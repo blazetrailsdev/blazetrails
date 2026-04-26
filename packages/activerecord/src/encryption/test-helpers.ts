@@ -11,13 +11,15 @@ import type { DatabaseAdapter } from "../adapter.js";
 
 export { Base };
 import { Configurable } from "./configurable.js";
+import { defaultCompressor, type Compressor } from "./config.js";
 import { Contexts } from "./contexts.js";
 import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { clearDefaultKeyProviderCache } from "./scheme.js";
 import { withEncryptionContext, withoutEncryption } from "./context.js";
-import { DecryptionError } from "./errors.js";
+import { DecryptionError, EncryptionError } from "./errors.js";
+import type { Encryptor } from "../encryption.js";
 
-export { withEncryptionContext, withoutEncryption, DecryptionError };
+export { withEncryptionContext, withoutEncryption, DecryptionError, EncryptionError };
 
 // ─── Test key material ────────────────────────────────────────────────────────
 
@@ -36,6 +38,8 @@ interface ConfigSnapshot {
   keyDerivationSalt: string | undefined;
   supportUnencryptedData: boolean;
   previousSchemes: typeof Configurable.config.previousSchemes;
+  forcedEncodingForDeterministicEncryption: string;
+  supportSha1ForNonDeterministicEncryption: boolean;
 }
 
 export function snapshotEncryptionConfig(): ConfigSnapshot {
@@ -46,6 +50,8 @@ export function snapshotEncryptionConfig(): ConfigSnapshot {
     keyDerivationSalt: c.keyDerivationSalt,
     supportUnencryptedData: c.supportUnencryptedData,
     previousSchemes: [...c.previousSchemes],
+    forcedEncodingForDeterministicEncryption: c.forcedEncodingForDeterministicEncryption,
+    supportSha1ForNonDeterministicEncryption: c.supportSha1ForNonDeterministicEncryption,
   };
 }
 
@@ -56,6 +62,8 @@ export function restoreEncryptionConfig(snapshot: ConfigSnapshot): void {
   c.keyDerivationSalt = snapshot.keyDerivationSalt;
   c.supportUnencryptedData = snapshot.supportUnencryptedData;
   c.previousSchemes = snapshot.previousSchemes;
+  c.forcedEncodingForDeterministicEncryption = snapshot.forcedEncodingForDeterministicEncryption;
+  c.supportSha1ForNonDeterministicEncryption = snapshot.supportSha1ForNonDeterministicEncryption;
   Contexts.resetDefaultContext();
   // Eagerly clear so the previous test's key material doesn't linger in
   // memory after config reset — the lazy clear on next keyProvider access
@@ -138,7 +146,7 @@ export function makeEncryptedBook(adapter: DatabaseAdapter) {
   return class EncryptedBook extends Base {
     static {
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { default: "<untitled>" });
       this.adapter = adapter;
       this.encrypts("name", { deterministic: true });
     }
@@ -161,19 +169,68 @@ export function makeEncryptedBookIgnoreCase(adapter: DatabaseAdapter) {
     static {
       this.attribute("id", "integer");
       this.attribute("name", "string");
+      this.attribute("original_name", "string");
       this.adapter = adapter;
       this.encrypts("name", { deterministic: true, ignoreCase: true });
     }
   } as any;
 }
 
+export const AUTHOR_NAME_LIMIT = 100;
+
 export function makeEncryptedAuthor(adapter: DatabaseAdapter) {
   return class EncryptedAuthor extends Base {
     static {
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { limit: AUTHOR_NAME_LIMIT });
       this.adapter = adapter;
       this.encrypts("name");
+    }
+  } as any;
+}
+
+export function makeEncryptedBookWithCustomCompressor(adapter: DatabaseAdapter) {
+  // Delegates actual compression to defaultCompressor (zlib) so the compressed
+  // output IS smaller and the path is exercised. inflate adds "[compressed] "
+  // prefix so tests can assert the custom compressor was actually called —
+  // mirrors Rails' EncryptedBookWithCustomCompressor fixture.
+  const customCompressor: Compressor = {
+    deflate(data: string): Buffer | Uint8Array {
+      return defaultCompressor.deflate(data);
+    },
+    inflate(data: Buffer | Uint8Array): string {
+      return "[compressed] " + defaultCompressor.inflate(data);
+    },
+  };
+  return class EncryptedBookWithCustomCompressor extends Base {
+    static {
+      this.attribute("id", "integer");
+      this.attribute("name", "string");
+      this.adapter = adapter;
+      this.encrypts("name", { compressor: customCompressor });
+    }
+  } as any;
+}
+
+const _failingEncryptor: Encryptor = {
+  encrypt(_value: string): string {
+    throw new EncryptionError("deliberate encryption failure");
+  },
+  decrypt(ciphertext: string): string {
+    return ciphertext;
+  },
+  isEncrypted(_text: string): boolean {
+    return false;
+  },
+};
+
+export function makeBookThatWillFailToEncryptName(adapter: DatabaseAdapter) {
+  return class BookThatWillFailToEncryptName extends Base {
+    static {
+      this.attribute("id", "integer");
+      this.attribute("name", "string");
+      this.adapter = adapter;
+      this.encrypts("name", { encryptor: _failingEncryptor });
     }
   } as any;
 }
@@ -196,7 +253,12 @@ export function assertEncryptedAttribute(
 ): void {
   // Verify the attribute reads back as the expected plaintext.
   const readValue = model[attrName];
-  if (readValue !== expectedValue) {
+  const valuesEqual =
+    readValue === expectedValue ||
+    (readValue instanceof Date &&
+      expectedValue instanceof Date &&
+      readValue.getTime() === expectedValue.getTime());
+  if (!valuesEqual) {
     throw new Error(
       `assertEncryptedAttribute: expected ${attrName} to equal ` +
         `${JSON.stringify(expectedValue)}, got ${JSON.stringify(readValue)}`,
@@ -204,12 +266,22 @@ export function assertEncryptedAttribute(
   }
 
   // Verify the DB-bound value differs from the plaintext — confirms real encryption.
-  // Empty strings are also encrypted by EncryptedAttributeType.serialize(), so
-  // include them in this check (only skip null/undefined).
+  // For non-string types (e.g. Date), also compare against the serialized string
+  // form since dbValue is always a string while expectedValue may be an object.
   if (expectedValue !== null && expectedValue !== undefined) {
     const dbValues = model._attributes.valuesForDatabase();
     const dbValue = dbValues[attrName];
-    if (dbValue === expectedValue) {
+    const type = model._attributes?.getAttribute?.(attrName)?.type;
+    const rawSerialized =
+      type && typeof (type as any).castType?.serialize === "function"
+        ? (type as any).castType.serialize(expectedValue)
+        : null;
+    // Normalize to string for comparison (EncryptedAttributeType calls String() before encrypting).
+    const serializedPlaintext = rawSerialized != null ? String(rawSerialized) : null;
+    if (
+      dbValue === expectedValue ||
+      (serializedPlaintext != null && dbValue === serializedPlaintext)
+    ) {
       throw new Error(
         `assertEncryptedAttribute: expected ${attrName} to be encrypted ` +
           `(DB value ≠ plaintext), but valuesForDatabase() returned the plaintext unchanged.`,

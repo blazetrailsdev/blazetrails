@@ -960,6 +960,12 @@ export class ToSql implements NodeVisitor<SQLString> {
 
   // -- BindParam --
 
+  // Overridable hook for date bind insertion so PostgreSQLWithBinds can
+  // emit $N placeholders instead of ?.
+  protected addDateBind(value: unknown): void {
+    this.collector.addBind(value);
+  }
+
   protected visitBindParam(node: Nodes.BindParam): SQLString {
     if (this._extractBinds) {
       this.collector.addBind(node.value !== undefined ? node.value : node);
@@ -1252,16 +1258,22 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitTable(node: Table): SQLString {
+    const quoted = node.name
+      .split(".")
+      .map((p) => `"${p}"`)
+      .join(".");
     if (node.tableAlias) {
-      this.collector.append(`"${node.name}" "${node.tableAlias}"`);
+      this.collector.append(`${quoted} "${node.tableAlias}"`);
     } else {
-      this.collector.append(`"${node.name}"`);
+      this.collector.append(quoted);
     }
     return this.collector;
   }
 
   private visitAttribute(node: Nodes.Attribute): SQLString {
-    this.collector.append(`"${node.relation.tableAlias || node.relation.name}"."${node.name}"`);
+    const tbl = (node.relation.tableAlias || node.relation.name).replace(/"/g, '""');
+    const col = node.name.replace(/"/g, '""');
+    this.collector.append(`"${tbl}"."${col}"`);
     return this.collector;
   }
 
@@ -1272,7 +1284,7 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (!attr || typeof attr.name !== "string") {
       throw new UnsupportedVisitError("UnqualifiedColumn must wrap an Attribute node with a name");
     }
-    this.collector.append(`"${attr.name}"`);
+    this.collector.append(`"${attr.name.replace(/"/g, '""')}"`);
     return this.collector;
   }
 
@@ -1285,7 +1297,25 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitQuoted(node: Nodes.Quoted): SQLString {
-    this.collector.append(this.quote(node.value));
+    if (
+      this._extractBinds &&
+      node.value !== null &&
+      node.value !== undefined &&
+      typeof node.value === "object" &&
+      "toISOString" in node.value &&
+      typeof (node.value as { toISOString: unknown }).toISOString === "function"
+    ) {
+      // Bind real Date instances directly (drivers handle them natively).
+      // For non-Date date-like objects, bind the formatted string so drivers
+      // don't receive an unsupported object type.
+      const bind =
+        node.value instanceof Date
+          ? node.value
+          : this.quotedDate(node.value as { toISOString(): string }).slice(1, -1);
+      this.addDateBind(bind);
+    } else {
+      this.collector.append(this.quote(node.value));
+    }
     return this.collector;
   }
 
@@ -1349,7 +1379,13 @@ export class ToSql implements NodeVisitor<SQLString> {
       "toISOString" in v &&
       typeof (v as { toISOString: unknown }).toISOString === "function"
     ) {
-      this.collector.append(`'${(v as { toISOString: () => string }).toISOString()}'`);
+      if (this._extractBinds) {
+        const bind =
+          v instanceof Date ? v : this.quotedDate(v as { toISOString(): string }).slice(1, -1);
+        this.addDateBind(bind);
+      } else {
+        this.collector.append(this.quotedDate(v as { toISOString(): string }));
+      }
     } else {
       this.collector.append(String(v));
     }
@@ -1363,6 +1399,33 @@ export class ToSql implements NodeVisitor<SQLString> {
     }
   }
 
+  // Formats a date-like value as a SQL datetime string matching Rails'
+  // AbstractAdapter#quoted_date: 'YYYY-MM-DD HH:MM:SS[.microseconds]'.
+  // When ms > 0 the fractional part is emitted as 6-digit microseconds,
+  // matching AR quoting.ts and preserving sub-second DB precision. When ms = 0
+  // the bare seconds form is used — matching Rails' default output for
+  // whole-second values.
+  //
+  // UTC handling: JS Date#toISOString() always appends Z; the regex also
+  // accepts strings without a trailing Z (treating absent timezone as UTC),
+  // which covers non-standard date-like objects. The Arel layer has no access
+  // to AR's defaultTimezone — adapter-level quoting in
+  // packages/activerecord/src/connection-adapters/abstract/quoting.ts is the
+  // authoritative path for timezone-aware bound values.
+  protected quotedDate(d: { toISOString(): string }): string {
+    // Matches "YYYY-MM-DDTHH:MM:SS.mmmZ", "YYYY-MM-DDTHH:MM:SSZ", or
+    // the same without trailing Z (treated as UTC).
+    const match = d.toISOString().match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z?$/);
+    if (!match) return `'${d.toISOString().replace(/'/g, "''")}'`;
+    const [, date, time, frac] = match;
+    // Normalise to exactly 6 digits: pad short fractions, truncate long ones.
+    // "729" → "729000" (μs), "7" → "700000", "1234" → "123400", "729000" → "729000".
+    const micros = frac ? parseInt((frac + "000000").slice(0, 6), 10) : 0;
+    return micros > 0
+      ? `'${date} ${time}.${String(micros).padStart(6, "0")}'`
+      : `'${date} ${time}'`;
+  }
+
   protected quote(value: unknown): string {
     if (value === null || value === undefined) return "NULL";
     if (typeof value === "number") return String(value);
@@ -1374,7 +1437,7 @@ export class ToSql implements NodeVisitor<SQLString> {
       "toISOString" in value &&
       typeof (value as { toISOString: unknown }).toISOString === "function"
     ) {
-      return `'${(value as { toISOString: () => string }).toISOString()}'`;
+      return this.quotedDate(value as { toISOString(): string });
     }
     if (typeof value === "object" && value !== null) {
       const proto = Object.getPrototypeOf(value);

@@ -475,3 +475,83 @@ describe("NumericalityValidationTest", () => {
     expect(new Person({ value: "0" }).isValid()).toBe(false);
   });
 });
+describe("numericality comparison operators", () => {
+  it("validates numericality with greater than or equal", () => {
+    class GTE extends Model {
+      static {
+        this.attribute("age", "integer");
+        this.validates("age", { numericality: { greaterThanOrEqualTo: 18 } });
+      }
+    }
+    expect(new GTE({ age: 18 }).isValid()).toBe(true);
+    expect(new GTE({ age: 17 }).isValid()).toBe(false);
+  });
+
+  it("validates numericality with less than or equal to", () => {
+    class LTE extends Model {
+      static {
+        this.attribute("rating", "integer");
+        this.validates("rating", { numericality: { lessThanOrEqualTo: 5 } });
+      }
+    }
+    expect(new LTE({ rating: 5 }).isValid()).toBe(true);
+    expect(new LTE({ rating: 6 }).isValid()).toBe(false);
+  });
+
+  it("validates numericality with equal to", () => {
+    class EQ extends Model {
+      static {
+        this.attribute("answer", "integer");
+        this.validates("answer", { numericality: { equalTo: 42 } });
+      }
+    }
+    expect(new EQ({ answer: 42 }).isValid()).toBe(true);
+    expect(new EQ({ answer: 41 }).isValid()).toBe(false);
+  });
+
+  it("validates numericality with other than", () => {
+    class OT extends Model {
+      static {
+        this.attribute("count", "integer");
+        this.validates("count", { numericality: { otherThan: 0 } });
+      }
+    }
+    expect(new OT({ count: 1 }).isValid()).toBe(true);
+    expect(new OT({ count: 0 }).isValid()).toBe(false);
+  });
+});
+describe("numericality with in: range", () => {
+  it("validates value is within range", () => {
+    class User extends Model {
+      static {
+        this.attribute("age", "integer");
+        this.validates("age", { numericality: { in: [18, 65] } });
+      }
+    }
+
+    const u1 = new User({ age: 25 });
+    expect(u1.isValid()).toBe(true);
+
+    const u2 = new User({ age: 10 });
+    expect(u2.isValid()).toBe(false);
+    expect(u2.errors.fullMessages.length).toBeGreaterThan(0);
+
+    const u3 = new User({ age: 70 });
+    expect(u3.isValid()).toBe(false);
+  });
+
+  it("accepts boundary values", () => {
+    class User extends Model {
+      static {
+        this.attribute("score", "integer");
+        this.validates("score", { numericality: { in: [0, 100] } });
+      }
+    }
+
+    const u1 = new User({ score: 0 });
+    expect(u1.isValid()).toBe(true);
+
+    const u2 = new User({ score: 100 });
+    expect(u2.isValid()).toBe(true);
+  });
+});

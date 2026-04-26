@@ -11,6 +11,8 @@ import {
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
 import { RecordNotSaved, RecordNotUnique } from "./errors.js";
+import { disallowRawSqlBang } from "./sanitization.js";
+import { columnNameMatcher as abstractColumnNameMatcher } from "./connection-adapters/abstract/quoting.js";
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
 import { getInheritanceColumn, isStiSubclass } from "./inheritance.js";
@@ -30,6 +32,7 @@ import {
   VALID_UNSCOPING_VALUES,
   argumentError,
   type UnscopeType,
+  type AssociationSpec,
 } from "./relation/query-methods.js";
 import { Batches } from "./relation/batches.js";
 import { wrapWithScopeProxy } from "./relation/delegation.js";
@@ -37,7 +40,7 @@ import { InsertAll } from "./insert-all.js";
 import { ScopeRegistry } from "./scoping.js";
 import { PredicateBuilder } from "./relation/predicate-builder.js";
 import { include, type Included } from "@blazetrails/activesupport";
-import { Calculations } from "./relation/calculations.js";
+import { Calculations, groupColumnToArel } from "./relation/calculations.js";
 import { FinderMethods } from "./relation/finder-methods.js";
 import { SpawnMethods } from "./relation/spawn-methods.js";
 import { FromClause } from "./relation/from-clause.js";
@@ -66,6 +69,49 @@ export type LoadedRelation<R> = Omit<R, "then">;
  * `EXPLAIN FORMAT=X ANALYZE` is invalid) from receiving orderings they
  * can't render.
  */
+/**
+ * Add a join clause to `clauses` for whereMissing/whereAssociated.
+ * - Skip if a join with the same table+ON already exists regardless of type
+ *   (e.g. leftJoins(:assoc).whereAssociated(:assoc) is valid — the existing
+ *   LEFT OUTER JOIN already covers the table; the IS NOT NULL predicate
+ *   provides the restriction).
+ * - Throw if a join to the same table with a *different* ON clause exists —
+ *   that would require aliasing which is not supported.
+ */
+function _addAssocJoin(
+  clauses: Array<{ type: "inner" | "left"; table: string; on: string; quoted?: boolean }>,
+  type: "inner" | "left",
+  join: { table: string; on: string },
+  assocName: string,
+  modelClass: any,
+): void {
+  const sameTableJoins = clauses.filter((j) => j.table === join.table);
+  if (sameTableJoins.length > 0) {
+    if (sameTableJoins.every((j) => j.on === join.on)) return; // all compatible — skip
+    throw new Error(
+      `where${type === "inner" ? "Associated" : "Missing"}: cannot add ${type.toUpperCase()} JOIN for '${assocName}' on ${modelClass.name} ` +
+        `— a different join to '${join.table}' already exists and cannot be represented without aliasing.`,
+    );
+  }
+  clauses.push({ type, table: join.table, on: join.on, quoted: true });
+}
+
+/** Compile one or more Arel predicate nodes to the ON string used in _joinClauses. */
+function _buildOnString(...predicates: Nodes.Node[]): string {
+  const node = predicates.length === 1 ? predicates[0] : new Nodes.And(predicates);
+  return new Visitors.ToSql().compile(node);
+}
+
+/**
+ * Return the alias bare if it is a valid SQL identifier (letters/digits/underscore,
+ * starting with a letter or underscore), otherwise double-quote and escape it.
+ * Mirrors Rails: aliases come from Symbol/string caller code — Rails assumes they
+ * are safe identifiers. We add a guard so malformed aliases don't produce invalid SQL.
+ */
+function _safeAlias(alias: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(alias) ? alias : `"${alias.replace(/"/g, '""')}"`;
+}
+
 function validateExplainOptions(options: ExplainOption[]): void {
   let seenHash = false;
   for (let i = 0; i < options.length; i++) {
@@ -95,6 +141,48 @@ function validateExplainOptions(options: ExplainOption[]): void {
  *
  * Mirrors: ActiveRecord::Relation
  */
+
+function hasTopLevelComma(s: string): boolean {
+  let depth = 0;
+  let quote: '"' | "'" | "`" | null = null;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (quote) {
+      if (ch === "\\") {
+        i++;
+        continue;
+      }
+      // SQL doubled-quote escape ("" or ``)
+      if (ch === quote && s[i + 1] === quote) {
+        i++;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (ch === "," && depth === 0) return true;
+  }
+  return false;
+}
+
+function resolveColumnNameMatcher(adapter: any): RegExp {
+  // Walk adapter → inner (SchemaAdapter wraps the real adapter) to find a
+  // static columnNameMatcher on the concrete adapter class.
+  let a = adapter;
+  while (a) {
+    const matcher = (a.constructor as any)?.columnNameMatcher?.();
+    if (matcher) return matcher;
+    a = a.inner;
+  }
+  return abstractColumnNameMatcher();
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class Relation<T extends Base> {
   private _modelClass: typeof Base;
@@ -104,7 +192,7 @@ export class Relation<T extends Base> {
   private _rawOrderClauses: string[] = [];
   private _limitValue: number | null = null;
   private _offsetValue: number | null = null;
-  private _selectColumns: (string | Nodes.SqlLiteral)[] | null = null;
+  private _selectColumns: (string | Nodes.Node)[] | null = null;
   private _isDistinct = false;
   private _distinctOnColumns: string[] = [];
   private _groupColumns: string[] = [];
@@ -116,11 +204,16 @@ export class Relation<T extends Base> {
     type: "union" | "unionAll" | "intersect" | "except";
     other: Relation<T>;
   } | null = null;
-  private _joinClauses: Array<{ type: "inner" | "left"; table: string; on: string }> = [];
+  private _joinClauses: Array<{
+    type: "inner" | "left";
+    table: string;
+    on: string;
+    quoted?: boolean;
+  }> = [];
   private _rawJoins: string[] = [];
-  private _includesAssociations: string[] = [];
-  private _preloadAssociations: string[] = [];
-  private _eagerLoadAssociations: string[] = [];
+  private _includesAssociations: AssociationSpec[] = [];
+  private _preloadAssociations: AssociationSpec[] = [];
+  private _eagerLoadAssociations: AssociationSpec[] = [];
   private _isReadonly = false;
   private _isStrictLoading = false;
   private _annotations: string[] = [];
@@ -238,85 +331,191 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Filter for records WHERE the association IS present (non-null FK).
+   * Filter for records WHERE the association IS present.
    *
-   * Mirrors: ActiveRecord::Relation#where.associated
+   * Mirrors: ActiveRecord::QueryMethods::WhereChain#associated — emits an
+   * INNER JOIN on the association then WHERE assoc_pk IS NOT NULL.
+   * Skips if an identical (table+ON) join already exists, regardless of join
+   * type; throws if a different join to the same table is present (aliasing
+   * not supported).
    */
   whereAssociated(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
-      const modelClass = rel._modelClass as any;
-      const associations: any[] = modelClass._associations ?? [];
-      const assocDef = associations.find((a: any) => a.name === assocName);
-
-      if (!assocDef) {
+      rel._requireAssociation(assocName);
+      const target = rel._resolveAssociationTarget(assocName);
+      if (!target) {
         throw new Error(
-          `Association named '${assocName}' was not found on ${modelClass.name}; perhaps you misspelled it?`,
+          `whereAssociated: association resolution failed for '${assocName}' on ${(rel._modelClass as any).name} — ` +
+            `through/HABTM associations may require a registered intermediate model, ` +
+            `and some join shapes (such as composite primary/foreign keys) are not supported.`,
         );
       }
-
-      if (assocDef.type === "belongsTo") {
-        const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
-        rel = rel.whereNot({ [foreignKey]: null });
-      } else if (assocDef.type === "hasMany" || assocDef.type === "hasOne") {
-        const { targetTable, foreignKey, typeNodes } = this._resolveHasManySubquery(
-          modelClass,
-          assocDef,
-          assocName,
-        );
-        const sourceTable = modelClass.tableName;
-        const pk = (assocDef.options.primaryKey ?? modelClass.primaryKey) as string;
-        const srcTable = new Table(sourceTable);
-        const tgtTable = new Table(targetTable);
-        const subquery = tgtTable.project(tgtTable.get(foreignKey));
-        for (const node of typeNodes) subquery.where(node);
-        const cloned = rel._clone();
-        cloned._whereClause.predicates.push(srcTable.get(pk).in(subquery));
-        rel = cloned;
+      const cloned = rel._clone();
+      for (const join of target.joins) {
+        _addAssocJoin(cloned._joinClauses, "inner", join, assocName, rel._modelClass as any);
       }
+      const tgtTable = new Table(target.table);
+      for (const pk of target.pks) {
+        cloned._whereClause.predicates.push(tgtTable.get(pk).notEq(null));
+      }
+      rel = cloned;
     }
     return rel;
   }
 
   /**
-   * Filter for records WHERE the association IS missing (null FK).
+   * Filter for records WHERE the association IS missing.
    *
-   * Mirrors: ActiveRecord::Relation#where.missing
+   * Mirrors: ActiveRecord::QueryMethods::WhereChain#missing — emits a
+   * LEFT OUTER JOIN on the association then WHERE assoc_pk IS NULL.
    */
   whereMissing(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
-      const modelClass = rel._modelClass as any;
-      const associations: any[] = modelClass._associations ?? [];
-      const assocDef = associations.find((a: any) => a.name === assocName);
-
-      if (!assocDef) {
+      rel._requireAssociation(assocName);
+      const target = rel._resolveAssociationTarget(assocName);
+      if (!target) {
         throw new Error(
-          `Association named '${assocName}' was not found on ${modelClass.name}; perhaps you misspelled it?`,
+          `whereMissing: association resolution failed for '${assocName}' on ${(rel._modelClass as any).name} — ` +
+            `through/HABTM associations may require a registered intermediate model, ` +
+            `and some join shapes (such as composite primary/foreign keys) are not supported.`,
         );
       }
-
-      if (assocDef.type === "belongsTo") {
-        const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
-        rel = rel.where({ [foreignKey]: null });
-      } else if (assocDef.type === "hasMany" || assocDef.type === "hasOne") {
-        const { targetTable, foreignKey, typeNodes } = this._resolveHasManySubquery(
-          modelClass,
-          assocDef,
-          assocName,
-        );
-        const sourceTable = modelClass.tableName;
-        const pk = (assocDef.options.primaryKey ?? modelClass.primaryKey) as string;
-        const srcTable = new Table(sourceTable);
-        const tgtTable = new Table(targetTable);
-        const subquery = tgtTable.project(tgtTable.get(foreignKey));
-        for (const node of typeNodes) subquery.where(node);
-        const cloned = rel._clone();
-        cloned._whereClause.predicates.push(srcTable.get(pk).notIn(subquery));
-        rel = cloned;
+      const cloned = rel._clone();
+      for (const join of target.joins) {
+        _addAssocJoin(cloned._joinClauses, "left", join, assocName, rel._modelClass as any);
       }
+      const tgtTable = new Table(target.table);
+      for (const pk of target.pks) {
+        cloned._whereClause.predicates.push(tgtTable.get(pk).eq(null));
+      }
+      rel = cloned;
     }
     return rel;
+  }
+
+  private _requireAssociation(assocName: string): void {
+    const modelClass = this._modelClass as any;
+    const associations: any[] = modelClass._associations ?? [];
+    if (!associations.some((a: any) => a.name === assocName)) {
+      throw new Error(
+        `Association named '${assocName}' was not found on ${modelClass.name}; perhaps you misspelled it?`,
+      );
+    }
+  }
+
+  /**
+   * Resolve all join steps and target PK columns for a named association.
+   *
+   * `pks` mirrors Rails' `Array(reflection.association_primary_key)` — one
+   * entry per PK column so callers emit one IS NULL/NOT NULL predicate each.
+   * The ON clause produced by `_resolveAssociationJoin` is a column-to-column
+   * expression (e.g. `"authors"."id" = "books"."author_id"`); if an array FK
+   * were used it would stringify to `"a,b"` — an invalid column reference.
+   * We guard against that before returning (see composite-FK check below).
+   *
+   * When the target model is not in `modelRegistry` the fallback behavior
+   * differs by association type:
+   * - `belongsTo`: target table name is not safe to infer — Rails always has
+   *   a registered model class, so `tableName` is always available; without
+   *   registration the inferred name (e.g. "authors") may differ from the real
+   *   table (e.g. "wm_authors"). Falls back to WHERE source.fk IS NULL which
+   *   is data-correct but not the Rails JOIN form. **Register the model** to
+   *   get the JOIN form.
+   * - `hasOne`/`hasMany`: target table is inferred from className + pluralise,
+   *   and a JOIN ON is built from association options.
+   * - through/HABTM: returns null (caller throws).
+   */
+  private _resolveAssociationTarget(
+    assocName: string,
+  ): { joins: Array<{ table: string; on: string }>; table: string; pks: string[] } | null {
+    const modelClass = this._modelClass as any;
+    const associations: any[] = modelClass._associations ?? [];
+    const assocDef = associations.find((a: any) => a.name === assocName);
+    if (!assocDef) return null;
+
+    // Primary path: registry-based resolution handles all association types.
+    const resolved = this._resolveAssociationJoin(assocName);
+    if (resolved) {
+      const joins = Array.isArray(resolved) ? resolved : [resolved];
+      const lastJoin = joins[joins.length - 1];
+      let rawPk: string | string[] = "id";
+      if (assocDef.type === "belongsTo") {
+        const targetModel = modelRegistry.get(assocDef.options.className ?? _camelize(assocName));
+        rawPk = assocDef.options.primaryKey ?? targetModel?.primaryKey ?? "id";
+      } else {
+        // Singularize for all plural collection association types.
+        const isPlural =
+          assocDef.type === "hasMany" ||
+          assocDef.type === "hasAndBelongsToMany" ||
+          (assocDef.type as string) === "hasManyThrough";
+        const className =
+          assocDef.options.className ?? _camelize(isPlural ? _singularize(assocName) : assocName);
+        const targetModel = modelRegistry.get(className);
+        rawPk = targetModel?.primaryKey ?? "id";
+      }
+      // Composite PKs are supported at the WHERE level (one IS NULL per column)
+      // but the JOIN ON clause from _resolveAssociationJoin is a raw SQL string;
+      // composite FK or PK options would stringify to "a,b" → invalid SQL.
+      if (Array.isArray(assocDef.options.foreignKey)) {
+        throw new Error(
+          `whereMissing/whereAssociated: composite foreignKey on '${assocName}' is not yet supported.`,
+        );
+      }
+      if (Array.isArray(assocDef.options.primaryKey)) {
+        throw new Error(
+          `whereMissing/whereAssociated: composite primaryKey on '${assocName}' is not yet supported.`,
+        );
+      }
+      const pks = Array.isArray(rawPk) ? rawPk : [rawPk];
+      return { joins, table: lastJoin.table, pks };
+    }
+
+    // Fallback: target model not in registry — derive JOIN from options.
+    // NOTE: for belongsTo, the target table name is not reliably inferrable
+    // without a registered model (the actual tableName may differ from the
+    // class-name convention). We fall back to a source-table FK null/non-null
+    // predicate, which is data-correct but not the Rails JOIN form. **Register
+    // the model** to get the JOIN form.
+    const sourceTable = modelClass.tableName;
+    if (assocDef.type === "belongsTo") {
+      const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
+      const pks = Array.isArray(foreignKey) ? foreignKey : [foreignKey];
+      return { joins: [], table: sourceTable, pks };
+    }
+    if (Array.isArray(assocDef.options.foreignKey)) {
+      throw new Error(
+        `whereMissing/whereAssociated: composite foreignKey on '${assocName}' is not yet supported in fallback path.`,
+      );
+    }
+    if (assocDef.type === "hasOne" || assocDef.type === "hasMany") {
+      const className =
+        assocDef.options.className ??
+        _camelize(assocDef.type === "hasMany" ? _singularize(assocName) : assocName);
+      const targetTable = assocDef.options.tableName ?? _pluralize(_toUnderscore(className));
+      const rawSourcePk = assocDef.options.primaryKey ?? modelClass.primaryKey ?? "id";
+      if (Array.isArray(rawSourcePk)) {
+        throw new Error(
+          `whereMissing/whereAssociated: composite primaryKey on '${assocName}' is not yet supported in fallback path.`,
+        );
+      }
+      const sourcePk = rawSourcePk;
+      const foreignKey = assocDef.options.as
+        ? (assocDef.options.foreignKey ?? `${_toUnderscore(assocDef.options.as)}_id`)
+        : (assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);
+      const tgt = new Table(targetTable);
+      const src = new Table(sourceTable);
+      const onPredicates: Nodes.Node[] = [tgt.get(foreignKey).eq(src.get(sourcePk))];
+      if (assocDef.options.as) {
+        const typeCol = `${_toUnderscore(assocDef.options.as)}_type`;
+        onPredicates.push(tgt.get(typeCol).eq(modelClass.name));
+      }
+      const onNode = onPredicates.length === 1 ? onPredicates[0] : new Nodes.And(onPredicates);
+      const on = new Visitors.ToSql().compile(onNode);
+      return { joins: [{ table: targetTable, on }], table: targetTable, pks: ["id"] };
+    }
+    return null;
   }
 
   private _resolveHasManySubquery(
@@ -429,7 +628,18 @@ export class Relation<T extends Base> {
         ? value.map((v) => this._castWhereValue(key, v))
         : this._castWhereValue(key, value);
     }
-    rel._whereClause.predicates.push(...this.predicateBuilder.buildNegatedFromHash(castConditions));
+    // Mirrors Rails' WhereClause#invert — branches on the actual predicate count,
+    // not the key count, since one key can expand to multiple predicates:
+    // - 1 predicate → invert_predicate (NOT NULL, !=, NOT BETWEEN, NOT IN, etc.)
+    // - 2+ predicates → NOT(p1 AND p2 AND ...) — semantically different from p1 != AND p2 !=
+    const positiveNodes = this.predicateBuilder.buildFromHash(castConditions);
+    if (positiveNodes.length <= 1) {
+      rel._whereClause.predicates.push(
+        ...this.predicateBuilder.buildNegatedFromHash(castConditions),
+      );
+    } else {
+      rel._whereClause.predicates.push(new Nodes.Not(new Nodes.And(positiveNodes)));
+    }
     return rel;
   }
 
@@ -524,8 +734,16 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#order
    */
-  order(...args: Array<string | Record<string, "asc" | "desc">>): Relation<T> {
-    return this._clone().orderBang(...args);
+  order(
+    ...args: Array<
+      | string
+      | Record<string, "asc" | "desc" | "ASC" | "DESC">
+      | Nodes.Node
+      | string[]
+      | [Nodes.Node, ...unknown[]]
+    >
+  ): Relation<T> {
+    return this._clone().orderBang(...(args as any));
   }
 
   /**
@@ -557,12 +775,12 @@ export class Relation<T extends Base> {
    *   select(record => record.active)   // block form (returns array)
    */
   select(fn: (record: T) => boolean): Promise<T[]>;
-  select(...columns: (string | Nodes.SqlLiteral)[]): Relation<T>;
+  select(...columns: (string | Nodes.Node)[]): Relation<T>;
   select(...args: any[]): Relation<T> | Promise<T[]> {
     if (args.length === 1 && typeof args[0] === "function") {
       return this.toArray().then((records) => records.filter(args[0]));
     }
-    const columns = args.map((a: any) => (a instanceof Nodes.SqlLiteral ? a : String(a)));
+    const columns = args.map((a: any) => (a instanceof Nodes.Node ? a : String(a)));
     return this._clone()._selectBang(...columns);
   }
 
@@ -571,7 +789,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#reselect
    */
-  reselect(...columns: (string | Nodes.SqlLiteral)[]): Relation<T> {
+  reselect(...columns: (string | Nodes.Node)[]): Relation<T> {
     return this._clone().reselectBang(...columns);
   }
 
@@ -635,8 +853,16 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#reorder
    */
-  reorder(...args: Array<string | Record<string, "asc" | "desc">>): Relation<T> {
-    return this._clone().reorderBang(...args);
+  reorder(
+    ...args: Array<
+      | string
+      | Record<string, "asc" | "desc" | "ASC" | "DESC">
+      | Nodes.Node
+      | string[]
+      | [Nodes.Node, ...unknown[]]
+    >
+  ): Relation<T> {
+    return this._clone().reorderBang(...(args as any));
   }
 
   /**
@@ -653,25 +879,47 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#in_order_of
    */
-  inOrderOf(column: string, values: unknown[]): Relation<T> {
+  inOrderOf(column: string, values: unknown[], filter = true): Relation<T> {
+    if (values.length === 0) return this.none();
+
+    // Use the model's arelTable so the attribute retains type-casting metadata,
+    // mirroring Rails' order_column which resolves through the model's arel_table.
+    const arelCol = this._modelClass.arelTable.get(column);
+
+    // Normalize undefined → null so eq(null) emits IS NULL (not the invalid = NULL).
+    const normalized = values.map((v) => (v === undefined ? null : v));
+
+    // Build CASE WHEN col = v1 THEN 1 ... END ASC (searched form, 1-indexed).
+    // Mirrors Rails' build_case_for_value_position: Arel::Nodes::Case.new (no operand)
+    // with column.eq(value) predicates. No ELSE when filter=true (the default).
+    const caseNode = new Nodes.Case();
+    normalized.forEach((v, i) => {
+      caseNode.when(arelCol.eq(v), new Nodes.Quoted(i + 1));
+    });
+    if (!filter) {
+      caseNode.else(new Nodes.Quoted(values.length + 1));
+    }
+    const orderNode = new Nodes.Ascending(caseNode);
+
+    // Push to _orderClauses (not _rawOrderClauses) so the CASE expression is
+    // appended in call-order relative to any existing order clauses.
+    // _applyOrderToManager detects CASE-style SQL via the "(" heuristic and
+    // a /\bcase\b/i check, then emits it as SqlLiteral.
     const rel = this._clone();
-    // Generate a CASE WHEN ... expression for ordering
-    const cases = values
-      .map((v, i) => {
-        const quoted =
-          v === null
-            ? "NULL"
-            : typeof v === "number"
-              ? String(v)
-              : `'${String(v).replace(/'/g, "''")}'`;
-        return `WHEN "${column}" = ${quoted} THEN ${i}`;
-      })
-      .join(" ");
-    const caseExpr = `CASE ${cases} ELSE ${values.length} END`;
-    // Use raw SQL order — push as a string that the order manager treats as raw
-    rel._orderClauses = [];
-    rel._rawOrderClauses = rel._rawOrderClauses ?? [];
-    rel._rawOrderClauses.push(caseExpr);
+    rel._orderClauses.push(orderNode.toSql());
+
+    // Add WHERE col IN (values) filter — mirrors Rails' arel_column.in(values.compact).
+    // Attribute#in uses buildQuoted (no type-caster context), matching Rails which
+    // pre-casts values via type_cast_for_database before calling in(). Callers
+    // should pre-cast for typed columns (e.g. enum integer mappings).
+    if (filter) {
+      const hasNull = normalized.includes(null);
+      const nonNull = normalized.filter((v) => v !== null);
+      let whereNode: Nodes.Node = arelCol.in(nonNull);
+      if (hasNull) whereNode = new Nodes.Or(whereNode, arelCol.eq(null));
+      rel._whereClause.predicates.push(hasNull ? new Nodes.Grouping(whereNode) : whereNode);
+    }
+
     return rel;
   }
 
@@ -708,7 +956,11 @@ export class Relation<T extends Base> {
     }
     if (this._selectColumns !== null) {
       const cols = this._selectColumns.map((c) =>
-        c instanceof Nodes.SqlLiteral ? `sql(${JSON.stringify(c.value)})` : JSON.stringify(c),
+        c instanceof Nodes.SqlLiteral
+          ? `sql(${JSON.stringify(c.value)})`
+          : c instanceof Nodes.Node
+            ? `sql(${JSON.stringify(c.toSql())})`
+            : JSON.stringify(c),
       );
       parts.push(`.select(${cols.join(", ")})`);
     }
@@ -794,6 +1046,16 @@ export class Relation<T extends Base> {
    */
   optimizerHints(...hints: string[]): Relation<T> {
     return this._clone().optimizerHintsBang(...hints);
+  }
+
+  /**
+   * Return a fresh unscoped relation for the model, discarding any
+   * WHERE/ORDER/etc. conditions on this relation.
+   *
+   * Mirrors: ActiveRecord::Relation#unscoped — delegates to klass.unscoped.
+   */
+  unscoped(): Relation<T> {
+    return this._modelClass.unscoped() as Relation<T>;
   }
 
   // merge and spawn are mixed in from spawn-methods.ts
@@ -898,28 +1160,41 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Add an INNER JOIN. Accepts an association name, a raw SQL string, or
-   * a table name with an ON condition.
+   * Add one or more INNER JOINs. Accepts:
+   * - An association name (resolved to a JOIN via reflection)
+   * - A raw SQL string
+   * - Two strings: (table, onClause) — explicit JOIN/ON pair
+   * - Arel `Nodes.Join` instances (e.g. from `SelectManager#joinSources`)
+   * - Any mix of the above as variadic args
    *
-   * Mirrors: ActiveRecord::Relation#joins
+   * Mirrors: ActiveRecord::Relation#joins — Rails' `joins(*args)` is variadic
+   * and accepts strings, symbol association names, or Arel join nodes.
    */
-  joins(tableOrSql?: string, on?: string): Relation<T> {
-    if (!tableOrSql) return this._clone();
+  joins(tableOrSql?: string, on?: string): Relation<T>;
+  joins(...nodes: Nodes.Join[]): Relation<T>;
+  joins(...args: Array<string | Nodes.Join>): Relation<T>;
+  joins(...args: Array<string | Nodes.Join | undefined>): Relation<T> {
     const rel = this._clone();
-    if (on) {
-      rel._joinClauses.push({ type: "inner", table: tableOrSql, on });
-    } else {
-      const resolved = rel._resolveAssociationJoin(tableOrSql);
+    // Two-string-argument form: joins(table, onClause) — preserved for back-compat.
+    if (args.length === 2 && typeof args[0] === "string" && typeof args[1] === "string") {
+      rel._joinClauses.push({ type: "inner", table: args[0], on: args[1] });
+      return rel;
+    }
+    for (const arg of args) {
+      if (!arg) continue;
+      // Arel join node (InnerJoin / OuterJoin / StringJoin etc. from joinSources).
+      if (arg instanceof Nodes.Join) {
+        rel._rawJoins.push(arg.toSql());
+        continue;
+      }
+      const resolved = rel._resolveAssociationJoin(arg);
       if (resolved) {
-        if (Array.isArray(resolved)) {
-          for (const join of resolved) {
-            rel._joinClauses.push({ type: "inner", table: join.table, on: join.on });
-          }
-        } else {
-          rel._joinClauses.push({ type: "inner", table: resolved.table, on: resolved.on });
+        const entries = Array.isArray(resolved) ? resolved : [resolved];
+        for (const j of entries) {
+          rel._joinClauses.push({ type: "inner", table: j.table, on: j.on, quoted: true });
         }
       } else {
-        rel._rawJoins.push(tableOrSql);
+        rel._rawJoins.push(arg);
       }
     }
     return rel;
@@ -940,10 +1215,15 @@ export class Relation<T extends Base> {
       if (resolved) {
         if (Array.isArray(resolved)) {
           for (const join of resolved) {
-            rel._joinClauses.push({ type: "left", table: join.table, on: join.on });
+            rel._joinClauses.push({ type: "left", table: join.table, on: join.on, quoted: true });
           }
         } else {
-          rel._joinClauses.push({ type: "left", table: resolved.table, on: resolved.on });
+          rel._joinClauses.push({
+            type: "left",
+            table: resolved.table,
+            on: resolved.on,
+            quoted: true,
+          });
         }
       } else {
         rel._joinClauses.push({ type: "left", table, on: "1=1" });
@@ -982,12 +1262,17 @@ export class Relation<T extends Base> {
 
     if (assocDef.type === "belongsTo") {
       const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(name)}_id`;
+      if (Array.isArray(foreignKey)) return null;
       const className = assocDef.options.className ?? _camelize(name);
       const targetModel = modelRegistry.get(className);
       if (!targetModel) return null;
       const targetTable = targetModel.tableName;
-      const targetPk = assocDef.options.primaryKey ?? targetModel.primaryKey ?? "id";
-      let onClause = `"${targetTable}"."${targetPk}" = "${sourceTable}"."${foreignKey}"`;
+      const rawTargetPk = assocDef.options.primaryKey ?? targetModel.primaryKey ?? "id";
+      if (Array.isArray(rawTargetPk)) return null;
+      const targetPk = rawTargetPk;
+      const tgt = new Table(targetTable);
+      const src = new Table(sourceTable);
+      const predicates: Nodes.Node[] = [tgt.get(targetPk).eq(src.get(foreignKey))];
 
       // STI type condition on target
       const inheritanceCol = getInheritanceColumn(targetModel);
@@ -996,11 +1281,10 @@ export class Relation<T extends Base> {
           targetModel.name,
           ...(targetModel.descendants ?? []).map((d: any) => d.name),
         ];
-        const inList = stiNames.map((n: string) => `'${n}'`).join(", ");
-        onClause += ` AND "${targetTable}"."${inheritanceCol}" IN (${inList})`;
+        predicates.push(tgt.get(inheritanceCol).in(stiNames));
       }
 
-      return { table: targetTable, on: onClause };
+      return { table: targetTable, on: _buildOnString(...predicates) };
     }
 
     if (assocDef.type === "hasOne" || assocDef.type === "hasMany") {
@@ -1015,14 +1299,19 @@ export class Relation<T extends Base> {
       const targetModel = modelRegistry.get(className);
       if (!targetModel) return null;
       const targetTable = targetModel.tableName;
-      const primaryKey = assocDef.options.primaryKey ?? sourcePk;
+      const rawPk = assocDef.options.primaryKey ?? sourcePk;
+      if (Array.isArray(rawPk)) return null;
+      const primaryKey = rawPk;
       const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`;
-      let onClause = `"${targetTable}"."${foreignKey}" = "${sourceTable}"."${primaryKey}"`;
+      if (Array.isArray(foreignKey)) return null;
+      const tgt = new Table(targetTable);
+      const src = new Table(sourceTable);
+      const predicates: Nodes.Node[] = [tgt.get(foreignKey).eq(src.get(primaryKey))];
 
       // Polymorphic type condition
       if (assocDef.options.as) {
         const typeCol = `${_toUnderscore(assocDef.options.as)}_type`;
-        onClause += ` AND "${targetTable}"."${typeCol}" = '${modelClass.name}'`;
+        predicates.push(tgt.get(typeCol).eq(modelClass.name));
       }
 
       // STI type condition on target
@@ -1032,11 +1321,10 @@ export class Relation<T extends Base> {
           targetModel.name,
           ...(targetModel.descendants ?? []).map((d: any) => d.name),
         ];
-        const inList = stiNames.map((n: string) => `'${n}'`).join(", ");
-        onClause += ` AND "${targetTable}"."${inheritanceCol}" IN (${inList})`;
+        predicates.push(tgt.get(inheritanceCol).in(stiNames));
       }
 
-      return { table: targetTable, on: onClause };
+      return { table: targetTable, on: _buildOnString(...predicates) };
     }
 
     // hasManyThrough (test-data style where type is literally "hasManyThrough")
@@ -1079,23 +1367,25 @@ export class Relation<T extends Base> {
     const throughTable = (throughModel as any).tableName;
 
     // Build the first JOIN: source -> through
-    let throughOn: string;
+    const srcTable = new Table(sourceTable);
+    const thrTable = new Table(throughTable);
+    const throughPredicates: Nodes.Node[] = [];
 
     if (throughAssocDef.type === "belongsTo") {
       const throughFk = throughAssocDef.options.foreignKey ?? `${_toUnderscore(throughName)}_id`;
       const throughTargetPk = throughAssocDef.options.primaryKey ?? throughModel.primaryKey ?? "id";
-      throughOn = `"${throughTable}"."${throughTargetPk}" = "${sourceTable}"."${throughFk}"`;
+      throughPredicates.push(thrTable.get(throughTargetPk).eq(srcTable.get(throughFk)));
     } else {
-      // hasMany or hasOne
       const throughPk = throughAssocDef.options.primaryKey ?? sourcePk;
       const throughAsName = throughAssocDef.options.as;
       const throughFk = throughAsName
         ? (throughAssocDef.options.foreignKey ?? `${_toUnderscore(throughAsName)}_id`)
         : (throughAssocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);
-      throughOn = `"${throughTable}"."${throughFk}" = "${sourceTable}"."${throughPk}"`;
+      throughPredicates.push(thrTable.get(throughFk).eq(srcTable.get(throughPk)));
       if (throughAsName) {
-        const typeCol = `${_toUnderscore(throughAsName)}_type`;
-        throughOn += ` AND "${throughTable}"."${typeCol}" = '${modelClass.name}'`;
+        throughPredicates.push(
+          thrTable.get(`${_toUnderscore(throughAsName)}_type`).eq(modelClass.name),
+        );
       }
     }
 
@@ -1110,31 +1400,44 @@ export class Relation<T extends Base> {
     const targetModel = modelRegistry.get(targetClassName);
     if (!targetModel) return null;
     const targetTable = (targetModel as any).tableName;
+    const tgtTable = new Table(targetTable);
 
     const sourceType = sourceAssocDef?.type ?? "belongsTo";
-    let targetOn: string;
+    const targetPredicates: Nodes.Node[] = [];
 
     if (sourceType === "belongsTo") {
       const targetFk = sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(sourceName)}_id`;
       const targetPk = sourceAssocDef?.options?.primaryKey ?? targetModel.primaryKey ?? "id";
-      targetOn = `"${targetTable}"."${targetPk}" = "${throughTable}"."${targetFk}"`;
+      targetPredicates.push(tgtTable.get(targetPk).eq(thrTable.get(targetFk)));
     } else {
-      // hasMany or hasOne: target has FK pointing to through
       const sourceAsName = sourceAssocDef?.options?.as;
       const sourceFk = sourceAsName
         ? (sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(sourceAsName)}_id`)
         : (sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(throughClassName)}_id`);
-      const throughPkCol = throughModel.primaryKey ?? "id";
-      targetOn = `"${targetTable}"."${sourceFk}" = "${throughTable}"."${throughPkCol}"`;
+      const rawThroughPk = throughModel.primaryKey ?? "id";
+      let throughPkCol: string;
+      if (Array.isArray(rawThroughPk)) {
+        if (rawThroughPk.includes("id")) {
+          throughPkCol = "id";
+        } else if (rawThroughPk.length === 1) {
+          throughPkCol = rawThroughPk[0];
+        } else {
+          return null;
+        }
+      } else {
+        throughPkCol = rawThroughPk;
+      }
+      targetPredicates.push(tgtTable.get(sourceFk).eq(thrTable.get(throughPkCol)));
       if (sourceAsName) {
-        const typeCol = `${_toUnderscore(sourceAsName)}_type`;
-        targetOn += ` AND "${targetTable}"."${typeCol}" = '${throughClassName}'`;
+        targetPredicates.push(
+          tgtTable.get(`${_toUnderscore(sourceAsName)}_type`).eq(throughClassName),
+        );
       }
     }
 
     return [
-      { table: throughTable, on: throughOn },
-      { table: targetTable, on: targetOn },
+      { table: throughTable, on: _buildOnString(...throughPredicates) },
+      { table: targetTable, on: _buildOnString(...targetPredicates) },
     ];
   }
 
@@ -1170,14 +1473,14 @@ export class Relation<T extends Base> {
     const ownerFk: string = fkOption ?? `${_toUnderscore(modelClass.name)}_id`;
     const targetFk = `${_toUnderscore(_singularize(assocDef.name))}_id`;
 
+    const srcT = new Table(sourceTable);
+    const joinT = new Table(joinTable);
+    const tgtT = new Table(targetTable);
     return [
-      {
-        table: joinTable,
-        on: `"${joinTable}"."${ownerFk}" = "${sourceTable}"."${sourcePk}"`,
-      },
+      { table: joinTable, on: _buildOnString(joinT.get(ownerFk).eq(srcT.get(sourcePk))) },
       {
         table: targetTable,
-        on: `"${targetTable}"."${targetPk}" = "${joinTable}"."${targetFk}"`,
+        on: _buildOnString(tgtT.get(targetPk as string).eq(joinT.get(targetFk))),
       },
     ];
   }
@@ -1187,7 +1490,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#includes
    */
-  includes(...associations: string[]): Relation<T> {
+  includes(...associations: AssociationSpec[]): Relation<T> {
     return this._clone().includesBang(...associations);
   }
 
@@ -1196,7 +1499,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#preload
    */
-  preload(...associations: string[]): Relation<T> {
+  preload(...associations: AssociationSpec[]): Relation<T> {
     return this._clone().preloadBang(...associations);
   }
 
@@ -1205,7 +1508,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#eager_load
    */
-  eagerLoad(...associations: string[]): Relation<T> {
+  eagerLoad(...associations: AssociationSpec[]): Relation<T> {
     return this._clone().eagerLoadBang(...associations);
   }
 
@@ -1525,7 +1828,7 @@ export class Relation<T extends Base> {
       loadedRecords = this._records;
     } else {
       const sql = this._toSql();
-      const result = await this._modelClass.adapter.selectAll(sql, "Load");
+      const result = await this._modelClass.adapter.selectAll(sql, `${this._modelClass.name} Load`);
       if (token !== this._loadToken) return [];
       const rows = result.toArray();
       loadedRecords = this._instrumentInstantiation(rows);
@@ -1565,7 +1868,7 @@ export class Relation<T extends Base> {
    * promoted to eager_load. See `references_eager_loaded_tables?`
    * in Rails relation.rb — the check is boolean, not per-association.
    */
-  private _includesToPromoteFromReferences(): string[] {
+  private _includesToPromoteFromReferences(): AssociationSpec[] {
     if (this._referencesValues.length === 0) return [];
     if (this._includesAssociations.length === 0) return [];
 
@@ -1582,11 +1885,19 @@ export class Relation<T extends Base> {
     const hasUnjoined = refs.some((ref) => !joinedTables.has(ref));
     if (!hasUnjoined) return [];
 
+    // Rails promotes ALL includes to eager_load when references points to an
+    // unjoined table. We promote flat string includes here; nested hash specs
+    // are left to the preloader because our JoinDependency does not yet
+    // support recursively joining nested association specs. Promoting hash
+    // top-level keys without also recursively joining their sub-associations
+    // would leave sub-associations unloaded. See: references_eager_loaded_tables?
     const alreadyEagerLoaded = new Set(this._eagerLoadAssociations);
-    return this._includesAssociations.filter((name) => !alreadyEagerLoaded.has(name));
+    return this._includesAssociations.filter(
+      (name): name is string => typeof name === "string" && !alreadyEagerLoaded.has(name),
+    );
   }
 
-  private async _executeEagerLoad(eagerAssocs?: string[]): Promise<void> {
+  private async _executeEagerLoad(eagerAssocs?: AssociationSpec[]): Promise<void> {
     const eagerAssociations = eagerAssocs ?? this._eagerLoadAssociations;
     const basePk = (this._modelClass as any).primaryKey ?? "id";
     if (
@@ -1605,8 +1916,13 @@ export class Relation<T extends Base> {
     const { JoinDependency } = await import("./associations/join-dependency.js");
     const jd = new JoinDependency(this._modelClass);
 
-    const fallbackAssocs: string[] = [];
+    const fallbackAssocs: AssociationSpec[] = [];
     for (const assocName of eagerAssociations) {
+      if (typeof assocName !== "string") {
+        // Nested hash specs fall back to preload
+        fallbackAssocs.push(assocName);
+        continue;
+      }
       if (assocName.includes(".")) {
         // Nested paths fall back to preload until per-level grouping is implemented
         fallbackAssocs.push(assocName);
@@ -1643,7 +1959,7 @@ export class Relation<T extends Base> {
     this._applyOrderToManager(manager, table);
 
     if (this._isDistinct) manager.distinct();
-    for (const col of this._groupColumns) manager.group(col);
+    for (const col of this._groupColumns) manager.group(groupColumnToArel(col, table));
     if (!this._havingClause.isEmpty()) manager.having(this._havingClause.ast);
     if (this._lockValue) manager.lock(this._lockValue);
 
@@ -1970,11 +2286,12 @@ export class Relation<T extends Base> {
 
   private _applyJoinsToManager(manager: SelectManager): void {
     for (const join of this._joinClauses) {
+      const tableNode = join.quoted ? new Table(join.table) : join.table;
       const onNode = new Nodes.SqlLiteral(join.on);
       if (join.type === "inner") {
-        manager.join(join.table, onNode);
+        manager.join(tableNode, onNode);
       } else {
-        manager.outerJoin(join.table, onNode);
+        manager.outerJoin(tableNode, onNode);
       }
     }
     for (const rawJoin of this._rawJoins) {
@@ -2034,7 +2351,7 @@ export class Relation<T extends Base> {
     const manager = table.project(new Nodes.SqlLiteral("1 AS one"));
     rel._applyJoinsToManager(manager);
     rel._applyWheresToManager(manager, table);
-    for (const col of rel._groupColumns) manager.group(col);
+    for (const col of rel._groupColumns) manager.group(groupColumnToArel(col, table));
     if (!rel._havingClause.isEmpty()) manager.having(rel._havingClause.ast);
     manager.take(1);
     const rows = await rel._modelClass.adapter.execute(manager.toSql());
@@ -2142,13 +2459,51 @@ export class Relation<T extends Base> {
   ): Promise<unknown[]> {
     if (this._isNone) return [];
 
+    // Mirrors Rails' disallow_raw_sql! check on pluck arguments.
+    // Uses the broader column_name_matcher (allows functions like UPPER(col))
+    // rather than column_name_with_order_matcher (which is stricter, for order).
+    const stringColumns = columns.filter((c): c is string => typeof c === "string");
+    if (stringColumns.length > 0) {
+      disallowRawSqlBang(stringColumns, resolveColumnNameMatcher(this._modelClass.adapter));
+    }
+
     const table = this._modelClass.arelTable;
-    const projections = columns.map((c) => (typeof c === "string" ? table.get(c) : c));
+    const projections = columns.map((c) => {
+      if (typeof c !== "string") return c;
+      // Table-qualified ("table.col"), quoted ('"table"."col"'), function expressions,
+      // or comma-separated lists must pass through as raw SQL.
+      // Comma-separated lists are not allowed in a single pluck argument —
+      // each column must be passed as a separate argument for correct result mapping.
+      if (hasTopLevelComma(c)) {
+        throw argumentError(
+          `pluck does not allow comma-separated column lists in a single argument. ` +
+            `Pass each column as a separate argument: pluck("col1", "col2")`,
+        );
+      }
+      const isComplex =
+        c.includes(".") ||
+        c.includes("(") ||
+        c.includes('"') ||
+        c.includes("`") ||
+        c.includes("::") ||
+        /\s+AS\s+/i.test(c);
+      return isComplex ? new Nodes.SqlLiteral(c) : table.get(c);
+    });
     // Extract column names for result mapping
     const columnNames = columns.map((c) => {
-      if (typeof c === "string") return c;
+      if (typeof c === "string") {
+        // Explicit AS alias is reliable on all adapters.
+        const asMatch = c.match(/\s+AS\s+(?:"([^"]+)"|`([^`]+)`|(\w+))\s*$/i);
+        if (asMatch) return asMatch[1] ?? asMatch[2] ?? asMatch[3];
+        // Function expressions: the result column label is adapter-specific and
+        // can't be reliably predicted — use positional fallback (return null).
+        if (c.includes("(")) return null;
+        // Table-qualified or quoted identifiers: extract the last plain identifier segment.
+        const dotMatch = c.match(/(?:["`]?\w+["`]?\.)? *["`]?(\w+)["`]?\s*$/);
+        if (dotMatch) return dotMatch[1];
+        return c;
+      }
       if (c instanceof Nodes.Attribute) return c.name;
-      // For functions/literals, use the SQL representation
       return null;
     });
     const manager = table.project(...projections);
@@ -2160,14 +2515,14 @@ export class Relation<T extends Base> {
     if (this._offsetValue !== null) manager.skip(this._offsetValue);
 
     const sql = manager.toSql();
-    const rows = await this._modelClass.adapter.execute(sql);
+    const result = await this._modelClass.adapter.selectAll(sql, `${this._modelClass.name} Pluck`);
 
+    const rows = result.toArray();
     if (columns.length === 1) {
       const name = columnNames[0];
       if (name) {
         return rows.map((row) => row[name]);
       }
-      // For expressions, return the first column value from each row
       return rows.map((row) => Object.values(row)[0]);
     }
     return rows.map((row) => {
@@ -2208,7 +2563,7 @@ export class Relation<T extends Base> {
       um.where(arelSql(cond));
     }
 
-    return this._modelClass.adapter.execUpdate(um.toSql(), "Update All");
+    return this._modelClass.adapter.execUpdate(um.toSql(), `${this._modelClass.name} Update All`);
   }
 
   /**
@@ -2239,7 +2594,7 @@ export class Relation<T extends Base> {
       dm.where(arelSql(cond));
     }
 
-    return this._modelClass.adapter.execDelete(dm.toSql(), "Delete All");
+    return this._modelClass.adapter.execDelete(dm.toSql(), `${this._modelClass.name} Delete All`);
   }
 
   /**
@@ -2475,7 +2830,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#select_values
    */
-  get selectValues(): (string | Nodes.SqlLiteral)[] {
+  get selectValues(): (string | Nodes.Node)[] {
     return this._selectColumns ?? [];
   }
 
@@ -2694,7 +3049,7 @@ export class Relation<T extends Base> {
   private _buildProjections(table: Table): any[] {
     if (this._selectColumns) {
       return this._selectColumns.map((c) => {
-        if (c instanceof Nodes.SqlLiteral) return c;
+        if (c instanceof Nodes.Node) return c;
         if (/[(*\s]/.test(c)) return new Nodes.SqlLiteral(c);
         return table.get(c);
       });
@@ -2741,7 +3096,7 @@ export class Relation<T extends Base> {
     if (this._limitValue !== null) manager.take(this._limitValue);
     if (this._offsetValue !== null) manager.skip(this._offsetValue);
     for (const col of this._groupColumns) {
-      manager.group(col);
+      manager.group(groupColumnToArel(col, table));
     }
     return manager;
   }
@@ -2793,7 +3148,7 @@ export class Relation<T extends Base> {
     if (this._offsetValue !== null) manager.skip(this._offsetValue);
 
     for (const col of this._groupColumns) {
-      manager.group(col);
+      manager.group(groupColumnToArel(col, table));
     }
 
     if (!this._havingClause.isEmpty()) manager.having(this._havingClause.ast);
@@ -2816,9 +3171,12 @@ export class Relation<T extends Base> {
       if (raw instanceof Relation) {
         const subSql = raw.toSql();
         const name = alias ?? "subquery";
-        fromExpr = `(${subSql}) "${name.replace(/"/g, '""')}"`;
+        // Rails wraps the alias in SqlLiteral so quote_table_name leaves it bare.
+        // Only emit bare when the alias is a safe identifier; fall back to quoted
+        // for names that would produce invalid SQL or risk injection.
+        fromExpr = `(${subSql}) ${_safeAlias(name)}`;
       } else if (alias) {
-        fromExpr = `${raw} "${alias.replace(/"/g, '""')}"`;
+        fromExpr = `${raw} ${_safeAlias(alias)}`;
       } else {
         fromExpr = raw;
       }
@@ -2863,6 +3221,16 @@ export class Relation<T extends Base> {
     return new Visitors.ToSql().compile(node);
   }
 
+  // Returns true when `col` is a known schema attribute OR is (part of) the
+  // model's primary key. The PK check is needed because `_attributeDefinitions`
+  // may not yet contain `id` (before schema reflection), but it must still be
+  // table-qualified to avoid ambiguous-column errors on joined relations.
+  private _isKnownColumn(col: string): boolean {
+    if (this._modelClass._attributeDefinitions.has(col)) return true;
+    const pk = this._modelClass.primaryKey;
+    return Array.isArray(pk) ? pk.includes(col) : pk === col;
+  }
+
   private _applyOrderToManager(manager: SelectManager, table: Table): void {
     // Raw order clauses (from inOrderOf)
     for (const rawClause of this._rawOrderClauses) {
@@ -2870,27 +3238,57 @@ export class Relation<T extends Base> {
     }
     for (const clause of this._orderClauses) {
       if (typeof clause === "string") {
+        const trimmed = clause.trim();
         // Detect SQL expressions (functions, parens, operators) and pass as raw SQL
-        if (clause.includes("(") || /\bcase\b/i.test(clause) || clause.includes("||")) {
-          manager.order(new Nodes.SqlLiteral(clause));
+        if (trimmed.includes("(") || /\bcase\b/i.test(trimmed) || trimmed.includes("||")) {
+          manager.order(new Nodes.SqlLiteral(trimmed));
         } else {
           // Parse "column ASC/DESC" or "table.column ASC/DESC" strings
-          const match = clause.match(/^([\w.]+)\s+(ASC|DESC)$/i);
+          const match = trimmed.match(/^([A-Za-z_$][\w$.]*)\s+(ASC|DESC)$/i);
           if (match) {
-            // Strip table prefix if present (e.g. "posts.score" → "score")
             const rawCol = match[1];
-            const col = rawCol.includes(".") ? rawCol.split(".").pop()! : rawCol;
             const dir = match[2].toUpperCase();
-            manager.order(dir === "DESC" ? table.get(col).desc() : table.get(col).asc());
+            // Any dotted identifier (one or more dots) passes through as raw SQL.
+            if (rawCol.includes(".")) {
+              manager.order(new Nodes.SqlLiteral(trimmed));
+            } else {
+              const node =
+                !this._fromClause.isEmpty() && !this._isKnownColumn(rawCol)
+                  ? new Nodes.UnqualifiedColumn(table.get(rawCol))
+                  : table.get(rawCol);
+              manager.order(
+                dir === "DESC" ? new Nodes.Descending(node) : new Nodes.Ascending(node),
+              );
+            }
           } else {
-            // Strip table prefix if present
-            const col = clause.includes(".") ? clause.split(".").pop()! : clause;
-            manager.order(table.get(col).asc());
+            // Not "col DIR" form. Only wrap plain letter-start identifiers;
+            // everything else (positional "1", NULLS FIRST, commas, etc.) is raw SQL.
+            if (/^[A-Za-z_$][\w$]*$/.test(trimmed)) {
+              const node =
+                !this._fromClause.isEmpty() && !this._isKnownColumn(trimmed)
+                  ? new Nodes.UnqualifiedColumn(table.get(trimmed))
+                  : table.get(trimmed);
+              manager.order(new Nodes.Ascending(node));
+            } else {
+              manager.order(new Nodes.SqlLiteral(trimmed));
+            }
           }
         }
       } else {
         const [col, dir] = clause;
-        manager.order(dir === "desc" ? table.get(col).desc() : table.get(col).asc());
+        // Function expressions, quoted identifiers, and dotted names must be
+        // emitted as raw SQL — table.get() would double-quote them incorrectly.
+        if (/[()"`]|::/.test(col) || /^[\w$]+(\.[\w$]+)+$/.test(col)) {
+          const lit = new Nodes.SqlLiteral(col);
+          manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
+        } else if (!this._fromClause.isEmpty() && !this._isKnownColumn(col)) {
+          const unqual = new Nodes.UnqualifiedColumn(table.get(col));
+          manager.order(
+            dir === "desc" ? new Nodes.Descending(unqual) : new Nodes.Ascending(unqual),
+          );
+        } else {
+          manager.order(dir === "desc" ? table.get(col).desc() : table.get(col).asc());
+        }
       }
     }
   }
@@ -2921,7 +3319,10 @@ export class Relation<T extends Base> {
     return normalized.map((node) => `(${this._compileArelNode(node)})`);
   }
 
-  private async _preloadAssociationsForRecords(records: T[], assocNames: string[]): Promise<void> {
+  private async _preloadAssociationsForRecords(
+    records: T[],
+    assocNames: AssociationSpec[],
+  ): Promise<void> {
     if (assocNames.length === 0) return;
     const { Preloader } = await import("./associations/preloader.js");
     const preloader = new Preloader({
@@ -2941,7 +3342,9 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#with
    */
-  with(...ctes: Array<Record<string, Relation<any> | string>>): Relation<T> {
+  with(
+    ...ctes: Array<Record<string, Relation<any> | string | Array<Relation<any> | string>>>
+  ): Relation<T> {
     return this._clone().withBang(...ctes);
   }
 
@@ -3294,11 +3697,12 @@ export class Relation<T extends Base> {
       typeof modelPbAccessor === "function"
         ? modelPbAccessor.call(this._modelClass)
         : modelPbAccessor;
+    const metadata = new TableMetadata(this._modelClass, this.table);
     if (modelPb && typeof modelPb.with === "function") {
-      const metadata = new TableMetadata(this._modelClass, this.table);
       pb = modelPb.with(metadata);
     } else {
       pb = new PredicateBuilder(this.table);
+      pb.setTableContext(metadata);
     }
     this._predicateBuilder = pb;
     return pb;
@@ -3321,8 +3725,9 @@ export class Relation<T extends Base> {
 
   get joinedIncludesValues(): string[] {
     if (this._joinClauses.length === 0) return [];
-    return this._includesAssociations.filter((assoc) =>
-      this._joinClauses.some((j) => j.table === assoc),
+    return this._includesAssociations.filter(
+      (assoc): assoc is string =>
+        typeof assoc === "string" && this._joinClauses.some((j) => j.table === assoc),
     );
   }
 
@@ -3392,7 +3797,7 @@ export class Relation<T extends Base> {
     return tracker;
   }
 
-  preloadAssociations(): string[] {
+  preloadAssociations(): AssociationSpec[] {
     return [...this._preloadAssociations, ...this._includesAssociations];
   }
 

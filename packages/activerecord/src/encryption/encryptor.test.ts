@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { Encryptor } from "./encryptor.js";
 import { DecryptionError, ForbiddenClass } from "./errors.js";
 import { MessageSerializer } from "./message-serializer.js";
+import { Message } from "./message.js";
+import { defaultCompressor } from "./config.js";
 import * as crypto from "crypto";
 
 function generateKey(): string {
@@ -118,8 +120,39 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
     expect(() => enc.encrypt({} as any, { key: generateKey() })).toThrow(ForbiddenClass);
   });
 
-  it.skip("store custom metadata with the encrypted data, accessible by the key provider", () => {
-    /* needs key provider integration with metadata */
+  it("store custom metadata with the encrypted data, accessible by the key provider", () => {
+    const secret = generateKey();
+    let receivedMessage: Message | null = null;
+
+    // Key provider that stores publicTags in the message headers and reads them back
+    // during decryption. Mirrors Rails: key_provider.encryption_key.public_tags are
+    // serialized into the message, and decryption_keys receives the full Message.
+    const keyProvider = {
+      encryptionKey() {
+        return { secret, publicTags: { model: "User", attr: "email" } };
+      },
+      decryptionKeys(message: Message) {
+        receivedMessage = message;
+        return [{ secret }];
+      },
+    };
+
+    const enc = new Encryptor();
+    const encrypted = enc.encrypt("test@example.com", { keyProvider });
+    const decrypted = enc.decrypt(encrypted, { keyProvider });
+
+    expect(decrypted).toBe("test@example.com");
+
+    // Verify the custom metadata was stored in the message headers.
+    const serializer = new MessageSerializer();
+    const message = serializer.load(encrypted);
+    expect(message.headers.get("model")).toBe("User");
+    expect(message.headers.get("attr")).toBe("email");
+
+    // Verify the key provider received a Message with the custom metadata headers during decryption.
+    expect(receivedMessage).not.toBeNull();
+    expect(receivedMessage!.headers.get("model")).toBe("User");
+    expect(receivedMessage!.headers.get("attr")).toBe("email");
   });
 
   it("compress? returns the compress setting", () => {
@@ -139,8 +172,28 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
     expect(enc.isEncrypted("plain text")).toBe(false);
   });
 
-  it.skip("decrypt respects encoding even when compression is used", () => {
-    /* needs encoding preservation in compression */
+  it("decrypt respects encoding even when compression is used", () => {
+    // Use a spy compressor so we can assert deflate/inflate were actually called.
+    // The input is non-ASCII (Unicode) to exercise the UTF-8 round-trip path.
+    let deflated = false;
+    let inflated = false;
+    const spyCompressor = {
+      deflate(data: string) {
+        deflated = true;
+        return defaultCompressor.deflate(data);
+      },
+      inflate(data: Buffer) {
+        inflated = true;
+        return defaultCompressor.inflate(data);
+      },
+    };
+    const enc = new Encryptor({ compress: true, compressor: spyCompressor });
+    const key = generateKey();
+    const text = ("The Starfleet is here — こんにちは 🌍 ¡Hola! Привет! " + "終わり！").repeat(40);
+    const encrypted = enc.encrypt(text, { key });
+    expect(enc.decrypt(encrypted, { key })).toBe(text);
+    expect(deflated).toBe(true);
+    expect(inflated).toBe(true);
   });
 
   it("accept a custom compressor", () => {

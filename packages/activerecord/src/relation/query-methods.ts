@@ -8,8 +8,11 @@ import { Nodes } from "@blazetrails/arel";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
-import { sanitizeSqlArray } from "../sanitization.js";
-import { quote } from "../connection-adapters/abstract/quoting.js";
+import { sanitizeSqlArray, disallowRawSqlBang } from "../sanitization.js";
+import {
+  quote,
+  columnNameWithOrderMatcher as abstractOrderMatcher,
+} from "../connection-adapters/abstract/quoting.js";
 import { JoinDependency } from "../associations/join-dependency.js";
 
 /**
@@ -65,6 +68,15 @@ export class CTEJoin {
   }
 }
 
+/**
+ * A single eager-loading specification: either a plain association name string
+ * or a nested hash mirroring Rails' `includes(author: :posts)` syntax.
+ *
+ * Mirrors: the argument accepted by ActiveRecord::QueryMethods#includes,
+ * #preload, and #eager_load.
+ */
+export type AssociationSpec = string | { [assoc: string]: AssociationSpec | AssociationSpec[] };
+
 // ---------------------------------------------------------------------------
 // Host interface: the shape of `this` for bang methods mixed into Relation.
 // Uses TS `private` keyword fields which are accessible at runtime.
@@ -84,9 +96,9 @@ interface QueryMethodsHost {
   _lockValue: string | null;
   _joinClauses: Array<{ type: "inner" | "left"; table: string; on: string }>;
   _rawJoins: string[];
-  _includesAssociations: string[];
-  _preloadAssociations: string[];
-  _eagerLoadAssociations: string[];
+  _includesAssociations: AssociationSpec[];
+  _preloadAssociations: AssociationSpec[];
+  _eagerLoadAssociations: AssociationSpec[];
   _isReadonly: boolean;
   _isStrictLoading: boolean;
   _annotations: string[];
@@ -104,22 +116,45 @@ interface QueryMethodsHost {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function resolveOrderMatcher(host: QueryMethodsHost): RegExp {
+  // Use the public .adapter getter so establishConnection() models get their
+  // concrete adapter's matcher. Walk adapter → inner to handle SchemaAdapter.
+  // Also check the instance method in case the adapter exposes it directly.
+  try {
+    let adapter = (host._modelClass as any)?.adapter ?? (host._modelClass as any)?._adapter;
+    while (adapter) {
+      const matcher =
+        (adapter as any)?.columnNameWithOrderMatcher?.() ??
+        (adapter.constructor as any)?.columnNameWithOrderMatcher?.();
+      if (matcher) return matcher;
+      adapter = (adapter as any).inner;
+    }
+  } catch {
+    // No adapter configured — fall back to abstract pattern.
+  }
+  return abstractOrderMatcher();
+}
+
+// ---------------------------------------------------------------------------
 // Bang variants — mutate `this` in place, return `this`.
 // In Rails, every query method `foo` has a `foo!` that mutates self.
 // The non-bang version calls `spawn.foo!` (clone then mutate).
 // ---------------------------------------------------------------------------
 
-function includesBang(this: QueryMethodsHost, ...associations: string[]): any {
+function includesBang(this: QueryMethodsHost, ...associations: AssociationSpec[]): any {
   this._includesAssociations.push(...associations);
   return this;
 }
 
-function eagerLoadBang(this: QueryMethodsHost, ...associations: string[]): any {
+function eagerLoadBang(this: QueryMethodsHost, ...associations: AssociationSpec[]): any {
   this._eagerLoadAssociations.push(...associations);
   return this;
 }
 
-function preloadBang(this: QueryMethodsHost, ...associations: string[]): any {
+function preloadBang(this: QueryMethodsHost, ...associations: AssociationSpec[]): any {
   this._preloadAssociations.push(...associations);
   return this;
 }
@@ -131,11 +166,76 @@ function referencesBang(this: QueryMethodsHost, ...tables: string[]): any {
   return this;
 }
 
+/** Validate and resolve a CTE name+query into a SQL string. */
+function resolveCteEntry(name: string, query: unknown): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw argumentError(
+      `Invalid CTE name "${name}": must be a valid SQL identifier (letters, digits, underscores, not starting with a digit).`,
+    );
+  }
+  if (query === null || query === undefined) {
+    throw argumentError(
+      `Invalid argument for with(): null/undefined is not allowed for CTE "${name}".`,
+    );
+  }
+  if (Array.isArray(query)) {
+    if (query.length === 0) throw argumentError(`Empty array passed for CTE "${name}".`);
+    for (const q of query) {
+      if (typeof q !== "string" && typeof (q as any)?.toSql !== "function") {
+        const typeName =
+          q !== null && typeof q === "object"
+            ? `type object (${(q as object).constructor?.name ?? "unknown"})`
+            : `type ${typeof q}`;
+        throw argumentError(`Unsupported argument type in array for CTE "${name}": ${typeName}`);
+      }
+    }
+    // Do NOT wrap individual subqueries in extra parens: the CTE body is already
+    // wrapped as `AS (...)` in toSql(), so `SELECT ... UNION SELECT ...` is valid.
+    // Parenthesized `(SELECT ...) UNION (SELECT ...)` is rejected by SQLite inside CTEs.
+    return (query as any[])
+      .map((q: any) => (typeof q === "string" ? q : q.toSql()))
+      .join(" UNION ");
+  }
+  const q = query as any;
+  if (typeof q !== "string" && typeof q?.toSql !== "function") {
+    const typeName =
+      q !== null && typeof q === "object"
+        ? `type object (${(q as object).constructor?.name ?? "unknown"})`
+        : `type ${typeof q}`;
+    throw argumentError(
+      `Unsupported argument type for CTE "${name}": expected a SQL string or Relation, got ${typeName}`,
+    );
+  }
+  return typeof q === "string" ? q : q.toSql();
+}
+
+/** Upsert a CTE into _ctes by name (last-write-wins), matching Rails behavior. */
+function upsertCte(
+  ctes: Array<{ name: string; sql: string; recursive: boolean }>,
+  name: string,
+  sql: string,
+  recursive: boolean,
+): void {
+  const existing = ctes.findIndex((c) => c.name === name);
+  if (existing >= 0) {
+    ctes[existing] = { name, sql, recursive };
+  } else {
+    ctes.push({ name, sql, recursive });
+  }
+}
+
 function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): any {
   for (const cte of ctes) {
+    if (!isPlainObject(cte)) {
+      const typeName =
+        cte !== null && typeof cte === "object"
+          ? `type object (${(cte as object).constructor?.name ?? "unknown"})`
+          : `type ${typeof cte}`;
+      throw argumentError(`Unsupported argument type: ${typeName}`);
+    }
     for (const [name, query] of Object.entries(cte)) {
-      const sql = typeof query === "string" ? query : query.toSql();
-      this._ctes.push({ name, sql, recursive: false });
+      const sql = resolveCteEntry(name, query);
+      upsertCte(this._ctes, name, sql, false);
     }
   }
   return this;
@@ -143,18 +243,28 @@ function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): 
 
 function withRecursiveBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): any {
   for (const cte of ctes) {
+    if (!isPlainObject(cte)) {
+      const typeName =
+        cte !== null && typeof cte === "object"
+          ? `type object (${(cte as object).constructor?.name ?? "unknown"})`
+          : `type ${typeof cte}`;
+      throw argumentError(`Unsupported argument type: ${typeName}`);
+    }
     for (const [name, query] of Object.entries(cte)) {
-      const sql = typeof query === "string" ? query : query.toSql();
-      this._ctes.push({ name, sql, recursive: true });
+      const sql = resolveCteEntry(name, query);
+      upsertCte(this._ctes, name, sql, true);
     }
   }
   return this;
 }
 
 function reselectBang(this: QueryMethodsHost, ...columns: any[]): any {
-  this._selectColumns = columns.map((c: any) =>
-    typeof c === "object" && c !== null && "value" in c ? c : String(c),
-  );
+  this._selectColumns = columns.map((c: any) => {
+    if (c instanceof Nodes.Node) return c;
+    if (typeof c === "object" && c !== null && "value" in c)
+      return new Nodes.SqlLiteral((c as { value: string }).value);
+    return String(c);
+  });
   return this;
 }
 
@@ -166,17 +276,49 @@ function reselectBang(this: QueryMethodsHost, ...columns: any[]): any {
  */
 function _selectBang(this: QueryMethodsHost, ...columns: any[]): any {
   const flat = columns.flat(Infinity);
-  const normalized = flat.map((c: any) =>
-    typeof c === "object" && c !== null && "value" in c ? c : String(c),
-  );
+  const normalized = flat.map((c: any) => {
+    if (c instanceof Nodes.Node) return c;
+    if (typeof c === "object" && c !== null && "value" in c)
+      return new Nodes.SqlLiteral((c as { value: string }).value);
+    return String(c);
+  });
   if (this._selectColumns === null) this._selectColumns = [];
-  const keyOf = (c: unknown) => (typeof c === "string" ? c : (c as { value: string }).value);
-  const seen = new Set(this._selectColumns.map(keyOf));
+  const seenStrings = new Set<string>();
+  const seenNodeHashes = new Map<number, Nodes.Node[]>();
+  const nodeIsDuplicate = (node: Nodes.Node): boolean => {
+    const h = node.hash();
+    const bucket = seenNodeHashes.get(h);
+    if (!bucket) return false;
+    return bucket.some((n) => n.eql(node));
+  };
+  const addNodeToSeen = (node: Nodes.Node): void => {
+    const h = node.hash();
+    const bucket = seenNodeHashes.get(h);
+    if (bucket) bucket.push(node);
+    else seenNodeHashes.set(h, [node]);
+  };
+  for (const existing of this._selectColumns) {
+    if (typeof existing === "string") seenStrings.add(existing);
+    else if (existing instanceof Nodes.Node) addNodeToSeen(existing);
+    else seenStrings.add((existing as { value: string }).value);
+  }
   for (const col of normalized) {
-    const key = keyOf(col);
-    if (!seen.has(key)) {
-      this._selectColumns.push(col);
-      seen.add(key);
+    if (typeof col === "string") {
+      if (!seenStrings.has(col)) {
+        this._selectColumns.push(col);
+        seenStrings.add(col);
+      }
+    } else if (col instanceof Nodes.Node) {
+      if (!nodeIsDuplicate(col)) {
+        this._selectColumns.push(col);
+        addNodeToSeen(col);
+      }
+    } else {
+      const key = (col as { value: string }).value;
+      if (!seenStrings.has(key)) {
+        this._selectColumns.push(col);
+        seenStrings.add(key);
+      }
     }
   }
   return this;
@@ -194,12 +336,42 @@ function regroupBang(this: QueryMethodsHost, ...columns: string[]): any {
 
 function orderBang(
   this: QueryMethodsHost,
-  ...args: Array<string | Record<string, "asc" | "desc">>
+  ...args: Array<
+    string | Record<string, "asc" | "desc"> | Nodes.Node | string[] | [Nodes.Node, ...unknown[]]
+  >
 ): any {
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
-    if (typeof arg === "string") {
+    if (Array.isArray(arg)) {
+      const [first, ...rest] = arg as unknown[];
+      if (first instanceof Nodes.Node) {
+        // Bind array: [Arel.sql("col = ?"), bind1, ...] — Arel bypasses check
+        const rawSql = (first as any).value ?? (first as Nodes.Node).toSql();
+        const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
+        if (interpolated.trim() !== "") this._orderClauses.push(interpolated);
+      } else {
+        // Plain string array: all elements must be strings; validate each immediately.
+        if (!(arg as unknown[]).every((e) => typeof e === "string")) {
+          throw argumentError("Order arguments passed as an array must contain only strings");
+        }
+        disallowRawSqlBang(arg as string[], resolveOrderMatcher(this));
+        for (const elem of arg as string[]) {
+          if (elem.trim() !== "") this._orderClauses.push(elem);
+        }
+      }
+    } else if (arg instanceof Nodes.Node) {
+      // Arel node (e.g. Arel.sql("title")) — store raw SQL directly.
+      const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
+      if (rawSql && rawSql.trim() !== "") this._orderClauses.push(rawSql);
+    } else if (typeof arg === "string") {
+      if (arg.trim() === "") {
+        const next = args[i + 1];
+        i += typeof next === "string" && /^(asc|desc)$/i.test(next) ? 2 : 1;
+        continue;
+      }
+      // Validate immediately — mirrors Rails raising on order("invalid") at call time.
+      disallowRawSqlBang([arg], resolveOrderMatcher(this));
       const next = args[i + 1];
       if (typeof next === "string" && /^(asc|desc)$/i.test(next)) {
         this._orderClauses.push([arg, next.toLowerCase() as "asc" | "desc"]);
@@ -207,10 +379,18 @@ function orderBang(
         continue;
       }
       this._orderClauses.push(arg);
-    } else {
+    } else if (arg !== null && typeof arg === "object") {
+      // Hash form { col: "asc"|"desc" } — validate column and direction immediately.
       for (const [col, dir] of Object.entries(arg)) {
-        this._orderClauses.push([col, dir]);
+        disallowRawSqlBang([col], resolveOrderMatcher(this));
+        if (!/^(asc|desc)$/i.test(String(dir))) {
+          throw argumentError(`Direction "${dir}" is invalid. Valid directions are: asc, desc`);
+        }
+        this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
       }
+    } else {
+      const argType = arg === null ? "null" : typeof arg;
+      throw argumentError(`Unsupported order argument: ${argType}`);
     }
     i++;
   }
@@ -219,17 +399,60 @@ function orderBang(
 
 function reorderBang(
   this: QueryMethodsHost,
-  ...args: Array<string | Record<string, "asc" | "desc">>
+  ...args: Array<
+    string | Record<string, "asc" | "desc"> | Nodes.Node | string[] | [Nodes.Node, ...unknown[]]
+  >
 ): any {
   this._orderClauses = [];
-  for (const arg of args) {
-    if (typeof arg === "string") {
-      this._orderClauses.push(arg);
-    } else {
-      for (const [col, dir] of Object.entries(arg)) {
-        this._orderClauses.push([col, dir]);
+  this._rawOrderClauses = [];
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (Array.isArray(arg)) {
+      const [first, ...rest] = arg as unknown[];
+      if (first instanceof Nodes.Node) {
+        const rawSql = (first as any).value ?? (first as Nodes.Node).toSql();
+        const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
+        if (interpolated.trim() !== "") this._orderClauses.push(interpolated);
+      } else {
+        if (!(arg as unknown[]).every((e) => typeof e === "string")) {
+          throw argumentError("Order arguments passed as an array must contain only strings");
+        }
+        disallowRawSqlBang(arg as string[], resolveOrderMatcher(this));
+        for (const elem of arg as string[]) {
+          if (elem.trim() !== "") this._orderClauses.push(elem);
+        }
       }
+    } else if (arg instanceof Nodes.Node) {
+      const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
+      if (rawSql && rawSql.trim() !== "") this._orderClauses.push(rawSql);
+    } else if (typeof arg === "string") {
+      if (arg.trim() === "") {
+        const next = args[i + 1];
+        i += typeof next === "string" && /^(asc|desc)$/i.test(next) ? 2 : 1;
+        continue;
+      }
+      disallowRawSqlBang([arg], resolveOrderMatcher(this));
+      const next = args[i + 1];
+      if (typeof next === "string" && /^(asc|desc)$/i.test(next)) {
+        this._orderClauses.push([arg, next.toLowerCase() as "asc" | "desc"]);
+        i += 2;
+        continue;
+      }
+      this._orderClauses.push(arg);
+    } else if (arg !== null && typeof arg === "object") {
+      for (const [col, dir] of Object.entries(arg as Record<string, string>)) {
+        disallowRawSqlBang([col], resolveOrderMatcher(this));
+        if (!/^(asc|desc)$/i.test(String(dir))) {
+          throw argumentError(`Direction "${dir}" is invalid. Valid directions are: asc, desc`);
+        }
+        this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
+      }
+    } else {
+      const argType = arg === null ? "null" : typeof arg;
+      throw argumentError(`Unsupported order argument: ${argType}`);
     }
+    i++;
   }
   return this;
 }
@@ -265,7 +488,8 @@ export type UnscopeType =
   | "having"
   | "optimizerHints"
   | "annotate"
-  | "createWith";
+  | "createWith"
+  | "with";
 
 export const VALID_UNSCOPING_VALUES: ReadonlySet<UnscopeType> = new Set<UnscopeType>([
   "where",
@@ -286,6 +510,7 @@ export const VALID_UNSCOPING_VALUES: ReadonlySet<UnscopeType> = new Set<UnscopeT
   "optimizerHints",
   "annotate",
   "createWith",
+  "with",
 ]);
 
 function unscopeBang(
@@ -358,6 +583,9 @@ function unscopeBang(
           break;
         case "annotate":
           this._annotations = [];
+          break;
+        case "with":
+          this._ctes = [];
           break;
       }
     } else if (scope && typeof scope === "object") {

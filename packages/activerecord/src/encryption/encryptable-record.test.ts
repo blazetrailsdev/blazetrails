@@ -9,6 +9,8 @@ import {
   makeEncryptedBookWithDowncaseName,
   makeEncryptedBookIgnoreCase,
   makeEncryptedAuthor,
+  makeBookThatWillFailToEncryptName,
+  makeEncryptedBookWithCustomCompressor,
   makeFreshModel,
   makeKeyProvider,
   assertEncryptedAttribute,
@@ -16,6 +18,9 @@ import {
   withEncryptionContext,
   withoutEncryption,
   DecryptionError,
+  EncryptionError,
+  AUTHOR_NAME_LIMIT,
+  Base,
 } from "./test-helpers.js";
 import { Configurable } from "./configurable.js";
 import { EncryptableRecord } from "./encryptable-record.js";
@@ -254,8 +259,13 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     expect(found!.name).toBe("dune");
   });
 
-  it.skip("when ignore_case: true, it ignores case in queries but keep it when reading the attribute", () => {
-    // requires dual-column storage (name + original_name) not yet implemented
+  it("when ignore_case: true, it ignores case in queries but keep it when reading the attribute", async () => {
+    const Book = makeEncryptedBookIgnoreCase(freshAdapter());
+    new Book();
+    await Book.create({ name: "Dune" });
+    const book = await Book.findBy({ name: "dune" });
+    expect(book).not.toBeNull();
+    expect(book!.name).toBe("Dune");
   });
 
   it("when ignore_case: true, it lets you update attributes normally", async () => {
@@ -296,30 +306,298 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     expect(isEncryptedAttribute(Post, "id")).toBe(false);
   });
 
-  it.skip("encrypts serialized attributes", () => {});
-  it.skip("encrypts serialized attributes where encrypts is declared first", () => {});
+  it("encrypts serialized attributes", async () => {
+    // `attribute("settings", "json")` registers a JSON cast type; `encrypts("settings")`
+    // wraps it in EncryptedAttributeType so the serialized JSON string is encrypted.
+    const adp = freshAdapter();
+    const Article = makeFreshModel(adp, { id: "integer", settings: "json" });
+    Article.encrypts("settings");
+    new Article();
+
+    const settings = { theme: "dark", font_size: 16 };
+    const article = await Article.create({ settings });
+
+    // The DB value is a ciphertext, not the raw JSON string.
+    const dbValue = article._attributes.valuesForDatabase()["settings"] as string;
+    expect(typeof dbValue).toBe("string");
+    expect(dbValue).not.toBe(JSON.stringify(settings));
+
+    // Round-trip: the object is decrypted and deserialized on read.
+    const reloaded = await Article.find(article.id);
+    expect(reloaded.settings).toEqual(settings);
+  });
+
+  it("encrypts serialized attributes where encrypts is declared first", async () => {
+    // _pendingEncryptions defers the wrapping until attribute() is called.
+    // applyPendingEncryptions() then wraps the resolved JSON type, so declaration
+    // order (encrypts before attribute) is transparent.
+    const adp = freshAdapter();
+    const Article = class extends Base {
+      static {
+        this.adapter = adp;
+        this.encrypts("settings"); // declared BEFORE the JSON type
+        this.attribute("id", "integer");
+        this.attribute("settings", "json");
+      }
+    } as any;
+    new Article();
+
+    const settings = { theme: "light", font_size: 14 };
+    const article = await Article.create({ settings });
+
+    const dbValue = article._attributes.valuesForDatabase()["settings"] as string;
+    expect(typeof dbValue).toBe("string");
+    expect(dbValue).not.toBe(JSON.stringify(settings));
+
+    const reloaded = await Article.find(article.id);
+    expect(reloaded.settings).toEqual(settings);
+  });
+
   it.skip("encrypts store attributes with accessors", () => {});
-  it.skip("encryption errors when saving records will raise the error and don't save anything", () => {});
-  it.skip("can't modify encrypted attributes when frozen_encryption is true", () => {});
-  it.skip("can only save unencrypted attributes when frozen encryption is true", () => {});
-  it.skip("validate column sizes", () => {});
-  it.skip("forces UTF-8 encoding for deterministic attributes by default", () => {});
-  it.skip("forces encoding for deterministic attributes based on the configured option", () => {});
-  it.skip("forced encoding for deterministic attributes will replace invalid characters", () => {});
-  it.skip("forced encoding for deterministic attributes can be disabled", () => {});
-  it.skip("support encrypted attributes defined on columns with default values", () => {});
-  it.skip("loading records with encrypted attributes defined on columns with default values", () => {});
-  it.skip("can dump and load records that use encryption", () => {});
-  it.skip("supports decrypting data encrypted non deterministically with SHA1 when digest class is SHA256", () => {});
-  it.skip("when ignore_case: true, it keeps both the attribute and the _original counterpart encrypted", () => {});
-  it.skip("when ignore_case: true, it returns the actual value when not encrypted", () => {});
-  it.skip("when ignore_case: true, users can override accessors and call super", () => {});
+  it("encryption errors when saving records will raise the error and don't save anything", async () => {
+    const Book = makeBookThatWillFailToEncryptName(freshAdapter());
+    new Book();
+    const countBefore = await Book.count();
+    await expect(Book.create({ name: "Dune" })).rejects.toThrow(EncryptionError);
+    expect(await Book.count()).toBe(countBefore);
+  });
+
+  it("can't modify encrypted attributes when frozen_encryption is true", async () => {
+    const Post = makeEncryptedPost(freshAdapter());
+    new Post();
+    const post = await Post.create({ title: "Original", body: "body" });
+    post.title = "Some new title";
+    expect(post.isValid()).toBe(true);
+    withEncryptionContext({ frozenEncryption: true }, () => {
+      expect(post.isValid()).toBe(false);
+    });
+  });
+
+  it("can only save unencrypted attributes when frozen encryption is true", async () => {
+    // Build a model with one encrypted (name) and one non-encrypted (notes) attribute.
+    const adp = freshAdapter();
+    const Article = makeFreshModel(adp, { id: "integer", name: "string", notes: "string" });
+    Article.encrypts("name");
+    new Article();
+    const article = await Article.create({ name: "Dune", notes: "original" });
+    // Updating a non-encrypted attribute via save succeeds even when frozen.
+    await withEncryptionContext({ frozenEncryption: true }, async () => {
+      article.notes = "updated";
+      await article.save();
+    });
+    const reloaded = await Article.find(article.id);
+    expect(reloaded.notes).toBe("updated");
+    // Updating an encrypted attribute fails validation when frozen.
+    withEncryptionContext({ frozenEncryption: true }, () => {
+      article.name = "New title";
+      expect(article.isValid()).toBe(false);
+      expect(article.errors.added("name", "can't be modified because it is encrypted")).toBe(true);
+    });
+  });
+  it("validate column sizes", async () => {
+    const Author = makeEncryptedAuthor(freshAdapter());
+    new Author();
+    expect(new Author({ name: "jorge" }).isValid()).toBe(true);
+    expect(new Author({ name: "a".repeat(AUTHOR_NAME_LIMIT + 1) }).isValid()).toBe(false);
+    const author = await Author.create({ name: "a".repeat(AUTHOR_NAME_LIMIT + 1) });
+    expect(author.isValid()).toBe(false);
+  });
+
+  it("forces UTF-8 encoding for deterministic attributes by default", async () => {
+    // UTF-8 is the default — JS strings are always valid Unicode so this is
+    // a no-op, but the feature must not break normal round-trips.
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+    const book = await Book.create({ name: "Dune" });
+    const reloaded = await Book.find(book.id);
+    expect(reloaded.name).toBe("Dune");
+  });
+
+  it("forces encoding for deterministic attributes based on the configured option", async () => {
+    // ASCII encoding: non-ASCII chars (> 0x7F) are replaced with "?" so two
+    // strings that differ only in non-ASCII content produce the same ciphertext.
+    Configurable.config.forcedEncodingForDeterministicEncryption = "ASCII";
+    const adp = freshAdapter();
+    const Book = makeEncryptedBook(adp);
+    new Book();
+    const book = await Book.create({ name: "Helló" });
+    const normalized = await Book.create({ name: "Hell?" });
+    expect(ciphertextFor(book, "name")).toBe(ciphertextFor(normalized, "name"));
+    const reloaded = await Book.find(book.id);
+    expect(reloaded.name).toBe("Hell?");
+  });
+
+  it("forced encoding for deterministic attributes will replace invalid characters", async () => {
+    // ASCII encoding replaces chars > 0x7F with "?".
+    Configurable.config.forcedEncodingForDeterministicEncryption = "ASCII";
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+    const book = await Book.create({ name: "Hello üñ" });
+    const reloaded = await Book.find(book.id);
+    expect(reloaded.name).toBe("Hello ??");
+  });
+
+  it("forced encoding for deterministic attributes can be disabled", async () => {
+    // With forced encoding disabled (""), non-ASCII chars are preserved as-is.
+    Configurable.config.forcedEncodingForDeterministicEncryption = "";
+    const adp = freshAdapter();
+    const Book = makeEncryptedBook(adp);
+    new Book();
+    const book = await Book.create({ name: "Helló" });
+    const unrelated = await Book.create({ name: "Hell?" });
+    // Different values -> different ciphertexts (no normalization flattens them).
+    expect(ciphertextFor(book, "name")).not.toBe(ciphertextFor(unrelated, "name"));
+    const reloaded = await Book.find(book.id);
+    expect(reloaded.name).toBe("Helló");
+  });
+
+  it("support encrypted attributes defined on columns with default values", async () => {
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+    const book = await Book.create({});
+    assertEncryptedAttribute(book, "name", "<untitled>");
+  });
+
+  it.skip("loading records with encrypted attributes defined on columns with default values", () => {
+    // requires upsert/insert_on_duplicate_update support
+  });
+  it("can dump and load records that use encryption", async () => {
+    // Mirrors Rails' Marshal.dump/Marshal.load test: after serializing a model's raw
+    // attribute state (ciphertexts) and reconstructing a new instance via the DB-load
+    // path, the encrypted attribute should decrypt correctly on read.
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+
+    const book = await Book.create({ name: "Dune" });
+
+    // Capture raw DB values (ciphertexts) — equivalent to what Marshal.dump preserves.
+    const rawValues = book._attributes.valuesForDatabase();
+
+    // Reconstruct via _instantiate (the DB-load path) so writeFromDatabase → deserialize
+    // is invoked, matching how Rails Marshal.load reconstructs AR objects.
+    const loadedBook = (Book as any)._instantiate(rawValues);
+
+    expect(loadedBook.name).toBe("Dune");
+  });
+  it("supports decrypting data encrypted non deterministically with SHA1 when digest class is SHA256", async () => {
+    Configurable.configure({
+      primaryKey: "the primary key",
+      deterministicKey: "the deterministic key",
+      keyDerivationSalt: "the salt",
+    });
+    Configurable.config.supportSha1ForNonDeterministicEncryption = true;
+
+    const { KeyGenerator } = await import("./key-generator.js");
+    const { DerivedSecretKeyProvider } = await import("./derived-secret-key-provider.js");
+
+    const keyProviderSha1 = new DerivedSecretKeyProvider("the primary key", {
+      keyGenerator: new KeyGenerator("SHA1"),
+    });
+    const keyProviderSha256 = new DerivedSecretKeyProvider("the primary key", {
+      keyGenerator: new KeyGenerator("SHA256"),
+    });
+
+    const adp = freshAdapter();
+    const PostSha1 = makeFreshModel(adp, { id: "integer", title: "string", body: "string" });
+    PostSha1.encrypts("title", { keyProvider: keyProviderSha1 });
+    new PostSha1();
+    await PostSha1.create({ title: "Post 1", body: "body" });
+
+    const PostSha256 = makeFreshModel(adp, { id: "integer", title: "string", body: "string" });
+    PostSha256._tableName = (PostSha1 as any)._tableName;
+    PostSha256.encrypts("title", { keyProvider: keyProviderSha256 });
+    new PostSha256();
+
+    const posts = await PostSha256.all();
+    expect(posts.map((p: any) => p.title)).toContain("Post 1");
+  });
+  it("when ignore_case: true, it keeps both the attribute and the _original counterpart encrypted", async () => {
+    const Book = makeEncryptedBookIgnoreCase(freshAdapter());
+    new Book();
+    const book = await Book.create({ name: "Dune" });
+    assertEncryptedAttribute(book, "name", "Dune");
+    assertEncryptedAttribute(book, "original_name", "Dune");
+    // In-memory read before save reflects the assigned value immediately.
+    const unsaved = new Book({ name: "Arrakis" });
+    expect(unsaved.name).toBe("Arrakis");
+    // Null-clearing: assigning null clears original_name and returns null.
+    unsaved.name = null;
+    expect(unsaved.name).toBeNull();
+  });
+
+  it("when ignore_case: true, it returns the actual value when not encrypted", async () => {
+    Configurable.config.supportUnencryptedData = true;
+    const Book = makeEncryptedBookIgnoreCase(freshAdapter());
+    new Book();
+    const book = await withoutEncryption(async () => Book.create({ name: "Dune" }));
+    expect(book.name).toBe("Dune");
+  });
+
+  it("when ignore_case: true, users can override accessors and call super", async () => {
+    const Book = makeEncryptedBookIgnoreCase(freshAdapter());
+    const OverridingBook = class extends Book {
+      get name() {
+        return `${super.name}-overridden`;
+      }
+    };
+    new Book();
+    await Book.create({ name: "Dune" });
+    const found = await Book.findBy({ name: "dune" });
+    expect(found).not.toBeNull();
+    const overridingInstance = found!.becomes(OverridingBook);
+    expect(overridingInstance.name).toBe("Dune-overridden");
+  });
   it.skip("binary data can be encrypted", () => {});
   it.skip("binary data can be encrypted uncompressed", () => {});
   it.skip("serialized binary data can be encrypted", () => {});
-  it.skip("deterministic ciphertexts remain constant", () => {});
-  it.skip("can compress data with custom compressor", () => {});
-  it.skip("type method returns cast type", () => {});
-  it.skip("encrypts normalized data", () => {});
-  it.skip("encrypts attribute data", () => {});
+  it.skip("deterministic ciphertexts remain constant", () => {
+    // Requires exact Rails-compatible test key configuration to decrypt the
+    // hardcoded ciphertext. Deferred until key derivation parity is confirmed.
+  });
+
+  it("can compress data with custom compressor", async () => {
+    const Book = makeEncryptedBookWithCustomCompressor(freshAdapter());
+    new Book();
+    // String length > 140 bytes to trigger compression path.
+    const name = "a".repeat(141);
+    const book = await Book.create({ name });
+    const reloaded = await Book.find(book.id);
+    // inflate adds "[compressed] " prefix, verifying the custom compressor path
+    // was exercised — mirrors Rails' EncryptedBookWithCustomCompressor assertion.
+    expect(reloaded.name).toMatch(/^\[compressed\] /);
+    expect(reloaded.name).toBe("[compressed] " + name);
+  });
+  it("type method returns cast type", () => {
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+    const Post = makeEncryptedPost(freshAdapter());
+    new Post();
+    expect((Book as any).typeForAttribute("name").type()).toBe("string");
+    expect((Post as any).typeForAttribute("body").type()).toBe("string");
+  });
+
+  it("encrypts normalized data", async () => {
+    // Both NormalizedFirst and NormalizedSecond use downcase:true normalization.
+    const adp = freshAdapter();
+    const BookNormalized = makeFreshModel(adp, { id: "integer", name: "string", logo: "string" });
+    BookNormalized.encrypts("name", { deterministic: true, downcase: true });
+    BookNormalized.encrypts("logo", { deterministic: true, downcase: true });
+    new BookNormalized();
+    const b1 = await BookNormalized.create({ name: "Book" });
+    assertEncryptedAttribute(await BookNormalized.find(b1.id), "name", "book");
+    const b2 = await BookNormalized.create({ logo: "Book" });
+    assertEncryptedAttribute(await BookNormalized.find(b2.id), "logo", "book");
+  });
+
+  it("encrypts attribute data", async () => {
+    // The DB column stores ciphertext (text), while the cast type is date.
+    // In Rails, encrypted attribute columns are always text in the schema.
+    const adp = freshAdapter();
+    const BookDate = makeFreshModel(adp, { id: "integer", name: "string" });
+    await BookDate.create({ name: "bootstrap" }); // write triggers text column creation
+    BookDate.attribute("name", "date"); // override cast type to date (DB stays text)
+    BookDate.encrypts("name");
+    const book = await BookDate.create({ name: "2024-01-01" });
+    assertEncryptedAttribute(book, "name", new Date("2024-01-01"));
+  });
 });

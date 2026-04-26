@@ -1,4 +1,4 @@
-import { Model } from "@blazetrails/activemodel";
+import { Model, type Type } from "@blazetrails/activemodel";
 import "./type.js"; // Register AR type overrides into AM's type registry
 import {
   Table,
@@ -8,6 +8,7 @@ import {
   DeleteManager,
   Nodes,
   sql as arelSql,
+  setToSqlVisitor,
 } from "@blazetrails/arel";
 import type { DatabaseAdapter } from "./adapter.js";
 import type { Relation } from "./relation.js";
@@ -104,9 +105,11 @@ import {
 } from "./attribute-methods/query.js";
 import {
   toParam as _toParam,
+  toParamClass as _toParamClass,
   cacheKey as _cacheKey,
   cacheKeyWithVersion as _cacheKeyWithVersion,
   cacheVersion as _cacheVersion,
+  collectionCacheKey as _collectionCacheKey,
 } from "./integration.js";
 import {
   noTouching as _noTouchingBlock,
@@ -137,6 +140,11 @@ import {
 } from "./scoping/default.js";
 import * as NamedScoping from "./scoping/named.js";
 import { Associations as _Associations, updateCounterCaches } from "./associations.js";
+import {
+  hasMultiparameterKeys,
+  extractMultiparameterCallstack,
+  executeMultiparameterAssignment,
+} from "./multiparameter-attribute-assignment.js";
 
 /** @internal */
 export function quoteSqlValue(v: unknown, asArray = false): string {
@@ -208,6 +216,20 @@ export function _setScopeProxyWrapper(wrapper: (rel: any) => any): void {
 let _onAdapterSet: ((modelClass: any) => void) | null = null;
 export function _setOnAdapterSetHook(hook: ((modelClass: any) => void) | null): void {
   _onAdapterSet = hook;
+}
+
+// Mirrors Rails' AbstractAdapter#arel_visitor — routes Node#toSql() through the
+// dialect-specific visitor (e.g. SQLite booleans as 1/0, no FOR UPDATE, etc.).
+// This is process-global: the last-assigned adapter's visitor wins, matching
+// Rails' single-connection-per-process assumption. Multi-adapter processes must
+// manage visitor selection themselves.
+function _wireArelVisitor(adapter: DatabaseAdapter): void {
+  const visitor = (adapter as { arelVisitor?: object }).arelVisitor;
+  if (visitor) {
+    setToSqlVisitor(
+      (visitor as object).constructor as new () => { compile(node: Nodes.Node): string },
+    );
+  }
 }
 
 /**
@@ -378,6 +400,7 @@ export class Base extends Model {
   // -- Class-level configuration --
   static _tableName: string | null = null;
   static _primaryKey: string | string[] = "id";
+  static readonly _isActiveRecordBase = true;
   static _adapter: DatabaseAdapter | null = null;
   static _connectionHandler: ConnectionHandler = new ConnectionHandler();
   static _configPath: string | null = null;
@@ -385,6 +408,9 @@ export class Base extends Model {
   static _connectionClass = false;
   static automaticScopeInversing = false;
   static automaticallyInvertPluralAssociations = false;
+  static paramDelimiter = "_";
+  static cacheVersioning = false;
+  static cacheTimestampFormat: "usec" | "number" = "usec";
   static _tableNamePrefix = "";
   static _tableNameSuffix = "";
   static _protectedEnvironments: string[] = ["production"];
@@ -460,6 +486,10 @@ export class Base extends Model {
    */
   static primaryClassQ(): boolean {
     return this.connectionClassForSelf() === Base;
+  }
+
+  static currentPreventingWrites(): boolean {
+    return _Core.currentPreventingWrites.call(this);
   }
 
   /**
@@ -577,7 +607,12 @@ export class Base extends Model {
   static attribute(
     name: string,
     typeName: string,
-    options?: { default?: unknown; virtual?: boolean; userProvidedDefault?: boolean },
+    options?: {
+      default?: unknown;
+      virtual?: boolean;
+      userProvidedDefault?: boolean;
+      limit?: number | null;
+    },
   ): void {
     // STI subclasses share the base's `_attributeDefinitions` — matching
     // Rails' `ActiveRecord::Inheritance` where `attribute_types` is a
@@ -597,6 +632,16 @@ export class Base extends Model {
       delete (this.prototype as any).id;
     }
     applyPendingEncryptions(this);
+  }
+
+  /**
+   * Returns the type object for a named attribute.
+   *
+   * Mirrors: ActiveRecord::ModelSchema::ClassMethods#type_for_attribute
+   */
+  static override typeForAttribute(name: string): Type | null {
+    (ModelSchema.loadSchema as any).call(this);
+    return (this._attributeDefinitions as any)?.get(name)?.type ?? null;
   }
 
   /**
@@ -639,6 +684,7 @@ export class Base extends Model {
       return;
     }
     this._adapter = adapter;
+    _wireArelVisitor(adapter);
     if (_onAdapterSet) _onAdapterSet(this);
 
     // Full schema reset on adapter swap: drops schema-sourced defs and
@@ -708,6 +754,7 @@ export class Base extends Model {
     const modelPool = this._connectionHandler.retrieveConnectionPool(this.name);
     if (modelPool) {
       this._adapter = modelPool.checkout();
+      _wireArelVisitor(this._adapter);
       if (_onAdapterSet) _onAdapterSet(this);
       return this._adapter;
     }
@@ -719,6 +766,7 @@ export class Base extends Model {
     if (connPool) {
       if (!connectionClass._adapter) {
         connectionClass._adapter = connPool.checkout();
+        _wireArelVisitor(connectionClass._adapter);
         if (_onAdapterSet) _onAdapterSet(connectionClass);
       }
       return connectionClass._adapter;
@@ -1811,6 +1859,7 @@ export class Base extends Model {
   declare static offset: typeof Querying.offset;
   declare static distinct: typeof Querying.distinct;
   declare static joins: typeof Querying.joins;
+  declare static optimizerHints: typeof Querying.optimizerHints;
   declare static leftJoins: typeof Querying.leftJoins;
   declare static leftOuterJoins: typeof Querying.leftOuterJoins;
   declare static none: typeof Querying.none;
@@ -1960,7 +2009,45 @@ export class Base extends Model {
 
   constructor(attrs: Record<string, unknown> = {}) {
     (new.target as typeof Base | undefined)?._requireConcreteClass();
-    super(attrs);
+    if (hasMultiparameterKeys(attrs)) {
+      // Mirrors Rails: Base#initialize calls assign_attributes which handles
+      // multiparameter keys. We split: regular attrs go through the Model
+      // constructor for setup, mp attrs are assembled after.
+      //
+      // Suppress after_initialize so it fires after ALL attrs are present
+      // (not just the regular subset), and re-snapshot dirty state so mp
+      // attrs appear clean (part of initial construction, not changes).
+      const ctor = new.target as typeof Base;
+      const suppressor = ctor as typeof ctor & { _suppressInitializeCallback?: boolean };
+      const hadOwnSuppressor = Object.prototype.hasOwnProperty.call(
+        suppressor,
+        "_suppressInitializeCallback",
+      );
+      const wasSuppressed = suppressor._suppressInitializeCallback;
+      suppressor._suppressInitializeCallback = true;
+      const { multiparams, regular } = extractMultiparameterCallstack(attrs);
+      try {
+        super(regular);
+      } finally {
+        // Always restore the flag even if super() throws, so later instances
+        // on this class still fire after_initialize normally.
+        if (hadOwnSuppressor) {
+          suppressor._suppressInitializeCallback = wasSuppressed;
+        } else {
+          delete (suppressor as { _suppressInitializeCallback?: boolean })
+            ._suppressInitializeCallback;
+        }
+      }
+      executeMultiparameterAssignment(this as any, multiparams);
+      // Re-snapshot so mp attrs are part of the initial clean state.
+      (this as any)._dirty.snapshot((this as any)._attributes);
+      // Now fire after_initialize with all attrs assembled.
+      if (!wasSuppressed) {
+        ctor._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
+      }
+    } else {
+      super(attrs);
+    }
   }
 
   // --- Persistence instance predicates (wired via include() after class body) ---
@@ -2002,6 +2089,14 @@ export class Base extends Model {
   declare cacheKey: () => string;
   declare cacheKeyWithVersion: () => string;
   declare cacheVersion: () => string | null;
+
+  static toParam(): string;
+  static toParam(methodName: string): void;
+  static toParam(methodName?: string): string | void {
+    return _toParamClass.call(this, methodName);
+  }
+
+  declare static collectionCacheKey: typeof _collectionCacheKey;
 
   declare writeAttribute: typeof ReadonlyAttributes.writeAttribute;
 
@@ -2204,11 +2299,13 @@ export class Base extends Model {
       im.insert(insertValues);
       sql = im.toSql();
     }
-    this._pendingOperation = ctor.adapter.execInsert(sql, "Insert").then((insertedId) => {
-      if (!Array.isArray(ctor.primaryKey) && this.id === null) {
-        this._attributes.set(ctor.primaryKey, insertedId);
-      }
-    });
+    this._pendingOperation = ctor.adapter
+      .execInsert(sql, `${ctor.name} Create`)
+      .then((insertedId) => {
+        if (!Array.isArray(ctor.primaryKey) && this.id === null) {
+          this._attributes.set(ctor.primaryKey, insertedId);
+        }
+      });
   }
 
   private _performUpdate(): void {
@@ -2273,11 +2370,13 @@ export class Base extends Model {
       }
     }
 
-    this._pendingOperation = ctor.adapter.execUpdate(um.toSql(), "Update").then((affected) => {
-      if (ctor.lockingEnabled && affected === 0) {
-        throw new StaleObjectError(this, "update");
-      }
-    });
+    this._pendingOperation = ctor.adapter
+      .execUpdate(um.toSql(), `${ctor.name} Update`)
+      .then((affected) => {
+        if (ctor.lockingEnabled && affected === 0) {
+          throw new StaleObjectError(this, "update");
+        }
+      });
   }
 
   // update / updateBang extracted to persistence.ts; wired via include() below.
@@ -2310,7 +2409,7 @@ export class Base extends Model {
           }
         }
 
-        const affected = await ctor.adapter.execDelete(dm.toSql(), "Destroy");
+        const affected = await ctor.adapter.execDelete(dm.toSql(), `${ctor.name} Destroy`);
         if (ctor.lockingEnabled && affected === 0) {
           throw new StaleObjectError(this, "destroy");
         }
@@ -2714,6 +2813,7 @@ export interface Base extends Included<typeof AutosaveAssociation> {
 // ---------------------------------------------------------------------------
 
 extend(Base, ConnectionHandling.ClassMethods);
+extend(Base, { collectionCacheKey: _collectionCacheKey });
 extend(Base, Querying);
 extend(Base, {
   belongsTo: _Associations.belongsTo,
@@ -2824,3 +2924,20 @@ include(Base, {
 // and on validates (AR's validates routes remaining rules through Model.validates).
 _setSuperIsValid(Model.prototype.isValid);
 _setSuperValidates(Model.validates);
+
+// Add attributes= setter (Rails: alias for assign_attributes) while preserving
+// the existing Model getter. Can't go through include() since object-literal
+// setters lose their descriptor; defineProperty merges both halves cleanly.
+{
+  const modelGetter = Object.getOwnPropertyDescriptor(Model.prototype, "attributes")?.get;
+  if (modelGetter) {
+    Object.defineProperty(Base.prototype, "attributes", {
+      get: modelGetter,
+      set(this: Base, attrs: Record<string, unknown>) {
+        this.assignAttributes(attrs);
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+}

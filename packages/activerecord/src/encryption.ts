@@ -23,9 +23,9 @@ import { EncryptedAttributeType } from "./encryption/encrypted-attribute-type.js
 import { Scheme, type SchemeOptions } from "./encryption/scheme.js";
 import type { EncryptorLike } from "./encryption/encryptor.js";
 import { Cipher } from "./encryption/cipher/aes256-gcm.js";
-import { globalPreviousSchemesFor } from "./encryption/encryptable-record.js";
+import { globalPreviousSchemesFor, EncryptableRecord } from "./encryption/encryptable-record.js";
 import { Configurable } from "./encryption/configurable.js";
-import { withoutEncryption } from "./encryption/context.js";
+import { withoutEncryption, getEncryptionContext } from "./encryption/context.js";
 
 /**
  * The simple encryptor surface `Base.encrypts({ encryptor })` accepts.
@@ -203,11 +203,77 @@ export function encrypts(klass: any, ...args: Array<string | EncryptsOptions>): 
   for (const name of names) {
     klass._pendingEncryptions.push({ name, scheme });
     klass._encryptedAttributes.add(name);
+    if (Configurable.config.validateColumnSize) {
+      EncryptableRecord.validateColumnSize(klass, name);
+    }
+    if (options.ignoreCase) {
+      _preserveOriginalEncrypted(klass, name, options);
+    }
   }
 
   if (klass._attributeDefinitions?.size > 0) {
     applyPendingEncryptions(klass);
   }
+}
+
+/**
+ * Mirrors Rails' EncryptableRecord::ClassMethods#preserve_original_encrypted.
+ * When ignore_case: true, stores the original-cased value in an additional
+ * `original_<name>` encrypted attribute, and overrides the reader so reads
+ * return the original-cased value rather than the downcased one.
+ */
+function _preserveOriginalEncrypted(klass: any, name: string, options: EncryptsOptions): void {
+  const originalAttrName = `original_${name}`;
+
+  // Register the original-case column as encrypted (without ignoreCase/downcase).
+  const { ignoreCase: _ic, downcase: _dc, ...originalOptions } = options;
+  encrypts(klass, originalAttrName, originalOptions);
+
+  // Before each save, copy the in-memory value of `name` into `original_name`
+  // when `name` has been written (is dirty). Using `readAttribute` bypasses
+  // the prototype getter so we read directly from the attribute store, not from
+  // `original_name`. Only syncing when dirty prevents a freshly-loaded record
+  // whose `readAttribute(name)` would return the decrypted downcased value from
+  // overwriting the original-cased `original_name` on an unrelated save.
+  // Mirrors Rails' `name= { self.original_name = value; super(value) }`.
+  if (typeof klass.beforeSave === "function") {
+    klass.beforeSave((record: any) => {
+      // For new records, always sync — changedAttributes is empty because attrs
+      // were assigned before the dirty snapshot in the constructor.
+      // For persisted records, only sync when `name` was actually written to
+      // avoid overwriting original_name with the downcased decrypted value on
+      // unrelated saves.
+      const isNew =
+        typeof record.isNewRecord === "function" ? record.isNewRecord() : !record.isPersisted?.();
+      const changed: string[] = Array.isArray(record.changedAttributes)
+        ? record.changedAttributes
+        : [];
+      if (!isNew && !changed.includes(name)) return;
+      const plaintext = record.readAttribute(name);
+      record.writeAttribute(originalAttrName, plaintext);
+    });
+  }
+
+  // Override the accessor on the prototype. Mirrors Rails'
+  // override_accessors_to_preserve_original:
+  //   - getter returns original_name when present, falls back to name for
+  //     legacy rows that predate the original_name column
+  //   - setter writes both name (for downcased query) and original_name
+  //     (for case-preserving reads) immediately, so in-memory reads see
+  //     the new value before the record is saved
+  Object.defineProperty(klass.prototype, name, {
+    configurable: true,
+    get(this: any) {
+      const originalValue = this.readAttribute(originalAttrName);
+      if (originalValue != null) return originalValue;
+      // Fallback for legacy rows where original_name is absent.
+      return this.readAttribute(name);
+    },
+    set(this: any, value: unknown) {
+      this.writeAttribute(name, value);
+      this.writeAttribute(originalAttrName, value);
+    },
+  });
 }
 
 /**
@@ -237,6 +303,44 @@ export function applyPendingEncryptions(klass: any): void {
       [name],
       (_attrName: string, castType: Type) => new EncryptedAttributeType({ scheme, castType }),
     );
+  }
+
+  // Re-run column-size validation after schema reflection so limits learned
+  // from the DB (not declared via attribute()) are also picked up. Safe even
+  // if validateColumnSize already ran at encrypts() time — it guards against
+  // registering the same LengthValidator twice.
+  if (Configurable.config.validateColumnSize) {
+    for (const { name } of pending) {
+      EncryptableRecord.validateColumnSize(klass, name);
+    }
+  }
+
+  // Register the frozen-encryption validator once per class. Own-property check
+  // so subclasses that have already snapped their callback chain don't miss it —
+  // if a subclass cloned _callbackChain before the parent installed this
+  // validator, `in` would suppress installation even though the clone lacks it.
+  // The validator reads `record.constructor._encryptedAttributes` at call time,
+  // so it correctly handles STI subclasses with different encrypted attribute sets.
+  if (
+    !Object.prototype.hasOwnProperty.call(klass, "_frozenEncryptionValidatorInstalled") &&
+    typeof klass.validate === "function"
+  ) {
+    klass._frozenEncryptionValidatorInstalled = true;
+    klass.validate((record: any) => {
+      if (!getEncryptionContext().frozenEncryption) return;
+      // Use record.constructor so STI subclasses consult their own
+      // encrypted_attributes list — mirrors Rails' self.class.encrypted_attributes.
+      const encryptedAttrs: Set<string> =
+        (record.constructor as any)._encryptedAttributes ?? new Set();
+      const changed: string[] = Array.isArray(record.changedAttributes)
+        ? record.changedAttributes
+        : [];
+      for (const attr of changed) {
+        if (encryptedAttrs.has(attr)) {
+          record.errors.add(attr, "can't be modified because it is encrypted");
+        }
+      }
+    });
   }
 }
 

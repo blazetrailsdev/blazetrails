@@ -6609,6 +6609,22 @@ describe("RelationTest", () => {
     expect(found!.id).toBe(first.id);
   });
 
+  it("find by with non hash conditions returns the first matching record", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    await Topic.create({ title: "match" });
+    await Topic.create({ title: "match" });
+    await Topic.create({ title: "other" });
+    const found = await Topic.where("title = 'match'").take();
+    expect(found).not.toBeNull();
+    expect(found!.title).toBe("match");
+    // take() is intentionally unordered — no id assertion
+  });
+
   it("find_by returns nil if the record is missing", async () => {
     class Topic extends Base {
       static {
@@ -6833,4 +6849,6 @@ describe("RelationTest", () => {
     }
     expect(Post.where({ title: "" })).toBeInstanceOf(Relation);
   });
+
+  it.skip("loading with one association with non preload", () => {});
 });

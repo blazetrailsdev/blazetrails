@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, Relation, IrreversibleOrderError } from "./index.js";
+import { Associations, registerModel, modelRegistry } from "./associations.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -105,6 +106,360 @@ describe("RelationTest", () => {
     expect(post.isPersisted()).toBe(true);
   });
 
+  it("dotted string order passes through as raw SQL (Rails treats all string orders as SqlLiteral)", () => {
+    class Post extends Base {
+      static _tableName = "posts";
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    // Rails never strips or re-qualifies cross-table references in string form.
+    expect(Post.order("comments.body ASC").toSql()).toContain("ORDER BY comments.body ASC");
+    expect(Post.order("posts.id DESC").toSql()).toContain("ORDER BY posts.id DESC");
+  });
+
+  it("order by primary key stays table-qualified even before schema reflection", () => {
+    // The PK (`id`) may not be in _attributeDefinitions before schema loads,
+    // but must remain table-qualified to avoid ambiguous-column errors on JOINs.
+    class Post extends Base {
+      static _tableName = "posts";
+      static {
+        this.adapter = adapter;
+      }
+    }
+    expect(Post.order({ id: "desc" }).toSql()).toContain('"posts"."id" DESC');
+  });
+
+  it("order by unknown column (subquery alias) uses bare quoted name", () => {
+    class Developer extends Base {
+      static _tableName = "developers";
+      static {
+        this.attribute("commits", "integer");
+        this.adapter = adapter;
+      }
+    }
+    const RANKED = "(SELECT id, commits AS hotness FROM developers) developers";
+    const sql = Developer.from(RANKED).order({ hotness: "desc" }).limit(10).toSql();
+    expect(sql).toContain('"hotness" DESC');
+    expect(sql).not.toContain('"developers"."hotness"');
+  });
+
+  it("order by known column uses table-qualified attribute", () => {
+    class Developer extends Base {
+      static _tableName = "developers";
+      static {
+        this.attribute("commits", "integer");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Developer.order({ commits: "desc" }).toSql();
+    expect(sql).toContain('"developers"."commits" DESC');
+  });
+
+  it("group by bare column name qualifies via table", () => {
+    class Order extends Base {
+      static _tableName = "orders";
+      static {
+        this.attribute("created_at", "string");
+        this.attribute("total", "integer");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Order.group("created_at").toSql();
+    expect(sql).toContain('"orders"."created_at"');
+    expect(sql).not.toMatch(/GROUP BY created_at[^"]/);
+  });
+
+  it("group by multiple bare columns qualifies each via table", () => {
+    class Book extends Base {
+      static _tableName = "books";
+      static {
+        this.attribute("author_id", "integer");
+        this.attribute("published_year", "integer");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.group("author_id", "published_year").toSql();
+    expect(sql).toContain('"books"."author_id"');
+    expect(sql).toContain('"books"."published_year"');
+    expect(sql).not.toMatch(/GROUP BY author_id[^"]/);
+    expect(sql).not.toMatch(/,\s*published_year[^"]/);
+  });
+
+  it("group by SQL expression passes through unqualified", () => {
+    class Order extends Base {
+      static _tableName = "orders";
+      static {
+        this.attribute("created_at", "string");
+        this.adapter = adapter;
+      }
+    }
+    // Function expressions pass through as raw SQL (not quoted as identifier)
+    const fnSql = Order.group("DATE(created_at)").toSql();
+    expect(fnSql).toContain("GROUP BY DATE(created_at)");
+    expect(fnSql).not.toContain('"orders"."DATE(created_at)"');
+    // Cast expressions pass through as raw SQL (not quoted as identifier)
+    const castSql = Order.group("created_at::date").toSql();
+    expect(castSql).toContain("GROUP BY created_at::date");
+    expect(castSql).not.toContain('"orders"."created_at::date"');
+    // Positional GROUP BY passes through as raw SQL
+    expect(Order.group("1").toSql()).toContain("GROUP BY 1");
+  });
+
+  it("group by dotted table.column qualifies each part", () => {
+    class Book extends Base {
+      static _tableName = "books";
+      static {
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.group("authors.name").toSql();
+    expect(sql).toContain('"authors"."name"');
+    expect(sql).not.toContain("authors.name");
+  });
+
+  it("hash-form order qualifies column with table name", () => {
+    class User extends Base {
+      static {
+        this.tableName = "users";
+        this.adapter = adapter;
+      }
+    }
+    const sql = User.order({ created_at: "desc" }).limit(10).toSql();
+    expect(sql).toContain('"users"."created_at" DESC');
+
+    const multiKeySql = User.order({ title: "asc", id: "desc" }).limit(10).toSql();
+    expect(multiKeySql).toContain('"users"."title" ASC');
+    expect(multiKeySql).toContain('"users"."id" DESC');
+  });
+
+  it("unscoped() on a relation discards WHERE/ORDER and returns fresh relation", () => {
+    class Post extends Base {
+      static {
+        this.tableName = "posts";
+        this.adapter = adapter;
+      }
+    }
+    const sql = Post.where({ active: true }).order("created_at").unscoped().order("title").toSql();
+    expect(sql).not.toContain("active");
+    expect(sql).not.toContain('"posts"."created_at"');
+    expect(sql).toContain('"posts"."title"');
+  });
+
+  it("joins() accepts Arel join nodes from joinSources", () => {
+    class Author extends Base {
+      static {
+        this.tableName = "authors";
+        this.adapter = adapter;
+      }
+    }
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const books = Book.arelTable;
+    const authors = Author.arelTable;
+    const joinSources = books
+      .join(authors)
+      .on(books.get("author_id").eq(authors.get("id"))).joinSources;
+    const sql = Book.joins(...joinSources).toSql();
+    expect(sql).toContain("INNER JOIN");
+    expect(sql).toContain('"authors"');
+    expect(sql).toContain('"books"."author_id"');
+  });
+
+  it("string ORDER BY plain identifier qualifies with table name", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    expect(Book.order("title").toSql()).toContain('"books"."title"');
+  });
+
+  it("string ORDER BY in .from() subquery context stays unqualified for unknown columns", () => {
+    class Developer extends Base {
+      static {
+        this.tableName = "developers";
+        this.adapter = adapter;
+      }
+    }
+    const RANKED = "SELECT id, commits AS hotness FROM developers";
+    const sql = Developer.from(RANKED).order("hotness desc").limit(10).toSql();
+    expect(sql).toContain('"hotness" DESC');
+    expect(sql).not.toContain('"developers"."hotness"');
+  });
+
+  it("Model.optimizerHints() delegates to all().optimizerHints()", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.optimizerHints("SeqScan(books)").where({ active: true }).toSql();
+    expect(sql).toContain("SeqScan(books)");
+    expect(sql).toContain('"books"."active"');
+  });
+
+  it("whereMissing emits LEFT OUTER JOIN + assoc_pk IS NULL", () => {
+    class WmAuthor extends Base {
+      static {
+        this.tableName = "authors";
+        registerModel("Author", this);
+      }
+    }
+    class WmBook extends Base {
+      static {
+        this.tableName = "books";
+        this.belongsTo("author");
+        registerModel("Book", this);
+      }
+    }
+    try {
+      const sql = WmBook.all().whereMissing("author").toSql();
+      expect(sql).toContain("LEFT OUTER JOIN");
+      expect(sql).toContain('"authors"');
+      expect(sql).toContain('"authors"."id" IS NULL');
+      expect(sql).not.toContain('"books"."author_id" IS NULL');
+    } finally {
+      modelRegistry.delete("Author");
+      modelRegistry.delete("Book");
+    }
+  });
+
+  it("whereAssociated emits INNER JOIN + assoc_pk IS NOT NULL", () => {
+    class WaAuthor extends Base {
+      static {
+        this.tableName = "authors";
+        registerModel("Author", this);
+      }
+    }
+    class WaBook extends Base {
+      static {
+        this.tableName = "books";
+        this.belongsTo("author");
+        registerModel("Book", this);
+      }
+    }
+    try {
+      const sql = WaBook.all().whereAssociated("author").toSql();
+      expect(sql).toContain("INNER JOIN");
+      expect(sql).toContain('"authors"');
+      expect(sql).toContain('"authors"."id" IS NOT NULL');
+      expect(sql).not.toContain('"books"."author_id" IS NOT NULL');
+    } finally {
+      modelRegistry.delete("Author");
+      modelRegistry.delete("Book");
+    }
+  });
+
+  it("whereNot multi-key hash wraps in NOT(AND) not individual !=", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.whereNot({ status: "draft", active: false }).toSql();
+    // Exact Rails form: WHERE NOT ("books"."status" = 'draft' AND "books"."active" = 0)
+    // — a single NOT wrapping one AND containing both predicates.
+    expect(sql).toMatch(/NOT \(.*"books"\."status".*AND.*"books"\."active".*\)/);
+    // Must be exactly one NOT ( occurrence — not per-column NOTs
+    expect(sql.match(/NOT \(/g)?.length).toBe(1);
+    // Must use = (positive predicates inside NOT), not !=
+    expect(sql).not.toContain("!=");
+  });
+
+  it("inOrderOf emits WHERE IN filter + CASE WHEN ... ASC (Rails form)", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.all().inOrderOf("status", ["published", "draft", "archived"]).toSql();
+    expect(sql).toContain(`"books"."status" IN ('published', 'draft', 'archived')`);
+    expect(sql).toContain(`CASE WHEN "books"."status" = 'published' THEN 1`);
+    expect(sql).toContain(`WHEN "books"."status" = 'draft' THEN 2`);
+    expect(sql).toContain(`WHEN "books"."status" = 'archived' THEN 3`);
+    expect(sql).toMatch(/END ASC/);
+    expect(sql).not.toContain("ELSE");
+    expect(sql).not.toContain("THEN 0");
+  });
+
+  it("inOrderOf with filter:false emits ELSE and no WHERE IN", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.all().inOrderOf("status", ["published", "draft"], false).toSql();
+    expect(sql).toContain(`CASE WHEN "books"."status" = 'published' THEN 1`);
+    expect(sql).toContain(`WHEN "books"."status" = 'draft' THEN 2`);
+    expect(sql).toContain("ELSE 3");
+    expect(sql).toMatch(/END ASC/);
+    expect(sql).not.toContain(" IN (");
+  });
+
+  it("whereMissing with hasMany emits LEFT OUTER JOIN + target_pk IS NULL", () => {
+    class WmhAuthor extends Base {
+      static {
+        this.tableName = "authors";
+        this.hasMany("books");
+        registerModel("Author", this);
+      }
+    }
+    class WmhBook extends Base {
+      static {
+        this.tableName = "books";
+        registerModel("Book", this);
+      }
+    }
+    try {
+      const sql = WmhAuthor.all().whereMissing("books").toSql();
+      expect(sql).toContain("LEFT OUTER JOIN");
+      expect(sql).toContain('"books"');
+      expect(sql).toContain('"books"."id" IS NULL');
+      expect(sql).not.toContain('"authors"."id" IS NULL');
+    } finally {
+      modelRegistry.delete("Author");
+      modelRegistry.delete("Book");
+    }
+  });
+
+  it("whereAssociated with hasMany emits INNER JOIN + target_pk IS NOT NULL", () => {
+    class WahAuthor extends Base {
+      static {
+        this.tableName = "authors";
+        this.hasMany("books");
+        registerModel("Author", this);
+      }
+    }
+    class WahBook extends Base {
+      static {
+        this.tableName = "books";
+        registerModel("Book", this);
+      }
+    }
+    try {
+      const sql = WahAuthor.all().whereAssociated("books").toSql();
+      expect(sql).toContain("INNER JOIN");
+      expect(sql).toContain('"books"');
+      expect(sql).toContain('"books"."id" IS NOT NULL');
+      expect(sql).not.toContain('"authors"."id" IS NOT NULL');
+    } finally {
+      modelRegistry.delete("Author");
+      modelRegistry.delete("Book");
+    }
+  });
+
   it("multiple selects", () => {
     class Post extends Base {
       static {
@@ -116,6 +471,18 @@ describe("RelationTest", () => {
     // reselect replaces previous select
     const sql = Post.select("title").reselect("body").toSql();
     expect(sql).toContain("body");
+  });
+
+  it("select with arel node emits SQL alias", () => {
+    class Book extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.select(Book.arelTable.get("title").as("t")).toSql();
+    expect(sql).toContain('"title" AS t');
+    expect(sql).not.toContain("[object Object]");
   });
 
   it("find_by with hash conditions returns the first matching record", async () => {
@@ -165,6 +532,32 @@ describe("RelationTest", () => {
     }
     const sql = Post.select("title").from("posts").toSql();
     expect(sql).toContain("FROM");
+  });
+
+  it("from(relation, alias) emits bare alias (mirrors Rails SqlLiteral unquoted path)", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.attribute("active", "boolean");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.from(Book.where({ active: true }), "books").toSql();
+    // Rails: FROM (SELECT "books".* FROM "books" WHERE ...) books  ← bare alias
+    expect(sql).toMatch(/FROM \(SELECT .+\) books/);
+    expect(sql).not.toContain(') "books"');
+  });
+
+  it("from(rawSql, alias) emits bare alias for valid identifiers", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.from("(SELECT * FROM books WHERE active = 1) books", "books").toSql();
+    expect(sql).toMatch(/\) books/);
+    expect(sql).not.toContain(') "books"');
   });
 
   it("relation with annotation includes comment in to sql", () => {
@@ -351,6 +744,35 @@ describe("RelationTest", () => {
     }
     const sql = Post.all().annotate("counting").toSql();
     expect(sql).toContain("counting");
+  });
+
+  it("association join quotes the table name", () => {
+    const adp = freshAdapter();
+    class Comment extends Base {
+      static _tableName = "comments";
+      static {
+        this.attribute("post_id", "integer");
+        this.adapter = adp;
+      }
+    }
+    class Post extends Base {
+      static _tableName = "posts";
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+        Associations.hasMany.call(this, "comments", {
+          className: "Comment",
+          foreignKey: "post_id",
+        });
+      }
+    }
+    registerModel("Comment", Comment);
+    try {
+      const sql = Post.joins("comments").toSql();
+      expect(sql).toContain('INNER JOIN "comments"');
+    } finally {
+      modelRegistry.delete("Comment");
+    }
   });
 
   it("joins with string array", () => {

@@ -11,6 +11,32 @@ import {
 } from "./errors.js";
 import { NullEncryptor } from "./null-encryptor.js";
 
+function _normalizeEncoding(encoding: string): "utf8" | "ascii" | "latin1" | null {
+  switch (encoding.toLowerCase().replace(/[^a-z0-9]/g, "")) {
+    case "utf8":
+      return "utf8";
+    case "ascii":
+    case "usascii":
+      return "ascii";
+    case "latin1":
+    case "iso88591":
+    case "binary":
+    case "ascii8bit":
+      return "latin1";
+    default:
+      return null;
+  }
+}
+
+function _replaceUnencodable(value: string, maxCodePoint: number): string {
+  const out: string[] = [];
+  for (const char of value) {
+    const cp = char.codePointAt(0)!;
+    out.push(cp > maxCodePoint || (cp >= 0xd800 && cp <= 0xdfff) ? "?" : char);
+  }
+  return out.join("");
+}
+
 /**
  * An ActiveModel type that encrypts/decrypts attribute values. This is
  * the central piece connecting the encryption system with `encrypts`
@@ -88,7 +114,9 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     const casted = this.castType.serialize?.(value) ?? value;
     if (casted === null || casted === undefined) return null;
     const str = typeof casted === "string" ? casted : String(casted);
-    const toEncrypt = this.scheme.downcase || this.scheme.ignoreCase ? str.toLowerCase() : str;
+    const normalized = this.deterministic ? this._applyForcedEncoding(str) : str;
+    const toEncrypt =
+      this.scheme.downcase || this.scheme.ignoreCase ? normalized.toLowerCase() : normalized;
     return this.encrypt(toEncrypt);
   }
 
@@ -104,6 +132,10 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
 
   get deterministic(): boolean {
     return this.scheme.deterministic ?? false;
+  }
+
+  override type(): string {
+    return this.castType.type();
   }
 
   get previousTypes(): EncryptedAttributeType[] {
@@ -151,8 +183,24 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     if (value === null || value === undefined) return value;
     if (this._default !== undefined && this._default === value) return value;
 
+    // Adapters that use JSON/JSONB columns (e.g. PostgreSQL) return the stored value
+    // as a parsed JS object rather than a raw string. Re-stringify so the encryptor
+    // always receives the JSON string that was originally stored.
+    // Fall back to String() if JSON.stringify throws (circular refs, etc.) so failures
+    // surface as DecryptionError rather than an unexpected TypeError.
+    let ciphertext: string;
+    if (typeof value === "string") {
+      ciphertext = value;
+    } else {
+      try {
+        ciphertext = JSON.stringify(value) ?? String(value);
+      } catch {
+        ciphertext = String(value);
+      }
+    }
+
     try {
-      return this._encryptor.decrypt(String(value), this.decryptionOptions());
+      return this._encryptor.decrypt(ciphertext, this.decryptionOptions());
     } catch (error) {
       if (!(error instanceof BaseEncryptionError)) throw error;
       if (this.scheme.previousSchemes.length === 0) {
@@ -184,17 +232,30 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     throw error;
   }
 
-  private encrypt(value: string): string {
-    return this._encryptor.encrypt(value, this.encryptionOptions());
+  private _applyForcedEncoding(value: string): string {
+    const forced = Configurable.config.forcedEncodingForDeterministicEncryption;
+    if (!forced) return value;
+    const enc = _normalizeEncoding(forced);
+    if (enc === null || enc === "utf8") return value;
+    return _replaceUnencodable(value, enc === "ascii" ? 0x7f : 0xff);
   }
 
-  private encryptionOptions(): Record<string, unknown> {
+  private encrypt(value: string): string {
+    // When fixed (default for deterministic), use the oldest previous scheme so
+    // existing ciphertexts remain stable across key rotations. When fixed: false,
+    // use the current (newest) scheme. Mirrors Rails' Scheme#oldest_encryption_scheme.
+    const encryptingScheme =
+      this.scheme.isFixed() && this.scheme.previousSchemes.length > 0
+        ? this.scheme.previousSchemes[this.scheme.previousSchemes.length - 1]
+        : this.scheme;
+    return encryptingScheme.encryptor.encrypt(value, this._encryptionOptionsFor(encryptingScheme));
+  }
+
+  private _encryptionOptionsFor(scheme: Scheme): Record<string, unknown> {
     const opts: Record<string, unknown> = {
-      deterministic: this.scheme.deterministic,
+      deterministic: scheme.deterministic,
     };
-    // Mirror Rails: only pass key_provider, never the raw key.
-    // scheme.keyProvider auto-derives from key: or deterministic: if needed.
-    const kp = this.scheme.keyProvider;
+    const kp = scheme.keyProvider;
     if (kp != null) opts.keyProvider = kp;
     return opts;
   }
@@ -208,9 +269,10 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
 
   get supportUnencryptedData(): boolean {
     if (this._previousType) return false;
-    return (
-      Configurable.config.supportUnencryptedData === true && this.scheme.isSupportUnencryptedData()
-    );
+    // Mirrors Rails' EncryptedAttributeType#support_unencrypted_data? which delegates
+    // directly to scheme.support_unencrypted_data?. The scheme already handles the
+    // per-attribute override vs global config fallback — no extra AND-gate needed here.
+    return this.scheme.isSupportUnencryptedData();
   }
 }
 

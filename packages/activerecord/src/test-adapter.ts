@@ -121,8 +121,14 @@ function extractColumnsFromModels(): void {
     if (attrs) {
       for (const [name, def] of attrs) {
         if (name === "id" && !isCpk && !isCustomPk) continue;
-        let colType = sqlType(def.type?.name || "string");
-        if (isMysql() && pkCols.includes(name) && colType === "TEXT") {
+        const innerType = (def.type as any)?.castType ?? def.type;
+        let colType = sqlType(innerType?.name || "string");
+        const limit = (def as any).limit;
+        const innerTypeName = innerType?.name;
+        const isStringType = innerTypeName === "string" || innerTypeName === "text";
+        if (limit != null && isStringType && (colType === "TEXT" || colType === "VARCHAR(255)")) {
+          colType = `VARCHAR(${limit})`;
+        } else if (isMysql() && pkCols.includes(name) && colType === "TEXT") {
           colType = "VARCHAR(255)";
         }
         columns.set(name, colType);
@@ -474,7 +480,7 @@ class SchemaAdapter implements DatabaseAdapter {
     return sql;
   }
 
-  async execute(sql: string, binds?: unknown[]): Promise<Record<string, unknown>[]> {
+  async execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]> {
     await this.setup();
     sql = this.fixSqliteCompat(sql);
     let lastError: unknown;
@@ -486,7 +492,7 @@ class SchemaAdapter implements DatabaseAdapter {
       const sp = useSp ? `_sr_${attempt}` : "";
       try {
         if (useSp) await this.inner.createSavepoint(sp);
-        const result = await this.inner.execute(sql, binds);
+        const result = await this.inner.execute(sql, binds, name);
         if (useSp) await this.inner.releaseSavepoint(sp);
         return result;
       } catch (e: any) {
@@ -506,7 +512,7 @@ class SchemaAdapter implements DatabaseAdapter {
     throw lastError;
   }
 
-  async executeMutation(sql: string, binds?: unknown[]): Promise<number> {
+  async executeMutation(sql: string, binds?: unknown[], name?: string): Promise<number> {
     await this.setup();
     sql = this.fixSqliteCompat(sql);
 
@@ -540,7 +546,7 @@ class SchemaAdapter implements DatabaseAdapter {
       const sp = useSp ? `_sr_m_${attempt}` : "";
       try {
         if (useSp) await this.inner.createSavepoint(sp);
-        const result = await this.inner.executeMutation(sql, binds);
+        const result = await this.inner.executeMutation(sql, binds, name);
         if (useSp) await this.inner.releaseSavepoint(sp);
         return result;
       } catch (e: any) {

@@ -8,15 +8,40 @@
  * Mirrors: ActiveRecord::Calculations
  */
 
-import { Nodes } from "@blazetrails/arel";
+import { Nodes, Table } from "@blazetrails/arel";
 import { BigIntegerType } from "@blazetrails/activemodel";
 import { detectAdapterName } from "../adapter-name.js";
+
+/**
+ * Qualify a GROUP BY column string as an Arel attribute node when it is a
+ * plain SQL identifier (letters, digits, underscores), mirroring Rails'
+ * `arel_columns` / `build_group` behaviour. Positional args ("1"), cast
+ * expressions ("created_at::date"), and SQL expressions pass through as
+ * SqlLiteral.
+ *
+ * @internal exported so Relation can share the implementation.
+ */
+export function groupColumnToArel(col: string, table: Table): Nodes.Node {
+  const trimmed = col.trim();
+  // Plain identifier → qualify via model table (e.g. "created_at" → "orders"."created_at").
+  if (/^[A-Za-z_]\w*$/.test(trimmed)) return table.get(trimmed);
+  // Simple table.column → create a cross-table Attribute (e.g. "authors.name" → "authors"."name").
+  // Mirrors Rails' arel_columns which calls table[column] on the referenced table.
+  const dotMatch = trimmed.match(/^([A-Za-z_]\w*)\.([A-Za-z_]\w*)$/);
+  if (dotMatch) return new Table(dotMatch[1]).get(dotMatch[2]);
+  // SQL expressions, casts, positional args, etc. pass through as raw SQL.
+  return new Nodes.SqlLiteral(trimmed);
+}
 
 interface CalculationRelation {
   _modelClass: {
     arelTable: any;
     primaryKey: string | string[];
-    adapter: { execute(sql: string): Promise<Record<string, unknown>[]> };
+    name: string;
+    adapter: {
+      execute(sql: string): Promise<Record<string, unknown>[]>;
+      selectAll(sql: string, name?: string | null): Promise<import("../result.js").Result>;
+    };
   };
   _limitValue: number | null;
   _offsetValue: number | null;
@@ -158,7 +183,9 @@ async function singleAggregate(
   const innerSql = manager.toSql();
   const sql =
     isBigintColumn(rel, fn, column) && needsBigintCast(rel) ? wrapBigintAgg(innerSql) : innerSql;
-  const rows = await rel._modelClass.adapter.execute(sql);
+  const opName = fn.charAt(0).toUpperCase() + fn.slice(1);
+  const result = await rel._modelClass.adapter.selectAll(sql, `${rel._modelClass.name} ${opName}`);
+  const rows = result.toArray() as Record<string, unknown>[];
   const val = rows[0]?.val;
   if (val === undefined || val === null) {
     return fn === "sum" ? castAggValue(null, fn, colType, coerceNumeric) : null;
@@ -174,11 +201,13 @@ async function groupedAggregate(
 ): Promise<Record<string, unknown>> {
   const table = rel._modelClass.arelTable;
   const groupCol = rel._groupColumns[0];
+  const groupNode = groupColumnToArel(groupCol, table);
   const aggNode = buildAggNode(table, fn, column, rel._isDistinct);
-  const manager = table.project(table.get(groupCol).as("group_key"), aggNode.as("val"));
+  const groupKeyAlias = new Nodes.As(groupNode, new Nodes.SqlLiteral("group_key"));
+  const manager = table.project(groupKeyAlias, aggNode.as("val"));
   rel._applyJoinsToManager(manager);
   rel._applyWheresToManager(manager, table);
-  manager.group(groupCol);
+  manager.group(groupNode);
 
   if (rel._limitValue !== null) manager.take(rel._limitValue);
   if (rel._offsetValue !== null) manager.skip(rel._offsetValue);
@@ -189,7 +218,12 @@ async function groupedAggregate(
     isBigintColumn(rel, fn, column) && needsBigintCast(rel)
       ? wrapBigintAgg(innerSql, true)
       : innerSql;
-  const rows = await rel._modelClass.adapter.execute(sql);
+  const opName = fn.charAt(0).toUpperCase() + fn.slice(1);
+  const queryResult = await rel._modelClass.adapter.selectAll(
+    sql,
+    `${rel._modelClass.name} ${opName}`,
+  );
+  const rows = queryResult.toArray() as Record<string, unknown>[];
 
   const result: Record<string, unknown> = {};
   for (const row of rows) {
@@ -228,7 +262,11 @@ export async function performCount(
     const manager = table.project(countNode.as("count"));
     this._applyJoinsToManager(manager);
     this._applyWheresToManager(manager, table);
-    const rows = await this._modelClass.adapter.execute(manager.toSql());
+    const result = await this._modelClass.adapter.selectAll(
+      manager.toSql(),
+      `${this._modelClass.name} Count`,
+    );
+    const rows = result.toArray() as Record<string, unknown>[];
     return Number(rows[0]?.count ?? 0);
   }
 
@@ -244,14 +282,22 @@ export async function performCount(
       const countAll = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
       const outerManager = table.project(countAll.as("count"));
       outerManager.from(new Nodes.SqlLiteral(`(${innerManager.toSql()}) AS subquery`));
-      const rows = await this._modelClass.adapter.execute(outerManager.toSql());
+      const result = await this._modelClass.adapter.selectAll(
+        outerManager.toSql(),
+        `${this._modelClass.name} Count`,
+      );
+      const rows = result.toArray() as Record<string, unknown>[];
       return Number(rows[0]?.count ?? 0);
     }
     const countNode = table.get(pk).count(true);
     const manager = table.project(countNode.as("count"));
     this._applyJoinsToManager(manager);
     this._applyWheresToManager(manager, table);
-    const rows = await this._modelClass.adapter.execute(manager.toSql());
+    const result = await this._modelClass.adapter.selectAll(
+      manager.toSql(),
+      `${this._modelClass.name} Count`,
+    );
+    const rows = result.toArray() as Record<string, unknown>[];
     return Number(rows[0]?.count ?? 0);
   }
 
@@ -259,7 +305,11 @@ export async function performCount(
   const manager = table.project(countAll.as("count"));
   this._applyJoinsToManager(manager);
   this._applyWheresToManager(manager, table);
-  const rows = await this._modelClass.adapter.execute(manager.toSql());
+  const result = await this._modelClass.adapter.selectAll(
+    manager.toSql(),
+    `${this._modelClass.name} Count`,
+  );
+  const rows = result.toArray() as Record<string, unknown>[];
   return Number(rows[0]?.count ?? 0);
 }
 

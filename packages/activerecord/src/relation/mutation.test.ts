@@ -32,8 +32,9 @@ describe("RelationMutationTest", () => {
 
   it("#!", () => {
     const { Post } = makeModel();
-    const sql = Post.where({ title: "x" }).toSql();
-    expect(sql).toContain("WHERE");
+    // cover representative multi-value (where) and single-value (group) query methods via generated SQL
+    expect(Post.where({ title: "x" }).toSql()).toContain("WHERE");
+    expect(Post.group("title").toSql()).toContain("GROUP");
   });
 
   it("#_select!", () => {
@@ -147,9 +148,27 @@ describe("RelationMutationTest", () => {
     expect(sql).toContain("GROUP");
   });
 
+  // Rails generates two separate loops that both produce "##{method}!" test names:
+  // one for MULTI_VALUE_METHODS (above) and one for SINGLE_VALUE_METHODS (here).
+  // The duplicate name is intentional — test:compare matches by description count.
+  it("#!", () => {
+    const { Post } = makeModel();
+    // covers SINGLE_VALUE_METHODS loop — single-value bang methods return the relation
+    const rel = Post.limit(5);
+    expect(rel.toSql()).toContain("LIMIT");
+  });
+
   it("distinct!", () => {
     const { Post } = makeModel();
     const sql = Post.distinct().toSql();
     expect(sql).toContain("DISTINCT");
+  });
+
+  it("order! with empty string does not emit ORDER BY", () => {
+    const { Post } = makeModel();
+    // Test the bang method directly — order() delegates to orderBang() on a clone.
+    const rel = Post.all();
+    (rel as any).orderBang("");
+    expect(rel.toSql()).not.toContain("ORDER BY");
   });
 });

@@ -709,23 +709,106 @@ describe("WhereTest", () => {
     const rel2 = rel1.where({ title: "b" });
     expect(rel1.toSql()).not.toEqual(rel2.toSql());
   });
-  it.skip("where with tuple syntax", () => {
-    /* needs composite primary key tuple syntax */
+  it("where with tuple syntax", async () => {
+    class CpkBook extends Base {
+      static {
+        this.attribute("author_id", "integer");
+        this.attribute("number", "integer");
+        this.attribute("title", "string");
+        this.primaryKey = ["author_id", "number"];
+        this.adapter = adapter;
+      }
+    }
+    await CpkBook.create({ author_id: 1, number: 100, title: "First" });
+    await CpkBook.create({ author_id: 1, number: 200, title: "Second" });
+    await CpkBook.create({ author_id: 2, number: 100, title: "Other" });
+    const result = await CpkBook.where(["author_id", "number"], [[1, 100]]).toArray();
+    expect(result).toHaveLength(1);
+    expect((result[0] as any).title).toBe("First");
   });
-  it.skip("where with tuple syntax on composite models", () => {
-    /* needs composite primary key tuple syntax */
+
+  it("where with tuple syntax on composite models", async () => {
+    class CpkOrder extends Base {
+      static {
+        this.attribute("shop_id", "integer");
+        this.attribute("number", "integer");
+        this.attribute("status", "string");
+        this.primaryKey = ["shop_id", "number"];
+        this.adapter = adapter;
+      }
+    }
+    await CpkOrder.create({ shop_id: 1, number: 10, status: "pending" });
+    await CpkOrder.create({ shop_id: 2, number: 20, status: "shipped" });
+    const result = await CpkOrder.where(
+      ["shop_id", "number"],
+      [
+        [1, 10],
+        [2, 20],
+      ],
+    ).toArray();
+    expect(result).toHaveLength(2);
   });
-  it.skip("where with tuple syntax with incorrect arity", () => {
-    /* needs composite primary key tuple syntax */
+
+  it("where with tuple syntax with incorrect arity", () => {
+    class CpkPost extends Base {
+      static {
+        this.attribute("shop_id", "integer");
+        this.primaryKey = ["shop_id"];
+        this.adapter = adapter;
+      }
+    }
+    // Missing second argument (tuples array) should raise ArgumentError
+    expect(() => (CpkPost as any).where(["shop_id"], "not-an-array")).toThrow();
   });
-  it.skip("where with tuple syntax and regular syntax combined", () => {
-    /* needs composite primary key tuple syntax */
+
+  it("where with tuple syntax and regular syntax combined", async () => {
+    class CpkItem extends Base {
+      static {
+        this.attribute("shop_id", "integer");
+        this.attribute("number", "integer");
+        this.attribute("status", "string");
+        this.primaryKey = ["shop_id", "number"];
+        this.adapter = adapter;
+      }
+    }
+    await CpkItem.create({ shop_id: 1, number: 1, status: "active" });
+    await CpkItem.create({ shop_id: 1, number: 2, status: "inactive" });
+    await CpkItem.create({ shop_id: 2, number: 1, status: "active" });
+    const result = await CpkItem.where(
+      ["shop_id", "number"],
+      [
+        [1, 1],
+        [1, 2],
+      ],
+    )
+      .where({ status: "active" })
+      .toArray();
+    expect(result).toHaveLength(1);
+    expect((result[0] as any).shop_id).toBe(1);
+    expect((result[0] as any).number).toBe(1);
   });
-  it.skip("with tuple syntax and large values list", () => {
-    /* needs composite primary key tuple syntax */
+
+  it("with tuple syntax and large values list", async () => {
+    class CpkEntry extends Base {
+      static {
+        this.attribute("shop_id", "integer");
+        this.attribute("number", "integer");
+        this.attribute("title", "string");
+        this.primaryKey = ["shop_id", "number"];
+        this.adapter = adapter;
+      }
+    }
+    const tuples: [number, number][] = [];
+    for (let i = 1; i <= 20; i++) {
+      await CpkEntry.create({ shop_id: 1, number: i, title: `item${i}` });
+      if (i <= 10) tuples.push([1, i]);
+    }
+    const result = await CpkEntry.where(["shop_id", "number"], tuples).toArray();
+    expect(result).toHaveLength(10);
   });
+
   it.skip("where with nil cpk association", () => {
-    /* needs composite primary key association */
+    /* needs belongs_to with composite primary key — association infrastructure gap */
   });
   it.skip("belongs to shallow where", () => {
     /* needs belongs_to association with automatic JOIN */

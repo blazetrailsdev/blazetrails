@@ -52,6 +52,7 @@ import { ExplainRegistry } from "./explain-registry.js";
 import { inspectExplainOption } from "./adapter.js";
 import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import { rubyInspectArray } from "./relation/ruby-inspect.js";
+import { JoinDependency } from "./associations/join-dependency.js";
 
 /**
  * A Relation returned from `load()` / `reload()` — a normal Relation with
@@ -1913,7 +1914,6 @@ export class Relation<T extends Base> {
       return;
     }
 
-    const { JoinDependency } = await import("./associations/join-dependency.js");
     const jd = new JoinDependency(this._modelClass);
 
     const fallbackAssocs: AssociationSpec[] = [];
@@ -3132,7 +3132,101 @@ export class Relation<T extends Base> {
     return this._toSqlWithoutSetOp();
   }
 
+  // Mirrors: ActiveRecord::Relation#eager_loading?
+  private _eagerLoadingForSql(): boolean {
+    if (this._eagerLoadAssociations.length > 0) return true;
+    return this._includesToPromoteFromReferences().length > 0;
+  }
+
+  // Mirrors: ActiveRecord::Relation#to_sql when eager_loading? — builds the
+  // JoinDependency SQL synchronously for toSql()/parity runner use.
+  // Returns null if no eager associations could be joined (fall back to plain SQL).
+  private _buildEagerSql(): string | null {
+    if (this._setOperation || !this._fromClause.isEmpty() || this._ctes.length > 0) return null;
+
+    const allEager = [
+      ...new Set([...this._eagerLoadAssociations, ...this._includesToPromoteFromReferences()]),
+    ];
+    if (allEager.length === 0) return null;
+
+    const basePk = (this._modelClass as any).primaryKey ?? "id";
+    if (Array.isArray(basePk)) return null;
+
+    const jd = new JoinDependency(this._modelClass);
+    for (const assocName of allEager) {
+      if (typeof assocName !== "string") continue;
+      jd.addAssociation(assocName);
+    }
+    if (jd.nodes.length === 0) return null;
+
+    const table = this._modelClass.arelTable;
+
+    // Build SELECT with t0_r0-style column aliases (mirrors apply_column_aliases)
+    const baseSelectSql = jd.buildSelectSql();
+    const manager = table.project(new Nodes.SqlLiteral(baseSelectSql));
+
+    // Apply LEFT OUTER JOINs from JoinDependency
+    for (const node of jd.nodes) {
+      (manager as any).core.source.right.push(
+        new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
+      );
+    }
+
+    this._applyJoinsToManager(manager);
+    this._applyWheresToManager(manager, table);
+    this._applyOrderToManager(manager, table);
+    if (this._isDistinct) manager.distinct();
+    for (const col of this._groupColumns) manager.group(groupColumnToArel(col, table));
+    if (!this._havingClause.isEmpty()) manager.having(this._havingClause.ast);
+    if (this._lockValue) manager.lock(this._lockValue);
+    if (this._optimizerHints.length > 0) manager.optimizerHints(...this._optimizerHints);
+
+    // LIMIT/OFFSET: use a subquery for collection associations to avoid fan-out.
+    // Non-collection (belongsTo, hasOne) are limitable — apply LIMIT directly.
+    // Mirrors: using_limitable_reflections? in Rails finder_methods.rb
+    const hasLimit = this._limitValue !== null || this._offsetValue !== null;
+    if (hasLimit) {
+      const isLimitable = jd.nodes.every((n) => n.assocType !== "hasMany");
+      if (isLimitable) {
+        if (this._limitValue !== null) manager.take(this._limitValue);
+        if (this._offsetValue !== null) manager.skip(this._offsetValue);
+      } else {
+        const tableName = (this._modelClass as any).tableName;
+        const idSubquery = table.project(`"${tableName}"."${basePk}"`);
+        (idSubquery as any).distinct();
+        for (const node of jd.nodes) {
+          (idSubquery as any).core.source.right.push(
+            new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
+          );
+        }
+        this._applyJoinsToManager(idSubquery as any);
+        this._applyWheresToManager(idSubquery as any, table);
+        this._applyOrderToManager(idSubquery as any, table);
+        if (this._limitValue !== null) (idSubquery as any).take(this._limitValue);
+        if (this._offsetValue !== null) (idSubquery as any).skip(this._offsetValue);
+        manager.where(
+          new Nodes.SqlLiteral(`"${tableName}"."${basePk}" IN (${(idSubquery as any).toSql()})`),
+        );
+      }
+    }
+
+    let sql = manager.toSql();
+    if (this._annotations.length > 0) {
+      const comments = this._annotations.map((c) => `/* ${c} */`).join(" ");
+      sql = `${sql} ${comments}`;
+    }
+    return sql;
+  }
+
   private _toSqlWithoutSetOp(): string {
+    // Eager loading: emit JoinDependency SQL (mirrors Rails to_sql + eager_loading?)
+    if (this._eagerLoadingForSql()) {
+      const eagerSql = this._buildEagerSql();
+      if (eagerSql !== null) return eagerSql;
+      // If _buildEagerSql returns null (e.g. unresolvable association),
+      // fall through to plain SQL so toSql() always returns something useful.
+    }
+
     const table = this._modelClass.arelTable;
     const projections = this._buildProjections(table);
     const manager = table.project(...(projections as any));

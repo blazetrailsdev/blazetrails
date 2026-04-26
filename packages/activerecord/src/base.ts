@@ -105,6 +105,7 @@ import {
 } from "./attribute-methods/query.js";
 import {
   toParam as _toParam,
+  toParamClass as _toParamClass,
   cacheKey as _cacheKey,
   cacheKeyWithVersion as _cacheKeyWithVersion,
   cacheVersion as _cacheVersion,
@@ -401,6 +402,9 @@ export class Base extends Model {
   static _connectionClass = false;
   static automaticScopeInversing = false;
   static automaticallyInvertPluralAssociations = false;
+  static paramDelimiter = "_";
+  static cacheVersioning = false;
+  static cacheTimestampFormat = "usec";
   static _tableNamePrefix = "";
   static _tableNameSuffix = "";
   static _protectedEnvironments: string[] = ["production"];
@@ -2040,6 +2044,12 @@ export class Base extends Model {
   declare cacheKey: () => string;
   declare cacheKeyWithVersion: () => string;
   declare cacheVersion: () => string | null;
+
+  static toParam(): string;
+  static toParam(methodName: string): void;
+  static toParam(methodName?: string): string | void {
+    return _toParamClass.call(this, methodName);
+  }
 
   declare writeAttribute: typeof ReadonlyAttributes.writeAttribute;
 

@@ -13,66 +13,192 @@ interface Identifiable {
   _readAttribute(name: string): unknown;
 }
 
+// ──────────────────────────────────────────────
+// Timestamp formatting  (mirrors Time#to_fs)
+// ──────────────────────────────────────────────
+
+// Mirrors: Time#to_fs(:usec) → "YYYYMMDDHHMMSSuuuuuu" (20 chars)
+// JS Date has ms precision; pad the 3 sub-ms digits with zeros.
+function toFsUsec(date: Date): string {
+  const y = date.getUTCFullYear().toString().padStart(4, "0");
+  const mo = (date.getUTCMonth() + 1).toString().padStart(2, "0");
+  const d = date.getUTCDate().toString().padStart(2, "0");
+  const h = date.getUTCHours().toString().padStart(2, "0");
+  const mi = date.getUTCMinutes().toString().padStart(2, "0");
+  const s = date.getUTCSeconds().toString().padStart(2, "0");
+  const ms = date.getUTCMilliseconds().toString().padStart(3, "0");
+  return `${y}${mo}${d}${h}${mi}${s}${ms}000`;
+}
+
+// Mirrors: Time#to_fs(:number) → "YYYYMMDDHHMMSS" (14 chars)
+function toFsNumber(date: Date): string {
+  const y = date.getUTCFullYear().toString().padStart(4, "0");
+  const mo = (date.getUTCMonth() + 1).toString().padStart(2, "0");
+  const d = date.getUTCDate().toString().padStart(2, "0");
+  const h = date.getUTCHours().toString().padStart(2, "0");
+  const mi = date.getUTCMinutes().toString().padStart(2, "0");
+  const s = date.getUTCSeconds().toString().padStart(2, "0");
+  return `${y}${mo}${d}${h}${mi}${s}`;
+}
+
+function formatTimestamp(date: Date, format: string): string {
+  return format === "number" ? toFsNumber(date) : toFsUsec(date);
+}
+
+// ──────────────────────────────────────────────
+// to_param helpers  (mirrors ActiveSupport)
+// ──────────────────────────────────────────────
+
+function squish(str: string): string {
+  return str.trim().replace(/\s+/g, " ");
+}
+
+// Mirrors: String#parameterize
+function parameterize(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+// Mirrors: String#truncate(20, separator: /-/, omission: "")
+function truncateParam(str: string, maxLen: number): string {
+  if (str.length <= maxLen) return str;
+  const stop = str.lastIndexOf("-", maxLen);
+  return stop > 0 ? str.slice(0, stop) : str.slice(0, maxLen);
+}
+
+// ──────────────────────────────────────────────
+// Instance methods
+// ──────────────────────────────────────────────
+
 /**
- * Returns the id as a string for URL params.
+ * Returns a string suitable for use in URLs.
+ * For composite primary keys, joins with param_delimiter (default "_").
  *
  * Mirrors: ActiveRecord::Integration#to_param
  */
 export function toParam(this: Identifiable): string | null {
   const pk = this.id;
-  return pk != null ? String(pk) : null;
+  if (pk == null) return null;
+  const delimiter: string = (this.constructor as any).paramDelimiter ?? "_";
+  return Array.isArray(pk) ? pk.join(delimiter) : String(pk);
 }
 
 /**
- * Return a cache key suitable for use in key/value stores.
+ * Returns the max of updated_at / updated_on as a Date, or null.
+ *
+ * Mirrors: ActiveRecord::Integration#max_updated_column_timestamp
+ */
+function maxUpdatedColumnTimestamp(record: any): Date | null {
+  const candidates: Date[] = [];
+  for (const col of ["updated_at", "updated_on"] as const) {
+    if (record.hasAttribute?.(col)) {
+      const val = record._readAttribute(col);
+      if (val instanceof Date) candidates.push(val);
+    }
+  }
+  if (candidates.length === 0) return null;
+  return candidates.reduce((a, b) => (a >= b ? a : b));
+}
+
+/**
+ * Returns a stable cache key. When cache_versioning is on, excludes the
+ * timestamp (use cache_version for that). When off, embeds the timestamp.
  *
  * Mirrors: ActiveRecord::Integration#cache_key
  */
 export function cacheKey(this: Identifiable): string {
-  const modelKey = (this.constructor as any).tableName as string;
+  const klass = this.constructor as any;
+  const modelKey: string = klass.tableName;
   const pk = this.id;
+
   if (this.isNewRecord()) {
     return `${modelKey}/new`;
   }
-  return `${modelKey}/${pk}`;
+
+  const idStr = Array.isArray(pk) ? pk.join("_") : String(pk);
+
+  if ((this as any).cacheVersion?.()) {
+    return `${modelKey}/${idStr}`;
+  }
+
+  const timestamp = maxUpdatedColumnTimestamp(this);
+  if (timestamp) {
+    const fmt: string = klass.cacheTimestampFormat ?? "usec";
+    return `${modelKey}/${idStr}-${formatTimestamp(timestamp, fmt)}`;
+  }
+
+  return `${modelKey}/${idStr}`;
 }
 
 /**
- * Return a cache key with version based on updated_at.
- *
- * Mirrors: ActiveRecord::Integration#cache_key_with_version
- */
-export function cacheKeyWithVersion(this: Identifiable): string {
-  const base = cacheKey.call(this);
-  const version = cacheVersion.call(this);
-  return version ? `${base}-${version}` : base;
-}
-
-/**
- * Return cache version (typically the updated_at timestamp).
+ * Returns the cache version (timestamp string) when cache_versioning is on.
  *
  * Mirrors: ActiveRecord::Integration#cache_version
  */
 export function cacheVersion(this: Identifiable): string | null {
+  const klass = this.constructor as any;
+  if (!klass.cacheVersioning) return null;
+
   if ((this as any).hasAttribute?.("updated_at")) {
-    const updatedAt = this._readAttribute("updated_at");
-    if (updatedAt instanceof Date) {
-      return updatedAt.toISOString().replace(/[^0-9]/g, "");
+    const val = this._readAttribute("updated_at");
+    if (val instanceof Date) {
+      const fmt: string = klass.cacheTimestampFormat ?? "usec";
+      return formatTimestamp(val, fmt);
     }
     return null;
-  } else if ((this.constructor as any).hasAttribute?.("updated_at")) {
-    throw new MissingAttributeError(
-      `missing attribute 'updated_at' for ${(this.constructor as any).name}`,
-    );
   }
+
+  if (klass.hasAttribute?.("updated_at")) {
+    throw new MissingAttributeError(`missing attribute 'updated_at' for ${klass.name}`);
+  }
+
   return null;
 }
 
 /**
- * Rails: collection.send(:compute_cache_key, timestamp_column)
- * Note: timestampColumn is accepted for API parity but Relation#computeCacheKey
- * does not yet support it — will take effect when that's implemented.
+ * Returns a cache key along with the version.
  *
+ * Mirrors: ActiveRecord::Integration#cache_key_with_version
+ */
+export function cacheKeyWithVersion(this: Identifiable): string {
+  const version = cacheVersion.call(this);
+  return version ? `${cacheKey.call(this)}-${version}` : cacheKey.call(this);
+}
+
+// ──────────────────────────────────────────────
+// Class methods
+// ──────────────────────────────────────────────
+
+/**
+ * Called with no argument: returns the class name (Module#to_param in Ruby).
+ * Called with a method name: defines an instance #to_param that returns
+ * "id-parameterized-value" (truncated to 20 chars at a word boundary).
+ *
+ * Mirrors: ActiveRecord::Integration::ClassMethods#to_param
+ */
+export function toParamClass(
+  this: { name: string; prototype: any },
+  methodName?: string,
+): string | undefined {
+  if (methodName === undefined) {
+    return this.name;
+  }
+  const klass = this;
+  klass.prototype.toParam = function (this: any): string | null {
+    const base: string | null = Object.getPrototypeOf(klass.prototype).toParam?.call(this) ?? null;
+    if (!base) return base;
+    const raw: string = String(this[methodName] ?? "");
+    const slug = truncateParam(parameterize(squish(raw)), 20);
+    return slug ? `${base}-${slug}` : base;
+  };
+  return undefined;
+}
+
+/**
  * Mirrors: ActiveRecord::Integration::ClassMethods#collection_cache_key
  */
 export function collectionCacheKey(

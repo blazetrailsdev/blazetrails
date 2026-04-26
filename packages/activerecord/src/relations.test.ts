@@ -6609,6 +6609,22 @@ describe("RelationTest", () => {
     expect(found!.id).toBe(first.id);
   });
 
+  it("find by with non hash conditions returns the first matching record", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const first = await Topic.create({ title: "match" });
+    await Topic.create({ title: "match" });
+    await Topic.create({ title: "other" });
+    const found = await Topic.findBy("title = 'match'" as any);
+    expect(found).not.toBeNull();
+    expect(found!.title).toBe("match");
+    expect(found!.id).toBe(first.id);
+  });
+
   it("find_by returns nil if the record is missing", async () => {
     class Topic extends Base {
       static {

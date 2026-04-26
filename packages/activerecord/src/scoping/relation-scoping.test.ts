@@ -856,4 +856,70 @@ describe("Static shorthands (Rails-guided)", () => {
       /* needs association + scoping */
     });
   }); // HasManyScopingTest
+
+  describe("HasAndBelongsToManyScopingTest", () => {
+    it("forwarding of static methods", async () => {
+      class Post extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+          (this as any).static_whatAreYou = function () {
+            return "Post";
+          };
+        }
+      }
+      class Category extends Base {
+        static {
+          this.attribute("name", "string");
+          this.adapter = adapter;
+          (this as any).static_whatAreYou = function () {
+            return "Category";
+          };
+        }
+      }
+      const post = await Post.create({ title: "test" });
+      const cat = await Category.create({ name: "test" });
+      expect((Category as any).static_whatAreYou()).toBe("Category");
+    });
+
+    it("nested scope finder", async () => {
+      class Post extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      }
+      class Category extends Base {
+        static {
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+      const post = await Post.create({ title: "test" });
+      const cat1 = await Category.create({ name: "cat1" });
+      const cat2 = await Category.create({ name: "cat2" });
+      const count = await Category.where("1=0").count();
+      expect(count).toBe(0);
+    });
+
+    it("none scoping", async () => {
+      class Post extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      }
+      class Category extends Base {
+        static {
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+      const post = await Post.create({ title: "test" });
+      const cat1 = await Category.create({ name: "cat1" });
+      const cat2 = await Category.create({ name: "cat2" });
+      const count = await Category.none().count();
+      expect(count).toBe(0);
+    });
+  }); // HasAndBelongsToManyScopingTest
 });

@@ -36,6 +36,12 @@ describe("RelationMutationTest", () => {
     expect(sql).toContain("WHERE");
   });
 
+  it("#!", () => {
+    const { Post } = makeModel();
+    const sql = Post.group("title").toSql();
+    expect(sql).toContain("GROUP");
+  });
+
   it("#_select!", () => {
     const { Post } = makeModel();
     const sql = Post.select("title").toSql();

@@ -1136,8 +1136,8 @@ export { deleteStatement as remove };
 // ---------------------------------------------------------------------------
 
 interface DatabaseStatementsDefaultsHost {
-  execute(sql: string, binds?: unknown[]): Promise<Record<string, unknown>[]>;
-  executeMutation(sql: string, binds?: unknown[]): Promise<number>;
+  execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]>;
+  executeMutation(sql: string, binds?: unknown[], name?: string): Promise<number>;
   execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
 }
 
@@ -1205,38 +1205,38 @@ export const DatabaseStatements = {
   async execQuery(
     this: DatabaseStatementsDefaultsHost,
     sql: string,
-    _name?: string | null,
+    name?: string | null,
     binds?: unknown[],
   ): Promise<Result> {
-    const rows = await this.execute(sql, binds);
+    const rows = await this.execute(sql, binds, name ?? "SQL");
     return Result.fromRowHashes(rows);
   },
 
   async execInsert(
     this: DatabaseStatementsDefaultsHost,
     sql: string,
-    _name?: string | null,
+    name?: string | null,
     binds?: unknown[],
   ): Promise<number> {
-    return this.executeMutation(sql, binds);
+    return this.executeMutation(sql, binds, name ?? "SQL");
   },
 
   async execDelete(
     this: DatabaseStatementsDefaultsHost,
     sql: string,
-    _name?: string | null,
+    name?: string | null,
     binds?: unknown[],
   ): Promise<number> {
-    return this.executeMutation(sql, binds);
+    return this.executeMutation(sql, binds, name ?? "SQL");
   },
 
   async execUpdate(
     this: DatabaseStatementsDefaultsHost,
     sql: string,
-    _name?: string | null,
+    name?: string | null,
     binds?: unknown[],
   ): Promise<number> {
-    return this.executeMutation(sql, binds);
+    return this.executeMutation(sql, binds, name ?? "SQL");
   },
 
   isWriteQuery(sql: string): boolean {

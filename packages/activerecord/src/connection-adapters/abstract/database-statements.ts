@@ -7,8 +7,17 @@
 import { sql as arelSql, Nodes, Visitors } from "@blazetrails/arel";
 import { Attribute as ModelAttribute } from "@blazetrails/activemodel";
 import { Notifications } from "@blazetrails/activesupport";
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import { TransactionIsolationError } from "../../errors.js";
-import { quote, quoteTableName, quoteColumnName } from "./quoting.js";
+import {
+  quote,
+  quoteTableName,
+  quoteColumnName,
+  formatInstantForSql,
+  formatPlainDateTimeForSql,
+  formatPlainDateForSql,
+  formatPlainTimeForSql,
+} from "./quoting.js";
 import { TransactionManager } from "./transaction.js";
 import { Result } from "../../result.js";
 import { isWriteQuerySql } from "../sql-classification.js";
@@ -940,11 +949,42 @@ export function sanitizeLimit(limit: unknown): number | Nodes.SqlLiteral {
 export function withYamlFallback(value: unknown): unknown {
   if (
     Array.isArray(value) ||
-    (value !== null && typeof value === "object" && !(value instanceof Date))
+    (value !== null &&
+      typeof value === "object" &&
+      !(value instanceof Date) &&
+      !isTemporalValue(value))
   ) {
     return JSON.stringify(value);
   }
   return value;
+}
+
+/**
+ * Convert a Temporal value to its SQL wire-string form for use as a bound
+ * parameter. Drivers (pg extended protocol, mysql2 prepared, better-sqlite3)
+ * reject raw Temporal objects; this shim converts them at the bind boundary
+ * so neither the text-protocol path (quote) nor the binary-protocol path
+ * need to know about Temporal.
+ *
+ * Returns the value unchanged when it is not a Temporal type.
+ */
+export function temporalToBindString(value: unknown): unknown {
+  if (value instanceof Temporal.Instant) return formatInstantForSql(value);
+  if (value instanceof Temporal.PlainDateTime) return formatPlainDateTimeForSql(value);
+  if (value instanceof Temporal.PlainDate) return formatPlainDateForSql(value);
+  if (value instanceof Temporal.PlainTime) return formatPlainTimeForSql(value);
+  if (value instanceof Temporal.ZonedDateTime) return formatInstantForSql(value.toInstant());
+  return value;
+}
+
+function isTemporalValue(value: object): boolean {
+  return (
+    value instanceof Temporal.Instant ||
+    value instanceof Temporal.PlainDateTime ||
+    value instanceof Temporal.PlainDate ||
+    value instanceof Temporal.PlainTime ||
+    value instanceof Temporal.ZonedDateTime
+  );
 }
 
 /**

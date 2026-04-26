@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting
  */
 
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import { getDefaultTimezone } from "../../type/internal/timezone.js";
 
 /**
@@ -236,6 +237,109 @@ export function quotedTime(value: Date): string {
     : new Date(2000, 0, 1, h, m, s, ms);
   const full = quotedDate(adjusted);
   return full.replace(/^\d{4}-\d{2}-\d{2} /, "");
+}
+
+/**
+ * Format a `Temporal.Instant` for SQL as `YYYY-MM-DD HH:MM:SS[.ffffff]` in
+ * UTC. Preserves up to microsecond precision (6 fractional digits); nanosecond
+ * digits are included when non-zero.
+ *
+ * Used by the abstract quote/bind path during the dual-typed window (PRs 2–6).
+ * After PR 6 this becomes the sole path and quotedDate is Date-only.
+ */
+export function formatInstantForSql(value: Temporal.Instant): string {
+  const zdt = value.toZonedDateTimeISO("UTC");
+  return formatZonedComponents(zdt);
+}
+
+/**
+ * Format a `Temporal.PlainDateTime` for SQL as `YYYY-MM-DD HH:MM:SS[.ffffff]`.
+ * No timezone conversion — the value is naive by definition.
+ */
+export function formatPlainDateTimeForSql(value: Temporal.PlainDateTime): string {
+  return formatPlainComponents(value);
+}
+
+/**
+ * Format a `Temporal.PlainDate` for SQL as `YYYY-MM-DD`.
+ */
+export function formatPlainDateForSql(value: Temporal.PlainDate): string {
+  const y = String(value.year).padStart(4, "0");
+  const m = String(value.month).padStart(2, "0");
+  const d = String(value.day).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Format a `Temporal.PlainTime` for SQL as `HH:MM:SS[.ffffff]`.
+ */
+export function formatPlainTimeForSql(value: Temporal.PlainTime): string {
+  return formatTimeComponents(
+    value.hour,
+    value.minute,
+    value.second,
+    value.millisecond,
+    value.microsecond,
+    value.nanosecond,
+  );
+}
+
+function formatZonedComponents(zdt: Temporal.ZonedDateTime): string {
+  const y = String(zdt.year).padStart(4, "0");
+  const mo = String(zdt.month).padStart(2, "0");
+  const d = String(zdt.day).padStart(2, "0");
+  const base = `${y}-${mo}-${d} `;
+  return (
+    base +
+    formatTimeComponents(
+      zdt.hour,
+      zdt.minute,
+      zdt.second,
+      zdt.millisecond,
+      zdt.microsecond,
+      zdt.nanosecond,
+    )
+  );
+}
+
+function formatPlainComponents(pdt: Temporal.PlainDateTime): string {
+  const y = String(pdt.year).padStart(4, "0");
+  const mo = String(pdt.month).padStart(2, "0");
+  const d = String(pdt.day).padStart(2, "0");
+  const base = `${y}-${mo}-${d} `;
+  return (
+    base +
+    formatTimeComponents(
+      pdt.hour,
+      pdt.minute,
+      pdt.second,
+      pdt.millisecond,
+      pdt.microsecond,
+      pdt.nanosecond,
+    )
+  );
+}
+
+function formatTimeComponents(
+  h: number,
+  min: number,
+  s: number,
+  ms: number,
+  us: number,
+  ns: number,
+): string {
+  const hh = String(h).padStart(2, "0");
+  const mm = String(min).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  const base = `${hh}:${mm}:${ss}`;
+  if (ms === 0 && us === 0 && ns === 0) return base;
+  // Build up to 9 fractional digits, trimming trailing zeros to the nearest
+  // 3-digit group (preserves full precision without unnecessary padding).
+  const frac9 =
+    String(ms).padStart(3, "0") + String(us).padStart(3, "0") + String(ns).padStart(3, "0");
+  // Trim to smallest non-zero 3-digit group (ms, us, or ns).
+  const frac = ns !== 0 ? frac9 : us !== 0 ? frac9.slice(0, 6) : frac9.slice(0, 3);
+  return `${base}.${frac}`;
 }
 
 /**

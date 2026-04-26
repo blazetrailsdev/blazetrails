@@ -2212,12 +2212,16 @@ export class Relation<T extends Base> {
       if (typeof c !== "string") return c;
       // Table-qualified ("table.col"), quoted ('"table"."col"'), function expressions,
       // or comma-separated lists must pass through as raw SQL.
+      // Comma-separated lists are not allowed in a single pluck argument —
+      // each column must be passed as a separate argument for correct result mapping.
+      if (c.includes(",")) {
+        throw new Error(
+          `pluck does not allow comma-separated column lists in a single argument. ` +
+            `Pass each column as a separate argument: pluck("col1", "col2")`,
+        );
+      }
       const isComplex =
-        c.includes(".") ||
-        c.includes("(") ||
-        c.includes('"') ||
-        c.includes(",") ||
-        /\s+AS\s+/i.test(c);
+        c.includes(".") || c.includes("(") || c.includes('"') || /\s+AS\s+/i.test(c);
       return isComplex ? new Nodes.SqlLiteral(c) : table.get(c);
     });
     // Extract column names for result mapping

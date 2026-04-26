@@ -120,19 +120,20 @@ interface QueryMethodsHost {
 // ---------------------------------------------------------------------------
 
 function resolveOrderMatcher(host: QueryMethodsHost): RegExp {
-  // Walk adapter → inner (SchemaAdapter wraps the real adapter) to find a
-  // static columnNameWithOrderMatcher on the concrete adapter class.
-  // Use _connection/_adapter private fields to avoid triggering connection-pool lookup.
+  // Use the public .adapter getter so establishConnection() models get their
+  // concrete adapter's matcher. Walk adapter → inner to handle SchemaAdapter.
+  // Also check the instance method in case the adapter exposes it directly.
   try {
-    let adapter = (host._modelClass as any)?._adapter;
-    if (!adapter) return abstractOrderMatcher();
+    let adapter = (host._modelClass as any)?.adapter ?? (host._modelClass as any)?._adapter;
     while (adapter) {
-      const matcher = (adapter.constructor as any)?.columnNameWithOrderMatcher?.();
+      const matcher =
+        (adapter as any)?.columnNameWithOrderMatcher?.() ??
+        (adapter.constructor as any)?.columnNameWithOrderMatcher?.();
       if (matcher) return matcher;
       adapter = (adapter as any).inner;
     }
   } catch {
-    // No adapter set — fall back to abstract pattern.
+    // No adapter configured — fall back to abstract pattern.
   }
   return abstractOrderMatcher();
 }
@@ -315,6 +316,8 @@ function orderBang(
         }
         this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
       }
+    } else {
+      throw argumentError(`Unsupported order argument: ${typeof arg}`);
     }
     i++;
   }
@@ -372,6 +375,8 @@ function reorderBang(
         }
         this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
       }
+    } else {
+      throw argumentError(`Unsupported order argument: ${typeof arg}`);
     }
     i++;
   }

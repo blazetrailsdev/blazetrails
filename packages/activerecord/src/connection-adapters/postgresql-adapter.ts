@@ -79,15 +79,30 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   static columnNameMatcher(): RegExp {
     // Rails PostgreSQL adapter column_name_matcher:
-    //   ((?:\w+\.|"\w+"\.){,2}(?:\w+|"\w+")(?:::\w+)? | \w+\((?:|\g<2>)\)(?:::\w+)?)
-    //   with optional AS alias. 2-level \g<2> approximation.
-    return /^((?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?)\)))\))(?:(?:\s+AS)?\s+(?:\w+|"\w+"))?)(?:\s*,\s*(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?)\)))\))(?:(?:\s+AS)?\s+(?:\w+|"\w+"))?)*$/i;
+    //   (col(?:::\w+)? | func(arg?)(?:::\w+)?) with optional AS alias.
+    // Both branches carry their own (?:::\w+)? so backtracking from col→func works.
+    // 2-level approximation of Ruby's recursive \g<2>.
+    //
+    // col_branch: (?:\w+\.|"\w+"\.){0,2}(?:\w+|"\w+")(?:::\w+)?
+    // func_branch: \w+\((?:|col_branch|func(col_branch))\)(?:::\w+)?
+    const col0 = String.raw`(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?`;
+    const col1 = String.raw`(?:${col0}|\w+\((?:|${col0})\)(?:::\w+)?)`;
+    const atom = String.raw`(?:${col0}|\w+\((?:|${col1})\)(?:::\w+)?)`;
+    return new RegExp(
+      `^(${atom}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)(?:\\s*,\\s*${atom}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)*$`,
+      "i",
+    );
   }
 
   static columnNameWithOrderMatcher(): RegExp {
-    // Rails PostgreSQL adapter column_name_with_order_matcher:
-    //   same atom + COLLATE "\w+" + ASC/DESC + NULLS FIRST/LAST
-    return /^((?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?)\)))\))(?:::\w+)?)(?:\s+COLLATE\s+"?\w+"?)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)(?:\s*,\s*(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?)\)))\))(?:::\w+)?)(?:\s+COLLATE\s+"?\w+"?)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)*$/i;
+    // Same atom as columnNameMatcher plus COLLATE, ASC/DESC, NULLS FIRST/LAST.
+    const col0 = String.raw`(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?`;
+    const col1 = String.raw`(?:${col0}|\w+\((?:|${col0})\)(?:::\w+)?)`;
+    const atom = String.raw`(?:${col0}|\w+\((?:|${col1})\)(?:::\w+)?)`;
+    return new RegExp(
+      `^(${atom}(?:\\s+COLLATE\\s+"?\\w+"?)?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)(?:\\s*,\\s*${atom}(?:\\s+COLLATE\\s+"?\\w+"?)?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)*$`,
+      "i",
+    );
   }
 
   override get active(): boolean {

@@ -939,17 +939,21 @@ describe("TransactionTest", () => {
   it("rollback when commit raises", async () => {
     const { Topic, adapter } = makeSQLiteTopic();
     const MyError = class extends Error {};
-    vi.spyOn(adapter, "commitDbTransaction").mockImplementationOnce(async () => {
+    const spy = vi.spyOn(adapter, "commitDbTransaction").mockImplementationOnce(async () => {
       throw new MyError("commit failed");
     });
 
-    await expect(
-      Topic.transaction(async () => {
-        await Topic.create({ title: "test" });
-      }),
-    ).rejects.toThrow(MyError);
+    try {
+      await expect(
+        Topic.transaction(async () => {
+          await Topic.create({ title: "test" });
+        }),
+      ).rejects.toThrow(MyError);
 
-    expect(await Topic.count()).toBe(0);
+      expect(await Topic.count()).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("rollback when saving a frozen record", async () => {

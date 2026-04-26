@@ -2753,8 +2753,9 @@ export class Base extends Model {
   }
 
   /**
-   * Returns the currently active transaction, or a null transaction (no-op
-   * callbacks) if no transaction is open.
+   * Returns the currently active transaction, or a null transaction if no
+   * transaction is open. On the null transaction, `afterCommit` runs
+   * immediately and `afterRollback` is a no-op.
    *
    * Mirrors: ActiveRecord::Base.current_transaction
    */

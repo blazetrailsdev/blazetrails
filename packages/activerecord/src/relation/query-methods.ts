@@ -142,7 +142,7 @@ function referencesBang(this: QueryMethodsHost, ...tables: string[]): any {
 
 function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): any {
   for (const cte of ctes) {
-    if (!(cte && typeof cte === "object" && !Array.isArray(cte))) {
+    if (!isPlainObject(cte)) {
       throw argumentError(`Unsupported argument type: ${String(cte)}`);
     }
     for (const [name, query] of Object.entries(cte)) {
@@ -168,12 +168,13 @@ function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): 
           .map((s: string) => `(${s})`)
           .join(" UNION ");
       } else {
-        if (typeof query !== "string" && typeof query?.toSql !== "function") {
+        const q = query as any;
+        if (typeof q !== "string" && typeof q?.toSql !== "function") {
           throw argumentError(
-            `Unsupported argument type for CTE "${name}": expected a SQL string or Relation, got ${typeof query}`,
+            `Unsupported argument type for CTE "${name}": expected a SQL string or Relation, got ${typeof q}`,
           );
         }
-        sql = typeof query === "string" ? query : query.toSql();
+        sql = typeof q === "string" ? q : q.toSql();
       }
       this._ctes.push({ name, sql, recursive: false });
     }

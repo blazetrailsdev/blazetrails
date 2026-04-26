@@ -5,8 +5,11 @@ import { Notifications } from "@blazetrails/activesupport";
 import type { NotificationSubscriber } from "@blazetrails/activesupport";
 import { SQLite3Adapter } from "./connection-adapters/sqlite3-adapter.js";
 
+const openAdapters: SQLite3Adapter[] = [];
+
 function makeTopic() {
   const adapter = new SQLite3Adapter(":memory:");
+  openAdapters.push(adapter);
   adapter.exec(
     "CREATE TABLE topics (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, updated_at DATETIME)",
   );
@@ -23,6 +26,9 @@ function makeTopic() {
 describe("TransactionInstrumentationTest", () => {
   afterEach(() => {
     Notifications.unsubscribeAll();
+    for (const adapter of openAdapters.splice(0)) {
+      adapter.close();
+    }
   });
 
   it("start transaction is triggered when the transaction is materialized", async () => {

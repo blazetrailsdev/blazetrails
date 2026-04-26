@@ -203,6 +203,11 @@ export class Notifications {
    */
   static publish(name: string, payload?: EventPayload): void {
     const event = new Event(name, new Date(), payload ?? {});
+    const current = this._eventStack();
+    const parent = current[current.length - 1];
+    if (parent) {
+      parent.children.push(event);
+    }
     event.finish();
     for (const sub of this._subscribers) {
       if (this._matches(sub.pattern, event.name)) {

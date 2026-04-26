@@ -153,4 +153,14 @@ describe("AdapterPreventWritesTest", () => {
       ),
     ).rejects.toThrow(ReadOnlyError);
   });
+
+  // Rails defines two variants of this test: one for PostgreSQL (which raises StatementInvalid
+  // on encoding errors eagerly) and one for all other adapters (assert_nothing_raised).
+  // This second occurrence mirrors the PostgreSQL variant — on PG the query raises before the
+  // write-prevention check; on SQLite bytes pass through as-is.
+  it("doesnt error when a select query has encoding errors", async () => {
+    await adapter.withPreventedWrites(async () => {
+      await expect(adapter.execute(`SELECT '\xC8'`)).resolves.toBeDefined();
+    });
+  });
 });

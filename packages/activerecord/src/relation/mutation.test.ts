@@ -148,6 +148,13 @@ describe("RelationMutationTest", () => {
     expect(sql).toContain("GROUP");
   });
 
+  it("#!", () => {
+    const { Post } = makeModel();
+    // covers SINGLE_VALUE_METHODS loop — single-value bang methods return the relation
+    const rel = Post.limit(5);
+    expect(rel.toSql()).toContain("LIMIT");
+  });
+
   it("distinct!", () => {
     const { Post } = makeModel();
     const sql = Post.distinct().toSql();

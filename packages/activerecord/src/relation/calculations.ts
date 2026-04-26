@@ -255,12 +255,14 @@ export async function performCount(
     // Mirrors: ActiveRecord::Calculations#build_count_subquery
     const innerTable = this._modelClass.arelTable;
     let innerManager: ReturnType<typeof innerTable.project>;
+    // columnAlias: what the outer COUNT targets. Mirrors Rails:
+    //   column_name == :all → Arel.star   (outer: COUNT(*))
+    //   else                → "count_column" (outer: COUNT(count_column))
+    const effectiveCol = column === "*" ? undefined : column;
+    let columnAlias: Nodes.Node;
     if (this._isDistinct) {
-      // DISTINCT relation: project the PK with DISTINCT applied so the inner
-      // query deduplicates before counting. Use table.get(col) for each column
-      // so PK references are qualified (table.col) and unambiguous when joins
-      // are present. Mirrors Rails: composite-PK DISTINCT count uses separate
-      // Attribute nodes for each key column.
+      // DISTINCT: project PK with DISTINCT applied so the inner query
+      // deduplicates before counting. Use table.get(c) for qualified refs.
       const pk = (this._modelClass as any).primaryKey ?? "id";
       if (Array.isArray(pk)) {
         innerManager = innerTable.project(...pk.map((c: string) => innerTable.get(c)));
@@ -268,24 +270,29 @@ export async function performCount(
         innerManager = innerTable.project(innerTable.get(pk));
       }
       innerManager.distinct();
+      columnAlias = new Nodes.SqlLiteral("*");
+    } else if (effectiveCol) {
+      // Specific column requested: project it aliased as count_column so the
+      // outer COUNT(count_column) excludes NULLs, matching non-limited semantics.
+      const colNode = innerTable.get(effectiveCol);
+      innerManager = innerTable.project(colNode.as("count_column"));
+      columnAlias = new Nodes.SqlLiteral("count_column");
     } else {
       innerManager = innerTable.project(new Nodes.SqlLiteral("1 AS one"));
+      columnAlias = new Nodes.SqlLiteral("*");
     }
     this._applyJoinsToManager(innerManager);
     this._applyWheresToManager(innerManager, innerTable);
     if (this._limitValue !== null) innerManager.take(this._limitValue);
     if (this._offsetValue !== null) innerManager.skip(this._offsetValue);
-    // Build outer COUNT using Arel AST: wrap the inner SelectManager in a
-    // Grouping node (parentheses) with a TableAlias ("subquery_for_count"),
-    // then project COUNT(*) with that node as the FROM source.
-    // Mirrors Rails: build_count_subquery uses Arel::Nodes::TableAlias.new(
-    //   Arel::Nodes::Grouping.new(inner_arel), alias_name)
+    // Wrap inner query as Arel AST: Grouping (parens) + TableAlias.
+    // Mirrors Rails: Arel::Nodes::TableAlias.new(Arel::Nodes::Grouping.new(inner), alias)
     const subqueryNode = new Nodes.TableAlias(
       new Nodes.Grouping(innerManager.ast),
       "subquery_for_count",
     );
-    const countAll = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
-    const outerManager = innerTable.project(countAll.as("count"));
+    const countNode = new Nodes.NamedFunction("COUNT", [columnAlias]);
+    const outerManager = innerTable.project(countNode.as("count"));
     outerManager.from(subqueryNode);
     const result = await this._modelClass.adapter.selectAll(
       outerManager.toSql(),

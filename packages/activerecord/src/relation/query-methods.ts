@@ -172,8 +172,12 @@ function resolveCteEntry(name: string, query: unknown): string {
   }
   const q = query as any;
   if (typeof q !== "string" && typeof q?.toSql !== "function") {
+    const typeName =
+      q !== null && typeof q === "object"
+        ? `type object (${(q as object).constructor?.name ?? "unknown"})`
+        : `type ${typeof q}`;
     throw argumentError(
-      `Unsupported argument type for CTE "${name}": expected a SQL string or Relation, got ${typeof q}`,
+      `Unsupported argument type for CTE "${name}": expected a SQL string or Relation, got ${typeName}`,
     );
   }
   return typeof q === "string" ? q : q.toSql();

@@ -32,7 +32,7 @@ describe("RelationMutationTest", () => {
 
   it("#!", () => {
     const { Post } = makeModel();
-    // multi-value method (where) and single-value method (group) both mutate in place
+    // cover representative multi-value (where) and single-value (group) query methods via generated SQL
     expect(Post.where({ title: "x" }).toSql()).toContain("WHERE");
     expect(Post.group("title").toSql()).toContain("GROUP");
   });

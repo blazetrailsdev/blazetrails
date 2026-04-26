@@ -1666,9 +1666,10 @@ function arelColumnAliasesFromHash(
     const modelClass: any = (this as any)._modelClass;
     const quoteAlias = (a: unknown): string => safeQuoteColumnName(modelClass, String(a));
     if (isPlainObject(columnsAliases)) {
-      return Object.entries(columnsAliases as Record<string, unknown>).map(([col, alias]) =>
-        nodeAs(arelColumnWithTable.call(this, tableName, col), quoteAlias(alias)),
-      );
+      return Reflect.ownKeys(columnsAliases as object).map((col) => {
+        const alias = (columnsAliases as any)[col];
+        return nodeAs(arelColumnWithTable.call(this, tableName, col as any), quoteAlias(alias));
+      });
     }
     if (Array.isArray(columnsAliases)) {
       return (columnsAliases as string[]).map((col) =>

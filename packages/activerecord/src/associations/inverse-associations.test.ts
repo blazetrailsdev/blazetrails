@@ -1227,6 +1227,83 @@ describe("InversePolymorphicBelongsToTests", () => {
   });
 });
 
+describe("InverseCachedPathTests", () => {
+  // Tests for the _cachedAssociations / _preloadedAssociations fast-paths in loadBelongsTo.
+  let adapter: DatabaseAdapter;
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  it("wires inverseOf on the cached-associations fast-path", async () => {
+    class CachedFace extends Base {
+      static {
+        this.attribute("man_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class CachedMan extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    Associations.hasOne.call(CachedMan, "cachedFace", { inverseOf: "cachedMan" });
+    Associations.belongsTo.call(CachedFace, "cachedMan", { inverseOf: "cachedFace" });
+    registerModel(CachedMan);
+    registerModel(CachedFace);
+
+    const m = await CachedMan.create({ name: "Alice" });
+    const f = await CachedFace.create({ man_id: m.id });
+
+    // Pre-populate _cachedAssociations so the fast-path is taken
+    (f as any)._cachedAssociations = new Map();
+    (f as any)._cachedAssociations.set("cachedMan", m);
+
+    const parent = await loadBelongsTo(f, "cachedMan", {
+      className: "CachedMan",
+      inverseOf: "cachedFace",
+    });
+    // Returns the cached instance
+    expect(parent).toBe(m);
+    // Inverse was wired on the parent's cache
+    expect((parent as any)._cachedAssociations?.get("cachedFace")).toBe(f);
+  });
+
+  it("throws on invalid inverseOf even when the cached value is null", async () => {
+    class NullFace extends Base {
+      static {
+        this.attribute("man_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class NullMan extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    // NullMan must have at least one association so validateInverseOf actually validates
+    // (it returns early without throwing when the target has zero associations).
+    Associations.hasOne.call(NullMan, "nullFace", { className: "NullFace" });
+    Associations.belongsTo.call(NullFace, "nullMan", { inverseOf: "nullFace" });
+    registerModel(NullMan);
+    registerModel(NullFace);
+
+    const f = new NullFace();
+    // Pre-populate cache with null (as the preloader does for missing rows)
+    (f as any)._cachedAssociations = new Map();
+    (f as any)._cachedAssociations.set("nullMan", null);
+
+    // An invalid inverseOf should throw even though the cached value is null
+    await expect(
+      loadBelongsTo(f, "nullMan", {
+        className: "NullMan",
+        inverseOf: "nonExistentAssociation",
+      }),
+    ).rejects.toThrow(/nonExistentAssociation/);
+  });
+});
+
 describe("InverseAssociationTests", () => {
   let adapter: DatabaseAdapter;
   beforeEach(() => {

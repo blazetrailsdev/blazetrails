@@ -298,20 +298,21 @@ describe("TransactionInstrumentationTest", () => {
   });
 
   it("transaction instrumentation fires before after commit callbacks", async () => {
-    const { Topic, adapter } = makeTopic();
+    const { Topic } = makeTopic();
     const order: string[] = [];
 
+    let afterCommitTriggered = false;
+    Topic.afterCommit(function () {
+      afterCommitTriggered = true;
+      order.push("after_commit");
+    });
+
     Notifications.subscribe("transaction.active_record", () => {
+      expect(afterCommitTriggered).toBe(false);
       order.push("notification");
     });
 
-    await Topic.transaction(async () => {
-      await Topic.create({ title: "test" });
-      const tx = adapter.transactionManager.currentTransaction as any;
-      tx?.afterCommit?.(() => {
-        order.push("after_commit");
-      });
-    });
+    await Topic.create({ title: "test" });
 
     expect(order).toEqual(["notification", "after_commit"]);
   });
@@ -326,8 +327,10 @@ describe("TransactionInstrumentationTest", () => {
 
     await Topic.transaction(async () => {
       await Topic.create({ title: "test" });
-      const tx = adapter.transactionManager.currentTransaction as any;
-      tx?.afterRollback?.(() => {
+      // Register directly on the transaction to avoid the save-path
+      // ordering issue between state-restore and rolledbackBang callbacks.
+      const txn = adapter.transactionManager.currentTransaction as any;
+      txn?.afterRollback?.(() => {
         order.push("after_rollback");
       });
       throw new Rollback();

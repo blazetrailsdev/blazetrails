@@ -5,11 +5,7 @@
  * Mirrors: ActiveRecord::QueryMethods
  */
 import { Nodes, SelectManager, Table as ArelTable, sql as arelSql } from "@blazetrails/arel";
-import {
-  ArgumentError,
-  Attribute,
-  defaultValue as defaultAttributeType,
-} from "@blazetrails/activemodel";
+import { ArgumentError, Attribute, ValueType } from "@blazetrails/activemodel";
 import { ActiveRecordError, IrreversibleOrderError, PreparedStatementInvalid } from "../errors.js";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
@@ -1175,7 +1171,7 @@ function processWithArgs(this: QueryMethodsHost, args: unknown[]): Record<string
 }
 
 function buildCastValue(name: string, value: unknown): Attribute {
-  return Attribute.withCastValue(name, value, defaultAttributeType());
+  return Attribute.withCastValue(name, value, new ValueType());
 }
 
 function buildNamedBoundSqlLiteral(

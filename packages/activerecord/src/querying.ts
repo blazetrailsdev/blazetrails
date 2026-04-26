@@ -176,13 +176,13 @@ export function joins<T extends typeof Base>(
 ): Relation<InstanceType<T>>;
 export function joins<T extends typeof Base>(
   this: T,
-  ...nodes: import("@blazetrails/arel").Nodes.Node[]
+  ...nodes: import("@blazetrails/arel").Nodes.Join[]
 ): Relation<InstanceType<T>>;
 export function joins<T extends typeof Base>(
   this: T,
-  ...args: Array<string | import("@blazetrails/arel").Nodes.Node | undefined>
+  ...args: Array<string | import("@blazetrails/arel").Nodes.Join | undefined>
 ): Relation<InstanceType<T>> {
-  return (this.all().joins as (...a: typeof args) => Relation<InstanceType<T>>)(...args);
+  return (this.all() as any).joins(...args) as Relation<InstanceType<T>>;
 }
 
 /** Mirrors: ActiveRecord::Querying#optimizer_hints */

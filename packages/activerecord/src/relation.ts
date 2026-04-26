@@ -1034,7 +1034,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#unscoped — delegates to klass.unscoped.
    */
   unscoped(): Relation<T> {
-    return (this._modelClass as any).unscoped() as Relation<T>;
+    return this._modelClass.unscoped() as Relation<T>;
   }
 
   // merge and spawn are mixed in from spawn-methods.ts
@@ -1145,8 +1145,8 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#joins
    */
   joins(tableOrSql?: string, on?: string): Relation<T>;
-  joins(...nodes: Nodes.Node[]): Relation<T>;
-  joins(...args: Array<string | Nodes.Node | undefined>): Relation<T> {
+  joins(...nodes: Nodes.Join[]): Relation<T>;
+  joins(...args: Array<string | Nodes.Join | undefined>): Relation<T> {
     const rel = this._clone();
     // Two-string-argument form: joins(table, onClause) — preserved for back-compat.
     if (args.length === 2 && typeof args[0] === "string" && typeof args[1] === "string") {
@@ -1155,8 +1155,8 @@ export class Relation<T extends Base> {
     }
     for (const arg of args) {
       if (!arg) continue;
-      // Arel join node (e.g. from SelectManager#joinSources) — render to SQL.
-      if (arg instanceof Nodes.Node) {
+      // Arel join node (InnerJoin / OuterJoin / StringJoin etc. from joinSources).
+      if (arg instanceof Nodes.Join) {
         rel._rawJoins.push(arg.toSql());
         continue;
       }

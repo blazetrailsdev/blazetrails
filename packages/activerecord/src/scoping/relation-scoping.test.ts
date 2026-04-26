@@ -877,8 +877,8 @@ describe("Static shorthands (Rails-guided)", () => {
           };
         }
       }
-      const post = await Post.create({ title: "test" });
-      const cat = await Category.create({ name: "test" });
+      await Post.create({ title: "test" });
+      await Category.create({ name: "test" });
       expect((Category as any).static_whatAreYou()).toBe("Category");
     });
 
@@ -895,9 +895,9 @@ describe("Static shorthands (Rails-guided)", () => {
           this.adapter = adapter;
         }
       }
-      const post = await Post.create({ title: "test" });
-      const cat1 = await Category.create({ name: "cat1" });
-      const cat2 = await Category.create({ name: "cat2" });
+      await Post.create({ title: "test" });
+      await Category.create({ name: "cat1" });
+      await Category.create({ name: "cat2" });
       const count = await Category.where("1=0").count();
       expect(count).toBe(0);
     });
@@ -915,9 +915,9 @@ describe("Static shorthands (Rails-guided)", () => {
           this.adapter = adapter;
         }
       }
-      const post = await Post.create({ title: "test" });
-      const cat1 = await Category.create({ name: "cat1" });
-      const cat2 = await Category.create({ name: "cat2" });
+      await Post.create({ title: "test" });
+      await Category.create({ name: "cat1" });
+      await Category.create({ name: "cat2" });
       const count = await Category.none().count();
       expect(count).toBe(0);
     });

@@ -143,7 +143,11 @@ function referencesBang(this: QueryMethodsHost, ...tables: string[]): any {
 function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): any {
   for (const cte of ctes) {
     if (!isPlainObject(cte)) {
-      throw argumentError(`Unsupported argument type: ${String(cte)}`);
+      const typeName =
+        cte !== null && typeof cte === "object"
+          ? `type object (${(cte as object).constructor?.name ?? "unknown"})`
+          : `type ${typeof cte}`;
+      throw argumentError(`Unsupported argument type: ${typeName}`);
     }
     for (const [name, query] of Object.entries(cte)) {
       if (query === null || query === undefined) {
@@ -158,8 +162,12 @@ function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): 
         }
         for (const q of query) {
           if (typeof q !== "string" && typeof q?.toSql !== "function") {
+            const typeName =
+              q !== null && typeof q === "object"
+                ? `type object (${(q as object).constructor?.name ?? "unknown"})`
+                : `type ${typeof q}`;
             throw argumentError(
-              `Unsupported argument type in array for CTE "${name}": ${typeof q}`,
+              `Unsupported argument type in array for CTE "${name}": ${typeName}`,
             );
           }
         }

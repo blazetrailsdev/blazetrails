@@ -330,6 +330,10 @@ describe("InstrumentationTest", () => {
 });
 
 describe("TransactionInSqlActiveRecordPayloadTest", () => {
+  afterEach(() => {
+    Notifications.unsubscribeAll();
+  });
+
   it("payload without an open transaction", async () => {
     const adapter = freshAdapter();
     class Book extends Base {
@@ -352,6 +356,10 @@ describe("TransactionInSqlActiveRecordPayloadTest", () => {
 });
 
 describe("TransactionInSqlActiveRecordPayloadNonTransactionalTest", () => {
+  afterEach(() => {
+    Notifications.unsubscribeAll();
+  });
+
   it("payload without an open transaction", async () => {
     const adapter = freshAdapter();
     class Book extends Base {
@@ -365,7 +373,6 @@ describe("TransactionInSqlActiveRecordPayloadNonTransactionalTest", () => {
       capturedTransaction = event.payload.transaction;
     });
     await Book.create({ name: "test" });
-    Notifications.unsubscribeAll();
     expect(capturedTransaction ?? null).toBeNull();
   });
 

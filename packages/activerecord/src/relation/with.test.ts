@@ -214,7 +214,7 @@ describe("WithTest", () => {
       }
     }
     const p1 = await WjPost.create({ title: "with comment" });
-    const p2 = await WjPost.create({ title: "no comment" });
+    await WjPost.create({ title: "no comment" });
     await WjComment.create({ wj_post_id: p1.id });
     // CTE of distinct wj_post_ids that have comments, joined back to wj_posts
     const commentedPosts = WjComment.select("wj_post_id").distinct();
@@ -241,7 +241,7 @@ describe("WithTest", () => {
       }
     }
     const p1 = await WljPost.create({ title: "with comment" });
-    const p2 = await WljPost.create({ title: "no comment" });
+    await WljPost.create({ title: "no comment" });
     await WljComment.create({ wlj_post_id: p1.id });
     const commentedPosts = WljComment.select("wlj_post_id").distinct();
     const records = await WljPost.all()

@@ -6,10 +6,9 @@
  */
 import { Nodes, SelectManager, sql as arelSql } from "@blazetrails/arel";
 import { ArgumentError } from "@blazetrails/activemodel";
-import { ActiveRecordError, PreparedStatementInvalid } from "../errors.js";
+import { ActiveRecordError, IrreversibleOrderError, PreparedStatementInvalid } from "../errors.js";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
-import { IrreversibleOrderError } from "../errors.js";
 import { sanitizeSqlArray, disallowRawSqlBang } from "../sanitization.js";
 import {
   quote,
@@ -1159,9 +1158,11 @@ function processWithArgs(this: QueryMethodsHost, args: unknown[]): Record<string
   });
 }
 
-function buildCastValue(name: string, value: unknown): unknown {
-  // Wraps a bound SQL parameter in an ActiveModel::Attribute-like shape.
-  // The adapter reads .value_for_database from the result.
+function buildCastValue(
+  name: string,
+  value: unknown,
+): { name: string; value: unknown; valueForDatabase(): unknown } {
+  if (!name) throw new ArgumentError("attribute name must be provided");
   return { name, value, valueForDatabase: () => value };
 }
 
@@ -1255,7 +1256,9 @@ function reverseSqlOrder(this: QueryMethodsHost, orderQuery: unknown[]): unknown
       }
       return o.split(",").map((s) => {
         s = s.trim();
-        return s.replace(/\sasc$/i, " DESC").replace(/\sdesc$/i, " ASC") || s + " DESC";
+        if (/\sasc$/i.test(s)) return s.replace(/\sasc$/i, " DESC");
+        if (/\sdesc$/i.test(s)) return s.replace(/\sdesc$/i, " ASC");
+        return `${s} DESC`;
       });
     }
     return [o];
@@ -1273,20 +1276,15 @@ function columnReferences(orderArgs: unknown[]): string[] {
     if (typeof arg === "string" || typeof arg === "symbol") {
       const t = extractTableNameFrom(String(arg));
       if (t) refs.push(t);
+    } else if (arg instanceof Nodes.Attribute) {
+      refs.push((arg as any).relation.name);
+    } else if (arg instanceof Nodes.Ordering) {
+      const expr = (arg as any).expr;
+      if (expr instanceof Nodes.Attribute) refs.push(expr.relation.name);
     } else if (arg !== null && typeof arg === "object" && !Array.isArray(arg)) {
       for (const [key] of Object.entries(arg as Record<string, unknown>)) {
         const t = extractTableNameFrom(String(key));
         if (t) refs.push(t);
-      }
-    } else if (arg !== null && typeof arg === "object") {
-      const node = arg as any;
-      // Arel::Attribute → node.relation.name
-      if (typeof node.relation === "object" && node.relation?.name) {
-        refs.push(node.relation.name);
-      } else if (typeof node.expr === "object" && typeof node.expr?.relation === "object") {
-        // Arel::Nodes::Ordering wrapping an Attribute → node.expr.relation.name
-        const rel = node.expr.relation;
-        if (rel?.name) refs.push(rel.name);
       }
     }
   }
@@ -1297,20 +1295,49 @@ function sanitizeOrderArguments(this: QueryMethodsHost, orderArgs: unknown[]): u
   return orderArgs.map((arg) => (this as any)._modelClass?.sanitizeSqlForOrder?.(arg) ?? arg);
 }
 
+function flattenedOrderKeysForRawSqlCheck(orderArgs: unknown[]): string[] {
+  const result: string[] = [];
+  for (const arg of orderArgs) {
+    if (Array.isArray(arg)) {
+      result.push(...flattenedOrderKeysForRawSqlCheck(arg));
+    } else if (typeof arg === "string" || typeof arg === "symbol") {
+      if (!(arg instanceof Nodes.SqlLiteral)) result.push(String(arg));
+    } else if (arg !== null && typeof arg === "object") {
+      for (const key of Object.keys(arg as Record<string, unknown>)) {
+        result.push(key);
+      }
+    }
+  }
+  return result;
+}
+
 function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void {
   const model = (this as any)._modelClass;
   const permit = model?.adapterClass?.columnNameWithOrderMatcher?.();
-  if (permit) disallowRawSqlBang(flattenedArgs(orderArgs) as string[], permit);
+  if (permit) disallowRawSqlBang(flattenedOrderKeysForRawSqlCheck(orderArgs), permit);
   validateOrderArgs.call(this, orderArgs);
   const refs = columnReferences(orderArgs);
   if (refs.length > 0)
     (this as any)._referencesValues = [...((this as any)._referencesValues ?? []), ...refs];
 }
 
+function buildOrderNode(clause: unknown): unknown {
+  if (clause instanceof Nodes.Node) return clause;
+  if (typeof clause === "string") return new Nodes.SqlLiteral(clause);
+  if (Array.isArray(clause) && clause.length === 2) {
+    const [col, dir] = clause;
+    const expr = col instanceof Nodes.Node ? col : new Nodes.SqlLiteral(String(col));
+    return String(dir).toLowerCase() === "desc"
+      ? new Nodes.Descending(expr)
+      : new Nodes.Ascending(expr);
+  }
+  return new Nodes.SqlLiteral(String(clause));
+}
+
 function buildOrder(this: QueryMethodsHost, arel: any): void {
-  const orders: unknown[] = ((this as any)._orderClauses ?? []).filter(
-    (o: unknown) => o !== null && o !== undefined && o !== "",
-  );
+  const orders = ((this as any)._orderClauses ?? [])
+    .filter((o: unknown) => o !== null && o !== undefined && o !== "")
+    .map(buildOrderNode);
   if (orders.length > 0) arel.order?.(...orders);
 }
 

@@ -12,6 +12,7 @@ import { WhereClause } from "./where-clause.js";
 import { sanitizeSqlArray, disallowRawSqlBang } from "../sanitization.js";
 import {
   quote,
+  quoteColumnName as quoteCol,
   columnNameWithOrderMatcher as abstractOrderMatcher,
 } from "../connection-adapters/abstract/quoting.js";
 import { JoinDependency } from "../associations/join-dependency.js";
@@ -1567,7 +1568,7 @@ function arelColumn(
   if (field instanceof Nodes.Node) return field;
   if (fallback) return fallback(fieldStr);
   const quoted = isSymbol
-    ? (modelClass?.adapter?.quoteTableName?.(fieldStr) ?? `"${fieldStr}"`)
+    ? (modelClass?.adapter?.quoteColumnName?.(fieldStr) ?? quoteCol(fieldStr))
     : fieldStr;
   return arelSql(quoted);
 }
@@ -1603,9 +1604,9 @@ function arelColumnWithTable(
 }
 
 function arelColumnsFromHash(this: QueryMethodsHost, fields: Record<string, unknown>): unknown[] {
-  return Object.entries(fields).flatMap(([tableName, columns]) => {
-    const tbl =
-      typeof tableName === "symbol" ? symbolToName(tableName as unknown as symbol) : tableName;
+  return Reflect.ownKeys(fields).flatMap((key) => {
+    const columns = (fields as Record<string | symbol, unknown>)[key];
+    const tbl = typeof key === "symbol" ? symbolToName(key) : key;
     if (typeof columns === "string" || typeof columns === "symbol") {
       return [arelColumnWithTable.call(this, tbl, columns as any)];
     }
@@ -1623,7 +1624,7 @@ function orderColumn(this: QueryMethodsHost, field: string): unknown {
     if (attrName === "count" && ((this as any)._groupColumns ?? []).length > 0) {
       return table?.get(attrName) ?? arelSql(attrName);
     }
-    const quoted = modelClass?.adapter?.quoteTableName?.(attrName) ?? `"${attrName}"`;
+    const quoted = modelClass?.adapter?.quoteColumnName?.(attrName) ?? quoteCol(attrName);
     return arelSql(quoted);
   });
 }
@@ -1636,20 +1637,26 @@ function processSelectArgs(this: QueryMethodsHost, fields: unknown[]): unknown[]
   });
 }
 
+function nodeAs(attr: unknown, quotedAlias: string): unknown {
+  if (typeof (attr as any)?.as === "function") return (attr as any).as(quotedAlias);
+  const attrSql = typeof (attr as any)?.toSql === "function" ? (attr as any).toSql() : String(attr);
+  return arelSql(`${attrSql} AS ${quotedAlias}`);
+}
+
 function arelColumnAliasesFromHash(
   this: QueryMethodsHost,
-  fields: Record<string, unknown>,
+  fields: Record<string | symbol, unknown>,
 ): unknown[] {
-  return Object.entries(fields).flatMap(([key, columnsAliases]) => {
-    const tableName = typeof key === "symbol" ? symbolToName(key as unknown as symbol) : key;
+  return Reflect.ownKeys(fields).flatMap((key) => {
+    const columnsAliases = fields[key as string];
+    const tableName = typeof key === "symbol" ? symbolToName(key) : key;
     const modelClass: any = (this as any)._modelClass;
+    const quoteAlias = (a: unknown): string =>
+      modelClass?.adapter?.quoteColumnName?.(String(a)) ?? quoteCol(String(a));
     if (isPlainObject(columnsAliases)) {
-      return Object.entries(columnsAliases as Record<string, unknown>).map(([col, alias]) => {
-        const attr = arelColumnWithTable.call(this, tableName, col);
-        const quotedAlias =
-          modelClass?.adapter?.quoteColumnName?.(String(alias)) ?? `"${String(alias)}"`;
-        return (attr as any)?.as?.(quotedAlias) ?? arelSql(`${attr} AS ${quotedAlias}`);
-      });
+      return Object.entries(columnsAliases as Record<string, unknown>).map(([col, alias]) =>
+        nodeAs(arelColumnWithTable.call(this, tableName, col), quoteAlias(alias)),
+      );
     }
     if (Array.isArray(columnsAliases)) {
       return (columnsAliases as string[]).map((col) =>
@@ -1657,11 +1664,7 @@ function arelColumnAliasesFromHash(
       );
     }
     if (typeof columnsAliases === "string" || typeof columnsAliases === "symbol") {
-      const attr = arelColumn.call(this, key as any);
-      const quotedAlias =
-        modelClass?.adapter?.quoteColumnName?.(String(columnsAliases)) ??
-        `"${String(columnsAliases)}"`;
-      return [(attr as any)?.as?.(quotedAlias) ?? arelSql(`${attr} AS ${quotedAlias}`)];
+      return [nodeAs(arelColumn.call(this, key as any), quoteAlias(columnsAliases))];
     }
     return [];
   });

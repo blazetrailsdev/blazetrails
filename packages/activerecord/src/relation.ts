@@ -1967,53 +1967,8 @@ export class Relation<T extends Base> {
       return;
     }
 
-    const table = this._modelClass.arelTable;
-    const manager = table.project(new Nodes.SqlLiteral(jd.buildSelectSql()));
+    const manager = this._buildEagerJoinManager(jd, basePk);
 
-    // Apply JoinDependency's LEFT OUTER JOINs
-    for (const node of jd.nodes) {
-      (manager as any).core.source.right.push(
-        new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
-      );
-    }
-
-    // Apply relation's existing joins, WHERE, ORDER, LIMIT, OFFSET, etc.
-    this._applyJoinsToManager(manager);
-    this._applyWheresToManager(manager, table);
-    this._applyOrderToManager(manager, table);
-
-    if (this._isDistinct) manager.distinct();
-    for (const col of this._groupColumns) manager.group(groupColumnToArel(col, table));
-    if (!this._havingClause.isEmpty()) manager.having(this._havingClause.ast);
-    if (this._lockValue) manager.lock(this._lockValue);
-
-    // When LIMIT/OFFSET is present, use a subquery for parent IDs to avoid
-    // JOIN fan-out changing the number of parent records returned.
-    if (this._limitValue !== null || this._offsetValue !== null) {
-      const tableName = (this._modelClass as any).tableName;
-      const idSubquery = table.project(`"${tableName}"."${basePk}"`);
-      (idSubquery as any).distinct();
-      for (const node of jd.nodes) {
-        (idSubquery as any).core.source.right.push(
-          new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
-        );
-      }
-      this._applyJoinsToManager(idSubquery as any);
-      this._applyWheresToManager(idSubquery as any, table);
-      this._applyOrderToManager(idSubquery as any, table);
-      if (this._limitValue !== null) (idSubquery as any).take(this._limitValue);
-      if (this._offsetValue !== null) (idSubquery as any).skip(this._offsetValue);
-      manager.where(
-        new Nodes.SqlLiteral(`"${tableName}"."${basePk}" IN (${(idSubquery as any).toSql()})`),
-      );
-    } else {
-      if (this._limitValue !== null) manager.take(this._limitValue);
-      if (this._offsetValue !== null) manager.skip(this._offsetValue);
-    }
-
-    if (this._optimizerHints.length > 0) {
-      manager.optimizerHints(...this._optimizerHints);
-    }
     let sql = manager.toSql();
     if (this._annotations.length > 0) {
       const comments = this._annotations.map((c) => `/* ${c} */`).join(" ");
@@ -3162,6 +3117,67 @@ export class Relation<T extends Base> {
     return this._includesToPromoteFromReferences().length > 0;
   }
 
+  /**
+   * Shared helper used by both _buildEagerSql (toSql path) and _executeEagerLoad
+   * (execution path). Builds a SelectManager with JoinDependency column aliases,
+   * LEFT OUTER JOINs, WHERE/ORDER/DISTINCT/GROUP/HAVING/LOCK/HINTS applied, and
+   * LIMIT/OFFSET handling via the limitable-reflections check.
+   *
+   * Mirrors: ActiveRecord::Relation#apply_join_dependency +
+   *          ActiveRecord::Associations::JoinDependency#apply_column_aliases
+   */
+  private _buildEagerJoinManager(jd: JoinDependency, basePk: string): SelectManager {
+    const table = this._modelClass.arelTable;
+
+    const manager = table.project(new Nodes.SqlLiteral(jd.buildSelectSql()));
+
+    for (const node of jd.nodes) {
+      (manager as any).core.source.right.push(
+        new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
+      );
+    }
+
+    this._applyJoinsToManager(manager);
+    this._applyWheresToManager(manager, table);
+    this._applyOrderToManager(manager, table);
+    if (this._isDistinct) manager.distinct();
+    for (const col of this._groupColumns) manager.group(groupColumnToArel(col, table));
+    if (!this._havingClause.isEmpty()) manager.having(this._havingClause.ast);
+    if (this._lockValue) manager.lock(this._lockValue);
+    if (this._optimizerHints.length > 0) manager.optimizerHints(...this._optimizerHints);
+
+    // LIMIT/OFFSET: use a subquery for collection associations to avoid fan-out
+    // (mirrors Rails' using_limitable_reflections? check in finder_methods.rb).
+    // Non-collection associations (belongsTo, hasOne) are limitable — apply directly.
+    const hasLimit = this._limitValue !== null || this._offsetValue !== null;
+    if (hasLimit) {
+      const isLimitable = jd.nodes.every((n) => n.assocType !== "hasMany");
+      if (isLimitable) {
+        if (this._limitValue !== null) manager.take(this._limitValue);
+        if (this._offsetValue !== null) manager.skip(this._offsetValue);
+      } else {
+        // Build a parent-ID subquery using Arel nodes so quoting is consistent.
+        const pkAttr = table.get(basePk);
+        const idSubquery = table.project(pkAttr);
+        (idSubquery as any).distinct();
+        for (const node of jd.nodes) {
+          (idSubquery as any).core.source.right.push(
+            new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
+          );
+        }
+        this._applyJoinsToManager(idSubquery as any);
+        this._applyWheresToManager(idSubquery as any, table);
+        this._applyOrderToManager(idSubquery as any, table);
+        if (this._limitValue !== null) (idSubquery as any).take(this._limitValue);
+        if (this._offsetValue !== null) (idSubquery as any).skip(this._offsetValue);
+        // pkAttr.in(subquery) produces "table"."pk" IN (SELECT ...) via Arel
+        manager.where(pkAttr.in(idSubquery));
+      }
+    }
+
+    return manager;
+  }
+
   // Mirrors: ActiveRecord::Relation#to_sql when eager_loading? — builds the
   // JoinDependency SQL synchronously for toSql()/parity runner use.
   // Returns null if no eager associations could be joined (fall back to plain SQL).
@@ -3183,56 +3199,7 @@ export class Relation<T extends Base> {
     }
     if (jd.nodes.length === 0) return null;
 
-    const table = this._modelClass.arelTable;
-
-    // Build SELECT with t0_r0-style column aliases (mirrors apply_column_aliases)
-    const baseSelectSql = jd.buildSelectSql();
-    const manager = table.project(new Nodes.SqlLiteral(baseSelectSql));
-
-    // Apply LEFT OUTER JOINs from JoinDependency
-    for (const node of jd.nodes) {
-      (manager as any).core.source.right.push(
-        new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
-      );
-    }
-
-    this._applyJoinsToManager(manager);
-    this._applyWheresToManager(manager, table);
-    this._applyOrderToManager(manager, table);
-    if (this._isDistinct) manager.distinct();
-    for (const col of this._groupColumns) manager.group(groupColumnToArel(col, table));
-    if (!this._havingClause.isEmpty()) manager.having(this._havingClause.ast);
-    if (this._lockValue) manager.lock(this._lockValue);
-    if (this._optimizerHints.length > 0) manager.optimizerHints(...this._optimizerHints);
-
-    // LIMIT/OFFSET: use a subquery for collection associations to avoid fan-out.
-    // Non-collection (belongsTo, hasOne) are limitable — apply LIMIT directly.
-    // Mirrors: using_limitable_reflections? in Rails finder_methods.rb
-    const hasLimit = this._limitValue !== null || this._offsetValue !== null;
-    if (hasLimit) {
-      const isLimitable = jd.nodes.every((n) => n.assocType !== "hasMany");
-      if (isLimitable) {
-        if (this._limitValue !== null) manager.take(this._limitValue);
-        if (this._offsetValue !== null) manager.skip(this._offsetValue);
-      } else {
-        const tableName = (this._modelClass as any).tableName;
-        const idSubquery = table.project(`"${tableName}"."${basePk}"`);
-        (idSubquery as any).distinct();
-        for (const node of jd.nodes) {
-          (idSubquery as any).core.source.right.push(
-            new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
-          );
-        }
-        this._applyJoinsToManager(idSubquery as any);
-        this._applyWheresToManager(idSubquery as any, table);
-        this._applyOrderToManager(idSubquery as any, table);
-        if (this._limitValue !== null) (idSubquery as any).take(this._limitValue);
-        if (this._offsetValue !== null) (idSubquery as any).skip(this._offsetValue);
-        manager.where(
-          new Nodes.SqlLiteral(`"${tableName}"."${basePk}" IN (${(idSubquery as any).toSql()})`),
-        );
-      }
-    }
+    const manager = this._buildEagerJoinManager(jd, basePk);
 
     let sql = manager.toSql();
     if (this._annotations.length > 0) {

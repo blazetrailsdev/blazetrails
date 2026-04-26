@@ -300,7 +300,10 @@ export class JoinDependency {
       }
       lastNode = node;
       currentModel = node.modelClass;
-      currentAlias = node.tableAlias;
+      // Use effectiveSqlName, not tableAlias: the JOIN SQL references the
+      // effective name (real table name or tN alias), so the next level's ON
+      // clause must use the same name as the source of the join.
+      currentAlias = node.effectiveSqlName;
       parentPath = parentPath ? `${parentPath}.${part}` : part;
     }
     return lastNode;

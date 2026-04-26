@@ -172,12 +172,13 @@ async function main(): Promise<void> {
     //     synchronously; trails' schema cache is populated async from the DB on
     //     first access. Without this step, JoinDependency sees an empty schema
     //     cache and falls back to only the primary key.
-    for (const [, klass] of modelRegistry) {
+    for (const [name, klass] of modelRegistry) {
       try {
         await (klass as unknown as { loadSchema(): Promise<void> }).loadSchema();
-      } catch {
-        // Non-critical: if schema load fails for a model, toSql() degrades
-        // gracefully (fewer column aliases).
+      } catch (err) {
+        process.stderr.write(
+          `parity ar_dump: warning: schema pre-warm failed for ${name}: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
     }
 

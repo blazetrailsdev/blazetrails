@@ -2012,7 +2012,7 @@ export class Base extends Model {
         suppressor,
         "_suppressInitializeCallback",
       );
-      const wasSupressed = suppressor._suppressInitializeCallback;
+      const wasSuppressed = suppressor._suppressInitializeCallback;
       suppressor._suppressInitializeCallback = true;
       const { multiparams, regular } = extractMultiparameterCallstack(attrs);
       try {
@@ -2021,7 +2021,7 @@ export class Base extends Model {
         // Always restore the flag even if super() throws, so later instances
         // on this class still fire after_initialize normally.
         if (hadOwnSuppressor) {
-          suppressor._suppressInitializeCallback = wasSupressed;
+          suppressor._suppressInitializeCallback = wasSuppressed;
         } else {
           delete (suppressor as { _suppressInitializeCallback?: boolean })
             ._suppressInitializeCallback;
@@ -2031,7 +2031,7 @@ export class Base extends Model {
       // Re-snapshot so mp attrs are part of the initial clean state.
       (this as any)._dirty.snapshot((this as any)._attributes);
       // Now fire after_initialize with all attrs assembled.
-      if (!wasSupressed) {
+      if (!wasSuppressed) {
         ctor._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
       }
     } else {

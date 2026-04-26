@@ -226,7 +226,9 @@ function assembleValue(parts: unknown[], typeName: string): unknown {
     // - undefined: key was absent from form params (Rails: nil → TypeError → raises)
     // - null/blank: key present but empty string (Rails: 0 via .to_i → ArgumentError rescued → nil)
     const datePartsAbsent = parts.slice(0, 3).some((v) => v === undefined);
-    const timePartsPresent = parts.slice(3).some((v) => v !== undefined && !isBlank(v));
+    // Check key presence (not value truthiness): blank time parts like (4i)=>""
+    // are cast to null but were still explicitly provided, matching Rails' .to_i → 0 path.
+    const timePartsPresent = parts.slice(3).some((v) => v !== undefined);
     if (datePartsAbsent && timePartsPresent) {
       throw new Error(
         `Multiparameter datetime requires year, month, and day (got ${JSON.stringify(parts)})`,

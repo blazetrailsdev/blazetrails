@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { Base } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
-import { Digest } from "@blazetrails/activesupport/digest";
+import { getCrypto } from "@blazetrails/activesupport";
+
+function hexdigest(data: string): string {
+  return getCrypto().createHash("md5").update(data).digest("hex").slice(0, 32);
+}
 
 function expectedUsec(d: Date): string {
   const y = d.getUTCFullYear().toString().padStart(4, "0");
@@ -49,7 +53,7 @@ describe("CollectionCacheKeyTest", () => {
     await Developer.create({ name: "Alice", salary: 100000, updated_at: t });
     const devs = Developer.where({ salary: 100000 }).order({ updated_at: "desc" });
     const key = await devs.cacheKey();
-    const digest = Digest.hexdigest(devs.toSql());
+    const digest = hexdigest(devs.toSql());
     const count = await Developer.where({ salary: 100000 }).count();
     expect(key).toBe(`developers/query-${digest}-${count}-${expectedUsec(t)}`);
   });
@@ -60,7 +64,7 @@ describe("CollectionCacheKeyTest", () => {
     await Developer.create({ name: "Alice", salary: 100000, updated_at: t });
     const devs = Developer.where({ salary: 100000 }).order({ updated_at: "desc" }).limit(5);
     const key = await devs.cacheKey();
-    const digest = Digest.hexdigest(devs.toSql());
+    const digest = hexdigest(devs.toSql());
     expect(key).toBe(`developers/query-${digest}-1-${expectedUsec(t)}`);
   });
 
@@ -71,7 +75,7 @@ describe("CollectionCacheKeyTest", () => {
     const devs = Developer.where({ salary: 100000 }).order({ updated_at: "desc" }).limit(5);
     const devsWithSelect = devs.select("*");
     const key = await devsWithSelect.cacheKey();
-    const digest = Digest.hexdigest(devsWithSelect.toSql());
+    const digest = hexdigest(devsWithSelect.toSql());
     expect(key).toBe(`developers/query-${digest}-1-${expectedUsec(t)}`);
   });
 
@@ -84,7 +88,7 @@ describe("CollectionCacheKeyTest", () => {
       .limit(5)
       .load();
     const key = await devs.cacheKey();
-    const digest = Digest.hexdigest(devs.toSql());
+    const digest = hexdigest(devs.toSql());
     // digest and count are stable; timestamp comes from loaded record's in-memory Date
     expect(key).toMatch(new RegExp(`^developers/query-${digest}-1-\\d{20}$`));
   });
@@ -266,7 +270,7 @@ describe("CollectionCacheKeyTest", () => {
     await withCollectionCacheVersioning(Developer, async () => {
       const devs = Developer.where({ salary: 100000 });
       const key = await devs.cacheKey();
-      const digest = Digest.hexdigest(devs.toSql());
+      const digest = hexdigest(devs.toSql());
       expect(key).toBe(`developers/query-${digest}`);
     });
   });

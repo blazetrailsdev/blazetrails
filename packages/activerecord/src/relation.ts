@@ -1,5 +1,4 @@
-import { Notifications } from "@blazetrails/activesupport";
-import { Digest } from "@blazetrails/activesupport/digest";
+import { getCrypto, Notifications } from "@blazetrails/activesupport";
 import {
   Table,
   SelectManager,
@@ -79,6 +78,11 @@ export type LoadedRelation<R> = Omit<R, "then">;
  * - Throw if a join to the same table with a *different* ON clause exists —
  *   that would require aliasing which is not supported.
  */
+// Mirrors: ActiveSupport::Digest.hexdigest — MD5 hex string truncated to 32 chars.
+function hexdigest(data: string): string {
+  return getCrypto().createHash("md5").update(data).digest("hex").slice(0, 32);
+}
+
 function formatCacheTimestamp(date: Date, format: string): string {
   const y = date.getUTCFullYear().toString().padStart(4, "0");
   const mo = (date.getUTCMonth() + 1).toString().padStart(2, "0");
@@ -3837,7 +3841,7 @@ export class Relation<T extends Base> {
   }
 
   async computeCacheKey(timestampColumn = "updated_at"): Promise<string> {
-    const key = `${this._modelClass.tableName}/query-${Digest.hexdigest(this.toSql())}`;
+    const key = `${this._modelClass.tableName}/query-${hexdigest(this.toSql())}`;
     if ((this._modelClass as any).collectionCacheVersioning) {
       return key;
     }

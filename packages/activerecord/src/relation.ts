@@ -3161,9 +3161,10 @@ export class Relation<T extends Base> {
       if (raw instanceof Relation) {
         const subSql = raw.toSql();
         const name = alias ?? "subquery";
-        fromExpr = `(${subSql}) "${name.replace(/"/g, '""')}"`;
+        // Rails wraps the alias in SqlLiteral so quote_table_name leaves it bare.
+        fromExpr = `(${subSql}) ${name}`;
       } else if (alias) {
-        fromExpr = `${raw} "${alias.replace(/"/g, '""')}"`;
+        fromExpr = `${raw} ${alias}`;
       } else {
         fromExpr = raw;
       }

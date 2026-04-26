@@ -1141,19 +1141,29 @@ describe("InversePolymorphicBelongsToTests", () => {
   });
 
   it("eager loaded child instance should be shared with parent on find", async () => {
-    // Rails: eager-loaded polymorphic parent should have its inverse cache pointing
-    // back to the same child instance (object sharing, not just equal values).
+    // Rails: the child instance used to look up the parent via loadBelongsTo (with inverseOf)
+    // is stored in the parent's inverse cache — object sharing, not just equal values.
     const { Man, Tag } = makeModels();
     const m = await Man.create({ name: "Gordon" });
     await Tag.create({ name: "cool", taggable_id: m.id, taggable_type: "Man" });
+
+    // Verify includes() preloads the polymorphic parent
     const tags = await Tag.all().includes("taggable").toArray();
     expect(tags.length).toBe(1);
-    const parent = (tags[0] as any)._preloadedAssociations?.get("taggable");
+    const preloadedParent = (tags[0] as any)._preloadedAssociations?.get("taggable");
+    expect(preloadedParent).not.toBeNull();
+    expect((preloadedParent as any).name).toBe("Gordon");
+
+    // Use a fresh Tag instance (not preloaded) so loadBelongsTo fetches and wires inverseOf.
+    // Preloaded instances skip the fetch and don't re-run inverse setup.
+    const freshTag = await Tag.findBy({ taggable_id: m.id });
+    const parent = await loadBelongsTo(freshTag!, "taggable", {
+      polymorphic: true,
+      inverseOf: "tags",
+    });
     expect(parent).not.toBeNull();
-    expect((parent as any).name).toBe("Gordon");
-    // makeModels doesn't configure inverseOf, so _cachedAssociations on the parent
-    // won't be set. The test verifies the eager load correctly resolves the parent
-    // instance — inverse caching requires explicit inverseOf configuration.
+    // The parent's inverse cache must reference the same freshTag instance
+    expect((parent as any)._cachedAssociations?.get("tags")).toBe(freshTag);
   });
   it("child instance should be shared with replaced via accessor parent", async () => {
     const { Man, Tag } = makeModels();

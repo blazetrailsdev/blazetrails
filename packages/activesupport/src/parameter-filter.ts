@@ -7,12 +7,12 @@ type FilterProc = (key: string, value: unknown) => unknown;
 type Filter = string | RegExp | FilterProc;
 
 export interface ParameterFilterOptions {
-  mask?: string;
+  mask?: unknown;
 }
 
 export class ParameterFilter {
   private readonly filters: Filter[];
-  private readonly mask: string;
+  private readonly mask: unknown;
 
   constructor(filters: Filter[] = [], { mask = "[FILTERED]" }: ParameterFilterOptions = {}) {
     this.filters = filters;

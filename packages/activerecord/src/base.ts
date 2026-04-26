@@ -122,6 +122,8 @@ import {
   isEqual as _isEqual,
   isPresent as _isPresent,
   isBlank as _isBlank,
+  filterAttributes as _filterAttributes,
+  inspectionFilter as _inspectionFilter,
 } from "./core.js";
 import * as _Core from "./core.js";
 import * as _Persistence from "./persistence.js";
@@ -401,6 +403,21 @@ export class Base extends Model {
   static _tableName: string | null = null;
   static _primaryKey: string | string[] = "id";
   static readonly _isActiveRecordBase = true;
+
+  static get filterAttributes(): (string | RegExp | ((key: string, value: unknown) => unknown))[] {
+    return _filterAttributes.call(this);
+  }
+
+  static set filterAttributes(
+    value: (string | RegExp | ((key: string, value: unknown) => unknown))[],
+  ) {
+    _filterAttributes.call(this, value);
+  }
+
+  static get inspectionFilter() {
+    return _inspectionFilter.call(this);
+  }
+
   static _adapter: DatabaseAdapter | null = null;
   static _connectionHandler: ConnectionHandler = new ConnectionHandler();
   static _configPath: string | null = null;

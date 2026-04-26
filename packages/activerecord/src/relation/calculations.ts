@@ -40,7 +40,7 @@ interface CalculationRelation {
     name: string;
     adapter: {
       execute(sql: string): Promise<Record<string, unknown>[]>;
-      selectAll(sql: string, name?: string): Promise<any>;
+      selectAll(sql: string, name?: string | null): Promise<import("../result.js").Result>;
     };
   };
   _limitValue: number | null;
@@ -183,7 +183,8 @@ async function singleAggregate(
   const innerSql = manager.toSql();
   const sql =
     isBigintColumn(rel, fn, column) && needsBigintCast(rel) ? wrapBigintAgg(innerSql) : innerSql;
-  const result = await rel._modelClass.adapter.selectAll(sql, `${rel._modelClass.name} Count`);
+  const opName = fn.charAt(0).toUpperCase() + fn.slice(1);
+  const result = await rel._modelClass.adapter.selectAll(sql, `${rel._modelClass.name} ${opName}`);
   const rows = result.toArray() as Record<string, unknown>[];
   const val = rows[0]?.val;
   if (val === undefined || val === null) {
@@ -217,7 +218,11 @@ async function groupedAggregate(
     isBigintColumn(rel, fn, column) && needsBigintCast(rel)
       ? wrapBigintAgg(innerSql, true)
       : innerSql;
-  const queryResult = await rel._modelClass.adapter.selectAll(sql, `${rel._modelClass.name} Count`);
+  const opName = fn.charAt(0).toUpperCase() + fn.slice(1);
+  const queryResult = await rel._modelClass.adapter.selectAll(
+    sql,
+    `${rel._modelClass.name} ${opName}`,
+  );
   const rows = queryResult.toArray() as Record<string, unknown>[];
 
   const result: Record<string, unknown> = {};

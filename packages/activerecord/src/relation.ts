@@ -2358,14 +2358,15 @@ export class Relation<T extends Base> {
     const sql = manager.toSql();
     const result = await this._modelClass.adapter.selectAll(sql, `${this._modelClass.name} Pluck`);
 
+    const rows = result.toArray();
     if (columns.length === 1) {
       const name = columnNames[0];
       if (name) {
-        return Array.from(result).map((row) => row[name]);
+        return rows.map((row) => row[name]);
       }
-      return Array.from(result).map((row) => Object.values(row)[0]);
+      return rows.map((row) => Object.values(row)[0]);
     }
-    return Array.from(result).map((row) => {
+    return rows.map((row) => {
       return columnNames.map((name, i) => {
         if (name) return row[name];
         return Object.values(row)[i];

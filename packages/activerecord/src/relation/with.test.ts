@@ -273,7 +273,7 @@ describe("WithTest", () => {
     const withCte = Post.where({});
     const relation = Post.all().with({ posts_with_cte: withCte });
     expect(relation.toSql()).toContain("WITH");
-    const unscoped = relation.unscope("with" as any);
+    const unscoped = relation.unscope("with");
     expect(unscoped.toSql()).not.toContain("WITH");
     expect(await unscoped.count()).toBe(2);
   });

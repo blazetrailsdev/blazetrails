@@ -1707,9 +1707,10 @@ function buildWithExpressionFromValue(
   nested = false,
 ): unknown {
   if (value instanceof Nodes.SqlLiteral) return new Nodes.Grouping(value as any);
-  if (value instanceof SelectManager) return value;
+  // Always return the AST node so Cte.relation receives a Node, not a SelectManager.
+  if (value instanceof SelectManager) return value.ast;
   if (value !== null && typeof value === "object" && typeof (value as any).toArel === "function") {
-    return nested ? (value as any).toArel().ast : (value as any).toArel();
+    return (value as any).toArel().ast;
   }
   if (Array.isArray(value)) {
     if (value.length === 1) return buildWithExpressionFromValue.call(this, value[0], false);
@@ -1724,7 +1725,9 @@ function buildWithExpressionFromValue(
 function buildWithValueFromHash(this: QueryMethodsHost, hash: Record<string, unknown>): unknown[] {
   return Object.entries(hash).map(([name, value]) => {
     const expr = buildWithExpressionFromValue.call(this, value);
-    return new Nodes.TableAlias(expr as any, name);
+    // Cte renders "name" AS (expr) — correct CTE SQL.
+    // TableAlias renders (expr) name — wrong for CTEs.
+    return new Nodes.Cte(name, expr as any);
   });
 }
 

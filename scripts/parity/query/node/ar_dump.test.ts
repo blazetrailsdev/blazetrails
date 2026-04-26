@@ -129,10 +129,10 @@ describe("ar_dump.ts", () => {
     expect((json.sql as string).includes("?")).toBe(false);
   });
 
-  it("truncates sub-second frozen-at to whole seconds (ar-65)", () => {
-    // Regression: a --frozen-at with milliseconds (e.g. 12:34:56.789) must not
-    // bleed into the SQL. Rails truncates unscaled DATETIME to whole seconds;
-    // the runner matches that by truncating frozenMs to seconds before FakeTimers.
+  it("preserves sub-second frozen-at precision in SQL and metadata (ar-65)", () => {
+    // Both runners freeze at full precision (Node: FakeTimers ms; Ruby: travel_to
+    // with_usec: true) so sub-second --frozen-at values appear consistently in
+    // the SQL output on both sides, enabling cross-side comparison.
     const outDir = mkdtempSync(join(tmpdir(), "parity-ar-test-"));
     const outPath = join(outDir, "ar-65-subsecond.json");
     const res = spawnSync(
@@ -148,11 +148,10 @@ describe("ar_dump.ts", () => {
     }
     rmSync(outDir, { recursive: true, force: true });
     expect(res.status, `stdout: ${res.stdout}\nstderr: ${res.stderr}`).toBe(0);
-    // frozenAt preserves the original --frozen-at input (matches Ruby runner behavior)
+    // frozenAt preserves the original --frozen-at input
     expect(json.frozenAt).toBe("2026-04-25T12:34:56.789Z");
-    // SQL must contain the whole-second form; no microsecond suffix
-    expect(json.sql as string).toContain("'2026-04-25 12:34:56'");
-    expect(json.sql as string).not.toMatch(/\d{2}:\d{2}:\d{2}\.\d/);
+    // SQL includes microseconds matching the sub-second frozen-at
+    expect(json.sql as string).toContain("'2026-04-25 12:34:56.789000'");
   });
 
   it("exits non-zero on an unknown fixture directory", () => {

@@ -98,7 +98,7 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
 
     # 3. Freeze time before loading fixture code in case a model uses
     #    Time.current in a default scope or a class-level filter.
-    time_helper.travel_to(frozen_time)
+    time_helper.travel_to(frozen_time, with_usec: true)
 
     # 4. Load models.rb first, then evaluate query.rb. Both go through the
     #    same isolated binding so class constants set by models.rb are

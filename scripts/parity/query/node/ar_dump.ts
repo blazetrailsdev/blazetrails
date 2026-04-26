@@ -13,13 +13,10 @@
  * and calls .toSql() on the default export — expected to be an AR
  * Relation.
  *
- * Time is always frozen. Unlike the arel runner, the effective frozen time is
- * truncated to whole seconds before installing FakeTimers. Rails serializes
- * Date binds for unscaled DATETIME columns without fractional seconds (the
- * column type's precision is nil, so AR truncates before quoting). Truncating
- * here ensures fixtures like `new Date(Date.now() - 7 * 86400 * 1000)` produce
- * whole-second values so both sides emit matching SQL regardless of the
- * sub-second component of the supplied --frozen-at.
+ * Time is always frozen. --frozen-at behaves identically to the arel runner:
+ * the full timestamp (including sub-second precision) is passed to FakeTimers.
+ * The Ruby runner passes with_usec: true to travel_to for the same reason —
+ * both sides preserve millisecond precision so their SQL output matches.
  *
  * @blazetrails/{arel,activesupport,activemodel,activerecord} must all
  * be built before running — resolution goes through package `main`
@@ -134,11 +131,7 @@ async function main(): Promise<void> {
   // ms-padded literal on trails but a whole-second literal on Rails.
   // Math.trunc (not Math.floor) is correct for pre-1970 timestamps where
   // Math.floor would round away from zero and shift by up to 1 second.
-  const frozenMs = Math.trunc(new Date(frozenTs).getTime() / 1000) * 1000;
-  // Keep frozenAt equal to the validated input string so both the Node and
-  // Ruby runners write the same value — the diff pipeline doesn't compare
-  // frozenAt today but symmetry avoids future surprises. The clock is still
-  // installed at whole-second precision; only the metadata field is unchanged.
+  const frozenMs = new Date(frozenTs).getTime();
   const fixtureDirAbs = resolve(fixtureDirRaw);
   const outPathAbs = resolve(outPathRaw);
   const fixtureName = basename(fixtureDirAbs);

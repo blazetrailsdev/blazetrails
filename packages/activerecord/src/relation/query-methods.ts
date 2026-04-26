@@ -1141,7 +1141,7 @@ function validateOrderArgs(this: QueryMethodsHost, args: unknown[]): void {
       if (isPlainObject(value)) {
         validateOrderArgs.call(this, [value]);
       } else if (!VALID_DIRECTIONS.has(String(value).toLowerCase())) {
-        throw new ArgumentError(`Direction "${value}" is invalid. Valid directions are: asc, desc`);
+        throw argumentError(`Direction "${value}" is invalid. Valid directions are: asc, desc`);
       }
     }
   }
@@ -1222,9 +1222,7 @@ function buildSubquery(
     throw new ActiveRecordError("Cannot build subquery: relation does not support toArel()");
   }
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(subqueryAlias)) {
-    throw new ArgumentError(
-      `Invalid subquery alias "${subqueryAlias}": must be a safe SQL identifier`,
-    );
+    throw argumentError(`Invalid subquery alias "${subqueryAlias}": must be a safe SQL identifier`);
   }
   const aliasedSubquery = (relation as any).toArel().as(subqueryAlias);
   const sm = new SelectManager();
@@ -1265,7 +1263,8 @@ function reverseSqlOrder(this: QueryMethodsHost, orderQuery: unknown[]): unknown
   return orderQuery.flatMap((o) => {
     // Match Rails: Arel::Attribute → .desc, Arel::Nodes::Ordering → .reverse,
     // other Arel nodes → .desc. Skip arrays (Array#reverse would mutate them).
-    if (o instanceof Nodes.Ordering) return [(o as any).reverse()];
+    if (o instanceof Nodes.Ordering && typeof (o as any).reverse === "function")
+      return [(o as any).reverse()];
     if (o instanceof Nodes.Attribute) return [o.desc()];
     if (o instanceof Nodes.Node && typeof (o as any).desc === "function") {
       return [(o as any).desc()];

@@ -51,9 +51,16 @@ export interface AliasMap {
 
 function getModelColumns(modelClass: any): string[] {
   // columnsHash() triggers loadSchema() which populates _attributeDefinitions
-  // from the schema cache before columnNames() reads them.
-  const ch: Record<string, unknown> | undefined =
-    typeof modelClass.columnsHash === "function" ? modelClass.columnsHash() : undefined;
+  // from the schema cache before columnNames() reads them. Guard with try/catch
+  // in case the model is abstract or has no adapter configured yet.
+  let ch: Record<string, unknown> | undefined;
+  if (typeof modelClass.columnsHash === "function") {
+    try {
+      ch = modelClass.columnsHash() as Record<string, unknown>;
+    } catch {
+      ch = undefined;
+    }
+  }
   const cols: string[] = ch ? Object.keys(ch) : (modelClass.columnNames?.() ?? []);
   const pk = modelClass.primaryKey ?? "id";
   if (Array.isArray(pk)) {
@@ -354,13 +361,21 @@ export class JoinDependency {
     return joins;
   }
 
-  instantiate(resultSet: Record<string, unknown>[], _strictLoadingValue?: boolean): any[] {
-    const { parents } = this.instantiateFromRows(resultSet);
-    return parents;
+  instantiate(resultSet: Record<string, unknown>[], strictLoadingValue?: boolean): any[] {
+    return this.construct(resultSet, strictLoadingValue);
   }
 
   applyColumnAliases(relation: any): any {
-    const selectExprs = this._buildSelectExpressions();
+    // Rails: aliases.columns.map { |c| Arel::Nodes::As.new(...) }
+    // Trails: build the same SQL strings via the aliases object.
+    const effectiveNameByIndex = new Map<number, string>();
+    effectiveNameByIndex.set(this._baseTableIndex, this._baseAlias);
+    for (const node of this._nodes) {
+      effectiveNameByIndex.set(node.tableIndex, node.effectiveSqlName);
+    }
+    const selectExprs = this.aliases()
+      .columns()
+      .map((a) => `"${effectiveNameByIndex.get(a.tableIndex)!}"."${a.column}" AS ${a.alias}`);
     if (typeof relation.reselectBang === "function") {
       relation.reselectBang(...selectExprs);
       return relation;
@@ -433,7 +448,7 @@ export class JoinDependency {
       let parentKey: unknown;
       if (!seenRawPks.has(rawPk)) {
         seenRawPks.add(rawPk);
-        const parent = (this._baseModel as any)._instantiate(parentAttrs);
+        const parent = this.constructModel(parentAttrs, null);
         parentKey = parent._readAttribute(basePk);
         rawToKey.set(rawPk, parentKey);
         parentMap.set(parentKey, parent);
@@ -461,7 +476,7 @@ export class JoinDependency {
 
         if (!seenPks.has(rawChildPk)) {
           seenPks.add(rawChildPk);
-          const child = (node.modelClass as any)._instantiate(childAttrs);
+          const child = this.constructModel(childAttrs, node);
           const parentAssocs = assocMap.get(parentKey)!;
           if (!parentAssocs.has(node.assocName)) {
             parentAssocs.set(node.assocName, []);

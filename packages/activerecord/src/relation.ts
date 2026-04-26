@@ -1696,8 +1696,7 @@ export class Relation<T extends Base> {
    */
   async isMany(): Promise<boolean> {
     if (this._loaded) return this._records.length > 1;
-    const c = await this.count();
-    return (c as number) > 1;
+    return (await this.limitedCount()) > 1;
   }
 
   /**
@@ -1707,8 +1706,7 @@ export class Relation<T extends Base> {
    */
   async isOne(): Promise<boolean> {
     if (this._loaded) return this._records.length === 1;
-    const c = await this.count();
-    return (c as number) === 1;
+    return (await this.limitedCount()) === 1;
   }
 
   /**
@@ -1890,14 +1888,14 @@ export class Relation<T extends Base> {
     if (this._referencesValues.length === 0) return false;
     if (this._includesAssociations.length === 0) return false;
 
-    // Rails builds join nodes and checks Arel::Nodes::StringJoin to identify
-    // raw SQL joins; mirrors that by wrapping _rawJoins as Nodes.StringJoin and
-    // extracting table names from their SQL text via tablesInString.
-    const stringJoins = this._rawJoins.map((s) => new Nodes.StringJoin(new Nodes.SqlLiteral(s)));
-
+    // Rails checks Arel::Nodes::StringJoin to identify raw SQL join fragments.
+    // Mirror that: construct StringJoin nodes for _rawJoins (the equivalent),
+    // then extract table identifiers from each node's SQL text.
     const joinedTables = new Set<string>([
       ...this._joinClauses.map((j) => j.table.toLowerCase()),
-      ...stringJoins.flatMap((j) => this.tablesInString((j.left as Nodes.SqlLiteral).value)),
+      ...this._rawJoins
+        .map((s) => new Nodes.StringJoin(new Nodes.SqlLiteral(s)))
+        .flatMap((j) => this.tablesInString((j.left as unknown as { value: string }).value)),
       String((this._modelClass as unknown as { tableName?: string }).tableName ?? "").toLowerCase(),
     ]);
 

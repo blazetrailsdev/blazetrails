@@ -977,8 +977,7 @@ export function becomesBang<
 
 // ---------------------------------------------------------------------------
 // Private instance helpers — mirrors ActiveRecord::Persistence private block.
-// These are non-exported so the extractor marks them internal: true, matching
-// the Rails private methods. Each is a real implementation, not a stub.
+// Non-exported so the extractor marks them internal: true.
 // ---------------------------------------------------------------------------
 
 interface PersistencePrivateHost {
@@ -1013,8 +1012,7 @@ interface PersistencePrivateHost {
       whereClause: { isEmpty(): boolean; ast: unknown };
     };
     globalCurrentScope?: unknown;
-    readonlyAttribute?(name: string): boolean;
-    counterCacheColumn?(name: string): boolean;
+    readonlyAttributeQ?(name: string): boolean;
     arelTable: InstanceType<typeof ArelTable>;
     _buildPkWhereNode(id: unknown): unknown;
     adapter: { execDelete(sql: string, name: string): Promise<number> };
@@ -1025,6 +1023,9 @@ function initInternals(this: PersistencePrivateHost): void {
   this._newRecord = true;
   this._destroyed = false;
   this._previouslyNewRecord = false;
+  // Mirrors the Transactions#init_internals super chain — those fields live here too.
+  (this as any)._triggerUpdateCallback = null;
+  (this as any)._triggerDestroyCallback = null;
 }
 
 function strictLoadedAssociations(this: any): string[] {
@@ -1032,7 +1033,8 @@ function strictLoadedAssociations(this: any): string[] {
   if (!cache) return [];
   const result: string[] = [];
   for (const [name, assoc] of cache) {
-    if (assoc?.owner?.strictLoading && !assoc?.owner?.strictLoadingNPlusOneOnly) {
+    const owner = assoc?.owner;
+    if (owner?._strictLoading && !owner?.isStrictLoadingNPlusOneOnly?.()) {
       result.push(name);
     }
   }
@@ -1044,20 +1046,19 @@ function _findRecord(
   options?: { lock?: boolean | string; allQueries?: boolean },
 ): Promise<unknown> {
   const ctor = this.constructor as any;
-  const allQueries = options?.allQueries;
+  const allQueries = options?.allQueries ?? null;
   const preloads = strictLoadedAssociations.call(this);
   let scope = ctor.all({ allQueries }).preload(preloads);
   const constraints = _inMemoryQueryConstraintsHash.call(this);
   if (options?.lock) scope = scope.lock(options.lock);
-  return scope.findBy(constraints);
+  // Rails uses find_by! — raises RecordNotFound when not found.
+  return scope.findByBang(constraints);
 }
 
 function _inMemoryQueryConstraintsHash(this: PersistencePrivateHost): Record<string, unknown> {
   const constraintsList = this.constructor.queryConstraintsList();
   if (!constraintsList) {
-    const pk = Array.isArray(this.constructor.primaryKey)
-      ? this.constructor.primaryKey[0]
-      : this.constructor.primaryKey;
+    const pk = this.constructor.primaryKey as string;
     return { [pk]: this.id };
   }
   return Object.fromEntries(constraintsList.map((col) => [col, this.readAttribute(col)]));
@@ -1066,15 +1067,13 @@ function _inMemoryQueryConstraintsHash(this: PersistencePrivateHost): Record<str
 function isApplyScoping(this: PersistencePrivateHost, options?: { unscoped?: boolean }): boolean {
   if (options?.unscoped) return false;
   const ctor = this.constructor as any;
-  return ctor.defaultScopes?.({ allQueries: true }) || !!ctor.globalCurrentScope;
+  return !!(ctor.defaultScopes?.({ allQueries: true }) || ctor.globalCurrentScope);
 }
 
 function _queryConstraintsHash(this: any): Record<string, unknown> {
   const constraintsList = this.constructor.queryConstraintsList();
   if (!constraintsList) {
-    const pk = Array.isArray(this.constructor.primaryKey)
-      ? this.constructor.primaryKey[0]
-      : this.constructor.primaryKey;
+    const pk = this.constructor.primaryKey as string;
     return { [pk]: this.idInDatabase?.() ?? this.id };
   }
   return Object.fromEntries(
@@ -1085,9 +1084,7 @@ function _queryConstraintsHash(this: any): Record<string, unknown> {
   );
 }
 
-function destroyAssociations(this: PersistencePrivateHost): void {
-  // Hook overridden by the associations module; base implementation is a no-op.
-}
+function destroyAssociations(this: PersistencePrivateHost): void {}
 
 function destroyRow(this: PersistencePrivateHost): Promise<number> {
   return _deleteRow.call(this);
@@ -1100,7 +1097,7 @@ function _deleteRow(this: PersistencePrivateHost): Promise<number> {
 function _touchRow(this: any, attributeNames: string[], time?: Date | null): Promise<number> {
   const t = time ?? new Date();
   for (const attr of attributeNames) {
-    (this as any)._writeAttribute(attr, t);
+    this._writeAttribute(attr, t);
   }
   return _updateRow.call(this, attributeNames, "touch");
 }
@@ -1118,18 +1115,43 @@ function _updateRow(
 }
 
 function createOrUpdate(this: any): Promise<boolean> {
-  if ((this as any)._readonly)
-    throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
+  if (this._readonly) _raiseReadonlyRecordError.call(this);
   if (this._destroyed) return Promise.resolve(false);
-  const p = this._newRecord ? _createRecord.call(this) : (this as any)._createOrUpdate();
-  return Promise.resolve(p).then((result) => result !== false && (result as unknown) !== 0);
+  if (this._newRecord) {
+    return _createRecord.call(this).then(() => true);
+  }
+  const attrNames: string[] = Object.keys((this as any)._attributes?.toObject?.() ?? {});
+  const ctor = this.constructor as any;
+  const colNames: string[] = ctor.columnNames ?? attrNames;
+  const filteredNames = attrNames.filter((n: string) => {
+    if (!colNames.includes(n)) return false;
+    if (ctor.readonlyAttributeQ?.(n)) return false;
+    return true;
+  });
+  if (filteredNames.length === 0) {
+    this._triggerUpdateCallback = true;
+    this._previouslyNewRecord = false;
+    return Promise.resolve(true);
+  }
+  return _updateRow.call(this, filteredNames).then((affected: number) => {
+    this._triggerUpdateCallback = affected === 1;
+    this._previouslyNewRecord = false;
+    return true;
+  });
 }
 
 async function _createRecord(this: any): Promise<unknown> {
   const ctor = this.constructor as any;
   const allNames: string[] = Object.keys(this._attributes?.toObject?.() ?? {});
-  const columnNames: string[] = ctor.columnNames ?? allNames;
-  const names = allNames.filter((name: string) => columnNames.includes(name));
+  const colNames: string[] = ctor.columnNames ?? allNames;
+  // Mirrors attributes_for_create: exclude PK columns whose value is nil.
+  const pk = ctor.primaryKey;
+  const pkCols: string[] = Array.isArray(pk) ? pk : [pk];
+  const names = allNames.filter((n: string) => {
+    if (!colNames.includes(n)) return false;
+    if (pkCols.includes(n) && this._readAttribute(n) == null) return false;
+    return true;
+  });
 
   const values: Record<string, unknown> = {};
   for (const name of names) {
@@ -1143,7 +1165,10 @@ async function _createRecord(this: any): Promise<unknown> {
       for (let i = 0; i < returningColumns.length; i++) {
         const col = returningColumns[i];
         if (!this._readAttribute(col)) {
-          this._attributes.set(col, returningValues[i]);
+          // Deserialize through the column's type before writing back.
+          const type = ctor.typeForAttribute?.(col);
+          const deserialized = type ? type.deserialize(returningValues[i]) : returningValues[i];
+          this._writeAttribute(col, deserialized);
         }
       }
     }
@@ -1161,7 +1186,7 @@ async function _createRecord(this: any): Promise<unknown> {
 }
 
 function verifyReadonlyAttribute(this: PersistencePrivateHost, name: string): void {
-  if ((this.constructor as any).readonlyAttribute?.(name)) {
+  if ((this.constructor as any).readonlyAttributeQ?.(name)) {
     throw new ActiveRecordError(`${name} is marked as readonly`);
   }
 }
@@ -1169,9 +1194,15 @@ function verifyReadonlyAttribute(this: PersistencePrivateHost, name: string): vo
 function _raiseRecordNotDestroyed(this: PersistencePrivateHost): never {
   const key = this.constructor.primaryKey;
   const keyStr = Array.isArray(key) ? key.join(", ") : key;
-  throw new RecordNotDestroyed(
-    `Failed to destroy ${this.constructor.name} with ${keyStr}=${String(this.id)}`,
-    this as unknown as object,
+  // If an association destroy raised an exception, propagate that instead.
+  const assocEx = (this as any)._associationDestroyException ?? null;
+  if (assocEx) (this as any)._associationDestroyException = null;
+  throw (
+    assocEx ??
+    new RecordNotDestroyed(
+      `Failed to destroy ${this.constructor.name} with ${keyStr}=${String(this.id)}`,
+      this as unknown as object,
+    )
   );
 }
 

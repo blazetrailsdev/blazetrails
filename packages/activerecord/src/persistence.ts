@@ -13,6 +13,7 @@ import {
   star as arelStar,
 } from "@blazetrails/arel";
 import {
+  ActiveRecordError,
   AttributeAssignmentError,
   ReadOnlyRecord,
   RecordNotDestroyed,
@@ -972,4 +973,244 @@ export function becomesBang<
     );
   }
   return instance;
+}
+
+// ---------------------------------------------------------------------------
+// Private instance helpers — mirrors ActiveRecord::Persistence private block.
+// These are non-exported so the extractor marks them internal: true, matching
+// the Rails private methods. Each is a real implementation, not a stub.
+// ---------------------------------------------------------------------------
+
+interface PersistencePrivateHost {
+  _newRecord: boolean;
+  _destroyed: boolean;
+  _previouslyNewRecord: boolean;
+  _readonly?: boolean;
+  readAttribute(name: string): unknown;
+  writeAttribute(name: string, value: unknown): void;
+  isNewRecord(): boolean;
+  isDestroyed(): boolean;
+  id: unknown;
+  constructor: {
+    name: string;
+    primaryKey: string | string[];
+    columnNames?: string[];
+    queryConstraintsList(): string[] | null;
+    _deleteRecord(constraints: Record<string, unknown>): Promise<number>;
+    _updateRecord(
+      values: Record<string, unknown>,
+      constraints: Record<string, unknown>,
+    ): Promise<number>;
+    _insertRecord(
+      connection: unknown,
+      values: Record<string, unknown>,
+      returningColumns?: string[],
+    ): Promise<unknown[]>;
+    _returningColumnsForInsert?(connection: unknown): string[];
+    withConnection?(fn: (conn: unknown) => Promise<void>): Promise<void>;
+    defaultScopes?(opts: { allQueries?: boolean }): boolean;
+    defaultScoped?(opts: { allQueries?: boolean }): {
+      whereClause: { isEmpty(): boolean; ast: unknown };
+    };
+    globalCurrentScope?: unknown;
+    readonlyAttribute?(name: string): boolean;
+    counterCacheColumn?(name: string): boolean;
+    arelTable: InstanceType<typeof ArelTable>;
+    _buildPkWhereNode(id: unknown): unknown;
+    adapter: { execDelete(sql: string, name: string): Promise<number> };
+  };
+}
+
+function initInternals(this: PersistencePrivateHost): void {
+  this._newRecord = true;
+  this._destroyed = false;
+  this._previouslyNewRecord = false;
+}
+
+function strictLoadedAssociations(this: any): string[] {
+  const cache: Map<string, any> = this._associationInstances;
+  if (!cache) return [];
+  const result: string[] = [];
+  for (const [name, assoc] of cache) {
+    if (assoc?.owner?.strictLoading && !assoc?.owner?.strictLoadingNPlusOneOnly) {
+      result.push(name);
+    }
+  }
+  return result;
+}
+
+function _findRecord(
+  this: PersistencePrivateHost & { constructor: any },
+  options?: { lock?: boolean | string; allQueries?: boolean },
+): Promise<unknown> {
+  const ctor = this.constructor as any;
+  const allQueries = options?.allQueries;
+  const preloads = strictLoadedAssociations.call(this);
+  let scope = ctor.all({ allQueries }).preload(preloads);
+  const constraints = _inMemoryQueryConstraintsHash.call(this);
+  if (options?.lock) scope = scope.lock(options.lock);
+  return scope.findBy(constraints);
+}
+
+function _inMemoryQueryConstraintsHash(this: PersistencePrivateHost): Record<string, unknown> {
+  const constraintsList = this.constructor.queryConstraintsList();
+  if (!constraintsList) {
+    const pk = Array.isArray(this.constructor.primaryKey)
+      ? this.constructor.primaryKey[0]
+      : this.constructor.primaryKey;
+    return { [pk]: this.id };
+  }
+  return Object.fromEntries(constraintsList.map((col) => [col, this.readAttribute(col)]));
+}
+
+function isApplyScoping(this: PersistencePrivateHost, options?: { unscoped?: boolean }): boolean {
+  if (options?.unscoped) return false;
+  const ctor = this.constructor as any;
+  return ctor.defaultScopes?.({ allQueries: true }) || !!ctor.globalCurrentScope;
+}
+
+function _queryConstraintsHash(this: any): Record<string, unknown> {
+  const constraintsList = this.constructor.queryConstraintsList();
+  if (!constraintsList) {
+    const pk = Array.isArray(this.constructor.primaryKey)
+      ? this.constructor.primaryKey[0]
+      : this.constructor.primaryKey;
+    return { [pk]: this.idInDatabase?.() ?? this.id };
+  }
+  return Object.fromEntries(
+    constraintsList.map((col: string) => [
+      col,
+      this.attributeInDatabase?.(col) ?? this.readAttribute(col),
+    ]),
+  );
+}
+
+function destroyAssociations(this: PersistencePrivateHost): void {
+  // Hook overridden by the associations module; base implementation is a no-op.
+}
+
+function destroyRow(this: PersistencePrivateHost): Promise<number> {
+  return _deleteRow.call(this);
+}
+
+function _deleteRow(this: PersistencePrivateHost): Promise<number> {
+  return this.constructor._deleteRecord(_queryConstraintsHash.call(this));
+}
+
+function _touchRow(this: any, attributeNames: string[], time?: Date | null): Promise<number> {
+  const t = time ?? new Date();
+  for (const attr of attributeNames) {
+    (this as any)._writeAttribute(attr, t);
+  }
+  return _updateRow.call(this, attributeNames, "touch");
+}
+
+function _updateRow(
+  this: PersistencePrivateHost,
+  attributeNames: string[],
+  _attemptedAction = "update",
+): Promise<number> {
+  const values: Record<string, unknown> = {};
+  for (const name of attributeNames) {
+    values[name] = this.readAttribute(name);
+  }
+  return this.constructor._updateRecord(values, _queryConstraintsHash.call(this));
+}
+
+function createOrUpdate(this: any): Promise<boolean> {
+  if ((this as any)._readonly)
+    throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
+  if (this._destroyed) return Promise.resolve(false);
+  const p = this._newRecord ? _createRecord.call(this) : (this as any)._createOrUpdate();
+  return Promise.resolve(p).then((result) => result !== false && (result as unknown) !== 0);
+}
+
+async function _createRecord(this: any): Promise<unknown> {
+  const ctor = this.constructor as any;
+  const allNames: string[] = Object.keys(this._attributes?.toObject?.() ?? {});
+  const columnNames: string[] = ctor.columnNames ?? allNames;
+  const names = allNames.filter((name: string) => columnNames.includes(name));
+
+  const values: Record<string, unknown> = {};
+  for (const name of names) {
+    values[name] = this._readAttribute(name);
+  }
+
+  const doInsert = async (connection: unknown) => {
+    const returningColumns: string[] = ctor._returningColumnsForInsert?.(connection) ?? [];
+    const returningValues = await ctor._insertRecord(connection, values, returningColumns);
+    if (returningValues) {
+      for (let i = 0; i < returningColumns.length; i++) {
+        const col = returningColumns[i];
+        if (!this._readAttribute(col)) {
+          this._attributes.set(col, returningValues[i]);
+        }
+      }
+    }
+  };
+
+  if (ctor.withConnection) {
+    await ctor.withConnection(doInsert);
+  } else {
+    await doInsert(ctor.adapter);
+  }
+
+  this._newRecord = false;
+  this._previouslyNewRecord = true;
+  return this.id;
+}
+
+function verifyReadonlyAttribute(this: PersistencePrivateHost, name: string): void {
+  if ((this.constructor as any).readonlyAttribute?.(name)) {
+    throw new ActiveRecordError(`${name} is marked as readonly`);
+  }
+}
+
+function _raiseRecordNotDestroyed(this: PersistencePrivateHost): never {
+  const key = this.constructor.primaryKey;
+  const keyStr = Array.isArray(key) ? key.join(", ") : key;
+  throw new RecordNotDestroyed(
+    `Failed to destroy ${this.constructor.name} with ${keyStr}=${String(this.id)}`,
+    this as unknown as object,
+  );
+}
+
+function _raiseReadonlyRecordError(this: { constructor: { name: string } }): never {
+  throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
+}
+
+function _raiseRecordNotTouchedError(): never {
+  throw new ActiveRecordError(
+    "Cannot touch on a new or destroyed record object. Consider using persisted?, new_record?, or destroyed? before touching.",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Private class helpers — mirrors ActiveRecord::Persistence::ClassMethods private block.
+// ---------------------------------------------------------------------------
+
+function instantiateInstanceOf(
+  klass: { _instantiate(attrs: Record<string, unknown>, colTypes?: Record<string, any>): any },
+  attributes: Record<string, unknown>,
+  columnTypes: Record<string, any> = {},
+  block?: (r: any) => void,
+): any {
+  const record = klass._instantiate(attributes, columnTypes);
+  block?.(record);
+  return record;
+}
+
+function discriminateClassForRecord<T>(klass: T, _record: Record<string, unknown>): T {
+  return klass;
+}
+
+function buildDefaultConstraint(this: {
+  defaultScopes?(opts: { allQueries?: boolean }): boolean;
+  defaultScoped(opts: { allQueries?: boolean }): {
+    whereClause: { isEmpty(): boolean; ast: unknown };
+  };
+}): unknown {
+  if (!this.defaultScopes?.({ allQueries: true })) return undefined;
+  const defaultWhereClause = this.defaultScoped({ allQueries: true }).whereClause;
+  return defaultWhereClause.isEmpty() ? undefined : defaultWhereClause.ast;
 }

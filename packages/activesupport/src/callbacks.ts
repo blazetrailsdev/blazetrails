@@ -269,7 +269,10 @@ export class Before {
     return (target: AnyRecord) => {
       if (!Value.check(callback.options, target)) return true;
       const cb = callback.filter as BeforeCallback;
-      if (terminatorFn === false) return true; // never halt
+      if (terminatorFn === false) {
+        cb(target);
+        return true;
+      } // run but never halt
       if (terminatorFn) return !terminatorFn(target, () => cb(target));
       return cb(target) !== false;
     };
@@ -348,7 +351,7 @@ export class Around {
 export class Callback {
   kind: CallbackKind;
   name: string;
-  readonly filter: AnyCallback;
+  readonly filter: AnyCallback | string | symbol;
   readonly options: CallbackOptions;
   readonly chainConfig: DefineCallbacksOptions;
 
@@ -356,7 +359,7 @@ export class Callback {
 
   constructor(
     name: string,
-    filter: AnyCallback,
+    filter: AnyCallback | string | symbol,
     kind: CallbackKind,
     options: CallbackOptions = {},
     chainConfig: DefineCallbacksOptions = {},
@@ -368,7 +371,7 @@ export class Callback {
     this.chainConfig = chainConfig;
   }
 
-  matches(kind: CallbackKind, filter?: AnyCallback): boolean {
+  matches(kind: CallbackKind, filter?: AnyCallback | string | symbol): boolean {
     if (this.kind !== kind) return false;
     if (filter && this.filter !== filter) return false;
     return true;
@@ -597,7 +600,7 @@ export class CallbackChain {
     this.chain.unshift(callback);
   }
 
-  remove(kind: CallbackKind, filter?: AnyCallback): void {
+  remove(kind: CallbackKind, filter?: AnyCallback | string | symbol): void {
     this.chain = this.chain.filter((cb) => !cb.matches(kind, filter));
   }
 
@@ -705,7 +708,9 @@ export function __updateCallbacks(
   [...targets].reverse().forEach((target) => {
     const chain = target.getCallbacks(name);
     const dup = new CallbackChain(chain.name, chain.config);
-    chain.entries.forEach((e) => dup.append(e));
+    chain.entries.forEach((e) =>
+      dup.append(new Callback(e.name, e.filter, e.kind, { ...e.options }, e.chainConfig)),
+    );
     fn(target, dup);
     target.setCallbacks(name, dup);
   });

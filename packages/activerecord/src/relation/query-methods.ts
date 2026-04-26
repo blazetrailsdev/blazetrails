@@ -418,7 +418,7 @@ function reorderBang(
       if (first instanceof Nodes.Node) {
         const rawSql = (first as any).value ?? (first as Nodes.Node).toSql();
         const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
-        if (interpolated.trim() !== "") this._orderClauses.push(interpolated);
+        if (interpolated.trim() !== "") this._orderClauses.push({ raw: String(interpolated) });
       } else {
         if (!(arg as unknown[]).every((e) => typeof e === "string")) {
           throw argumentError("Order arguments passed as an array must contain only strings");

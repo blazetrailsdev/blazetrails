@@ -1025,14 +1025,14 @@ function reverseOrderBang(this: QueryMethodsHost): any {
       // Mirrors Rails reverse_sql_order string case: flip trailing ASC↔DESC,
       // or append DESC if no direction present.
       const raw = (clause as { raw: string }).raw.trim();
-      const flipped = raw.replace(/\s+ASC$/i, " DESC").replace(/\s+DESC$/i, " ASC");
-      if (flipped !== raw) return { raw: flipped };
-      // No direction suffix — append DESC (matches Rails `s << " DESC"` fallback)
-      if (/[(),]/.test(raw) || /CASE/i.test(raw)) {
+      if (isDoesNotSupportReverse(raw)) {
         throw new IrreversibleOrderError(
           `Relation has a non-reversible order and cannot be reversed: ${raw}`,
         );
       }
+      const flipped = raw.replace(/\s+ASC$/i, " DESC").replace(/\s+DESC$/i, " ASC");
+      if (flipped !== raw) return { raw: flipped };
+      // No direction suffix — append DESC (matches Rails `s << " DESC"` fallback)
       return { raw: `${raw} DESC` };
     }
     if (typeof clause === "string") {

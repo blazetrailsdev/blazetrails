@@ -145,7 +145,7 @@ export function order<T extends typeof Base>(
     | [import("@blazetrails/arel").Nodes.Node, ...unknown[]]
   >
 ): Relation<InstanceType<T>> {
-  return this.all().order(...(args as any));
+  return this.all().order(...args);
 }
 
 /** Mirrors: ActiveRecord::Querying#group */

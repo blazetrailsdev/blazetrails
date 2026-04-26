@@ -1023,12 +1023,10 @@ function reverseOrderBang(this: QueryMethodsHost): any {
       const raw = (clause as { raw: string }).raw.trim();
       const match = raw.match(/^([A-Za-z_$][\w$.]*)\s+(ASC|DESC)$/i);
       if (match) {
-        return [match[1], match[2].toUpperCase() === "ASC" ? "desc" : "asc"] as [
-          string,
-          "asc" | "desc",
-        ];
+        const reversed = match[2].toUpperCase() === "ASC" ? "DESC" : "ASC";
+        return { raw: `${match[1]} ${reversed}` };
       }
-      if (/^[A-Za-z_$][\w$]*$/.test(raw)) return [raw, "desc" as const];
+      if (/^[A-Za-z_$][\w$]*$/.test(raw)) return { raw: `${raw} DESC` };
       throw new IrreversibleOrderError(
         `Relation has a non-reversible order and cannot be reversed: ${raw}`,
       );

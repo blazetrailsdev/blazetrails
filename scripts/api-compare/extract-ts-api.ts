@@ -220,6 +220,38 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
           line,
           file: relPath,
         });
+      } else if (ts.isFunctionDeclaration(node) && node.name && !isExported(node)) {
+        // Non-exported file-local helpers map to Rails private methods
+        // per the project mixin convention (CLAUDE.md). Record them as
+        // internal so `--privates` mode can match them.
+        const line = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
+        fileFunctions.push({
+          name: node.name.text,
+          visibility: "private",
+          params: extractParameters(node.parameters),
+          isStatic: false,
+          line,
+          file: relPath,
+          internal: true,
+        });
+      } else if (ts.isVariableStatement(node) && !isExported(node)) {
+        // Non-exported `const fn = (...) => ...` arrow/function helpers.
+        for (const decl of node.declarationList.declarations) {
+          if (!ts.isIdentifier(decl.name)) continue;
+          const init = decl.initializer;
+          if (!init) continue;
+          if (!ts.isArrowFunction(init) && !ts.isFunctionExpression(init)) continue;
+          const line = decl.getSourceFile().getLineAndCharacterOfPosition(decl.getStart()).line + 1;
+          fileFunctions.push({
+            name: decl.name.text,
+            visibility: "private",
+            params: extractParameters(init.parameters),
+            isStatic: false,
+            line,
+            file: relPath,
+            internal: true,
+          });
+        }
       }
     });
 

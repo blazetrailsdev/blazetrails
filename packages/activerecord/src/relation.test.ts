@@ -548,6 +548,18 @@ describe("RelationTest", () => {
     expect(sql).not.toContain(') "books"');
   });
 
+  it("from(rawSql, alias) emits bare alias for valid identifiers", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.from("(SELECT * FROM books WHERE active = 1) books", "books").toSql();
+    expect(sql).toMatch(/\) books/);
+    expect(sql).not.toContain(') "books"');
+  });
+
   it("relation with annotation includes comment in to sql", () => {
     class Post extends Base {
       static {

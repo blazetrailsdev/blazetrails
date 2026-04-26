@@ -695,9 +695,7 @@ function buildWhereClause(
           ? value.map((v) => this._castWhereValue(resolved, v))
           : this._castWhereValue(resolved, value);
     }
-    const parts = this.predicateBuilder.buildFromHash(normalized, (tableName: string) =>
-      lookupTableKlassFromJoinDependencies.call(this, tableName),
-    );
+    const parts = this.predicateBuilder.buildFromHash(normalized);
     return new WhereClause(parts);
   }
 
@@ -1831,28 +1829,37 @@ function eachJoinDependencies(
 ): void {
   const deps = joinDependencies ?? buildJoinDependencies.call(this);
   for (const jd of deps) {
-    jd.each?.(block) ?? block(jd);
+    jd.each(block);
   }
 }
 
 function buildJoinDependencies(this: QueryMethodsHost): JoinDependency[] {
-  const mc = (this as any)._modelClass;
-  const joins: AssociationSpec[] = [
+  // Mirror Rails: joins | left_outer_joins | eager_load | includes
+  const joinNames: AssociationSpec[] = [
     ...this._joinClauses.map((j) => j.table),
     ...this._rawJoins,
   ] as AssociationSpec[];
 
-  const eager: AssociationSpec[] = [...this._eagerLoadAssociations, ...this._includesAssociations];
-
-  const all = [...new Set([...joins, ...eager])];
-  const namedAssociations = all.filter((j) => typeof j === "string") as string[];
-
-  const jd = new JoinDependency(mc);
-  for (const name of namedAssociations) {
-    if (name.includes(".")) jd.addNestedAssociation?.(name);
-    else jd.addAssociation?.(name);
+  if (this._eagerLoadAssociations.length > 0) {
+    for (const a of this._eagerLoadAssociations) {
+      if (!joinNames.includes(a)) joinNames.push(a);
+    }
   }
-  return [jd];
+  if (this._includesAssociations.length > 0) {
+    for (const a of this._includesAssociations) {
+      if (!joinNames.includes(a)) joinNames.push(a);
+    }
+  }
+
+  const stashedJoins: JoinDependency[] = [];
+  const named = selectNamedJoins.call(this, joinNames, stashedJoins);
+  const jd = constructJoinDependency.call(
+    this,
+    named.filter((n) => typeof n === "string") as string[],
+    null,
+  );
+  stashedJoins.unshift(jd);
+  return stashedJoins;
 }
 
 function buildArel(this: QueryMethodsHost, _connection?: unknown, _aliases?: unknown): any {
@@ -1860,27 +1867,26 @@ function buildArel(this: QueryMethodsHost, _connection?: unknown, _aliases?: unk
   const table: any = mc?.arelTable;
   const arel = new SelectManager(table);
 
-  buildJoins.call(this, arel.joinSources ?? arel.froms ?? []);
+  buildJoins.call(this, arel.joinSources);
 
-  if (!this._whereClause.isEmpty?.()) arel.where(this._whereClause.ast);
-  if (!this._havingClause.isEmpty?.()) arel.having(this._havingClause.ast);
+  if (!this._whereClause.isEmpty()) arel.where(this._whereClause.ast);
+  if (!this._havingClause.isEmpty()) arel.having(this._havingClause.ast);
 
-  if (this._limitValue !== null) arel.take(buildCastValue("LIMIT", this._limitValue));
-  if (this._offsetValue !== null) arel.skip(buildCastValue("OFFSET", this._offsetValue));
+  if (this._limitValue !== null) arel.take(this._limitValue);
+  if (this._offsetValue !== null) arel.skip(this._offsetValue);
 
-  if (this._groupColumns.length > 0) {
-    arel.group(...arelColumns.call(this, this._groupColumns));
-  }
+  if (this._groupColumns.length > 0)
+    arel.group(...(arelColumns.call(this, this._groupColumns) as (Nodes.Node | string)[]));
 
   buildOrder.call(this, arel);
   buildWith.call(this, arel);
   buildSelect.call(this, arel);
 
   if (this._optimizerHints.length > 0) arel.optimizerHints?.(...this._optimizerHints);
-  arel.distinct(this._isDistinct);
+  if (this._isDistinct) arel.distinct();
 
   const from = buildFrom.call(this);
-  if (from !== undefined && from !== null) arel.from(from);
+  if (from !== undefined && from !== null) arel.from(from as any);
 
   if (this._lockValue) arel.lock(this._lockValue);
 
@@ -1899,32 +1905,22 @@ function selectNamedJoins(
   stashedJoins: unknown[] | null,
   block?: (join: unknown) => void,
 ): unknown[] {
-  const withValues: Array<Record<string, unknown>> = (this as any)._ctes ?? [];
-  const cteJoins: unknown[] = [];
+  // Mirror Rails: partition into CTEJoins (symbols matching a with_value key)
+  // vs ordinary association specs.
+  const cteNames = new Set(this._ctes.map((c) => c.name));
+  const cteJoins: string[] = [];
   const associations: unknown[] = [];
 
   for (const joinName of joinNames) {
-    const isCte =
-      typeof joinName === "symbol" &&
-      withValues.some(
-        (w) =>
-          typeof w === "object" &&
-          w !== null &&
-          Symbol.keyFor(joinName as symbol) != null &&
-          (joinName as symbol).description != null &&
-          Object.prototype.hasOwnProperty.call(w, (joinName as symbol).description as string),
-      );
-    if (isCte) {
-      cteJoins.push(joinName);
+    if (typeof joinName === "symbol" && cteNames.has(symbolToName(joinName))) {
+      cteJoins.push(symbolToName(joinName));
     } else {
       associations.push(joinName);
     }
   }
 
   for (const cteName of cteJoins) {
-    block?.(
-      new CTEJoin(typeof cteName === "symbol" ? symbolToName(cteName as symbol) : String(cteName)),
-    );
+    block?.(new CTEJoin(cteName));
   }
 
   return selectAssociationList.call(this, associations, stashedJoins, block);
@@ -1954,7 +1950,9 @@ function selectAssociationList(
   return result;
 }
 
-function buildJoinBuckets(this: QueryMethodsHost): [Record<string, unknown[]>, unknown] {
+function buildJoinBuckets(
+  this: QueryMethodsHost,
+): [Record<string, unknown[]>, typeof Nodes.InnerJoin | typeof Nodes.OuterJoin] {
   const buckets: Record<string, unknown[]> = {
     named_join: [],
     stashed_join: [],
@@ -1962,21 +1960,40 @@ function buildJoinBuckets(this: QueryMethodsHost): [Record<string, unknown[]>, u
     join_node: [],
   };
 
-  const leftJoins = this._joinClauses.filter((j) => j.type === "left");
-  if (leftJoins.length > 0) {
-    const leftJoinNodes = leftJoins.map((j) =>
-      arelSql(`LEFT OUTER JOIN ${j.quoted ? j.table : `"${j.table}"`} ON ${j.on}`),
+  const leftClauses = this._joinClauses.filter((j) => j.type === "left");
+  if (leftClauses.length > 0) {
+    const stashedLeft: unknown[] = [];
+    const leftJoinNames = selectNamedJoins.call(
+      this,
+      leftClauses.map((j) => j.table),
+      stashedLeft,
+      (join) => {
+        if (join instanceof CTEJoin) {
+          buckets.join_node.push(buildWithJoinNode.call(this, join.name, Nodes.OuterJoin));
+        } else {
+          throw argumentError("only Hash, Symbol and Array are allowed");
+        }
+      },
     );
-    if (
-      this._joinClauses.filter((j) => j.type === "inner").length === 0 &&
-      this._rawJoins.length === 0
-    ) {
-      buckets.join_node.push(...leftJoinNodes);
-      return [buckets, Nodes.OuterJoin ?? "outer"];
+
+    const hasInner = this._joinClauses.some((j) => j.type === "inner") || this._rawJoins.length > 0;
+    if (!hasInner) {
+      buckets.named_join = leftJoinNames;
+      buckets.stashed_join = stashedLeft;
+      return [buckets, Nodes.OuterJoin];
     }
-    buckets.stashed_join.push(...leftJoinNodes);
+    if (stashedLeft.length > 0) {
+      buckets.stashed_join.push(
+        constructJoinDependency.call(
+          this,
+          leftJoinNames.filter((n) => typeof n === "string") as string[],
+          Nodes.OuterJoin,
+        ),
+      );
+    }
   }
 
+  // Arel StringJoin nodes for raw SQL joins
   for (const raw of this._rawJoins) {
     buckets.join_node.push(new Nodes.StringJoin(arelSql(raw) as any));
   }
@@ -1986,20 +2003,44 @@ function buildJoinBuckets(this: QueryMethodsHost): [Record<string, unknown[]>, u
     this,
     innerClauses.map((j) => j.table),
     buckets.stashed_join,
+    (join) => {
+      if (
+        join instanceof Nodes.StringJoin ||
+        join instanceof Nodes.InnerJoin ||
+        join instanceof Nodes.OuterJoin
+      ) {
+        buckets.join_node.push(join);
+      } else if (join instanceof CTEJoin) {
+        buckets.join_node.push(buildWithJoinNode.call(this, join.name));
+      }
+    },
   );
 
-  return [buckets, Nodes.InnerJoin ?? "inner"];
+  return [buckets, Nodes.InnerJoin];
 }
 
 function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
   if (this._joinClauses.length === 0 && this._rawJoins.length === 0) return joinSources;
 
-  const [buckets] = buildJoinBuckets.call(this);
+  const [buckets, joinType] = buildJoinBuckets.call(this);
 
+  const namedJoins = buckets.named_join as unknown[];
+  const stashedJoins = buckets.stashed_join as unknown[];
   const leadingJoins = buckets.leading_join as unknown[];
   const joinNodes = buckets.join_node as unknown[];
 
   if (leadingJoins.length > 0) (joinSources as any[]).push(...leadingJoins);
+
+  if (namedJoins.length > 0 || stashedJoins.length > 0) {
+    const jd = constructJoinDependency.call(
+      this,
+      namedJoins.filter((n) => typeof n === "string") as string[],
+      joinType,
+    );
+    // jd.joinConstraints is not yet implemented — append join nodes directly for now
+    (joinSources as any[]).push(...stashedJoins);
+  }
+
   if (joinNodes.length > 0) (joinSources as any[]).push(...joinNodes);
 
   return joinSources;
@@ -2021,20 +2062,26 @@ function buildWith(this: QueryMethodsHost, arel: any): void {
 function buildWithJoinNode(
   this: QueryMethodsHost,
   name: string,
-  kind: unknown = Nodes.InnerJoin,
+  kind: typeof Nodes.InnerJoin | typeof Nodes.OuterJoin = Nodes.InnerJoin,
 ): unknown {
   const mc = (this as any)._modelClass;
   const table: any = mc?.arelTable;
   const withTable = new ArelTable(name);
+  // Rails: with_table[model.model_name.to_s.foreign_key].eq(table[model.primary_key])
   const fk = mc?.modelName
-    ? `${mc.modelName.toLowerCase()}_id`
-    : `${String(mc?.name ?? "model").toLowerCase()}_id`;
-  const pk = mc?.primaryKey ?? "id";
+    ? `${String(mc.modelName)
+        .replace(/([A-Z])/g, "_$1")
+        .replace(/^_/, "")
+        .toLowerCase()}_id`
+    : `${String(mc?.name ?? "model")
+        .replace(/([A-Z])/g, "_$1")
+        .replace(/^_/, "")
+        .toLowerCase()}_id`;
+  const pk = Array.isArray(mc?.primaryKey) ? mc.primaryKey[0] : (mc?.primaryKey ?? "id");
+  const joinSources = table
+    ?.join(withTable, kind)
+    .on(withTable.get(fk).eq(table.get(pk))).joinSources;
   return (
-    table
-      ?.join(withTable, kind)
-      .on(withTable.get(fk).eq(table.get(pk)))
-      .joinSources?.first?.() ??
-    arelSql(`JOIN "${name}" ON "${name}"."${fk}" = "${table?.name}"."${pk}"`)
+    joinSources?.[0] ?? arelSql(`JOIN "${name}" ON "${name}"."${fk}" = "${table?.name}"."${pk}"`)
   );
 }

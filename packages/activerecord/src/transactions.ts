@@ -76,6 +76,40 @@ export function currentTransaction(): Transaction | null {
   return getTransactionStorage().getStore() ?? null;
 }
 
+const NULL_TRANSACTION_PROXY = {
+  afterCommit(_fn: () => void | Promise<void>): void {},
+  afterRollback(_fn: () => void | Promise<void>): void {},
+  isOpen(): boolean {
+    return false;
+  },
+};
+
+/**
+ * Returns the current transaction object, or a null transaction (no-op callbacks)
+ * if no transaction is open.
+ *
+ * Mirrors: ActiveRecord::Base.current_transaction
+ */
+export function currentTransactionPublic() {
+  const tx = currentTransaction();
+  return tx ?? NULL_TRANSACTION_PROXY;
+}
+
+/**
+ * Run a callback after all currently open transactions have committed.
+ * If there is no open transaction, the callback is called immediately.
+ *
+ * Mirrors: ActiveRecord.after_all_transactions_commit
+ */
+export function afterAllTransactionsCommit(fn: () => void | Promise<void>): void {
+  const tx = currentTransaction();
+  if (!tx || !tx.open) {
+    void Promise.resolve().then(fn);
+  } else {
+    tx.afterCommit(fn);
+  }
+}
+
 /**
  * Execute a block within a database transaction.
  *

@@ -131,7 +131,10 @@ import * as _Reflection from "./reflection.js";
 import * as _AssocInstance from "./associations/instance-methods.js";
 import { argumentError } from "./relation/query-methods.js";
 import { ScopeRegistry } from "./scoping.js";
-import { transaction as _transaction } from "./transactions.js";
+import {
+  transaction as _transaction,
+  currentTransactionPublic as _currentTransactionPublic,
+} from "./transactions.js";
 
 import {
   Default as DefaultScoping,
@@ -2747,6 +2750,16 @@ export class Base extends Model {
     options?: { isolation?: string; requiresNew?: boolean; joinable?: boolean },
   ): Promise<R | undefined> {
     return _transaction(this, fn, options);
+  }
+
+  /**
+   * Returns the currently active transaction, or a null transaction (no-op
+   * callbacks) if no transaction is open.
+   *
+   * Mirrors: ActiveRecord::Base.current_transaction
+   */
+  static currentTransaction() {
+    return _currentTransactionPublic();
   }
 
   /**

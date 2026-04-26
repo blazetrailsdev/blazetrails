@@ -1,7 +1,7 @@
 /**
  * Mirrors Rails activerecord/test/cases/associations/has_many_through_associations_test.rb
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Base, registerModel, enableSti, registerSubclass, RecordInvalid } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
@@ -3381,22 +3381,13 @@ describe("HasManyThroughAssociationsTest", () => {
     const proxy = (owner as any).txn_tags as CollectionProxy<any>;
 
     // Rails: assert_called(Tag, :transaction) { Post.first.tags.transaction { } }
-    // CollectionProxy.transaction() is not yet implemented; assert it should exist
-    // and delegate to the target model class when called.
-    expect(typeof (proxy as any).transaction).toBe("function");
-
-    // When implemented, calling proxy.transaction should call TxnTag.transaction
-    let transactionCalled = false;
-    const origTransaction = TxnTag.transaction.bind(TxnTag);
-    (TxnTag as any).transaction = async (fn: any) => {
-      transactionCalled = true;
-      return origTransaction(fn);
-    };
+    // CollectionProxy.transaction() delegates to the target model class.
+    const spy = vi.spyOn(TxnTag, "transaction");
     try {
       await (proxy as any).transaction(async () => {});
-      expect(transactionCalled).toBe(true);
+      expect(spy).toHaveBeenCalledOnce();
     } finally {
-      (TxnTag as any).transaction = origTransaction;
+      vi.restoreAllMocks();
     }
   });
 
@@ -3443,12 +3434,15 @@ describe("HasManyThroughAssociationsTest", () => {
     const p1 = await TxnPerson.create({ name: "David" });
     const p2 = await TxnPerson.create({ name: "Michael" });
 
-    // Assigning people via the through creates TxnReader join records
-    await TxnReader.create({ txn_post_id: post.id, txn_person_id: p1.id });
-    await TxnReader.create({ txn_post_id: post.id, txn_person_id: p2.id });
+    // Rails: assert_called(Reader, :transaction) { post.people = [person, other_person] }
+    // Replacing the collection updates the through (join) records.
+    // Transaction wrapping of through writes is not yet implemented in trails,
+    // so we verify the replacement result rather than the transaction call.
+    await ((post as any).txn_people as CollectionProxy<any>).replace([p1, p2]);
 
     const people = await (post as any).txn_people.toArray();
     expect(people).toHaveLength(2);
+    expect(people.map((p: any) => p.name).sort()).toEqual(["David", "Michael"]);
   });
   it("has many association through a belongs to association where the association doesnt exist", async () => {
     class HmtNoBtOwner extends Base {
@@ -6827,7 +6821,8 @@ describe("HasManyThroughAssociationsTest", () => {
     await TsuComment.create({ tsu_post_id: p1.id, body: "C1" });
 
     // Rails: FirstPost.unscoped { author.comments_on_first_posts } == author.comments (all)
-    // The association through TsuPost with unscoped() removes the default where scope
+    // Verify the through association loads comments via the through model's posts.
+    // Both the scoped association and a manual unscoped query see the same "First Post" comment.
     const allComments = await TsuPost.unscoped()
       .where({ tsu_author_id: author.id })
       .then(async (posts: any[]) => {
@@ -6836,9 +6831,12 @@ describe("HasManyThroughAssociationsTest", () => {
       });
 
     const scoped = await (author as any).tsu_comments.toArray();
-    // Both queries return comments through the same posts
-    expect(scoped.length).toBeGreaterThanOrEqual(0);
-    expect(allComments.length).toBeGreaterThanOrEqual(scoped.length);
+    // scoped loads through tsu_posts (which has default scope matching "First Post")
+    // allComments is the unscoped equivalent — both should return exactly C1
+    expect(allComments).toHaveLength(1);
+    expect((allComments[0] as any).body).toBe("C1");
+    // The through association result matches the unscoped manual query
+    expect(scoped.length).toBe(allComments.length);
   });
 
   it("through scope isnt affected by scoping", async () => {
@@ -7283,7 +7281,9 @@ describe("HasManyThroughAssociationsTest", () => {
     await CqBlogPostTag2.create({ blog_id: 1, blog_post_id: post.id, tag_id: tag.id });
 
     const posts = await (tag as any).cq_blog_posts2.toArray();
-    expect(posts.length).toBeGreaterThanOrEqual(0);
+    expect(posts).toHaveLength(1);
+    expect((posts[0] as any).title).toBe("Great Post");
+    expect((posts[0] as any).blog_id).toBe(1);
   });
   it("loading cpk association with unpersisted owner", async () => {
     class CpkHmtOwner extends Base {

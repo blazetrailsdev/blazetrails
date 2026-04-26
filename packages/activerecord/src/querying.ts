@@ -137,7 +137,13 @@ export function select<T extends typeof Base>(
 /** Mirrors: ActiveRecord::Querying#order */
 export function order<T extends typeof Base>(
   this: T,
-  ...args: Array<string | Record<string, "asc" | "desc"> | import("@blazetrails/arel").Nodes.Node>
+  ...args: Array<
+    | string
+    | Record<string, "asc" | "desc" | "ASC" | "DESC">
+    | import("@blazetrails/arel").Nodes.Node
+    | string[]
+    | [import("@blazetrails/arel").Nodes.Node, ...unknown[]]
+  >
 ): Relation<InstanceType<T>> {
   return this.all().order(...(args as any));
 }

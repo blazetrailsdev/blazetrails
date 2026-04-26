@@ -1122,28 +1122,26 @@ function checkIfMethodHasArgumentsBang(
 }
 
 function flattenedArgs(args: unknown[]): unknown[] {
-  return args.flatMap((e) =>
-    e !== null && typeof e === "object" && !Array.isArray(e)
-      ? flattenedArgs(Object.entries(e as object).flat())
-      : Array.isArray(e)
-        ? flattenedArgs(e)
-        : e,
-  );
+  return args.flatMap((e) => {
+    if (Array.isArray(e)) return flattenedArgs(e);
+    // Only expand plain objects — leave class instances (Arel nodes, Dates, …) as-is.
+    if (isPlainObject(e)) return flattenedArgs(Object.entries(e).flat());
+    return e;
+  });
 }
 
 const VALID_DIRECTIONS = new Set(["asc", "desc", "ASC", "DESC"]);
 
 function validateOrderArgs(this: QueryMethodsHost, args: unknown[]): void {
   for (const arg of args) {
-    if (arg !== null && typeof arg === "object" && !Array.isArray(arg)) {
-      for (const [, value] of Object.entries(arg as Record<string, unknown>)) {
-        if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-          validateOrderArgs.call(this, [value]);
-        } else if (!VALID_DIRECTIONS.has(value as string)) {
-          throw new ArgumentError(
-            `Direction "${value}" is invalid. Valid directions are: ${[...VALID_DIRECTIONS].join(", ")}`,
-          );
-        }
+    if (!isPlainObject(arg)) continue;
+    for (const [, value] of Object.entries(arg)) {
+      if (isPlainObject(value)) {
+        validateOrderArgs.call(this, [value]);
+      } else if (!VALID_DIRECTIONS.has(value as string)) {
+        throw new ArgumentError(
+          `Direction "${value}" is invalid. Valid directions are: ${[...VALID_DIRECTIONS].join(", ")}`,
+        );
       }
     }
   }
@@ -1151,10 +1149,10 @@ function validateOrderArgs(this: QueryMethodsHost, args: unknown[]): void {
 
 function processWithArgs(this: QueryMethodsHost, args: unknown[]): Record<string, unknown>[] {
   return args.flatMap((arg) => {
-    if (arg === null || typeof arg !== "object" || Array.isArray(arg)) {
+    if (!isPlainObject(arg)) {
       throw new ArgumentError(`Unsupported argument type: ${String(arg)} ${typeof arg}`);
     }
-    return Object.entries(arg as Record<string, unknown>).map(([k, v]) => ({ [k]: v }));
+    return Object.entries(arg).map(([k, v]) => ({ [k]: v }));
   });
 }
 
@@ -1182,7 +1180,7 @@ function buildNamedBoundSqlLiteral(
   try {
     return new Nodes.BoundSqlLiteral(`(${statement})`, [], namedBinds);
   } catch (e: any) {
-    throw new PreparedStatementInvalid(e?.message ?? String(e));
+    throw new PreparedStatementInvalid(e?.message ?? String(e), { cause: e });
   }
 }
 
@@ -1200,7 +1198,7 @@ function buildBoundSqlLiteral(
   try {
     return new Nodes.BoundSqlLiteral(`(${statement})`, positionalBinds, {});
   } catch (e: any) {
-    throw new PreparedStatementInvalid(e?.message ?? String(e));
+    throw new PreparedStatementInvalid(e?.message ?? String(e), { cause: e });
   }
 }
 
@@ -1214,6 +1212,11 @@ function buildSubquery(
     typeof (this as any).unscope === "function" ? (this as any).unscope("optimizerHints") : this;
   if (typeof (relation as any).toArel !== "function") {
     throw new ActiveRecordError("Cannot build subquery: relation does not support toArel()");
+  }
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(subqueryAlias)) {
+    throw new ArgumentError(
+      `Invalid subquery alias "${subqueryAlias}": must be a safe SQL identifier`,
+    );
   }
   const aliasedSubquery = (relation as any).toArel().as(subqueryAlias);
   const sm = new SelectManager();
@@ -1239,6 +1242,11 @@ function reverseSqlOrder(this: QueryMethodsHost, orderQuery: unknown[]): unknown
   if (orderQuery.length === 0) {
     const pk = (this as any)._modelClass?.primaryKey;
     if (pk) {
+      if (Array.isArray(pk)) {
+        throw new IrreversibleOrderError(
+          "Relation has no current order and table has a composite primary key; cannot determine default reverse order",
+        );
+      }
       const table: any = (this as any)._modelClass?.arelTable;
       return [table ? table.get(pk).desc() : arelSql(`${pk} DESC`)];
     }
@@ -1308,18 +1316,10 @@ function flattenedOrderKeysForRawSqlCheck(orderArgs: unknown[]): string[] {
       result.push(String(arg));
     } else if (arg instanceof Nodes.Node) {
       // Arel nodes (SqlLiteral, Attribute, Ordering, …) are pre-sanitized; skip them.
-    } else if (arg !== null && typeof arg === "object") {
-      for (const [key, value] of Object.entries(arg as Record<string, unknown>)) {
+    } else if (isPlainObject(arg)) {
+      for (const [key, value] of Object.entries(arg)) {
         result.push(key);
-        // Recurse into nested hash values so { table: { col: "asc" } } is fully validated.
-        if (
-          value !== null &&
-          typeof value === "object" &&
-          !Array.isArray(value) &&
-          !(value instanceof Nodes.Node)
-        ) {
-          result.push(...flattenedOrderKeysForRawSqlCheck([value]));
-        }
+        if (isPlainObject(value)) result.push(...flattenedOrderKeysForRawSqlCheck([value]));
       }
     }
   }

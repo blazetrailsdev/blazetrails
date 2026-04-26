@@ -6616,13 +6616,13 @@ describe("RelationTest", () => {
         this.adapter = adapter;
       }
     }
-    const first = await Topic.create({ title: "match" });
+    await Topic.create({ title: "match" });
     await Topic.create({ title: "match" });
     await Topic.create({ title: "other" });
     const found = await Topic.where("title = 'match'").take();
     expect(found).not.toBeNull();
     expect(found!.title).toBe("match");
-    expect(found!.id).toBe(first.id);
+    // take() is intentionally unordered — no id assertion
   });
 
   it("find_by returns nil if the record is missing", async () => {

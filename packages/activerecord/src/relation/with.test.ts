@@ -97,8 +97,13 @@ describe("WithTest", () => {
     const cte = Post.where({});
     const rel = Post.all().with({ dup_cte: cte }).with({ dup_cte: cte });
     const sql = rel.toSql();
-    const matches = (sql.match(/dup_cte/g) || []).length;
-    expect(matches).toBeGreaterThanOrEqual(2);
+    // Duplicate CTE name is deduplicated (last-write-wins) — appears exactly once
+    // in the WITH clause, producing valid SQL.
+    const matches = (sql.match(/"dup_cte"/g) || []).length;
+    expect(matches).toBe(1);
+    expect(sql).toContain("WITH");
+    // Confirm the generated SQL is valid and executes
+    await expect(rel.count()).resolves.toBe(1);
   });
 
   it("count after with call", async () => {

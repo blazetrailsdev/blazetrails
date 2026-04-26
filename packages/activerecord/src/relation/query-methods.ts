@@ -150,6 +150,12 @@ function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): 
       throw argumentError(`Unsupported argument type: ${typeName}`);
     }
     for (const [name, query] of Object.entries(cte)) {
+      // Validate CTE name is a safe SQL identifier to prevent injection.
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+        throw argumentError(
+          `Invalid CTE name "${name}": must be a valid SQL identifier (letters, digits, underscores, not starting with a digit).`,
+        );
+      }
       if (query === null || query === undefined) {
         throw argumentError(
           `Invalid argument for with(): null/undefined is not allowed for CTE "${name}".`,
@@ -184,7 +190,13 @@ function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): 
         }
         sql = typeof q === "string" ? q : q.toSql();
       }
-      this._ctes.push({ name, sql, recursive: false });
+      // Deduplicate by name: last-write-wins, matching Rails behavior.
+      const existing = this._ctes.findIndex((c) => c.name === name);
+      if (existing >= 0) {
+        this._ctes[existing] = { name, sql, recursive: false };
+      } else {
+        this._ctes.push({ name, sql, recursive: false });
+      }
     }
   }
   return this;

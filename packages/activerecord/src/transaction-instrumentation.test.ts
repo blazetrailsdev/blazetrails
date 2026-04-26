@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { Base } from "./index.js";
 import { Rollback } from "./errors.js";
 import { Notifications } from "@blazetrails/activesupport";
@@ -353,15 +353,9 @@ describe("TransactionInstrumentationTest", () => {
     });
 
     const MyError = class extends Error {};
-    const original = adapter.commitDbTransaction.bind(adapter);
-    let threw = false;
-    adapter.commitDbTransaction = async () => {
-      if (!threw) {
-        threw = true;
-        throw new MyError("commit failed");
-      }
-      return original();
-    };
+    vi.spyOn(adapter, "commitDbTransaction").mockImplementationOnce(async () => {
+      throw new MyError("commit failed");
+    });
 
     await expect(
       Topic.transaction(async () => {
@@ -386,15 +380,9 @@ describe("TransactionInstrumentationTest", () => {
 
     const MyError = class extends Error {};
     const tm = adapter.transactionManager;
-    const original = tm.rollbackTransaction.bind(tm);
-    let threw = false;
-    tm.rollbackTransaction = async (...args: any[]) => {
-      if (!threw) {
-        threw = true;
-        throw new MyError("rollback failed");
-      }
-      return original(...args);
-    };
+    vi.spyOn(tm, "rollbackTransaction").mockImplementationOnce(async () => {
+      throw new MyError("rollback failed");
+    });
 
     await expect(
       Topic.transaction(async () => {

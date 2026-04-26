@@ -13,8 +13,10 @@ import { sanitizeSqlArray, disallowRawSqlBang } from "../sanitization.js";
 import {
   quote,
   quoteColumnName as quoteCol,
+  quoteTableName as quoteTable,
   columnNameWithOrderMatcher as abstractOrderMatcher,
 } from "../connection-adapters/abstract/quoting.js";
+import { detectAdapterName } from "../adapter-name.js";
 import { JoinDependency } from "../associations/join-dependency.js";
 
 /**
@@ -1536,17 +1538,23 @@ function escapeRegex(s: string): string {
 
 function safeQuoteTableName(modelClass: any, name: string): string {
   try {
-    return modelClass?.adapter?.quoteTableName?.(name) ?? `"${name.replace(/"/g, '""')}"`;
+    return (
+      modelClass?.adapter?.quoteTableName?.(name) ??
+      quoteTable(name, detectAdapterName(modelClass?.adapter))
+    );
   } catch {
-    return `"${name.replace(/"/g, '""')}"`;
+    return quoteTable(name, detectAdapterName(modelClass?.adapter));
   }
 }
 
 function safeQuoteColumnName(modelClass: any, name: string): string {
   try {
-    return modelClass?.adapter?.quoteColumnName?.(name) ?? quoteCol(name);
+    return (
+      modelClass?.adapter?.quoteColumnName?.(name) ??
+      quoteCol(name, detectAdapterName(modelClass?.adapter))
+    );
   } catch {
-    return quoteCol(name);
+    return quoteCol(name, detectAdapterName(modelClass?.adapter));
   }
 }
 

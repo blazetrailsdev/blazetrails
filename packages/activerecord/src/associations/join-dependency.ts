@@ -220,10 +220,7 @@ export class JoinDependency {
       if (scopeSql) {
         const whereMatch = scopeSql.match(/\bWHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|\s*$)/i);
         if (whereMatch) {
-          const scopeWhere = whereMatch[1].replace(
-            new RegExp(`"${targetTable!}"`, "g"),
-            `"${effectiveName}"`,
-          );
+          const scopeWhere = whereMatch[1].replaceAll(`"${targetTable!}"`, `"${effectiveName}"`);
           joinOn += ` AND ${scopeWhere}`;
         }
       }
@@ -696,10 +693,7 @@ export class JoinDependency {
       if (scopeSql) {
         const whereMatch = scopeSql.match(/\bWHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|\s*$)/i);
         if (whereMatch) {
-          const scopeWhere = whereMatch[1].replace(
-            new RegExp(`"${targetTable}"`, "g"),
-            `"${targetAlias}"`,
-          );
+          const scopeWhere = whereMatch[1].replaceAll(`"${targetTable}"`, `"${targetAlias}"`);
           targetJoinOn += ` AND ${scopeWhere}`;
         }
       }

@@ -249,9 +249,25 @@ export async function performCount(
     return groupedAggregate(this, "count", column ?? "*", true) as Promise<Record<string, number>>;
   }
 
-  if (this._limitValue !== null) {
-    const rows = await this.toArray();
-    return rows.length;
+  if (this._limitValue !== null || this._offsetValue !== null) {
+    // Rails: build_count_subquery — wraps the limited relation as a subquery and
+    // counts its rows without instantiating records.
+    // SELECT COUNT(*) FROM (SELECT 1 AS one FROM ... LIMIT N) subquery_for_count
+    const innerTable = this._modelClass.arelTable;
+    const innerManager = innerTable.project(new Nodes.SqlLiteral("1 AS one"));
+    this._applyJoinsToManager(innerManager);
+    this._applyWheresToManager(innerManager, innerTable);
+    if (this._limitValue !== null) innerManager.take(this._limitValue);
+    if (this._offsetValue !== null) innerManager.skip(this._offsetValue);
+    const outerManager = new Nodes.SqlLiteral(
+      `SELECT COUNT(*) AS count FROM (${innerManager.toSql()}) subquery_for_count`,
+    );
+    const result = await this._modelClass.adapter.selectAll(
+      String(outerManager),
+      `${this._modelClass.name} Count`,
+    );
+    const rows = result.toArray() as Record<string, unknown>[];
+    return Number(rows[0]?.count ?? 0);
   }
 
   const table = this._modelClass.arelTable;

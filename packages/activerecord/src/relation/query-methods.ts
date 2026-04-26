@@ -1284,11 +1284,16 @@ function extractTableNameFrom(orderTerm: string): string | null {
   return match ? match[1] : null;
 }
 
+function symbolToName(s: symbol): string {
+  return Symbol.keyFor(s) ?? s.description ?? "";
+}
+
 function columnReferences(orderArgs: unknown[]): string[] {
   const refs: string[] = [];
   for (const arg of orderArgs) {
     if (typeof arg === "string" || typeof arg === "symbol") {
-      const t = extractTableNameFrom(String(arg));
+      const term = typeof arg === "symbol" ? symbolToName(arg) : arg;
+      const t = extractTableNameFrom(term);
       if (t) refs.push(t);
     } else if (arg instanceof Nodes.Attribute) {
       refs.push((arg as any).relation.name);
@@ -1315,7 +1320,7 @@ function flattenedOrderKeysForRawSqlCheck(orderArgs: unknown[]): string[] {
     if (Array.isArray(arg)) {
       result.push(...flattenedOrderKeysForRawSqlCheck(arg));
     } else if (typeof arg === "string" || typeof arg === "symbol") {
-      result.push(String(arg));
+      result.push(typeof arg === "symbol" ? symbolToName(arg) : arg);
     } else if (arg instanceof Nodes.Node) {
       // Arel nodes (SqlLiteral, Attribute, Ordering, …) are pre-sanitized; skip them.
     } else if (isPlainObject(arg)) {
@@ -1340,9 +1345,7 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
   const mapped: unknown[] = [];
   for (const arg of orderArgs) {
     if (typeof arg === "symbol") {
-      // Use .description to get the symbol name ("id" not "Symbol(id)").
-      const name = arg.description ?? String(arg);
-      mapped.push(new Nodes.Ascending(arelSql(name)));
+      mapped.push(new Nodes.Ascending(arelSql(symbolToName(arg))));
     } else if (
       arg !== null &&
       typeof arg === "object" &&

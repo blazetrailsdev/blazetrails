@@ -262,8 +262,9 @@ export function formatInstantForSql(value: Temporal.Instant): string {
 }
 
 /**
- * Format a `Temporal.PlainDateTime` for SQL as `YYYY-MM-DD HH:MM:SS[.ffffff]`.
- * No timezone conversion — the value is naive by definition.
+ * Format a `Temporal.PlainDateTime` for SQL as `YYYY-MM-DD HH:MM:SS[.fffffffff]`.
+ * No timezone conversion — the value is naive by definition. Fractional digits
+ * are trimmed to the smallest non-zero 3-digit group (ms/µs/ns).
  */
 export function formatPlainDateTimeForSql(value: Temporal.PlainDateTime): string {
   return formatPlainComponents(value);
@@ -273,14 +274,15 @@ export function formatPlainDateTimeForSql(value: Temporal.PlainDateTime): string
  * Format a `Temporal.PlainDate` for SQL as `YYYY-MM-DD`.
  */
 export function formatPlainDateForSql(value: Temporal.PlainDate): string {
-  const y = String(value.year).padStart(4, "0");
+  const y = padYear(value.year);
   const m = String(value.month).padStart(2, "0");
   const d = String(value.day).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
 /**
- * Format a `Temporal.PlainTime` for SQL as `HH:MM:SS[.ffffff]`.
+ * Format a `Temporal.PlainTime` for SQL as `HH:MM:SS[.fffffffff]`.
+ * Fractional digits are trimmed to the smallest non-zero 3-digit group.
  */
 export function formatPlainTimeForSql(value: Temporal.PlainTime): string {
   return formatTimeComponents(
@@ -293,8 +295,12 @@ export function formatPlainTimeForSql(value: Temporal.PlainTime): string {
   );
 }
 
+function padYear(year: number): string {
+  return year < 0 ? `-${String(-year).padStart(4, "0")}` : String(year).padStart(4, "0");
+}
+
 function formatZonedComponents(zdt: Temporal.ZonedDateTime): string {
-  const y = String(zdt.year).padStart(4, "0");
+  const y = padYear(zdt.year);
   const mo = String(zdt.month).padStart(2, "0");
   const d = String(zdt.day).padStart(2, "0");
   const base = `${y}-${mo}-${d} `;
@@ -312,7 +318,7 @@ function formatZonedComponents(zdt: Temporal.ZonedDateTime): string {
 }
 
 function formatPlainComponents(pdt: Temporal.PlainDateTime): string {
-  const y = String(pdt.year).padStart(4, "0");
+  const y = padYear(pdt.year);
   const mo = String(pdt.month).padStart(2, "0");
   const d = String(pdt.day).padStart(2, "0");
   const base = `${y}-${mo}-${d} `;

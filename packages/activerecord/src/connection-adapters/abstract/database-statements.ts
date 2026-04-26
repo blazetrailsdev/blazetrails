@@ -1008,10 +1008,13 @@ export function highPrecisionCurrentTimestamp(): Nodes.SqlLiteral {
  */
 export function typeCastedBinds(binds: unknown[] | undefined): unknown[] {
   return (binds ?? []).map((b: any) => {
+    let v: unknown;
     if (b && typeof b === "object" && typeof b.valueForDatabase === "function") {
-      return b.valueForDatabase();
+      v = b.valueForDatabase();
+    } else {
+      v = b && typeof b === "object" && "value" in b ? b.value : b;
     }
-    return b && typeof b === "object" && "value" in b ? b.value : b;
+    return temporalToBindString(v);
   });
 }
 

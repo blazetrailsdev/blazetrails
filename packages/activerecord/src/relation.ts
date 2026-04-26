@@ -2557,7 +2557,12 @@ export class Relation<T extends Base> {
       um.where(arelSql(cond));
     }
 
-    return this._modelClass.adapter.execUpdate(um.toSql(), `${this._modelClass.name} Update All`);
+    const count = await this._modelClass.adapter.execUpdate(
+      um.toSql(),
+      `${this._modelClass.name} Update All`,
+    );
+    this.reset();
+    return count;
   }
 
   /**
@@ -2588,7 +2593,12 @@ export class Relation<T extends Base> {
       dm.where(arelSql(cond));
     }
 
-    return this._modelClass.adapter.execDelete(dm.toSql(), `${this._modelClass.name} Delete All`);
+    const count = await this._modelClass.adapter.execDelete(
+      dm.toSql(),
+      `${this._modelClass.name} Delete All`,
+    );
+    this.reset();
+    return count;
   }
 
   /**

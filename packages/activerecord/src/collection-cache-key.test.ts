@@ -118,8 +118,7 @@ describe("CollectionCacheKeyTest", () => {
     await Developer.create({ name: "David", salary: 80000 });
     const devs = Developer.where({ name: "David" });
     const key1 = await devs.cacheKey();
-    await Developer.where({ name: "David" }).updateAll({ updated_at: new Date("2025-01-01Z") });
-    devs.reset();
+    await devs.updateAll({ updated_at: new Date("2025-01-01Z") }); // resets devs memos
     expect(await devs.cacheKey()).not.toBe(key1);
   });
 
@@ -128,8 +127,7 @@ describe("CollectionCacheKeyTest", () => {
     await Developer.create({ name: "David", salary: 80000 });
     const devs = Developer.where({ name: "David" });
     const key1 = await devs.cacheKey();
-    await Developer.where({ name: "David" }).updateAll({ updated_at: new Date("2025-06-01Z") });
-    devs.reset();
+    await devs.updateAll({ updated_at: new Date("2025-06-01Z") });
     expect(await devs.cacheKey()).not.toBe(key1);
   });
 
@@ -139,8 +137,7 @@ describe("CollectionCacheKeyTest", () => {
     await Developer.create({ name: "David" });
     const devs = Developer.where({ name: "David" });
     const key1 = await devs.cacheKey();
-    await Developer.where({ name: "David" }).deleteAll();
-    devs.reset();
+    await devs.deleteAll(); // resets devs memos
     expect(await devs.cacheKey()).not.toBe(key1);
   });
 
@@ -149,8 +146,7 @@ describe("CollectionCacheKeyTest", () => {
     await Developer.create({ name: "David" });
     const devs = Developer.where({ name: "David" });
     const key1 = await devs.cacheKey();
-    await Developer.where({ name: "David" }).deleteAll();
-    devs.reset();
+    await devs.deleteAll();
     expect(await devs.cacheKey()).not.toBe(key1);
   });
 
@@ -160,7 +156,6 @@ describe("CollectionCacheKeyTest", () => {
     const devs = Developer.where({ name: "David" });
     const key1 = await devs.cacheKey();
     await devs.destroyAll();
-    devs.reset();
     expect(await devs.cacheKey()).not.toBe(key1);
   });
 

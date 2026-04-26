@@ -14,11 +14,20 @@ import type { Range } from "../../connection-adapters/postgresql/oid/range.js";
  *   where({ created_at: new Range(null, end) })     → created_at <= end
  */
 export class RangeHandler {
-  constructor() {}
+  private _castBound?: (columnName: string, value: unknown) => unknown;
+
+  constructor(castBound?: (columnName: string, value: unknown) => unknown) {
+    this._castBound = castBound;
+  }
 
   call(attribute: Nodes.Attribute, value: Range): Nodes.Node {
-    const beginVal = value.begin;
-    const endVal = value.end;
+    // Cast bounds through the attribute's type (e.g. integer casts "1-meowmeow" → 1)
+    const cast = this._castBound
+      ? (v: unknown) => this._castBound!(attribute.name, v)
+      : (v: unknown) => v;
+    const beginVal =
+      value.begin !== null && value.begin !== undefined ? cast(value.begin) : value.begin;
+    const endVal = value.end !== null && value.end !== undefined ? cast(value.end) : value.end;
 
     if (beginVal === null || beginVal === undefined) {
       if (endVal === null || endVal === undefined) {

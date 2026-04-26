@@ -945,6 +945,26 @@ export class Base extends Model {
     this._logger = log;
   }
 
+  /**
+   * Times the given block and logs the result.
+   * Mirrors: ActiveRecord::Base.benchmark (via ActiveSupport::Benchmarkable)
+   */
+  static async benchmark<T>(
+    message: string,
+    options: { level?: "debug" | "info" | "warn" | "error"; silence?: boolean } = {},
+    fn: () => T | Promise<T>,
+  ): Promise<T> {
+    const level = options.level ?? "info";
+    const start = performance.now();
+    const result = await fn();
+    const ms = performance.now() - start;
+    const log = this.logger;
+    if (log && typeof (log as any)[level] === "function") {
+      (log as any)[level](`${message} (${ms.toFixed(1)}ms)`);
+    }
+    return result;
+  }
+
   // -- Timestamp control --
   static _recordTimestamps = true;
 

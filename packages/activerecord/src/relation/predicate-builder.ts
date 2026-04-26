@@ -33,7 +33,19 @@ export class PredicateBuilder {
   constructor(table: Table) {
     this.table = table;
     this.arrayHandler = new ArrayHandler(this);
-    this.rangeHandler = new RangeHandler();
+    this.rangeHandler = new RangeHandler((colName, v) => {
+      // Use the model class's typeForAttribute if available (resolves declared attr types)
+      const ctx = this._tableContext as {
+        typeForAttribute?(n: string): { cast?(x: unknown): unknown } | null;
+      } | null;
+      const type = ctx?.typeForAttribute?.(colName);
+      if (type?.cast) return type.cast(v);
+      // Fall back to the Arel table's type caster
+      const arelType = this.table.typeForAttribute(colName) as
+        | { cast?(x: unknown): unknown }
+        | undefined;
+      return arelType?.cast ? arelType.cast(v) : v;
+    });
     this.basicObjectHandler = new BasicObjectHandler(this);
     this.relationHandler = new RelationHandler();
   }

@@ -121,7 +121,7 @@ export function cacheKey(this: Identifiable): string {
 
   const idStr = Array.isArray(pk) ? pk.join("_") : String(pk);
 
-  if ((this as any).cacheVersion?.()) {
+  if (klass.cacheVersioning) {
     return `${modelKey}/${idStr}`;
   }
 

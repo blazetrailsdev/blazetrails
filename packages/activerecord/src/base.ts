@@ -109,6 +109,7 @@ import {
   cacheKey as _cacheKey,
   cacheKeyWithVersion as _cacheKeyWithVersion,
   cacheVersion as _cacheVersion,
+  collectionCacheKey as _collectionCacheKey,
 } from "./integration.js";
 import {
   noTouching as _noTouchingBlock,
@@ -2051,6 +2052,8 @@ export class Base extends Model {
     return _toParamClass.call(this, methodName);
   }
 
+  declare static collectionCacheKey: typeof _collectionCacheKey;
+
   declare writeAttribute: typeof ReadonlyAttributes.writeAttribute;
 
   /**
@@ -2766,6 +2769,7 @@ export interface Base extends Included<typeof AutosaveAssociation> {
 // ---------------------------------------------------------------------------
 
 extend(Base, ConnectionHandling.ClassMethods);
+extend(Base, { collectionCacheKey: _collectionCacheKey });
 extend(Base, Querying);
 extend(Base, {
   belongsTo: _Associations.belongsTo,

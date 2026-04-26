@@ -1,22 +1,54 @@
 {
-  "ar-16": {
+  "arel-17": {
     "side": "diff",
-    "reason": "Book.all().eagerLoad(\"author\").limit(10): trails eagerLoad pushes the association into _eagerLoadAssociations but doesn't emit the LEFT OUTER JOIN + column-aliased SELECT that Rails produces. Rails emits 'SELECT \"books\".\"id\" AS t0_r0, ... FROM \"books\" LEFT OUTER JOIN \"authors\" ON ... LIMIT 10'; trails emits the bare 'SELECT \"books\".* FROM \"books\" LIMIT 10'. Real trails-missing feature: eagerLoad's JOIN + column-projection behaviour."
+    "reason": "is_distinct_from: trails emits 'IS DISTINCT FROM' (SQL standard); Rails on SQLite emits 'IS NOT' (SQLite extension). Both are semantically equivalent but lexically differ."
   },
-  "ar-57": {
-    "side": "diff",
-    "reason": "includes + references + string where: Rails promotes includes(:author) to a LEFT OUTER JOIN + column-aliased SELECT when references(:author) is combined with a string WHERE touching that table (same mechanism as eagerLoad). trails emits a plain SELECT with the WHERE clause but no JOIN. Same root cause as ar-16 — eagerLoad JOIN + column-projection behaviour is not implemented."
-  },
-  "ar-79": {
+  "arel-24": {
     "side": "trails-missing",
-    "reason": "Relation#unscoped() not implemented as an instance method. Rails allows chaining unscoped() on a relation to discard all previously applied scopes; trails only implements it as a class method."
+    "reason": "arithmetic chain (users[:age] / 3 - employees[:time_at_company]): trails Attribute#divide returns a node without a .subtract method — predication-after-arithmetic chain is incomplete."
   },
-  "ar-82": {
+  "arel-25": {
     "side": "trails-missing",
-    "reason": "Model.optimizer_hints() class-method delegation not implemented. Rails delegates optimizer_hints() from the class to its default scope relation; trails only has it as an instance method on Relation, so Book.optimizerHints(...) throws."
+    "reason": "arithmetic predication gap — same family as arel-24 (trails arithmetic ops do not chain into further predicates)."
   },
-  "ar-87": {
+  "arel-26": {
+    "side": "trails-missing",
+    "reason": "arithmetic predication gap — same family as arel-24."
+  },
+  "arel-27": {
+    "side": "trails-missing",
+    "reason": "arithmetic predication gap — same family as arel-24."
+  },
+  "arel-28": {
+    "side": "trails-missing",
+    "reason": "arithmetic predication gap — same family as arel-24."
+  },
+  "arel-29": {
+    "side": "trails-missing",
+    "reason": "arithmetic predication gap — same family as arel-24."
+  },
+  "arel-30": {
+    "side": "trails-missing",
+    "reason": "(~users[:bitmap]).gt(0): trails Nodes.BitwiseNot does not implement predication methods (no .gt/.lt/.eq chain)."
+  },
+  "arel-36": {
     "side": "diff",
-    "reason": "Relation#joins() does not accept Arel join nodes. Rails joins() flattens its args and handles Arel::Nodes::InnerJoin entries in build_joins; trails joins() only accepts strings, coercing any non-string to [object Object]. Rails: 'SELECT \"books\".* FROM \"books\" INNER JOIN \"authors\" ON ...'; trails: 'SELECT \"books\".* FROM \"books\" [object Object]'."
+    "reason": "EXTRACT(MONTH FROM ...) vs EXTRACT(month FROM ...): trails ToSql visitor emits the EXTRACT field in the casing it was constructed with (lowercase in fixture); Rails uppercases."
+  },
+  "arel-44": {
+    "side": "diff",
+    "reason": "subquery alias quoting: Rails emits the alias bare (sub); trails emits the quoted identifier (\"sub\"). Real ToSql visitor divergence."
+  },
+  "arel-47": {
+    "side": "trails-missing",
+    "reason": "photos[:id].count.gt(5): trails Attribute#count returns a node without predication methods — HAVING aggregate-comparison chain incomplete."
+  },
+  "ar-96": {
+    "side": "diff",
+    "reason": "left_outer_joins with association: Rails resolves the association foreign key to emit ON \"reviews\".\"book_id\" = \"books\".\"id\"; trails emits ON 1=1 (no association resolution)."
+  },
+  "ar-98": {
+    "side": "diff",
+    "reason": "where.not with hash (multi-key): Rails emits WHERE NOT (...AND...), trails emits individual != predicates joined with AND — logically different semantics."
   }
 }

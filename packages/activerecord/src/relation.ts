@@ -1,4 +1,4 @@
-import { getCrypto, Notifications } from "@blazetrails/activesupport";
+import { hexdigest, Notifications } from "@blazetrails/activesupport";
 import {
   Table,
   SelectManager,
@@ -78,12 +78,7 @@ export type LoadedRelation<R> = Omit<R, "then">;
  * - Throw if a join to the same table with a *different* ON clause exists —
  *   that would require aliasing which is not supported.
  */
-// Mirrors: ActiveSupport::Digest.hexdigest — MD5 hex string truncated to 32 chars.
-function hexdigest(data: string): string {
-  return getCrypto().createHash("md5").update(data).digest("hex").slice(0, 32);
-}
-
-function formatCacheTimestamp(date: Date, format: string): string {
+function formatCacheTimestamp(date: Date, format: "usec" | "number" | string): string {
   const y = date.getUTCFullYear().toString().padStart(4, "0");
   const mo = (date.getUTCMonth() + 1).toString().padStart(2, "0");
   const d = date.getUTCDate().toString().padStart(2, "0");
@@ -91,6 +86,11 @@ function formatCacheTimestamp(date: Date, format: string): string {
   const mi = date.getUTCMinutes().toString().padStart(2, "0");
   const s = date.getUTCSeconds().toString().padStart(2, "0");
   if (format === "number") return `${y}${mo}${d}${h}${mi}${s}`;
+  if (format !== "usec") {
+    throw new Error(
+      `Unknown cacheTimestampFormat: ${JSON.stringify(format)}. Supported values: "usec", "number".`,
+    );
+  }
   const ms = date.getUTCMilliseconds().toString().padStart(3, "0");
   return `${y}${mo}${d}${h}${mi}${s}${ms}000`;
 }
@@ -3842,7 +3842,7 @@ export class Relation<T extends Base> {
 
   async computeCacheKey(timestampColumn = "updated_at"): Promise<string> {
     const key = `${this._modelClass.tableName}/query-${hexdigest(this.toSql())}`;
-    if ((this._modelClass as any).collectionCacheVersioning) {
+    if (this._modelClass.collectionCacheVersioning) {
       return key;
     }
     const version = await this.computeCacheVersion(timestampColumn);
@@ -3855,7 +3855,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#cache_version
    */
   async cacheVersion(timestampColumn = "updated_at"): Promise<string | null> {
-    if (!(this._modelClass as any).collectionCacheVersioning) return null;
+    if (!this._modelClass.collectionCacheVersioning) return null;
     this._cacheVersions ??= new Map();
     if (!this._cacheVersions.has(timestampColumn)) {
       this._cacheVersions.set(
@@ -3884,23 +3884,29 @@ export class Relation<T extends Base> {
     } else {
       try {
         const collection: Relation<T> = this;
-        const column = this.table.get(timestampColumn);
-        const columnSql = this._compileArelNode(column);
-        const selectTemplate = `COUNT(*) AS "size", MAX(%s) AS "timestamp"`;
+        const tsColumn = this.table.get(timestampColumn);
+        // Build COUNT(*) and MAX(col) projections via Arel nodes.
+        const countStar = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
+        const maxNode = tsColumn.maximum();
 
         if (this._limitValue !== null || (this._offsetValue ?? 0) > 0) {
+          // Has LIMIT/OFFSET — wrap in a subquery (mirrors Rails' build_subquery).
           const subqueryAlias = "subquery_for_cache_key";
           const inner = collection._clone();
-          inner._selectColumns = [`${columnSql} AS collection_cache_key_timestamp`];
+          inner._selectColumns = [
+            this._compileArelNode(tsColumn.as("collection_cache_key_timestamp")),
+          ];
           if (this._isDistinct && (!this._selectColumns || this._selectColumns.length === 0)) {
             inner._selectColumns = [
               this._compileArelNode(this.table.star),
               ...inner._selectColumns!,
             ];
           }
-          const innerSql = inner.toSql();
-          const subqueryColumn = `"${subqueryAlias}"."collection_cache_key_timestamp"`;
-          const sql = `SELECT ${selectTemplate.replace("%s", subqueryColumn)} FROM (${innerSql}) AS "${subqueryAlias}"`;
+          const subTable = new Table(subqueryAlias);
+          const subColumn = subTable.get("collection_cache_key_timestamp");
+          const outerCountStar = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
+          const outerMaxNode = subColumn.maximum();
+          const sql = `SELECT ${this._compileArelNode(outerCountStar.as("size"))}, ${this._compileArelNode(outerMaxNode.as("timestamp"))} FROM (${inner.toSql()}) AS "${subqueryAlias}"`;
           const rows = await this._modelClass.adapter.execute(sql);
           size = Number(rows[0]?.size ?? 0);
           timestamp = rows[0]?.timestamp;
@@ -3908,17 +3914,21 @@ export class Relation<T extends Base> {
           const query = collection._clone();
           query._orderClauses = [];
           query._rawOrderClauses = [];
-          query._selectColumns = [selectTemplate.replace("%s", columnSql)];
+          query._selectColumns = [
+            this._compileArelNode(countStar.as("size")),
+            this._compileArelNode(maxNode.as("timestamp")),
+          ];
           const rows = await this._modelClass.adapter.execute(query.toSql());
           size = Number(rows[0]?.size ?? 0);
           timestamp = rows[0]?.timestamp;
         }
       } catch {
         try {
+          const countFallback = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
           const query = this._clone();
           query._orderClauses = [];
           query._rawOrderClauses = [];
-          query._selectColumns = [`COUNT(*) AS "size"`];
+          query._selectColumns = [this._compileArelNode(countFallback.as("size"))];
           const rows = await this._modelClass.adapter.execute(query.toSql());
           size = Number(rows[0]?.size ?? 0);
         } catch {
@@ -3939,7 +3949,7 @@ export class Relation<T extends Base> {
         ts = new Date(timestamp);
       }
       if (ts && !isNaN(ts.getTime())) {
-        const fmt: string = (this._modelClass as any).cacheTimestampFormat ?? "usec";
+        const fmt = this._modelClass.cacheTimestampFormat;
         const formatted = formatCacheTimestamp(ts, fmt);
         return `${size}-${formatted}`;
       }

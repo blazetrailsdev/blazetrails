@@ -1,11 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Base } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
-import { getCrypto } from "@blazetrails/activesupport";
-
-function hexdigest(data: string): string {
-  return getCrypto().createHash("md5").update(data).digest("hex").slice(0, 32);
-}
+import { hexdigest } from "@blazetrails/activesupport";
 
 function expectedUsec(d: Date): string {
   const y = d.getUTCFullYear().toString().padStart(4, "0");

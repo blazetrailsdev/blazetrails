@@ -1890,10 +1890,14 @@ export class Relation<T extends Base> {
     if (this._referencesValues.length === 0) return false;
     if (this._includesAssociations.length === 0) return false;
 
+    // Rails builds join nodes and checks Arel::Nodes::StringJoin to identify
+    // raw SQL joins; mirrors that by wrapping _rawJoins as Nodes.StringJoin and
+    // extracting table names from their SQL text via tablesInString.
+    const stringJoins = this._rawJoins.map((s) => new Nodes.StringJoin(new Nodes.SqlLiteral(s)));
+
     const joinedTables = new Set<string>([
       ...this._joinClauses.map((j) => j.table.toLowerCase()),
-      // Raw SQL join strings may reference table names inline
-      ...this._rawJoins.flatMap((s) => this.tablesInString(s)),
+      ...stringJoins.flatMap((j) => this.tablesInString((j.left as Nodes.SqlLiteral).value)),
       String((this._modelClass as unknown as { tableName?: string }).tableName ?? "").toLowerCase(),
     ]);
 

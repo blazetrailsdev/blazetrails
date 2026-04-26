@@ -1524,3 +1524,176 @@ export const QueryMethodBangs = {
   excludingBang,
   constructJoinDependency,
 } as const;
+
+// ---------------------------------------------------------------------------
+// PR 2a private helpers — column resolution, select/from/with building.
+// ---------------------------------------------------------------------------
+
+function isTableNameMatches(this: QueryMethodsHost, from: unknown): boolean {
+  const table: any = (this as any)._modelClass?.arelTable;
+  if (!table) return false;
+  const name = Regexp.escape ? Regexp.escape(table.name) : table.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const modelClass: any = (this as any)._modelClass;
+  const quotedName = (name: string) =>
+    modelClass?.adapter?.quoteTableName?.(name) ?? `"${name}"`;
+  const quoted = quotedName(table.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|(?<!FROM)\\s)(?:\\b${name}\\b|${quoted})(?!\\.)`, "i").test(String(from));
+}
+
+function arelColumn(this: QueryMethodsHost, field: string | symbol): unknown {
+  const modelClass: any = (this as any)._modelClass;
+  const table: any = modelClass?.arelTable;
+  let fieldStr = typeof field === "symbol" ? symbolToName(field) : field;
+  fieldStr = modelClass?.attributeAliases?.[fieldStr] ?? fieldStr;
+
+  const fromClause = (this as any)._fromClause;
+  const from = fromClause?.name || fromClause?.value;
+
+  if (modelClass?.columnsHash?.()[fieldStr] && (!from || isTableNameMatches.call(this, from))) {
+    return table?.get(fieldStr) ?? arelSql(fieldStr);
+  }
+  const dotMatch = fieldStr.match(/^(?<tbl>(?:\w+\.)?\w+)\.(?<col>\w+)$/);
+  if (dotMatch) {
+    return arelColumnWithTable.call(this, dotMatch.groups!.tbl, dotMatch.groups!.col);
+  }
+  if (Nodes.isArelNode?.(field) || field instanceof Nodes.Node) return field;
+  const isSymbol = typeof field === "symbol";
+  return isSymbol
+    ? new ArelTable(fieldStr).get(fieldStr)
+    : arelSql(fieldStr);
+}
+
+function arelColumns(this: QueryMethodsHost, columns: unknown[]): unknown[] {
+  return columns.flatMap((field) => {
+    if (typeof field === "string" || typeof field === "symbol") return [arelColumn.call(this, field as any)];
+    if (typeof field === "function") return [field()];
+    if (isPlainObject(field)) return arelColumnsFromHash.call(this, field as Record<string, unknown>);
+    return [field];
+  });
+}
+
+function arelColumnWithTable(this: QueryMethodsHost, tableName: string, columnName: string | symbol): unknown {
+  const existing = (this as any)._referencesValues ?? [];
+  if (!existing.includes(tableName)) (this as any)._referencesValues = [...existing, tableName];
+  const colStr = typeof columnName === "symbol" ? symbolToName(columnName) : columnName;
+  if (typeof columnName === "symbol" || !/\W/.test(colStr)) {
+    const builder = (this as any).predicateBuilder;
+    return (
+      builder?.resolveArelAttribute?.(tableName, colStr) ??
+      new ArelTable(tableName).get(colStr)
+    );
+  }
+  const modelClass: any = (this as any)._modelClass;
+  const quotedTable = modelClass?.adapter?.quoteTableName?.(tableName) ?? `"${tableName}"`;
+  return arelSql(`${quotedTable}.${colStr}`);
+}
+
+function arelColumnsFromHash(this: QueryMethodsHost, fields: Record<string, unknown>): unknown[] {
+  return Object.entries(fields).flatMap(([tableName, columns]) => {
+    const tbl = typeof tableName === "symbol" ? symbolToName(tableName as unknown as symbol) : tableName;
+    if (typeof columns === "string" || typeof columns === "symbol") {
+      return [arelColumnWithTable.call(this, tbl, columns as any)];
+    }
+    if (Array.isArray(columns)) {
+      return columns.map((col) => arelColumnWithTable.call(this, tbl, col));
+    }
+    throw new TypeError(`Expected Symbol, String or Array, got: ${typeof columns}`);
+  });
+}
+
+function orderColumn(this: QueryMethodsHost, field: string): unknown {
+  // Mirrors Rails' order_column: resolves field via arel_column with a custom
+  // fallback that quotes the identifier as a table name (for "count" + group).
+  const result = arelColumn.call(this, field);
+  if (result) return result;
+  const modelClass: any = (this as any)._modelClass;
+  const table: any = modelClass?.arelTable;
+  if (field === "count" && ((this as any)._groupColumns ?? []).length > 0) {
+    return table?.get(field) ?? arelSql(field);
+  }
+  const quoted = modelClass?.adapter?.quoteTableName?.(field) ?? `"${field}"`;
+  return arelSql(quoted);
+}
+
+function processSelectArgs(this: QueryMethodsHost, fields: unknown[]): unknown[] {
+  return fields.flatMap((field) => {
+    if (isPlainObject(field)) return arelColumnAliasesFromHash.call(this, field as Record<string, unknown>);
+    return [field];
+  });
+}
+
+function arelColumnAliasesFromHash(this: QueryMethodsHost, fields: Record<string, unknown>): unknown[] {
+  return Object.entries(fields).flatMap(([key, columnsAliases]) => {
+    const tableName = typeof key === "symbol" ? symbolToName(key as unknown as symbol) : key;
+    const modelClass: any = (this as any)._modelClass;
+    if (isPlainObject(columnsAliases)) {
+      return Object.entries(columnsAliases as Record<string, unknown>).map(([col, alias]) => {
+        const attr = arelColumnWithTable.call(this, tableName, col);
+        const quotedAlias = modelClass?.adapter?.quoteColumnName?.(String(alias)) ?? `"${String(alias)}"`;
+        return (attr as any)?.as?.(quotedAlias) ?? arelSql(`${attr} AS ${quotedAlias}`);
+      });
+    }
+    if (Array.isArray(columnsAliases)) {
+      return (columnsAliases as string[]).map((col) => arelColumnWithTable.call(this, tableName, col));
+    }
+    if (typeof columnsAliases === "string" || typeof columnsAliases === "symbol") {
+      const attr = arelColumn.call(this, key as any);
+      const quotedAlias = modelClass?.adapter?.quoteColumnName?.(String(columnsAliases)) ?? `"${String(columnsAliases)}"`;
+      return [(attr as any)?.as?.(quotedAlias) ?? arelSql(`${attr} AS ${quotedAlias}`)];
+    }
+    return [];
+  });
+}
+
+function buildFrom(this: QueryMethodsHost): unknown {
+  const fromClause = (this as any)._fromClause;
+  const opts = fromClause?.value;
+  let name = fromClause?.name;
+  if (opts && typeof (opts as any).toArel === "function") {
+    name ??= "subquery";
+    return (opts as any).toArel().as(String(name));
+  }
+  return opts;
+}
+
+function buildSelect(this: QueryMethodsHost, arel: any): void {
+  const selectCols = (this as any)._selectColumns;
+  if (selectCols && selectCols.length > 0) {
+    arel.project(...arelColumns.call(this, selectCols));
+    return;
+  }
+  const modelClass: any = (this as any)._modelClass;
+  const table: any = modelClass?.arelTable;
+  if ((modelClass?.ignoredColumns?.length ?? 0) > 0 || modelClass?.enumerateColumnsInSelectStatements) {
+    const cols: string[] = modelClass?.columnNames?.() ?? [];
+    if (cols.length > 0) {
+      arel.project(...cols.map((f: string) => table?.get(f) ?? arelSql(f)));
+      return;
+    }
+  }
+  arel.project(table ? table.star : arelSql("*"));
+}
+
+function buildWithExpressionFromValue(this: QueryMethodsHost, value: unknown, nested = false): unknown {
+  if (value instanceof Nodes.SqlLiteral) return new Nodes.Grouping(value);
+  if (value instanceof SelectManager) return value;
+  if (value !== null && typeof value === "object" && typeof (value as any).toArel === "function") {
+    return nested ? (value as any).toArel().ast : (value as any).toArel();
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 1) return buildWithExpressionFromValue.call(this, value[0], false);
+    const parts = value.map((q) => buildWithExpressionFromValue.call(this, q, true));
+    return parts.reduce((result, part) => new (Nodes as any).UnionAll(result, part));
+  }
+  throw argumentError(`Unsupported argument type: \`${String(value)}\` ${typeof value}`);
+}
+
+function buildWithValueFromHash(this: QueryMethodsHost, hash: Record<string, unknown>): unknown[] {
+  return Object.entries(hash).map(([name, value]) => {
+    const expr = buildWithExpressionFromValue.call(this, value);
+    return new (Nodes as any).TableAlias(expr, name);
+  });
+}
+
+// lookupTableKlassFromJoinDependencies is implemented in PR 2b alongside
+// buildJoinDependencies and eachJoinDependencies which it depends on.

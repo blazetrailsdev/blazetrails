@@ -123,7 +123,10 @@ async function main(): Promise<void> {
   assertBuilt();
 
   const frozenTs = frozenAt ?? DEFAULT_FROZEN_AT;
-  const frozenMs = new Date(frozenTs).getTime();
+  // Truncate to whole seconds: Rails serializes unscaled DATETIME columns
+  // without fractional seconds, so a sub-second frozen-at would produce a
+  // ms-padded literal on trails but a whole-second literal on Rails.
+  const frozenMs = Math.floor(new Date(frozenTs).getTime() / 1000) * 1000;
   const fixtureDirAbs = resolve(fixtureDirRaw);
   const outPathAbs = resolve(outPathRaw);
   const fixtureName = basename(fixtureDirAbs);

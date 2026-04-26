@@ -801,9 +801,9 @@ export class Relation<T extends Base> {
   inOrderOf(column: string, values: unknown[], filter = true): Relation<T> {
     if (values.length === 0) return this.none();
 
-    // Qualify the column with the model table, mirroring Rails' order_column.
-    const tableName = (this._modelClass as any).tableName as string;
-    const arelCol = new Table(tableName).get(column);
+    // Use the model's arelTable so the attribute retains type-casting metadata,
+    // mirroring Rails' order_column which resolves through the model's arel_table.
+    const arelCol = (this._modelClass as any).arelTable.get(column);
 
     // Build CASE WHEN col = v1 THEN 1 ... END ASC (searched form, 1-indexed).
     // Mirrors Rails' build_case_for_value_position: Arel::Nodes::Case.new (no operand)

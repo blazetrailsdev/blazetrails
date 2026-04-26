@@ -1117,7 +1117,9 @@ function checkIfMethodHasArgumentsBang(
   const flat = flattenedArgs(args);
   args.length = 0;
   for (const a of flat) {
-    if (a !== null && a !== undefined && a !== "") args.push(a);
+    if (a === null || a === undefined) continue;
+    if (typeof a === "string" && a.trim() === "") continue;
+    args.push(a);
   }
 }
 
@@ -1220,10 +1222,10 @@ function buildSubquery(
   }
   const aliasedSubquery = (relation as any).toArel().as(subqueryAlias);
   const sm = new SelectManager();
-  (sm as any).from(aliasedSubquery);
+  sm.from(aliasedSubquery);
   sm.project(selectValue as any);
   const hints: string[] = (this as any)._optimizerHints ?? [];
-  if (hints.length > 0) (sm as any).optimizerHints?.(...hints);
+  if (hints.length > 0) sm.optimizerHints(...hints);
   return sm;
 }
 
@@ -1334,12 +1336,13 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
     const existing: string[] = (this as any)._referencesValues ?? [];
     (this as any)._referencesValues = [...new Set([...existing, ...refs])];
   }
-  // Rails maps Symbol args to Ascending nodes and Hash args to directional nodes
-  // (Arel::Nodes::SqlLiteral / Arel::Nodes::Node keys get their dir method called directly).
+  // Rails maps Symbol args to Ascending nodes and Hash args to directional nodes.
   const mapped: unknown[] = [];
   for (const arg of orderArgs) {
     if (typeof arg === "symbol") {
-      mapped.push(new Nodes.Ascending(arelSql(String(arg))));
+      // Use .description to get the symbol name ("id" not "Symbol(id)").
+      const name = arg.description ?? String(arg);
+      mapped.push(new Nodes.Ascending(arelSql(name)));
     } else if (
       arg !== null &&
       typeof arg === "object" &&

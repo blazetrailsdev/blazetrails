@@ -1347,7 +1347,7 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
       !(arg instanceof Nodes.Node)
     ) {
       for (const [key, dir] of Object.entries(arg as Record<string, unknown>)) {
-        const expr: Nodes.Node = key instanceof Nodes.Node ? key : arelSql(key);
+        const expr: Nodes.Node = arelSql(key);
         mapped.push(
           String(dir).toLowerCase() === "desc"
             ? new Nodes.Descending(expr)

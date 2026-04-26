@@ -760,8 +760,8 @@ describe("WhereTest", () => {
       }
     }
     // Tuple inner length (1) doesn't match column count (2) — must raise with the specific mismatch details
-    expect(() => (CpkPost as any).where(["shop_id", "number"], [[1]])).toThrow(
-      /tuple arity.*1.*column count.*2|column count.*2.*tuple arity.*1/i,
+    expect(() => CpkPost.where(["shop_id", "number"], [[1]])).toThrow(
+      "tuple arity 1 does not match column count 2",
     );
   });
 

@@ -1112,7 +1112,7 @@ function checkIfMethodHasArgumentsBang(
   message?: string,
 ): void {
   if (!args || args.length === 0) {
-    throw new ArgumentError(message ?? `The method .${methodName}() must contain arguments.`);
+    throw argumentError(message ?? `The method .${methodName}() must contain arguments.`);
   }
   const flat = flattenedArgs(args);
   args.length = 0;
@@ -1150,7 +1150,15 @@ function validateOrderArgs(this: QueryMethodsHost, args: unknown[]): void {
 function processWithArgs(this: QueryMethodsHost, args: unknown[]): Record<string, unknown>[] {
   return args.flatMap((arg) => {
     if (!isPlainObject(arg)) {
-      throw new ArgumentError(`Unsupported argument type: ${String(arg)} ${typeof arg}`);
+      const desc =
+        arg === null
+          ? "null"
+          : Array.isArray(arg)
+            ? "Array"
+            : typeof arg !== "object"
+              ? `${String(arg)} (${typeof arg})`
+              : ((arg as any).constructor?.name ?? "object");
+      throw argumentError(`Unsupported argument type: ${desc}. Expected a plain object/hash.`);
     }
     return Object.entries(arg).map(([k, v]) => ({ [k]: v }));
   });
@@ -1287,7 +1295,7 @@ function extractTableNameFrom(orderTerm: string): string | null {
 function symbolToName(s: symbol): string {
   const name = Symbol.keyFor(s) ?? s.description;
   if (name === undefined || name.trim() === "") {
-    throw new ArgumentError("Order symbols must have a non-blank name");
+    throw argumentError("Order symbols must have a non-blank name");
   }
   return name;
 }
@@ -1304,10 +1312,15 @@ function columnReferences(orderArgs: unknown[]): string[] {
     } else if (arg instanceof Nodes.Ordering) {
       const expr = (arg as any).expr;
       if (expr instanceof Nodes.Attribute) refs.push(expr.relation.name);
-    } else if (arg !== null && typeof arg === "object" && !Array.isArray(arg)) {
-      for (const [key] of Object.entries(arg as Record<string, unknown>)) {
-        const t = extractTableNameFrom(String(key));
-        if (t) refs.push(t);
+    } else if (isPlainObject(arg)) {
+      for (const [key, value] of Object.entries(arg)) {
+        if (isPlainObject(value)) {
+          // Nested hash { table: { col: dir } } — key is the table name.
+          refs.push(key);
+        } else {
+          const t = extractTableNameFrom(String(key));
+          if (t) refs.push(t);
+        }
       }
     }
   }
@@ -1350,19 +1363,26 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
   for (const arg of orderArgs) {
     if (typeof arg === "symbol") {
       mapped.push(new Nodes.Ascending(arelSql(symbolToName(arg))));
-    } else if (
-      arg !== null &&
-      typeof arg === "object" &&
-      !Array.isArray(arg) &&
-      !(arg instanceof Nodes.Node)
-    ) {
-      for (const [key, dir] of Object.entries(arg as Record<string, unknown>)) {
-        const expr: Nodes.Node = arelSql(key);
-        mapped.push(
-          String(dir).toLowerCase() === "desc"
-            ? new Nodes.Descending(expr)
-            : new Nodes.Ascending(expr),
-        );
+    } else if (isPlainObject(arg)) {
+      for (const [key, value] of Object.entries(arg)) {
+        if (isPlainObject(value)) {
+          // Nested hash: { table: { col: dir } } → table.col DESC/ASC
+          for (const [field, dir] of Object.entries(value)) {
+            const expr = arelSql(`${key}.${field}`);
+            mapped.push(
+              String(dir).toLowerCase() === "desc"
+                ? new Nodes.Descending(expr)
+                : new Nodes.Ascending(expr),
+            );
+          }
+        } else {
+          const expr: Nodes.Node = arelSql(key);
+          mapped.push(
+            String(value).toLowerCase() === "desc"
+              ? new Nodes.Descending(expr)
+              : new Nodes.Ascending(expr),
+          );
+        }
       }
     } else {
       mapped.push(arg);

@@ -119,7 +119,8 @@ export function cacheKey(this: Identifiable): string {
     return `${modelKey}/new`;
   }
 
-  const idStr = Array.isArray(pk) ? pk.join("_") : String(pk);
+  const delimiter: string = klass.paramDelimiter ?? "_";
+  const idStr = Array.isArray(pk) ? pk.join(delimiter) : String(pk);
 
   if (klass.cacheVersioning) {
     return `${modelKey}/${idStr}`;
@@ -192,7 +193,8 @@ export function toParamClass(
   klass.prototype.toParam = function (this: any): string | null {
     const base: string | null = Object.getPrototypeOf(klass.prototype).toParam?.call(this) ?? null;
     if (!base) return base;
-    const raw: string = String(this[methodName] ?? "");
+    const member = this[methodName];
+    const raw: string = String((typeof member === "function" ? member.call(this) : member) ?? "");
     const slug = truncateParam(parameterize(squish(raw)), 20);
     return slug ? `${base}-${slug}` : base;
   };

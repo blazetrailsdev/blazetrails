@@ -135,10 +135,10 @@ async function main(): Promise<void> {
   // Math.trunc (not Math.floor) is correct for pre-1970 timestamps where
   // Math.floor would round away from zero and shift by up to 1 second.
   const frozenMs = Math.trunc(new Date(frozenTs).getTime() / 1000) * 1000;
-  // Canonical frozenAt is the truncated time — what both sides are actually
-  // frozen to. Storing the original sub-second input would misrepresent what
-  // was passed to FakeTimers and disagree with the SQL output.
-  const effectiveFrozenTs = new Date(frozenMs).toISOString();
+  // Keep frozenAt equal to the validated input string so both the Node and
+  // Ruby runners write the same value — the diff pipeline doesn't compare
+  // frozenAt today but symmetry avoids future surprises. The clock is still
+  // installed at whole-second precision; only the metadata field is unchanged.
   const fixtureDirAbs = resolve(fixtureDirRaw);
   const outPathAbs = resolve(outPathRaw);
   const fixtureName = basename(fixtureDirAbs);
@@ -275,7 +275,7 @@ async function main(): Promise<void> {
     const canonical: CanonicalQuery = {
       version: 1,
       fixture: fixtureName,
-      frozenAt: effectiveFrozenTs,
+      frozenAt: frozenTs,
       sql: sqlStr,
       paramSql,
       binds,
@@ -288,7 +288,7 @@ async function main(): Promise<void> {
     process.stdout.write(`[trails] ${fixtureName}\n`);
     process.stdout.write(`  result type : ${ctor}\n`);
     process.stdout.write(`  sql         : ${sqlStr}\n`);
-    process.stdout.write(`  frozenAt    : ${effectiveFrozenTs}\n`);
+    process.stdout.write(`  frozenAt    : ${frozenTs}\n`);
     process.stdout.write(`  → ${outPathAbs}\n`);
   } finally {
     clock.uninstall();

@@ -32,6 +32,13 @@ function freshAdapter(): DatabaseAdapter {
   return createTestAdapter();
 }
 
+// Close all SQLite adapters after every test regardless of which describe block.
+afterEach(() => {
+  for (const a of openAdapters.splice(0)) {
+    a.close();
+  }
+});
+
 // ==========================================================================
 // TransactionTest — targets transactions_test.rb
 // ==========================================================================
@@ -40,12 +47,6 @@ describe("TransactionTest", () => {
 
   beforeEach(() => {
     adapter = freshAdapter();
-  });
-
-  afterEach(() => {
-    for (const a of openAdapters.splice(0)) {
-      a.close();
-    }
   });
 
   it("transaction commits on success", async () => {
@@ -952,6 +953,10 @@ describe("TransactionTest", () => {
   });
 
   it("rollback when saving a frozen record", async () => {
+    // Rails test: freeze a new record then call save — save raises FrozenError
+    // because writeAttribute is called to set the id after INSERT. The test is
+    // about frozen-record protection, not transactional rollback — the test
+    // adapter is correct here (no real DB transaction needed).
     const adp = freshAdapter();
     class Topic extends Base {
       static {

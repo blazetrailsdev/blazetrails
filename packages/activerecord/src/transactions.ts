@@ -30,6 +30,7 @@ function _afterFailureActions(
   }
 }
 import { Transaction } from "./connection-adapters/abstract/transaction.js";
+import { Transaction as PublicTransaction } from "./transaction.js";
 import { transaction as dbTransaction } from "./connection-adapters/abstract/database-statements.js";
 
 type TransactionAction = "create" | "update" | "destroy";
@@ -76,23 +77,19 @@ export function currentTransaction(): Transaction | null {
   return getTransactionStorage().getStore() ?? null;
 }
 
-const NULL_TRANSACTION_PROXY = {
-  afterCommit(_fn: () => void | Promise<void>): void {},
-  afterRollback(_fn: () => void | Promise<void>): void {},
-  isOpen(): boolean {
-    return false;
-  },
-};
-
 /**
- * Returns the current transaction object, or a null transaction (no-op callbacks)
- * if no transaction is open.
+ * Returns the current transaction as the public Transaction wrapper, or
+ * Transaction.NULL_TRANSACTION when no transaction is open.
+ *
+ * NULL_TRANSACTION fires afterCommit immediately and ignores afterRollback,
+ * matching Rails' ActiveRecord::Transaction::NULL_TRANSACTION behavior.
  *
  * Mirrors: ActiveRecord::Base.current_transaction
  */
-export function currentTransactionPublic() {
-  const tx = currentTransaction();
-  return tx ?? NULL_TRANSACTION_PROXY;
+export function currentTransactionPublic(): PublicTransaction {
+  const internalTx = currentTransaction();
+  if (!internalTx) return PublicTransaction.NULL_TRANSACTION;
+  return new PublicTransaction(internalTx);
 }
 
 /**

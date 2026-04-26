@@ -1083,7 +1083,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#from
    */
-  from(source: string | Relation<any>, subqueryName?: string): Relation<T> {
+  from(source: string | Relation<any> | Nodes.Node, subqueryName?: string): Relation<T> {
     return this._clone().fromBang(source, subqueryName);
   }
 

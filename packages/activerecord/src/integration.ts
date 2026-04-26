@@ -48,7 +48,7 @@ function formatTimestamp(date: Date, format: CacheTimestampFormat | string): str
   if (format === "number") return toFsNumber(date);
   if (format !== "usec") {
     throw new Error(
-      `Unknown cache_timestamp_format: ${JSON.stringify(format)}. Supported values: "usec", "number".`,
+      `Unknown cacheTimestampFormat: ${JSON.stringify(format)}. Supported values: "usec", "number".`,
     );
   }
   return toFsUsec(date);

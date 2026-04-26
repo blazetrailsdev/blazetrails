@@ -315,7 +315,7 @@ export function columnNameWithOrderMatcher(): RegExp {
   const col1 = String.raw`(?:${col0}|\w+\((?:|${col0})\)(?:::\w+)?)`;
   const atom = String.raw`(?:${col0}|\w+\((?:|${col1})\)(?:::\w+)?)`;
   return new RegExp(
-    `^(${atom}(?:\\s+COLLATE\\s+"?\\w+"?)?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)(?:\\s*,\\s*${atom}(?:\\s+COLLATE\\s+"?\\w+"?)?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)*$`,
+    `^(${atom}(?:\\s+COLLATE\\s+"\\w+")?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)(?:\\s*,\\s*${atom}(?:\\s+COLLATE\\s+"\\w+")?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)*$`,
     "i",
   );
 }

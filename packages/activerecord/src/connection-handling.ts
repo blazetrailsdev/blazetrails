@@ -152,8 +152,12 @@ export function connectedToMany<T>(this: typeof Base, ...args: unknown[]): T {
     throw new ArgumentError("must provide a block.");
   }
 
-  if (!isBaseClass(this) || normalized.some((klass) => isBaseClass(klass))) {
+  if (!isBaseClass(this)) {
     throw new NotImplementedError("connected_to_many can only be called on ActiveRecord::Base.");
+  }
+
+  if (normalized.some((klass) => isBaseClass(klass))) {
+    throw new NotImplementedError("connected_to_many cannot include ActiveRecord::Base.");
   }
 
   const { role, shard } = options;

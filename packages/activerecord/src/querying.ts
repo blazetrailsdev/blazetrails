@@ -171,9 +171,18 @@ export function distinct<T extends typeof Base>(this: T): Relation<InstanceType<
 /** Mirrors: ActiveRecord::Querying#joins */
 export function joins<T extends typeof Base>(
   this: T,
+  tableOrSql?: string,
+  on?: string,
+): Relation<InstanceType<T>>;
+export function joins<T extends typeof Base>(
+  this: T,
+  ...nodes: import("@blazetrails/arel").Nodes.Node[]
+): Relation<InstanceType<T>>;
+export function joins<T extends typeof Base>(
+  this: T,
   ...args: Array<string | import("@blazetrails/arel").Nodes.Node | undefined>
 ): Relation<InstanceType<T>> {
-  return this.all().joins(...args);
+  return (this.all().joins as (...a: typeof args) => Relation<InstanceType<T>>)(...args);
 }
 
 /** Mirrors: ActiveRecord::Querying#optimizer_hints */

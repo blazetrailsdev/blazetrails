@@ -1144,23 +1144,30 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#joins
    */
+  joins(tableOrSql?: string, on?: string): Relation<T>;
+  joins(...nodes: Nodes.Node[]): Relation<T>;
   joins(...args: Array<string | Nodes.Node | undefined>): Relation<T> {
     const rel = this._clone();
-    for (const tableOrSql of args) {
-      if (!tableOrSql) continue;
+    // Two-string-argument form: joins(table, onClause) — preserved for back-compat.
+    if (args.length === 2 && typeof args[0] === "string" && typeof args[1] === "string") {
+      rel._joinClauses.push({ type: "inner", table: args[0], on: args[1] });
+      return rel;
+    }
+    for (const arg of args) {
+      if (!arg) continue;
       // Arel join node (e.g. from SelectManager#joinSources) — render to SQL.
-      if (tableOrSql instanceof Nodes.Node) {
-        rel._rawJoins.push(tableOrSql.toSql());
+      if (arg instanceof Nodes.Node) {
+        rel._rawJoins.push(arg.toSql());
         continue;
       }
-      const resolved = rel._resolveAssociationJoin(tableOrSql);
+      const resolved = rel._resolveAssociationJoin(arg);
       if (resolved) {
         const entries = Array.isArray(resolved) ? resolved : [resolved];
         for (const j of entries) {
           rel._joinClauses.push({ type: "inner", table: j.table, on: j.on, quoted: true });
         }
       } else {
-        rel._rawJoins.push(tableOrSql);
+        rel._rawJoins.push(arg);
       }
     }
     return rel;

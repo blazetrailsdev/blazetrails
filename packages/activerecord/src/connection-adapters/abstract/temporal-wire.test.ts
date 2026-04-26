@@ -192,6 +192,10 @@ describe("parseMysqlPlainDateTime", () => {
   it("returns null for zero-date", () => {
     expect(parseMysqlPlainDateTime("0000-00-00 00:00:00")).toBeNull();
   });
+
+  it("returns null for zero-date with fractional seconds (DATETIME(6))", () => {
+    expect(parseMysqlPlainDateTime("0000-00-00 00:00:00.000000")).toBeNull();
+  });
 });
 
 describe("parseMysqlDate", () => {

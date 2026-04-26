@@ -293,5 +293,7 @@ function isZeroDate(text: string): boolean {
 }
 
 function isZeroDatetime(text: string): boolean {
-  return text === "0000-00-00 00:00:00" || text === "0000-00-00T00:00:00";
+  // Match "0000-00-00 00:00:00" / "0000-00-00T00:00:00" and the fractional
+  // variants emitted by DATETIME(N) columns, e.g. "0000-00-00 00:00:00.000000".
+  return /^0000-00-00[T ]00:00:00(\.\d+)?$/.test(text);
 }

@@ -2,7 +2,7 @@
  * Mirrors: activerecord/test/cases/multiparameter_attributes_test.rb
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, composedOf } from "./index.js";
+import { Base, composedOf, MultiparameterAssignmentErrors } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 
@@ -243,12 +243,11 @@ describe("MultiParameterAttributeTest", () => {
       }
     }
     const topic = new Topic();
-    // Only positions 4 and 5 — year/month/day absent → null
-    topic.assignAttributes({
-      "written_on(4i)": "16",
-      "written_on(5i)": "24",
-    });
-    expect((topic as any).written_on).toBeNull();
+    // Rails: time parts without date context → Time.new(nil,nil,nil,16,24) raises ArgumentError,
+    // collected into MultiparameterAssignmentErrors.
+    expect(() =>
+      topic.assignAttributes({ "written_on(4i)": "16", "written_on(5i)": "24" }),
+    ).toThrow(MultiparameterAssignmentErrors);
   });
 
   it("multiparameter attributes on time with raise on small time if missing date parts", () => {
@@ -259,11 +258,9 @@ describe("MultiParameterAttributeTest", () => {
       }
     }
     const topic = new Topic();
-    topic.assignAttributes({
-      "written_on(4i)": "1",
-      "written_on(5i)": "2",
-    });
-    expect((topic as any).written_on).toBeNull();
+    expect(() => topic.assignAttributes({ "written_on(4i)": "1", "written_on(5i)": "2" })).toThrow(
+      MultiparameterAssignmentErrors,
+    );
   });
 
   it("multiparameter attributes on time will ignore hour if missing", () => {

@@ -11,7 +11,17 @@
  */
 
 import { AttributeAssignmentError, MultiparameterAssignmentErrors } from "./errors.js";
-import { reflectOnAggregation } from "./reflection.js";
+
+// Read _aggregateReflections directly to avoid a circular dependency:
+// persistence.ts → multiparameter-attribute-assignment.ts → reflection.ts → persistence.ts
+function getAggregation(modelClass: any, name: string): { klass: any } | null {
+  const aggs: Map<string, { klass: any }> | undefined = modelClass._aggregateReflections;
+  return aggs?.get(name) ?? null;
+}
+
+// Maximum allowed position index — guards against DoS via huge allocations
+// (e.g. written_on(99999999i)). Rails only uses 1..6 for date/time.
+const MAX_MULTIPARAMETER_INDEX = 100;
 
 const MULTIPARAMETER_ATTRIBUTE_PATTERN = /^([^(]+)\((\d+)([if]?)\)$/;
 
@@ -37,12 +47,23 @@ export function extractMultiparameterCallstack(attrs: Record<string, unknown>): 
     if (match) {
       const name = match[1];
       const pos = parseInt(match[2], 10);
+      if (pos > MAX_MULTIPARAMETER_INDEX) continue; // guard against huge allocations
       const typeFlag = match[3];
       let castValue: unknown;
       if (typeFlag === "i") {
-        castValue = isBlank(value) ? null : parseInt(String(value), 10);
+        if (isBlank(value)) {
+          castValue = null;
+        } else {
+          const n = parseInt(String(value), 10);
+          castValue = isNaN(n) ? null : n; // NaN → null, not silently stored
+        }
       } else if (typeFlag === "f") {
-        castValue = isBlank(value) ? null : parseFloat(String(value));
+        if (isBlank(value)) {
+          castValue = null;
+        } else {
+          const n = parseFloat(String(value));
+          castValue = isNaN(n) ? null : n;
+        }
       } else {
         castValue = isBlank(value) ? null : value;
       }
@@ -69,7 +90,7 @@ export function executeMultiparameterAssignment(
 
   for (const [name, partsMap] of Object.entries(callstack)) {
     try {
-      const aggregation = reflectOnAggregation(modelClass, name);
+      const aggregation = getAggregation(modelClass, name);
       if (aggregation) {
         assignAggregation(instance as any, name, partsMap, aggregation);
       } else {
@@ -97,7 +118,7 @@ function assignAggregation(
   partsMap: Record<number, unknown>,
   aggregation: { klass: any },
 ): void {
-  const maxPos = Math.max(...Object.keys(partsMap).map(Number));
+  const maxPos = Math.min(Math.max(...Object.keys(partsMap).map(Number)), MAX_MULTIPARAMETER_INDEX);
   const values = Array.from({ length: maxPos }, (_, i) => partsMap[i + 1] ?? null);
 
   if (values.every(isBlank)) return;
@@ -122,12 +143,20 @@ function assignDateTimeAttribute(
   } else if (typeName === "datetime" || typeName === "timestamp" || typeName === "time") {
     maxPos = 6;
   } else {
-    maxPos = Math.max(...Object.keys(partsMap).map(Number));
+    maxPos = Math.min(Math.max(...Object.keys(partsMap).map(Number)), MAX_MULTIPARAMETER_INDEX);
   }
 
-  const values = Array.from({ length: maxPos }, (_, i) => partsMap[i + 1] ?? null);
+  // Track which positions were explicitly provided (even if blank) vs. absent entirely.
+  // Rails casts blank strings via .to_i → 0 (non-nil), so blank-but-present date parts
+  // trigger a rescued ArgumentError (→ nil). Absent date parts with time parts present
+  // trigger an unrescued TypeError (→ MultiparameterAssignmentErrors). We mirror this by
+  // distinguishing "key in partsMap" (provided, possibly blank) from key absent.
+  const values = Array.from({ length: maxPos }, (_, i) => {
+    const pos = i + 1;
+    return pos in partsMap ? (partsMap[pos] ?? null) : undefined;
+  });
 
-  if (values.every(isBlank)) {
+  if (values.every((v) => v === undefined || isBlank(v))) {
     instance.writeAttribute(name, null);
     return;
   }
@@ -193,12 +222,21 @@ function assembleValue(parts: unknown[], typeName: string): unknown {
   }
 
   if (typeName === "datetime" || typeName === "timestamp") {
+    // Check raw parts BEFORE str() conversion to distinguish:
+    // - undefined: key was absent from form params (Rails: nil → TypeError → raises)
+    // - null/blank: key present but empty string (Rails: 0 via .to_i → ArgumentError rescued → nil)
+    const datePartsAbsent = parts.slice(0, 3).some((v) => v === undefined);
+    const timePartsPresent = parts.slice(3).some((v) => v !== undefined && !isBlank(v));
+    if (datePartsAbsent && timePartsPresent) {
+      throw new Error(
+        `Multiparameter datetime requires year, month, and day (got ${JSON.stringify(parts)})`,
+      );
+    }
     const [ys, mos, ds, hs, mis, ss] = parts.map(str);
-    if (!ys && !mos && !ds) return null;
-    const year = parseIntStrict(ys, "year"),
-      month = parseIntStrict(mos, "month"),
-      day = parseIntStrict(ds, "day");
-    if (year === null || month === null || day === null) return null;
+    if (!ys || !mos || !ds) return null; // blank date parts → nil (Rails rescued ArgumentError)
+    const year = parseIntStrict(ys, "year")!,
+      month = parseIntStrict(mos, "month")!,
+      day = parseIntStrict(ds, "day")!;
     const hour = hs !== null ? (parseIntStrict(hs, "hour") ?? 0) : 0;
     const min = mis !== null ? (parseIntStrict(mis, "minute") ?? 0) : 0;
     const sec = ss !== null ? (parseIntStrict(ss, "second") ?? 0) : 0;

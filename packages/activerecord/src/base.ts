@@ -2008,11 +2008,25 @@ export class Base extends Model {
       // attrs appear clean (part of initial construction, not changes).
       const ctor = new.target as typeof Base;
       const suppressor = ctor as typeof ctor & { _suppressInitializeCallback?: boolean };
+      const hadOwnSuppressor = Object.prototype.hasOwnProperty.call(
+        suppressor,
+        "_suppressInitializeCallback",
+      );
       const wasSupressed = suppressor._suppressInitializeCallback;
       suppressor._suppressInitializeCallback = true;
       const { multiparams, regular } = extractMultiparameterCallstack(attrs);
-      super(regular);
-      suppressor._suppressInitializeCallback = wasSupressed;
+      try {
+        super(regular);
+      } finally {
+        // Always restore the flag even if super() throws, so later instances
+        // on this class still fire after_initialize normally.
+        if (hadOwnSuppressor) {
+          suppressor._suppressInitializeCallback = wasSupressed;
+        } else {
+          delete (suppressor as { _suppressInitializeCallback?: boolean })
+            ._suppressInitializeCallback;
+        }
+      }
       executeMultiparameterAssignment(this as any, multiparams);
       // Re-snapshot so mp attrs are part of the initial clean state.
       (this as any)._dirty.snapshot((this as any)._attributes);

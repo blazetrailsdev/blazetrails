@@ -2858,8 +2858,12 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#order_values
    */
-  get orderValues(): Array<string | [string, "asc" | "desc"] | { raw: string }> {
-    return [...this._orderClauses];
+  get orderValues(): Array<string | [string, "asc" | "desc"] | Nodes.Node> {
+    return this._orderClauses.map((clause) =>
+      typeof clause === "object" && !Array.isArray(clause) && "raw" in clause
+        ? new Nodes.SqlLiteral((clause as { raw: string }).raw)
+        : clause,
+    );
   }
 
   /**

@@ -362,10 +362,13 @@ function orderBang(
         }
       }
     } else if (arg instanceof Nodes.Node) {
-      // Arel node — preserve raw SQL without table qualification.
-      // SqlLiteral must pass through verbatim (no column-qualification).
       const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
-      if (rawSql && rawSql.trim() !== "") this._orderClauses.push({ raw: rawSql });
+      if (rawSql && rawSql.trim() !== "") {
+        // SqlLiteral must pass through verbatim — store as { raw } to bypass column qualification.
+        // Structured nodes (Ascending, Descending) already have fully-formed SQL from .toSql(),
+        // so they can use the same raw passthrough path.
+        this._orderClauses.push(arg instanceof Nodes.SqlLiteral ? { raw: rawSql } : rawSql);
+      }
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -427,7 +430,9 @@ function reorderBang(
       }
     } else if (arg instanceof Nodes.Node) {
       const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
-      if (rawSql && rawSql.trim() !== "") this._orderClauses.push({ raw: rawSql });
+      if (rawSql && rawSql.trim() !== "") {
+        this._orderClauses.push(arg instanceof Nodes.SqlLiteral ? { raw: rawSql } : rawSql);
+      }
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -1015,8 +1020,17 @@ function optimizerHintsBang(this: QueryMethodsHost, ...hints: string[]): any {
 function reverseOrderBang(this: QueryMethodsHost): any {
   this._orderClauses = this._orderClauses.map((clause) => {
     if (typeof clause === "object" && !Array.isArray(clause) && "raw" in clause) {
+      const raw = (clause as { raw: string }).raw.trim();
+      const match = raw.match(/^([A-Za-z_$][\w$.]*)\s+(ASC|DESC)$/i);
+      if (match) {
+        return [match[1], match[2].toUpperCase() === "ASC" ? "desc" : "asc"] as [
+          string,
+          "asc" | "desc",
+        ];
+      }
+      if (/^[A-Za-z_$][\w$]*$/.test(raw)) return [raw, "desc" as const];
       throw new IrreversibleOrderError(
-        `Relation has a non-reversible order and cannot be reversed: ${(clause as { raw: string }).raw}`,
+        `Relation has a non-reversible order and cannot be reversed: ${raw}`,
       );
     }
     if (typeof clause === "string") {

@@ -962,11 +962,13 @@ export function withYamlFallback(value: unknown): unknown {
 /**
  * Convert a Temporal value to its SQL wire-string form for use as a bound
  * parameter. Drivers (pg extended protocol, mysql2 prepared, better-sqlite3)
- * reject raw Temporal objects; this shim converts them at the bind boundary
- * so neither the text-protocol path (quote) nor the binary-protocol path
- * need to know about Temporal.
- *
+ * reject raw Temporal objects; this shim converts them at the bind boundary.
  * Returns the value unchanged when it is not a Temporal type.
+ *
+ * Applied in `typeCastedBinds` (notification payloads) in this PR. The actual
+ * driver-bind paths (pg `client.query values`, mysql2 `conn.execute`, and
+ * better-sqlite3 `stmt.all`) are wired in PRs 5a, 5b, and 4 respectively,
+ * once those adapters start receiving real Temporal values from the cast layer.
  */
 export function temporalToBindString(value: unknown): unknown {
   if (value instanceof Temporal.Instant) return formatInstantForSql(value);

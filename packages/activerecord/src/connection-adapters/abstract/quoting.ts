@@ -250,15 +250,14 @@ export function quotedTime(value: Date): string {
 }
 
 /**
- * Format a `Temporal.Instant` for SQL as `YYYY-MM-DD HH:MM:SS[.fffffffff]` in
- * UTC. Preserves up to nanosecond precision (9 fractional digits); trailing
- * zero groups are trimmed so whole-second and millisecond-only values stay
- * compact. Used by the abstract quote/bind path during the dual-typed window
- * (PRs 2–6); after PR 6 this becomes the sole datetime-write path.
+ * Format a `Temporal.Instant` for SQL as `YYYY-MM-DD HH:MM:SS[.fffffffff]`.
+ * Respects `ActiveRecord.default_timezone` exactly as `quotedDate()` does:
+ * UTC when the setting is `"utc"`, otherwise the host system's local timezone.
+ * Preserves up to nanosecond precision; trailing zero groups are trimmed.
  */
 export function formatInstantForSql(value: Temporal.Instant): string {
-  const zdt = value.toZonedDateTimeISO("UTC");
-  return formatZonedComponents(zdt);
+  const tz = getDefaultTimezone() === "utc" ? "UTC" : Temporal.Now.timeZoneId();
+  return formatZonedComponents(value.toZonedDateTimeISO(tz));
 }
 
 /**

@@ -26,9 +26,5 @@
   "ar-99": {
     "side": "diff",
     "reason": "from() with subquery alias: Rails does not quote the subquery alias ('books'); trails always quotes table aliases. Rails: 'SELECT \"books\".* FROM (SELECT \"books\".* FROM \"books\" WHERE \"books\".\"active\" = 1) books'; trails: 'SELECT \"books\".* FROM (SELECT \"books\".* FROM \"books\" WHERE \"books\".\"active\" = 1) \"books\"'. Root cause: Arel's alias quoting is unconditional; Rails' parser handles bare aliases specially in FROM clauses."
-  },
-  "ar-106": {
-    "side": "diff",
-    "reason": "order() with string form does not qualify column names: Rails emits 'ORDER BY \"books\".\"author_id\" ASC, \"books\".\"title\" DESC'; trails emits 'ORDER BY author_id ASC, title DESC'. String-based order clauses pass through directly to SQL without column qualification. Root cause: order(string) is passed through without Arel node wrapping."
   }
 }

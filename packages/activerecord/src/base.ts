@@ -404,6 +404,9 @@ export class Base extends Model {
   static _primaryKey: string | string[] = "id";
   static readonly _isActiveRecordBase = true;
 
+  // Mirrors: ActiveRecord::Base.filter_attributes = [] at class definition time.
+  static _filterAttributes: (string | RegExp | ((key: string, value: unknown) => unknown))[] = [];
+
   static get filterAttributes(): (string | RegExp | ((key: string, value: unknown) => unknown))[] {
     return _filterAttributes.call(this);
   }

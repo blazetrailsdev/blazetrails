@@ -34,9 +34,10 @@ export type TimeTzValue = { time: Temporal.PlainTime; offset: string };
 export function parsePostgresInstant(
   text: string,
 ): Temporal.Instant | DateInfinityType | DateNegativeInfinityType {
-  if (text === "infinity") return DateInfinity;
-  if (text === "-infinity") return DateNegativeInfinity;
-  const { iso, bc } = extractBcSuffix(text.trim());
+  const trimmed = text.trim();
+  if (trimmed === "infinity") return DateInfinity;
+  if (trimmed === "-infinity") return DateNegativeInfinity;
+  const { iso, bc } = extractBcSuffix(trimmed);
   if (bc) return parseBcTimestampTzAsInstant(iso);
   return Temporal.Instant.from(normalizeTimestampTz(iso));
 }
@@ -50,9 +51,10 @@ export function parsePostgresInstant(
 export function parsePostgresPlainDateTime(
   text: string,
 ): Temporal.PlainDateTime | DateInfinityType | DateNegativeInfinityType {
-  if (text === "infinity") return DateInfinity;
-  if (text === "-infinity") return DateNegativeInfinity;
-  const { iso, bc } = extractBcSuffix(text.trim());
+  const trimmed = text.trim();
+  if (trimmed === "infinity") return DateInfinity;
+  if (trimmed === "-infinity") return DateNegativeInfinity;
+  const { iso, bc } = extractBcSuffix(trimmed);
   if (bc) return parseBcTimestampAsPlainDateTime(iso);
   return Temporal.PlainDateTime.from(iso.replace(" ", "T"));
 }
@@ -65,9 +67,10 @@ export function parsePostgresPlainDateTime(
 export function parsePostgresDate(
   text: string,
 ): Temporal.PlainDate | DateInfinityType | DateNegativeInfinityType {
-  if (text === "infinity") return DateInfinity;
-  if (text === "-infinity") return DateNegativeInfinity;
-  const { iso, bc } = extractBcSuffix(text.trim());
+  const trimmed = text.trim();
+  if (trimmed === "infinity") return DateInfinity;
+  if (trimmed === "-infinity") return DateNegativeInfinity;
+  const { iso, bc } = extractBcSuffix(trimmed);
   const plain = Temporal.PlainDate.from(iso);
   if (!bc) return plain;
   return Temporal.PlainDate.from({

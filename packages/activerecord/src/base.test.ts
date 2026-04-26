@@ -1767,9 +1767,17 @@ describe("BasicsTest", () => {
     await Author.create({ name: "Alice" });
     const pk = Author.columnsHash()["id"];
     const ref = Post.columnsHash()["author_id"];
-    // Both are integer-typed — sql_type may be null when schema cache is not wired
-    // to a live DB, but the declared types should match
-    expect(pk?.type ?? "integer").toBe(ref?.type ?? "integer");
+    // author_id is explicitly declared as integer — its type must be defined
+    expect(ref).toBeDefined();
+    expect(ref!.type).toBeDefined();
+    // The pk column is loaded from the schema after create; type may vary by adapter
+    // but when both are defined they must match (Rails: pk.sql_type == ref.sql_type)
+    if (pk?.type !== undefined && pk?.type !== null) {
+      expect(pk.type).toBe(ref!.type);
+    } else {
+      // pk not in schema cache — at minimum ref is integer-typed
+      expect(ref!.type).toMatch(/integer|bigint|int/i);
+    }
   });
   it("invalid limit", () => {
     class User extends Base {
@@ -1866,6 +1874,9 @@ describe("BasicsTest", () => {
     const intRange = new ArRange(t1.priority, t2.priority);
     const bySlug = await Topic.where({ priority: slugRange }).toArray();
     const byInt = await Topic.where({ priority: intRange }).toArray();
+    // Both queries must find the two created records (not empty)
+    expect(byInt).toHaveLength(2);
+    expect(bySlug).toHaveLength(2);
     expect(bySlug.map((r: any) => r.priority).sort()).toEqual(
       byInt.map((r: any) => r.priority).sort(),
     );
@@ -1891,7 +1902,10 @@ describe("BasicsTest", () => {
 
     const proxyResults = await (car as any).bulbs.toArray();
     const relationResults = await Bulb.where({ car_id: car.id }).toArray();
-    expect(proxyResults.map((r: any) => r.id)).toEqual(relationResults.map((r: any) => r.id));
+    expect(proxyResults).toHaveLength(1);
+    expect(proxyResults.map((r: any) => r.id).sort()).toEqual(
+      relationResults.map((r: any) => r.id).sort(),
+    );
   });
 
   it("equality of relation and association relation", async () => {
@@ -1918,6 +1932,7 @@ describe("BasicsTest", () => {
     const assocRelation = (car as any).bulbs.includes("car");
     const relationResults = await bulbsOfCar.toArray();
     const assocResults = await assocRelation.toArray();
+    expect(relationResults).toHaveLength(1);
     expect(assocResults.map((r: any) => r.id).sort()).toEqual(
       relationResults.map((r: any) => r.id).sort(),
     );
@@ -1945,6 +1960,7 @@ describe("BasicsTest", () => {
     // CollectionProxy and includes-chain produce the same underlying rows
     const proxyResults = await (car as any).bulbs.toArray();
     const assocRelResults = await (car as any).bulbs.includes("car").toArray();
+    expect(proxyResults).toHaveLength(1);
     expect(proxyResults.map((r: any) => r.id).sort()).toEqual(
       assocRelResults.map((r: any) => r.id).sort(),
     );
@@ -2277,18 +2293,43 @@ describe("BasicsTest", () => {
   it("benchmark with use silence", async () => {
     const log: string[] = [];
     const savedLogger = Base.logger;
-    Base.logger = {
+    // Logger with a silence() method that suppresses all output from inside the block
+    const silenceableLogger = {
       debug: (msg: string) => log.push(msg),
       info: (msg: string) => log.push(msg),
+      _silenced: false,
+      silence<T>(fn: () => Promise<T>): Promise<T> {
+        const prev = this._silenced;
+        this._silenced = true;
+        return Promise.resolve(fn()).finally(() => {
+          this._silenced = prev;
+        });
+      },
     };
+    // Wrap debug to respect _silenced flag
+    const wrappedLogger = {
+      debug: (msg: string) => {
+        if (!silenceableLogger._silenced) log.push(msg);
+      },
+      info: (msg: string) => log.push(msg),
+      silence: silenceableLogger.silence.bind(silenceableLogger),
+    };
+    Base.logger = wrappedLogger;
     try {
+      // silence: false — inner log should appear
       await Base.benchmark("Logging", { level: "debug", silence: false }, async () => {
         Base.logger?.debug?.("Quiet");
       });
+      expect(log.some((m) => m.includes("Quiet"))).toBe(true);
+      log.length = 0;
+      // silence: true — inner log should be suppressed
+      await Base.benchmark("Logging2", { level: "debug", silence: true }, async () => {
+        Base.logger?.debug?.("Suppressed");
+      });
+      expect(log.some((m) => m.includes("Suppressed"))).toBe(false);
     } finally {
       Base.logger = savedLogger;
     }
-    expect(log.some((m) => m.includes("Quiet"))).toBe(true);
   });
 
   it("clear cache!", async () => {
@@ -2302,11 +2343,13 @@ describe("BasicsTest", () => {
     // Warm the columns hash cache
     const before = Topic.columnsHash();
     expect(Object.keys(before).length).toBeGreaterThan(0);
-    // Reset clears the cached schema info
+    // Reset clears the cached schema info — the returned object is a new instance
     Topic.resetColumnInformation();
     const after = Topic.columnsHash();
     expect(Object.keys(after).length).toBeGreaterThan(0);
     expect(Object.keys(after)).toEqual(Object.keys(before));
+    // The cache was cleared and recomputed — different object reference
+    expect(after).not.toBe(before);
   });
   it.skip("marshal inspected round trip", () => {});
   it.skip("marshalling with associations 6 1", () => {});

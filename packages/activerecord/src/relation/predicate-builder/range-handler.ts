@@ -46,4 +46,25 @@ export class RangeHandler {
 
     return attribute.between(beginVal, endVal);
   }
+
+  callNegated(attribute: Nodes.Attribute, value: Range): Nodes.Node {
+    const cast = this._castBound
+      ? (v: unknown) => this._castBound!(attribute.name, v)
+      : (v: unknown) => v;
+    const beginVal =
+      value.begin !== null && value.begin !== undefined ? cast(value.begin) : value.begin;
+    const endVal = value.end !== null && value.end !== undefined ? cast(value.end) : value.end;
+
+    if (beginVal === null || beginVal === undefined) {
+      if (endVal === null || endVal === undefined) return attribute.isNull();
+      return value.excludeEnd ? attribute.gteq(endVal) : attribute.gt(endVal);
+    }
+    if (endVal === null || endVal === undefined) {
+      return attribute.lt(beginVal);
+    }
+    if (value.excludeEnd) {
+      return new Nodes.Grouping(new Nodes.Or(attribute.lt(beginVal), attribute.gteq(endVal)));
+    }
+    return attribute.notBetween(beginVal, endVal);
+  }
 }

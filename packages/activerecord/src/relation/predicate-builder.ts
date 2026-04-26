@@ -137,20 +137,7 @@ export class PredicateBuilder {
       return attribute.isNotNull();
     }
     if (value instanceof Range) {
-      const beginVal = value.begin;
-      const endVal = value.end;
-      if (beginVal === null || beginVal === undefined) {
-        if (endVal === null || endVal === undefined) return attribute.isNull();
-        return value.excludeEnd ? attribute.gteq(endVal) : attribute.gt(endVal);
-      }
-      if (endVal === null || endVal === undefined) {
-        return attribute.lt(beginVal);
-      }
-      if (value.excludeEnd) {
-        // Negation of (>= begin AND < end) is (< begin OR >= end)
-        return new Nodes.Grouping(new Nodes.Or(attribute.lt(beginVal), attribute.gteq(endVal)));
-      }
-      return attribute.notBetween(beginVal, endVal);
+      return this.rangeHandler.callNegated(attribute, value);
     }
     if (Array.isArray(value)) {
       return this.buildNegatedArray(attribute, value);

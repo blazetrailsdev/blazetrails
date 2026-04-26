@@ -560,20 +560,25 @@ export async function loadBelongsTo(
   // Check cached (inverse_of) first, then preloaded.
   // Even for cached/preloaded hits, wire inverseOf so the parent's association
   // cache points back to this child instance (mirrors Rails behavior).
+  // Validate inverseOf consistently: an invalid name must throw here too, not
+  // only on a cache miss (same behavior as the main fetch path below).
+  const _wireInverse = (target: Base): void => {
+    if (!options.inverseOf) return;
+    // Validate only for non-polymorphic — matches the main fetch path.
+    if (!options.polymorphic) {
+      validateInverseOf(target.constructor as typeof Base, assocName, options.inverseOf);
+    }
+    (target as any)._cachedAssociations = (target as any)._cachedAssociations ?? new Map();
+    (target as any)._cachedAssociations.set(options.inverseOf, record);
+  };
   if ((record as any)._cachedAssociations?.has(assocName)) {
     const cached = (record as any)._cachedAssociations.get(assocName) as Base | null;
-    if (options.inverseOf && cached) {
-      (cached as any)._cachedAssociations = (cached as any)._cachedAssociations ?? new Map();
-      (cached as any)._cachedAssociations.set(options.inverseOf, record);
-    }
+    if (cached) _wireInverse(cached);
     return cached;
   }
   if ((record as any)._preloadedAssociations?.has(assocName)) {
     const preloaded = (record as any)._preloadedAssociations.get(assocName) as Base | null;
-    if (options.inverseOf && preloaded) {
-      (preloaded as any)._cachedAssociations = (preloaded as any)._cachedAssociations ?? new Map();
-      (preloaded as any)._cachedAssociations.set(options.inverseOf, record);
-    }
+    if (preloaded) _wireInverse(preloaded);
     return preloaded;
   }
 

@@ -445,58 +445,76 @@ describe("QueryCacheStore public re-export", () => {
 describe("QueryCacheMutableParamTest", () => {
   it("query cache handles mutated binds", async () => {
     // Rails: mutating a bind array after a query is cached must not corrupt the
-    // cached result or produce wrong results on the next call.
+    // cached result or produce wrong results on later calls.
     const { cached } = setup();
     await cached.executeMutation("INSERT INTO tasks (title) VALUES ('bind_task')");
     await cached.withCache(async () => {
+      cached.resetCounters();
       const binds = ["bind_task"];
       const sql = 'SELECT * FROM "tasks" WHERE title = ?';
       const r1 = await cached.execute(sql, binds);
       expect(r1).toHaveLength(1);
-      // Mutate the binds array after caching
+      const hitsAfterFirst = cached.cacheHits;
+
+      // Mutate the original array — this changes the cache key, so the next call
+      // must not find a cache hit and must return 0 rows (the mutated value does not exist).
       binds[0] = "nonexistent";
-      // Second call with original SQL but NOW mutated binds — cache key uses
-      // the serialized form captured at first call time, so this is a different key.
-      // The key insight: cached results are not affected by the mutation.
-      const r2 = await cached.execute(sql, ["bind_task"]);
-      expect(r2).toHaveLength(1);
-      expect(r1[0]).toEqual(r2[0]);
+      const r2 = await cached.execute(sql, binds);
+      expect(r2).toHaveLength(0);
+      expect(cached.cacheHits).toBe(hitsAfterFirst); // no hit — different key
+
+      // Re-query with the original bind value — the previously cached entry must
+      // still be intact (mutation did not corrupt it).
+      const hitsAfterMutated = cached.cacheHits;
+      const r3 = await cached.execute(sql, ["bind_task"]);
+      expect(r3).toHaveLength(1);
+      expect(r1[0]).toEqual(r3[0]);
+      expect(cached.cacheHits).toBeGreaterThan(hitsAfterMutated); // cache hit restored
     });
   });
 });
 
 describe("QuerySerializedParamTest", () => {
   it("query serialized active record", async () => {
-    // Rails: queries with ActiveRecord object binds are cached using the
-    // serialized form of the object (its id/primary key). Verify cached
-    // results are returned correctly when the same bind is used again.
+    // Rails: queries keyed by an AR record's serialized id produce a stable
+    // cache key — repeated lookups for the same record hit the cache.
+    // In Rails, `where(id: record)` serializes the record via id_for_database.
+    // In trails we test the same observable: repeated calls with the same
+    // primary-key bind produce a cache hit and return identical results.
     const { cached, Task } = setup();
     const t = await Task.create({ title: "serialized_ar" });
     await cached.withCache(async () => {
       cached.resetCounters();
       const r1 = await Task.where({ id: t.id }).toArray();
+      expect(r1).toHaveLength(1);
+      expect(r1[0]?.id).toBe(t.id);
       const hitsAfterFirst = cached.cacheHits;
       const r2 = await Task.where({ id: t.id }).toArray();
-      expect(r1).toHaveLength(1);
       expect(r2).toHaveLength(1);
-      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst);
+      expect(r2[0]?.id).toBe(t.id);
+      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst); // cache hit
     });
   });
 
   it("query serialized string", async () => {
-    // Rails: string-serialized bind params (e.g. an object coerced to string)
-    // produce a stable cache key and are returned from cache correctly.
+    // Rails: string bind params coerced from objects (via to_s) produce a stable
+    // cache key — repeated calls with the same string value are served from cache.
+    // The key property tested: the cache key is built from the serialized bind
+    // value, not from object identity, so equal string binds hit the same entry.
     const { cached } = setup();
     await cached.executeMutation("INSERT INTO tasks (title) VALUES ('str_serial')");
     await cached.withCache(async () => {
       cached.resetCounters();
       const sql = 'SELECT * FROM "tasks" WHERE title = ?';
-      const r1 = await cached.execute(sql, ["str_serial"]);
-      const hitsAfterFirst = cached.cacheHits;
-      const r2 = await cached.execute(sql, ["str_serial"]);
+      // Two independent string instances with the same value must share a cache key.
+      const bind1 = "str_serial";
+      const bind2 = `${"str"}_serial`; // different reference, same value
+      const r1 = await cached.execute(sql, [bind1]);
       expect(r1).toHaveLength(1);
+      const hitsAfterFirst = cached.cacheHits;
+      const r2 = await cached.execute(sql, [bind2]);
       expect(r2).toHaveLength(1);
-      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst);
+      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst); // value equality → cache hit
     });
   });
 });

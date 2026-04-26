@@ -167,9 +167,8 @@ export async function resetCounters(
       counterColumn = resolveCounterColumn(this, assoc, assoc.name);
     }
 
-    const countWas = record.readAttribute(counterColumn) as number | null;
     const count = await countHasMany(record, assoc.name, assoc.options);
-    if (count !== countWas) updates[counterColumn] = count;
+    updates[counterColumn] = count;
   }
 
   if (options.touch) {

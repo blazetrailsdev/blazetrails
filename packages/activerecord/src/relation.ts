@@ -2242,8 +2242,8 @@ export class Relation<T extends Base> {
     const columnNames = columns.map((c) => {
       if (typeof c === "string") {
         // Explicit AS alias is reliable on all adapters.
-        const asMatch = c.match(/\s+AS\s+(\w+)\s*$/i);
-        if (asMatch) return asMatch[1];
+        const asMatch = c.match(/\s+AS\s+(?:"([^"]+)"|`([^`]+)`|(\w+))\s*$/i);
+        if (asMatch) return asMatch[1] ?? asMatch[2] ?? asMatch[3];
         // Function expressions: the result column label is adapter-specific and
         // can't be reliably predicted — use positional fallback (return null).
         if (c.includes("(")) return null;

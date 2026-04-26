@@ -2446,7 +2446,7 @@ describe("BasicsTest", () => {
         this.connectionClass = true;
       }
     }
-    Base.connectedToMany([FirstAbstractClass, SecondAbstractClass], { role: "reading" }, () => {
+    Base.connectedToMany(FirstAbstractClass, SecondAbstractClass, { role: "reading" }, () => {
       expect(FirstAbstractClass.currentPreventingWrites()).toBe(true);
       expect(SecondAbstractClass.currentPreventingWrites()).toBe(true);
       expect(Base.currentPreventingWrites()).toBe(false);

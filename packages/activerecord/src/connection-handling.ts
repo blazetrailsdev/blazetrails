@@ -122,13 +122,48 @@ export function connectedTo<T>(
   return withRoleAndShard.call(this, role, shard, preventWrites, fn) as T;
 }
 
+// Mirrors Rails' connected_to_many(*classes, role:, ...) splat — callers may pass
+// a single class, an array, or multiple classes as positional args before options+fn.
 export function connectedToMany<T>(
   this: typeof Base,
-  classes: typeof Base | (typeof Base)[],
+  classes: (typeof Base)[],
   options: { role: string; shard?: string; preventWrites?: boolean },
   fn: () => T,
+): T;
+export function connectedToMany<T>(
+  this: typeof Base,
+  klass: typeof Base,
+  options: { role: string; shard?: string; preventWrites?: boolean },
+  fn: () => T,
+): T;
+export function connectedToMany<T>(
+  this: typeof Base,
+  k1: typeof Base,
+  k2: typeof Base,
+  options: { role: string; shard?: string; preventWrites?: boolean },
+  fn: () => T,
+): T;
+export function connectedToMany<T>(
+  this: typeof Base,
+  k1: typeof Base,
+  k2: typeof Base,
+  k3: typeof Base,
+  options: { role: string; shard?: string; preventWrites?: boolean },
+  fn: () => T,
+): T;
+export function connectedToMany<T>(
+  this: typeof Base,
+  firstArg: typeof Base | (typeof Base)[],
+  ...rest: unknown[]
 ): T {
-  const normalized = (Array.isArray(classes) ? classes : [classes]).flat();
+  const fn = rest[rest.length - 1] as () => T;
+  const options = rest[rest.length - 2] as {
+    role: string;
+    shard?: string;
+    preventWrites?: boolean;
+  };
+  const extraClasses = rest.slice(0, rest.length - 2) as (typeof Base)[];
+  const normalized = [firstArg, ...extraClasses].flat() as (typeof Base)[];
 
   if (!isBaseClass(this) || normalized.some((klass) => isBaseClass(klass))) {
     throw new NotImplementedError("connected_to_many can only be called on ActiveRecord::Base.");

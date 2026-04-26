@@ -57,6 +57,18 @@ export class WhereChain<R = any> {
   exists(conditions?: unknown): Promise<boolean> {
     return this._scope.exists(conditions);
   }
+
+  private scopeAssociationReflection(association: string): unknown {
+    const model = (this._scope as any)._modelClass ?? (this._scope as any).model;
+    const reflection =
+      model?._reflectOnAssociation?.(association) ?? model?._reflect_on_association?.(association);
+    if (!reflection) {
+      throw argumentError(
+        `An association named \`:${association}\` does not exist on the model \`${model?.name ?? "unknown"}\`.`,
+      );
+    }
+    return reflection;
+  }
 }
 
 /**
@@ -633,31 +645,26 @@ function leftOuterJoinsBang(this: QueryMethodsHost, ...args: string[]): any {
   return this;
 }
 
-function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
-  if (opts == null) return this;
-
-  if (opts instanceof Nodes.Node) {
-    this._whereClause.predicates.push(opts);
-    return this;
+function buildWhereClause(
+  this: QueryMethodsHost,
+  opts: unknown,
+  rest: unknown[] = [],
+): WhereClause {
+  if (Array.isArray(opts)) {
+    const [head, ...tail] = opts as unknown[];
+    return buildWhereClause.call(this, head, tail);
   }
 
+  if (opts instanceof Nodes.Node) return new WhereClause([opts]);
+
   if (typeof opts === "string") {
-    let sql: string;
-    // Named binds only when:
-    //   - the first extra value is a plain Hash, AND
-    //   - the statement contains `:word` tokens NOT preceded by another
-    //     `:` (so PostgreSQL casts like `payload::jsonb` don't match), AND
-    //   - the statement does not contain `?` (positional always wins
-    //     when both styles are present, matching common user intent and
-    //     avoiding the `::jsonb @> ?` footgun).
-    // Non-plain objects like Date/Range always route through
-    // sanitizeSqlArray's positional-bind path.
     const firstBind = rest[0];
     const hasPositional = opts.includes("?");
     const hasNamedToken = /(?<!:):[a-zA-Z_]\w*/.test(opts);
     const isNamedBinds =
       rest.length === 1 && isPlainObject(firstBind) && hasNamedToken && !hasPositional;
 
+    let sql: string;
     if (isNamedBinds) {
       sql = opts;
       const namedBinds = firstBind as Record<string, unknown>;
@@ -673,27 +680,34 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
     } else {
       sql = opts;
     }
-    if (sql.trim()) this._whereClause.predicates.push(new Nodes.SqlLiteral(sql));
-    return this;
+    return new WhereClause(sql.trim() ? [new Nodes.SqlLiteral(sql)] : []);
   }
 
-  if (typeof opts !== "object" || Array.isArray(opts)) {
-    const err = new Error(`Unsupported argument type: ${typeof opts} (${String(opts)})`);
-    err.name = "ArgumentError";
-    throw err;
-  }
-
-  const cast: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(opts as Record<string, unknown>)) {
-    if (isRelationLike(value)) {
-      cast[key] = value;
-    } else {
-      cast[key] = Array.isArray(value)
-        ? value.map((v) => this._castWhereValue(key, v))
-        : this._castWhereValue(key, value);
+  if (typeof opts === "object" && opts !== null && !Array.isArray(opts)) {
+    const mc = (this as any)._modelClass;
+    const aliases: Record<string, string> = mc?._attributeAliases ?? {};
+    const normalized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(opts as Record<string, unknown>)) {
+      const resolved = aliases[key] ?? key;
+      normalized[resolved] = isRelationLike(value)
+        ? value
+        : Array.isArray(value)
+          ? value.map((v) => this._castWhereValue(resolved, v))
+          : this._castWhereValue(resolved, value);
     }
+    const parts = this.predicateBuilder.buildFromHash(normalized, (tableName: string) =>
+      lookupTableKlassFromJoinDependencies.call(this, tableName),
+    );
+    return new WhereClause(parts);
   }
-  this._whereClause.predicates.push(...this.predicateBuilder.buildFromHash(cast));
+
+  throw argumentError(`Unsupported argument type: ${String(opts)} (${typeof opts})`);
+}
+
+function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
+  if (opts == null) return this;
+  const clause = buildWhereClause.call(this, opts, rest);
+  this._whereClause.predicates.push(...clause.predicates);
   return this;
 }
 
@@ -1802,5 +1816,225 @@ function buildWithValueFromHash(this: QueryMethodsHost, hash: Record<string, unk
   });
 }
 
-// lookupTableKlassFromJoinDependencies is implemented in PR 2b alongside
-// buildJoinDependencies and eachJoinDependencies which it depends on.
+function lookupTableKlassFromJoinDependencies(this: QueryMethodsHost, tableName: string): unknown {
+  let found: unknown = null;
+  eachJoinDependencies.call(this, undefined, (join: any) => {
+    if (tableName === join.tableName) found = join.baseKlass;
+  });
+  return found;
+}
+
+function eachJoinDependencies(
+  this: QueryMethodsHost,
+  joinDependencies: JoinDependency[] | undefined,
+  block: (join: any) => void,
+): void {
+  const deps = joinDependencies ?? buildJoinDependencies.call(this);
+  for (const jd of deps) {
+    jd.each?.(block) ?? block(jd);
+  }
+}
+
+function buildJoinDependencies(this: QueryMethodsHost): JoinDependency[] {
+  const mc = (this as any)._modelClass;
+  const joins: AssociationSpec[] = [
+    ...this._joinClauses.map((j) => j.table),
+    ...this._rawJoins,
+  ] as AssociationSpec[];
+
+  const eager: AssociationSpec[] = [...this._eagerLoadAssociations, ...this._includesAssociations];
+
+  const all = [...new Set([...joins, ...eager])];
+  const namedAssociations = all.filter((j) => typeof j === "string") as string[];
+
+  const jd = new JoinDependency(mc);
+  for (const name of namedAssociations) {
+    if (name.includes(".")) jd.addNestedAssociation?.(name);
+    else jd.addAssociation?.(name);
+  }
+  return [jd];
+}
+
+function buildArel(this: QueryMethodsHost, _connection?: unknown, _aliases?: unknown): any {
+  const mc = (this as any)._modelClass;
+  const table: any = mc?.arelTable;
+  const arel = new SelectManager(table);
+
+  buildJoins.call(this, arel.joinSources ?? arel.froms ?? []);
+
+  if (!this._whereClause.isEmpty?.()) arel.where(this._whereClause.ast);
+  if (!this._havingClause.isEmpty?.()) arel.having(this._havingClause.ast);
+
+  if (this._limitValue !== null) arel.take(buildCastValue("LIMIT", this._limitValue));
+  if (this._offsetValue !== null) arel.skip(buildCastValue("OFFSET", this._offsetValue));
+
+  if (this._groupColumns.length > 0) {
+    arel.group(...arelColumns.call(this, this._groupColumns));
+  }
+
+  buildOrder.call(this, arel);
+  buildWith.call(this, arel);
+  buildSelect.call(this, arel);
+
+  if (this._optimizerHints.length > 0) arel.optimizerHints?.(...this._optimizerHints);
+  arel.distinct(this._isDistinct);
+
+  const from = buildFrom.call(this);
+  if (from !== undefined && from !== null) arel.from(from);
+
+  if (this._lockValue) arel.lock(this._lockValue);
+
+  if (this._annotations.length > 0) {
+    const annotates =
+      this._annotations.length > 1 ? [...new Set(this._annotations)] : this._annotations;
+    arel.comment?.(...annotates);
+  }
+
+  return arel;
+}
+
+function selectNamedJoins(
+  this: QueryMethodsHost,
+  joinNames: unknown[],
+  stashedJoins: unknown[] | null,
+  block?: (join: unknown) => void,
+): unknown[] {
+  const withValues: Array<Record<string, unknown>> = (this as any)._ctes ?? [];
+  const cteJoins: unknown[] = [];
+  const associations: unknown[] = [];
+
+  for (const joinName of joinNames) {
+    const isCte =
+      typeof joinName === "symbol" &&
+      withValues.some(
+        (w) =>
+          typeof w === "object" &&
+          w !== null &&
+          Symbol.keyFor(joinName as symbol) != null &&
+          (joinName as symbol).description != null &&
+          Object.prototype.hasOwnProperty.call(w, (joinName as symbol).description as string),
+      );
+    if (isCte) {
+      cteJoins.push(joinName);
+    } else {
+      associations.push(joinName);
+    }
+  }
+
+  for (const cteName of cteJoins) {
+    block?.(
+      new CTEJoin(typeof cteName === "symbol" ? symbolToName(cteName as symbol) : String(cteName)),
+    );
+  }
+
+  return selectAssociationList.call(this, associations, stashedJoins, block);
+}
+
+function selectAssociationList(
+  this: QueryMethodsHost,
+  associations: unknown[],
+  stashedJoins: unknown[] | null,
+  block?: (join: unknown) => void,
+): unknown[] {
+  const result: unknown[] = [];
+  for (const association of associations) {
+    if (
+      typeof association === "string" ||
+      typeof association === "symbol" ||
+      Array.isArray(association) ||
+      isPlainObject(association)
+    ) {
+      result.push(association);
+    } else if (association instanceof JoinDependency) {
+      stashedJoins?.push(association);
+    } else {
+      block?.(association);
+    }
+  }
+  return result;
+}
+
+function buildJoinBuckets(this: QueryMethodsHost): [Record<string, unknown[]>, unknown] {
+  const buckets: Record<string, unknown[]> = {
+    named_join: [],
+    stashed_join: [],
+    leading_join: [],
+    join_node: [],
+  };
+
+  const leftJoins = this._joinClauses.filter((j) => j.type === "left");
+  if (leftJoins.length > 0) {
+    const leftJoinNodes = leftJoins.map((j) =>
+      arelSql(`LEFT OUTER JOIN ${j.quoted ? j.table : `"${j.table}"`} ON ${j.on}`),
+    );
+    if (
+      this._joinClauses.filter((j) => j.type === "inner").length === 0 &&
+      this._rawJoins.length === 0
+    ) {
+      buckets.join_node.push(...leftJoinNodes);
+      return [buckets, Nodes.OuterJoin ?? "outer"];
+    }
+    buckets.stashed_join.push(...leftJoinNodes);
+  }
+
+  for (const raw of this._rawJoins) {
+    buckets.join_node.push(new Nodes.StringJoin(arelSql(raw) as any));
+  }
+
+  const innerClauses = this._joinClauses.filter((j) => j.type === "inner");
+  buckets.named_join = selectNamedJoins.call(
+    this,
+    innerClauses.map((j) => j.table),
+    buckets.stashed_join,
+  );
+
+  return [buckets, Nodes.InnerJoin ?? "inner"];
+}
+
+function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
+  if (this._joinClauses.length === 0 && this._rawJoins.length === 0) return joinSources;
+
+  const [buckets] = buildJoinBuckets.call(this);
+
+  const leadingJoins = buckets.leading_join as unknown[];
+  const joinNodes = buckets.join_node as unknown[];
+
+  if (leadingJoins.length > 0) (joinSources as any[]).push(...leadingJoins);
+  if (joinNodes.length > 0) (joinSources as any[]).push(...joinNodes);
+
+  return joinSources;
+}
+
+function buildWith(this: QueryMethodsHost, arel: any): void {
+  if (!this._ctes || this._ctes.length === 0) return;
+
+  const hasRecursive = this._ctes.some((c) => c.recursive);
+  const withNodes = this._ctes.map((c) => arelSql(`"${c.name}" AS (${c.sql})`));
+
+  if (hasRecursive) {
+    arel.with?.("recursive", withNodes);
+  } else {
+    arel.with?.(withNodes);
+  }
+}
+
+function buildWithJoinNode(
+  this: QueryMethodsHost,
+  name: string,
+  kind: unknown = Nodes.InnerJoin,
+): unknown {
+  const mc = (this as any)._modelClass;
+  const table: any = mc?.arelTable;
+  const withTable = new ArelTable(name);
+  const fk = mc?.modelName
+    ? `${mc.modelName.toLowerCase()}_id`
+    : `${String(mc?.name ?? "model").toLowerCase()}_id`;
+  const pk = mc?.primaryKey ?? "id";
+  return (
+    table
+      ?.join(withTable, kind)
+      .on(withTable.get(fk).eq(table.get(pk)))
+      .joinSources?.first?.() ??
+    arelSql(`JOIN "${name}" ON "${name}"."${fk}" = "${table?.name}"."${pk}"`)
+  );
+}

@@ -1301,8 +1301,8 @@ function flattenedOrderKeysForRawSqlCheck(orderArgs: unknown[]): string[] {
     if (Array.isArray(arg)) {
       result.push(...flattenedOrderKeysForRawSqlCheck(arg));
     } else if (typeof arg === "string" || typeof arg === "symbol") {
-      if (!(arg instanceof Nodes.SqlLiteral)) result.push(String(arg));
-    } else if (arg !== null && typeof arg === "object") {
+      result.push(String(arg));
+    } else if (arg !== null && typeof arg === "object" && !(arg instanceof Nodes.SqlLiteral)) {
       for (const key of Object.keys(arg as Record<string, unknown>)) {
         result.push(key);
       }

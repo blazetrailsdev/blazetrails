@@ -41,7 +41,7 @@ export class ParameterFilter {
     if (
       value !== null &&
       typeof value === "object" &&
-      Object.getPrototypeOf(value) === Object.prototype
+      (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
     ) {
       const result: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {

@@ -150,10 +150,17 @@ describe("CacheKeyTest", () => {
       }
     }
     const p = await Post.create({ title: "test" });
+    // Set a fixed UTC timestamp on both records so the comparison is
+    // independent of the local-timezone round-trip through the test adapter.
+    const t = new Date("2024-06-15T10:00:00.000Z");
+    p.writeAttribute("updated_at", t);
     const found = await Post.find(p.id);
-    // Both in-memory and DB-loaded records return a non-null version string.
-    expect(typeof p.cacheVersion()).toBe("string");
-    expect(typeof found.cacheVersion()).toBe("string");
+    found.writeAttribute("updated_at", t);
+    const version = p.cacheVersion();
+    const foundVersion = found.cacheVersion();
+    expect(typeof version).toBe("string");
+    expect(typeof foundVersion).toBe("string");
+    expect(version).toBe(foundVersion);
   });
 
   it("cache_version does NOT call updated_at when value is from the database", async () => {

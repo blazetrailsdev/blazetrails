@@ -165,8 +165,9 @@ export function cacheVersion(this: Identifiable): string | null {
  * Mirrors: ActiveRecord::Integration#cache_key_with_version
  */
 export function cacheKeyWithVersion(this: Identifiable): string {
+  const base = cacheKey.call(this);
   const version = cacheVersion.call(this);
-  return version ? `${cacheKey.call(this)}-${version}` : cacheKey.call(this);
+  return version ? `${base}-${version}` : base;
 }
 
 // ──────────────────────────────────────────────

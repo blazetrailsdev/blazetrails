@@ -53,6 +53,11 @@ export function quote(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "boolean") return value ? quotedTrue() : quotedFalse();
   if (typeof value === "number" || typeof value === "bigint") return String(value);
+  if (value instanceof Temporal.Instant) return `'${formatInstantForSql(value)}'`;
+  if (value instanceof Temporal.PlainDateTime) return `'${formatPlainDateTimeForSql(value)}'`;
+  if (value instanceof Temporal.PlainDate) return `'${formatPlainDateForSql(value)}'`;
+  if (value instanceof Temporal.PlainTime) return `'${formatPlainTimeForSql(value)}'`;
+  if (value instanceof Temporal.ZonedDateTime) return `'${formatInstantForSql(value.toInstant())}'`;
   if (value instanceof Date) return `'${quotedDate(value)}'`;
   if (typeof value === "symbol") {
     const desc = value.description;
@@ -81,6 +86,11 @@ export function typeCast(value: unknown): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === "number" || typeof value === "bigint") return value;
   if (typeof value === "string") return value;
+  if (value instanceof Temporal.Instant) return formatInstantForSql(value);
+  if (value instanceof Temporal.PlainDateTime) return formatPlainDateTimeForSql(value);
+  if (value instanceof Temporal.PlainDate) return formatPlainDateForSql(value);
+  if (value instanceof Temporal.PlainTime) return formatPlainTimeForSql(value);
+  if (value instanceof Temporal.ZonedDateTime) return formatInstantForSql(value.toInstant());
   if (value instanceof Date) return quotedDate(value);
   throw new TypeError(`can't cast ${(value as object).constructor?.name ?? typeof value}`);
 }
@@ -240,12 +250,11 @@ export function quotedTime(value: Date): string {
 }
 
 /**
- * Format a `Temporal.Instant` for SQL as `YYYY-MM-DD HH:MM:SS[.ffffff]` in
- * UTC. Preserves up to microsecond precision (6 fractional digits); nanosecond
- * digits are included when non-zero.
- *
- * Used by the abstract quote/bind path during the dual-typed window (PRs 2–6).
- * After PR 6 this becomes the sole path and quotedDate is Date-only.
+ * Format a `Temporal.Instant` for SQL as `YYYY-MM-DD HH:MM:SS[.fffffffff]` in
+ * UTC. Preserves up to nanosecond precision (9 fractional digits); trailing
+ * zero groups are trimmed so whole-second and millisecond-only values stay
+ * compact. Used by the abstract quote/bind path during the dual-typed window
+ * (PRs 2–6); after PR 6 this becomes the sole datetime-write path.
  */
 export function formatInstantForSql(value: Temporal.Instant): string {
   const zdt = value.toZonedDateTimeISO("UTC");

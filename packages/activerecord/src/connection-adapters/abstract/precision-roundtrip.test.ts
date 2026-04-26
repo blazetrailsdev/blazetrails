@@ -11,6 +11,8 @@ import {
   formatPlainDateTimeForSql,
   formatPlainDateForSql,
   formatPlainTimeForSql,
+  quote,
+  typeCast,
 } from "./quoting.js";
 import { temporalToBindString } from "./database-statements.js";
 
@@ -126,5 +128,43 @@ describe("temporalToBindString", () => {
     expect(temporalToBindString(42)).toBe(42);
     expect(temporalToBindString("hello")).toBe("hello");
     expect(temporalToBindString(null)).toBe(null);
+  });
+});
+
+// abstract quote() / typeCast() — used by the Postgres adapter which has no
+// adapter-specific override for datetime quoting.
+describe("abstract quote() with Temporal (Postgres path)", () => {
+  it("quotes an Instant", () => {
+    const v = Temporal.Instant.from("2026-04-26T14:23:55.123456Z");
+    expect(quote(v)).toBe("'2026-04-26 14:23:55.123456'");
+  });
+
+  it("quotes a PlainDateTime", () => {
+    const v = Temporal.PlainDateTime.from("2026-04-26T14:23:55.000001");
+    expect(quote(v)).toBe("'2026-04-26 14:23:55.000001'");
+  });
+
+  it("quotes a PlainDate", () => {
+    expect(quote(Temporal.PlainDate.from("2026-04-26"))).toBe("'2026-04-26'");
+  });
+
+  it("quotes a PlainTime", () => {
+    expect(quote(Temporal.PlainTime.from("14:23:55.123456"))).toBe("'14:23:55.123456'");
+  });
+
+  it("quotes a ZonedDateTime as its UTC instant", () => {
+    const v = Temporal.ZonedDateTime.from("2026-04-26T16:23:55+02:00[Europe/Paris]");
+    expect(quote(v)).toBe("'2026-04-26 14:23:55'");
+  });
+});
+
+describe("abstract typeCast() with Temporal (Postgres path)", () => {
+  it("casts an Instant to its UTC string", () => {
+    const v = Temporal.Instant.from("2026-04-26T14:23:55.123456Z");
+    expect(typeCast(v)).toBe("2026-04-26 14:23:55.123456");
+  });
+
+  it("casts a PlainDate to string", () => {
+    expect(typeCast(Temporal.PlainDate.from("2026-04-26"))).toBe("2026-04-26");
   });
 });

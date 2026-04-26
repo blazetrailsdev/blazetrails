@@ -266,7 +266,7 @@ describe("RelationTest", () => {
     const joinSources = books
       .join(authors)
       .on(books.get("author_id").eq(authors.get("id"))).joinSources;
-    const sql = Book.joins(...(joinSources as import("@blazetrails/arel").Nodes.Join[])).toSql();
+    const sql = Book.joins(...joinSources).toSql();
     expect(sql).toContain("INNER JOIN");
     expect(sql).toContain('"authors"');
     expect(sql).toContain('"books"."author_id"');

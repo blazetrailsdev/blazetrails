@@ -364,10 +364,9 @@ function orderBang(
     } else if (arg instanceof Nodes.Node) {
       const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
       if (rawSql && rawSql.trim() !== "") {
-        // SqlLiteral must pass through verbatim — store as { raw } to bypass column qualification.
-        // Structured nodes (Ascending, Descending) already have fully-formed SQL from .toSql(),
-        // so they can use the same raw passthrough path.
-        this._orderClauses.push(arg instanceof Nodes.SqlLiteral ? { raw: rawSql } : rawSql);
+        // All Arel nodes (SqlLiteral, Ascending, Descending, …) have fully-formed
+        // SQL — store as { raw } to bypass column qualification in _applyOrderToManager.
+        this._orderClauses.push({ raw: rawSql });
       }
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
@@ -431,7 +430,7 @@ function reorderBang(
     } else if (arg instanceof Nodes.Node) {
       const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
       if (rawSql && rawSql.trim() !== "") {
-        this._orderClauses.push(arg instanceof Nodes.SqlLiteral ? { raw: rawSql } : rawSql);
+        this._orderClauses.push({ raw: rawSql });
       }
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {

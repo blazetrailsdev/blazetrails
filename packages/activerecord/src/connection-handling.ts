@@ -122,48 +122,35 @@ export function connectedTo<T>(
   return withRoleAndShard.call(this, role, shard, preventWrites, fn) as T;
 }
 
-// Mirrors Rails' connected_to_many(*classes, role:, ...) splat — callers may pass
-// a single class, an array, or multiple classes as positional args before options+fn.
+type ConnectedToManyOptions = { role: string; shard?: string; preventWrites?: boolean };
+
+// Mirrors Rails' connected_to_many(*classes, role:, ...) splat.
+// Array form: connectedToMany([A, B], options, fn)
 export function connectedToMany<T>(
   this: typeof Base,
   classes: (typeof Base)[],
-  options: { role: string; shard?: string; preventWrites?: boolean },
+  options: ConnectedToManyOptions,
   fn: () => T,
 ): T;
+// Variadic form: connectedToMany(A, options, fn) or connectedToMany(A, B, options, fn) etc.
 export function connectedToMany<T>(
   this: typeof Base,
-  klass: typeof Base,
-  options: { role: string; shard?: string; preventWrites?: boolean },
-  fn: () => T,
+  ...args: [...(typeof Base)[], ConnectedToManyOptions, () => T]
 ): T;
-export function connectedToMany<T>(
-  this: typeof Base,
-  k1: typeof Base,
-  k2: typeof Base,
-  options: { role: string; shard?: string; preventWrites?: boolean },
-  fn: () => T,
-): T;
-export function connectedToMany<T>(
-  this: typeof Base,
-  k1: typeof Base,
-  k2: typeof Base,
-  k3: typeof Base,
-  options: { role: string; shard?: string; preventWrites?: boolean },
-  fn: () => T,
-): T;
-export function connectedToMany<T>(
-  this: typeof Base,
-  firstArg: typeof Base | (typeof Base)[],
-  ...rest: unknown[]
-): T {
-  const fn = rest[rest.length - 1] as () => T;
-  const options = rest[rest.length - 2] as {
-    role: string;
-    shard?: string;
-    preventWrites?: boolean;
-  };
-  const extraClasses = rest.slice(0, rest.length - 2) as (typeof Base)[];
-  const normalized = [firstArg, ...extraClasses].flat() as (typeof Base)[];
+export function connectedToMany<T>(this: typeof Base, ...args: unknown[]): T {
+  const fn = args[args.length - 1] as () => T;
+  const options = args[args.length - 2] as ConnectedToManyOptions;
+  // Everything before options+fn: may be a single class, an array, or N positional classes.
+  const classArgs = args.slice(0, args.length - 2);
+  const normalized = classArgs.flat() as (typeof Base)[];
+
+  if (!options?.role) {
+    throw new ArgumentError("must provide a `role`.");
+  }
+
+  if (typeof fn !== "function") {
+    throw new ArgumentError("must provide a block.");
+  }
 
   if (!isBaseClass(this) || normalized.some((klass) => isBaseClass(klass))) {
     throw new NotImplementedError("connected_to_many can only be called on ActiveRecord::Base.");

@@ -1565,7 +1565,6 @@ function arelColumn(
   if (dotMatch) {
     return arelColumnWithTable.call(this, dotMatch.groups!.tbl, dotMatch.groups!.col);
   }
-  if (field instanceof Nodes.Node) return field;
   if (fallback) return fallback(fieldStr);
   const quoted = isSymbol
     ? (modelClass?.adapter?.quoteColumnName?.(fieldStr) ?? quoteCol(fieldStr))

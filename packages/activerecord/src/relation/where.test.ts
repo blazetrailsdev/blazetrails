@@ -295,7 +295,7 @@ describe("WhereTest", () => {
     /* needs association-scoped WHERE with automatic JOIN */
   });
   it.skip("where with strong parameters", () => {
-    /* Rails-specific: ActionController::Parameters has no JS equivalent */
+    /* needs ActionController::Parameters integration in this test setup or ActiveRecord.where support for coercing Parameters to a plain hash */
   });
   it.skip("where with conditions on both tables", () => {
     /* needs JOIN across tables */
@@ -724,7 +724,8 @@ describe("WhereTest", () => {
     await CpkBook.create({ author_id: 2, number: 100, title: "Other" });
     const result = await CpkBook.where(["author_id", "number"], [[1, 100]]).toArray();
     expect(result).toHaveLength(1);
-    expect((result[0] as any).title).toBe("First");
+    const book = result[0] as InstanceType<typeof CpkBook>;
+    expect(book.title).toBe("First");
   });
 
   it("where with tuple syntax on composite models", async () => {
@@ -758,8 +759,10 @@ describe("WhereTest", () => {
         this.adapter = adapter;
       }
     }
-    // Tuple inner length (1) doesn't match column count (2) — must raise with arity/column info
-    expect(() => (CpkPost as any).where(["shop_id", "number"], [[1]])).toThrow(/arity|column/i);
+    // Tuple inner length (1) doesn't match column count (2) — must raise with the specific mismatch details
+    expect(() => (CpkPost as any).where(["shop_id", "number"], [[1]])).toThrow(
+      /tuple arity.*1.*column count.*2|column count.*2.*tuple arity.*1/i,
+    );
   });
 
   it("where with tuple syntax and regular syntax combined", async () => {
@@ -785,8 +788,9 @@ describe("WhereTest", () => {
       .where({ status: "active" })
       .toArray();
     expect(result).toHaveLength(1);
-    expect((result[0] as any).shop_id).toBe(1);
-    expect((result[0] as any).number).toBe(1);
+    const item = result[0] as InstanceType<typeof CpkItem>;
+    expect(item.shop_id).toBe(1);
+    expect(item.number).toBe(1);
   });
 
   it("with tuple syntax and large values list", async () => {
@@ -888,7 +892,7 @@ describe("WhereTest", () => {
     /* Rational is a Ruby type with no JS equivalent */
   });
   it.skip("where with duration for string column", () => {
-    /* ActiveSupport::Duration has no JS equivalent */
+    /* ActiveSupport::Duration exists, but where predicate building/type-casting for Duration values is not implemented yet */
   });
   it("where with integer for binary column", () => {
     class Post extends Base {

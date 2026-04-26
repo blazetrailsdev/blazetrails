@@ -2282,7 +2282,7 @@ export class Relation<T extends Base> {
       }
     }
     for (const rawJoin of this._rawJoins) {
-      (manager as any).core.source.right.push(new Nodes.StringJoin(new Nodes.SqlLiteral(rawJoin)));
+      manager.appendStringJoin(rawJoin);
     }
   }
 
@@ -3140,9 +3140,7 @@ export class Relation<T extends Base> {
     const manager = table.project(new Nodes.SqlLiteral(jd.buildSelectSql()));
 
     for (const node of jd.nodes) {
-      (manager as any).core.source.right.push(
-        new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
-      );
+      manager.appendStringJoin(node.joinSql);
     }
 
     this._applyJoinsToManager(manager);
@@ -3167,17 +3165,15 @@ export class Relation<T extends Base> {
         // Build a parent-ID subquery using Arel nodes so quoting is consistent.
         const pkAttr = table.get(basePk);
         const idSubquery = table.project(pkAttr);
-        (idSubquery as any).distinct();
+        idSubquery.distinct();
         for (const node of jd.nodes) {
-          (idSubquery as any).core.source.right.push(
-            new Nodes.StringJoin(new Nodes.SqlLiteral(node.joinSql)),
-          );
+          idSubquery.appendStringJoin(node.joinSql);
         }
-        this._applyJoinsToManager(idSubquery as any);
-        this._applyWheresToManager(idSubquery as any, table);
-        this._applyOrderToManager(idSubquery as any, table);
-        if (this._limitValue !== null) (idSubquery as any).take(this._limitValue);
-        if (this._offsetValue !== null) (idSubquery as any).skip(this._offsetValue);
+        this._applyJoinsToManager(idSubquery);
+        this._applyWheresToManager(idSubquery, table);
+        this._applyOrderToManager(idSubquery, table);
+        if (this._limitValue !== null) idSubquery.take(this._limitValue);
+        if (this._offsetValue !== null) idSubquery.skip(this._offsetValue);
         // pkAttr.in(subquery) produces "table"."pk" IN (SELECT ...) via Arel
         manager.where(pkAttr.in(idSubquery));
       }

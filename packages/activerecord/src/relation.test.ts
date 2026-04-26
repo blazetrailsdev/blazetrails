@@ -1204,6 +1204,40 @@ describe("RelationTest", () => {
     }
   });
 
+  it("eagerLoad hasMany with LIMIT uses IN-subquery to avoid fan-out", () => {
+    try {
+      class EagerComment extends Base {
+        static {
+          this.tableName = "eager_comments";
+          this.attribute("body", "string");
+          this.attribute("eager_article_id", "integer");
+          this.adapter = adapter;
+          registerModel(this);
+        }
+      }
+      class EagerArticle extends Base {
+        static {
+          this.tableName = "eager_articles";
+          this.attribute("title", "string");
+          Associations.hasMany.call(this, "eagerComments", {
+            className: "EagerComment",
+            foreignKey: "eager_article_id",
+          });
+          this.adapter = adapter;
+          registerModel(this);
+        }
+      }
+      // hasMany is a collection association → not limitable → IN-subquery for fan-out avoidance
+      const sql = EagerArticle.all().eagerLoad("eagerComments").limit(5).toSql();
+      expect(sql).toContain(" IN (SELECT");
+      // LIMIT 5 lives inside the subquery, not on the outer query
+      expect(sql).toMatch(/IN \(SELECT .* LIMIT 5\)/s);
+    } finally {
+      modelRegistry.delete("EagerComment");
+      modelRegistry.delete("EagerArticle");
+    }
+  });
+
   it("includes + references promotes to eager load SQL", () => {
     try {
       class Author extends Base {

@@ -260,9 +260,16 @@ export async function performCount(
     //   else                → "count_column" (outer: COUNT(count_column))
     const effectiveCol = column === "*" ? undefined : column;
     let columnAlias: Nodes.Node;
-    if (this._isDistinct) {
-      // DISTINCT: project PK with DISTINCT applied so the inner query
-      // deduplicates before counting. Use table.get(c) for qualified refs.
+    if (this._isDistinct && effectiveCol) {
+      // DISTINCT + specific column: project that column aliased as count_column
+      // with DISTINCT applied so the inner query counts distinct non-NULL values
+      // of the requested column (matches COUNT(DISTINCT col) semantics).
+      innerManager = innerTable.project(innerTable.get(effectiveCol).as("count_column"));
+      innerManager.distinct();
+      columnAlias = new Nodes.SqlLiteral("count_column");
+    } else if (this._isDistinct) {
+      // DISTINCT + count(*): project PK with DISTINCT to deduplicate rows.
+      // Use table.get(c) so PK refs are qualified (unambiguous with joins).
       const pk = (this._modelClass as any).primaryKey ?? "id";
       if (Array.isArray(pk)) {
         innerManager = innerTable.project(...pk.map((c: string) => innerTable.get(c)));

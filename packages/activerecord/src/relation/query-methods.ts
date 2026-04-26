@@ -84,7 +84,7 @@ export type AssociationSpec = string | { [assoc: string]: AssociationSpec | Asso
 // ---------------------------------------------------------------------------
 interface QueryMethodsHost {
   _whereClause: WhereClause;
-  _orderClauses: Array<string | [string, "asc" | "desc"]>;
+  _orderClauses: Array<string | [string, "asc" | "desc"] | { raw: string }>;
   _rawOrderClauses: string[];
   _limitValue: number | null;
   _offsetValue: number | null;
@@ -362,9 +362,10 @@ function orderBang(
         }
       }
     } else if (arg instanceof Nodes.Node) {
-      // Arel node (e.g. Arel.sql("title")) — store raw SQL directly.
+      // Arel node — preserve raw SQL without table qualification.
+      // SqlLiteral must pass through verbatim (no column-qualification).
       const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
-      if (rawSql && rawSql.trim() !== "") this._orderClauses.push(rawSql);
+      if (rawSql && rawSql.trim() !== "") this._orderClauses.push({ raw: rawSql });
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -426,7 +427,7 @@ function reorderBang(
       }
     } else if (arg instanceof Nodes.Node) {
       const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
-      if (rawSql && rawSql.trim() !== "") this._orderClauses.push(rawSql);
+      if (rawSql && rawSql.trim() !== "") this._orderClauses.push({ raw: rawSql });
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -1013,6 +1014,11 @@ function optimizerHintsBang(this: QueryMethodsHost, ...hints: string[]): any {
 
 function reverseOrderBang(this: QueryMethodsHost): any {
   this._orderClauses = this._orderClauses.map((clause) => {
+    if (typeof clause === "object" && !Array.isArray(clause) && "raw" in clause) {
+      throw new IrreversibleOrderError(
+        `Relation has a non-reversible order and cannot be reversed: ${(clause as { raw: string }).raw}`,
+      );
+    }
     if (typeof clause === "string") {
       const match = clause.match(/^([\w.]+)\s+(ASC|DESC)$/i);
       if (match) {

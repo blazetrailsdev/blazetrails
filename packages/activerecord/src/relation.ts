@@ -828,9 +828,9 @@ export class Relation<T extends Base> {
     rel._orderClauses.push(orderNode.toSql());
 
     // Add WHERE col IN (values) filter — mirrors Rails' arel_column.in(values.compact).
-    // Attribute#in uses buildQuoted per element; since arelCol is from the model's
-    // arelTable (not a bare Table), it carries the column type context. For typed columns
-    // requiring serialization, callers should pre-cast values before calling inOrderOf.
+    // Attribute#in uses buildQuoted (no type-caster context), matching Rails which
+    // pre-casts values via type_cast_for_database before calling in(). Callers
+    // should pre-cast for typed columns (e.g. enum integer mappings).
     if (filter) {
       const hasNull = normalized.includes(null);
       const nonNull = normalized.filter((v) => v !== null);

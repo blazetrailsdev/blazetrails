@@ -618,7 +618,19 @@ export class Relation<T extends Base> {
         ? value.map((v) => this._castWhereValue(key, v))
         : this._castWhereValue(key, value);
     }
-    rel._whereClause.predicates.push(...this.predicateBuilder.buildNegatedFromHash(castConditions));
+    // Mirrors Rails' WhereClause#invert:
+    // - single predicate → invert_predicate (NOT NULL, !=, NOT BETWEEN, etc.)
+    // - multiple predicates → NOT(p1 AND p2 AND ...) — different semantics from p1 != AND p2 !=
+    const keys = Object.keys(castConditions);
+    if (keys.length <= 1) {
+      rel._whereClause.predicates.push(
+        ...this.predicateBuilder.buildNegatedFromHash(castConditions),
+      );
+    } else {
+      const positiveNodes = this.predicateBuilder.buildFromHash(castConditions);
+      const combined = positiveNodes.length === 1 ? positiveNodes[0] : new Nodes.And(positiveNodes);
+      rel._whereClause.predicates.push(new Nodes.Not(combined));
+    }
     return rel;
   }
 

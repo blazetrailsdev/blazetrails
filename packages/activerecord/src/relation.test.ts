@@ -359,6 +359,22 @@ describe("RelationTest", () => {
     }
   });
 
+  it("whereNot multi-key hash wraps in NOT(AND) not individual !=", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.whereNot({ status: "draft", active: false }).toSql();
+    // Rails: WHERE NOT ("books"."status" = 'draft' AND "books"."active" = 0)
+    expect(sql).toContain("NOT (");
+    expect(sql).toContain('"books"."status"');
+    expect(sql).toContain('"books"."active"');
+    // Must NOT be individual != predicates (wrong semantics)
+    expect(sql).not.toContain("!= 'draft' AND");
+  });
+
   it("inOrderOf emits WHERE IN filter + CASE WHEN ... ASC (Rails form)", () => {
     class Book extends Base {
       static {

@@ -1147,4 +1147,82 @@ describe("RelationTest", () => {
     }
     expect(() => Post.order("LOWER(title) ASC").reverseOrder()).toThrow(IrreversibleOrderError);
   });
+
+  it("eagerLoad emits LEFT OUTER JOIN and t0_r0-style column aliases", () => {
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        registerModel(this);
+      }
+    }
+    class Book extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("author_id", "integer");
+        Associations.belongsTo.call(this, "author", { className: "Author" });
+        this.adapter = adapter;
+        registerModel(this);
+      }
+    }
+    const sql = Book.all().eagerLoad("author").toSql();
+    // SELECT with t0_r* aliases for base table
+    expect(sql).toMatch(/"books"\."id" AS t0_r/);
+    // SELECT with t1_r* aliases for joined table
+    expect(sql).toMatch(/"authors"\.".*" AS t1_r/);
+    // LEFT OUTER JOIN using real table name (no collision)
+    expect(sql).toContain('LEFT OUTER JOIN "authors" ON');
+    // No tN table alias in the JOIN clause (Rails only aliases on collision)
+    expect(sql).not.toMatch(/LEFT OUTER JOIN "authors" "t\d+"/);
+  });
+
+  it("eagerLoad with LIMIT emits direct LIMIT for non-collection associations", () => {
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        registerModel(this);
+      }
+    }
+    class Book extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("author_id", "integer");
+        Associations.belongsTo.call(this, "author", { className: "Author" });
+        this.adapter = adapter;
+        registerModel(this);
+      }
+    }
+    const sql = Book.all().eagerLoad("author").limit(10).toSql();
+    // belongsTo is limitable — no subquery, plain LIMIT
+    expect(sql).toContain("LIMIT 10");
+    expect(sql).not.toContain(" IN (SELECT");
+  });
+
+  it("includes + references promotes to eager load SQL", () => {
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        registerModel(this);
+      }
+    }
+    class Book extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("author_id", "integer");
+        Associations.belongsTo.call(this, "author", { className: "Author" });
+        this.adapter = adapter;
+        registerModel(this);
+      }
+    }
+    const sql = Book.all()
+      .includes("author")
+      .where("authors.name = 'Rails'")
+      .references("authors")
+      .toSql();
+    expect(sql).toContain('LEFT OUTER JOIN "authors" ON');
+    expect(sql).toMatch(/"books"\."id" AS t0_r/);
+    expect(sql).toContain("authors.name = 'Rails'");
+  });
 });

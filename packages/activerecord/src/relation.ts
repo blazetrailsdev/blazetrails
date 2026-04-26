@@ -1909,8 +1909,11 @@ export class Relation<T extends Base> {
    */
   private tablesInString(string: string): string[] {
     if (!string) return [];
-    // Match word.word patterns (table.column), downcase to match Rails' Oracle compat.
-    const matches = string.match(/[a-zA-Z_][\w.]+(?=\.)/g) ?? [];
+    // Mirrors Rails' tables_in_string regex: /[a-zA-Z_][.\w]+(?=.?\.)/
+    // The `.?` lookahead allows one non-dot char (e.g. a closing `"`) between
+    // the identifier and the qualifying dot, so `"posts"."col"` correctly
+    // yields `posts`. Downcase to match Rails' Oracle compat comment.
+    const matches = string.match(/[a-zA-Z_][\w.]+(?=.?\.)/g) ?? [];
     return matches.map((s) => s.toLowerCase()).filter((s) => s !== "raw_sql_");
   }
 

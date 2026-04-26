@@ -530,16 +530,14 @@ export class JoinDependency {
   }
 
   /**
-   * Instantiates a single model record from aliased row data and caches it
-   * in the model cache to deduplicate repeated parent rows.
+   * Instantiates a single model record from a hash of aliased row attributes.
+   * Deduplication of repeated parent rows is handled by instantiateFromRows
+   * (the `seenRawPks` / `parentMap` logic); this method just constructs the
+   * model object for a given attribute hash.
    *
    * Mirrors: ActiveRecord::Associations::JoinDependency#construct_model
    */
-  private constructModel(
-    attrs: Record<string, unknown>,
-    node: JoinNode | null,
-    _modelCache?: Map<unknown, unknown>,
-  ): any {
+  private constructModel(attrs: Record<string, unknown>, node: JoinNode | null): any {
     const modelClass = node ? node.modelClass : this._baseModel;
     return (modelClass as any)._instantiate(attrs);
   }

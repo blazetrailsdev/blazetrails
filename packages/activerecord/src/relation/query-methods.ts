@@ -4,7 +4,7 @@
  *
  * Mirrors: ActiveRecord::QueryMethods
  */
-import { Nodes, SelectManager, sql as arelSql } from "@blazetrails/arel";
+import { Nodes, SelectManager, Table as ArelTable, sql as arelSql } from "@blazetrails/arel";
 import { ArgumentError } from "@blazetrails/activemodel";
 import { ActiveRecordError, IrreversibleOrderError, PreparedStatementInvalid } from "../errors.js";
 import { FromClause } from "./from-clause.js";
@@ -1100,7 +1100,7 @@ function async(this: QueryMethodsHost): QueryMethodsHost {
 }
 
 function assertModifiableBang(this: QueryMethodsHost): void {
-  if ((this as any)._loaded || (this as any)._arel) {
+  if ((this as any)._loaded) {
     throw new ActiveRecordError("can't modify a loaded relation");
   }
 }
@@ -1132,7 +1132,7 @@ function flattenedArgs(args: unknown[]): unknown[] {
   });
 }
 
-const VALID_DIRECTIONS = new Set(["asc", "desc", "ASC", "DESC"]);
+const VALID_DIRECTIONS = new Set(["asc", "desc"]);
 
 function validateOrderArgs(this: QueryMethodsHost, args: unknown[]): void {
   for (const arg of args) {
@@ -1140,10 +1140,8 @@ function validateOrderArgs(this: QueryMethodsHost, args: unknown[]): void {
     for (const [, value] of Object.entries(arg)) {
       if (isPlainObject(value)) {
         validateOrderArgs.call(this, [value]);
-      } else if (!VALID_DIRECTIONS.has(value as string)) {
-        throw new ArgumentError(
-          `Direction "${value}" is invalid. Valid directions are: ${[...VALID_DIRECTIONS].join(", ")}`,
-        );
+      } else if (!VALID_DIRECTIONS.has(String(value).toLowerCase())) {
+        throw new ArgumentError(`Direction "${value}" is invalid. Valid directions are: asc, desc`);
       }
     }
   }
@@ -1287,7 +1285,11 @@ function extractTableNameFrom(orderTerm: string): string | null {
 }
 
 function symbolToName(s: symbol): string {
-  return Symbol.keyFor(s) ?? s.description ?? "";
+  const name = Symbol.keyFor(s) ?? s.description;
+  if (name === undefined || name.trim() === "") {
+    throw new ArgumentError("Order symbols must have a non-blank name");
+  }
+  return name;
 }
 
 function columnReferences(orderArgs: unknown[]): string[] {
@@ -1397,12 +1399,12 @@ function buildCaseForValuePosition(
   options: { filter?: boolean } = {},
 ): unknown {
   const filter = options.filter !== false;
-  const node: any = new (Nodes as any).Case();
+  const node = new Nodes.Case();
   values.forEach((value, i) => {
     node.when((column as any).eq(value), i + 1);
   });
-  if (!filter) node.else(values.length + 1);
-  return new (Nodes as any).Ascending(node);
+  if (!filter) (node as any).else(values.length + 1);
+  return new Nodes.Ascending(node);
 }
 
 function resolveArelAttributes(this: QueryMethodsHost, attrs: unknown[]): unknown[] {
@@ -1417,14 +1419,14 @@ function resolveArelAttributes(this: QueryMethodsHost, attrs: unknown[]): unknow
         return (Array.isArray(columns) ? columns : [columns]).map(
           (col) =>
             builder?.resolveArelAttribute?.(tableName, String(col)) ??
-            arelSql(`${tableName}.${String(col)}`),
+            new ArelTable(tableName).get(String(col)),
         );
       });
     }
     const s = String(attr);
     if (s.includes(".")) {
       const [table, col] = s.split(".", 2);
-      return [builder?.resolveArelAttribute?.(table, col) ?? arelSql(s)];
+      return [builder?.resolveArelAttribute?.(table, col) ?? new ArelTable(table).get(col)];
     }
     return [s];
   });

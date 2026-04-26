@@ -1158,20 +1158,20 @@ export const DatabaseStatements = {
   async selectOne(
     this: DatabaseStatementsDefaultsHost,
     sql: string,
-    _name?: string | null,
+    name?: string | null,
     binds?: unknown[],
   ): Promise<Record<string, unknown> | undefined> {
-    const rows = await this.execute(sql, binds);
+    const rows = await this.execute(sql, binds, name ?? "SQL");
     return rows[0];
   },
 
   async selectValue(
     this: DatabaseStatementsDefaultsHost,
     sql: string,
-    _name?: string | null,
+    name?: string | null,
     binds?: unknown[],
   ): Promise<unknown> {
-    const rows = await this.execute(sql, binds);
+    const rows = await this.execute(sql, binds, name ?? "SQL");
     if (rows.length === 0) return undefined;
     const keys = Object.keys(rows[0]);
     return keys.length > 0 ? rows[0][keys[0]] : undefined;
@@ -1180,10 +1180,10 @@ export const DatabaseStatements = {
   async selectValues(
     this: DatabaseStatementsDefaultsHost,
     sql: string,
-    _name?: string | null,
+    name?: string | null,
     binds?: unknown[],
   ): Promise<unknown[]> {
-    const rows = await this.execute(sql, binds);
+    const rows = await this.execute(sql, binds, name ?? "SQL");
     if (rows.length === 0) return [];
     const firstKey = Object.keys(rows[0])[0];
     if (firstKey === undefined) return rows.map(() => undefined);
@@ -1193,10 +1193,10 @@ export const DatabaseStatements = {
   async selectRows(
     this: DatabaseStatementsDefaultsHost,
     sql: string,
-    _name?: string | null,
+    name?: string | null,
     binds?: unknown[],
   ): Promise<unknown[][]> {
-    const rows = await this.execute(sql, binds);
+    const rows = await this.execute(sql, binds, name ?? "SQL");
     if (rows.length === 0) return [];
     const keys = Object.keys(rows[0]);
     return rows.map((row) => keys.map((key) => row[key]));

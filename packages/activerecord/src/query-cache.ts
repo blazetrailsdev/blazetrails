@@ -376,30 +376,30 @@ export class QueryCacheAdapter implements DatabaseAdapter {
 
   async selectOne(
     sql: string,
-    _name?: string | null,
+    name?: string | null,
     binds?: unknown[],
   ): Promise<Record<string, unknown> | undefined> {
-    const rows = await this.execute(sql, binds);
+    const rows = await this.execute(sql, binds, name ?? undefined);
     return rows[0];
   }
 
-  async selectValue(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown> {
-    const rows = await this.execute(sql, binds);
+  async selectValue(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown> {
+    const rows = await this.execute(sql, binds, name ?? undefined);
     if (rows.length === 0) return undefined;
     const keys = Object.keys(rows[0]);
     return keys.length > 0 ? rows[0][keys[0]] : undefined;
   }
 
-  async selectValues(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[]> {
-    const rows = await this.execute(sql, binds);
+  async selectValues(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown[]> {
+    const rows = await this.execute(sql, binds, name ?? undefined);
     if (rows.length === 0) return [];
     const firstKey = Object.keys(rows[0])[0];
     if (firstKey === undefined) return rows.map(() => undefined);
     return rows.map((row) => row[firstKey]);
   }
 
-  async selectRows(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[][]> {
-    const rows = await this.execute(sql, binds);
+  async selectRows(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown[][]> {
+    const rows = await this.execute(sql, binds, name ?? undefined);
     if (rows.length === 0) return [];
     const keys = Object.keys(rows[0]);
     return rows.map((row) => keys.map((key) => row[key]));

@@ -168,7 +168,8 @@ describe("HasManyThroughAssociationsTest", () => {
     });
 
     // Rails: company.special_developers.where.not("contracts.id": nil)
-    // Core: through association with a chained where condition on the through table
+    // Core: chaining whereNot on a through collection works
+    // (The disable-joins path runs target query; we use a target-table condition here)
     const results = await (company as any).ta_developers
       .whereNot({ "ta_developers.id": null })
       .toArray();
@@ -2049,6 +2050,7 @@ describe("HasManyThroughAssociationsTest", () => {
     Associations.hasMany.call(CcNulOwner, "ccNulTaggings", {
       className: "CcNulTagging",
       foreignKey: "cc_nul_owner_id",
+      dependent: "nullify",
     });
     Associations.hasMany.call(CcNulOwner, "ccNulTags", {
       through: "ccNulTaggings",
@@ -2070,7 +2072,8 @@ describe("HasManyThroughAssociationsTest", () => {
     await owner.reload();
     expect((owner as any).tags_with_nullify_count).toBe(1);
 
-    // delete() on through calls destroy() on join, which decrements counterCache
+    // delete() on a through with dependent:nullify on the through association:
+    // nullifies the join record's owner FK, which decrements the counter via counterCache
     await (owner as any).ccNulTags.delete(tag);
     await owner.reload();
     expect((owner as any).tags_with_nullify_count).toBe(0);
@@ -2123,11 +2126,12 @@ describe("HasManyThroughAssociationsTest", () => {
     await owner.reload();
     expect((owner as any).tags_count).toBe(1);
 
-    // Delete all tags through the collection
-    await (owner as any).ccRplTags.delete(tag);
+    // Replace the through collection with an empty set — exercises collection replacement
+    await ((owner as any).ccRplTags as CollectionProxy<any>).replace([]);
     await owner.reload();
     const taggingsCount = await CcRplTagging.where({ cc_rpl_owner_id: owner.id }).count();
-    expect(Number(taggingsCount)).toBe(Number((owner as any).tags_count));
+    expect(Number(taggingsCount)).toBe(0);
+    expect(Number((owner as any).tags_count)).toBe(0);
   });
 
   it("update counter caches on destroy", async () => {
@@ -2225,11 +2229,13 @@ describe("HasManyThroughAssociationsTest", () => {
     const countBefore = await IdestrTagging.where({ idestr_owner_id: owner.id }).count();
     await owner.update({ indestructible_tags_count: Number(countBefore) });
 
-    // Try to destroy — beforeDestroy callback prevents it
+    // Try to destroy via collection — beforeDestroy callback returns false, preventing destruction
     await (owner as any).idestrTags.delete(tag);
     await owner.reload();
-    // Counter stays the same because destroy was prevented
-    expect(Number((owner as any).indestructible_tags_count)).toBeGreaterThanOrEqual(0);
+    // Counter stays the same as before because destroy was prevented
+    const countAfter = await IdestrTagging.where({ idestr_owner_id: owner.id }).count();
+    expect(Number((owner as any).indestructible_tags_count)).toBe(Number(countBefore));
+    expect(Number(countAfter)).toBe(Number(countBefore));
   });
   it("replace association", async () => {
     class HmtReplOwner extends Base {
@@ -3363,11 +3369,18 @@ describe("HasManyThroughAssociationsTest", () => {
     });
 
     const owner = await TxnOwner.create({ name: "Post" });
-    // The proxy gives access to the target model class and can load data
-    const proxy = (owner as any).txn_tags;
+    const tag = await TxnTag.create({ name: "science" });
+    await TxnJoin.create({ txn_owner_id: owner.id, txn_tag_id: tag.id });
+
+    // Rails: assert_called(Tag, :transaction) { Post.first.tags.transaction { } }
+    // The proxy wraps the target model class (TxnTag) — the transaction method
+    // would be called on that class. CollectionProxy exposes the target model via klass.
+    const proxy = (owner as any).txn_tags as CollectionProxy<any>;
     expect(proxy).toBeDefined();
+    // Verify proxy loads from the correct model (TxnTag, not TxnJoin)
     const tags = await proxy.toArray();
-    expect(Array.isArray(tags)).toBe(true);
+    expect(tags).toHaveLength(1);
+    expect((tags[0] as any).name).toBe("science");
   });
 
   it("has many through uses the through model to create transactions", async () => {
@@ -6667,13 +6680,29 @@ describe("HasManyThroughAssociationsTest", () => {
       source: "sj_comments",
     });
 
+    // Through association with a scope that adds a JOIN — tests both string and hash join in scope
+    Associations.hasMany.call(SjAuthor, "sj_recent_comments", {
+      className: "SjComment",
+      through: "sj_posts",
+      source: "sj_comments",
+      scope: (rel: any) =>
+        rel.joins(
+          `INNER JOIN "sj_posts" AS "sj_posts_alias" ON "sj_posts_alias"."id" = "sj_comments"."sj_post_id"`,
+        ),
+    });
+
     const author = await SjAuthor.create({ name: "David" });
     const post = await SjPost.create({ sj_author_id: author.id, title: "P1" });
     await SjComment.create({ sj_post_id: post.id, body: "C1" });
 
-    const found = await SjAuthor.joins("sj_posts").take();
-    expect(found).toBeDefined();
-    expect((found as any).name).toBe("David");
+    // Basic through loading works
+    const comments = await (author as any).sj_comments.toArray();
+    expect(comments).toHaveLength(1);
+    expect((comments[0] as any).body).toBe("C1");
+
+    // Through association with a string join in scope also works
+    const recentComments = await (author as any).sj_recent_comments.toArray();
+    expect(recentComments).toHaveLength(1);
   });
 
   it("has many through with scope should respect table alias", async () => {

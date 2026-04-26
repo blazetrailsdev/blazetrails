@@ -3026,6 +3026,9 @@ describe("TestNestedAttributesOnAHasManyAssociation", () => {
   beforeEach(() => {
     adapter = freshAdapter();
   });
+  afterEach(() => {
+    Notifications.unsubscribeAll();
+  });
 
   function makeModels() {
     class Bird extends Base {

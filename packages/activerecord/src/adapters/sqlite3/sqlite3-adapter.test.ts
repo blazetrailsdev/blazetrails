@@ -13,6 +13,7 @@ beforeEach(() => {
 
 afterEach(() => {
   adapter.close();
+  Notifications.unsubscribeAll();
 });
 
 describe("SQLite3AdapterTest", () => {

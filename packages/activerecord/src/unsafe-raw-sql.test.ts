@@ -255,6 +255,15 @@ describe("UnsafeRawSqlTest", () => {
     ).rejects.toBeInstanceOf(UnknownAttributeReference);
   });
 
+  it("pluck: rejects comma-separated column list in a single argument", async () => {
+    // trails-specific guard: pluck("id, title") has ambiguous result mapping.
+    // Pass each column as a separate argument instead: pluck("id", "title").
+    await expect((Post as any).pluck("id, title")).rejects.toMatchObject({
+      name: "ArgumentError",
+      message: /pluck does not allow comma-separated/,
+    });
+  });
+
   it("pluck: always allows Arel", async () => {
     const values = await (Post as any).pluck("title", arelSql("length(title)"));
     expect(values.length).toBeGreaterThan(0);

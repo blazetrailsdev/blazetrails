@@ -156,9 +156,9 @@ export function parseMysqlDate(text: string): Temporal.PlainDate | null {
  * handle the `HH:MM:SS[.ffffff]` case here (the cast layer is
  * responsible for interval TIME).
  */
-export function parseMysqlTime(text: string): Temporal.PlainTime | null {
+export function parseMysqlTime(text: string): Temporal.PlainTime {
   const trimmed = text.trim();
-  if (trimmed === "00:00:00" || trimmed === "") return Temporal.PlainTime.from("00:00:00");
+  if (trimmed === "") return Temporal.PlainTime.from("00:00:00");
   return Temporal.PlainTime.from(trimmed);
 }
 
@@ -206,7 +206,7 @@ function parseBcTimestampTzAsInstant(withoutBc: string): Temporal.Instant {
     );
   if (!match) throw new RangeError(`Cannot parse BC timestamptz: ${JSON.stringify(withoutBc)}`);
   const [, y, mo, d, h, mi, s, frac, rawOffset] = match;
-  const { microsecond, nanosecond } = parseFraction(frac);
+  const { millisecond, microsecond, nanosecond } = parseFraction(frac);
   const zdt = Temporal.ZonedDateTime.from({
     year: bcYearToIso(Number(y)),
     month: Number(mo),
@@ -214,6 +214,7 @@ function parseBcTimestampTzAsInstant(withoutBc: string): Temporal.Instant {
     hour: Number(h),
     minute: Number(mi),
     second: Number(s),
+    millisecond,
     microsecond,
     nanosecond,
     timeZone: expandOffset(rawOffset),
@@ -230,7 +231,7 @@ function parseBcTimestampAsPlainDateTime(withoutBc: string): Temporal.PlainDateT
   const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/.exec(withoutBc);
   if (!match) throw new RangeError(`Cannot parse BC timestamp: ${JSON.stringify(withoutBc)}`);
   const [, y, mo, d, h, mi, s, frac] = match;
-  const { microsecond, nanosecond } = parseFraction(frac);
+  const { millisecond, microsecond, nanosecond } = parseFraction(frac);
   return Temporal.PlainDateTime.from({
     year: bcYearToIso(Number(y)),
     month: Number(mo),
@@ -238,21 +239,29 @@ function parseBcTimestampAsPlainDateTime(withoutBc: string): Temporal.PlainDateT
     hour: Number(h),
     minute: Number(mi),
     second: Number(s),
+    millisecond,
     microsecond,
     nanosecond,
   });
 }
 
 /**
- * Convert a fractional-seconds string (up to 9 digits) to microsecond
- * and nanosecond components.  "123456" → { microsecond: 123456, nanosecond: 0 }.
+ * Convert a fractional-seconds string (up to 9 digits) to the three
+ * Temporal sub-second components, each in the 0–999 range.
+ * "123456" → { millisecond: 123, microsecond: 456, nanosecond: 0 }.
  */
-function parseFraction(frac: string | undefined): { microsecond: number; nanosecond: number } {
-  if (!frac) return { microsecond: 0, nanosecond: 0 };
+function parseFraction(frac: string | undefined): {
+  millisecond: number;
+  microsecond: number;
+  nanosecond: number;
+} {
+  if (!frac) return { millisecond: 0, microsecond: 0, nanosecond: 0 };
   const padded = frac.padEnd(9, "0");
-  const microsecond = Number(padded.slice(0, 6));
-  const nanosecond = Number(padded.slice(6, 9));
-  return { microsecond, nanosecond };
+  return {
+    millisecond: Number(padded.slice(0, 3)),
+    microsecond: Number(padded.slice(3, 6)),
+    nanosecond: Number(padded.slice(6, 9)),
+  };
 }
 
 /**

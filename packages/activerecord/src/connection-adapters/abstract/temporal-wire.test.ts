@@ -58,6 +58,14 @@ describe("parsePostgresInstant", () => {
     expect(zdt.month).toBe(3);
     expect(zdt.day).toBe(15);
   });
+
+  it("parses a BC timestamp with microseconds", () => {
+    const result = parsePostgresInstant("0044-03-15 12:00:00.000123+00 BC") as Temporal.Instant;
+    const zdt = result.toZonedDateTimeISO("UTC");
+    expect(zdt.millisecond).toBe(0);
+    expect(zdt.microsecond).toBe(123);
+    expect(zdt.nanosecond).toBe(0);
+  });
 });
 
 describe("parsePostgresPlainDateTime", () => {
@@ -84,6 +92,15 @@ describe("parsePostgresPlainDateTime", () => {
     expect(result.year).toBe(-43);
     expect(result.month).toBe(3);
     expect(result.day).toBe(15);
+  });
+
+  it("parses a BC datetime with microseconds", () => {
+    const result = parsePostgresPlainDateTime(
+      "0044-03-15 12:00:00.000456 BC",
+    ) as Temporal.PlainDateTime;
+    expect(result.millisecond).toBe(0);
+    expect(result.microsecond).toBe(456);
+    expect(result.nanosecond).toBe(0);
   });
 });
 
@@ -181,11 +198,15 @@ describe("parseMysqlDate", () => {
 describe("parseMysqlTime", () => {
   it("parses a TIME string", () => {
     const result = parseMysqlTime("14:23:55.123456");
-    expect(result?.toString()).toBe("14:23:55.123456");
+    expect(result.toString()).toBe("14:23:55.123456");
   });
 
   it("parses midnight", () => {
     const result = parseMysqlTime("00:00:00");
-    expect(result?.toString()).toBe("00:00:00");
+    expect(result.toString()).toBe("00:00:00");
+  });
+
+  it("treats empty string as midnight", () => {
+    expect(parseMysqlTime("").toString()).toBe("00:00:00");
   });
 });

@@ -545,7 +545,7 @@ export class CallbackSequence {
       block?.();
       return true;
     }
-    return callbackChain._invokeSequence(this, target, block);
+    return callbackChain._invoke(target, block);
   }
 
   // Back-reference set by CallbackChain.compile() for invoke() convenience
@@ -618,7 +618,7 @@ export class CallbackChain {
     return this.chain.length === 0;
   }
 
-  _invokeSequence(seq: CallbackSequence, target: AnyRecord, block?: () => void): boolean {
+  _invoke(target: AnyRecord, block?: () => void): boolean {
     const terminatorFn = this.config.terminator;
     const entries = this.chain;
 
@@ -801,7 +801,7 @@ export namespace Callbacks {
     if (!chain) {
       throw new Error(`No callback chain "${name}" defined. Call defineCallbacks first.`);
     }
-    const entry = new Callback(name, callback, kind, options);
+    const entry = new Callback(name, callback, kind, options, chain.config);
     if (options.prepend) {
       chain.prepend(entry);
     } else {

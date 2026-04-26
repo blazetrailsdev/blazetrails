@@ -202,7 +202,13 @@ export class Notifications {
    * Mirrors ActiveSupport::Notifications.publish.
    */
   static publish(name: string, payload?: EventPayload): void {
-    this.instrument(name, payload);
+    const event = new Event(name, new Date(), payload ?? {});
+    event.finish();
+    for (const sub of this._subscribers) {
+      if (this._matches(sub.pattern, event.name)) {
+        sub.callback(event);
+      }
+    }
   }
 
   // -------------------------------------------------------------------------

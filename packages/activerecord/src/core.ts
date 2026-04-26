@@ -51,6 +51,10 @@ export class InspectionMask {
   inspect(): string {
     return this._value;
   }
+
+  toJSON(): string {
+    return this._value;
+  }
 }
 
 // ---------------------------------------------------------------------------

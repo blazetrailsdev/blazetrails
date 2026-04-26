@@ -10,5 +10,17 @@
   "ar-65": {
     "side": "diff",
     "reason": "Same datetime-precision gap as ar-01/ar-52 (equality form): Order.where(created_at: Time.now) — rails truncates to whole seconds for the unprecisioned DATETIME column, trails keeps subsecond precision in both the bind and the inlined SQL. Flakes whenever the frozen-at is not on a whole second."
+  },
+  "ar-16": {
+    "side": "diff",
+    "reason": "Book.all().eagerLoad(\"author\").limit(10): trails eagerLoad pushes the association into _eagerLoadAssociations but doesn't emit the LEFT OUTER JOIN + column-aliased SELECT that Rails produces. Rails emits 'SELECT \"books\".\"id\" AS t0_r0, ... FROM \"books\" LEFT OUTER JOIN \"authors\" ON ... LIMIT 10'; trails emits the bare 'SELECT \"books\".* FROM \"books\" LIMIT 10'. Real trails-missing feature: eagerLoad's JOIN + column-projection behaviour."
+  },
+  "ar-57": {
+    "side": "diff",
+    "reason": "includes + references + string where: Rails promotes includes(:author) to a LEFT OUTER JOIN + column-aliased SELECT when references(:author) is combined with a string WHERE touching that table (same mechanism as eagerLoad). trails emits a plain SELECT with the WHERE clause but no JOIN. Same root cause as ar-16 — eagerLoad JOIN + column-projection behaviour is not implemented."
+  },
+  "ar-133": {
+    "side": "diff",
+    "reason": "from() does not handle Arel::Nodes::As arguments: Rails accepts an Arel As node (SelectManager#as result) as the from() value and inlines it as a parenthesised subquery — 'FROM (SELECT ...) ranked'. Trails' from() handler checks for Relation, string, or string+alias, but falls through to a bare toString() for Arel nodes, producing 'FROM [object Object]'. Real fix: detect Arel As / SelectManager in the from() handler and call toSql() on them."
   }
 }

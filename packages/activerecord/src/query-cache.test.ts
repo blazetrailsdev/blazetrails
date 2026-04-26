@@ -270,16 +270,21 @@ describe("QueryCacheTest", () => {
     const sub = Notifications.subscribe("sql.active_record", (event) => {
       events.push(event);
     });
+    const sql = 'SELECT * FROM "tasks"';
     try {
       await cached.withCache(async () => {
-        const sql = 'SELECT * FROM "tasks"';
         await cached.selectAll(sql);
         await cached.selectAll(sql); // second call → cache hit
       });
     } finally {
       Notifications.unsubscribe(sub);
     }
-    const cachedEvent = (events as any[]).find((e: any) => e?.payload?.cached === true);
+    // Filter by sql and connection to avoid false positives from concurrent tests
+    // (Notifications is a process-global singleton).
+    const cachedEvent = (events as any[]).find(
+      (e: any) =>
+        e?.payload?.cached === true && e?.payload?.sql === sql && e?.payload?.connection === cached,
+    );
     expect(cachedEvent).toBeDefined();
   });
 
@@ -476,11 +481,10 @@ describe("QueryCacheMutableParamTest", () => {
 
 describe("QuerySerializedParamTest", () => {
   it("query serialized active record", async () => {
-    // Rails: queries keyed by an AR record's serialized id produce a stable
-    // cache key — repeated lookups for the same record hit the cache.
-    // In Rails, `where(id: record)` serializes the record via id_for_database.
-    // In trails we test the same observable: repeated calls with the same
-    // primary-key bind produce a cache hit and return identical results.
+    // Rails parity: repeated lookups scoped to the same primary-key value
+    // produce a cache hit and return identical results. (Rails supports passing
+    // an AR record directly via id_for_database; here we use the primitive id,
+    // which is the value the ORM ultimately binds for both cases.)
     const { cached, Task } = setup();
     const t = await Task.create({ title: "serialized_ar" });
     await cached.withCache(async () => {
@@ -497,10 +501,9 @@ describe("QuerySerializedParamTest", () => {
   });
 
   it("query serialized string", async () => {
-    // Rails: string bind params coerced from objects (via to_s) produce a stable
-    // cache key — repeated calls with the same string value are served from cache.
-    // The key property tested: the cache key is built from the serialized bind
-    // value, not from object identity, so equal string binds hit the same entry.
+    // Verifies that identical string bind values produce identical cache keys —
+    // the cache key is derived from value equality, so two separate but equal
+    // strings hit the same cache entry.
     const { cached } = setup();
     await cached.executeMutation("INSERT INTO tasks (title) VALUES ('str_serial')");
     await cached.withCache(async () => {

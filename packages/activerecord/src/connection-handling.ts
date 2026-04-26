@@ -44,6 +44,12 @@ function getProhibitContext(): AsyncContext<boolean> {
 
 // --- ConnectionHandling module methods (mixed into Base as static methods) ---
 
+// Mirrors: self == Base — own-property marker set only on the literal Base class,
+// not inherited by subclasses.
+function isBaseClass(klass: typeof Base): boolean {
+  return Object.prototype.hasOwnProperty.call(klass, "_isActiveRecordBase");
+}
+
 export function connectsTo(
   this: typeof Base,
   options: {
@@ -51,7 +57,7 @@ export function connectsTo(
     shards?: Record<string, Record<string, string>>;
   },
 ): ConnectionPool[] {
-  if (!isPrimaryClass.call(this) && !this.abstractClass) {
+  if (!isBaseClass(this) && !this.abstractClass) {
     throw new NotImplementedError(
       "`connects_to` can only be called on ActiveRecord::Base or abstract classes",
     );
@@ -96,7 +102,7 @@ export function connectedTo<T>(
   options: { role?: string; shard?: string; preventWrites?: boolean },
   fn: () => T,
 ): T {
-  if (!isPrimaryClass.call(this) && !this.abstractClass) {
+  if (!isBaseClass(this) && !this.abstractClass) {
     throw new NotImplementedError(
       "calling `connected_to` is only allowed on ActiveRecord::Base or abstract classes.",
     );
@@ -122,7 +128,7 @@ export function connectedToMany<T>(
   options: { role: string; shard?: string; preventWrites?: boolean },
   fn: () => T,
 ): T {
-  if (!isPrimaryClass.call(this) || classes.some((klass) => isPrimaryClass.call(klass))) {
+  if (!isBaseClass(this) || classes.some((klass) => isBaseClass(klass))) {
     throw new NotImplementedError("connected_to_many can only be called on ActiveRecord::Base.");
   }
 

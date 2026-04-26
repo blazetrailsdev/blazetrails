@@ -5,6 +5,7 @@
  */
 
 import { MissingAttributeError } from "@blazetrails/activemodel";
+import { squish } from "@blazetrails/activesupport";
 
 interface Identifiable {
   id: unknown;
@@ -49,11 +50,8 @@ function formatTimestamp(date: Date, format: string): string {
 // to_param helpers  (mirrors ActiveSupport)
 // ──────────────────────────────────────────────
 
-function squish(str: string): string {
-  return str.trim().replace(/\s+/g, " ");
-}
-
-// Mirrors: String#parameterize
+// activesupport's parameterize strips all non-ASCII, while Rails' transliterates
+// diacritics (é→e). The NFD + combining-mark approach is closer to Rails.
 function parameterize(str: string): string {
   return str
     .normalize("NFD")
@@ -63,7 +61,9 @@ function parameterize(str: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-// Mirrors: String#truncate(20, separator: /-/, omission: "")
+// activesupport's truncate slices first then finds the separator, which differs
+// from Rails' rindex(separator, length) when the separator falls exactly at the
+// boundary. Use the Rails-faithful implementation directly.
 function truncateParam(str: string, maxLen: number): string {
   if (str.length <= maxLen) return str;
   const stop = str.lastIndexOf("-", maxLen);

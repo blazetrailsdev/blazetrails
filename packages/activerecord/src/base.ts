@@ -955,12 +955,20 @@ export class Base extends Model {
     fn: () => T | Promise<T>,
   ): Promise<T> {
     const level = options.level ?? "info";
+    const log = this.logger as { silence?: (fn: () => Promise<T>) => Promise<T> } | null;
+
     const start = performance.now();
-    const result = await fn();
+    let result: T;
+    if (options.silence && log && typeof log.silence === "function") {
+      result = await log.silence(() => Promise.resolve(fn()) as Promise<T>);
+    } else {
+      result = await fn();
+    }
     const ms = performance.now() - start;
-    const log = this.logger;
-    if (log && typeof (log as any)[level] === "function") {
-      (log as any)[level](`${message} (${ms.toFixed(1)}ms)`);
+
+    const logger = this.logger;
+    if (logger && typeof (logger as any)[level] === "function") {
+      (logger as any)[level](`${message} (${ms.toFixed(1)}ms)`);
     }
     return result;
   }

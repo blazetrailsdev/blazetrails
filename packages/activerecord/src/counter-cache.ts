@@ -163,8 +163,9 @@ export async function resetCounters(
       counterColumn = resolveCounterColumn(this, assoc, assoc.name);
     }
 
+    const countWas = record.readAttribute(counterColumn) as number | null;
     const count = await countHasMany(record, assoc.name, assoc.options);
-    updates[counterColumn] = count;
+    if (count !== countWas) updates[counterColumn] = count;
   }
 
   if (options.touch) {
@@ -177,9 +178,7 @@ export async function resetCounters(
   }
 
   if (Object.keys(updates).length > 0) {
-    await this.unscoped()
-      .where({ [this.primaryKey as string]: record.id })
-      .updateAll(updates);
+    await this.unscoped().where(buildPkPredicate(this, record.id)).updateAll(updates);
   }
 }
 

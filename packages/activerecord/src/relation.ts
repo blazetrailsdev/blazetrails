@@ -817,9 +817,8 @@ export class Relation<T extends Base> {
     }
     const orderNode = new Nodes.Ascending(caseNode);
 
+    // Mirrors Rails' spawn.order!(...) — appends to existing order, doesn't replace.
     const rel = this._clone();
-    rel._orderClauses = [];
-    rel._rawOrderClauses = [];
     rel._rawOrderClauses.push(new Visitors.ToSql().compile(orderNode));
 
     // Add WHERE col IN (values) to restrict to the named set (filter=true default).

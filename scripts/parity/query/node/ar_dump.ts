@@ -13,7 +13,13 @@
  * and calls .toSql() on the default export — expected to be an AR
  * Relation.
  *
- * Time is always frozen. --frozen-at behaves identically to the arel runner.
+ * Time is always frozen. Unlike the arel runner, the effective frozen time is
+ * truncated to whole seconds before installing FakeTimers. Rails serializes
+ * Date binds for unscaled DATETIME columns without fractional seconds (the
+ * column type's precision is nil, so AR truncates before quoting). Truncating
+ * here ensures fixtures like `new Date(Date.now() - 7 * 86400 * 1000)` produce
+ * whole-second values so both sides emit matching SQL regardless of the
+ * sub-second component of the supplied --frozen-at.
  *
  * @blazetrails/{arel,activesupport,activemodel,activerecord} must all
  * be built before running — resolution goes through package `main`

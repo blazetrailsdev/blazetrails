@@ -129,6 +129,30 @@ describe("ar_dump.ts", () => {
     expect((json.sql as string).includes("?")).toBe(false);
   });
 
+  it("truncates sub-second frozen-at to whole seconds (ar-65)", () => {
+    // Regression: a --frozen-at with milliseconds (e.g. 12:34:56.789) must not
+    // bleed into the SQL. Rails truncates unscaled DATETIME to whole seconds;
+    // the runner achieves this by flooring frozenMs to seconds before FakeTimers.
+    const outDir = mkdtempSync(join(tmpdir(), "parity-ar-test-"));
+    const outPath = join(outDir, "ar-65-subsecond.json");
+    const res = spawnSync(
+      TSX_BIN,
+      [AR_DUMP, join(FIXTURES, "ar-65"), outPath, "--frozen-at", "2026-04-25T12:34:56.789Z"],
+      { encoding: "utf8", cwd: REPO_ROOT },
+    );
+    let json: Record<string, unknown> = {};
+    try {
+      json = JSON.parse(readFileSync(outPath, "utf8")) as Record<string, unknown>;
+    } catch {
+      /* leave json={} — test asserts code first */
+    }
+    rmSync(outDir, { recursive: true, force: true });
+    expect(res.status, `stdout: ${res.stdout}\nstderr: ${res.stderr}`).toBe(0);
+    // SQL must contain the whole-second form; no microsecond suffix
+    expect(json.sql as string).toContain("'2026-04-25 12:34:56'");
+    expect(json.sql as string).not.toMatch(/\d{2}:\d{2}:\d{2}\.\d/);
+  });
+
   it("exits non-zero on an unknown fixture directory", () => {
     // Typo'd or missing fixture dir — the most common operator error.
     // We want it to fail fast with a readable errno, not deep inside AR.

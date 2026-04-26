@@ -417,7 +417,7 @@ export class Base extends Model {
     _filterAttributes.call(this, value);
   }
 
-  static get inspectionFilter() {
+  static inspectionFilter() {
     return _inspectionFilter.call(this);
   }
 

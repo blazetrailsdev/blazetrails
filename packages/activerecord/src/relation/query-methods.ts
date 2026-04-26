@@ -1365,8 +1365,10 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
   const mapped: unknown[] = [];
   for (const arg of orderArgs) {
     if (typeof arg === "symbol") {
+      // Resolve against the current relation's table, not a table named after the column.
       const name = symbolToName(arg);
-      const attr = this.predicateBuilder?.resolveArelAttribute?.(name, name) ?? arelSql(name);
+      const modelTable = (this as any)._modelClass?.arelTable;
+      const attr = modelTable ? modelTable.get(name) : arelSql(name);
       mapped.push(new Nodes.Ascending(attr));
     } else if (isPlainObject(arg)) {
       for (const [key, value] of Object.entries(arg)) {
@@ -1381,9 +1383,9 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
             );
           }
         } else {
-          // Flat hash: { col: dir } — resolve via predicate builder for quoting
-          const attr =
-            this.predicateBuilder?.resolveArelAttribute?.(key, key) ?? new ArelTable(key).get(key);
+          // Flat hash: { col: dir } — resolve against the current table.
+          const modelTable = (this as any)._modelClass?.arelTable;
+          const attr = modelTable ? modelTable.get(key) : arelSql(key);
           mapped.push(
             String(value).toLowerCase() === "desc"
               ? new Nodes.Descending(attr)

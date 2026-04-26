@@ -2221,7 +2221,11 @@ export class Relation<T extends Base> {
         );
       }
       const isComplex =
-        c.includes(".") || c.includes("(") || c.includes('"') || /\s+AS\s+/i.test(c);
+        c.includes(".") ||
+        c.includes("(") ||
+        c.includes('"') ||
+        c.includes("`") ||
+        /\s+AS\s+/i.test(c);
       return isComplex ? new Nodes.SqlLiteral(c) : table.get(c);
     });
     // Extract column names for result mapping
@@ -2234,7 +2238,7 @@ export class Relation<T extends Base> {
         // can't be reliably predicted — use positional fallback (return null).
         if (c.includes("(")) return null;
         // Table-qualified or quoted identifiers: extract the last plain identifier segment.
-        const dotMatch = c.match(/(?:"?\w+"?\.)?"?(\w+)"?\s*$/);
+        const dotMatch = c.match(/(?:["`]?\w+["`]?\.)? *["`]?(\w+)["`]?\s*$/);
         if (dotMatch) return dotMatch[1];
         return c;
       }

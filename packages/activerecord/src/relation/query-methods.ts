@@ -4,9 +4,9 @@
  *
  * Mirrors: ActiveRecord::QueryMethods
  */
-import { Nodes, SelectManager, Table, sql as arelSql } from "@blazetrails/arel";
+import { Nodes, SelectManager, sql as arelSql } from "@blazetrails/arel";
 import { ArgumentError } from "@blazetrails/activemodel";
-import { PreparedStatementInvalid } from "../errors.js";
+import { ActiveRecordError, PreparedStatementInvalid } from "../errors.js";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
@@ -1095,12 +1095,14 @@ function asyncBang(this: QueryMethodsHost): QueryMethodsHost {
 }
 
 function async(this: QueryMethodsHost): QueryMethodsHost {
-  return (this as any).spawn().asyncBang();
+  const rel = (this as any).spawn();
+  rel._async = true;
+  return rel;
 }
 
 function assertModifiableBang(this: QueryMethodsHost): void {
   if ((this as any)._loaded || (this as any)._arel) {
-    throw new Error("UnmodifiableRelation");
+    throw new ActiveRecordError("can't modify a loaded relation");
   }
 }
 
@@ -1167,17 +1169,17 @@ function buildNamedBoundSqlLiteral(
   this: QueryMethodsHost,
   statement: string,
   values: Record<string, unknown>,
-): Nodes.Node {
-  const boundValues: Record<string, unknown> = {};
+): Nodes.BoundSqlLiteral {
+  const namedBinds: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(values)) {
     if (value !== null && typeof value === "object" && typeof (value as any).toSql === "function") {
-      boundValues[key] = arelSql((value as any).toSql());
+      namedBinds[key] = arelSql((value as any).toSql());
     } else {
-      boundValues[key] = value;
+      namedBinds[key] = value;
     }
   }
   try {
-    return new (Nodes as any).BoundSqlLiteral(`(${statement})`, null, boundValues);
+    return new Nodes.BoundSqlLiteral(`(${statement})`, [], namedBinds);
   } catch (e: any) {
     throw new PreparedStatementInvalid(e?.message ?? String(e));
   }
@@ -1187,15 +1189,15 @@ function buildBoundSqlLiteral(
   this: QueryMethodsHost,
   statement: string,
   values: unknown[],
-): Nodes.Node {
-  const boundValues = values.map((value) => {
+): Nodes.BoundSqlLiteral {
+  const positionalBinds = values.map((value) => {
     if (value !== null && typeof value === "object" && typeof (value as any).toSql === "function") {
       return arelSql((value as any).toSql());
     }
     return value;
   });
   try {
-    return new (Nodes as any).BoundSqlLiteral(`(${statement})`, boundValues, null);
+    return new Nodes.BoundSqlLiteral(`(${statement})`, positionalBinds, {});
   } catch (e: any) {
     throw new PreparedStatementInvalid(e?.message ?? String(e));
   }
@@ -1206,10 +1208,11 @@ function buildSubquery(
   subqueryAlias: string,
   selectValue: unknown,
 ): SelectManager {
+  // Rails: except(:optimizer_hints).arel.as(alias) → new SelectManager(subquery).project(selectValue)
   const relation = (this as any).except?.("optimizerHints") ?? this;
-  const subquery = (relation as any).toArel?.().as(subqueryAlias);
-  const sm = new SelectManager(new Table(subqueryAlias));
-  if (subquery) sm.from(subquery);
+  const aliasedSubquery = (relation as any).toArel?.().as(subqueryAlias);
+  const sm = new SelectManager();
+  if (aliasedSubquery) (sm as any).from(aliasedSubquery);
   sm.project(selectValue as any);
   const hints: string[] = (this as any)._optimizerHints ?? [];
   if (hints.length > 0) (sm as any).optimizerHints?.(...hints);
@@ -1246,7 +1249,9 @@ function reverseSqlOrder(this: QueryMethodsHost, orderQuery: unknown[]): unknown
     }
     if (typeof o === "string") {
       if (isDoesNotSupportReverse(o)) {
-        throw new IrreversibleOrderError(`Order ${JSON.stringify(o)} cannot be reversed automatically`);
+        throw new IrreversibleOrderError(
+          `Order ${JSON.stringify(o)} cannot be reversed automatically`,
+        );
       }
       return o.split(",").map((s) => {
         s = s.trim();
@@ -1273,8 +1278,16 @@ function columnReferences(orderArgs: unknown[]): string[] {
         const t = extractTableNameFrom(String(key));
         if (t) refs.push(t);
       }
-    } else if (arg !== null && typeof arg === "object" && typeof (arg as any).relation === "object") {
-      refs.push((arg as any).relation.name);
+    } else if (arg !== null && typeof arg === "object") {
+      const node = arg as any;
+      // Arel::Attribute → node.relation.name
+      if (typeof node.relation === "object" && node.relation?.name) {
+        refs.push(node.relation.name);
+      } else if (typeof node.expr === "object" && typeof node.expr?.relation === "object") {
+        // Arel::Nodes::Ordering wrapping an Attribute → node.expr.relation.name
+        const rel = node.expr.relation;
+        if (rel?.name) refs.push(rel.name);
+      }
     }
   }
   return refs;
@@ -1290,7 +1303,8 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
   if (permit) disallowRawSqlBang(flattenedArgs(orderArgs) as string[], permit);
   validateOrderArgs.call(this, orderArgs);
   const refs = columnReferences(orderArgs);
-  if (refs.length > 0) (this as any)._referencesValues = [...((this as any)._referencesValues ?? []), ...refs];
+  if (refs.length > 0)
+    (this as any)._referencesValues = [...((this as any)._referencesValues ?? []), ...refs];
 }
 
 function buildOrder(this: QueryMethodsHost, arel: any): void {
@@ -1324,8 +1338,10 @@ function resolveArelAttributes(this: QueryMethodsHost, attrs: unknown[]): unknow
     if (attr !== null && typeof attr === "object" && !Array.isArray(attr)) {
       return Object.entries(attr as Record<string, unknown>).flatMap(([table, columns]) => {
         const tableName = String(table);
-        return (Array.isArray(columns) ? columns : [columns]).map((col) =>
-          builder?.resolveArelAttribute?.(tableName, String(col)) ?? arelSql(`${tableName}.${String(col)}`),
+        return (Array.isArray(columns) ? columns : [columns]).map(
+          (col) =>
+            builder?.resolveArelAttribute?.(tableName, String(col)) ??
+            arelSql(`${tableName}.${String(col)}`),
         );
       });
     }

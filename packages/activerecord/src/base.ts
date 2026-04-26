@@ -966,7 +966,7 @@ export class Base extends Model {
       // this silences synchronous log calls inside fn(). Async continuations
       // run after the silence window closes, which mirrors Rails' Ruby behavior
       // where the block is also synchronous.
-      const ERROR_LEVEL = 4; // Logger::ERROR
+      const ERROR_LEVEL = 3; // Logger::ERROR (matches ActiveSupport::Logger::ERROR)
       log.silence(ERROR_LEVEL, () => {
         result = fn();
       });

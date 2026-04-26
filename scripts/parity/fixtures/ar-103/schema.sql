@@ -4,5 +4,5 @@
 CREATE TABLE books (
   id INTEGER PRIMARY KEY,
   title TEXT,
-  created_at TEXT
+  created_at DATETIME
 );

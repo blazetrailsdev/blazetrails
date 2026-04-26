@@ -6540,7 +6540,7 @@ describe("HasManyThroughAssociationsTest", () => {
 
     const author = await JsAuthor.create({ name: "David" });
     const post = await JsPost.create({ js_author_id: author.id, title: "First Post" });
-    const comment = await JsComment.create({ js_post_id: post.id, body: "Great!" });
+    await JsComment.create({ js_post_id: post.id, body: "Great!" });
 
     const comments = await (author as any).js_comments.toArray();
     expect(comments).toHaveLength(1);
@@ -6593,7 +6593,7 @@ describe("HasManyThroughAssociationsTest", () => {
 
     const author = await LjAuthor.create({ name: "Mary" });
     const post = await LjPost.create({ lj_author_id: author.id, title: "Other" });
-    const comment = await LjComment.create({ lj_post_id: post.id, body: "Hey!" });
+    await LjComment.create({ lj_post_id: post.id, body: "Hey!" });
 
     const comments = await (author as any).lj_comments.toArray();
     expect(comments).toHaveLength(1);

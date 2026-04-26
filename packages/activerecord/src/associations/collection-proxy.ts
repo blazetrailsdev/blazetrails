@@ -2067,15 +2067,22 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       await this._pushThrough(records, false, true);
       return;
     }
-    // Non-through: let push() assign the FK first, then verify the save succeeded.
-    // Track which records were new before push() so we can raise if they're still unsaved.
+    // Non-through: push() assigns the FK first, then we verify new records persisted
+    // and call saveBang() on already-persisted records to surface validation errors.
     const newRecords = records.filter((r) => r.isNewRecord());
+    const persistedRecords = records.filter((r) => !r.isNewRecord());
+
     await this.push(...records);
+
     for (const record of newRecords) {
       if (record.isNewRecord()) {
         // push() called save() which returned false — raise as Rails' << does
         throw new RecordInvalid(record as unknown as object);
       }
+    }
+
+    for (const record of persistedRecords) {
+      await record.saveBang();
     }
     return;
   }

@@ -619,9 +619,13 @@ function setOptionsForCallbacksBang(
   if (options.on) {
     const fireOn = (Array.isArray(options.on) ? options.on : [options.on]) as string[];
     assertValidTransactionAction(fireOn);
-    const existingIf = options.if as ((record: Base) => boolean) | undefined;
-    options.if = (record: Base) =>
-      isTransactionIncludeAnyAction(record, fireOn) && (existingIf ? existingIf(record) : true);
+    const existingIf = options.if as CallbackFn | CallbackFn[] | undefined;
+    options.if = (record: Base) => {
+      if (!isTransactionIncludeAnyAction(record, fireOn)) return false;
+      if (!existingIf) return true;
+      if (Array.isArray(existingIf)) return existingIf.every((fn) => fn(record));
+      return (existingIf as CallbackFn)(record) as boolean;
+    };
   }
 }
 

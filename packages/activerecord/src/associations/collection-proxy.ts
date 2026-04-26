@@ -1026,7 +1026,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       // Save the target record if it's new
       if (record.isNewRecord()) {
         if (bang) {
-          await (record as any).saveBang(); // raises RecordInvalid if invalid
+          await record.saveBang(); // raises RecordInvalid if invalid
         } else {
           const saved = await record.save();
           if (!saved) continue;
@@ -1056,7 +1056,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       if (bang) {
         // Bang form: raise RecordInvalid if join record is invalid (mirrors Rails' save!)
         joinRecord = new throughModel(joinAttrs);
-        await (joinRecord as any).saveBang();
+        await joinRecord.saveBang();
       } else {
         joinRecord = await throughModel.create(joinAttrs);
       }
@@ -2067,13 +2067,17 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       await this._pushThrough(records, false, true);
       return;
     }
-    // Non-through: save each record with saveBang() to surface validation errors
-    for (const record of records) {
+    // Non-through: let push() assign the FK first, then verify the save succeeded.
+    // Track which records were new before push() so we can raise if they're still unsaved.
+    const newRecords = records.filter((r) => r.isNewRecord());
+    await this.push(...records);
+    for (const record of newRecords) {
       if (record.isNewRecord()) {
-        await (record as any).saveBang();
+        // push() called save() which returned false — raise as Rails' << does
+        throw new RecordInvalid(record as unknown as object);
       }
     }
-    return this.push(...records);
+    return;
   }
 
   /**

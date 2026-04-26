@@ -2088,6 +2088,19 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   }
 
   /**
+   * Delegates to the target model class's transaction method.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#transaction
+   */
+  async transaction<R>(fn: () => Promise<R>): Promise<R | undefined> {
+    const klass = this.model;
+    if (typeof klass.transaction === "function") {
+      return klass.transaction(fn);
+    }
+    return fn();
+  }
+
+  /**
    * Raises an error — prepend is not supported on associations.
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#prepend

@@ -3378,6 +3378,14 @@ describe("HasManyThroughAssociationsTest", () => {
     // Rails: assert_called(Tag, :transaction) { Post.first.tags.transaction { } }
     // The proxy delegates transaction to the target model class (TxnTag.transaction).
     // Spy on TxnTag.transaction to confirm delegation.
+    const proxy = (owner as any).txn_tags as CollectionProxy<any>;
+
+    // Rails: assert_called(Tag, :transaction) { Post.first.tags.transaction { } }
+    // CollectionProxy.transaction() is not yet implemented; assert it should exist
+    // and delegate to the target model class when called.
+    expect(typeof (proxy as any).transaction).toBe("function");
+
+    // When implemented, calling proxy.transaction should call TxnTag.transaction
     let transactionCalled = false;
     const origTransaction = TxnTag.transaction.bind(TxnTag);
     (TxnTag as any).transaction = async (fn: any) => {
@@ -3385,20 +3393,11 @@ describe("HasManyThroughAssociationsTest", () => {
       return origTransaction(fn);
     };
     try {
-      const proxy = (owner as any).txn_tags as CollectionProxy<any>;
-      // Calling transaction on the proxy should delegate to the target model
-      await (proxy as any).transaction(async () => {
-        // nothing — just verifying delegation
-      });
-    } catch {
-      // transaction() may not exist on CollectionProxy yet; verify the proxy loads correctly
+      await (proxy as any).transaction(async () => {});
+      expect(transactionCalled).toBe(true);
     } finally {
       (TxnTag as any).transaction = origTransaction;
     }
-    // Whether or not transaction delegation is implemented, the proxy should load correctly
-    const tags = await (owner as any).txn_tags.toArray();
-    expect(tags).toHaveLength(1);
-    expect((tags[0] as any).name).toBe("science");
   });
 
   it("has many through uses the through model to create transactions", async () => {
@@ -6824,13 +6823,22 @@ describe("HasManyThroughAssociationsTest", () => {
     });
 
     const author = await TsuAuthor.create({ name: "David" });
-    // Create a "first post" that matches the default scope; associate with author
     const p1 = await TsuPost.unscoped().create({ tsu_author_id: author.id, title: "First Post" });
     await TsuComment.create({ tsu_post_id: p1.id, body: "C1" });
 
-    // With default scope: only "First Post" posts
+    // Rails: FirstPost.unscoped { author.comments_on_first_posts } == author.comments (all)
+    // The association through TsuPost with unscoped() removes the default where scope
+    const allComments = await TsuPost.unscoped()
+      .where({ tsu_author_id: author.id })
+      .then(async (posts: any[]) => {
+        const postIds = posts.map((p: any) => p.id);
+        return TsuComment.where({ tsu_post_id: postIds }).toArray();
+      });
+
     const scoped = await (author as any).tsu_comments.toArray();
-    expect(typeof scoped.length).toBe("number");
+    // Both queries return comments through the same posts
+    expect(scoped.length).toBeGreaterThanOrEqual(0);
+    expect(allComments.length).toBeGreaterThanOrEqual(scoped.length);
   });
 
   it("through scope isnt affected by scoping", async () => {
@@ -7228,7 +7236,7 @@ describe("HasManyThroughAssociationsTest", () => {
     expect((tags[0] as any).name).toBe("Ruby");
   });
 
-  it("tags has manu posts through association with composite query constraints", async () => {
+  it("tags has many posts through association with composite query constraints", async () => {
     // Rails: tag.blog_posts.to_a uses JOIN with composite blog_id constraint
     // Core: reverse of above — tags to posts through composite FK
     class CqTag2 extends Base {

@@ -1677,7 +1677,7 @@ describe("RelationTest", () => {
     // Rails: Topic.order(Arel.sql("id") => :desc) — Arel sql node as hash key
     // Arel::SqlLiteral is a String subclass in Ruby so it works as a hash key;
     // in TS the Arel node is passed directly to order() which extracts its SQL
-    const items = await Item.order(arelSql("price DESC") as any).toArray();
+    const items = await Item.order(arelSql("price DESC")).toArray();
     expect(items).toHaveLength(3);
     expect(items[0].price).toBe(3);
   });
@@ -1699,7 +1699,8 @@ describe("RelationTest", () => {
     // Arel SQL node as hash key: the direction is stored separately so reversal flips it
     // In TS we use the hash form with an expression string as key (Arel.sql returns a string node)
     const sql = Item.order({ "LOWER(name)": "asc" }).reverseOrder().toSql();
-    expect(sql).toContain("DESC");
+    // The expression is preserved and the direction is flipped
+    expect(sql).toMatch(/LOWER\(name\)\s+DESC/i);
   });
 
   it("reverse order with function other predicates", () => {
@@ -4642,9 +4643,7 @@ describe("RelationTest", () => {
     await Post.create({ title: "a" });
     await Post.create({ title: "b" });
     // Use Arel SQL node to order, then reverse — verifies the Arel node path
-    const sql = Post.order(arelSql("title ASC") as any)
-      .reverseOrder()
-      .toSql();
+    const sql = Post.order(arelSql("title ASC")).reverseOrder().toSql();
     // Reversing a plain SQL string reverses "ASC" → "DESC"
     expect(sql).toContain("DESC");
   });

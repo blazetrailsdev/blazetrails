@@ -1261,13 +1261,12 @@ function reverseSqlOrder(this: QueryMethodsHost, orderQuery: unknown[]): unknown
     );
   }
   return orderQuery.flatMap((o) => {
-    // Match Rails: Arel::Attribute → .desc, Arel::Nodes::Ordering → .reverse,
-    // other Arel nodes → .desc. Skip arrays (Array#reverse would mutate them).
-    if (o instanceof Nodes.Ordering && typeof (o as any).reverse === "function")
-      return [(o as any).reverse()];
-    if (o instanceof Nodes.Attribute) return [o.desc()];
-    if (o instanceof Nodes.Node && typeof (o as any).desc === "function") {
-      return [(o as any).desc()];
+    // Use reverse() when available (Ascending, Descending, NullsFirst, NullsLast),
+    // fall back to desc() for other Arel nodes (Attribute, NodeExpression, etc.).
+    // Guard instanceof Nodes.Node to avoid matching arrays which also have reverse().
+    if (o instanceof Nodes.Node) {
+      if (typeof (o as any).reverse === "function") return [(o as any).reverse()];
+      if (typeof (o as any).desc === "function") return [(o as any).desc()];
     }
     if (typeof o === "string") {
       if (isDoesNotSupportReverse(o)) {
@@ -1350,7 +1349,12 @@ function flattenedOrderKeysForRawSqlCheck(orderArgs: unknown[]): (string | symbo
 }
 
 function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void {
-  disallowRawSqlBang(flattenedOrderKeysForRawSqlCheck(orderArgs), resolveOrderMatcher(this));
+  // disallowRawSqlBang skips symbols — resolve symbol names to strings first
+  // so their descriptions are validated against the column-name matcher.
+  const keysForCheck = flattenedOrderKeysForRawSqlCheck(orderArgs).map((k) =>
+    typeof k === "symbol" ? symbolToName(k) : k,
+  );
+  disallowRawSqlBang(keysForCheck, resolveOrderMatcher(this));
   validateOrderArgs.call(this, orderArgs);
   const refs = columnReferences(orderArgs);
   if (refs.length > 0) {

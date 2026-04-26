@@ -461,6 +461,10 @@ export class Base extends Model {
     return this.connectionClassForSelf() === Base;
   }
 
+  static currentPreventingWrites(): boolean {
+    return _Core.currentPreventingWrites.call(this);
+  }
+
   /**
    * Walks up the superclass chain until it finds a class where
    * connectionClassQ() is true, or reaches Base.

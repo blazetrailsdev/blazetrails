@@ -175,10 +175,16 @@ describe("ConnectionHandlingTest", () => {
   });
 
   it("connectedToMany switches for classes", () => {
-    Base.connectedToMany([Base], { role: "reading" }, () => {
-      expect(currentRole.call(Base)).toBe("reading");
+    class AbstractConn extends Base {
+      static {
+        this.abstractClass = true;
+        this.connectionClass = true;
+      }
+    }
+    Base.connectedToMany([AbstractConn], { role: "reading" }, () => {
+      expect(currentRole.call(AbstractConn)).toBe("reading");
     });
-    expect(currentRole.call(Base)).toBe("writing");
+    expect(currentRole.call(AbstractConn)).toBe("writing");
   });
 
   it("clear_query_caches_for_current_thread does not throw", () => {

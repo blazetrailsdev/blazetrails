@@ -12,6 +12,7 @@ import {
   AdapterNotSpecified,
   ConnectionNotEstablished,
   ConfigurationError,
+  NotImplementedError,
 } from "./errors.js";
 import { ArgumentError } from "@blazetrails/activemodel";
 import {
@@ -50,6 +51,12 @@ export function connectsTo(
     shards?: Record<string, Record<string, string>>;
   },
 ): ConnectionPool[] {
+  if (!isPrimaryClass.call(this) && !this.abstractClass) {
+    throw new NotImplementedError(
+      "`connects_to` can only be called on ActiveRecord::Base or abstract classes",
+    );
+  }
+
   const database = options.database ?? {};
   const shards = options.shards ?? {};
 
@@ -89,6 +96,18 @@ export function connectedTo<T>(
   options: { role?: string; shard?: string; preventWrites?: boolean },
   fn: () => T,
 ): T {
+  if (!isPrimaryClass.call(this) && !this.abstractClass) {
+    throw new NotImplementedError(
+      "calling `connected_to` is only allowed on ActiveRecord::Base or abstract classes.",
+    );
+  }
+
+  if (!this.connectionClassQ() && !isPrimaryClass.call(this)) {
+    throw new NotImplementedError(
+      "calling `connected_to` is only allowed on the abstract class that established the connection.",
+    );
+  }
+
   const { role, shard, preventWrites = false } = options;
   if (!role && !shard) {
     throw new ArgumentError("must provide a `shard` and/or `role`.");
@@ -103,7 +122,12 @@ export function connectedToMany<T>(
   options: { role: string; shard?: string; preventWrites?: boolean },
   fn: () => T,
 ): T {
-  const { role, shard, preventWrites = false } = options;
+  if (!this.primaryClassQ() || classes.some((klass) => klass.primaryClassQ())) {
+    throw new NotImplementedError("connected_to_many can only be called on ActiveRecord::Base.");
+  }
+
+  const { role, shard } = options;
+  const preventWrites = options.preventWrites ?? role === "reading";
 
   const klasses = new Set(classes.map((klass) => klass.connectionClassForSelf()));
   const entry = { role, shard, preventWrites, klasses };
@@ -162,7 +186,8 @@ export function connectingTo(
   this: typeof Base,
   options: { role?: string; shard?: string; preventWrites?: boolean },
 ): void {
-  const { role = "writing", shard = "default", preventWrites = false } = options;
+  const { role = "writing", shard = "default" } = options;
+  const preventWrites = options.preventWrites ?? role === "reading";
   appendToConnectedToStack({
     role,
     shard,

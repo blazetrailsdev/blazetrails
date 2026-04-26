@@ -823,7 +823,7 @@ export class Relation<T extends Base> {
     // _applyOrderToManager detects CASE-style SQL via the "(" heuristic and
     // a /\bcase\b/i check, then emits it as SqlLiteral.
     const rel = this._clone();
-    rel._orderClauses.push(new Visitors.ToSql().compile(orderNode));
+    rel._orderClauses.push(orderNode.toSql());
 
     // Add WHERE col IN (values) filter — mirrors Rails' arel_column.in(values.compact).
     // Values go through attribute-aware casting via the model's arelTable type-caster

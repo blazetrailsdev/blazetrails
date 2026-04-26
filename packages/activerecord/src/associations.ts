@@ -557,12 +557,24 @@ export async function loadBelongsTo(
   assocName: string,
   options: AssociationOptions,
 ): Promise<Base | null> {
-  // Check cached (inverse_of) first, then preloaded
+  // Check cached (inverse_of) first, then preloaded.
+  // Even for cached/preloaded hits, wire inverseOf so the parent's association
+  // cache points back to this child instance (mirrors Rails behavior).
   if ((record as any)._cachedAssociations?.has(assocName)) {
-    return (record as any)._cachedAssociations.get(assocName) as Base | null;
+    const cached = (record as any)._cachedAssociations.get(assocName) as Base | null;
+    if (options.inverseOf && cached) {
+      (cached as any)._cachedAssociations = (cached as any)._cachedAssociations ?? new Map();
+      (cached as any)._cachedAssociations.set(options.inverseOf, record);
+    }
+    return cached;
   }
   if ((record as any)._preloadedAssociations?.has(assocName)) {
-    return (record as any)._preloadedAssociations.get(assocName) as Base | null;
+    const preloaded = (record as any)._preloadedAssociations.get(assocName) as Base | null;
+    if (options.inverseOf && preloaded) {
+      (preloaded as any)._cachedAssociations = (preloaded as any)._cachedAssociations ?? new Map();
+      (preloaded as any)._cachedAssociations.set(options.inverseOf, record);
+    }
+    return preloaded;
   }
 
   // Strict loading check: this is a lazy load

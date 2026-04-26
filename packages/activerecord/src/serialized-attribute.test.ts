@@ -488,21 +488,168 @@ describe("SerializedAttributeTest", () => {
   });
 });
 
+// Rails: SerializedAttributeTestWithYamlSafeLoad inherits SerializedAttributeTest
+// and runs all the same tests with use_yaml_unsafe_load=false. In trails we use
+// JSON serialization regardless, so behavior is identical to the base class.
 describe("SerializedAttributeTestWithYamlSafeLoad", () => {
-  it.skip("supports permitted classes for default column serializer", () => {});
-  // These tests cover YAML safe_load behavior which is Ruby/YAML-specific.
-  // TypeScript uses JSON serialization instead, so these are not applicable.
-  it.skip("serialized attribute — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("serialized attribute on custom attribute with default — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("nil is always persisted as null — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("serialized attribute with default — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("serialized attributes from database on subclass — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("serialized attribute on alias attribute — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("unexpected serialized type — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("serialize attribute via select method when time zone available — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("should raise exception on serialized attribute with type mismatch — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("serialized time attribute — YAML-specific, not applicable to TypeScript", () => {});
-  it.skip("supports permitted classes for default column serializer — YAML-specific, not applicable to TypeScript", () => {});
+  function makeModel() {
+    const adapter = freshAdapter();
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("preferences", "string");
+        this.adapter = adapter;
+      }
+    }
+    serialize(User, "preferences");
+    return { User, adapter };
+  }
+
+  it("serialized attribute", () => {
+    const { User } = makeModel();
+    const u = new User();
+    u.preferences = JSON.stringify({ theme: "dark" });
+    expect(u.preferences).toEqual({ theme: "dark" });
+  });
+
+  it("serialized attribute on alias attribute", () => {
+    const adapter = freshAdapter();
+    class AliasUser extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("preferences", "string");
+        this.adapter = adapter;
+        this.aliasAttribute("prefs", "preferences");
+      }
+    }
+    serialize(AliasUser, "preferences");
+    const u = new AliasUser();
+    u.preferences = JSON.stringify({ theme: "dark" });
+    expect(u.preferences).toEqual({ theme: "dark" });
+    expect(u.prefs !== undefined).toBe(true);
+  });
+
+  it("serialized attribute with default", () => {
+    const adapter = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("settings", "string", { default: "{}" });
+        this.adapter = adapter;
+      }
+    }
+    serialize(Post, "settings");
+    const p = new Post();
+    expect(p.settings).toEqual({});
+  });
+
+  it("serialized attribute on custom attribute with default", () => {
+    const adapter = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("metadata", "string", { default: '{"version":1}' });
+        this.adapter = adapter;
+      }
+    }
+    serialize(Post, "metadata");
+    const p = new Post();
+    expect(p.metadata).toEqual({ version: 1 });
+  });
+
+  it("serialized attributes from database on subclass", async () => {
+    const adapter = freshAdapter();
+    class Parent extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("data", "string");
+        this.adapter = adapter;
+      }
+    }
+    serialize(Parent, "data");
+    class Child extends Parent {}
+    const c = await Child.create({ name: "test", data: JSON.stringify({ key: "val" }) as any });
+    const found = await Child.find(c.id);
+    expect((found as any).data).toEqual({ key: "val" });
+  });
+
+  it("serialized time attribute", () => {
+    const adapter = freshAdapter();
+    class Event extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("payload", "string");
+        this.adapter = adapter;
+      }
+    }
+    serialize(Event, "payload");
+    const e = new Event();
+    const now = new Date().toISOString();
+    e.payload = JSON.stringify({ occurred_at: now });
+    const val = e.payload as Record<string, unknown>;
+    expect(val.occurred_at).toBe(now);
+  });
+
+  it("should raise exception on serialized attribute with type mismatch", async () => {
+    const adapter = freshAdapter();
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("content", "string");
+        this.adapter = adapter;
+      }
+    }
+    serialize(Topic, "content", { coder: "json" });
+    const topic = await Topic.create({
+      title: "test",
+      content: JSON.stringify({ zomg: true }) as any,
+    });
+    serialize(Topic, "content", { coder: "array" });
+    const found = await Topic.find(topic.id);
+    expect(() => found.content).toThrow(SerializationTypeMismatch);
+  });
+
+  it("serialize attribute via select method when time zone available", async () => {
+    const adapter = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("tags", "string");
+        this.adapter = adapter;
+      }
+    }
+    serialize(Post, "tags");
+    const p = await Post.create({ title: "test", tags: JSON.stringify(["a", "b"]) as any });
+    const found = await Post.select("id", "tags").find(p.id);
+    expect((found as any).tags).toEqual(["a", "b"]);
+  });
+
+  it("unexpected serialized type", async () => {
+    const adapter = freshAdapter();
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("content", "string");
+        this.adapter = adapter;
+      }
+    }
+    serialize(Topic, "content", { coder: "hash" });
+    await Topic.create({ title: "test", content: JSON.stringify({ zomg: true }) as any });
+    serialize(Topic, "content", { coder: "array" });
+    const topic = (await Topic.all().toArray())[0];
+    expect(() => topic.content).toThrow(SerializationTypeMismatch);
+  });
+
+  it("nil is always persisted as null", () => {
+    const { User } = makeModel();
+    const u = new User();
+    u.preferences = null;
+    expect(u.preferences).toBeNull();
+  });
+
+  it.skip("supports permitted classes for default column serializer", () => {
+    // Rails-specific: YAML permitted classes have no equivalent in trails (JSON serialization).
+  });
 });
 
 describe("serialize", () => {

@@ -5,7 +5,7 @@
  */
 
 import { MissingAttributeError } from "@blazetrails/activemodel";
-import { squish } from "@blazetrails/activesupport";
+import { squish, parameterize, truncate } from "@blazetrails/activesupport";
 
 interface Identifiable {
   id: unknown;
@@ -55,28 +55,8 @@ function formatTimestamp(date: Date, format: CacheTimestampFormat | string): str
 }
 
 // ──────────────────────────────────────────────
-// to_param helpers  (mirrors ActiveSupport)
+// to_param helpers
 // ──────────────────────────────────────────────
-
-// activesupport's parameterize strips all non-ASCII, while Rails' transliterates
-// diacritics (é→e). The NFD + combining-mark approach is closer to Rails.
-function parameterize(str: string): string {
-  return str
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-// activesupport's truncate slices first then finds the separator, which differs
-// from Rails' rindex(separator, length) when the separator falls exactly at the
-// boundary. Use the Rails-faithful implementation directly.
-function truncateParam(str: string, maxLen: number): string {
-  if (str.length <= maxLen) return str;
-  const stop = str.lastIndexOf("-", maxLen);
-  return stop > 0 ? str.slice(0, stop) : str.slice(0, maxLen);
-}
 
 // ──────────────────────────────────────────────
 // Instance methods
@@ -203,7 +183,7 @@ export function toParamClass(
     if (!base) return base;
     const member = this[methodName];
     const raw: string = String((typeof member === "function" ? member.call(this) : member) ?? "");
-    const slug = truncateParam(parameterize(squish(raw)), 20);
+    const slug = truncate(parameterize(squish(raw)), 20, { separator: /-/, omission: "" });
     return slug ? `${base}-${slug}` : base;
   };
   return undefined;

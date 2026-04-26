@@ -1083,11 +1083,14 @@ describe("AutomaticInverseFindingTests", () => {
   });
 
   it.skip("has many inverse of derived automatically despite of composite foreign key", () => {
-    /* needs composite FK — our canFindInverseOfAutomatically returns false when foreignKey is set,
-       even for composite keys. Rails 7.x allows auto-detection with composite query_constraints. */
+    /* Composite FK associations use queryConstraints (not options.foreignKey scalar).
+       canFindInverseOfAutomatically currently checks options.foreignKey only, so composite
+       FK associations passed via queryConstraints may still auto-detect. Needs validation
+       that the right path is exercised and inverse detection works correctly for composite FKs. */
   });
   it.skip("belongs to inverse of derived automatically despite of composite foreign key", () => {
-    /* needs composite FK — same as above */
+    /* Same as above — verify canFindInverseOfAutomatically behavior for queryConstraints vs
+       scalar foreignKey, and that automatic detection works for composite FK associations. */
   });
 });
 
@@ -1237,7 +1240,8 @@ describe("InverseCachedPathTests", () => {
   it("wires inverseOf on the cached-associations fast-path", async () => {
     class CachedFace extends Base {
       static {
-        this.attribute("man_id", "integer");
+        // Default FK for belongsTo :cachedMan is cached_man_id
+        this.attribute("cached_man_id", "integer");
         this.adapter = adapter;
       }
     }
@@ -1253,7 +1257,7 @@ describe("InverseCachedPathTests", () => {
     registerModel(CachedFace);
 
     const m = await CachedMan.create({ name: "Alice" });
-    const f = await CachedFace.create({ man_id: m.id });
+    const f = await CachedFace.create({ cached_man_id: m.id });
 
     // Pre-populate _cachedAssociations so the fast-path is taken
     (f as any)._cachedAssociations = new Map();

@@ -560,10 +560,10 @@ export async function loadBelongsTo(
   // Check cached (inverse_of) first, then preloaded.
   // Even for cached/preloaded hits, wire inverseOf so the parent's association
   // cache points back to this child instance (mirrors Rails behavior).
-  // Validate inverseOf before checking whether the value is null: an invalid name
-  // must throw even when the cached value is null (e.g. preloader stored null for
-  // a missing row), consistent with the cache-miss path that validates before the
-  // FK/null short-circuit.
+  // For non-polymorphic associations, validate inverseOf before checking whether
+  // the value is null: an invalid name must throw even when the cached value is
+  // null (e.g. preloader stored null for a missing row), consistent with the
+  // cache-miss path that validates before the FK/null short-circuit.
   if ((record as any)._cachedAssociations?.has(assocName)) {
     const cached = (record as any)._cachedAssociations.get(assocName) as Base | null;
     if (options.inverseOf && !options.polymorphic) {

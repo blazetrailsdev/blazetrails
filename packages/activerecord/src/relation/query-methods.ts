@@ -1210,10 +1210,14 @@ function buildSubquery(
   selectValue: unknown,
 ): SelectManager {
   // Rails: except(:optimizer_hints).arel.as(alias) — use unscope (our except is SQL EXCEPT, not query-part removal)
-  const relation = (this as any).unscope?.("optimizerHints") ?? this;
-  const aliasedSubquery = (relation as any).toArel?.().as(subqueryAlias);
+  const relation =
+    typeof (this as any).unscope === "function" ? (this as any).unscope("optimizerHints") : this;
+  if (typeof (relation as any).toArel !== "function") {
+    throw new ActiveRecordError("Cannot build subquery: relation does not support toArel()");
+  }
+  const aliasedSubquery = (relation as any).toArel().as(subqueryAlias);
   const sm = new SelectManager();
-  if (aliasedSubquery) (sm as any).from(aliasedSubquery);
+  (sm as any).from(aliasedSubquery);
   sm.project(selectValue as any);
   const hints: string[] = (this as any)._optimizerHints ?? [];
   if (hints.length > 0) (sm as any).optimizerHints?.(...hints);
@@ -1302,9 +1306,20 @@ function flattenedOrderKeysForRawSqlCheck(orderArgs: unknown[]): string[] {
       result.push(...flattenedOrderKeysForRawSqlCheck(arg));
     } else if (typeof arg === "string" || typeof arg === "symbol") {
       result.push(String(arg));
-    } else if (arg !== null && typeof arg === "object" && !(arg instanceof Nodes.SqlLiteral)) {
-      for (const key of Object.keys(arg as Record<string, unknown>)) {
+    } else if (arg instanceof Nodes.Node) {
+      // Arel nodes (SqlLiteral, Attribute, Ordering, …) are pre-sanitized; skip them.
+    } else if (arg !== null && typeof arg === "object") {
+      for (const [key, value] of Object.entries(arg as Record<string, unknown>)) {
         result.push(key);
+        // Recurse into nested hash values so { table: { col: "asc" } } is fully validated.
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          !(value instanceof Nodes.Node)
+        ) {
+          result.push(...flattenedOrderKeysForRawSqlCheck([value]));
+        }
       }
     }
   }
@@ -1315,8 +1330,36 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
   disallowRawSqlBang(flattenedOrderKeysForRawSqlCheck(orderArgs), resolveOrderMatcher(this));
   validateOrderArgs.call(this, orderArgs);
   const refs = columnReferences(orderArgs);
-  if (refs.length > 0)
-    (this as any)._referencesValues = [...((this as any)._referencesValues ?? []), ...refs];
+  if (refs.length > 0) {
+    const existing: string[] = (this as any)._referencesValues ?? [];
+    (this as any)._referencesValues = [...new Set([...existing, ...refs])];
+  }
+  // Rails maps Symbol args to Ascending nodes and Hash args to directional nodes
+  // (Arel::Nodes::SqlLiteral / Arel::Nodes::Node keys get their dir method called directly).
+  const mapped: unknown[] = [];
+  for (const arg of orderArgs) {
+    if (typeof arg === "symbol") {
+      mapped.push(new Nodes.Ascending(arelSql(String(arg))));
+    } else if (
+      arg !== null &&
+      typeof arg === "object" &&
+      !Array.isArray(arg) &&
+      !(arg instanceof Nodes.Node)
+    ) {
+      for (const [key, dir] of Object.entries(arg as Record<string, unknown>)) {
+        const expr: Nodes.Node = key instanceof Nodes.Node ? key : arelSql(key);
+        mapped.push(
+          String(dir).toLowerCase() === "desc"
+            ? new Nodes.Descending(expr)
+            : new Nodes.Ascending(expr),
+        );
+      }
+    } else {
+      mapped.push(arg);
+    }
+  }
+  orderArgs.length = 0;
+  orderArgs.push(...mapped);
 }
 
 function buildOrderNode(clause: unknown): unknown {

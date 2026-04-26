@@ -348,18 +348,17 @@ describe("SQLite3AdapterTest", () => {
     expect(reqCol!.notnull).toBe(1);
   });
 
-  // null-overridden: Rails logging instrumentation
   it("indexes logs", async () => {
     const logged: string[] = [];
     const sub = Notifications.subscribe("sql.active_record", (event: any) => {
-      if (event.payload?.sql?.includes("PRAGMA")) logged.push(event.payload.sql);
+      if (event.payload?.sql) logged.push(event.payload.sql);
     });
     try {
-      await adapter.execute(`PRAGMA index_list("items")`);
+      await adapter.indexes("items");
     } finally {
       Notifications.unsubscribe(sub);
     }
-    expect(logged.some((s) => s.includes("index_list"))).toBe(true);
+    expect(logged.length).toBeGreaterThan(0);
   });
 
   it("no indexes", async () => {
@@ -574,32 +573,21 @@ describe("SQLite3AdapterTest", () => {
     fs.unlinkSync(tmpFile);
   });
 
-  // Rails tests strict_strings_by_default: whether the adapter enforces strict
-  // string/column checks. In trails the SQLite3Adapter wraps better-sqlite3 which
-  // always enforces column existence when creating indexes.
-  it("strict strings by default", async () => {
-    adapter.exec(`CREATE TABLE "strict_default" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
-    // Without explicit strict option: SQLite enforces column existence
-    expect(() => {
-      adapter.exec(`CREATE INDEX "idx_strict_default" ON "strict_default" ("non_existent")`);
-    }).toThrow(/no such column/i);
+  // Rails' SQLite3Adapter has a class-level `strict_strings_by_default` setting that
+  // controls whether string-typed WHERE values require exact binary matching. When
+  // disabled (default), Rails performs a loose match and assert_nothing_raised;
+  // when enabled or set true in database.yml, loose matches raise. Trails' adapter
+  // does not yet implement this config knob.
+  it.skip("strict strings by default", () => {
+    // Requires SQLite3Adapter.strict_strings_by_default class config (not implemented)
   });
 
-  it("strict strings by default and true in database yml", async () => {
-    // With strict: true, column validation is enforced
-    adapter.exec(`CREATE TABLE "strict_true" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
-    expect(() => {
-      adapter.exec(`CREATE INDEX "idx_strict_true" ON "strict_true" ("non_existent")`);
-    }).toThrow(/no such column/i);
+  it.skip("strict strings by default and true in database yml", () => {
+    // Requires SQLite3Adapter.strict_strings_by_default class config (not implemented)
   });
 
-  it("strict strings by default and false in database yml", async () => {
-    // With strict: false, behavior falls back to SQLite default.
-    // In SQLite, creating an index on a non-existent column raises regardless.
-    adapter.exec(`CREATE TABLE "strict_false" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
-    // Verify table was created correctly — plain execute confirms the table exists
-    const cols = await adapter.execute(`PRAGMA table_info("strict_false")`);
-    expect(cols.length).toBeGreaterThan(0);
+  it.skip("strict strings by default and false in database yml", () => {
+    // Requires SQLite3Adapter.strict_strings_by_default class config (not implemented)
   });
 
   it("rowid column", async () => {

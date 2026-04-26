@@ -62,7 +62,9 @@ export function parsePostgresPlainDateTime(
 /**
  * Parse a Postgres `date` wire string to `Temporal.PlainDate`.
  *
- * Wire format: `'YYYY-MM-DD'` or `'YYYY-MM-DD BC'`.
+ * Wire format: `'YYYY-MM-DD'`, `'YYYY-MM-DD BC'`,
+ * or the sentinels `'infinity'` / `'-infinity'` which return
+ * `DateInfinity` / `DateNegativeInfinity`.
  */
 export function parsePostgresDate(
   text: string,
@@ -155,14 +157,12 @@ export function parseMysqlDate(text: string): Temporal.PlainDate | null {
 /**
  * Parse a MySQL `TIME` wire string to `Temporal.PlainTime`.
  *
- * MySQL TIME can be negative or exceed 24 h for intervals; we only
- * handle the `HH:MM:SS[.ffffff]` case here (the cast layer is
- * responsible for interval TIME).
+ * Wire format: `'HH:MM:SS[.ffffff]'` (standard range, no sign). MySQL TIME
+ * can be negative or exceed 24 h for interval values; those paths are the
+ * cast layer's responsibility and are not handled here.
  */
 export function parseMysqlTime(text: string): Temporal.PlainTime {
-  const trimmed = text.trim();
-  if (trimmed === "") return Temporal.PlainTime.from("00:00:00");
-  return Temporal.PlainTime.from(trimmed);
+  return Temporal.PlainTime.from(text.trim());
 }
 
 // ---------------------------------------------------------------------------

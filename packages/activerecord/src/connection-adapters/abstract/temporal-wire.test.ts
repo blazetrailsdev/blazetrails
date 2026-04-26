@@ -205,8 +205,4 @@ describe("parseMysqlTime", () => {
     const result = parseMysqlTime("00:00:00");
     expect(result.toString()).toBe("00:00:00");
   });
-
-  it("treats empty string as midnight", () => {
-    expect(parseMysqlTime("").toString()).toBe("00:00:00");
-  });
 });

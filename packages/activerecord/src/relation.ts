@@ -101,7 +101,26 @@ function validateExplainOptions(options: ExplainOption[]): void {
 
 function hasTopLevelComma(s: string): boolean {
   let depth = 0;
-  for (const ch of s) {
+  let quote: '"' | "'" | "`" | null = null;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (quote) {
+      if (ch === "\\") {
+        i++;
+        continue;
+      }
+      // SQL doubled-quote escape ("" or ``)
+      if (ch === quote && s[i + 1] === quote) {
+        i++;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      continue;
+    }
     if (ch === "(") depth++;
     else if (ch === ")") depth--;
     else if (ch === "," && depth === 0) return true;

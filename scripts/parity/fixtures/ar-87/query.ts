@@ -1,4 +1,4 @@
-import { Nodes } from "@blazetrails/arel";
+import type { Nodes } from "@blazetrails/arel";
 import { Author, Book } from "./models.js";
 
 const authors = Author.arelTable;

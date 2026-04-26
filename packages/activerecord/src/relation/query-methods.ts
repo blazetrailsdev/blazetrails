@@ -213,6 +213,13 @@ function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): 
 
 function withRecursiveBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): any {
   for (const cte of ctes) {
+    if (!isPlainObject(cte)) {
+      const typeName =
+        cte !== null && typeof cte === "object"
+          ? `type object (${(cte as object).constructor?.name ?? "unknown"})`
+          : `type ${typeof cte}`;
+      throw argumentError(`Unsupported argument type: ${typeName}`);
+    }
     for (const [name, query] of Object.entries(cte)) {
       const sql = resolveCteEntry(name, query);
       upsertCte(this._ctes, name, sql, true);

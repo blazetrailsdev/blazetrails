@@ -4,8 +4,8 @@
  * these have no Temporal equivalent.
  */
 
-export const DateInfinity: unique symbol = Symbol("DateInfinity");
-export const DateNegativeInfinity: unique symbol = Symbol("DateNegativeInfinity");
+export const DateInfinity = Symbol.for("@blazetrails/activemodel:DateInfinity");
+export const DateNegativeInfinity = Symbol.for("@blazetrails/activemodel:DateNegativeInfinity");
 
 export type DateInfinity = typeof DateInfinity;
 export type DateNegativeInfinity = typeof DateNegativeInfinity;

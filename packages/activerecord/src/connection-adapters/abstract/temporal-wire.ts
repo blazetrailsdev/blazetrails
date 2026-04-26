@@ -204,7 +204,7 @@ function bcYearToIso(pgYear: number): number {
 function parseBcTimestampTzAsInstant(withoutBc: string): Temporal.Instant {
   // e.g. "0044-03-15 12:00:00.123456+00" or "0044-03-15 12:00:00+02:30"
   const match =
-    /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?([-+]\d{2}(?::\d{2})?)$/.exec(
+    /^(\d+)-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?([-+]\d{2}(?::\d{2})?)$/.exec(
       withoutBc,
     );
   if (!match) throw new RangeError(`Cannot parse BC timestamptz: ${JSON.stringify(withoutBc)}`);
@@ -231,7 +231,7 @@ function parseBcTimestampTzAsInstant(withoutBc: string): Temporal.Instant {
  */
 function parseBcTimestampAsPlainDateTime(withoutBc: string): Temporal.PlainDateTime {
   // e.g. "0044-03-15 12:00:00.123456" or "0044-03-15 12:00:00"
-  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/.exec(withoutBc);
+  const match = /^(\d+)-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/.exec(withoutBc);
   if (!match) throw new RangeError(`Cannot parse BC timestamp: ${JSON.stringify(withoutBc)}`);
   const [, y, mo, d, h, mi, s, frac] = match;
   const { millisecond, microsecond, nanosecond } = parseFraction(frac);

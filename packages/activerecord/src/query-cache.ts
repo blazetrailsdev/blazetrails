@@ -199,7 +199,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     this.cache.clear();
   }
 
-  async execute(sql: string, binds?: unknown[]): Promise<Record<string, unknown>[]> {
+  async execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]> {
     this._queryCount++;
 
     // Strip leading SQL comments (e.g. from QueryLogs prepend) before detecting statement type
@@ -216,16 +216,16 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     // preventing stale results when the cache is re-enabled later.
     if (!isSelect && !isReadOnlyCte) {
       if (this.cache.dirties) this.cache.clear();
-      return this.inner.execute(sql, binds);
+      return this.inner.execute(sql, binds, name);
     }
 
     if (!this.cache.enabled) {
-      return this.inner.execute(sql, binds);
+      return this.inner.execute(sql, binds, name);
     }
 
     // Don't cache locked queries (SELECT ... FOR UPDATE)
     if (/\bFOR\s+(UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)\b/i.test(sql)) {
-      return this.inner.execute(sql, binds);
+      return this.inner.execute(sql, binds, name);
     }
 
     const key = cacheKey(sql, binds);
@@ -237,7 +237,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
       const bindArray = binds ?? [];
       Notifications.instrument("sql.active_record", {
         sql,
-        name: "SQL",
+        name: name ?? "SQL",
         binds: bindArray,
         type_casted_binds: castBinds(bindArray),
         connection: this,
@@ -247,14 +247,14 @@ export class QueryCacheAdapter implements DatabaseAdapter {
       return cached.map((row) => ({ ...row }));
     }
     return this.cache.computeIfAbsent(key, async () => {
-      return this.inner.execute(sql, binds);
+      return this.inner.execute(sql, binds, name);
     });
   }
 
-  async executeMutation(sql: string, binds?: unknown[]): Promise<number> {
+  async executeMutation(sql: string, binds?: unknown[], name?: string): Promise<number> {
     this._queryCount++;
     if (this.cache.dirties) this.cache.clear();
-    return this.inner.executeMutation(sql, binds);
+    return this.inner.executeMutation(sql, binds, name);
   }
 
   async beginTransaction(): Promise<void> {

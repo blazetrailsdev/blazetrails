@@ -163,8 +163,16 @@ function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): 
             );
           }
         }
-        sql = query.map((q: any) => (typeof q === "string" ? q : q.toSql())).join(" UNION ");
+        sql = query
+          .map((q: any) => (typeof q === "string" ? q : q.toSql()))
+          .map((s: string) => `(${s})`)
+          .join(" UNION ");
       } else {
+        if (typeof query !== "string" && typeof query?.toSql !== "function") {
+          throw argumentError(
+            `Unsupported argument type for CTE "${name}": expected a SQL string or Relation, got ${typeof query}`,
+          );
+        }
         sql = typeof query === "string" ? query : query.toSql();
       }
       this._ctes.push({ name, sql, recursive: false });

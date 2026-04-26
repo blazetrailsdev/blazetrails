@@ -148,6 +148,8 @@ describe("ar_dump.ts", () => {
     }
     rmSync(outDir, { recursive: true, force: true });
     expect(res.status, `stdout: ${res.stdout}\nstderr: ${res.stderr}`).toBe(0);
+    // frozenAt in output must reflect the truncated time, not the raw input
+    expect(json.frozenAt).toBe("2026-04-25T12:34:56.000Z");
     // SQL must contain the whole-second form; no microsecond suffix
     expect(json.sql as string).toContain("'2026-04-25 12:34:56'");
     expect(json.sql as string).not.toMatch(/\d{2}:\d{2}:\d{2}\.\d/);

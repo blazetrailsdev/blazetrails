@@ -132,7 +132,13 @@ async function main(): Promise<void> {
   // Truncate to whole seconds: Rails serializes unscaled DATETIME columns
   // without fractional seconds, so a sub-second frozen-at would produce a
   // ms-padded literal on trails but a whole-second literal on Rails.
-  const frozenMs = Math.floor(new Date(frozenTs).getTime() / 1000) * 1000;
+  // Math.trunc (not Math.floor) is correct for pre-1970 timestamps where
+  // Math.floor would round away from zero and shift by up to 1 second.
+  const frozenMs = Math.trunc(new Date(frozenTs).getTime() / 1000) * 1000;
+  // Canonical frozenAt is the truncated time — what both sides are actually
+  // frozen to. Storing the original sub-second input would misrepresent what
+  // was passed to FakeTimers and disagree with the SQL output.
+  const effectiveFrozenTs = new Date(frozenMs).toISOString();
   const fixtureDirAbs = resolve(fixtureDirRaw);
   const outPathAbs = resolve(outPathRaw);
   const fixtureName = basename(fixtureDirAbs);
@@ -269,7 +275,7 @@ async function main(): Promise<void> {
     const canonical: CanonicalQuery = {
       version: 1,
       fixture: fixtureName,
-      frozenAt: frozenTs,
+      frozenAt: effectiveFrozenTs,
       sql: sqlStr,
       paramSql,
       binds,
@@ -282,7 +288,7 @@ async function main(): Promise<void> {
     process.stdout.write(`[trails] ${fixtureName}\n`);
     process.stdout.write(`  result type : ${ctor}\n`);
     process.stdout.write(`  sql         : ${sqlStr}\n`);
-    process.stdout.write(`  frozenAt    : ${frozenTs}\n`);
+    process.stdout.write(`  frozenAt    : ${effectiveFrozenTs}\n`);
     process.stdout.write(`  → ${outPathAbs}\n`);
   } finally {
     clock.uninstall();

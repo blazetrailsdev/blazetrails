@@ -1139,13 +1139,19 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Add an INNER JOIN. Accepts an association name, a raw SQL string, or
-   * a table name with an ON condition.
+   * Add one or more INNER JOINs. Accepts:
+   * - An association name (resolved to a JOIN via reflection)
+   * - A raw SQL string
+   * - Two strings: (table, onClause) — explicit JOIN/ON pair
+   * - Arel `Nodes.Join` instances (e.g. from `SelectManager#joinSources`)
+   * - Any mix of the above as variadic args
    *
-   * Mirrors: ActiveRecord::Relation#joins
+   * Mirrors: ActiveRecord::Relation#joins — Rails' `joins(*args)` is variadic
+   * and accepts strings, symbol association names, or Arel join nodes.
    */
   joins(tableOrSql?: string, on?: string): Relation<T>;
   joins(...nodes: Nodes.Join[]): Relation<T>;
+  joins(...args: Array<string | Nodes.Join>): Relation<T>;
   joins(...args: Array<string | Nodes.Join | undefined>): Relation<T> {
     const rel = this._clone();
     // Two-string-argument form: joins(table, onClause) — preserved for back-compat.

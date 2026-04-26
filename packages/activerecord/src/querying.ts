@@ -180,9 +180,14 @@ export function joins<T extends typeof Base>(
 ): Relation<InstanceType<T>>;
 export function joins<T extends typeof Base>(
   this: T,
-  ...args: Array<string | import("@blazetrails/arel").Nodes.Join | undefined>
+  ...args: [] | [tableOrSql?: string, on?: string] | import("@blazetrails/arel").Nodes.Join[]
 ): Relation<InstanceType<T>> {
-  return (this.all() as any).joins(...args) as Relation<InstanceType<T>>;
+  const relation = this.all();
+  if (args.length === 0 || typeof args[0] === "string" || args[0] === undefined) {
+    const [tableOrSql, on] = args as [string?, string?];
+    return relation.joins(tableOrSql, on);
+  }
+  return relation.joins(...(args as import("@blazetrails/arel").Nodes.Join[]));
 }
 
 /** Mirrors: ActiveRecord::Querying#optimizer_hints */

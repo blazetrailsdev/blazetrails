@@ -84,7 +84,7 @@ export type AssociationSpec = string | { [assoc: string]: AssociationSpec | Asso
 // ---------------------------------------------------------------------------
 interface QueryMethodsHost {
   _whereClause: WhereClause;
-  _orderClauses: Array<string | [string, "asc" | "desc"] | { raw: string } | Nodes.Node>;
+  _orderClauses: Array<string | [string, "asc" | "desc"] | { raw: string }>;
   _rawOrderClauses: string[];
   _limitValue: number | null;
   _offsetValue: number | null;
@@ -347,10 +347,11 @@ function orderBang(
     if (Array.isArray(arg)) {
       const [first, ...rest] = arg as unknown[];
       if (first instanceof Nodes.Node) {
-        // Bind array: [Arel.sql("col = ?"), bind1, ...] — Arel bypasses check
+        // Bind array: [Arel.sql("col = ?"), bind1, ...] — Arel bypasses check.
+        // Store as { raw } so _applyOrderToManager emits it verbatim.
         const rawSql = (first as any).value ?? (first as Nodes.Node).toSql();
         const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
-        if (interpolated.trim() !== "") this._orderClauses.push(interpolated);
+        if (interpolated.trim() !== "") this._orderClauses.push({ raw: String(interpolated) });
       } else {
         // Plain string array: all elements must be strings; validate each immediately.
         if (!(arg as unknown[]).every((e) => typeof e === "string")) {
@@ -362,9 +363,12 @@ function orderBang(
         }
       }
     } else if (arg instanceof Nodes.Node) {
-      // Store Arel nodes directly — mirrors Rails, which keeps live Arel::Node
-      // objects in order_values without pre-rendering.
-      this._orderClauses.push(arg);
+      // Pre-render to raw SQL string tagged as { raw } so _applyOrderToManager
+      // emits it verbatim (bypasses column qualification). Using { raw } rather
+      // than a live Nodes.Node keeps _orderClauses serializable (inspect(), merge
+      // dedup, etc. use JSON.stringify on the array).
+      const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
+      if (rawSql && rawSql.trim() !== "") this._orderClauses.push({ raw: String(rawSql) });
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -425,9 +429,12 @@ function reorderBang(
         }
       }
     } else if (arg instanceof Nodes.Node) {
-      // Store Arel nodes directly — mirrors Rails, which keeps live Arel::Node
-      // objects in order_values without pre-rendering.
-      this._orderClauses.push(arg);
+      // Pre-render to raw SQL string tagged as { raw } so _applyOrderToManager
+      // emits it verbatim (bypasses column qualification). Using { raw } rather
+      // than a live Nodes.Node keeps _orderClauses serializable (inspect(), merge
+      // dedup, etc. use JSON.stringify on the array).
+      const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
+      if (rawSql && rawSql.trim() !== "") this._orderClauses.push({ raw: String(rawSql) });
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -1014,22 +1021,19 @@ function optimizerHintsBang(this: QueryMethodsHost, ...hints: string[]): any {
 
 function reverseOrderBang(this: QueryMethodsHost): any {
   this._orderClauses = this._orderClauses.map((clause) => {
-    if (clause instanceof Nodes.Node) {
-      throw new IrreversibleOrderError(
-        `Relation has a non-reversible order and cannot be reversed: ${(clause as any).toSql?.() ?? clause}`,
-      );
-    }
     if (typeof clause === "object" && !Array.isArray(clause) && "raw" in clause) {
+      // Mirrors Rails reverse_sql_order string case: flip trailing ASC↔DESC,
+      // or append DESC if no direction present.
       const raw = (clause as { raw: string }).raw.trim();
-      const match = raw.match(/^([A-Za-z_$][\w$.]*)\s+(ASC|DESC)$/i);
-      if (match) {
-        const reversed = match[2].toUpperCase() === "ASC" ? "DESC" : "ASC";
-        return { raw: `${match[1]} ${reversed}` };
+      const flipped = raw.replace(/\s+ASC$/i, " DESC").replace(/\s+DESC$/i, " ASC");
+      if (flipped !== raw) return { raw: flipped };
+      // No direction suffix — append DESC (matches Rails `s << " DESC"` fallback)
+      if (/[(),]/.test(raw) || /CASE/i.test(raw)) {
+        throw new IrreversibleOrderError(
+          `Relation has a non-reversible order and cannot be reversed: ${raw}`,
+        );
       }
-      if (/^[A-Za-z_$][\w$]*$/.test(raw)) return { raw: `${raw} DESC` };
-      throw new IrreversibleOrderError(
-        `Relation has a non-reversible order and cannot be reversed: ${raw}`,
-      );
+      return { raw: `${raw} DESC` };
     }
     if (typeof clause === "string") {
       const match = clause.match(/^([\w.]+)\s+(ASC|DESC)$/i);

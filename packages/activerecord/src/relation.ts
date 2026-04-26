@@ -2860,12 +2860,11 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#order_values
    */
   get orderValues(): Array<string | [string, "asc" | "desc"] | Nodes.Node> {
-    return this._orderClauses.map((clause) => {
-      if (clause instanceof Nodes.Node) return clause;
-      if (typeof clause === "object" && !Array.isArray(clause) && "raw" in clause)
-        return new Nodes.SqlLiteral((clause as { raw: string }).raw);
-      return clause;
-    });
+    return this._orderClauses.map((clause) =>
+      typeof clause === "object" && !Array.isArray(clause) && "raw" in clause
+        ? new Nodes.SqlLiteral((clause as { raw: string }).raw)
+        : clause,
+    );
   }
 
   /**
@@ -3364,10 +3363,6 @@ export class Relation<T extends Base> {
       manager.order(new Nodes.SqlLiteral(rawClause));
     }
     for (const clause of this._orderClauses) {
-      if (clause instanceof Nodes.Node) {
-        manager.order(clause);
-        continue;
-      }
       if (typeof clause === "object" && !Array.isArray(clause) && "raw" in clause) {
         manager.order(new Nodes.SqlLiteral((clause as { raw: string }).raw));
         continue;
@@ -3409,7 +3404,7 @@ export class Relation<T extends Base> {
             }
           }
         }
-      } else {
+      } else if (Array.isArray(clause)) {
         const [col, dir] = clause;
         // Function expressions, quoted identifiers, and dotted names must be
         // emitted as raw SQL — table.get() would double-quote them incorrectly.

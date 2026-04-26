@@ -171,10 +171,17 @@ export function distinct<T extends typeof Base>(this: T): Relation<InstanceType<
 /** Mirrors: ActiveRecord::Querying#joins */
 export function joins<T extends typeof Base>(
   this: T,
-  tableOrSql?: string,
-  on?: string,
+  ...args: Array<string | import("@blazetrails/arel").Nodes.Node | undefined>
 ): Relation<InstanceType<T>> {
-  return this.all().joins(tableOrSql, on);
+  return this.all().joins(...args);
+}
+
+/** Mirrors: ActiveRecord::Querying#optimizer_hints */
+export function optimizerHints<T extends typeof Base>(
+  this: T,
+  ...hints: string[]
+): Relation<InstanceType<T>> {
+  return this.all().optimizerHints(...hints);
 }
 
 /** Mirrors: ActiveRecord::Querying#left_joins */

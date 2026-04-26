@@ -1027,6 +1027,16 @@ export class Relation<T extends Base> {
     return this._clone().optimizerHintsBang(...hints);
   }
 
+  /**
+   * Return a fresh unscoped relation for the model, discarding any
+   * WHERE/ORDER/etc. conditions on this relation.
+   *
+   * Mirrors: ActiveRecord::Relation#unscoped — delegates to klass.unscoped.
+   */
+  unscoped(): Relation<T> {
+    return (this._modelClass as any).unscoped() as Relation<T>;
+  }
+
   // merge and spawn are mixed in from spawn-methods.ts
 
   /**
@@ -1134,25 +1144,20 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#joins
    */
-  joins(tableOrSql?: string, on?: string): Relation<T> {
-    if (!tableOrSql) return this._clone();
+  joins(...args: Array<string | Nodes.Node | undefined>): Relation<T> {
     const rel = this._clone();
-    if (on) {
-      rel._joinClauses.push({ type: "inner", table: tableOrSql, on });
-    } else {
+    for (const tableOrSql of args) {
+      if (!tableOrSql) continue;
+      // Arel join node (e.g. from SelectManager#joinSources) — render to SQL.
+      if (tableOrSql instanceof Nodes.Node) {
+        rel._rawJoins.push(tableOrSql.toSql());
+        continue;
+      }
       const resolved = rel._resolveAssociationJoin(tableOrSql);
       if (resolved) {
-        if (Array.isArray(resolved)) {
-          for (const join of resolved) {
-            rel._joinClauses.push({ type: "inner", table: join.table, on: join.on, quoted: true });
-          }
-        } else {
-          rel._joinClauses.push({
-            type: "inner",
-            table: resolved.table,
-            on: resolved.on,
-            quoted: true,
-          });
+        const entries = Array.isArray(resolved) ? resolved : [resolved];
+        for (const j of entries) {
+          rel._joinClauses.push({ type: "inner", table: j.table, on: j.on, quoted: true });
         }
       } else {
         rel._rawJoins.push(tableOrSql);
@@ -3210,9 +3215,10 @@ export class Relation<T extends Base> {
             if (rawCol.includes(".")) {
               manager.order(new Nodes.SqlLiteral(trimmed));
             } else {
-              const node = this._isKnownColumn(rawCol)
-                ? table.get(rawCol)
-                : new Nodes.UnqualifiedColumn(table.get(rawCol));
+              const node =
+                !this._fromClause.isEmpty() && !this._isKnownColumn(rawCol)
+                  ? new Nodes.UnqualifiedColumn(table.get(rawCol))
+                  : table.get(rawCol);
               manager.order(
                 dir === "DESC" ? new Nodes.Descending(node) : new Nodes.Ascending(node),
               );
@@ -3221,9 +3227,10 @@ export class Relation<T extends Base> {
             // Not "col DIR" form. Only wrap plain letter-start identifiers;
             // everything else (positional "1", NULLS FIRST, commas, etc.) is raw SQL.
             if (/^[A-Za-z_$][\w$]*$/.test(trimmed)) {
-              const node = this._isKnownColumn(trimmed)
-                ? table.get(trimmed)
-                : new Nodes.UnqualifiedColumn(table.get(trimmed));
+              const node =
+                !this._fromClause.isEmpty() && !this._isKnownColumn(trimmed)
+                  ? new Nodes.UnqualifiedColumn(table.get(trimmed))
+                  : table.get(trimmed);
               manager.order(new Nodes.Ascending(node));
             } else {
               manager.order(new Nodes.SqlLiteral(trimmed));

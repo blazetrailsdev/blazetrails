@@ -61,7 +61,7 @@ describe("parsePostgresInstant", () => {
   it("parses a BC timestamp", () => {
     // Postgres 0044-03-15 BC = ISO year -43
     const result = parsePostgresInstant("0044-03-15 12:00:00+00 BC") as Temporal.Instant;
-    expect(Number(result.epochNanoseconds)).toBeLessThan(0);
+    expect(result.epochNanoseconds).toBeLessThan(0n);
     // year -43 in proleptic Gregorian = 44 BC
     const zdt = result.toZonedDateTimeISO("UTC");
     expect(zdt.year).toBe(-43);

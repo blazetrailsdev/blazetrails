@@ -1588,6 +1588,7 @@ function arelColumn(
 
 function arelColumns(this: QueryMethodsHost, columns: unknown[]): unknown[] {
   return columns.flatMap((field) => {
+    if (field instanceof Nodes.Node) return [field]; // Arel nodes pass through directly
     if (typeof field === "string" || typeof field === "symbol")
       return [arelColumn.call(this, field as any)];
     if (typeof field === "function") return [field()];
@@ -1668,7 +1669,12 @@ function arelColumnAliasesFromHash(
     if (isPlainObject(columnsAliases)) {
       return Reflect.ownKeys(columnsAliases as object).map((col) => {
         const alias = (columnsAliases as any)[col];
-        return nodeAs(arelColumnWithTable.call(this, tableName, col as any), quoteAlias(alias));
+        // col may be a Nodes.SqlLiteral (pre-quoted identifier) or plain string/symbol
+        const attr =
+          col instanceof Nodes.SqlLiteral
+            ? col
+            : arelColumnWithTable.call(this, tableName, col as any);
+        return nodeAs(attr, quoteAlias(alias));
       });
     }
     if (Array.isArray(columnsAliases)) {

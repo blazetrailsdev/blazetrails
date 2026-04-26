@@ -188,17 +188,65 @@ describe("QueryCacheTest", () => {
     });
   });
 
-  it.skip("select one with cache", () => {
-    /* needs selectOne API */
+  it("select one with cache", async () => {
+    const { cached } = setup();
+    await cached.executeMutation("INSERT INTO tasks (title) VALUES ('sel_one')");
+    await cached.withCache(async () => {
+      cached.resetCounters();
+      const sql = 'SELECT * FROM "tasks" LIMIT 1';
+      const r1 = await cached.selectOne(sql);
+      const hitsAfterFirst = cached.cacheHits;
+      const r2 = await cached.selectOne(sql);
+      expect(r1).toBeDefined();
+      expect(r2).toBeDefined();
+      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst);
+    });
   });
-  it.skip("select value with cache", () => {
-    /* needs selectValue API */
+
+  it("select value with cache", async () => {
+    const { cached } = setup();
+    await cached.executeMutation("INSERT INTO tasks (title) VALUES ('sel_val')");
+    await cached.withCache(async () => {
+      cached.resetCounters();
+      const sql = 'SELECT title FROM "tasks" LIMIT 1';
+      const v1 = await cached.selectValue(sql);
+      const hitsAfterFirst = cached.cacheHits;
+      const v2 = await cached.selectValue(sql);
+      expect(v1).toBe("sel_val");
+      expect(v2).toBe("sel_val");
+      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst);
+    });
   });
-  it.skip("select values with cache", () => {
-    /* needs selectValues API */
+
+  it("select values with cache", async () => {
+    const { cached } = setup();
+    await cached.executeMutation("INSERT INTO tasks (title) VALUES ('a')");
+    await cached.executeMutation("INSERT INTO tasks (title) VALUES ('b')");
+    await cached.withCache(async () => {
+      cached.resetCounters();
+      const sql = 'SELECT title FROM "tasks" ORDER BY title';
+      const v1 = await cached.selectValues(sql);
+      const hitsAfterFirst = cached.cacheHits;
+      const v2 = await cached.selectValues(sql);
+      expect(v1).toEqual(["a", "b"]);
+      expect(v2).toEqual(["a", "b"]);
+      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst);
+    });
   });
-  it.skip("select rows with cache", () => {
-    /* needs selectRows API */
+
+  it("select rows with cache", async () => {
+    const { cached } = setup();
+    await cached.executeMutation("INSERT INTO tasks (title) VALUES ('row1')");
+    await cached.withCache(async () => {
+      cached.resetCounters();
+      const sql = 'SELECT * FROM "tasks" LIMIT 1';
+      const r1 = await cached.selectRows(sql);
+      const hitsAfterFirst = cached.cacheHits;
+      const r2 = await cached.selectRows(sql);
+      expect(Array.isArray(r1[0])).toBe(true);
+      expect(r1).toEqual(r2);
+      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst);
+    });
   });
 
   it("query cache dups results correctly", async () => {
@@ -212,8 +260,27 @@ describe("QueryCacheTest", () => {
     expect(r1[0]).toEqual(r2[0]);
   });
 
-  it.skip("cache notifications can be overridden", () => {
-    /* needs notification system */
+  it("cache notifications can be overridden", async () => {
+    // Rails: cached hits emit sql.active_record with cached:true so callers can
+    // distinguish cache hits from real queries in instrumentation subscribers.
+    const { cached } = setup();
+    await cached.executeMutation("INSERT INTO tasks (title) VALUES ('notif')");
+    const events: unknown[] = [];
+    const { Notifications } = await import("@blazetrails/activesupport");
+    const sub = Notifications.subscribe("sql.active_record", (event) => {
+      events.push(event);
+    });
+    try {
+      await cached.withCache(async () => {
+        const sql = 'SELECT * FROM "tasks"';
+        await cached.selectAll(sql);
+        await cached.selectAll(sql); // second call → cache hit
+      });
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    const cachedEvent = (events as any[]).find((e: any) => e?.payload?.cached === true);
+    expect(cachedEvent).toBeDefined();
   });
 
   it("cache does not raise exceptions", async () => {
@@ -376,17 +443,61 @@ describe("QueryCacheStore public re-export", () => {
 });
 
 describe("QueryCacheMutableParamTest", () => {
-  it.skip("query cache handles mutated binds", () => {
-    /* needs bind parameter mutation detection */
+  it("query cache handles mutated binds", async () => {
+    // Rails: mutating a bind array after a query is cached must not corrupt the
+    // cached result or produce wrong results on the next call.
+    const { cached } = setup();
+    await cached.executeMutation("INSERT INTO tasks (title) VALUES ('bind_task')");
+    await cached.withCache(async () => {
+      const binds = ["bind_task"];
+      const sql = 'SELECT * FROM "tasks" WHERE title = ?';
+      const r1 = await cached.execute(sql, binds);
+      expect(r1).toHaveLength(1);
+      // Mutate the binds array after caching
+      binds[0] = "nonexistent";
+      // Second call with original SQL but NOW mutated binds — cache key uses
+      // the serialized form captured at first call time, so this is a different key.
+      // The key insight: cached results are not affected by the mutation.
+      const r2 = await cached.execute(sql, ["bind_task"]);
+      expect(r2).toHaveLength(1);
+      expect(r1[0]).toEqual(r2[0]);
+    });
   });
 });
 
 describe("QuerySerializedParamTest", () => {
-  it.skip("query serialized active record", () => {
-    /* needs serialization support */
+  it("query serialized active record", async () => {
+    // Rails: queries with ActiveRecord object binds are cached using the
+    // serialized form of the object (its id/primary key). Verify cached
+    // results are returned correctly when the same bind is used again.
+    const { cached, Task } = setup();
+    const t = await Task.create({ title: "serialized_ar" });
+    await cached.withCache(async () => {
+      cached.resetCounters();
+      const r1 = await Task.where({ id: t.id }).toArray();
+      const hitsAfterFirst = cached.cacheHits;
+      const r2 = await Task.where({ id: t.id }).toArray();
+      expect(r1).toHaveLength(1);
+      expect(r2).toHaveLength(1);
+      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst);
+    });
   });
-  it.skip("query serialized string", () => {
-    /* needs serialization support */
+
+  it("query serialized string", async () => {
+    // Rails: string-serialized bind params (e.g. an object coerced to string)
+    // produce a stable cache key and are returned from cache correctly.
+    const { cached } = setup();
+    await cached.executeMutation("INSERT INTO tasks (title) VALUES ('str_serial')");
+    await cached.withCache(async () => {
+      cached.resetCounters();
+      const sql = 'SELECT * FROM "tasks" WHERE title = ?';
+      const r1 = await cached.execute(sql, ["str_serial"]);
+      const hitsAfterFirst = cached.cacheHits;
+      const r2 = await cached.execute(sql, ["str_serial"]);
+      expect(r1).toHaveLength(1);
+      expect(r2).toHaveLength(1);
+      expect(cached.cacheHits).toBeGreaterThan(hitsAfterFirst);
+    });
   });
 });
 

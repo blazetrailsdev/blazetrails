@@ -1265,8 +1265,8 @@ function reverseSqlOrder(this: QueryMethodsHost, orderQuery: unknown[]): unknown
   });
 }
 
-function extractTableNameFrom(string: string): string | null {
-  const match = string.match(/^\W?(\w+)\W?\./);
+function extractTableNameFrom(orderTerm: string): string | null {
+  const match = orderTerm.match(/^\W?(\w+)\W?\./);
   return match ? match[1] : null;
 }
 
@@ -1348,7 +1348,7 @@ function buildCaseForValuePosition(
   const filter = options.filter !== false;
   const node: any = new (Nodes as any).Case();
   values.forEach((value, i) => {
-    node.when((column as any).eq(value)).then(i + 1);
+    node.when((column as any).eq(value), i + 1);
   });
   if (!filter) node.else(values.length + 1);
   return new (Nodes as any).Ascending(node);

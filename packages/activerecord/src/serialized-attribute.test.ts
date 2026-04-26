@@ -489,107 +489,104 @@ describe("SerializedAttributeTest", () => {
 });
 
 // Rails: SerializedAttributeTestWithYamlSafeLoad inherits SerializedAttributeTest
-// and runs all the same tests with use_yaml_unsafe_load=false. In trails we use
-// JSON serialization regardless, so behavior is identical to the base class.
+// and re-runs the same tests with use_yaml_unsafe_load=false. In trails we use
+// JSON serialization regardless, so the same assertions apply.
 describe("SerializedAttributeTestWithYamlSafeLoad", () => {
-  function makeModel() {
+  // Rails test_serialized_attribute: create, assert content, reload, assert again
+  it("serialized attribute", async () => {
     const adapter = freshAdapter();
-    class User extends Base {
+    class Topic extends Base {
       static {
-        this.attribute("name", "string");
-        this.attribute("preferences", "string");
+        this.attribute("title", "string");
+        this.attribute("content", "string");
         this.adapter = adapter;
       }
     }
-    serialize(User, "preferences");
-    return { User, adapter };
-  }
-
-  it("serialized attribute", () => {
-    const { User } = makeModel();
-    const u = new User();
-    u.preferences = JSON.stringify({ theme: "dark" });
-    expect(u.preferences).toEqual({ theme: "dark" });
+    serialize(Topic, "content");
+    const myobj = { somevalue: "thevalue" };
+    const topic = await Topic.create({ title: "test", content: JSON.stringify(myobj) as any });
+    expect((topic as any).content).toEqual(myobj);
+    const reloaded = await Topic.find(topic.id);
+    expect((reloaded as any).content).toEqual(myobj);
   });
 
-  it("serialized attribute on alias attribute", () => {
+  // Rails test_serialized_attribute_on_alias_attribute: create, reload via alias reads deserialized
+  it("serialized attribute on alias attribute", async () => {
     const adapter = freshAdapter();
-    class AliasUser extends Base {
+    class Topic extends Base {
       static {
-        this.attribute("name", "string");
-        this.attribute("preferences", "string");
+        this.attribute("title", "string");
+        this.attribute("content", "string");
         this.adapter = adapter;
-        this.aliasAttribute("prefs", "preferences");
+        this.aliasAttribute("object", "content");
       }
     }
-    serialize(AliasUser, "preferences");
-    const u = new AliasUser();
-    u.preferences = JSON.stringify({ theme: "dark" });
-    expect(u.preferences).toEqual({ theme: "dark" });
-    expect(u.prefs !== undefined).toBe(true);
+    serialize(Topic, "content");
+    const myobj = { somevalue: "thevalue" };
+    const topic = await Topic.create({ title: "test", content: JSON.stringify(myobj) as any });
+    expect((topic as any).object).toEqual(myobj);
+    const reloaded = await Topic.find(topic.id);
+    expect((reloaded as any).object).toEqual(myobj);
   });
 
+  // Rails test_serialized_attribute_with_default
   it("serialized attribute with default", () => {
     const adapter = freshAdapter();
-    class Post extends Base {
+    class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.attribute("settings", "string", { default: "{}" });
+        this.attribute("content", "string", { default: '{"key":"value"}' });
         this.adapter = adapter;
       }
     }
-    serialize(Post, "settings");
-    const p = new Post();
-    expect(p.settings).toEqual({});
+    serialize(Topic, "content");
+    const t = new Topic();
+    expect((t as any).content).toEqual({ key: "value" });
   });
 
+  // Rails test_serialized_attribute_on_custom_attribute_with_default
   it("serialized attribute on custom attribute with default", () => {
     const adapter = freshAdapter();
-    class Post extends Base {
+    class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.attribute("metadata", "string", { default: '{"version":1}' });
+        this.attribute("content", "string", { default: '{"key":"value"}' });
         this.adapter = adapter;
       }
     }
-    serialize(Post, "metadata");
-    const p = new Post();
-    expect(p.metadata).toEqual({ version: 1 });
+    serialize(Topic, "content");
+    const t = new Topic();
+    expect((t as any).content).toEqual({ key: "value" });
   });
 
+  // Rails test_serialized_attributes_from_database_on_subclass: save + reload via subclass
   it("serialized attributes from database on subclass", async () => {
     const adapter = freshAdapter();
-    class Parent extends Base {
+    class ImportantTopic extends Base {
       static {
-        this.attribute("name", "string");
-        this.attribute("data", "string");
+        this.attribute("title", "string");
+        this.attribute("content", "string");
         this.adapter = adapter;
       }
     }
-    serialize(Parent, "data");
-    class Child extends Parent {}
-    const c = await Child.create({ name: "test", data: JSON.stringify({ key: "val" }) as any });
-    const found = await Child.find(c.id);
-    expect((found as any).data).toEqual({ key: "val" });
+    class VeryImportantTopic extends ImportantTopic {}
+    serialize(ImportantTopic, "content");
+    const payload = { foo: "bar" };
+    const t = await VeryImportantTopic.create({
+      title: "test",
+      content: JSON.stringify(payload) as any,
+    });
+    const reloaded = await VeryImportantTopic.find(t.id);
+    expect((reloaded as any).content).toEqual(payload);
   });
 
-  it("serialized time attribute", () => {
-    const adapter = freshAdapter();
-    class Event extends Base {
-      static {
-        this.attribute("name", "string");
-        this.attribute("payload", "string");
-        this.adapter = adapter;
-      }
-    }
-    serialize(Event, "payload");
-    const e = new Event();
-    const now = new Date().toISOString();
-    e.payload = JSON.stringify({ occurred_at: now });
-    const val = e.payload as Record<string, unknown>;
-    expect(val.occurred_at).toBe(now);
+  // Rails test_serialized_time_attribute is SKIPPED in the safe_load variant:
+  // "Time is a DisallowedClass in Psych safe_load()"
+  it.skip("serialized time attribute", () => {
+    // Skipped in Rails WithYamlSafeLoad: Time is a DisallowedClass for Psych safe_load.
   });
 
+  // Rails test_should_raise_exception_on_serialized_attribute_with_type_mismatch
   it("should raise exception on serialized attribute with type mismatch", async () => {
     const adapter = freshAdapter();
     class Topic extends Base {
@@ -599,31 +596,34 @@ describe("SerializedAttributeTestWithYamlSafeLoad", () => {
         this.adapter = adapter;
       }
     }
-    serialize(Topic, "content", { coder: "json" });
+    serialize(Topic, "content");
     const topic = await Topic.create({
       title: "test",
-      content: JSON.stringify({ zomg: true }) as any,
+      content: JSON.stringify({ somevalue: "thevalue" }) as any,
     });
     serialize(Topic, "content", { coder: "array" });
     const found = await Topic.find(topic.id);
     expect(() => found.content).toThrow(SerializationTypeMismatch);
   });
 
+  // Rails test_serialize_attribute_via_select_method_when_time_zone_available
   it("serialize attribute via select method when time zone available", async () => {
     const adapter = freshAdapter();
-    class Post extends Base {
+    class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.attribute("tags", "string");
+        this.attribute("content", "string");
         this.adapter = adapter;
       }
     }
-    serialize(Post, "tags");
-    const p = await Post.create({ title: "test", tags: JSON.stringify(["a", "b"]) as any });
-    const found = await Post.select("id", "tags").find(p.id);
-    expect((found as any).tags).toEqual(["a", "b"]);
+    serialize(Topic, "content");
+    const myobj = { somevalue: "thevalue" };
+    const topic = await Topic.create({ title: "test", content: JSON.stringify(myobj) as any });
+    const found = await Topic.select("id", "content").find(topic.id);
+    expect((found as any).content).toEqual(myobj);
   });
 
+  // Rails test_unexpected_serialized_type: create Hash, switch to Array, reload → mismatch
   it("unexpected serialized type", async () => {
     const adapter = freshAdapter();
     class Topic extends Base {
@@ -633,18 +633,34 @@ describe("SerializedAttributeTestWithYamlSafeLoad", () => {
         this.adapter = adapter;
       }
     }
-    serialize(Topic, "content", { coder: "hash" });
-    await Topic.create({ title: "test", content: JSON.stringify({ zomg: true }) as any });
+    serialize(Topic, "content");
+    const topic = await Topic.create({
+      title: "test",
+      content: JSON.stringify({ zomg: true }) as any,
+    });
     serialize(Topic, "content", { coder: "array" });
-    const topic = (await Topic.all().toArray())[0];
-    expect(() => topic.content).toThrow(SerializationTypeMismatch);
+    const reloaded = await Topic.find(topic.id);
+    expect(() => reloaded.content).toThrow(SerializationTypeMismatch);
   });
 
-  it("nil is always persisted as null", () => {
-    const { User } = makeModel();
-    const u = new User();
-    u.preferences = null;
-    expect(u.preferences).toBeNull();
+  // Rails test_nil_is_always_persisted_as_null: create with data, update to nil, where(content: nil)
+  it("nil is always persisted as null", async () => {
+    const adapter = freshAdapter();
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("content", "string");
+        this.adapter = adapter;
+      }
+    }
+    serialize(Topic, "content");
+    const topic = await Topic.create({
+      title: "test",
+      content: JSON.stringify({ foo: "bar" }) as any,
+    });
+    await topic.updateAttribute("content", null);
+    const found = await Topic.where({ content: null }).toArray();
+    expect(found.map((t: any) => t.id)).toContain(topic.id);
   });
 
   it.skip("supports permitted classes for default column serializer", () => {

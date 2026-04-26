@@ -138,10 +138,11 @@ export function columnNameMatcher(): RegExp {
     "`" +
     String.raw`|"[^"]*"|\w+)`;
   const col = String.raw`(?:(?:${id}\.){0,2})${id}`;
-  // fnCall2: function with plain col/star args (deepest level)
-  const fnCall2 = String.raw`\w+\(\s*(?:\*|${col})(?:\s*,\s*(?:\*|${col}))*\s*\)|\w+\(\s*\)`;
-  // fnCall1: function whose args can themselves be functions (level 1)
-  const fnCall1 = String.raw`\w+\(\s*(?:\*|${col}|${fnCall2})(?:\s*,\s*(?:\*|${col}|${fnCall2}))*\s*\)|\w+\(\s*\)`;
+  // Rails uses \w+\((?:|\g<2>)\) — 0 or 1 arg (no comma-separated multi-arg).
+  // fnCall2: function with 0 or 1 plain col/star arg (deepest level)
+  const fnCall2 = String.raw`\w+\(\s*(?:\*|${col})?\s*\)`;
+  // fnCall1: function with 0 or 1 arg (which can itself be a function)
+  const fnCall1 = String.raw`\w+\(\s*(?:\*|${col}|${fnCall2})?\s*\)`;
   const expr = String.raw`(?:${col}|${fnCall1})`;
   const aliased = String.raw`${expr}(?:(?:\s+AS)?\s+${id})?`;
   return new RegExp(`^${aliased}(?:\\s*,\\s*${aliased})*$`, "i");
@@ -159,8 +160,8 @@ export function columnNameWithOrderMatcher(): RegExp {
     "`" +
     String.raw`|"[^"]*"|\w+)`;
   const col = String.raw`(?:(?:${id}\.){0,2})${id}`;
-  const fnCall2 = String.raw`\w+\(\s*(?:\*|${col})(?:\s*,\s*(?:\*|${col}))*\s*\)|\w+\(\s*\)`;
-  const fnCall1 = String.raw`\w+\(\s*(?:\*|${col}|${fnCall2})(?:\s*,\s*(?:\*|${col}|${fnCall2}))*\s*\)|\w+\(\s*\)`;
+  const fnCall2 = String.raw`\w+\(\s*(?:\*|${col})?\s*\)`;
+  const fnCall1 = String.raw`\w+\(\s*(?:\*|${col}|${fnCall2})?\s*\)`;
   const expr = String.raw`(?:${col}|${fnCall1})`;
   const collate = String.raw`(?:\s+COLLATE\s+\S+)?`;
   const dir = String.raw`(?:\s+ASC|\s+DESC)?`;

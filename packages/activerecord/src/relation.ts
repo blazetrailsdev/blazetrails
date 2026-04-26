@@ -2215,7 +2215,7 @@ export class Relation<T extends Base> {
       // Comma-separated lists are not allowed in a single pluck argument —
       // each column must be passed as a separate argument for correct result mapping.
       if (c.includes(",")) {
-        throw new Error(
+        throw argumentError(
           `pluck does not allow comma-separated column lists in a single argument. ` +
             `Pass each column as a separate argument: pluck("col1", "col2")`,
         );
@@ -2227,16 +2227,18 @@ export class Relation<T extends Base> {
     // Extract column names for result mapping
     const columnNames = columns.map((c) => {
       if (typeof c === "string") {
-        // For table-qualified ("posts.title") or complex expressions, extract the alias
-        // or last segment as the result key.
+        // Explicit AS alias is reliable on all adapters.
         const asMatch = c.match(/\s+AS\s+(\w+)\s*$/i);
         if (asMatch) return asMatch[1];
+        // Function expressions: the result column label is adapter-specific and
+        // can't be reliably predicted — use positional fallback (return null).
+        if (c.includes("(")) return null;
+        // Table-qualified or quoted identifiers: extract the last plain identifier segment.
         const dotMatch = c.match(/(?:"?\w+"?\.)?"?(\w+)"?\s*$/);
         if (dotMatch) return dotMatch[1];
         return c;
       }
       if (c instanceof Nodes.Attribute) return c.name;
-      // For functions/literals, use the SQL representation
       return null;
     });
     const manager = table.project(...projections);

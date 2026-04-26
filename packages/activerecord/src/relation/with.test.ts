@@ -116,8 +116,25 @@ describe("WithTest", () => {
     expect(count).toBe(2);
   });
 
-  it.skip("with when called from active record scope", () => {
-    /* needs scope definition */
+  it("with when called from active record scope", async () => {
+    const adapter = freshAdapter();
+    class WsPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("tags_count", "integer");
+        this.adapter = adapter;
+      }
+      static withTagsCte() {
+        return WsPost.all()
+          .with({ ws_tagged: WsPost.where("tags_count > 0") })
+          .from("ws_tagged AS ws_posts");
+      }
+    }
+    const p1 = await WsPost.create({ title: "tagged", tags_count: 2 });
+    const p2 = await WsPost.create({ title: "tagged2", tags_count: 1 });
+    await WsPost.create({ title: "untagged", tags_count: 0 });
+    const records = await WsPost.withTagsCte().order("id").toArray();
+    expect(records.map((r) => (r as any).id).sort()).toEqual([p1.id, p2.id].sort());
   });
 
   it("with when invalid params are passed", () => {
@@ -133,12 +150,39 @@ describe("WithTest", () => {
     }).toThrow();
   });
 
-  it.skip("with when passing arrays", () => {
-    /* arrays not supported in with implementation */
+  it("with when passing arrays", async () => {
+    const adapter = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const p1 = await Post.create({ title: "alpha" });
+    const p2 = await Post.create({ title: "beta" });
+    // Array of relations → UNION CTE
+    const rel = Post.all().with({
+      union_cte: [Post.where({ id: p1.id }), Post.where({ id: p2.id })],
+    });
+    const sql = rel.toSql();
+    expect(sql).toContain("WITH");
+    expect(sql).toContain("UNION");
+    expect(sql).toContain("union_cte");
   });
 
-  it.skip("with when passing single item array", () => {
-    /* arrays not supported in with implementation */
+  it("with when passing single item array", async () => {
+    const adapter = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const p = await Post.create({ title: "solo" });
+    const rel = Post.all().with({ solo_cte: [Post.where({ id: p.id })] });
+    const sql = rel.toSql();
+    expect(sql).toContain("WITH");
+    expect(sql).toContain("solo_cte");
   });
 
   it("with recursive", async () => {
@@ -155,23 +199,87 @@ describe("WithTest", () => {
     expect(sql).toContain("recursive_cte");
   });
 
-  it.skip("with joins", () => {
-    /* needs cross-table CTE + joins infrastructure */
+  it("with joins", async () => {
+    const adapter = freshAdapter();
+    class WjComment extends Base {
+      static {
+        this.attribute("wj_post_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class WjPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const p1 = await WjPost.create({ title: "with comment" });
+    const p2 = await WjPost.create({ title: "no comment" });
+    await WjComment.create({ wj_post_id: p1.id });
+    // CTE of distinct wj_post_ids that have comments, joined back to wj_posts
+    const commentedPosts = WjComment.select("wj_post_id").distinct();
+    const posts = await WjPost.all()
+      .with({ commented_wj_posts: commentedPosts })
+      .joins(`INNER JOIN commented_wj_posts ON commented_wj_posts.wj_post_id = wj_posts.id`)
+      .order("id")
+      .toArray();
+    expect(posts.map((p) => (p as any).id)).toEqual([p1.id]);
   });
 
-  it.skip("with left joins", () => {
-    /* needs cross-table CTE + left joins infrastructure */
+  it("with left joins", async () => {
+    const adapter = freshAdapter();
+    class WljComment extends Base {
+      static {
+        this.attribute("wlj_post_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class WljPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const p1 = await WljPost.create({ title: "with comment" });
+    const p2 = await WljPost.create({ title: "no comment" });
+    await WljComment.create({ wlj_post_id: p1.id });
+    const commentedPosts = WljComment.select("wlj_post_id").distinct();
+    const records = await WljPost.all()
+      .with({ commented_wlj_posts: commentedPosts })
+      .joins(
+        `LEFT OUTER JOIN commented_wlj_posts ON commented_wlj_posts.wlj_post_id = wlj_posts.id`,
+      )
+      .order("wlj_posts.id")
+      .toArray();
+    // Left join returns all posts including those without comments
+    expect(records.length).toBe(2);
   });
 
   it.skip("raises when using block", () => {
-    /* block syntax not checked in current implementation */
+    // Rails tests that passing a block to with() raises ArgumentError.
+    // TypeScript has no block/proc syntax; this constraint is not applicable.
   });
 
-  it.skip("unscoping", () => {
-    /* _ctes can't be unscoped with current implementation */
+  it("unscoping", async () => {
+    const adapter = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    await Post.create({ title: "a" });
+    await Post.create({ title: "b" });
+    const withCte = Post.where({});
+    const relation = Post.all().with({ posts_with_cte: withCte });
+    expect(relation.toSql()).toContain("WITH");
+    const unscoped = relation.unscope("with" as any);
+    expect(unscoped.toSql()).not.toContain("WITH");
+    expect(await unscoped.count()).toBe(2);
   });
 
   it.skip("common table expressions are unsupported", () => {
-    /* unsupported database */
+    // The in-memory test adapter (SQLite) supports CTEs. This branch only
+    // runs on adapters that don't, which aren't exercised in the test suite.
   });
 });

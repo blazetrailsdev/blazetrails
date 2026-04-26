@@ -3178,7 +3178,9 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#with
    */
-  with(...ctes: Array<Record<string, Relation<any> | string>>): Relation<T> {
+  with(
+    ...ctes: Array<Record<string, Relation<any> | string | Array<Relation<any> | string>>>
+  ): Relation<T> {
     return this._clone().withBang(...ctes);
   }
 

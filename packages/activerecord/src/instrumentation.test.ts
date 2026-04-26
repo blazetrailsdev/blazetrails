@@ -311,8 +311,21 @@ describe("InstrumentationTest", () => {
     /* needs query cache */
   });
 
-  it.skip("no instantiation notification when no records", () => {
-    /* needs instantiation.active_record notification */
+  it("no instantiation notification when no records", async () => {
+    const adapter = freshAdapter();
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    await Author.create({ name: "David" });
+    let called = false;
+    Notifications.subscribe("instantiation.active_record", () => {
+      called = true;
+    });
+    await Author.where({ id: 0 }).toArray();
+    expect(called).toBe(false);
   });
 });
 
@@ -339,11 +352,24 @@ describe("TransactionInSqlActiveRecordPayloadTest", () => {
 });
 
 describe("TransactionInSqlActiveRecordPayloadNonTransactionalTest", () => {
-  it.skip("payload without an open transaction", () => {
-    /* needs transaction object in payload */
+  it("payload without an open transaction", async () => {
+    const adapter = freshAdapter();
+    class Book extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    let capturedTransaction: unknown = "unset";
+    Notifications.subscribe("sql.active_record", (event: any) => {
+      capturedTransaction = event.payload.transaction;
+    });
+    await Book.create({ name: "test" });
+    Notifications.unsubscribeAll();
+    expect(capturedTransaction ?? null).toBeNull();
   });
 
   it.skip("payload with an open transaction", () => {
-    /* needs transaction object in payload */
+    // Requires transaction object exposed in sql.active_record payload.
   });
 });

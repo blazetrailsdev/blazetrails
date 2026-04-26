@@ -142,8 +142,31 @@ function referencesBang(this: QueryMethodsHost, ...tables: string[]): any {
 
 function withBang(this: QueryMethodsHost, ...ctes: Array<Record<string, any>>): any {
   for (const cte of ctes) {
+    if (!(cte && typeof cte === "object" && !Array.isArray(cte))) {
+      throw argumentError(`Unsupported argument type: ${String(cte)}`);
+    }
     for (const [name, query] of Object.entries(cte)) {
-      const sql = typeof query === "string" ? query : query.toSql();
+      if (query === null || query === undefined) {
+        throw argumentError(
+          `Invalid argument for with(): null/undefined is not allowed for CTE "${name}".`,
+        );
+      }
+      let sql: string;
+      if (Array.isArray(query)) {
+        if (query.length === 0) {
+          throw argumentError(`Empty array passed for CTE "${name}".`);
+        }
+        for (const q of query) {
+          if (typeof q !== "string" && typeof q?.toSql !== "function") {
+            throw argumentError(
+              `Unsupported argument type in array for CTE "${name}": ${typeof q}`,
+            );
+          }
+        }
+        sql = query.map((q: any) => (typeof q === "string" ? q : q.toSql())).join(" UNION ");
+      } else {
+        sql = typeof query === "string" ? query : query.toSql();
+      }
       this._ctes.push({ name, sql, recursive: false });
     }
   }
@@ -328,7 +351,8 @@ export type UnscopeType =
   | "having"
   | "optimizerHints"
   | "annotate"
-  | "createWith";
+  | "createWith"
+  | "with";
 
 export const VALID_UNSCOPING_VALUES: ReadonlySet<UnscopeType> = new Set<UnscopeType>([
   "where",
@@ -349,6 +373,7 @@ export const VALID_UNSCOPING_VALUES: ReadonlySet<UnscopeType> = new Set<UnscopeT
   "optimizerHints",
   "annotate",
   "createWith",
+  "with",
 ]);
 
 function unscopeBang(
@@ -421,6 +446,9 @@ function unscopeBang(
           break;
         case "annotate":
           this._annotations = [];
+          break;
+        case "with":
+          this._ctes = [];
           break;
       }
     } else if (scope && typeof scope === "object") {

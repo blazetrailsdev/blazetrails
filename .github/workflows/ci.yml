@@ -5,16 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    # Per-adapter parity labels opt in specific suites without a new commit:
-    #   run-parity-sqlite   — schema + query parity (SQLite fixtures)
-    #   run-parity-postgres — Postgres-specific parity (future)
-    #   run-parity-mysql    — MySQL/MariaDB-specific parity (future)
     types: [opened, synchronize, reopened, labeled]
   schedule:
-    # Weekly post-merge sweep so slow regressions can't hide between
-    # parity-relevant PRs. Monday 06:00 UTC is off-peak on an Ubuntu runner.
     - cron: "0 6 * * 1"
-  workflow_dispatch:
 
 jobs:
   # Preflight that sets `docs_only=true` when every changed path is under
@@ -30,18 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.filter.outputs.docs_only }}
-      parity_sqlite: ${{ steps.filter.outputs.parity_sqlite }}
-      parity_postgres: ${{ steps.filter.outputs.parity_postgres }}
-      parity_mysql: ${{ steps.filter.outputs.parity_mysql }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - id: filter
-        env:
-          # Labels live on the PR even when the firing event is `labeled`,
-          # `synchronize`, etc., so we can scan them uniformly.
-          PR_LABELS: ${{ toJSON(github.event.pull_request.labels) }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -56,49 +42,25 @@ jobs:
           # reliably compute a diff — fall back to running the full matrix.
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
-          elif ! files=$(git diff --name-only "$base" "$head" 2>/dev/null); then
+            exit 0
+          fi
+          if ! files=$(git diff --name-only "$base" "$head" 2>/dev/null); then
             echo "git diff failed (base may be unreachable after force-push) — running full matrix"
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Changed files:"
-            echo "$files"
-            # docs_only: any line NOT starting with `docs/` flips the switch.
-            if [ -z "$files" ]; then
-              echo "docs_only=false" >> "$GITHUB_OUTPUT"
-            elif echo "$files" | grep -qv '^docs/'; then
-              echo "docs_only=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "docs_only=true" >> "$GITHUB_OUTPUT"
-            fi
+            exit 0
           fi
-          # Per-adapter parity gates. Each suite is expensive (~15-20 CI
-          # minutes across 7 jobs), so plain PRs skip all parity. Run on:
-          #   - push to main / schedule / workflow_dispatch → all adapters
-          #   - PRs carrying a per-adapter label → only that adapter
-          # `any(.[]; ...)` guards against the `.[].name == "..."` bug where
-          # jq -e bases exit status on the last element of a stream.
-          case "${{ github.event_name }}" in
-            push|schedule|workflow_dispatch)
-              echo "parity_sqlite=true"   >> "$GITHUB_OUTPUT"
-              echo "parity_postgres=true" >> "$GITHUB_OUTPUT"
-              echo "parity_mysql=true"    >> "$GITHUB_OUTPUT"
-              ;;
-            pull_request)
-              for adapter in sqlite postgres mysql; do
-                label="run-parity-${adapter}"
-                if echo "$PR_LABELS" | jq -e --arg l "$label" 'any(.[]; .name == $l)' >/dev/null; then
-                  echo "parity_${adapter}=true"  >> "$GITHUB_OUTPUT"
-                else
-                  echo "parity_${adapter}=false" >> "$GITHUB_OUTPUT"
-                fi
-              done
-              ;;
-            *)
-              echo "parity_sqlite=false"   >> "$GITHUB_OUTPUT"
-              echo "parity_postgres=false" >> "$GITHUB_OUTPUT"
-              echo "parity_mysql=false"    >> "$GITHUB_OUTPUT"
-              ;;
-          esac
+          echo "Changed files:"
+          echo "$files"
+          if [ -z "$files" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Any line that does NOT start with `docs/` flips the switch.
+          if echo "$files" | grep -qv '^docs/'; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          fi
 
   build-and-typecheck:
     name: Build & Type Check
@@ -373,7 +335,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
-      needs.changes.outputs.parity_sqlite == 'true'
+      (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'run-parity'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -417,7 +379,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
-      needs.changes.outputs.parity_sqlite == 'true'
+      (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'run-parity'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -447,7 +409,7 @@ jobs:
       - schema-parity-trails
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
-      needs.changes.outputs.parity_sqlite == 'true' &&
+      (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'run-parity')) &&
       needs.schema-parity-rails.result == 'success' &&
       needs.schema-parity-trails.result == 'success'
     runs-on: ubuntu-latest
@@ -477,7 +439,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
-      needs.changes.outputs.parity_sqlite == 'true'
+      (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'run-parity'))
     runs-on: ubuntu-latest
     outputs:
       # Minted once per workflow run and consumed by both dump jobs so they
@@ -498,7 +460,7 @@ jobs:
       - query-parity-frozen-at
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
-      needs.changes.outputs.parity_sqlite == 'true'
+      (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'run-parity'))
     runs-on: ubuntu-latest
     env:
       PARITY_FROZEN_AT: ${{ needs.query-parity-frozen-at.outputs.value }}
@@ -539,7 +501,7 @@ jobs:
       - query-parity-frozen-at
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
-      needs.changes.outputs.parity_sqlite == 'true'
+      (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'run-parity'))
     runs-on: ubuntu-latest
     env:
       PARITY_FROZEN_AT: ${{ needs.query-parity-frozen-at.outputs.value }}
@@ -580,7 +542,7 @@ jobs:
       - query-parity-trails
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
-      needs.changes.outputs.parity_sqlite == 'true' &&
+      (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'run-parity')) &&
       needs.query-parity-rails.result == 'success' &&
       needs.query-parity-trails.result == 'success'
     runs-on: ubuntu-latest

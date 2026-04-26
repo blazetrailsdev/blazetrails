@@ -132,7 +132,7 @@ describe("ar_dump.ts", () => {
   it("truncates sub-second frozen-at to whole seconds (ar-65)", () => {
     // Regression: a --frozen-at with milliseconds (e.g. 12:34:56.789) must not
     // bleed into the SQL. Rails truncates unscaled DATETIME to whole seconds;
-    // the runner achieves this by flooring frozenMs to seconds before FakeTimers.
+    // the runner matches that by truncating frozenMs to seconds before FakeTimers.
     const outDir = mkdtempSync(join(tmpdir(), "parity-ar-test-"));
     const outPath = join(outDir, "ar-65-subsecond.json");
     const res = spawnSync(

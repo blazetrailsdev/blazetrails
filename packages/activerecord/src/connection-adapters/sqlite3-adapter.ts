@@ -60,9 +60,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   static columnNameMatcher(): RegExp {
     // Mirrors Rails SQLite3 column_name_matcher. Uses "..." quoted identifiers
-    // (SQLite-style, supports escaped "" inside). Strict 0-or-1 function arg
-    // matching Rails \w+\((?:|\g<2>)\) — multi-arg functions are rejected.
-    const id = String.raw`(?:\w+|"[^"]*")`;
+    // (SQLite double-quote escaping: "" inside quotes). Strict 0-or-1 function
+    // arg matching Rails \w+\((?:|\g<2>)\) — multi-arg functions are rejected.
+    const id = String.raw`(?:\w+|"(?:[^"]|"")*")`;
     const col = String.raw`(?:${id}\.)?${id}`;
     const fn2 = String.raw`\w+\(\s*(?:\*|${col})?\s*\)`;
     const fn1 = String.raw`\w+\(\s*(?:\*|${col}|${fn2})?\s*\)`;
@@ -74,7 +74,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   static columnNameWithOrderMatcher(): RegExp {
     // Mirrors Rails SQLite3 column_name_with_order_matcher. Adds COLLATE and
     // ASC/DESC; includes NULLS FIRST/LAST for reverseOrder() compatibility.
-    const id = String.raw`(?:\w+|"[^"]*")`;
+    const id = String.raw`(?:\w+|"(?:[^"]|"")*")`;
     const col = String.raw`(?:${id}\.)?${id}`;
     const fn2 = String.raw`\w+\(\s*(?:\*|${col})?\s*\)`;
     const fn1 = String.raw`\w+\(\s*(?:\*|${col}|${fn2})?\s*\)`;

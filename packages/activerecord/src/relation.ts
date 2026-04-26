@@ -576,7 +576,11 @@ export class Relation<T extends Base> {
    */
   order(
     ...args: Array<
-      string | Record<string, "asc" | "desc"> | Nodes.Node | string[] | [Nodes.Node, ...unknown[]]
+      | string
+      | Record<string, "asc" | "desc" | "ASC" | "DESC">
+      | Nodes.Node
+      | string[]
+      | [Nodes.Node, ...unknown[]]
     >
   ): Relation<T> {
     return this._clone().orderBang(...(args as any));
@@ -691,7 +695,11 @@ export class Relation<T extends Base> {
    */
   reorder(
     ...args: Array<
-      string | Record<string, "asc" | "desc"> | Nodes.Node | string[] | [Nodes.Node, ...unknown[]]
+      | string
+      | Record<string, "asc" | "desc" | "ASC" | "DESC">
+      | Nodes.Node
+      | string[]
+      | [Nodes.Node, ...unknown[]]
     >
   ): Relation<T> {
     return this._clone().reorderBang(...(args as any));
@@ -3039,10 +3047,9 @@ export class Relation<T extends Base> {
         }
       } else {
         const [col, dir] = clause;
-        // Mirrors Rails' arel_column: unknown columns (e.g. subquery aliases
-        // from .from()) get a bare quoted name, not a table-qualified attribute.
-        // Dotted keys (e.g. "comments.body") pass through as raw SQL with direction.
-        if (/^[\w$]+(\.[\w$]+)+$/.test(col)) {
+        // Function expressions, quoted identifiers, and dotted names must be
+        // emitted as raw SQL — table.get() would double-quote them incorrectly.
+        if (/[()"`]/.test(col) || /^[\w$]+(\.[\w$]+)+$/.test(col)) {
           const lit = new Nodes.SqlLiteral(col);
           manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
         } else if (!this._fromClause.isEmpty() && !this._isKnownColumn(col)) {

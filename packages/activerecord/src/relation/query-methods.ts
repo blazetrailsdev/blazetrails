@@ -1181,8 +1181,8 @@ function buildNamedBoundSqlLiteral(
 ): Nodes.BoundSqlLiteral {
   const namedBinds: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(values)) {
-    if (value !== null && typeof value === "object" && typeof (value as any).toSql === "function") {
-      namedBinds[key] = arelSql((value as any).toSql());
+    if (value instanceof Nodes.Node) {
+      namedBinds[key] = arelSql(value.toSql());
     } else {
       namedBinds[key] = value;
     }
@@ -1200,8 +1200,8 @@ function buildBoundSqlLiteral(
   values: unknown[],
 ): Nodes.BoundSqlLiteral {
   const positionalBinds = values.map((value) => {
-    if (value !== null && typeof value === "object" && typeof (value as any).toSql === "function") {
-      return arelSql((value as any).toSql());
+    if (value instanceof Nodes.Node) {
+      return arelSql(value.toSql());
     }
     return value;
   });
@@ -1256,7 +1256,15 @@ function reverseSqlOrder(this: QueryMethodsHost, orderQuery: unknown[]): unknown
         );
       }
       const table: any = (this as any)._modelClass?.arelTable;
-      return [table ? table.get(pk).desc() : arelSql(`${pk} DESC`)];
+      const modelClass: any = (this as any)._modelClass;
+      const arelTable =
+        modelClass?.arelTable ??
+        (modelClass?.tableName ? new ArelTable(modelClass.tableName) : null);
+      return [
+        arelTable
+          ? new Nodes.Descending(arelTable.get(pk))
+          : new Nodes.Descending(new Nodes.SqlLiteral(pk)),
+      ];
     }
     throw new IrreversibleOrderError(
       "Relation has no current order and table has no primary key to be used as default order",

@@ -250,20 +250,35 @@ export async function performCount(
   }
 
   if (this._limitValue !== null || this._offsetValue !== null) {
-    // Rails: build_count_subquery — wraps the limited relation as a subquery and
-    // counts its rows without instantiating records.
-    // SELECT COUNT(*) FROM (SELECT 1 AS one FROM ... LIMIT N) subquery_for_count
+    // Rails: build_count_subquery — wraps the limited relation as a subquery
+    // and counts its rows without instantiating records.
+    // Mirrors: ActiveRecord::Calculations#build_count_subquery
     const innerTable = this._modelClass.arelTable;
-    const innerManager = innerTable.project(new Nodes.SqlLiteral("1 AS one"));
+    let innerManager: ReturnType<typeof innerTable.project>;
+    if (this._isDistinct) {
+      // DISTINCT relation: project the PK with DISTINCT applied so the inner
+      // query deduplicates rows before counting (mirrors Rails: when distinct
+      // is true, select_values are preserved rather than replaced with 1 AS one).
+      const pk = (this._modelClass as any).primaryKey ?? "id";
+      const pkAttr = Array.isArray(pk)
+        ? new Nodes.SqlLiteral(pk.map((c: string) => `"${c}"`).join(", "))
+        : innerTable.get(pk);
+      innerManager = innerTable.project(pkAttr as any);
+      innerManager.distinct();
+    } else {
+      innerManager = innerTable.project(new Nodes.SqlLiteral("1 AS one"));
+    }
     this._applyJoinsToManager(innerManager);
     this._applyWheresToManager(innerManager, innerTable);
     if (this._limitValue !== null) innerManager.take(this._limitValue);
     if (this._offsetValue !== null) innerManager.skip(this._offsetValue);
-    const outerManager = new Nodes.SqlLiteral(
-      `SELECT COUNT(*) AS count FROM (${innerManager.toSql()}) subquery_for_count`,
-    );
+    // Build outer COUNT via Arel (outerManager.from(subquery)) so adapter-specific
+    // quoting behavior is applied consistently.
+    const countAll = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
+    const outerManager = innerTable.project(countAll.as("count"));
+    outerManager.from(new Nodes.SqlLiteral(`(${innerManager.toSql()}) subquery_for_count`));
     const result = await this._modelClass.adapter.selectAll(
-      String(outerManager),
+      outerManager.toSql(),
       `${this._modelClass.name} Count`,
     );
     const rows = result.toArray() as Record<string, unknown>[];

@@ -1173,7 +1173,7 @@ export class Relation<T extends Base> {
   joins(tableOrSql?: string, on?: string): Relation<T>;
   joins(...nodes: Nodes.Join[]): Relation<T>;
   joins(stringArray: string[]): Relation<T>;
-  joins(...args: Array<string | Nodes.Join>): Relation<T>;
+  joins(...args: Array<string | string[] | Nodes.Join>): Relation<T>;
   joins(...args: Array<string | string[] | Nodes.Join | undefined>): Relation<T> {
     const rel = this._clone();
     // Two-string-argument form: joins(table, onClause) — preserved for back-compat.

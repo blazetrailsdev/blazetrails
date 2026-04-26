@@ -2067,6 +2067,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       await this._pushThrough(records, false, true);
       return;
     }
+    // Non-through: save each record with saveBang() to surface validation errors
+    for (const record of records) {
+      if (record.isNewRecord()) {
+        await (record as any).saveBang();
+      }
+    }
     return this.push(...records);
   }
 

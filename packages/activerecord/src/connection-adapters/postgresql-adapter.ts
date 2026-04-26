@@ -77,6 +77,19 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return "PostgreSQL";
   }
 
+  static columnNameMatcher(): RegExp {
+    // Rails PostgreSQL adapter column_name_matcher:
+    //   ((?:\w+\.|"\w+"\.){,2}(?:\w+|"\w+")(?:::\w+)? | \w+\((?:|\g<2>)\)(?:::\w+)?)
+    //   with optional AS alias. 2-level \g<2> approximation.
+    return /^((?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?)\)))\))(?:(?:\s+AS)?\s+(?:\w+|"\w+"))?)(?:\s*,\s*(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?)\)))\))(?:(?:\s+AS)?\s+(?:\w+|"\w+"))?)*$/i;
+  }
+
+  static columnNameWithOrderMatcher(): RegExp {
+    // Rails PostgreSQL adapter column_name_with_order_matcher:
+    //   same atom + COLLATE "\w+" + ASC/DESC + NULLS FIRST/LAST
+    return /^((?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?)\)))\))(?:::\w+)?)(?:\s+COLLATE\s+"?\w+"?)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)(?:\s*,\s*(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?|\w+\((?:|(?:(?:(?:\w+|"\w+")\.){0,2}(?:\w+|"\w+")(?:::\w+)?)\)))\))(?:::\w+)?)(?:\s+COLLATE\s+"?\w+"?)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)*$/i;
+  }
+
   override get active(): boolean {
     return this._driverPool != null;
   }

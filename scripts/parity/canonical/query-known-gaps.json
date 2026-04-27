@@ -10,5 +10,25 @@
   "ar-65": {
     "side": "diff",
     "reason": "Same datetime-precision gap as ar-01/ar-52 (equality form): Order.where(created_at: Time.now) — rails truncates to whole seconds for the unprecisioned DATETIME column, trails keeps subsecond precision in both the bind and the inlined SQL. Flakes whenever the frozen-at is not on a whole second."
+  },
+  "ar-134": {
+    "side": "diff",
+    "reason": "joins() does not support nested hash arguments: Rails resolves joins({books: :reviews}) to two INNER JOINs via the association graph; trails falls through to a toString() on the hash object, producing 'FROM \"authors\" [object Object]'. Real fix: detect hash arguments in joinsBang and resolve them through the association chain."
+  },
+  "ar-137": {
+    "side": "diff",
+    "reason": "withRecursive union uses UNION instead of UNION ALL: Rails emits 'UNION ALL' between the anchor and recursive term of a recursive CTE; trails emits bare 'UNION'. Real fix: withRecursiveBang/resolveCteEntry should always use UNION ALL for the recursive term."
+  },
+  "ar-138": {
+    "side": "diff",
+    "reason": "HAVING clause is dropped when a relation is used as a WHERE IN subquery: Rails emits 'WHERE id IN (SELECT author_id FROM books GROUP BY author_id HAVING COUNT(*) >= 3)'; trails drops the HAVING and emits 'WHERE id IN (SELECT author_id FROM books GROUP BY author_id)'. Real fix: the WHERE IN subquery path must preserve the HAVING clause from the inner relation's toSql()."
+  },
+  "ar-139": {
+    "side": "diff",
+    "reason": "joins(:assoc).where(assoc: {col: val}) does not alias the joined table: Rails aliases the joined table with the association name ('INNER JOIN \"authors\" \"author\" ON \"author\".\"id\" = ...') so WHERE \"author\".\"name\" resolves correctly; trails emits no alias ('INNER JOIN \"authors\" ON \"authors\".\"id\" = ...') leaving WHERE \"author\".\"name\" referencing an unknown table. Real fix: when joins(:assoc) is resolved symbolically, alias the table with the association name."
+  },
+  "ar-143": {
+    "side": "trails-missing",
+    "reason": "leftOuterJoins() crashes on nested hash arguments: same root cause as ar-134 — trails does not resolve nested hashes through the association graph for leftOuterJoins, raising 'Unknown node type: Object'. Real fix: share the nested-hash resolution logic between joinsBang and leftOuterJoinsBang."
   }
 }

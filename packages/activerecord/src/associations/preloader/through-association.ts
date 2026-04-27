@@ -321,7 +321,7 @@ function sourcePreloaders(assoc: ThroughAssociation): unknown[] {
 }
 
 function middleRecords(assoc: ThroughAssociation): unknown[] {
-  return (assoc as any)._middleRecords ?? [];
+  return (assoc as any)._getMiddleRecords?.() ?? [];
 }
 
 function throughPreloaders(assoc: ThroughAssociation): unknown[] {
@@ -349,5 +349,5 @@ function preloadIndex(assoc: ThroughAssociation): Map<unknown, number> {
 }
 
 function throughScope(assoc: ThroughAssociation): unknown {
-  return (assoc as any)._throughScope ?? null;
+  return (assoc as any)._buildThroughScope?.() ?? null;
 }

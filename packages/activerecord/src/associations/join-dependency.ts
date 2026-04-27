@@ -747,6 +747,8 @@ function joinType(dep: JoinDependency): string {
 }
 
 function aliasTracker(dep: JoinDependency): unknown {
+  // _aliasCache is defined on JoinDependency (Map<JoinNode|null, Map<string,string>>).
+  // Rails' alias_tracker is an AliasTracker instance; ours is the equivalent map.
   return (dep as any)._aliasCache ?? null;
 }
 

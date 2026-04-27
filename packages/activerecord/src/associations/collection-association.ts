@@ -265,7 +265,7 @@ export class CollectionAssociation extends Association {
     if (this.owner.isNewRecord()) {
       this.target = [...otherArray];
       this.loadedBang();
-    } else if (!arraysEqual(otherArray, originalTarget)) {
+    } else if (!wasLoaded || !arraysEqual(otherArray, originalTarget)) {
       for (const r of originalTarget) {
         if (!otherArray.includes(r)) {
           const idx = this.target.indexOf(r);
@@ -283,7 +283,7 @@ export class CollectionAssociation extends Association {
       // replace() calls before save(). Only update newTarget so the final flush
       // diffs against the real persisted state, not an intermediate in-memory one.
       if (this._pendingReplace) {
-        if (arraysEqual(otherArray, this._pendingReplace.originalTarget)) {
+        if (wasLoaded && arraysEqual(otherArray, this._pendingReplace.originalTarget)) {
           this._pendingReplace = null; // reverted to DB state — nothing to flush
         } else {
           this._pendingReplace.newTarget = [...otherArray];

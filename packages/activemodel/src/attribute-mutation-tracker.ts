@@ -1,8 +1,17 @@
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import { AttributeSet } from "./attribute-set.js";
 
 function cloneValue(value: unknown): unknown {
   if (value === null || typeof value !== "object") return value;
-  if (value instanceof Date) return new Date(value.getTime());
+  // Temporal types are immutable — no clone needed
+  if (
+    value instanceof Temporal.Instant ||
+    value instanceof Temporal.PlainDateTime ||
+    value instanceof Temporal.PlainDate ||
+    value instanceof Temporal.PlainTime ||
+    value instanceof Temporal.ZonedDateTime
+  )
+    return value;
   if (Array.isArray(value)) return value.map(cloneValue);
   // Only deep-clone plain objects; preserve class instances as-is
   const proto = Object.getPrototypeOf(value);

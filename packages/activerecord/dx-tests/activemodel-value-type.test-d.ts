@@ -1,4 +1,5 @@
 import { describe, it, expectTypeOf } from "vitest";
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import {
   ValueType,
   IntegerType,
@@ -27,9 +28,9 @@ describe("ValueType<T> type parameter flows into concrete subclasses", () => {
     expectTypeOf(t.cast(0)).toEqualTypeOf<boolean | null>();
   });
 
-  it("DateType#cast narrows to Date | null", () => {
+  it("DateType#cast narrows to Temporal.PlainDate | null", () => {
     const t = new DateType();
-    expectTypeOf(t.cast(0)).toEqualTypeOf<Date | null>();
+    expectTypeOf(t.cast(0)).toEqualTypeOf<Temporal.PlainDate | null>();
   });
 
   it("FloatType#cast narrows to number | null", () => {

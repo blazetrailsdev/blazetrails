@@ -1,17 +1,13 @@
 /**
  * Mirrors: ActiveRecord::Type::Time
  *
- * Also defines Time::Value as a branded wrapper around Date (matching
- * Ruby's DelegateClass(::Time)).
+ * TimeValue will be re-implemented on Temporal.ZonedDateTime in PR 8.
+ * For now it is a thin shell that keeps the type hierarchy intact while
+ * the activemodel cast layer has been flipped to Temporal.PlainTime.
  */
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import { TimeType as ActiveModelTime } from "@blazetrails/activemodel";
 import { isUtc, type TimezoneOptions } from "./internal/timezone.js";
-
-export class TimeValue extends globalThis.Date {
-  constructor(value: globalThis.Date) {
-    super(value.getTime());
-  }
-}
 
 export class Time extends ActiveModelTime {
   private _timezone?: "utc" | "local";
@@ -25,19 +21,12 @@ export class Time extends ActiveModelTime {
     return isUtc(this._timezone);
   }
 
-  serialize(value: unknown): TimeValue | null {
-    const cast = super.serialize(value);
-    if (cast instanceof globalThis.Date) {
-      return new TimeValue(cast);
-    }
-    return null;
+  override serialize(value: unknown): string | null {
+    return super.serialize(value);
   }
 
-  /**
-   * Mirrors: ActiveRecord::Type::Time#serialize_cast_value
-   */
-  serializeCastValue(value: globalThis.Date | null): TimeValue | null {
+  override serializeCastValue(value: Temporal.PlainTime | null): string | null {
     if (value == null) return null;
-    return new TimeValue(value);
+    return value.toString({ smallestUnit: "microsecond" });
   }
 }

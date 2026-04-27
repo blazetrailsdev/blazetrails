@@ -1,3 +1,5 @@
+import { Temporal } from "@blazetrails/activesupport/temporal";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
@@ -177,11 +179,15 @@ function _coerceForJson(
   // its description would misrepresent its role. Leave symbols alone;
   // `JSON.stringify` already drops them per spec, which correctly
   // signals "this doesn't serialize".
-  if (value instanceof Date) {
-    // Invalid Date (e.g. `new Date("bad")`) throws on `toISOString`.
-    // `Date.prototype.toJSON` returns null in that case — match it so
-    // `asJson` stays JSON-safe regardless of attribute hygiene.
-    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  if (
+    value instanceof Temporal.Instant ||
+    value instanceof Temporal.PlainDateTime ||
+    value instanceof Temporal.PlainDate ||
+    value instanceof Temporal.PlainTime ||
+    value instanceof Temporal.ZonedDateTime
+  ) {
+    // Temporal.prototype.toJSON() emits ISO 8601 with native precision.
+    return value.toJSON();
   }
   if (Array.isArray(value)) {
     // True cycle: short-circuit to null (Rails' JSON encoder raises, but

@@ -1,6 +1,7 @@
 import { Errors, StrictValidationFailed } from "./errors.js";
 import { ValidationError, ValidationContext } from "./validations.js";
 import { humanize, underscore, dasherize, htmlEscape } from "@blazetrails/activesupport";
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import { I18n } from "./i18n.js";
 import { Type } from "./type/value.js";
 import { AttributeSet } from "./attribute-set.js";
@@ -1767,7 +1768,15 @@ export class Model {
       const tag = dasherize(key);
       if (value === null || value === undefined) {
         xml += `${indent}<${tag} nil="true"/>\n`;
-      } else if (typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
+      } else if (
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        !(value instanceof Temporal.Instant) &&
+        !(value instanceof Temporal.PlainDateTime) &&
+        !(value instanceof Temporal.PlainDate) &&
+        !(value instanceof Temporal.PlainTime) &&
+        !(value instanceof Temporal.ZonedDateTime)
+      ) {
         xml += `${indent}<${tag}>\n${this._hashToXml(value as Record<string, unknown>, indent + "  ")}${indent}</${tag}>\n`;
       } else if (Array.isArray(value)) {
         xml += `${indent}<${tag} type="array">\n`;
@@ -1783,8 +1792,16 @@ export class Model {
         xml += `${indent}<${tag} type="integer">${value}</${tag}>\n`;
       } else if (typeof value === "boolean") {
         xml += `${indent}<${tag} type="boolean">${value}</${tag}>\n`;
-      } else if (value instanceof Date) {
-        xml += `${indent}<${tag} type="dateTime">${value.toISOString()}</${tag}>\n`;
+      } else if (
+        value instanceof Temporal.Instant ||
+        value instanceof Temporal.PlainDateTime ||
+        value instanceof Temporal.ZonedDateTime
+      ) {
+        xml += `${indent}<${tag} type="dateTime">${value.toJSON()}</${tag}>\n`;
+      } else if (value instanceof Temporal.PlainDate) {
+        xml += `${indent}<${tag} type="date">${value.toString()}</${tag}>\n`;
+      } else if (value instanceof Temporal.PlainTime) {
+        xml += `${indent}<${tag} type="time">${value.toString()}</${tag}>\n`;
       } else {
         xml += `${indent}<${tag}>${this._escapeXml(String(value))}</${tag}>\n`;
       }

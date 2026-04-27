@@ -8,6 +8,9 @@ const TYPE_DATE = 10;
 const TYPE_TIME = 11;
 const TYPE_DATETIME = 12;
 const TYPE_NEWDATE = 14;
+const TYPE_TIMESTAMP2 = 17; // binary protocol variant for TIMESTAMP(N)
+const TYPE_DATETIME2 = 18; // binary protocol variant for DATETIME(N)
+const TYPE_TIME2 = 19; // binary protocol variant for TIME(N)
 const TYPE_VARCHAR = 253;
 
 function field(type: number, value: string | null) {
@@ -86,6 +89,23 @@ describe("temporalTypeCast", () => {
 
     it("returns null for NULL", () => {
       expect(temporalTypeCast(field(TYPE_TIME, null), next)).toBeNull();
+    });
+  });
+
+  describe("binary protocol variants (prepared statements)", () => {
+    it("TIMESTAMP2 (type 17) parses to Temporal.Instant", () => {
+      const result = temporalTypeCast(field(TYPE_TIMESTAMP2, "2026-04-27 14:23:55.123456"), next);
+      expect(result).toBeInstanceOf(Temporal.Instant);
+    });
+
+    it("DATETIME2 (type 18) parses to Temporal.PlainDateTime", () => {
+      const result = temporalTypeCast(field(TYPE_DATETIME2, "2026-04-27 14:23:55.123456"), next);
+      expect(result).toBeInstanceOf(Temporal.PlainDateTime);
+    });
+
+    it("TIME2 (type 19) parses to Temporal.PlainTime", () => {
+      const result = temporalTypeCast(field(TYPE_TIME2, "14:23:55.123456"), next);
+      expect(result).toBeInstanceOf(Temporal.PlainTime);
     });
   });
 

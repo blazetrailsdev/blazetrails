@@ -1011,14 +1011,25 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // Note: the threshold is mysql2's internal digit count (≥15), not
     // Number.MAX_SAFE_INTEGER (2^53-1 ≈ 9×10^15, 16 digits). Callers may
     // override via explicit false in config.
-    const pool = mysql.createPool({ supportBigNumbers: true, ...TEMPORAL_POOL_OPTIONS, ...config });
+    // TEMPORAL_POOL_OPTIONS is spread LAST so user config cannot accidentally
+    // override our typeCast callback and silently break Temporal parsing.
+    const pool = mysql.createPool({ supportBigNumbers: true, ...config, ...TEMPORAL_POOL_OPTIONS });
     // Pin session timezone to UTC so TIMESTAMP wire strings are always in UTC,
     // allowing parseMysqlInstant to treat them as Temporal.Instant correctly.
     // The 'connection' event fires on the underlying (non-promise) pool for
     // each new physical connection before it enters the pool.
-    pool.pool.on("connection", (conn: { query: (sql: string) => void }) => {
-      conn.query("SET time_zone = '+00:00'");
-    });
+    pool.pool.on(
+      "connection",
+      (conn: { query: (sql: string, cb: (err: Error | null) => void) => void }) => {
+        conn.query("SET time_zone = '+00:00'", (err) => {
+          if (err) {
+            // Non-fatal — log but don't crash the pool. TIMESTAMP columns will
+            // fall back to server-default timezone behavior if this fails.
+            console.warn("[trails] Failed to pin MySQL session time_zone to UTC:", err.message);
+          }
+        });
+      },
+    );
     return pool;
   }
 }

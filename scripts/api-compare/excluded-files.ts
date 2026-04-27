@@ -76,7 +76,7 @@ export const EXCLUDED_FILES: ExcludedFile[] = [
     reason:
       "Rails-specific YAML fixtures (test/fixtures/*.yml loaded once into the DB " +
       "with named-row references and ERB preprocessing). The JS/TS ecosystem uses " +
-      "factories or ad-hoc Model.create instead; trails users won't ship YAML fixtures.",
+      "factories or ad-hoc Model.create instead; Trails users won't ship YAML fixtures.",
   },
   {
     pattern: "fixture_set",

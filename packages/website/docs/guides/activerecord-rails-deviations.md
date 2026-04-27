@@ -428,7 +428,7 @@ factories (`Model.create`, factory libraries) a decade ago, and Vitest
 tests use per-test setup rather than a shared transactional dataset.
 Porting the YAML loader, ERB shim, label hashing, polymorphic
 resolution, and connection-pool coordination would be a large surface
-for a feature trails users would not adopt.
+for a feature Trails users would not adopt.
 
 Affected Rails files (skipped in `api:compare` / `test:compare` —
 see `scripts/api-compare/excluded-files.ts`):
@@ -440,7 +440,7 @@ see `scripts/api-compare/excluded-files.ts`):
 
 Use factories or per-test `Model.create` calls instead. The
 transactional-rollback behavior that `TestFixtures` provides is
-covered separately by trails' transaction support (`await transaction(...)`)
+covered separately by Trails' transaction support (`await transaction(...)`)
 inside test setup/teardown.
 
 ## Summary

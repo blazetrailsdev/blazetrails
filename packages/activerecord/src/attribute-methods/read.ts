@@ -42,7 +42,8 @@ export function _readAttribute(this: AttributeHolder, name: string): unknown {
 
 // Mirrors: ActiveRecord::AttributeMethods::Read::ClassMethods private#define_method_attribute
 // Rails generates a reader method via AttrNames.define_attribute_accessor_method.
-// TypeScript attribute access is handled statically; this registers the name.
+// TypeScript attribute access is handled statically; AttrNames.defineAttributeAccessorMethod
+// has no side effects — this call is retained only for Rails-parity.
 function defineMethodAttribute(canonicalName: string, _options?: unknown): void {
-  AttrNames.defineAttributeAccessorMethod(canonicalName, false);
+  void AttrNames.defineAttributeAccessorMethod(canonicalName, false);
 }

@@ -320,7 +320,9 @@ function attributesForCreate(this: any, attributeNames: string[]): string[] {
   const colNames = new Set<string>(mc.columnNames?.() ?? []);
   return attributeNames.filter((name) => {
     if (!colNames.has(name)) return false;
-    if (pkAttribute.call(this, name) && this.id == null) return false;
+    // Rails: pk_attribute?(name) && id.nil? — check per-column PK value so
+    // composite PKs work correctly (this.id would be an array, not null).
+    if (pkAttribute.call(this, name) && this._attributes?.get?.(name) == null) return false;
     // Rails: column_for_attribute(name).virtual?
     if (mc.columnForAttribute?.(name)?.virtual) return false;
     return true;

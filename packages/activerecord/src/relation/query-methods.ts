@@ -1957,19 +1957,26 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
   const buckets: Record<string, unknown[]> = {
     leading_join: [],
     join_node: [],
+    stashed_join: [],
   };
 
-  // Mirror Rails build_join_buckets routing (query_methods.rb:1856-1863):
-  // 1. Convert string joins to StringJoin nodes.
-  // 2. Route LeadingJoin nodes to leading_join so they appear first in join_sources.
-  // 3. Route all other explicit Arel join nodes to join_node.
+  // Mirror Rails build_join_buckets (query_methods.rb:1844–1876):
+  // Detect stashed joins from eagerLoad/includes associations. When present,
+  // non-LeadingJoin explicit nodes go to join_node (after alias-tracker joins).
+  // When absent, all explicit nodes go to leading_join (before named joins),
+  // matching Rails' else branch: `!LeadingJoin && (stashed_eager_load ||
+  // stashed_left_joins)` is false, so all nodes route to leading_join.
+  const stashedJoins = buildJoinDependencies.call(this);
+  const hasStashed = stashedJoins.length > 0;
+  buckets.stashed_join.push(...stashedJoins);
+
   for (const v of this._joinValues) {
     const node: Nodes.Join =
       typeof v === "string" ? (new Nodes.StringJoin(arelSql(v.trim()) as any) as Nodes.Join) : v;
-    if (node instanceof Nodes.LeadingJoin) {
-      buckets.leading_join.push(node);
-    } else {
+    if (!(node instanceof Nodes.LeadingJoin) && hasStashed) {
       buckets.join_node.push(node);
+    } else {
+      buckets.leading_join.push(node);
     }
   }
 
@@ -1977,16 +1984,19 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
 }
 
 function buildJoins(this: QueryMethodsHost, arel: any): void {
-  if (this._joinClauses.length === 0 && this._joinValues.length === 0) return;
+  const hasAssocs = this._eagerLoadAssociations.length > 0 || this._includesAssociations.length > 0;
+  if (this._joinClauses.length === 0 && this._joinValues.length === 0 && !hasAssocs) return;
 
   const buckets = buildJoinBuckets.call(this);
   const leadingJoins = buckets.leading_join as unknown[];
   const joinNodes = buckets.join_node as unknown[];
+  const stashedJoins = buckets.stashed_join as JoinDependency[];
 
   for (const j of leadingJoins) arel.source.right.push(j);
 
-  // Mirror _applyJoinsToManager: use manager.join()/outerJoin() so the
-  // SelectManager handles string→SqlLiteral conversion and On wrapping.
+  // Named association joins from _joinClauses (pre-resolved SQL join specs).
+  // Mirrors Rails' join_dependency.join_constraints(stashed_joins, alias_tracker)
+  // for the named_join + stashed_join buckets.
   for (const j of this._joinClauses) {
     const tableNode = j.quoted ? new ArelTable(j.table) : j.table;
     const onNode = arelSql(j.on) as any;
@@ -1995,6 +2005,14 @@ function buildJoins(this: QueryMethodsHost, arel: any): void {
     } else {
       arel.outerJoin(tableNode, onNode);
     }
+  }
+
+  // Stashed join dependencies (eager_load/includes) — generate join SQL via
+  // joinConstraints and push directly to join_sources (mirrors build_joins:1896).
+  if (stashedJoins.length > 0) {
+    const [primary, ...rest] = stashedJoins;
+    const constraintNodes = primary.joinConstraints(rest);
+    for (const node of constraintNodes) arel.source.right.push(node);
   }
 
   for (const node of joinNodes) arel.source.right.push(node);

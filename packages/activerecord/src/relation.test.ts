@@ -370,9 +370,12 @@ describe("RelationTest", () => {
   });
 
   it("joins() with stashed eager-load: LeadingJoin before InnerJoin regardless of argument order", () => {
-    // With stashed joins present (eagerLoad triggers stashed_eager_load), Rails
-    // routes LeadingJoin → leading_join (first) and non-LeadingJoin → join_node
-    // (last), so LeadingJoin appears before InnerJoin regardless of argument order.
+    // With stashed joins present (eagerLoad sets _eagerLoadAssociations, the
+    // stashed_eager_load signal), _applyJoinsToManager routes LeadingJoin →
+    // leading_join (prepended first) and non-LeadingJoin → join_node (appended
+    // last). The "author" association need not exist on the model — this test
+    // exercises the routing split in _applyJoinsToManager (toSql path), not
+    // the stashed JOIN SQL insertion in buildJoins (buildArel path).
     class Book extends Base {
       static {
         this.tableName = "books";
@@ -390,8 +393,8 @@ describe("RelationTest", () => {
       authors,
       new Nodes.On(new Nodes.SqlLiteral("books.author_id = authors.id")),
     );
-    // innerJoin passed first, but stashed joins (eagerLoad) cause routing split:
-    // leadingJoin → leading (prepended), innerJoin → join_node (appended)
+    // innerJoin passed first, but stashed signal causes routing split:
+    // leadingJoin → prepended, innerJoin → appended → authors before tags in SQL
     const rel = Book.joins(innerJoin, leadingJoin).eagerLoad("author");
     const sqlStr = rel.toSql();
     const authorPos = sqlStr.indexOf('"authors"');

@@ -1958,18 +1958,25 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
     join_node: [],
   };
 
-  // Convert raw SQL joins to StringJoin nodes.
-  // _joinClauses (already-resolved SQL joins) are handled directly by
-  // buildJoins via manager.join()/outerJoin() and don't go through buckets.
-  for (const raw of this._rawJoins) {
-    buckets.join_node.push(new Nodes.StringJoin(arelSql(raw) as any));
+  // _joinValues holds strings and Arel nodes in insertion order (mirrors Rails'
+  // joins_values). Route LeadingJoin to leading_join (prepended before
+  // alias-tracker-generated joins in build_joins) and everything else to
+  // join_node. String values are wrapped as StringJoin per Rails' bucket logic.
+  for (const v of this._joinValues) {
+    if (v instanceof Nodes.LeadingJoin) {
+      buckets.leading_join.push(v);
+    } else if (typeof v === "string") {
+      buckets.join_node.push(new Nodes.StringJoin(arelSql(v) as any));
+    } else {
+      buckets.join_node.push(v);
+    }
   }
 
   return buckets;
 }
 
 function buildJoins(this: QueryMethodsHost, arel: any): void {
-  if (this._joinClauses.length === 0 && this._rawJoins.length === 0) return;
+  if (this._joinClauses.length === 0 && this._joinValues.length === 0) return;
 
   const buckets = buildJoinBuckets.call(this);
   const leadingJoins = buckets.leading_join as unknown[];

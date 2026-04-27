@@ -243,6 +243,13 @@ function removeTargetBang(assoc: HasOneAssociation, method: string): Promise<voi
   if (!target) return Promise.resolve();
   if (method === "delete") return (target as any).delete?.() ?? Promise.resolve();
   if (method === "destroy") return (target as any).destroy?.() ?? Promise.resolve();
+  if (method === "nullify") {
+    if (target.isPersisted()) {
+      (assoc as any).nullifyOwnerAttributes(target);
+      return (target as any).save?.() ?? Promise.resolve();
+    }
+    return Promise.resolve();
+  }
   return Promise.resolve();
 }
 

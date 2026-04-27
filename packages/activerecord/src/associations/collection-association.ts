@@ -3,7 +3,7 @@ import type { AssociationDefinition } from "../associations.js";
 import { fireAssocCallbacks } from "../associations.js";
 import { underscore } from "@blazetrails/activesupport";
 import { Association } from "./association.js";
-import { RecordNotSaved, Rollback, AssociationNotLoadedError } from "../errors.js";
+import { RecordNotSaved, Rollback } from "../errors.js";
 
 /**
  * Base class for has_many and has_and_belongs_to_many associations.
@@ -18,7 +18,7 @@ export class CollectionAssociation extends Association {
   declare target: Base[];
   nestedAttributesTarget: Base[] | null = null;
   private _associationIds: unknown[] | null = null;
-  _pendingReplace: { newTarget: Base[]; originalTarget: Base[] } | null = null;
+  _pendingReplace: { newTarget: Base[]; originalTarget: Base[]; wasLoaded: boolean } | null = null;
 
   constructor(owner: Base, definition: AssociationDefinition) {
     super(owner, definition);
@@ -60,6 +60,9 @@ export class CollectionAssociation extends Association {
    * Loads records by the given IDs and replaces the collection.
    */
   async idsWriter(ids: unknown[]): Promise<void> {
+    if (!this.owner.isNewRecord() && !this.isLoaded()) {
+      await this.loadTarget();
+    }
     const filteredIds = (ids ?? []).filter((id) => id != null && id !== "");
     if (filteredIds.length === 0) {
       this.replace([]);
@@ -256,11 +259,7 @@ export class CollectionAssociation extends Association {
    */
   replace(otherArray: Base[]): void {
     for (const val of otherArray) (this as any).raiseOnTypeMismatchBang(val);
-    // Rails calls load_target synchronously before replacing. Since loadTarget()
-    // is async here, require callers to load first on persisted owners.
-    if (!this.owner.isNewRecord() && !this.isLoaded()) {
-      throw new AssociationNotLoadedError(this.owner.constructor.name, this.reflection.name);
-    }
+    const wasLoaded = this.isLoaded();
     const originalTarget = [...this.target];
     replaceCommonRecordsInMemory(this, otherArray, originalTarget);
     if (this.owner.isNewRecord()) {
@@ -290,7 +289,7 @@ export class CollectionAssociation extends Association {
           this._pendingReplace.newTarget = [...otherArray];
         }
       } else {
-        this._pendingReplace = { newTarget: [...otherArray], originalTarget };
+        this._pendingReplace = { newTarget: [...otherArray], originalTarget, wasLoaded };
       }
     }
   }
@@ -298,6 +297,12 @@ export class CollectionAssociation extends Association {
   async persistReplace(): Promise<void> {
     const pending = this._pendingReplace;
     if (!pending || this.owner.isNewRecord()) return;
+    // If the association wasn't loaded at assignment time, load now to get the
+    // real DB baseline before diffing (mirrors Rails' load_target in replace).
+    if (!pending.wasLoaded) {
+      await this.loadTarget();
+      pending.originalTarget = [...this.target];
+    }
     const currentTarget = this.target;
     await transaction(this, async () => {
       // replaceRecords diffs against assoc.target; restore originalTarget so

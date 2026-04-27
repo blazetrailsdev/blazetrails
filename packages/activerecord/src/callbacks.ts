@@ -234,7 +234,7 @@ function _createRecord(this: any): Promise<unknown> {
   // Rails: _run_create_callbacks { super }
   const ctor = this.constructor as any;
   return ctor._callbackChain.runCallbacks("create", this, async () => {
-    this._performInsert?.();
+    const result = await this._performInsert?.();
     if (this._pendingOperation) {
       await this._pendingOperation;
       this._pendingOperation = null;
@@ -242,6 +242,7 @@ function _createRecord(this: any): Promise<unknown> {
     this._previouslyNewRecord = true;
     this._newRecord = false;
     this.changesApplied();
+    return result;
   });
 }
 
@@ -249,12 +250,13 @@ function _updateRecord(this: any): Promise<unknown> {
   // Rails: _run_update_callbacks { record_update_timestamps { super } }
   const ctor = this.constructor as any;
   return ctor._callbackChain.runCallbacks("update", this, async () => {
-    this._performUpdate?.();
+    const result = await this._performUpdate?.();
     if (this._pendingOperation) {
       await this._pendingOperation;
       this._pendingOperation = null;
     }
     this._previouslyNewRecord = false;
     this.changesApplied();
+    return result;
   });
 }

@@ -304,9 +304,9 @@ function attributesWithValues(this: any, attributeNames: string[]): Record<strin
 
 function attributesForUpdate(this: any, attributeNames: string[]): string[] {
   const mc = this.constructor as any;
-  const colNames: string[] = mc.columnNames?.() ?? [];
+  const colNames = new Set<string>(mc.columnNames?.() ?? []);
   return attributeNames.filter((name) => {
-    if (!colNames.includes(name)) return false;
+    if (!colNames.has(name)) return false;
     // Rails: filters out readonly_attribute? and counter_cache_column?
     if (mc._readonlyAttributes?.has?.(name)) return false;
     if (mc._counterCacheColumns?.has?.(name)) return false;
@@ -316,9 +316,9 @@ function attributesForUpdate(this: any, attributeNames: string[]): string[] {
 
 function attributesForCreate(this: any, attributeNames: string[]): string[] {
   const mc = this.constructor as any;
-  const colNames: string[] = mc.columnNames?.() ?? [];
+  const colNames = new Set<string>(mc.columnNames?.() ?? []);
   return attributeNames.filter((name) => {
-    if (!colNames.includes(name)) return false;
+    if (!colNames.has(name)) return false;
     // Rails: filters out pk when id is nil (server-generated PK)
     if (pkAttribute.call(this, name) && this.id == null) return false;
     return true;
@@ -336,7 +336,11 @@ function formatForInspect(this: any, name: string, value: unknown): string {
       : JSON.stringify(filtered);
   }
   if (filtered instanceof Date) return `"${filtered.toISOString()}"`;
-  return JSON.stringify(filtered);
+  try {
+    return JSON.stringify(filtered);
+  } catch {
+    return String(filtered);
+  }
 }
 
 function pkAttribute(this: any, name: string): boolean {

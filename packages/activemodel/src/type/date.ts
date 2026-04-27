@@ -20,6 +20,15 @@ export class DateType extends ValueType<DateCastResult> {
     if (value instanceof Temporal.PlainDate) return value;
     // Accept PlainDateTime from multiparameter assignment — extract the date part.
     if (value instanceof Temporal.PlainDateTime) return value.toPlainDate();
+    // Dual-typed window: pg driver still returns Date until PR 5a.
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return null;
+      return Temporal.PlainDate.from({
+        year: value.getUTCFullYear(),
+        month: value.getUTCMonth() + 1,
+        day: value.getUTCDate(),
+      });
+    }
     const str = String(value).trim();
     if (str === "") return null;
     try {

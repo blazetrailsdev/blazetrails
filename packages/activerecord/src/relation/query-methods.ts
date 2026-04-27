@@ -1968,8 +1968,9 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
   // stashed_left_joins)` is false, so all nodes route to leading_join.
   // Guard the call: buildJoinDependencies always returns at least [primaryJD]
   // even when there are no associations, so we check first to avoid false positives.
-  const hasAssocStashed =
-    this._eagerLoadAssociations.length > 0 || this._includesAssociations.length > 0;
+  // Only eagerLoad associations trigger stashed_eager_load in Rails —
+  // includes may resolve via preload (no joins) and should not be counted.
+  const hasAssocStashed = this._eagerLoadAssociations.length > 0;
   const stashedJoins = hasAssocStashed ? buildJoinDependencies.call(this) : [];
   const hasStashed = stashedJoins.length > 0;
   buckets.stashed_join.push(...stashedJoins);
@@ -1988,8 +1989,8 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
 }
 
 function buildJoins(this: QueryMethodsHost, arel: any): void {
-  const hasAssocs = this._eagerLoadAssociations.length > 0 || this._includesAssociations.length > 0;
-  if (this._joinClauses.length === 0 && this._joinValues.length === 0 && !hasAssocs) return;
+  const hasEagerAssocs = this._eagerLoadAssociations.length > 0;
+  if (this._joinClauses.length === 0 && this._joinValues.length === 0 && !hasEagerAssocs) return;
 
   const buckets = buildJoinBuckets.call(this);
   const leadingJoins = buckets.leading_join as unknown[];

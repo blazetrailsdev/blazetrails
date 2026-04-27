@@ -2320,17 +2320,14 @@ export class Relation<T extends Base> {
 
   private _applyJoinsToManager(manager: SelectManager): void {
     // Mirror Rails build_join_buckets routing (query_methods.rb:1856-1863):
-    // When stashed joins exist (eager-load or existing join_sources from
-    // _buildEagerJoinManager), non-LeadingJoin nodes go to join_node (appended
-    // after). Without stashed joins, all nodes go to leading_join (prepended
-    // before _joinClauses), matching Rails' else branch.
-    // We treat any existing join_sources OR eager/includes associations as the
-    // stashed signal — both indicate a stashed_eager_load / stashed_left_joins
-    // context where the routing split matters.
-    const hasStashed =
-      manager.joinSources.length > 0 ||
-      this._eagerLoadAssociations.length > 0 ||
-      this._includesAssociations.length > 0;
+    // When stashed joins exist, non-LeadingJoin nodes go to join_node (appended
+    // after), LeadingJoin goes to leading_join (prepended before). Without stashed
+    // joins all nodes go to leading_join in insertion order (Rails' else branch).
+    // Stashed signal: existing join_sources (set by _buildEagerJoinManager before
+    // this call) OR _eagerLoadAssociations (stashed_eager_load equivalent).
+    // _includesAssociations is NOT included — includes may resolve via preload
+    // (no joins), so counting it would incorrectly split even in the non-join path.
+    const hasStashed = manager.joinSourceCount > 0 || this._eagerLoadAssociations.length > 0;
     const leadingJoins: Nodes.Join[] = [];
     const joinNodes: Nodes.Join[] = [];
     for (const v of this._joinValues) {

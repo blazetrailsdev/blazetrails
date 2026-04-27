@@ -392,7 +392,7 @@ describe("RelationTest", () => {
     );
     // innerJoin passed first, but stashed joins (eagerLoad) cause routing split:
     // leadingJoin → leading (prepended), innerJoin → join_node (appended)
-    const rel = Book.joins(innerJoin, leadingJoin).eagerLoad("author" as any);
+    const rel = Book.joins(innerJoin, leadingJoin).eagerLoad("author");
     const sqlStr = rel.toSql();
     const authorPos = sqlStr.indexOf('"authors"');
     const tagPos = sqlStr.indexOf('"tags"');

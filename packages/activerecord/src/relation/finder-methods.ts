@@ -633,9 +633,15 @@ async function findSome(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
   const records = await (rel as any).where({ [pk]: ids }).toArray();
   if (records.length !== ids.length) {
     const foundIds = records.map((r: any) => r.readAttribute?.(pk) ?? r[pk]);
-    const missingIds = ids.filter((id) => !foundIds.includes(id));
+    // Multiset subtraction: remove each found id once so duplicate requested ids
+    // are accounted for correctly (mirrors Rails' expected_size = ids.size comparison).
+    const remaining = [...ids];
+    for (const foundId of foundIds) {
+      const idx = remaining.findIndex((id) => id === foundId);
+      if (idx >= 0) remaining.splice(idx, 1);
+    }
     const modelName = (rel as any)._modelClass.name as string;
-    throw new RecordNotFound(`Couldn't find all ${modelName}`, modelName, pk, missingIds);
+    throw new RecordNotFound(`Couldn't find all ${modelName}`, modelName, pk, remaining);
   }
   return records;
 }

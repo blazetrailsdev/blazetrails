@@ -222,6 +222,9 @@ export class PredicateBuilder {
     if (Array.isArray(value)) {
       return this.arrayHandler.call(attribute, value);
     }
+    if (value instanceof Set) {
+      return this.arrayHandler.call(attribute, Array.from(value));
+    }
     if (this.isRelation(value)) {
       return this.relationHandler.call(attribute, value);
     }

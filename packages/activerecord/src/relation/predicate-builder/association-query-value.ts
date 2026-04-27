@@ -41,9 +41,10 @@ export class AssociationQueryValue {
   }
 
   private isSelectClause(): boolean {
-    if (this.value && typeof (this.value as any).selectValues === "function") {
-      return (this.value as any).selectValues().length === 0;
-    }
+    if (!this.value) return false;
+    const sv = (this.value as any).selectValues;
+    if (typeof sv === "function") return sv.call(this.value).length === 0;
+    if (Array.isArray(sv)) return sv.length === 0;
     return false;
   }
 

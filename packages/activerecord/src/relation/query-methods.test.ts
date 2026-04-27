@@ -30,23 +30,23 @@ describe("ActiveRecord::QueryMethods", () => {
       const Article = makeModel();
       const scope = Article.where({ content: "hello" });
       const sql = scope.toSql();
-      expect(sql).toContain('"body"');
-      expect(sql).not.toContain('"content"');
+      expect(sql).toMatch(/["`]body["`]/);
+      expect(sql).not.toMatch(/["`]content["`]/);
     });
 
     it("resolves alias to the real column name for array values", () => {
       const Article = makeModel();
       const scope = Article.where({ content: ["a", "b"] });
       const sql = scope.toSql();
-      expect(sql).toContain('"body"');
-      expect(sql).not.toContain('"content"');
+      expect(sql).toMatch(/["`]body["`]/);
+      expect(sql).not.toMatch(/["`]content["`]/);
     });
 
     it("passes through non-aliased column names unchanged", () => {
       const Article = makeModel();
       const scope = Article.where({ title: "hello" });
       const sql = scope.toSql();
-      expect(sql).toContain('"title"');
+      expect(sql).toMatch(/["`]title["`]/);
     });
   });
 });

@@ -971,11 +971,19 @@ export function withYamlFallback(value: unknown): unknown {
  * Temporal migration work once those adapters start receiving real Temporal
  * values from the cast layer.
  */
-export function temporalToBindString(value: unknown): unknown {
+export function temporalToBindString(
+  value: unknown,
+  adapter?: "sqlite" | "postgres" | "mysql",
+): unknown {
   if (value instanceof Temporal.Instant) return formatInstantForSql(value);
   if (value instanceof Temporal.PlainDateTime) return formatPlainDateTimeForSql(value);
   if (value instanceof Temporal.PlainDate) return formatPlainDateForSql(value);
-  if (value instanceof Temporal.PlainTime) return formatPlainTimeForSql(value);
+  if (value instanceof Temporal.PlainTime) {
+    // SQLite stores time as a datetime string with a fixed 2000-01-01 date prefix,
+    // matching quotedTime(Date) behavior in sqlite3/quoting.ts.
+    const t = formatPlainTimeForSql(value);
+    return adapter === "sqlite" ? `2000-01-01 ${t}` : t;
+  }
   if (value instanceof Temporal.ZonedDateTime) return formatInstantForSql(value.toInstant());
   return value;
 }

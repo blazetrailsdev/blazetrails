@@ -294,17 +294,58 @@ export function formatPlainTimeForSql(value: Temporal.PlainTime): string {
   );
 }
 
+/**
+ * MySQL-safe variants of the formatters. MySQL TIME/DATETIME/TIMESTAMP support
+ * at most 6 fractional digits (microseconds); emitting 7–9 nanosecond digits
+ * in strict SQL mode causes an error rather than silent truncation.
+ */
+export function formatInstantForSqlMysql(value: Temporal.Instant): string {
+  const tz = getDefaultTimezone() === "utc" ? "UTC" : Temporal.Now.timeZoneId();
+  const zdt = value.toZonedDateTimeISO(tz);
+  return (
+    formatDatePrefix(zdt) +
+    formatTimeComponents(zdt.hour, zdt.minute, zdt.second, zdt.millisecond, zdt.microsecond, 0, 6)
+  );
+}
+
+export function formatPlainDateTimeForSqlMysql(value: Temporal.PlainDateTime): string {
+  return (
+    formatDatePrefix(value) +
+    formatTimeComponents(
+      value.hour,
+      value.minute,
+      value.second,
+      value.millisecond,
+      value.microsecond,
+      0,
+      6,
+    )
+  );
+}
+
+export function formatPlainTimeForSqlMysql(value: Temporal.PlainTime): string {
+  return formatTimeComponents(
+    value.hour,
+    value.minute,
+    value.second,
+    value.millisecond,
+    value.microsecond,
+    0,
+    6,
+  );
+}
+
+function formatDatePrefix(v: { year: number; month: number; day: number }): string {
+  return `${padYear(v.year)}-${String(v.month).padStart(2, "0")}-${String(v.day).padStart(2, "0")} `;
+}
+
 function padYear(year: number): string {
   return String(year);
 }
 
 function formatZonedComponents(zdt: Temporal.ZonedDateTime): string {
-  const y = padYear(zdt.year);
-  const mo = String(zdt.month).padStart(2, "0");
-  const d = String(zdt.day).padStart(2, "0");
-  const base = `${y}-${mo}-${d} `;
   return (
-    base +
+    formatDatePrefix(zdt) +
     formatTimeComponents(
       zdt.hour,
       zdt.minute,
@@ -317,10 +358,7 @@ function formatZonedComponents(zdt: Temporal.ZonedDateTime): string {
 }
 
 function formatPlainComponents(pdt: Temporal.PlainDateTime): string {
-  const y = padYear(pdt.year);
-  const mo = String(pdt.month).padStart(2, "0");
-  const d = String(pdt.day).padStart(2, "0");
-  const base = `${y}-${mo}-${d} `;
+  const base = formatDatePrefix(pdt);
   return (
     base +
     formatTimeComponents(
@@ -341,19 +379,23 @@ function formatTimeComponents(
   ms: number,
   us: number,
   ns: number,
+  maxFracDigits = 9,
 ): string {
   const hh = String(h).padStart(2, "0");
   const mm = String(min).padStart(2, "0");
   const ss = String(s).padStart(2, "0");
   const base = `${hh}:${mm}:${ss}`;
-  if (ms === 0 && us === 0 && ns === 0) return base;
-  // Build up to 9 fractional digits, trimming trailing zeros to the nearest
-  // 3-digit group (preserves full precision without unnecessary padding).
+  // Clamp sub-second components to maxFracDigits before building the string.
+  const effectiveUs = maxFracDigits >= 6 ? us : 0;
+  const effectiveNs = maxFracDigits >= 9 ? ns : 0;
+  if (ms === 0 && effectiveUs === 0 && effectiveNs === 0) return base;
   const frac9 =
-    String(ms).padStart(3, "0") + String(us).padStart(3, "0") + String(ns).padStart(3, "0");
-  // Trim to smallest non-zero 3-digit group (ms, us, or ns).
-  const frac = ns !== 0 ? frac9 : us !== 0 ? frac9.slice(0, 6) : frac9.slice(0, 3);
-  return `${base}.${frac}`;
+    String(ms).padStart(3, "0") +
+    String(effectiveUs).padStart(3, "0") +
+    String(effectiveNs).padStart(3, "0");
+  const frac =
+    effectiveNs !== 0 ? frac9 : effectiveUs !== 0 ? frac9.slice(0, 6) : frac9.slice(0, 3);
+  return `${base}.${frac.slice(0, maxFracDigits)}`;
 }
 
 /**

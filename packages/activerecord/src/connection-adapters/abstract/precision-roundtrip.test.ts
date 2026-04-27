@@ -11,6 +11,9 @@ import {
   formatPlainDateTimeForSql,
   formatPlainDateForSql,
   formatPlainTimeForSql,
+  formatInstantForSqlMysql,
+  formatPlainDateTimeForSqlMysql,
+  formatPlainTimeForSqlMysql,
   quote,
   typeCast,
 } from "./quoting.js";
@@ -138,6 +141,40 @@ describe("temporalToBindString", () => {
     expect(temporalToBindString(42)).toBe(42);
     expect(temporalToBindString("hello")).toBe("hello");
     expect(temporalToBindString(null)).toBe(null);
+  });
+});
+
+describe("MySQL-safe formatters (clamped to 6 fractional digits)", () => {
+  it("formatInstantForSqlMysql drops nanoseconds", () => {
+    const v = Temporal.Instant.from("2026-04-26T14:23:55.123456789Z");
+    expect(formatInstantForSqlMysql(v)).toBe("2026-04-26 14:23:55.123456");
+  });
+
+  it("formatPlainDateTimeForSqlMysql drops nanoseconds", () => {
+    const v = Temporal.PlainDateTime.from("2026-04-26T14:23:55.123456789");
+    expect(formatPlainDateTimeForSqlMysql(v)).toBe("2026-04-26 14:23:55.123456");
+  });
+
+  it("formatPlainTimeForSqlMysql drops nanoseconds", () => {
+    const v = Temporal.PlainTime.from("14:23:55.000000001");
+    expect(formatPlainTimeForSqlMysql(v)).toBe("14:23:55");
+  });
+
+  it("formatPlainTimeForSqlMysql preserves microseconds", () => {
+    const v = Temporal.PlainTime.from("14:23:55.000001");
+    expect(formatPlainTimeForSqlMysql(v)).toBe("14:23:55.000001");
+  });
+});
+
+describe("temporalToBindString adapter=sqlite uses 2000-01-01 prefix for PlainTime", () => {
+  it("wraps PlainTime in 2000-01-01 for sqlite", () => {
+    const v = Temporal.PlainTime.from("14:23:55.123456");
+    expect(temporalToBindString(v, "sqlite")).toBe("2000-01-01 14:23:55.123456");
+  });
+
+  it("returns bare time string for postgres", () => {
+    const v = Temporal.PlainTime.from("14:23:55.123456");
+    expect(temporalToBindString(v, "postgres")).toBe("14:23:55.123456");
   });
 });
 

@@ -10,10 +10,10 @@
 
 import {
   quotedDate as abstractQuotedDate,
-  formatInstantForSql,
-  formatPlainDateTimeForSql,
+  formatInstantForSqlMysql as formatInstantForSql,
+  formatPlainDateTimeForSqlMysql as formatPlainDateTimeForSql,
   formatPlainDateForSql,
-  formatPlainTimeForSql,
+  formatPlainTimeForSqlMysql as formatPlainTimeForSql,
 } from "../abstract/quoting.js";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 

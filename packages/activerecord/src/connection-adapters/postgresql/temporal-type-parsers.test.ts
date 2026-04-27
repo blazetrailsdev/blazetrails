@@ -108,16 +108,16 @@ describe("getTypeParser — timetz (OID 1266)", () => {
 });
 
 describe("getTypeParser — binary format", () => {
-  it("returns null for binary format (not intercepted)", () => {
-    expect(getTypeParser(OID_TIMESTAMPTZ, "binary")).toBeNull();
-    expect(getTypeParser(OID_DATE, "binary")).toBeNull();
+  it("delegates binary format to pg built-ins (always returns a function)", () => {
+    expect(typeof getTypeParser(OID_TIMESTAMPTZ, "binary")).toBe("function");
+    expect(typeof getTypeParser(OID_DATE, "binary")).toBe("function");
   });
 });
 
 describe("getTypeParser — unknown OIDs", () => {
-  it("returns null for non-temporal OIDs", () => {
-    expect(getTypeParser(23, "text")).toBeNull(); // int4
-    expect(getTypeParser(25, "text")).toBeNull(); // text
+  it("delegates non-temporal OIDs to pg built-ins (always returns a function)", () => {
+    expect(typeof getTypeParser(23, "text")).toBe("function"); // int4
+    expect(typeof getTypeParser(25, "text")).toBe("function"); // text
   });
 });
 

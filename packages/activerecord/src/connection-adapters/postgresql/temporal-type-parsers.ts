@@ -11,6 +11,7 @@
  * etc. Per-connection tables, not global mutation.
  */
 
+import pg from "pg";
 import {
   parsePostgresInstant,
   parsePostgresPlainDateTime,
@@ -40,14 +41,17 @@ const TEMPORAL_PARSERS: ReadonlyMap<number, PgParser> = new Map<number, PgParser
  * Drop-in replacement for `pg.types.getTypeParser`.
  * Pass as `{ types: { getTypeParser } }` in the pg.Pool / pg.Client config.
  *
- * Only intercepts text-format (`format === 'text'`) for the five temporal
- * OIDs. Everything else falls through to the default pg parser via `null`,
- * which pg interprets as "use the built-in default for this OID".
+ * Intercepts text-format for the five temporal OIDs and returns our Temporal
+ * wire parsers. All other OIDs delegate to `pg.types.getTypeParser` so the
+ * built-in parsers (int, bool, numeric, etc.) remain active. Returning `null`
+ * is NOT correct — pg stores the return value directly in its `_parsers` array
+ * and calls it; a non-function crashes query processing.
  */
-export function getTypeParser(oid: number, format?: string): PgParser | null {
-  if (format === "text" || !format) {
+export function getTypeParser(oid: number, format?: string): PgParser {
+  const fmt = format || "text";
+  if (fmt === "text") {
     const parser = TEMPORAL_PARSERS.get(oid);
     if (parser) return parser;
   }
-  return null;
+  return pg.types.getTypeParser(oid, fmt as "text" | "binary") as PgParser;
 }

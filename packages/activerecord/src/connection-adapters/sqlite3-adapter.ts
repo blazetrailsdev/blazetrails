@@ -20,7 +20,7 @@ import { DateTime as ARDateTimeType } from "../type/date-time.js";
 import { Time as TimeType } from "../type/time.js";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import type { DateTimeCastResult } from "@blazetrails/activemodel";
-import { getDefaultTimezone } from "../type/internal/timezone.js";
+import { defaultSqlTimezone } from "./abstract/quoting.js";
 import { Text as TextType } from "../type/text.js";
 import { Json as JsonType } from "../type/json.js";
 import { DecimalWithoutScale } from "../type/decimal-without-scale.js";
@@ -67,10 +67,7 @@ export class SQLiteDateTimeType extends ARDateTimeType {
   override cast(value: unknown): DateTimeCastResult | null {
     const result = super.cast(value);
     if (result instanceof Temporal.PlainDateTime) {
-      // Mirror formatInstantForSql's timezone selection so reads match writes:
-      // UTC default → interpret stored string as UTC; local → host timezone.
-      const tz = getDefaultTimezone() === "utc" ? "UTC" : Temporal.Now.timeZoneId();
-      return result.toZonedDateTime(tz).toInstant();
+      return result.toZonedDateTime(defaultSqlTimezone()).toInstant();
     }
     return result;
   }

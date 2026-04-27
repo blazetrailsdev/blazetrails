@@ -451,7 +451,7 @@ export class LoaderRecords {
 
 // Private helpers mirroring Rails' PreloaderAssociation private methods
 function owners(assoc: Association): Base[] {
-  return (assoc as any)._owners ?? [];
+  return assoc.owners;
 }
 
 function reflection(assoc: Association): unknown {

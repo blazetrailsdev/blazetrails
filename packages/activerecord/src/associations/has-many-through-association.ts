@@ -12,19 +12,54 @@ export class HasManyThroughAssociation extends HasManyAssociation {
 }
 
 function buildThroughRecord(assoc: HasManyThroughAssociation, record: Base): Base | null {
-  return (assoc as any)._buildThroughRecord?.(record) ?? null;
+  const throughName = assoc.reflection.options.through as string | undefined;
+  if (!throughName) return null;
+  const throughAssoc = (assoc.owner as any).association?.(throughName);
+  if (!throughAssoc) return null;
+  // Build a new through-model record with the source association FK wired to record.
+  const sourceName = assoc.reflection.options.source ?? assoc.reflection.name;
+  const attrs: Record<string, unknown> = {};
+  // Set the source FK to point at the target record's PK
+  const sourceRefl = (throughAssoc.klass as any)?._reflectOnAssociation?.(String(sourceName));
+  const sourceFk = sourceRefl?.options?.foreignKey ?? `${String(sourceName)}_id`;
+  attrs[String(sourceFk)] = (record as any).id;
+  return typeof throughAssoc.build === "function" ? throughAssoc.build(attrs) : null;
 }
 
 function throughScope(assoc: HasManyThroughAssociation): unknown {
+  // through_scope is set externally by the association's concat/insert path.
+  // Return the memoized scope if it was set; otherwise null.
   return (assoc as any)._throughScope ?? null;
 }
 
 function throughScopeAttributes(assoc: HasManyThroughAssociation): Record<string, unknown> {
-  return (assoc as any)._throughScopeAttributes?.() ?? {};
+  // Extract WHERE conditions from the through scope for the through model's table.
+  const throughName = assoc.reflection.options.through as string | undefined;
+  if (!throughName) return {};
+  const throughAssoc = (assoc.owner as any).association?.(throughName);
+  if (!throughAssoc) return {};
+  const scope: any = throughAssoc.scope?.();
+  if (!scope || typeof scope.whereValuesHash !== "function") return {};
+  const throughTable = (throughAssoc.klass as any)?.tableName ?? "";
+  const attrs = scope.whereValuesHash(throughTable) as Record<string, unknown>;
+  // Exclude the FK columns and the STI inheritance column.
+  const throughFk = throughAssoc.reflection?.options?.foreignKey ?? "";
+  const inheritanceCol = (throughAssoc.klass as any)?.inheritanceColumn ?? "type";
+  for (const key of [String(throughFk), inheritanceCol]) {
+    if (key in attrs) delete attrs[key];
+  }
+  return attrs;
 }
 
 function saveThroughRecord(assoc: HasManyThroughAssociation, record: Base): Promise<boolean> {
-  return (assoc as any)._saveThroughRecord?.(record) ?? Promise.resolve(true);
+  // Find and save the first unsaved through record for this target.
+  const records = throughRecordsFor(assoc, record);
+  const first = records[0];
+  if (!first || (first as any).isDestroyed?.()) return Promise.resolve(true);
+  if (typeof (first as any).save === "function") {
+    return (first as any).save({ validate: true });
+  }
+  return Promise.resolve(true);
 }
 
 function removeRecords(
@@ -93,9 +128,40 @@ function distribution(assoc: HasManyThroughAssociation, array: Base[]): Map<Base
 }
 
 function throughRecordsFor(assoc: HasManyThroughAssociation, record: Base): Base[] {
-  return (assoc as any)._throughRecordsFor?.(record) ?? [];
+  // Mirrors Rails: find through-model records whose source FK matches the target record.
+  // construct_join_attributes gives us the FK map; filter through_association.target.
+  const throughName = assoc.reflection.options.through as string | undefined;
+  if (!throughName) return [];
+  const throughAssoc = (assoc.owner as any).association?.(throughName);
+  if (!throughAssoc) return [];
+  const sourceName = assoc.reflection.options.source ?? assoc.reflection.name;
+  const sourceRefl = (throughAssoc.klass as any)?._reflectOnAssociation?.(String(sourceName));
+  const sourceFk = sourceRefl?.options?.foreignKey ?? `${String(sourceName)}_id`;
+  const targetId = (record as any).id;
+  const candidates: Base[] = Array.isArray(throughAssoc.target)
+    ? throughAssoc.target
+    : throughAssoc.target
+      ? [throughAssoc.target]
+      : [];
+  return candidates.filter((c) => (c as any).readAttribute?.(String(sourceFk)) === targetId);
 }
 
 function deleteThroughRecords(assoc: HasManyThroughAssociation, records: Base[]): Promise<void> {
-  return (assoc as any)._deleteThroughRecords?.(records) ?? Promise.resolve();
+  // Mirrors Rails delete_through_records: remove through join-model records.
+  const throughName = assoc.reflection.options.through as string | undefined;
+  if (!throughName) return Promise.resolve();
+  const throughAssoc = (assoc.owner as any).association?.(throughName);
+  if (!throughAssoc) return Promise.resolve();
+  for (const record of records) {
+    const toDelete = throughRecordsFor(assoc, record);
+    if (Array.isArray(throughAssoc.target)) {
+      for (const r of toDelete) {
+        const idx = (throughAssoc.target as Base[]).indexOf(r);
+        if (idx !== -1) (throughAssoc.target as Base[]).splice(idx, 1);
+      }
+    } else if (toDelete.length > 0 && throughAssoc.target === toDelete[0]) {
+      throughAssoc.target = null;
+    }
+  }
+  return Promise.resolve();
 }

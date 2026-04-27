@@ -750,8 +750,12 @@ function aliasTracker(dep: JoinDependency): unknown {
   return (dep as any)._aliasCache ?? null;
 }
 
-function makeJoinConstraints(dep: JoinDependency, root: unknown, type: string): unknown[] {
-  return (dep as any)._nodes ?? [];
+function makeJoinConstraints(dep: JoinDependency, root: unknown, type: string): Nodes.Node[] {
+  // Rails: maps each child of join_root into join constraints via make_constraints.
+  // Our implementation stores pre-built JOIN SQL in _nodes; return as Arel literals.
+  type JoinNode = { joinSql: string };
+  const nodes = (dep as any)._nodes as JoinNode[] | undefined;
+  return (nodes ?? []).map((n) => arelSql(n.joinSql));
 }
 
 function makeConstraints(
@@ -759,19 +763,39 @@ function makeConstraints(
   parent: unknown,
   child: unknown,
   type: string,
-): unknown[] {
-  void Nodes.OuterJoin; // Rails: uses arel_table and Arel::Nodes::OuterJoin
-  return [];
+): Nodes.Node[] {
+  // Rails: calls child.join_constraints to build Arel::Nodes::OuterJoin nodes.
+  // Our _nodes contain pre-built JOIN SQL per association; filter to the child's node.
+  type JoinNode = { assocName?: string; joinSql: string };
+  const nodes = (dep as any)._nodes as JoinNode[] | undefined;
+  const childName = (child as { assocName?: string })?.assocName;
+  const matching = (nodes ?? []).filter((n) => !childName || n.assocName === childName);
+  void Nodes.OuterJoin; // Rails uses Arel::Nodes::OuterJoin in child.join_constraints
+  return matching.map((n) => arelSql(n.joinSql));
 }
 
-function walk(dep: JoinDependency, left: unknown, right: unknown, type: string): unknown[] {
-  return [];
+function walk(dep: JoinDependency, left: unknown, right: unknown, type: string): Nodes.Node[] {
+  // Rails: merges two JoinAssociation subtrees reusing existing table aliases.
+  // Our flat _nodes structure doesn't have a tree to walk; return all join SQLs.
+  type JoinNode = { joinSql: string };
+  const nodes = (dep as any)._nodes as JoinNode[] | undefined;
+  return (nodes ?? []).map((n) => arelSql(n.joinSql));
 }
 
 function findReflection(dep: JoinDependency, klass: unknown, name: string): unknown {
-  return (klass as any)?._reflectOnAssociation?.(name) ?? null;
+  const found = (klass as any)?._reflectOnAssociation?.(name) ?? null;
+  if (!found) {
+    throw new Error(
+      `Can't join '${(klass as any)?.name ?? String(klass)}' to association named '${name}'`,
+    );
+  }
+  return found;
 }
 
 function build(dep: JoinDependency, associations: unknown, baseKlass: unknown): unknown[] {
-  return [];
+  // Rails: recursively builds JoinAssociation tree from an association name hash.
+  // Our JoinDependency uses addEagerLoadFor; return node metadata for reflection.
+  type JoinNode = { assocName?: string; assocType?: string };
+  const nodes = (dep as any)._nodes as JoinNode[] | undefined;
+  return (nodes ?? []).map((n) => ({ name: n.assocName, type: n.assocType }));
 }

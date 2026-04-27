@@ -78,17 +78,9 @@ interface CoreRecord {
  */
 export function inspect(this: CoreRecord): string {
   const ctor = this.constructor as { name: string };
-  const filter = inspectionFilter.call(this.constructor as CoreHost);
+  // Rails: inspect builds attribute strings via format_for_inspect (same as attribute_for_inspect)
   const attrs = Array.from(this._attributes)
-    .map(([k, v]) => {
-      if (v === null || v === undefined) return `${k}: nil`;
-      const filtered = filter.filterParam(k, v);
-      if (filtered instanceof InspectionMask) return `${k}: ${filtered}`;
-      if (filtered === null || filtered === undefined) return `${k}: nil`;
-      if (typeof filtered === "string") return `${k}: "${filtered}"`;
-      if (filtered instanceof Date) return `${k}: "${filtered.toISOString()}"`;
-      return `${k}: ${JSON.stringify(filtered)}`;
-    })
+    .map(([k, v]) => `${k}: ${formatForInspect.call(this, k, v)}`)
     .join(", ");
   return `#<${ctor.name} ${attrs}>`;
 }

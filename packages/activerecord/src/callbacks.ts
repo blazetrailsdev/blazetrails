@@ -235,7 +235,8 @@ function _createRecord(this: any): Promise<boolean> {
   // Rails: _run_create_callbacks { super } — returns whether callbacks completed.
   const ctor = this.constructor as any;
   return ctor._callbackChain.runCallbacks("create", this, async () => {
-    await this._performInsert?.();
+    if (!this._performInsert) throw new Error("_performInsert not implemented");
+    await this._performInsert();
     if (this._pendingOperation) {
       await this._pendingOperation;
       this._pendingOperation = null;

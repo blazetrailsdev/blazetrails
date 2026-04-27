@@ -310,7 +310,8 @@ export function attributesForUpdate(this: any, attributeNames: string[]): string
     if (mc._readonlyAttributes?.has?.(name)) return false;
     if (mc._counterCacheColumns?.has?.(name)) return false;
     // Rails: column_for_attribute(name).virtual?
-    if (mc.columnForAttribute?.(name)?.virtual) return false;
+    const col = mc.columnForAttribute?.(name);
+    if (col?.virtual || col?.isVirtual?.()) return false;
     return true;
   });
 }
@@ -324,7 +325,8 @@ export function attributesForCreate(this: any, attributeNames: string[]): string
     // composite PKs work correctly (this.id would be an array, not null).
     if (pkAttribute.call(this, name) && this._attributes?.get?.(name) == null) return false;
     // Rails: column_for_attribute(name).virtual?
-    if (mc.columnForAttribute?.(name)?.virtual) return false;
+    const col = mc.columnForAttribute?.(name);
+    if (col?.virtual || col?.isVirtual?.()) return false;
     return true;
   });
 }

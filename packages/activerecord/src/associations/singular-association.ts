@@ -141,14 +141,10 @@ export class SingularAssociation extends Association {
   }
 }
 
-function scopeForCreate(
-  assoc: import("./singular-association.js").SingularAssociation,
-): Record<string, unknown> {
+function scopeForCreate(assoc: SingularAssociation): Record<string, unknown> {
   return (assoc as any).scope?.()?.scopeForCreate?.() ?? {};
 }
 
-function findTarget(
-  assoc: import("./singular-association.js").SingularAssociation,
-): Promise<import("../base.js").Base | null> {
-  return assoc.loadTarget() as Promise<import("../base.js").Base | null>;
+function findTarget(assoc: SingularAssociation): Promise<Base | null> {
+  return assoc.loadTarget() as Promise<Base | null>;
 }

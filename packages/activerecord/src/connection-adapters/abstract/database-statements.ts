@@ -965,10 +965,11 @@ export function withYamlFallback(value: unknown): unknown {
  * reject raw Temporal objects; this shim converts them at the bind boundary.
  * Returns the value unchanged when it is not a Temporal type.
  *
- * Applied in `typeCastedBinds` (notification payloads) in this PR. The actual
+ * Applied in `typeCastedBinds` (notification payloads) for now. The actual
  * driver-bind paths (pg `client.query values`, mysql2 `conn.execute`, and
- * better-sqlite3 `stmt.all`) are wired in PRs 5a, 5b, and 4 respectively,
- * once those adapters start receiving real Temporal values from the cast layer.
+ * better-sqlite3 `stmt.all`) should be wired as part of the adapter-specific
+ * Temporal migration work once those adapters start receiving real Temporal
+ * values from the cast layer.
  */
 export function temporalToBindString(value: unknown): unknown {
   if (value instanceof Temporal.Instant) return formatInstantForSql(value);

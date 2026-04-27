@@ -1,5 +1,5 @@
 /**
- * Precision round-trip tests for the Temporal SQL formatters introduced in PR 2.
+ * Precision round-trip tests for the Temporal SQL formatters.
  * Verifies that sub-millisecond precision is preserved end-to-end through the
  * format functions that feed both the text-protocol (quote) and bind paths.
  */

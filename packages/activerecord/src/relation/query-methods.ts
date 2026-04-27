@@ -114,6 +114,7 @@ interface QueryMethodsHost {
   _lockValue: string | null;
   _joinClauses: Array<{ type: "inner" | "left"; table: string; on: string; quoted?: boolean }>;
   _rawJoins: string[];
+  _arelJoins: Nodes.Join[];
   _includesAssociations: AssociationSpec[];
   _preloadAssociations: AssociationSpec[];
   _eagerLoadAssociations: AssociationSpec[];
@@ -584,6 +585,7 @@ function unscopeBang(
         case "joins":
           this._joinClauses = [];
           this._rawJoins = [];
+          this._arelJoins = [];
           break;
         case "leftOuterJoins":
           this._joinClauses = this._joinClauses.filter((j) => j.type !== "left");
@@ -811,6 +813,7 @@ const STRUCTURAL_FIELDS: ReadonlyArray<[string, keyof QueryMethodsHost]> = [
   ["rawOrder", "_rawOrderClauses"],
   ["joins", "_joinClauses"],
   ["rawJoins", "_rawJoins"],
+  ["arelJoins", "_arelJoins"],
   ["limit", "_limitValue"],
   ["offset", "_offsetValue"],
   ["lock", "_lockValue"],

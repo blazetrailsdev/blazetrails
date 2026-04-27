@@ -3,7 +3,7 @@
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { sql } from "@blazetrails/arel";
+import { sql, Nodes, Table as ArelTable } from "@blazetrails/arel";
 import { Base, Relation, IrreversibleOrderError } from "./index.js";
 import { Associations, registerModel, modelRegistry } from "./associations.js";
 
@@ -290,6 +290,48 @@ describe("RelationTest", () => {
     expect(sql).toContain("INNER JOIN");
     expect(sql).toContain('"authors"');
     expect(sql).toContain('"books"."author_id"');
+  });
+
+  it("joins() preserves Arel node type — InnerJoin renders as INNER JOIN", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const authors = new ArelTable("authors");
+    const node = new Nodes.InnerJoin(
+      authors,
+      new Nodes.On(new Nodes.SqlLiteral("books.author_id = authors.id")),
+    );
+    const sql = Book.joins(node).toSql();
+    expect(sql).toContain("INNER JOIN");
+    expect(sql).toContain("authors");
+  });
+
+  it("joins() routes LeadingJoin nodes before other join sources", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const authors = new ArelTable("authors");
+    const tags = new ArelTable("tags");
+    const leadingJoin = new Nodes.LeadingJoin(
+      authors,
+      new Nodes.On(new Nodes.SqlLiteral("books.author_id = authors.id")),
+    );
+    const innerJoin = new Nodes.InnerJoin(
+      tags,
+      new Nodes.On(new Nodes.SqlLiteral("books.tag_id = tags.id")),
+    );
+    const sqlStr = Book.joins(innerJoin, leadingJoin).toSql();
+    const authorPos = sqlStr.indexOf('"authors"');
+    const tagPos = sqlStr.indexOf('"tags"');
+    expect(authorPos).toBeGreaterThan(-1);
+    expect(tagPos).toBeGreaterThan(-1);
+    expect(authorPos).toBeLessThan(tagPos);
   });
 
   it("string ORDER BY plain identifier qualifies with table name", () => {

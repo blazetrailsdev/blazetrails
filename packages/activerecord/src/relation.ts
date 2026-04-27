@@ -237,6 +237,7 @@ export class Relation<T extends Base> {
     quoted?: boolean;
   }> = [];
   private _rawJoins: string[] = [];
+  private _arelJoins: Nodes.Join[] = [];
   private _includesAssociations: AssociationSpec[] = [];
   private _preloadAssociations: AssociationSpec[] = [];
   private _eagerLoadAssociations: AssociationSpec[] = [];
@@ -1213,7 +1214,7 @@ export class Relation<T extends Base> {
       if (!arg) continue;
       // Arel join node (InnerJoin / OuterJoin / StringJoin etc. from joinSources).
       if (arg instanceof Nodes.Join) {
-        rel._rawJoins.push(arg.toSql());
+        rel._arelJoins.push(arg);
         continue;
       }
       const resolved = rel._resolveAssociationJoin(arg);
@@ -1925,12 +1926,11 @@ export class Relation<T extends Base> {
     const joinedTables = new Set<string>([
       ...this._joinClauses.map((j) => j.table.toLowerCase()),
       ...this._rawJoins.flatMap((s) => {
-        // Wrap as StringJoin (Rails' Arel::Nodes::StringJoin equivalent) and
-        // read back via instanceof to stay type-safe with no unsafe cast.
         const join = new Nodes.StringJoin(new Nodes.SqlLiteral(s));
         const sqlText = join.left instanceof Nodes.SqlLiteral ? join.left.value : s;
         return this.tablesInString(sqlText);
       }),
+      ...this._arelJoins.flatMap((node) => this.tablesInString(node.toSql())),
       String((this._modelClass as unknown as { tableName?: string }).tableName ?? "").toLowerCase(),
     ]);
 
@@ -2320,6 +2320,23 @@ export class Relation<T extends Base> {
     }
     for (const rawJoin of this._rawJoins) {
       manager.appendStringJoin(rawJoin);
+    }
+    // Rails build_join_buckets: LeadingJoin nodes are prepended to join_sources
+    // before alias tracking; other Arel join nodes are appended after.
+    const leadingJoins: Nodes.Join[] = [];
+    const otherArelJoins: Nodes.Join[] = [];
+    for (const node of this._arelJoins) {
+      if (node instanceof Nodes.LeadingJoin) {
+        leadingJoins.push(node);
+      } else {
+        otherArelJoins.push(node);
+      }
+    }
+    for (const node of leadingJoins) {
+      manager.prependJoinNode(node);
+    }
+    for (const node of otherArelJoins) {
+      manager.appendJoinNode(node);
     }
   }
 
@@ -3917,6 +3934,7 @@ export class Relation<T extends Base> {
       this._havingClause.isEmpty() &&
       this._joinClauses.length === 0 &&
       this._rawJoins.length === 0 &&
+      this._arelJoins.length === 0 &&
       this._includesAssociations.length === 0 &&
       this._eagerLoadAssociations.length === 0 &&
       this._preloadAssociations.length === 0 &&
@@ -4172,6 +4190,7 @@ export class Relation<T extends Base> {
     this._setOperation = source._setOperation;
     this._joinClauses = [...source._joinClauses];
     this._rawJoins = [...source._rawJoins];
+    this._arelJoins = [...source._arelJoins];
     this._includesAssociations = [...source._includesAssociations];
     this._preloadAssociations = [...source._preloadAssociations];
     this._eagerLoadAssociations = [...source._eagerLoadAssociations];

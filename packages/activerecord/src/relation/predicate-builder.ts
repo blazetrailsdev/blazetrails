@@ -151,6 +151,9 @@ export class PredicateBuilder {
     if (value === null || value === undefined) {
       return attribute.isNotNull();
     }
+    if (value instanceof Set) {
+      value = Array.from(value);
+    }
     if (value instanceof Range) {
       return this.rangeHandler.callNegated(attribute, value);
     }

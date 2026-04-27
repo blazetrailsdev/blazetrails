@@ -83,6 +83,12 @@ describe("PredicateBuilderTest", () => {
       expect(compile(node)).toMatch(/NOT IN \(1, 2, 3\)/);
     });
 
+    it("builds NOT IN for Set values in negated predicates", () => {
+      const builder = new PredicateBuilder(table);
+      const [node] = builder.buildNegatedFromHash({ id: new Set([1, 2]) });
+      expect(compile(node)).toMatch(/NOT IN \(1, 2\)/);
+    });
+
     it("builds correct negation for exclusive ranges", () => {
       const builder = new PredicateBuilder(table);
       const [node] = builder.buildNegatedFromHash({ age: new Range(18, 65, true) });

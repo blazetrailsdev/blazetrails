@@ -18,6 +18,7 @@ import {
 } from "../connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "../adapter-name.js";
 import { JoinDependency } from "../associations/join-dependency.js";
+import { foreignKey } from "@blazetrails/activesupport";
 
 /**
  * Interface for the scope that WhereChain delegates to.
@@ -1834,10 +1835,11 @@ function eachJoinDependencies(
 }
 
 function buildJoinDependencies(this: QueryMethodsHost): JoinDependency[] {
-  // Mirror Rails: joins | left_outer_joins | eager_load | includes
+  // Mirror Rails: joins | left_outer_joins | eager_load | includes.
+  // _rawJoins are raw SQL strings — exclude them; only named association
+  // join clauses can be resolved through JoinDependency.
   const joinNames: AssociationSpec[] = [
     ...this._joinClauses.map((j) => j.table),
-    ...this._rawJoins,
   ] as AssociationSpec[];
 
   if (this._eagerLoadAssociations.length > 0) {
@@ -2025,7 +2027,7 @@ function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
   const [buckets, joinType] = buildJoinBuckets.call(this);
 
   const namedJoins = buckets.named_join as unknown[];
-  const stashedJoins = buckets.stashed_join as unknown[];
+  const stashedJoins = buckets.stashed_join as JoinDependency[];
   const leadingJoins = buckets.leading_join as unknown[];
   const joinNodes = buckets.join_node as unknown[];
 
@@ -2037,8 +2039,17 @@ function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
       namedJoins.filter((n) => typeof n === "string") as string[],
       joinType,
     );
-    // jd.joinConstraints is not yet implemented — append join nodes directly for now
-    (joinSources as any[]).push(...stashedJoins);
+    // Use joinConstraints to produce Arel join nodes from the JoinDependency graph.
+    const constraintNodes = jd.joinConstraints(stashedJoins);
+    (joinSources as any[]).push(...constraintNodes);
+  }
+
+  // Translate _joinClauses entries into Arel join nodes, preserving ON conditions.
+  for (const j of this._joinClauses) {
+    const joinTable = new ArelTable(j.table);
+    const JoinClass = j.type === "left" ? Nodes.OuterJoin : Nodes.InnerJoin;
+    const onNode = new Nodes.On(arelSql(j.on) as any);
+    (joinSources as any[]).push(new JoinClass(joinTable, onNode));
   }
 
   if (joinNodes.length > 0) (joinSources as any[]).push(...joinNodes);
@@ -2050,12 +2061,12 @@ function buildWith(this: QueryMethodsHost, arel: any): void {
   if (!this._ctes || this._ctes.length === 0) return;
 
   const hasRecursive = this._ctes.some((c) => c.recursive);
-  const withNodes = this._ctes.map((c) => arelSql(`"${c.name}" AS (${c.sql})`));
+  const withNodes = this._ctes.map((c) => new Nodes.Cte(c.name, arelSql(c.sql) as any));
 
   if (hasRecursive) {
-    arel.with?.("recursive", withNodes);
+    arel.withRecursive?.(...withNodes);
   } else {
-    arel.with?.(withNodes);
+    arel.with?.(...withNodes);
   }
 }
 
@@ -2066,22 +2077,11 @@ function buildWithJoinNode(
 ): unknown {
   const mc = (this as any)._modelClass;
   const table: any = mc?.arelTable;
+  if (!table) throw new ActiveRecordError("Cannot build CTE join node: model has no arelTable");
   const withTable = new ArelTable(name);
   // Rails: with_table[model.model_name.to_s.foreign_key].eq(table[model.primary_key])
-  const fk = mc?.modelName
-    ? `${String(mc.modelName)
-        .replace(/([A-Z])/g, "_$1")
-        .replace(/^_/, "")
-        .toLowerCase()}_id`
-    : `${String(mc?.name ?? "model")
-        .replace(/([A-Z])/g, "_$1")
-        .replace(/^_/, "")
-        .toLowerCase()}_id`;
+  const modelName = String(mc?.modelName ?? mc?.name ?? "Model");
+  const fk = foreignKey(modelName);
   const pk = Array.isArray(mc?.primaryKey) ? mc.primaryKey[0] : (mc?.primaryKey ?? "id");
-  const joinSources = table
-    ?.join(withTable, kind)
-    .on(withTable.get(fk).eq(table.get(pk))).joinSources;
-  return (
-    joinSources?.[0] ?? arelSql(`JOIN "${name}" ON "${name}"."${fk}" = "${table?.name}"."${pk}"`)
-  );
+  return table.join(withTable, kind).on(withTable.get(fk).eq(table.get(pk))).joinSources[0];
 }

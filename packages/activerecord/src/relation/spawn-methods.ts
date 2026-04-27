@@ -84,7 +84,7 @@ export function mergeBang(this: any, other: any): any {
         ...(this._eagerLoadAssociations ?? []),
         ...other._eagerLoadAssociations,
       ];
-    // mergeJoins (preserve original order — all join types in _joinClauses)
+    // mergeJoins (preserve original order across both join stores: _joinClauses and _joinValues)
     this._joinClauses.push(...(other._joinClauses ?? []));
     this._joinValues.push(...(other._joinValues ?? []));
     // sticky none

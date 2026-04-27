@@ -292,7 +292,7 @@ describe("RelationTest", () => {
     expect(sql).toContain('"books"."author_id"');
   });
 
-  it("joins() preserves Arel node type — InnerJoin renders as INNER JOIN", () => {
+  it("joins() preserves Arel node type — InnerJoin stays InnerJoin in _joinValues, not StringJoin", () => {
     class Book extends Base {
       static {
         this.tableName = "books";
@@ -304,9 +304,13 @@ describe("RelationTest", () => {
       authors,
       new Nodes.On(new Nodes.SqlLiteral("books.author_id = authors.id")),
     );
-    const sql = Book.joins(node).toSql();
-    expect(sql).toContain("INNER JOIN");
-    expect(sql).toContain("authors");
+    const relation = Book.joins(node);
+    const joinValues = (relation as any)._joinValues as unknown[];
+    expect(relation.toSql()).toContain("INNER JOIN");
+    expect(relation.toSql()).toContain("authors");
+    expect(joinValues).toHaveLength(1);
+    expect(joinValues[0]).toBeInstanceOf(Nodes.InnerJoin);
+    expect(joinValues[0]).not.toBeInstanceOf(Nodes.StringJoin);
   });
 
   it("joins() routes LeadingJoin nodes before other join sources", () => {

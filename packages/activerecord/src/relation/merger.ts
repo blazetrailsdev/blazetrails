@@ -67,9 +67,11 @@ export class Merger {
   private mergeJoins(rel: any): void {
     // Rails: joins_values and left_outer_joins_values are separate arrays, so each
     // merge helper unions its own array independently (no interleaving in Rails).
-    // In our codebase both types share _joinClauses in insertion order. Push the
-    // entire array here so the original sequence is preserved — Arel::Nodes::InnerJoin
-    // is the type used for same-model inner joins in Rails' cross-model merge path.
+    // Our codebase mirrors that split: explicit SQL joins go into _joinClauses,
+    // Arel/string join nodes into _joinValues, and named left-outer-join associations
+    // into _leftOuterJoinsValues. Each is merged independently below.
+    // Arel::Nodes::InnerJoin is the type used for same-model inner joins in Rails'
+    // cross-model merge path.
     const clauses: Array<{ type: string; table: string; on: string; quoted?: boolean }> =
       this.other._joinClauses ?? [];
     if (clauses.length > 0) rel._joinClauses.push(...clauses);

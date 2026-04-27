@@ -222,8 +222,9 @@ function registerCallback(
 // ---------------------------------------------------------------------------
 // Private instance helpers — mirrors ActiveRecord::Callbacks private block.
 // Rails overrides persistence methods to wrap each in _run_*_callbacks { super }.
-// Our base.ts._createOrUpdate() already runs the full callback chain inline,
-// so these delegate to that unified implementation.
+// createOrUpdate delegates to base.ts._createOrUpdate() which runs the full
+// callback+persistence cycle. _createRecord/_updateRecord wrap the underlying
+// persistence work directly in their respective callback chains.
 // ---------------------------------------------------------------------------
 
 function createOrUpdate(this: any): Promise<boolean> {

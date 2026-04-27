@@ -1104,7 +1104,7 @@ function excludingBang(this: QueryMethodsHost, records: any[]): any {
 
 function constructJoinDependency(
   this: QueryMethodsHost,
-  associations: string | string[],
+  associations: string | AssociationSpec[],
   _joinType?: unknown,
 ): JoinDependency {
   const jd = new JoinDependency(this._modelClass);
@@ -1863,7 +1863,9 @@ function buildArel(this: QueryMethodsHost, _connection?: unknown, _aliases?: unk
   const table: any = mc?.arelTable;
   const arel = new SelectManager(table);
 
-  buildJoins.call(this, arel.joinSources);
+  // joinSources is a getter returning a copy — push into the internal mutable array.
+  const joinSources: any[] = (arel as any).ast?.cores?.[0]?.source?.right ?? [];
+  buildJoins.call(this, joinSources);
 
   if (!this._whereClause.isEmpty()) arel.where(this._whereClause.ast);
   if (!this._havingClause.isEmpty()) arel.having(this._havingClause.ast);
@@ -2067,6 +2069,9 @@ function buildWithJoinNode(
   // Rails: with_table[model.model_name.to_s.foreign_key].eq(table[model.primary_key])
   const modelName = String(mc?.modelName ?? mc?.name ?? "Model");
   const fk = foreignKey(modelName);
-  const pk = Array.isArray(mc?.primaryKey) ? mc.primaryKey[0] : (mc?.primaryKey ?? "id");
+  if (Array.isArray(mc?.primaryKey)) {
+    throw new ActiveRecordError("Cannot build CTE join node with composite primary keys");
+  }
+  const pk = mc?.primaryKey ?? "id";
   return table.join(withTable, kind).on(withTable.get(fk).eq(table.get(pk))).joinSources[0];
 }

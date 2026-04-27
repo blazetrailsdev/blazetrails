@@ -49,4 +49,35 @@ describe("ActiveRecord::QueryMethods", () => {
       expect(sql).toMatch(/["`]title["`]/);
     });
   });
+
+  describe("WITH (CTE) emission", () => {
+    function makePostModel() {
+      class Post extends Base {
+        static {
+          this.attribute("title", "string");
+          this.attribute("published", "boolean");
+          this.adapter = adapter;
+        }
+      }
+      return Post;
+    }
+
+    it("emits WITH clause for a plain CTE", () => {
+      const Post = makePostModel();
+      const scope = Post.with({ recent: "SELECT id FROM posts WHERE published = true" });
+      const sql = scope.toSql();
+      expect(sql).toMatch(/WITH/i);
+      expect(sql).toContain("recent");
+    });
+
+    it("emits WITH RECURSIVE clause for a recursive CTE", () => {
+      const Post = makePostModel();
+      const scope = Post.withRecursive({
+        tree: "SELECT id FROM posts WHERE id = 1 UNION ALL SELECT p.id FROM posts p JOIN tree t ON p.parent_id = t.id",
+      });
+      const sql = scope.toSql();
+      expect(sql).toMatch(/WITH RECURSIVE/i);
+      expect(sql).toContain("tree");
+    });
+  });
 });

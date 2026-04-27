@@ -9,6 +9,7 @@
  */
 
 import type { Base } from "./base.js";
+import { currentTimeFromProperTimezone, timestampAttributesForUpdateInModel } from "./timestamp.js";
 
 type ModelCtor = typeof Base;
 
@@ -253,11 +254,13 @@ function _updateRecord(this: any): Promise<boolean> {
   return ctor._callbackChain.runCallbacks("update", this, async () => {
     // Mirror record_update_timestamps: write timestamp columns before the update
     // when the model has record_timestamps enabled and has changes to save.
-    if (this._touchRecord !== false && ctor.recordTimestamps !== false) {
-      const time = new Date();
-      const updateAttrs: string[] = ctor.timestampAttributesForUpdateInModel?.call(ctor) ?? [];
+    // Mirror record_update_timestamps: use _skipTouch (Rails' @_touch_record flag)
+    // and the shared currentTimeFromProperTimezone() helper (Temporal.Instant).
+    if (!this._skipTouch && ctor.recordTimestamps !== false) {
+      const time = currentTimeFromProperTimezone();
+      const updateAttrs = timestampAttributesForUpdateInModel.call(ctor);
       for (const col of updateAttrs) {
-        if (this._attributes?.has(col) && !this.willSaveChangeToAttribute?.(col)) {
+        if (ctor._attributeDefinitions?.has(col) && !this.willSaveChangeToAttribute?.(col)) {
           this.writeAttribute?.(col, time);
         }
       }

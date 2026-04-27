@@ -674,7 +674,7 @@ function buildWhereClause(
         const replacement = Array.isArray(value)
           ? value.map((v) => quote(v)).join(", ")
           : quote(value);
-        sql = sql.replace(new RegExp(`(?<!:):${escaped}\\b`, "g"), replacement);
+        sql = sql.replace(new RegExp(`(?<!:):${escaped}\\b`, "g"), () => replacement);
       }
     } else if (rest.length > 0) {
       sql = sanitizeSqlArray(opts, ...rest);
@@ -1853,11 +1853,7 @@ function buildJoinDependencies(this: QueryMethodsHost): JoinDependency[] {
 
   const stashedJoins: JoinDependency[] = [];
   const named = selectNamedJoins.call(this, joinNames, stashedJoins);
-  const jd = constructJoinDependency.call(
-    this,
-    named.filter((n) => typeof n === "string") as string[],
-    null,
-  );
+  const jd = constructJoinDependency.call(this, named as AssociationSpec[], null);
   stashedJoins.unshift(jd);
   return stashedJoins;
 }
@@ -1984,11 +1980,7 @@ function buildJoinBuckets(
     }
     if (stashedLeft.length > 0) {
       buckets.stashed_join.push(
-        constructJoinDependency.call(
-          this,
-          leftJoinNames.filter((n) => typeof n === "string") as string[],
-          Nodes.OuterJoin,
-        ),
+        constructJoinDependency.call(this, leftJoinNames as AssociationSpec[], Nodes.OuterJoin),
       );
     }
   }
@@ -2032,11 +2024,17 @@ function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
   // Translate _joinClauses into Arel join nodes preserving ON conditions.
   // _joinClauses are already-resolved SQL join targets, not association names,
   // so they are not routed through JoinDependency/constructJoinDependency.
+  const mc = (this as any)._modelClass;
   for (const j of this._joinClauses) {
-    const joinTable = new ArelTable(j.table);
     const JoinClass = j.type === "left" ? Nodes.OuterJoin : Nodes.InnerJoin;
     const onNode = new Nodes.On(arelSql(j.on) as any);
-    (joinSources as any[]).push(new JoinClass(joinTable, onNode));
+    // Schema-qualified names (e.g. "schema.table") must not be passed directly
+    // to ArelTable — the visitor quotes the whole string as one identifier.
+    // Emit a quoted SQL literal for the join relation instead.
+    const joinRelation = j.table.includes(".")
+      ? arelSql(safeQuoteTableName(mc, j.table))
+      : new ArelTable(j.table);
+    (joinSources as any[]).push(new JoinClass(joinRelation as any, onNode));
   }
 
   if (joinNodes.length > 0) (joinSources as any[]).push(...joinNodes);

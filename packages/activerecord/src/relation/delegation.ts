@@ -51,6 +51,10 @@ export class GeneratedRelationMethods {
   has(name: string): boolean {
     return this._methods.has(name);
   }
+
+  entries(): IterableIterator<[string, Function]> {
+    return this._methods.entries();
+  }
 }
 
 /**
@@ -179,7 +183,7 @@ function relationClassFor(klass: Function): typeof GeneratedRelationMethods {
 }
 
 function includeRelationMethods(target: object, methods: GeneratedRelationMethods): void {
-  for (const [name, fn] of (methods as any)._methods) {
+  for (const [name, fn] of methods.entries()) {
     (target as any)[name] = fn;
   }
 }

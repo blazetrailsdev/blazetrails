@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { nameMatches, superclassesMatch, resolveTsClassForRuby, methodInMode } from "./compare.js";
+import {
+  nameMatches,
+  superclassesMatch,
+  resolveTsClassForRuby,
+  methodInMode,
+  tsShouldIncludeInIndex,
+} from "./compare.js";
 import type { ClassInfo, MethodInfo } from "./types.js";
 
 function cls(file: string, name: string, superclass?: string): ClassInfo {
@@ -208,11 +214,13 @@ describe("methodInMode", () => {
   });
 });
 
-describe("TS-side index inclusion (tsShouldInclude semantics)", () => {
+describe("tsShouldIncludeInIndex", () => {
   // When --privates-only is active, a Ruby private method implemented as an
   // exported (public) TS function must still count as matched.
   // When default/public mode is active, internal TS methods must NOT satisfy
   // Ruby public method coverage (would inflate scores).
+  // When --privates (all) is active, the full combined surface is shown, so
+  // internal TS methods should also be included.
 
   const pub: MethodInfo = { name: "foo", visibility: "public", params: [] };
   const internal: MethodInfo = {
@@ -222,22 +230,18 @@ describe("TS-side index inclusion (tsShouldInclude semantics)", () => {
     params: [],
   };
 
-  // tsShouldInclude mirrors: mode === "private" ? true : !m.internal
-  const tsShouldInclude = (m: MethodInfo, mode: "public" | "private" | "all") =>
-    mode === "private" ? true : !m.internal;
-
   it("private mode includes both public and internal TS methods", () => {
-    expect(tsShouldInclude(pub, "private")).toBe(true);
-    expect(tsShouldInclude(internal, "private")).toBe(true);
+    expect(tsShouldIncludeInIndex(pub, "private")).toBe(true);
+    expect(tsShouldIncludeInIndex(internal, "private")).toBe(true);
   });
 
   it("public mode excludes internal TS methods", () => {
-    expect(tsShouldInclude(pub, "public")).toBe(true);
-    expect(tsShouldInclude(internal, "public")).toBe(false);
+    expect(tsShouldIncludeInIndex(pub, "public")).toBe(true);
+    expect(tsShouldIncludeInIndex(internal, "public")).toBe(false);
   });
 
-  it("all mode excludes internal TS methods (same as public)", () => {
-    expect(tsShouldInclude(pub, "all")).toBe(true);
-    expect(tsShouldInclude(internal, "all")).toBe(false);
+  it("all mode includes both public and internal TS methods (full surface)", () => {
+    expect(tsShouldIncludeInIndex(pub, "all")).toBe(true);
+    expect(tsShouldIncludeInIndex(internal, "all")).toBe(true);
   });
 });

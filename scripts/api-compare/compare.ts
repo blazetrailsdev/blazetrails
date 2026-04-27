@@ -273,6 +273,21 @@ export function methodInMode(m: MethodInfo, mode: CompareMode): boolean {
   return m.internal !== true;
 }
 
+/**
+ * Whether a TS method should be included in the per-file lookup index for a
+ * given mode. This is the TS-side counterpart to methodInMode (which filters
+ * the Ruby side).
+ *
+ *   public: only public TS methods — internal helpers must not satisfy Ruby
+ *           public method coverage (would inflate scores).
+ *   private: ALL TS methods — Rails private methods implemented as exported
+ *            TS functions (e.g. exported for wiring) still count as matched.
+ *   all:    ALL TS methods — full combined surface, same widening as private.
+ */
+export function tsShouldIncludeInIndex(m: MethodInfo, mode: CompareMode): boolean {
+  return mode === "public" ? !m.internal : true;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -326,13 +341,8 @@ function main() {
     const tsPkg = ts.packages[pkg];
 
     // Build per-file method index from TS: file → Set<methodName>.
-    //
-    // In public/all mode: only public TS methods are indexed (internal helpers
-    // must not satisfy Ruby public method coverage).
-    // In private mode: ALL TS methods are indexed — Rails private methods
-    // implemented as exported TS functions (e.g. exported for wiring into
-    // base.ts) should still count as matched.
-    const tsShouldInclude = (m: MethodInfo) => (mode === "private" ? true : !m.internal);
+    // See tsShouldIncludeInIndex for the inclusion semantics.
+    const tsShouldInclude = (m: MethodInfo) => tsShouldIncludeInIndex(m, mode);
     const tsMethodsByFile = new Map<string, Set<string>>();
 
     if (tsPkg) {

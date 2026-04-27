@@ -345,7 +345,8 @@ export function formatForInspect(this: any, name: string, value: unknown): strin
   }
   if (filtered instanceof Date) return `"${filtered.toISOString()}"`;
   try {
-    return JSON.stringify(filtered);
+    const stringified = JSON.stringify(filtered);
+    return stringified === undefined ? String(filtered) : stringified;
   } catch {
     return String(filtered);
   }

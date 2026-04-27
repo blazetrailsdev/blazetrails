@@ -464,7 +464,6 @@ export class PredicateBuilder {
       if (object instanceof klass) return handler;
     }
     if (object instanceof Array) return this.arrayHandler;
-    if (object instanceof Set) return this.arrayHandler;
     return this.basicObjectHandler;
   }
 }

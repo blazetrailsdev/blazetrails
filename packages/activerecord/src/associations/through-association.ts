@@ -34,21 +34,51 @@ function throughReflection(assoc: { owner: Base; reflection: any }): unknown {
 }
 
 function throughAssociation(assoc: { owner: Base; reflection: any }): unknown {
+  // Rails: @through_association ||= owner.association(through_reflection.name)
   const tr = throughReflection(assoc) as any;
-  if (tr) return (assoc.owner as any).association?.(tr.name ?? assoc.reflection.options.through);
-  return null;
+  if (!tr) return null;
+  return (assoc.owner as any).association?.(tr.name);
 }
 
 function constructJoinAttributes(
   assoc: { owner: Base; reflection: any },
   ...records: Base[]
 ): Record<string, unknown> {
-  const sourceRefl = assoc.reflection.sourceReflection?.() as any;
+  ensureMutable(assoc);
+  const refl = assoc.reflection as any;
+  const sourceRefl = refl.sourceReflection?.() as any;
   if (!sourceRefl) return {};
-  if (records.length === 1) {
-    return { [sourceRefl.name]: records[0] };
+
+  // Rails: source_reflection.association_primary_key(reflection.klass)
+  const assocPk = sourceRefl.associationPrimaryKey?.(refl.klass) ?? sourceRefl.primaryKey ?? "id";
+  const pkArr: string[] = Array.isArray(assocPk) ? assocPk : [assocPk];
+  const compositeConstraints: string[] = refl.klass?.compositeQueryConstraintsList ?? [];
+
+  let joinAttributes: Record<string, unknown>;
+  if (
+    pkArr.length === compositeConstraints.length &&
+    pkArr.every((k: string, i: number) => k === compositeConstraints[i]) &&
+    !refl.options?.sourceType
+  ) {
+    // Association-form: pass the record objects directly under the source name
+    joinAttributes = { [sourceRefl.name]: records.length === 1 ? records[0] : records };
+  } else {
+    const fk: string = sourceRefl.foreignKey ?? `${sourceRefl.name}_id`;
+    const pkValues = records.map((r: any) =>
+      pkArr.length === 1
+        ? (r.readAttribute?.(pkArr[0]) ?? r.id)
+        : pkArr.map((k: string) => r.readAttribute?.(k)),
+    );
+    joinAttributes = { [fk]: records.length === 1 ? pkValues[0] : pkValues };
   }
-  return { [sourceRefl.foreignKey as string]: records.map((r: any) => r.id) };
+
+  if (refl.options?.sourceType) {
+    const foreignType: string = sourceRefl.foreignType ?? `${sourceRefl.name}_type`;
+    joinAttributes[foreignType] =
+      records.length === 1 ? refl.options.sourceType : [refl.options.sourceType];
+  }
+
+  return joinAttributes;
 }
 
 function ensureMutable(assoc: { owner: Base; reflection: any }): void {

@@ -130,8 +130,11 @@ function deleteCount(_assoc: HasManyAssociation, method: string, scope: any): Pr
   return scope.updateAll?.() ?? Promise.resolve(0);
 }
 
-function deleteOrNullifyAllRecords(assoc: HasManyAssociation, method: string): Promise<void> {
-  return (assoc as any).deleteAll?.(method) ?? Promise.resolve();
+async function deleteOrNullifyAllRecords(assoc: HasManyAssociation, method: string): Promise<void> {
+  // Rails: count = delete_count(method, scope); update_counter(-count)
+  const scope = (assoc as any).scope?.();
+  const count = await deleteCount(assoc, method, scope);
+  if (count > 0) await updateCounter(assoc, -count);
 }
 
 function deleteRecords(assoc: HasManyAssociation, records: Base[], method: string): Promise<void> {

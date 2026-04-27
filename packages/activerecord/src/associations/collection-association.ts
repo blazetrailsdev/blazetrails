@@ -678,7 +678,8 @@ export class CollectionAssociation extends Association {
 }
 
 function transaction(assoc: CollectionAssociation, block: () => Promise<void>): Promise<void> {
-  const klass = assoc.klass;
+  // Rails: reflection.klass.transaction(&block) — uses the reflection's klass, not assoc.klass
+  const klass = (assoc.reflection as any).klass ?? assoc.klass;
   if (klass && typeof (klass as any).transaction === "function") {
     return (klass as any).transaction(block);
   }

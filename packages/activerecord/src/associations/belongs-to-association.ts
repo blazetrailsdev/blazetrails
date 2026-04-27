@@ -378,7 +378,10 @@ function isRequireCounterUpdate(assoc: BelongsToAssociation): boolean {
 }
 
 function primaryKey(assoc: BelongsToAssociation, klass: unknown): string | string[] {
-  const opts = assoc.reflection.options as any;
-  if (opts.primaryKey) return opts.primaryKey;
-  return (klass as any)?.primaryKey ?? "id";
+  // Rails: reflection.association_primary_key(klass)
+  const refl = assoc.reflection as any;
+  if (typeof refl.associationPrimaryKey === "function") {
+    return refl.associationPrimaryKey(klass);
+  }
+  return refl.options?.primaryKey ?? (klass as any)?.primaryKey ?? "id";
 }

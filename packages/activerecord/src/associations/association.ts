@@ -487,11 +487,14 @@ export class Association {
   }
 
   private isSkipStatementCache(scope: any): boolean {
-    return !!(
-      this.reflection.options.scope ||
-      scope?.eagerLoading?.() ||
-      (this.klass as any)?.hasScopeAttributes?.()
-    );
+    // Rails: reflection.has_scope? || scope.eager_loading? ||
+    //        klass.scope_attributes? || reflection.source_reflection.active_record.default_scopes.any?
+    const refl = this.reflection as any;
+    const hasReflScope = !!(refl.hasScope?.() ?? refl.options?.scope);
+    const eagerLoading = !!scope?.eagerLoading?.();
+    const scopeAttrs = !!(this.klass as any)?.hasScopeAttributes?.();
+    const sourceDefaultScopes = !!refl.sourceReflection?.()?.activeRecord?.defaultScopes?.length;
+    return hasReflScope || eagerLoading || scopeAttrs || sourceDefaultScopes;
   }
 
   private enqueueDestroyAssociation(options: Record<string, unknown>): void {

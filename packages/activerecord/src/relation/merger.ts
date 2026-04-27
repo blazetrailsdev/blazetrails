@@ -38,7 +38,7 @@ export class Merger {
   }
 
   private mergeSelectValues(rel: any): void {
-    if (this.other._selectColumns && this.other._selectColumns.length > 0) {
+    if (this.other._selectColumns != null) {
       rel._selectColumns = [...this.other._selectColumns];
     }
   }
@@ -125,11 +125,9 @@ export class Merger {
   }
 
   private isReplaceFromClause(): boolean {
-    return (
-      (!this.relation._fromClause || this.relation._fromClause === "") &&
-      this.other._fromClause &&
-      this.other._fromClause !== ""
-    );
+    const relationFrom = this.relation._fromClause;
+    const otherFrom = this.other._fromClause;
+    return (!relationFrom || relationFrom.isEmpty()) && !!otherFrom && !otherFrom.isEmpty();
   }
 }
 

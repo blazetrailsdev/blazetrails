@@ -1856,9 +1856,9 @@ export class Relation<T extends Base> {
       if (token !== this._loadToken) return [];
       const rows = result.toArray();
       loadedRecords = this._instrumentInstantiation(rows);
-      this._records = loadedRecords;
+      this.loadRecords(loadedRecords);
     }
-    this._loaded = true;
+    if (!this._loaded) this._loaded = true;
 
     // Apply readonly and strict_loading flags to loaded records
     if (this._isReadonly) {
@@ -3641,19 +3641,13 @@ export class Relation<T extends Base> {
   ): Promise<number> {
     if (this._isNone) return 0;
 
-    const table = this._modelClass.arelTable;
     const updates: Record<string, unknown> = {};
 
-    // Mirrors Rails' `_increment_attribute` — wrap the column in a COALESCE
-    // (treating NULL as 0) and then add/subtract the binding. Rails uses
-    // `Subtraction` for negative values and `Addition` for positive ones so
-    // the generated SQL reads `col - 3` rather than `col + -3`.
     for (const [counterName, value] of Object.entries(counters)) {
-      const unqual = new Nodes.UnqualifiedColumn(table.get(counterName));
-      const coalesced = new Nodes.NamedFunction("COALESCE", [unqual, new Nodes.Quoted(0)]);
-      const bind = new Nodes.Quoted(Math.abs(value));
-      updates[counterName] =
-        value < 0 ? new Nodes.Subtraction(coalesced, bind) : new Nodes.Addition(coalesced, bind);
+      updates[counterName] = this._incrementAttribute(
+        this._modelClass.arelTable.get(counterName),
+        value,
+      );
     }
 
     if (options?.touch) {
@@ -4217,11 +4211,12 @@ export class Relation<T extends Base> {
   }
 
   private _incrementAttribute(attribute: any, value = 1): any {
-    const bind = this.predicateBuilder.buildBindAttribute(attribute.name, Math.abs(value));
-    const absVal = Math.abs(value);
-    const colName = typeof attribute === "string" ? attribute : attribute.name;
-    const op = value < 0 ? "-" : "+";
-    return new Nodes.SqlLiteral(`COALESCE(${colName}, 0) ${op} ${absVal}`);
+    const unqual = new Nodes.UnqualifiedColumn(
+      typeof attribute === "string" ? this._modelClass.arelTable.get(attribute) : attribute,
+    );
+    const coalesced = new Nodes.NamedFunction("COALESCE", [unqual, new Nodes.Quoted(0)]);
+    const bind = new Nodes.Quoted(Math.abs(value));
+    return value < 0 ? new Nodes.Subtraction(coalesced, bind) : new Nodes.Addition(coalesced, bind);
   }
 
   private async execQueries(): Promise<T[]> {

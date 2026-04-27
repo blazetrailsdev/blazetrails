@@ -212,10 +212,9 @@ export class PredicateBuilder {
     if (value === null || value === undefined) {
       return attribute.isNull();
     }
-    for (const [klass, handler] of this.handlers) {
-      if (value instanceof klass) {
-        return handler.call(attribute, value);
-      }
+    const customHandler = this.handlers.length > 0 ? this.handlerFor(value) : null;
+    if (customHandler && customHandler !== this.basicObjectHandler) {
+      return customHandler.call(attribute, value);
     }
     if (value instanceof Range) {
       return this.rangeHandler.call(attribute, value);

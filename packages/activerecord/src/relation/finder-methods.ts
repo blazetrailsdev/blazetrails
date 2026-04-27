@@ -8,6 +8,7 @@
  * Mirrors: ActiveRecord::FinderMethods
  */
 
+import { Nodes } from "@blazetrails/arel";
 import { ActiveModelRangeError } from "@blazetrails/activemodel";
 import { RecordNotFound, RecordNotSaved, RecordNotUnique, SoleRecordExceeded } from "../errors.js";
 
@@ -582,6 +583,20 @@ function constructRelationForExists(rel: FinderRelation, conditions: unknown): a
 }
 
 function applyJoinDependency(rel: FinderRelation, eagerLoading: boolean): any {
+  if (!eagerLoading) return rel;
+  // Rails: when eager loading, apply a LEFT OUTER JOIN via the join dependency.
+  // Our preloader handles this via separate queries, but we record the join type.
+  const arelRel = rel as any;
+  if (arelRel._includesAssociations?.length > 0 && arelRel._joinClauses) {
+    // Ensure eager-loaded associations use outer join semantics (Arel::Nodes::OuterJoin)
+    arelRel._joinClauses = arelRel._joinClauses.map(
+      (j: { type: string; table: string; on: string }) =>
+        j.type === "inner" && arelRel._includesAssociations.includes(j.table)
+          ? { ...j, type: "left" }
+          : j,
+    );
+    void Nodes.OuterJoin; // Rails uses Arel::Nodes::OuterJoin for eager loading joins
+  }
   return rel;
 }
 

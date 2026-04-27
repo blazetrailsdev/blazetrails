@@ -1,3 +1,5 @@
+import { Nodes } from "@blazetrails/arel";
+
 /**
  * Merges two Relations together, combining their conditions,
  * joins, and other clauses.
@@ -51,18 +53,24 @@ export class Merger {
   }
 
   private mergeJoins(rel: any): void {
-    if (this.other._joinClauses && this.other._joinClauses.length > 0) {
-      rel._joinClauses.push(...this.other._joinClauses);
-    }
-    if (this.other._rawJoins && this.other._rawJoins.length > 0) {
-      rel._rawJoins.push(...this.other._rawJoins);
-    }
+    // Rails: joins_values are unioned; cross-model joins use Arel::Nodes::InnerJoin.
+    const clauses: Array<{ type: string; table: string; on: string; quoted?: boolean }> =
+      this.other._joinClauses ?? [];
+    const innerJoins = clauses.filter((j): j is typeof j =>
+      j instanceof Nodes.Join ? !(j instanceof Nodes.OuterJoin) : j.type !== "left",
+    );
+    if (innerJoins.length > 0) rel._joinClauses.push(...innerJoins);
+    if (this.other._rawJoins?.length > 0) rel._rawJoins.push(...this.other._rawJoins);
   }
 
   private mergeOuterJoins(rel: any): void {
-    if (this.other._leftOuterJoins && this.other._leftOuterJoins.length > 0) {
-      rel._leftOuterJoins = [...(rel._leftOuterJoins ?? []), ...this.other._leftOuterJoins];
-    }
+    // Rails: left_outer_joins_values are unioned; cross-model joins use Arel::Nodes::OuterJoin.
+    const clauses: Array<{ type: string; table: string; on: string; quoted?: boolean }> =
+      this.other._joinClauses ?? [];
+    const outerJoins = clauses.filter((j): j is typeof j =>
+      j instanceof Nodes.Join ? j instanceof Nodes.OuterJoin : j.type === "left",
+    );
+    if (outerJoins.length > 0) rel._joinClauses.push(...outerJoins);
   }
 
   private mergeMultiValues(rel: any): void {

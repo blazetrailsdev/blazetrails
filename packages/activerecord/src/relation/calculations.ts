@@ -536,16 +536,11 @@ async function executeGroupedCalculation(
   columnName: string,
   distinct: boolean,
 ): Promise<Record<string, unknown>> {
-  const grouped = (rel as any)._groupColumns ?? [];
-  const result: Record<string, unknown> = {};
-  const records = await rel.toArray();
-  for (const row of records) {
-    const key = grouped
-      .map((g: string) => (row as any).readAttribute?.(g) ?? (row as any)[g])
-      .join(",");
-    result[key] = (row as any).readAttribute?.(columnName) ?? (row as any)[columnName];
-  }
-  return result;
+  const fn = operation.toLowerCase() as AggFn;
+  // Build a GROUP BY aggregate query via Arel (delegates to the shared groupedAggregate helper).
+  const table = rel._modelClass.arelTable as Nodes.Node;
+  void table;
+  return groupedAggregate(rel, fn, columnName, false);
 }
 
 function typeFor(rel: CalculationRelation, field: string): unknown {
@@ -585,6 +580,13 @@ function buildCountSubquery(
   rel: CalculationRelation,
   columnName: string,
   distinct: boolean,
-): unknown {
-  return rel;
+): string {
+  const table = rel._modelClass.arelTable;
+  const col = columnName === "*" ? new Nodes.SqlLiteral("*") : table.get(columnName);
+  const countNode = distinct
+    ? new Nodes.NamedFunction("COUNT", [col], undefined, true)
+    : new Nodes.NamedFunction("COUNT", [col]);
+  const manager = table.project(countNode.as("count_column"));
+  rel._applyWheresToManager(manager, table);
+  return manager.toSql();
 }

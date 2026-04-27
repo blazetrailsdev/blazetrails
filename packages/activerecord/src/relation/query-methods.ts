@@ -48,10 +48,12 @@ export class WhereChain<R = any> {
   }
 
   associated(...associationNames: string[]): R {
+    for (const name of associationNames) this.scopeAssociationReflection(name);
     return this._scope.whereAssociated(...associationNames);
   }
 
   missing(...associationNames: string[]): R {
+    for (const name of associationNames) this.scopeAssociationReflection(name);
     return this._scope.whereMissing(...associationNames);
   }
 
@@ -684,7 +686,7 @@ function buildWhereClause(
     return new WhereClause(sql.trim() ? [new Nodes.SqlLiteral(sql)] : []);
   }
 
-  if (typeof opts === "object" && opts !== null && !Array.isArray(opts)) {
+  if (isPlainObject(opts)) {
     const mc = (this as any)._modelClass;
     const aliases: Record<string, string> = mc?._attributeAliases ?? {};
     const normalized: Record<string, unknown> = {};
@@ -1815,6 +1817,11 @@ function buildWithValueFromHash(this: QueryMethodsHost, hash: Record<string, unk
   });
 }
 
+// Rails passes lookupTableKlassFromJoinDependencies as a block to
+// predicate_builder.build_from_hash so polymorphic associations resolve to the
+// right model. Our PredicateBuilder#buildFromHash doesn't yet accept that
+// callback — these three helpers are wired through buildArel → buildJoins and
+// exist for private-API parity until buildArel replaces toArel().
 function lookupTableKlassFromJoinDependencies(this: QueryMethodsHost, tableName: string): unknown {
   let found: unknown = null;
   eachJoinDependencies.call(this, undefined, (join: any) => {

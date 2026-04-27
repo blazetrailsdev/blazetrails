@@ -2317,15 +2317,24 @@ export class Relation<T extends Base> {
   // interface merge + prototype assignment (see bottom of file)
 
   private _applyJoinsToManager(manager: SelectManager): void {
-    // Mirror Rails build_join_buckets + build_joins (query_methods.rb):
-    // All explicit Arel join nodes and raw SQL strings from _joinValues are first
-    // converted to Join nodes and placed in the leading_join bucket (since we have
-    // no stashed_eager_load or stashed_left_joins). leading_joins are placed in
-    // join_sources before _joinClauses (named-association joins), matching Rails'
-    // `join_sources.concat(leading_joins)` before alias-tracker-generated joins.
-    const leadingJoins: Nodes.Join[] = this._joinValues.map((v) =>
-      typeof v === "string" ? new Nodes.StringJoin(new Nodes.SqlLiteral(v.trim())) : v,
-    );
+    // Mirror Rails build_join_buckets routing (query_methods.rb:1856-1863):
+    // LeadingJoin nodes go to the leading_join bucket (prepended before any
+    // existing join_sources, including eager-load JoinDependency joins added by
+    // _buildEagerJoinManager). All other nodes — including StringJoin from raw SQL
+    // strings — go to the join_node bucket (appended after existing join_sources).
+    // This matches the stashed_eager_load / stashed_left_joins routing condition:
+    // `!LeadingJoin && (stashed_eager_load || stashed_left_joins) → join_node`.
+    const leadingJoins: Nodes.Join[] = [];
+    const joinNodes: Nodes.Join[] = [];
+    for (const v of this._joinValues) {
+      const node: Nodes.Join =
+        typeof v === "string" ? new Nodes.StringJoin(new Nodes.SqlLiteral(v.trim())) : v;
+      if (node instanceof Nodes.LeadingJoin) {
+        leadingJoins.push(node);
+      } else {
+        joinNodes.push(node);
+      }
+    }
     if (leadingJoins.length > 0) manager.prependJoinNodes(...leadingJoins);
     for (const join of this._joinClauses) {
       const tableNode = join.quoted ? new Table(join.table) : join.table;
@@ -2336,6 +2345,7 @@ export class Relation<T extends Base> {
         manager.outerJoin(tableNode, onNode);
       }
     }
+    for (const node of joinNodes) manager.appendJoinNode(node);
   }
 
   /**

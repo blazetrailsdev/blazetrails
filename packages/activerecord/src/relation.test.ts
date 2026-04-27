@@ -314,10 +314,6 @@ describe("RelationTest", () => {
   });
 
   it("joins() preserves insertion order across LeadingJoin and InnerJoin", () => {
-    // Rails build_join_buckets: without stashed_eager_load or stashed_left_joins,
-    // ALL Arel join nodes go to the leading_join bucket in original insertion order.
-    // There is no forced reordering of LeadingJoin before InnerJoin — the caller
-    // controls order by argument position (query_methods.rb:1856–1863).
     class Book extends Base {
       static {
         this.tableName = "books";
@@ -336,6 +332,36 @@ describe("RelationTest", () => {
     );
     // leadingJoin passed first → authors appears first in SQL
     const sqlStr = Book.joins(leadingJoin, innerJoin).toSql();
+    const authorPos = sqlStr.indexOf('"authors"');
+    const tagPos = sqlStr.indexOf('"tags"');
+    expect(authorPos).toBeGreaterThan(-1);
+    expect(tagPos).toBeGreaterThan(-1);
+    expect(authorPos).toBeLessThan(tagPos);
+  });
+
+  it("joins() places LeadingJoin ahead of InnerJoin even when passed later", () => {
+    // Rails build_join_buckets routes LeadingJoin → leading_join bucket (prepended)
+    // and non-LeadingJoin → join_node bucket (appended), regardless of argument
+    // order. This matters for eager-loading where join_sources is non-empty
+    // (query_methods.rb:1856-1863, build_joins:1891-1899).
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const authors = new ArelTable("authors");
+    const tags = new ArelTable("tags");
+    const innerJoin = new Nodes.InnerJoin(
+      tags,
+      new Nodes.On(new Nodes.SqlLiteral("books.tag_id = tags.id")),
+    );
+    const leadingJoin = new Nodes.LeadingJoin(
+      authors,
+      new Nodes.On(new Nodes.SqlLiteral("books.author_id = authors.id")),
+    );
+    // leadingJoin passed second — should still appear before innerJoin in SQL
+    const sqlStr = Book.joins(innerJoin, leadingJoin).toSql();
     const authorPos = sqlStr.indexOf('"authors"');
     const tagPos = sqlStr.indexOf('"tags"');
     expect(authorPos).toBeGreaterThan(-1);

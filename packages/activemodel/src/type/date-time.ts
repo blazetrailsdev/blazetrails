@@ -60,7 +60,9 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
 
   serialize(value: unknown): string | null {
     const cast = this.cast(value);
-    if (cast === null || cast === DateInfinity || cast === DateNegativeInfinity) return null;
+    if (cast === null) return null;
+    if (cast === DateInfinity) return "infinity";
+    if (cast === DateNegativeInfinity) return "-infinity";
     const temporal = cast as Temporal.Instant | Temporal.PlainDateTime;
     const p = this.precision ?? -1;
     const digits = (Number.isInteger(p) && p >= 0 && p <= 9 ? p : 6) as

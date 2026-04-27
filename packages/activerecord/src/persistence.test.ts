@@ -1139,7 +1139,7 @@ describe("PersistenceTest", () => {
     const p = await Post.create({ title: "auto", created_at: now });
     expect(p.created_at).toBeInstanceOf(Temporal.PlainDateTime);
     // timestamp (no tz) round-trip: compare via UTC epoch ms
-    expect(epochMs(p.created_at)).toBe(now);
+    expect(epochMs(p.created_at)).toBe(now.epochMilliseconds);
     expect(p.isPersisted()).toBe(true);
   });
 

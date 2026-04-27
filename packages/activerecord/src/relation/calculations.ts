@@ -543,10 +543,14 @@ function lookupCastTypeFromJoinDependencies(_rel: CalculationRelation, _name: st
   return null;
 }
 
-function typeCastPluckValues(result: unknown[][], columns: string[]): unknown[][] {
+function typeCastPluckValues(
+  result: unknown[][],
+  columns: string[],
+  rel?: CalculationRelation,
+): unknown[][] {
   return result.map((row) =>
     row.map((val, i) =>
-      castAggValue(val, "sum" as any, resolveColType(null as any, columns[i] ?? ""), false),
+      castAggValue(val, "sum" as any, rel ? resolveColType(rel, columns[i] ?? "") : null, false),
     ),
   );
 }

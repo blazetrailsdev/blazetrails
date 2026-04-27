@@ -300,8 +300,9 @@ function referencedColumns(predicates: Nodes.Node[]): Record<string, Nodes.Node>
 }
 
 function isEqualityNode(node: Nodes.Node): boolean {
-  if (typeof node === "string") return false;
-  return typeof (node as any).equality === "function" ? (node as any).equality() : false;
+  if (node instanceof Nodes.Equality) return true;
+  if (typeof (node as any).isEquality === "function") return (node as any).isEquality();
+  return false;
 }
 
 const visitor = new Visitors.ToSql();

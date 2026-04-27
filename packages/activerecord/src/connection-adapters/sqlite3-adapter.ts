@@ -525,6 +525,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     });
     map.registerType("decimal", new DecimalType());
     map.registerType("boolean", new BooleanType());
+    // Date/time types — no driver-level work needed for Temporal (PR 4).
+    // better-sqlite3 returns datetime columns as TEXT strings (SQLite has
+    // no native datetime type), so DateTimeType#cast receives a string and
+    // returns Temporal.PlainDateTime.  Writes go through sqlite3/quoting.ts
+    // which already formats all Temporal types as :db strings.
     map.registerType("date", new DateType());
     map.registerType("datetime", new DateTimeType());
     map.registerType("timestamp", new DateTimeType());

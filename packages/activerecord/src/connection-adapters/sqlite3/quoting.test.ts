@@ -1,4 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { Temporal } from "@blazetrails/activesupport/temporal";
+import { SQLite3Adapter } from "../sqlite3-adapter.js";
+import { DateTime as DateTimeType } from "../../type/date-time.js";
+import { Date as DateType } from "../../type/date.js";
+import { Time as TimeType } from "../../type/time.js";
 import {
   columnNameMatcher,
   columnNameWithOrderMatcher,
@@ -279,6 +284,134 @@ describe("SQLite3::Quoting", () => {
     it("quotedTimeUtc carries the microseconds suffix too", () => {
       const d = new Date(Date.UTC(2026, 3, 18, 12, 34, 56, 123));
       expect(quotedTimeUtc(d)).toMatch(/^12:34:56\.\d{6}$/);
+    });
+  });
+
+  describe("quote(Temporal.*) — unit", () => {
+    it("quotes Temporal.Instant as offset-less :db format with microseconds", () => {
+      const ts = Temporal.Instant.from("2026-04-18T12:34:56.123456Z");
+      expect(quote(ts)).toBe("'2026-04-18 12:34:56.123456'");
+    });
+
+    it("quotes Temporal.Instant with whole seconds (no trailing fraction)", () => {
+      const ts = Temporal.Instant.from("2026-04-18T12:34:56Z");
+      expect(quote(ts)).toBe("'2026-04-18 12:34:56'");
+    });
+
+    it("quotes Temporal.PlainDateTime with microseconds", () => {
+      const dt = Temporal.PlainDateTime.from("2026-04-18T12:34:56.123456");
+      expect(quote(dt)).toBe("'2026-04-18 12:34:56.123456'");
+    });
+
+    it("quotes Temporal.PlainDate as YYYY-MM-DD", () => {
+      const d = Temporal.PlainDate.from("2026-04-18");
+      expect(quote(d)).toBe("'2026-04-18'");
+    });
+
+    it("quotes Temporal.PlainTime prefixed with 2000-01-01 sentinel date", () => {
+      const t = Temporal.PlainTime.from("14:23:55.654321");
+      expect(quote(t)).toBe("'2000-01-01 14:23:55.654321'");
+    });
+  });
+
+  describe("typeCast(Temporal.*) — unit", () => {
+    it("typeCast Temporal.Instant returns unquoted :db string", () => {
+      const ts = Temporal.Instant.from("2026-04-18T12:34:56.123456Z");
+      expect(typeCast(ts)).toBe("2026-04-18 12:34:56.123456");
+    });
+
+    it("typeCast Temporal.PlainDateTime returns unquoted string", () => {
+      const dt = Temporal.PlainDateTime.from("2026-04-18T12:34:56.123456");
+      expect(typeCast(dt)).toBe("2026-04-18 12:34:56.123456");
+    });
+
+    it("typeCast Temporal.PlainDate returns YYYY-MM-DD string", () => {
+      const d = Temporal.PlainDate.from("2026-04-18");
+      expect(typeCast(d)).toBe("2026-04-18");
+    });
+
+    it("typeCast Temporal.PlainTime returns prefixed time string", () => {
+      const t = Temporal.PlainTime.from("14:23:55.654321");
+      expect(typeCast(t)).toBe("2000-01-01 14:23:55.654321");
+    });
+  });
+
+  describe("SQLite microsecond round-trip — integration", () => {
+    let adapter: SQLite3Adapter;
+
+    beforeEach(() => {
+      adapter = new SQLite3Adapter(":memory:");
+      adapter.exec(`CREATE TABLE "events" (
+        "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+        "ts"  DATETIME,
+        "dt"  DATETIME,
+        "d"   DATE,
+        "t"   TIME
+      )`);
+    });
+
+    afterEach(() => {
+      adapter.close();
+    });
+
+    it("Temporal.Instant with microsecond precision survives INSERT → SELECT", async () => {
+      const instant = Temporal.Instant.from("2026-04-18T12:34:56.123456Z");
+      await adapter.executeMutation(`INSERT INTO "events" ("ts") VALUES (${quote(instant)})`);
+      const rows = await adapter.execute(`SELECT "ts" FROM "events" LIMIT 1`);
+      const raw = (rows as any[])[0].ts as string;
+      // SQLite stores as offset-less UTC string; read back via DateTimeType#cast.
+      const cast = new DateTimeType().cast(raw);
+      expect(cast).toBeInstanceOf(Temporal.PlainDateTime);
+      const pdt = cast as Temporal.PlainDateTime;
+      expect(pdt.year).toBe(2026);
+      expect(pdt.month).toBe(4);
+      expect(pdt.day).toBe(18);
+      expect(pdt.hour).toBe(12);
+      expect(pdt.minute).toBe(34);
+      expect(pdt.second).toBe(56);
+      expect(pdt.microsecond).toBe(123456 % 1000); // 456
+      expect(pdt.millisecond).toBe(Math.floor(123456 / 1000)); // 123
+    });
+
+    it("Temporal.PlainDateTime with microseconds survives INSERT → SELECT", async () => {
+      const dt = Temporal.PlainDateTime.from("2026-04-18T12:34:56.654321");
+      await adapter.executeMutation(`INSERT INTO "events" ("dt") VALUES (${quote(dt)})`);
+      const rows = await adapter.execute(`SELECT "dt" FROM "events" LIMIT 1`);
+      const raw = (rows as any[])[0].dt as string;
+      const cast = new DateTimeType().cast(raw) as Temporal.PlainDateTime;
+      expect(cast).toBeInstanceOf(Temporal.PlainDateTime);
+      expect(cast.microsecond).toBe(654321 % 1000); // 321
+      expect(cast.millisecond).toBe(Math.floor(654321 / 1000)); // 654
+    });
+
+    it("Temporal.PlainDate survives INSERT → SELECT", async () => {
+      const date = Temporal.PlainDate.from("2026-04-18");
+      await adapter.executeMutation(`INSERT INTO "events" ("d") VALUES (${quote(date)})`);
+      const rows = await adapter.execute(`SELECT "d" FROM "events" LIMIT 1`);
+      const raw = (rows as any[])[0].d as string;
+      const cast = new DateType().cast(raw);
+      expect(cast).toBeInstanceOf(Temporal.PlainDate);
+      const pd = cast as Temporal.PlainDate;
+      expect(pd.year).toBe(2026);
+      expect(pd.month).toBe(4);
+      expect(pd.day).toBe(18);
+    });
+
+    it("Temporal.PlainTime with microseconds survives INSERT → SELECT", async () => {
+      // SQLite stores time as the '2000-01-01 HH:MM:SS.ffffff' sentinel form.
+      const time = Temporal.PlainTime.from("14:23:55.654321");
+      await adapter.executeMutation(`INSERT INTO "events" ("t") VALUES (${quote(time)})`);
+      const rows = await adapter.execute(`SELECT "t" FROM "events" LIMIT 1`);
+      const raw = (rows as any[])[0].t as string;
+      // Strip the sentinel date prefix before casting.
+      const timePart = raw.includes(" ") ? raw.slice(raw.indexOf(" ") + 1) : raw;
+      const cast = new TimeType().cast(timePart) as Temporal.PlainTime;
+      expect(cast).toBeInstanceOf(Temporal.PlainTime);
+      expect(cast.hour).toBe(14);
+      expect(cast.minute).toBe(23);
+      expect(cast.second).toBe(55);
+      expect(cast.microsecond).toBe(654321 % 1000); // 321
+      expect(cast.millisecond).toBe(Math.floor(654321 / 1000)); // 654
     });
   });
 });

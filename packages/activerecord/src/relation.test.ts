@@ -334,6 +334,31 @@ describe("RelationTest", () => {
     expect(authorPos).toBeLessThan(tagPos);
   });
 
+  it("joins() preserves order of multiple LeadingJoin nodes", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const authors = new ArelTable("authors");
+    const publishers = new ArelTable("publishers");
+    const j1 = new Nodes.LeadingJoin(
+      authors,
+      new Nodes.On(new Nodes.SqlLiteral("books.author_id = authors.id")),
+    );
+    const j2 = new Nodes.LeadingJoin(
+      publishers,
+      new Nodes.On(new Nodes.SqlLiteral("books.publisher_id = publishers.id")),
+    );
+    const sqlStr = Book.joins(j1, j2).toSql();
+    const authorPos = sqlStr.indexOf('"authors"');
+    const publisherPos = sqlStr.indexOf('"publishers"');
+    expect(authorPos).toBeGreaterThan(-1);
+    expect(publisherPos).toBeGreaterThan(-1);
+    expect(authorPos).toBeLessThan(publisherPos);
+  });
+
   it("string ORDER BY plain identifier qualifies with table name", () => {
     class Book extends Base {
       static {

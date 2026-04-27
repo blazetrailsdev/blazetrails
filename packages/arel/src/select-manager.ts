@@ -593,13 +593,12 @@ export class SelectManager extends TreeManager {
   }
 
   /**
-   * Prepend an existing Arel join node to join_sources (used for LeadingJoin
-   * nodes that Rails places before alias tracking in build_join_buckets).
-   *
-   * Mirrors: join_sources.concat(leading_joins) in Rails build_joins.
+   * Prepend existing Arel join nodes to join_sources, preserving their order
+   * (mirrors Rails' join_sources.concat(leading_joins) in build_joins, where
+   * leading_joins appear before alias-tracker-generated joins).
    */
-  prependJoinNode(node: Join): this {
-    this.core.source.right.unshift(node);
+  prependJoinNodes(...nodes: Join[]): this {
+    this.core.source.right.unshift(...nodes);
     return this;
   }
 

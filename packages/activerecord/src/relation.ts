@@ -2332,9 +2332,7 @@ export class Relation<T extends Base> {
         otherArelJoins.push(node);
       }
     }
-    for (const node of leadingJoins) {
-      manager.prependJoinNode(node);
-    }
+    if (leadingJoins.length > 0) manager.prependJoinNodes(...leadingJoins);
     for (const node of otherArelJoins) {
       manager.appendJoinNode(node);
     }

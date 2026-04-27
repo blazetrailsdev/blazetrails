@@ -99,7 +99,6 @@ import {
   accessedFields as _accessedFields,
   attributesForCreate as _attributesForCreate,
   attributesForUpdate as _attributesForUpdate,
-  attributesWithValues as _attributesWithValues,
 } from "./attribute-methods.js";
 import { toKey as _toKey } from "./attribute-methods/primary-key.js";
 import { _readAttribute as _readAttributeFn } from "./attribute-methods/read.js";

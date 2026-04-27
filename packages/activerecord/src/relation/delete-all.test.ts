@@ -3,14 +3,8 @@
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { Temporal } from "@blazetrails/activesupport/temporal";
+import { epochMs } from "@blazetrails/activesupport/testing/temporal-helpers";
 
-function epochMs(v: unknown): number {
-  if (v instanceof Temporal.Instant) return v.epochMilliseconds;
-  if (v instanceof Temporal.PlainDateTime)
-    return v.toZonedDateTime("UTC").toInstant().epochMilliseconds;
-  throw new TypeError(`epochMs: unsupported type ${(v as object)?.constructor?.name}`);
-}
 import { Base, registerModel } from "../index.js";
 import { Associations, loadHasMany, processDependentAssociations } from "../associations.js";
 

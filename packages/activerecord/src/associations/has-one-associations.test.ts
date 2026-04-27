@@ -1,15 +1,9 @@
-import { Temporal } from "@blazetrails/activesupport/temporal";
-import { instant } from "@blazetrails/activesupport/testing/temporal-helpers";
+import {
+  instant,
+  epochMs,
+  isTemporalDatetime,
+} from "@blazetrails/activesupport/testing/temporal-helpers";
 
-function epochMs(v: unknown): number {
-  if (v instanceof Temporal.Instant) return v.epochMilliseconds;
-  if (v instanceof Temporal.PlainDateTime)
-    return v.toZonedDateTime("UTC").toInstant().epochMilliseconds;
-  throw new TypeError(`epochMs: unsupported type ${(v as object)?.constructor?.name}`);
-}
-function isTemporalDatetime(v: unknown): boolean {
-  return v instanceof Temporal.Instant || v instanceof Temporal.PlainDateTime;
-}
 /**
  * Mirrors Rails activerecord/test/cases/associations/has_one_associations_test.rb
  */

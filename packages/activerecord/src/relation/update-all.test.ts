@@ -1,12 +1,5 @@
-import { Temporal } from "@blazetrails/activesupport/temporal";
-import { instant } from "@blazetrails/activesupport/testing/temporal-helpers";
+import { instant, epochMs } from "@blazetrails/activesupport/testing/temporal-helpers";
 
-function epochMs(v: unknown): number {
-  if (v instanceof Temporal.Instant) return v.epochMilliseconds;
-  if (v instanceof Temporal.PlainDateTime)
-    return v.toZonedDateTime("UTC").toInstant().epochMilliseconds;
-  throw new TypeError(`epochMs: unsupported type ${(v as object)?.constructor?.name}`);
-}
 /**
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.

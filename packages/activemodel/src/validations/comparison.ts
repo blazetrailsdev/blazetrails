@@ -57,7 +57,8 @@ export class ComparisonValidator extends EachValidator {
     const safeCompare = (a: unknown, b: unknown): number | null => {
       try {
         return this.compare(a, b);
-      } catch {
+      } catch (error) {
+        if (!(error instanceof TypeError)) throw error;
         record.errors.add(attribute, "invalid", { value, message: this.options.message });
         return null;
       }

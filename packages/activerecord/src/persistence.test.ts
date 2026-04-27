@@ -1,18 +1,10 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import { instant } from "@blazetrails/activesupport/testing/temporal-helpers";
+import {
+  instant,
+  epochMs,
+  isTemporalDatetime,
+} from "@blazetrails/activesupport/testing/temporal-helpers";
 
-// timestamp (no tz) columns return PlainDateTime. With default_timezone=:utc
-// the stored value is UTC, so treat it as UTC to get epoch milliseconds.
-function epochMs(v: unknown): number {
-  if (v instanceof Temporal.Instant) return v.epochMilliseconds;
-  if (v instanceof Temporal.PlainDateTime)
-    return v.toZonedDateTime("UTC").toInstant().epochMilliseconds;
-  throw new TypeError(`epochMs: unsupported type ${(v as object)?.constructor?.name}`);
-}
-// SQLite datetime → Temporal.Instant; Postgres timestamp (no tz) → Temporal.PlainDateTime
-function isTemporalDatetime(v: unknown): boolean {
-  return v instanceof Temporal.Instant || v instanceof Temporal.PlainDateTime;
-}
 /**
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.

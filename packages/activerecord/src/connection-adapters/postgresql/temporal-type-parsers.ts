@@ -48,11 +48,11 @@ const TEMPORAL_PARSERS: ReadonlyMap<number, PgParser> = new Map<number, PgParser
  * is NOT correct — pg stores the return value directly in its `_parsers` array
  * and calls it; a non-function crashes query processing.
  */
-export function getTypeParser(oid: number, format?: string): PgParser {
+export function getTypeParser(oid: number, format?: "text" | "binary"): PgParser {
   const fmt = format || "text";
   if (fmt === "text") {
     const parser = TEMPORAL_PARSERS.get(oid);
     if (parser) return parser;
   }
-  return pg.types.getTypeParser(oid, fmt as "text" | "binary") as PgParser;
+  return pg.types.getTypeParser(oid, fmt) as PgParser;
 }

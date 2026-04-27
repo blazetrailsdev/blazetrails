@@ -315,9 +315,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
           // For all other OIDs, respect any user-supplied parser first, then
           // delegate to getTemporalTypeParser which falls back to pg built-ins.
           if (TEMPORAL_OIDS.has(oid) && (format === "text" || !format)) {
-            return getTemporalTypeParser(oid, format);
+            return getTemporalTypeParser(oid, format as "text" | "binary");
           }
-          return userGetTypeParser?.(oid, format) ?? getTemporalTypeParser(oid, format);
+          return (
+            userGetTypeParser?.(oid, format) ??
+            getTemporalTypeParser(oid, format as "text" | "binary")
+          );
         },
       },
     });

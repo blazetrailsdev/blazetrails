@@ -1,5 +1,6 @@
 import type { Base } from "./base.js";
-import { ReadOnlyRecord } from "./errors.js";
+import { ReadOnlyRecord, StaleObjectError } from "./errors.js";
+import { UpdateManager, Nodes } from "@blazetrails/arel";
 
 /**
  * Timestamp handling for ActiveRecord models.
@@ -32,15 +33,50 @@ export async function touch(this: Base, ...names: string[]): Promise<boolean> {
 
   if (touchCols.length === 0) return false;
 
-  // Write the timestamp values as dirty changes so _performUpdate picks them
-  // up and applies the locking-aware UPDATE (increments lock_version, raises
-  // StaleObjectError on version mismatch). Mirrors Rails' _touch_row path.
+  // Build a targeted UPDATE directly — mirrors Rails' _touch_row → _update_row.
+  // Does NOT run save callbacks (before_save / after_save), only after_touch.
+  const table = ctor.arelTable;
+  const setPairs: [InstanceType<typeof Nodes.Node>, unknown][] = touchCols.map((col) => [
+    table.get(col) as InstanceType<typeof Nodes.Node>,
+    new Nodes.Quoted(now),
+  ]);
+
+  // Write new values via writeAttribute to register them as dirty changes
+  // so changesApplied() can populate previousChanges (saved_changes).
   for (const col of touchCols) {
     this.writeAttribute(col, now);
   }
 
-  const saved = await (this as any).save({ validate: false });
-  if (!saved) return false;
+  // Optimistic locking: include lock_version increment and stale-object check.
+  const lockCol = ctor.lockingColumn;
+  let rawVersion: unknown;
+  if (ctor.lockingEnabled) {
+    rawVersion = this.readAttribute(lockCol);
+    const current = rawVersion == null ? 0 : Number(rawVersion) || 0;
+    const next = current + 1;
+    setPairs.push([table.get(lockCol) as InstanceType<typeof Nodes.Node>, new Nodes.Quoted(next)]);
+    this.writeAttribute(lockCol, next);
+  }
+
+  const um = new UpdateManager()
+    .table(table)
+    .set(setPairs)
+    .where((ctor as any)._buildPkWhereNode(this.id));
+
+  if (ctor.lockingEnabled) {
+    if (rawVersion == null) {
+      um.where(table.get(lockCol).isNull());
+    } else {
+      um.where(table.get(lockCol).eq(Number(rawVersion) || 0));
+    }
+  }
+
+  const affected = await ctor.adapter.execUpdate(um.toSql(), `${ctor.name} Touch`);
+  if (ctor.lockingEnabled && affected === 0) {
+    throw new StaleObjectError(this, "touch");
+  }
+
+  this.changesApplied();
 
   await ctor._callbackChain.runAfter("touch", this);
   return true;

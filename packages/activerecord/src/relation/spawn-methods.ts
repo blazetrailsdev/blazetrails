@@ -86,7 +86,7 @@ export function mergeBang(this: any, other: any): any {
       ];
     // mergeJoins (preserve original order — all join types in _joinClauses)
     this._joinClauses.push(...(other._joinClauses ?? []));
-    this._rawJoins.push(...(other._rawJoins ?? []));
+    this._joinValues.push(...(other._joinValues ?? []));
     // sticky none
     if (other._isNone) this._isNone = true;
   } else if (typeof other === "object" && other !== null) {

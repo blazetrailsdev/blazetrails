@@ -236,8 +236,7 @@ export class Relation<T extends Base> {
     on: string;
     quoted?: boolean;
   }> = [];
-  private _rawJoins: string[] = [];
-  private _arelJoins: Nodes.Join[] = [];
+  private _joinValues: (string | Nodes.Join)[] = [];
   private _includesAssociations: AssociationSpec[] = [];
   private _preloadAssociations: AssociationSpec[] = [];
   private _eagerLoadAssociations: AssociationSpec[] = [];
@@ -1214,7 +1213,7 @@ export class Relation<T extends Base> {
       if (!arg) continue;
       // Arel join node (InnerJoin / OuterJoin / StringJoin etc. from joinSources).
       if (arg instanceof Nodes.Join) {
-        rel._arelJoins.push(arg);
+        rel._joinValues.push(arg);
         continue;
       }
       const resolved = rel._resolveAssociationJoin(arg);
@@ -1224,7 +1223,7 @@ export class Relation<T extends Base> {
           rel._joinClauses.push({ type: "inner", table: j.table, on: j.on, quoted: true });
         }
       } else {
-        rel._rawJoins.push(arg);
+        rel._joinValues.push(arg);
       }
     }
     return rel;
@@ -1919,18 +1918,20 @@ export class Relation<T extends Base> {
     if (this._referencesValues.length === 0) return false;
     if (this._includesAssociations.length === 0) return false;
 
-    // _rawJoins are the string-form equivalent of Rails' Arel::Nodes::StringJoin.
-    // Rails' references_eager_loaded_tables? extracts table names from StringJoin
-    // nodes via tables_in_string; mirror that by passing each raw SQL string
-    // directly to tablesInString (wrapping as StringJoin for type-level parity).
+    // _joinValues holds strings and Arel join nodes in insertion order (mirrors
+    // Rails' joins_values). Rails' references_eager_loaded_tables? extracts table
+    // names from StringJoin nodes via tables_in_string; for Arel nodes we call
+    // toSql() and run the same extraction.
     const joinedTables = new Set<string>([
       ...this._joinClauses.map((j) => j.table.toLowerCase()),
-      ...this._rawJoins.flatMap((s) => {
-        const join = new Nodes.StringJoin(new Nodes.SqlLiteral(s));
-        const sqlText = join.left instanceof Nodes.SqlLiteral ? join.left.value : s;
-        return this.tablesInString(sqlText);
+      ...this._joinValues.flatMap((v) => {
+        if (typeof v === "string") {
+          const join = new Nodes.StringJoin(new Nodes.SqlLiteral(v));
+          const sqlText = join.left instanceof Nodes.SqlLiteral ? join.left.value : v;
+          return this.tablesInString(sqlText);
+        }
+        return this.tablesInString(v.toSql());
       }),
-      ...this._arelJoins.flatMap((node) => this.tablesInString(node.toSql())),
       String((this._modelClass as unknown as { tableName?: string }).tableName ?? "").toLowerCase(),
     ]);
 
@@ -2318,23 +2319,24 @@ export class Relation<T extends Base> {
         manager.outerJoin(tableNode, onNode);
       }
     }
-    for (const rawJoin of this._rawJoins) {
-      manager.appendStringJoin(rawJoin);
-    }
-    // Rails build_join_buckets: LeadingJoin nodes are prepended to join_sources
-    // before alias tracking; other Arel join nodes are appended after.
-    const leadingJoins: Nodes.Join[] = [];
-    const otherArelJoins: Nodes.Join[] = [];
-    for (const node of this._arelJoins) {
-      if (node instanceof Nodes.LeadingJoin) {
-        leadingJoins.push(node);
-      } else {
-        otherArelJoins.push(node);
-      }
+    // build_join_buckets routes LeadingJoin to the leading_join bucket, which is
+    // inserted at the front of join_sources before alias-tracker-generated joins,
+    // while everything else goes to the string-join or join_node buckets after it.
+    // We mirror that by collecting LeadingJoins separately, prepending them to the
+    // manager's existing join sources, and then appending the remaining joins in
+    // their original relative order.
+    const leadingJoins: Nodes.LeadingJoin[] = [];
+    for (const v of this._joinValues) {
+      if (v instanceof Nodes.LeadingJoin) leadingJoins.push(v);
     }
     if (leadingJoins.length > 0) manager.prependJoinNodes(...leadingJoins);
-    for (const node of otherArelJoins) {
-      manager.appendJoinNode(node);
+    for (const v of this._joinValues) {
+      if (v instanceof Nodes.LeadingJoin) continue;
+      if (typeof v === "string") {
+        manager.appendStringJoin(v);
+      } else {
+        manager.appendJoinNode(v);
+      }
     }
   }
 
@@ -3931,8 +3933,7 @@ export class Relation<T extends Base> {
       this._groupColumns.length === 0 &&
       this._havingClause.isEmpty() &&
       this._joinClauses.length === 0 &&
-      this._rawJoins.length === 0 &&
-      this._arelJoins.length === 0 &&
+      this._joinValues.length === 0 &&
       this._includesAssociations.length === 0 &&
       this._eagerLoadAssociations.length === 0 &&
       this._preloadAssociations.length === 0 &&
@@ -4187,8 +4188,7 @@ export class Relation<T extends Base> {
     this._lockValue = source._lockValue;
     this._setOperation = source._setOperation;
     this._joinClauses = [...source._joinClauses];
-    this._rawJoins = [...source._rawJoins];
-    this._arelJoins = [...source._arelJoins];
+    this._joinValues = [...source._joinValues];
     this._includesAssociations = [...source._includesAssociations];
     this._preloadAssociations = [...source._preloadAssociations];
     this._eagerLoadAssociations = [...source._eagerLoadAssociations];

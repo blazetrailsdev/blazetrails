@@ -302,8 +302,9 @@ function attributesForUpdate(this: any, attributeNames: string[]): string[] {
   const colNames: string[] = mc.columnNames?.() ?? [];
   return attributeNames.filter((name) => {
     if (!colNames.includes(name)) return false;
-    if (mc.isReadonlyAttribute?.(name)) return false;
-    if (mc.counterCacheColumn?.(name)) return false;
+    // Rails: filters out readonly_attribute? and counter_cache_column?
+    if (mc._readonlyAttributes?.has?.(name)) return false;
+    if (mc._counterCacheColumns?.has?.(name)) return false;
     return true;
   });
 }
@@ -313,6 +314,7 @@ function attributesForCreate(this: any, attributeNames: string[]): string[] {
   const colNames: string[] = mc.columnNames?.() ?? [];
   return attributeNames.filter((name) => {
     if (!colNames.includes(name)) return false;
+    // Rails: filters out pk when id is nil (server-generated PK)
     if (pkAttribute.call(this, name) && this.id == null) return false;
     return true;
   });

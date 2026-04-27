@@ -219,26 +219,40 @@ function registerCallback(
 }
 
 // ---------------------------------------------------------------------------
-// Private instance helpers — mirrors ActiveRecord::Callbacks private block
+// Private instance helpers — mirrors ActiveRecord::Callbacks private block.
+// Rails overrides persistence methods to wrap each in _run_*_callbacks { super }.
+// Our base.ts._createOrUpdate() already runs the full callback chain inline,
+// so these delegate to that unified implementation.
 // ---------------------------------------------------------------------------
 
 function createOrUpdate(this: any): Promise<boolean> {
-  return this._callbackChain
-    ? this._runCallbacks(
-        "save",
-        () => (this as any)._createOrUpdateWithoutCallbacks?.() ?? Promise.resolve(true),
-      )
-    : Promise.resolve(true);
+  // Rails: _run_save_callbacks { super }
+  return (this._createOrUpdate as () => Promise<boolean>).call(this);
 }
 
 function _createRecord(this: any): Promise<unknown> {
-  return this._callbackChain
-    ? this._runCallbacks("create", () => (this as any)._createRecordWithoutCallbacks?.())
-    : Promise.resolve(null);
+  // Rails: _run_create_callbacks { super }
+  const ctor = this.constructor as any;
+  return ctor._callbackChain.runCallbacks("create", this, async () => {
+    this._performInsert?.();
+    if (this._pendingOperation) {
+      await this._pendingOperation;
+      this._pendingOperation = null;
+    }
+    this._newRecord = false;
+    this.changesApplied?.();
+  });
 }
 
 function _updateRecord(this: any): Promise<unknown> {
-  return this._callbackChain
-    ? this._runCallbacks("update", () => (this as any)._updateRecordWithoutCallbacks?.())
-    : Promise.resolve(null);
+  // Rails: _run_update_callbacks { record_update_timestamps { super } }
+  const ctor = this.constructor as any;
+  return ctor._callbackChain.runCallbacks("update", this, async () => {
+    this._performUpdate?.();
+    if (this._pendingOperation) {
+      await this._pendingOperation;
+      this._pendingOperation = null;
+    }
+    this.changesApplied?.();
+  });
 }

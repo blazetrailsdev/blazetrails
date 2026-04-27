@@ -1212,8 +1212,10 @@ export class Relation<T extends Base> {
     for (const arg of flatArgs) {
       if (!arg) continue;
       // Arel join node — stored as-is to preserve type (mirrors Rails joins_values).
+      // Rails joins! uses |= (array union), deduplicating by object identity for
+      // nodes and string equality for strings. JS === matches both behaviours.
       if (arg instanceof Nodes.Join) {
-        rel._joinValues.push(arg);
+        if (!rel._joinValues.includes(arg)) rel._joinValues.push(arg);
         continue;
       }
       const resolved = rel._resolveAssociationJoin(arg);
@@ -1223,7 +1225,7 @@ export class Relation<T extends Base> {
           rel._joinClauses.push({ type: "inner", table: j.table, on: j.on, quoted: true });
         }
       } else {
-        rel._joinValues.push(arg);
+        if (!rel._joinValues.includes(arg)) rel._joinValues.push(arg);
       }
     }
     return rel;

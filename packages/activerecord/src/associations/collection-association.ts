@@ -724,7 +724,7 @@ function deleteRecords(assoc: CollectionAssociation, records: Base[], method: st
 function replaceRecords(
   assoc: CollectionAssociation,
   newTarget: Base[],
-  originalTarget: Base[],
+  _originalTarget: Base[],
 ): Promise<Base[]> {
   return (assoc as any).replace(newTarget);
 }

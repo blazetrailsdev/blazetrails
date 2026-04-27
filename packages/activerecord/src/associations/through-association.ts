@@ -26,6 +26,7 @@ function throughReflection(assoc: { owner: Base; reflection: any }): unknown {
   let refl = assoc.reflection.throughReflection?.();
   if (!refl) {
     const throughName = assoc.reflection.options.through;
+    if (!throughName) return null;
     const ctor = assoc.owner.constructor as any;
     refl = ctor._reflectOnAssociation?.(throughName) ?? null;
   }

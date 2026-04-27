@@ -472,7 +472,7 @@ export class Association {
     }
   }
 
-  private inverseReflectionFor(record: Base): unknown {
+  private inverseReflectionFor(_record: Base): unknown {
     return (this.reflection as any).inverseOf ?? null;
   }
 

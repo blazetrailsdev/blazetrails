@@ -125,7 +125,7 @@ function updateCounterInMemory(assoc: HasManyAssociation, difference: number): v
   }
 }
 
-function deleteCount(assoc: HasManyAssociation, method: string, scope: any): Promise<number> {
+function deleteCount(_assoc: HasManyAssociation, method: string, scope: any): Promise<number> {
   if (method === "deleteAll") return scope.deleteAll?.() ?? Promise.resolve(0);
   return scope.updateAll?.() ?? Promise.resolve(0);
 }
@@ -147,10 +147,10 @@ function updateCounterIfSuccess(
   return savedSuccessfully;
 }
 
-function difference(assoc: HasManyAssociation, a: Base[], b: Base[]): Base[] {
+function difference(_assoc: HasManyAssociation, a: Base[], b: Base[]): Base[] {
   return a.filter((r) => !b.includes(r));
 }
 
-function intersection(assoc: HasManyAssociation, a: Base[], b: Base[]): Base[] {
+function intersection(_assoc: HasManyAssociation, a: Base[], b: Base[]): Base[] {
   return a.filter((r) => b.includes(r));
 }

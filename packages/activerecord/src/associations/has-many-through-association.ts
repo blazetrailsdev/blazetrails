@@ -64,9 +64,9 @@ function saveThroughRecord(assoc: HasManyThroughAssociation, record: Base): Prom
 
 function removeRecords(
   assoc: HasManyThroughAssociation,
-  existingRecords: Base[],
+  _existingRecords: Base[],
   records: Base[],
-  method: string,
+  _method: string,
 ): Promise<void> {
   return (assoc as any).delete?.(...records) ?? Promise.resolve();
 }
@@ -100,16 +100,16 @@ function deleteRecords(
   return (assoc as any).delete?.(...records) ?? Promise.resolve();
 }
 
-function difference(assoc: HasManyThroughAssociation, a: Base[], b: Base[]): Base[] {
+function difference(_assoc: HasManyThroughAssociation, a: Base[], b: Base[]): Base[] {
   return a.filter((r) => !b.includes(r));
 }
 
-function intersection(assoc: HasManyThroughAssociation, a: Base[], b: Base[]): Base[] {
+function intersection(_assoc: HasManyThroughAssociation, a: Base[], b: Base[]): Base[] {
   return a.filter((r) => b.includes(r));
 }
 
 function markOccurrence(
-  assoc: HasManyThroughAssociation,
+  _assoc: HasManyThroughAssociation,
   distribution: Map<Base, number>,
   record: Base,
 ): boolean {
@@ -121,7 +121,7 @@ function markOccurrence(
   return false;
 }
 
-function distribution(assoc: HasManyThroughAssociation, array: Base[]): Map<Base, number> {
+function distribution(_assoc: HasManyThroughAssociation, array: Base[]): Map<Base, number> {
   const result = new Map<Base, number>();
   for (const r of array) result.set(r, (result.get(r) ?? 0) + 1);
   return result;

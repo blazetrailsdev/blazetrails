@@ -110,12 +110,12 @@ function _addAssocJoin(
   join: { table: string; on: string },
   assocName: string,
   modelClass: any,
-  leftOuterJoinsValues?: string[],
+  leftOuterJoinsValues?: ReadonlyArray<unknown>,
 ): void {
   // If the association is already covered by _leftOuterJoinsValues (deferred
   // LEFT OUTER JOIN path), skip — the join will be emitted when the manager
   // is built, so adding a second join here would cause ambiguous column names.
-  if (leftOuterJoinsValues?.includes(assocName)) return;
+  if (leftOuterJoinsValues?.some((v) => typeof v === "string" && v === assocName)) return;
   const sameTableJoins = clauses.filter((j) => j.table === join.table);
   if (sameTableJoins.length > 0) {
     if (sameTableJoins.every((j) => j.on === join.on)) return; // all compatible — skip
@@ -391,7 +391,7 @@ export class Relation<T extends Base> {
           join,
           assocName,
           rel._modelClass as any,
-          cloned._leftOuterJoinsValues as string[],
+          cloned._leftOuterJoinsValues,
         );
       }
       const tgtTable = new Table(target.table);
@@ -429,7 +429,7 @@ export class Relation<T extends Base> {
           join,
           assocName,
           rel._modelClass as any,
-          cloned._leftOuterJoinsValues as string[],
+          cloned._leftOuterJoinsValues,
         );
       }
       const tgtTable = new Table(target.table);

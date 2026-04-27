@@ -159,6 +159,20 @@ export function validOptions(): string[] {
   return ["autosave"];
 }
 
+export async function flushPendingReplaces(record: Base): Promise<void> {
+  const ctor = record.constructor as any;
+  const associations: AssociationDefinition[] = ctor._associations ?? [];
+  for (const assoc of associations) {
+    const cached =
+      (record as any)._cachedAssociations?.get(assoc.name) ??
+      (record as any)._preloadedAssociations?.get(assoc.name);
+    if (!cached) continue;
+    if (typeof (cached as any).persistReplace === "function" && (cached as any)._pendingReplace) {
+      await (cached as any).persistReplace();
+    }
+  }
+}
+
 export function clearAutosaveState(record: Base): void {
   const r = record as any;
   r[MARKED_FOR_DESTRUCTION] = false;

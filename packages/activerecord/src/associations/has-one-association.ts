@@ -13,6 +13,8 @@ import { SingularAssociation } from "./singular-association.js";
  * Mirrors: ActiveRecord::Associations::HasOneAssociation
  */
 export class HasOneAssociation extends SingularAssociation {
+  _pendingReplace: { record: Base | null; previousTarget: Base | null } | null = null;
+
   constructor(owner: Base, definition: AssociationDefinition) {
     super(owner, definition);
   }
@@ -92,26 +94,38 @@ export class HasOneAssociation extends SingularAssociation {
     if (record) (this as any).raiseOnTypeMismatchBang(record);
     const assigningAnother = this.target !== record;
     if (assigningAnother || (record as any)?.hasChangesToSave?.()) {
-      const shouldSave = save && (this.owner as any).isPersisted?.();
-      void transactionIf(this, !!shouldSave, async () => {
-        if (this.target && !(this.target as any).isDestroyed?.() && assigningAnother) {
-          await removeTargetBang(this, (this.reflection.options.dependent as string) ?? "");
-        }
-        if (record) {
-          this.setOwnerAttributes(record);
-          this.setInverseInstance(record);
-          if (shouldSave && typeof (record as any).save === "function") {
-            const saved = await (record as any).save();
-            if (!saved) {
-              this.nullifyOwnerAttributes(record);
-              throw new Error(`Failed to save the new associated ${this.reflection.name}.`);
-            }
-          }
-        }
-      });
+      if (record) {
+        this.setOwnerAttributes(record);
+        this.setInverseInstance(record);
+      }
+      if (save && (this.owner as any).isPersisted?.()) {
+        this._pendingReplace = { record, previousTarget: this.target };
+      }
     }
     this.target = record;
     this.loadedBang();
+  }
+
+  async persistReplace(): Promise<void> {
+    const pending = this._pendingReplace;
+    if (!pending) return;
+    this._pendingReplace = null;
+    await transactionIf(this, true, async () => {
+      if (
+        pending.previousTarget &&
+        !(pending.previousTarget as any).isDestroyed?.() &&
+        pending.previousTarget !== pending.record
+      ) {
+        await removeTargetBang(this, (this.reflection.options.dependent as string) ?? "");
+      }
+      if (pending.record && typeof (pending.record as any).save === "function") {
+        const saved = await (pending.record as any).save();
+        if (!saved) {
+          this.nullifyOwnerAttributes(pending.record);
+          throw new Error(`Failed to save the new associated ${this.reflection.name}.`);
+        }
+      }
+    });
   }
 
   protected override async doAsyncFindTarget(): Promise<Base | null> {

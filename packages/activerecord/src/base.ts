@@ -36,6 +36,7 @@ import {
   AutosaveAssociation,
   autosaveBelongsTo,
   autosaveChildren,
+  flushPendingReplaces,
 } from "./autosave-association.js";
 import {
   isValid as validationsIsValid,
@@ -2302,6 +2303,8 @@ export class Base extends Model {
       if (wasNewRecord) {
         await updateCounterCaches(this, "increment");
       }
+
+      await flushPendingReplaces(this);
 
       const autosaveOk = await autosaveChildren(this);
       if (!autosaveOk) return false;

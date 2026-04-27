@@ -18,6 +18,7 @@ export class CollectionAssociation extends Association {
   nestedAttributesTarget: Base[] | null = null;
   private _replacedOrAddedTargets: Set<Base> = new Set();
   private _associationIds: unknown[] | null = null;
+  _pendingReplace: { newTarget: Base[]; originalTarget: Base[] } | null = null;
 
   constructor(owner: Base, definition: AssociationDefinition) {
     super(owner, definition);
@@ -62,27 +63,28 @@ export class CollectionAssociation extends Association {
     const filteredIds = (ids ?? []).filter((id) => id != null && id !== "");
     if (filteredIds.length === 0) {
       this.replace([]);
-      return;
-    }
-    const Klass = this.klass as any;
-    const pk = Klass.primaryKey ?? "id";
+    } else {
+      const Klass = this.klass as any;
+      const pk = Klass.primaryKey ?? "id";
 
-    if (Array.isArray(pk)) {
-      const found = await Promise.all(
-        filteredIds.map(async (id) => {
-          const conditions: Record<string, unknown> = {};
-          const idParts = Array.isArray(id) ? id : [id];
-          pk.forEach((col: string, i: number) => {
-            conditions[col] = idParts[i];
-          });
-          return Klass.findBy(conditions);
-        }),
-      );
-      this.replace(found.filter((r): r is Base => r != null));
-    } else if (typeof Klass.where === "function") {
-      const records: Base[] = await Klass.where({ [pk]: filteredIds }).toArray();
-      this.replace(records);
+      if (Array.isArray(pk)) {
+        const found = await Promise.all(
+          filteredIds.map(async (id) => {
+            const conditions: Record<string, unknown> = {};
+            const idParts = Array.isArray(id) ? id : [id];
+            pk.forEach((col: string, i: number) => {
+              conditions[col] = idParts[i];
+            });
+            return Klass.findBy(conditions);
+          }),
+        );
+        this.replace(found.filter((r): r is Base => r != null));
+      } else if (typeof Klass.where === "function") {
+        const records: Base[] = await Klass.where({ [pk]: filteredIds }).toArray();
+        this.replace(records);
+      }
     }
+    await this.persistReplace();
   }
 
   override reset(): void {
@@ -255,16 +257,11 @@ export class CollectionAssociation extends Association {
   replace(otherArray: Base[]): void {
     for (const val of otherArray) (this as any).raiseOnTypeMismatchBang(val);
     const originalTarget = [...this.target];
-    // Update in-memory target immediately (synchronous) then persist async.
-    // Rails does the same: replace_common_records_in_memory runs first,
-    // then transaction { replace_records } (async) handles DB.
     replaceCommonRecordsInMemory(this, otherArray, originalTarget);
     if (this.owner.isNewRecord()) {
-      // For new owners: just set the in-memory target directly
       this.target = [...otherArray];
       this.loadedBang();
     } else if (!arraysEqual(otherArray, originalTarget)) {
-      // Sync in-memory: remove records not in new target, add new ones
       for (const r of originalTarget) {
         if (!otherArray.includes(r)) {
           const idx = this.target.indexOf(r);
@@ -278,11 +275,17 @@ export class CollectionAssociation extends Association {
         }
       }
       this.loadedBang();
-      // Persist changes async (matches Rails: transaction { replace_records })
-      void transaction(this, async () => {
-        await replaceRecords(this, otherArray, originalTarget);
-      });
+      this._pendingReplace = { newTarget: [...otherArray], originalTarget };
     }
+  }
+
+  async persistReplace(): Promise<void> {
+    const pending = this._pendingReplace;
+    if (!pending || this.owner.isNewRecord()) return;
+    this._pendingReplace = null;
+    await transaction(this, async () => {
+      await replaceRecords(this, pending.newTarget, pending.originalTarget);
+    });
   }
 
   /**

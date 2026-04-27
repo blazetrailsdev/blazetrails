@@ -109,6 +109,6 @@
   },
   "ar-171": {
     "side": "trails-missing",
-    "reason": "group(Arel.sql(...)) crashes: group(sql('DATE(created_at)')) throws 'col.trim is not a function' because groupBang calls .trim() on every argument, assuming strings. Arel SqlLiteral (and NamedFunction, cf. ar-154) are not strings. Real fix: groupBang must handle Arel node arguments by calling .toSql() (or passing them to the Arel GROUP BY clause directly) instead of treating every argument as a string."
+    "reason": "group(Arel.sql(...)) crashes: group(sql('DATE(created_at)')) throws 'col.trim is not a function' because groupBang stores Arel values in _groupColumns and groupColumnToArel later calls .trim() on each entry, assuming strings. Arel SqlLiteral (and NamedFunction, cf. ar-154) are not strings. Real fix: group/groupBang must handle Arel node arguments by passing them through to the Arel GROUP BY clause (or converting them appropriately) instead of letting non-strings reach string-only processing in groupColumnToArel."
   }
 }

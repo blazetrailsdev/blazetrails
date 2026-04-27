@@ -2,6 +2,7 @@ import type { Base } from "../base.js";
 import type { AssociationDefinition } from "../associations.js";
 import { loadHasOne } from "../associations.js";
 import { DeleteRestrictionError } from "./errors.js";
+import { RecordNotSaved } from "../errors.js";
 import { underscore } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
 
@@ -122,7 +123,11 @@ export class HasOneAssociation extends SingularAssociation {
         const saved = await (pending.record as any).save();
         if (!saved) {
           this.nullifyOwnerAttributes(pending.record);
-          throw new Error(`Failed to save the new associated ${this.reflection.name}.`);
+          if (pending.previousTarget) this.setOwnerAttributes(pending.previousTarget);
+          throw new RecordNotSaved(
+            `Failed to save the new associated ${this.reflection.name}.`,
+            pending.record,
+          );
         }
       }
     });

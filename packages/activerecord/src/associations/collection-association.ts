@@ -3,6 +3,7 @@ import type { AssociationDefinition } from "../associations.js";
 import { fireAssocCallbacks } from "../associations.js";
 import { underscore } from "@blazetrails/activesupport";
 import { Association } from "./association.js";
+import { RecordNotSaved } from "../errors.js";
 
 /**
  * Base class for has_many and has_and_belongs_to_many associations.
@@ -688,8 +689,9 @@ async function replaceRecords(
     const result = await assoc.concat(...toAdd);
     if (!result) {
       (assoc as any).target = originalTarget;
-      throw new Error(
+      throw new RecordNotSaved(
         `Failed to replace ${assoc.reflection.name} because one or more records could not be saved.`,
+        assoc.owner,
       );
     }
   }

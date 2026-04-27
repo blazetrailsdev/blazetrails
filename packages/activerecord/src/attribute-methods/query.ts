@@ -71,5 +71,6 @@ function castToBoolean(value: unknown): boolean {
 
 // Mirrors: ActiveRecord::AttributeMethods::Query::ClassMethods private#query_cast_attribute
 function queryCastAttribute(this: any, attrName: string, value: unknown): unknown {
-  return (this.typeForAttribute?.(attrName) ?? booleanType).deserialize(value);
+  const type = this.typeForAttribute?.(attrName) ?? new BooleanType();
+  return type.deserialize(value);
 }

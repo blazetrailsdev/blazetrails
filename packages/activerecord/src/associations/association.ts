@@ -462,10 +462,13 @@ export class Association {
   private raiseOnTypeMismatchBang(record: Base): void {
     const klass = this.klass;
     if (klass && !(record instanceof (klass as any))) {
-      throw new Error(
-        `${record.constructor.name}(#${(record.constructor as any).objectId ?? ""}) expected, ` +
-          `got an instance of ${record.constructor.name}`,
-      );
+      const expectedType =
+        (klass as any).name ??
+        (this.reflection as any).klass?.name ??
+        (this.reflection as any).className ??
+        this.reflection.name;
+      const actualType = record.constructor.name;
+      throw new Error(`${expectedType} expected, got an instance of ${actualType}`);
     }
   }
 
@@ -501,16 +504,16 @@ export class Association {
   }
 
   private isMatchesForeignKey(record: Base): boolean {
+    const fk = (this.reflection.options as any).foreignKey;
+    const fkArr: string[] = Array.isArray(fk) ? fk : [String(fk)];
     if (this.isForeignKeyFor(record)) {
-      const fk = (this.reflection.options as any).foreignKey as string;
       return (
-        (record as any).readAttribute(fk) === (this.owner as any).id ||
+        fkArr.every((key) => (record as any).readAttribute(key) === (this.owner as any).id) ||
         (this.isForeignKeyFor(this.owner) &&
-          (this.owner as any).readAttribute(fk) === (record as any).id)
+          fkArr.every((key) => (this.owner as any).readAttribute(key) === (record as any).id))
       );
     }
-    const fk = (this.reflection.options as any).foreignKey as string;
-    return (this.owner as any).readAttribute(fk) === (record as any).id;
+    return fkArr.every((key) => (this.owner as any).readAttribute(key) === (record as any).id);
   }
 }
 

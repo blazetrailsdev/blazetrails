@@ -752,8 +752,14 @@ function join(table: unknown, constraint: unknown): unknown {
   return new Nodes.LeadingJoin(table as any, new Nodes.On(constraint as any));
 }
 
-function lastChainScope(scope: AssociationScope, reflection: unknown, owner: unknown): unknown {
-  return (scope as any)._lastChainScope(scope, reflection, owner);
+function lastChainScope(
+  scope: AssociationScope,
+  currentScope: unknown,
+  reflection: unknown,
+  owner: unknown,
+  klass?: unknown,
+): unknown {
+  return (scope as any)._lastChainScope(currentScope, reflection, owner, klass);
 }
 
 function transformValue(scope: AssociationScope, value: unknown): unknown {

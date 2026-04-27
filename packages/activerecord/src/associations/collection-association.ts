@@ -685,13 +685,27 @@ function transaction(assoc: CollectionAssociation, block: () => Promise<void>): 
   return block();
 }
 
-function insertRecord(
+async function insertRecord(
   assoc: CollectionAssociation,
   record: Base,
   validate = true,
   raise = false,
 ): Promise<Base | null> {
-  return (assoc as any)._createRecord(record, raise);
+  // Mirrors Rails insert_record: set owner FK attributes on the record, then save it.
+  if (typeof (assoc as any).setOwnerAttributes === "function") {
+    (assoc as any).setOwnerAttributes(record);
+  }
+  const saveMethod = raise ? "saveBang" : "save";
+  if (typeof (record as any)[saveMethod] === "function") {
+    const saved = await (record as any)[saveMethod]({ validate });
+    return saved ? record : null;
+  }
+  if (typeof (record as any).save === "function") {
+    const saved = await (record as any).save();
+    if (!saved && raise) throw new Error(`Failed to insert ${record.constructor.name}`);
+    return saved ? record : null;
+  }
+  return record;
 }
 
 function removeRecords(

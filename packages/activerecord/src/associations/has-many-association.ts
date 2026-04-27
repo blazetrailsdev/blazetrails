@@ -102,12 +102,18 @@ function countRecords(assoc: HasManyAssociation): Promise<number> {
   return (assoc as any).scope?.()?.count?.() ?? Promise.resolve(0);
 }
 
-function updateCounter(assoc: HasManyAssociation, difference: number): Promise<void> {
+async function updateCounter(assoc: HasManyAssociation, difference: number): Promise<void> {
   const counterCol = assoc.reflection.options.counterCache;
-  if (counterCol && typeof (assoc.owner as any).increment === "function") {
-    return (assoc.owner as any).increment(String(counterCol), difference);
+  if (!counterCol) return;
+  const owner = assoc.owner as any;
+  const column = String(counterCol);
+  if (typeof owner.incrementBang === "function") {
+    await owner.incrementBang(column, difference);
+  } else if (typeof owner.updateCounters === "function") {
+    await owner.updateCounters({ [column]: difference });
+  } else if (typeof owner.increment === "function") {
+    owner.increment(column, difference);
   }
-  return Promise.resolve();
 }
 
 function updateCounterInMemory(assoc: HasManyAssociation, difference: number): void {

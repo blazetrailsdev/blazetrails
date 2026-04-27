@@ -2375,11 +2375,13 @@ export class Relation<T extends Base> {
     }
     // Process left_outer_joins_values: resolve via JoinDependency and emit as
     // StringJoin nodes (mirrors Rails build_join_buckets stashed_left_joins path).
-    // Exclude associations already covered by _eagerLoadAssociations to avoid
-    // duplicate JOINs when e.g. eagerLoad("posts").leftJoins("posts") is used.
-    const pendingLeftOuter = this._leftOuterJoinsValues.filter(
-      (v) => !this._eagerLoadAssociations.includes(v),
-    );
+    // Exclude associations already covered by _eagerLoadAssociations OR by
+    // includes promoted to eager load (includes().references()) — both cause
+    // _buildEagerJoinManager to emit LEFT OUTER JOINs, so emitting again here
+    // would produce duplicate JOINs / ambiguous column errors.
+    const promotedIncludes = this._includesToPromoteFromReferences();
+    const eagerCovered = new Set([...this._eagerLoadAssociations, ...promotedIncludes]);
+    const pendingLeftOuter = this._leftOuterJoinsValues.filter((v) => !eagerCovered.has(v));
     if (pendingLeftOuter.length > 0) {
       const jd = QueryMethodBangs.constructJoinDependency.call(
         this as any,

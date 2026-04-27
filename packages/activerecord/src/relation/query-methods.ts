@@ -640,7 +640,7 @@ function joinsBang(this: QueryMethodsHost, ...args: (string | Nodes.Join)[]): an
   return this;
 }
 
-function leftOuterJoinsBang(this: QueryMethodsHost, ...args: (string | Nodes.Join)[]): any {
+function leftOuterJoinsBang(this: QueryMethodsHost, ...args: string[]): any {
   for (const arg of args) {
     this._joinValues.push(arg);
   }

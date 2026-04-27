@@ -63,8 +63,7 @@ export class WhereChain<R = any> {
 
   private scopeAssociationReflection(association: string): unknown {
     const model = (this._scope as any)._modelClass ?? (this._scope as any).model;
-    const reflection =
-      model?._reflectOnAssociation?.(association);
+    const reflection = model?._reflectOnAssociation?.(association);
     if (!reflection) {
       throw argumentError(
         `An association named \`:${association}\` does not exist on the model \`${model?.name ?? "unknown"}\`.`,

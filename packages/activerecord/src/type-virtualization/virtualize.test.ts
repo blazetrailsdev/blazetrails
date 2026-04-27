@@ -201,10 +201,10 @@ describe("virtualize — deltas", () => {
         },
       },
     });
-    expect(text).toMatch(/declare created_at:.*Temporal\.Instant[^|]/);
-    expect(text).toMatch(/declare updated_at:.*Temporal\.PlainDateTime[^|]/);
+    expect(text).toMatch(/declare created_at:.*Temporal\.Instant;/);
+    expect(text).toMatch(/declare updated_at:.*Temporal\.PlainDateTime;/);
     expect(text).toMatch(/declare starts_on:.*Temporal\.PlainDate.*\| null/);
-    expect(text).toMatch(/declare duration:.*Temporal\.PlainTime[^|]/);
+    expect(text).toMatch(/declare duration:.*Temporal\.PlainTime;/);
     // nullable datetime union must be parenthesised: (Instant | PlainDateTime) | null
     expect(text).toMatch(
       /declare scheduled_at: \(.*Temporal\.Instant.*Temporal\.PlainDateTime\) \| null/,

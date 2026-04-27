@@ -1820,8 +1820,8 @@ function buildWithValueFromHash(this: QueryMethodsHost, hash: Record<string, unk
 // Rails passes lookupTableKlassFromJoinDependencies as a block to
 // predicate_builder.build_from_hash so polymorphic associations resolve to the
 // right model. Our PredicateBuilder#buildFromHash doesn't yet accept that
-// callback — these three helpers are wired through buildArel → buildJoins and
-// exist for private-API parity until buildArel replaces toArel().
+// callback. These helpers exist for private-API parity; they are not yet wired
+// through the current buildArel() → buildJoins() path.
 function lookupTableKlassFromJoinDependencies(this: QueryMethodsHost, tableName: string): unknown {
   let found: unknown = null;
   eachJoinDependencies.call(this, undefined, (join: any) => {
@@ -1870,8 +1870,8 @@ function buildArel(this: QueryMethodsHost, _connection?: unknown, _aliases?: unk
   const table: any = mc?.arelTable;
   const arel = new SelectManager(table);
 
-  // joinSources is a getter returning a copy — push into the internal mutable array.
-  const joinSources: any[] = (arel as any).ast?.cores?.[0]?.source?.right ?? [];
+  // arel.source.right is the internal mutable join array; joinSources getter returns a copy.
+  const joinSources: any[] = arel.source.right;
   buildJoins.call(this, joinSources);
 
   if (!this._whereClause.isEmpty()) arel.where(this._whereClause.ast);
@@ -1955,9 +1955,7 @@ function selectAssociationList(
   return result;
 }
 
-function buildJoinBuckets(
-  this: QueryMethodsHost,
-): [Record<string, unknown[]>, typeof Nodes.InnerJoin | typeof Nodes.OuterJoin] {
+function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
   const buckets: Record<string, unknown[]> = {
     named_join: [],
     stashed_join: [],
@@ -1985,7 +1983,7 @@ function buildJoinBuckets(
     if (!hasInner) {
       buckets.named_join = leftJoinNames;
       buckets.stashed_join = stashedLeft;
-      return [buckets, Nodes.OuterJoin];
+      return buckets;
     }
     if (stashedLeft.length > 0) {
       buckets.stashed_join.push(
@@ -2017,13 +2015,13 @@ function buildJoinBuckets(
     },
   );
 
-  return [buckets, Nodes.InnerJoin];
+  return buckets;
 }
 
 function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
   if (this._joinClauses.length === 0 && this._rawJoins.length === 0) return joinSources;
 
-  const [buckets] = buildJoinBuckets.call(this);
+  const buckets = buildJoinBuckets.call(this);
 
   const leadingJoins = buckets.leading_join as unknown[];
   const joinNodes = buckets.join_node as unknown[];
@@ -2031,19 +2029,14 @@ function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
   if (leadingJoins.length > 0) (joinSources as any[]).push(...leadingJoins);
 
   // Translate _joinClauses into Arel join nodes preserving ON conditions.
-  // _joinClauses are already-resolved SQL join targets, not association names,
-  // so they are not routed through JoinDependency/constructJoinDependency.
-  const mc = (this as any)._modelClass;
+  // Mirror _applyJoinsToManager: use ArelTable only when the join clause is
+  // a known real table name (quoted: true); otherwise treat the table string
+  // as a SQL literal so aliases (e.g. "posts p") and raw fragments pass through.
   for (const j of this._joinClauses) {
     const JoinClass = j.type === "left" ? Nodes.OuterJoin : Nodes.InnerJoin;
     const onNode = new Nodes.On(arelSql(j.on) as any);
-    // Schema-qualified names (e.g. "schema.table") must not be passed directly
-    // to ArelTable — the visitor quotes the whole string as one identifier.
-    // Emit a quoted SQL literal for the join relation instead.
-    const joinRelation = j.table.includes(".")
-      ? arelSql(safeQuoteTableName(mc, j.table))
-      : new ArelTable(j.table);
-    (joinSources as any[]).push(new JoinClass(joinRelation as any, onNode));
+    const tableNode = (j as any).quoted ? new ArelTable(j.table) : (j.table as any);
+    (joinSources as any[]).push(new JoinClass(tableNode, onNode));
   }
 
   if (joinNodes.length > 0) (joinSources as any[]).push(...joinNodes);

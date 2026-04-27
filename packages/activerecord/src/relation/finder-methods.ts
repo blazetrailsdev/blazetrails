@@ -602,7 +602,7 @@ function applyJoinDependency(rel: FinderRelation, eagerLoading: boolean): any {
 
 function isUsingLimitableReflections(reflections: unknown[]): boolean {
   return (reflections as any[]).every(
-    (r) => r.macro !== "has_many" && r.macro !== "has_and_belongs_to_many",
+    (r) => r.macro !== "hasMany" && r.macro !== "hasAndBelongsToMany",
   );
 }
 

@@ -67,7 +67,7 @@ describe("virtualize — deltas", () => {
     expect(text.match(/declare title: string;/g)?.length).toBe(1);
     // Schema-only columns ARE emitted.
     expect(text).toMatch(/declare body: string;/);
-    expect(text).toMatch(/declare published_at: Date;/);
+    expect(text).toMatch(/declare published_at:.*Temporal\.Instant.*Temporal\.PlainDateTime/);
     expect(text).toMatch(/declare views: number;/);
   });
 

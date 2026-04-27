@@ -707,8 +707,9 @@ async function replaceRecords(
   if (toDelete.length > 0) await assoc.delete(...toDelete);
   const toAdd = newTarget.filter((r) => !(assoc.target as Base[]).includes(r));
   if (toAdd.length > 0) {
-    const result = await assoc.concat(...toAdd);
-    if (!result) {
+    try {
+      await assoc.concat(...toAdd);
+    } catch {
       (assoc as any).target = originalTarget;
       throw new RecordNotSaved(
         `Failed to replace ${assoc.reflection.name} because one or more records could not be saved.`,
@@ -738,7 +739,7 @@ function replaceOnTarget(
 ): Base | null {
   const replaced = assoc as any;
   let index = -1;
-  if (replace && replaced._replacedOrAddedTargets?.has(record)) {
+  if (replace) {
     index = (assoc.target as Base[]).indexOf(record);
   }
 

@@ -34,8 +34,8 @@ export interface Core {
 }
 
 // InspectionMask, inspectionFilter, and formatForInspect live in attribute-inspection.ts.
-// Re-export InspectionMask so existing importers of core.ts keep working.
-export { InspectionMask } from "./attribute-inspection.js";
+// Re-export so existing importers of core.ts keep working.
+export { InspectionMask, inspectionFilter } from "./attribute-inspection.js";
 
 // ---------------------------------------------------------------------------
 // Instance-level behavior

@@ -93,6 +93,7 @@ export class CollectionAssociation extends Association {
     this.target = [];
     this._replacedOrAddedTargets = new Set();
     this._associationIds = null;
+    this._pendingReplace = null;
   }
 
   /**
@@ -294,7 +295,6 @@ export class CollectionAssociation extends Association {
   async persistReplace(): Promise<void> {
     const pending = this._pendingReplace;
     if (!pending || this.owner.isNewRecord()) return;
-    this._pendingReplace = null;
     const currentTarget = this.target;
     await transaction(this, async () => {
       // replaceRecords diffs against assoc.target; restore originalTarget so
@@ -306,6 +306,8 @@ export class CollectionAssociation extends Association {
         this.target = currentTarget;
       }
     });
+    // Clear only after success — leave intact on error so save() retry can re-attempt
+    this._pendingReplace = null;
   }
 
   /**

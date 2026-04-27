@@ -20,6 +20,11 @@ export class HasOneAssociation extends SingularAssociation {
     super(owner, definition);
   }
 
+  override reset(): void {
+    super.reset();
+    this._pendingReplace = null;
+  }
+
   /**
    * Handle the :dependent option when the owner is being destroyed.
    */
@@ -118,7 +123,6 @@ export class HasOneAssociation extends SingularAssociation {
   async persistReplace(): Promise<void> {
     const pending = this._pendingReplace;
     if (!pending) return;
-    this._pendingReplace = null;
     await transactionIf(this, true, async () => {
       if (
         pending.previousTarget &&
@@ -147,6 +151,8 @@ export class HasOneAssociation extends SingularAssociation {
         }
       }
     });
+    // Clear only after success — leave intact on error so save() retry can re-attempt
+    this._pendingReplace = null;
   }
 
   protected override async doAsyncFindTarget(): Promise<Base | null> {

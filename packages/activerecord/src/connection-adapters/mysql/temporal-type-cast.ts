@@ -85,12 +85,12 @@ export function temporalTypeCast(field: Field, next: NextFn): unknown {
  * Spread into the pool config AFTER user options so typeCast is never
  * overridden by a caller's config key.
  *
- * `dateStrings: true` is redundant when a custom typeCast is provided
- * (typeCast intercepts every field before mysql2's own Date parser runs),
- * but acts as a safety net if typeCast somehow doesn't handle a temporal
- * field — ensuring mysql2 falls back to a string rather than a Date object.
+ * `dateStrings` is intentionally NOT set here. In mysql2, `dateStrings: true`
+ * short-circuits the custom `typeCast` callback for temporal field types —
+ * mysql2 returns the string directly without invoking `typeCast`. Our callback
+ * reads the wire string via `field.string()` regardless, so `dateStrings` is
+ * not needed and would break temporal parsing.
  */
-export const TEMPORAL_POOL_OPTIONS: Pick<mysql.PoolOptions, "dateStrings" | "typeCast"> = {
-  dateStrings: true,
+export const TEMPORAL_POOL_OPTIONS: Pick<mysql.PoolOptions, "typeCast"> = {
   typeCast: temporalTypeCast as unknown as mysql.PoolOptions["typeCast"],
 };

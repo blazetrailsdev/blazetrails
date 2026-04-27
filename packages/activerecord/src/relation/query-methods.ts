@@ -655,7 +655,7 @@ function buildWhereClause(
 ): WhereClause {
   if (Array.isArray(opts)) {
     const [head, ...tail] = opts as unknown[];
-    return buildWhereClause.call(this, head, tail);
+    return buildWhereClause.call(this, head, [...tail, ...rest]);
   }
 
   if (opts instanceof Nodes.Node) return new WhereClause([opts]);

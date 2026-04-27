@@ -239,8 +239,9 @@ function _createRecord(this: any): Promise<unknown> {
       await this._pendingOperation;
       this._pendingOperation = null;
     }
+    this._previouslyNewRecord = true;
     this._newRecord = false;
-    this.changesApplied?.();
+    this.changesApplied();
   });
 }
 
@@ -253,6 +254,7 @@ function _updateRecord(this: any): Promise<unknown> {
       await this._pendingOperation;
       this._pendingOperation = null;
     }
-    this.changesApplied?.();
+    this._previouslyNewRecord = false;
+    this.changesApplied();
   });
 }

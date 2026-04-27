@@ -5,7 +5,7 @@
  */
 import { isBlank } from "@blazetrails/activesupport";
 import { resolveAliasName } from "@blazetrails/activemodel";
-import { inspectionFilter } from "./core.js";
+import { inspectionFilter, InspectionMask } from "./core.js";
 // ActiveModel provides aliasAttribute and undefineAttributeMethods on Model.
 // aliasAttribute delegates via the prototype chain. defineAttributeMethods
 // is implemented here since AM doesn't expose it as a static on Model.
@@ -289,12 +289,16 @@ export function _hasAttribute(this: AttributeMethodsHost, attrName: string): boo
 // ---------------------------------------------------------------------------
 
 function attributeMethod(this: any, attrName: string): boolean {
-  return this._attributes != null && attrName in this._attributes;
+  return this._attributes != null && this._attributes.has(attrName);
 }
 
 function attributesWithValues(this: any, attributeNames: string[]): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-  for (const name of attributeNames) result[name] = this._attributes?.[name];
+  const attributes = this._attributes;
+  if (attributes == null) return result;
+  for (const name of attributeNames) {
+    if (attributes.has(name)) result[name] = attributes.fetchValue(name);
+  }
   return result;
 }
 
@@ -325,6 +329,7 @@ function formatForInspect(this: any, name: string, value: unknown): string {
   if (value === null || value === undefined) return String(value);
   const filter = inspectionFilter.call(this.constructor);
   const filtered = filter.filterParam(name, value);
+  if (filtered instanceof InspectionMask) return filtered.toString();
   if (typeof filtered === "string") {
     return filtered.length > 50
       ? JSON.stringify(filtered.slice(0, 50) + "...")

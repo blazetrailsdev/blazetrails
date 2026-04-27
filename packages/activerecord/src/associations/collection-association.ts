@@ -3,7 +3,7 @@ import type { AssociationDefinition } from "../associations.js";
 import { fireAssocCallbacks } from "../associations.js";
 import { underscore } from "@blazetrails/activesupport";
 import { Association } from "./association.js";
-import { RecordNotSaved } from "../errors.js";
+import { RecordNotSaved, Rollback, ActiveRecordError } from "../errors.js";
 
 /**
  * Base class for has_many and has_and_belongs_to_many associations.
@@ -17,7 +17,6 @@ import { RecordNotSaved } from "../errors.js";
 export class CollectionAssociation extends Association {
   declare target: Base[];
   nestedAttributesTarget: Base[] | null = null;
-  private _replacedOrAddedTargets: Set<Base> = new Set();
   private _associationIds: unknown[] | null = null;
   _pendingReplace: { newTarget: Base[]; originalTarget: Base[] } | null = null;
 
@@ -91,7 +90,6 @@ export class CollectionAssociation extends Association {
   override reset(): void {
     super.reset();
     this.target = [];
-    this._replacedOrAddedTargets = new Set();
     this._associationIds = null;
     this._pendingReplace = null;
   }
@@ -709,12 +707,16 @@ async function replaceRecords(
   if (toAdd.length > 0) {
     try {
       await assoc.concat(...toAdd);
-    } catch {
-      (assoc as any).target = originalTarget;
-      throw new RecordNotSaved(
-        `Failed to replace ${assoc.reflection.name} because one or more records could not be saved.`,
-        assoc.owner,
-      );
+    } catch (e) {
+      // Only translate validation/rollback failures; re-throw adapter/query errors as-is
+      if (e instanceof Rollback || e instanceof ActiveRecordError) {
+        (assoc as any).target = originalTarget;
+        throw new RecordNotSaved(
+          `Failed to replace ${assoc.reflection.name} because one or more records could not be saved.`,
+          assoc.owner,
+        );
+      }
+      throw e;
     }
   }
   return assoc.target as Base[];
@@ -749,7 +751,6 @@ function replaceOnTarget(
   }
 
   assoc.setInverseInstance(record);
-  replaced._replacedOrAddedTargets?.add(record);
   replaced._associationIds = null;
 
   const target = assoc.target as Base[];

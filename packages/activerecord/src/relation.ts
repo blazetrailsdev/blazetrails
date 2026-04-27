@@ -2310,6 +2310,16 @@ export class Relation<T extends Base> {
   // interface merge + prototype assignment (see bottom of file)
 
   private _applyJoinsToManager(manager: SelectManager): void {
+    // Mirror Rails build_join_buckets + build_joins (query_methods.rb):
+    // All explicit Arel join nodes and raw SQL strings from _joinValues are first
+    // converted to Join nodes and placed in the leading_join bucket (since we have
+    // no stashed_eager_load or stashed_left_joins). leading_joins are placed in
+    // join_sources before _joinClauses (named-association joins), matching Rails'
+    // `join_sources.concat(leading_joins)` before alias-tracker-generated joins.
+    const leadingJoins: Nodes.Join[] = this._joinValues.map((v) =>
+      typeof v === "string" ? new Nodes.StringJoin(new Nodes.SqlLiteral(v.trim())) : v,
+    );
+    if (leadingJoins.length > 0) manager.prependJoinNodes(...leadingJoins);
     for (const join of this._joinClauses) {
       const tableNode = join.quoted ? new Table(join.table) : join.table;
       const onNode = new Nodes.SqlLiteral(join.on);
@@ -2317,25 +2327,6 @@ export class Relation<T extends Base> {
         manager.join(tableNode, onNode);
       } else {
         manager.outerJoin(tableNode, onNode);
-      }
-    }
-    // build_join_buckets routes LeadingJoin to the leading_join bucket, which is
-    // inserted at the front of join_sources before alias-tracker-generated joins,
-    // while everything else goes to the string-join or join_node buckets after it.
-    // We mirror that by collecting LeadingJoins separately, prepending them to the
-    // manager's existing join sources, and then appending the remaining joins in
-    // their original relative order.
-    const leadingJoins: Nodes.LeadingJoin[] = [];
-    for (const v of this._joinValues) {
-      if (v instanceof Nodes.LeadingJoin) leadingJoins.push(v);
-    }
-    if (leadingJoins.length > 0) manager.prependJoinNodes(...leadingJoins);
-    for (const v of this._joinValues) {
-      if (v instanceof Nodes.LeadingJoin) continue;
-      if (typeof v === "string") {
-        manager.appendStringJoin(v);
-      } else {
-        manager.appendJoinNode(v);
       }
     }
   }

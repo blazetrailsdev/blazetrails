@@ -313,7 +313,11 @@ describe("RelationTest", () => {
     expect(joinValues[0]).not.toBeInstanceOf(Nodes.StringJoin);
   });
 
-  it("joins() routes LeadingJoin nodes before other join sources", () => {
+  it("joins() preserves insertion order across LeadingJoin and InnerJoin", () => {
+    // Rails build_join_buckets: without stashed_eager_load or stashed_left_joins,
+    // ALL Arel join nodes go to the leading_join bucket in original insertion order.
+    // There is no forced reordering of LeadingJoin before InnerJoin — the caller
+    // controls order by argument position (query_methods.rb:1856–1863).
     class Book extends Base {
       static {
         this.tableName = "books";
@@ -330,7 +334,8 @@ describe("RelationTest", () => {
       tags,
       new Nodes.On(new Nodes.SqlLiteral("books.tag_id = tags.id")),
     );
-    const sqlStr = Book.joins(innerJoin, leadingJoin).toSql();
+    // leadingJoin passed first → authors appears first in SQL
+    const sqlStr = Book.joins(leadingJoin, innerJoin).toSql();
     const authorPos = sqlStr.indexOf('"authors"');
     const tagPos = sqlStr.indexOf('"tags"');
     expect(authorPos).toBeGreaterThan(-1);

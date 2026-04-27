@@ -1958,18 +1958,23 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
     join_node: [],
   };
 
-  // _joinValues holds strings and Arel nodes in insertion order (mirrors Rails'
-  // joins_values). Route LeadingJoin to leading_join (prepended before
-  // alias-tracker-generated joins in build_joins) and everything else to
-  // join_node. String values are wrapped as StringJoin per Rails' bucket logic.
-  for (const v of this._joinValues) {
-    if (v instanceof Nodes.LeadingJoin) {
-      buckets.leading_join.push(v);
-    } else if (typeof v === "string") {
-      buckets.join_node.push(new Nodes.StringJoin(arelSql(v) as any));
-    } else {
-      buckets.join_node.push(v);
-    }
+  // Mirror Rails build_join_buckets (query_methods.rb):
+  // 1. Convert strings to StringJoin (joins[i] = StringJoin.new(sql(join.strip)) if String).
+  // 2. While the front of the list is a Join node, shift and route:
+  //    - non-LeadingJoin AND (stashed_eager_load || stashed_left_joins) → join_node
+  //    - everything else (LeadingJoin, or any Join when no stashed joins) → leading_join
+  // We don't yet have stashed_eager_load/stashed_left_joins, so all explicit
+  // Arel join nodes unconditionally go to leading_join per Rails' else branch.
+  const joins: Nodes.Join[] = this._joinValues.map((v) =>
+    typeof v === "string" ? (new Nodes.StringJoin(arelSql(v.trim()) as any) as Nodes.Join) : v,
+  );
+
+  while (joins.length > 0 && joins[0] instanceof Nodes.Join) {
+    const node = joins.shift()!;
+    // Without stashed_eager_load or stashed_left_joins the condition
+    // `!LeadingJoin && (stashed_eager_load || stashed_left_joins)` is always
+    // false, so every node goes to leading_join (Rails' else branch).
+    buckets.leading_join.push(node);
   }
 
   return buckets;

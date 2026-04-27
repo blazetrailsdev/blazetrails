@@ -6,6 +6,7 @@
  */
 
 import { Temporal } from "@blazetrails/activesupport/temporal";
+import { isDateInfinity, isDateNegativeInfinity } from "@blazetrails/activemodel";
 import {
   InsertManager,
   UpdateManager,
@@ -826,7 +827,9 @@ export async function updateColumns<T extends UpdateColumnsRecord>(
       cast instanceof Temporal.PlainDateTime ||
       cast instanceof Temporal.PlainDate ||
       cast instanceof Temporal.PlainTime ||
-      cast instanceof Temporal.ZonedDateTime
+      cast instanceof Temporal.ZonedDateTime ||
+      isDateInfinity(cast) ||
+      isDateNegativeInfinity(cast)
         ? (def?.type.serialize?.(cast) ?? cast)
         : cast;
     setPairs.push([table.get(key), dbValue]);

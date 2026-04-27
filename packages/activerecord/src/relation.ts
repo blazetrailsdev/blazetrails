@@ -4014,16 +4014,23 @@ export class Relation<T extends Base> {
     if (this._loaded) {
       size = this._records.length;
       if (size > 0) {
+        const toInstant = (v: unknown): Temporal.Instant | null => {
+          if (v instanceof Temporal.Instant) return v;
+          if (v instanceof Date && !Number.isNaN(v.getTime()))
+            return Temporal.Instant.fromEpochMilliseconds(v.getTime());
+          if (typeof v === "number" && Number.isFinite(v))
+            return Temporal.Instant.fromEpochMilliseconds(v);
+          return null;
+        };
         timestamp = this._records
           .map((r) => (r as any).readAttribute(timestampColumn))
           .reduce((max: unknown, val: unknown) => {
             if (max == null) return val;
             if (val == null) return max;
-            // Temporal objects throw on `>` — compare by epoch for Instants,
-            // by compare() for PlainDateTime.
-            if (val instanceof Temporal.Instant && max instanceof Temporal.Instant) {
-              return Temporal.Instant.compare(val, max) > 0 ? val : max;
-            }
+            // Coerce Date/number to Instant for the dual-typed window (pre-PR 5a).
+            const valI = toInstant(val);
+            const maxI = toInstant(max);
+            if (valI && maxI) return Temporal.Instant.compare(valI, maxI) > 0 ? valI : maxI;
             if (val instanceof Temporal.PlainDateTime && max instanceof Temporal.PlainDateTime) {
               return Temporal.PlainDateTime.compare(val, max) > 0 ? val : max;
             }
@@ -4101,6 +4108,10 @@ export class Relation<T extends Base> {
       let ts: Temporal.Instant | Temporal.PlainDateTime | null = null;
       if (timestamp instanceof Temporal.Instant || timestamp instanceof Temporal.PlainDateTime) {
         ts = timestamp;
+      } else if (timestamp instanceof Date && !Number.isNaN((timestamp as Date).getTime())) {
+        ts = Temporal.Instant.fromEpochMilliseconds((timestamp as Date).getTime());
+      } else if (typeof timestamp === "number" && Number.isFinite(timestamp)) {
+        ts = Temporal.Instant.fromEpochMilliseconds(timestamp as number);
       } else if (typeof timestamp === "string") {
         try {
           // Normalize: space → T, short offset ±HH → ±HH:MM (Postgres wire quirk)

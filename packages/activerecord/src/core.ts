@@ -33,7 +33,7 @@ export interface Core {
   freeze(): this;
 }
 
-// InspectionMask, inspectionFilter, and formatForInspect live in attribute-inspection.ts.
+// InspectionMask and inspectionFilter live in attribute-inspection.ts.
 // Re-export so existing importers of core.ts keep working.
 export { InspectionMask, inspectionFilter } from "./attribute-inspection.js";
 

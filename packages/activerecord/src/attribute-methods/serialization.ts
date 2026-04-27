@@ -12,7 +12,9 @@
  *
  * Mirrors: ActiveRecord::AttributeMethods::Serialization
  */
-import { NotImplementedError } from "../errors.js";
+import { ColumnSerializer as CodersColumnSerializer } from "../coders/column-serializer.js";
+import { JSON as CodersJSON } from "../coders/json.js";
+import { Json as JsonType } from "../type/json.js";
 export interface Serialization {
   serialize(attribute: string, options?: { coder?: unknown }): void;
 }
@@ -55,14 +57,47 @@ export class ColumnSerializer {
   }
 }
 
-function buildColumnSerializer(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::AttributeMethods::Serialization#build_column_serializer is not implemented",
-  );
+type CoderLike = { dump(v: unknown): string; load(v: unknown): unknown };
+
+function buildColumnSerializer(
+  attrName: string,
+  coder: unknown,
+  type: unknown,
+  _yaml?: Record<string, unknown>,
+): unknown {
+  const resolvedCoder = coder === globalThis.JSON ? CodersJSON : coder;
+
+  if (
+    resolvedCoder != null &&
+    typeof resolvedCoder === "object" &&
+    "load" in resolvedCoder &&
+    "dump" in resolvedCoder &&
+    !("new" in resolvedCoder)
+  ) {
+    if (type && type !== Object) {
+      return new CodersColumnSerializer(attrName, resolvedCoder as CoderLike, type as any);
+    }
+    return resolvedCoder;
+  }
+
+  if (resolvedCoder != null && typeof resolvedCoder === "function" && !("load" in resolvedCoder)) {
+    return new (resolvedCoder as any)(attrName, type);
+  }
+
+  if (type && type !== Object) {
+    return new CodersColumnSerializer(attrName, resolvedCoder as CoderLike, type as any);
+  }
+
+  return resolvedCoder;
 }
 
-function isTypeIncompatibleWithSerialize(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::AttributeMethods::Serialization#type_incompatible_with_serialize? is not implemented",
-  );
+function isTypeIncompatibleWithSerialize(
+  castType: unknown,
+  coder: unknown,
+  type: unknown,
+): boolean {
+  if (castType instanceof JsonType && coder === CodersJSON) return true;
+  if (castType != null && typeof (castType as any).typeCastArray === "function" && type === Array)
+    return true;
+  return false;
 }

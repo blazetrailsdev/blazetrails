@@ -9,6 +9,7 @@
  */
 
 import type { AttributeSet } from "@blazetrails/activemodel";
+import { AttrNames } from "@blazetrails/activemodel";
 
 /**
  * The Read module interface.
@@ -40,6 +41,8 @@ export function _readAttribute(this: AttributeHolder, name: string): unknown {
 }
 
 // Mirrors: ActiveRecord::AttributeMethods::Read::ClassMethods private#define_method_attribute
-// TypeScript uses static types and Proxy-based attribute access — no runtime
-// code-generation equivalent needed, but the method must exist for parity.
-function defineMethodAttribute(_canonicalName: string, _options?: unknown): void {}
+// Rails generates a reader method via AttrNames.define_attribute_accessor_method.
+// TypeScript attribute access is handled statically; this registers the name.
+function defineMethodAttribute(canonicalName: string, _options?: unknown): void {
+  AttrNames.defineAttributeAccessorMethod(canonicalName, false);
+}

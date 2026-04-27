@@ -9,7 +9,7 @@
  * Mirrors: ActiveRecord::AttributeMethods::Write
  */
 
-import { Model } from "@blazetrails/activemodel";
+import { Model, AttrNames } from "@blazetrails/activemodel";
 
 /**
  * The Write module interface.
@@ -38,6 +38,8 @@ export function _writeAttribute(this: Model, name: string, value: unknown): void
 }
 
 // Mirrors: ActiveRecord::AttributeMethods::Write::ClassMethods private#define_method_attribute=
-// TypeScript uses static types and Proxy-based attribute access — no runtime
-// code-generation equivalent needed, but the method must exist for parity.
-function defineMethodAttribute(_canonicalName: string, _options?: unknown): void {}
+// Rails generates a writer method via AttrNames.define_attribute_accessor_method.
+// TypeScript attribute access is handled statically; this registers the name.
+function defineMethodAttribute(canonicalName: string, _options?: unknown): void {
+  AttrNames.defineAttributeAccessorMethod(canonicalName, true);
+}

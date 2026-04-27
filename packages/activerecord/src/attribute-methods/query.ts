@@ -57,7 +57,9 @@ function publicSend(obj: object, name: string): unknown {
  * Mirrors: ActiveRecord::AttributeMethods::Query#_query_attribute
  */
 export function _queryAttribute(this: RawReadable, name: string): boolean {
-  return castToBoolean(this._readAttribute(name));
+  const value = this._readAttribute(name);
+  // Rails: _query_attribute reads the value then calls query_cast_attribute
+  return castToBoolean(queryCastAttribute.call(this, name, value));
 }
 
 function castToBoolean(value: unknown): boolean {

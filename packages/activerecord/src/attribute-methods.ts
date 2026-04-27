@@ -292,7 +292,7 @@ function attributeMethod(this: any, attrName: string): boolean {
   return this._attributes != null && this._attributes.has(attrName);
 }
 
-function attributesWithValues(this: any, attributeNames: string[]): Record<string, unknown> {
+export function attributesWithValues(this: any, attributeNames: string[]): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   const attributes = this._attributes;
   if (attributes == null) return result;
@@ -302,7 +302,7 @@ function attributesWithValues(this: any, attributeNames: string[]): Record<strin
   return result;
 }
 
-function attributesForUpdate(this: any, attributeNames: string[]): string[] {
+export function attributesForUpdate(this: any, attributeNames: string[]): string[] {
   const mc = this.constructor as any;
   const colNames = new Set<string>(mc.columnNames?.() ?? []);
   return attributeNames.filter((name) => {
@@ -315,7 +315,7 @@ function attributesForUpdate(this: any, attributeNames: string[]): string[] {
   });
 }
 
-function attributesForCreate(this: any, attributeNames: string[]): string[] {
+export function attributesForCreate(this: any, attributeNames: string[]): string[] {
   const mc = this.constructor as any;
   const colNames = new Set<string>(mc.columnNames?.() ?? []);
   return attributeNames.filter((name) => {
@@ -329,7 +329,7 @@ function attributesForCreate(this: any, attributeNames: string[]): string[] {
   });
 }
 
-function formatForInspect(this: any, name: string, value: unknown): string {
+export function formatForInspect(this: any, name: string, value: unknown): string {
   // Mirror Rails: format_for_inspect — nil returns "nil" (Ruby nil.inspect),
   // strings get double-quoted with 50-char truncation, filter applied to raw value.
   // Aligns with attributeForInspect in core.ts.

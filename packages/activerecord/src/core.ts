@@ -9,6 +9,7 @@ import { Notifications, ParameterFilter, getAsyncContext } from "@blazetrails/ac
 import type { AsyncContext } from "@blazetrails/activesupport";
 import { PredicateBuilder } from "./relation/predicate-builder.js";
 import { argumentError } from "./relation/query-methods.js";
+import { formatForInspect } from "./attribute-methods.js";
 
 /**
  * The Core module interface — methods mixed into every AR model.
@@ -99,17 +100,8 @@ export function inspect(this: CoreRecord): string {
  */
 export function attributeForInspect(this: CoreRecord, attr: string): string {
   const raw = this.readAttribute(attr);
-  if (raw === null || raw === undefined) return "nil";
-  const filter = inspectionFilter.call(this.constructor as CoreHost);
-  const value = filter.filterParam(attr, raw);
-  if (value instanceof InspectionMask) return value.toString();
-  if (value === null || value === undefined) return "nil";
-  if (typeof value === "string") {
-    if (value.length > 50) return `"${value.substring(0, 50)}..."`;
-    return `"${value}"`;
-  }
-  if (value instanceof Date) return `"${value.toISOString()}"`;
-  return JSON.stringify(value);
+  // Rails: attribute_for_inspect calls format_for_inspect(attr_name, value)
+  return formatForInspect.call(this, attr, raw);
 }
 
 /**

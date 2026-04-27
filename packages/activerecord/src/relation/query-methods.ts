@@ -1970,20 +1970,54 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
     leading_join: [],
     join_node: [],
     stashed_join: [],
+    named_join: [],
   };
 
-  // Mirror Rails build_join_buckets (query_methods.rb:1844–1876):
-  // Stashed signal: _eagerLoadAssociations (stashed_eager_load) OR
-  // _leftOuterJoinsValues (stashed_left_joins). When present, non-LeadingJoin
-  // explicit nodes go to join_node (after alias-tracker joins). When absent,
-  // all explicit nodes go to leading_join (before named joins), matching Rails'
-  // else branch. Guard: buildJoinDependencies always returns [primaryJD] even
-  // when empty, so check first to avoid false positives.
-  const hasAssocStashed =
-    this._eagerLoadAssociations.length > 0 || this._leftOuterJoinsValues.length > 0;
-  const stashedJoins = hasAssocStashed ? buildJoinDependencies.call(this) : [];
-  const hasStashed = stashedJoins.length > 0;
-  buckets.stashed_join.push(...stashedJoins);
+  // Mirror Rails build_join_buckets (query_methods.rb:1828–1876):
+  // When left_outer_joins_values is non-empty, Rails runs select_named_joins on
+  // them to build stashed_left_joins. If joins_values is also empty, it returns
+  // early with OuterJoin type and named_join populated. Otherwise the left-outer
+  // JoinDependency is prepended to stashed_left_joins.
+  if (this._leftOuterJoinsValues.length > 0) {
+    const stashedLeft: JoinDependency[] = [];
+    const namedLeft = selectNamedJoins.call(
+      this,
+      this._leftOuterJoinsValues as string[],
+      stashedLeft,
+    );
+
+    if (this._joinValues.length === 0 && this._joinClauses.length === 0) {
+      // Only left outer joins — short-circuit (query_methods.rb:1838-1842).
+      buckets.named_join.push(...namedLeft);
+      buckets.stashed_join.push(...stashedLeft);
+      return buckets;
+    }
+
+    const leftJd = constructJoinDependency.call(
+      this,
+      namedLeft as AssociationSpec[],
+      Nodes.OuterJoin,
+    );
+    stashedLeft.unshift(leftJd);
+    buckets.stashed_join.push(...stashedLeft);
+  }
+
+  // Stashed eager signal: _eagerLoadAssociations (stashed_eager_load equivalent).
+  // _leftOuterJoinsValues is already handled above, so only eager is added here
+  // to avoid double-inclusion. Guard: check non-empty before calling to avoid
+  // constructing an empty primary JD.
+  if (this._eagerLoadAssociations.length > 0) {
+    const eagerStash: JoinDependency[] = [];
+    const namedEager = selectNamedJoins.call(
+      this,
+      this._eagerLoadAssociations as string[],
+      eagerStash,
+    );
+    const eagerJd = constructJoinDependency.call(this, namedEager as AssociationSpec[], null);
+    eagerStash.unshift(eagerJd);
+    buckets.stashed_join.push(...eagerStash);
+  }
+  const hasStashed = buckets.stashed_join.length > 0;
 
   for (const v of this._joinValues) {
     const node: Nodes.Join =
@@ -2007,6 +2041,7 @@ function buildJoins(this: QueryMethodsHost, arel: any): void {
   const leadingJoins = buckets.leading_join as unknown[];
   const joinNodes = buckets.join_node as unknown[];
   const stashedJoins = buckets.stashed_join as JoinDependency[];
+  const namedJoins = buckets.named_join as AssociationSpec[];
 
   for (const j of leadingJoins) arel.source.right.push(j);
 
@@ -2023,9 +2058,15 @@ function buildJoins(this: QueryMethodsHost, arel: any): void {
     }
   }
 
-  // Stashed join dependencies (eager_load/includes) — generate join SQL via
-  // joinConstraints and push directly to join_sources (mirrors build_joins:1896).
-  if (stashedJoins.length > 0) {
+  // Named left outer joins (short-circuit path: only left_outer_joins_values,
+  // no explicit joins). Rails processes these as named_join → OuterJoin type.
+  if (namedJoins.length > 0) {
+    const jd = constructJoinDependency.call(this, namedJoins, Nodes.OuterJoin);
+    const constraintNodes = jd.joinConstraints(stashedJoins);
+    for (const node of constraintNodes) arel.source.right.push(node);
+  } else if (stashedJoins.length > 0) {
+    // Stashed join dependencies (eager_load or left_outer combined with explicit
+    // joins) — generate join SQL via joinConstraints (mirrors build_joins:1896).
     const [primary, ...rest] = stashedJoins;
     const constraintNodes = primary.joinConstraints(rest);
     for (const node of constraintNodes) arel.source.right.push(node);

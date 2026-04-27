@@ -1818,7 +1818,7 @@ function buildWithValueFromHash(this: QueryMethodsHost, hash: Record<string, unk
 function lookupTableKlassFromJoinDependencies(this: QueryMethodsHost, tableName: string): unknown {
   let found: unknown = null;
   eachJoinDependencies.call(this, undefined, (join: any) => {
-    if (tableName === join.tableName) found = join.baseKlass;
+    if (tableName === join.tableName) found = join.modelClass;
   });
   return found;
 }
@@ -1836,11 +1836,9 @@ function eachJoinDependencies(
 
 function buildJoinDependencies(this: QueryMethodsHost): JoinDependency[] {
   // Mirror Rails: joins | left_outer_joins | eager_load | includes.
-  // _rawJoins are raw SQL strings — exclude them; only named association
-  // join clauses can be resolved through JoinDependency.
-  const joinNames: AssociationSpec[] = [
-    ...this._joinClauses.map((j) => j.table),
-  ] as AssociationSpec[];
+  // _joinClauses store SQL join targets (table names), not association names.
+  // Only association specs from eagerLoad/includes can be resolved via JoinDependency.
+  const joinNames: AssociationSpec[] = [];
 
   if (this._eagerLoadAssociations.length > 0) {
     for (const a of this._eagerLoadAssociations) {
@@ -2024,27 +2022,16 @@ function buildJoinBuckets(
 function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
   if (this._joinClauses.length === 0 && this._rawJoins.length === 0) return joinSources;
 
-  const [buckets, joinType] = buildJoinBuckets.call(this);
+  const [buckets] = buildJoinBuckets.call(this);
 
-  const namedJoins = buckets.named_join as unknown[];
-  const stashedJoins = buckets.stashed_join as JoinDependency[];
   const leadingJoins = buckets.leading_join as unknown[];
   const joinNodes = buckets.join_node as unknown[];
 
   if (leadingJoins.length > 0) (joinSources as any[]).push(...leadingJoins);
 
-  if (namedJoins.length > 0 || stashedJoins.length > 0) {
-    const jd = constructJoinDependency.call(
-      this,
-      namedJoins.filter((n) => typeof n === "string") as string[],
-      joinType,
-    );
-    // Use joinConstraints to produce Arel join nodes from the JoinDependency graph.
-    const constraintNodes = jd.joinConstraints(stashedJoins);
-    (joinSources as any[]).push(...constraintNodes);
-  }
-
-  // Translate _joinClauses entries into Arel join nodes, preserving ON conditions.
+  // Translate _joinClauses into Arel join nodes preserving ON conditions.
+  // _joinClauses are already-resolved SQL join targets, not association names,
+  // so they are not routed through JoinDependency/constructJoinDependency.
   for (const j of this._joinClauses) {
     const joinTable = new ArelTable(j.table);
     const JoinClass = j.type === "left" ? Nodes.OuterJoin : Nodes.InnerJoin;

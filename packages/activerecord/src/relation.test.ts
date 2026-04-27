@@ -321,6 +321,38 @@ describe("RelationTest", () => {
     expect(rel.toSql()).toMatch(/LEFT OUTER JOIN/i);
   });
 
+  it("includes().references() + leftJoins(): no duplicate LEFT OUTER JOIN in SQL", () => {
+    // Regression: includes promoted to eager load via references() causes
+    // _buildEagerJoinManager to emit the LEFT OUTER JOIN. The pendingLeftOuter
+    // filter must exclude promoted includes so leftJoins(:assoc) doesn't emit
+    // a second JOIN for the same association.
+    class Author extends Base {
+      static {
+        this.tableName = "authors";
+        this.adapter = adapter;
+      }
+    }
+    class Post extends Base {
+      static {
+        this.tableName = "posts";
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("RefLeftAuthor", Author);
+    registerModel("RefLeftPost", Post);
+    Associations.hasMany.call(Author, "posts", {
+      className: "RefLeftPost",
+      foreignKey: "author_id",
+    });
+
+    const rel = Author.all().includes("posts").references("posts").leftJoins("posts");
+    const sqlStr = rel.toSql();
+    // "posts" table should appear only once in LEFT OUTER JOIN clauses
+    const leftJoinMatches = sqlStr.match(/LEFT OUTER JOIN/gi) ?? [];
+    expect(leftJoinMatches.length).toBe(1);
+  });
+
   it("eagerLoad + leftJoins: buildJoinBuckets short-circuit does not drop eager stash", () => {
     // Regression: when _joinValues and _joinClauses are empty, buildJoinBuckets
     // short-circuits for the left-outer-only path. If _eagerLoadAssociations is

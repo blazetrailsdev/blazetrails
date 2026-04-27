@@ -83,10 +83,11 @@ export class Merger {
   }
 
   private mergeOuterJoins(_rel: any): void {
-    // Our _joinClauses already contains both inner and outer joins (merged above
-    // in order). Rails' merge_outer_joins handles left_outer_joins_values, a
-    // separate array not present in our data model — Arel::Nodes::OuterJoin is
-    // the type used in Rails' cross-model outer-join path.
+    // Same-model left outer join associations are merged in mergeJoins above via
+    // _leftOuterJoinsValues. Rails' merge_outer_joins also handles a cross-model
+    // path (partitions associations, calls left_outer_joins! on a new JoinDependency)
+    // which is not yet implemented here — Arel::Nodes::OuterJoin is the join type
+    // used in that cross-model path.
     void Nodes.OuterJoin;
   }
 

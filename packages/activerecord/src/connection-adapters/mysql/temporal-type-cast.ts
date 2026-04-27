@@ -45,13 +45,14 @@ export function temporalTypeCast(field: Field, next: NextFn): unknown {
       return parseMysqlInstant(raw);
     }
     case "DATETIME":
-    case "DATETIME2":
-    case "NEWDATE": {
+    case "DATETIME2": {
       const raw = field.string();
       if (raw === null) return null;
       return parseMysqlPlainDateTime(raw);
     }
-    case "DATE": {
+    case "DATE":
+    case "NEWDATE": {
+      // NEWDATE is the MySQL protocol's internal DATE-only wire type.
       const raw = field.string();
       if (raw === null) return null;
       return parseMysqlDate(raw);

@@ -52,11 +52,6 @@ describe("temporalTypeCast", () => {
       expect(result).toBeInstanceOf(Temporal.PlainDateTime);
     });
 
-    it("handles NEWDATE type", () => {
-      const result = temporalTypeCast(field("NEWDATE", "2026-04-27 00:00:00"), next);
-      expect(result).toBeInstanceOf(Temporal.PlainDateTime);
-    });
-
     it("returns null for NULL", () => {
       expect(temporalTypeCast(field("DATETIME", null), next)).toBeNull();
     });
@@ -65,6 +60,12 @@ describe("temporalTypeCast", () => {
   describe("DATE", () => {
     it("parses DATE to Temporal.PlainDate", () => {
       const result = temporalTypeCast(field("DATE", "2026-04-27"), next);
+      expect(result).toBeInstanceOf(Temporal.PlainDate);
+      expect((result as Temporal.PlainDate).toString()).toBe("2026-04-27");
+    });
+
+    it("handles NEWDATE (DATE-only wire type) as Temporal.PlainDate", () => {
+      const result = temporalTypeCast(field("NEWDATE", "2026-04-27"), next);
       expect(result).toBeInstanceOf(Temporal.PlainDate);
       expect((result as Temporal.PlainDate).toString()).toBe("2026-04-27");
     });

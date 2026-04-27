@@ -13,7 +13,7 @@ import { Column } from "./column.js";
 import { SqlTypeMetadata } from "./sql-type-metadata.js";
 import { ExplainPrettyPrinter } from "./mysql/explain-pretty-printer.js";
 import { typeCastedBinds } from "./abstract/database-statements.js";
-import { TEMPORAL_POOL_OPTIONS } from "./mysql/temporal-type-cast.js";
+import { temporalTypeCast, TEMPORAL_POOL_OPTIONS } from "./mysql/temporal-type-cast.js";
 
 /**
  * Mysql2-flavored StatementPool. Evicted entries send COM_STMT_CLOSE
@@ -1011,9 +1011,22 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // Note: the threshold is mysql2's internal digit count (≥15), not
     // Number.MAX_SAFE_INTEGER (2^53-1 ≈ 9×10^15, 16 digits). Callers may
     // override via explicit false in config.
-    // TEMPORAL_POOL_OPTIONS is spread LAST so user config cannot accidentally
-    // override our typeCast callback and silently break Temporal parsing.
-    const pool = mysql.createPool({ supportBigNumbers: true, ...config, ...TEMPORAL_POOL_OPTIONS });
+    // Compose our Temporal typeCast with any user-supplied typeCast so callers
+    // can still intercept non-temporal fields (e.g. custom ENUM handling) without
+    // losing Temporal parsing on temporal columns.
+    const userTypeCast = config.typeCast;
+    const composedTypeCast =
+      typeof userTypeCast === "function"
+        ? (field: unknown, next: () => unknown) =>
+            temporalTypeCast(field as Parameters<typeof temporalTypeCast>[0], () =>
+              (userTypeCast as (f: unknown, n: () => unknown) => unknown)(field, next),
+            )
+        : TEMPORAL_POOL_OPTIONS.typeCast;
+    const pool = mysql.createPool({
+      supportBigNumbers: true,
+      ...config,
+      typeCast: composedTypeCast,
+    });
     // Pin session timezone to UTC so TIMESTAMP wire strings are always in UTC,
     // allowing parseMysqlInstant to treat them as Temporal.Instant correctly.
     // mysql.Pool (promise wrapper) re-emits 'connection' from the underlying pool
@@ -1021,7 +1034,13 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // property access needed. The callback receives the raw PoolConnection (non-
     // promise) so we use the callback-style query directly.
     pool.on("connection", (conn) => {
-      (conn as unknown as { query: (sql: string) => void }).query("SET time_zone = '+00:00'");
+      const rawConn = conn as unknown as {
+        query: (sql: string, cb: (err: Error | null) => void) => void;
+        destroy: () => void;
+      };
+      rawConn.query("SET time_zone = '+00:00'", (err) => {
+        if (err) rawConn.destroy();
+      });
     });
     return pool;
   }

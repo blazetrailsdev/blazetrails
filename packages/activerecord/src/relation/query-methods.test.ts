@@ -64,7 +64,7 @@ describe("ActiveRecord::QueryMethods", () => {
 
     it("emits WITH clause for a plain CTE", () => {
       const Post = makePostModel();
-      const scope = Post.with({ recent: "SELECT id FROM posts WHERE published = true" });
+      const scope = Post.all().with({ recent: "SELECT id FROM posts WHERE published = true" });
       const sql = scope.toSql();
       expect(sql).toMatch(/WITH/i);
       expect(sql).toContain("recent");
@@ -72,7 +72,7 @@ describe("ActiveRecord::QueryMethods", () => {
 
     it("emits WITH RECURSIVE clause for a recursive CTE", () => {
       const Post = makePostModel();
-      const scope = Post.withRecursive({
+      const scope = Post.all().withRecursive({
         tree: "SELECT id FROM posts WHERE id = 1 UNION ALL SELECT p.id FROM posts p JOIN tree t ON p.parent_id = t.id",
       });
       const sql = scope.toSql();

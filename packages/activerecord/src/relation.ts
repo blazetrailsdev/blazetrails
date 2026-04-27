@@ -1850,6 +1850,7 @@ export class Relation<T extends Base> {
       await this._executeEagerLoad(allEager);
       if (token !== this._loadToken) return [];
       loadedRecords = this._records;
+      this.loadRecords(loadedRecords);
     } else {
       const sql = this._toSql();
       const result = await this._modelClass.adapter.selectAll(sql, `${this._modelClass.name} Load`);
@@ -1858,7 +1859,6 @@ export class Relation<T extends Base> {
       loadedRecords = this._instrumentInstantiation(rows);
       this.loadRecords(loadedRecords);
     }
-    if (!this._loaded) this._loaded = true;
 
     // Apply readonly and strict_loading flags to loaded records
     if (this._isReadonly) {

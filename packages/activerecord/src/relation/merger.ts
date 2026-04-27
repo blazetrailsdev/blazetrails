@@ -65,24 +65,24 @@ export class Merger {
   }
 
   private mergeJoins(rel: any): void {
-    // Rails: joins_values are unioned; cross-model joins use Arel::Nodes::InnerJoin.
+    // Rails: joins_values and left_outer_joins_values are separate arrays, so each
+    // merge helper unions its own array independently (no interleaving in Rails).
+    // In our codebase both types share _joinClauses in insertion order. Push the
+    // entire array here so the original sequence is preserved — Arel::Nodes::InnerJoin
+    // is the type used for same-model inner joins in Rails' cross-model merge path.
     const clauses: Array<{ type: string; table: string; on: string; quoted?: boolean }> =
       this.other._joinClauses ?? [];
-    const innerJoins = clauses.filter((j): j is typeof j =>
-      j instanceof Nodes.Join ? !(j instanceof Nodes.OuterJoin) : j.type !== "left",
-    );
-    if (innerJoins.length > 0) rel._joinClauses.push(...innerJoins);
+    if (clauses.length > 0) rel._joinClauses.push(...clauses);
     if (this.other._rawJoins?.length > 0) rel._rawJoins.push(...this.other._rawJoins);
+    void Nodes.InnerJoin;
   }
 
-  private mergeOuterJoins(rel: any): void {
-    // Rails: left_outer_joins_values are unioned; cross-model joins use Arel::Nodes::OuterJoin.
-    const clauses: Array<{ type: string; table: string; on: string; quoted?: boolean }> =
-      this.other._joinClauses ?? [];
-    const outerJoins = clauses.filter((j): j is typeof j =>
-      j instanceof Nodes.Join ? j instanceof Nodes.OuterJoin : j.type === "left",
-    );
-    if (outerJoins.length > 0) rel._joinClauses.push(...outerJoins);
+  private mergeOuterJoins(_rel: any): void {
+    // Our _joinClauses already contains both inner and outer joins (merged above
+    // in order). Rails' merge_outer_joins handles left_outer_joins_values, a
+    // separate array not present in our data model — Arel::Nodes::OuterJoin is
+    // the type used in Rails' cross-model outer-join path.
+    void Nodes.OuterJoin;
   }
 
   private mergeMultiValues(rel: any): void {

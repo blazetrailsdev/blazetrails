@@ -2037,8 +2037,6 @@ function buildJoins(this: QueryMethodsHost, arel: any): void {
     }
   }
 
-  for (const raw of this._rawJoins) arel.appendStringJoin(raw);
-
   for (const node of joinNodes) arel.source.right.push(node);
 }
 

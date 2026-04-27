@@ -5,11 +5,11 @@
  */
 
 import { NotImplementedError } from "./errors.js";
-import { Notifications, ParameterFilter, getAsyncContext } from "@blazetrails/activesupport";
+import { Notifications, getAsyncContext } from "@blazetrails/activesupport";
 import type { AsyncContext } from "@blazetrails/activesupport";
 import { PredicateBuilder } from "./relation/predicate-builder.js";
 import { argumentError } from "./relation/query-methods.js";
-import { formatForInspect } from "./attribute-methods.js";
+import { InspectionMask, inspectionFilter, formatForInspect } from "./attribute-inspection.js";
 
 /**
  * The Core module interface — methods mixed into every AR model.
@@ -33,31 +33,9 @@ export interface Core {
   freeze(): this;
 }
 
-/**
- * Placeholder used in inspect output when an attribute value is masked
- * (e.g. for filtered attributes).
- *
- * Mirrors: ActiveRecord::Core::InspectionMask
- */
-export class InspectionMask {
-  private _value: string;
-
-  constructor(value: string = "[FILTERED]") {
-    this._value = value;
-  }
-
-  toString(): string {
-    return this._value;
-  }
-
-  inspect(): string {
-    return this._value;
-  }
-
-  toJSON(): string {
-    return this._value;
-  }
-}
+// InspectionMask, inspectionFilter, and formatForInspect live in attribute-inspection.ts.
+// Re-export InspectionMask so existing importers of core.ts keep working.
+export { InspectionMask } from "./attribute-inspection.js";
 
 // ---------------------------------------------------------------------------
 // Instance-level behavior
@@ -501,24 +479,7 @@ export function filterAttributes(
   return [];
 }
 
-const INSPECTION_MASK = new InspectionMask();
-
-/**
- * Rails: creates an ActiveSupport::ParameterFilter with an InspectionMask.
- * Delegates up the class hierarchy if no own filterAttributes are set, so
- * per-class overrides don't cache stale Base filters (hasOwnProperty guards).
- */
-export function inspectionFilter(this: CoreHost): ParameterFilter {
-  if (this._inspectionFilter) return this._inspectionFilter;
-  if (!Object.prototype.hasOwnProperty.call(this, "_filterAttributes")) {
-    const parent = parentClass(this);
-    if (parent) return inspectionFilter.call(parent);
-  }
-  this._inspectionFilter = new ParameterFilter(this._filterAttributes ?? [], {
-    mask: INSPECTION_MASK,
-  });
-  return this._inspectionFilter;
-}
+// inspectionFilter is now in attribute-inspection.ts
 
 /**
  * Rails: PredicateBuilder.new(TableMetadata.new(self, arel_table))

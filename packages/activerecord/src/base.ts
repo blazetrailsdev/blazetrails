@@ -2392,9 +2392,6 @@ export class Base extends Model {
       this._writeAttribute("updated_at", Temporal.Now.instant());
     }
 
-    // Rails raises ReadonlyAttributeError at write time (HasReadonlyAttributes),
-    // so by the time we reach save the change set can never contain a readonly
-    // column on a persisted record. No silent-filter needed.
     const changedAttrs = { ...this.changes };
 
     if (Object.keys(changedAttrs).length === 0) return;

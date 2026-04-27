@@ -258,7 +258,8 @@ function _updateRecord(this: any): Promise<boolean> {
     // when the model has record_timestamps enabled and has changes to save.
     // Mirror record_update_timestamps: use _skipTouch (Rails' @_touch_record flag)
     // and the shared currentTimeFromProperTimezone() helper (Temporal.Instant).
-    if (!this._skipTouch && ctor.recordTimestamps !== false) {
+    const hasChanges = Object.keys(this.changes ?? {}).length > 0;
+    if (!this._skipTouch && ctor.recordTimestamps !== false && hasChanges) {
       const time = currentTimeFromProperTimezone();
       const updateAttrs = timestampAttributesForUpdateInModel.call(ctor);
       for (const col of updateAttrs) {

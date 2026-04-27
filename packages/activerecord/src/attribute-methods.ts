@@ -5,7 +5,7 @@
  */
 import { isBlank } from "@blazetrails/activesupport";
 import { resolveAliasName } from "@blazetrails/activemodel";
-import { inspectionFilter, InspectionMask } from "./core.js";
+import { inspectionFilter, InspectionMask } from "./attribute-inspection.js";
 // ActiveModel provides aliasAttribute and undefineAttributeMethods on Model.
 // aliasAttribute delegates via the prototype chain. defineAttributeMethods
 // is implemented here since AM doesn't expose it as a static on Model.
@@ -331,26 +331,8 @@ export function attributesForCreate(this: any, attributeNames: string[]): string
   });
 }
 
-export function formatForInspect(this: any, name: string, value: unknown): string {
-  // Mirror Rails: format_for_inspect — nil returns "nil" (Ruby nil.inspect),
-  // strings get double-quoted with 50-char truncation, filter applied to raw value.
-  // Aligns with attributeForInspect in core.ts.
-  if (value === null || value === undefined) return "nil";
-  const filter = inspectionFilter.call(this.constructor);
-  const filtered = filter.filterParam(name, value);
-  if (filtered instanceof InspectionMask) return filtered.toString();
-  if (filtered === null || filtered === undefined) return "nil";
-  if (typeof filtered === "string") {
-    return filtered.length > 50 ? `"${filtered.substring(0, 50)}..."` : `"${filtered}"`;
-  }
-  if (filtered instanceof Date) return `"${filtered.toISOString()}"`;
-  try {
-    const stringified = JSON.stringify(filtered);
-    return stringified === undefined ? String(filtered) : stringified;
-  } catch {
-    return String(filtered);
-  }
-}
+// Re-export from shared module so callers of attribute-methods can import here.
+export { formatForInspect } from "./attribute-inspection.js";
 
 function pkAttribute(this: any, name: string): boolean {
   const pk = (this.constructor as any)?.primaryKey ?? this._primaryKey;

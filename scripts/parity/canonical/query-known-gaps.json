@@ -13,7 +13,7 @@
   },
   "ar-134": {
     "side": "trails-missing",
-    "reason": "joins() does not support nested hash arguments: Rails resolves joins({books: :reviews}) to two INNER JOINs via the association graph; trails falls through to a toString() on the hash object, producing 'FROM \"authors\" [object Object]'. Root cause: Relation#joins does not handle object arguments — they fall through to _rawJoins and are stringified during SQL generation. Real fix: handle object/hash arguments in Relation#joins by resolving them through the association chain (via _resolveAssociationJoin and _applyJoinsToManager) before they fall through to raw joins."
+    "reason": "joins() crashes on nested hash arguments: Rails resolves joins({books: :reviews}) to two INNER JOINs via the association graph; Trails accepts the object argument into _rawJoins and later attempts to use it as a join node during SQL generation, causing a runtime failure instead of producing a valid query. Root cause: Relation#joins does not handle object/hash arguments — they fall through to _rawJoins and fail when the SQL builder encounters a non-string join entry. Real fix: handle nested object/hash arguments in Relation#joins by resolving them through _resolveAssociationJoin and applying the resulting joins via _applyJoinsToManager."
   },
   "ar-137": {
     "side": "diff",

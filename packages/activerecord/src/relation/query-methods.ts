@@ -1955,63 +1955,16 @@ function selectAssociationList(
 
 function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
   const buckets: Record<string, unknown[]> = {
-    named_join: [],
-    stashed_join: [],
     leading_join: [],
     join_node: [],
   };
 
-  const leftClauses = this._joinClauses.filter((j) => j.type === "left");
-  if (leftClauses.length > 0) {
-    const stashedLeft: unknown[] = [];
-    const leftJoinNames = selectNamedJoins.call(
-      this,
-      leftClauses.map((j) => j.table),
-      stashedLeft,
-      (join) => {
-        if (join instanceof CTEJoin) {
-          buckets.join_node.push(buildWithJoinNode.call(this, join.name, Nodes.OuterJoin));
-        } else {
-          throw argumentError("only Hash, Symbol and Array are allowed");
-        }
-      },
-    );
-
-    const hasInner = this._joinClauses.some((j) => j.type === "inner") || this._rawJoins.length > 0;
-    if (!hasInner) {
-      buckets.named_join = leftJoinNames;
-      buckets.stashed_join = stashedLeft;
-      return buckets;
-    }
-    if (stashedLeft.length > 0) {
-      buckets.stashed_join.push(
-        constructJoinDependency.call(this, leftJoinNames as AssociationSpec[], Nodes.OuterJoin),
-      );
-    }
-  }
-
-  // Arel StringJoin nodes for raw SQL joins
+  // Convert raw SQL joins to StringJoin nodes.
+  // _joinClauses (already-resolved SQL joins) are handled directly by
+  // buildJoins via manager.join()/outerJoin() and don't go through buckets.
   for (const raw of this._rawJoins) {
     buckets.join_node.push(new Nodes.StringJoin(arelSql(raw) as any));
   }
-
-  const innerClauses = this._joinClauses.filter((j) => j.type === "inner");
-  buckets.named_join = selectNamedJoins.call(
-    this,
-    innerClauses.map((j) => j.table),
-    buckets.stashed_join,
-    (join) => {
-      if (
-        join instanceof Nodes.StringJoin ||
-        join instanceof Nodes.InnerJoin ||
-        join instanceof Nodes.OuterJoin
-      ) {
-        buckets.join_node.push(join);
-      } else if (join instanceof CTEJoin) {
-        buckets.join_node.push(buildWithJoinNode.call(this, join.name));
-      }
-    },
-  );
 
   return buckets;
 }

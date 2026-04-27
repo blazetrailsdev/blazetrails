@@ -1918,10 +1918,11 @@ export class Relation<T extends Base> {
     if (this._referencesValues.length === 0) return false;
     if (this._includesAssociations.length === 0) return false;
 
-    // _joinValues holds strings and Arel join nodes in insertion order (mirrors
-    // Rails' joins_values). Rails' references_eager_loaded_tables? extracts table
-    // names from StringJoin nodes via tables_in_string; for Arel nodes we call
-    // toSql() and run the same extraction.
+    // Rails references_eager_loaded_tables? (relation.rb) calls build_joins([]) and
+    // iterates the returned nodes: StringJoin → tables_in_string(join.left),
+    // other joins → join.left.name. Mirror that: strings become StringJoin and we
+    // extract via tablesInString; Arel nodes expose their table via left.name when
+    // available (InnerJoin/OuterJoin/LeadingJoin all have left: Table).
     const joinedTables = new Set<string>([
       ...this._joinClauses.map((j) => j.table.toLowerCase()),
       ...this._joinValues.flatMap((v) => {
@@ -1930,6 +1931,12 @@ export class Relation<T extends Base> {
           const sqlText = join.left instanceof Nodes.SqlLiteral ? join.left.value : v;
           return this.tablesInString(sqlText);
         }
+        if (v instanceof Nodes.StringJoin) {
+          const sqlText = v.left instanceof Nodes.SqlLiteral ? v.left.value : v.toSql();
+          return this.tablesInString(sqlText);
+        }
+        const leftName = (v.left as any)?.name;
+        if (typeof leftName === "string") return [leftName.toLowerCase()];
         return this.tablesInString(v.toSql());
       }),
       String((this._modelClass as unknown as { tableName?: string }).tableName ?? "").toLowerCase(),

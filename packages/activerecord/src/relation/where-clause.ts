@@ -242,7 +242,7 @@ function unionNodes(a: Nodes.Node[], b: Nodes.Node[]): Nodes.Node[] {
 
 function predicatesWithWrappedSqlLiterals(predicates: Nodes.Node[]): Nodes.Node[] {
   return nonEmptyPredicates(predicates).map((node) => {
-    if (node instanceof Nodes.SqlLiteral || typeof node === "string") return wrapSqlLiteral(node);
+    if (node instanceof Nodes.SqlLiteral) return wrapSqlLiteral(node);
     return node;
   });
 }
@@ -254,15 +254,11 @@ function predicates(wc: WhereClause): Nodes.Node[] {
 }
 
 function nonEmptyPredicates(predicates: Nodes.Node[]): Nodes.Node[] {
-  return predicates.filter(
-    (n) =>
-      !(typeof n === "string" && n === "") && !(n instanceof Nodes.SqlLiteral && n.value === ""),
-  );
+  return predicates.filter((n) => !(n instanceof Nodes.SqlLiteral && n.value === ""));
 }
 
-function wrapSqlLiteral(node: Nodes.Node | string): Nodes.Node {
-  const lit = typeof node === "string" ? new Nodes.SqlLiteral(node) : (node as Nodes.SqlLiteral);
-  return new Nodes.Grouping(lit);
+function wrapSqlLiteral(node: Nodes.SqlLiteral): Nodes.Node {
+  return new Nodes.Grouping(node);
 }
 
 function extractAttribute(node: Nodes.Node): Nodes.Attribute | null {

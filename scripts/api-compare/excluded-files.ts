@@ -80,6 +80,7 @@ export const EXCLUDED_FILES: ExcludedFile[] = [
   },
   {
     pattern: "fixture_set",
+    testFile: "fixture_set/",
     reason:
       "Supporting machinery for YAML fixtures (FixtureSet file/table-row/render-context/" +
       "model-metadata/identify). Excluded along with fixtures.rb.",
@@ -94,8 +95,8 @@ export const EXCLUDED_FILES: ExcludedFile[] = [
   },
   {
     pattern: "encryption/encrypted_fixtures.rb",
-    reason:
-      "Encrypts YAML fixture rows on load. Excluded transitively with fixtures.rb.",
+    testFile: "encryption/encrypted_fixtures_test.rb",
+    reason: "Encrypts YAML fixture rows on load. Excluded transitively with fixtures.rb.",
   },
 ];
 

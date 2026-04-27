@@ -206,13 +206,24 @@ function nodeReferencesTable(node: Nodes.Node, tableName: string): boolean {
 }
 
 function appendConstraints(join: unknown, constraints: unknown[]): void {
-  void Nodes.And;
-  void Nodes.StringJoin; // Rails: Arel::Nodes::StringJoin + Arel::Nodes::And
+  // Rails: if StringJoin, prepend constraints to left; otherwise combine via Arel::Nodes::And
+  void Nodes.StringJoin;
   if (!join || !constraints.length) return;
   const joinAny = join as any;
-  if (typeof joinAny.left === "string") {
-    joinAny.left = [joinAny.left, ...constraints].join(" AND ");
-  } else if (joinAny.right?.expr) {
-    joinAny.right.expr = { and: [joinAny.right.expr, ...constraints] };
+  const arelConstraints = constraints.filter((c): c is Nodes.Node => c instanceof Nodes.Node);
+  if (!arelConstraints.length) return;
+  if (join instanceof Nodes.StringJoin) {
+    // StringJoin: prepend constraints to the left SQL literal using And
+    const existing = joinAny.left;
+    const allExprs: Nodes.Node[] =
+      existing instanceof Nodes.Node ? [existing, ...arelConstraints] : arelConstraints;
+    joinAny.left = allExprs.length === 1 ? allExprs[0] : new Nodes.And(allExprs);
+  } else if (joinAny.right?.expr instanceof Nodes.Node) {
+    const existing = joinAny.right.expr as Nodes.Node;
+    const allExprs: Nodes.Node[] =
+      existing instanceof Nodes.And
+        ? [...existing.children, ...arelConstraints]
+        : [existing, ...arelConstraints];
+    joinAny.right.expr = new Nodes.And(allExprs);
   }
 }

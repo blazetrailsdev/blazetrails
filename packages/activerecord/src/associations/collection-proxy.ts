@@ -2192,7 +2192,11 @@ function findNthWithLimit(
   limit: number,
 ): Promise<any[]> {
   if ((proxy as any)._isFindFromTarget?.()) {
-    (proxy as any).loadTarget?.();
+    // await target hydration before slicing — loadTarget() is async
+    return Promise.resolve((proxy as any).loadTarget?.()).then(() => {
+      const records = (proxy as any)._association?.target;
+      return Array.isArray(records) ? records.slice(index, index + limit) : [];
+    });
   }
   return (proxy as any).limit(limit).offset(index).toArray();
 }
@@ -2200,10 +2204,15 @@ function findNthWithLimit(
 function findNthFromLast(proxy: CollectionProxy<any>, index: number): Promise<any> {
   const records = (proxy as any)._association?.target;
   if (Array.isArray(records)) {
+    // index=1 → last (records[-1]), index=2 → second-to-last (records[-2]), etc.
+    // Matches Rails: records[-index] == records[length - index]
     return Promise.resolve(records[records.length - index] ?? null);
   }
+  // Mirror finder-methods.ts: reverse order then take a positive offset
+  // (negative offset is not valid SQL on most adapters)
   return (proxy as any)
-    .offset(-index)
+    .reverseOrder?.()
+    .offset(index - 1)
     .limit(1)
     .toArray()
     .then((r: any[]) => r[0] ?? null);

@@ -495,8 +495,10 @@ function ownerKeyType(assoc: Association): string {
 }
 
 function reflectionScope(assoc: Association): unknown {
-  // Rails: reflection.join_scopes(klass.arel_table, ...) — uses Arel table for scope building
+  // Rails: reflection.join_scopes(klass.arel_table, klass.predicate_builder, klass).inject(&:merge!)
+  // Our implementation memoizes this as _reflectionScope; the arel_table is accessed internally.
   const table: Table | undefined = (assoc as any)._model?.arelTable;
+  void table; // used by Rails to build scopes; our preloader memoizes the result
   return (assoc as any)._reflectionScope;
 }
 

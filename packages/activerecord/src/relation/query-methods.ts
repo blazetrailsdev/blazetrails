@@ -643,12 +643,11 @@ function joinsBang(this: QueryMethodsHost, ...args: (string | Nodes.Join)[]): an
   return this;
 }
 
-function leftOuterJoinsBang(this: QueryMethodsHost, ...args: string[]): any {
+function leftOuterJoinsBang(this: QueryMethodsHost, ...args: AssociationSpec[]): any {
   // Mirrors Rails left_outer_joins! which stores into left_outer_joins_values
   // (separate from joins_values / _joinValues which is the inner-join path).
   for (const arg of args) {
-    if (!this._leftOuterJoinsValues.includes(arg as AssociationSpec))
-      this._leftOuterJoinsValues.push(arg as AssociationSpec);
+    if (!this._leftOuterJoinsValues.includes(arg)) this._leftOuterJoinsValues.push(arg);
   }
   return this;
 }
@@ -1980,11 +1979,7 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
   // JoinDependency is prepended to stashed_left_joins.
   if (this._leftOuterJoinsValues.length > 0) {
     const stashedLeft: JoinDependency[] = [];
-    const namedLeft = selectNamedJoins.call(
-      this,
-      this._leftOuterJoinsValues as string[],
-      stashedLeft,
-    );
+    const namedLeft = selectNamedJoins.call(this, this._leftOuterJoinsValues, stashedLeft);
 
     if (this._joinValues.length === 0 && this._joinClauses.length === 0) {
       // Only left outer joins — short-circuit (query_methods.rb:1838-1842).

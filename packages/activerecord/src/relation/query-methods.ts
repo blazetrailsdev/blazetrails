@@ -1961,15 +1961,14 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
   };
 
   // Mirror Rails build_join_buckets (query_methods.rb:1844–1876):
-  // Detect stashed joins from eagerLoad/includes associations. When present,
-  // non-LeadingJoin explicit nodes go to join_node (after alias-tracker joins).
-  // When absent, all explicit nodes go to leading_join (before named joins),
-  // matching Rails' else branch: `!LeadingJoin && (stashed_eager_load ||
-  // stashed_left_joins)` is false, so all nodes route to leading_join.
+  // Detect stashed joins from _eagerLoadAssociations only — includes may resolve
+  // via preload (no joins) and is not a reliable stashed signal. When stashed
+  // joins are present, non-LeadingJoin explicit nodes go to join_node (after
+  // alias-tracker joins). When absent, all explicit nodes go to leading_join
+  // (before named joins), matching Rails' else branch: `!LeadingJoin &&
+  // (stashed_eager_load || stashed_left_joins)` is false → leading_join.
   // Guard the call: buildJoinDependencies always returns at least [primaryJD]
-  // even when there are no associations, so we check first to avoid false positives.
-  // Only eagerLoad associations trigger stashed_eager_load in Rails —
-  // includes may resolve via preload (no joins) and should not be counted.
+  // even when associations are empty, so we check first to avoid false positives.
   const hasAssocStashed = this._eagerLoadAssociations.length > 0;
   const stashedJoins = hasAssocStashed ? buildJoinDependencies.call(this) : [];
   const hasStashed = stashedJoins.length > 0;

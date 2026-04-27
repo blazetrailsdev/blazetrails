@@ -13,6 +13,7 @@ import { Column } from "./column.js";
 import { SqlTypeMetadata } from "./sql-type-metadata.js";
 import { ExplainPrettyPrinter } from "./mysql/explain-pretty-printer.js";
 import { typeCastedBinds } from "./abstract/database-statements.js";
+import { TEMPORAL_POOL_OPTIONS } from "./mysql/temporal-type-cast.js";
 
 /**
  * Mysql2-flavored StatementPool. Evicted entries send COM_STMT_CLOSE
@@ -1010,6 +1011,14 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // Note: the threshold is mysql2's internal digit count (≥15), not
     // Number.MAX_SAFE_INTEGER (2^53-1 ≈ 9×10^15, 16 digits). Callers may
     // override via explicit false in config.
-    return mysql.createPool({ supportBigNumbers: true, ...config });
+    const pool = mysql.createPool({ supportBigNumbers: true, ...TEMPORAL_POOL_OPTIONS, ...config });
+    // Pin session timezone to UTC so TIMESTAMP wire strings are always in UTC,
+    // allowing parseMysqlInstant to treat them as Temporal.Instant correctly.
+    // The 'connection' event fires on the underlying (non-promise) pool for
+    // each new physical connection before it enters the pool.
+    pool.pool.on("connection", (conn: { query: (sql: string) => void }) => {
+      conn.query("SET time_zone = '+00:00'");
+    });
+    return pool;
   }
 }

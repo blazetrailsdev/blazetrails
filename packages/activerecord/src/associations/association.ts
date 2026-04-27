@@ -459,7 +459,7 @@ export class Association {
     return this.findTargetNeeded();
   }
 
-  private raiseOnTypeMismatchBang(record: Base): void {
+  protected raiseOnTypeMismatchBang(record: Base): void {
     const klass = this.klass;
     if (klass && !(record instanceof (klass as any))) {
       const expectedType =

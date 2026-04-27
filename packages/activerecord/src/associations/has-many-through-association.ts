@@ -16,13 +16,7 @@ function buildThroughRecord(assoc: HasManyThroughAssociation, record: Base): Bas
   if (!throughName) return null;
   const throughAssoc = (assoc.owner as any).association?.(throughName);
   if (!throughAssoc) return null;
-  // Build a new through-model record with the source association FK wired to record.
-  const sourceName = assoc.reflection.options.source ?? assoc.reflection.name;
-  const attrs: Record<string, unknown> = {};
-  // Set the source FK to point at the target record's PK
-  const sourceRefl = (throughAssoc.klass as any)?._reflectOnAssociation?.(String(sourceName));
-  const sourceFk = sourceRefl?.options?.foreignKey ?? `${String(sourceName)}_id`;
-  attrs[String(sourceFk)] = (record as any).id;
+  const attrs = buildSourceJoinAttributes(assoc, record);
   return typeof throughAssoc.build === "function" ? throughAssoc.build(attrs) : null;
 }
 
@@ -128,22 +122,28 @@ function distribution(_assoc: HasManyThroughAssociation, array: Base[]): Map<Bas
 }
 
 function throughRecordsFor(assoc: HasManyThroughAssociation, record: Base): Base[] {
-  // Mirrors Rails: find through-model records whose source FK matches the target record.
-  // construct_join_attributes gives us the FK map; filter through_association.target.
   const throughName = assoc.reflection.options.through as string | undefined;
   if (!throughName) return [];
   const throughAssoc = (assoc.owner as any).association?.(throughName);
   if (!throughAssoc) return [];
-  const sourceName = assoc.reflection.options.source ?? assoc.reflection.name;
-  const sourceRefl = (throughAssoc.klass as any)?._reflectOnAssociation?.(String(sourceName));
-  const sourceFk = sourceRefl?.options?.foreignKey ?? `${String(sourceName)}_id`;
-  const targetId = (record as any).id;
+
+  // Use constructJoinAttributes to get the FK → PK map for this record,
+  // then filter the through-association's in-memory target by those constraints.
+  const joinAttrs = buildSourceJoinAttributes(assoc, record);
   const candidates: Base[] = Array.isArray(throughAssoc.target)
     ? throughAssoc.target
     : throughAssoc.target
       ? [throughAssoc.target]
       : [];
-  return candidates.filter((c) => (c as any).readAttribute?.(String(sourceFk)) === targetId);
+  return candidates.filter((c) =>
+    Object.entries(joinAttrs).every(([fk, val]) => {
+      const actual =
+        typeof (c as any).readAttribute === "function"
+          ? (c as any).readAttribute(fk)
+          : (c as any)[fk];
+      return actual === val;
+    }),
+  );
 }
 
 function deleteThroughRecords(assoc: HasManyThroughAssociation, records: Base[]): Promise<void> {
@@ -164,4 +164,38 @@ function deleteThroughRecords(assoc: HasManyThroughAssociation, records: Base[])
     }
   }
   return Promise.resolve();
+}
+
+function buildSourceJoinAttributes(
+  assoc: { owner: Base; reflection: any },
+  record: Base,
+): Record<string, unknown> {
+  const refl = assoc.reflection as any;
+  const sourceRefl = refl.sourceReflection?.() as any;
+  if (!sourceRefl) return {};
+  const assocPk = sourceRefl.associationPrimaryKey?.(refl.klass) ?? sourceRefl.primaryKey ?? "id";
+  const pkArr: string[] = Array.isArray(assocPk) ? assocPk : [assocPk];
+  const compositeConstraints: string[] = refl.klass?.compositeQueryConstraintsList ?? [];
+
+  let joinAttributes: Record<string, unknown>;
+  if (
+    pkArr.length === compositeConstraints.length &&
+    pkArr.every((k: string, i: number) => k === compositeConstraints[i]) &&
+    !refl.options?.sourceType
+  ) {
+    joinAttributes = { [sourceRefl.name]: record };
+  } else {
+    const fk: string = sourceRefl.foreignKey ?? `${sourceRefl.name}_id`;
+    const pkValues =
+      pkArr.length === 1
+        ? ((record as any).readAttribute?.(pkArr[0]) ?? (record as any).id)
+        : pkArr.map((k: string) => (record as any).readAttribute?.(k));
+    joinAttributes = { [fk]: pkValues };
+  }
+
+  if (refl.options?.sourceType) {
+    const foreignType: string = sourceRefl.foreignType ?? `${sourceRefl.name}_type`;
+    joinAttributes[foreignType] = refl.options.sourceType;
+  }
+  return joinAttributes;
 }

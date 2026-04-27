@@ -2191,7 +2191,7 @@ function findNthWithLimit(
   index: number,
   limit: number,
 ): Promise<any[]> {
-  if ((proxy as any)._isFindFromTarget?.()) {
+  if (isFindFromTarget(proxy)) {
     // await target hydration before slicing — loadTarget() is async
     return Promise.resolve((proxy as any).loadTarget?.()).then(() => {
       const records = (proxy as any)._association?.target;

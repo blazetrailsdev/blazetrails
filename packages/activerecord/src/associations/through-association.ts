@@ -101,3 +101,30 @@ function ensureNotNested(assoc: { owner: Base; reflection: any }): void {
     }
   }
 }
+
+function staleState(assoc: { owner: Base; reflection: any }): unknown[] | null {
+  const tr = throughReflection(assoc) as any;
+  if (!tr?.isBelongsTo?.()) return null;
+  const fks: string[] = Array.isArray(tr.foreignKey) ? tr.foreignKey : [tr.foreignKey];
+  const vals = fks
+    .map((fk: string) =>
+      typeof (assoc.owner as any).readAttribute === "function"
+        ? (assoc.owner as any).readAttribute(fk)
+        : (assoc.owner as any)[fk],
+    )
+    .filter((v: unknown) => v != null);
+  return vals.length > 0 ? vals : null;
+}
+
+function foreignKeyPresent(assoc: { owner: Base; reflection: any }): boolean {
+  const tr = throughReflection(assoc) as any;
+  if (!tr?.isBelongsTo?.()) return false;
+  const fks: string[] = Array.isArray(tr.foreignKey) ? tr.foreignKey : [tr.foreignKey];
+  return fks.every((fk: string) => {
+    const val =
+      typeof (assoc.owner as any).readAttribute === "function"
+        ? (assoc.owner as any).readAttribute(fk)
+        : (assoc.owner as any)[fk];
+    return val != null;
+  });
+}

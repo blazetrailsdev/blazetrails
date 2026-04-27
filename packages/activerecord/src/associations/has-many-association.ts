@@ -77,15 +77,14 @@ export class HasManyAssociation extends CollectionAssociation {
    */
   async insertRecord(record: Base, validate = true, raise = false): Promise<boolean> {
     this.setOwnerAttributes(record);
-
+    let saved = false;
     if (typeof (record as any).save === "function") {
-      const saved = await (record as any).save({ validate });
-      if (!saved && raise) {
+      saved = !!(await (record as any).save({ validate }));
+      if (!saved && raise)
         throw new Error(`Failed to save the new associated ${this.reflection.name}.`);
-      }
-      return !!saved;
     }
-    return false;
+    // Rails: update_counter_if_success(super, 1) — sync counter on successful insert
+    return updateCounterIfSuccess(this, saved, 1);
   }
 
   protected override async doAsyncFindTarget(): Promise<Base[]> {

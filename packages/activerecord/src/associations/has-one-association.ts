@@ -88,15 +88,30 @@ export class HasOneAssociation extends SingularAssociation {
     super.replace(null);
   }
 
-  protected override replace(record: Base | null): void {
-    // Nullify FK on previous target when swapping records
-    if (this.target && this.target !== record) {
-      this.nullifyOwnerAttributes(this.target);
+  protected override replace(record: Base | null, save = true): void {
+    if (record) (this as any).raiseOnTypeMismatchBang(record);
+    const assigningAnother = this.target !== record;
+    if (assigningAnother || (record as any)?.hasChangesToSave?.()) {
+      const shouldSave = save && (this.owner as any).isPersisted?.();
+      void transactionIf(this, !!shouldSave, async () => {
+        if (this.target && !(this.target as any).isDestroyed?.() && assigningAnother) {
+          await removeTargetBang(this, (this.reflection.options.dependent as string) ?? "");
+        }
+        if (record) {
+          this.setOwnerAttributes(record);
+          this.setInverseInstance(record);
+          if (shouldSave && typeof (record as any).save === "function") {
+            const saved = await (record as any).save();
+            if (!saved) {
+              this.nullifyOwnerAttributes(record);
+              throw new Error(`Failed to save the new associated ${this.reflection.name}.`);
+            }
+          }
+        }
+      });
     }
-    if (record) {
-      this.setOwnerAttributes(record);
-    }
-    super.replace(record);
+    this.target = record;
+    this.loadedBang();
   }
 
   protected override async doAsyncFindTarget(): Promise<Base | null> {

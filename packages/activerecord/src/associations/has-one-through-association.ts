@@ -16,11 +16,8 @@ async function createThroughRecord(
   record: Base | null,
   save: boolean,
 ): Promise<Base | null> {
-  // Mirrors Rails HasOneThroughAssociation#create_through_record:
-  // 1. ensure_not_nested
-  // 2. load the current through record
-  // 3. if record is nil → destroy through record
-  // 4. otherwise build/update through record with construct_join_attributes
+  ensureNotNestedThrough(assoc);
+
   const throughName = assoc.reflection.options.through as string | undefined;
   if (!throughName) return null;
   const throughProxy = (assoc.owner as any).association?.(throughName);
@@ -34,13 +31,7 @@ async function createThroughRecord(
   }
 
   if (record) {
-    // Build the attributes joining the through model to the target
-    const sourceRefl = (assoc.reflection as any).sourceReflection?.() as any;
-    const attrs: Record<string, unknown> = {};
-    if (sourceRefl) {
-      const fk: string = sourceRefl.foreignKey ?? `${sourceRefl.name}_id`;
-      attrs[fk] = (record as any).id;
-    }
+    const attrs = buildJoinAttributes(assoc, record);
 
     if (throughRecord) {
       if ((throughRecord as any).isNewRecord?.()) {
@@ -55,4 +46,49 @@ async function createThroughRecord(
     }
   }
   return record;
+}
+
+function ensureNotNestedThrough(assoc: { reflection: any; owner: Base }): void {
+  if (assoc.reflection.options.through) {
+    const throughRefl = (assoc.owner.constructor as any)._reflectOnAssociation?.(
+      assoc.reflection.options.through,
+    );
+    if (throughRefl?.options?.through) {
+      throw new Error(`Nested through associations are read-only.`);
+    }
+  }
+}
+
+function buildJoinAttributes(
+  assoc: { owner: Base; reflection: any },
+  record: Base,
+): Record<string, unknown> {
+  const refl = assoc.reflection as any;
+  const sourceRefl = refl.sourceReflection?.() as any;
+  if (!sourceRefl) return {};
+  const assocPk = sourceRefl.associationPrimaryKey?.(refl.klass) ?? sourceRefl.primaryKey ?? "id";
+  const pkArr: string[] = Array.isArray(assocPk) ? assocPk : [assocPk];
+  const compositeConstraints: string[] = refl.klass?.compositeQueryConstraintsList ?? [];
+
+  let joinAttributes: Record<string, unknown>;
+  if (
+    pkArr.length === compositeConstraints.length &&
+    pkArr.every((k: string, i: number) => k === compositeConstraints[i]) &&
+    !refl.options?.sourceType
+  ) {
+    joinAttributes = { [sourceRefl.name]: record };
+  } else {
+    const fk: string = sourceRefl.foreignKey ?? `${sourceRefl.name}_id`;
+    const pkVal =
+      pkArr.length === 1
+        ? ((record as any).readAttribute?.(pkArr[0]) ?? (record as any).id)
+        : pkArr.map((k: string) => (record as any).readAttribute?.(k));
+    joinAttributes = { [fk]: pkVal };
+  }
+
+  if (refl.options?.sourceType) {
+    const foreignType: string = sourceRefl.foreignType ?? `${sourceRefl.name}_type`;
+    joinAttributes[foreignType] = refl.options.sourceType;
+  }
+  return joinAttributes;
 }

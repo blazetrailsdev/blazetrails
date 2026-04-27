@@ -112,7 +112,7 @@ interface QueryMethodsHost {
   _havingClause: WhereClause;
   _isNone: boolean;
   _lockValue: string | null;
-  _joinClauses: Array<{ type: "inner" | "left"; table: string; on: string }>;
+  _joinClauses: Array<{ type: "inner" | "left"; table: string; on: string; quoted?: boolean }>;
   _rawJoins: string[];
   _includesAssociations: AssociationSpec[];
   _preloadAssociations: AssociationSpec[];
@@ -1980,7 +1980,7 @@ function buildJoins(this: QueryMethodsHost, arel: any): void {
   // Mirror _applyJoinsToManager: use manager.join()/outerJoin() so the
   // SelectManager handles string→SqlLiteral conversion and On wrapping.
   for (const j of this._joinClauses) {
-    const tableNode = (j as any).quoted ? new ArelTable(j.table) : j.table;
+    const tableNode = j.quoted ? new ArelTable(j.table) : j.table;
     const onNode = arelSql(j.on) as any;
     if (j.type === "inner") {
       arel.join(tableNode, onNode);

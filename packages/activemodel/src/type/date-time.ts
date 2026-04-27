@@ -37,16 +37,20 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
     const normalized = str
       .replace(" ", "T")
       .replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?)([-+]\d{2})$/, "$1$2:00");
-    const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(normalized);
+    // Date-only string (YYYY-MM-DD) → midnight PlainDateTime, matching Rails behavior.
+    const datetimeString = /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+      ? `${normalized}T00:00:00`
+      : normalized;
+    const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(datetimeString);
     if (hasOffset) {
       try {
-        return Temporal.Instant.from(normalized);
+        return Temporal.Instant.from(datetimeString);
       } catch {
         return null;
       }
     }
     try {
-      return Temporal.PlainDateTime.from(normalized, { overflow: "reject" });
+      return Temporal.PlainDateTime.from(datetimeString, { overflow: "reject" });
     } catch {
       return null;
     }

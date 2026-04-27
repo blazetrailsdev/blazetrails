@@ -4034,7 +4034,8 @@ export class Relation<T extends Base> {
             if (val instanceof Temporal.PlainDateTime && max instanceof Temporal.PlainDateTime) {
               return Temporal.PlainDateTime.compare(val, max) > 0 ? val : max;
             }
-            return val > max ? val : max;
+            // Mixed or unknown types — keep max rather than risking Temporal throwing on >.
+            return max;
           }, null);
       }
     } else {
@@ -4116,6 +4117,7 @@ export class Relation<T extends Base> {
         try {
           // Normalize: space → T, short offset ±HH → ±HH:MM (Postgres wire quirk)
           const normalized = timestamp
+            .trim()
             .replace(" ", "T")
             .replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?)([-+]\d{2})$/, "$1$2:00");
           const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(normalized);

@@ -817,11 +817,11 @@ export async function updateColumns<T extends UpdateColumnsRecord>(
     }
     const cast = def ? def.type.cast(value) : value;
     this._attributes.set(key, cast);
-    // Pre-serialize Temporal values so the Arel quote layer receives a string
-    // (not a raw Temporal object). Only Temporal types need this — other types
-    // (strings, numbers, null) are already in their DB-ready form, and custom
-    // types like EncryptedAttributeType must NOT be serialized here (their
-    // serialize() would re-encrypt an already-encrypted value).
+    // Pre-serialize only Temporal objects and date-infinity sentinels so the
+    // Arel quote layer receives a string. All other cast values (strings,
+    // numbers, null, booleans) are already DB-ready and must not be passed
+    // through serialize() — doing so would corrupt types whose serialize()
+    // has side effects (e.g. re-encrypting an already-encrypted value).
     const dbValue =
       cast instanceof Temporal.Instant ||
       cast instanceof Temporal.PlainDateTime ||

@@ -1981,8 +1981,15 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
     const stashedLeft: JoinDependency[] = [];
     const namedLeft = selectNamedJoins.call(this, this._leftOuterJoinsValues, stashedLeft);
 
-    if (this._joinValues.length === 0 && this._joinClauses.length === 0) {
-      // Only left outer joins — short-circuit (query_methods.rb:1838-1842).
+    if (
+      this._joinValues.length === 0 &&
+      this._joinClauses.length === 0 &&
+      this._eagerLoadAssociations.length === 0
+    ) {
+      // Only left outer joins, no explicit joins or eager stash — short-circuit
+      // (query_methods.rb:1838-1842: `if joins_values.empty?`). In Rails, eager
+      // stash lives inside joins_values; here it's a separate field so we must
+      // also exclude it from the short-circuit to avoid dropping eager-load JOINs.
       buckets.named_join.push(...namedLeft);
       buckets.stashed_join.push(...stashedLeft);
       return buckets;

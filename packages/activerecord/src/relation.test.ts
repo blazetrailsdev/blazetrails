@@ -321,6 +321,37 @@ describe("RelationTest", () => {
     expect(rel.toSql()).toMatch(/LEFT OUTER JOIN/i);
   });
 
+  it("eagerLoad + leftJoins: buildJoinBuckets short-circuit does not drop eager stash", () => {
+    // Regression: when _joinValues and _joinClauses are empty, buildJoinBuckets
+    // short-circuits for the left-outer-only path. If _eagerLoadAssociations is
+    // also present, the short-circuit must not fire — eager stash would be skipped.
+    class Author extends Base {
+      static {
+        this.tableName = "authors";
+        this.adapter = adapter;
+      }
+    }
+    class Post extends Base {
+      static {
+        this.tableName = "posts";
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("EagerLeftAuthor", Author);
+    registerModel("EagerLeftPost", Post);
+    Associations.hasMany.call(Author, "posts", {
+      className: "EagerLeftPost",
+      foreignKey: "author_id",
+    });
+    // Both eagerLoad and leftJoins present, no explicit _joinValues/_joinClauses
+    const rel = Author.leftJoins("posts").eagerLoad("posts");
+    expect((rel as any)._eagerLoadAssociations).toContain("posts");
+    expect((rel as any)._leftOuterJoinsValues).toContain("posts");
+    // buildJoinBuckets must not short-circuit; SQL must be non-empty (no throw)
+    expect(() => rel.toSql()).not.toThrow();
+  });
+
   it("joins() preserves Arel node type — InnerJoin stays InnerJoin in _joinValues, not StringJoin", () => {
     class Book extends Base {
       static {

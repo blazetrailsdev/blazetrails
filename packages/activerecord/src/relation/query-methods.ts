@@ -2035,7 +2035,7 @@ function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
   for (const j of this._joinClauses) {
     const JoinClass = j.type === "left" ? Nodes.OuterJoin : Nodes.InnerJoin;
     const onNode = new Nodes.On(arelSql(j.on) as any);
-    const tableNode = (j as any).quoted ? new ArelTable(j.table) : (j.table as any);
+    const tableNode = (j as any).quoted ? new ArelTable(j.table) : (arelSql(j.table) as any);
     (joinSources as any[]).push(new JoinClass(tableNode, onNode));
   }
 

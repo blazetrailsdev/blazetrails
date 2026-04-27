@@ -21,6 +21,8 @@ export class ComparisonValidator extends EachValidator {
       return Temporal.ZonedDateTime.compare(a, b);
     if (typeof a === "number" && typeof b === "number") return a - b;
     if (typeof a === "string" && typeof b === "string") return a < b ? -1 : a > b ? 1 : 0;
+    // Dual-typed window: Date values still in flight compare by epoch ms.
+    if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
     // Incomparable types (e.g. Temporal vs non-Temporal, mixed types).
     // Rails raises ArgumentError here; we throw so callers don't silently
     // skip validation due to NaN comparison semantics (NaN <= 0 is false).

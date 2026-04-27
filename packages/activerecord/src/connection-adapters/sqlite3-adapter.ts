@@ -54,13 +54,14 @@ import { SqlTypeMetadata } from "./sql-type-metadata.js";
 /**
  * SQLite-specific DateTime type.
  *
- * better-sqlite3 returns datetime columns as TEXT (SQLite stores them as
- * offset-less UTC strings).  The base DateTimeType#cast returns
- * Temporal.PlainDateTime for such strings.  This subclass converts any
- * PlainDateTime result to Temporal.Instant (UTC) so callers get a
- * timezone-aware value that matches the UTC-convention SQLite uses.
+ * better-sqlite3 returns datetime columns as TEXT. The base
+ * DateTimeType#cast returns Temporal.PlainDateTime for offset-less datetime
+ * strings. This subclass converts any PlainDateTime result to
+ * Temporal.Instant so callers get a timezone-aware value.
  *
- * Mirrors the Rails convention that SQLite datetime values are always UTC.
+ * Stored datetime strings are interpreted according to
+ * ActiveRecord.default_timezone (defaulting to UTC), matching the timezone
+ * selection used when formatting instants for SQLite.
  */
 export class SQLiteDateTimeType extends ARDateTimeType {
   override cast(value: unknown): DateTimeCastResult | null {
@@ -552,11 +553,12 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     });
     map.registerType("decimal", new DecimalType());
     map.registerType("boolean", new BooleanType());
-    // Date/time types — no driver-level work needed for Temporal (PR 4).
-    // better-sqlite3 returns datetime columns as TEXT strings (SQLite has
-    // no native datetime type).  SQLiteDateTimeType converts the offset-less
-    // UTC strings back to Temporal.Instant (UTC convention).  Writes go
-    // through sqlite3/quoting.ts which formats all Temporal types as :db strings.
+    // Date/time types: no driver-level type-parser work needed for Temporal.
+    // better-sqlite3 returns datetime columns as TEXT strings (SQLite has no
+    // native datetime type).  SQLiteDateTimeType converts offset-less strings
+    // to Temporal.Instant using the same timezone as formatInstantForSql
+    // (default_timezone: UTC → UTC, local → host tz).  Writes go through
+    // sqlite3/quoting.ts which formats all Temporal types as :db strings.
     map.registerType("date", new DateType());
     map.registerType("datetime", new SQLiteDateTimeType());
     map.registerType("timestamp", new SQLiteDateTimeType());

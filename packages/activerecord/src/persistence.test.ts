@@ -9,6 +9,10 @@ function epochMs(v: unknown): number {
     return v.toZonedDateTime("UTC").toInstant().epochMilliseconds;
   throw new TypeError(`epochMs: unsupported type ${(v as object)?.constructor?.name}`);
 }
+// SQLite datetime → Temporal.Instant; Postgres timestamp (no tz) → Temporal.PlainDateTime
+function isTemporalDatetime(v: unknown): boolean {
+  return v instanceof Temporal.Instant || v instanceof Temporal.PlainDateTime;
+}
 /**
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
@@ -1137,7 +1141,7 @@ describe("PersistenceTest", () => {
     }
     const now = Temporal.Now.instant();
     const p = await Post.create({ title: "auto", created_at: now });
-    expect(p.created_at).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(p.created_at).toSatisfy(isTemporalDatetime);
     // timestamp (no tz) round-trip: compare via UTC epoch ms
     expect(epochMs(p.created_at)).toBe(now.epochMilliseconds);
     expect(p.isPersisted()).toBe(true);
@@ -1393,7 +1397,7 @@ describe("PersistenceTest", () => {
     const t = await Topic.create({ title: "old" });
     t.title = "new";
     await t.save();
-    expect(t.updated_at).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(t.updated_at).toSatisfy(isTemporalDatetime);
   });
 
   it("save without N+1", async () => {
@@ -1478,8 +1482,8 @@ describe("PersistenceTest", () => {
       }
     }
     const t = await Topic.create({ title: "test" });
-    expect(t.created_at).toBeInstanceOf(Temporal.PlainDateTime);
-    expect(t.updated_at).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(t.created_at).toSatisfy(isTemporalDatetime);
+    expect(t.updated_at).toSatisfy(isTemporalDatetime);
   });
 
   it("update_attribute_vs_update_column", async () => {
@@ -2129,7 +2133,7 @@ describe("PersistenceTest", () => {
     }
     const t = await Topic.create({ title: "test" });
     await t.updateAttributeBang("title", "new");
-    expect(t.updated_at).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(t.updated_at).toSatisfy(isTemporalDatetime);
   });
 
   it("update column for readonly attribute", async () => {
@@ -3509,8 +3513,8 @@ describe("PersistenceTest", () => {
 
     await topic.touch("replied_at");
 
-    expect(topic.replied_at).toBeInstanceOf(Temporal.PlainDateTime);
-    expect(topic.updated_at).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(topic.replied_at).toSatisfy(isTemporalDatetime);
+    expect(topic.updated_at).toSatisfy(isTemporalDatetime);
   });
 
   it("touch does not run callbacks", async () => {
@@ -3634,7 +3638,7 @@ describe("PersistenceTest", () => {
     await user.save();
     // updated_at should be set (may or may not differ due to timing,
     // but at minimum it should be a Date)
-    expect(user.updated_at).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(user.updated_at).toSatisfy(isTemporalDatetime);
   });
 });
 
@@ -3821,8 +3825,8 @@ describe("PersistenceTest", () => {
     const user = await User.create({ name: "Alice" });
     expect(user.last_login_at).toBeNull();
     await user.touch("last_login_at");
-    expect(user.last_login_at).toBeInstanceOf(Temporal.PlainDateTime);
-    expect(user.updated_at).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(user.last_login_at).toSatisfy(isTemporalDatetime);
+    expect(user.updated_at).toSatisfy(isTemporalDatetime);
   });
 
   // Rails: test_touch_persists_to_database
@@ -3838,7 +3842,7 @@ describe("PersistenceTest", () => {
     const user = await User.create({ name: "Alice" });
     await user.touch();
     const reloaded = await User.find(user.id!);
-    expect(reloaded.updated_at).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(reloaded.updated_at).toSatisfy(isTemporalDatetime);
   });
 });
 

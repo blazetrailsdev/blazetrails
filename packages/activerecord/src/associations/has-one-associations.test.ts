@@ -7,6 +7,9 @@ function epochMs(v: unknown): number {
     return v.toZonedDateTime("UTC").toInstant().epochMilliseconds;
   throw new TypeError(`epochMs: unsupported type ${(v as object)?.constructor?.name}`);
 }
+function isTemporalDatetime(v: unknown): boolean {
+  return v instanceof Temporal.Instant || v instanceof Temporal.PlainDateTime;
+}
 /**
  * Mirrors Rails activerecord/test/cases/associations/has_one_associations_test.rb
  */
@@ -1081,7 +1084,7 @@ describe("HasOneAssociationsTest", () => {
     await TouchAccount.create({ touch_firm_id: firm.id, credit_limit: 100 });
     const reloaded = await TouchFirm.find(firm.id);
     const updatedAt = reloaded.updated_at;
-    expect(updatedAt).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(updatedAt).toSatisfy(isTemporalDatetime);
     expect(epochMs(updatedAt)).toBeGreaterThan(originalTime.epochMilliseconds);
   });
 

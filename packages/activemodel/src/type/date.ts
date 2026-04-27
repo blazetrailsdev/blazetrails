@@ -42,9 +42,9 @@ export class DateType extends ValueType<DateCastResult> {
 
   serialize(value: unknown): string | null {
     const cast = this.cast(value);
-    if (cast === null) return null;
-    if (cast === DateInfinity) return "infinity";
-    if (cast === DateNegativeInfinity) return "-infinity";
+    // Sentinels are Postgres-specific; base type returns null. The Postgres
+    // OID::Date subclass overrides serialize() to emit 'infinity'/'-infinity'.
+    if (cast === null || cast === DateInfinity || cast === DateNegativeInfinity) return null;
     return cast.toString();
   }
 

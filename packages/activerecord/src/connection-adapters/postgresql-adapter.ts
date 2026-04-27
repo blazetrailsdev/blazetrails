@@ -302,9 +302,22 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // Freeze a shallow copy so post-construction mutation can't bypass the
     // key/value validation above and introduce un-sanitized SQL fragments.
     this._sessionVariables = Object.freeze({ ...(variables ?? {}) });
+    const userGetTypeParser = (
+      pgConfig.types as { getTypeParser?: (oid: number, format?: string) => unknown } | undefined
+    )?.getTypeParser;
     this._driverPool = new pg.Pool({
       ...pgConfig,
-      types: { getTypeParser: getTemporalTypeParser },
+      types: {
+        getTypeParser(oid: number, format?: string): unknown {
+          // Our Temporal parsers handle text-format for the 5 datetime OIDs.
+          // For all other OIDs, respect any user-supplied parser first, then
+          // delegate to getTemporalTypeParser which falls back to pg built-ins.
+          if ([1082, 1083, 1114, 1184, 1266].includes(oid) && (format === "text" || !format)) {
+            return getTemporalTypeParser(oid, format);
+          }
+          return userGetTypeParser?.(oid, format) ?? getTemporalTypeParser(oid, format);
+        },
+      },
     });
   }
 

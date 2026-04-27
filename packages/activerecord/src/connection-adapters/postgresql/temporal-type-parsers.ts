@@ -27,14 +27,15 @@ const OID_TIMESTAMP = 1114;
 const OID_TIMESTAMPTZ = 1184;
 const OID_TIMETZ = 1266;
 
-type PgParser = (value: string) => unknown;
+// Text-format parsers receive strings; binary-format parsers receive Buffer.
+type PgParser = (value: string | Buffer) => unknown;
 
 const TEMPORAL_PARSERS: ReadonlyMap<number, PgParser> = new Map<number, PgParser>([
-  [OID_TIMESTAMPTZ, (v) => parsePostgresInstant(v)],
-  [OID_TIMESTAMP, (v) => parsePostgresPlainDateTime(v)],
-  [OID_DATE, (v) => parsePostgresDate(v)],
-  [OID_TIME, (v) => parsePostgresTime(v)],
-  [OID_TIMETZ, (v) => parsePostgresTimeTz(v)],
+  [OID_TIMESTAMPTZ, (v) => parsePostgresInstant(v as string)],
+  [OID_TIMESTAMP, (v) => parsePostgresPlainDateTime(v as string)],
+  [OID_DATE, (v) => parsePostgresDate(v as string)],
+  [OID_TIME, (v) => parsePostgresTime(v as string)],
+  [OID_TIMETZ, (v) => parsePostgresTimeTz(v as string)],
 ]);
 
 /**

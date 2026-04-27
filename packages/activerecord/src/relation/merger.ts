@@ -74,8 +74,9 @@ export class Merger {
       this.other._joinClauses ?? [];
     if (clauses.length > 0) rel._joinClauses.push(...clauses);
     if (this.other._joinValues?.length > 0) rel._joinValues.push(...this.other._joinValues);
-    if (this.other._leftOuterJoinsValues?.length > 0)
-      rel._leftOuterJoinsValues.push(...this.other._leftOuterJoinsValues);
+    for (const v of this.other._leftOuterJoinsValues ?? []) {
+      if (!rel._leftOuterJoinsValues.includes(v)) rel._leftOuterJoinsValues.push(v);
+    }
     void Nodes.InnerJoin;
   }
 

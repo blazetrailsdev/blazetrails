@@ -1935,12 +1935,17 @@ export class Relation<T extends Base> {
     // extract via tablesInString; Arel nodes expose their table via left.name when
     // available (InnerJoin/OuterJoin/LeadingJoin all have left: Table).
     // _leftOuterJoinsValues holds association names (not table names). Rails
-    // build_joins([]) processes left_outer_joins_values and includes their tables
-    // in references_eager_loaded_tables?. We approximate by using the association
-    // name as the table name (matches standard Rails pluralized naming).
+    // build_joins([]) processes left_outer_joins_values and extracts table names
+    // from the resulting join nodes. We resolve via _resolveAssociationJoin to
+    // get the actual table name (handles camelCase → snake_case mappings).
     const leftOuterTables = this._leftOuterJoinsValues
       .filter((v): v is string => typeof v === "string")
-      .map((v) => v.toLowerCase());
+      .flatMap((v) => {
+        const resolved = this._resolveAssociationJoin(v);
+        if (!resolved) return [v.toLowerCase()]; // fallback
+        const entries = Array.isArray(resolved) ? resolved : [resolved];
+        return entries.map((e) => e.table.toLowerCase());
+      });
     const joinedTables = new Set<string>([
       ...this._joinClauses.map((j) => j.table.toLowerCase()),
       ...leftOuterTables,
@@ -2370,10 +2375,15 @@ export class Relation<T extends Base> {
     }
     // Process left_outer_joins_values: resolve via JoinDependency and emit as
     // StringJoin nodes (mirrors Rails build_join_buckets stashed_left_joins path).
-    if (this._leftOuterJoinsValues.length > 0) {
+    // Exclude associations already covered by _eagerLoadAssociations to avoid
+    // duplicate JOINs when e.g. eagerLoad("posts").leftJoins("posts") is used.
+    const pendingLeftOuter = this._leftOuterJoinsValues.filter(
+      (v) => !this._eagerLoadAssociations.includes(v),
+    );
+    if (pendingLeftOuter.length > 0) {
       const jd = QueryMethodBangs.constructJoinDependency.call(
         this as any,
-        this._leftOuterJoinsValues,
+        pendingLeftOuter,
         Nodes.OuterJoin,
       );
       for (const node of jd.joinConstraints([])) manager.appendJoinNode(node);

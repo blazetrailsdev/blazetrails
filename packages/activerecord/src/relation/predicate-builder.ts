@@ -212,6 +212,12 @@ export class PredicateBuilder {
     if (value === null || value === undefined) {
       return attribute.isNull();
     }
+    // Normalize Set → Array before dispatch so every code path (custom handlers,
+    // explicit Array branch, handlerFor fallback) receives an array. Rails registers
+    // Set with ArrayHandler by default (predicate_builder.rb:20).
+    if (value instanceof Set) {
+      value = Array.from(value);
+    }
     const customHandler = this.handlers.length > 0 ? this.handlerFor(value) : null;
     if (customHandler && customHandler !== this.basicObjectHandler) {
       return customHandler.call(attribute, value);
@@ -221,9 +227,6 @@ export class PredicateBuilder {
     }
     if (Array.isArray(value)) {
       return this.arrayHandler.call(attribute, value);
-    }
-    if (value instanceof Set) {
-      return this.arrayHandler.call(attribute, Array.from(value));
     }
     if (this.isRelation(value)) {
       return this.relationHandler.call(attribute, value);

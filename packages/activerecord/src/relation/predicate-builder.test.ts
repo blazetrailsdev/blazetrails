@@ -37,6 +37,21 @@ describe("PredicateBuilderTest", () => {
       expect(compile(node)).toMatch(/IN \(1, 2, 3\)/);
     });
 
+    it("builds IN for Set values (mirrors Rails registering Set => ArrayHandler)", () => {
+      const builder = new PredicateBuilder(table);
+      const [node] = builder.buildFromHash({ id: new Set([1, 2, 3]) });
+      expect(compile(node)).toMatch(/IN \(1, 2, 3\)/);
+    });
+
+    it("builds IN for Set values when a custom handler is also registered", () => {
+      const builder = new PredicateBuilder(table);
+      builder.registerHandler(Date, {
+        call: (attr, _v) => attr.eq(0),
+      });
+      const [node] = builder.buildFromHash({ id: new Set([4, 5]) });
+      expect(compile(node)).toMatch(/IN \(4, 5\)/);
+    });
+
     it("builds BETWEEN for ranges", () => {
       const builder = new PredicateBuilder(table);
       const [node] = builder.buildFromHash({ age: new Range(18, 65) });

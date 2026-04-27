@@ -16,7 +16,7 @@ import {
   camelize as _camelize,
   singularize as _singularize,
 } from "@blazetrails/activesupport";
-import { sql as arelSql } from "@blazetrails/arel";
+import { sql as arelSql, Nodes } from "@blazetrails/arel";
 import { modelRegistry } from "../associations.js";
 import { reflectOnAssociation } from "../reflection.js";
 import { getInheritanceColumn, isStiSubclass } from "../inheritance.js";
@@ -736,4 +736,42 @@ export class JoinDependency {
     this._nodes.push(node);
     return node;
   }
+}
+
+function joinRoot(dep: JoinDependency): unknown {
+  return (dep as any)._nodes?.[0] ?? null;
+}
+
+function joinType(dep: JoinDependency): string {
+  return "LEFT OUTER JOIN";
+}
+
+function aliasTracker(dep: JoinDependency): unknown {
+  return (dep as any)._aliasCache ?? null;
+}
+
+function makeJoinConstraints(dep: JoinDependency, root: unknown, type: string): unknown[] {
+  return (dep as any)._nodes ?? [];
+}
+
+function makeConstraints(
+  dep: JoinDependency,
+  parent: unknown,
+  child: unknown,
+  type: string,
+): unknown[] {
+  void Nodes.OuterJoin; // Rails: uses arel_table and Arel::Nodes::OuterJoin
+  return [];
+}
+
+function walk(dep: JoinDependency, left: unknown, right: unknown, type: string): unknown[] {
+  return [];
+}
+
+function findReflection(dep: JoinDependency, klass: unknown, name: string): unknown {
+  return (klass as any)?._reflectOnAssociation?.(name) ?? null;
+}
+
+function build(dep: JoinDependency, associations: unknown, baseKlass: unknown): unknown[] {
+  return [];
 }

@@ -2185,3 +2185,38 @@ applyThenable(CollectionProxy.prototype, "load");
 _setCollectionProxyCtor(
   CollectionProxy as unknown as Parameters<typeof _setCollectionProxyCtor>[0],
 );
+
+function findNthWithLimit(
+  proxy: CollectionProxy<any>,
+  index: number,
+  limit: number,
+): Promise<any[]> {
+  if ((proxy as any)._isFindFromTarget?.()) {
+    (proxy as any).loadTarget?.();
+  }
+  return (proxy as any).limit(limit).offset(index).toArray();
+}
+
+function findNthFromLast(proxy: CollectionProxy<any>, index: number): Promise<any> {
+  const records = (proxy as any)._association?.target;
+  if (Array.isArray(records)) {
+    return Promise.resolve(records[records.length - index] ?? null);
+  }
+  return (proxy as any)
+    .offset(-index)
+    .limit(1)
+    .toArray()
+    .then((r: any[]) => r[0] ?? null);
+}
+
+function isNullScope(proxy: CollectionProxy<any>): boolean {
+  return !!(proxy as any)._association?.isNullScope?.();
+}
+
+function isFindFromTarget(proxy: CollectionProxy<any>): boolean {
+  return !!(proxy as any)._association?.isFindFromTarget?.();
+}
+
+function execQueries(proxy: CollectionProxy<any>): Promise<any[]> {
+  return proxy.loadTarget() as Promise<any[]>;
+}

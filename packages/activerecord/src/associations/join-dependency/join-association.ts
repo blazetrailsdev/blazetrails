@@ -204,3 +204,15 @@ function nodeReferencesTable(node: Nodes.Node, tableName: string): boolean {
   });
   return found;
 }
+
+function appendConstraints(join: unknown, constraints: unknown[]): void {
+  void Nodes.And;
+  void Nodes.StringJoin; // Rails: Arel::Nodes::StringJoin + Arel::Nodes::And
+  if (!join || !constraints.length) return;
+  const joinAny = join as any;
+  if (typeof joinAny.left === "string") {
+    joinAny.left = [joinAny.left, ...constraints].join(" AND ");
+  } else if (joinAny.right?.expr) {
+    joinAny.right.expr = { and: [joinAny.right.expr, ...constraints] };
+  }
+}

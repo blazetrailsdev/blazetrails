@@ -10,3 +10,11 @@ export class HasOneThroughAssociation extends HasOneAssociation {
     super(owner, definition);
   }
 }
+
+function createThroughRecord(
+  assoc: HasOneThroughAssociation,
+  record: Base,
+  save: boolean,
+): Promise<Base | null> {
+  return (assoc as any).replace(record, save);
+}

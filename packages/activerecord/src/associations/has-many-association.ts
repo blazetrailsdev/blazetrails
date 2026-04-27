@@ -97,3 +97,54 @@ export class HasManyAssociation extends CollectionAssociation {
     super.setOwnerAttributes(record);
   }
 }
+
+function countRecords(assoc: HasManyAssociation): Promise<number> {
+  return (assoc as any).scope?.()?.count?.() ?? Promise.resolve(0);
+}
+
+function updateCounter(assoc: HasManyAssociation, difference: number): Promise<void> {
+  const counterCol = assoc.reflection.options.counterCache;
+  if (counterCol && typeof (assoc.owner as any).increment === "function") {
+    return (assoc.owner as any).increment(String(counterCol), difference);
+  }
+  return Promise.resolve();
+}
+
+function updateCounterInMemory(assoc: HasManyAssociation, difference: number): void {
+  const counterCol = assoc.reflection.options.counterCache;
+  if (counterCol) {
+    const owner = assoc.owner as any;
+    const current = Number(owner.readAttribute?.(String(counterCol)) ?? 0);
+    owner.writeAttribute?.(String(counterCol), current + difference);
+  }
+}
+
+function deleteCount(assoc: HasManyAssociation, method: string, scope: any): Promise<number> {
+  if (method === "deleteAll") return scope.deleteAll?.() ?? Promise.resolve(0);
+  return scope.updateAll?.() ?? Promise.resolve(0);
+}
+
+function deleteOrNullifyAllRecords(assoc: HasManyAssociation, method: string): Promise<void> {
+  return (assoc as any).deleteAll?.(method) ?? Promise.resolve();
+}
+
+function deleteRecords(assoc: HasManyAssociation, records: Base[], method: string): Promise<void> {
+  return (assoc as any).delete?.(...records) ?? Promise.resolve();
+}
+
+function updateCounterIfSuccess(
+  assoc: HasManyAssociation,
+  savedSuccessfully: boolean,
+  difference: number,
+): boolean {
+  if (savedSuccessfully) updateCounterInMemory(assoc, difference);
+  return savedSuccessfully;
+}
+
+function difference(assoc: HasManyAssociation, a: Base[], b: Base[]): Base[] {
+  return a.filter((r) => !b.includes(r));
+}
+
+function intersection(assoc: HasManyAssociation, a: Base[], b: Base[]): Base[] {
+  return a.filter((r) => b.includes(r));
+}

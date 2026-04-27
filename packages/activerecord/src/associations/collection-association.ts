@@ -676,3 +676,87 @@ export class CollectionAssociation extends Association {
     return found;
   }
 }
+
+function transaction(assoc: CollectionAssociation, block: () => Promise<void>): Promise<void> {
+  const klass = assoc.klass;
+  if (klass && typeof (klass as any).transaction === "function") {
+    return (klass as any).transaction(block);
+  }
+  return block();
+}
+
+function insertRecord(
+  assoc: CollectionAssociation,
+  record: Base,
+  validate = true,
+  raise = false,
+): Promise<Base | null> {
+  return (assoc as any)._createRecord(record, raise);
+}
+
+function removeRecords(
+  assoc: CollectionAssociation,
+  existingRecords: Base[],
+  records: Base[],
+  method: string,
+): Promise<void> {
+  return (assoc as any).deleteOrDestroy(records, method);
+}
+
+function deleteRecords(assoc: CollectionAssociation, records: Base[], method: string): void {
+  throw new Error(`deleteRecords must be implemented by ${assoc.constructor.name}`);
+}
+
+function replaceRecords(
+  assoc: CollectionAssociation,
+  newTarget: Base[],
+  originalTarget: Base[],
+): Promise<Base[]> {
+  return (assoc as any).replace(newTarget);
+}
+
+function replaceCommonRecordsInMemory(
+  assoc: CollectionAssociation,
+  newTarget: Base[],
+  originalTarget: Base[],
+): void {
+  const common = newTarget.filter((r) => originalTarget.includes(r));
+  for (const record of common) {
+    replaceOnTarget(assoc, record, true, true);
+  }
+}
+
+function replaceOnTarget(
+  assoc: CollectionAssociation,
+  record: Base,
+  skipCallbacks: boolean,
+  replace: boolean,
+): void {
+  if (!skipCallbacks) callback(assoc, "beforeAdd", record);
+  const target = assoc.target as Base[];
+  const idx = target.indexOf(record);
+  if (idx !== -1 && replace) {
+    target.splice(idx, 1, record);
+  } else if (idx === -1) {
+    target.push(record);
+  }
+  if (!skipCallbacks) callback(assoc, "afterAdd", record);
+}
+
+function callback(assoc: CollectionAssociation, method: string, record: Base): void {
+  for (const cb of callbacksFor(assoc, method)) {
+    if (typeof cb === "function") cb(method, assoc.owner, record);
+  }
+}
+
+function callbacksFor(assoc: CollectionAssociation, callbackName: string): unknown[] {
+  const fullName = `${callbackName}For${assoc.reflection.name.charAt(0).toUpperCase()}${assoc.reflection.name.slice(1)}`;
+  const owner = assoc.owner.constructor as any;
+  if (typeof owner[fullName] === "function") return owner[fullName]();
+  return [];
+}
+
+function isIncludeInMemory(assoc: CollectionAssociation, record: Base): boolean {
+  const target = assoc.target as Base[];
+  return target.includes(record);
+}

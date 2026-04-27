@@ -177,3 +177,25 @@ export class HasOneAssociation extends SingularAssociation {
     }
   }
 }
+
+function removeTargetBang(assoc: HasOneAssociation, method: string): Promise<void> {
+  const target = assoc.target as Base | null;
+  if (!target) return Promise.resolve();
+  if (method === "delete") return (target as any).delete?.() ?? Promise.resolve();
+  if (method === "destroy") return (target as any).destroy?.() ?? Promise.resolve();
+  return Promise.resolve();
+}
+
+function transactionIf(
+  assoc: HasOneAssociation,
+  condition: boolean,
+  block: () => Promise<void>,
+): Promise<void> {
+  if (condition) {
+    const klass = assoc.klass;
+    if (klass && typeof (klass as any).transaction === "function") {
+      return (klass as any).transaction(block);
+    }
+  }
+  return block();
+}

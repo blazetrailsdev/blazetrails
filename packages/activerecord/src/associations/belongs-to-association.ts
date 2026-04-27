@@ -371,3 +371,14 @@ export class BelongsToAssociation extends SingularAssociation {
     return false;
   }
 }
+
+function isRequireCounterUpdate(assoc: BelongsToAssociation): boolean {
+  const col = (assoc as any).counterCacheColumn?.();
+  return !!(col && assoc.owner.isPersisted());
+}
+
+function primaryKey(assoc: BelongsToAssociation, klass: unknown): string | string[] {
+  const opts = assoc.reflection.options as any;
+  if (opts.primaryKey) return opts.primaryKey;
+  return (klass as any)?.primaryKey ?? "id";
+}

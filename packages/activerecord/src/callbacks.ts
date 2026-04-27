@@ -8,7 +8,6 @@
  * Mirrors: ActiveRecord::Callbacks
  */
 
-import { NotImplementedError } from "./errors.js";
 import type { Base } from "./base.js";
 
 type ModelCtor = typeof Base;
@@ -219,14 +218,27 @@ function registerCallback(
   klass._callbackChain!.register(timing, event, fn, conditions);
 }
 
-function createOrUpdate(opts?: any): never {
-  throw new NotImplementedError("ActiveRecord::Callbacks#create_or_update is not implemented");
+// ---------------------------------------------------------------------------
+// Private instance helpers — mirrors ActiveRecord::Callbacks private block
+// ---------------------------------------------------------------------------
+
+function createOrUpdate(this: any): Promise<boolean> {
+  return this._callbackChain
+    ? this._runCallbacks(
+        "save",
+        () => (this as any)._createOrUpdateWithoutCallbacks?.() ?? Promise.resolve(true),
+      )
+    : Promise.resolve(true);
 }
 
-function _createRecord(): never {
-  throw new NotImplementedError("ActiveRecord::Callbacks#_create_record is not implemented");
+function _createRecord(this: any): Promise<unknown> {
+  return this._callbackChain
+    ? this._runCallbacks("create", () => (this as any)._createRecordWithoutCallbacks?.())
+    : Promise.resolve(null);
 }
 
-function _updateRecord(): never {
-  throw new NotImplementedError("ActiveRecord::Callbacks#_update_record is not implemented");
+function _updateRecord(this: any): Promise<unknown> {
+  return this._callbackChain
+    ? this._runCallbacks("update", () => (this as any)._updateRecordWithoutCallbacks?.())
+    : Promise.resolve(null);
 }

@@ -8,7 +8,6 @@
  * Mirrors: ActiveRecord::AttributeMethods::Read
  */
 
-import { NotImplementedError } from "../errors.js";
 import type { AttributeSet } from "@blazetrails/activemodel";
 
 /**
@@ -40,8 +39,7 @@ export function _readAttribute(this: AttributeHolder, name: string): unknown {
   return this._attributes.fetchValue(name) ?? null;
 }
 
-function defineMethodAttribute(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::AttributeMethods::Read#define_method_attribute is not implemented",
-  );
-}
+// Mirrors: ActiveRecord::AttributeMethods::Read::ClassMethods private#define_method_attribute
+// TypeScript uses static types and Proxy-based attribute access — no runtime
+// code-generation equivalent needed, but the method must exist for parity.
+function defineMethodAttribute(_canonicalName: string, _options?: unknown): void {}

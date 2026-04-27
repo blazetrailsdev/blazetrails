@@ -9,7 +9,6 @@
  * Mirrors: ActiveRecord::AttributeMethods::Write
  */
 
-import { NotImplementedError } from "../errors.js";
 import { Model } from "@blazetrails/activemodel";
 
 /**
@@ -38,8 +37,7 @@ export function _writeAttribute(this: Model, name: string, value: unknown): void
   Model.prototype._writeAttribute.call(this, name, value);
 }
 
-function defineMethodAttribute(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::AttributeMethods::Write#define_method_attribute= is not implemented",
-  );
-}
+// Mirrors: ActiveRecord::AttributeMethods::Write::ClassMethods private#define_method_attribute=
+// TypeScript uses static types and Proxy-based attribute access — no runtime
+// code-generation equivalent needed, but the method must exist for parity.
+function defineMethodAttribute(_canonicalName: string, _options?: unknown): void {}

@@ -38,9 +38,12 @@ export function _writeAttribute(this: Model, name: string, value: unknown): void
 }
 
 // Mirrors: ActiveRecord::AttributeMethods::Write::ClassMethods private#define_method_attribute=
-// Rails generates a writer method via AttrNames.define_attribute_accessor_method.
-// TypeScript attribute access is handled statically; AttrNames.defineAttributeAccessorMethod
-// has no side effects — this call is retained only for Rails-parity.
+// Rails derives writer method metadata via defineAttributeAccessorMethod and
+// uses it while generating dynamic attribute writers. TypeScript attribute
+// access is handled statically, so we compute the same metadata for parity
+// but intentionally do not register or define anything.
 function defineMethodAttribute(canonicalName: string, _options?: unknown): void {
-  void AttrNames.defineAttributeAccessorMethod(canonicalName, true);
+  const { methodName, attrNameRef } = AttrNames.defineAttributeAccessorMethod(canonicalName, true);
+  void methodName;
+  void attrNameRef;
 }

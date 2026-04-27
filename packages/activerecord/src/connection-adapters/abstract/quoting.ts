@@ -295,7 +295,7 @@ export function formatPlainTimeForSql(value: Temporal.PlainTime): string {
 }
 
 function padYear(year: number): string {
-  return year < 0 ? `-${String(-year).padStart(4, "0")}` : String(year).padStart(4, "0");
+  return String(year);
 }
 
 function formatZonedComponents(zdt: Temporal.ZonedDateTime): string {

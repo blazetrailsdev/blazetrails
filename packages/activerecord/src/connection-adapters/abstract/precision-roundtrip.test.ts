@@ -76,10 +76,11 @@ describe("formatPlainDateForSql", () => {
     expect(formatPlainDateForSql(Temporal.PlainDate.from("2026-01-05"))).toBe("2026-01-05");
   });
 
-  it("formats a negative (BCE) year with leading minus", () => {
-    // year -43 = 44 BC in proleptic Gregorian
+  it("formats a negative (BCE) year matching quotedDate(Date) convention (no zero-padding)", () => {
+    // year -43 = 44 BC in proleptic Gregorian; String(-43) → "-43", matching
+    // how quotedDate(Date) formats years (String(getUTCFullYear()) — no padding).
     expect(formatPlainDateForSql(Temporal.PlainDate.from({ year: -43, month: 3, day: 15 }))).toBe(
-      "-0043-03-15",
+      "-43-03-15",
     );
   });
 });

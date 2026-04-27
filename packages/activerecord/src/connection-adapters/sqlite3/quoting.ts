@@ -100,7 +100,7 @@ export function quote(value: unknown): string {
   if (value instanceof Temporal.Instant) return `'${formatInstantForSql(value)}'`;
   if (value instanceof Temporal.PlainDateTime) return `'${formatPlainDateTimeForSql(value)}'`;
   if (value instanceof Temporal.PlainDate) return `'${formatPlainDateForSql(value)}'`;
-  if (value instanceof Temporal.PlainTime) return `'${formatPlainTimeForSql(value)}'`;
+  if (value instanceof Temporal.PlainTime) return `'2000-01-01 ${formatPlainTimeForSql(value)}'`;
   if (value instanceof Temporal.ZonedDateTime) return `'${formatInstantForSql(value.toInstant())}'`;
   if (value instanceof Date) return `'${quotedDate(value)}'`;
   if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
@@ -157,7 +157,7 @@ export function typeCast(value: unknown): unknown {
   if (value instanceof Temporal.Instant) return formatInstantForSql(value);
   if (value instanceof Temporal.PlainDateTime) return formatPlainDateTimeForSql(value);
   if (value instanceof Temporal.PlainDate) return formatPlainDateForSql(value);
-  if (value instanceof Temporal.PlainTime) return formatPlainTimeForSql(value);
+  if (value instanceof Temporal.PlainTime) return `2000-01-01 ${formatPlainTimeForSql(value)}`;
   if (value instanceof Temporal.ZonedDateTime) return formatInstantForSql(value.toInstant());
   if (value instanceof Date) return quotedDate(value);
   if (value instanceof Uint8Array || value instanceof ArrayBuffer) return value;

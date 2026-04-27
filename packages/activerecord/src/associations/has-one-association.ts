@@ -117,7 +117,15 @@ export class HasOneAssociation extends SingularAssociation {
         !(pending.previousTarget as any).isDestroyed?.() &&
         pending.previousTarget !== pending.record
       ) {
-        await removeTargetBang(this, (this.reflection.options.dependent as string) ?? "");
+        // removeTargetBang reads assoc.target; temporarily restore previousTarget
+        // so it operates on the old record, not the new one already set in replace()
+        const currentTarget = this.target;
+        this.target = pending.previousTarget;
+        try {
+          await removeTargetBang(this, (this.reflection.options.dependent as string) ?? "");
+        } finally {
+          this.target = currentTarget;
+        }
       }
       if (pending.record && typeof (pending.record as any).save === "function") {
         const saved = await (pending.record as any).save();

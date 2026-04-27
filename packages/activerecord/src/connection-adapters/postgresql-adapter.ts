@@ -857,6 +857,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   ): Promise<Record<string, unknown>[]> {
     this.checkIfWriteQuery(sql);
     await this.materializeTransactions();
+    binds = binds.map((v) => temporalToBindString(v, "postgres"));
     const rewritten = this.rewriteBinds(sql, binds);
     // payload.sql is the rewritten SQL (`$1` not `?`) so ExplainSubscriber
     // stores something that can be re-EXPLAIN'd on the same adapter
@@ -895,6 +896,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async executeMutation(sql: string, binds: unknown[] = [], name: string = "SQL"): Promise<number> {
     this.checkIfWriteQuery(sql);
     await this.materializeTransactions();
+    binds = binds.map((v) => temporalToBindString(v, "postgres"));
     const pgSql = this.rewriteBinds(sql, binds);
     // payload.sql records the rewritten SQL — ExplainSubscriber captures
     // something that can be re-EXPLAIN'd without re-running rewriteBinds
@@ -1227,8 +1229,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       // re-EXPLAIN'd. Bind values pass through to pg as the values
       // array so `EXPLAIN` with parameters doesn't error with
       // "there is no parameter $1".
-      const rewritten = this.rewriteBinds(sql, binds);
-      const result = await client.query(`${clause} ${rewritten}`, binds);
+      const pgBinds = binds.map((v) => temporalToBindString(v, "postgres"));
+      const rewritten = this.rewriteBinds(sql, pgBinds);
+      const result = await client.query(`${clause} ${rewritten}`, pgBinds);
       const printer = new ExplainPrettyPrinter();
       return printer.pp(result.rows);
     });

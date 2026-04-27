@@ -45,7 +45,7 @@ const TEMPORAL_PARSERS: ReadonlyMap<number, PgParser> = new Map<number, PgParser
  * which pg interprets as "use the built-in default for this OID".
  */
 export function getTypeParser(oid: number, format?: string): PgParser | null {
-  if (format === "text" || format === undefined) {
+  if (format === "text" || !format) {
     const parser = TEMPORAL_PARSERS.get(oid);
     if (parser) return parser;
   }

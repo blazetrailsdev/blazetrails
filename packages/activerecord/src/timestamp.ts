@@ -23,29 +23,30 @@ export async function touch(this: Base, ...names: string[]): Promise<boolean> {
   const now = new Date();
 
   const ctor = this.constructor as typeof Base;
-  const touchCols: string[] = [];
-  if (ctor._attributeDefinitions.has("updated_at")) {
-    touchCols.push("updated_at");
-  }
+  const touchColSet = new Set<string>();
+  if (ctor._attributeDefinitions.has("updated_at")) touchColSet.add("updated_at");
   for (const name of names) {
-    if (ctor._attributeDefinitions.has(name)) touchCols.push(name);
+    if (ctor._attributeDefinitions.has(name)) touchColSet.add(name);
   }
+  const touchCols = Array.from(touchColSet);
 
   if (touchCols.length === 0) return false;
 
-  // Build a targeted UPDATE directly — mirrors Rails' _touch_row → _update_row.
-  // Does NOT run save callbacks (before_save / after_save), only after_touch.
-  const table = ctor.arelTable;
-  const setPairs: [InstanceType<typeof Nodes.Node>, unknown][] = touchCols.map((col) => [
-    table.get(col) as InstanceType<typeof Nodes.Node>,
-    new Nodes.Quoted(now),
-  ]);
-
-  // Write new values via writeAttribute to register them as dirty changes
-  // so changesApplied() can populate previousChanges (saved_changes).
+  // Write new values via writeAttribute so changesApplied() populates previousChanges.
   for (const col of touchCols) {
     this.writeAttribute(col, now);
   }
+
+  // Build a targeted UPDATE directly — mirrors Rails' _touch_row → _update_row.
+  // Does NOT run save callbacks (before_save / after_save), only after_touch.
+  // Use valuesForDatabase() so the adapter's type casting / quoting path is used,
+  // consistent with how save() serializes values.
+  const dbValues = (this as any)._attributes.valuesForDatabase();
+  const table = ctor.arelTable;
+  const setPairs: [InstanceType<typeof Nodes.Node>, unknown][] = touchCols.map((col) => [
+    table.get(col) as InstanceType<typeof Nodes.Node>,
+    new Nodes.Quoted(dbValues[col]),
+  ]);
 
   // Optimistic locking: include lock_version increment and stale-object check.
   const lockCol = ctor.lockingColumn;

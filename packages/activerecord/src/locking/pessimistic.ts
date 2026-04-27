@@ -72,19 +72,33 @@ export async function withLock<T extends Base>(
 ): Promise<void>;
 export async function withLock<T extends Base>(
   this: T,
+  lockClause: string,
+  options: TxOptions,
+  fn: (record: T) => Promise<void> | void,
+): Promise<void>;
+export async function withLock<T extends Base>(
+  this: T,
   lockOrOptOrFn: string | TxOptions | ((record: T) => Promise<void> | void),
+  optOrFn?: TxOptions | ((record: T) => Promise<void> | void),
   fn?: (record: T) => Promise<void> | void,
 ): Promise<void> {
   let lockClause = "FOR UPDATE";
   let txOptions: TxOptions = {};
-  let callback = fn;
+  let callback: ((record: T) => Promise<void> | void) | undefined;
 
   if (typeof lockOrOptOrFn === "function") {
     callback = lockOrOptOrFn;
   } else if (typeof lockOrOptOrFn === "string") {
     lockClause = lockOrOptOrFn;
+    if (typeof optOrFn === "function") {
+      callback = optOrFn;
+    } else if (optOrFn !== null && optOrFn !== undefined && typeof optOrFn === "object") {
+      txOptions = optOrFn;
+      callback = fn;
+    }
   } else if (lockOrOptOrFn !== null && typeof lockOrOptOrFn === "object") {
     txOptions = lockOrOptOrFn;
+    if (typeof optOrFn === "function") callback = optOrFn;
   }
 
   if (!callback) {

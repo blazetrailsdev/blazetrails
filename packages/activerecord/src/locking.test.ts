@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { Base, transaction, registerModel, StaleObjectError } from "./index.js";
 import { Associations } from "./associations.js";
 
@@ -30,7 +30,6 @@ function freshAdapter(): DatabaseAdapter {
   return createTestAdapter();
 }
 
-import { afterEach } from "vitest";
 afterEach(() => {
   for (const a of openAdapters.splice(0)) a.close();
 });

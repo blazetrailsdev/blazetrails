@@ -204,16 +204,14 @@ function _touchRow(
   });
 }
 
-function _updateRecord(this: DirtyPrivateHost, attributeNames?: string[]): Promise<number> {
-  const names = attributeNames ?? attributeNamesForPartialUpdates.call(this);
+function _updateRecord(this: DirtyPrivateHost, _attributeNames?: string[]): Promise<number> {
   return this._performUpdate().then((rows) => {
     this.changesApplied();
     return rows;
   });
 }
 
-function _createRecord(this: DirtyPrivateHost, attributeNames?: string[]): Promise<unknown> {
-  const names = attributeNames ?? attributeNamesForPartialInserts.call(this);
+function _createRecord(this: DirtyPrivateHost, _attributeNames?: string[]): Promise<unknown> {
   return this._performInsert().then((id) => {
     this.changesApplied();
     return id;

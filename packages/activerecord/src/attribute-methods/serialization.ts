@@ -67,20 +67,8 @@ function buildColumnSerializer(
 ): unknown {
   const resolvedCoder = coder === globalThis.JSON ? CodersJSON : coder;
 
-  if (
-    resolvedCoder != null &&
-    typeof resolvedCoder === "object" &&
-    "load" in resolvedCoder &&
-    "dump" in resolvedCoder &&
-    !("new" in resolvedCoder)
-  ) {
-    if (type && type !== Object) {
-      return new CodersColumnSerializer(attrName, resolvedCoder as CoderLike, type as any);
-    }
-    return resolvedCoder;
-  }
-
-  if (resolvedCoder != null && typeof resolvedCoder === "function" && !("load" in resolvedCoder)) {
+  // coder.respond_to?(:new) && !coder.respond_to?(:load) → instantiate as constructor
+  if (typeof resolvedCoder === "function" && !("load" in resolvedCoder)) {
     return new (resolvedCoder as any)(attrName, type);
   }
 
@@ -96,7 +84,8 @@ function isTypeIncompatibleWithSerialize(
   coder: unknown,
   type: unknown,
 ): boolean {
-  if (castType instanceof JsonType && coder === CodersJSON) return true;
+  const resolvedCoder = coder === globalThis.JSON ? CodersJSON : coder;
+  if (castType instanceof JsonType && resolvedCoder === CodersJSON) return true;
   if (castType != null && typeof (castType as any).typeCastArray === "function" && type === Array)
     return true;
   return false;

@@ -2,7 +2,7 @@
  * Mirrors: ActiveRecord::AttributeMethods::TimeZoneConversion
  */
 export interface TimeZoneConversion {
-  timeZoneAwareAttributes: string[];
+  timeZoneAwareAttributes: boolean;
   skipTimeZoneConversionForAttributes: string[];
 }
 

@@ -45,6 +45,8 @@ import {
   temporalToBindString,
 } from "./abstract/database-statements.js";
 import { getTypeParser as getTemporalTypeParser } from "./postgresql/temporal-type-parsers.js";
+
+const TEMPORAL_OIDS = new Set([1082, 1083, 1114, 1184, 1266]);
 import { READ_QUERY } from "./postgresql/database-statements.js";
 import type { CreateDatabaseOptions, PgIndexDefinition } from "./postgresql/schema-statements.js";
 import {
@@ -312,7 +314,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
           // Our Temporal parsers handle text-format for the 5 datetime OIDs.
           // For all other OIDs, respect any user-supplied parser first, then
           // delegate to getTemporalTypeParser which falls back to pg built-ins.
-          if ([1082, 1083, 1114, 1184, 1266].includes(oid) && (format === "text" || !format)) {
+          if (TEMPORAL_OIDS.has(oid) && (format === "text" || !format)) {
             return getTemporalTypeParser(oid, format);
           }
           return userGetTypeParser?.(oid, format) ?? getTemporalTypeParser(oid, format);

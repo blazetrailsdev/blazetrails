@@ -1,3 +1,4 @@
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import { hexdigest, Notifications } from "@blazetrails/activesupport";
 import {
   Table,
@@ -79,21 +80,25 @@ export type LoadedRelation<R> = Omit<R, "then">;
  * - Throw if a join to the same table with a *different* ON clause exists —
  *   that would require aliasing which is not supported.
  */
-function formatCacheTimestamp(date: Date, format: "usec" | "number" | string): string {
-  const y = date.getUTCFullYear().toString().padStart(4, "0");
-  const mo = (date.getUTCMonth() + 1).toString().padStart(2, "0");
-  const d = date.getUTCDate().toString().padStart(2, "0");
-  const h = date.getUTCHours().toString().padStart(2, "0");
-  const mi = date.getUTCMinutes().toString().padStart(2, "0");
-  const s = date.getUTCSeconds().toString().padStart(2, "0");
+function formatCacheTimestamp(
+  ts: Temporal.Instant | Temporal.PlainDateTime,
+  format: "usec" | "number" | string,
+): string {
+  const dt = ts instanceof Temporal.Instant ? ts.toZonedDateTimeISO("UTC") : ts;
+  const y = dt.year.toString().padStart(4, "0");
+  const mo = dt.month.toString().padStart(2, "0");
+  const d = dt.day.toString().padStart(2, "0");
+  const h = dt.hour.toString().padStart(2, "0");
+  const mi = dt.minute.toString().padStart(2, "0");
+  const s = dt.second.toString().padStart(2, "0");
   if (format === "number") return `${y}${mo}${d}${h}${mi}${s}`;
   if (format !== "usec") {
     throw new Error(
       `Unknown cacheTimestampFormat: ${JSON.stringify(format)}. Supported values: "usec", "number".`,
     );
   }
-  const ms = date.getUTCMilliseconds().toString().padStart(3, "0");
-  return `${y}${mo}${d}${h}${mi}${s}${ms}000`;
+  const us = (dt.millisecond * 1000 + dt.microsecond).toString().padStart(6, "0");
+  return `${y}${mo}${d}${h}${mi}${s}${us}`;
 }
 
 function _addAssocJoin(
@@ -2227,12 +2232,19 @@ export class Relation<T extends Base> {
     ) {
       return value;
     }
-    // Dates CAN slip past typeCast if an adapter returns them
-    // unchanged (e.g. a future adapter that skips Date formatting).
-    // Coerce to ISO-ish string so rubyInspect renders
-    // `"2026-01-02T12:34:56.000Z"` rather than `"[object Date]"`
-    // via JSON.stringify (which would double-quote the date).
+    // Date (dual-typed window): coerce to ISO string so inspect doesn't double-quote.
     if (value instanceof Date) return value.toISOString();
+    // Temporal values: coerce to ISO string for inspect output.
+    // ZonedDateTime uses toInstant().toString() to avoid the bracketed IANA form.
+    if (value instanceof Temporal.ZonedDateTime) return value.toInstant().toString();
+    if (
+      value instanceof Temporal.Instant ||
+      value instanceof Temporal.PlainDateTime ||
+      value instanceof Temporal.PlainDate ||
+      value instanceof Temporal.PlainTime
+    ) {
+      return value.toString();
+    }
     const binaryBytes = this._binaryByteLength(value);
     if (binaryBytes !== null) return `<${binaryBytes} bytes of binary data>`;
     if (typeof value === "object") {
@@ -4007,6 +4019,14 @@ export class Relation<T extends Base> {
           .reduce((max: unknown, val: unknown) => {
             if (max == null) return val;
             if (val == null) return max;
+            // Temporal objects throw on `>` — compare by epoch for Instants,
+            // by compare() for PlainDateTime.
+            if (val instanceof Temporal.Instant && max instanceof Temporal.Instant) {
+              return Temporal.Instant.compare(val, max) > 0 ? val : max;
+            }
+            if (val instanceof Temporal.PlainDateTime && max instanceof Temporal.PlainDateTime) {
+              return Temporal.PlainDateTime.compare(val, max) > 0 ? val : max;
+            }
             return val > max ? val : max;
           }, null);
       }
@@ -4078,17 +4098,24 @@ export class Relation<T extends Base> {
     }
 
     if (timestamp != null) {
-      let ts: Date | null = null;
-      if (timestamp instanceof Date) {
+      let ts: Temporal.Instant | Temporal.PlainDateTime | null = null;
+      if (timestamp instanceof Temporal.Instant || timestamp instanceof Temporal.PlainDateTime) {
         ts = timestamp;
       } else if (typeof timestamp === "string") {
-        const bare = timestamp.trim();
-        const m = bare.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d+)?)$/);
-        ts = m ? new Date(`${m[1]}T${m[2]}Z`) : new Date(bare);
-      } else if (typeof timestamp === "number") {
-        ts = new Date(timestamp);
+        try {
+          // Normalize: space → T, short offset ±HH → ±HH:MM (Postgres wire quirk)
+          const normalized = timestamp
+            .replace(" ", "T")
+            .replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?)([-+]\d{2})$/, "$1$2:00");
+          const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(normalized);
+          ts = hasOffset
+            ? Temporal.Instant.from(normalized)
+            : Temporal.PlainDateTime.from(normalized);
+        } catch {
+          ts = null;
+        }
       }
-      if (ts && !isNaN(ts.getTime())) {
+      if (ts != null) {
         const fmt = this._modelClass.cacheTimestampFormat;
         const formatted = formatCacheTimestamp(ts, fmt);
         return `${size}-${formatted}`;

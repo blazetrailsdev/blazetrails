@@ -5,6 +5,7 @@
  * Mirrors: ActiveRecord::Persistence::ClassMethods
  */
 
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import {
   InsertManager,
   UpdateManager,
@@ -733,7 +734,10 @@ interface UpdateColumnsRecord {
     name: string;
     primaryKey: string | string[];
     arelTable: InstanceType<typeof ArelTable>;
-    _attributeDefinitions: Map<string, { type: { cast(v: unknown): unknown } }>;
+    _attributeDefinitions: Map<
+      string,
+      { type: { cast(v: unknown): unknown; serialize?(v: unknown): unknown } }
+    >;
     _buildPkWhereNode(id: unknown): Parameters<UpdateManager["where"]>[0];
     adapter: {
       execUpdate(sql: string, name?: string, binds?: unknown[]): Promise<number>;
@@ -812,7 +816,20 @@ export async function updateColumns<T extends UpdateColumnsRecord>(
     }
     const cast = def ? def.type.cast(value) : value;
     this._attributes.set(key, cast);
-    setPairs.push([table.get(key), cast]);
+    // Pre-serialize Temporal values so the Arel quote layer receives a string
+    // (not a raw Temporal object). Only Temporal types need this — other types
+    // (strings, numbers, null) are already in their DB-ready form, and custom
+    // types like EncryptedAttributeType must NOT be serialized here (their
+    // serialize() would re-encrypt an already-encrypted value).
+    const dbValue =
+      cast instanceof Temporal.Instant ||
+      cast instanceof Temporal.PlainDateTime ||
+      cast instanceof Temporal.PlainDate ||
+      cast instanceof Temporal.PlainTime ||
+      cast instanceof Temporal.ZonedDateTime
+        ? (def?.type.serialize?.(cast) ?? cast)
+        : cast;
+    setPairs.push([table.get(key), dbValue]);
   }
 
   const um = new UpdateManager();

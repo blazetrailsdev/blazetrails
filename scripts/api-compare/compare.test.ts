@@ -207,3 +207,37 @@ describe("methodInMode", () => {
     expect(methodInMode(bare, "all")).toBe(true);
   });
 });
+
+describe("TS-side index inclusion (tsShouldInclude semantics)", () => {
+  // When --privates-only is active, a Ruby private method implemented as an
+  // exported (public) TS function must still count as matched.
+  // When default/public mode is active, internal TS methods must NOT satisfy
+  // Ruby public method coverage (would inflate scores).
+
+  const pub: MethodInfo = { name: "foo", visibility: "public", params: [] };
+  const internal: MethodInfo = {
+    name: "bar",
+    visibility: "private",
+    internal: true,
+    params: [],
+  };
+
+  // tsShouldInclude mirrors: mode === "private" ? true : !m.internal
+  const tsShouldInclude = (m: MethodInfo, mode: "public" | "private" | "all") =>
+    mode === "private" ? true : !m.internal;
+
+  it("private mode includes both public and internal TS methods", () => {
+    expect(tsShouldInclude(pub, "private")).toBe(true);
+    expect(tsShouldInclude(internal, "private")).toBe(true);
+  });
+
+  it("public mode excludes internal TS methods", () => {
+    expect(tsShouldInclude(pub, "public")).toBe(true);
+    expect(tsShouldInclude(internal, "public")).toBe(false);
+  });
+
+  it("all mode excludes internal TS methods (same as public)", () => {
+    expect(tsShouldInclude(pub, "all")).toBe(true);
+    expect(tsShouldInclude(internal, "all")).toBe(false);
+  });
+});

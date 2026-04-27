@@ -325,19 +325,22 @@ function main() {
 
     const tsPkg = ts.packages[pkg];
 
-    // Build per-file method index from TS: file → Set<methodName>
+    // Build per-file method index from TS: file → Set<methodName>.
+    //
+    // In public/all mode: only public TS methods are indexed (internal helpers
+    // must not satisfy Ruby public method coverage).
+    // In private mode: ALL TS methods are indexed — Rails private methods
+    // implemented as exported TS functions (e.g. exported for wiring into
+    // base.ts) should still count as matched.
+    const tsShouldInclude = (m: MethodInfo) => (mode === "private" ? true : !m.internal);
     const tsMethodsByFile = new Map<string, Set<string>>();
 
     if (tsPkg) {
-      // TS method lookup always indexes ALL methods (public + internal).
-      // The Ruby side is filtered by mode; widening the TS lookup ensures that
-      // Rails private methods implemented as exported TS functions still count
-      // as matched when running --privates-only.
       const addMethods = (cls: ClassInfo) => {
         const file = cls.file || "";
         const methods = tsMethodsByFile.get(file) || new Set();
         for (const m of [...cls.instanceMethods, ...cls.classMethods]) {
-          methods.add(m.name);
+          if (tsShouldInclude(m)) methods.add(m.name);
         }
         tsMethodsByFile.set(file, methods);
       };
@@ -350,7 +353,7 @@ function main() {
         for (const [file, fns] of Object.entries(tsPkg.fileFunctions)) {
           const methods = tsMethodsByFile.get(file) || new Set();
           for (const fn of fns) {
-            methods.add(fn.name);
+            if (tsShouldInclude(fn)) methods.add(fn.name);
           }
           tsMethodsByFile.set(file, methods);
         }
@@ -406,7 +409,7 @@ function main() {
 
         const methods = new Set<string>();
         for (const m of [...entity.instanceMethods, ...entity.classMethods]) {
-          methods.add(m.name);
+          if (tsShouldInclude(m)) methods.add(m.name);
         }
 
         if (entity.superclass) {

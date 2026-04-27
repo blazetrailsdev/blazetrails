@@ -6,17 +6,17 @@
  * `{ typeCast }` to `mysql.createPool` intercepts those fields and
  * returns the appropriate Temporal type instead.
  *
- * mysql2 exposes `field.type` as a string name (e.g. "TIMESTAMP"), not
- * a numeric OID. The callback reads the raw wire string via `field.string()`
- * and dispatches to the matching parser from temporal-wire.ts.
+ * In mysql2's typeCast callback, `field.type` is a string name (e.g.
+ * "TIMESTAMP") not a numeric OID. The callback reads the raw wire string
+ * via `field.string()` and dispatches to the matching parser.
  *
  * Precondition: the connection's `@@session.time_zone` must be `'+00:00'`
- * (enforced via a post-connect `SET time_zone = '+00:00'`). Without this,
- * TIMESTAMP strings are emitted in the server's session timezone and
- * parseMysqlInstant would silently produce wrong instants.
+ * (enforced via pool.on('connection') in Mysql2Adapter.newClient). Without
+ * this, TIMESTAMP strings arrive in the server's session timezone and
+ * parseMysqlInstant would produce wrong instants.
  *
- * We deliberately do NOT call any global mysql2 type registration — that
- * would mutate a process-wide registry shared with other mysql2 users.
+ * We do NOT call any global mysql2 type registration — that would mutate
+ * a process-wide registry shared with other mysql2 users in the process.
  */
 
 import mysql from "mysql2/promise";

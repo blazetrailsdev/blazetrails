@@ -1016,20 +1016,13 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     const pool = mysql.createPool({ supportBigNumbers: true, ...config, ...TEMPORAL_POOL_OPTIONS });
     // Pin session timezone to UTC so TIMESTAMP wire strings are always in UTC,
     // allowing parseMysqlInstant to treat them as Temporal.Instant correctly.
-    // The 'connection' event fires on the underlying (non-promise) pool for
-    // each new physical connection before it enters the pool.
-    pool.pool.on(
-      "connection",
-      (conn: { query: (sql: string, cb: (err: Error | null) => void) => void }) => {
-        conn.query("SET time_zone = '+00:00'", (err) => {
-          if (err) {
-            // Non-fatal — log but don't crash the pool. TIMESTAMP columns will
-            // fall back to server-default timezone behavior if this fails.
-            console.warn("[trails] Failed to pin MySQL session time_zone to UTC:", err.message);
-          }
-        });
-      },
-    );
+    // mysql.Pool (promise wrapper) re-emits 'connection' from the underlying pool
+    // via inheritEvents — this is the public typed API on mysql.Pool, no internal
+    // property access needed. The callback receives the raw PoolConnection (non-
+    // promise) so we use the callback-style query directly.
+    pool.on("connection", (conn) => {
+      (conn as unknown as { query: (sql: string) => void }).query("SET time_zone = '+00:00'");
+    });
     return pool;
   }
 }

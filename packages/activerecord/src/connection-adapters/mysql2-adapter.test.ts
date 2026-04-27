@@ -729,12 +729,11 @@ describeIfMysql("Mysql2Adapter", () => {
     });
 
     it("returns null for zero DATETIME '0000-00-00 00:00:00'", async () => {
-      // Requires sql_mode without NO_ZERO_DATE; skip quietly if server rejects it.
-      try {
-        await adapter.exec("INSERT INTO `temporal_test` (`dt`) VALUES ('0000-00-00 00:00:00')");
-      } catch {
-        return;
-      }
+      // NO_ZERO_DATE in sql_mode rejects the insert. Check first and skip if set.
+      const modeRows = await adapter.execute("SELECT @@SESSION.sql_mode AS m");
+      const sqlMode = String(modeRows[0].m ?? "");
+      if (sqlMode.includes("NO_ZERO_DATE") || sqlMode.includes("TRADITIONAL")) return;
+      await adapter.exec("INSERT INTO `temporal_test` (`dt`) VALUES ('0000-00-00 00:00:00')");
       const rows = await adapter.execute("SELECT `dt` FROM `temporal_test`");
       expect(rows[0].dt).toBeNull();
     });
@@ -746,13 +745,15 @@ describeIfMysql("Mysql2Adapter", () => {
       expect((rows[0].d as Temporal.PlainDate).toString()).toBe("2026-04-27");
     });
 
-    it("round-trips TIME(6) as Temporal.PlainTime", async () => {
+    it("round-trips TIME(6) with microsecond precision as Temporal.PlainTime", async () => {
       await adapter.exec("INSERT INTO `temporal_test` (`t`) VALUES ('14:23:55.123456')");
       const rows = await adapter.execute("SELECT `t` FROM `temporal_test`");
       expect(rows[0].t).toBeInstanceOf(Temporal.PlainTime);
       const pt = rows[0].t as Temporal.PlainTime;
       expect(pt.hour).toBe(14);
       expect(pt.second).toBe(55);
+      expect(pt.millisecond).toBe(123);
+      expect(pt.microsecond).toBe(456);
     });
 
     it("does not affect a sibling mysql2 connection (no global registry mutation)", async () => {

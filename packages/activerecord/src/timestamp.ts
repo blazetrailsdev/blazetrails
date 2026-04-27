@@ -1,6 +1,7 @@
 import type { Base } from "./base.js";
 import { ReadOnlyRecord, StaleObjectError } from "./errors.js";
 import { UpdateManager, Nodes } from "@blazetrails/arel";
+import { isAppliedTo as isNoTouchingApplied } from "./no-touching.js";
 
 /**
  * Timestamp handling for ActiveRecord models.
@@ -20,13 +21,17 @@ export async function touch(this: Base, ...names: string[]): Promise<boolean> {
     throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
   }
   if (!this.isPersisted()) return false;
-  const now = new Date();
 
   const ctor = this.constructor as typeof Base;
+  if (isNoTouchingApplied(ctor)) return false;
+
+  const now = new Date();
+  const aliases: Record<string, string> = (ctor as any)._attributeAliases ?? {};
   const touchColSet = new Set<string>();
   if (ctor._attributeDefinitions.has("updated_at")) touchColSet.add("updated_at");
   for (const name of names) {
-    if (ctor._attributeDefinitions.has(name)) touchColSet.add(name);
+    const resolved = aliases[name] ?? name;
+    if (ctor._attributeDefinitions.has(resolved)) touchColSet.add(resolved);
   }
   const touchCols = Array.from(touchColSet);
 
@@ -72,7 +77,14 @@ export async function touch(this: Base, ...names: string[]): Promise<boolean> {
     }
   }
 
-  const affected = await ctor.adapter.execUpdate(um.toSql(), `${ctor.name} Touch`);
+  const adapter = ctor.adapter as any;
+  let affected: number;
+  if (typeof adapter.update === "function") {
+    affected = await adapter.update(um);
+  } else {
+    const sql = adapter.toSql ? adapter.toSql(um) : um.toSql();
+    affected = await ctor.adapter.execUpdate(sql, `${ctor.name} Touch`);
+  }
   if (ctor.lockingEnabled && affected === 0) {
     throw new StaleObjectError(this, "touch");
   }

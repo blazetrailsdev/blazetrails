@@ -1039,7 +1039,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
         destroy: () => void;
       };
       rawConn.query("SET time_zone = '+00:00'", (err) => {
-        if (err) rawConn.destroy();
+        if (err) {
+          rawConn.destroy();
+          pool.emit("error", err);
+        }
       });
     });
     return pool;

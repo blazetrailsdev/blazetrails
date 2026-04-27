@@ -28,6 +28,10 @@ describe("temporalTypeCast", () => {
       expect(temporalTypeCast(field("TIMESTAMP", null), next)).toBeNull();
     });
 
+    it("returns null for zero timestamp '0000-00-00 00:00:00'", () => {
+      expect(temporalTypeCast(field("TIMESTAMP", "0000-00-00 00:00:00"), next)).toBeNull();
+    });
+
     it("handles TIMESTAMP2 (binary protocol fractional variant)", () => {
       const result = temporalTypeCast(field("TIMESTAMP2", "2026-04-27 14:23:55.123456"), next);
       expect(result).toBeInstanceOf(Temporal.Instant);

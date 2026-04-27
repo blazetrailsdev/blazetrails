@@ -4160,7 +4160,7 @@ export class Relation<T extends Base> {
   }
 
   protected loadRecords(records: T[]): void {
-    this._records = Object.freeze([...records]) as T[];
+    this._records = [...records];
     this._loaded = true;
   }
 

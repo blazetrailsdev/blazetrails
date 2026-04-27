@@ -263,14 +263,15 @@ function wrapSqlLiteral(node: Nodes.SqlLiteral): Nodes.Node {
 
 function extractAttribute(node: Nodes.Node): Nodes.Attribute | null {
   let attrNode: Nodes.Attribute | null = null;
-  const fetcher = node as { fetchAttribute?: (cb: (a: Nodes.Node) => boolean | void) => void };
+  const fetcher = node as { fetchAttribute?: (cb: (a: Nodes.Node) => boolean) => void };
   fetcher.fetchAttribute?.((attr: Nodes.Node) => {
-    if (!(attr instanceof Nodes.Attribute)) return;
+    if (!(attr instanceof Nodes.Attribute)) return true; // not an attribute — keep traversing
     if (attrNode !== null && !attrNode.eql(attr)) {
       attrNode = null;
-      return false;
+      return false; // conflict: multiple different attributes — stop
     }
     attrNode = attr;
+    return true; // found a match — keep traversing (Nary may have more children)
   });
   return attrNode;
 }

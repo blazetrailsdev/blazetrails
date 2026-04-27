@@ -144,3 +144,4 @@ function defineDelegatedTypeMethods(role: any, types?: any, options?: any): neve
     "ActiveRecord::DelegatedType#define_delegated_type_methods is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -109,3 +109,4 @@ function _typeNameFor(value: unknown): string {
 function data(): never {
   throw new NotImplementedError("ActiveRecord::Encryption::Properties#data is not implemented");
 }
+// --- end api:compare private stubs ---

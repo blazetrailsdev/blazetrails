@@ -322,3 +322,4 @@ function cantModifyEncryptedAttributesWhenFrozen(): never {
     "ActiveRecord::Encryption::EncryptableRecord#cant_modify_encrypted_attributes_when_frozen is not implemented",
   );
 }
+// --- end api:compare private stubs ---

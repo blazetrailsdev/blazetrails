@@ -271,3 +271,4 @@ function querySourceLocation(): never {
     "ActiveRecord::LogSubscriber#query_source_location is not implemented",
   );
 }
+// --- end api:compare private stubs ---

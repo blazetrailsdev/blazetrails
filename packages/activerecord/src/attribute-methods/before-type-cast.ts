@@ -91,3 +91,4 @@ function isAttributeCameFromUser(attrName: any): never {
     "ActiveRecord::AttributeMethods::BeforeTypeCast#attribute_came_from_user? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

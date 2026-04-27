@@ -127,3 +127,4 @@ function isExportNameOnSchemaDump(): never {
 function isDefinedFor(toTable?: any, validate?: any, options?: any): never {
   throw new NotImplementedError("ActiveRecord::ConnectionAdapters#defined_for? is not implemented");
 }
+// --- end api:compare private stubs ---

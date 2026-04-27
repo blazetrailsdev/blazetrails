@@ -173,3 +173,4 @@ function hookAttributeType(): never {
     "ActiveRecord::Locking::Optimistic#hook_attribute_type is not implemented",
   );
 }
+// --- end api:compare private stubs ---

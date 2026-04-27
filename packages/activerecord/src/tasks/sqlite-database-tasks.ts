@@ -378,3 +378,4 @@ function runCmdError(cmd: any, args: any): never {
     "ActiveRecord::Tasks::SQLiteDatabaseTasks#run_cmd_error is not implemented",
   );
 }
+// --- end api:compare private stubs ---

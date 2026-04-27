@@ -237,3 +237,4 @@ function timestampAttributesForUpdate(): never {
     "ActiveRecord::Timestamp#timestamp_attributes_for_update is not implemented",
   );
 }
+// --- end api:compare private stubs ---

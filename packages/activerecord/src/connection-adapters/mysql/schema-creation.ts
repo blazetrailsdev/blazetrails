@@ -102,3 +102,4 @@ function indexInCreate(tableName: any, columnName: any, options: any): never {
     "ActiveRecord::ConnectionAdapters::MySQL::SchemaCreation#index_in_create is not implemented",
   );
 }
+// --- end api:compare private stubs ---

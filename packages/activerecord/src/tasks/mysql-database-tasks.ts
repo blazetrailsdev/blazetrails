@@ -360,3 +360,4 @@ function runCmdError(cmd: any, args: any, action: any): never {
     "ActiveRecord::Tasks::MySQLDatabaseTasks#run_cmd_error is not implemented",
   );
 }
+// --- end api:compare private stubs ---

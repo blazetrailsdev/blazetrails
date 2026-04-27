@@ -49,3 +49,4 @@ function renderBind(connection: any, attr: any): never {
 function buildExplainClause(connection: any, options?: any): never {
   throw new NotImplementedError("ActiveRecord::Explain#build_explain_clause is not implemented");
 }
+// --- end api:compare private stubs ---

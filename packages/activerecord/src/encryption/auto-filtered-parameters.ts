@@ -87,3 +87,4 @@ function isExcludedFromFilterParameters(filterParameter: any): never {
     "ActiveRecord::Encryption::AutoFilteredParameters#excluded_from_filter_parameters? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

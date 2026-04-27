@@ -990,3 +990,4 @@ function computeTableName(): never {
 function typeForColumn(): never {
   throw new NotImplementedError("ActiveRecord::ModelSchema#type_for_column is not implemented");
 }
+// --- end api:compare private stubs ---

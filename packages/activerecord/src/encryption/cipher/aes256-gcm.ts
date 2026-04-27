@@ -138,3 +138,4 @@ function generateDeterministicIv(clearText: any): never {
     "ActiveRecord::Encryption::Cipher::Aes256Gcm#generate_deterministic_iv is not implemented",
   );
 }
+// --- end api:compare private stubs ---

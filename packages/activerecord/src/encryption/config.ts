@@ -81,3 +81,4 @@ function addPreviousScheme(properties?: any): never {
     "ActiveRecord::Encryption::Config#add_previous_scheme is not implemented",
   );
 }
+// --- end api:compare private stubs ---

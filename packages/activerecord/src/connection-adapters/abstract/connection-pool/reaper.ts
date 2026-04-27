@@ -121,3 +121,4 @@ function spawnThread(frequency: any): never {
     "ActiveRecord::ConnectionAdapters::ConnectionPool::Reaper#spawn_thread is not implemented",
   );
 }
+// --- end api:compare private stubs ---

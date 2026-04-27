@@ -112,3 +112,4 @@ function checkArityOfConstructor(): never {
     "ActiveRecord::Coders::ColumnSerializer#check_arity_of_constructor is not implemented",
   );
 }
+// --- end api:compare private stubs ---

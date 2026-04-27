@@ -81,3 +81,4 @@ function buildFooter(nrows: any, elapsed: any): never {
     "ActiveRecord::ConnectionAdapters::MySQL::ExplainPrettyPrinter#build_footer is not implemented",
   );
 }
+// --- end api:compare private stubs ---

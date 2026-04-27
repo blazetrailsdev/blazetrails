@@ -248,3 +248,4 @@ function defaultKeyProvider(): never {
     "ActiveRecord::Encryption::Scheme#default_key_provider is not implemented",
   );
 }
+// --- end api:compare private stubs ---

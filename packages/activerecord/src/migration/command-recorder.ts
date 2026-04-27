@@ -307,3 +307,4 @@ function invertDropVirtualTable(args: any): never {
     "ActiveRecord::Migration::CommandRecorder#invert_drop_virtual_table is not implemented",
   );
 }
+// --- end api:compare private stubs ---

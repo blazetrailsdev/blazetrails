@@ -46,3 +46,4 @@ function defineMethodAttribute(): never {
     "ActiveRecord::AttributeMethods::Read#define_method_attribute is not implemented",
   );
 }
+// --- end api:compare private stubs ---

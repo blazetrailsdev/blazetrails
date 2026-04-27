@@ -215,3 +215,4 @@ function unquote(value: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Range#unquote is not implemented",
   );
 }
+// --- end api:compare private stubs ---

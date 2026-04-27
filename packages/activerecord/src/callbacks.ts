@@ -231,3 +231,4 @@ function _createRecord(): never {
 function _updateRecord(): never {
   throw new NotImplementedError("ActiveRecord::Callbacks#_update_record is not implemented");
 }
+// --- end api:compare private stubs ---

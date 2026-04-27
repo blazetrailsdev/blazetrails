@@ -296,3 +296,4 @@ function additionalValuesFor(value: any, type: any): never {
     "ActiveRecord::Encryption::ExtendedDeterministicQueries::EncryptedQuery#additional_values_for is not implemented",
   );
 }
+// --- end api:compare private stubs ---

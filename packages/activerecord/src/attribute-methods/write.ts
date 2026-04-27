@@ -44,3 +44,4 @@ function defineMethodAttribute(): never {
     "ActiveRecord::AttributeMethods::Write#define_method_attribute= is not implemented",
   );
 }
+// --- end api:compare private stubs ---

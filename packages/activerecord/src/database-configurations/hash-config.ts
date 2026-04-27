@@ -115,3 +115,4 @@ function schemaFileType(format: any): never {
     "ActiveRecord::DatabaseConfigurations::HashConfig#schema_file_type is not implemented",
   );
 }
+// --- end api:compare private stubs ---

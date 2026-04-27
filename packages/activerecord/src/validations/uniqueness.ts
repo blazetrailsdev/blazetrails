@@ -160,3 +160,4 @@ function mapEnumAttribute(klass: any, attribute: any, value: any): never {
     "ActiveRecord::Validations::UniquenessValidator#map_enum_attribute is not implemented",
   );
 }
+// --- end api:compare private stubs ---

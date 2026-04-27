@@ -32,3 +32,4 @@ function connection(): never {
     "ActiveRecord::Migration::DefaultStrategy#connection is not implemented",
   );
 }
+// --- end api:compare private stubs ---

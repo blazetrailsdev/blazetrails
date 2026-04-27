@@ -132,3 +132,4 @@ function initializeTypeMap(m: any): never {
     "ActiveRecord::ConnectionAdapters::TrilogyAdapter#initialize_type_map is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -1660,3 +1660,4 @@ function quotedScope(name?: any, type?: any): never {
     "ActiveRecord::ConnectionAdapters::SchemaStatements#quoted_scope is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -756,3 +756,4 @@ function resolveConfigForConnection(configOrEnv: any): never {
     "ActiveRecord::ConnectionHandling#resolve_config_for_connection is not implemented",
   );
 }
+// --- end api:compare private stubs ---

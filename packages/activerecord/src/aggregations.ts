@@ -159,3 +159,4 @@ function readerMethod(): never {
 function writerMethod(): never {
   throw new NotImplementedError("ActiveRecord::Aggregations#writer_method is not implemented");
 }
+// --- end api:compare private stubs ---

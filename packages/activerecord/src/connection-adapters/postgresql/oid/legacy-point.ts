@@ -56,3 +56,4 @@ function numberForPoint(number: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::OID::LegacyPoint#number_for_point is not implemented",
   );
 }
+// --- end api:compare private stubs ---

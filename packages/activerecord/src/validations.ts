@@ -300,3 +300,4 @@ function raiseValidationError(): never {
     "ActiveRecord::Validations#raise_validation_error is not implemented",
   );
 }
+// --- end api:compare private stubs ---

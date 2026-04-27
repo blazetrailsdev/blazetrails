@@ -1195,3 +1195,4 @@ function initializeDatabase(dbConfig: any): never {
     "ActiveRecord::Tasks::DatabaseTasks#initialize_database is not implemented",
   );
 }
+// --- end api:compare private stubs ---

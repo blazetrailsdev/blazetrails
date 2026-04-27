@@ -51,3 +51,4 @@ function toBooleanBang(configurationHash: any, key: any): never {
     "ActiveRecord::DatabaseConfigurations::UrlConfig#to_boolean! is not implemented",
   );
 }
+// --- end api:compare private stubs ---

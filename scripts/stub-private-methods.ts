@@ -3,8 +3,16 @@
  * Stubs out missing private methods in existing activerecord TS files.
  * For each method reported by `api:compare` as missing, appends a non-exported
  * function with the same parameter names as the Rails source. Body throws
- * NotImplementedError. Extracted as "private" by extract-ts-api's file-local
- * helper logic.
+ * NotImplementedError.
+ *
+ * These stubs are intentionally *not* counted by `extract-ts-api` (which
+ * skips file-local helpers whose body is just `throw new NotImplementedError`)
+ * — they are a navigational aid, not API coverage, and should not inflate
+ * the privates score.
+ *
+ * Idempotent: each file's generated block lives between marker comments. On
+ * re-run the existing block is removed before a fresh one is appended, so a
+ * file never accumulates multiple generated sections.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -176,6 +184,12 @@ for (const fileEntry of ar.files) {
 
   let src = fs.readFileSync(tsAbs, "utf8");
 
+  // Strip any existing generated block so re-runs replace it instead of
+  // accumulating a new section each time.
+  const blockRe =
+    /\n*\/\/ --- api:compare private stubs \(auto-generated\) ---[\s\S]*?\/\/ --- end api:compare private stubs ---\n?/;
+  src = src.replace(blockRe, "\n");
+
   // Determine import for NotImplementedError. The errors module lives at
   // packages/activerecord/src/errors.ts. Compute relative import.
   const fromDir = path.dirname(tsAbs);
@@ -263,6 +277,7 @@ for (const fileEntry of ar.files) {
   if (!src.endsWith("\n")) src += "\n";
   src += "\n// --- api:compare private stubs (auto-generated) ---\n";
   src += stubs.join("\n\n") + "\n";
+  src += "// --- end api:compare private stubs ---\n";
 
   fs.writeFileSync(tsAbs, src);
   totalAppended += stubs.length;

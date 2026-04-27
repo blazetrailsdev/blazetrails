@@ -27,3 +27,4 @@ function deriveKeyFrom(password: any, using?: any): never {
     "ActiveRecord::Encryption::DerivedSecretKeyProvider#derive_key_from is not implemented",
   );
 }
+// --- end api:compare private stubs ---

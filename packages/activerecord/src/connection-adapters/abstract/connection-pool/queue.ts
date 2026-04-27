@@ -361,3 +361,4 @@ function remove(): never {
     "ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#remove is not implemented",
   );
 }
+// --- end api:compare private stubs ---

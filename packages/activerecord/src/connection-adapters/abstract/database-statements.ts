@@ -1461,3 +1461,4 @@ function extractTableRefFromInsertSql(sql: any): never {
     "ActiveRecord::ConnectionAdapters::DatabaseStatements#extract_table_ref_from_insert_sql is not implemented",
   );
 }
+// --- end api:compare private stubs ---

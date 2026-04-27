@@ -104,3 +104,4 @@ function schemaCollation(column: any): never {
     "ActiveRecord::ConnectionAdapters::SchemaDumper#schema_collation is not implemented",
   );
 }
+// --- end api:compare private stubs ---

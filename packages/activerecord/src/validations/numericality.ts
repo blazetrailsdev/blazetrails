@@ -43,3 +43,4 @@ function columnScaleFor(record: any, attribute: any): never {
     "ActiveRecord::Validations::NumericalityValidator#column_scale_for is not implemented",
   );
 }
+// --- end api:compare private stubs ---

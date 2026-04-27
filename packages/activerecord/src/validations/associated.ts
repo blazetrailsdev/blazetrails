@@ -67,3 +67,4 @@ function recordValidationContextForAssociation(record: any): never {
     "ActiveRecord::Validations::AssociatedValidator#record_validation_context_for_association is not implemented",
   );
 }
+// --- end api:compare private stubs ---

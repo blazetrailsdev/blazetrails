@@ -61,3 +61,4 @@ export class TypeMap {
 function performFetch(lookupKey: any, block?: any): never {
   throw new NotImplementedError("ActiveRecord::Type::TypeMap#perform_fetch is not implemented");
 }
+// --- end api:compare private stubs ---

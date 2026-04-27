@@ -171,3 +171,4 @@ function attributeNamesForPartialInserts(): never {
     "ActiveRecord::AttributeMethods::Dirty#attribute_names_for_partial_inserts is not implemented",
   );
 }
+// --- end api:compare private stubs ---

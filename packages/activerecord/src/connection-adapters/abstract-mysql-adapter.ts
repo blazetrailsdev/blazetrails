@@ -1081,3 +1081,4 @@ function extractPrecision(sqlType: any): never {
     "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#extract_precision is not implemented",
   );
 }
+// --- end api:compare private stubs ---

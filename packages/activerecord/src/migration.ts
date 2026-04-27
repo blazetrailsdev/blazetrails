@@ -2311,3 +2311,4 @@ function generateMigratorAdvisoryLockId(): never {
     "ActiveRecord::Migrator#generate_migrator_advisory_lock_id is not implemented",
   );
 }
+// --- end api:compare private stubs ---

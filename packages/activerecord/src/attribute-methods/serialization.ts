@@ -67,3 +67,4 @@ function isTypeIncompatibleWithSerialize(): never {
     "ActiveRecord::AttributeMethods::Serialization#type_incompatible_with_serialize? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

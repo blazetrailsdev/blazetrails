@@ -330,3 +330,4 @@ function generateAssociationWriter(): never {
     "ActiveRecord::NestedAttributes#generate_association_writer is not implemented",
   );
 }
+// --- end api:compare private stubs ---

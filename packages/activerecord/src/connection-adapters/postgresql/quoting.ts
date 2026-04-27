@@ -413,3 +413,4 @@ function isInfinity(value: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#infinity? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

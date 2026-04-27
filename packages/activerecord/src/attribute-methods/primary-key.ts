@@ -155,3 +155,4 @@ function isAttributeMethod(attrName: any): never {
     "ActiveRecord::AttributeMethods::PrimaryKey#attribute_method? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

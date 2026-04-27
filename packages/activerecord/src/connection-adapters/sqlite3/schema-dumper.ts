@@ -43,3 +43,4 @@ function extractExpressionForVirtualColumn(column: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::SchemaDumper#extract_expression_for_virtual_column is not implemented",
   );
 }
+// --- end api:compare private stubs ---

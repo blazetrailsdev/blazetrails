@@ -96,3 +96,4 @@ function singletonMethodAdded(): never {
     "ActiveRecord::Scoping::Named#singleton_method_added is not implemented",
   );
 }
+// --- end api:compare private stubs ---

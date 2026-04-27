@@ -193,3 +193,4 @@ function hasDeferTouchAttrs(): never {
     "ActiveRecord::TouchLater#has_defer_touch_attrs? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

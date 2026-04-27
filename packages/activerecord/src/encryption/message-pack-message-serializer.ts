@@ -71,3 +71,4 @@ function parseProperties(headers: any, level: any): never {
     "ActiveRecord::Encryption::MessagePackMessageSerializer#parse_properties is not implemented",
   );
 }
+// --- end api:compare private stubs ---

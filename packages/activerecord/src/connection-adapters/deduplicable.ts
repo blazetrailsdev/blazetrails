@@ -36,3 +36,4 @@ function deduplicated(): never {
     "ActiveRecord::ConnectionAdapters::Deduplicable#deduplicated is not implemented",
   );
 }
+// --- end api:compare private stubs ---

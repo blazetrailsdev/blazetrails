@@ -174,3 +174,4 @@ function extractGeneratedType(field: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#extract_generated_type is not implemented",
   );
 }
+// --- end api:compare private stubs ---

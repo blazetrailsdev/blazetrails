@@ -142,3 +142,4 @@ function defaultInsertValue(column: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#default_insert_value is not implemented",
   );
 }
+// --- end api:compare private stubs ---

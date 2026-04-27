@@ -2200,3 +2200,4 @@ function associationInstanceSet(name: any, association: any): never {
     "ActiveRecord::Associations#association_instance_set is not implemented",
   );
 }
+// --- end api:compare private stubs ---

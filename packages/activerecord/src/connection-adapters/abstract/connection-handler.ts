@@ -307,3 +307,4 @@ function determineOwnerName(ownerName: any, config: any): never {
     "ActiveRecord::ConnectionAdapters::ConnectionHandler#determine_owner_name is not implemented",
   );
 }
+// --- end api:compare private stubs ---

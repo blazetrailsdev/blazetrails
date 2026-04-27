@@ -1300,3 +1300,4 @@ function defineColumnMethods(...columnTypes: any[]): never {
     "ActiveRecord::ConnectionAdapters::ColumnMethods#define_column_methods is not implemented",
   );
 }
+// --- end api:compare private stubs ---

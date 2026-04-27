@@ -1057,3 +1057,4 @@ function afterFailureActions(transaction: any, error: any): never {
     "ActiveRecord::ConnectionAdapters::TransactionManager#after_failure_actions is not implemented",
   );
 }
+// --- end api:compare private stubs ---

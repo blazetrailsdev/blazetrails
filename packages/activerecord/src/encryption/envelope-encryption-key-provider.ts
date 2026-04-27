@@ -78,3 +78,4 @@ function generateRandomSecret(): never {
     "ActiveRecord::Encryption::EnvelopeEncryptionKeyProvider#generate_random_secret is not implemented",
   );
 }
+// --- end api:compare private stubs ---

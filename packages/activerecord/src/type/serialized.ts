@@ -100,3 +100,4 @@ export class Serialized extends ValueType {
 function encoded(value: any): never {
   throw new NotImplementedError("ActiveRecord::Type::Serialized#encoded is not implemented");
 }
+// --- end api:compare private stubs ---

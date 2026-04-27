@@ -35,3 +35,4 @@ function maxValue(): never {
 function minValue(): never {
   throw new NotImplementedError("ActiveRecord::Type::UnsignedInteger#min_value is not implemented");
 }
+// --- end api:compare private stubs ---

@@ -142,3 +142,4 @@ function decodeIfNeeded(value: any): never {
     "ActiveRecord::Encryption::MessageSerializer#decode_if_needed is not implemented",
   );
 }
+// --- end api:compare private stubs ---

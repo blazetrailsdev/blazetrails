@@ -312,3 +312,4 @@ function formatForInspect(name: any, value: any): never {
 function isPkAttribute(name: any): never {
   throw new NotImplementedError("ActiveRecord::AttributeMethods#pk_attribute? is not implemented");
 }
+// --- end api:compare private stubs ---

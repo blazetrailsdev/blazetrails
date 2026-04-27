@@ -328,3 +328,4 @@ function subclassFromAttributes(): never {
     "ActiveRecord::Inheritance#subclass_from_attributes is not implemented",
   );
 }
+// --- end api:compare private stubs ---

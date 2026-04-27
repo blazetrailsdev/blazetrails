@@ -438,3 +438,4 @@ function runCmdError(cmd: any, args: any, action: any): never {
     "ActiveRecord::Tasks::PostgreSQLDatabaseTasks#run_cmd_error is not implemented",
   );
 }
+// --- end api:compare private stubs ---

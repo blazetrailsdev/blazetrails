@@ -177,3 +177,4 @@ function deduplicated(): never {
     "ActiveRecord::ConnectionAdapters::Column#deduplicated is not implemented",
   );
 }
+// --- end api:compare private stubs ---

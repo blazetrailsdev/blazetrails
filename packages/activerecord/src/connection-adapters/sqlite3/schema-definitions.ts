@@ -62,3 +62,4 @@ function validColumnDefinitionOptions(): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::TableDefinition#valid_column_definition_options is not implemented",
   );
 }
+// --- end api:compare private stubs ---

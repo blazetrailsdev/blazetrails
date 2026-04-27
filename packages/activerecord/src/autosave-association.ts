@@ -599,3 +599,4 @@ function defineAutosaveValidationCallbacks(): never {
     "ActiveRecord::AutosaveAssociation#define_autosave_validation_callbacks is not implemented",
   );
 }
+// --- end api:compare private stubs ---

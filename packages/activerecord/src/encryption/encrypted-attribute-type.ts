@@ -389,3 +389,4 @@ function databaseTypeToText(value: any): never {
     "ActiveRecord::Encryption::EncryptedAttributeType#database_type_to_text is not implemented",
   );
 }
+// --- end api:compare private stubs ---

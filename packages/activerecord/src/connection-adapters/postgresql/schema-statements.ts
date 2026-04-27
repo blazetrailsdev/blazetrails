@@ -417,3 +417,4 @@ function columnNamesFromColumnNumbers(tableOid: any, columnNumbers: any): never 
     "ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaStatements#column_names_from_column_numbers is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -1915,3 +1915,4 @@ function initializeTypeMap(m: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3Adapter#initialize_type_map is not implemented",
   );
 }
+// --- end api:compare private stubs ---

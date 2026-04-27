@@ -54,3 +54,4 @@ function isCreateTimeZoneConversionAttribute(): never {
     "ActiveRecord::AttributeMethods::TimeZoneConversion#create_time_zone_conversion_attribute? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

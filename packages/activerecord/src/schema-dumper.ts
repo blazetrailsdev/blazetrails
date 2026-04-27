@@ -727,3 +727,4 @@ function isIgnored(tableName: any): never {
 function generateOptions(config: any): never {
   throw new NotImplementedError("ActiveRecord::SchemaDumper#generate_options is not implemented");
 }
+// --- end api:compare private stubs ---

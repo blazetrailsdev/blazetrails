@@ -64,3 +64,4 @@ function deduplicated(): never {
     "ActiveRecord::ConnectionAdapters::MySQL::TypeMetadata#deduplicated is not implemented",
   );
 }
+// --- end api:compare private stubs ---

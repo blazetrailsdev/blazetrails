@@ -211,3 +211,4 @@ function writeStoreAttribute(storeAttribute: any, key: any, value: any): never {
 function storeAccessorFor(storeAttribute: any): never {
   throw new NotImplementedError("ActiveRecord::Store#store_accessor_for is not implemented");
 }
+// --- end api:compare private stubs ---

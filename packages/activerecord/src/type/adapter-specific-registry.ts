@@ -236,3 +236,4 @@ function isMatchesOptions(kwargs?: any): never {
     "ActiveRecord::Type::DecorationRegistration#matches_options? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

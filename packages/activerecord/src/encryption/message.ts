@@ -35,3 +35,4 @@ function validatePayloadType(payload: any): never {
     "ActiveRecord::Encryption::Message#validate_payload_type is not implemented",
   );
 }
+// --- end api:compare private stubs ---

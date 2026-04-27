@@ -174,3 +174,4 @@ function integerToSql(limit: any): never {
     "ActiveRecord::ConnectionAdapters::MySQL::SchemaStatements#integer_to_sql is not implemented",
   );
 }
+// --- end api:compare private stubs ---

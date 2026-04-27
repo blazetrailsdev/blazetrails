@@ -130,3 +130,4 @@ function cache(): never {
     "ActiveRecord::ConnectionAdapters::StatementPool#cache is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -1884,3 +1884,4 @@ function sourceTypeScope(): never {
     "ActiveRecord::Reflection::PolymorphicReflection#source_type_scope is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -55,3 +55,4 @@ function keyLength(): never {
     "ActiveRecord::Encryption::KeyGenerator#key_length is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -993,3 +993,4 @@ function checkoutAndVerify(c: any): never {
     "ActiveRecord::ConnectionAdapters::ConnectionPool#checkout_and_verify is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -254,3 +254,4 @@ function raiseIfBindArityMismatch(): never {
     "ActiveRecord::Sanitization#raise_if_bind_arity_mismatch is not implemented",
   );
 }
+// --- end api:compare private stubs ---

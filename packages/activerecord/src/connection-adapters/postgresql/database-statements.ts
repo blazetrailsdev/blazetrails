@@ -144,3 +144,4 @@ function isWarningIgnored(warning: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#warning_ignored? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

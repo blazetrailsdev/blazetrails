@@ -392,3 +392,4 @@ function actionSql(action: any, dependency: any): never {
     "ActiveRecord::ConnectionAdapters::SchemaCreation#action_sql is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -264,3 +264,4 @@ function is_foreignKeysEqual(fkey1: any, fkey2: any): never {
     "ActiveRecord::CounterCache#_foreign_keys_equal? is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -438,3 +438,4 @@ function cacheNotificationInfo(sql: any, name: any, binds: any): never {
     "ActiveRecord::ConnectionAdapters::QueryCache#cache_notification_info is not implemented",
   );
 }
+// --- end api:compare private stubs ---

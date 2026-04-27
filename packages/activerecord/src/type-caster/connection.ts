@@ -71,3 +71,4 @@ function tableName(): never {
     "ActiveRecord::TypeCaster::Connection#table_name is not implemented",
   );
 }
+// --- end api:compare private stubs ---

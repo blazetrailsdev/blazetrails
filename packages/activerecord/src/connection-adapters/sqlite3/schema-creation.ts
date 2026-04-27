@@ -38,3 +38,4 @@ function addColumnOptionsBang(sql: any, options: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::SchemaCreation#add_column_options! is not implemented",
   );
 }
+// --- end api:compare private stubs ---

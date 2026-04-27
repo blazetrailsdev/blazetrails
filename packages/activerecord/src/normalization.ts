@@ -95,3 +95,4 @@ function normalizeChangedInPlaceAttributes(): never {
     "ActiveRecord::Normalization#normalize_changed_in_place_attributes is not implemented",
   );
 }
+// --- end api:compare private stubs ---

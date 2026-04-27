@@ -234,3 +234,4 @@ function updateOrCreateEntry(connection: any, key: any, value: any): never {
     "ActiveRecord::InternalMetadata#update_or_create_entry is not implemented",
   );
 }
+// --- end api:compare private stubs ---

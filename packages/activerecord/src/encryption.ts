@@ -482,3 +482,4 @@ function tryToDecryptWithEach(encryptedText: any, keys?: any): never {
 function cipherFor(secret: any, deterministic?: any): never {
   throw new NotImplementedError("ActiveRecord::Encryption::Cipher#cipher_for is not implemented");
 }
+// --- end api:compare private stubs ---

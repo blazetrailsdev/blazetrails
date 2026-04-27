@@ -4101,3 +4101,4 @@ function constructCoder(row: any, coderClass: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#construct_coder is not implemented",
   );
 }
+// --- end api:compare private stubs ---

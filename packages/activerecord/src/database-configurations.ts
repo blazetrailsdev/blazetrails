@@ -463,3 +463,4 @@ function environmentValueFor(name: any): never {
     "ActiveRecord::DatabaseConfigurations#environment_value_for is not implemented",
   );
 }
+// --- end api:compare private stubs ---

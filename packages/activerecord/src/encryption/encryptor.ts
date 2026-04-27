@@ -232,3 +232,4 @@ function forcedEncodingForDeterministicEncryption(): never {
     "ActiveRecord::Encryption::Encryptor#forced_encoding_for_deterministic_encryption is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -29,3 +29,4 @@ function castValue(value: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Enum#cast_value is not implemented",
   );
 }
+// --- end api:compare private stubs ---

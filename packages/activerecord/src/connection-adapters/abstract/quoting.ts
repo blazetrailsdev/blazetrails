@@ -481,3 +481,4 @@ function lookupCastType(sqlType: any): never {
     "ActiveRecord::ConnectionAdapters::Quoting#lookup_cast_type is not implemented",
   );
 }
+// --- end api:compare private stubs ---

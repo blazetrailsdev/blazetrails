@@ -234,3 +234,4 @@ function rawTimestampToCacheVersion(timestamp: any): never {
     "ActiveRecord::Integration#raw_timestamp_to_cache_version is not implemented",
   );
 }
+// --- end api:compare private stubs ---

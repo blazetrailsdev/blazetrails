@@ -593,3 +593,4 @@ function integerLikePrimaryKeyType(type: any, options: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::TableDefinition#integer_like_primary_key_type is not implemented",
   );
 }
+// --- end api:compare private stubs ---

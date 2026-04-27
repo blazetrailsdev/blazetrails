@@ -35,3 +35,4 @@ function keysGroupedById(): never {
     "ActiveRecord::Encryption::KeyProvider#keys_grouped_by_id is not implemented",
   );
 }
+// --- end api:compare private stubs ---

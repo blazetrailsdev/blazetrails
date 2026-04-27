@@ -54,3 +54,4 @@ function maxAllowedPacket(): never {
     "ActiveRecord::ConnectionAdapters::MySQL::DatabaseStatements#max_allowed_packet is not implemented",
   );
 }
+// --- end api:compare private stubs ---

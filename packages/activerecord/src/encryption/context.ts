@@ -117,3 +117,4 @@ function buildDefaultKeyProvider(): never {
     "ActiveRecord::Encryption::Context#build_default_key_provider is not implemented",
   );
 }
+// --- end api:compare private stubs ---

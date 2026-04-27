@@ -76,3 +76,4 @@ function queryCastAttribute(attrName: any, value: any): never {
     "ActiveRecord::AttributeMethods::Query#query_cast_attribute is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -250,3 +250,4 @@ function columnType(name: any, index: any, typeOverrides: any): never {
 function hashRows(): never {
   throw new NotImplementedError("ActiveRecord::Result#hash_rows is not implemented");
 }
+// --- end api:compare private stubs ---

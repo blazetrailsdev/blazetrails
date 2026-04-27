@@ -134,3 +134,4 @@ function tableModifierInCreate(o: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaCreation#table_modifier_in_create is not implemented",
   );
 }
+// --- end api:compare private stubs ---

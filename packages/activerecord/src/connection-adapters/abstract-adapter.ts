@@ -1156,3 +1156,4 @@ function extractLimit(sqlType: any): never {
     "ActiveRecord::ConnectionAdapters::AbstractAdapter#extract_limit is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -63,3 +63,4 @@ function deduplicated(): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::TypeMetadata#deduplicated is not implemented",
   );
 }
+// --- end api:compare private stubs ---

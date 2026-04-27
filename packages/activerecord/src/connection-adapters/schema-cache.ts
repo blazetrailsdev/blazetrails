@@ -743,3 +743,4 @@ function open(filename: any): never {
     "ActiveRecord::ConnectionAdapters::SchemaCache#open is not implemented",
   );
 }
+// --- end api:compare private stubs ---

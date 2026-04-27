@@ -458,3 +458,4 @@ function detectNegativeEnumConditionsBang(methodNames: any): never {
     "ActiveRecord::Enum#detect_negative_enum_conditions! is not implemented",
   );
 }
+// --- end api:compare private stubs ---

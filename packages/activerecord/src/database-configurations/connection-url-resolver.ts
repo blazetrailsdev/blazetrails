@@ -195,3 +195,4 @@ function databaseFromPath(): never {
     "ActiveRecord::DatabaseConfigurations::ConnectionUrlResolver#database_from_path is not implemented",
   );
 }
+// --- end api:compare private stubs ---

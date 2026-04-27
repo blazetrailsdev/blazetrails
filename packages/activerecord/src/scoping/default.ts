@@ -123,3 +123,4 @@ function evaluateDefaultScope(): never {
     "ActiveRecord::Scoping::Default#evaluate_default_scope is not implemented",
   );
 }
+// --- end api:compare private stubs ---

@@ -54,6 +54,8 @@ export async function lockBang<T extends Base>(
  * the block is required — calling `withLock("FOR UPDATE")` with no
  * callback is a compile error (and a runtime error, as a safety net).
  */
+type TxOptions = { requiresNew?: boolean; joinable?: boolean; isolation?: string };
+
 export async function withLock<T extends Base>(
   this: T,
   fn: (record: T) => Promise<void> | void,
@@ -65,16 +67,24 @@ export async function withLock<T extends Base>(
 ): Promise<void>;
 export async function withLock<T extends Base>(
   this: T,
-  lockOrFn: string | ((record: T) => Promise<void> | void),
+  options: TxOptions,
+  fn: (record: T) => Promise<void> | void,
+): Promise<void>;
+export async function withLock<T extends Base>(
+  this: T,
+  lockOrOptOrFn: string | TxOptions | ((record: T) => Promise<void> | void),
   fn?: (record: T) => Promise<void> | void,
 ): Promise<void> {
   let lockClause = "FOR UPDATE";
+  let txOptions: TxOptions = {};
   let callback = fn;
 
-  if (typeof lockOrFn === "function") {
-    callback = lockOrFn;
-  } else if (typeof lockOrFn === "string") {
-    lockClause = lockOrFn;
+  if (typeof lockOrOptOrFn === "function") {
+    callback = lockOrOptOrFn;
+  } else if (typeof lockOrOptOrFn === "string") {
+    lockClause = lockOrOptOrFn;
+  } else if (lockOrOptOrFn !== null && typeof lockOrOptOrFn === "object") {
+    txOptions = lockOrOptOrFn;
   }
 
   if (!callback) {
@@ -86,7 +96,7 @@ export async function withLock<T extends Base>(
   await instance.transaction(async () => {
     await lockBang.call(instance, lockClause);
     await cb(instance);
-  });
+  }, txOptions);
 }
 
 /**

@@ -20,20 +20,27 @@ export async function touch(this: Base, ...names: string[]): Promise<boolean> {
   }
   if (!this.isPersisted()) return false;
   const now = new Date();
-  const attrs: Record<string, unknown> = {};
 
   const ctor = this.constructor as typeof Base;
+  const touchCols: string[] = [];
   if (ctor._attributeDefinitions.has("updated_at")) {
-    attrs.updated_at = now;
+    touchCols.push("updated_at");
   }
-
   for (const name of names) {
-    attrs[name] = now;
+    if (ctor._attributeDefinitions.has(name)) touchCols.push(name);
   }
 
-  if (Object.keys(attrs).length === 0) return false;
+  if (touchCols.length === 0) return false;
 
-  await this.updateColumns(attrs);
+  // Write the timestamp values as dirty changes so _performUpdate picks them
+  // up and applies the locking-aware UPDATE (increments lock_version, raises
+  // StaleObjectError on version mismatch). Mirrors Rails' _touch_row path.
+  for (const col of touchCols) {
+    this.writeAttribute(col, now);
+  }
+
+  const saved = await (this as any).save({ validate: false });
+  if (!saved) return false;
 
   await ctor._callbackChain.runAfter("touch", this);
   return true;

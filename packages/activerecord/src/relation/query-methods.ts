@@ -2004,8 +2004,9 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
 
   // Stashed eager signal: _eagerLoadAssociations (stashed_eager_load equivalent).
   // _leftOuterJoinsValues is already handled above, so only eager is added here
-  // to avoid double-inclusion. Guard: check non-empty before calling to avoid
-  // constructing an empty primary JD.
+  // to avoid double-inclusion. Only push a primary JD when namedEager has at least
+  // one string association — non-string specs (hashes/nested) skip constructJoinDependency
+  // and would produce an empty JD that still sets hasStashed, incorrectly changing routing.
   if (this._eagerLoadAssociations.length > 0) {
     const eagerStash: JoinDependency[] = [];
     const namedEager = selectNamedJoins.call(
@@ -2013,9 +2014,12 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
       this._eagerLoadAssociations as string[],
       eagerStash,
     );
-    const eagerJd = constructJoinDependency.call(this, namedEager as AssociationSpec[], null);
-    eagerStash.unshift(eagerJd);
-    buckets.stashed_join.push(...eagerStash);
+    const hasJoinableEager = (namedEager as AssociationSpec[]).some((a) => typeof a === "string");
+    if (hasJoinableEager) {
+      const eagerJd = constructJoinDependency.call(this, namedEager as AssociationSpec[], null);
+      eagerStash.unshift(eagerJd);
+    }
+    if (eagerStash.length > 0) buckets.stashed_join.push(...eagerStash);
   }
   const hasStashed = buckets.stashed_join.length > 0;
 

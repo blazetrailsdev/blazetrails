@@ -723,8 +723,9 @@ describeIfMysql("Mysql2Adapter", () => {
       const rows = await adapter.execute("SELECT `dt` FROM `temporal_test`");
       expect(rows[0].dt).toBeInstanceOf(Temporal.PlainDateTime);
       const pdt = rows[0].dt as Temporal.PlainDateTime;
-      expect(pdt.microsecond).toBe(123);
-      expect(pdt.millisecond).toBe(456);
+      // .123456 s → millisecond=123, microsecond=456 (sub-ms component)
+      expect(pdt.millisecond).toBe(123);
+      expect(pdt.microsecond).toBe(456);
     });
 
     it("returns null for zero DATETIME '0000-00-00 00:00:00'", async () => {

@@ -40,7 +40,9 @@ describe("temporalTypeCast", () => {
     it("parses DATETIME to Temporal.PlainDateTime", () => {
       const result = temporalTypeCast(field(TYPE_DATETIME, "2026-04-27 14:23:55.123456"), next);
       expect(result).toBeInstanceOf(Temporal.PlainDateTime);
-      expect((result as Temporal.PlainDateTime).microsecond).toBe(123);
+      // .123456 s → millisecond=123, microsecond=456 (sub-ms component)
+      expect((result as Temporal.PlainDateTime).millisecond).toBe(123);
+      expect((result as Temporal.PlainDateTime).microsecond).toBe(456);
     });
 
     it("returns null for zero-date", () => {
@@ -77,7 +79,9 @@ describe("temporalTypeCast", () => {
     it("parses TIME to Temporal.PlainTime", () => {
       const result = temporalTypeCast(field(TYPE_TIME, "14:23:55.123456"), next);
       expect(result).toBeInstanceOf(Temporal.PlainTime);
-      expect((result as Temporal.PlainTime).toString()).toBe("14:23:55.12345600");
+      const pt = result as Temporal.PlainTime;
+      expect(pt.millisecond).toBe(123);
+      expect(pt.microsecond).toBe(456);
     });
 
     it("returns null for NULL", () => {

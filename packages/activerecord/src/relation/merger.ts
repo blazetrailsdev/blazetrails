@@ -17,43 +17,99 @@ export class Merger {
 
   merge(): any {
     const rel = this.relation._clone();
-    rel._whereClause = rel._whereClause.merge(this.other._whereClause);
-    if (this.other._orderClauses.length > 0) {
-      rel._orderClauses = [...this.other._orderClauses];
+    this.mergeWhereClause(rel);
+    this.mergeSelectValues(rel);
+    this.mergeMultiValues(rel);
+    this.mergeSingleValues(rel);
+    this.mergeClauses(rel);
+    this.mergePreloads(rel);
+    this.mergeJoins(rel);
+    this.mergeOuterJoins(rel);
+    if (this.other._isNone) rel._isNone = true;
+    return rel;
+  }
+
+  private mergeWhereClause(rel: any): void {
+    if (!this.other._whereClause.isEmpty()) {
+      rel._whereClause = rel._whereClause.merge(this.other._whereClause);
     }
-    if (this.other._limitValue !== null) {
-      rel._limitValue = this.other._limitValue;
-    }
-    if (this.other._offsetValue !== null) {
-      rel._offsetValue = this.other._offsetValue;
-    }
-    if (this.other._selectColumns) {
+  }
+
+  private mergeSelectValues(rel: any): void {
+    if (this.other._selectColumns && this.other._selectColumns.length > 0) {
       rel._selectColumns = [...this.other._selectColumns];
     }
-    if (this.other._isDistinct) rel._isDistinct = true;
-    if (this.other._groupColumns.length > 0) {
+  }
+
+  private mergePreloads(rel: any): void {
+    if (this.other._preloadValues && this.other._preloadValues.length > 0) {
+      rel._preloadValues = [...(rel._preloadValues ?? []), ...this.other._preloadValues];
+    }
+    if (this.other._includesValues && this.other._includesValues.length > 0) {
+      rel._includesValues = [...(rel._includesValues ?? []), ...this.other._includesValues];
+    }
+  }
+
+  private mergeJoins(rel: any): void {
+    if (this.other._joinClauses && this.other._joinClauses.length > 0) {
+      rel._joinClauses.push(...this.other._joinClauses);
+    }
+    if (this.other._rawJoins && this.other._rawJoins.length > 0) {
+      rel._rawJoins.push(...this.other._rawJoins);
+    }
+  }
+
+  private mergeOuterJoins(rel: any): void {
+    if (this.other._leftOuterJoins && this.other._leftOuterJoins.length > 0) {
+      rel._leftOuterJoins = [...(rel._leftOuterJoins ?? []), ...this.other._leftOuterJoins];
+    }
+  }
+
+  private mergeMultiValues(rel: any): void {
+    if (this.other._orderClauses && this.other._orderClauses.length > 0) {
+      rel._orderClauses = [...this.other._orderClauses];
+    }
+    if (this.other._groupColumns && this.other._groupColumns.length > 0) {
       rel._groupColumns.push(...this.other._groupColumns);
     }
-    if (!this.other._havingClause.isEmpty()) {
-      rel._havingClause = rel._havingClause.merge(this.other._havingClause);
+    if (this.other._annotations && this.other._annotations.length > 0) {
+      rel._annotations.push(...this.other._annotations);
     }
+    if (this.other._referencesValues) {
+      for (const ref of this.other._referencesValues) {
+        if (!rel._referencesValues.includes(ref)) rel._referencesValues.push(ref);
+      }
+    }
+  }
+
+  private mergeSingleValues(rel: any): void {
+    if (this.other._limitValue !== null && this.other._limitValue !== undefined) {
+      rel._limitValue = this.other._limitValue;
+    }
+    if (this.other._offsetValue !== null && this.other._offsetValue !== undefined) {
+      rel._offsetValue = this.other._offsetValue;
+    }
+    if (this.other._isDistinct) rel._isDistinct = true;
     if (this.other._lockValue) rel._lockValue = this.other._lockValue;
     if (this.other._isReadonly) rel._isReadonly = true;
     if (this.other._isStrictLoading) rel._isStrictLoading = true;
-    // `.none()` is sticky — a merged-in relation that was already
-    // empty stays empty so callers don't accidentally broaden the
-    // result by composing additional state on top. Mirrors Rails'
-    // `Relation::Merger#merge` implicitly propagating the null
-    // relation's short-circuit; we have to copy it explicitly
-    // because our none-check lives on a boolean field.
-    if (this.other._isNone) rel._isNone = true;
-    rel._joinClauses.push(...this.other._joinClauses);
-    rel._rawJoins.push(...this.other._rawJoins);
-    rel._annotations.push(...this.other._annotations);
-    for (const ref of this.other._referencesValues) {
-      if (!rel._referencesValues.includes(ref)) rel._referencesValues.push(ref);
+  }
+
+  private mergeClauses(rel: any): void {
+    if (!this.other._havingClause.isEmpty()) {
+      rel._havingClause = rel._havingClause.merge(this.other._havingClause);
     }
-    return rel;
+    if (this.isReplaceFromClause() && this.other._fromClause) {
+      rel._fromClause = this.other._fromClause;
+    }
+  }
+
+  private isReplaceFromClause(): boolean {
+    return (
+      (!this.relation._fromClause || this.relation._fromClause === "") &&
+      this.other._fromClause &&
+      this.other._fromClause !== ""
+    );
   }
 }
 

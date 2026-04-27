@@ -21,7 +21,15 @@ export interface AssociationMapping {
 }
 
 export class PredicateBuilder {
-  readonly table: Table;
+  private _table: Table;
+
+  get table(): Table {
+    return this._table;
+  }
+
+  protected set table(value: Table) {
+    this._table = value;
+  }
   private arrayHandler: ArrayHandler;
   private rangeHandler: RangeHandler;
   private basicObjectHandler: BasicObjectHandler;
@@ -31,7 +39,7 @@ export class PredicateBuilder {
   private _tableContext: any = null;
 
   constructor(table: Table) {
-    this.table = table;
+    this._table = table;
     this.arrayHandler = new ArrayHandler(this);
     this.rangeHandler = new RangeHandler((attribute, v) => {
       // Prefer the attribute's own relation typeCaster (covers joined/aliased tables)
@@ -399,6 +407,57 @@ export class PredicateBuilder {
     return (
       typeof value === "object" && value !== null && "_modelClass" in value && "toArel" in value
     );
+  }
+
+  protected expandFromHash(
+    attributes: Record<string, unknown>,
+    block?: (key: string) => any,
+  ): Nodes.Node[] {
+    return this.buildFromHash(attributes);
+  }
+
+  private groupingQueries(queries: Nodes.Node[][]): Nodes.Node | Nodes.Node[] {
+    if (queries.length === 1) return queries[0];
+    const ands = queries.map((q) => (q.length === 1 ? q[0] : new Nodes.And(q)));
+    return [new Nodes.Grouping(new Nodes.Or(ands))];
+  }
+
+  private convertDotNotationToHash(attributes: Record<string, unknown>): Record<string, unknown> {
+    const converted: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(attributes)) {
+      if (isPlainObject(value)) {
+        const existing = converted[key];
+        if (existing && isPlainObject(existing)) {
+          Object.assign(existing, value);
+        } else {
+          converted[key] = { ...value };
+        }
+      } else {
+        const dot = key.lastIndexOf(".");
+        if (dot !== -1) {
+          const tableName = key.slice(0, dot);
+          const colName = key.slice(dot + 1);
+          const existing = converted[tableName];
+          if (existing && isPlainObject(existing)) {
+            (existing as Record<string, unknown>)[colName] = value;
+          } else {
+            converted[tableName] = { [colName]: value };
+          }
+        } else {
+          converted[key] = value;
+        }
+      }
+    }
+    return converted;
+  }
+
+  private handlerFor(object: unknown): { call(attr: Nodes.Attribute, value: any): Nodes.Node } {
+    for (const [klass, handler] of this.handlers) {
+      if (object instanceof klass) return handler;
+    }
+    if (object instanceof Array) return this.arrayHandler;
+    if (object instanceof Set) return this.arrayHandler;
+    return this.basicObjectHandler;
   }
 }
 

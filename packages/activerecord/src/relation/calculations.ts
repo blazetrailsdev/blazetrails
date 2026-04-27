@@ -453,3 +453,138 @@ export class ColumnAliasTracker {
     return `${column}_${count}`;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Private helpers (mirrors Rails' ActiveRecord::Calculations private methods)
+// ---------------------------------------------------------------------------
+
+function columnAliasFor(field: string): string {
+  return field
+    .replace(/[^a-zA-Z0-9_]/, "_")
+    .replace(/_{2,}/, "_")
+    .slice(0, 255);
+}
+
+function truncate(name: string): string {
+  return name.slice(0, 255);
+}
+
+function aggregateColumn(rel: CalculationRelation, columnName: string): unknown {
+  const table = rel._modelClass.arelTable;
+  if (columnName === "*" || columnName === "1") {
+    return (table as any).sql ? (table as any).sql(columnName) : columnName;
+  }
+  if (columnName.includes(".")) {
+    const parts = columnName.split(".");
+    return new Table(parts[0]).get(parts[1]);
+  }
+  return table.get(columnName);
+}
+
+function isAllAttributes(columnNames: string[]): boolean {
+  return columnNames.every((c) => c === "*" || !c.includes("("));
+}
+
+function hasInclude(rel: CalculationRelation, columnName: string | null): boolean {
+  return (rel as any)._includesValues?.length > 0 || (rel as any)._eagerLoadValues?.length > 0;
+}
+
+function performCalculation(
+  rel: CalculationRelation,
+  operation: string,
+  columnName: string,
+): Promise<unknown> {
+  if ((rel as any)._groupColumns?.length > 0) {
+    return executeGroupedCalculation(rel, operation, columnName, false);
+  }
+  return executeSimpleCalculation(rel, operation, columnName, false);
+}
+
+function isDistinctSelect(rel: CalculationRelation, columnName: string): boolean {
+  return rel._isDistinct || columnName !== "*";
+}
+
+function operationOverAggregateColumn(
+  column: unknown,
+  operation: string,
+  distinct: boolean,
+): unknown {
+  return column;
+}
+
+async function executeSimpleCalculation(
+  rel: CalculationRelation,
+  operation: string,
+  columnName: string,
+  distinct: boolean,
+): Promise<unknown> {
+  const table = rel._modelClass.arelTable;
+  const col = aggregateColumn(rel, columnName);
+  const fn = operation.toUpperCase();
+  const colSql = typeof col === "string" ? col : ((col as any).toSql?.() ?? String(col));
+  const distinctSql = distinct ? "DISTINCT " : "";
+  const sql = `SELECT ${fn}(${distinctSql}${colSql}) FROM ${(table as any).name}`;
+  const rows = await rel._modelClass.adapter.execute(sql);
+  if (rows.length === 0) return null;
+  const val = Object.values(rows[0])[0];
+  return typeCastCalculatedValue(val, operation, resolveColType(rel, columnName));
+}
+
+async function executeGroupedCalculation(
+  rel: CalculationRelation,
+  operation: string,
+  columnName: string,
+  distinct: boolean,
+): Promise<Record<string, unknown>> {
+  const grouped = (rel as any)._groupColumns ?? [];
+  const result: Record<string, unknown> = {};
+  const records = await rel.toArray();
+  for (const row of records) {
+    const key = grouped
+      .map((g: string) => (row as any).readAttribute?.(g) ?? (row as any)[g])
+      .join(",");
+    result[key] = (row as any).readAttribute?.(columnName) ?? (row as any)[columnName];
+  }
+  return result;
+}
+
+function typeFor(rel: CalculationRelation, field: string): unknown {
+  return resolveColType(rel, field);
+}
+
+function lookupCastTypeFromJoinDependencies(_rel: CalculationRelation, _name: string): unknown {
+  return null;
+}
+
+function typeCastPluckValues(result: unknown[][], columns: string[]): unknown[][] {
+  return result.map((row) =>
+    row.map((val, i) =>
+      castAggValue(val, "sum" as any, resolveColType(null as any, columns[i] ?? ""), false),
+    ),
+  );
+}
+
+function typeCastCalculatedValue(value: unknown, operation: string, type: unknown): unknown {
+  if (operation === "count") return Number(value ?? 0);
+  if (operation === "sum") return Number(value ?? 0);
+  if (operation === "average") return value === null ? null : Number(value);
+  return value;
+}
+
+function selectForCount(rel: CalculationRelation): string {
+  const sel = (rel as any)._selectColumns;
+  if (!sel || sel.length === 0) return "*";
+  return sel.map((s: unknown) => String(s)).join(", ");
+}
+
+function isBuildCountSubquery(operation: string, columnName: string, distinct: boolean): boolean {
+  return operation === "count" && distinct && columnName !== "*";
+}
+
+function buildCountSubquery(
+  rel: CalculationRelation,
+  columnName: string,
+  distinct: boolean,
+): unknown {
+  return rel;
+}

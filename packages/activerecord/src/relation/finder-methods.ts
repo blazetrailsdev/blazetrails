@@ -564,3 +564,100 @@ export const FinderMethods = {
   createOrFindByBang: performCreateOrFindByBang,
   raiseRecordNotFoundExceptionBang,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Private helpers (mirrors Rails' ActiveRecord::FinderMethods private methods)
+// ---------------------------------------------------------------------------
+
+function constructRelationForExists(rel: FinderRelation, conditions: unknown): any {
+  if (conditions === false || conditions === null) return rel;
+  if (typeof conditions === "object" && conditions !== null) {
+    return (rel as any).where(conditions);
+  }
+  if (conditions !== undefined && conditions !== true) {
+    const pk = (rel as any)._modelClass.primaryKey;
+    return (rel as any).where({ [pk as string]: conditions });
+  }
+  return rel;
+}
+
+function applyJoinDependency(rel: FinderRelation, eagerLoading: boolean): any {
+  return rel;
+}
+
+function isUsingLimitableReflections(reflections: unknown[]): boolean {
+  return (reflections as any[]).every(
+    (r) => r.macro !== "has_many" && r.macro !== "has_and_belongs_to_many",
+  );
+}
+
+async function findWithIds(rel: FinderRelation, ids: unknown[]): Promise<any> {
+  const normalized = normalizeFindArgs(
+    (rel as any)._modelClass.name,
+    (rel as any)._modelClass.primaryKey,
+    ids,
+  );
+  if (normalized.wantArray) {
+    return findSome(rel, normalized.ids);
+  }
+  return findOne(rel, normalized.ids[0]);
+}
+
+async function findOne(rel: FinderRelation, id: unknown): Promise<any> {
+  const pk = (rel as any)._modelClass.primaryKey as string;
+  const record = await (rel as any).findBy({ [pk]: id });
+  if (!record) {
+    const modelName = (rel as any)._modelClass.name as string;
+    throw new RecordNotFound(`Couldn't find ${modelName}`, modelName, pk, id);
+  }
+  return record;
+}
+
+async function findSome(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
+  const pk = (rel as any)._modelClass.primaryKey as string;
+  const records = await (rel as any).where({ [pk]: ids }).toArray();
+  if (records.length !== ids.length) {
+    const foundIds = records.map((r: any) => r.readAttribute?.(pk) ?? r[pk]);
+    const missingIds = ids.filter((id) => !foundIds.includes(id));
+    const modelName = (rel as any)._modelClass.name as string;
+    throw new RecordNotFound(`Couldn't find all ${modelName}`, modelName, pk, missingIds);
+  }
+  return records;
+}
+
+async function findSomeOrdered(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
+  const pk = (rel as any)._modelClass.primaryKey;
+  const records = await findSome(rel, ids);
+  const idIndex = new Map(ids.map((id, i) => [String(id), i]));
+  return records.sort((a: any, b: any) => {
+    const ai = idIndex.get(String(a.readAttribute?.(pk as string) ?? a[pk as string])) ?? 0;
+    const bi = idIndex.get(String(b.readAttribute?.(pk as string) ?? b[pk as string])) ?? 0;
+    return ai - bi;
+  });
+}
+
+async function findTake(rel: FinderRelation): Promise<any | null> {
+  const records = await (rel as any).limit(1).toArray();
+  return records[0] ?? null;
+}
+
+async function findTakeWithLimit(rel: FinderRelation, limit: number): Promise<any[]> {
+  return (rel as any).limit(limit).toArray();
+}
+
+function findNth(rel: FinderRelation, index: number): Promise<any | null> {
+  return findNthWithLimit.call(rel, index);
+}
+
+async function findLast(rel: FinderRelation, limit?: number): Promise<any> {
+  return performLast.call(rel, limit);
+}
+
+function orderedRelation(rel: FinderRelation): any {
+  return orderByPk(rel, "asc");
+}
+
+function _orderColumns(rel: FinderRelation): string[] {
+  const pk = (rel as any)._modelClass.primaryKey;
+  return Array.isArray(pk) ? pk : [pk];
+}

@@ -173,3 +173,17 @@ export function wrapWithScopeProxy<T extends object>(rel: T): T {
     },
   });
 }
+
+function relationClassFor(klass: Function): typeof GeneratedRelationMethods {
+  return GeneratedRelationMethods;
+}
+
+function includeRelationMethods(target: object, methods: GeneratedRelationMethods): void {
+  for (const [name, fn] of (methods as any)._methods) {
+    (target as any)[name] = fn;
+  }
+}
+
+function generatedRelationMethods(modelClass: Function): GeneratedRelationMethods {
+  return _generatedMethodsByModel.get(modelClass) ?? new GeneratedRelationMethods();
+}

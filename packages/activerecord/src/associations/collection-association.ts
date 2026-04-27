@@ -276,7 +276,18 @@ export class CollectionAssociation extends Association {
         }
       }
       this.loadedBang();
-      this._pendingReplace = { newTarget: [...otherArray], originalTarget };
+      // Preserve the first originalTarget (what's in the DB) across multiple
+      // replace() calls before save(). Only update newTarget so the final flush
+      // diffs against the real persisted state, not an intermediate in-memory one.
+      if (this._pendingReplace) {
+        if (arraysEqual(otherArray, this._pendingReplace.originalTarget)) {
+          this._pendingReplace = null; // reverted to DB state — nothing to flush
+        } else {
+          this._pendingReplace.newTarget = [...otherArray];
+        }
+      } else {
+        this._pendingReplace = { newTarget: [...otherArray], originalTarget };
+      }
     }
   }
 
@@ -284,8 +295,16 @@ export class CollectionAssociation extends Association {
     const pending = this._pendingReplace;
     if (!pending || this.owner.isNewRecord()) return;
     this._pendingReplace = null;
+    const currentTarget = this.target;
     await transaction(this, async () => {
-      await replaceRecords(this, pending.newTarget, pending.originalTarget);
+      // replaceRecords diffs against assoc.target; restore originalTarget so
+      // it sees the real DB state rather than the already-updated in-memory target
+      this.target = [...pending.originalTarget];
+      try {
+        await replaceRecords(this, pending.newTarget, pending.originalTarget);
+      } finally {
+        this.target = currentTarget;
+      }
     });
   }
 

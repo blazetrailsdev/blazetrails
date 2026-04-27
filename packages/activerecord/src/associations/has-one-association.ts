@@ -14,7 +14,7 @@ import { SingularAssociation } from "./singular-association.js";
  * Mirrors: ActiveRecord::Associations::HasOneAssociation
  */
 export class HasOneAssociation extends SingularAssociation {
-  _pendingReplace: { record: Base | null; previousTarget: Base | null } | null = null;
+  _pendingReplace: { record: Base | null; readonly previousTarget: Base | null } | null = null;
 
   constructor(owner: Base, definition: AssociationDefinition) {
     super(owner, definition);
@@ -100,7 +100,15 @@ export class HasOneAssociation extends SingularAssociation {
         this.setInverseInstance(record);
       }
       if (save && (this.owner as any).isPersisted?.()) {
-        this._pendingReplace = { record, previousTarget: this.target };
+        if (this._pendingReplace) {
+          if (record === this._pendingReplace.previousTarget) {
+            this._pendingReplace = null; // reverted to DB state — nothing to flush
+          } else {
+            this._pendingReplace.record = record; // update destination, keep original previousTarget
+          }
+        } else {
+          this._pendingReplace = { record, previousTarget: this.target };
+        }
       }
     }
     this.target = record;

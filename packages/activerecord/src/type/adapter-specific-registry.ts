@@ -156,7 +156,6 @@ export class AdapterSpecificRegistry {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function registrations(): never {
   throw new NotImplementedError(
     "ActiveRecord::Type::AdapterSpecificRegistry#registrations is not implemented",
@@ -236,4 +235,3 @@ function isMatchesOptions(kwargs?: any): never {
     "ActiveRecord::Type::DecorationRegistration#matches_options? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

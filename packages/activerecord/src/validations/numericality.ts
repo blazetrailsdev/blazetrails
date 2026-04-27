@@ -31,7 +31,6 @@ export class NumericalityValidator extends BaseNumericalityValidator {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function columnPrecisionFor(record: any, attribute: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Validations::NumericalityValidator#column_precision_for is not implemented",
@@ -43,4 +42,3 @@ function columnScaleFor(record: any, attribute: any): never {
     "ActiveRecord::Validations::NumericalityValidator#column_scale_for is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -255,7 +255,6 @@ export function escapeComment(content: string): string {
   return s;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function rebuildHandlers(): never {
   throw new NotImplementedError("ActiveRecord::QueryLogs#rebuild_handlers is not implemented");
 }
@@ -271,4 +270,3 @@ function escapeSqlComment(content: any): never {
 function tagContent(connection: any): never {
   throw new NotImplementedError("ActiveRecord::QueryLogs#tag_content is not implemented");
 }
-// --- end api:compare private stubs ---

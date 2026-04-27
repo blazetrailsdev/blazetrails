@@ -713,7 +713,6 @@ export class FakePool {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function emptyCache(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SchemaReflection#empty_cache is not implemented",
@@ -743,4 +742,3 @@ function open(filename: any): never {
     "ActiveRecord::ConnectionAdapters::SchemaCache#open is not implemented",
   );
 }
-// --- end api:compare private stubs ---

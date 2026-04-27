@@ -149,10 +149,8 @@ export function getPrimaryKey(
   return "id";
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function isAttributeMethod(attrName: any): never {
   throw new NotImplementedError(
     "ActiveRecord::AttributeMethods::PrimaryKey#attribute_method? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

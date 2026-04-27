@@ -124,10 +124,8 @@ export class StatementPool<T = unknown> {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function cache(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::StatementPool#cache is not implemented",
   );
 }
-// --- end api:compare private stubs ---

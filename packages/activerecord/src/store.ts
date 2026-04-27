@@ -193,7 +193,6 @@ export function store(
  */
 export const storeAccessor = store;
 
-// --- api:compare private stubs (auto-generated) ---
 function asRegularHash(obj: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Store::IndifferentCoder#as_regular_hash is not implemented",
@@ -211,4 +210,3 @@ function writeStoreAttribute(storeAttribute: any, key: any, value: any): never {
 function storeAccessorFor(storeAttribute: any): never {
   throw new NotImplementedError("ActiveRecord::Store#store_accessor_for is not implemented");
 }
-// --- end api:compare private stubs ---

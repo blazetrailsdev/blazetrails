@@ -265,7 +265,6 @@ export class ConnectionHandler {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function connectionNameToPoolManager(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::ConnectionHandler#connection_name_to_pool_manager is not implemented",
@@ -307,4 +306,3 @@ function determineOwnerName(ownerName: any, config: any): never {
     "ActiveRecord::ConnectionAdapters::ConnectionHandler#determine_owner_name is not implemented",
   );
 }
-// --- end api:compare private stubs ---

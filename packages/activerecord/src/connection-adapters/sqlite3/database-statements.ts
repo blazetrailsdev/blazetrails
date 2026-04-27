@@ -86,7 +86,6 @@ export async function resetIsolationLevel(
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function internalBeginTransaction(mode: any, isolation: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#internal_begin_transaction is not implemented",
@@ -142,4 +141,3 @@ function defaultInsertValue(column: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#default_insert_value is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -131,7 +131,6 @@ export async function updateCounters(
   return 0;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function _createRecord(attributeNames?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Locking::Optimistic#_create_record is not implemented",
@@ -173,4 +172,3 @@ function hookAttributeType(): never {
     "ActiveRecord::Locking::Optimistic#hook_attribute_type is not implemented",
   );
 }
-// --- end api:compare private stubs ---

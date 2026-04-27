@@ -41,7 +41,6 @@ export async function execExplain(
   return (modelClass as any).all()._execExplain(queries, options);
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function renderBind(connection: any, attr: any): never {
   throw new NotImplementedError("ActiveRecord::Explain#render_bind is not implemented");
 }
@@ -49,4 +48,3 @@ function renderBind(connection: any, attr: any): never {
 function buildExplainClause(connection: any, options?: any): never {
   throw new NotImplementedError("ActiveRecord::Explain#build_explain_clause is not implemented");
 }
-// --- end api:compare private stubs ---

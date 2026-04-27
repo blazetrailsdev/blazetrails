@@ -57,7 +57,6 @@ export class AutoFilteredParameters {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function app(): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::AutoFilteredParameters#app is not implemented",
@@ -87,4 +86,3 @@ function isExcludedFromFilterParameters(filterParameter: any): never {
     "ActiveRecord::Encryption::AutoFilteredParameters#excluded_from_filter_parameters? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -67,10 +67,8 @@ export interface SqlTypeMetadataJSON {
   scale: number | null;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function deduplicated(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SqlTypeMetadata#deduplicated is not implemented",
   );
 }
-// --- end api:compare private stubs ---

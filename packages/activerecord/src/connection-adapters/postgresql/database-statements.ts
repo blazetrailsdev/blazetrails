@@ -70,7 +70,6 @@ export interface DatabaseStatements {
   setConstraints(deferred: "deferred" | "immediate", ...constraints: string[]): Promise<void>;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function cancelAnyRunningQuery(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#cancel_any_running_query is not implemented",
@@ -144,4 +143,3 @@ function isWarningIgnored(warning: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#warning_ignored? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

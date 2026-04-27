@@ -135,7 +135,6 @@ export function attributesInDatabase(record: DirtyRecord): Record<string, unknow
   return result;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function initInternals(): never {
   throw new NotImplementedError(
     "ActiveRecord::AttributeMethods::Dirty#init_internals is not implemented",
@@ -171,4 +170,3 @@ function attributeNamesForPartialInserts(): never {
     "ActiveRecord::AttributeMethods::Dirty#attribute_names_for_partial_inserts is not implemented",
   );
 }
-// --- end api:compare private stubs ---

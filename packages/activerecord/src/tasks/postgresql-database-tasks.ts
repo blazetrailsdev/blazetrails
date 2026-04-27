@@ -414,7 +414,6 @@ export function normalizeSchemaSearchPath(raw: string): string[] {
     .filter((s) => s.length > 0 && s !== "$user");
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function connection(): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::PostgreSQLDatabaseTasks#connection is not implemented",
@@ -438,4 +437,3 @@ function runCmdError(cmd: any, args: any, action: any): never {
     "ActiveRecord::Tasks::PostgreSQLDatabaseTasks#run_cmd_error is not implemented",
   );
 }
-// --- end api:compare private stubs ---

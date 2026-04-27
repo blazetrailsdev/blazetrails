@@ -45,10 +45,8 @@ function buildUrlHash(url: string): DatabaseConfigOptions {
   return new ConnectionUrlResolver(url).toHash();
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function toBooleanBang(configurationHash: any, key: any): never {
   throw new NotImplementedError(
     "ActiveRecord::DatabaseConfigurations::UrlConfig#to_boolean! is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -36,7 +36,6 @@ export class SchemaCreation extends AbstractSchemaCreation {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function visit_DropForeignKey(name: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::MySQL::SchemaCreation#visit_DropForeignKey is not implemented",
@@ -102,4 +101,3 @@ function indexInCreate(tableName: any, columnName: any, options: any): never {
     "ActiveRecord::ConnectionAdapters::MySQL::SchemaCreation#index_in_create is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -256,7 +256,6 @@ async function processNestedAttributes(record: Base): Promise<void> {
   (record as any)._pendingNestedAttributes = null;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function assignNestedAttributesForOneToOneAssociation(
   associationName: any,
   attributes: any,
@@ -330,4 +329,3 @@ function generateAssociationWriter(): never {
     "ActiveRecord::NestedAttributes#generate_association_writer is not implemented",
   );
 }
-// --- end api:compare private stubs ---

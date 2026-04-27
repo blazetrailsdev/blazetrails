@@ -78,7 +78,6 @@ export class TrilogyAdapter extends AbstractMysqlAdapter {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function isTextType(type: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::TrilogyAdapter#text_type? is not implemented",
@@ -132,4 +131,3 @@ function initializeTypeMap(m: any): never {
     "ActiveRecord::ConnectionAdapters::TrilogyAdapter#initialize_type_map is not implemented",
   );
 }
-// --- end api:compare private stubs ---

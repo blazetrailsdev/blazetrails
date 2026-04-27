@@ -20,7 +20,6 @@ export class SchemaCreation extends AbstractSchemaCreation {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function visit_ForeignKeyDefinition(o: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SQLite3::SchemaCreation#visit_ForeignKeyDefinition is not implemented",
@@ -38,4 +37,3 @@ function addColumnOptionsBang(sql: any, options: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::SchemaCreation#add_column_options! is not implemented",
   );
 }
-// --- end api:compare private stubs ---

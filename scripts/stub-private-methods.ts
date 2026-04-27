@@ -184,11 +184,13 @@ for (const fileEntry of ar.files) {
 
   let src = fs.readFileSync(tsAbs, "utf8");
 
-  // Strip any existing generated block so re-runs replace it instead of
-  // accumulating a new section each time.
-  const blockRe =
-    /\n*\/\/ --- api:compare private stubs \(auto-generated\) ---[\s\S]*?\/\/ --- end api:compare private stubs ---\n?/;
-  src = src.replace(blockRe, "\n");
+  // Strip any trailing run of previously-generated stubs so re-runs replace
+  // them instead of stacking new ones. A stub is identified structurally:
+  // a non-exported `function NAME(...): never { throw new NotImplementedError("..."); }`
+  // (matching what this script emits below).
+  const trailingStubRe =
+    /(?:\s*function\s+[A-Za-z_$][\w$]*\s*\([^)]*\)\s*:\s*never\s*\{\s*throw\s+new\s+NotImplementedError\("[^"]*"\);\s*\})+\s*$/;
+  src = src.replace(trailingStubRe, "\n");
 
   // Determine import for NotImplementedError. The errors module lives at
   // packages/activerecord/src/errors.ts. Compute relative import.
@@ -275,9 +277,7 @@ for (const fileEntry of ar.files) {
   }
 
   if (!src.endsWith("\n")) src += "\n";
-  src += "\n// --- api:compare private stubs (auto-generated) ---\n";
-  src += stubs.join("\n\n") + "\n";
-  src += "// --- end api:compare private stubs ---\n";
+  src += "\n" + stubs.join("\n\n") + "\n";
 
   fs.writeFileSync(tsAbs, src);
   totalAppended += stubs.length;

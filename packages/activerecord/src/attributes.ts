@@ -178,7 +178,6 @@ export function _defaultAttributes(this: AnyClass): AttributeSet {
   return cacheHost._cachedDefaultAttributes;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function reloadSchemaFromCache(): never {
   throw new NotImplementedError(
     "ActiveRecord::Attributes#reload_schema_from_cache is not implemented",
@@ -198,4 +197,3 @@ function resolveTypeName(): never {
 function typeForColumn(): never {
   throw new NotImplementedError("ActiveRecord::Attributes#type_for_column is not implemented");
 }
-// --- end api:compare private stubs ---

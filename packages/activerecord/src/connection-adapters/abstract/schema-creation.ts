@@ -284,7 +284,6 @@ export class SchemaCreation {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function visit_AlterTable(o: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SchemaCreation#visit_AlterTable is not implemented",
@@ -392,4 +391,3 @@ function actionSql(action: any, dependency: any): never {
     "ActiveRecord::ConnectionAdapters::SchemaCreation#action_sql is not implemented",
   );
 }
-// --- end api:compare private stubs ---

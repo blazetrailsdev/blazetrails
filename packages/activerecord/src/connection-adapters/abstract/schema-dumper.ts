@@ -26,7 +26,6 @@ export class SchemaDumper extends BaseSchemaDumper {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function columnSpec(column: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SchemaDumper#column_spec is not implemented",
@@ -104,4 +103,3 @@ function schemaCollation(column: any): never {
     "ActiveRecord::ConnectionAdapters::SchemaDumper#schema_collation is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -242,7 +242,6 @@ const EMPTY_COLUMNS = Object.freeze([]) as unknown as string[];
 const EMPTY_ROWS = Object.freeze([]) as unknown as unknown[][];
 const EMPTY = Object.freeze(new Result(EMPTY_COLUMNS, EMPTY_ROWS, EMPTY_COLUMN_TYPES)) as Result;
 
-// --- api:compare private stubs (auto-generated) ---
 function columnType(name: any, index: any, typeOverrides: any): never {
   throw new NotImplementedError("ActiveRecord::Result#column_type is not implemented");
 }
@@ -250,4 +249,3 @@ function columnType(name: any, index: any, typeOverrides: any): never {
 function hashRows(): never {
   throw new NotImplementedError("ActiveRecord::Result#hash_rows is not implemented");
 }
-// --- end api:compare private stubs ---

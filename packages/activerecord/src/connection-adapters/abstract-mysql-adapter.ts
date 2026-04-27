@@ -937,7 +937,6 @@ export class StatementPool extends ConnectionStatementPool<MysqlPreparedStatemen
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function canPerformCaseInsensitiveComparisonFor(column: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#can_perform_case_insensitive_comparison_for? is not implemented",
@@ -1081,4 +1080,3 @@ function extractPrecision(sqlType: any): never {
     "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#extract_precision is not implemented",
   );
 }
-// --- end api:compare private stubs ---

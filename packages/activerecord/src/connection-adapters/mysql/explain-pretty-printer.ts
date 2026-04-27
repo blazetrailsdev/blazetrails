@@ -57,7 +57,6 @@ export class ExplainPrettyPrinter {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function computeColumnWidths(result: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::MySQL::ExplainPrettyPrinter#compute_column_widths is not implemented",
@@ -81,4 +80,3 @@ function buildFooter(nrows: any, elapsed: any): never {
     "ActiveRecord::ConnectionAdapters::MySQL::ExplainPrettyPrinter#build_footer is not implemented",
   );
 }
-// --- end api:compare private stubs ---

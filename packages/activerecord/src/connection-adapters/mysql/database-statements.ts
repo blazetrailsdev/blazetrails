@@ -18,7 +18,6 @@ export interface DatabaseStatements {
   highPrecisionCurrentTimestamp(): Nodes.SqlLiteral;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function isAnalyzeWithoutExplain(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::MySQL::DatabaseStatements#analyze_without_explain? is not implemented",
@@ -54,4 +53,3 @@ function maxAllowedPacket(): never {
     "ActiveRecord::ConnectionAdapters::MySQL::DatabaseStatements#max_allowed_packet is not implemented",
   );
 }
-// --- end api:compare private stubs ---

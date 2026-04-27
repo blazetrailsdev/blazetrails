@@ -436,7 +436,6 @@ export class Builder {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function hasAttributeAliases(attributes: any): never {
   throw new NotImplementedError(
     "ActiveRecord::InsertAll#has_attribute_aliases? is not implemented",
@@ -508,4 +507,3 @@ function disallowRawSqlBang(value: any): never {
 function timestampsForCreate(): never {
   throw new NotImplementedError("ActiveRecord::InsertAll#timestamps_for_create is not implemented");
 }
-// --- end api:compare private stubs ---

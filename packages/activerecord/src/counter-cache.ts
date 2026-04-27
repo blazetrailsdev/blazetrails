@@ -250,7 +250,6 @@ export const ClassMethods = {
   isCounterCacheColumn,
 };
 
-// --- api:compare private stubs (auto-generated) ---
 function _createRecord(attributeNames?: any): never {
   throw new NotImplementedError("ActiveRecord::CounterCache#_create_record is not implemented");
 }
@@ -264,4 +263,3 @@ function is_foreignKeysEqual(fkey1: any, fkey2: any): never {
     "ActiveRecord::CounterCache#_foreign_keys_equal? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

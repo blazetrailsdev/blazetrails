@@ -377,7 +377,6 @@ function isSqlLiteral(value: unknown): value is { value: string } {
   );
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function lookupCastType(sqlType: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#lookup_cast_type is not implemented",
@@ -413,4 +412,3 @@ function isInfinity(value: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#infinity? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

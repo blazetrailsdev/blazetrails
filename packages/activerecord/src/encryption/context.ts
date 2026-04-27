@@ -105,7 +105,6 @@ export function isProtectedMode(): boolean {
   return currentContext().protectedMode === true;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function setDefaults(): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::Context#set_defaults is not implemented",
@@ -117,4 +116,3 @@ function buildDefaultKeyProvider(): never {
     "ActiveRecord::Encryption::Context#build_default_key_provider is not implemented",
   );
 }
-// --- end api:compare private stubs ---

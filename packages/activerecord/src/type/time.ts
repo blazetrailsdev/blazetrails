@@ -22,8 +22,6 @@ export class Time extends ActiveModelTime {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function castValue(value: any): never {
   throw new NotImplementedError("ActiveRecord::Type::Time#cast_value is not implemented");
 }
-// --- end api:compare private stubs ---

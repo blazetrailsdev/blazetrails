@@ -78,7 +78,6 @@ export interface SchemaStatements {
   schemaCreation(): unknown;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function isRowFormatDynamicByDefault(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::MySQL::SchemaStatements#row_format_dynamic_by_default? is not implemented",
@@ -174,4 +173,3 @@ function integerToSql(limit: any): never {
     "ActiveRecord::ConnectionAdapters::MySQL::SchemaStatements#integer_to_sql is not implemented",
   );
 }
-// --- end api:compare private stubs ---

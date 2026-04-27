@@ -209,10 +209,8 @@ function inspect(value: unknown): string {
   return String(value);
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function unquote(value: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Range#unquote is not implemented",
   );
 }
-// --- end api:compare private stubs ---

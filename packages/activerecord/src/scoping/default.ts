@@ -95,7 +95,6 @@ export function isDefaultScopes(
   return scopes.length > 0;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function buildDefaultScope(): never {
   throw new NotImplementedError(
     "ActiveRecord::Scoping::Default#build_default_scope is not implemented",
@@ -123,4 +122,3 @@ function evaluateDefaultScope(): never {
     "ActiveRecord::Scoping::Default#evaluate_default_scope is not implemented",
   );
 }
-// --- end api:compare private stubs ---

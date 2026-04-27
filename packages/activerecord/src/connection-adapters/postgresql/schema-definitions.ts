@@ -575,7 +575,6 @@ export class AlterTable extends AbstractAlterTable {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function validColumnDefinitionOptions(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQL::TableDefinition#valid_column_definition_options is not implemented",
@@ -593,4 +592,3 @@ function integerLikePrimaryKeyType(type: any, options: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::TableDefinition#integer_like_primary_key_type is not implemented",
   );
 }
-// --- end api:compare private stubs ---

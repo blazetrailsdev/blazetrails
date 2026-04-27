@@ -228,10 +228,8 @@ export class InternalMetadata {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function updateOrCreateEntry(connection: any, key: any, value: any): never {
   throw new NotImplementedError(
     "ActiveRecord::InternalMetadata#update_or_create_entry is not implemented",
   );
 }
-// --- end api:compare private stubs ---

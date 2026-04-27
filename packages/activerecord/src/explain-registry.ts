@@ -108,8 +108,6 @@ export class ExplainRegistry {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function instance(): never {
   throw new NotImplementedError("ActiveRecord::ExplainRegistry#instance is not implemented");
 }
-// --- end api:compare private stubs ---

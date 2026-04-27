@@ -41,7 +41,6 @@ export class MessagePackMessageSerializer {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function messageToHash(message: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::MessagePackMessageSerializer#message_to_hash is not implemented",
@@ -71,4 +70,3 @@ function parseProperties(headers: any, level: any): never {
     "ActiveRecord::Encryption::MessagePackMessageSerializer#parse_properties is not implemented",
   );
 }
-// --- end api:compare private stubs ---

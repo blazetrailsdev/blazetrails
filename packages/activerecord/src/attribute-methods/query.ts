@@ -70,10 +70,8 @@ function castToBoolean(value: unknown): boolean {
   return !!value;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function queryCastAttribute(attrName: any, value: any): never {
   throw new NotImplementedError(
     "ActiveRecord::AttributeMethods::Query#query_cast_attribute is not implemented",
   );
 }
-// --- end api:compare private stubs ---

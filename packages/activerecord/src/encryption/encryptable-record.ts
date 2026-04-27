@@ -202,7 +202,6 @@ export function getAttributeType(klass: any, name: string): unknown {
   return def?.type;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function encryptAttribute(
   name: any,
   keyProvider?: any,
@@ -322,4 +321,3 @@ function cantModifyEncryptedAttributesWhenFrozen(): never {
     "ActiveRecord::Encryption::EncryptableRecord#cant_modify_encrypted_attributes_when_frozen is not implemented",
   );
 }
-// --- end api:compare private stubs ---

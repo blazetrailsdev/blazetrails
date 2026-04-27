@@ -1801,7 +1801,6 @@ function normalizeReferentialAction(action: string): string {
   return REFERENTIAL_ACTION_MAP[action.toLowerCase()] ?? action.toUpperCase();
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function bindParamsLength(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SQLite3Adapter#bind_params_length is not implemented",
@@ -1915,4 +1914,3 @@ function initializeTypeMap(m: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3Adapter#initialize_type_map is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -235,7 +235,6 @@ export class LogSubscriber extends BaseLogSubscriber {
 LogSubscriber.subscribeLogLevel("sql", "debug");
 LogSubscriber.subscribeLogLevel("strict_loading_violation", "debug");
 
-// --- api:compare private stubs (auto-generated) ---
 function typeCastedBinds(castedBinds: any): never {
   throw new NotImplementedError("ActiveRecord::LogSubscriber#type_casted_binds is not implemented");
 }
@@ -271,4 +270,3 @@ function querySourceLocation(): never {
     "ActiveRecord::LogSubscriber#query_source_location is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -1842,7 +1842,6 @@ export const ClassMethods = {
   _reflectOnAssociation: _reflectOnAssociationClassMethod,
 };
 
-// --- api:compare private stubs (auto-generated) ---
 function actualSourceReflection(): never {
   throw new NotImplementedError(
     "ActiveRecord::Reflection::AbstractReflection#actual_source_reflection is not implemented",
@@ -1884,4 +1883,3 @@ function sourceTypeScope(): never {
     "ActiveRecord::Reflection::PolymorphicReflection#source_type_scope is not implemented",
   );
 }
-// --- end api:compare private stubs ---

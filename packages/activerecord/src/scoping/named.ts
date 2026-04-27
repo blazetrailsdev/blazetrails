@@ -90,10 +90,8 @@ export const ClassMethods = {
   defaultExtensions,
 };
 
-// --- api:compare private stubs (auto-generated) ---
 function singletonMethodAdded(): never {
   throw new NotImplementedError(
     "ActiveRecord::Scoping::Named#singleton_method_added is not implemented",
   );
 }
-// --- end api:compare private stubs ---

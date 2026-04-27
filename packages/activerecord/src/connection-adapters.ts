@@ -103,7 +103,6 @@ export {
   TableDefinition,
 } from "./connection-adapters/abstract/schema-definitions.js";
 
-// --- api:compare private stubs (auto-generated) ---
 function defaultPrimaryKey(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters#default_primary_key is not implemented",
@@ -127,4 +126,3 @@ function isExportNameOnSchemaDump(): never {
 function isDefinedFor(toTable?: any, validate?: any, options?: any): never {
   throw new NotImplementedError("ActiveRecord::ConnectionAdapters#defined_for? is not implemented");
 }
-// --- end api:compare private stubs ---

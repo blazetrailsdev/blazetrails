@@ -73,7 +73,6 @@ export function attributesForDatabase(record: DatabaseRecord): Record<string, un
   return result;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function attributeBeforeTypeCast(attrName: any): never {
   throw new NotImplementedError(
     "ActiveRecord::AttributeMethods::BeforeTypeCast#attribute_before_type_cast is not implemented",
@@ -91,4 +90,3 @@ function isAttributeCameFromUser(attrName: any): never {
     "ActiveRecord::AttributeMethods::BeforeTypeCast#attribute_came_from_user? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

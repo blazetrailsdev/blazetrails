@@ -2151,7 +2151,6 @@ export class CheckPending {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function detailedMigrationMessage(pendingMigrations: any): never {
   throw new NotImplementedError(
     "ActiveRecord::PendingMigrationError#detailed_migration_message is not implemented",
@@ -2311,4 +2310,3 @@ function generateMigratorAdvisoryLockId(): never {
     "ActiveRecord::Migrator#generate_migrator_advisory_lock_id is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -50,7 +50,6 @@ export class SchemaCreation extends AbstractSchemaCreation {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function visit_AlterTable(o: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaCreation#visit_AlterTable is not implemented",
@@ -134,4 +133,3 @@ function tableModifierInCreate(o: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaCreation#table_modifier_in_create is not implemented",
   );
 }
-// --- end api:compare private stubs ---

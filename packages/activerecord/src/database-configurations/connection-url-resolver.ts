@@ -159,7 +159,6 @@ function redactUrl(url: string): string {
   return url.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^@/]+@/, "$1***@");
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function uri(): never {
   throw new NotImplementedError(
     "ActiveRecord::DatabaseConfigurations::ConnectionUrlResolver#uri is not implemented",
@@ -195,4 +194,3 @@ function databaseFromPath(): never {
     "ActiveRecord::DatabaseConfigurations::ConnectionUrlResolver#database_from_path is not implemented",
   );
 }
-// --- end api:compare private stubs ---

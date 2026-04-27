@@ -100,7 +100,6 @@ export class MessageSerializer {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function parseMessage(data: any, level: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::MessageSerializer#parse_message is not implemented",
@@ -142,4 +141,3 @@ function decodeIfNeeded(value: any): never {
     "ActiveRecord::Encryption::MessageSerializer#decode_if_needed is not implemented",
   );
 }
-// --- end api:compare private stubs ---

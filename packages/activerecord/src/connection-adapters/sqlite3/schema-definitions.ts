@@ -50,7 +50,6 @@ export class TableDefinition extends AbstractTableDefinition {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function integerLikePrimaryKeyType(type: any, options: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SQLite3::TableDefinition#integer_like_primary_key_type is not implemented",
@@ -62,4 +61,3 @@ function validColumnDefinitionOptions(): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::TableDefinition#valid_column_definition_options is not implemented",
   );
 }
-// --- end api:compare private stubs ---

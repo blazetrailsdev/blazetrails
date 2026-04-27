@@ -292,7 +292,6 @@ export function polymorphicClassFor(_modelClass: typeof Base, name: string): typ
   return klass;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function initializeInternalsCallback(): never {
   throw new NotImplementedError(
     "ActiveRecord::Inheritance#initialize_internals_callback is not implemented",
@@ -328,4 +327,3 @@ function subclassFromAttributes(): never {
     "ActiveRecord::Inheritance#subclass_from_attributes is not implemented",
   );
 }
-// --- end api:compare private stubs ---

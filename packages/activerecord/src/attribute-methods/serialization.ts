@@ -55,7 +55,6 @@ export class ColumnSerializer {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function buildColumnSerializer(): never {
   throw new NotImplementedError(
     "ActiveRecord::AttributeMethods::Serialization#build_column_serializer is not implemented",
@@ -67,4 +66,3 @@ function isTypeIncompatibleWithSerialize(): never {
     "ActiveRecord::AttributeMethods::Serialization#type_incompatible_with_serialize? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

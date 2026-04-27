@@ -30,7 +30,6 @@ export class TimeZoneConverter {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function convertTimeToTimeZone(value: any): never {
   throw new NotImplementedError(
     "ActiveRecord::AttributeMethods::TimeZoneConversion::TimeZoneConverter#convert_time_to_time_zone is not implemented",
@@ -54,4 +53,3 @@ function isCreateTimeZoneConversionAttribute(): never {
     "ActiveRecord::AttributeMethods::TimeZoneConversion#create_time_zone_conversion_attribute? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

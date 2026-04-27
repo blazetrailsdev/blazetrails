@@ -397,7 +397,6 @@ _setDefaultEnvGetter(() => DatabaseConfigurations.defaultEnv);
 // current DatabaseConfigurations instance (matching Rails' global Base.configurations).
 _setPrimaryChecker((name) => _currentConfigurations?.isPrimary(name) ?? false);
 
-// --- api:compare private stubs (auto-generated) ---
 function envWithConfigs(env?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::DatabaseConfigurations#env_with_configs is not implemented",
@@ -463,4 +462,3 @@ function environmentValueFor(name: any): never {
     "ActiveRecord::DatabaseConfigurations#environment_value_for is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -402,7 +402,6 @@ export function dirtiesQueryCache(
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function checkVersion(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::QueryCache::Store#check_version is not implemented",
@@ -438,4 +437,3 @@ function cacheNotificationInfo(sql: any, name: any, binds: any): never {
     "ActiveRecord::ConnectionAdapters::QueryCache#cache_notification_info is not implemented",
   );
 }
-// --- end api:compare private stubs ---

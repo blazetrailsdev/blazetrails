@@ -118,7 +118,6 @@ export class UniquenessValidator extends EachValidator {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function findFinderClassFor(record: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Validations::UniquenessValidator#find_finder_class_for is not implemented",
@@ -160,4 +159,3 @@ function mapEnumAttribute(klass: any, attribute: any, value: any): never {
     "ActiveRecord::Validations::UniquenessValidator#map_enum_attribute is not implemented",
   );
 }
-// --- end api:compare private stubs ---

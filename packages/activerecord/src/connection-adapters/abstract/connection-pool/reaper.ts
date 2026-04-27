@@ -115,10 +115,8 @@ export class Reaper {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function spawnThread(frequency: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::ConnectionPool::Reaper#spawn_thread is not implemented",
   );
 }
-// --- end api:compare private stubs ---

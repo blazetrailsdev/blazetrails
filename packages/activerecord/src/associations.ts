@@ -2184,7 +2184,6 @@ export async function touchBelongsToParents(record: Base): Promise<void> {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function initInternals(): never {
   throw new NotImplementedError("ActiveRecord::Associations#init_internals is not implemented");
 }
@@ -2200,4 +2199,3 @@ function associationInstanceSet(name: any, association: any): never {
     "ActiveRecord::Associations#association_instance_set is not implemented",
   );
 }
-// --- end api:compare private stubs ---

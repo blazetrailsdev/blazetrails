@@ -1416,7 +1416,6 @@ export class SchemaStatements {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function generateIndexName(tableName: any, column: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SchemaStatements#generate_index_name is not implemented",
@@ -1660,4 +1659,3 @@ function quotedScope(name?: any, type?: any): never {
     "ActiveRecord::ConnectionAdapters::SchemaStatements#quoted_scope is not implemented",
   );
 }
-// --- end api:compare private stubs ---

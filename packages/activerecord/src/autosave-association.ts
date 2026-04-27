@@ -485,7 +485,6 @@ function propagateErrors(parent: Base, child: Base, assocName: string): void {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function initInternals(): never {
   throw new NotImplementedError(
     "ActiveRecord::AutosaveAssociation#init_internals is not implemented",
@@ -599,4 +598,3 @@ function defineAutosaveValidationCallbacks(): never {
     "ActiveRecord::AutosaveAssociation#define_autosave_validation_callbacks is not implemented",
   );
 }
-// --- end api:compare private stubs ---

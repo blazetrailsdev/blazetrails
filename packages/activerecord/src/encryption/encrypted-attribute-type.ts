@@ -293,7 +293,6 @@ function isAdditionalValue(value: unknown): boolean {
   );
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function previousSchemesIncludingCleanText(): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::EncryptedAttributeType#previous_schemes_including_clean_text is not implemented",
@@ -389,4 +388,3 @@ function databaseTypeToText(value: any): never {
     "ActiveRecord::Encryption::EncryptedAttributeType#database_type_to_text is not implemented",
   );
 }
-// --- end api:compare private stubs ---

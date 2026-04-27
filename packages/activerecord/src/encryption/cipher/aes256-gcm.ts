@@ -126,7 +126,6 @@ export class Cipher {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function generateIv(cipher: any, clearText: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::Cipher::Aes256Gcm#generate_iv is not implemented",
@@ -138,4 +137,3 @@ function generateDeterministicIv(clearText: any): never {
     "ActiveRecord::Encryption::Cipher::Aes256Gcm#generate_deterministic_iv is not implemented",
   );
 }
-// --- end api:compare private stubs ---

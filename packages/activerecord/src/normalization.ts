@@ -83,7 +83,6 @@ export function normalizeAttribute(record: InstanceType<typeof Model>, name: str
   return record.normalizeAttribute(name);
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function normalize(value: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Normalization::NormalizedValueType#normalize is not implemented",
@@ -95,4 +94,3 @@ function normalizeChangedInPlaceAttributes(): never {
     "ActiveRecord::Normalization#normalize_changed_in_place_attributes is not implemented",
   );
 }
-// --- end api:compare private stubs ---

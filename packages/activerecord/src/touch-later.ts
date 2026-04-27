@@ -183,7 +183,6 @@ export const InstanceMethods = {
   beforeCommittedBang,
 };
 
-// --- api:compare private stubs (auto-generated) ---
 function initInternals(): never {
   throw new NotImplementedError("ActiveRecord::TouchLater#init_internals is not implemented");
 }
@@ -193,4 +192,3 @@ function hasDeferTouchAttrs(): never {
     "ActiveRecord::TouchLater#has_defer_touch_attrs? is not implemented",
   );
 }
-// --- end api:compare private stubs ---

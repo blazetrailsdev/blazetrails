@@ -1162,7 +1162,6 @@ export interface SchemaStatementsLike {
   primaryKey?(tableName: string): Promise<string | null>;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function conciseOptions(options: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::IndexDefinition#concise_options is not implemented",
@@ -1300,4 +1299,3 @@ function defineColumnMethods(...columnTypes: any[]): never {
     "ActiveRecord::ConnectionAdapters::ColumnMethods#define_column_methods is not implemented",
   );
 }
-// --- end api:compare private stubs ---

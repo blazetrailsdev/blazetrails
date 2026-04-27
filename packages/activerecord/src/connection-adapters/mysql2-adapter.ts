@@ -1014,7 +1014,6 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function isTextType(type: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::Mysql2Adapter#text_type? is not implemented",
@@ -1068,4 +1067,3 @@ function initializeTypeMap(m: any): never {
     "ActiveRecord::ConnectionAdapters::Mysql2Adapter#initialize_type_map is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -54,7 +54,6 @@ export class EnvelopeEncryptionKeyProvider {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function encryptDataKey(randomSecret: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::EnvelopeEncryptionKeyProvider#encrypt_data_key is not implemented",
@@ -78,4 +77,3 @@ function generateRandomSecret(): never {
     "ActiveRecord::Encryption::EnvelopeEncryptionKeyProvider#generate_random_secret is not implemented",
   );
 }
-// --- end api:compare private stubs ---

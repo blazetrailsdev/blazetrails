@@ -26,10 +26,8 @@ export class DefaultStrategy extends ExecutionStrategy {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function connection(): never {
   throw new NotImplementedError(
     "ActiveRecord::Migration::DefaultStrategy#connection is not implemented",
   );
 }
-// --- end api:compare private stubs ---

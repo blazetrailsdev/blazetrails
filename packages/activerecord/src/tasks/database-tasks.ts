@@ -1101,7 +1101,6 @@ export interface DatabaseTaskHandler {
   ): Promise<void>;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function truncateTables(dbConfig: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#truncate_tables is not implemented",
@@ -1195,4 +1194,3 @@ function initializeDatabase(dbConfig: any): never {
     "ActiveRecord::Tasks::DatabaseTasks#initialize_database is not implemented",
   );
 }
-// --- end api:compare private stubs ---

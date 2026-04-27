@@ -29,10 +29,8 @@ export class Message {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function validatePayloadType(payload: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::Message#validate_payload_type is not implemented",
   );
 }
-// --- end api:compare private stubs ---

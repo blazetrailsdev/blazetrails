@@ -171,10 +171,8 @@ export class NullColumn extends Column {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function deduplicated(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::Column#deduplicated is not implemented",
   );
 }
-// --- end api:compare private stubs ---

@@ -40,10 +40,8 @@ export function _readAttribute(this: AttributeHolder, name: string): unknown {
   return this._attributes.fetchValue(name) ?? null;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function defineMethodAttribute(): never {
   throw new NotImplementedError(
     "ActiveRecord::AttributeMethods::Read#define_method_attribute is not implemented",
   );
 }
-// --- end api:compare private stubs ---

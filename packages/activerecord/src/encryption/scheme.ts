@@ -224,7 +224,6 @@ export class Scheme {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function validateConfigBang(): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::Scheme#validate_config! is not implemented",
@@ -248,4 +247,3 @@ function defaultKeyProvider(): never {
     "ActiveRecord::Encryption::Scheme#default_key_provider is not implemented",
   );
 }
-// --- end api:compare private stubs ---

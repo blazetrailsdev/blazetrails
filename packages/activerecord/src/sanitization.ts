@@ -226,7 +226,6 @@ export const ClassMethods = {
   disallowRawSqlBang,
 };
 
-// --- api:compare private stubs (auto-generated) ---
 function replaceBindVariables(): never {
   throw new NotImplementedError(
     "ActiveRecord::Sanitization#replace_bind_variables is not implemented",
@@ -254,4 +253,3 @@ function raiseIfBindArityMismatch(): never {
     "ActiveRecord::Sanitization#raise_if_bind_arity_mismatch is not implemented",
   );
 }
-// --- end api:compare private stubs ---

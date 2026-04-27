@@ -179,7 +179,6 @@ export const InstanceMethods = {
   touch,
 };
 
-// --- api:compare private stubs (auto-generated) ---
 function initInternals(): never {
   throw new NotImplementedError("ActiveRecord::Timestamp#init_internals is not implemented");
 }
@@ -237,4 +236,3 @@ function timestampAttributesForUpdate(): never {
     "ActiveRecord::Timestamp#timestamp_attributes_for_update is not implemented",
   );
 }
-// --- end api:compare private stubs ---

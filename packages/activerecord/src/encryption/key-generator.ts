@@ -43,7 +43,6 @@ export class KeyGenerator {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function keyDerivationSalt(): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::KeyGenerator#key_derivation_salt is not implemented",
@@ -55,4 +54,3 @@ function keyLength(): never {
     "ActiveRecord::Encryption::KeyGenerator#key_length is not implemented",
   );
 }
-// --- end api:compare private stubs ---

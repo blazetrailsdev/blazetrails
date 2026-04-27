@@ -147,7 +147,6 @@ export const InstanceMethods = {
   reload,
 };
 
-// --- api:compare private stubs (auto-generated) ---
 function initInternals(): never {
   throw new NotImplementedError("ActiveRecord::Aggregations#init_internals is not implemented");
 }
@@ -159,4 +158,3 @@ function readerMethod(): never {
 function writerMethod(): never {
   throw new NotImplementedError("ActiveRecord::Aggregations#writer_method is not implemented");
 }
-// --- end api:compare private stubs ---

@@ -27,7 +27,6 @@ export class UnsignedInteger extends IntegerType {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function maxValue(): never {
   throw new NotImplementedError("ActiveRecord::Type::UnsignedInteger#max_value is not implemented");
 }
@@ -35,4 +34,3 @@ function maxValue(): never {
 function minValue(): never {
   throw new NotImplementedError("ActiveRecord::Type::UnsignedInteger#min_value is not implemented");
 }
-// --- end api:compare private stubs ---

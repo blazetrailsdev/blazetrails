@@ -13,7 +13,6 @@ export class SchemaDumper extends AbstractSchemaDumper {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function virtualTables(stream: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SQLite3::SchemaDumper#virtual_tables is not implemented",
@@ -43,4 +42,3 @@ function extractExpressionForVirtualColumn(column: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::SchemaDumper#extract_expression_for_virtual_column is not implemented",
   );
 }
-// --- end api:compare private stubs ---

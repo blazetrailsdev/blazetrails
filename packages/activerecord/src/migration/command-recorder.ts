@@ -163,7 +163,6 @@ export class CommandRecorder {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function invertTransaction(args: any, block?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Migration::CommandRecorder#invert_transaction is not implemented",
@@ -307,4 +306,3 @@ function invertDropVirtualTable(args: any): never {
     "ActiveRecord::Migration::CommandRecorder#invert_drop_virtual_table is not implemented",
   );
 }
-// --- end api:compare private stubs ---

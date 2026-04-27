@@ -55,7 +55,6 @@ export class AssociatedValidator extends EachValidator {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function isValidObject(record: any, context: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Validations::AssociatedValidator#valid_object? is not implemented",
@@ -67,4 +66,3 @@ function recordValidationContextForAssociation(record: any): never {
     "ActiveRecord::Validations::AssociatedValidator#record_validation_context_for_association is not implemented",
   );
 }
-// --- end api:compare private stubs ---

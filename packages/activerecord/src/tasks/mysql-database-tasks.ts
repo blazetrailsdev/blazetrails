@@ -336,7 +336,6 @@ export class MySQLDatabaseTasks {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function connection(): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::MySQLDatabaseTasks#connection is not implemented",
@@ -360,4 +359,3 @@ function runCmdError(cmd: any, args: any, action: any): never {
     "ActiveRecord::Tasks::MySQLDatabaseTasks#run_cmd_error is not implemented",
   );
 }
-// --- end api:compare private stubs ---

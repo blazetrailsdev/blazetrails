@@ -65,10 +65,8 @@ export class Connection {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function tableName(): never {
   throw new NotImplementedError(
     "ActiveRecord::TypeCaster::Connection#table_name is not implemented",
   );
 }
-// --- end api:compare private stubs ---

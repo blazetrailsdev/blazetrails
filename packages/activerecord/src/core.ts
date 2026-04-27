@@ -591,7 +591,6 @@ export function cachedFindByStatement(
   return cache.get(key);
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function initInternals(): never {
   throw new NotImplementedError("ActiveRecord::Core#init_internals is not implemented");
 }
@@ -627,4 +626,3 @@ function relation(): never {
 function cachedFindBy(): never {
   throw new NotImplementedError("ActiveRecord::Core#cached_find_by is not implemented");
 }
-// --- end api:compare private stubs ---

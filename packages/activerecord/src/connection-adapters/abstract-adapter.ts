@@ -957,7 +957,6 @@ export class AbstractAdapter {
 // Rails: `include DatabaseStatements` inside the class body.
 include(AbstractAdapter, DatabaseStatements);
 
-// --- api:compare private stubs (auto-generated) ---
 function canPerformCaseInsensitiveComparisonFor(column: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::AbstractAdapter#can_perform_case_insensitive_comparison_for? is not implemented",
@@ -1156,4 +1155,3 @@ function extractLimit(sqlType: any): never {
     "ActiveRecord::ConnectionAdapters::AbstractAdapter#extract_limit is not implemented",
   );
 }
-// --- end api:compare private stubs ---

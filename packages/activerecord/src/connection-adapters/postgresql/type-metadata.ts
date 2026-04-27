@@ -57,10 +57,8 @@ export class TypeMetadata {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function deduplicated(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQL::TypeMetadata#deduplicated is not implemented",
   );
 }
-// --- end api:compare private stubs ---

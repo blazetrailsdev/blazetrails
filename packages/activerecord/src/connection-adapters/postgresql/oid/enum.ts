@@ -23,10 +23,8 @@ export class Enum extends ValueType<string> {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function castValue(value: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Enum#cast_value is not implemented",
   );
 }
-// --- end api:compare private stubs ---

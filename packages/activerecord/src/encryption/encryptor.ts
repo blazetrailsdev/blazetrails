@@ -158,7 +158,6 @@ export class Encryptor {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function defaultKeyProvider(): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::Encryptor#default_key_provider is not implemented",
@@ -232,4 +231,3 @@ function forcedEncodingForDeterministicEncryption(): never {
     "ActiveRecord::Encryption::Encryptor#forced_encoding_for_deterministic_encryption is not implemented",
   );
 }
-// --- end api:compare private stubs ---

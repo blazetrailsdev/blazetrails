@@ -106,10 +106,8 @@ export class ColumnSerializer {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function checkArityOfConstructor(): never {
   throw new NotImplementedError(
     "ActiveRecord::Coders::ColumnSerializer#check_arity_of_constructor is not implemented",
   );
 }
-// --- end api:compare private stubs ---

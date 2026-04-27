@@ -38,10 +38,8 @@ export function _writeAttribute(this: Model, name: string, value: unknown): void
   Model.prototype._writeAttribute.call(this, name, value);
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function defineMethodAttribute(): never {
   throw new NotImplementedError(
     "ActiveRecord::AttributeMethods::Write#define_method_attribute= is not implemented",
   );
 }
-// --- end api:compare private stubs ---

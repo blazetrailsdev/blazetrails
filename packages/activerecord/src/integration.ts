@@ -222,7 +222,6 @@ export function collectionCacheKey(
   return Promise.resolve("");
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function canUseFastCacheVersion(timestamp: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Integration#can_use_fast_cache_version? is not implemented",
@@ -234,4 +233,3 @@ function rawTimestampToCacheVersion(timestamp: any): never {
     "ActiveRecord::Integration#raw_timestamp_to_cache_version is not implemented",
   );
 }
-// --- end api:compare private stubs ---

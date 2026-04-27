@@ -397,7 +397,6 @@ export function castEnumValue(
   return def.type.serialize(value) as number | null;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function name(): never {
   throw new NotImplementedError("ActiveRecord::Enum::EnumType#name is not implemented");
 }
@@ -458,4 +457,3 @@ function detectNegativeEnumConditionsBang(methodNames: any): never {
     "ActiveRecord::Enum#detect_negative_enum_conditions! is not implemented",
   );
 }
-// --- end api:compare private stubs ---

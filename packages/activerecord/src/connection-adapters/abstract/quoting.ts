@@ -469,7 +469,6 @@ function isSqlLiteral(value: unknown): value is { value: string } {
   );
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function typeCastedBinds(binds: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::Quoting#type_casted_binds is not implemented",
@@ -481,4 +480,3 @@ function lookupCastType(sqlType: any): never {
     "ActiveRecord::ConnectionAdapters::Quoting#lookup_cast_type is not implemented",
   );
 }
-// --- end api:compare private stubs ---

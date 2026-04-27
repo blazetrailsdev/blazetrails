@@ -120,7 +120,6 @@ export function schemaCreation(): SchemaCreation {
   return new SchemaCreation("sqlite");
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function validTableDefinitionOptions(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#valid_table_definition_options is not implemented",
@@ -174,4 +173,3 @@ function extractGeneratedType(field: any): never {
     "ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#extract_generated_type is not implemented",
   );
 }
-// --- end api:compare private stubs ---

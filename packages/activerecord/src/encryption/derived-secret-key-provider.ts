@@ -21,10 +21,8 @@ export class DerivedSecretKeyProvider extends KeyProvider {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function deriveKeyFrom(password: any, using?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Encryption::DerivedSecretKeyProvider#derive_key_from is not implemented",
   );
 }
-// --- end api:compare private stubs ---

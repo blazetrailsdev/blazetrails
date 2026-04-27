@@ -284,7 +284,6 @@ export function _hasAttribute(this: AttributeMethodsHost, attrName: string): boo
   return this._attributeDefinitions.has(attrName);
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function attributesWithValues(attributeNames: any): never {
   throw new NotImplementedError(
     "ActiveRecord::AttributeMethods#attributes_with_values is not implemented",
@@ -312,4 +311,3 @@ function formatForInspect(name: any, value: any): never {
 function isPkAttribute(name: any): never {
   throw new NotImplementedError("ActiveRecord::AttributeMethods#pk_attribute? is not implemented");
 }
-// --- end api:compare private stubs ---

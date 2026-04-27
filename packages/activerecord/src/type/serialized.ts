@@ -96,8 +96,6 @@ export class Serialized extends ValueType {
   }
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function encoded(value: any): never {
   throw new NotImplementedError("ActiveRecord::Type::Serialized#encoded is not implemented");
 }
-// --- end api:compare private stubs ---

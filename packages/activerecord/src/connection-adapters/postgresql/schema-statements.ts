@@ -268,7 +268,6 @@ export interface SchemaStatements {
   schemaCreation(): unknown;
 }
 
-// --- api:compare private stubs (auto-generated) ---
 function createTableDefinition(name: any, options?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaStatements#create_table_definition is not implemented",
@@ -417,4 +416,3 @@ function columnNamesFromColumnNumbers(tableOid: any, columnNumbers: any): never 
     "ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaStatements#column_names_from_column_numbers is not implemented",
   );
 }
-// --- end api:compare private stubs ---

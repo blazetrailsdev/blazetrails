@@ -3951,7 +3951,6 @@ const FORMAT_TYPE_ALIASES: Record<string, string> = {
   boolean: "bool",
 };
 
-// --- api:compare private stubs (auto-generated) ---
 function typeMap(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#type_map is not implemented",
@@ -4101,4 +4100,3 @@ function constructCoder(row: any, coderClass: any): never {
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#construct_coder is not implemented",
   );
 }
-// --- end api:compare private stubs ---

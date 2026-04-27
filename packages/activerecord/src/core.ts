@@ -9,7 +9,7 @@ import { Notifications, getAsyncContext } from "@blazetrails/activesupport";
 import type { AsyncContext } from "@blazetrails/activesupport";
 import { PredicateBuilder } from "./relation/predicate-builder.js";
 import { argumentError } from "./relation/query-methods.js";
-import { InspectionMask, inspectionFilter, formatForInspect } from "./attribute-inspection.js";
+import { formatForInspect } from "./attribute-inspection.js";
 
 /**
  * The Core module interface — methods mixed into every AR model.

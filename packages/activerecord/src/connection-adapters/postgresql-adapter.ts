@@ -39,7 +39,12 @@ import {
 } from "../errors.js";
 import { AbstractAdapter } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
-import { transactionIsolationLevels, typeCastedBinds } from "./abstract/database-statements.js";
+import {
+  transactionIsolationLevels,
+  typeCastedBinds,
+  temporalToBindString,
+} from "./abstract/database-statements.js";
+import { getTypeParser as getTemporalTypeParser } from "./postgresql/temporal-type-parsers.js";
 import { READ_QUERY } from "./postgresql/database-statements.js";
 import type { CreateDatabaseOptions, PgIndexDefinition } from "./postgresql/schema-statements.js";
 import {
@@ -241,7 +246,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (typeof config === "string") {
       this._minMessages = "warning";
       this._sessionVariables = {};
-      this._driverPool = new pg.Pool({ connectionString: config });
+      this._driverPool = new pg.Pool({
+        connectionString: config,
+        types: { getTypeParser: getTemporalTypeParser },
+      });
       return;
     }
     // Rails' database.yml merges driver connection params + adapter
@@ -294,7 +302,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // Freeze a shallow copy so post-construction mutation can't bypass the
     // key/value validation above and introduce un-sanitized SQL fragments.
     this._sessionVariables = Object.freeze({ ...(variables ?? {}) });
-    this._driverPool = new pg.Pool(pgConfig);
+    this._driverPool = new pg.Pool({
+      ...pgConfig,
+      types: { getTypeParser: getTemporalTypeParser },
+    });
   }
 
   /**
@@ -451,7 +462,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       fields: Array<{ name: string; dataTypeID: number }>;
       rows: unknown[][];
     }
-    const bindArray = binds ?? [];
+    // Convert any Temporal values to SQL strings before pg sees them.
+    // pg's extended/prepared protocol serializes parameters via its own
+    // writer which has no Temporal support.
+    const bindArray = (binds ?? []).map((v) => temporalToBindString(v, "postgres"));
     const rewritten = this.rewriteBinds(sql, bindArray);
     const payload: Record<string, unknown> = {
       sql: rewritten,

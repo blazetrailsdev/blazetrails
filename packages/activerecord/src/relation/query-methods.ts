@@ -1966,7 +1966,11 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
   // When absent, all explicit nodes go to leading_join (before named joins),
   // matching Rails' else branch: `!LeadingJoin && (stashed_eager_load ||
   // stashed_left_joins)` is false, so all nodes route to leading_join.
-  const stashedJoins = buildJoinDependencies.call(this);
+  // Guard the call: buildJoinDependencies always returns at least [primaryJD]
+  // even when there are no associations, so we check first to avoid false positives.
+  const hasAssocStashed =
+    this._eagerLoadAssociations.length > 0 || this._includesAssociations.length > 0;
+  const stashedJoins = hasAssocStashed ? buildJoinDependencies.call(this) : [];
   const hasStashed = stashedJoins.length > 0;
   buckets.stashed_join.push(...stashedJoins);
 

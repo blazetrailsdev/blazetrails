@@ -114,6 +114,7 @@ interface QueryMethodsHost {
   _lockValue: string | null;
   _joinClauses: Array<{ type: "inner" | "left"; table: string; on: string; quoted?: boolean }>;
   _joinValues: (string | Nodes.Join)[];
+  _leftOuterJoinsValues: AssociationSpec[];
   _includesAssociations: AssociationSpec[];
   _preloadAssociations: AssociationSpec[];
   _eagerLoadAssociations: AssociationSpec[];
@@ -587,6 +588,7 @@ function unscopeBang(
           break;
         case "leftOuterJoins":
           this._joinClauses = this._joinClauses.filter((j) => j.type !== "left");
+          this._leftOuterJoinsValues = [];
           break;
         case "includes":
           // Rails: `unscope(:includes)` clears includes only — preload
@@ -642,8 +644,11 @@ function joinsBang(this: QueryMethodsHost, ...args: (string | Nodes.Join)[]): an
 }
 
 function leftOuterJoinsBang(this: QueryMethodsHost, ...args: string[]): any {
+  // Mirrors Rails left_outer_joins! which stores into left_outer_joins_values
+  // (separate from joins_values / _joinValues which is the inner-join path).
   for (const arg of args) {
-    this._joinValues.push(arg);
+    if (!this._leftOuterJoinsValues.includes(arg as AssociationSpec))
+      this._leftOuterJoinsValues.push(arg as AssociationSpec);
   }
   return this;
 }
@@ -812,6 +817,7 @@ const STRUCTURAL_FIELDS: ReadonlyArray<[string, keyof QueryMethodsHost]> = [
   ["rawOrder", "_rawOrderClauses"],
   ["joins", "_joinClauses"],
   ["joinValues", "_joinValues"],
+  ["leftOuterJoinsValues", "_leftOuterJoinsValues"],
   ["limit", "_limitValue"],
   ["offset", "_offsetValue"],
   ["lock", "_lockValue"],
@@ -1842,11 +1848,17 @@ function eachJoinDependencies(
 }
 
 function buildJoinDependencies(this: QueryMethodsHost): JoinDependency[] {
-  // Mirror Rails: joins | left_outer_joins | eager_load | includes.
-  // _joinClauses store SQL join targets (table names), not association names.
-  // Only association specs from eagerLoad/includes can be resolved via JoinDependency.
+  // Mirror Rails build_join_dependencies (query_methods.rb:1735-1745):
+  // joins | left_outer_joins | eager_load | includes association specs.
+  // _joinClauses store pre-resolved SQL (table name + ON string), not association
+  // names, so only _leftOuterJoinsValues, eagerLoad, and includes contribute here.
   const joinNames: AssociationSpec[] = [];
 
+  if (this._leftOuterJoinsValues.length > 0) {
+    for (const a of this._leftOuterJoinsValues) {
+      if (!joinNames.includes(a)) joinNames.push(a);
+    }
+  }
   if (this._eagerLoadAssociations.length > 0) {
     for (const a of this._eagerLoadAssociations) {
       if (!joinNames.includes(a)) joinNames.push(a);
@@ -1961,15 +1973,14 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
   };
 
   // Mirror Rails build_join_buckets (query_methods.rb:1844–1876):
-  // Detect stashed joins from _eagerLoadAssociations only — includes may resolve
-  // via preload (no joins) and is not a reliable stashed signal. When stashed
-  // joins are present, non-LeadingJoin explicit nodes go to join_node (after
-  // alias-tracker joins). When absent, all explicit nodes go to leading_join
-  // (before named joins), matching Rails' else branch: `!LeadingJoin &&
-  // (stashed_eager_load || stashed_left_joins)` is false → leading_join.
-  // Guard the call: buildJoinDependencies always returns at least [primaryJD]
-  // even when associations are empty, so we check first to avoid false positives.
-  const hasAssocStashed = this._eagerLoadAssociations.length > 0;
+  // Stashed signal: _eagerLoadAssociations (stashed_eager_load) OR
+  // _leftOuterJoinsValues (stashed_left_joins). When present, non-LeadingJoin
+  // explicit nodes go to join_node (after alias-tracker joins). When absent,
+  // all explicit nodes go to leading_join (before named joins), matching Rails'
+  // else branch. Guard: buildJoinDependencies always returns [primaryJD] even
+  // when empty, so check first to avoid false positives.
+  const hasAssocStashed =
+    this._eagerLoadAssociations.length > 0 || this._leftOuterJoinsValues.length > 0;
   const stashedJoins = hasAssocStashed ? buildJoinDependencies.call(this) : [];
   const hasStashed = stashedJoins.length > 0;
   buckets.stashed_join.push(...stashedJoins);
@@ -1988,7 +1999,8 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
 }
 
 function buildJoins(this: QueryMethodsHost, arel: any): void {
-  const hasEagerAssocs = this._eagerLoadAssociations.length > 0;
+  const hasEagerAssocs =
+    this._eagerLoadAssociations.length > 0 || this._leftOuterJoinsValues.length > 0;
   if (this._joinClauses.length === 0 && this._joinValues.length === 0 && !hasEagerAssocs) return;
 
   const buckets = buildJoinBuckets.call(this);

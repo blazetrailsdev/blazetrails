@@ -1,3 +1,5 @@
+import { Nodes } from "@blazetrails/arel";
+
 /**
  * Batch processing methods: findEach, findInBatches, inBatches.
  *
@@ -89,9 +91,7 @@ function batchCondition(
     return (attr as any)[op](val);
   });
   if (conditions.length === 1) return relation.where(conditions[0]);
-  // Build AND of all conditions for multi-column cursor
-  const andNode = conditions.reduce((a: any, b: any) => ({ and: [a, b] }));
-  return relation.where(andNode);
+  return relation.where(new Nodes.Grouping(new Nodes.And(conditions)));
 }
 
 function buildBatchOrders(

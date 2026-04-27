@@ -44,11 +44,23 @@ export class Merger {
   }
 
   private mergePreloads(rel: any): void {
-    if (this.other._preloadValues && this.other._preloadValues.length > 0) {
-      rel._preloadValues = [...(rel._preloadValues ?? []), ...this.other._preloadValues];
+    if (this.other._preloadAssociations && this.other._preloadAssociations.length > 0) {
+      rel._preloadAssociations = [
+        ...(rel._preloadAssociations ?? []),
+        ...this.other._preloadAssociations,
+      ];
     }
-    if (this.other._includesValues && this.other._includesValues.length > 0) {
-      rel._includesValues = [...(rel._includesValues ?? []), ...this.other._includesValues];
+    if (this.other._includesAssociations && this.other._includesAssociations.length > 0) {
+      rel._includesAssociations = [
+        ...(rel._includesAssociations ?? []),
+        ...this.other._includesAssociations,
+      ];
+    }
+    if (this.other._eagerLoadAssociations && this.other._eagerLoadAssociations.length > 0) {
+      rel._eagerLoadAssociations = [
+        ...(rel._eagerLoadAssociations ?? []),
+        ...this.other._eagerLoadAssociations,
+      ];
     }
   }
 

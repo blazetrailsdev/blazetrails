@@ -460,8 +460,8 @@ export class ColumnAliasTracker {
 
 function columnAliasFor(field: string): string {
   return field
-    .replace(/[^a-zA-Z0-9_]/, "_")
-    .replace(/_{2,}/, "_")
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .replace(/_{2,}/g, "_")
     .slice(0, 255);
 }
 
@@ -518,16 +518,8 @@ async function executeSimpleCalculation(
   columnName: string,
   distinct: boolean,
 ): Promise<unknown> {
-  const table = rel._modelClass.arelTable;
-  const col = aggregateColumn(rel, columnName);
-  const fn = operation.toUpperCase();
-  const colSql = typeof col === "string" ? col : ((col as any).toSql?.() ?? String(col));
-  const distinctSql = distinct ? "DISTINCT " : "";
-  const sql = `SELECT ${fn}(${distinctSql}${colSql}) FROM ${(table as any).name}`;
-  const rows = await rel._modelClass.adapter.execute(sql);
-  if (rows.length === 0) return null;
-  const val = Object.values(rows[0])[0];
-  return typeCastCalculatedValue(val, operation, resolveColType(rel, columnName));
+  const fn = operation.toLowerCase() as AggFn;
+  return singleAggregate(rel, fn, columnName, true);
 }
 
 async function executeGroupedCalculation(

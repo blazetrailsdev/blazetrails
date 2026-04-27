@@ -1211,7 +1211,7 @@ export class Relation<T extends Base> {
     const flatArgs = args.flatMap((a) => (Array.isArray(a) ? a : [a]));
     for (const arg of flatArgs) {
       if (!arg) continue;
-      // Arel join node (InnerJoin / OuterJoin / StringJoin etc. from joinSources).
+      // Arel join node — stored as-is to preserve type (mirrors Rails joins_values).
       if (arg instanceof Nodes.Join) {
         rel._joinValues.push(arg);
         continue;

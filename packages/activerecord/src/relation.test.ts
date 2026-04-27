@@ -359,6 +359,26 @@ describe("RelationTest", () => {
     expect(authorPos).toBeLessThan(publisherPos);
   });
 
+  it("joins() preserves insertion order when mixing Arel nodes and string joins", () => {
+    class Book extends Base {
+      static {
+        this.tableName = "books";
+        this.adapter = adapter;
+      }
+    }
+    const authors = new ArelTable("authors");
+    const arelJoin = new Nodes.InnerJoin(
+      authors,
+      new Nodes.On(new Nodes.SqlLiteral("books.author_id = authors.id")),
+    );
+    const sqlStr = Book.joins(arelJoin, 'JOIN "tags" ON "books"."tag_id" = "tags"."id"').toSql();
+    const authorPos = sqlStr.indexOf('"authors"');
+    const tagPos = sqlStr.indexOf('"tags"');
+    expect(authorPos).toBeGreaterThan(-1);
+    expect(tagPos).toBeGreaterThan(-1);
+    expect(authorPos).toBeLessThan(tagPos);
+  });
+
   it("string ORDER BY plain identifier qualifies with table name", () => {
     class Book extends Base {
       static {

@@ -552,6 +552,16 @@ export class UnknownAttributeReference extends ActiveRecordError {
   }
 }
 
+export class AssociationNotLoadedError extends ActiveRecordError {
+  constructor(ownerName: string, associationName: string) {
+    super(
+      `Association '${associationName}' on '${ownerName}' must be loaded before replacing. ` +
+        `Await the reader (e.g. \`await record.${associationName}\`) before assigning.`,
+    );
+    this.name = "AssociationNotLoadedError";
+  }
+}
+
 export class MultiparameterAssignmentErrors extends ActiveRecordError {
   readonly errors: Error[];
 

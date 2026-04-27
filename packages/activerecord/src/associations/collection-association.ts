@@ -3,7 +3,7 @@ import type { AssociationDefinition } from "../associations.js";
 import { fireAssocCallbacks } from "../associations.js";
 import { underscore } from "@blazetrails/activesupport";
 import { Association } from "./association.js";
-import { RecordNotSaved, Rollback } from "../errors.js";
+import { RecordNotSaved, Rollback, AssociationNotLoadedError } from "../errors.js";
 
 /**
  * Base class for has_many and has_and_belongs_to_many associations.
@@ -256,6 +256,11 @@ export class CollectionAssociation extends Association {
    */
   replace(otherArray: Base[]): void {
     for (const val of otherArray) (this as any).raiseOnTypeMismatchBang(val);
+    // Rails calls load_target synchronously before replacing. Since loadTarget()
+    // is async here, require callers to load first on persisted owners.
+    if (!this.owner.isNewRecord() && !this.isLoaded()) {
+      throw new AssociationNotLoadedError(this.owner.constructor.name, this.reflection.name);
+    }
     const originalTarget = [...this.target];
     replaceCommonRecordsInMemory(this, otherArray, originalTarget);
     if (this.owner.isNewRecord()) {

@@ -1,10 +1,10 @@
 # Private API Parity — Path to 100%
 
 `pnpm api:compare --package activerecord --privates-only` reports
-**~220/1429 (~15%)** for private/protected methods (post-Tier-1 PRs),
-vs 94.7% for public-only. Of the remaining gap, roughly **~10% is
-detection** (fixable in the extractor) and **~90% is real implementation
-work** spread across many Rails subsystems.
+**205/1429 (14.3%)** for private/protected methods, vs 96.3% for
+public-only. Of the remaining gap, roughly **~10% is detection**
+(fixable in the extractor) and **~90% is real implementation work**
+spread across many Rails subsystems.
 
 ## 1. Script improvements
 
@@ -40,11 +40,6 @@ Spot-check 3–5 0% files for predicate mismatches.
   (`_updateRecordWithLock` composite-PK path).
 - **`transactions.rb`** — **100%** — PR #882.
 - **`relation/query_methods.rb`** — **100%** — PRs #884 + #901 + #908.
-  Covers all 45 private helpers including `buildArel`, `buildWhereClause`,
-  `buildJoins`/`buildJoinBuckets`, `buildWith`, `buildWithJoinNode`,
-  `selectNamedJoins`, `selectAssociationList`, `buildJoinDependencies`,
-  `eachJoinDependencies`, `lookupTableKlassFromJoinDependencies`,
-  `WhereChain#scopeAssociationReflection`.
 
 Still open in Tier 1:
 

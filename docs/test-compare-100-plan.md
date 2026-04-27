@@ -1,9 +1,7 @@
 # activerecord test:compare → 100% Plan
 
-Snapshot 2026-04-25: `activerecord 5487/8348 (65.7%) | 338/338 files | 242 misplaced`.
-Total pending: **2861 tests** across **260 files** (skipped + misplaced + missing).
-Zero missing files — every Rails AR test file already has a TS counterpart;
-all gaps are skipped tests or stub-test misplacements.
+Snapshot 2026-04-26: `activerecord 5894/8348 (70.6%) | 338/338 files | 0 misplaced`.
+Total pending: **2454 tests** across skipped tests; zero missing files, zero misplaced.
 
 PR sizing follows the repo rule (≤20 methods/feature touchpoints unless trivial).
 For each PR the rails source path(s) and trails source/test paths are listed.

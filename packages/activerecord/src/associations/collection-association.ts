@@ -297,11 +297,12 @@ export class CollectionAssociation extends Association {
   async persistReplace(): Promise<void> {
     const pending = this._pendingReplace;
     if (!pending || this.owner.isNewRecord()) return;
-    // If the association wasn't loaded at assignment time, load now to get the
-    // real DB baseline before diffing (mirrors Rails' load_target in replace).
+    // If the association wasn't loaded at assignment time, fetch the persisted
+    // baseline directly via doAsyncFindTarget to avoid the loadedBang short-circuit
+    // and without mutating this.target (mirrors Rails' load_target in replace).
     if (!pending.wasLoaded) {
-      await this.loadTarget();
-      pending.originalTarget = [...this.target];
+      const dbRecords = await this.doAsyncFindTarget();
+      pending.originalTarget = Array.isArray(dbRecords) ? [...dbRecords] : [];
     }
     const currentTarget = this.target;
     await transaction(this, async () => {

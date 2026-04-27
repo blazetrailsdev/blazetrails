@@ -18,6 +18,8 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
 
   cast(value: unknown): DateTimeCastResult | null {
     if (value === null || value === undefined) return null;
+    if (value === DateInfinity) return DateInfinity;
+    if (value === DateNegativeInfinity) return DateNegativeInfinity;
     if (value instanceof Temporal.Instant) return value;
     if (value instanceof Temporal.PlainDateTime) return value;
     // Dual-typed window: pg driver still returns Date until PR 5a.

@@ -17,6 +17,8 @@ export class DateType extends ValueType<DateCastResult> {
 
   cast(value: unknown): DateCastResult | null {
     if (value === null || value === undefined) return null;
+    if (value === DateInfinity) return DateInfinity;
+    if (value === DateNegativeInfinity) return DateNegativeInfinity;
     if (value instanceof Temporal.PlainDate) return value;
     // Accept PlainDateTime from multiparameter assignment — extract the date part.
     if (value instanceof Temporal.PlainDateTime) return value.toPlainDate();

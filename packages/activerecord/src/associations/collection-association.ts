@@ -3,7 +3,7 @@ import type { AssociationDefinition } from "../associations.js";
 import { fireAssocCallbacks } from "../associations.js";
 import { underscore } from "@blazetrails/activesupport";
 import { Association } from "./association.js";
-import { RecordNotSaved, Rollback, ActiveRecordError } from "../errors.js";
+import { RecordNotSaved, Rollback } from "../errors.js";
 
 /**
  * Base class for has_many and has_and_belongs_to_many associations.
@@ -151,7 +151,7 @@ export class CollectionAssociation extends Association {
         if (!saved) result = false;
       }
     }
-    if (!result) throw new Error("ActiveRecord::Rollback");
+    if (!result) throw new Rollback();
   }
 
   /**
@@ -709,7 +709,7 @@ async function replaceRecords(
       await assoc.concat(...toAdd);
     } catch (e) {
       // Only translate validation/rollback failures; re-throw adapter/query errors as-is
-      if (e instanceof Rollback || e instanceof ActiveRecordError) {
+      if (e instanceof Rollback) {
         (assoc as any).target = originalTarget;
         throw new RecordNotSaved(
           `Failed to replace ${assoc.reflection.name} because one or more records could not be saved.`,

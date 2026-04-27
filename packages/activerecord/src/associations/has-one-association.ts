@@ -106,10 +106,14 @@ export class HasOneAssociation extends SingularAssociation {
       }
       if (save && (this.owner as any).isPersisted?.()) {
         if (this._pendingReplace) {
-          if (record === this._pendingReplace.previousTarget) {
-            this._pendingReplace = null; // reverted to DB state — nothing to flush
+          // Only clear on a true revert: a different-record assignment being set back.
+          // Same-record (dirty) assignments must not clear even if record === previousTarget.
+          const wasAssignedAnother =
+            this._pendingReplace.previousTarget !== this._pendingReplace.record;
+          if (wasAssignedAnother && record === this._pendingReplace.previousTarget) {
+            this._pendingReplace = null;
           } else {
-            this._pendingReplace.record = record; // update destination, keep original previousTarget
+            this._pendingReplace.record = record;
           }
         } else {
           this._pendingReplace = { record, previousTarget: this.target };

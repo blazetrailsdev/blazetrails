@@ -1,3 +1,4 @@
+import { NotImplementedError } from "./errors.js";
 import { ExplainRegistry } from "./explain-registry.js";
 import type { Base } from "./base.js";
 import type { ExplainOption } from "./adapter.js";
@@ -38,4 +39,13 @@ export async function execExplain(
   // and adapter-specific buildExplainClause — reusing that logic avoids
   // duplicating the JSON.stringify / typeCast edge cases.
   return (modelClass as any).all()._execExplain(queries, options);
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function renderBind(connection: any, attr: any): never {
+  throw new NotImplementedError("ActiveRecord::Explain#render_bind is not implemented");
+}
+
+function buildExplainClause(connection: any, options?: any): never {
+  throw new NotImplementedError("ActiveRecord::Explain#build_explain_clause is not implemented");
 }

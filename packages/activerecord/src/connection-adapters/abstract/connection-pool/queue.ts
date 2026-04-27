@@ -11,7 +11,7 @@
  */
 
 import type { DatabaseAdapter } from "../../../adapter.js";
-import { ConnectionTimeoutError } from "../../../errors.js";
+import { ConnectionTimeoutError, NotImplementedError } from "../../../errors.js";
 import { include, type Included } from "@blazetrails/activesupport";
 
 /**
@@ -342,3 +342,22 @@ export class ConnectionLeasingQueue extends Queue {
 
 // Rails: `include BiasableQueue` in ConnectionLeasingQueue
 include(ConnectionLeasingQueue, BiasableQueue);
+
+// --- api:compare private stubs (auto-generated) ---
+function synchronize(block?: any): never {
+  throw new NotImplementedError(
+    "ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#synchronize is not implemented",
+  );
+}
+
+function isAny(): never {
+  throw new NotImplementedError(
+    "ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#any? is not implemented",
+  );
+}
+
+function remove(): never {
+  throw new NotImplementedError(
+    "ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#remove is not implemented",
+  );
+}

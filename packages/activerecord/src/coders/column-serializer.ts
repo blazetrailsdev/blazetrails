@@ -1,4 +1,4 @@
-import { SerializationTypeMismatch } from "../errors.js";
+import { SerializationTypeMismatch, NotImplementedError } from "../errors.js";
 
 type CoderLike = { dump(obj: unknown): string | null; load(payload: unknown): unknown };
 type ClassLike = new (...args: unknown[]) => unknown;
@@ -104,4 +104,11 @@ export class ColumnSerializer {
       );
     }
   }
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function checkArityOfConstructor(): never {
+  throw new NotImplementedError(
+    "ActiveRecord::Coders::ColumnSerializer#check_arity_of_constructor is not implemented",
+  );
 }

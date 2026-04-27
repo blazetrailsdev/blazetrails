@@ -8,6 +8,7 @@
  * Creates a HashConfig with envName="development", name="primary",
  * and configuration={ database: "db_name" }.
  */
+import { NotImplementedError } from "../errors.js";
 import { DatabaseConfig, type DatabaseConfigOptions } from "./database-config.js";
 
 // Late-bound reference to the global configurations — set by
@@ -106,4 +107,11 @@ export class HashConfig extends DatabaseConfig {
         return null;
     }
   }
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function schemaFileType(format: any): never {
+  throw new NotImplementedError(
+    "ActiveRecord::DatabaseConfigurations::HashConfig#schema_file_type is not implemented",
+  );
 }

@@ -12,6 +12,7 @@
  * static maps and `setInterval`, using WeakRef to avoid preventing pool GC.
  */
 
+import { NotImplementedError } from "../../../errors.js";
 export interface ReapablePool {
   reap?(): void;
   flush?(): void;
@@ -112,4 +113,11 @@ export class Reaper {
       Reaper._timers.delete(frequency);
     }
   }
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function spawnThread(frequency: any): never {
+  throw new NotImplementedError(
+    "ActiveRecord::ConnectionAdapters::ConnectionPool::Reaper#spawn_thread is not implemented",
+  );
 }

@@ -8,6 +8,7 @@
  * Mirrors: ActiveRecord::Callbacks
  */
 
+import { NotImplementedError } from "./errors.js";
 import type { Base } from "./base.js";
 
 type ModelCtor = typeof Base;
@@ -216,4 +217,17 @@ function registerCallback(
     conditions.on = (options as ValidationCallbackOptions<never>).on;
   }
   klass._callbackChain!.register(timing, event, fn, conditions);
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function createOrUpdate(opts?: any): never {
+  throw new NotImplementedError("ActiveRecord::Callbacks#create_or_update is not implemented");
+}
+
+function _createRecord(): never {
+  throw new NotImplementedError("ActiveRecord::Callbacks#_create_record is not implemented");
+}
+
+function _updateRecord(): never {
+  throw new NotImplementedError("ActiveRecord::Callbacks#_update_record is not implemented");
 }

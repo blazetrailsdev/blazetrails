@@ -12,6 +12,7 @@
  *
  * Mirrors: ActiveRecord::AttributeMethods::Serialization
  */
+import { NotImplementedError } from "../errors.js";
 export interface Serialization {
   serialize(attribute: string, options?: { coder?: unknown }): void;
 }
@@ -52,4 +53,17 @@ export class ColumnSerializer {
   load(raw: unknown): unknown {
     return this.coder.load(raw);
   }
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function buildColumnSerializer(): never {
+  throw new NotImplementedError(
+    "ActiveRecord::AttributeMethods::Serialization#build_column_serializer is not implemented",
+  );
+}
+
+function isTypeIncompatibleWithSerialize(): never {
+  throw new NotImplementedError(
+    "ActiveRecord::AttributeMethods::Serialization#type_incompatible_with_serialize? is not implemented",
+  );
 }

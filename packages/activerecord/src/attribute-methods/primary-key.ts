@@ -3,6 +3,7 @@
  *
  * Mirrors: ActiveRecord::AttributeMethods::PrimaryKey
  */
+import { NotImplementedError } from "../errors.js";
 import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "../adapter-name.js";
 import { underscore } from "@blazetrails/activesupport";
@@ -146,4 +147,11 @@ export function getPrimaryKey(
     }
   }
   return "id";
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function isAttributeMethod(attrName: any): never {
+  throw new NotImplementedError(
+    "ActiveRecord::AttributeMethods::PrimaryKey#attribute_method? is not implemented",
+  );
 }

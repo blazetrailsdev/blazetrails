@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::Encryption::Config
  */
 
+import { NotImplementedError } from "../errors.js";
 import { ConfigError } from "./errors.js";
 import type { SchemeOptions } from "./scheme.js";
 
@@ -69,3 +70,14 @@ export const defaultCompressor: Compressor = {
     return inflateSync(data).toString("utf-8");
   },
 };
+
+// --- api:compare private stubs (auto-generated) ---
+function setDefaults(): never {
+  throw new NotImplementedError("ActiveRecord::Encryption::Config#set_defaults is not implemented");
+}
+
+function addPreviousScheme(properties?: any): never {
+  throw new NotImplementedError(
+    "ActiveRecord::Encryption::Config#add_previous_scheme is not implemented",
+  );
+}

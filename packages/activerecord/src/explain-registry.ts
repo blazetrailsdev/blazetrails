@@ -16,6 +16,7 @@
  * scope has been opened so existing unit-level tests keep working.
  */
 
+import { NotImplementedError } from "./errors.js";
 import { getAsyncContext } from "@blazetrails/activesupport";
 import type { AsyncContext } from "@blazetrails/activesupport";
 
@@ -105,4 +106,9 @@ export class ExplainRegistry {
       slot.queries = [];
     }
   }
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function instance(): never {
+  throw new NotImplementedError("ActiveRecord::ExplainRegistry#instance is not implemented");
 }

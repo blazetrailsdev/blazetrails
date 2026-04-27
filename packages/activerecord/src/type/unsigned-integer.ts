@@ -1,3 +1,4 @@
+import { NotImplementedError } from "../errors.js";
 import { IntegerType } from "@blazetrails/activemodel";
 
 /**
@@ -24,4 +25,13 @@ export class UnsignedInteger extends IntegerType {
   override isSerializable(value: unknown): boolean {
     return value == null || this.cast(value) !== null;
   }
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function maxValue(): never {
+  throw new NotImplementedError("ActiveRecord::Type::UnsignedInteger#max_value is not implemented");
+}
+
+function minValue(): never {
+  throw new NotImplementedError("ActiveRecord::Type::UnsignedInteger#min_value is not implemented");
 }

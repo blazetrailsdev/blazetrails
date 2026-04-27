@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::Column
  */
 
+import { NotImplementedError } from "../errors.js";
 import { SqlTypeMetadata } from "./sql-type-metadata.js";
 import type { SqlTypeMetadataJSON } from "./sql-type-metadata.js";
 import { humanize } from "@blazetrails/activesupport";
@@ -168,4 +169,11 @@ export class NullColumn extends Column {
   constructor() {
     super("", null, null, true);
   }
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function deduplicated(): never {
+  throw new NotImplementedError(
+    "ActiveRecord::ConnectionAdapters::Column#deduplicated is not implemented",
+  );
 }

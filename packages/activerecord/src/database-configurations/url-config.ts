@@ -4,6 +4,7 @@
  * A configuration built from a connection URL. Parses the URL into a
  * config hash and merges with any provided configuration overrides.
  */
+import { NotImplementedError } from "../errors.js";
 import { HashConfig } from "./hash-config.js";
 import type { DatabaseConfigOptions } from "./database-config.js";
 import { ConnectionUrlResolver } from "./connection-url-resolver.js";
@@ -42,4 +43,11 @@ function buildUrlHash(url: string): DatabaseConfigOptions {
     return { url };
   }
   return new ConnectionUrlResolver(url).toHash();
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function toBooleanBang(configurationHash: any, key: any): never {
+  throw new NotImplementedError(
+    "ActiveRecord::DatabaseConfigurations::UrlConfig#to_boolean! is not implemented",
+  );
 }

@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::Encryption::KeyProvider
  */
 
+import { NotImplementedError } from "../errors.js";
 import { Key } from "./key.js";
 import type { Message } from "./message.js";
 
@@ -26,4 +27,11 @@ export class KeyProvider {
     }
     return [...this._keys];
   }
+}
+
+// --- api:compare private stubs (auto-generated) ---
+function keysGroupedById(): never {
+  throw new NotImplementedError(
+    "ActiveRecord::Encryption::KeyProvider#keys_grouped_by_id is not implemented",
+  );
 }

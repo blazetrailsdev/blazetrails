@@ -329,11 +329,14 @@ function main() {
     const tsMethodsByFile = new Map<string, Set<string>>();
 
     if (tsPkg) {
+      // TS method lookup always indexes ALL methods (public + internal).
+      // The Ruby side is filtered by mode; widening the TS lookup ensures that
+      // Rails private methods implemented as exported TS functions still count
+      // as matched when running --privates-only.
       const addMethods = (cls: ClassInfo) => {
         const file = cls.file || "";
         const methods = tsMethodsByFile.get(file) || new Set();
         for (const m of [...cls.instanceMethods, ...cls.classMethods]) {
-          if (!methodMatchesMode(m)) continue;
           methods.add(m.name);
         }
         tsMethodsByFile.set(file, methods);
@@ -347,7 +350,6 @@ function main() {
         for (const [file, fns] of Object.entries(tsPkg.fileFunctions)) {
           const methods = tsMethodsByFile.get(file) || new Set();
           for (const fn of fns) {
-            if (!methodMatchesMode(fn)) continue;
             methods.add(fn.name);
           }
           tsMethodsByFile.set(file, methods);
@@ -404,7 +406,6 @@ function main() {
 
         const methods = new Set<string>();
         for (const m of [...entity.instanceMethods, ...entity.classMethods]) {
-          if (!methodMatchesMode(m)) continue;
           methods.add(m.name);
         }
 

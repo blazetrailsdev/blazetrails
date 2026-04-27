@@ -1934,8 +1934,16 @@ export class Relation<T extends Base> {
     // other joins → join.left.name. Mirror that: strings become StringJoin and we
     // extract via tablesInString; Arel nodes expose their table via left.name when
     // available (InnerJoin/OuterJoin/LeadingJoin all have left: Table).
+    // _leftOuterJoinsValues holds association names (not table names). Rails
+    // build_joins([]) processes left_outer_joins_values and includes their tables
+    // in references_eager_loaded_tables?. We approximate by using the association
+    // name as the table name (matches standard Rails pluralized naming).
+    const leftOuterTables = this._leftOuterJoinsValues
+      .filter((v): v is string => typeof v === "string")
+      .map((v) => v.toLowerCase());
     const joinedTables = new Set<string>([
       ...this._joinClauses.map((j) => j.table.toLowerCase()),
+      ...leftOuterTables,
       ...this._joinValues.flatMap((v) => {
         if (typeof v === "string") {
           const join = new Nodes.StringJoin(new Nodes.SqlLiteral(v));
@@ -2363,9 +2371,12 @@ export class Relation<T extends Base> {
     // Process left_outer_joins_values: resolve via JoinDependency and emit as
     // StringJoin nodes (mirrors Rails build_join_buckets stashed_left_joins path).
     if (this._leftOuterJoinsValues.length > 0) {
-      const jd = (this as any).constructJoinDependency(this._leftOuterJoinsValues, Nodes.OuterJoin);
-      const constraints = (jd as any).joinConstraints([]);
-      for (const node of constraints) manager.appendJoinNode(node);
+      const jd = QueryMethodBangs.constructJoinDependency.call(
+        this as any,
+        this._leftOuterJoinsValues,
+        Nodes.OuterJoin,
+      );
+      for (const node of jd.joinConstraints([])) manager.appendJoinNode(node);
     }
     for (const node of joinNodes) manager.appendJoinNode(node);
   }

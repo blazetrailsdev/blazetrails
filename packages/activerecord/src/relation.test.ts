@@ -292,6 +292,35 @@ describe("RelationTest", () => {
     expect(sql).toContain('"books"."author_id"');
   });
 
+  it("leftJoins(:assoc) stores in _leftOuterJoinsValues and generates LEFT OUTER JOIN", () => {
+    class Author extends Base {
+      static {
+        this.tableName = "authors";
+        this.adapter = adapter;
+      }
+    }
+    class Post extends Base {
+      static {
+        this.tableName = "posts";
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("LeftJoinAuthor2", Author);
+    registerModel("LeftJoinPost2", Post);
+    Associations.hasMany.call(Author, "posts", {
+      className: "LeftJoinPost2",
+      foreignKey: "author_id",
+    });
+
+    const rel = Author.leftJoins("posts");
+    // Association name stored in _leftOuterJoinsValues, not pre-resolved to _joinClauses
+    expect((rel as any)._leftOuterJoinsValues).toContain("posts");
+    expect((rel as any)._joinClauses.some((j: any) => j.table === "posts")).toBe(false);
+    // SQL still contains LEFT OUTER JOIN
+    expect(rel.toSql()).toMatch(/LEFT OUTER JOIN/i);
+  });
+
   it("joins() preserves Arel node type — InnerJoin stays InnerJoin in _joinValues, not StringJoin", () => {
     class Book extends Base {
       static {

@@ -1870,9 +1870,7 @@ function buildArel(this: QueryMethodsHost, _connection?: unknown, _aliases?: unk
   const table: any = mc?.arelTable;
   const arel = new SelectManager(table);
 
-  // arel.source.right is the internal mutable join array; joinSources getter returns a copy.
-  const joinSources: any[] = arel.source.right;
-  buildJoins.call(this, joinSources);
+  buildJoins.call(this, arel);
 
   if (!this._whereClause.isEmpty()) arel.where(this._whereClause.ast);
   if (!this._havingClause.isEmpty()) arel.having(this._havingClause.ast);
@@ -2018,30 +2016,30 @@ function buildJoinBuckets(this: QueryMethodsHost): Record<string, unknown[]> {
   return buckets;
 }
 
-function buildJoins(this: QueryMethodsHost, joinSources: unknown[]): unknown[] {
-  if (this._joinClauses.length === 0 && this._rawJoins.length === 0) return joinSources;
+function buildJoins(this: QueryMethodsHost, arel: any): void {
+  if (this._joinClauses.length === 0 && this._rawJoins.length === 0) return;
 
   const buckets = buildJoinBuckets.call(this);
-
   const leadingJoins = buckets.leading_join as unknown[];
   const joinNodes = buckets.join_node as unknown[];
 
-  if (leadingJoins.length > 0) (joinSources as any[]).push(...leadingJoins);
+  for (const j of leadingJoins) arel.source.right.push(j);
 
-  // Translate _joinClauses into Arel join nodes preserving ON conditions.
-  // Mirror _applyJoinsToManager: use ArelTable only when the join clause is
-  // a known real table name (quoted: true); otherwise treat the table string
-  // as a SQL literal so aliases (e.g. "posts p") and raw fragments pass through.
+  // Mirror _applyJoinsToManager: use manager.join()/outerJoin() so the
+  // SelectManager handles string→SqlLiteral conversion and On wrapping.
   for (const j of this._joinClauses) {
-    const JoinClass = j.type === "left" ? Nodes.OuterJoin : Nodes.InnerJoin;
-    const onNode = new Nodes.On(arelSql(j.on) as any);
-    const tableNode = (j as any).quoted ? new ArelTable(j.table) : (arelSql(j.table) as any);
-    (joinSources as any[]).push(new JoinClass(tableNode, onNode));
+    const tableNode = (j as any).quoted ? new ArelTable(j.table) : j.table;
+    const onNode = arelSql(j.on) as any;
+    if (j.type === "inner") {
+      arel.join(tableNode, onNode);
+    } else {
+      arel.outerJoin(tableNode, onNode);
+    }
   }
 
-  if (joinNodes.length > 0) (joinSources as any[]).push(...joinNodes);
+  for (const raw of this._rawJoins) arel.appendStringJoin(raw);
 
-  return joinSources;
+  for (const node of joinNodes) arel.source.right.push(node);
 }
 
 function buildWith(this: QueryMethodsHost, arel: any): void {

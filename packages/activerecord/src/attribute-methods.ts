@@ -307,9 +307,10 @@ function attributesForUpdate(this: any, attributeNames: string[]): string[] {
   const colNames = new Set<string>(mc.columnNames?.() ?? []);
   return attributeNames.filter((name) => {
     if (!colNames.has(name)) return false;
-    // Rails: filters out readonly_attribute? and counter_cache_column?
     if (mc._readonlyAttributes?.has?.(name)) return false;
     if (mc._counterCacheColumns?.has?.(name)) return false;
+    // Rails: column_for_attribute(name).virtual?
+    if (mc.columnForAttribute?.(name)?.virtual) return false;
     return true;
   });
 }
@@ -319,21 +320,24 @@ function attributesForCreate(this: any, attributeNames: string[]): string[] {
   const colNames = new Set<string>(mc.columnNames?.() ?? []);
   return attributeNames.filter((name) => {
     if (!colNames.has(name)) return false;
-    // Rails: filters out pk when id is nil (server-generated PK)
     if (pkAttribute.call(this, name) && this.id == null) return false;
+    // Rails: column_for_attribute(name).virtual?
+    if (mc.columnForAttribute?.(name)?.virtual) return false;
     return true;
   });
 }
 
 function formatForInspect(this: any, name: string, value: unknown): string {
-  if (value === null || value === undefined) return String(value);
+  // Mirror Rails: format_for_inspect — nil returns "nil" (Ruby nil.inspect),
+  // strings get double-quoted with 50-char truncation, filter applied to raw value.
+  // Aligns with attributeForInspect in core.ts.
+  if (value === null || value === undefined) return "nil";
   const filter = inspectionFilter.call(this.constructor);
   const filtered = filter.filterParam(name, value);
   if (filtered instanceof InspectionMask) return filtered.toString();
+  if (filtered === null || filtered === undefined) return "nil";
   if (typeof filtered === "string") {
-    return filtered.length > 50
-      ? JSON.stringify(filtered.slice(0, 50) + "...")
-      : JSON.stringify(filtered);
+    return filtered.length > 50 ? `"${filtered.substring(0, 50)}..."` : `"${filtered}"`;
   }
   if (filtered instanceof Date) return `"${filtered.toISOString()}"`;
   try {

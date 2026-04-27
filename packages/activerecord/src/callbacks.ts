@@ -248,8 +248,21 @@ function _createRecord(this: any): Promise<unknown> {
 
 function _updateRecord(this: any): Promise<unknown> {
   // Rails: _run_update_callbacks { record_update_timestamps { super } }
+  // record_update_timestamps writes updated_at/updated_on when @_touch_record
+  // and should_record_timestamps? are true, then yields to the actual update.
   const ctor = this.constructor as any;
   return ctor._callbackChain.runCallbacks("update", this, async () => {
+    // Mirror record_update_timestamps: write timestamp columns before the update
+    // when the model has record_timestamps enabled and has changes to save.
+    if (this._touchRecord !== false && ctor.recordTimestamps !== false) {
+      const time = new Date();
+      const updateAttrs: string[] = ctor.timestampAttributesForUpdateInModel?.call(ctor) ?? [];
+      for (const col of updateAttrs) {
+        if (this._attributes?.has(col) && !this.willSaveChangeToAttribute?.(col)) {
+          this.writeAttribute?.(col, time);
+        }
+      }
+    }
     const result = await this._performUpdate?.();
     if (this._pendingOperation) {
       await this._pendingOperation;

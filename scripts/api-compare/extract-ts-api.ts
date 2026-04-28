@@ -510,6 +510,33 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
       const hostInfo = info.classes[hostKey];
       if (!hostInfo) return;
 
+      // Inline object literal: `include(Host, { foo() {...}, bar: ... })`.
+      // No module name to reference; push the methods directly onto the
+      // host's own instanceMethods so they appear at the host's TS file.
+      if (ts.isObjectLiteralExpression(modArg)) {
+        for (const prop of modArg.properties) {
+          let mname: string | null = null;
+          if (ts.isMethodDeclaration(prop) && prop.name && ts.isIdentifier(prop.name)) {
+            mname = prop.name.text;
+          } else if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
+            mname = prop.name.text;
+          } else if (ts.isShorthandPropertyAssignment(prop)) {
+            mname = prop.name.text;
+          }
+          if (!mname) continue;
+          if (hostInfo.instanceMethods.some((m) => m.name === mname)) continue;
+          const line = prop.getSourceFile().getLineAndCharacterOfPosition(prop.getStart()).line + 1;
+          hostInfo.instanceMethods.push({
+            name: mname,
+            visibility: "public",
+            params: [],
+            line,
+            file: hostInfo.file,
+          });
+        }
+        return;
+      }
+
       // Resolve the module name. Imports may rebind it (`import { Math
       // as MathMixin }`), so follow the alias to the original symbol's
       // name when possible. Property access (`Mod.InstanceMethods`)

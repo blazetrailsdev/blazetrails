@@ -8,7 +8,7 @@ import type { DatabaseAdapter } from "./adapter.js";
 import type { MigrationProxy } from "./migration.js";
 import { Migrator } from "./migration.js";
 import type { Base } from "./base.js";
-import type { DatabaseConfigurations } from "./database-configurations.js";
+import { DatabaseConfigurations } from "./database-configurations.js";
 import { DatabaseTasks } from "./tasks/database-tasks.js";
 
 /**
@@ -57,7 +57,16 @@ export async function createAndLoadSchema(
   index: number,
   { envName }: { envName: string } = { envName: "test" },
 ): Promise<void> {
-  const configurations = (modelClass as any).configurations as DatabaseConfigurations;
+  // `Base.configurations` is a raw, OrderedOptions-shaped object with
+  // `.toH()` (matches `connection-handling.ts:81`'s usage). Normalize via
+  // `DatabaseConfigurations.fromEnv` so subsequent `.configsFor` is safe
+  // regardless of whether `configurations` is already a registry, a raw
+  // hash, or unset.
+  const raw = (modelClass as any).configurations;
+  const configurations =
+    raw instanceof DatabaseConfigurations
+      ? raw
+      : DatabaseConfigurations.fromEnv(typeof raw?.toH === "function" ? raw.toH() : (raw ?? {}));
   if (!configurations) return;
 
   const old = process.env.VERBOSE;

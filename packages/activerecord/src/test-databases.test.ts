@@ -3,8 +3,19 @@ import { createAndMigrate, eachDatabase, createAndLoadSchema } from "./test-data
 import { createTestAdapter } from "./test-adapter.js";
 import type { MigrationProxy } from "./migration.js";
 import type { Base } from "./base.js";
-import type { DatabaseConfigurations } from "./database-configurations.js";
+import { DatabaseConfigurations } from "./database-configurations.js";
 import { DatabaseTasks } from "./tasks/database-tasks.js";
+
+// Build a (minimal) DatabaseConfigurations whose `configsFor` returns the
+// supplied stubbed configs. Mirrors the production shape — production code
+// calls `(this as any).configurations?.toH?.()` then `fromEnv(...)`, so the
+// real Base.configurations is a raw hash; createAndLoadSchema normalizes
+// either input. Tests use the post-normalization instance directly.
+const stubConfigurations = (configs: unknown[]): DatabaseConfigurations => {
+  const dc = new DatabaseConfigurations([]);
+  vi.spyOn(dc, "configsFor").mockReturnValue(configs as never);
+  return dc;
+};
 
 describe("TestDatabasesTest", () => {
   afterEach(() => {
@@ -33,9 +44,7 @@ describe("TestDatabasesTest", () => {
     });
     mockConfig.adapter = "sqlite3";
 
-    const mockConfigurations = {
-      configsFor: vi.fn().mockReturnValue([mockConfig]),
-    } as any as DatabaseConfigurations;
+    const mockConfigurations = stubConfigurations([mockConfig]);
 
     const mockModelClass = {
       configurations: mockConfigurations,
@@ -74,9 +83,7 @@ describe("TestDatabasesTest", () => {
     });
     mockConfig.adapter = "sqlite3";
 
-    const mockConfigurations = {
-      configsFor: vi.fn().mockReturnValue([mockConfig]),
-    } as any as DatabaseConfigurations;
+    const mockConfigurations = stubConfigurations([mockConfig]);
 
     const mockModelClass = {
       configurations: mockConfigurations,
@@ -101,9 +108,7 @@ describe("TestDatabasesTest", () => {
       { database: "test/db/replica.sqlite3", adapter: "sqlite3", name: "replica" },
     ];
 
-    const mockConfigurations = {
-      configsFor: vi.fn().mockReturnValue(configs),
-    } as any as DatabaseConfigurations;
+    const mockConfigurations = stubConfigurations(configs);
 
     const mockModelClass = {
       configurations: mockConfigurations,
@@ -139,7 +144,7 @@ describe("TestDatabasesTest", () => {
     mockConfig.adapter = "sqlite3";
 
     const mockModelClass = {
-      configurations: { configsFor: vi.fn().mockReturnValue([mockConfig]) },
+      configurations: stubConfigurations([mockConfig]),
     } as any as typeof Base;
 
     const originalVerbose = process.env.VERBOSE;

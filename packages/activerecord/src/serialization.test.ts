@@ -88,6 +88,41 @@ describe("SerializationTest", () => {
   it.skip("find records by serialized attributes through join", () => {
     /* needs associations + serialized columns */
   });
+
+  // Mirrors ActiveRecord::Serialization#serializable_hash — when a model
+  // declares an inheritance column (STI), serializableHash must exclude
+  // it without callers having to pass `except`.
+  it("excludes the inheritance column from serializable_hash for STI models", () => {
+    class Vehicle extends Base {}
+    Vehicle._tableName = "vehicles";
+    Vehicle.attribute("id", "integer");
+    Vehicle.attribute("name", "string");
+    Vehicle.attribute("type", "string");
+    Vehicle.inheritanceColumn = "type";
+    Vehicle.adapter = adapter;
+
+    const car = new Vehicle({ id: 1, name: "Camry", type: "Car" });
+    const hash = (car as any).serializableHash();
+    expect(hash).toMatchObject({ id: 1, name: "Camry" });
+    expect(hash).not.toHaveProperty("type");
+  });
+
+  it("does not duplicate the inheritance column when caller already passes it in except", () => {
+    class Vehicle extends Base {}
+    Vehicle._tableName = "vehicles";
+    Vehicle.attribute("id", "integer");
+    Vehicle.attribute("name", "string");
+    Vehicle.attribute("type", "string");
+    Vehicle.inheritanceColumn = "type";
+    Vehicle.adapter = adapter;
+
+    const car = new Vehicle({ id: 1, name: "Camry", type: "Car" });
+    // Caller redundantly excludes "type" — final except list should still
+    // be deduped (Ruby's `|=` set-union semantics).
+    const hash = (car as any).serializableHash({ except: ["type"] });
+    expect(hash).not.toHaveProperty("type");
+    expect(hash).toMatchObject({ id: 1, name: "Camry" });
+  });
 });
 
 describe("toXml() on Base", () => {

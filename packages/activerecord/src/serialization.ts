@@ -23,7 +23,7 @@ export function serializableHash(this: Base, options?: SerializeOptions): Record
     const exceptArray =
       raw == null ? [] : Array.isArray(raw) ? raw : [raw as string | number | symbol];
     // Mirrors: `options[:except] |= Array(inheritance_column)` (set union).
-    options.except = [...new Set(exceptArray.map((v) => String(v))), inheritanceCol];
+    options.except = [...new Set([...exceptArray.map((v) => String(v)), inheritanceCol])];
   }
 
   return amSerializableHash(this, options);

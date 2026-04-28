@@ -50,7 +50,7 @@ export function parsePostgresInstant(
  * and `ActiveRecord.default_timezone = :utc` default. This ensures a consistent
  * `Temporal.Instant` return type across all adapters for `datetime` columns.
  */
-export function parsePostgresPlainDateTime(
+export function parsePostgresTimestampAsInstant(
   text: string,
 ): Temporal.Instant | DateInfinityType | DateNegativeInfinityType {
   const trimmed = text.trim();
@@ -142,12 +142,12 @@ export function parseMysqlInstant(text: string): Temporal.Instant | null {
  * Parse a MySQL `DATETIME` wire string to `Temporal.Instant`.
  *
  * Wire format: `'YYYY-MM-DD HH:MM:SS[.ffffff]'` (naive, no timezone).
- * Treated as UTC — connection is pinned to `SET time_zone = '+00:00'` so
- * DATETIME strings are always in UTC. Zero-date `'0000-00-00 00:00:00'`
- * returns `null`. This matches the `Temporal.Instant` return type of all
- * other adapters for `datetime` columns.
+ * `DATETIME` is timezone-naive in MySQL — this parser treats the value as UTC
+ * by convention to match Rails-style `default_timezone: :utc` handling and
+ * the `Temporal.Instant` return type used here for `datetime` columns. Zero-date
+ * `'0000-00-00 00:00:00'` returns `null`.
  */
-export function parseMysqlPlainDateTime(text: string): Temporal.Instant | null {
+export function parseMysqlDatetimeAsInstant(text: string): Temporal.Instant | null {
   const trimmed = text.trim();
   if (isZeroDatetime(trimmed)) return null;
   return Temporal.Instant.from(clampFraction(trimmed.replace(" ", "T") + "Z"));

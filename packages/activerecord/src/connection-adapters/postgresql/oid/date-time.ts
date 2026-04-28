@@ -21,7 +21,7 @@ import {
   type DateInfinityType,
   type DateNegativeInfinityType,
 } from "@blazetrails/activemodel";
-import { parsePostgresPlainDateTime, parsePostgresInstant } from "../../abstract/temporal-wire.js";
+import { parsePostgresTimestampAsInstant, parsePostgresInstant } from "../../abstract/temporal-wire.js";
 
 type PgDateTimeResult = Temporal.Instant | DateInfinityType | DateNegativeInfinityType;
 
@@ -43,9 +43,9 @@ export class DateTime extends DateTimeType {
       if (/ BC$/.test(value)) {
         try {
           // BC dates may have offset (timestamptz) or not (timestamp). Both
-          // return Instant — parsePostgresPlainDateTime now treats naive as UTC.
+          // return Instant — parsePostgresTimestampAsInstant now treats naive as UTC.
           const hasOffset = /[-+]\d{2}(?::\d{2})?$/.test(value.slice(0, -3).trimEnd());
-          return hasOffset ? parsePostgresInstant(value) : parsePostgresPlainDateTime(value);
+          return hasOffset ? parsePostgresInstant(value) : parsePostgresTimestampAsInstant(value);
         } catch {
           return null;
         }

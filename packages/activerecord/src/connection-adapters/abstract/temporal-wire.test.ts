@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import {
   parsePostgresInstant,
-  parsePostgresPlainDateTime,
+  parsePostgresTimestampAsInstant,
   parsePostgresDate,
   parsePostgresTime,
   parsePostgresTimeTz,
   parseMysqlInstant,
-  parseMysqlPlainDateTime,
+  parseMysqlDatetimeAsInstant,
   parseMysqlDate,
   parseMysqlTime,
   DateInfinity,
@@ -78,28 +78,28 @@ describe("parsePostgresInstant", () => {
   });
 });
 
-describe("parsePostgresPlainDateTime", () => {
+describe("parsePostgresTimestampAsInstant", () => {
   it("parses a timestamp with space separator as UTC Instant", () => {
-    const result = parsePostgresPlainDateTime("2026-04-26 14:23:55.123456") as Temporal.Instant;
+    const result = parsePostgresTimestampAsInstant("2026-04-26 14:23:55.123456") as Temporal.Instant;
     expect(result).toBeInstanceOf(Temporal.Instant);
     expect(result.toString()).toBe("2026-04-26T14:23:55.123456Z");
   });
 
   it("preserves microseconds", () => {
-    const result = parsePostgresPlainDateTime("2024-12-31 23:59:59.999999") as Temporal.Instant;
+    const result = parsePostgresTimestampAsInstant("2024-12-31 23:59:59.999999") as Temporal.Instant;
     expect(result.toString()).toBe("2024-12-31T23:59:59.999999Z");
   });
 
   it("returns DateInfinity for 'infinity'", () => {
-    expect(parsePostgresPlainDateTime("infinity")).toBe(DateInfinity);
+    expect(parsePostgresTimestampAsInstant("infinity")).toBe(DateInfinity);
   });
 
   it("returns DateNegativeInfinity for '-infinity'", () => {
-    expect(parsePostgresPlainDateTime("-infinity")).toBe(DateNegativeInfinity);
+    expect(parsePostgresTimestampAsInstant("-infinity")).toBe(DateNegativeInfinity);
   });
 
   it("parses a BC datetime as UTC Instant", () => {
-    const result = parsePostgresPlainDateTime("0044-03-15 12:00:00 BC") as Temporal.Instant;
+    const result = parsePostgresTimestampAsInstant("0044-03-15 12:00:00 BC") as Temporal.Instant;
     expect(result).toBeInstanceOf(Temporal.Instant);
     const zdt = result.toZonedDateTimeISO("UTC");
     expect(zdt.year).toBe(-43);
@@ -108,7 +108,7 @@ describe("parsePostgresPlainDateTime", () => {
   });
 
   it("parses a BC datetime with microseconds", () => {
-    const result = parsePostgresPlainDateTime("0044-03-15 12:00:00.000456 BC") as Temporal.Instant;
+    const result = parsePostgresTimestampAsInstant("0044-03-15 12:00:00.000456 BC") as Temporal.Instant;
     const zdt = result.toZonedDateTimeISO("UTC");
     expect(zdt.millisecond).toBe(0);
     expect(zdt.microsecond).toBe(456);
@@ -207,19 +207,19 @@ describe("parseMysqlInstant", () => {
   });
 });
 
-describe("parseMysqlPlainDateTime", () => {
+describe("parseMysqlDatetimeAsInstant", () => {
   it("parses a DATETIME string as UTC Instant", () => {
-    const result = parseMysqlPlainDateTime("2026-04-26 14:23:55.123456") as Temporal.Instant;
+    const result = parseMysqlDatetimeAsInstant("2026-04-26 14:23:55.123456") as Temporal.Instant;
     expect(result).toBeInstanceOf(Temporal.Instant);
     expect(result.toString()).toBe("2026-04-26T14:23:55.123456Z");
   });
 
   it("returns null for zero-date", () => {
-    expect(parseMysqlPlainDateTime("0000-00-00 00:00:00")).toBeNull();
+    expect(parseMysqlDatetimeAsInstant("0000-00-00 00:00:00")).toBeNull();
   });
 
   it("returns null for zero-date with fractional seconds (DATETIME(6))", () => {
-    expect(parseMysqlPlainDateTime("0000-00-00 00:00:00.000000")).toBeNull();
+    expect(parseMysqlDatetimeAsInstant("0000-00-00 00:00:00.000000")).toBeNull();
   });
 });
 

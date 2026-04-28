@@ -420,7 +420,11 @@ export function assertValidEnumDefinitionValues(
     }
     if (
       values.some((v) => {
-        if (typeof v === "symbol") return false;
+        if (typeof v === "symbol") {
+          // Reject Symbol("") / Symbol("   ") — mirror Ruby Symbol#blank?
+          const desc = v.description ?? Symbol.keyFor(v) ?? "";
+          return isBlank(desc);
+        }
         return isBlank(v);
       })
     ) {
@@ -429,7 +433,7 @@ export function assertValidEnumDefinitionValues(
     return values;
   }
 
-  if (typeof values === "object" && values !== null && !Array.isArray(values)) {
+  if (isPlainHash(values)) {
     const keys = Object.keys(values);
     if (keys.length === 0) {
       throw new ArgumentError("Enum values must not be empty.");
@@ -455,6 +459,13 @@ export function assertValidEnumDefinitionValues(
   }
 
   throw new ArgumentError("Enum values must be either a non-empty hash or an array.");
+}
+
+/** True for plain JS objects (Object.prototype or null proto), matching Ruby Hash semantics. */
+function isPlainHash(value: unknown): boolean {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 /**

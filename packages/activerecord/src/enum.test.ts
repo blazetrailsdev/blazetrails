@@ -1763,6 +1763,22 @@ describe("Enum private validators", () => {
     it("rejects hash with whitespace-only key", () => {
       expect(() => assertValidEnumDefinitionValues({ "   ": 1 })).toThrow(/blank name/);
     });
+    it("rejects array with blank-description Symbol", () => {
+      expect(() => assertValidEnumDefinitionValues([Symbol("")])).toThrow(/blank name/);
+      expect(() => assertValidEnumDefinitionValues([Symbol("   ")])).toThrow(/blank name/);
+    });
+    it("rejects non-plain-object values (Map/Date/class instances)", () => {
+      expect(() => assertValidEnumDefinitionValues(new Map())).toThrow(
+        /non-empty hash or an array/,
+      );
+      expect(() => assertValidEnumDefinitionValues(new Date())).toThrow(
+        /non-empty hash or an array/,
+      );
+      class Foo {}
+      expect(() => assertValidEnumDefinitionValues(new Foo())).toThrow(
+        /non-empty hash or an array/,
+      );
+    });
     it("rejects empty hash", () => {
       expect(() => assertValidEnumDefinitionValues({})).toThrow(ArgumentError);
     });

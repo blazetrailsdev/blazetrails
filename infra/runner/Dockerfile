@@ -42,7 +42,9 @@ RUN curl -fsSL -o actions-runner.tar.gz \
 
 USER runner
 
-COPY --chown=runner:runner entrypoint.sh /home/runner/entrypoint.sh
+# Path is relative to the build context (repo root under Dokku), not the
+# Dockerfile location.
+COPY --chown=runner:runner infra/runner/entrypoint.sh /home/runner/entrypoint.sh
 RUN chmod +x /home/runner/entrypoint.sh
 
 ENTRYPOINT ["/home/runner/entrypoint.sh"]

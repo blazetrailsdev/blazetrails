@@ -456,19 +456,16 @@ export function assertValidEnumDefinitionValues(
 export function assertValidEnumOptions(options: unknown): void {
   if (!options || typeof options !== "object" || Array.isArray(options)) return;
 
-  const invalidKeys = [
-    "_prefix",
-    "_suffix",
-    "_scopes",
-    "_default",
-    "_instance_methods",
-    "_validate",
-  ];
+  // Rails: options.keys & %i[_prefix _suffix _scopes _default _instance_methods]
+  // Note: _validate is NOT in this list — it is rejected at the enum definition
+  // level, not as an option key (enum.rb:361-365).
+  const invalidKeys = ["_prefix", "_suffix", "_scopes", "_default", "_instance_methods"];
   const found = Object.keys(options).filter((k) => invalidKeys.includes(k));
 
   if (found.length > 0) {
+    // Rails: invalid_keys.map(&:inspect) — inspect on a Ruby symbol produces ":key"
     throw new ArgumentError(
-      `invalid option(s): ${found.map((k) => `"${k}"`).join(", ")}. Valid options are: prefix, suffix, scopes, default, instance_methods, and validate.`,
+      `invalid option(s): ${found.map((k) => `:${k}`).join(", ")}. Valid options are: :prefix, :suffix, :scopes, :default, :instance_methods, and :validate.`,
     );
   }
 }

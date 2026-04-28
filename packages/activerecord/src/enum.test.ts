@@ -1766,9 +1766,18 @@ describe("Enum private validators", () => {
   });
 
   describe("assertValidEnumOptions", () => {
-    it("rejects underscore-prefixed _prefix/_validate keys with ArgumentError", () => {
+    it("rejects underscore-prefixed option keys with ArgumentError (enum.rb:361-365)", () => {
+      // Rails: options.keys & %i[_prefix _suffix _scopes _default _instance_methods]
       expect(() => assertValidEnumOptions({ _prefix: "x" })).toThrow(ArgumentError);
-      expect(() => assertValidEnumOptions({ _validate: true })).toThrow(/invalid option/);
+      expect(() => assertValidEnumOptions({ _suffix: "x" })).toThrow(/invalid option/);
+      expect(() => assertValidEnumOptions({ _scopes: true })).toThrow(/invalid option/);
+      expect(() => assertValidEnumOptions({ _default: "active" })).toThrow(/invalid option/);
+      expect(() => assertValidEnumOptions({ _instance_methods: false })).toThrow(/invalid option/);
+      // _validate is NOT in Rails' invalid list — valid options include :validate
+      expect(() => assertValidEnumOptions({ _validate: true })).not.toThrow();
+    });
+    it("error message uses Ruby symbol inspect format (:key)", () => {
+      expect(() => assertValidEnumOptions({ _prefix: "x" })).toThrow(/:_prefix/);
     });
     it("accepts valid options without throwing", () => {
       expect(() => assertValidEnumOptions({ prefix: "x", validate: true })).not.toThrow();

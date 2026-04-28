@@ -277,9 +277,13 @@ export async function authenticateBy(
     throw new ArgumentError("One or more finder arguments are required");
   }
 
-  // Short-circuit: if any password is nil or empty, return null immediately
+  // Short-circuit: if any password is nil, empty, or not a string,
+  // return null immediately. Non-string values would otherwise flow
+  // through `as string` casts into PBKDF2 and either misbehave or
+  // throw — Rails' Ruby version coerces via `to_s` but in TS treating
+  // them as auth failure is the safer parity.
   for (const [, value] of passwordEntries) {
-    if (value === null || value === undefined || value === "") {
+    if (typeof value !== "string" || value === "") {
       return null;
     }
   }

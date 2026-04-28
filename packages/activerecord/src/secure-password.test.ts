@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { performance } from "node:perf_hooks";
 import { Base } from "./index.js";
 import { hasSecurePassword } from "./secure-password.js";
 import { setTokenForSecret } from "./generates-token-for.js";

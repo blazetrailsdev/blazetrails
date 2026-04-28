@@ -1,5 +1,6 @@
 import type { Node } from "./nodes/node.js";
 import { And } from "./nodes/and.js";
+import { As } from "./nodes/binary.js";
 import type { Join } from "./nodes/binary.js";
 import { False } from "./nodes/false.js";
 import { Grouping } from "./nodes/grouping.js";
@@ -14,16 +15,19 @@ import { On } from "./nodes/unary.js";
 /**
  * Mirrors: Arel::FactoryMethods (Ruby module mixed into Node and TreeManager).
  *
- * Apply with `include(Klass, FactoryMethods)` from @blazetrails/activesupport
- * and augment the class type with `Included<typeof FactoryMethods>`.
+ * Apply the runtime mixin with `include(Klass, FactoryMethods)` from
+ * @blazetrails/activesupport. Model the added methods in TypeScript by
+ * interface-merging `FactoryMethodsModule` (declared below) into the
+ * relevant class types — see Node, TreeManager, Table, and SelectManager.
  *
- * The explicit interface annotation below is load-bearing: without it, the
- * Node↔FactoryMethods type cycle (Node interface-merges
- * `Included<typeof FactoryMethods>`; FactoryMethods values reference Node)
- * forces tsc into a structural fallback when emitting composite .d.ts,
- * widening FactoryMethods to `Record<string, ...>` and reintroducing a
- * string index signature into Node. Pinning the type breaks the cycle
- * for declaration emit.
+ * Why an explicit `FactoryMethodsModule` interface (vs. deriving from
+ * `typeof FactoryMethods` via `Included<>`): the Node↔FactoryMethods
+ * type cycle (Node interface-merges this module; FactoryMethods values
+ * reference Node) forces tsc into a structural fallback when emitting
+ * composite .d.ts, widening `typeof FactoryMethods` to
+ * `Record<string, ...>` and reintroducing a string index signature into
+ * Node. Pinning the module type to a hand-written interface gives tsc
+ * a fixed point and avoids the fallback.
  */
 export interface FactoryMethodsModule {
   createTrue(): True;
@@ -90,7 +94,11 @@ export const FactoryMethods: FactoryMethodsModule = {
     return new NamedFunction("COALESCE", exprs);
   },
 
+  // Mirrors: Arel::FactoryMethods#cast — `Nodes::NamedFunction.new "CAST",
+  // [name.as(type)]`. Builds an `As` AST node so the visitor compiles it
+  // correctly (`CAST(expr AS type)`); the previous string-interpolation
+  // form stringified Node instances as `"[object Object]"`.
   cast(expr: Node, type: string): NamedFunction {
-    return new NamedFunction("CAST", [new SqlLiteral(`${expr} AS ${type}`)]);
+    return new NamedFunction("CAST", [new As(expr, new SqlLiteral(type))]);
   },
 };

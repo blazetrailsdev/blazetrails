@@ -52,6 +52,10 @@ describe("TestFactoryMethods", () => {
     const fn = users.cast(users.get("age"), "VARCHAR");
     expect(fn).toBeInstanceOf(Nodes.NamedFunction);
     expect(fn.name).toBe("CAST");
+    // Mirrors Rails: `cast` builds NamedFunction("CAST", [name.as(type)]),
+    // not a string-interpolated SqlLiteral. The compiled SQL must reference
+    // the column properly rather than "[object Object] AS VARCHAR".
+    expect(new Visitors.ToSql().compile(fn)).toBe('CAST("users"."age" AS VARCHAR)');
   });
 
   it("create true", () => {

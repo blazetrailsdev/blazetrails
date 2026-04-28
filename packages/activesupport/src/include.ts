@@ -35,14 +35,23 @@ export const extended = Symbol.for("@blazetrails/activesupport:extended");
  *
  * Usage:
  *   export interface Relation<T> extends Included<typeof QueryMethodBangs> {}
+ *
+ * Implementation note: the parameter is intentionally unconstrained
+ * (no `M extends Module`). Constraining over `Record<string, Function>`
+ * forces a string index signature into every `Included<M>`, which in
+ * turn forces every property on the merging class — and on every
+ * subclass — to be assignable to `(...args: unknown[]) => unknown`.
+ * That breaks any class that mixes `Included<>` and also has non-method
+ * fields (e.g. arel's `Attribute` with `relation`, `name`, `caster`).
+ * Filtering function-typed keys via `M[K] extends Function` keeps the
+ * resulting type tight to the literal keys of the passed module.
  */
-export type Included<M extends Module> = {
-  [K in keyof M as K extends string ? K : never]: M[K] extends (
-    this: any,
-    ...args: infer A
-  ) => infer R
-    ? (...args: A) => R
-    : never;
+export type Included<M> = {
+  [K in keyof M as K extends string
+    ? M[K] extends (this: any, ...args: any[]) => any
+      ? K
+      : never
+    : never]: M[K] extends (this: any, ...args: infer A) => infer R ? (...args: A) => R : never;
 };
 
 export function include(klass: AnyClass, mod: Module | AnyClass): void {

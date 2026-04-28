@@ -5,6 +5,22 @@
  * Mirrors: ActiveRecord::Suppressor
  */
 
+/**
+ * The suppression registry, keyed by model class name.
+ * Mirrors: ActiveSupport::IsolatedExecutionState[:active_record_suppressor_registry]
+ */
+const _suppressorRegistry: Record<string, boolean | undefined> = {};
+
+/**
+ * Get the current suppressor registry.
+ * Returns a mutable map of class names to suppression state.
+ *
+ * Mirrors: ActiveRecord::Suppressor.registry
+ */
+export function registry(): Record<string, boolean | undefined> {
+  return _suppressorRegistry;
+}
+
 const _suppressionDepth = new Map<Function, number>();
 
 /**
@@ -30,8 +46,6 @@ export async function suppress<R>(modelClass: Function, fn: () => R | Promise<R>
 
 /**
  * Check if the given model class is currently suppressed.
- *
- * Mirrors: ActiveRecord::Suppressor.registry
  */
 export function isSuppressed(modelClass: Function): boolean {
   let current: unknown = modelClass;

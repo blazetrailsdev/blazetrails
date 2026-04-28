@@ -138,3 +138,19 @@ describe("suppress()", () => {
     expect(all.length).toBe(0);
   });
 });
+
+describe("Suppressor.registry", () => {
+  it("returns the suppression registry", () => {
+    const adapter = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const registry = Base.registry;
+    expect(registry).toBeDefined();
+    expect(typeof registry).toBe("object");
+  });
+});

@@ -8,6 +8,7 @@ import {
   assertValidEnumDefinitionValues,
   assertValidEnumOptions,
   detectNegativeEnumConditionsBang,
+  setEnumWarn,
 } from "./enum.js";
 import { ArgumentError } from "@blazetrails/activemodel";
 
@@ -1789,6 +1790,13 @@ describe("Enum private validators", () => {
     it("rejects hash with non-primitive value", () => {
       expect(() => assertValidEnumDefinitionValues({ a: { x: 1 } })).toThrow(ArgumentError);
     });
+    it("accepts hash with symbol keys (Reflect.ownKeys)", () => {
+      const out = assertValidEnumDefinitionValues({ [Symbol("draft")]: 0 });
+      expect(out).toBeDefined();
+    });
+    it("rejects hash with blank-description symbol key", () => {
+      expect(() => assertValidEnumDefinitionValues({ [Symbol("")]: 0 })).toThrow(/blank name/);
+    });
     it("rejects hash with NaN or Infinity number values", () => {
       expect(() => assertValidEnumDefinitionValues({ a: NaN })).toThrow(/finite numbers/);
       expect(() => assertValidEnumDefinitionValues({ a: Infinity })).toThrow(/finite numbers/);
@@ -1829,6 +1837,18 @@ describe("Enum private validators", () => {
       const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
       detectNegativeEnumConditionsBang(["draft", "not_draft"]);
       expect(spy).toHaveBeenCalledWith(expect.stringMatching(/'not_draft'/));
+    });
+    it("routes warnings through setEnumWarn instead of console.warn", () => {
+      const calls: string[] = [];
+      setEnumWarn((msg) => calls.push(msg));
+      try {
+        const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        detectNegativeEnumConditionsBang(["draft", "notDraft"]);
+        expect(calls.length).toBe(1);
+        expect(consoleSpy).not.toHaveBeenCalled();
+      } finally {
+        setEnumWarn((msg) => console.warn(msg));
+      }
     });
     it("does not warn for unrelated identifiers starting with 'not' (notebook, notify)", () => {
       const spy = vi.spyOn(console, "warn").mockImplementation(() => {});

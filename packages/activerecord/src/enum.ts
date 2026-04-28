@@ -434,14 +434,26 @@ export function assertValidEnumDefinitionValues(
   }
 
   if (isPlainHash(values)) {
-    const keys = Object.keys(values);
+    // Use Reflect.ownKeys so symbol-keyed entries (e.g. { [Symbol('draft')]: 0 })
+    // aren't silently dropped by Object.keys; symbols are validated alongside
+    // strings to mirror Ruby Hash + Symbol semantics.
+    const keys = Reflect.ownKeys(values as object);
     if (keys.length === 0) {
       throw new ArgumentError("Enum values must not be empty.");
     }
-    if (keys.some((k) => isBlank(k))) {
+    if (
+      keys.some((k) => {
+        if (typeof k === "symbol") {
+          const desc = k.description ?? Symbol.keyFor(k) ?? "";
+          return isBlank(desc);
+        }
+        return isBlank(k);
+      })
+    ) {
       throw new ArgumentError("Enum values must not contain a blank name.");
     }
-    for (const [, value] of Object.entries(values)) {
+    for (const k of keys) {
+      const value = (values as Record<string | symbol, unknown>)[k as string];
       const isFiniteNumber = typeof value === "number" && Number.isFinite(value);
       if (
         !(
@@ -492,17 +504,25 @@ export function assertValidEnumOptions(options: unknown): void {
   }
 }
 
+/** Default warn sink — overridable via setEnumWarn so hosts can route warnings. */
+let _enumWarn: (msg: string) => void = (msg) => console.warn(msg);
+
+export function setEnumWarn(fn: (msg: string) => void): void {
+  _enumWarn = fn;
+}
+
 /**
  * Warn on negative enum condition conflicts (e.g., both "notDraft" and "draft").
  * Mirrors: ActiveRecord::Enum#detect_negative_enum_conditions! (private)
  */
 export function detectNegativeEnumConditionsBang(methodNames: string[]): void {
+  const methodNameSet = new Set(methodNames);
   for (const notMethod of methodNames) {
     const normalized = normalizeNegativeEnumPositiveForm(notMethod);
     if (!normalized) continue;
     const { prefix, positiveForm } = normalized;
-    if (methodNames.includes(positiveForm)) {
-      console.warn(
+    if (methodNameSet.has(positiveForm)) {
+      _enumWarn(
         `Enum uses prefix '${prefix}' which conflicts with auto-generated negative scope '${notMethod}' ` +
           `while positive form '${positiveForm}' also exists.`,
       );

@@ -1,5 +1,5 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
-import { include, extend, included, extended, type Included } from "./include.js";
+import { include, extend, included, extended, type Included, type Extended } from "./include.js";
 
 describe("include", () => {
   it("copies instance methods onto the prototype", () => {
@@ -240,5 +240,29 @@ describe("Included<>", () => {
     };
     type T = Included<typeof Mod>;
     expectTypeOf<T>().toEqualTypeOf<{ greet: () => string }>();
+  });
+});
+
+describe("Extended<>", () => {
+  // Extended<> shares its implementation with Included<> via the internal
+  // CallableMethods<> helper. Mirror the Included<> regression assertions
+  // so a future divergence in either type's behavior fails its own test.
+  it("does not introduce a string index signature into the merged type", () => {
+    const Mod = {
+      connectedTo(this: unknown, role: string): number {
+        return role.length;
+      },
+    };
+    type T = Extended<typeof Mod>;
+    expectTypeOf<T>().toEqualTypeOf<{ connectedTo: (role: string) => number }>();
+  });
+
+  it("strips the this parameter and skips non-method properties", () => {
+    const Mod = {
+      establish(this: { tag: string }): void {},
+      pool: 5 as const,
+    };
+    type T = Extended<typeof Mod>;
+    expectTypeOf<T>().toEqualTypeOf<{ establish: () => void }>();
   });
 });

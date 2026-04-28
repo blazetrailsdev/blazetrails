@@ -30,31 +30,38 @@ export const included = Symbol.for("@blazetrails/activesupport:included");
 export const extended = Symbol.for("@blazetrails/activesupport:extended");
 
 /**
- * Derive instance method types from an included module object.
- * Strips the `this` parameter from each function signature.
+ * Shared between `Included<>` and `Extended<>`: filter `M` down to its
+ * callable string-keyed properties and strip the `this` parameter from
+ * each signature.
  *
- * Usage:
- *   export interface Relation<T> extends Included<typeof QueryMethodBangs> {}
- *
- * Implementation note: the parameter is constrained to `object` rather
- * than the runtime `Module = Record<string, Function>`. The runtime
- * shape forces a string index signature into every `Included<M>`,
- * which in turn forces every property on the merging class — and on
- * every subclass — to be assignable to `(...args: unknown[]) => unknown`.
- * That breaks any class that mixes `Included<>` and also has non-method
- * fields (e.g. arel's `Attribute` with `relation`, `name`, `caster`).
- * `object` is wide enough to accept any module literal but carries no
- * index signature. Filtering callable keys via
- * `M[K] extends (this: any, ...args: any[]) => any` then keeps the
- * resulting type tight to the literal method keys of the passed module.
+ * Implementation note: `M` is constrained to `object` rather than the
+ * runtime `Module = Record<string, Function>`. The runtime shape forces
+ * a string index signature into every result, which propagates into
+ * any merging class — and every subclass — and demands every property
+ * be assignable to `(...args: unknown[]) => unknown`. That breaks
+ * classes mixing this type and also having non-method fields (e.g.
+ * arel's `Attribute` with `relation`, `name`, `caster`). `object` is
+ * wide enough to accept any module literal but carries no index
+ * signature. Filtering callable keys via
+ * `M[K] extends (this: any, ...args: any[]) => any` keeps the result
+ * tight to the literal method keys of the passed module.
  */
-export type Included<M extends object> = {
+type CallableMethods<M extends object> = {
   [K in keyof M as K extends string
     ? M[K] extends (this: any, ...args: any[]) => any
       ? K
       : never
     : never]: M[K] extends (this: any, ...args: infer A) => infer R ? (...args: A) => R : never;
 };
+
+/**
+ * Derive instance method types from an included module object.
+ * Strips the `this` parameter from each function signature.
+ *
+ * Usage:
+ *   export interface Relation<T> extends Included<typeof QueryMethodBangs> {}
+ */
+export type Included<M extends object> = CallableMethods<M>;
 
 export function include(klass: AnyClass, mod: Module | AnyClass): void {
   const descriptors: PropertyDescriptorMap = {};
@@ -122,16 +129,7 @@ export function include(klass: AnyClass, mod: Module | AnyClass): void {
  *   extend(Base, ConnectionHandlingMethods);
  *   const TypedBase = Base as unknown as BaseStatic;
  */
-// See the implementation note on `Included<>` — the `object` constraint
-// + callable-key filter avoids leaking a string index signature into
-// classes that merge with this type.
-export type Extended<M extends object> = {
-  [K in keyof M as K extends string
-    ? M[K] extends (this: any, ...args: any[]) => any
-      ? K
-      : never
-    : never]: M[K] extends (this: any, ...args: infer A) => infer R ? (...args: A) => R : never;
-};
+export type Extended<M extends object> = CallableMethods<M>;
 
 /**
  * Ruby-style `extend` for mixing module methods onto a class as static methods.

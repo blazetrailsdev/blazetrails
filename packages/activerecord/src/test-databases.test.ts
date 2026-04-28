@@ -161,7 +161,11 @@ describe("TestDatabasesTest", () => {
       expect(mockEstablishConnection).toHaveBeenCalledWith(mockModelClass);
       expect(process.env.VERBOSE).toBe("1");
     } finally {
-      process.env.VERBOSE = originalVerbose;
+      if (originalVerbose === undefined) {
+        delete process.env.VERBOSE;
+      } else {
+        process.env.VERBOSE = originalVerbose;
+      }
     }
   });
 

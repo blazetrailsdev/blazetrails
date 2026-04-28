@@ -16,6 +16,12 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
+# Cancel superseded runs on PR pushes; keep main/schedule runs intact so
+# post-merge sweeps and timing reports aren't lost.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Preflight that sets `docs_only=true` when every changed path is under
   # top-level `docs/`. Downstream jobs gate on this via `if:` so they're
@@ -135,6 +141,8 @@ jobs:
       - run: pnpm lint
   prettier:
     name: Prettier
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -630,16 +638,68 @@ jobs:
       - query-parity-trails
       - query-parity-diff
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
     steps:
-      - name: Fail if any required job failed or was cancelled
+      - name: Fail if any required job failed, was cancelled, or unexpectedly skipped
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          PARITY_SQLITE: ${{ needs.changes.outputs.parity_sqlite }}
         run: |
           echo "$NEEDS_JSON"
+          # Hard failures: failure or cancelled.
           bad=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key')
           if [ -n "$bad" ]; then
             echo "Failed/cancelled jobs:"
             echo "$bad"
             exit 1
           fi
+          # Allow-list jobs that may legitimately skip, conditioned on the
+          # gate that produced the skip. Anything else skipping means a gate
+          # mis-evaluated and downstream silently passed.
+          parity_jobs='schema-parity-rails schema-parity-trails schema-parity-diff query-parity-frozen-at query-parity-rails query-parity-trails query-parity-diff'
+          while read -r job result; do
+            [ "$result" = "skipped" ] || continue
+            case "$job" in
+              changes|ci) continue ;;
+            esac
+            if [ "$DOCS_ONLY" = "true" ]; then
+              continue
+            fi
+            if [ "$PARITY_SQLITE" != "true" ] && echo "$parity_jobs" | grep -qw "$job"; then
+              continue
+            fi
+            echo "Unexpectedly skipped job: $job (docs_only=$DOCS_ONLY parity_sqlite=$PARITY_SQLITE)"
+            exit 1
+          done < <(echo "$NEEDS_JSON" | jq -r 'to_entries[] | "\(.key) \(.value.result)"')
           echo "All jobs passed or were intentionally skipped."
+
+      - name: Job timing report
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          echo "### Job durations (longest first)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Status | Duration |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|--------|----------|" >> "$GITHUB_STEP_SUMMARY"
+          gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/jobs" \
+            | jq -r '
+                .jobs[]
+                | select(.name != "CI")
+                | select(.started_at != null and .completed_at != null)
+                | {
+                    name,
+                    conclusion,
+                    seconds: ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601))
+                  }
+                | [.seconds, .name, .conclusion] | @tsv
+              ' \
+            | sort -rn \
+            | awk -F'\t' '{
+                s=$1; m=int(s/60); r=s-m*60;
+                printf("| %s | %s | %dm%02ds |\n", $2, $3, m, r)
+              }' >> "$GITHUB_STEP_SUMMARY"

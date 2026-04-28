@@ -39,7 +39,13 @@ dokku config:set --no-restart gh-runner \
   GH_PAT=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
   RUNNER_LABELS=self-hosted,Linux,X64
 
-# 4. Persistent pnpm store across ephemeral container lifetimes. CAS-safe
+# 4. Restart policy MUST be `always`, not Dokku's default `on-failure:10`.
+#    Ephemeral runners exit with code 0 after each job (success); the
+#    on-failure default treats that as "no restart needed" and the pool
+#    drains to zero after one CI run.
+dokku ps:set gh-runner restart-policy always
+
+# 5. Persistent pnpm store across ephemeral container lifetimes. CAS-safe
 #    for concurrent replicas (pnpm uses content-addressed storage).
 #    node_modules and dist remain per-container, never shared.
 sudo mkdir -p /var/lib/dokku/data/storage/gh-runner-pnpm

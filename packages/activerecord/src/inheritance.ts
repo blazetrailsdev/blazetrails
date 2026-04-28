@@ -19,11 +19,10 @@ function castInheritanceColumnValue(
   inheritCol: string,
   value: unknown,
 ): unknown {
-  const def = (modelClass as any)._attributeDefinitions?.get(inheritCol);
-  if (def && def.type) {
-    return def.type.cast(value);
-  }
-  return value;
+  // Delegate to Base._castAttributeValue so casting stays consistent with
+  // the rest of the codebase (PK lookup paths, attribute writes, etc.) and
+  // doesn't drift if attribute-definition storage changes.
+  return modelClass._castAttributeValue(inheritCol, value);
 }
 
 /**
@@ -311,11 +310,14 @@ export function polymorphicClassFor(_modelClass: typeof Base, name: string): typ
 }
 
 /**
- * Called during instance initialization after callbacks run.
  * Sets the inheritance column to the proper STI class name if needed.
  *
- * Mirrors: ActiveRecord::Inheritance#initialize_internals_callback
- * @internal Private method, called automatically during object initialization.
+ * Mirrors: ActiveRecord::Inheritance#initialize_internals_callback. In Rails
+ * this is wired into the initialization callback chain via `super`. The
+ * trails port currently exposes it as a parity helper; integrating it into
+ * Base's init flow is a follow-up.
+ *
+ * @internal Private method.
  */
 export function initializeInternalsCallback(this: Base): void {
   ensureProperType.call(this);

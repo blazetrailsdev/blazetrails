@@ -950,7 +950,10 @@ export function sanitizeLimit(limit: unknown): number | Nodes.SqlLiteral {
 export function withYamlFallback(value: unknown): unknown {
   if (
     Array.isArray(value) ||
-    (value !== null && typeof value === "object" && !isTemporalValue(value))
+    (value !== null &&
+      typeof value === "object" &&
+      !(value instanceof Date) &&
+      !isTemporalValue(value))
   ) {
     return JSON.stringify(value);
   }

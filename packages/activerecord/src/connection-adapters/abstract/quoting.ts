@@ -59,7 +59,10 @@ export function quote(value: unknown): string {
   if (value instanceof Temporal.PlainDate) return `'${formatPlainDateForSql(value)}'`;
   if (value instanceof Temporal.PlainTime) return `'${formatPlainTimeForSql(value)}'`;
   if (value instanceof Temporal.ZonedDateTime) return `'${formatInstantForSql(value.toInstant())}'`;
-  // Date objects are no longer accepted — use Temporal types.
+  if (value instanceof Date)
+    throw new TypeError(
+      "quote: JS Date is not accepted — use a Temporal type (Instant, PlainDateTime, etc.)",
+    );
   if (typeof value === "symbol") {
     const desc = value.description;
     if (desc === undefined) throw new TypeError("Cannot quote a Symbol without a description");
@@ -92,6 +95,10 @@ export function typeCast(value: unknown): unknown {
   if (value instanceof Temporal.PlainDate) return formatPlainDateForSql(value);
   if (value instanceof Temporal.PlainTime) return formatPlainTimeForSql(value);
   if (value instanceof Temporal.ZonedDateTime) return formatInstantForSql(value.toInstant());
+  if (value instanceof Date)
+    throw new TypeError(
+      "typeCast: JS Date is not accepted — use a Temporal type (Instant, PlainDateTime, etc.)",
+    );
   throw new TypeError(`can't cast ${(value as object).constructor?.name ?? typeof value}`);
 }
 

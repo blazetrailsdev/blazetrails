@@ -41,6 +41,28 @@ export async function eachDatabase(
 }
 
 /**
+ * Pull the database path out of a URL-shaped config when the explicit
+ * `database` field isn't populated. trails' `UrlConfig` doesn't override
+ * `database` to parse the URL the way Rails does, so URL-only configs
+ * (e.g. `{ adapter: "sqlite3", url: "test/db/primary.sqlite3" }`)
+ * present `dbConfig.database === undefined`. Mirrors Rails' fallback
+ * behavior of `URI(url).path.delete_prefix("/")`.
+ */
+function databaseFromUrl(dbConfig: { configuration?: { url?: string } }): string | undefined {
+  const url = dbConfig.configuration?.url;
+  if (typeof url !== "string" || url === "") return undefined;
+  // sqlite3 URLs are typically file paths (e.g. "test/db/foo.sqlite3"
+  // or "sqlite3:test/db/foo.sqlite3"). Try URL parsing first, fall
+  // through to the raw string if the URL has no scheme.
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.replace(/^\//, "") || parsed.host || undefined;
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Create and load test schema(s) for parallelized test execution.
  *
  * For each configuration in the named environment, appends the index to
@@ -75,7 +97,14 @@ export async function createAndLoadSchema(
   try {
     const configs = configurations.configsFor({ envName });
     for (const dbConfig of configs) {
-      dbConfig._database = `${dbConfig.database}-${index}`;
+      const baseName = dbConfig.database ?? databaseFromUrl(dbConfig);
+      if (!baseName) {
+        throw new Error(
+          `Cannot suffix database name for ${envName}/${dbConfig.name ?? "(unnamed)"}: ` +
+            `neither database nor a parseable URL is available`,
+        );
+      }
+      dbConfig._database = `${baseName}-${index}`;
       await DatabaseTasks.reconstructFromSchema(dbConfig, DatabaseTasks.schemaFormat, undefined);
     }
   } finally {

@@ -120,6 +120,59 @@ describe("TestDatabasesTest", () => {
     expect(configNames).toEqual(["primary", "replica"]);
   });
 
+  // URL-only configs (no explicit `database`) — e.g. sqlite paths
+  // embedded in the URL. The base name must be derived from the URL so
+  // suffixing produces `<dbpath>-<index>` rather than `undefined-<index>`.
+  it("suffixes a URL-based config by deriving the database from configuration.url", async () => {
+    vi.spyOn(DatabaseTasks, "reconstructFromSchema").mockResolvedValue(undefined);
+    vi.spyOn(await import("./connection-handling.js"), "establishConnection").mockResolvedValue(
+      undefined,
+    );
+
+    const mockConfig: any = {
+      adapter: "sqlite3",
+      configuration: { url: "test/db/primary.sqlite3" },
+    };
+    let suffixed: string | undefined;
+    Object.defineProperty(mockConfig, "_database", {
+      set(val: string) {
+        suffixed = val;
+        this.__database = val;
+      },
+    });
+    Object.defineProperty(mockConfig, "database", {
+      get() {
+        return this.__database; // initially undefined — URL parsing must kick in
+      },
+    });
+
+    const mockModelClass = {
+      configurations: stubConfigurations([mockConfig]),
+    } as any as typeof Base;
+
+    await createAndLoadSchema(mockModelClass, 5, { envName: "arunit" });
+    expect(suffixed).toBe("test/db/primary.sqlite3-5");
+  });
+
+  it("throws a clear error when neither database nor URL yields a name", async () => {
+    vi.spyOn(DatabaseTasks, "reconstructFromSchema").mockResolvedValue(undefined);
+    vi.spyOn(await import("./connection-handling.js"), "establishConnection").mockResolvedValue(
+      undefined,
+    );
+
+    const mockConfig: any = { adapter: "sqlite3", configuration: {}, name: "primary" };
+    Object.defineProperty(mockConfig, "_database", { set() {} });
+    Object.defineProperty(mockConfig, "database", { get: () => undefined });
+
+    const mockModelClass = {
+      configurations: stubConfigurations([mockConfig]),
+    } as any as typeof Base;
+
+    await expect(createAndLoadSchema(mockModelClass, 1, { envName: "arunit" })).rejects.toThrow(
+      /Cannot suffix database name/,
+    );
+  });
+
   // Mirrors Rails' `ensure` semantics in test_databases.rb:18-21 — the env
   // restore and reconnect must still happen if reconstruct_from_schema raises.
   it("restores VERBOSE and re-establishes connection after schema load failure", async () => {

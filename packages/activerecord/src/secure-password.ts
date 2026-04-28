@@ -254,13 +254,20 @@ export function hasSecurePassword(
  */
 export async function authenticateBy(
   this: typeof Base,
-  attributes: Record<string, unknown> | { toH(): Record<string, unknown> },
+  attributes:
+    | Record<string, unknown>
+    | { toH(): Record<string, unknown> }
+    | { to_h(): Record<string, unknown> },
 ): Promise<Base | null> {
-  // Convert to plain object if it has toH method
+  // Convert to plain object via either the JS-style `toH` (canonical
+  // trails camelCase) or Rails-style `to_h` (so Ruby/Rails values like
+  // ActionController::Parameters interop without translation).
   const attrs =
     typeof (attributes as any).toH === "function"
       ? (attributes as any).toH()
-      : (attributes as Record<string, unknown>);
+      : typeof (attributes as any).to_h === "function"
+        ? (attributes as any).to_h()
+        : (attributes as Record<string, unknown>);
 
   const passwordEntries: Array<[string, unknown]> = [];
   const identifierEntries: Array<[string, unknown]> = [];
@@ -283,10 +290,11 @@ export async function authenticateBy(
   }
 
   // Short-circuit: if any password is nil, empty, or not a string,
-  // return null immediately. Non-string values would otherwise flow
-  // through `as string` casts into PBKDF2 and either misbehave or
-  // throw — Rails' Ruby version coerces via `to_s` but in TS treating
-  // them as auth failure is the safer parity.
+  // return null immediately. Intentional divergence from Rails:
+  // Ruby's `to_s` coerces silently, but in TS a non-string value
+  // (object, number) reaching PBKDF2 either throws or silently
+  // stringifies to garbage like `[object Object]`. Treating it as
+  // auth failure is safer than coercing.
   for (const [, value] of passwordEntries) {
     if (typeof value !== "string" || value === "") {
       return null;
@@ -329,11 +337,17 @@ export async function authenticateBy(
     }
     return allAuthenticated ? record : null;
   } else {
-    // Even if record is not found, hash the passwords to mitigate timing attacks
+    // Even if no record is found, hash the supplied passwords so the
+    // not-found path takes comparable time to a successful authenticate.
+    // Use the async pbkdf2 here (rather than the sync hashPassword used
+    // by the password setter) so the mitigation doesn't block the event
+    // loop on every cache miss / invalid identifier — important under
+    // login load and when this path is the most-frequent caller.
+    const salt = getCrypto().randomBytes(SALT_LENGTH);
     for (const [name] of passwordEntries) {
       const value = passwords[name] as string;
-      // Hash (but discard) to consume time
-      hashPassword(value);
+      // Result discarded — we only care about the elapsed CPU time.
+      await getCrypto().pbkdf2(value, salt, ITERATIONS, KEY_LENGTH, "sha256");
     }
     return null;
   }

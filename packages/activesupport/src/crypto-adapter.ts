@@ -44,6 +44,19 @@ export interface CryptoAdapter {
     keylen: number,
     digest: string,
   ): Buffer;
+  /**
+   * Async PBKDF2 — runs on Node's crypto threadpool rather than the
+   * main thread. Prefer this over `pbkdf2Sync` on hot per-request
+   * paths (e.g. authenticate_by's not-found timing mitigation) so the
+   * event loop stays responsive under login load.
+   */
+  pbkdf2(
+    password: string | Uint8Array,
+    salt: string | Uint8Array,
+    iterations: number,
+    keylen: number,
+    digest: string,
+  ): Promise<Buffer>;
   timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean;
 }
 
@@ -101,6 +114,14 @@ function wrapNodeCrypto(nodeCrypto: typeof import("node:crypto")): CryptoAdapter
     },
     pbkdf2Sync(password, salt, iterations, keylen, digest): Buffer {
       return nodeCrypto.pbkdf2Sync(password, salt, iterations, keylen, digest);
+    },
+    pbkdf2(password, salt, iterations, keylen, digest): Promise<Buffer> {
+      return new Promise((resolve, reject) => {
+        nodeCrypto.pbkdf2(password, salt, iterations, keylen, digest, (err, key) => {
+          if (err) reject(err);
+          else resolve(key);
+        });
+      });
     },
     timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
       return nodeCrypto.timingSafeEqual(a, b);

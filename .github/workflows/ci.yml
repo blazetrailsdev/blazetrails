@@ -646,7 +646,10 @@ jobs:
           NEEDS_JSON: ${{ toJSON(needs) }}
           DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           PARITY_SQLITE: ${{ needs.changes.outputs.parity_sqlite }}
+          PARITY_POSTGRES: ${{ needs.changes.outputs.parity_postgres }}
+          PARITY_MYSQL: ${{ needs.changes.outputs.parity_mysql }}
         run: |
+          set -euo pipefail
           echo "$NEEDS_JSON"
           # Hard failures: failure or cancelled.
           bad=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key')
@@ -658,46 +661,65 @@ jobs:
           # Allow-list jobs that may legitimately skip, conditioned on the
           # gate that produced the skip. Anything else skipping means a gate
           # mis-evaluated and downstream silently passed.
-          parity_jobs='schema-parity-rails schema-parity-trails schema-parity-diff query-parity-frozen-at query-parity-rails query-parity-trails query-parity-diff'
-          while read -r job result; do
-            [ "$result" = "skipped" ] || continue
-            case "$job" in
-              changes|ci) continue ;;
-            esac
-            if [ "$DOCS_ONLY" = "true" ]; then
-              continue
-            fi
-            if [ "$PARITY_SQLITE" != "true" ] && echo "$parity_jobs" | grep -qw "$job"; then
-              continue
-            fi
-            echo "Unexpectedly skipped job: $job (docs_only=$DOCS_ONLY parity_sqlite=$PARITY_SQLITE)"
-            exit 1
-          done < <(echo "$NEEDS_JSON" | jq -r 'to_entries[] | "\(.key) \(.value.result)"')
+          unexpected=0
+          # Docs-only legitimately skips every gated downstream.
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "docs_only=true — all downstream skips are expected."
+          else
+            any_parity=false
+            for v in "$PARITY_SQLITE" "$PARITY_POSTGRES" "$PARITY_MYSQL"; do
+              [ "$v" = "true" ] && any_parity=true
+            done
+            while read -r job result; do
+              [ "$result" = "skipped" ] || continue
+              case "$job" in
+                changes|ci) continue ;;
+                schema-parity-rails|schema-parity-trails|schema-parity-diff|\
+                query-parity-frozen-at|query-parity-rails|query-parity-trails|query-parity-diff)
+                  # Parity skip is legitimate when no parity gate is on.
+                  [ "$any_parity" = "false" ] && continue
+                  ;;
+              esac
+              echo "Unexpectedly skipped job: $job (docs_only=$DOCS_ONLY parity_sqlite=$PARITY_SQLITE parity_postgres=$PARITY_POSTGRES parity_mysql=$PARITY_MYSQL)"
+              unexpected=1
+            done < <(echo "$NEEDS_JSON" | jq -r 'to_entries[] | "\(.key) \(.value.result)"')
+          fi
+          [ "$unexpected" -eq 0 ] || exit 1
           echo "All jobs passed or were intentionally skipped."
 
+      # Informational only — never fails the run. Captures peer-job
+      # durations from the same workflow run; CI's own duration is excluded
+      # because it isn't final at the time of this query.
       - name: Job timing report
         if: ${{ always() }}
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
         run: |
-          echo "### Job durations (longest first)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Job | Status | Duration |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-----|--------|----------|" >> "$GITHUB_STEP_SUMMARY"
-          gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/jobs" \
-            | jq -r '
-                .jobs[]
-                | select(.name != "CI")
-                | select(.started_at != null and .completed_at != null)
-                | {
-                    name,
-                    conclusion,
-                    seconds: ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601))
-                  }
-                | [.seconds, .name, .conclusion] | @tsv
-              ' \
+          set -uo pipefail
+          {
+            echo "### Job durations (longest first)"
+            echo ""
+            echo "| Job | Status | Duration |"
+            echo "|-----|--------|----------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if ! gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/jobs" > /tmp/jobs.json; then
+            echo "_(timing report unavailable: gh api failed)_" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          jq -r '
+            .jobs[]
+            | select(.name != "CI")
+            | select(.started_at != null and .completed_at != null)
+            | [
+                ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601)),
+                .name,
+                (.conclusion // "running")
+              ]
+            | @tsv
+          ' /tmp/jobs.json \
             | sort -rn \
             | awk -F'\t' '{
                 s=$1; m=int(s/60); r=s-m*60;

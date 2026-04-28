@@ -17,14 +17,6 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
     if (value === DateInfinity) return DateInfinity;
     if (value === DateNegativeInfinity) return DateNegativeInfinity;
     if (value instanceof Temporal.Instant) return value;
-    // PlainDateTime accepted for backwards compat — treat as UTC Instant.
-    if (value instanceof Temporal.PlainDateTime) return value.toZonedDateTime("UTC").toInstant();
-    // Dual-typed window: pg driver still returns Date until PR 5a.
-    if (value instanceof Date) {
-      return Number.isNaN(value.getTime())
-        ? null
-        : Temporal.Instant.fromEpochMilliseconds(value.getTime());
-    }
     const str = String(value).trim();
     if (str === "") return null;
     return this.parseString(str);

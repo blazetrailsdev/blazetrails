@@ -18,11 +18,8 @@ export function sanitizeSqlArray(template: string, ...binds: unknown[]): string 
   const statement = template;
   const [first] = binds;
 
-  if (first && typeof first === "object" && !Array.isArray(first)) {
-    const bindVars = first as Record<string, unknown>;
-    if (/:\w+/.test(statement)) {
-      return replaceNamedBindVariables(statement, bindVars);
-    }
+  if (isPlainHash(first) && /:\w+/.test(statement)) {
+    return replaceNamedBindVariables(statement, first as Record<string, unknown>);
   }
 
   if (statement.includes("?")) {
@@ -290,34 +287,34 @@ function replaceNamedBindVariables(statement: string, bindVars: Record<string, u
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#quote_bound_value
  */
 function quoteBoundValue(value: unknown): string {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    typeof (value as any).id_for_database === "function"
-  ) {
-    return quote((value as any).id_for_database());
+  if (hasIdForDatabase(value)) {
+    return quote(value.idForDatabase());
   }
 
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return quote(null);
     }
-    return value
-      .map((v) => {
-        if (
-          typeof v === "object" &&
-          v !== null &&
-          typeof (v as any).id_for_database === "function"
-        ) {
-          return quote((v as any).id_for_database());
-        }
-        return quote(v);
-      })
-      .join(",");
+    return value.map((v) => (hasIdForDatabase(v) ? quote(v.idForDatabase()) : quote(v))).join(",");
   }
 
   return quote(value);
+}
+
+function hasIdForDatabase(value: unknown): value is { idForDatabase(): unknown } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as { idForDatabase?: unknown }).idForDatabase === "function"
+  );
+}
+
+/** True for plain JS objects (Object.prototype or null proto), matching Ruby Hash semantics. */
+function isPlainHash(value: unknown): boolean {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { createAndMigrate, eachDatabase, createAndLoadSchema } from "./test-databases.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { MigrationProxy } from "./migration.js";
@@ -7,6 +7,10 @@ import type { DatabaseConfigurations } from "./database-configurations.js";
 import { DatabaseTasks } from "./tasks/database-tasks.js";
 
 describe("TestDatabasesTest", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("databases are created", async () => {
     const mockReconstructFromSchema = vi
       .spyOn(DatabaseTasks, "reconstructFromSchema")

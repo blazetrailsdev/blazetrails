@@ -8,7 +8,7 @@ import type { Base } from "./base.js";
 import { modelRegistry } from "./associations.js";
 import { ActiveRecordError, NameError, SubclassNotFound } from "./errors.js";
 import { Nodes } from "@blazetrails/arel";
-import { camelize, underscore } from "@blazetrails/activesupport";
+import { camelize, isPresent, underscore } from "@blazetrails/activesupport";
 
 /**
  * Helper: cast inheritance column value through its attribute type.
@@ -385,8 +385,7 @@ function usingSingleTableInheritance(
   const inheritCol = getInheritanceColumn(modelClass);
   if (!inheritCol) return false;
   // Rails: record[inheritance_column].present? && has_attribute?(inheritance_column)
-  const val = record[inheritCol];
-  if (val == null || !(val as any)?.toString?.().trim?.().length) return false;
+  if (!isPresent(record[inheritCol])) return false;
   // Check that the inheritance column is a declared attribute on this model
   return (modelClass as any)._attributeDefinitions?.has(inheritCol) ?? false;
 }
@@ -450,17 +449,16 @@ export function subclassFromAttributes(
   if (!inheritCol) return null;
 
   // Try the column as-given, plus snake_case and camelCase variants so attrs
-  // from form params or JS-style camelCase callers both resolve.
+  // from form params or JS-style camelCase callers both resolve. Use ?? to
+  // preserve falsy-but-present values like 0 (Rails: 0.present? is true).
   const camelCol = camelize(inheritCol, false);
   const snakeCol = underscore(inheritCol);
-  const subclassName =
-    (attrsHash[inheritCol] as string | null | undefined) ||
-    (attrsHash[snakeCol] as string | null | undefined) ||
-    (attrsHash[camelCol] as string | null | undefined);
+  const subclassValue =
+    attrsHash[inheritCol] ?? attrsHash[snakeCol] ?? attrsHash[camelCol] ?? undefined;
 
-  if (subclassName && subclassName.toString().trim()) {
+  if (isPresent(subclassValue)) {
     // Rails: cast the value through the inheritance column's type
-    const castValue = castInheritanceColumnValue(modelClass, inheritCol, subclassName);
+    const castValue = castInheritanceColumnValue(modelClass, inheritCol, subclassValue);
     return findStiClass(modelClass, castValue as string);
   }
 

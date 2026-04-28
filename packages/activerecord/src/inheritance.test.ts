@@ -1925,4 +1925,67 @@ describe("typeCondition", () => {
     expect(subclassFromAttributes(Vehicle, { type: "" })).toBe(null);
     expect(subclassFromAttributes(Vehicle, {})).toBe(null);
   });
+
+  it("discriminateClassForRecord returns base class when inheritance column is not declared", async () => {
+    const { discriminateClassForRecord } = await import("./inheritance.js");
+    // Create a base class WITHOUT STI enabled and without the inheritance column as an attribute
+    class NonStiModel extends Base {
+      static {
+        this._tableName = "non_sti_models";
+        // Note: no attribute("type", ...) and no enableSti()
+      }
+    }
+    // Even if a record has a value in a "type" column,
+    // discriminateClassForRecord should return the base class
+    // because the column isn't declared on the model
+    const record = { type: "SomeClass" };
+    const result = discriminateClassForRecord(NonStiModel, record);
+    expect(result).toBe(NonStiModel);
+  });
+
+  it("discriminateClassForRecord casts the inheritance column value through its type", async () => {
+    const { discriminateClassForRecord } = await import("./inheritance.js");
+    const adapter = createTestAdapter();
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+        this.adapter = adapter;
+        enableSti(Vehicle);
+      }
+    }
+    class Car extends Vehicle {
+      static {
+        this.adapter = adapter;
+        registerModel(Car);
+        registerSubclass(Car);
+      }
+    }
+    // Pass a record with the type as a value (it will be cast through the string type)
+    const klass = discriminateClassForRecord(Vehicle, { type: "Car" });
+    expect(klass).toBe(Car);
+  });
+
+  it("subclassFromAttributes casts the inheritance column value through its type", async () => {
+    const { subclassFromAttributes } = await import("./inheritance.js");
+    const adapter = createTestAdapter();
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+        this.adapter = adapter;
+        enableSti(Vehicle);
+      }
+    }
+    class Car extends Vehicle {
+      static {
+        this.adapter = adapter;
+        registerModel(Car);
+        registerSubclass(Car);
+      }
+    }
+    // Pass attributes with the type as a value (it will be cast through the string type)
+    const klass = subclassFromAttributes(Vehicle, { type: "Car" });
+    expect(klass).toBe(Car);
+  });
 });

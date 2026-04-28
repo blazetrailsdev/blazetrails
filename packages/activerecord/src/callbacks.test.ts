@@ -1767,6 +1767,25 @@ describe("CallbacksTest", () => {
     expect(String((item as any).updated_at)).toEqual(String(before));
   });
 
+  // Regression — _updateRecord must not auto-touch updated_at when the record
+  // has no dirty changes (Rails no-op).
+  it("update_record does not touch updated_at when there are no changes", async () => {
+    class Item extends Base {
+      static {
+        this._tableName = "no_change_items";
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        this.attribute("updated_at", "datetime");
+        this.adapter = adapter;
+      }
+    }
+    const item = await Item.create({ name: "first" });
+    const before = (item as any).updated_at;
+    // Don't mutate name — no changes.
+    await (item as any)._updateRecord();
+    expect(String((item as any).updated_at)).toEqual(String(before));
+  });
+
   // Rails: test "halt callback chain with false"
   it("before save throwing abort", async () => {
     class Immutable extends Base {

@@ -270,12 +270,15 @@ export function _updateRecord(this: any): Promise<boolean> {
       }
     }
     if (!this._performUpdate) throw new Error("_performUpdate not implemented");
-    // _performUpdate also auto-touches updated_at; skip its inner write when the
-    // outer wrapper just handled timestamps, or when recordTimestamps is disabled
-    // (so timestamp columns truly stay unchanged). Rails: Timestamp#_update_record
-    // writes once via record_update_timestamps; super does not.
+    // _performUpdate also auto-touches updated_at; skip its inner write when:
+    //   - the outer wrapper just handled timestamps, OR
+    //   - recordTimestamps is disabled, OR
+    //   - there are no dirty changes (Rails no-op — don't auto-touch and don't
+    //     desync updated_at vs updated_on by writing inside the inner layer).
+    // Rails: Timestamp#_update_record writes once via record_update_timestamps;
+    // super does not.
     const previousSkipTouch = this._skipTouch;
-    const skipInnerTouch = wroteTimestamps || ctor.recordTimestamps === false;
+    const skipInnerTouch = wroteTimestamps || ctor.recordTimestamps === false || !hasChanges;
     if (skipInnerTouch) this._skipTouch = true;
     try {
       await this._performUpdate();

@@ -45,7 +45,7 @@ export async function eachDatabase(
  *
  * For each configuration in the named environment, appends the index to
  * the database name, purges/creates the database, and loads the schema.
- * Finally re-establishes the connection to the original database(s).
+ * Finally re-establishes the connection so the worker uses the suffixed per-worker database.
  *
  * Called by ActiveSupport::Testing::Parallelization.after_fork_hook in
  * parallelized test workers (process i gets test databases with suffix `-i`).

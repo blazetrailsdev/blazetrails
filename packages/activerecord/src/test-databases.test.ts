@@ -100,7 +100,7 @@ describe("TestDatabasesTest", () => {
     expect(mockReconstructFromSchema).toHaveBeenCalled();
   });
 
-  it("order of configurations isn't changed by test databases", async () => {
+  it("order of configurations isnt changed by test databases", async () => {
     const mockReconstructFromSchema = vi
       .spyOn(DatabaseTasks, "reconstructFromSchema")
       .mockResolvedValue(undefined);

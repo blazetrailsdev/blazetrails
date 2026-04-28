@@ -374,7 +374,7 @@ describe("sanitizeSql", () => {
   });
 
   describe("private helpers (replace_bind_variables, quote_bound_value, etc)", () => {
-    it.skip("sanitize sql array handles %s format string", () => {
+    it("sanitize sql array handles %s format string", () => {
       class Post extends Base {
         static _tableName = "posts";
       }
@@ -485,7 +485,7 @@ describe("sanitizeSql", () => {
       expect(result).toContain("3");
     });
 
-    it.skip("handles Sets as bind values", () => {
+    it("handles Sets as bind values", () => {
       class Post extends Base {
         static _tableName = "posts";
       }
@@ -495,7 +495,7 @@ describe("sanitizeSql", () => {
       expect(result).toContain("3");
     });
 
-    it.skip("handles empty Sets as bind values", () => {
+    it("handles empty Sets as bind values", () => {
       class Post extends Base {
         static _tableName = "posts";
       }

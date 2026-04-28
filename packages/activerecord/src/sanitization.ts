@@ -5,7 +5,13 @@
  */
 
 import { Nodes, sql as arelSql } from "@blazetrails/arel";
-import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
+import {
+  quote,
+  quoteIdentifier,
+  quoteTableName,
+  quoteString,
+  castBoundValue,
+} from "./connection-adapters/abstract/quoting.js";
 import { PreparedStatementInvalid, UnknownAttributeReference } from "./errors.js";
 
 /**
@@ -28,6 +34,14 @@ export function sanitizeSqlArray(template: string, ...binds: unknown[]): string 
 
   if (statement === "") {
     return statement;
+  }
+
+  // %s format string support (e.g., "name='%s' and id='%s'")
+  if (statement.includes("%s") && binds.length > 0) {
+    return statement.replace(/%s/g, () => {
+      const value = binds.shift();
+      return quoteString((value as any).toString());
+    });
   }
 
   return statement;
@@ -281,24 +295,36 @@ function replaceNamedBindVariables(statement: string, bindVars: Record<string, u
 
 /**
  * Quote a single value for use in SQL.
- * Handles arrays (converts to comma-separated quoted values),
+ * Handles arrays and Sets (converts to comma-separated quoted values),
  * objects with `id_for_database` method, and primitive values.
  *
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#quote_bound_value
  */
 function quoteBoundValue(value: unknown): string {
   if (hasIdForDatabase(value)) {
-    return quote(value.idForDatabase());
+    const cast = castBoundValue(value.idForDatabase());
+    return quote(cast);
   }
 
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
-      return quote(null);
+  // Handle any enumerable that has a map method (Array, Set, etc.)
+  // Rails uses respond_to?(:map) and !acts_like?(:string)
+  if (isEnumerable(value)) {
+    const values = Array.from(value as Iterable<unknown>);
+    if (values.length === 0) {
+      const cast = castBoundValue(null);
+      return quote(cast);
     }
-    return value.map((v) => (hasIdForDatabase(v) ? quote(v.idForDatabase()) : quote(v))).join(",");
+    return values
+      .map((v) => {
+        const idVal = hasIdForDatabase(v) ? v.idForDatabase() : v;
+        const cast = castBoundValue(idVal);
+        return quote(cast);
+      })
+      .join(",");
   }
 
-  return quote(value);
+  const cast = castBoundValue(value);
+  return quote(cast);
 }
 
 function hasIdForDatabase(value: unknown): value is { idForDatabase(): unknown } {
@@ -306,7 +332,25 @@ function hasIdForDatabase(value: unknown): value is { idForDatabase(): unknown }
     typeof value === "object" &&
     value !== null &&
     !Array.isArray(value) &&
+    !(value instanceof Set) &&
     typeof (value as { idForDatabase?: unknown }).idForDatabase === "function"
+  );
+}
+
+/**
+ * Check if a value is enumerable (Array or Set).
+ * Rails uses respond_to?(:map) and !acts_like?(:string) which includes
+ * Array, Range, Set, and other Enumerable types.
+ * JS approximation: Array and Set.
+ */
+function isEnumerable(value: unknown): value is Iterable<unknown> {
+  return (
+    Array.isArray(value) ||
+    (typeof value === "object" && value instanceof Set) ||
+    (typeof value === "object" &&
+      value !== null &&
+      Symbol.iterator in value &&
+      typeof value !== "string")
   );
 }
 

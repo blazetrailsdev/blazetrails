@@ -100,7 +100,7 @@ describe("TestDatabasesTest", () => {
     expect(mockReconstructFromSchema).toHaveBeenCalled();
   });
 
-  it("order of configurations isnt changed by test databases", async () => {
+  it("order of configurations isn't changed by test databases", async () => {
     const mockReconstructFromSchema = vi
       .spyOn(DatabaseTasks, "reconstructFromSchema")
       .mockResolvedValue(undefined);
@@ -121,8 +121,12 @@ describe("TestDatabasesTest", () => {
 
     await createAndLoadSchema(mockModelClass, 42, { envName: "arunit" });
 
-    const configNames = configs.map((c: any) => c.name);
-    expect(configNames).toEqual(["primary", "replica"]);
+    expect(mockReconstructFromSchema).toHaveBeenCalledTimes(configs.length);
+    const reconstructedNames = mockReconstructFromSchema.mock.calls.map(
+      (call: any[]) => call[0].name,
+    );
+    expect(reconstructedNames).toEqual(["primary", "replica"]);
+    expect(mockEstablishConnection).toHaveBeenCalled();
   });
 
   // URL-only configs (no explicit `database`) — e.g. sqlite paths

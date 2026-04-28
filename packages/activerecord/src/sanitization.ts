@@ -307,8 +307,10 @@ function quoteBoundValue(value: unknown): string {
     return quote(cast);
   }
 
-  // Handle any enumerable that has a map method (Array, Set, etc.)
-  // Rails uses respond_to?(:map) and !acts_like?(:string)
+  // Handle collections recognized by isEnumerable (Array and Set only).
+  // Rails uses respond_to?(:map) and !acts_like?(:string), but this
+  // implementation intentionally limits support to those two collection
+  // types and does not expand arbitrary iterables (Buffer/Map/etc).
   if (isEnumerable(value)) {
     const values = Array.from(value as Iterable<unknown>);
     if (values.length === 0) {

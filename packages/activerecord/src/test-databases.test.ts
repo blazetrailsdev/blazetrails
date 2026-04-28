@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { createAndMigrate, eachDatabase, createAndLoadSchema } from "./test-databases.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { MigrationProxy } from "./migration.js";
-import { Base } from "./base.js";
+import type { Base } from "./base.js";
 import type { DatabaseConfigurations } from "./database-configurations.js";
 import { DatabaseTasks } from "./tasks/database-tasks.js";
 
@@ -50,9 +50,6 @@ describe("TestDatabasesTest", () => {
       undefined,
     );
     expect(mockEstablishConnection).toHaveBeenCalledWith(mockModelClass);
-
-    mockReconstructFromSchema.mockRestore();
-    mockEstablishConnection.mockRestore();
   });
 
   it("create databases after fork", async () => {
@@ -89,9 +86,6 @@ describe("TestDatabasesTest", () => {
 
     expect(mockConfig.database).toBe("test/db/primary.sqlite3-42");
     expect(mockReconstructFromSchema).toHaveBeenCalled();
-
-    mockReconstructFromSchema.mockRestore();
-    mockEstablishConnection.mockRestore();
   });
 
   it("order of configurations isnt changed by test databases", async () => {
@@ -119,9 +113,6 @@ describe("TestDatabasesTest", () => {
 
     const configNames = configs.map((c: any) => c.name);
     expect(configNames).toEqual(["primary", "replica"]);
-
-    mockReconstructFromSchema.mockRestore();
-    mockEstablishConnection.mockRestore();
   });
 
   // Mirrors Rails' `ensure` semantics in test_databases.rb:18-21 — the env

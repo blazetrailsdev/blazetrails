@@ -1134,13 +1134,19 @@ function walkAssociationTree(
     }
   } else if (Array.isArray(associations)) {
     for (const assoc of associations) walkAssociationTree(assoc, tree);
-  } else if (typeof associations === "object" && associations !== null) {
+  } else if (isPlainObject(associations)) {
     for (const [k, v] of Object.entries(associations)) {
       const sub = (tree[k] ??= {}) as Record<string, unknown>;
       if (v != null) walkAssociationTree(v as AssociationSpec | AssociationSpec[], sub as any);
     }
   } else {
-    throw new ConfigurationError(`Invalid association spec: ${JSON.stringify(associations)}`);
+    let desc: string;
+    try {
+      desc = JSON.stringify(associations);
+    } catch {
+      desc = `${typeof associations}`;
+    }
+    throw new ConfigurationError(`Invalid association spec: ${desc}`);
   }
 }
 

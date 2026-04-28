@@ -362,12 +362,22 @@ describe("RelationTest", () => {
     const sql = Author.all().leftJoins({ posts: "comments" }).toSql();
     expect(sql).toMatch(/LEFT OUTER JOIN.*posts/i);
     expect(sql).toMatch(/LEFT OUTER JOIN.*comments/i);
-    // Verify comments is joined through posts (ON references the posts table/alias)
-    const postsMatch = sql.match(/LEFT OUTER JOIN\s+["`]?posts["`]?(?:\s+(\w+))?\s+ON/i);
-    const postsRef = postsMatch?.[1] ?? "posts";
-    expect(sql).toMatch(
+    // Verify comments is joined through posts: ON clause must reference the
+    // effective SQL name of the posts table (real name or collision alias).
+    const postsJoinMatch = sql.match(
+      /LEFT OUTER JOIN\s+["`]?posts["`]?(?:\s+(?:AS\s+)?["`]?(\w+)["`]?)?\s+ON/i,
+    );
+    expect(postsJoinMatch).not.toBeNull();
+    const postsRef = postsJoinMatch?.[1] ?? "posts";
+    const escapedPostsRef = postsRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const commentsJoinMatch = sql.match(
+      /LEFT OUTER JOIN\s+["`]?comments["`]?(?:\s+(?:AS\s+)?["`]?\w+["`]?)?\s+ON\s+([\s\S]*?)(?=\s+LEFT OUTER JOIN|\s*$)/i,
+    );
+    expect(commentsJoinMatch).not.toBeNull();
+    const commentsOnClause = commentsJoinMatch?.[1] ?? "";
+    expect(commentsOnClause).toMatch(
       new RegExp(
-        `["\`]?comments["\`]?[^)]+post_id["\`]?\\s*=\\s*["\`]?${postsRef}["\`]?\\.["\`]?id`,
+        `["\`]?comments["\`]?\\.["\`]?post_id["\`]?\\s*=\\s*["\`]?${escapedPostsRef}["\`]?\\.["\`]?id["\`]?`,
         "i",
       ),
     );

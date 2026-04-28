@@ -573,30 +573,36 @@ async function autoConnect(modelClass: typeof Base): Promise<void> {
     );
   }
 
-  // Prefer the (possibly-mutated) configuration hash over the original
-  // URL string when an explicit database is set. Rails' `establish_connection`
-  // resolves from configuration_hash, not the raw URL, so callers that
-  // mutate `_database` (e.g. TestDatabases.create_and_load_schema appending
-  // a worker index) actually reconnect to the mutated DB. The URL is only
-  // used when the configuration carries no explicit `database` — i.e. for
-  // opaque adapter strings like `jdbc:` that buildUrlHash passes through.
-  const cfgDatabase = (dbConfig.configuration as { database?: string }).database;
-  const url = cfgDatabase
-    ? ""
-    : (dbConfig instanceof UrlConfig ? dbConfig.url : undefined) ||
-      (dbConfig.configuration.url as string | undefined) ||
-      "";
-  const adapterName = dbConfig.adapter || (url ? adapterNameFromUrl(url) : undefined);
+  // The original URL is always usable for adapter inference (e.g.
+  // `sqlite3:db/test.sqlite3` → "sqlite3"), even when the connection
+  // target should be built from a (possibly-mutated) configuration hash.
+  const originalUrl =
+    (dbConfig instanceof UrlConfig ? dbConfig.url : undefined) ||
+    (dbConfig.configuration.url as string | undefined) ||
+    "";
+  const adapterName =
+    dbConfig.adapter || (originalUrl ? adapterNameFromUrl(originalUrl) : undefined);
   if (!adapterName) {
     throw new AdapterNotSpecified(
       `Database configuration for "${env}" must include an adapter name or a URL. ` +
         `Add config/database.json, set DATABASE_URL, or call ${modelClass.name}.establishConnection(url)`,
     );
   }
+
+  // Prefer the configuration hash over the original URL string when an
+  // explicit `database` is set — Rails' `establish_connection` resolves
+  // from configuration_hash, not the raw URL, so callers that mutate
+  // `_database` (e.g. TestDatabases.create_and_load_schema appending a
+  // worker index) actually reconnect to the mutated DB. The URL is only
+  // forwarded to the adapter layer when the configuration carries no
+  // explicit `database` — i.e. for opaque adapter strings like `jdbc:`
+  // that buildUrlHash passes through without decomposing.
+  const cfgDatabase = (dbConfig.configuration as { database?: string }).database;
+  const connectUrl = cfgDatabase ? "" : originalUrl;
   await establishWithConfig(
     modelClass,
     adapterName,
-    url,
+    connectUrl,
     dbConfig.configuration as Record<string, unknown>,
   );
 }

@@ -36,6 +36,10 @@ export class UrlConfig extends HashConfig {
 
 function databaseFromUrl(url: string): string | undefined {
   if (!url) return undefined;
+  // Mirror buildUrlHash: Windows drive-letter paths (e.g. `C:/db.sqlite3`)
+  // are valid WHATWG URLs (`protocol: "c:"`) but they're filesystem
+  // paths, not URIs. URL parsing would silently drop the drive letter.
+  if (/^[A-Za-z]:[\\/]/.test(url)) return url;
   try {
     const parsed = new URL(url);
     // Mirrors Rails: the database name is only ever derived from the URL

@@ -387,14 +387,16 @@ describe("ConnectionHandlingTest", () => {
       (WorkerModel as any).configurations = inMemory;
 
       await WorkerModel.establishConnection();
-      // The connection's database should be the mutated value, not the
-      // original URL path. The SQLite adapter exposes the path via
-      // adapterClass; assert the model can be queried at all (no throw)
-      // and that the configuration retained the mutation.
+      // The connection pool's resolved dbConfig must point at the
+      // mutated database, not the original URL path. This is the
+      // actual reconnect-target observation Copilot review #3 asked
+      // for — without the URL-skip in autoConnect, this would surface
+      // the original "db/foo.sqlite3" instead.
+      const pool = WorkerModel.connectionPool();
+      expect(pool.dbConfig.database).toBe("db/foo-2.sqlite3");
       const Klass = await WorkerModel.adapterClass();
       const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
       expect(Klass).toBe(SQLite3Adapter);
-      expect(url.database).toBe("db/foo-2.sqlite3");
     } finally {
       (DatabaseConfigurations as any).current = priorCurrent;
     }

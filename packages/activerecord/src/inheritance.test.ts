@@ -1989,3 +1989,40 @@ describe("typeCondition", () => {
     expect(klass).toBe(Car);
   });
 });
+
+// Regression: Copilot review #2 claimed _inheritanceColumn isn't visible on
+// STI subclasses. JS static inheritance walks the prototype chain, so the
+// column IS visible. These tests pin that behavior so it can't regress.
+describe("STI subclass receiver paths", () => {
+  it("getInheritanceColumn returns the base column when called on a subclass", async () => {
+    const { typeCondition, getInheritanceColumn } = await import("./inheritance.js");
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Vehicle);
+    class Car extends Vehicle {}
+    expect(getInheritanceColumn(Car)).toBe("type");
+    const predicate = typeCondition(Car);
+    expect(predicate).toBeDefined();
+  });
+
+  it("subclassFromAttributes works when called on a subclass receiver", async () => {
+    const { subclassFromAttributes } = await import("./inheritance.js");
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Vehicle);
+    class Car extends Vehicle {}
+    registerSubclass(Car);
+    registerModel(Vehicle);
+    registerModel(Car);
+    expect(subclassFromAttributes(Car, { type: "Car" })).toBe(Car);
+    expect(subclassFromAttributes(Car, {})).toBe(null);
+  });
+});

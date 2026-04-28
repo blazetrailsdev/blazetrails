@@ -226,6 +226,7 @@ export const ClassMethods = {
   disallowRawSqlBang,
 };
 
+<<<<<<< HEAD
 /**
  * Replace `?` placeholders with quoted bind variable values.
  * Called by sanitizeSqlArray when positional binds are present.

@@ -1109,22 +1109,72 @@ function excludingBang(this: QueryMethodsHost, records: any[]): any {
   return this;
 }
 
+/**
+ * Flatten any AssociationSpec mix into a tree of { assocName: subtree } pairs,
+ * mirroring Rails' JoinDependency.make_tree / walk_tree (join_dependency.rb:47-70).
+ * Strings → leaf; Arrays → each element walked; Hashes → key/value pairs.
+ */
+function walkAssociationTree(
+  associations: AssociationSpec | AssociationSpec[],
+  tree: Record<string, Record<string, unknown>>,
+): void {
+  if (typeof associations === "string") {
+    tree[associations] ??= {};
+  } else if (Array.isArray(associations)) {
+    for (const assoc of associations) walkAssociationTree(assoc, tree);
+  } else if (typeof associations === "object" && associations !== null) {
+    for (const [k, v] of Object.entries(associations)) {
+      const sub = (tree[k] ??= {}) as Record<string, unknown>;
+      if (v) walkAssociationTree(v as AssociationSpec | AssociationSpec[], sub as any);
+    }
+  }
+}
+
+/**
+ * Add all associations in a tree to jd, passing parent context so each
+ * nested association is attached to its parent (not re-added from scratch).
+ * Mirrors Rails JoinDependency#build (join_dependency.rb:228).
+ */
+function addTreeToJoinDependency(
+  jd: JoinDependency,
+  tree: Record<string, Record<string, unknown>>,
+  modelName: string,
+  parentContext?: { fromModel: unknown; fromAlias: string; parentAssocName: string },
+): void {
+  for (const [assocName, subtree] of Object.entries(tree)) {
+    const node = jd.addAssociation(assocName, parentContext as any);
+    if (!node) {
+      throw argumentError(
+        `Association named '${assocName}' was not found on ${modelName}; perhaps you misspelled it?`,
+      );
+    }
+    const children = subtree as Record<string, Record<string, unknown>>;
+    if (Object.keys(children).length > 0) {
+      addTreeToJoinDependency(jd, children, modelName, {
+        fromModel: node.modelClass,
+        fromAlias: node.tableAlias,
+        parentAssocName: parentContext
+          ? `${parentContext.parentAssocName}.${assocName}`
+          : assocName,
+      });
+    }
+  }
+}
+
 function constructJoinDependency(
   this: QueryMethodsHost,
   associations: string | AssociationSpec[],
   _joinType?: unknown,
 ): JoinDependency {
+  // Mirror Rails construct_join_dependency → JoinDependency.make_tree (join_dependency.rb:47).
+  // Flatten the AssociationSpec mix into a tree, then add each association to the JD
+  // using parent context so nested specs attach correctly without duplicate intermediate nodes.
   const jd = new JoinDependency(this._modelClass);
-  const names = Array.isArray(associations) ? associations : [associations];
-  for (const name of names) {
-    if (typeof name !== "string") continue;
-    const node = name.includes(".") ? jd.addNestedAssociation(name) : jd.addAssociation(name);
-    if (!node) {
-      throw argumentError(
-        `Association named '${name}' was not found on ${(this._modelClass as any).name ?? "model"}; perhaps you misspelled it?`,
-      );
-    }
-  }
+  const modelName = (this._modelClass as any).name ?? "model";
+  const specs = Array.isArray(associations) ? associations : [associations];
+  const tree: Record<string, Record<string, unknown>> = {};
+  for (const spec of specs) walkAssociationTree(spec, tree);
+  addTreeToJoinDependency(jd, tree, modelName);
   return jd;
 }
 

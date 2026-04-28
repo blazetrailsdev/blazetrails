@@ -292,6 +292,82 @@ describe("RelationTest", () => {
     expect(sql).toContain('"books"."author_id"');
   });
 
+  it("constructJoinDependency handles array-form spec — joins(['posts','comments'])", () => {
+    // constructJoinDependency's walkAssociationTree flattens array specs so
+    // joins(["posts", "comments"]) is equivalent to joins("posts", "comments").
+    class Author extends Base {
+      static {
+        this.tableName = "authors";
+        this.adapter = adapter;
+      }
+    }
+    class Post extends Base {
+      static {
+        this.tableName = "posts";
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Comment extends Base {
+      static {
+        this.tableName = "comments";
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("CJDAuthor", Author);
+    registerModel("CJDPost", Post);
+    registerModel("CJDComment", Comment);
+    Associations.hasMany.call(Author, "posts", { className: "CJDPost", foreignKey: "author_id" });
+    Associations.hasMany.call(Author, "comments", {
+      className: "CJDComment",
+      foreignKey: "author_id",
+    });
+    // Array spec goes directly through constructJoinDependency via leftJoins
+    const sql = Author.all()
+      .leftJoins(["posts", "comments"] as any)
+      .toSql();
+    expect(sql).toMatch(/LEFT OUTER JOIN.*posts/i);
+    expect(sql).toMatch(/LEFT OUTER JOIN.*comments/i);
+  });
+
+  it("constructJoinDependency handles hash spec — leftJoins({ posts: 'comments' })", () => {
+    // Hash spec { posts: "comments" } means: join posts, then join comments via posts.
+    class Author extends Base {
+      static {
+        this.tableName = "authors";
+        this.adapter = adapter;
+      }
+    }
+    class Post extends Base {
+      static {
+        this.tableName = "posts";
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Comment extends Base {
+      static {
+        this.tableName = "comments";
+        this.attribute("post_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("HashAuthor", Author);
+    registerModel("HashPost", Post);
+    registerModel("HashComment", Comment);
+    Associations.hasMany.call(Author, "posts", { className: "HashPost", foreignKey: "author_id" });
+    Associations.hasMany.call(Post, "comments", {
+      className: "HashComment",
+      foreignKey: "post_id",
+    });
+    const sql = Author.all()
+      .leftJoins({ posts: "comments" } as any)
+      .toSql();
+    expect(sql).toMatch(/LEFT OUTER JOIN.*posts/i);
+    expect(sql).toMatch(/LEFT OUTER JOIN.*comments/i);
+  });
+
   it("leftJoins(:assoc) stores in _leftOuterJoinsValues and generates LEFT OUTER JOIN", () => {
     class Author extends Base {
       static {

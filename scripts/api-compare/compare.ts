@@ -13,15 +13,13 @@
  * Usage:
  *   npx tsx scripts/api-compare/compare.ts [--package activerecord] [--missing] [--files] [--incomplete]
  *
- * Flags:
- *   --check-includes  expand each host class's expected method set with the
- *                     instance methods of every module it `include`s and the
- *                     class methods of every module it `extend`s, recursively.
- *                     Catches mixin wiring gaps that pre-date this check
- *                     (e.g. arel #814: `Predications` methods existed in
- *                     `predications.ts` but `NodeExpression` didn't mix them
- *                     in, so `(node).eq(...)` failed at runtime despite a
- *                     "100%" compare result).
+ * Each host class's expected method set is expanded with the instance
+ * methods of every module it `include`s (and class methods of modules it
+ * `extend`s), recursively. This catches mixin wiring gaps where the
+ * mixin's methods live in a sibling TS file but aren't actually reachable
+ * on the host — e.g. arel #814: `Predications` methods existed in
+ * `predications.ts` but `NodeExpression` didn't mix them in, so
+ * `(node).eq(...)` failed at runtime despite a "100%" compare result.
  */
 
 import * as fs from "fs";
@@ -370,11 +368,6 @@ function main() {
   const showFiles = args.includes("--files");
   const showIncomplete = args.includes("--incomplete");
   const showInheritance = args.includes("--inheritance");
-  // When set, expand each host class's expected method set with the
-  // instance methods of every module it `include`s (and class methods
-  // of modules it `extend`s), recursively. Off by default because it
-  // surfaces wiring gaps that pre-date this check — turn on to audit.
-  const checkIncludes = args.includes("--check-includes");
   // Comparison bucket:
   //   default        → public API only (matches historical coverage numbers)
   //   --privates     → public + private combined (full surface)
@@ -698,13 +691,8 @@ function main() {
       // (e.g., 8 subclasses in binary.rb each override `invert`). Count once.
       const seen = new Map<string, { rubyName: string; rubyModule: string }>();
       for (const item of items) {
-        let rubyMethods: MethodInfo[];
-        if (checkIncludes) {
-          const f = flattenIncludedMethodInfos(item.info, rubyPkg, moduleFqnByShort);
-          rubyMethods = [...f.instance, ...f.klass];
-        } else {
-          rubyMethods = [...item.info.instanceMethods, ...item.info.classMethods];
-        }
+        const f = flattenIncludedMethodInfos(item.info, rubyPkg, moduleFqnByShort);
+        const rubyMethods = [...f.instance, ...f.klass];
         for (const rm of rubyMethods) {
           if (!methodMatchesMode(rm)) continue;
           const tsCandidates = rubyMethodToTs(rm.name);

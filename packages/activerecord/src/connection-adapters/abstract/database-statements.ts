@@ -966,9 +966,9 @@ export function withYamlFallback(value: unknown): unknown {
  * reject raw Temporal objects; this shim converts them at the bind boundary.
  * Returns the value unchanged when it is not a Temporal type.
  *
- * Applied in `typeCastedBinds` (notification payloads) and at the driver bind
- * boundary in each adapter (pg extended protocol, mysql2 prepared statements,
- * better-sqlite3).
+ * Called directly by the PostgreSQL adapter bind paths (with adapter="postgres"
+ * for infinity sentinel handling) and indirectly by all adapters via
+ * `typeCastedBinds` (notification payloads, no adapter arg).
  */
 export function temporalToBindString(
   value: unknown,

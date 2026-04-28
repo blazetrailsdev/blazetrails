@@ -139,6 +139,12 @@ describe("PostgreSQL quoting", () => {
 
   it("quote(new Date()) throws — Date is no longer accepted", () => {
     expect(() => quote(new Date())).toThrow(TypeError);
+    expect(() => quote(new Date())).toThrow(/Temporal/);
+  });
+
+  it("typeCast(new Date()) throws — Date is no longer accepted", () => {
+    expect(() => typeCast(new Date())).toThrow(TypeError);
+    expect(() => typeCast(new Date())).toThrow(/Temporal/);
   });
 });
 

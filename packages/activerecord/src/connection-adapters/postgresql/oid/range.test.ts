@@ -94,4 +94,15 @@ describe("PostgreSQL::OID::Range", () => {
     expect(type.isForceEquality(new Range(1, 10))).toBe(true);
     expect(type.isForceEquality([1, 10])).toBe(false);
   });
+
+  it("typeCastForSchema throws on Date bound — use Temporal instead", () => {
+    const passthroughSubtype = {
+      cast: (v: unknown) => v,
+      serialize: (v: unknown) => v,
+      deserialize: (v: unknown) => v,
+    };
+    const type = new RangeType(passthroughSubtype, "tsrange");
+    expect(() => type.typeCastForSchema(new Range(new Date(), new Date()))).toThrow(TypeError);
+    expect(() => type.typeCastForSchema(new Range(new Date(), new Date()))).toThrow(/Temporal/);
+  });
 });

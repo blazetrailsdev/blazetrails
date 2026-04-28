@@ -89,6 +89,11 @@ describe("QuotingTest", () => {
     expect(() => quote(object)).toThrow(TypeError);
   });
 
+  it("quote(new Date()) throws with Temporal guidance", () => {
+    expect(() => quote(new Date())).toThrow(TypeError);
+    expect(() => quote(new Date())).toThrow(/Temporal/);
+  });
+
   it("quote column name", () => {
     expect(quoteColumnName("name")).toBe('"name"');
   });
@@ -131,7 +136,10 @@ describe("TypeCastingTest", () => {
     expect(() => typeCast({})).toThrow(TypeError);
   });
 
-  it.skip("type cast date", () => {});
+  it("type cast date", () => {
+    expect(() => typeCast(new Date())).toThrow(TypeError);
+    expect(() => typeCast(new Date())).toThrow(/Temporal/);
+  });
   it.skip("type cast time", () => {});
   it.skip("type cast duration should raise error", () => {});
 });

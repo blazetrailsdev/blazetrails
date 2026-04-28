@@ -984,8 +984,8 @@ export function temporalToBindString(
   if (value instanceof Temporal.PlainDateTime) return formatPlainDateTimeForSql(value);
   if (value instanceof Temporal.PlainDate) return formatPlainDateForSql(value);
   if (value instanceof Temporal.PlainTime) {
-    // SQLite stores time as a datetime string with a fixed 2000-01-01 date prefix,
-    // matching quotedTime(Date) behavior in sqlite3/quoting.ts.
+    // SQLite stores time with a fixed 2000-01-01 date prefix so it can be
+    // read back as a datetime string by the cast layer.
     const t = formatPlainTimeForSql(value);
     return adapter === "sqlite" ? `2000-01-01 ${t}` : t;
   }

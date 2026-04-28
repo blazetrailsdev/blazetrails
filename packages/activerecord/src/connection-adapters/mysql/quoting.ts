@@ -165,6 +165,10 @@ export function quote(value: unknown): string {
   if (value instanceof Temporal.PlainDate) return `'${formatPlainDateForSql(value)}'`;
   if (value instanceof Temporal.PlainTime) return `'${formatPlainTimeForSql(value)}'`;
   if (value instanceof Temporal.ZonedDateTime) return `'${formatInstantForSql(value.toInstant())}'`;
+  if (value instanceof Date)
+    throw new TypeError(
+      "quote: JS Date is not accepted — use a Temporal type (Instant, PlainDateTime, etc.)",
+    );
   if (value instanceof Buffer) return quotedBinary(value);
   if (typeof value === "symbol") {
     const desc = value.description;
@@ -203,13 +207,14 @@ export function typeCast(value: unknown): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === "number" || typeof value === "bigint") return value;
   if (typeof value === "string") return value;
-  // Rails' `type_cast` returns `quoted_date(value)` — an unquoted
-  // formatted string. EXPLAIN / log-subscriber renderers want the
-  // primitive, not the Date instance.
   if (value instanceof Temporal.Instant) return formatInstantForSql(value);
   if (value instanceof Temporal.PlainDateTime) return formatPlainDateTimeForSql(value);
   if (value instanceof Temporal.PlainDate) return formatPlainDateForSql(value);
   if (value instanceof Temporal.PlainTime) return formatPlainTimeForSql(value);
   if (value instanceof Temporal.ZonedDateTime) return formatInstantForSql(value.toInstant());
+  if (value instanceof Date)
+    throw new TypeError(
+      "typeCast: JS Date is not accepted — use a Temporal type (Instant, PlainDateTime, etc.)",
+    );
   throw new TypeError(`can't cast ${(value as object).constructor?.name ?? typeof value}`);
 }

@@ -2716,9 +2716,8 @@ export class Relation<T extends Base> {
     if (this._isNone) return 0;
 
     const now = Temporal.Now.instant();
-    const adapter = this._modelClass.adapter as { quote(v: unknown): string; executeMutation(sql: string): Promise<number> } | undefined;
-    if (!adapter) return 0;
-
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const adapter = this._modelClass.adapter!;
     const nowSql = adapter.quote(now);
     const updates: Record<string, unknown> = {};
 
@@ -2741,7 +2740,7 @@ export class Relation<T extends Base> {
       um.where(arelSql(cond));
     }
 
-    return adapter.executeMutation(um.toSql());
+    return this._modelClass.adapter.executeMutation(um.toSql());
   }
 
   /**

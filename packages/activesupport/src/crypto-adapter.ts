@@ -78,7 +78,12 @@ export function pbkdf2Async(
   if (typeof adapter.pbkdf2 === "function") {
     return adapter.pbkdf2(password, salt, iterations, keylen, digest);
   }
-  return Promise.resolve(adapter.pbkdf2Sync(password, salt, iterations, keylen, digest));
+  // Defer the sync call so a synchronous throw becomes a Promise
+  // rejection — keeps the function's async contract intact for `.catch`
+  // callers regardless of how the underlying adapter behaves.
+  return Promise.resolve().then(() =>
+    adapter.pbkdf2Sync(password, salt, iterations, keylen, digest),
+  );
 }
 
 export interface HashAdapter {

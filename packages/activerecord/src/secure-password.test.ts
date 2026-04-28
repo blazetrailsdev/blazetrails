@@ -452,6 +452,15 @@ describe("SecurePasswordTest", () => {
     );
   });
 
+  it("authenticate_by treats undefined identifier values as missing (not IS NULL)", async () => {
+    const User = makeUser();
+    // `undefined` would otherwise flow through PredicateBuilder as `IS NULL`
+    // and could authenticate a record whose token is actually NULL.
+    await expect(User.authenticateBy({ token: undefined, password: PASSWORD })).rejects.toThrow(
+      "One or more finder arguments are required",
+    );
+  });
+
   // Rails: test "authenticate_by accepts any object that implements to_h"
   it("authenticate_by accepts any object that implements to_h", async () => {
     const { User, user } = await createUser();

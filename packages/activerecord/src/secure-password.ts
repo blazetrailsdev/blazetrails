@@ -308,11 +308,19 @@ export async function authenticateBy(
     }
   }
 
-  // Convert entries back to objects for findBy
-  const passwords = Object.fromEntries(passwordEntries);
-  const identifiers = Object.fromEntries(identifierEntries);
+  // Strip `undefined` identifier values before hitting findBy. trails'
+  // PredicateBuilder treats `undefined` the same as `null` and emits
+  // `IS NULL`, so a caller destructuring a missing field could otherwise
+  // authenticate a record whose identifier is actually NULL. Re-check
+  // the "at least one finder arg" invariant after filtering.
+  const definedIdentifierEntries = identifierEntries.filter(([, v]) => v !== undefined);
+  if (definedIdentifierEntries.length === 0) {
+    throw new ArgumentError("One or more finder arguments are required");
+  }
 
-  // Try to find the record
+  const passwords = Object.fromEntries(passwordEntries);
+  const identifiers = Object.fromEntries(definedIdentifierEntries);
+
   const record = await (this as any).findBy(identifiers);
   if (record) {
     // Authenticate every password attribute without early-exit. Mirrors
@@ -346,15 +354,17 @@ export async function authenticateBy(
   } else {
     // Even if no record is found, hash the supplied passwords so the
     // not-found path takes comparable time to a successful authenticate.
-    // Use the async pbkdf2 here (rather than the sync hashPassword used
-    // by the password setter) so the mitigation doesn't block the event
-    // loop on every cache miss / invalid identifier — important under
-    // login load and when this path is the most-frequent caller.
-    const salt = getCrypto().randomBytes(SALT_LENGTH);
+    // Use `pbkdf2Async` here (rather than the sync hashPassword used by
+    // the password setter) to prefer the threadpool path when the
+    // crypto adapter supports it — important under login load and when
+    // this path is the most-frequent caller. Adapters without an async
+    // `pbkdf2` fall back to `pbkdf2Sync` wrapped in a deferred promise.
+    const crypto = getCrypto();
+    const salt = crypto.randomBytes(SALT_LENGTH);
     for (const [name] of passwordEntries) {
       const value = passwords[name] as string;
       // Result discarded — we only care about the elapsed CPU time.
-      await pbkdf2Async(getCrypto(), value, salt, ITERATIONS, KEY_LENGTH, "sha256");
+      await pbkdf2Async(crypto, value, salt, ITERATIONS, KEY_LENGTH, "sha256");
     }
     return null;
   }

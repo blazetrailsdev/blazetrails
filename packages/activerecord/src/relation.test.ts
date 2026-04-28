@@ -324,9 +324,7 @@ describe("RelationTest", () => {
       foreignKey: "author_id",
     });
     // Array spec goes directly through constructJoinDependency via leftJoins
-    const sql = Author.all()
-      .leftJoins(["posts", "comments"] as any)
-      .toSql();
+    const sql = Author.all().leftJoins(["posts", "comments"]).toSql();
     expect(sql).toMatch(/LEFT OUTER JOIN.*posts/i);
     expect(sql).toMatch(/LEFT OUTER JOIN.*comments/i);
   });
@@ -361,11 +359,18 @@ describe("RelationTest", () => {
       className: "HashComment",
       foreignKey: "post_id",
     });
-    const sql = Author.all()
-      .leftJoins({ posts: "comments" } as any)
-      .toSql();
+    const sql = Author.all().leftJoins({ posts: "comments" }).toSql();
     expect(sql).toMatch(/LEFT OUTER JOIN.*posts/i);
     expect(sql).toMatch(/LEFT OUTER JOIN.*comments/i);
+    // Verify comments is joined through posts (ON references the posts table/alias)
+    const postsMatch = sql.match(/LEFT OUTER JOIN\s+["`]?posts["`]?(?:\s+(\w+))?\s+ON/i);
+    const postsRef = postsMatch?.[1] ?? "posts";
+    expect(sql).toMatch(
+      new RegExp(
+        `["\`]?comments["\`]?[^)]+post_id["\`]?\\s*=\\s*["\`]?${postsRef}["\`]?\\.["\`]?id`,
+        "i",
+      ),
+    );
   });
 
   it("leftJoins(:assoc) stores in _leftOuterJoinsValues and generates LEFT OUTER JOIN", () => {

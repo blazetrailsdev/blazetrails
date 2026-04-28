@@ -1137,7 +1137,7 @@ function walkAssociationTree(
   } else if (typeof associations === "object" && associations !== null) {
     for (const [k, v] of Object.entries(associations)) {
       const sub = (tree[k] ??= {}) as Record<string, unknown>;
-      if (v) walkAssociationTree(v as AssociationSpec | AssociationSpec[], sub as any);
+      if (v != null) walkAssociationTree(v as AssociationSpec | AssociationSpec[], sub as any);
     }
   } else {
     throw new ConfigurationError(`Invalid association spec: ${JSON.stringify(associations)}`);
@@ -1158,15 +1158,23 @@ function addTreeToJoinDependency(
   for (const [assocName, subtree] of Object.entries(tree)) {
     const node = jd.addAssociation(assocName, parentContext as any);
     if (!node) {
+      // Use current parent model name in the error (not always the root model).
+      const onModel = parentContext
+        ? ((parentContext.fromModel as any)?.name ?? modelName)
+        : modelName;
       throw argumentError(
-        `Association named '${assocName}' was not found on ${modelName}; perhaps you misspelled it?`,
+        `Association named '${assocName}' was not found on ${onModel}; perhaps you misspelled it?`,
       );
     }
     const children = subtree as Record<string, Record<string, unknown>>;
     if (Object.keys(children).length > 0) {
       addTreeToJoinDependency(jd, children, modelName, {
         fromModel: node.modelClass,
-        fromAlias: node.tableAlias,
+        // effectiveSqlName is the name that actually appears in JOIN SQL (the
+        // real table name unless aliased due to collision). Using tableAlias
+        // here would generate ON clauses referencing e.g. "t1" when the JOIN
+        // SQL uses the real table name.
+        fromAlias: node.effectiveSqlName,
         parentAssocName: parentContext
           ? `${parentContext.parentAssocName}.${assocName}`
           : assocName,

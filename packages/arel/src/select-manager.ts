@@ -529,8 +529,8 @@ export class SelectManager extends TreeManager {
   // -- FactoryMethods (via TreeManager) --
   // createTrue/createFalse/createTableAlias/createStringJoin/createAnd/
   // createOn/grouping/lower/coalesce/cast are mixed in from
-  // Arel::FactoryMethods (see ../factory-methods.ts and the include() call
-  // in ../index.ts). createJoin is overridden below because Rails' Arel
+  // Arel::FactoryMethods (see ./factory-methods.ts and the include() call
+  // in ./index.ts). createJoin is overridden below because Rails' Arel
   // wraps the constraint in an `On` node when sourced from a SelectManager.
 
   private static readonly defaultJoinConstructor = InnerJoin;

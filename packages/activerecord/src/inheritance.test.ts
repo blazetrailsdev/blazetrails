@@ -1895,3 +1895,34 @@ describe("InheritanceTest — new parity methods", () => {
     expect(polymorphicClassFor(Post, "Comment")).toBe(Comment);
   });
 });
+
+describe("typeCondition", () => {
+  it("resolves the STI column via table.get (Arel API) and returns a non-null predicate", async () => {
+    const { typeCondition } = await import("./inheritance.js");
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Vehicle);
+    const predicate = typeCondition(Vehicle);
+    expect(predicate).toBeDefined();
+    expect(predicate).not.toBeNull();
+  });
+
+  it("subclass_from_attributes returns null when inheritance column is missing or empty", async () => {
+    const { subclassFromAttributes } = await import("./inheritance.js");
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Vehicle);
+    expect(subclassFromAttributes(Vehicle, null)).toBe(null);
+    expect(subclassFromAttributes(Vehicle, { type: null })).toBe(null);
+    expect(subclassFromAttributes(Vehicle, { type: "" })).toBe(null);
+    expect(subclassFromAttributes(Vehicle, {})).toBe(null);
+  });
+});

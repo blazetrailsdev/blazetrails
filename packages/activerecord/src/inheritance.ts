@@ -8,6 +8,7 @@ import type { Base } from "./base.js";
 import { modelRegistry } from "./associations.js";
 import { NameError, SubclassNotFound } from "./errors.js";
 import { Nodes } from "@blazetrails/arel";
+import { underscore } from "@blazetrails/activesupport";
 
 /**
  * Resolve a type name string to a model class.
@@ -373,7 +374,7 @@ export function typeCondition(modelClass: typeof Base, arelTable?: any): any {
   const table = arelTable || (modelClass as any).arelTable;
   if (!table) throw new Error("Cannot build type condition without arel table");
 
-  const stiColumn = table[inheritCol];
+  const stiColumn = typeof table.get === "function" ? table.get(inheritCol) : table[inheritCol];
   const stiNames = ([modelClass] as (typeof Base)[])
     .concat(descendants(modelClass))
     .map((klass) => stiName(klass));
@@ -402,10 +403,12 @@ export function subclassFromAttributes(
 ): typeof Base | null {
   if (!attrs) return null;
 
-  // Convert to plain object if it has a toH or toObject method
+  // Convert to plain object via toH (Ruby Hash) or toObject (TS hash-like)
   let attrsHash = attrs as Record<string, unknown>;
   if (typeof (attrs as any).toH === "function") {
     attrsHash = (attrs as any).toH();
+  } else if (typeof (attrs as any).toObject === "function") {
+    attrsHash = (attrs as any).toObject();
   }
 
   if (!attrsHash || typeof attrsHash !== "object") return null;
@@ -416,18 +419,11 @@ export function subclassFromAttributes(
   // Try both camelCase and snake_case forms of the inheritance column name
   const subclassName =
     (attrsHash[inheritCol] as string | null | undefined) ||
-    (attrsHash[toSnakeCase(inheritCol)] as string | null | undefined);
+    (attrsHash[underscore(inheritCol)] as string | null | undefined);
 
   if (subclassName && subclassName.toString().trim()) {
     return findStiClass(modelClass, subclassName);
   }
 
   return null;
-}
-
-/**
- * Helper to convert camelCase to snake_case.
- */
-function toSnakeCase(str: string): string {
-  return str.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
 }

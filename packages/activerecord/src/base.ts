@@ -1174,7 +1174,7 @@ export class Base extends Model {
     return _isSuppressed(this);
   }
 
-  static get registry(): Record<string, true | undefined> {
+  static get registry(): Record<string, number | undefined> {
     return _suppressorRegistry();
   }
 

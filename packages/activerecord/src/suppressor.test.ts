@@ -164,6 +164,26 @@ describe("Suppressor.registry", () => {
     expect(Base.registry.Widget).toBeFalsy();
   });
 
+  it("returns the same object across calls (mutable, shared)", () => {
+    expect(Base.registry).toBe(Base.registry);
+  });
+
+  it("a held reference observes suppression mutations", async () => {
+    const adapter = freshAdapter();
+    class Holdable extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    const reg = Base.registry;
+    expect(reg.Holdable).toBeFalsy();
+    await Holdable.suppress(async () => {
+      expect(reg.Holdable).toBeTruthy();
+    });
+    expect(reg.Holdable).toBeFalsy();
+  });
+
   it("registry stays truthy across nested suppress blocks", async () => {
     const adapter = freshAdapter();
     class Gizmo extends Base {

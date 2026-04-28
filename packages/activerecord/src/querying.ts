@@ -264,6 +264,7 @@ export function leftOuterJoins<T extends typeof Base>(
       on,
     );
   }
+  if (table === undefined) return rel.leftOuterJoins();
   return rel.leftOuterJoins(table);
 }
 

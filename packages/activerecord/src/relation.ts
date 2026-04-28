@@ -1285,8 +1285,11 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#left_outer_joins
    */
+  leftOuterJoins(): Relation<T>;
+  leftOuterJoins(table: string, on: string): Relation<T>;
+  leftOuterJoins(table: AssociationSpec | AssociationSpec[]): Relation<T>;
   leftOuterJoins(table?: AssociationSpec | AssociationSpec[], on?: string): Relation<T> {
-    if (!table) return this._clone();
+    if (table === undefined) return this._clone();
     // Delegate to leftJoins so its runtime validation (non-string + on → argumentError) fires.
     if (on !== undefined)
       return (this.leftJoins as (t: string, o: string) => Relation<T>)(table as string, on);

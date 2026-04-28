@@ -171,27 +171,14 @@ function stableSerialize(value: unknown, seen: WeakSet<object> = new WeakSet()):
 }
 
 // Methods supplied by the FactoryMethods mixin (runtime wiring in ../index.ts).
-// Declared explicitly rather than via `Included<typeof FactoryMethods>` because
-// that helper introduces an index signature that breaks property typing on Node
-// subclasses (e.g. Attribute's `relation`, `name`, etc.).
-//
-// Forward-declared types here (vs. importing the concrete classes) avoid a
-// module-load cycle: factory-methods.ts imports Node-extending subclasses.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-export interface Node {
-  createTrue(): import("./true.js").True;
-  createFalse(): import("./false.js").False;
-  createTableAlias(relation: Node, name: string): import("./table-alias.js").TableAlias;
-  createJoin(
-    to: Node,
-    constraint?: Node | null,
-    klass?: new (left: Node, right: Node | null) => import("./binary.js").Join,
-  ): import("./binary.js").Join;
-  createStringJoin(to: string | Node): import("./string-join.js").StringJoin;
-  createAnd(clauses: Node[]): import("./and.js").And;
-  createOn(expr: Node): import("./unary.js").On;
-  grouping(expr: Node): import("./grouping.js").Grouping;
-  lower(column: Node): import("./named-function.js").NamedFunction;
-  coalesce(...exprs: Node[]): import("./named-function.js").NamedFunction;
-  cast(expr: Node, type: string): import("./named-function.js").NamedFunction;
-}
+// The aliased import keeps this type-only — pulling factory-methods.ts into
+// the static import graph here would create a module-load cycle, since it
+// imports concrete Node subclasses. The explicit `FactoryMethodsModule`
+// interface (vs. `Included<typeof FactoryMethods>`) is required: under
+// composite/declaration emit, the cycle Node ↔ FactoryMethods would force
+// tsc to fall back to a structural shape with a string index signature.
+type _FactoryMethodsModule = import("../factory-methods.js").FactoryMethodsModule;
+
+/* eslint-disable-next-line @typescript-eslint/no-empty-object-type,
+   @typescript-eslint/no-unsafe-declaration-merging */
+export interface Node extends _FactoryMethodsModule {}

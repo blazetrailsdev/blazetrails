@@ -79,21 +79,10 @@ export abstract class TreeManager {
 }
 
 // Methods supplied by the FactoryMethods mixin (runtime wiring in ./index.ts).
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-export interface TreeManager {
-  createTrue(): import("./nodes/true.js").True;
-  createFalse(): import("./nodes/false.js").False;
-  createTableAlias(relation: Node, name: string): import("./nodes/table-alias.js").TableAlias;
-  createJoin(
-    to: Node,
-    constraint?: Node | null,
-    klass?: new (left: Node, right: Node | null) => import("./nodes/binary.js").Join,
-  ): import("./nodes/binary.js").Join;
-  createStringJoin(to: string | Node): import("./nodes/string-join.js").StringJoin;
-  createAnd(clauses: Node[]): import("./nodes/and.js").And;
-  createOn(expr: Node): import("./nodes/unary.js").On;
-  grouping(expr: Node): import("./nodes/grouping.js").Grouping;
-  lower(column: Node): import("./nodes/named-function.js").NamedFunction;
-  coalesce(...exprs: Node[]): import("./nodes/named-function.js").NamedFunction;
-  cast(expr: Node, type: string): import("./nodes/named-function.js").NamedFunction;
-}
+// See node.ts for why this uses the explicit `FactoryMethodsModule` interface
+// rather than `Included<typeof FactoryMethods>`.
+type _FactoryMethodsModule = import("./factory-methods.js").FactoryMethodsModule;
+
+/* eslint-disable-next-line @typescript-eslint/no-empty-object-type,
+   @typescript-eslint/no-unsafe-declaration-merging */
+export interface TreeManager extends _FactoryMethodsModule {}

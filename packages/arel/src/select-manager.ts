@@ -34,6 +34,7 @@ import { InsertManager } from "./insert-manager.js";
  *
  * Mirrors: Arel::SelectManager
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class SelectManager extends TreeManager {
   readonly ast: SelectStatement;
 
@@ -542,7 +543,7 @@ export class SelectManager extends TreeManager {
 
   createJoin(
     to: Node,
-    constraint?: Node,
+    constraint?: Node | null,
     klass?: new (left: Node, right: Node | null) => Join,
   ): Join {
     const JoinKlass =
@@ -586,3 +587,11 @@ export class SelectManager extends TreeManager {
     return this;
   }
 }
+
+// Surface the inherited FactoryMethods on select-manager.ts so api:compare
+// matches them against select_manager.rb.
+type _FactoryMethodsModule = import("./factory-methods.js").FactoryMethodsModule;
+
+/* eslint-disable-next-line @typescript-eslint/no-empty-object-type,
+   @typescript-eslint/no-unsafe-declaration-merging */
+export interface SelectManager extends _FactoryMethodsModule {}

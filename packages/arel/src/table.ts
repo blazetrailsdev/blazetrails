@@ -12,6 +12,7 @@ import { TableAlias } from "./nodes/table-alias.js";
  *
  * Mirrors: Arel::Table
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class Table extends Node {
   static engine: unknown = null;
 
@@ -211,3 +212,12 @@ export class Table extends Node {
     return visitor.visit(this);
   }
 }
+
+// Surface the inherited FactoryMethods on table.ts so api:compare
+// matches them against table.rb (Rails Arel's `Table` includes
+// FactoryMethods directly, expecting the methods to belong here).
+type _FactoryMethodsModule = import("./factory-methods.js").FactoryMethodsModule;
+
+/* eslint-disable-next-line @typescript-eslint/no-empty-object-type,
+   @typescript-eslint/no-unsafe-declaration-merging */
+export interface Table extends _FactoryMethodsModule {}

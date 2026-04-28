@@ -46,8 +46,12 @@ const _Node = Node as unknown as new (...args: any[]) => Node;
 const _NodeExpression = NodeExpression as unknown as new (...args: any[]) => NodeExpression;
 const _TreeManager = TreeManager as unknown as new (...args: any[]) => TreeManager;
 /* eslint-enable @typescript-eslint/no-explicit-any */
-include(_Node, FactoryMethods);
-include(_TreeManager, FactoryMethods);
+// The cast matches include()'s runtime constraint. FactoryMethods is
+// typed as the explicit FactoryMethodsModule interface (no index
+// signature) to break the Node ↔ FactoryMethods type cycle.
+type RuntimeModule = Record<string, (...args: unknown[]) => unknown>;
+include(_Node, FactoryMethods as unknown as RuntimeModule);
+include(_TreeManager, FactoryMethods as unknown as RuntimeModule);
 include(_NodeExpression, Predications);
 include(_NodeExpression, MathMixin);
 include(InfixOperation, Predications);

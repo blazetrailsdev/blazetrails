@@ -16,8 +16,34 @@ import { On } from "./nodes/unary.js";
  *
  * Apply with `include(Klass, FactoryMethods)` from @blazetrails/activesupport
  * and augment the class type with `Included<typeof FactoryMethods>`.
+ *
+ * The explicit interface annotation below is load-bearing: without it, the
+ * Node↔FactoryMethods type cycle (Node interface-merges
+ * `Included<typeof FactoryMethods>`; FactoryMethods values reference Node)
+ * forces tsc into a structural fallback when emitting composite .d.ts,
+ * widening FactoryMethods to `Record<string, ...>` and reintroducing a
+ * string index signature into Node. Pinning the type breaks the cycle
+ * for declaration emit.
  */
-export const FactoryMethods = {
+export interface FactoryMethodsModule {
+  createTrue(): True;
+  createFalse(): False;
+  createTableAlias(relation: Node, name: string): TableAlias;
+  createJoin(
+    to: Node,
+    constraint?: Node | null,
+    klass?: new (left: Node, right: Node | null) => Join,
+  ): Join;
+  createStringJoin(to: string | Node): StringJoin;
+  createAnd(clauses: Node[]): And;
+  createOn(expr: Node): On;
+  grouping(expr: Node): Grouping;
+  lower(column: Node): NamedFunction;
+  coalesce(...exprs: Node[]): NamedFunction;
+  cast(expr: Node, type: string): NamedFunction;
+}
+
+export const FactoryMethods: FactoryMethodsModule = {
   createTrue(): True {
     return new True();
   },

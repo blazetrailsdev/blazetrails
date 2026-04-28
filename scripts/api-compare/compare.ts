@@ -16,7 +16,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import type { ApiManifest, ClassInfo, MethodInfo } from "./types.js";
+import type { ApiManifest, ClassInfo, MethodInfo, PackageInfo } from "./types.js";
 import { OUTPUT_DIR, packageSrcDir } from "./config.js";
 import { rubyFileToTs, rubyMethodToTs } from "./conventions.js";
 import { isExcluded } from "./excluded-files.js";
@@ -288,6 +288,50 @@ export function tsShouldIncludeInIndex(m: MethodInfo, mode: CompareMode): boolea
   return mode === "public" ? !m.internal : true;
 }
 
+/**
+ * Flatten `include`/`extend`-reachable methods onto a host entity.
+ *
+ * Ruby's `include Mod` flattens Mod's instance methods onto the including
+ * class's lookup chain; `extend Mod` flattens them as singleton (class)
+ * methods. The api-compare manifest records each entity's *own* declared
+ * methods only, so without this expansion `Base.includes = ["Querying"]`
+ * doesn't surface `Querying`'s methods as part of `Base`'s expected TS
+ * surface — and a Rails class can pass api-compare with the mixin's
+ * methods living in some other TS file but never reachable on the host.
+ *
+ * Recurses through nested includes (a module's own includes propagate as
+ * instance methods on the host; nested extends propagate as class methods).
+ * Cycles are guarded by `visited`. Modules outside the package are silently
+ * skipped — included stdlib like `Comparable`/`Enumerable` falls through.
+ */
+export function flattenIncludedMethodInfos(
+  entity: ClassInfo,
+  rubyPkg: PackageInfo,
+  moduleFqnByShort: Map<string, string[]>,
+): { instance: MethodInfo[]; klass: MethodInfo[] } {
+  const instance: MethodInfo[] = [...entity.instanceMethods];
+  const klass: MethodInfo[] = [...entity.classMethods];
+  const visited = new Set<string>();
+
+  const walk = (incName: string, asClassMethods: boolean): void => {
+    const fqns = moduleFqnByShort.get(incName) ?? [incName];
+    for (const fqn of fqns) {
+      if (visited.has(fqn)) continue;
+      visited.add(fqn);
+      const mod = rubyPkg.modules[fqn] as unknown as ClassInfo | undefined;
+      if (!mod) continue;
+      const sink = asClassMethods ? klass : instance;
+      for (const m of mod.instanceMethods) sink.push(m);
+      for (const inc of mod.includes ?? []) walk(inc, asClassMethods);
+      for (const ext of mod.extends ?? []) walk(ext, true);
+    }
+  };
+
+  for (const inc of entity.includes ?? []) walk(inc, false);
+  for (const ext of entity.extends ?? []) walk(ext, true);
+  return { instance, klass };
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -308,6 +352,11 @@ function main() {
   const showFiles = args.includes("--files");
   const showIncomplete = args.includes("--incomplete");
   const showInheritance = args.includes("--inheritance");
+  // When set, expand each host class's expected method set with the
+  // instance methods of every module it `include`s (and class methods
+  // of modules it `extend`s), recursively. Off by default because it
+  // surfaces wiring gaps that pre-date this check — turn on to audit.
+  const checkIncludes = args.includes("--check-includes");
   // Comparison bucket:
   //   default        → public API only (matches historical coverage numbers)
   //   --privates     → public + private combined (full surface)
@@ -631,7 +680,12 @@ function main() {
       // (e.g., 8 subclasses in binary.rb each override `invert`). Count once.
       const seen = new Map<string, { rubyName: string; rubyModule: string }>();
       for (const item of items) {
-        const rubyMethods = [...item.info.instanceMethods, ...item.info.classMethods];
+        const rubyMethods = checkIncludes
+          ? (() => {
+              const f = flattenIncludedMethodInfos(item.info, rubyPkg, moduleFqnByShort);
+              return [...f.instance, ...f.klass];
+            })()
+          : [...item.info.instanceMethods, ...item.info.classMethods];
         for (const rm of rubyMethods) {
           if (!methodMatchesMode(rm)) continue;
           const tsCandidates = rubyMethodToTs(rm.name);

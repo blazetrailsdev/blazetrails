@@ -221,30 +221,13 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
           file: relPath,
         });
       } else if (ts.isVariableStatement(node) && isExported(node)) {
-        // Capture `export const X = { method() {...}, ... }` as a module.
-        // This is the shape every `include(Host, Mod)` mixin uses
-        // (see activesupport/src/include.ts), so without recording these
-        // the include-detection pass below has nothing to fold in.
+        // Capture `export const X = { method() {...}, foo, bar: ... }`
+        // as a module. This is the shape every `include(Host, Mod)`
+        // mixin uses (see activesupport/src/include.ts).
         for (const decl of node.declarationList.declarations) {
           if (!decl.name || !ts.isIdentifier(decl.name)) continue;
           if (!decl.initializer || !ts.isObjectLiteralExpression(decl.initializer)) continue;
-          const methods: MethodInfo[] = [];
-          for (const prop of decl.initializer.properties) {
-            let mname: string | null = null;
-            if (ts.isMethodDeclaration(prop) && prop.name && ts.isIdentifier(prop.name)) {
-              mname = prop.name.text;
-            } else if (
-              ts.isPropertyAssignment(prop) &&
-              ts.isIdentifier(prop.name) &&
-              (ts.isFunctionExpression(prop.initializer) || ts.isArrowFunction(prop.initializer))
-            ) {
-              mname = prop.name.text;
-            }
-            if (!mname) continue;
-            const line =
-              prop.getSourceFile().getLineAndCharacterOfPosition(prop.getStart()).line + 1;
-            methods.push({ name: mname, visibility: "public", params: [], line, file: relPath });
-          }
+          const methods = harvestObjectLiteralMethods(decl.initializer, checker, relPath);
           if (methods.length === 0) continue;
           const modKey = `${relPath}:${decl.name.text}`;
           if (info.modules[modKey] || info.classes[modKey]) continue;
@@ -510,52 +493,58 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
       const hostInfo = info.classes[hostKey];
       if (!hostInfo) return;
 
+      const pushMethods = (methods: MethodInfo[]): void => {
+        for (const m of methods) {
+          if (hostInfo.instanceMethods.some((existing) => existing.name === m.name)) continue;
+          hostInfo.instanceMethods.push({ ...m, file: hostInfo.file });
+        }
+      };
+
       // Inline object literal: `include(Host, { foo() {...}, bar: ... })`.
-      // No module name to reference; push the methods directly onto the
-      // host's own instanceMethods so they appear at the host's TS file.
+      // No module name to reference — push methods straight onto the host.
       if (ts.isObjectLiteralExpression(modArg)) {
-        for (const prop of modArg.properties) {
-          let mname: string | null = null;
-          if (ts.isMethodDeclaration(prop) && prop.name && ts.isIdentifier(prop.name)) {
-            mname = prop.name.text;
-          } else if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
-            mname = prop.name.text;
-          } else if (ts.isShorthandPropertyAssignment(prop)) {
-            mname = prop.name.text;
-          }
-          if (!mname) continue;
-          if (hostInfo.instanceMethods.some((m) => m.name === mname)) continue;
-          const line = prop.getSourceFile().getLineAndCharacterOfPosition(prop.getStart()).line + 1;
-          hostInfo.instanceMethods.push({
-            name: mname,
-            visibility: "public",
-            params: [],
-            line,
-            file: hostInfo.file,
-          });
+        pushMethods(harvestObjectLiteralMethods(modArg, checker, hostInfo.file ?? ""));
+        return;
+      }
+
+      // Property access: `include(Host, NS.InstanceMethods)`. The bare
+      // name "InstanceMethods" collides heavily across files (every
+      // concern declares one), so we can't push it onto host.extends
+      // and rely on path-proximity resolution. Resolve the property
+      // symbol back to its declaration and push its methods directly.
+      if (ts.isPropertyAccessExpression(modArg) && ts.isIdentifier(modArg.name)) {
+        const sym0 = checker.getSymbolAtLocation(modArg);
+        const resolved =
+          sym0 && sym0.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym0) : sym0;
+        const propDecl = resolved?.valueDeclaration ?? resolved?.declarations?.[0];
+        if (
+          propDecl &&
+          ts.isVariableDeclaration(propDecl) &&
+          propDecl.initializer &&
+          ts.isObjectLiteralExpression(propDecl.initializer)
+        ) {
+          pushMethods(
+            harvestObjectLiteralMethods(propDecl.initializer, checker, hostInfo.file ?? ""),
+          );
         }
         return;
       }
 
-      // Resolve the module name. Imports may rebind it (`import { Math
-      // as MathMixin }`), so follow the alias to the original symbol's
-      // name when possible. Property access (`Mod.InstanceMethods`)
-      // takes the rightmost segment.
-      let modName: string | null = null;
+      // Bare identifier: `include(Host, Mod)`. Imports may rebind
+      // (`import { Math as MathMixin }`), so follow the alias to the
+      // original symbol's name and push it onto host.extends so
+      // compare.ts's getInherited() walker resolves it via tsByShort.
       if (ts.isIdentifier(modArg)) {
         const sym0 = checker.getSymbolAtLocation(modArg);
+        let modName: string;
         if (sym0) {
           const sym = sym0.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym0) : sym0;
           modName = sym.name;
         } else {
           modName = modArg.text;
         }
-      } else if (ts.isPropertyAccessExpression(modArg) && ts.isIdentifier(modArg.name)) {
-        modName = modArg.name.text;
+        if (!hostInfo.extends.includes(modName)) hostInfo.extends.push(modName);
       }
-      if (!modName) return;
-
-      if (!hostInfo.extends.includes(modName)) hostInfo.extends.push(modName);
     });
   }
 
@@ -588,6 +577,52 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
  *
  * Caller must already have ensured `node` is not exported.
  */
+/**
+ * Extract method names from an object literal — covers the four shapes
+ * Rails-style mixin modules use:
+ *
+ *   export const Mod = {
+ *     foo() { ... },                         // MethodDeclaration
+ *     bar: function () { ... },              // PropertyAssignment + FunctionExpression
+ *     baz: () => { ... },                    // PropertyAssignment + ArrowFunction
+ *     qux,                                   // ShorthandPropertyAssignment
+ *     quux: SomeNamespace.qux,               // PropertyAssignment + identifier/property-access (callable)
+ *   };
+ *
+ * Used both for `export const Mod = { ... }` module discovery and for
+ * resolving inline / property-access mod args to `include(Host, Mod)`.
+ */
+export function harvestObjectLiteralMethods(
+  obj: ts.ObjectLiteralExpression,
+  checker: ts.TypeChecker,
+  file: string,
+): MethodInfo[] {
+  const out: MethodInfo[] = [];
+  for (const prop of obj.properties) {
+    let mname: string | null = null;
+    if (ts.isMethodDeclaration(prop) && prop.name && ts.isIdentifier(prop.name)) {
+      mname = prop.name.text;
+    } else if (ts.isShorthandPropertyAssignment(prop)) {
+      mname = prop.name.text;
+    } else if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
+      const init = prop.initializer;
+      if (ts.isFunctionExpression(init) || ts.isArrowFunction(init)) {
+        mname = prop.name.text;
+      } else {
+        // `foo: bar` / `foo: NS.bar` — count if the RHS resolves to a
+        // callable. Catches `readAttributeForValidation:
+        // _Validations.readAttributeForValidation` etc.
+        const t = checker.getTypeAtLocation(init);
+        if (t.getCallSignatures().length > 0) mname = prop.name.text;
+      }
+    }
+    if (!mname) continue;
+    const line = prop.getSourceFile().getLineAndCharacterOfPosition(prop.getStart()).line + 1;
+    out.push({ name: mname, visibility: "public", params: [], line, file });
+  }
+  return out;
+}
+
 export function extractFileLocalHelpers(
   node: ts.FunctionDeclaration | ts.VariableStatement,
   relPath: string,

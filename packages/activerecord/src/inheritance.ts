@@ -6,7 +6,7 @@
 
 import type { Base } from "./base.js";
 import { modelRegistry } from "./associations.js";
-import { NameError, SubclassNotFound } from "./errors.js";
+import { ActiveRecordError, NameError, SubclassNotFound } from "./errors.js";
 import { Nodes } from "@blazetrails/arel";
 import { underscore } from "@blazetrails/activesupport";
 
@@ -19,10 +19,19 @@ function castInheritanceColumnValue(
   inheritCol: string,
   value: unknown,
 ): unknown {
-  // Delegate to Base._castAttributeValue so casting stays consistent with
-  // the rest of the codebase (PK lookup paths, attribute writes, etc.) and
-  // doesn't drift if attribute-definition storage changes.
-  return modelClass._castAttributeValue(inheritCol, value);
+  // Rails: type_for_attribute(inheritCol).cast(value) — handles non-string
+  // inputs (numbers/booleans) by coercing through the column's type.
+  // Falls back to Base._castAttributeValue (string-only) for compatibility.
+  const attrType = modelClass.typeForAttribute(inheritCol) as {
+    cast(value: unknown): unknown;
+  } | null;
+  const casted = attrType
+    ? attrType.cast(value)
+    : modelClass._castAttributeValue(inheritCol, value);
+  if (casted == null) return casted;
+  // Normalize to a primitive string (handles String wrapper objects) so
+  // findStiClass downstream can match against modelRegistry keys.
+  return typeof casted === "string" ? casted : String(casted);
 }
 
 /**
@@ -395,7 +404,7 @@ export function typeCondition(modelClass: typeof Base, arelTable?: any): any {
   }
 
   const table = arelTable || (modelClass as any).arelTable;
-  if (!table) throw new Error("Cannot build type condition without arel table");
+  if (!table) throw new ActiveRecordError("Cannot build type condition without arel table");
 
   const stiColumn = typeof table.get === "function" ? table.get(inheritCol) : table[inheritCol];
   const stiNames = ([modelClass] as (typeof Base)[])

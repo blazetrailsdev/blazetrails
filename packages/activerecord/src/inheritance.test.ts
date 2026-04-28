@@ -1990,9 +1990,9 @@ describe("typeCondition", () => {
   });
 });
 
-// Regression: Copilot review #2 claimed _inheritanceColumn isn't visible on
-// STI subclasses. JS static inheritance walks the prototype chain, so the
-// column IS visible. These tests pin that behavior so it can't regress.
+// Regression: _inheritanceColumn remains visible on STI subclasses because
+// JavaScript static property lookup walks the prototype chain. These tests
+// pin that behavior so it can't regress.
 describe("STI subclass receiver paths", () => {
   it("getInheritanceColumn returns the base column when called on a subclass", async () => {
     const { typeCondition, getInheritanceColumn } = await import("./inheritance.js");
@@ -2024,5 +2024,51 @@ describe("STI subclass receiver paths", () => {
     registerModel(Car);
     expect(subclassFromAttributes(Car, { type: "Car" })).toBe(Car);
     expect(subclassFromAttributes(Car, {})).toBe(null);
+  });
+});
+
+describe("ensureProperType / initializeInternalsCallback", () => {
+  it("ensureProperType writes the STI sti_name on a subclass instance", async () => {
+    const { ensureProperType } = await import("./inheritance.js");
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Vehicle);
+    class Car extends Vehicle {}
+    const car = new Car({});
+    ensureProperType.call(car);
+    expect((car as any).readAttribute("type")).toBe("Car");
+  });
+
+  it("ensureProperType is a no-op on the STI base class itself", async () => {
+    const { ensureProperType } = await import("./inheritance.js");
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Vehicle);
+    const v = new Vehicle({});
+    ensureProperType.call(v);
+    expect((v as any).readAttribute("type")).not.toBe("Vehicle");
+  });
+
+  it("initializeInternalsCallback delegates to ensureProperType", async () => {
+    const { initializeInternalsCallback } = await import("./inheritance.js");
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Vehicle);
+    class Car extends Vehicle {}
+    const car = new Car({});
+    initializeInternalsCallback.call(car);
+    expect((car as any).readAttribute("type")).toBe("Car");
   });
 });

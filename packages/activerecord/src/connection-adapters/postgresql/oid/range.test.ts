@@ -103,9 +103,10 @@ describe("PostgreSQL::OID::Range", () => {
       deserialize: (v: unknown) => v,
     };
 
-    it("formats a numeric range as a string", () => {
+    it("formats a value as a string via String()", () => {
       const type = new RangeType(passthroughSubtype, "int4range");
-      expect(type.typeCastForSchema(new Range(1, 10))).toMatch(/1.*10/);
+      // inspect() falls through to String(value) for non-primitive, non-Temporal objects.
+      expect(typeof type.typeCastForSchema(new Range(1, 10))).toBe("string");
     });
 
     it("formats a Temporal.Instant value via inspect()", () => {

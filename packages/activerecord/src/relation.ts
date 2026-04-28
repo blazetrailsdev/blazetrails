@@ -1290,10 +1290,12 @@ export class Relation<T extends Base> {
   leftOuterJoins(table: AssociationSpec | AssociationSpec[]): Relation<T>;
   leftOuterJoins(table?: AssociationSpec | AssociationSpec[], on?: string): Relation<T> {
     if (table === undefined) return this._clone();
-    // Delegate to leftJoins so its runtime validation (non-string + on → argumentError) fires.
-    if (on !== undefined)
-      return (this.leftJoins as (t: string, o: string) => Relation<T>)(table as string, on);
-    return this.leftJoins(table as AssociationSpec | AssociationSpec[]);
+    if (on !== undefined) {
+      if (typeof table !== "string")
+        throw argumentError("leftJoins(table, on) requires a string table name");
+      return this.leftJoins(table, on);
+    }
+    return this.leftJoins(table);
   }
 
   /**

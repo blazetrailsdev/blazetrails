@@ -233,16 +233,15 @@ export function leftJoins<T extends typeof Base>(
 ): Relation<InstanceType<T>> {
   const rel = this.all();
   if (on !== undefined) {
-    // Delegate via cast so Relation.leftJoins' runtime validation fires for non-string table.
-    return (rel.leftJoins as (t: string, o: string) => Relation<InstanceType<T>>)(
-      table as string,
-      on,
-    );
+    if (typeof table !== "string")
+      throw new Error("leftJoins(table, on) requires a string table name");
+    return rel.leftJoins(table, on);
   }
-  return rel.leftJoins(table as AssociationSpec | AssociationSpec[]);
+  return rel.leftJoins(table);
 }
 
 /** Mirrors: ActiveRecord::Querying#left_outer_joins */
+export function leftOuterJoins<T extends typeof Base>(this: T): Relation<InstanceType<T>>;
 export function leftOuterJoins<T extends typeof Base>(
   this: T,
   table: string,
@@ -250,7 +249,7 @@ export function leftOuterJoins<T extends typeof Base>(
 ): Relation<InstanceType<T>>;
 export function leftOuterJoins<T extends typeof Base>(
   this: T,
-  table?: AssociationSpec | AssociationSpec[],
+  table: AssociationSpec | AssociationSpec[],
 ): Relation<InstanceType<T>>;
 export function leftOuterJoins<T extends typeof Base>(
   this: T,
@@ -258,13 +257,12 @@ export function leftOuterJoins<T extends typeof Base>(
   on?: string,
 ): Relation<InstanceType<T>> {
   const rel = this.all();
-  if (on !== undefined) {
-    return (rel.leftOuterJoins as (t: string, o: string) => Relation<InstanceType<T>>)(
-      table as string,
-      on,
-    );
-  }
   if (table === undefined) return rel.leftOuterJoins();
+  if (on !== undefined) {
+    if (typeof table !== "string")
+      throw new Error("leftJoins(table, on) requires a string table name");
+    return rel.leftOuterJoins(table, on);
+  }
   return rel.leftOuterJoins(table);
 }
 

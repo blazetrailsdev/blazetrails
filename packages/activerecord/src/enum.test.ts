@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { castEnumValue, Base, Relation, defineEnum, readEnumValue } from "./index.js";
 
 import { createTestAdapter } from "./test-adapter.js";
@@ -1725,5 +1725,72 @@ describe("EnumTest", () => {
     post.writeAttribute("subtitle", "hello");
     post.writeAttribute("subtitle", null);
     expect(post.changed).toBe(false);
+  });
+});
+
+import {
+  assertValidEnumDefinitionValues,
+  assertValidEnumOptions,
+  detectNegativeEnumConditionsBang,
+} from "./enum.js";
+import { ArgumentError } from "@blazetrails/activemodel";
+
+describe("Enum private validators", () => {
+  describe("assertValidEnumDefinitionValues", () => {
+    it("rejects empty array with ArgumentError", () => {
+      expect(() => assertValidEnumDefinitionValues([])).toThrow(ArgumentError);
+    });
+    it("rejects array with non-string entries", () => {
+      expect(() => assertValidEnumDefinitionValues([1, 2])).toThrow(ArgumentError);
+    });
+    it("rejects array with blank name", () => {
+      expect(() => assertValidEnumDefinitionValues(["a", ""])).toThrow(/blank name/);
+    });
+    it("rejects empty hash", () => {
+      expect(() => assertValidEnumDefinitionValues({})).toThrow(ArgumentError);
+    });
+    it("accepts hash with boolean and null values", () => {
+      const out = assertValidEnumDefinitionValues({ a: true, b: null, c: 1 });
+      expect(out).toEqual({ a: true, b: null, c: 1 });
+    });
+    it("rejects hash with non-primitive value", () => {
+      expect(() => assertValidEnumDefinitionValues({ a: { x: 1 } })).toThrow(ArgumentError);
+    });
+  });
+
+  describe("assertValidEnumOptions", () => {
+    it("rejects underscore-prefixed _prefix/_validate keys with ArgumentError", () => {
+      expect(() => assertValidEnumOptions({ _prefix: "x" })).toThrow(ArgumentError);
+      expect(() => assertValidEnumOptions({ _validate: true })).toThrow(/invalid option/);
+    });
+    it("accepts valid options without throwing", () => {
+      expect(() => assertValidEnumOptions({ prefix: "x", validate: true })).not.toThrow();
+    });
+    it("treats arrays as not-an-options-hash", () => {
+      expect(() => assertValidEnumOptions([] as any)).not.toThrow();
+    });
+  });
+
+  describe("detectNegativeEnumConditionsBang", () => {
+    it("warns when notDraft conflicts with draft (camelCase prefix)", () => {
+      const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      detectNegativeEnumConditionsBang(["draft", "notDraft"]);
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringMatching(/conflicts with auto-generated negative scope 'notDraft'/),
+      );
+      spy.mockRestore();
+    });
+    it("warns when not_draft conflicts with draft (snake_case prefix)", () => {
+      const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      detectNegativeEnumConditionsBang(["draft", "not_draft"]);
+      expect(spy).toHaveBeenCalledWith(expect.stringMatching(/'not_draft'/));
+      spy.mockRestore();
+    });
+    it("does not warn when there is no positive-form clash", () => {
+      const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      detectNegativeEnumConditionsBang(["notDraft", "published"]);
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
   });
 });

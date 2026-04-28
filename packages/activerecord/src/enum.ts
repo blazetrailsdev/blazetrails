@@ -1,6 +1,6 @@
 import type { Base } from "./base.js";
 import { camelize, pluralize } from "@blazetrails/activesupport";
-import { ValueType } from "@blazetrails/activemodel";
+import { ArgumentError, ValueType } from "@blazetrails/activemodel";
 
 /**
  * Enum definition — maps symbolic names to integer values.
@@ -402,22 +402,21 @@ export function castEnumValue(
  */
 export function assertValidEnumDefinitionValues(
   values: any,
-): Record<string, number | string> | string[] {
+): Record<string, string | number | boolean | null> | string[] {
   if (Array.isArray(values)) {
     if (values.length === 0) {
-      throw new Error("Enum values must not be empty.");
+      throw new ArgumentError("Enum values must not be empty.");
     }
     const allStrings = values.every((v) => typeof v === "string");
-    const allSymbols = values.every((v) => typeof v === "string");
-    if (!allStrings && !allSymbols) {
-      throw new Error(
+    if (!allStrings) {
+      throw new ArgumentError(
         `Enum values must only contain symbols or strings, got: ${Array.from(
           new Set(values.map((v) => typeof v)),
         ).join(", ")}`,
       );
     }
     if (values.some((v) => !v || v === "")) {
-      throw new Error("Enum values must not contain a blank name.");
+      throw new ArgumentError("Enum values must not contain a blank name.");
     }
     return values;
   }
@@ -425,10 +424,10 @@ export function assertValidEnumDefinitionValues(
   if (typeof values === "object" && values !== null && !Array.isArray(values)) {
     const keys = Object.keys(values);
     if (keys.length === 0) {
-      throw new Error("Enum values must not be empty.");
+      throw new ArgumentError("Enum values must not be empty.");
     }
     if (keys.some((k) => !k || k === "")) {
-      throw new Error("Enum values must not contain a blank name.");
+      throw new ArgumentError("Enum values must not contain a blank name.");
     }
     for (const [, value] of Object.entries(values)) {
       if (
@@ -439,7 +438,7 @@ export function assertValidEnumDefinitionValues(
           value === null
         )
       ) {
-        throw new Error(
+        throw new ArgumentError(
           `Enum values must be only booleans, integers, floats, symbols or strings, got: ${typeof value}`,
         );
       }
@@ -447,7 +446,7 @@ export function assertValidEnumDefinitionValues(
     return values;
   }
 
-  throw new Error("Enum values must be either a non-empty hash or an array.");
+  throw new ArgumentError("Enum values must be either a non-empty hash or an array.");
 }
 
 /**
@@ -455,13 +454,20 @@ export function assertValidEnumDefinitionValues(
  * Mirrors: ActiveRecord::Enum#assert_valid_enum_options (private)
  */
 export function assertValidEnumOptions(options: Record<string, any>): void {
-  if (!options || typeof options !== "object") return;
+  if (!options || typeof options !== "object" || Array.isArray(options)) return;
 
-  const invalidKeys = ["_prefix", "_suffix", "_scopes", "_default", "_instance_methods"];
+  const invalidKeys = [
+    "_prefix",
+    "_suffix",
+    "_scopes",
+    "_default",
+    "_instance_methods",
+    "_validate",
+  ];
   const found = Object.keys(options).filter((k) => invalidKeys.includes(k));
 
   if (found.length > 0) {
-    throw new Error(
+    throw new ArgumentError(
       `invalid option(s): ${found.map((k) => `"${k}"`).join(", ")}. Valid options are: prefix, suffix, scopes, default, instance_methods, and validate.`,
     );
   }
@@ -472,14 +478,30 @@ export function assertValidEnumOptions(options: Record<string, any>): void {
  * Mirrors: ActiveRecord::Enum#detect_negative_enum_conditions! (private)
  */
 export function detectNegativeEnumConditionsBang(methodNames: string[]): void {
-  const notMethods = methodNames.filter((m) => m.startsWith("not"));
-  for (const notMethod of notMethods) {
-    const positiveForm = notMethod.substring(3);
+  for (const notMethod of methodNames) {
+    const normalized = normalizeNegativeEnumPositiveForm(notMethod);
+    if (!normalized) continue;
+    const { prefix, positiveForm } = normalized;
     if (methodNames.includes(positiveForm)) {
       console.warn(
-        `Enum uses prefix 'not_' which conflicts with auto-generated negative scope '${notMethod}' ` +
+        `Enum uses prefix '${prefix}' which conflicts with auto-generated negative scope '${notMethod}' ` +
           `while positive form '${positiveForm}' also exists.`,
       );
     }
   }
+}
+
+function normalizeNegativeEnumPositiveForm(
+  methodName: string,
+): { prefix: "not" | "not_"; positiveForm: string } | null {
+  if (methodName.startsWith("not_")) {
+    const rest = methodName.substring(4);
+    if (rest.length === 0) return null;
+    return { prefix: "not_", positiveForm: rest.charAt(0).toLowerCase() + rest.slice(1) };
+  }
+  if (methodName.startsWith("not") && methodName.length > 3) {
+    const rest = methodName.substring(3);
+    return { prefix: "not", positiveForm: rest.charAt(0).toLowerCase() + rest.slice(1) };
+  }
+  return null;
 }

@@ -60,7 +60,8 @@ export function hasSecurePassword(
   const passwordKey = Symbol(`${attribute}`);
   const confirmationKey = Symbol(`${attribute}_confirmation`);
 
-  // ${attribute} setter/getter (e.g. password / recovery_password)
+  // Define setter/getter for the configured secure-password attribute
+  // (e.g. password / recovery_password).
   Object.defineProperty(modelClass.prototype, attribute, {
     get: function () {
       return (this as any)[passwordKey] ?? null;
@@ -299,12 +300,16 @@ export async function authenticateBy(
   // Try to find the record
   const record = await (this as any).findBy(identifiers);
   if (record) {
-    // Authenticate all password attributes. Mirrors Rails:
-    // `record.public_send(:"authenticate_#{name}", value)` — if the method
-    // doesn't exist, Ruby raises NoMethodError. Throwing here matches that
-    // semantic and avoids a timing-attack channel where a misconfigured
-    // model (digest column without hasSecurePassword) silently shortcuts
-    // out of the hash work that the not-found path always performs.
+    // Authenticate every password attribute without early-exit. Mirrors
+    // Rails: `record.public_send(:"authenticate_#{name}", value)` — if
+    // the method doesn't exist, Ruby raises NoMethodError. Throwing here
+    // matches that semantic and avoids a timing-attack channel where a
+    // misconfigured model (digest column without hasSecurePassword)
+    // silently shortcuts out of the hash work that the not-found path
+    // always performs. Likewise, accumulate `allAuthenticated` rather
+    // than `break`-ing on the first wrong password so multi-password
+    // models spend the same hash-work whether the first or last password
+    // is wrong (Rails uses `count == size` for the same reason).
     let allAuthenticated = true;
     for (const [name] of passwordEntries) {
       const value = passwords[name] as string;
@@ -318,7 +323,8 @@ export async function authenticateBy(
       }
       if (!authenticateMethod.call(record, value)) {
         allAuthenticated = false;
-        break;
+        // Don't break — keep going so the hash work is independent
+        // of which (or how many) passwords are wrong.
       }
     }
     return allAuthenticated ? record : null;

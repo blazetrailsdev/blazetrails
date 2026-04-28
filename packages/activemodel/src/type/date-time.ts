@@ -46,8 +46,10 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
       }
     }
     try {
-      // No offset — interpret in configured timezone (UTC by default,
-      // host-system local when ActiveRecord.default_timezone === "local").
+      // No offset — interpret in the default timezone configured via
+      // ActiveModel's helpers/timezone module (UTC by default, host-system
+      // local when set to "local"). ActiveRecord wires its own
+      // default_timezone setter into ActiveModel's so they stay in sync.
       return Temporal.PlainDateTime.from(datetimeString, { overflow: "reject" })
         .toZonedDateTime(configuredTimezone())
         .toInstant();

@@ -260,7 +260,9 @@ function parseBcTimestampTzAsInstant(withoutBc: string): Temporal.Instant {
 }
 
 /**
- * Parse a BC-suffixed Postgres `timestamp` string to `Temporal.Instant` (UTC).
+ * Parse a BC-suffixed Postgres `timestamp` string to `Temporal.Instant`,
+ * interpreting the naive value in `defaultSqlTimezone()` (UTC by default,
+ * host-system local when `ActiveRecord.default_timezone === "local"`).
  * Input has already had " BC" stripped.
  */
 function parseBcTimestampAsInstant(withoutBc: string): Temporal.Instant {

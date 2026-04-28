@@ -1112,14 +1112,21 @@ function excludingBang(this: QueryMethodsHost, records: any[]): any {
 /**
  * Flatten any AssociationSpec mix into a tree of { assocName: subtree } pairs,
  * mirroring Rails' JoinDependency.make_tree / walk_tree (join_dependency.rb:47-70).
- * Strings → leaf; Arrays → each element walked; Hashes → key/value pairs.
+ * Strings → leaf (dot-notation "a.b" expands to nested { a: { b: {} } });
+ * Arrays → each element walked; Hashes → key/value pairs.
+ * Unknown types raise ArgumentError, matching Rails' ConfigurationError (line 67).
  */
 function walkAssociationTree(
   associations: AssociationSpec | AssociationSpec[],
   tree: Record<string, Record<string, unknown>>,
 ): void {
   if (typeof associations === "string") {
-    tree[associations] ??= {};
+    // Expand dot-notation "posts.comments" → { posts: { comments: {} } }
+    const parts = associations.split(".");
+    let node = tree;
+    for (const part of parts) {
+      node = (node[part] ??= {}) as Record<string, Record<string, unknown>>;
+    }
   } else if (Array.isArray(associations)) {
     for (const assoc of associations) walkAssociationTree(assoc, tree);
   } else if (typeof associations === "object" && associations !== null) {
@@ -1127,6 +1134,8 @@ function walkAssociationTree(
       const sub = (tree[k] ??= {}) as Record<string, unknown>;
       if (v) walkAssociationTree(v as AssociationSpec | AssociationSpec[], sub as any);
     }
+  } else {
+    throw argumentError(`Invalid association spec: ${JSON.stringify(associations)}`);
   }
 }
 

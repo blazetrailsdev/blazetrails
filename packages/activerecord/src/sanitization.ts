@@ -36,12 +36,13 @@ export function sanitizeSqlArray(template: string, ...binds: unknown[]): string 
     return statement;
   }
 
-  // %s format string support (e.g., "name='%s' and id='%s'")
-  if (statement.includes("%s") && binds.length > 0) {
-    return statement.replace(/%s/g, () => {
-      const value = binds.shift();
-      return quoteString((value as any).toString());
-    });
+  // %s format string support (e.g., "name='%s' and id='%s'") — Rails:
+  //   statement % values.collect { |v| connection.quote_string(v.to_s) }
+  const formatStringCount = (statement.match(/%s/g) ?? []).length;
+  if (formatStringCount > 0) {
+    raiseIfBindArityMismatch(statement, formatStringCount, binds.length);
+    const values = [...binds];
+    return statement.replace(/%s/g, () => quoteString(String(values.shift() ?? "")));
   }
 
   return statement;
@@ -340,18 +341,13 @@ function hasIdForDatabase(value: unknown): value is { idForDatabase(): unknown }
 /**
  * Check if a value is enumerable (Array or Set).
  * Rails uses respond_to?(:map) and !acts_like?(:string) which includes
- * Array, Range, Set, and other Enumerable types.
- * JS approximation: Array and Set.
+ * Array, Range, Set, and other Enumerable types. JS approximation:
+ * accepts only Array and Set so we don't accidentally expand strings,
+ * Buffers, Maps, or arbitrary iterables that aren't collections of
+ * scalar bind values.
  */
 function isEnumerable(value: unknown): value is Iterable<unknown> {
-  return (
-    Array.isArray(value) ||
-    (typeof value === "object" && value instanceof Set) ||
-    (typeof value === "object" &&
-      value !== null &&
-      Symbol.iterator in value &&
-      typeof value !== "string")
-  );
+  return Array.isArray(value) || value instanceof Set;
 }
 
 /** True for plain JS objects (Object.prototype or null proto), matching Ruby Hash semantics. */

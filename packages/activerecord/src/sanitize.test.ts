@@ -382,6 +382,22 @@ describe("sanitizeSql", () => {
       expect(result).toBe("name='foo''bar' and group_id='4'");
     });
 
+    it("sanitize sql array %s format raises on arity mismatch", () => {
+      class Post extends Base {
+        static _tableName = "posts";
+      }
+      expect(() => Post.sanitizeSqlArray("name='%s' and id='%s'", "foo")).toThrow(
+        /wrong number of bind variables/,
+      );
+    });
+
+    it("sanitize sql array %s format coerces nullish to empty string", () => {
+      class Post extends Base {
+        static _tableName = "posts";
+      }
+      expect(Post.sanitizeSqlArray("name='%s'", null)).toBe("name=''");
+    });
+
     it("handles named bind variables with simple strings", () => {
       class Post extends Base {
         static _tableName = "posts";

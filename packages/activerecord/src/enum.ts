@@ -1,4 +1,3 @@
-import { NotImplementedError } from "./errors.js";
 import type { Base } from "./base.js";
 import { camelize, pluralize } from "@blazetrails/activesupport";
 import { ValueType } from "@blazetrails/activemodel";
@@ -397,63 +396,90 @@ export function castEnumValue(
   return def.type.serialize(value) as number | null;
 }
 
-function name(): never {
-  throw new NotImplementedError("ActiveRecord::Enum::EnumType#name is not implemented");
-}
-
-function klass(): never {
-  throw new NotImplementedError("ActiveRecord::Enum::EnumMethods#klass is not implemented");
-}
-
-function defineEnumMethods(
-  name: any,
-  valueMethodName: any,
-  value: any,
-  scopes: any,
-  instanceMethods: any,
-): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Enum::EnumMethods#define_enum_methods is not implemented",
-  );
-}
-
-function _enum(
-  name: any,
+/**
+ * Validate enum values are non-empty array or hash with proper types.
+ * Mirrors: ActiveRecord::Enum#assert_valid_enum_definition_values (private)
+ */
+export function assertValidEnumDefinitionValues(
   values: any,
-  prefix?: any,
-  suffix?: any,
-  scopes?: any,
-  instanceMethods?: any,
-  validate?: any,
-  options?: any,
-): never {
-  throw new NotImplementedError("ActiveRecord::Enum#_enum is not implemented");
+): Record<string, number | string> | string[] {
+  if (Array.isArray(values)) {
+    if (values.length === 0) {
+      throw new Error("Enum values must not be empty.");
+    }
+    const allStrings = values.every((v) => typeof v === "string");
+    const allSymbols = values.every((v) => typeof v === "string");
+    if (!allStrings && !allSymbols) {
+      throw new Error(
+        `Enum values must only contain symbols or strings, got: ${Array.from(
+          new Set(values.map((v) => typeof v)),
+        ).join(", ")}`,
+      );
+    }
+    if (values.some((v) => !v || v === "")) {
+      throw new Error("Enum values must not contain a blank name.");
+    }
+    return values;
+  }
+
+  if (typeof values === "object" && values !== null && !Array.isArray(values)) {
+    const keys = Object.keys(values);
+    if (keys.length === 0) {
+      throw new Error("Enum values must not be empty.");
+    }
+    if (keys.some((k) => !k || k === "")) {
+      throw new Error("Enum values must not contain a blank name.");
+    }
+    for (const [, value] of Object.entries(values)) {
+      if (
+        !(
+          typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean" ||
+          value === null
+        )
+      ) {
+        throw new Error(
+          `Enum values must be only booleans, integers, floats, symbols or strings, got: ${typeof value}`,
+        );
+      }
+    }
+    return values;
+  }
+
+  throw new Error("Enum values must be either a non-empty hash or an array.");
 }
 
-function _enumMethodsModule(): never {
-  throw new NotImplementedError("ActiveRecord::Enum#_enum_methods_module is not implemented");
+/**
+ * Validate enum options: reject underscore-prefixed variants.
+ * Mirrors: ActiveRecord::Enum#assert_valid_enum_options (private)
+ */
+export function assertValidEnumOptions(options: Record<string, any>): void {
+  if (!options || typeof options !== "object") return;
+
+  const invalidKeys = ["_prefix", "_suffix", "_scopes", "_default", "_instance_methods"];
+  const found = Object.keys(options).filter((k) => invalidKeys.includes(k));
+
+  if (found.length > 0) {
+    throw new Error(
+      `invalid option(s): ${found.map((k) => `"${k}"`).join(", ")}. Valid options are: prefix, suffix, scopes, default, instance_methods, and validate.`,
+    );
+  }
 }
 
-function assertValidEnumDefinitionValues(values: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Enum#assert_valid_enum_definition_values is not implemented",
-  );
-}
-
-function assertValidEnumOptions(options: any): never {
-  throw new NotImplementedError("ActiveRecord::Enum#assert_valid_enum_options is not implemented");
-}
-
-function detectEnumConflictBang(enumName: any, methodName: any, klassMethod?: any): never {
-  throw new NotImplementedError("ActiveRecord::Enum#detect_enum_conflict! is not implemented");
-}
-
-function raiseConflictError(enumName: any, methodName: any, type?: any, source?: any): never {
-  throw new NotImplementedError("ActiveRecord::Enum#raise_conflict_error is not implemented");
-}
-
-function detectNegativeEnumConditionsBang(methodNames: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Enum#detect_negative_enum_conditions! is not implemented",
-  );
+/**
+ * Warn on negative enum condition conflicts (e.g., both "notDraft" and "draft").
+ * Mirrors: ActiveRecord::Enum#detect_negative_enum_conditions! (private)
+ */
+export function detectNegativeEnumConditionsBang(methodNames: string[]): void {
+  const notMethods = methodNames.filter((m) => m.startsWith("not"));
+  for (const notMethod of notMethods) {
+    const positiveForm = notMethod.substring(3);
+    if (methodNames.includes(positiveForm)) {
+      console.warn(
+        `Enum uses prefix 'not_' which conflicts with auto-generated negative scope '${notMethod}' ` +
+          `while positive form '${positiveForm}' also exists.`,
+      );
+    }
+  }
 }

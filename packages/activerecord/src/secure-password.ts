@@ -111,13 +111,16 @@ export function hasSecurePassword(
     configurable: true,
   });
 
-  // Static authenticateBy class method
-  // Mirrors: ActiveRecord::SecurePassword.authenticate_by
-  Object.defineProperty(modelClass, "authenticateBy", {
-    value: authenticateBy,
-    writable: true,
-    configurable: true,
-  });
+  // Static authenticateBy — attached once per class (Rails: ClassMethods
+  // module included once). Skip if already defined so multiple
+  // hasSecurePassword calls don't redundantly redefine the same function.
+  if (!(modelClass as any).authenticateBy) {
+    Object.defineProperty(modelClass, "authenticateBy", {
+      value: authenticateBy,
+      writable: true,
+      configurable: true,
+    });
+  }
 
   // Hook into save to hash the password. Use writeAttribute (not
   // _attributes.set) so the dirty tracker marks the column changed and

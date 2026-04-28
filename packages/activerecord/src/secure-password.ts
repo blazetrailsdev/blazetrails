@@ -1,19 +1,7 @@
-import { getCrypto } from "@blazetrails/activesupport";
+import { getCrypto, camelize } from "@blazetrails/activesupport";
 import { ArgumentError } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
 import { generatesTokenFor } from "./token-for.js";
-
-/**
- * `password` → `Password`; `recovery_password` → `RecoveryPassword`.
- * Matches the underscore-to-camelCase convention used by `secure-token.ts`
- * so attribute names with underscores produce the expected method names.
- */
-function camelize(attr: string): string {
-  return (
-    attr.charAt(0).toUpperCase() +
-    attr.slice(1).replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
-  );
-}
 
 /**
  * Secure password support using PBKDF2 (Web Crypto API).
@@ -303,13 +291,24 @@ export async function authenticateBy(
   // Try to find the record
   const record = await (this as any).findBy(identifiers);
   if (record) {
-    // Authenticate all password attributes
+    // Authenticate all password attributes. Mirrors Rails:
+    // `record.public_send(:"authenticate_#{name}", value)` — if the method
+    // doesn't exist, Ruby raises NoMethodError. Throwing here matches that
+    // semantic and avoids a timing-attack channel where a misconfigured
+    // model (digest column without hasSecurePassword) silently shortcuts
+    // out of the hash work that the not-found path always performs.
     let allAuthenticated = true;
     for (const [name] of passwordEntries) {
       const value = passwords[name] as string;
       const methodName = `authenticate${camelize(name)}`;
       const authenticateMethod = (record as any)[methodName];
-      if (typeof authenticateMethod !== "function" || !authenticateMethod.call(record, value)) {
+      if (typeof authenticateMethod !== "function") {
+        throw new TypeError(
+          `${(this as typeof Base).name}#${methodName} is not defined — ` +
+            `did you call hasSecurePassword(model, "${name}")?`,
+        );
+      }
+      if (!authenticateMethod.call(record, value)) {
         allAuthenticated = false;
         break;
       }

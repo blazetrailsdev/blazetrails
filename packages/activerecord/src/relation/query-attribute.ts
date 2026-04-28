@@ -57,13 +57,19 @@ export class QueryAttribute extends Attribute {
     return QueryAttribute.withCastValue(this.name, value, this.type);
   }
 
+  override get valueForDatabase(): unknown {
+    return super.valueForDatabase;
+  }
+
   isNil(): boolean {
     return this.valueBeforeTypeCast === null || this.valueBeforeTypeCast === undefined;
   }
 
   isInfinite(): boolean {
-    const v = this.valueBeforeTypeCast;
-    return v === Infinity || v === -Infinity;
+    return (
+      isInfinity(this.valueBeforeTypeCast) ||
+      (this.isSerializable() && isInfinity(this.valueForDatabase))
+    );
   }
 
   isUnboundable(): boolean {
@@ -71,7 +77,10 @@ export class QueryAttribute extends Attribute {
   }
 }
 
+// private
+
 function isInfinity(value: unknown): boolean {
+  if (value === Infinity || value === -Infinity) return true;
   return (
     value !== null &&
     value !== undefined &&

@@ -87,6 +87,15 @@ describe("QueryAttribute", () => {
     expect(new QueryAttribute("x", 999, intType).isInfinite()).toBe(false);
   });
 
+  it("isInfinite checks valueForDatabase for serializable types", () => {
+    const expandingType = {
+      cast: (v: unknown) => v,
+      serialize: (_v: unknown) => Infinity,
+    };
+    const attr = new QueryAttribute("x", "anything", expandingType);
+    expect(attr.isInfinite()).toBe(true);
+  });
+
   it("equals compares name, value, and type", () => {
     const a = new QueryAttribute("age", "25", intType);
     const b = new QueryAttribute("age", "25", intType);

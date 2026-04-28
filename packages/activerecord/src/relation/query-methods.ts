@@ -1142,7 +1142,7 @@ function walkAssociationTree(
   } else {
     let desc: string;
     try {
-      desc = JSON.stringify(associations);
+      desc = JSON.stringify(associations) ?? String(associations);
     } catch {
       desc = `${typeof associations}`;
     }

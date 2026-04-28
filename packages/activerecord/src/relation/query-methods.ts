@@ -1114,8 +1114,18 @@ function excludingBang(this: QueryMethodsHost, records: any[]): any {
   return this;
 }
 
+/** Recursive association tree: mirrors Rails' JoinDependency.make_tree output. */
+interface AssocTree {
+  [key: string]: AssocTree;
+}
+
+/** Safe factory: prototype-pollution-safe null-prototype object. */
+function makeAssocTree(): AssocTree {
+  return Object.create(null) as AssocTree;
+}
+
 /**
- * Flatten any AssociationSpec mix into a tree of { assocName: subtree } pairs,
+ * Flatten any AssociationSpec mix into an AssocTree,
  * mirroring Rails' JoinDependency.make_tree / walk_tree (join_dependency.rb:47-70).
  * Strings → leaf (dot-notation "a.b" expands to nested { a: { b: {} } });
  * Arrays → each element walked; Hashes → key/value pairs.
@@ -1123,21 +1133,21 @@ function excludingBang(this: QueryMethodsHost, records: any[]): any {
  */
 function walkAssociationTree(
   associations: AssociationSpec | AssociationSpec[],
-  tree: Record<string, Record<string, unknown>>,
+  tree: AssocTree,
 ): void {
   if (typeof associations === "string") {
     // Expand dot-notation "posts.comments" → { posts: { comments: {} } }
     const parts = associations.split(".");
     let node = tree;
     for (const part of parts) {
-      node = (node[part] ??= {}) as Record<string, Record<string, unknown>>;
+      node = node[part] ??= makeAssocTree();
     }
   } else if (Array.isArray(associations)) {
     for (const assoc of associations) walkAssociationTree(assoc, tree);
   } else if (isPlainObject(associations)) {
     for (const [k, v] of Object.entries(associations)) {
-      const sub = (tree[k] ??= {}) as Record<string, unknown>;
-      if (v != null) walkAssociationTree(v as AssociationSpec | AssociationSpec[], sub as any);
+      const sub = (tree[k] ??= makeAssocTree());
+      if (v != null) walkAssociationTree(v as AssociationSpec | AssociationSpec[], sub);
     }
   } else {
     let desc: string;
@@ -1150,6 +1160,9 @@ function walkAssociationTree(
   }
 }
 
+/** Options shape matching JoinDependency.addAssociation's options parameter. */
+type AddAssocOptions = { fromModel?: unknown; fromAlias?: string; parentAssocName?: string };
+
 /**
  * Add all associations in a tree to jd, passing parent context so each
  * nested association is attached to its parent (not re-added from scratch).
@@ -1157,12 +1170,12 @@ function walkAssociationTree(
  */
 function addTreeToJoinDependency(
   jd: JoinDependency,
-  tree: Record<string, Record<string, unknown>>,
+  tree: AssocTree,
   modelName: string,
-  parentContext?: { fromModel: unknown; fromAlias: string; parentAssocName: string },
+  parentContext?: AddAssocOptions,
 ): void {
   for (const [assocName, subtree] of Object.entries(tree)) {
-    const node = jd.addAssociation(assocName, parentContext as any);
+    const node = jd.addAssociation(assocName, parentContext);
     if (!node) {
       // Use current parent model name in the error (not always the root model).
       const onModel = parentContext
@@ -1172,7 +1185,7 @@ function addTreeToJoinDependency(
         `Association named '${assocName}' was not found on ${onModel}; perhaps you misspelled it?`,
       );
     }
-    const children = subtree as Record<string, Record<string, unknown>>;
+    const children = subtree;
     if (Object.keys(children).length > 0) {
       addTreeToJoinDependency(jd, children, modelName, {
         fromModel: node.modelClass,
@@ -1200,7 +1213,7 @@ function constructJoinDependency(
   const jd = new JoinDependency(this._modelClass);
   const modelName = (this._modelClass as any).name ?? "model";
   const specs = Array.isArray(associations) ? associations : [associations];
-  const tree: Record<string, Record<string, unknown>> = {};
+  const tree = makeAssocTree();
   for (const spec of specs) walkAssociationTree(spec, tree);
   addTreeToJoinDependency(jd, tree, modelName);
   return jd;

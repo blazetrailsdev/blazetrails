@@ -128,7 +128,7 @@ export class InsertAll {
   }
 
   mapKeyWithValue<T>(fn: (key: string, value: unknown) => T): T[][] {
-    const now = this.recordTimestamps() ? new Date() : undefined;
+    const now = this.recordTimestamps() ? Temporal.Now.instant() : undefined;
     const keysList = [...this.keysIncludingTimestamps()];
     return this.inserts.map((row) => {
       const merged = { ...this._scopeAttributes, ...row };

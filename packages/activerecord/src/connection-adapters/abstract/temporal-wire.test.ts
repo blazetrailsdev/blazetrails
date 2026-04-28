@@ -80,13 +80,17 @@ describe("parsePostgresInstant", () => {
 
 describe("parsePostgresTimestampAsInstant", () => {
   it("parses a timestamp with space separator as UTC Instant", () => {
-    const result = parsePostgresTimestampAsInstant("2026-04-26 14:23:55.123456") as Temporal.Instant;
+    const result = parsePostgresTimestampAsInstant(
+      "2026-04-26 14:23:55.123456",
+    ) as Temporal.Instant;
     expect(result).toBeInstanceOf(Temporal.Instant);
     expect(result.toString()).toBe("2026-04-26T14:23:55.123456Z");
   });
 
   it("preserves microseconds", () => {
-    const result = parsePostgresTimestampAsInstant("2024-12-31 23:59:59.999999") as Temporal.Instant;
+    const result = parsePostgresTimestampAsInstant(
+      "2024-12-31 23:59:59.999999",
+    ) as Temporal.Instant;
     expect(result.toString()).toBe("2024-12-31T23:59:59.999999Z");
   });
 
@@ -108,7 +112,9 @@ describe("parsePostgresTimestampAsInstant", () => {
   });
 
   it("parses a BC datetime with microseconds", () => {
-    const result = parsePostgresTimestampAsInstant("0044-03-15 12:00:00.000456 BC") as Temporal.Instant;
+    const result = parsePostgresTimestampAsInstant(
+      "0044-03-15 12:00:00.000456 BC",
+    ) as Temporal.Instant;
     const zdt = result.toZonedDateTimeISO("UTC");
     expect(zdt.millisecond).toBe(0);
     expect(zdt.microsecond).toBe(456);

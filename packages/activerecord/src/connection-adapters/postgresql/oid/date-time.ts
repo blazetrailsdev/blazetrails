@@ -21,7 +21,10 @@ import {
   type DateInfinityType,
   type DateNegativeInfinityType,
 } from "@blazetrails/activemodel";
-import { parsePostgresTimestampAsInstant, parsePostgresInstant } from "../../abstract/temporal-wire.js";
+import {
+  parsePostgresTimestampAsInstant,
+  parsePostgresInstant,
+} from "../../abstract/temporal-wire.js";
 
 type PgDateTimeResult = Temporal.Instant | DateInfinityType | DateNegativeInfinityType;
 

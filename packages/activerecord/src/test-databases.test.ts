@@ -179,19 +179,18 @@ describe("TestDatabasesTest", () => {
     expect(mockReconstructFromSchema).toHaveBeenCalled();
   });
 
-  it("does not overwrite an unset Base.configurations with an empty registry", async () => {
+  it("calls establishConnection to load disk configs when configurations is unset", async () => {
     vi.spyOn(DatabaseTasks, "reconstructFromSchema").mockResolvedValue(undefined);
-    vi.spyOn(await import("./connection-handling.js"), "establishConnection").mockResolvedValue(
-      undefined,
-    );
+    const mockEstablishConnection = vi
+      .spyOn(await import("./connection-handling.js"), "establishConnection")
+      .mockResolvedValue(undefined);
 
-    // No `configurations` set on the model — autoConnect should still
-    // be free to load from disk on the reconnect path. Persisting an
-    // empty registry would trip "No database configuration found…".
+    // No `configurations` set — should trigger establishConnection (disk-load path)
+    // then return early since configurations is still null after that.
     const mockModelClass = { configurations: undefined } as any as typeof Base;
 
     await createAndLoadSchema(mockModelClass, 1, { envName: "arunit" });
-    expect((mockModelClass as any).configurations).toBeUndefined();
+    expect(mockEstablishConnection).toHaveBeenCalledWith(mockModelClass);
   });
 
   it("throws a clear error when neither database nor URL yields a name", async () => {

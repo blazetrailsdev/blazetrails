@@ -65,28 +65,23 @@ export async function createAndLoadSchema(
   index: number,
   { envName }: { envName: string } = { envName: "test" },
 ): Promise<void> {
-  // `Base.configurations` is a raw, OrderedOptions-shaped object with
-  // `.toH()` (matches `connection-handling.ts:81`'s usage). Normalize via
-  // `DatabaseConfigurations.fromEnv` so subsequent `.configsFor` is safe
-  // regardless of whether `configurations` is already a registry, a raw
-  // hash, or unset.
-  const raw = (modelClass as any).configurations;
+  // If configurations haven't been loaded yet, trigger autoConnect so the
+  // disk-load path populates them (mirrors Rails: configs are always loaded
+  // before create_and_load_schema is called via the after_fork_hook).
+  let raw = (modelClass as any).configurations;
   if (raw == null) {
-    // No in-memory configurations — let autoConnect's disk-load path
-    // handle the reconnect, and there's nothing to suffix in-memory.
-    // Falling through here would overwrite Base.configurations with an
-    // empty registry and trip "No database configuration found…".
-    return;
+    const { establishConnection } = await import("./connection-handling.js");
+    await establishConnection(modelClass);
+    raw = (modelClass as any).configurations;
   }
+  if (raw == null) return; // truly no config even after disk-load — nothing to do
+
+  // Normalize to a DatabaseConfigurations instance. Persist it back so
+  // _database mutations and the finally reconnect see the same registry.
   const configurations =
     raw instanceof DatabaseConfigurations
       ? raw
       : DatabaseConfigurations.fromEnv(typeof raw.toH === "function" ? raw.toH() : raw);
-  // Persist the normalized registry back so later mutations (`_database`
-  // suffixing) and the post-finally reconnect see the same instance.
-  // Without this, a caller that supplied a raw OrderedOptions / hash
-  // would re-normalize from the original (unmutated) source on the
-  // reconnect path and target the unsuffixed DB.
   (modelClass as any).configurations = configurations;
 
   const old = process.env.VERBOSE;

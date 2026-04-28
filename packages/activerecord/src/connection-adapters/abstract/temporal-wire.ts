@@ -16,8 +16,26 @@ import {
   type DateInfinityType,
   type DateNegativeInfinityType,
 } from "@blazetrails/activemodel";
+import { getDefaultTimezone } from "../../type/internal/timezone.js";
 
 export { DateInfinity, DateNegativeInfinity };
+
+/**
+ * Resolve the configured SQL timezone for naive datetime values.
+ * Mirrors `defaultSqlTimezone()` in quoting.ts — UTC by default,
+ * host system local when `ActiveRecord.default_timezone === "local"`.
+ */
+function configuredSqlTimezone(): string {
+  return getDefaultTimezone() === "utc" ? "UTC" : Temporal.Now.timeZoneId();
+}
+
+/**
+ * Convert a naive ISO datetime string (no offset) to a `Temporal.Instant`,
+ * interpreting it in the configured SQL timezone.
+ */
+function naiveIsoToInstant(iso: string): Temporal.Instant {
+  return Temporal.PlainDateTime.from(iso).toZonedDateTime(configuredSqlTimezone()).toInstant();
+}
 
 export type TimeTzValue = { time: Temporal.PlainTime; offset: string };
 
@@ -58,7 +76,7 @@ export function parsePostgresTimestampAsInstant(
   if (trimmed === "-infinity") return DateNegativeInfinity;
   const { iso, bc } = extractBcSuffix(trimmed);
   if (bc) return parseBcTimestampAsInstant(iso);
-  return Temporal.Instant.from(clampFraction(iso.replace(" ", "T") + "Z"));
+  return naiveIsoToInstant(clampFraction(iso.replace(" ", "T")));
 }
 
 /**
@@ -150,7 +168,7 @@ export function parseMysqlInstant(text: string): Temporal.Instant | null {
 export function parseMysqlDatetimeAsInstant(text: string): Temporal.Instant | null {
   const trimmed = text.trim();
   if (isZeroDatetime(trimmed)) return null;
-  return Temporal.Instant.from(clampFraction(trimmed.replace(" ", "T") + "Z"));
+  return naiveIsoToInstant(clampFraction(trimmed.replace(" ", "T")));
 }
 
 /**
@@ -268,7 +286,7 @@ function parseBcTimestampAsInstant(withoutBc: string): Temporal.Instant {
       millisecond,
       microsecond,
       nanosecond,
-      timeZone: "UTC",
+      timeZone: configuredSqlTimezone(),
     },
     { overflow: "reject" },
   ).toInstant();

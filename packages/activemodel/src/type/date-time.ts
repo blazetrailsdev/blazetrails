@@ -5,7 +5,12 @@ import {
   type DateInfinity as DateInfinityType,
   type DateNegativeInfinity as DateNegativeInfinityType,
 } from "./internal/sentinels.js";
+import { isUtc } from "./helpers/timezone.js";
 import { ValueType } from "./value.js";
+
+function configuredTimezone(): string {
+  return isUtc() ? "UTC" : Temporal.Now.timeZoneId();
+}
 
 export type DateTimeCastResult = Temporal.Instant | DateInfinityType | DateNegativeInfinityType;
 
@@ -41,9 +46,10 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
       }
     }
     try {
-      // No offset — treat as UTC per default_timezone: :utc convention.
+      // No offset — interpret in configured timezone (UTC by default,
+      // host-system local when ActiveRecord.default_timezone === "local").
       return Temporal.PlainDateTime.from(datetimeString, { overflow: "reject" })
-        .toZonedDateTime("UTC")
+        .toZonedDateTime(configuredTimezone())
         .toInstant();
     } catch {
       return null;

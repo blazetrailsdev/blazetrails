@@ -15,6 +15,7 @@ import { RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { disallowRawSqlBang } from "./sanitization.js";
 import {
   columnNameMatcher as abstractColumnNameMatcher,
+  defaultSqlTimezone,
   formatInstantForSql,
 } from "./connection-adapters/abstract/quoting.js";
 import { modelRegistry } from "./associations.js";
@@ -4206,7 +4207,9 @@ export class Relation<T extends Base> {
           const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(normalized);
           ts = hasOffset
             ? Temporal.Instant.from(normalized)
-            : Temporal.PlainDateTime.from(normalized).toZonedDateTime("UTC").toInstant();
+            : Temporal.PlainDateTime.from(normalized)
+                .toZonedDateTime(defaultSqlTimezone())
+                .toInstant();
         } catch {
           ts = null;
         }

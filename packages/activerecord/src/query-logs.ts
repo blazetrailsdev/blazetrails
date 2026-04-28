@@ -256,30 +256,11 @@ export class QueryLogs {
   }
 
   // private
-  private rebuildHandlers(): void {
-    // Rebuild internal handler cache when tags or taggings change.
-    // The current implementation doesn't use a handler pattern — it
-    // directly evaluates tags in tagContent(). This stub documents
-    // the Rails pattern for reference (Rails uses handlers to defer
-    // evaluation and cache results across queries).
-    // Mirrors: ActiveRecord::QueryLogs#rebuild_handlers
-  }
-
-  private buildHandler(name: string, handler?: TagValue | TagHandler): void {
-    // Build a single tag handler from a name and optional custom handler.
-    // In Rails, this returns a handler object that wraps the tag's value
-    // fetch. The TS implementation directly evaluates tags, so this is
-    // a documentation stub.
-    // Mirrors: ActiveRecord::QueryLogs#build_handler
-  }
 
   private escapeSqlComment(content: string): string {
     // Sanitize a string to appear within a SQL comment.
-    // Escapes /* and */ to prevent SQL comment injection.
     // Mirrors: ActiveRecord::QueryLogs#escape_sql_comment
-    let comment = String(content);
-    comment = comment.replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
-    return comment;
+    return String(content).replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
   }
 }
 

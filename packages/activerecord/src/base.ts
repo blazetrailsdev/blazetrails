@@ -3014,10 +3014,18 @@ include(Base, {
   attributeNamesForSerialization: Serialization.attributeNamesForSerialization,
 });
 
-// Attach callback private methods
-(Base.prototype as any).createOrUpdate = createOrUpdate;
-(Base.prototype as any)._createRecord = _createRecord;
-(Base.prototype as any)._updateRecord = _updateRecord;
+for (const [name, fn] of [
+  ["createOrUpdate", createOrUpdate],
+  ["_createRecord", _createRecord],
+  ["_updateRecord", _updateRecord],
+] as const) {
+  Object.defineProperty(Base.prototype, name, {
+    value: fn,
+    configurable: true,
+    writable: true,
+    enumerable: false,
+  });
+}
 
 // Register Model's super methods for the Validations module.
 // Breaks the recursion on isValid (Base.isValid → validations.isValid → Model.isValid)

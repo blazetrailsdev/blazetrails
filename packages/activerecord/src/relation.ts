@@ -1262,7 +1262,7 @@ export class Relation<T extends Base> {
     if (on) {
       // Explicit SQL form: LEFT OUTER JOIN table ON condition — only valid for strings.
       if (typeof table !== "string")
-        throw new Error("leftJoins(table, on) requires a string table name");
+        throw argumentError("leftJoins(table, on) requires a string table name");
       rel._joinClauses.push({ type: "left", table, on });
     } else {
       // Association name/spec form — mirrors Rails left_outer_joins! storing in

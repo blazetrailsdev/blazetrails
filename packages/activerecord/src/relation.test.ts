@@ -293,8 +293,7 @@ describe("RelationTest", () => {
   });
 
   it("constructJoinDependency handles array-form spec — joins(['posts','comments'])", () => {
-    // constructJoinDependency's walkAssociationTree flattens array specs so
-    // joins(["posts", "comments"]) is equivalent to joins("posts", "comments").
+    // leftJoins(["posts", "comments"]) is equivalent to leftJoins("posts", "comments").
     class Author extends Base {
       static {
         this.tableName = "authors";

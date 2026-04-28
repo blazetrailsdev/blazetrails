@@ -69,7 +69,11 @@ import { Association as AssociationInstance } from "./associations/association.j
 import { ConnectionHandler } from "./connection-adapters/abstract/connection-handler.js";
 import * as ConnectionHandling from "./connection-handling.js";
 import * as ModelSchema from "./model-schema.js";
-import { createOrUpdate, _createRecord, _updateRecord } from "./callbacks.js";
+import {
+  createOrUpdate as callbacksCreateOrUpdate,
+  _createRecord as callbacksCreateRecord,
+  _updateRecord as callbacksUpdateRecord,
+} from "./callbacks.js";
 // Lazy-loaded to avoid pulling node:crypto into browser bundles
 let _signedIdModule: typeof import("./signed-id.js") | null = null;
 let _signedIdModulePromise: Promise<typeof import("./signed-id.js")> | null = null;
@@ -3015,9 +3019,9 @@ include(Base, {
 });
 
 for (const [name, fn] of [
-  ["createOrUpdate", createOrUpdate],
-  ["_createRecord", _createRecord],
-  ["_updateRecord", _updateRecord],
+  ["createOrUpdate", callbacksCreateOrUpdate],
+  ["_createRecord", callbacksCreateRecord],
+  ["_updateRecord", callbacksUpdateRecord],
 ] as const) {
   Object.defineProperty(Base.prototype, name, {
     value: fn,

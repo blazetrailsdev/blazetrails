@@ -228,7 +228,10 @@ function registerCallback(
 // ---------------------------------------------------------------------------
 
 export function createOrUpdate(this: any): Promise<boolean> {
-  // Rails: _run_save_callbacks { super }
+  // Rails: Callbacks#create_or_update wraps super in _run_save_callbacks.
+  // In trails, save's before/after callback chain runs inside _createOrUpdate
+  // (base.ts: runBefore("save") → dispatch create/update → runAfter("save")),
+  // so this wrapper just delegates and the callback ordering still matches.
   return (this._createOrUpdate as () => Promise<boolean>).call(this);
 }
 

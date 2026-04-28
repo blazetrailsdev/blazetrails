@@ -272,11 +272,10 @@ function replaceNamedBindVariables(statement: string, bindVars: Record<string, u
         return match.slice(1);
       } else {
         // Named bind variable
-        const key = name as keyof typeof bindVars;
-        if (!(key in bindVars)) {
+        if (!Object.prototype.hasOwnProperty.call(bindVars, name)) {
           throw new PreparedStatementInvalid(`missing value for :${name} in ${statement}`);
         }
-        return replaceBindVariable(bindVars[key]);
+        return replaceBindVariable(bindVars[name]);
       }
     },
   );

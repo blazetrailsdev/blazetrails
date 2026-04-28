@@ -6,51 +6,54 @@
  */
 
 /**
- * The suppression registry, keyed by model class name.
- * Mirrors: ActiveSupport::IsolatedExecutionState[:active_record_suppressor_registry]
+ * Per-class suppression depth, keyed by model class name.
+ *
+ * Mirrors Rails' `ActiveSupport::IsolatedExecutionState[:active_record_suppressor_registry]`
+ * — Rails stores `true`/previous-state per class name, gated by Ruby's
+ * lexical `ensure`. JS lacks per-fiber state and overlapping async
+ * `suppress` blocks need re-entrant accounting, so we store a depth
+ * count: `registry[name] > 0` ⇔ suppressed. Truthiness matches Rails'
+ * `Suppressor.registry[name] ? true : super` check.
  */
-const _suppressorRegistry: Record<string, boolean | undefined> = {};
+const _suppressorRegistry: Record<string, number | undefined> = {};
 
 /**
- * Get the current suppressor registry.
- * Returns a mutable map of class names to suppression state.
+ * Get the suppressor registry. Truthy values indicate suppressed classes.
  *
  * Mirrors: ActiveRecord::Suppressor.registry
  */
-export function registry(): Record<string, boolean | undefined> {
+export function registry(): Record<string, number | undefined> {
   return _suppressorRegistry;
 }
 
-const _suppressionDepth = new Map<Function, number>();
-
 /**
  * Suppress persistence for the given model class during the block.
- * Re-entrant safe: nested suppress blocks increment a depth counter.
+ * Re-entrant safe: nested suppress blocks increment the registry depth.
  *
  * Mirrors: ActiveRecord::Suppressor.suppress
  */
 export async function suppress<R>(modelClass: Function, fn: () => R | Promise<R>): Promise<R> {
-  const depth = _suppressionDepth.get(modelClass) ?? 0;
-  _suppressionDepth.set(modelClass, depth + 1);
+  const name = modelClass.name;
+  _suppressorRegistry[name] = (_suppressorRegistry[name] ?? 0) + 1;
   try {
     return await fn();
   } finally {
-    const current = _suppressionDepth.get(modelClass) ?? 1;
+    const current = _suppressorRegistry[name] ?? 1;
     if (current <= 1) {
-      _suppressionDepth.delete(modelClass);
+      delete _suppressorRegistry[name];
     } else {
-      _suppressionDepth.set(modelClass, current - 1);
+      _suppressorRegistry[name] = current - 1;
     }
   }
 }
 
 /**
- * Check if the given model class is currently suppressed.
+ * Check if the given model class (or any ancestor) is currently suppressed.
  */
 export function isSuppressed(modelClass: Function): boolean {
   let current: unknown = modelClass;
   while (current && typeof current === "function") {
-    if ((_suppressionDepth.get(current as Function) ?? 0) > 0) return true;
+    if ((_suppressorRegistry[(current as Function).name] ?? 0) > 0) return true;
     current = Object.getPrototypeOf(current);
   }
   return false;

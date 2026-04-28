@@ -141,16 +141,45 @@ describe("suppress()", () => {
 
 describe("Suppressor.registry", () => {
   it("returns the suppression registry", () => {
+    const registry = Base.registry;
+    expect(registry).toBeDefined();
+    expect(typeof registry).toBe("object");
+  });
+
+  it("registry reflects active suppression by class name", async () => {
     const adapter = freshAdapter();
-    class Post extends Base {
+    class Widget extends Base {
       static {
-        this.attribute("title", "string");
+        this.attribute("name", "string");
         this.adapter = adapter;
       }
     }
 
-    const registry = Base.registry;
-    expect(registry).toBeDefined();
-    expect(typeof registry).toBe("object");
+    expect(Base.registry.Widget).toBeFalsy();
+
+    await Widget.suppress(async () => {
+      expect(Base.registry.Widget).toBeTruthy();
+    });
+
+    expect(Base.registry.Widget).toBeFalsy();
+  });
+
+  it("registry tracks nested suppress depth", async () => {
+    const adapter = freshAdapter();
+    class Gizmo extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    await Gizmo.suppress(async () => {
+      expect(Base.registry.Gizmo).toBe(1);
+      await Gizmo.suppress(async () => {
+        expect(Base.registry.Gizmo).toBe(2);
+      });
+      expect(Base.registry.Gizmo).toBe(1);
+    });
+    expect(Base.registry.Gizmo).toBeFalsy();
   });
 });

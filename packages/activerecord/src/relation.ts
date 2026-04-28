@@ -1260,6 +1260,8 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#left_joins
    */
+  leftJoins(table: string, on: string): Relation<T>;
+  leftJoins(table: AssociationSpec | AssociationSpec[]): Relation<T>;
   leftJoins(table: AssociationSpec | AssociationSpec[], on?: string): Relation<T> {
     const rel = this._clone();
     if (on) {
@@ -1285,7 +1287,9 @@ export class Relation<T extends Base> {
    */
   leftOuterJoins(table?: AssociationSpec | AssociationSpec[], on?: string): Relation<T> {
     if (!table) return this._clone();
-    return this.leftJoins(table, on);
+    // Route to the correct overload explicitly to satisfy TS overload resolution.
+    if (on && typeof table === "string") return this.leftJoins(table, on);
+    return this.leftJoins(table as AssociationSpec | AssociationSpec[]);
   }
 
   /**

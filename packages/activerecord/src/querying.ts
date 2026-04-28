@@ -219,19 +219,39 @@ export function optimizerHints<T extends typeof Base>(
 /** Mirrors: ActiveRecord::Querying#left_joins */
 export function leftJoins<T extends typeof Base>(
   this: T,
+  table: string,
+  on: string,
+): Relation<InstanceType<T>>;
+export function leftJoins<T extends typeof Base>(
+  this: T,
+  table: AssociationSpec | AssociationSpec[],
+): Relation<InstanceType<T>>;
+export function leftJoins<T extends typeof Base>(
+  this: T,
   table: AssociationSpec | AssociationSpec[],
   on?: string,
 ): Relation<InstanceType<T>> {
-  return this.all().leftJoins(table, on);
+  if (on && typeof table === "string") return this.all().leftJoins(table, on);
+  return this.all().leftJoins(table as AssociationSpec | AssociationSpec[]);
 }
 
 /** Mirrors: ActiveRecord::Querying#left_outer_joins */
 export function leftOuterJoins<T extends typeof Base>(
   this: T,
+  table: string,
+  on: string,
+): Relation<InstanceType<T>>;
+export function leftOuterJoins<T extends typeof Base>(
+  this: T,
+  table?: AssociationSpec | AssociationSpec[],
+): Relation<InstanceType<T>>;
+export function leftOuterJoins<T extends typeof Base>(
+  this: T,
   table?: AssociationSpec | AssociationSpec[],
   on?: string,
 ): Relation<InstanceType<T>> {
-  return this.all().leftOuterJoins(table, on);
+  if (on && typeof table === "string") return this.all().leftOuterJoins(table, on);
+  return this.all().leftOuterJoins(table);
 }
 
 /** Mirrors: ActiveRecord::Querying#none */

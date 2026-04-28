@@ -1,15 +1,6 @@
 import { serializableHash as amSerializableHash } from "@blazetrails/activemodel";
+import type { SerializeOptions } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
-
-/**
- * Serialization options for filtering attributes.
- */
-interface SerializeOptions {
-  only?: string[];
-  except?: string[];
-  methods?: string[];
-  include?: Record<string, SerializeOptions> | string[] | string;
-}
 
 /**
  * Wrapper around ActiveModel serialization to handle ActiveRecord-specific

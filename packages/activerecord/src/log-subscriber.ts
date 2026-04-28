@@ -1,4 +1,6 @@
+import { Attribute } from "@blazetrails/activemodel";
 import {
+  BacktraceCleaner,
   LogSubscriber as BaseLogSubscriber,
   NotificationEvent as Event,
   type Logger,
@@ -144,23 +146,27 @@ export class LogSubscriber extends BaseLogSubscriber {
   private querySourceLocation(): string | null {
     try {
       const err = new Error();
-      const stack = err.stack?.split("\n") ?? [];
-      for (const line of stack.slice(2)) {
-        const trimmed = line.trim();
-        if (
-          !trimmed.includes("log-subscriber") &&
-          !trimmed.includes("LogSubscriber") &&
-          !trimmed.includes("notifications") &&
-          !trimmed.includes("node_modules")
-        ) {
-          return trimmed.replace(/^at\s+/, "");
-        }
-      }
+      const stack = (err.stack?.split("\n") ?? []).slice(2).map((l) => l.trim());
+      const cleaned = LogSubscriber._backtraceCleaner.clean(stack);
+      const frame = cleaned[0];
+      return frame ? frame.replace(/^at\s+/, "") : null;
     } catch {
-      // ignore
+      return null;
     }
-    return null;
   }
+
+  private static _backtraceCleaner: BacktraceCleaner = (() => {
+    const cleaner = new BacktraceCleaner();
+    cleaner.addFilter((line) => line.replace(/^at\s+/, ""));
+    cleaner.addSilencer(
+      (line) =>
+        line.includes("log-subscriber") ||
+        line.includes("LogSubscriber") ||
+        line.includes("notifications") ||
+        line.includes("node_modules"),
+    );
+    return cleaner;
+  })();
 
   private typeCastedBinds(castedBinds: unknown): any[] {
     if (typeof castedBinds === "function") return castedBinds();
@@ -173,25 +179,58 @@ export class LogSubscriber extends BaseLogSubscriber {
     return null;
   }
 
-  private renderBind(attr: any, value: unknown): [string | null, unknown] {
-    // ActiveModel::Attribute — has type and value properties
-    if (attr && typeof attr === "object" && "type" in attr && "value" in attr) {
-      if (attr.type?.binary?.() && attr.value != null) {
+  private resolveBindAttribute(attr: unknown): {
+    name?: string;
+    type?: { isBinary?: () => boolean; binary?: () => boolean };
+    value?: unknown;
+    valueForDatabase?: unknown;
+  } | null {
+    if (attr instanceof Attribute) return attr as never;
+    if (
+      attr &&
+      typeof attr === "object" &&
+      "type" in (attr as object) &&
+      "value" in (attr as object)
+    ) {
+      return attr as never;
+    }
+    return null;
+  }
+
+  private renderBind(attr: unknown, value: unknown): [string | null, unknown] {
+    // Rails: render_bind takes an ActiveModel::Attribute. Resolve real
+    // Attribute instances via the activemodel API; also tolerate duck-typed
+    // shapes (legacy bind descriptors used elsewhere in the adapter layer).
+    const resolved = this.resolveBindAttribute(attr);
+    if (resolved) {
+      const isBinary = resolved.type?.isBinary?.() ?? resolved.type?.binary?.() ?? false;
+      if (isBinary && resolved.value != null) {
         const raw =
-          typeof attr.valueForDatabase === "function" ? attr.valueForDatabase() : attr.value;
-        const bytes = byteLength(raw);
+          typeof resolved.valueForDatabase === "function"
+            ? resolved.valueForDatabase()
+            : resolved.valueForDatabase;
+        const bytes = byteLength(raw ?? resolved.value);
         value = `<${bytes} bytes of binary data>`;
       }
-      return [attr.name ?? null, value];
+      return [resolved.name ?? null, value];
     }
 
     if (Array.isArray(attr)) {
-      return [attr[0]?.name ?? null, value];
+      const [head] = attr;
+      const headName =
+        head instanceof Attribute
+          ? head.name
+          : head &&
+              typeof head === "object" &&
+              typeof (head as { name?: unknown }).name === "string"
+            ? (head as { name: string }).name
+            : null;
+      return [headName, value];
     }
 
     // Simple object with .name (e.g. query attribute descriptor)
-    if (attr && typeof attr === "object" && typeof attr.name === "string") {
-      return [attr.name, value];
+    if (attr && typeof attr === "object" && typeof (attr as { name?: unknown }).name === "string") {
+      return [(attr as { name: string }).name, value];
     }
 
     return [null, value];

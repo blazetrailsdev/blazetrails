@@ -239,10 +239,14 @@ export function hasSecurePassword(
  * attributes. Returns the record if authentication succeeds; otherwise,
  * returns null.
  *
- * Regardless of whether a record is found, authenticateBy will
- * cryptographically digest the given password attributes. This behavior
- * helps mitigate timing-based enumeration attacks, wherein an attacker can
- * determine if a passworded record exists even without knowing the password.
+ * When password attributes are valid non-empty strings, authenticateBy
+ * cryptographically digests them even if no matching record is found.
+ * That mitigates timing-based enumeration attacks where an attacker can
+ * determine if a passworded record exists even without knowing the
+ * password. Invalid password inputs (nil, empty string, non-string) are
+ * still short-circuited to `null` without hashing — they're not valid
+ * Rails password values and the timing-attack channel only exists for
+ * legitimate inputs.
  *
  * Raises an ArgumentError if the set of attributes doesn't contain at
  * least one password and one non-password attribute.

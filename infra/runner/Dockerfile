@@ -27,7 +27,10 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
  && npm install -g "pnpm@${PNPM_VERSION}" \
  && npm cache clean --force
 
-RUN useradd -m -d /home/runner -s /bin/bash runner
+# Pin UID so the persistent pnpm-store volume mount in Dokku
+# (`dokku storage:mount … :/home/runner/.local/share/pnpm`) has stable
+# ownership across container restarts.
+RUN useradd -u 1000 -m -d /home/runner -s /bin/bash runner
 WORKDIR /home/runner
 
 RUN curl -fsSL -o actions-runner.tar.gz \

@@ -40,8 +40,7 @@ echo "→ Registering runner: name=$RUNNER_NAME labels=$RUNNER_LABELS"
   --name "$RUNNER_NAME" \
   --labels "$RUNNER_LABELS" \
   --ephemeral \
-  --unattended \
-  --replace
+  --unattended
 
 echo "→ Listening for one job"
 exec ./run.sh

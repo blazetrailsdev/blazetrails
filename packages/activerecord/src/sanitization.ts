@@ -226,7 +226,6 @@ export const ClassMethods = {
   disallowRawSqlBang,
 };
 
-<<<<<<< HEAD
 /**
  * Replace `?` placeholders with quoted bind variable values.
  * Called by sanitizeSqlArray when positional binds are present.
@@ -243,6 +242,8 @@ function replaceBindVariables(statement: string, values: unknown[]): string {
 
 /**
  * Quote a single bind variable value.
+ * Handles Relation objects (converts to SQL) and complex values (arrays, etc).
+ *
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#replace_bind_variable
  */
 function replaceBindVariable(value: unknown): string {

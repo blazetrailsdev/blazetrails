@@ -11,6 +11,22 @@ import { Nodes } from "@blazetrails/arel";
 import { underscore } from "@blazetrails/activesupport";
 
 /**
+ * Helper: cast inheritance column value through its attribute type.
+ * Rails: type_for_attribute(inheritCol).cast(value)
+ */
+function castInheritanceColumnValue(
+  modelClass: typeof Base,
+  inheritCol: string,
+  value: unknown,
+): unknown {
+  const def = (modelClass as any)._attributeDefinitions?.get(inheritCol);
+  if (def && def.type) {
+    return def.type.cast(value);
+  }
+  return value;
+}
+
+/**
  * Resolve a type name string to a model class.
  * Used by STI to look up subclasses by their type column value.
  *
@@ -337,7 +353,9 @@ export function discriminateClassForRecord(
   if (usingSingleTableInheritance(modelClass, record)) {
     const inheritCol = getInheritanceColumn(modelClass);
     if (inheritCol) {
-      return findStiClass(modelClass, record[inheritCol] as string);
+      // Rails: subclass = base_class.type_for_attribute(inheritCol).cast(record[inheritCol])
+      const castValue = castInheritanceColumnValue(modelClass, inheritCol, record[inheritCol]);
+      return findStiClass(modelClass, castValue as string);
     }
   }
   return modelClass;
@@ -354,8 +372,11 @@ function usingSingleTableInheritance(
 ): boolean {
   const inheritCol = getInheritanceColumn(modelClass);
   if (!inheritCol) return false;
+  // Rails: record[inheritance_column].present? && has_attribute?(inheritance_column)
   const val = record[inheritCol];
-  return val != null && (val as any)?.toString?.().trim?.().length > 0;
+  if (val == null || !(val as any)?.toString?.().trim?.().length) return false;
+  // Check that the inheritance column is a declared attribute on this model
+  return (modelClass as any)._attributeDefinitions?.has(inheritCol) ?? false;
 }
 
 /**
@@ -422,7 +443,9 @@ export function subclassFromAttributes(
     (attrsHash[underscore(inheritCol)] as string | null | undefined);
 
   if (subclassName && subclassName.toString().trim()) {
-    return findStiClass(modelClass, subclassName);
+    // Rails: cast the value through the inheritance column's type
+    const castValue = castInheritanceColumnValue(modelClass, inheritCol, subclassName);
+    return findStiClass(modelClass, castValue as string);
   }
 
   return null;

@@ -151,6 +151,49 @@ describe("TestDatabasesTest", () => {
     expect(dbConfig.database).toBe("test/db/primary.sqlite3-5");
   });
 
+  it("does not suffix in-memory SQLite databases", async () => {
+    const mockReconstructFromSchema = vi
+      .spyOn(DatabaseTasks, "reconstructFromSchema")
+      .mockResolvedValue(undefined);
+    vi.spyOn(await import("./connection-handling.js"), "establishConnection").mockResolvedValue(
+      undefined,
+    );
+
+    const mockConfig: any = { adapter: "sqlite3" };
+    let suffixed: string | undefined;
+    Object.defineProperty(mockConfig, "_database", {
+      set(val: string) {
+        suffixed = val;
+      },
+    });
+    Object.defineProperty(mockConfig, "database", { get: () => ":memory:" });
+
+    const mockModelClass = {
+      configurations: stubConfigurations([mockConfig]),
+    } as any as typeof Base;
+
+    await createAndLoadSchema(mockModelClass, 7, { envName: "arunit" });
+    // _database setter must NOT have been called for an in-memory DB —
+    // suffixing `:memory:` would turn it into an on-disk path.
+    expect(suffixed).toBeUndefined();
+    expect(mockReconstructFromSchema).toHaveBeenCalled();
+  });
+
+  it("does not overwrite an unset Base.configurations with an empty registry", async () => {
+    vi.spyOn(DatabaseTasks, "reconstructFromSchema").mockResolvedValue(undefined);
+    vi.spyOn(await import("./connection-handling.js"), "establishConnection").mockResolvedValue(
+      undefined,
+    );
+
+    // No `configurations` set on the model — autoConnect should still
+    // be free to load from disk on the reconnect path. Persisting an
+    // empty registry would trip "No database configuration found…".
+    const mockModelClass = { configurations: undefined } as any as typeof Base;
+
+    await createAndLoadSchema(mockModelClass, 1, { envName: "arunit" });
+    expect((mockModelClass as any).configurations).toBeUndefined();
+  });
+
   it("throws a clear error when neither database nor URL yields a name", async () => {
     vi.spyOn(DatabaseTasks, "reconstructFromSchema").mockResolvedValue(undefined);
     vi.spyOn(await import("./connection-handling.js"), "establishConnection").mockResolvedValue(

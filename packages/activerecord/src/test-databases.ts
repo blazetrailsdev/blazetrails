@@ -40,6 +40,14 @@ export async function eachDatabase(
   }
 }
 
+// `:memory:` (canonical) plus the URI variants SQLite recognizes for an
+// in-memory database. See https://www.sqlite.org/inmemorydb.html.
+function isInMemorySqlite(name: string): boolean {
+  if (name === ":memory:") return true;
+  if (name.startsWith("file::memory:")) return true;
+  return /[?&]mode=memory(?:&|$)/.test(name);
+}
+
 /**
  * Create and load test schema(s) for parallelized test execution.
  *
@@ -63,11 +71,17 @@ export async function createAndLoadSchema(
   // regardless of whether `configurations` is already a registry, a raw
   // hash, or unset.
   const raw = (modelClass as any).configurations;
+  if (raw == null) {
+    // No in-memory configurations — let autoConnect's disk-load path
+    // handle the reconnect, and there's nothing to suffix in-memory.
+    // Falling through here would overwrite Base.configurations with an
+    // empty registry and trip "No database configuration found…".
+    return;
+  }
   const configurations =
     raw instanceof DatabaseConfigurations
       ? raw
-      : DatabaseConfigurations.fromEnv(typeof raw?.toH === "function" ? raw.toH() : (raw ?? {}));
-  if (!configurations) return;
+      : DatabaseConfigurations.fromEnv(typeof raw.toH === "function" ? raw.toH() : raw);
   // Persist the normalized registry back so later mutations (`_database`
   // suffixing) and the post-finally reconnect see the same instance.
   // Without this, a caller that supplied a raw OrderedOptions / hash
@@ -91,7 +105,14 @@ export async function createAndLoadSchema(
             `neither database nor a parseable URL is available`,
         );
       }
-      dbConfig._database = `${baseName}-${index}`;
+      // Skip suffixing for SQLite in-memory databases — `:memory:` and
+      // `file::memory:?...` are special-cased by SQLiteDatabaseTasks and
+      // are already per-process-isolated, so workers don't need a suffix.
+      // Suffixing would turn `:memory:` into `:memory:-2`, which the
+      // adapter would treat as an on-disk file path.
+      if (!isInMemorySqlite(baseName)) {
+        dbConfig._database = `${baseName}-${index}`;
+      }
       await DatabaseTasks.reconstructFromSchema(dbConfig, DatabaseTasks.schemaFormat, undefined);
     }
   } finally {

@@ -68,6 +68,12 @@ export async function createAndLoadSchema(
       ? raw
       : DatabaseConfigurations.fromEnv(typeof raw?.toH === "function" ? raw.toH() : (raw ?? {}));
   if (!configurations) return;
+  // Persist the normalized registry back so later mutations (`_database`
+  // suffixing) and the post-finally reconnect see the same instance.
+  // Without this, a caller that supplied a raw OrderedOptions / hash
+  // would re-normalize from the original (unmutated) source on the
+  // reconnect path and target the unsuffixed DB.
+  (modelClass as any).configurations = configurations;
 
   const old = process.env.VERBOSE;
   process.env.VERBOSE = "false";

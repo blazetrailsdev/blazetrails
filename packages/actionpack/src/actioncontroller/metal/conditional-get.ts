@@ -113,7 +113,10 @@ export function getEtaggers(): ReadonlyArray<Etagger> {
   return _etaggers;
 }
 
-/** Clear the registered etaggers. Test seam; mirrors `clearDefaultHeaders`. */
+/**
+ * Clear the registered etaggers. Test seam; mirrors `clearDefaultHeaders`.
+ * @internal
+ */
 export function clearEtaggers(): void {
   _etaggers.length = 0;
 }

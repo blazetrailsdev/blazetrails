@@ -488,7 +488,7 @@ function isPlainHash(value: unknown): boolean {
  * Mirrors: ActiveRecord::Enum#assert_valid_enum_options (private)
  */
 export function assertValidEnumOptions(options: unknown): void {
-  if (!options || typeof options !== "object" || Array.isArray(options)) return;
+  if (!options || !isPlainHash(options)) return;
 
   // Rails: options.keys & %i[_prefix _suffix _scopes _default _instance_methods]
   // Note: _validate is NOT in this list — it is rejected at the enum definition

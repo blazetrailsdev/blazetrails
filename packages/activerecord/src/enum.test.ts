@@ -1823,6 +1823,12 @@ describe("Enum private validators", () => {
     it("treats arrays as not-an-options-hash", () => {
       expect(() => assertValidEnumOptions([] as any)).not.toThrow();
     });
+    it("treats Map / Date / class instances as not-an-options-hash", () => {
+      expect(() => assertValidEnumOptions(new Map())).not.toThrow();
+      expect(() => assertValidEnumOptions(new Date())).not.toThrow();
+      class Foo {}
+      expect(() => assertValidEnumOptions(new Foo())).not.toThrow();
+    });
   });
 
   describe("detectNegativeEnumConditionsBang", () => {

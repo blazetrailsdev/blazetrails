@@ -258,27 +258,20 @@ export class QueryLogs {
   // private
 
   private escapeSqlComment(content: string): string {
-    // Sanitize a string to appear within a SQL comment.
     // Mirrors: ActiveRecord::QueryLogs#escape_sql_comment
-    return String(content).replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
+    return escapeComment(content);
   }
 }
 
-/**
- * Sanitize a string for safe inclusion in a SQL comment.
- * Mirrors: ActiveRecord::QueryLogs.escape_sql_comment
- */
+// Sanitize a string for safe inclusion in a SQL comment by neutralising
+// any internal "*/" and "/*" sequences (turns them into "* /" / "/ *").
+//
+// Partial port of ActiveRecord::QueryLogs#escape_sql_comment
+// (query_logs.rb:219-228). Rails additionally strips a leading
+// `\A\s*/\*\+?\s?` and a trailing `\s?\*/\s*\Z` before escaping; trails
+// intentionally omits that strip so bare-marker inputs round-trip
+// through escape rather than collapsing to an empty string — the
+// existing "escaping bad comments" test cases encode that.
 export function escapeComment(content: string): string {
-  let s = content;
-  // The Rails method (query_logs.rb:219-223) removes surrounding comment
-  // markers only if they're at the beginning or end of the whole string,
-  // which prevents wrapping a value that's ITSELF a marker like "*/" or "/*".
-  // The regex {\A\s*/\*\+?\s?|\s?\*/\s*\Z} matches:
-  //   - start: optional space, then "/*" optionally followed by "+", optionally followed by space
-  //   - OR end: optional space, then "*/", optional space before end
-  // But our test cases pass raw markers ("*/", "/*") which don't have
-  // that structure. The test expects them to still be escaped internally.
-  // So skip the marker-stripping and just do the escaping:
-  s = s.replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
-  return s;
+  return String(content).replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
 }

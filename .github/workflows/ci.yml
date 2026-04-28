@@ -39,6 +39,11 @@ jobs:
       parity_sqlite: ${{ steps.filter.outputs.parity_sqlite }}
       parity_postgres: ${{ steps.filter.outputs.parity_postgres }}
       parity_mysql: ${{ steps.filter.outputs.parity_mysql }}
+      # Pure-Node jobs route to self-hosted only for trusted actor + same
+      # repo. Fork PRs and any other actor fall back to ubuntu-latest, so
+      # untrusted code never executes on the self-hosted box. Consumers:
+      # `runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}`.
+      runner: ${{ steps.runner.outputs.value }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -105,12 +110,28 @@ jobs:
               echo "parity_mysql=false"    >> "$GITHUB_OUTPUT"
               ;;
           esac
+      - id: runner
+        env:
+          ACTOR: ${{ github.actor }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Trust gate: only the sole committer running on a same-repo
+          # branch lands on self-hosted. HEAD_REPO is empty for non-PR
+          # events (push/schedule/dispatch), all of which are inherently
+          # same-repo.
+          if [ "$ACTOR" = "deanmarano" ] && { [ -z "$HEAD_REPO" ] || [ "$HEAD_REPO" = "$REPO" ]; }; then
+            echo 'value=["self-hosted","Linux","X64"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'value="ubuntu-latest"' >> "$GITHUB_OUTPUT"
+          fi
 
   build-and-typecheck:
     name: Build & Type Check
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -127,7 +148,7 @@ jobs:
     name: Lint
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -143,7 +164,7 @@ jobs:
     name: Prettier
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -160,7 +181,7 @@ jobs:
     name: Guides Code Type Check
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -178,7 +199,7 @@ jobs:
     name: DX Type Tests
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -195,7 +216,7 @@ jobs:
     name: Virtualized DX Type Tests
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -212,7 +233,7 @@ jobs:
     name: Unit Tests
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -323,7 +344,7 @@ jobs:
     name: Website
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

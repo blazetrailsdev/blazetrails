@@ -113,24 +113,12 @@ export class LogSubscriber extends BaseLogSubscriber {
     this.debugSql(message);
   }
 
-  private override get logger(): Logger | null {
+  override get logger(): Logger | null {
     // Rails: `def logger; ActiveRecord::Base.logger; end`
     // Returns Base.logger directly — null means logging disabled.
     const B = getBase();
     if (B && "logger" in B) return B.logger as Logger | null;
     return (this.constructor as typeof LogSubscriber).logger;
-  }
-
-  private debug(progname?: string, block?: () => string): boolean {
-    // Call parent class debug method, passing through the arguments
-    const result = super.debug(progname, block);
-    if (!result) return result;
-
-    if (_verboseQueryLogs) {
-      this.logQuerySource();
-    }
-
-    return result;
   }
 
   protected debugSql(message: string): boolean {

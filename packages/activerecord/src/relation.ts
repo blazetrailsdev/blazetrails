@@ -13,7 +13,10 @@ import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
 import { RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { disallowRawSqlBang } from "./sanitization.js";
-import { columnNameMatcher as abstractColumnNameMatcher } from "./connection-adapters/abstract/quoting.js";
+import {
+  columnNameMatcher as abstractColumnNameMatcher,
+  formatInstantForSql,
+} from "./connection-adapters/abstract/quoting.js";
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
 import { getInheritanceColumn, isStiSubclass } from "./inheritance.js";
@@ -2716,7 +2719,7 @@ export class Relation<T extends Base> {
     if (this._isNone) return 0;
 
     const now = Temporal.Now.instant();
-    const nowSql = this._modelClass.adapter.quote(now);
+    const nowSql = this._modelClass.adapter?.quote(now) ?? `'${formatInstantForSql(now)}'`;
     const updates: Record<string, unknown> = {};
 
     // Always touch updated_at if defined on the model

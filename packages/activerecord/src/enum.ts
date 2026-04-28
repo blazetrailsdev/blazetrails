@@ -442,16 +442,19 @@ export function assertValidEnumDefinitionValues(
       throw new ArgumentError("Enum values must not contain a blank name.");
     }
     for (const [, value] of Object.entries(values)) {
+      const isFiniteNumber = typeof value === "number" && Number.isFinite(value);
       if (
         !(
           typeof value === "string" ||
-          typeof value === "number" ||
+          isFiniteNumber ||
           typeof value === "boolean" ||
           value === null
         )
       ) {
         throw new ArgumentError(
-          `Enum values must be only booleans, integers, floats, strings, or null, got: ${typeof value}`,
+          `Enum values must be only booleans, finite numbers, strings, or null, got: ${
+            typeof value === "number" ? String(value) : typeof value
+          }`,
         );
       }
     }
@@ -515,7 +518,12 @@ function normalizeNegativeEnumPositiveForm(
     if (rest.length === 0) return null;
     return { prefix: "not_", positiveForm: rest.charAt(0).toLowerCase() + rest.slice(1) };
   }
+  // Match camelCase generated form: "notDraft" — next char must be uppercase
+  // (so unrelated identifiers like "notebook" / "notify" don't get treated
+  // as negative scopes for "ebook" / "ify").
   if (methodName.startsWith("not") && methodName.length > 3) {
+    const next = methodName.charAt(3);
+    if (next !== next.toUpperCase() || next === next.toLowerCase()) return null;
     const rest = methodName.substring(3);
     return { prefix: "not", positiveForm: rest.charAt(0).toLowerCase() + rest.slice(1) };
   }

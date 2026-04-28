@@ -1789,6 +1789,10 @@ describe("Enum private validators", () => {
     it("rejects hash with non-primitive value", () => {
       expect(() => assertValidEnumDefinitionValues({ a: { x: 1 } })).toThrow(ArgumentError);
     });
+    it("rejects hash with NaN or Infinity number values", () => {
+      expect(() => assertValidEnumDefinitionValues({ a: NaN })).toThrow(/finite numbers/);
+      expect(() => assertValidEnumDefinitionValues({ a: Infinity })).toThrow(/finite numbers/);
+    });
   });
 
   describe("assertValidEnumOptions", () => {
@@ -1825,6 +1829,11 @@ describe("Enum private validators", () => {
       const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
       detectNegativeEnumConditionsBang(["draft", "not_draft"]);
       expect(spy).toHaveBeenCalledWith(expect.stringMatching(/'not_draft'/));
+    });
+    it("does not warn for unrelated identifiers starting with 'not' (notebook, notify)", () => {
+      const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      detectNegativeEnumConditionsBang(["ebook", "notebook", "ify", "notify"]);
+      expect(spy).not.toHaveBeenCalled();
     });
     it("does not warn when there is no positive-form clash", () => {
       const spy = vi.spyOn(console, "warn").mockImplementation(() => {});

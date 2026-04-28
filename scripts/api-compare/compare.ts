@@ -309,10 +309,19 @@ export function tsShouldIncludeInIndex(m: MethodInfo, mode: CompareMode): boolea
  * surface — and a Rails class can pass api-compare with the mixin's
  * methods living in some other TS file but never reachable on the host.
  *
- * Recurses through nested includes (a module's own includes propagate as
- * instance methods on the host; nested extends propagate as class methods).
- * Cycles are guarded by `visited`. Modules outside the package are silently
- * skipped — included stdlib like `Comparable`/`Enumerable` falls through.
+ * Only the host's *own* `extend` lands as class methods. Ruby `extend`
+ * affects only the receiver's singleton class and does not propagate
+ * through `include` chains, so a module's `extend X` (e.g. `module M;
+ * extend ActiveSupport::Concern; end`) does NOT give `X`'s methods to
+ * a class that does `include M`. (Rails' "class methods via include"
+ * pattern is ASC's nested `ClassMethods` submodule, which compare.ts
+ * folds into the parent module before this helper runs.) Nested
+ * `include` chains do propagate, so a module that includes another
+ * module contributes those chained methods to the host as instance
+ * methods (or class methods if the host got them via `extend`).
+ *
+ * Cycles are guarded by `visited`. Modules outside the package are
+ * silently skipped — stdlib like `Comparable`/`Enumerable` falls through.
  */
 export function flattenIncludedMethodInfos(
   entity: ClassInfo,
@@ -333,7 +342,6 @@ export function flattenIncludedMethodInfos(
       const sink = asClassMethods ? klass : instance;
       for (const m of mod.instanceMethods) sink.push(m);
       for (const inc of mod.includes ?? []) walk(inc, asClassMethods);
-      for (const ext of mod.extends ?? []) walk(ext, true);
     }
   };
 

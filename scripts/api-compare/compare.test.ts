@@ -335,6 +335,36 @@ describe("flattenIncludedMethodInfos", () => {
     expect(f.instance.map((m) => m.name).sort()).toEqual(["eq", "null", "true_value"]);
   });
 
+  it("does not propagate a module's own `extend` through `include` chains", () => {
+    // Ruby `extend X` affects only the receiver's singleton class. A
+    // module that does `extend ActiveSupport::Concern` does NOT donate
+    // Concern's methods to a class that does `include` the module.
+    // (Rails' "class methods via include" pattern is ASC's nested
+    // ClassMethods submodule, folded in by compare.ts upstream.)
+    const concern = mod("Concern", ["append_features", "included"]);
+    const myConcern = mod("MyConcern", ["instance_helper"]);
+    myConcern.extends = ["Concern"];
+    const host: ClassInfo = {
+      name: "Host",
+      file: "host.rb",
+      includes: ["MyConcern"],
+      extends: [],
+      instanceMethods: [],
+      classMethods: [],
+    };
+    const pkg: PackageInfo = {
+      classes: {},
+      modules: { Concern: concern, MyConcern: myConcern },
+    };
+    const byShort = new Map([
+      ["Concern", ["Concern"]],
+      ["MyConcern", ["MyConcern"]],
+    ]);
+    const f = flattenIncludedMethodInfos(host, pkg, byShort);
+    expect(f.instance.map((m) => m.name).sort()).toEqual(["instance_helper"]);
+    expect(f.klass).toEqual([]);
+  });
+
   it("skips modules outside the package without erroring", () => {
     // Comparable, Enumerable etc. live in stdlib — not in our manifest.
     const host: ClassInfo = {

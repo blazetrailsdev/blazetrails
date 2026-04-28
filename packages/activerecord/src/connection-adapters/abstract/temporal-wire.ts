@@ -16,25 +16,17 @@ import {
   type DateInfinityType,
   type DateNegativeInfinityType,
 } from "@blazetrails/activemodel";
-import { getDefaultTimezone } from "../../type/internal/timezone.js";
+import { defaultSqlTimezone } from "./quoting.js";
 
 export { DateInfinity, DateNegativeInfinity };
 
 /**
- * Resolve the configured SQL timezone for naive datetime values.
- * Mirrors `defaultSqlTimezone()` in quoting.ts — UTC by default,
- * host system local when `ActiveRecord.default_timezone === "local"`.
- */
-function configuredSqlTimezone(): string {
-  return getDefaultTimezone() === "utc" ? "UTC" : Temporal.Now.timeZoneId();
-}
-
-/**
  * Convert a naive ISO datetime string (no offset) to a `Temporal.Instant`,
- * interpreting it in the configured SQL timezone.
+ * interpreting it in the configured SQL timezone (UTC by default, host-system
+ * local when `ActiveRecord.default_timezone === "local"`).
  */
 function naiveIsoToInstant(iso: string): Temporal.Instant {
-  return Temporal.PlainDateTime.from(iso).toZonedDateTime(configuredSqlTimezone()).toInstant();
+  return Temporal.PlainDateTime.from(iso).toZonedDateTime(defaultSqlTimezone()).toInstant();
 }
 
 export type TimeTzValue = { time: Temporal.PlainTime; offset: string };
@@ -64,9 +56,11 @@ export function parsePostgresInstant(
  * Parse a Postgres `timestamp` (without tz) wire string to `Temporal.Instant`.
  *
  * Wire format: `'YYYY-MM-DD HH:MM:SS[.ffffff]'` (no offset).
- * The value is treated as UTC — matching Rails' `default_timezone: :utc` convention
- * and `ActiveRecord.default_timezone = :utc` default. This ensures a consistent
- * `Temporal.Instant` return type across all adapters for `datetime` columns.
+ * The naive value is interpreted in `ActiveRecord.default_timezone` (UTC by
+ * default, host-system local when set to `:local`) and converted to a
+ * `Temporal.Instant`. Symmetric with `formatInstantForSql` in quoting, which
+ * uses the same `defaultSqlTimezone()` for writes — so reads and writes
+ * round-trip cleanly under either configuration.
  */
 export function parsePostgresTimestampAsInstant(
   text: string,
@@ -160,10 +154,10 @@ export function parseMysqlInstant(text: string): Temporal.Instant | null {
  * Parse a MySQL `DATETIME` wire string to `Temporal.Instant`.
  *
  * Wire format: `'YYYY-MM-DD HH:MM:SS[.ffffff]'` (naive, no timezone).
- * `DATETIME` is timezone-naive in MySQL — this parser treats the value as UTC
- * by convention to match Rails-style `default_timezone: :utc` handling and
- * the `Temporal.Instant` return type used here for `datetime` columns. Zero-date
- * `'0000-00-00 00:00:00'` returns `null`.
+ * `DATETIME` is timezone-naive in MySQL — the value is interpreted in
+ * `ActiveRecord.default_timezone` (UTC by default, host-system local when
+ * set to `:local`), matching the convention used by `formatInstantForSql`
+ * on the write path. Zero-date `'0000-00-00 00:00:00'` returns `null`.
  */
 export function parseMysqlDatetimeAsInstant(text: string): Temporal.Instant | null {
   const trimmed = text.trim();
@@ -286,7 +280,7 @@ function parseBcTimestampAsInstant(withoutBc: string): Temporal.Instant {
       millisecond,
       microsecond,
       nanosecond,
-      timeZone: configuredSqlTimezone(),
+      timeZone: defaultSqlTimezone(),
     },
     { overflow: "reject" },
   ).toInstant();

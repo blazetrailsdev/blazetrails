@@ -4199,7 +4199,8 @@ export class Relation<T extends Base> {
       } else if (typeof timestamp === "string") {
         try {
           // Normalize: space → T, short offset ±HH → ±HH:MM (Postgres wire quirk).
-          // Treat naive strings as UTC (default_timezone: :utc convention).
+          // Naive strings interpreted in defaultSqlTimezone() — UTC by default,
+          // host-system local when ActiveRecord.default_timezone === "local".
           const normalized = timestamp
             .trim()
             .replace(" ", "T")

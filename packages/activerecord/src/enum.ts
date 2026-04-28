@@ -1,5 +1,5 @@
 import type { Base } from "./base.js";
-import { camelize, pluralize } from "@blazetrails/activesupport";
+import { camelize, isBlank, pluralize } from "@blazetrails/activesupport";
 import { ArgumentError, ValueType } from "@blazetrails/activemodel";
 
 /**
@@ -410,12 +410,12 @@ export function assertValidEnumDefinitionValues(
     const allStrings = values.every((v) => typeof v === "string");
     if (!allStrings) {
       throw new ArgumentError(
-        `Enum values must only contain symbols or strings, got: ${Array.from(
+        `Enum values must only contain strings, got: ${Array.from(
           new Set(values.map((v) => typeof v)),
         ).join(", ")}`,
       );
     }
-    if (values.some((v) => !v || v === "")) {
+    if (values.some((v) => isBlank(v))) {
       throw new ArgumentError("Enum values must not contain a blank name.");
     }
     return values;
@@ -426,7 +426,7 @@ export function assertValidEnumDefinitionValues(
     if (keys.length === 0) {
       throw new ArgumentError("Enum values must not be empty.");
     }
-    if (keys.some((k) => !k || k === "")) {
+    if (keys.some((k) => isBlank(k))) {
       throw new ArgumentError("Enum values must not contain a blank name.");
     }
     for (const [, value] of Object.entries(values)) {
@@ -439,7 +439,7 @@ export function assertValidEnumDefinitionValues(
         )
       ) {
         throw new ArgumentError(
-          `Enum values must be only booleans, integers, floats, symbols or strings, got: ${typeof value}`,
+          `Enum values must be only booleans, integers, floats, strings, or null, got: ${typeof value}`,
         );
       }
     }
@@ -453,7 +453,7 @@ export function assertValidEnumDefinitionValues(
  * Validate enum options: reject underscore-prefixed variants.
  * Mirrors: ActiveRecord::Enum#assert_valid_enum_options (private)
  */
-export function assertValidEnumOptions(options: Record<string, any>): void {
+export function assertValidEnumOptions(options: unknown): void {
   if (!options || typeof options !== "object" || Array.isArray(options)) return;
 
   const invalidKeys = [

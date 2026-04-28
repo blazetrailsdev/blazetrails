@@ -2,8 +2,14 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { castEnumValue, Base, Relation, defineEnum, readEnumValue } from "./index.js";
+import {
+  assertValidEnumDefinitionValues,
+  assertValidEnumOptions,
+  detectNegativeEnumConditionsBang,
+} from "./enum.js";
+import { ArgumentError } from "@blazetrails/activemodel";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -1728,14 +1734,9 @@ describe("EnumTest", () => {
   });
 });
 
-import {
-  assertValidEnumDefinitionValues,
-  assertValidEnumOptions,
-  detectNegativeEnumConditionsBang,
-} from "./enum.js";
-import { ArgumentError } from "@blazetrails/activemodel";
-
 describe("Enum private validators", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   describe("assertValidEnumDefinitionValues", () => {
     it("rejects empty array with ArgumentError", () => {
       expect(() => assertValidEnumDefinitionValues([])).toThrow(ArgumentError);
@@ -1745,6 +1746,12 @@ describe("Enum private validators", () => {
     });
     it("rejects array with blank name", () => {
       expect(() => assertValidEnumDefinitionValues(["a", ""])).toThrow(/blank name/);
+    });
+    it("rejects array with whitespace-only name", () => {
+      expect(() => assertValidEnumDefinitionValues(["a", "   "])).toThrow(/blank name/);
+    });
+    it("rejects hash with whitespace-only key", () => {
+      expect(() => assertValidEnumDefinitionValues({ "   ": 1 })).toThrow(/blank name/);
     });
     it("rejects empty hash", () => {
       expect(() => assertValidEnumDefinitionValues({})).toThrow(ArgumentError);
@@ -1778,19 +1785,16 @@ describe("Enum private validators", () => {
       expect(spy).toHaveBeenCalledWith(
         expect.stringMatching(/conflicts with auto-generated negative scope 'notDraft'/),
       );
-      spy.mockRestore();
     });
     it("warns when not_draft conflicts with draft (snake_case prefix)", () => {
       const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
       detectNegativeEnumConditionsBang(["draft", "not_draft"]);
       expect(spy).toHaveBeenCalledWith(expect.stringMatching(/'not_draft'/));
-      spy.mockRestore();
     });
     it("does not warn when there is no positive-form clash", () => {
       const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
       detectNegativeEnumConditionsBang(["notDraft", "published"]);
       expect(spy).not.toHaveBeenCalled();
-      spy.mockRestore();
     });
   });
 });

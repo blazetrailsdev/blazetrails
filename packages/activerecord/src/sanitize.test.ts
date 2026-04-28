@@ -434,11 +434,11 @@ describe("sanitizeSql", () => {
       class Post extends Base {
         static _tableName = "posts";
       }
-      const result = Post.sanitizeSqlArray("time_value = :time AND literal_colon = '10\\:00'", {
-        time: "14:30",
+      const result = Post.sanitizeSqlArray("TO_TIMESTAMP(:date, 'YYYY/MM/DD HH12\\:MI\\:SS')", {
+        date: "2024-01-01",
       });
-      expect(result).toContain("'14:30'");
-      expect(result).toContain("10:00");
+      expect(result).toContain("'2024-01-01'");
+      expect(result).toContain("HH12:MI:SS");
     });
 
     it("raises on missing named bind variable", () => {

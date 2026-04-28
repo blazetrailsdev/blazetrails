@@ -81,6 +81,21 @@ export class Renderer {
     return this.render(options);
   }
 
+  /** Build the Rack env for a request. */
+  private envForRequest(): Record<string, unknown> {
+    // If HTTP_HOST is explicitly set or routes are unavailable, return the stored env
+    const hasHttpHost = "HTTP_HOST" in this._defaults;
+    const routesAvailable = (this._controller as any)?._routes;
+
+    if (hasHttpHost || !routesAvailable) {
+      return { ...this._defaults };
+    }
+
+    // Otherwise, merge controller's default env with stored env
+    const defaultEnv = routesAvailable.defaultEnv ?? {};
+    return { ...defaultEnv, ...this._defaults };
+  }
+
   private static RACK_KEY_TRANSLATION: Record<string, string> = {
     http_host: "HTTP_HOST",
     https: "HTTPS",

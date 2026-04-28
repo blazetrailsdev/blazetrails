@@ -5,35 +5,59 @@
  * Mirrors: ActiveRecord::Suppressor
  */
 
-/**
- * The shared, mutable suppression registry — single module-level object
- * returned by `registry()`. Mirrors Rails'
- * `ActiveSupport::IsolatedExecutionState[:active_record_suppressor_registry]`:
- * a Rails-side `Suppressor.registry[Klass.name] = true` is what `suppress`
- * does, and `save`/`save!` check `Suppressor.registry[self.class.name]`.
- *
- * Stored as numeric depth (`registry[name] > 0` ⇔ suppressed) so re-entrant
- * `suppress` calls compose correctly in async JS. Truthy values still
- * satisfy Rails' `registry[name] ? true : super` check at every call site.
- *
- * `Object.create(null)` avoids surprises from prototype keys
- * (`__proto__`/`constructor`).
- */
-const _suppressorRegistry: Record<string, number | undefined> = Object.create(null);
+import { getAsyncContext } from "@blazetrails/activesupport";
+import type { AsyncContext } from "@blazetrails/activesupport";
 
 /**
- * Get the suppressor registry. Returns the same mutable object on every
- * call — callers can hold a reference and observe mutations (Rails parity).
+ * The suppressor registry: a map from class name → `true` when that
+ * class is currently suppressed. Mirrors Rails'
+ * `Suppressor.registry[klass.name] = true` contract.
+ *
+ * Storage is async-context-scoped (matching `explain-registry.ts` and
+ * Rails' `IsolatedExecutionState`/per-fiber semantics) so two
+ * concurrent `suppress` blocks running under the same Promise.all
+ * don't leak state into each other. Outside any active scope
+ * (sequential code paths) we fall back to a process-global registry,
+ * so existing direct mutations (`Base.registry[name] = true`)
+ * still work.
+ *
+ * `Object.create(null)` avoids `__proto__`/`constructor` foot-guns.
+ */
+const _fallback: Record<string, true | undefined> = Object.create(null);
+
+let _context: AsyncContext<Record<string, true | undefined>> | null = null;
+let _contextAdapter: ReturnType<typeof getAsyncContext> | null = null;
+
+function ctx(): AsyncContext<Record<string, true | undefined>> {
+  const adapter = getAsyncContext();
+  if (!_context || _contextAdapter !== adapter) {
+    _contextAdapter = adapter;
+    _context = adapter.create<Record<string, true | undefined>>();
+  }
+  return _context;
+}
+
+function currentRegistry(): Record<string, true | undefined> {
+  return ctx().getStore() ?? _fallback;
+}
+
+/**
+ * Get the suppressor registry for the current async scope. Returns the
+ * same object across calls within a scope (mutations are observable);
+ * concurrent async tasks each see their own isolated registry, matching
+ * Rails' per-fiber `IsolatedExecutionState`.
  *
  * Mirrors: ActiveRecord::Suppressor.registry
  */
-export function registry(): Record<string, number | undefined> {
-  return _suppressorRegistry;
+export function registry(): Record<string, true | undefined> {
+  return currentRegistry();
 }
 
 /**
  * Suppress persistence for the given model class during the block.
- * Re-entrant safe: nested suppress blocks increment the registry depth.
+ * Re-entrant safe — nested `suppress` calls inherit the parent scope's
+ * registry. Concurrent `suppress` blocks (e.g. under `Promise.all`)
+ * run in their own scopes and don't leak state.
  *
  * Mirrors: ActiveRecord::Suppressor.suppress
  */
@@ -44,29 +68,21 @@ export async function suppress<R>(modelClass: Function, fn: () => R | Promise<R>
     // (Rails has the same constraint); just run the block.
     return await fn();
   }
-  _suppressorRegistry[name] = (_suppressorRegistry[name] ?? 0) + 1;
-  try {
-    return await fn();
-  } finally {
-    const current = _suppressorRegistry[name] ?? 1;
-    if (current <= 1) {
-      delete _suppressorRegistry[name];
-    } else {
-      _suppressorRegistry[name] = current - 1;
-    }
-  }
+  const parent = currentRegistry();
+  const child: Record<string, true | undefined> = { ...parent, [name]: true };
+  return await ctx().run(child, fn);
 }
 
 /**
- * Check if the given model class (or any ancestor) is currently suppressed.
- * Walks the prototype chain so subclass instances honor a parent-class
- * suppression.
+ * Check if the given model class (or any ancestor) is currently
+ * suppressed in the active scope.
  */
 export function isSuppressed(modelClass: Function): boolean {
+  const reg = currentRegistry();
   let current: unknown = modelClass;
   while (current && typeof current === "function") {
-    const name = (current as Function).name;
-    if (name && (_suppressorRegistry[name] ?? 0) > 0) return true;
+    const klassName = (current as Function).name;
+    if (klassName && reg[klassName]) return true;
     current = Object.getPrototypeOf(current);
   }
   return false;

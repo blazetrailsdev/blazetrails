@@ -164,11 +164,12 @@ describe("Suppressor.registry", () => {
     expect(Base.registry.Widget).toBeFalsy();
   });
 
-  it("returns the same object across calls (mutable, shared)", () => {
+  it("returns the same object on consecutive calls in the same scope", () => {
+    // Outside any suppress scope: fallback registry — same identity.
     expect(Base.registry).toBe(Base.registry);
   });
 
-  it("a held reference observes suppression mutations", async () => {
+  it("a held reference inside the scope observes the active suppression", async () => {
     const adapter = freshAdapter();
     class Holdable extends Base {
       static {
@@ -176,12 +177,47 @@ describe("Suppressor.registry", () => {
         this.adapter = adapter;
       }
     }
-    const reg = Base.registry;
-    expect(reg.Holdable).toBeFalsy();
     await Holdable.suppress(async () => {
-      expect(reg.Holdable).toBeTruthy();
+      // Reference captured *inside* the scope — sees the scope's registry.
+      const reg = Base.registry;
+      expect(reg.Holdable).toBe(true);
     });
-    expect(reg.Holdable).toBeFalsy();
+    expect(Base.registry.Holdable).toBeFalsy();
+  });
+
+  it("isolates registry state across concurrent suppress blocks", async () => {
+    const adapter = freshAdapter();
+    class ConcurrentAlpha extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class ConcurrentBeta extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    expect(Base.registry.ConcurrentAlpha).toBeFalsy();
+    expect(Base.registry.ConcurrentBeta).toBeFalsy();
+
+    await Promise.all([
+      ConcurrentAlpha.suppress(async () => {
+        await Promise.resolve();
+        expect(Base.registry.ConcurrentAlpha).toBe(true);
+        expect(Base.registry.ConcurrentBeta).toBeFalsy();
+      }),
+      ConcurrentBeta.suppress(async () => {
+        await Promise.resolve();
+        expect(Base.registry.ConcurrentBeta).toBe(true);
+        expect(Base.registry.ConcurrentAlpha).toBeFalsy();
+      }),
+    ]);
+
+    expect(Base.registry.ConcurrentAlpha).toBeFalsy();
+    expect(Base.registry.ConcurrentBeta).toBeFalsy();
   });
 
   it("registry stays truthy across nested suppress blocks", async () => {

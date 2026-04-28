@@ -1,3 +1,4 @@
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import { NotImplementedError } from "./errors.js";
 import { Nodes, Visitors } from "@blazetrails/arel";
 import { SerializeCastValue } from "@blazetrails/activemodel";

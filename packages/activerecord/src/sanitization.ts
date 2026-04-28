@@ -6,11 +6,7 @@
 
 import { Nodes, sql as arelSql } from "@blazetrails/arel";
 import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
-import {
-  PreparedStatementInvalid,
-  UnknownAttributeReference,
-  NotImplementedError,
-} from "./errors.js";
+import { PreparedStatementInvalid, UnknownAttributeReference } from "./errors.js";
 
 /**
  * Sanitize a SQL template with bind parameters.
@@ -19,18 +15,25 @@ import {
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#sanitize_sql_array
  */
 export function sanitizeSqlArray(template: string, ...binds: unknown[]): string {
-  const placeholderCount = (template.match(/\?/g) ?? []).length;
-  if (placeholderCount !== binds.length) {
-    throw new PreparedStatementInvalid(
-      `wrong number of bind variables (${binds.length} for ${placeholderCount}) in: ${template}`,
-    );
+  const statement = template;
+  const [first] = binds;
+
+  if (first && typeof first === "object" && !Array.isArray(first)) {
+    const bindVars = first as Record<string, unknown>;
+    if (/:\w+/.test(statement)) {
+      return replaceNamedBindVariables(statement, bindVars);
+    }
   }
-  let result = template;
-  for (const bind of binds) {
-    const quoted = quote(bind);
-    result = result.replace("?", () => quoted);
+
+  if (statement.includes("?")) {
+    return replaceBindVariables(statement, binds);
   }
-  return result;
+
+  if (statement === "") {
+    return statement;
+  }
+
+  return statement;
 }
 
 /**
@@ -226,30 +229,107 @@ export const ClassMethods = {
   disallowRawSqlBang,
 };
 
-function replaceBindVariables(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Sanitization#replace_bind_variables is not implemented",
-  );
+/**
+ * Replace `?` placeholders with quoted bind variable values.
+ * Called by sanitizeSqlArray when positional binds are present.
+ *
+ * Mirrors: ActiveRecord::Sanitization::ClassMethods#replace_bind_variables
+ */
+function replaceBindVariables(statement: string, values: unknown[]): string {
+  raiseIfBindArityMismatch(statement, statement.match(/\?/g)?.length ?? 0, values.length);
+  const bound = [...values];
+  let result = statement;
+  result = result.replace(/\?/g, () => replaceBindVariable(bound.shift()));
+  return result;
 }
 
-function replaceBindVariable(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Sanitization#replace_bind_variable is not implemented",
-  );
+/**
+ * Quote a single bind variable value.
+ * Handles Relation objects (converts to SQL) and complex values (arrays, etc).
+ *
+ * Mirrors: ActiveRecord::Sanitization::ClassMethods#replace_bind_variable
+ */
+function replaceBindVariable(value: unknown): string {
+  return quoteBoundValue(value);
 }
 
-function replaceNamedBindVariables(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Sanitization#replace_named_bind_variables is not implemented",
+/**
+ * Replace named bind variables (`:name` syntax) with quoted values.
+ * Handles PostgreSQL type casts (`::`) and escaped colons.
+ *
+ * Mirrors: ActiveRecord::Sanitization::ClassMethods#replace_named_bind_variables
+ */
+function replaceNamedBindVariables(statement: string, bindVars: Record<string, unknown>): string {
+  let result = statement;
+  result = result.replace(
+    /([:\\]?):([a-zA-Z]\w*)/g,
+    (match: string, prefix: string, name: string) => {
+      if (prefix === ":") {
+        // PostgreSQL type cast like `::type` — return unchanged
+        return match;
+      } else if (prefix === "\\") {
+        // Escaped literal colon — return without the backslash
+        return match.slice(1);
+      } else {
+        // Named bind variable
+        const key = name as keyof typeof bindVars;
+        if (!(key in bindVars)) {
+          throw new PreparedStatementInvalid(`missing value for :${name} in ${statement}`);
+        }
+        return replaceBindVariable(bindVars[key]);
+      }
+    },
   );
+  return result;
 }
 
-function quoteBoundValue(): never {
-  throw new NotImplementedError("ActiveRecord::Sanitization#quote_bound_value is not implemented");
+/**
+ * Quote a single value for use in SQL.
+ * Handles arrays (converts to comma-separated quoted values),
+ * objects with `id_for_database` method, and primitive values.
+ *
+ * Mirrors: ActiveRecord::Sanitization::ClassMethods#quote_bound_value
+ */
+function quoteBoundValue(value: unknown): string {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as any).id_for_database === "function"
+  ) {
+    return quote((value as any).id_for_database());
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return quote(null);
+    }
+    return value
+      .map((v) => {
+        if (
+          typeof v === "object" &&
+          v !== null &&
+          typeof (v as any).id_for_database === "function"
+        ) {
+          return quote((v as any).id_for_database());
+        }
+        return quote(v);
+      })
+      .join(",");
+  }
+
+  return quote(value);
 }
 
-function raiseIfBindArityMismatch(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Sanitization#raise_if_bind_arity_mismatch is not implemented",
-  );
+/**
+ * Validate that the number of bind variables matches the number of placeholders.
+ *
+ * Mirrors: ActiveRecord::Sanitization::ClassMethods#raise_if_bind_arity_mismatch
+ */
+function raiseIfBindArityMismatch(statement: string, expected: number, provided: number): void {
+  if (expected !== provided) {
+    throw new PreparedStatementInvalid(
+      `wrong number of bind variables (${provided} for ${expected}) in: ${statement}`,
+    );
+  }
 }

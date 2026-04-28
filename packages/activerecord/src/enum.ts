@@ -399,23 +399,31 @@ export function castEnumValue(
 /**
  * Validate enum values are non-empty array or hash with proper types.
  * Mirrors: ActiveRecord::Enum#assert_valid_enum_definition_values (private)
+ *
+ * Accepts both strings and symbols in arrays (Rails parity). JavaScript symbols
+ * are the closest equivalent to Ruby symbols; strings are used directly.
  */
 export function assertValidEnumDefinitionValues(
   values: any,
-): Record<string, string | number | boolean | null> | string[] {
+): Record<string, string | number | boolean | null> | (string | symbol)[] {
   if (Array.isArray(values)) {
     if (values.length === 0) {
       throw new ArgumentError("Enum values must not be empty.");
     }
-    const allStrings = values.every((v) => typeof v === "string");
-    if (!allStrings) {
+    const allValid = values.every((v) => typeof v === "string" || typeof v === "symbol");
+    if (!allValid) {
       throw new ArgumentError(
-        `Enum values must only contain strings, got: ${Array.from(
+        `Enum values must only contain strings or symbols, got: ${Array.from(
           new Set(values.map((v) => typeof v)),
         ).join(", ")}`,
       );
     }
-    if (values.some((v) => isBlank(v))) {
+    if (
+      values.some((v) => {
+        if (typeof v === "symbol") return false;
+        return isBlank(v);
+      })
+    ) {
       throw new ArgumentError("Enum values must not contain a blank name.");
     }
     return values;

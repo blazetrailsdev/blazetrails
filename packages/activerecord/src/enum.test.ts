@@ -1744,6 +1744,16 @@ describe("Enum private validators", () => {
     it("rejects array with non-string entries", () => {
       expect(() => assertValidEnumDefinitionValues([1, 2])).toThrow(ArgumentError);
     });
+    it("accepts array with string entries", () => {
+      const out = assertValidEnumDefinitionValues(["draft", "published"]);
+      expect(out).toEqual(["draft", "published"]);
+    });
+    it("accepts array with symbol entries", () => {
+      const sym1 = Symbol("draft");
+      const sym2 = Symbol("published");
+      const out = assertValidEnumDefinitionValues([sym1, sym2]);
+      expect(out).toEqual([sym1, sym2]);
+    });
     it("rejects array with blank name", () => {
       expect(() => assertValidEnumDefinitionValues(["a", ""])).toThrow(/blank name/);
     });

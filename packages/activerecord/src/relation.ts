@@ -86,10 +86,7 @@ export type LoadedRelation<R> = Omit<R, "then">;
  * - Throw if a join to the same table with a *different* ON clause exists —
  *   that would require aliasing which is not supported.
  */
-function formatCacheTimestamp(
-  ts: Temporal.Instant,
-  format: "usec" | "number" | string,
-): string {
+function formatCacheTimestamp(ts: Temporal.Instant, format: "usec" | "number" | string): string {
   const dt = ts.toZonedDateTimeISO("UTC");
   const y = dt.year.toString().padStart(4, "0");
   const mo = dt.month.toString().padStart(2, "0");

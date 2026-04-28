@@ -97,9 +97,7 @@ function maxUpdatedColumnTimestamp(record: any): TemporalTimestamp | null {
     }
   }
   if (candidates.length === 0) return null;
-  return candidates.reduce((a, b) =>
-    Temporal.Instant.compare(a, b) >= 0 ? a : b,
-  );
+  return candidates.reduce((a, b) => (Temporal.Instant.compare(a, b) >= 0 ? a : b));
 }
 
 /**

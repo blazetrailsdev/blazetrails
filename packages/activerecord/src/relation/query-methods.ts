@@ -6,7 +6,12 @@
  */
 import { Nodes, SelectManager, Table as ArelTable, sql as arelSql } from "@blazetrails/arel";
 import { Attribute, ValueType } from "@blazetrails/activemodel";
-import { ActiveRecordError, IrreversibleOrderError, PreparedStatementInvalid } from "../errors.js";
+import {
+  ActiveRecordError,
+  ConfigurationError,
+  IrreversibleOrderError,
+  PreparedStatementInvalid,
+} from "../errors.js";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { sanitizeSqlArray, disallowRawSqlBang } from "../sanitization.js";
@@ -1114,7 +1119,7 @@ function excludingBang(this: QueryMethodsHost, records: any[]): any {
  * mirroring Rails' JoinDependency.make_tree / walk_tree (join_dependency.rb:47-70).
  * Strings → leaf (dot-notation "a.b" expands to nested { a: { b: {} } });
  * Arrays → each element walked; Hashes → key/value pairs.
- * Unknown types raise ArgumentError, matching Rails' ConfigurationError (line 67).
+ * Unknown types raise ConfigurationError, matching Rails (join_dependency.rb:67).
  */
 function walkAssociationTree(
   associations: AssociationSpec | AssociationSpec[],
@@ -1135,7 +1140,7 @@ function walkAssociationTree(
       if (v) walkAssociationTree(v as AssociationSpec | AssociationSpec[], sub as any);
     }
   } else {
-    throw argumentError(`Invalid association spec: ${JSON.stringify(associations)}`);
+    throw new ConfigurationError(`Invalid association spec: ${JSON.stringify(associations)}`);
   }
 }
 

@@ -121,37 +121,25 @@ describe("TestDatabasesTest", () => {
   });
 
   // URL-only configs (no explicit `database`) — e.g. sqlite paths
-  // embedded in the URL. The base name must be derived from the URL so
-  // suffixing produces `<dbpath>-<index>` rather than `undefined-<index>`.
+  // embedded in the URL. UrlConfig.database (#957) parses the URL,
+  // so the suffix lands on the parsed path rather than `undefined`.
   it("suffixes a URL-based config by deriving the database from configuration.url", async () => {
     vi.spyOn(DatabaseTasks, "reconstructFromSchema").mockResolvedValue(undefined);
     vi.spyOn(await import("./connection-handling.js"), "establishConnection").mockResolvedValue(
       undefined,
     );
 
-    const mockConfig: any = {
+    const { UrlConfig } = await import("./database-configurations/url-config.js");
+    const dbConfig = new UrlConfig("arunit", "primary", "test/db/primary.sqlite3", {
       adapter: "sqlite3",
-      configuration: { url: "test/db/primary.sqlite3" },
-    };
-    let suffixed: string | undefined;
-    Object.defineProperty(mockConfig, "_database", {
-      set(val: string) {
-        suffixed = val;
-        this.__database = val;
-      },
-    });
-    Object.defineProperty(mockConfig, "database", {
-      get() {
-        return this.__database; // initially undefined — URL parsing must kick in
-      },
     });
 
     const mockModelClass = {
-      configurations: stubConfigurations([mockConfig]),
+      configurations: stubConfigurations([dbConfig]),
     } as any as typeof Base;
 
     await createAndLoadSchema(mockModelClass, 5, { envName: "arunit" });
-    expect(suffixed).toBe("test/db/primary.sqlite3-5");
+    expect(dbConfig.database).toBe("test/db/primary.sqlite3-5");
   });
 
   it("throws a clear error when neither database nor URL yields a name", async () => {

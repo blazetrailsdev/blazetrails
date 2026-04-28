@@ -16,10 +16,14 @@ export function serializableHash(this: Base, options?: SerializeOptions): Record
   if (inheritanceCol && klass.hasAttribute(inheritanceCol)) {
     options = options ? { ...options } : {};
 
-    // Normalize except to an array of strings
-    options.except = Array.from(options.except || []).map((v) => String(v));
-    // Add the inheritance column to the except list
-    options.except = [...new Set(options.except), inheritanceCol];
+    // Mirror Ruby's `Array(x)`: nil → [], scalar → [scalar], array → array.
+    // `Array.from("type")` would split a string into characters, so we
+    // can't blindly use it here.
+    const raw = (options as { except?: unknown }).except;
+    const exceptArray =
+      raw == null ? [] : Array.isArray(raw) ? raw : [raw as string | number | symbol];
+    // Mirrors: `options[:except] |= Array(inheritance_column)` (set union).
+    options.except = [...new Set(exceptArray.map((v) => String(v))), inheritanceCol];
   }
 
   return amSerializableHash(this, options);

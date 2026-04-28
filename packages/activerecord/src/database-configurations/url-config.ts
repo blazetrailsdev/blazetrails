@@ -38,7 +38,13 @@ function databaseFromUrl(url: string): string | undefined {
   if (!url) return undefined;
   try {
     const parsed = new URL(url);
-    return parsed.pathname.replace(/^\//, "") || parsed.host || undefined;
+    // Mirrors Rails: the database name is only ever derived from the URL
+    // path, never the host. URLs like `postgres://localhost` (no path)
+    // legitimately have no database name — falling back to `host` would
+    // silently mask a misconfiguration and route reconnects/creation at
+    // a database called "localhost".
+    const path = parsed.pathname.replace(/^\//, "");
+    return path || undefined;
   } catch {
     // Bare filesystem paths and `:memory:` aren't parseable URLs but are
     // the database name themselves.

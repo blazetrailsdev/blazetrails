@@ -354,13 +354,9 @@ describe("ConnectionHandlingTest", () => {
     class InMemoryModel extends Base {}
     (InMemoryModel as any).configurations = inMemory;
 
-    await expect(
-      (async () => {
-        await Base.establishConnection.call(InMemoryModel);
-        const Klass = await InMemoryModel.adapterClass();
-        const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
-        expect(Klass).toBe(SQLite3Adapter);
-      })(),
-    ).resolves.not.toThrow();
+    await InMemoryModel.establishConnection();
+    const Klass = await InMemoryModel.adapterClass();
+    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+    expect(Klass).toBe(SQLite3Adapter);
   });
 });

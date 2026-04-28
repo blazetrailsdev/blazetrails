@@ -8,6 +8,7 @@
 import { Notifications } from "@blazetrails/activesupport";
 import type { Base } from "./base.js";
 import type { Relation } from "./relation.js";
+import { argumentError } from "./relation/query-methods.js";
 import type { AssociationSpec } from "./relation/query-methods.js";
 import { sanitizeSql } from "./sanitization.js";
 
@@ -234,7 +235,7 @@ export function leftJoins<T extends typeof Base>(
   const rel = this.all();
   if (on !== undefined) {
     if (typeof table !== "string")
-      throw new Error("leftJoins(table, on) requires a string table name");
+      throw argumentError("leftJoins(table, on) requires a string table name");
     return rel.leftJoins(table, on);
   }
   return rel.leftJoins(table);
@@ -260,7 +261,7 @@ export function leftOuterJoins<T extends typeof Base>(
   if (table === undefined) return rel.leftOuterJoins();
   if (on !== undefined) {
     if (typeof table !== "string")
-      throw new Error("leftJoins(table, on) requires a string table name");
+      throw argumentError("leftOuterJoins(table, on) requires a string table name");
     return rel.leftOuterJoins(table, on);
   }
   return rel.leftOuterJoins(table);

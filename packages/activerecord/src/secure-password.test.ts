@@ -411,25 +411,28 @@ describe("SecurePasswordTest", () => {
   });
 
   // Rails: test "authenticate_by takes the same amount of time regardless
-  // of whether record is found" — verify the constant-time mitigation by
-  // showing that the not-found path still spends substantial time hashing
-  // (PBKDF2 with 10k iterations is multiple ms; a no-op short-circuit
-  // would return in microseconds). Mirrors Rails' `new(passwords)` BCrypt
-  // trigger at secure_password.rb:55.
+  // of whether record is found" — both the not-found path and the
+  // found-but-wrong-password path must run the password hash so a timing
+  // attacker can't distinguish them. Compare elapsed times relative to
+  // each other rather than against an absolute threshold (which is flaky
+  // across hardware): the not-found run should not be substantially
+  // shorter than the wrong-password run.
+  // Mirrors Rails' `new(passwords)` BCrypt trigger at secure_password.rb:55.
   it("authenticate_by takes the same amount of time regardless of whether record is found", async () => {
-    const User = makeUser();
+    const { User, user } = await createUser();
 
-    const start = performance.now();
-    const result = await (User as any).authenticateBy({
-      token: "no-such-token",
-      password: PASSWORD,
-    });
-    const elapsedMs = performance.now() - start;
+    const t0 = performance.now();
+    expect(await User.authenticateBy({ token: user.token, password: "wrong" })).toBeNull();
+    const wrongPasswordMs = performance.now() - t0;
 
-    expect(result).toBeNull();
-    // PBKDF2 hashing should take meaningful time. A no-op return path
-    // would complete sub-millisecond; we expect ≥5ms in practice.
-    expect(elapsedMs).toBeGreaterThan(5);
+    const t1 = performance.now();
+    expect(await User.authenticateBy({ token: "no-such-token", password: PASSWORD })).toBeNull();
+    const notFoundMs = performance.now() - t1;
+
+    // The not-found path should be at least ~30% as long as the
+    // wrong-password path (both hash; a no-op short-circuit would be
+    // orders of magnitude faster).
+    expect(notFoundMs).toBeGreaterThan(wrongPasswordMs * 0.3);
   });
 
   // Rails: test "authenticate_by requires at least one password"

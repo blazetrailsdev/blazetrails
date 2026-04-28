@@ -66,7 +66,7 @@ export async function createAndLoadSchema(
   try {
     const configs = configurations.configsFor({ envName });
     for (const dbConfig of configs) {
-      (dbConfig as any)._database = `${dbConfig.database}-${index}`;
+      dbConfig._database = `${dbConfig.database}-${index}`;
       await DatabaseTasks.reconstructFromSchema(dbConfig, DatabaseTasks.schemaFormat, undefined);
     }
   } finally {

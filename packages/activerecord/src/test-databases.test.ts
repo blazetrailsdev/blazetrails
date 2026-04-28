@@ -124,6 +124,47 @@ describe("TestDatabasesTest", () => {
     mockEstablishConnection.mockRestore();
   });
 
+  // Mirrors Rails' `ensure` semantics in test_databases.rb:18-21 — the env
+  // restore and reconnect must still happen if reconstruct_from_schema raises.
+  it("restores VERBOSE and re-establishes connection after schema load failure", async () => {
+    const error = new Error("schema load failed");
+    vi.spyOn(DatabaseTasks, "reconstructFromSchema").mockRejectedValue(error);
+    const connectionHandling = await import("./connection-handling.js");
+    const mockEstablishConnection = vi
+      .spyOn(connectionHandling, "establishConnection")
+      .mockResolvedValue(undefined);
+
+    const mockConfig: any = {};
+    Object.defineProperty(mockConfig, "_database", {
+      set(val: string) {
+        this.__database = val;
+      },
+    });
+    Object.defineProperty(mockConfig, "database", {
+      get() {
+        return this.__database || "test/db/primary.sqlite3";
+      },
+    });
+    mockConfig.adapter = "sqlite3";
+
+    const mockModelClass = {
+      configurations: { configsFor: vi.fn().mockReturnValue([mockConfig]) },
+    } as any as typeof Base;
+
+    const originalVerbose = process.env.VERBOSE;
+    process.env.VERBOSE = "1";
+
+    try {
+      await expect(createAndLoadSchema(mockModelClass, 7, { envName: "arunit" })).rejects.toThrow(
+        error,
+      );
+      expect(mockEstablishConnection).toHaveBeenCalledWith(mockModelClass);
+      expect(process.env.VERBOSE).toBe("1");
+    } finally {
+      process.env.VERBOSE = originalVerbose;
+    }
+  });
+
   it("createAndMigrate runs migrations on all adapters", async () => {
     const adapter = createTestAdapter();
     const log: string[] = [];

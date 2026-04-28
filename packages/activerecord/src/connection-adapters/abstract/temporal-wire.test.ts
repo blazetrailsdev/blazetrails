@@ -108,9 +108,7 @@ describe("parsePostgresPlainDateTime", () => {
   });
 
   it("parses a BC datetime with microseconds", () => {
-    const result = parsePostgresPlainDateTime(
-      "0044-03-15 12:00:00.000456 BC",
-    ) as Temporal.Instant;
+    const result = parsePostgresPlainDateTime("0044-03-15 12:00:00.000456 BC") as Temporal.Instant;
     const zdt = result.toZonedDateTimeISO("UTC");
     expect(zdt.millisecond).toBe(0);
     expect(zdt.microsecond).toBe(456);

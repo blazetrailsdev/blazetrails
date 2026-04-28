@@ -36,17 +36,19 @@ export const extended = Symbol.for("@blazetrails/activesupport:extended");
  * Usage:
  *   export interface Relation<T> extends Included<typeof QueryMethodBangs> {}
  *
- * Implementation note: the parameter is intentionally unconstrained
- * (no `M extends Module`). Constraining over `Record<string, Function>`
- * forces a string index signature into every `Included<M>`, which in
- * turn forces every property on the merging class — and on every
- * subclass — to be assignable to `(...args: unknown[]) => unknown`.
+ * Implementation note: the parameter is constrained to `object` rather
+ * than the runtime `Module = Record<string, Function>`. The runtime
+ * shape forces a string index signature into every `Included<M>`,
+ * which in turn forces every property on the merging class — and on
+ * every subclass — to be assignable to `(...args: unknown[]) => unknown`.
  * That breaks any class that mixes `Included<>` and also has non-method
  * fields (e.g. arel's `Attribute` with `relation`, `name`, `caster`).
- * Filtering function-typed keys via `M[K] extends Function` keeps the
- * resulting type tight to the literal keys of the passed module.
+ * `object` is wide enough to accept any module literal but carries no
+ * index signature. Filtering callable keys via
+ * `M[K] extends (this: any, ...args: any[]) => any` then keeps the
+ * resulting type tight to the literal method keys of the passed module.
  */
-export type Included<M> = {
+export type Included<M extends object> = {
   [K in keyof M as K extends string
     ? M[K] extends (this: any, ...args: any[]) => any
       ? K
@@ -120,13 +122,15 @@ export function include(klass: AnyClass, mod: Module | AnyClass): void {
  *   extend(Base, ConnectionHandlingMethods);
  *   const TypedBase = Base as unknown as BaseStatic;
  */
-export type Extended<M extends Module> = {
-  [K in keyof M as K extends string ? K : never]: M[K] extends (
-    this: any,
-    ...args: infer A
-  ) => infer R
-    ? (...args: A) => R
-    : never;
+// See the implementation note on `Included<>` — the `object` constraint
+// + callable-key filter avoids leaking a string index signature into
+// classes that merge with this type.
+export type Extended<M extends object> = {
+  [K in keyof M as K extends string
+    ? M[K] extends (this: any, ...args: any[]) => any
+      ? K
+      : never
+    : never]: M[K] extends (this: any, ...args: infer A) => infer R ? (...args: A) => R : never;
 };
 
 /**

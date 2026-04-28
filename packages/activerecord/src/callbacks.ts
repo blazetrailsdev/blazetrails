@@ -227,12 +227,12 @@ function registerCallback(
 // persistence work directly in their respective callback chains.
 // ---------------------------------------------------------------------------
 
-function createOrUpdate(this: any): Promise<boolean> {
+export function createOrUpdate(this: any): Promise<boolean> {
   // Rails: _run_save_callbacks { super }
   return (this._createOrUpdate as () => Promise<boolean>).call(this);
 }
 
-function _createRecord(this: any): Promise<boolean> {
+export function _createRecord(this: any): Promise<boolean> {
   // Rails: _run_create_callbacks { super } — returns whether callbacks completed.
   const ctor = this.constructor as any;
   return ctor._callbackChain.runCallbacks("create", this, async () => {
@@ -248,7 +248,7 @@ function _createRecord(this: any): Promise<boolean> {
   });
 }
 
-function _updateRecord(this: any): Promise<boolean> {
+export function _updateRecord(this: any): Promise<boolean> {
   // Rails: _run_update_callbacks { record_update_timestamps { super } } — returns boolean.
   // record_update_timestamps writes updated_at/updated_on when @_touch_record
   // and should_record_timestamps? are true, then yields to the actual update.

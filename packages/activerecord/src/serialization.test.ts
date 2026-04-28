@@ -102,9 +102,32 @@ describe("SerializationTest", () => {
     Vehicle.adapter = adapter;
 
     const car = new Vehicle({ id: 1, name: "Camry", type: "Car" });
-    const hash = (car as any).serializableHash();
+    const hash = car.serializableHash();
     expect(hash).toMatchObject({ id: 1, name: "Camry" });
     expect(hash).not.toHaveProperty("type");
+  });
+
+  // Mirrors Rails' `private def attribute_names_for_serialization;
+  // attribute_names; end` hook — overriding it must actually affect
+  // serializableHash output.
+  it("respects an overridden attributeNamesForSerialization", () => {
+    class SecretModel extends Base {
+      attributeNamesForSerialization() {
+        // Only expose "name"; hide other attributes from serialization.
+        return ["name"];
+      }
+    }
+    SecretModel._tableName = "secrets";
+    SecretModel.attribute("id", "integer");
+    SecretModel.attribute("name", "string");
+    SecretModel.attribute("ssn", "string");
+    SecretModel.adapter = adapter;
+
+    const s = new SecretModel({ id: 1, name: "Visible", ssn: "111-22-3333" });
+    const hash = s.serializableHash();
+    expect(hash).toMatchObject({ name: "Visible" });
+    expect(hash).not.toHaveProperty("ssn");
+    expect(hash).not.toHaveProperty("id");
   });
 
   it("does not duplicate the inheritance column when caller already passes it in except", () => {
@@ -119,7 +142,7 @@ describe("SerializationTest", () => {
     const car = new Vehicle({ id: 1, name: "Camry", type: "Car" });
     // Caller redundantly excludes "type" — final except list should still
     // be deduped (Ruby's `|=` set-union semantics).
-    const hash = (car as any).serializableHash({ except: ["type"] });
+    const hash = car.serializableHash({ except: ["type"] });
     expect(hash).not.toHaveProperty("type");
     expect(hash).toMatchObject({ id: 1, name: "Camry" });
   });

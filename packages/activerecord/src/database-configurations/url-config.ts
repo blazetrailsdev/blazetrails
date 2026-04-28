@@ -21,6 +21,29 @@ export class UrlConfig extends HashConfig {
     super(envName, name, { ...configuration, ...buildUrlHash(url) });
     this.url = url;
   }
+
+  // Mirrors Rails' UrlConfig — when the configuration hash doesn't carry an
+  // explicit `database`, fall back to parsing the URL's path. Necessary for
+  // URL-only sqlite configs (`{ adapter: "sqlite3", url: "db/test.sqlite3" }`)
+  // where buildUrlHash leaves `configuration.database` undefined: callers
+  // like TestDatabases.create_and_load_schema rely on `db_config.database`.
+  override get database(): string | undefined {
+    const explicit = super.database;
+    if (explicit !== undefined) return explicit;
+    return databaseFromUrl(this.url);
+  }
+}
+
+function databaseFromUrl(url: string): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.replace(/^\//, "") || parsed.host || undefined;
+  } catch {
+    // Bare filesystem paths and `:memory:` aren't parseable URLs but are
+    // the database name themselves.
+    return url;
+  }
 }
 
 // Mirrors: UrlConfig#build_url_hash

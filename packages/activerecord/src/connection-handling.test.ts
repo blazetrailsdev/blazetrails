@@ -335,4 +335,32 @@ describe("ConnectionHandlingTest", () => {
     const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
     expect(Klass).toBe(SQLite3Adapter);
   });
+
+  // Mirrors Rails: `ActiveRecord::Base.establish_connection` with no args
+  // reads from `Base.configurations` (the in-memory registry), not from
+  // disk. Required so callers that mutate `configurations` in place (e.g.
+  // `TestDatabases.create_and_load_schema`) actually reconnect to the
+  // mutated config rather than picking up the original from
+  // config/database.*.
+  it("autoConnect honors an in-memory DatabaseConfigurations registry", async () => {
+    const { DatabaseConfigurations } = await import("./database-configurations.js");
+    const { HashConfig } = await import("./database-configurations/hash-config.js");
+    const env = process.env.NODE_ENV || DatabaseConfigurations.defaultEnv;
+
+    const inMemory = new DatabaseConfigurations([
+      new HashConfig(env, "primary", { adapter: "sqlite3", database: ":memory:" }),
+    ]);
+
+    class InMemoryModel extends Base {}
+    (InMemoryModel as any).configurations = inMemory;
+
+    await expect(
+      (async () => {
+        await Base.establishConnection.call(InMemoryModel);
+        const Klass = await InMemoryModel.adapterClass();
+        const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+        expect(Klass).toBe(SQLite3Adapter);
+      })(),
+    ).resolves.not.toThrow();
+  });
 });

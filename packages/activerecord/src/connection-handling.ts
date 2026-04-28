@@ -544,8 +544,24 @@ async function establishWithConfig(
 }
 
 async function autoConnect(modelClass: typeof Base): Promise<void> {
-  const raw = await loadConfigFile(modelClass);
-  const configs = DatabaseConfigurations.fromEnv(raw);
+  // Prefer the in-memory configurations when set — Rails'
+  // `establish_connection` (no args) reads from `Base.configurations`,
+  // the same registry mutated by callers like
+  // `TestDatabases.create_and_load_schema` (which suffixes `_database`
+  // per worker before reconnect). Falling back to disk would re-read
+  // unmutated configs and reconnect to the wrong database.
+  const inMemory = (modelClass as any).configurations;
+  let configs: DatabaseConfigurations;
+  if (inMemory instanceof DatabaseConfigurations) {
+    configs = inMemory;
+  } else if (inMemory && typeof inMemory.toH === "function") {
+    configs = DatabaseConfigurations.fromEnv(inMemory.toH());
+  } else if (inMemory && typeof inMemory === "object") {
+    configs = DatabaseConfigurations.fromEnv(inMemory);
+  } else {
+    const raw = await loadConfigFile(modelClass);
+    configs = DatabaseConfigurations.fromEnv(raw);
+  }
   const env = process.env.NODE_ENV || DatabaseConfigurations.defaultEnv;
   const primaryConfigs = configs.configsFor({ envName: env, name: "primary" });
   const dbConfig = primaryConfigs[0] ?? configs.findDbConfig(env);

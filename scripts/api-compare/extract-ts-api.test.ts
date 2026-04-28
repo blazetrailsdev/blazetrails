@@ -381,6 +381,39 @@ describe("extractFromProgram — include() detection", () => {
     ]);
   });
 
+  it("ignores `include()` calls when the file doesn't import from @blazetrails/activesupport", () => {
+    // A local `include` function with the same name shouldn't be
+    // confused for the activesupport mixin — the detection pass keys
+    // off the import specifier.
+    const info = extractFromFiles("/p", {
+      "node.ts": `export class Node {}`,
+      "math.ts": `export const Math = { add() {} };`,
+      "wire.ts": `
+        import { Node } from "./node.js";
+        import { Math } from "./math.js";
+        function include(a: any, b: any) {}
+        include(Node, Math);
+      `,
+    });
+    expect(info.classes["node.ts:Node"].extends).not.toContain("Math");
+  });
+
+  it("dedupes repeated include() calls for the same (host, mod) pair", () => {
+    const info = extractFromFiles("/p", {
+      "node.ts": `export class Node {}`,
+      "math.ts": `export const Math = { add() {} };`,
+      "wire.ts": `
+        import { include } from "@blazetrails/activesupport";
+        import { Node } from "./node.js";
+        import { Math } from "./math.js";
+        include(Node, Math);
+        include(Node, Math);
+      `,
+    });
+    const ext = info.classes["node.ts:Node"].extends.filter((e) => e === "Math");
+    expect(ext).toHaveLength(1);
+  });
+
   it("resolves a const-cast host (`const _X = X as unknown as new (...) => X`)", () => {
     // Mirrors arel/index.ts post-#814.
     const info = extractFromFiles("/p", {

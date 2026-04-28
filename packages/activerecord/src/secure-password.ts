@@ -1,6 +1,19 @@
 import { getCrypto } from "@blazetrails/activesupport";
+import { ArgumentError } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
 import { generatesTokenFor } from "./token-for.js";
+
+/**
+ * `password` → `Password`; `recovery_password` → `RecoveryPassword`.
+ * Matches the underscore-to-camelCase convention used by `secure-token.ts`
+ * so attribute names with underscores produce the expected method names.
+ */
+function camelize(attr: string): string {
+  return (
+    attr.charAt(0).toUpperCase() +
+    attr.slice(1).replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
+  );
+}
 
 /**
  * Secure password support using PBKDF2 (Web Crypto API).
@@ -45,18 +58,22 @@ function verifyPassword(password: string, digest: string): boolean {
  */
 export function hasSecurePassword(
   modelClass: typeof Base,
-  options: { validations?: boolean; resetToken?: boolean } = {},
+  attributeOrOptions: string | { validations?: boolean; resetToken?: boolean } = {},
+  maybeOptions: { validations?: boolean; resetToken?: boolean } = {},
 ): void {
+  // Mirrors Rails: `has_secure_password(attribute = :password, validations: true, reset_token: true)`
+  const attribute = typeof attributeOrOptions === "string" ? attributeOrOptions : "password";
+  const options = typeof attributeOrOptions === "string" ? maybeOptions : attributeOrOptions;
+  const isDefaultAttribute = attribute === "password";
   const runValidations = options.validations !== false;
-  const attribute = "password";
   const digestAttr = `${attribute}_digest`;
 
   // Store the raw password temporarily for hashing during save
-  const passwordKey = Symbol("password");
-  const confirmationKey = Symbol("password_confirmation");
+  const passwordKey = Symbol(`${attribute}`);
+  const confirmationKey = Symbol(`${attribute}_confirmation`);
 
-  // password setter/getter
-  Object.defineProperty(modelClass.prototype, "password", {
+  // ${attribute} setter/getter (e.g. password / recovery_password)
+  Object.defineProperty(modelClass.prototype, attribute, {
     get: function () {
       return (this as any)[passwordKey] ?? null;
     },
@@ -66,24 +83,49 @@ export function hasSecurePassword(
     configurable: true,
   });
 
-  // password_confirmation setter/getter
-  Object.defineProperty(modelClass.prototype, "passwordConfirmation", {
-    get: function () {
-      return (this as any)[confirmationKey] ?? null;
-    },
-    set: function (value: string | null) {
-      (this as any)[confirmationKey] = value;
-    },
-    configurable: true,
-  });
+  // password_confirmation setter/getter — only for the default attribute,
+  // matching the surface most apps rely on. Per-attribute confirmation is
+  // a separable follow-up.
+  if (isDefaultAttribute) {
+    Object.defineProperty(modelClass.prototype, "passwordConfirmation", {
+      get: function () {
+        return (this as any)[confirmationKey] ?? null;
+      },
+      set: function (value: string | null) {
+        (this as any)[confirmationKey] = value;
+      },
+      configurable: true,
+    });
 
-  // authenticate method
-  Object.defineProperty(modelClass.prototype, "authenticate", {
+    // `authenticate` (no suffix) is a Rails convenience for the default attribute.
+    Object.defineProperty(modelClass.prototype, "authenticate", {
+      value: function (this: Base, password: string): Base | false {
+        const digest = this._readAttribute(digestAttr);
+        if (!digest) return false;
+        return verifyPassword(password, digest as string) ? this : false;
+      },
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  // authenticate${Attribute} method (for authenticate_by to call)
+  // e.g., authenticatePassword, authenticateRecoveryPassword
+  const authenticateMethodName = `authenticate${camelize(attribute)}`;
+  Object.defineProperty(modelClass.prototype, authenticateMethodName, {
     value: function (this: Base, password: string): Base | false {
       const digest = this._readAttribute(digestAttr);
       if (!digest) return false;
       return verifyPassword(password, digest as string) ? this : false;
     },
+    writable: true,
+    configurable: true,
+  });
+
+  // Static authenticateBy class method
+  // Mirrors: ActiveRecord::SecurePassword.authenticate_by
+  Object.defineProperty(modelClass, "authenticateBy", {
+    value: authenticateBy,
     writable: true,
     configurable: true,
   });
@@ -108,8 +150,10 @@ export function hasSecurePassword(
     }
   });
 
-  // Add validations
-  if (runValidations) {
+  // Add validations (only wired for the default `password` attribute today;
+  // per-attribute validations would mean parameterizing the `errors.add`
+  // keys and message — separable from authenticate_by parity).
+  if (runValidations && isDefaultAttribute) {
     modelClass.validate(function (record: any) {
       const rawPassword = record[passwordKey];
       const isNew = record.isNewRecord();
@@ -192,6 +236,93 @@ export function hasSecurePassword(
       writable: true,
       configurable: true,
     });
+  }
+}
+
+/**
+ * Authenticates a record by finding it via non-password attributes,
+ * then verifying password attributes. Returns the record on success,
+ * null if authentication fails.
+ *
+ * Mirrors: ActiveRecord::SecurePassword.authenticate_by
+ *
+ * Given a set of attributes, finds a record using the non-password
+ * attributes, and then authenticates that record using the password
+ * attributes. Returns the record if authentication succeeds; otherwise,
+ * returns null.
+ *
+ * Regardless of whether a record is found, authenticateBy will
+ * cryptographically digest the given password attributes. This behavior
+ * helps mitigate timing-based enumeration attacks, wherein an attacker can
+ * determine if a passworded record exists even without knowing the password.
+ *
+ * Raises an ArgumentError if the set of attributes doesn't contain at
+ * least one password and one non-password attribute.
+ */
+export async function authenticateBy(
+  this: typeof Base,
+  attributes: Record<string, unknown> | { toH(): Record<string, unknown> },
+): Promise<Base | null> {
+  // Convert to plain object if it has toH method
+  const attrs =
+    typeof (attributes as any).toH === "function"
+      ? (attributes as any).toH()
+      : (attributes as Record<string, unknown>);
+
+  const passwordEntries: Array<[string, unknown]> = [];
+  const identifierEntries: Array<[string, unknown]> = [];
+
+  for (const [name, value] of Object.entries(attrs)) {
+    // Check if this is a password attribute (the _digest variant exists but name doesn't)
+    const digestName = `${name}_digest`;
+    if (!(this as any).hasAttribute?.(name) && (this as any).hasAttribute?.(digestName)) {
+      passwordEntries.push([name, value]);
+    } else {
+      identifierEntries.push([name, value]);
+    }
+  }
+
+  if (passwordEntries.length === 0) {
+    throw new ArgumentError("One or more password arguments are required");
+  }
+  if (identifierEntries.length === 0) {
+    throw new ArgumentError("One or more finder arguments are required");
+  }
+
+  // Short-circuit: if any password is nil or empty, return null immediately
+  for (const [, value] of passwordEntries) {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+  }
+
+  // Convert entries back to objects for findBy
+  const passwords = Object.fromEntries(passwordEntries);
+  const identifiers = Object.fromEntries(identifierEntries);
+
+  // Try to find the record
+  const record = await (this as any).findBy(identifiers);
+  if (record) {
+    // Authenticate all password attributes
+    let allAuthenticated = true;
+    for (const [name] of passwordEntries) {
+      const value = passwords[name] as string;
+      const methodName = `authenticate${camelize(name)}`;
+      const authenticateMethod = (record as any)[methodName];
+      if (typeof authenticateMethod !== "function" || !authenticateMethod.call(record, value)) {
+        allAuthenticated = false;
+        break;
+      }
+    }
+    return allAuthenticated ? record : null;
+  } else {
+    // Even if record is not found, hash the passwords to mitigate timing attacks
+    for (const [name] of passwordEntries) {
+      const value = passwords[name] as string;
+      // Hash (but discard) to consume time
+      hashPassword(value);
+    }
+    return null;
   }
 }
 

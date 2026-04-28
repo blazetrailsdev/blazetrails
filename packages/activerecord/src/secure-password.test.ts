@@ -292,14 +292,173 @@ describe("password reset token", () => {
 });
 
 describe("SecurePasswordTest", () => {
-  it.skip("authenticate_by authenticates when password is correct", () => {});
-  it.skip("authenticate_by does not authenticate when password is incorrect", () => {});
-  it.skip("authenticate_by takes the same amount of time regardless of whether record is found", () => {});
-  it.skip("authenticate_by short circuits when password is nil", () => {});
-  it.skip("authenticate_by short circuits when password is an empty string", () => {});
-  it.skip("authenticate_by finds record using multiple attributes", () => {});
-  it.skip("authenticate_by authenticates using multiple passwords", () => {});
-  it.skip("authenticate_by requires at least one password", () => {});
-  it.skip("authenticate_by requires at least one attribute", () => {});
-  it.skip("authenticate_by accepts any object that implements to_h", () => {});
+  let adapter: DatabaseAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Builds a User class with the union of attributes used across these tests.
+  // Per-test attribute differences in Rails are immaterial for these tests
+  // (sqlite ignores unread columns); a single shared class halves the LOC
+  // here without changing behavior.
+  const makeUser = () => {
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("token", "string");
+        this.attribute("email", "string");
+        this.attribute("password_digest", "string");
+        this.attribute("auth_token_digest", "string");
+        this.attribute("recovery_password_digest", "string");
+        this.adapter = adapter;
+      }
+    }
+    hasSecurePassword(User, { validations: false });
+    return User as typeof User & {
+      authenticateBy(attrs: unknown): Promise<InstanceType<typeof User> | null>;
+    };
+  };
+
+  const PASSWORD = "mUc3m00RsqyRe";
+
+  const createUser = async (extra: Record<string, unknown> = {}) => {
+    const User = makeUser();
+    const user = new User({ token: "abc123", ...extra });
+    (user as any).password = PASSWORD;
+    await user.save();
+    return { User, user };
+  };
+
+  // Rails: test "authenticate_by authenticates when password is correct"
+  it("authenticate_by authenticates when password is correct", async () => {
+    const { User, user } = await createUser();
+    const found = await User.authenticateBy({ token: user.token, password: PASSWORD });
+    expect(found).not.toBeNull();
+    expect(found?.id).toBe(user.id);
+    expect(found?.token).toBe(user.token);
+  });
+
+  // Rails: test "authenticate_by does not authenticate when password is incorrect"
+  it("authenticate_by does not authenticate when password is incorrect", async () => {
+    const { User, user } = await createUser();
+    const found = await User.authenticateBy({ token: user.token, password: "wrong" });
+    expect(found).toBeNull();
+  });
+
+  // Rails: test "authenticate_by short circuits when password is nil"
+  it("authenticate_by short circuits when password is nil", async () => {
+    const User = makeUser();
+    expect(await User.authenticateBy({ token: "abc123", password: null })).toBeNull();
+  });
+
+  // Rails: test "authenticate_by short circuits when password is an empty string"
+  it("authenticate_by short circuits when password is an empty string", async () => {
+    const User = makeUser();
+    expect(await User.authenticateBy({ token: "abc123", password: "" })).toBeNull();
+  });
+
+  // Rails: test "authenticate_by finds record using multiple attributes"
+  it("authenticate_by finds record using multiple attributes", async () => {
+    const { User, user } = await createUser({ email: "test@example.com" });
+    const found = await User.authenticateBy({
+      token: user.token,
+      email: user.email,
+      password: PASSWORD,
+    });
+    expect(found?.id).toBe(user.id);
+
+    const notFound = await User.authenticateBy({
+      token: user.token,
+      email: "wrong@example.com",
+      password: PASSWORD,
+    });
+    expect(notFound).toBeNull();
+  });
+
+  // Rails: test "authenticate_by authenticates using multiple passwords"
+  it("authenticate_by authenticates using multiple passwords", async () => {
+    const User = makeUser();
+    hasSecurePassword(User, "recovery_password", { validations: false });
+    const RECOVERY = "recovery-secret";
+    const user = new User({ token: "abc123" });
+    (user as any).password = PASSWORD;
+    (user as any).recovery_password = RECOVERY;
+    await user.save();
+
+    const ok = await User.authenticateBy({
+      token: user.token,
+      password: PASSWORD,
+      recovery_password: RECOVERY,
+    });
+    expect(ok?.id).toBe(user.id);
+
+    expect(
+      await User.authenticateBy({
+        token: user.token,
+        password: "wrong",
+        recovery_password: RECOVERY,
+      }),
+    ).toBeNull();
+    expect(
+      await User.authenticateBy({
+        token: user.token,
+        password: PASSWORD,
+        recovery_password: "wrong",
+      }),
+    ).toBeNull();
+  });
+
+  // Rails: test "authenticate_by takes the same amount of time regardless
+  // of whether record is found" — verify the constant-time mitigation by
+  // showing that the not-found path still spends substantial time hashing
+  // (PBKDF2 with 10k iterations is multiple ms; a no-op short-circuit
+  // would return in microseconds). Mirrors Rails' `new(passwords)` BCrypt
+  // trigger at secure_password.rb:55.
+  it("authenticate_by takes the same amount of time regardless of whether record is found", async () => {
+    const User = makeUser();
+
+    const start = performance.now();
+    const result = await (User as any).authenticateBy({
+      token: "no-such-token",
+      password: PASSWORD,
+    });
+    const elapsedMs = performance.now() - start;
+
+    expect(result).toBeNull();
+    // PBKDF2 hashing should take meaningful time. A no-op return path
+    // would complete sub-millisecond; we expect ≥5ms in practice.
+    expect(elapsedMs).toBeGreaterThan(5);
+  });
+
+  // Rails: test "authenticate_by requires at least one password"
+  it("authenticate_by requires at least one password", async () => {
+    const User = makeUser();
+    await expect(User.authenticateBy({ token: "abc123" })).rejects.toThrow(
+      "One or more password arguments are required",
+    );
+  });
+
+  // Rails: test "authenticate_by requires at least one attribute"
+  it("authenticate_by requires at least one attribute", async () => {
+    const User = makeUser();
+    await expect(User.authenticateBy({ password: "abc123" })).rejects.toThrow(
+      "One or more finder arguments are required",
+    );
+  });
+
+  // Rails: test "authenticate_by accepts any object that implements to_h"
+  it("authenticate_by accepts any object that implements to_h", async () => {
+    const { User, user } = await createUser();
+    const found = await User.authenticateBy({
+      toH: () => ({ token: user.token, password: PASSWORD }),
+    });
+    expect(found?.id).toBe(user.id);
+
+    const notFound = await User.authenticateBy({
+      toH: () => ({ token: "wrong", password: PASSWORD }),
+    });
+    expect(notFound).toBeNull();
+  });
 });

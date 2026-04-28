@@ -193,10 +193,10 @@ export function typecastForDatabase(value: unknown): unknown {
 
 /**
  * Cast a value to the primitive form MySQL drivers expect for binds.
- * Booleans become 1/0, Dates are rendered as an **unquoted**
- * `YYYY-MM-DD HH:MM:SS` string (Rails' `value.to_formatted_s(:db)`
- * form — it's `quote()`'s job to add the surrounding single quotes,
- * not `typeCast`'s), strings and numbers pass through unchanged.
+ * Booleans become 1/0; Temporal types are formatted as unquoted
+ * `YYYY-MM-DD HH:MM:SS[.ffffff]` strings (it's `quote()`'s job to
+ * add surrounding single quotes); strings and numbers pass through.
+ * JS Date is not accepted — use a Temporal type instead.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::Quoting#type_cast
  */

@@ -43,20 +43,22 @@ export function parsePostgresInstant(
 }
 
 /**
- * Parse a Postgres `timestamp` wire string to `Temporal.PlainDateTime`.
+ * Parse a Postgres `timestamp` (without tz) wire string to `Temporal.Instant`.
  *
  * Wire format: `'YYYY-MM-DD HH:MM:SS[.ffffff]'` (no offset).
- * or the sentinels `'infinity'` / `'-infinity'`.
+ * The value is treated as UTC — matching Rails' `default_timezone: :utc` convention
+ * and `ActiveRecord.default_timezone = :utc` default. This ensures a consistent
+ * `Temporal.Instant` return type across all adapters for `datetime` columns.
  */
 export function parsePostgresPlainDateTime(
   text: string,
-): Temporal.PlainDateTime | DateInfinityType | DateNegativeInfinityType {
+): Temporal.Instant | DateInfinityType | DateNegativeInfinityType {
   const trimmed = text.trim();
   if (trimmed === "infinity") return DateInfinity;
   if (trimmed === "-infinity") return DateNegativeInfinity;
   const { iso, bc } = extractBcSuffix(trimmed);
-  if (bc) return parseBcTimestampAsPlainDateTime(iso);
-  return Temporal.PlainDateTime.from(clampFraction(iso.replace(" ", "T")));
+  if (bc) return parseBcTimestampAsInstant(iso);
+  return Temporal.Instant.from(clampFraction(iso.replace(" ", "T") + "Z"));
 }
 
 /**
@@ -137,15 +139,18 @@ export function parseMysqlInstant(text: string): Temporal.Instant | null {
 }
 
 /**
- * Parse a MySQL `DATETIME` wire string to `Temporal.PlainDateTime`.
+ * Parse a MySQL `DATETIME` wire string to `Temporal.Instant`.
  *
  * Wire format: `'YYYY-MM-DD HH:MM:SS[.ffffff]'` (naive, no timezone).
- * Zero-date `'0000-00-00 00:00:00'` returns `null`.
+ * Treated as UTC — connection is pinned to `SET time_zone = '+00:00'` so
+ * DATETIME strings are always in UTC. Zero-date `'0000-00-00 00:00:00'`
+ * returns `null`. This matches the `Temporal.Instant` return type of all
+ * other adapters for `datetime` columns.
  */
-export function parseMysqlPlainDateTime(text: string): Temporal.PlainDateTime | null {
+export function parseMysqlPlainDateTime(text: string): Temporal.Instant | null {
   const trimmed = text.trim();
   if (isZeroDatetime(trimmed)) return null;
-  return Temporal.PlainDateTime.from(clampFraction(trimmed.replace(" ", "T")));
+  return Temporal.Instant.from(clampFraction(trimmed.replace(" ", "T") + "Z"));
 }
 
 /**
@@ -243,16 +248,16 @@ function parseBcTimestampTzAsInstant(withoutBc: string): Temporal.Instant {
 }
 
 /**
- * Parse a BC-suffixed Postgres `timestamp` string to `Temporal.PlainDateTime`.
+ * Parse a BC-suffixed Postgres `timestamp` string to `Temporal.Instant` (UTC).
  * Input has already had " BC" stripped.
  */
-function parseBcTimestampAsPlainDateTime(withoutBc: string): Temporal.PlainDateTime {
+function parseBcTimestampAsInstant(withoutBc: string): Temporal.Instant {
   // e.g. "0044-03-15 12:00:00.123456" or "0044-03-15 12:00:00"
   const match = /^(\d+)-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/.exec(withoutBc);
   if (!match) throw new RangeError(`Cannot parse BC timestamp: ${JSON.stringify(withoutBc)}`);
   const [, y, mo, d, h, mi, s, frac] = match;
   const { millisecond, microsecond, nanosecond } = parseFraction(frac);
-  return Temporal.PlainDateTime.from(
+  return Temporal.ZonedDateTime.from(
     {
       year: bcYearToIso(Number(y)),
       month: Number(mo),
@@ -263,9 +268,10 @@ function parseBcTimestampAsPlainDateTime(withoutBc: string): Temporal.PlainDateT
       millisecond,
       microsecond,
       nanosecond,
+      timeZone: "UTC",
     },
     { overflow: "reject" },
-  );
+  ).toInstant();
 }
 
 /**

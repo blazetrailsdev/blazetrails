@@ -12,9 +12,12 @@ set -euo pipefail
 : "${GH_PAT:?GH_PAT must be set (PAT with repo scope or fine-grained Administration: write)}"
 
 # Hostname inside Dokku replicas is e.g. "gh-runner.runner.1" — replace dots
-# so the runner name is API-safe and unique per replica/restart.
+# so the runner name is API-safe and unique per replica/restart. Nanosecond
+# precision avoids same-second collisions if two containers spin up
+# simultaneously (cleanup-by-name would otherwise risk deleting the wrong
+# record).
 SAFE_HOST="$(hostname | tr '.' '-')"
-RUNNER_NAME="${RUNNER_NAME:-${SAFE_HOST}-$(date +%s)}"
+RUNNER_NAME="${RUNNER_NAME:-${SAFE_HOST}-$(date +%s%N)}"
 RUNNER_LABELS="${RUNNER_LABELS:-self-hosted,Linux,X64}"
 API="https://api.github.com/repos/$GH_REPO"
 
@@ -31,10 +34,17 @@ TOKEN=$(echo "$TOKEN_JSON" | jq -er .token) || {
   exit 1
 }
 
-# Resolve and DELETE the runner record by name. `--ephemeral` self-
-# deregisters on clean job completion, so a 404 here is fine and expected.
-# This is the path that catches signal-induced exits during idle, where
-# --ephemeral does NOT clean up.
+# Resolve and DELETE the runner record by name. By the time `wait`
+# returns, run.sh has exited — either:
+#   - cleanly after a job, in which case `--ephemeral` already
+#     deregistered and the lookup returns nothing (404-equivalent: empty);
+#   - or after a forwarded signal during idle, in which case the record
+#     is still present and we delete it here.
+# Either way, no race with an in-flight job: run.sh is gone before this
+# trap fires.
+#
+# `?per_page=100` is fine at our scale (a single repo with <100 runners);
+# if the pool ever grows past that, paginate.
 cleanup() {
   echo "→ Cleanup: looking up runner record for $RUNNER_NAME"
   local id

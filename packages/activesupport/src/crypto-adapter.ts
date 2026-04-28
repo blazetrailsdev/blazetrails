@@ -45,12 +45,14 @@ export interface CryptoAdapter {
     digest: string,
   ): Buffer;
   /**
-   * Async PBKDF2 — runs on Node's crypto threadpool rather than the
-   * main thread. Prefer this over `pbkdf2Sync` on hot per-request
-   * paths (e.g. authenticate_by's not-found timing mitigation) so the
-   * event loop stays responsive under login load.
+   * Async PBKDF2 — when implemented, runs on a threadpool so hot
+   * per-request paths don't block the event loop. **Optional**: callers
+   * should go through `pbkdf2Async(adapter, ...)` below, which falls
+   * back to wrapping `pbkdf2Sync` in `Promise.resolve` for adapters that
+   * don't ship an async implementation. Marking this optional keeps
+   * downstream custom adapters source-compatible.
    */
-  pbkdf2(
+  pbkdf2?(
     password: string | Uint8Array,
     salt: string | Uint8Array,
     iterations: number,
@@ -58,6 +60,25 @@ export interface CryptoAdapter {
     digest: string,
   ): Promise<Buffer>;
   timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean;
+}
+
+/**
+ * Use the adapter's async `pbkdf2` when available, otherwise wrap the
+ * sync implementation. Lets call sites prefer the threadpool path
+ * without breaking adapters that only implement `pbkdf2Sync`.
+ */
+export function pbkdf2Async(
+  adapter: CryptoAdapter,
+  password: string | Uint8Array,
+  salt: string | Uint8Array,
+  iterations: number,
+  keylen: number,
+  digest: string,
+): Promise<Buffer> {
+  if (typeof adapter.pbkdf2 === "function") {
+    return adapter.pbkdf2(password, salt, iterations, keylen, digest);
+  }
+  return Promise.resolve(adapter.pbkdf2Sync(password, salt, iterations, keylen, digest));
 }
 
 export interface HashAdapter {

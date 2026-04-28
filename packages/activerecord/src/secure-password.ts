@@ -1,4 +1,4 @@
-import { getCrypto, camelize } from "@blazetrails/activesupport";
+import { getCrypto, camelize, pbkdf2Async } from "@blazetrails/activesupport";
 import { ArgumentError } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
 import { generatesTokenFor } from "./token-for.js";
@@ -259,13 +259,21 @@ export async function authenticateBy(
   this: typeof Base,
   attributes: Record<string, unknown> | { toH(): Record<string, unknown> },
 ): Promise<Base | null> {
+  // Reject non-objects up front so a stray null/undefined produces a
+  // clear error instead of "Cannot read properties of null (reading
+  // 'toH')" deep in the call chain.
+  if (attributes === null || typeof attributes !== "object") {
+    throw new ArgumentError(
+      "authenticateBy expects an object of attributes (or one with a toH() method)",
+    );
+  }
   // Convert to a plain object if the input has a `toH()` method
   // (trails' camelCase analog of Rails' `to_h`). trails is camelCase-only
   // — callers passing Ruby/Rails-shaped values must translate to `toH()`
   // at the boundary.
   const attrs =
-    typeof (attributes as any).toH === "function"
-      ? (attributes as any).toH()
+    typeof (attributes as { toH?: unknown }).toH === "function"
+      ? (attributes as { toH(): Record<string, unknown> }).toH()
       : (attributes as Record<string, unknown>);
 
   const passwordEntries: Array<[string, unknown]> = [];
@@ -346,7 +354,7 @@ export async function authenticateBy(
     for (const [name] of passwordEntries) {
       const value = passwords[name] as string;
       // Result discarded — we only care about the elapsed CPU time.
-      await getCrypto().pbkdf2(value, salt, ITERATIONS, KEY_LENGTH, "sha256");
+      await pbkdf2Async(getCrypto(), value, salt, ITERATIONS, KEY_LENGTH, "sha256");
     }
     return null;
   }

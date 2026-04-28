@@ -27,10 +27,12 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
  && npm install -g "pnpm@${PNPM_VERSION}" \
  && npm cache clean --force
 
-# Pin UID so the persistent pnpm-store volume mount in Dokku
-# (`dokku storage:mount … :/home/runner/.local/share/pnpm`) has stable
-# ownership across container restarts.
-RUN useradd -u 1000 -m -d /home/runner -s /bin/bash runner
+# Ubuntu 24.04 ships with a default `ubuntu` user at UID 1000; remove it
+# so we can pin our runner user there. Pinning the UID gives the
+# persistent pnpm-store volume mount (`dokku storage:mount …`) stable
+# ownership across image rebuilds.
+RUN userdel -r ubuntu 2>/dev/null || true \
+ && useradd -u 1000 -m -d /home/runner -s /bin/bash runner
 WORKDIR /home/runner
 
 RUN curl -fsSL -o actions-runner.tar.gz \

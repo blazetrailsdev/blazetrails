@@ -79,7 +79,7 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
     return temporal.toString({ fractionalSecondDigits: digits });
   }
 
-  serializeCastValue(value: Temporal.Instant | null): string | null {
+  serializeCastValue(value: DateTimeCastResult | null): string | null {
     return this.serialize(value);
   }
 

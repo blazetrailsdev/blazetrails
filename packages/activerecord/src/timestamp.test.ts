@@ -4,11 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import {
-  instant,
-  epochMs,
-  isTemporalDatetime,
-} from "@blazetrails/activesupport/testing/temporal-helpers";
+import { instant } from "@blazetrails/activesupport/testing/temporal-helpers";
 import { Base, registerModel } from "./index.js";
 import { Associations } from "./associations.js";
 
@@ -366,8 +362,14 @@ describe("TimestampTest", () => {
     }
     const post = await Post.create({ title: "Round-trip" });
     const reloaded = await Post.find(post.id!);
+    const isTemporalDatetime = (v: unknown) =>
+      v instanceof Temporal.Instant || v instanceof Temporal.PlainDateTime;
     expect(isTemporalDatetime(reloaded.created_at)).toBe(true);
-    expect(epochMs(reloaded.created_at)).toBe(epochMs(post.created_at));
+    const toMs = (v: unknown) =>
+      v instanceof Temporal.Instant
+        ? v.epochMilliseconds
+        : (v as Temporal.PlainDateTime).toZonedDateTime("UTC").toInstant().epochMilliseconds;
+    expect(toMs(reloaded.created_at)).toBe(toMs(post.created_at));
   });
 
   it("does not overwrite explicitly set timestamps on insert", async () => {

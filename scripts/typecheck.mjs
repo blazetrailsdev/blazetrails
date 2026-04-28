@@ -17,4 +17,13 @@ const tscPath = path.join(
 // (<1s warm via .tsbuildinfo), matching what CI's `pnpm build` does
 // before its typecheck step.
 const result = spawnSync(tscPath, ["--build"], { stdio: "inherit" });
+
+if (result.error) {
+  console.error("✗ Failed to start TypeScript compiler.");
+  console.error(`  tsc: ${tscPath}`);
+  console.error(`  cwd: ${process.cwd()}`);
+  console.error(`  ${result.error.name}: ${result.error.message}`);
+  process.exit(1);
+}
+
 process.exit(result.status ?? 1);

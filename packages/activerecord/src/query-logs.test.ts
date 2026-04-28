@@ -263,7 +263,20 @@ describe("QueryLogs.tagsFormatter", () => {
     expect(logs.tagsFormatter).toBe("legacy");
   });
 
-  it("falls back to 'legacy' for custom formatters", () => {
+  it("tracks formatter = SQLCommenter (class value)", () => {
+    const logs = new QueryLogs();
+    logs.formatter = SQLCommenter;
+    expect(logs.tagsFormatter).toBe("sqlcommenter");
+  });
+
+  it("tracks formatter = LegacyFormatter (class value)", () => {
+    const logs = new QueryLogs();
+    logs.formatter = SQLCommenter;
+    logs.formatter = LegacyFormatter;
+    expect(logs.tagsFormatter).toBe("legacy");
+  });
+
+  it("falls back to 'legacy' for unknown custom formatters", () => {
     const logs = new QueryLogs();
     logs.formatter = SQLCommenter;
     logs.formatter = {

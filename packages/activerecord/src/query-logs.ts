@@ -114,8 +114,16 @@ export class QueryLogs {
       // Accept anything with the right call shape — an instance, a
       // const object, or a class / function with static `format` /
       // `join` (matches how Rails' singleton-class formatters are
-      // invoked: `MyFormatter.format(k, v)`).
-      this._tagsFormatter = "legacy"; // fallback when custom formatter
+      // invoked: `MyFormatter.format(k, v)`). Detect the known
+      // built-ins so `tagsFormatter` stays accurate when the caller
+      // passes the class value directly (`logs.formatter = SQLCommenter`).
+      if (format === SQLCommenter) {
+        this._tagsFormatter = "sqlcommenter";
+      } else if (format === LegacyFormatter) {
+        this._tagsFormatter = "legacy";
+      } else {
+        this._tagsFormatter = "legacy"; // unknown custom formatter
+      }
       this._formatter = format as QueryLogsFormatter;
     } else {
       // Describe the bad value without dumping a full function body

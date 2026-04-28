@@ -46,7 +46,9 @@ export class DateTime extends DateTimeType {
       if (/ BC$/.test(value)) {
         try {
           // BC dates may have offset (timestamptz) or not (timestamp). Both
-          // return Instant — parsePostgresTimestampAsInstant now treats naive as UTC.
+          // return Instant — parsePostgresTimestampAsInstant interprets naive
+          // values in defaultSqlTimezone() (UTC by default, host-local when
+          // ActiveRecord.default_timezone === "local").
           const hasOffset = /[-+]\d{2}(?::\d{2})?$/.test(value.slice(0, -3).trimEnd());
           return hasOffset ? parsePostgresInstant(value) : parsePostgresTimestampAsInstant(value);
         } catch {

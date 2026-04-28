@@ -5,8 +5,10 @@
  * a value — space separator instead of T, two-digit offsets, BC suffix,
  * infinity sentinels, zero-dates.
  *
- * All functions are pure (no I/O, no side effects) so they can be unit-
- * tested directly without a live database.
+ * Naive timestamp parsers (no offset in the wire format) interpret values
+ * in `defaultSqlTimezone()` — UTC by default, host-system local when
+ * `ActiveRecord.default_timezone === "local"`. This is the only non-pure
+ * dependency; everything else is pure and unit-testable without a live DB.
  */
 
 import { Temporal } from "@blazetrails/activesupport/temporal";

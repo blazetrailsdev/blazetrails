@@ -1,4 +1,3 @@
-import { NotImplementedError } from "./errors.js";
 import {
   LogSubscriber as BaseLogSubscriber,
   NotificationEvent as Event,
@@ -91,30 +90,30 @@ export class LogSubscriber extends BaseLogSubscriber {
     let binds: string | null = null;
 
     if (payload.binds && Array.isArray(payload.binds) && payload.binds.length > 0) {
-      const castedParams = this._typeCastedBinds(
+      const castedParams = this.typeCastedBinds(
         payload.type_casted_binds ?? payload.typeCastedBinds,
       );
       const bindPairs: [string | null, unknown][] = [];
 
       for (let i = 0; i < (payload.binds as any[]).length; i++) {
         const attr = (payload.binds as any[])[i];
-        const filteredParams = this._filter(this._extractAttributeName(attr, i), castedParams?.[i]);
-        bindPairs.push(this._renderBind(attr, filteredParams));
+        const filteredParams = this.filter(this.extractAttributeName(attr, i), castedParams?.[i]);
+        bindPairs.push(this.renderBind(attr, filteredParams));
       }
 
       binds = `  ${safeJsonStringify(bindPairs)}`;
     }
 
-    const colorizedName = this._colorizePayloadName(name, payload.name as string | undefined);
+    const colorizedName = this.colorizePayloadName(name, payload.name as string | undefined);
     const colorizedSql = this.colorizeLogging
-      ? this.color(sql, this._sqlColor(sql), { bold: true })
+      ? this.color(sql, this.sqlColor(sql), { bold: true })
       : sql;
 
     const message = `  ${colorizedName}  ${colorizedSql}${binds ?? ""}`;
-    this._debugSql(message);
+    this.debugSql(message);
   }
 
-  override get logger(): Logger | null {
+  private override get logger(): Logger | null {
     // Rails: `def logger; ActiveRecord::Base.logger; end`
     // Returns Base.logger directly — null means logging disabled.
     const B = getBase();
@@ -122,29 +121,39 @@ export class LogSubscriber extends BaseLogSubscriber {
     return (this.constructor as typeof LogSubscriber).logger;
   }
 
-  // -- Private helpers -----------------------------------------------------
-
-  protected _debugSql(message: string): boolean {
-    const l = this.logger;
-    if (!l) return false;
-    const result = l.debug(message);
+  private debug(progname?: string, block?: () => string): boolean {
+    // Call parent class debug method, passing through the arguments
+    const result = super.debug(progname, block);
+    if (!result) return result;
 
     if (_verboseQueryLogs) {
-      this._logQuerySource();
+      this.logQuerySource();
     }
 
     return result;
   }
 
-  private _logQuerySource(): void {
-    const source = this._querySourceLocation();
+  protected debugSql(message: string): boolean {
+    const l = this.logger;
+    if (!l) return false;
+    const result = l.debug(message);
+
+    if (_verboseQueryLogs) {
+      this.logQuerySource();
+    }
+
+    return result;
+  }
+
+  private logQuerySource(): void {
+    const source = this.querySourceLocation();
     if (source) {
       const l = this.logger;
       if (l) l.debug(`  ↳ ${source}`);
     }
   }
 
-  protected _querySourceLocation(): string | null {
+  private querySourceLocation(): string | null {
     try {
       const err = new Error();
       const stack = err.stack?.split("\n") ?? [];
@@ -165,18 +174,18 @@ export class LogSubscriber extends BaseLogSubscriber {
     return null;
   }
 
-  private _typeCastedBinds(castedBinds: unknown): any[] {
+  private typeCastedBinds(castedBinds: unknown): any[] {
     if (typeof castedBinds === "function") return castedBinds();
     return (castedBinds as any[]) ?? [];
   }
 
-  private _extractAttributeName(attr: any, _i: number): string | null {
+  private extractAttributeName(attr: any, _i: number): string | null {
     if (attr && typeof attr.name === "string") return attr.name;
     if (Array.isArray(attr) && attr[0] && typeof attr[0].name === "string") return attr[0].name;
     return null;
   }
 
-  private _renderBind(attr: any, value: unknown): [string | null, unknown] {
+  private renderBind(attr: any, value: unknown): [string | null, unknown] {
     // ActiveModel::Attribute — has type and value properties
     if (attr && typeof attr === "object" && "type" in attr && "value" in attr) {
       if (attr.type?.binary?.() && attr.value != null) {
@@ -200,14 +209,14 @@ export class LogSubscriber extends BaseLogSubscriber {
     return [null, value];
   }
 
-  private _colorizePayloadName(name: string, payloadName: string | undefined): string {
+  private colorizePayloadName(name: string, payloadName: string | undefined): string {
     if (!payloadName || payloadName === "" || payloadName === "SQL") {
       return this.color(name, BaseLogSubscriber.MAGENTA, { bold: true });
     }
     return this.color(name, BaseLogSubscriber.CYAN, { bold: true });
   }
 
-  private _sqlColor(sql: string): string {
+  private sqlColor(sql: string): string {
     if (/^\s*rollback/im.test(sql)) return BaseLogSubscriber.RED;
     if (/select .*for update/ims.test(sql) || /^\s*lock/im.test(sql))
       return BaseLogSubscriber.WHITE;
@@ -219,7 +228,7 @@ export class LogSubscriber extends BaseLogSubscriber {
     return BaseLogSubscriber.MAGENTA;
   }
 
-  private _filter(name: string | null, value: unknown): unknown {
+  private filter(name: string | null, value: unknown): unknown {
     const B = getBase();
     if (B && typeof B.inspectionFilter === "function") {
       const filter = B.inspectionFilter();
@@ -234,39 +243,3 @@ export class LogSubscriber extends BaseLogSubscriber {
 // Register log-level gates matching Rails' class-body `subscribe_log_level` calls.
 LogSubscriber.subscribeLogLevel("sql", "debug");
 LogSubscriber.subscribeLogLevel("strict_loading_violation", "debug");
-
-function typeCastedBinds(castedBinds: any): never {
-  throw new NotImplementedError("ActiveRecord::LogSubscriber#type_casted_binds is not implemented");
-}
-
-function renderBind(attr: any, value: any): never {
-  throw new NotImplementedError("ActiveRecord::LogSubscriber#render_bind is not implemented");
-}
-
-function colorizePayloadName(name: any, payloadName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::LogSubscriber#colorize_payload_name is not implemented",
-  );
-}
-
-function sqlColor(sql: any): never {
-  throw new NotImplementedError("ActiveRecord::LogSubscriber#sql_color is not implemented");
-}
-
-function logger(): never {
-  throw new NotImplementedError("ActiveRecord::LogSubscriber#logger is not implemented");
-}
-
-function debug(progname?: any, block?: any): never {
-  throw new NotImplementedError("ActiveRecord::LogSubscriber#debug is not implemented");
-}
-
-function logQuerySource(): never {
-  throw new NotImplementedError("ActiveRecord::LogSubscriber#log_query_source is not implemented");
-}
-
-function querySourceLocation(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::LogSubscriber#query_source_location is not implemented",
-  );
-}

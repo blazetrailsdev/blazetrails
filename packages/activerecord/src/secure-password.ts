@@ -254,20 +254,16 @@ export function hasSecurePassword(
  */
 export async function authenticateBy(
   this: typeof Base,
-  attributes:
-    | Record<string, unknown>
-    | { toH(): Record<string, unknown> }
-    | { to_h(): Record<string, unknown> },
+  attributes: Record<string, unknown> | { toH(): Record<string, unknown> },
 ): Promise<Base | null> {
-  // Convert to plain object via either the JS-style `toH` (canonical
-  // trails camelCase) or Rails-style `to_h` (so Ruby/Rails values like
-  // ActionController::Parameters interop without translation).
+  // Convert to a plain object if the input has a `toH()` method
+  // (trails' camelCase analog of Rails' `to_h`). trails is camelCase-only
+  // — callers passing Ruby/Rails-shaped values must translate to `toH()`
+  // at the boundary.
   const attrs =
     typeof (attributes as any).toH === "function"
       ? (attributes as any).toH()
-      : typeof (attributes as any).to_h === "function"
-        ? (attributes as any).to_h()
-        : (attributes as Record<string, unknown>);
+      : (attributes as Record<string, unknown>);
 
   const passwordEntries: Array<[string, unknown]> = [];
   const identifierEntries: Array<[string, unknown]> = [];

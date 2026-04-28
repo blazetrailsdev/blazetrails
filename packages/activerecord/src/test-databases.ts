@@ -89,14 +89,14 @@ export async function createAndLoadSchema(
       await DatabaseTasks.reconstructFromSchema(dbConfig, DatabaseTasks.schemaFormat, undefined);
     }
   } finally {
-    // Restore VERBOSE environment variable
+    // Rails ensure order: establish_connection first, then restore VERBOSE
+    // (test_databases.rb:18-21).
+    const { establishConnection } = await import("./connection-handling.js");
+    await establishConnection(modelClass);
     if (old !== undefined) {
       process.env.VERBOSE = old;
     } else {
       delete process.env.VERBOSE;
     }
-    // Re-establish connection to original database(s)
-    const { establishConnection } = await import("./connection-handling.js");
-    await establishConnection(modelClass);
   }
 }

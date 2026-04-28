@@ -1252,8 +1252,11 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Add a LEFT OUTER JOIN. Accepts an association name or a table name
-   * with an ON condition.
+   * Add a LEFT OUTER JOIN. Accepts:
+   * - A string association name: `leftJoins("posts")`
+   * - A hash spec for nested associations: `leftJoins({ posts: "comments" })`
+   * - An array of the above: `leftJoins(["posts", "comments"])`
+   * - A raw table name with an explicit ON clause: `leftJoins("posts", "posts.author_id = authors.id")`
    *
    * Mirrors: ActiveRecord::Relation#left_joins
    */

@@ -85,6 +85,6 @@ function isInfinity(value: unknown): boolean {
   const fn = (value as { infinite?: unknown }).infinite;
   if (typeof fn !== "function") return false;
   const result = (fn as () => unknown).call(value);
-  // Mirrors Ruby truthiness — Float#infinite? returns nil/1/-1; only 1/-1 are truthy.
-  return result != null && result !== false && result !== 0;
+  // Mirrors Ruby truthiness for duck-typed infinite() results: only nil/false are falsey.
+  return result != null && result !== false;
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createAndMigrate, eachDatabase, createAndLoadSchema } from "./test-databases.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { MigrationProxy } from "./migration.js";
@@ -18,7 +18,12 @@ const stubConfigurations = (configs: unknown[]): DatabaseConfigurations => {
 };
 
 describe("TestDatabasesTest", () => {
+  let priorCurrent: DatabaseConfigurations | null;
+  beforeEach(() => {
+    priorCurrent = DatabaseConfigurations.current;
+  });
   afterEach(() => {
+    DatabaseConfigurations.current = priorCurrent;
     vi.restoreAllMocks();
   });
 

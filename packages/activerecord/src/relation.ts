@@ -2741,6 +2741,7 @@ export class Relation<T extends Base> {
       um.where(arelSql(cond));
     }
 
+    if (!this._modelClass.adapter) return 0;
     return this._modelClass.adapter.executeMutation(um.toSql());
   }
 

@@ -8,7 +8,7 @@ import type { Base } from "./base.js";
 import { modelRegistry } from "./associations.js";
 import { ActiveRecordError, NameError, SubclassNotFound } from "./errors.js";
 import { Nodes } from "@blazetrails/arel";
-import { underscore } from "@blazetrails/activesupport";
+import { camelize, underscore } from "@blazetrails/activesupport";
 
 /**
  * Helper: cast inheritance column value through its attribute type.
@@ -341,12 +341,13 @@ export function initializeInternalsCallback(this: Base): void {
  */
 export function ensureProperType(this: Base): void {
   const klass = this.constructor as typeof Base;
-  if (isFinderNeedsTypeCondition(klass)) {
-    const inheritCol = getInheritanceColumn(klass);
-    if (inheritCol) {
-      (this as any)._writeAttribute(inheritCol, stiName(klass));
-    }
-  }
+  if (!isFinderNeedsTypeCondition(klass)) return;
+  const inheritCol = getInheritanceColumn(klass);
+  if (!inheritCol) return;
+  // Only write when the column is a declared attribute — otherwise the value
+  // wouldn't persist or serialize correctly. Mirrors usingSingleTableInheritance.
+  if (!(klass as any)._attributeDefinitions?.has(inheritCol)) return;
+  (this as any)._writeAttribute(inheritCol, stiName(klass));
 }
 
 /**
@@ -448,10 +449,14 @@ export function subclassFromAttributes(
   const inheritCol = getInheritanceColumn(modelClass);
   if (!inheritCol) return null;
 
-  // Try both camelCase and snake_case forms of the inheritance column name
+  // Try the column as-given, plus snake_case and camelCase variants so attrs
+  // from form params or JS-style camelCase callers both resolve.
+  const camelCol = camelize(inheritCol, false);
+  const snakeCol = underscore(inheritCol);
   const subclassName =
     (attrsHash[inheritCol] as string | null | undefined) ||
-    (attrsHash[underscore(inheritCol)] as string | null | undefined);
+    (attrsHash[snakeCol] as string | null | undefined) ||
+    (attrsHash[camelCol] as string | null | undefined);
 
   if (subclassName && subclassName.toString().trim()) {
     // Rails: cast the value through the inheritance column's type

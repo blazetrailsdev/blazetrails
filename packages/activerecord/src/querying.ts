@@ -231,8 +231,15 @@ export function leftJoins<T extends typeof Base>(
   table: AssociationSpec | AssociationSpec[],
   on?: string,
 ): Relation<InstanceType<T>> {
-  if (on && typeof table === "string") return this.all().leftJoins(table, on);
-  return this.all().leftJoins(table as AssociationSpec | AssociationSpec[]);
+  const rel = this.all();
+  if (on !== undefined) {
+    // Delegate via cast so Relation.leftJoins' runtime validation fires for non-string table.
+    return (rel.leftJoins as (t: string, o: string) => Relation<InstanceType<T>>)(
+      table as string,
+      on,
+    );
+  }
+  return rel.leftJoins(table as AssociationSpec | AssociationSpec[]);
 }
 
 /** Mirrors: ActiveRecord::Querying#left_outer_joins */
@@ -250,8 +257,14 @@ export function leftOuterJoins<T extends typeof Base>(
   table?: AssociationSpec | AssociationSpec[],
   on?: string,
 ): Relation<InstanceType<T>> {
-  if (on && typeof table === "string") return this.all().leftOuterJoins(table, on);
-  return this.all().leftOuterJoins(table);
+  const rel = this.all();
+  if (on !== undefined) {
+    return (rel.leftOuterJoins as (t: string, o: string) => Relation<InstanceType<T>>)(
+      table as string,
+      on,
+    );
+  }
+  return rel.leftOuterJoins(table);
 }
 
 /** Mirrors: ActiveRecord::Querying#none */

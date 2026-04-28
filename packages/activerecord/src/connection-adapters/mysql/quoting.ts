@@ -9,7 +9,6 @@
  */
 
 import {
-  quotedDate as abstractQuotedDate,
   formatInstantForSqlMysql as formatInstantForSql,
   formatPlainDateTimeForSqlMysql as formatPlainDateTimeForSql,
   formatPlainDateForSql,
@@ -22,8 +21,6 @@ export interface Quoting {
   unquotedTrue(): number;
   quotedFalse(): string;
   unquotedFalse(): number;
-  quotedDate(date: Date): string;
-  quotedTimeUtc(date: Date): string;
   quoteTableName(name: string): string;
   quoteColumnName(name: string): string;
   quoteString(value: string): string;
@@ -44,29 +41,6 @@ export function quotedFalse(): string {
 
 export function unquotedFalse(): number {
   return 0;
-}
-
-/**
- * MySQL's DATETIME/TIMESTAMP literal format matches Rails' `:db`
- * form: unquoted `YYYY-MM-DD HH:MM:SS[.microseconds]`. Fractional
- * seconds only appear when milliseconds > 0. `quote()` wraps the
- * result with single quotes.
- *
- * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quoted_date
- */
-export function quotedDate(date: Date): string {
-  return abstractQuotedDate(date);
-}
-
-/**
- * Time-only portion of `quotedDate`. Unquoted.
- *
- * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quoted_time
- */
-export function quotedTimeUtc(date: Date): string {
-  const full = quotedDate(date);
-  const sep = full.indexOf(" ");
-  return sep === -1 ? full : full.slice(sep + 1);
 }
 
 export function quoteTableName(name: string): string {
@@ -191,7 +165,6 @@ export function quote(value: unknown): string {
   if (value instanceof Temporal.PlainDate) return `'${formatPlainDateForSql(value)}'`;
   if (value instanceof Temporal.PlainTime) return `'${formatPlainTimeForSql(value)}'`;
   if (value instanceof Temporal.ZonedDateTime) return `'${formatInstantForSql(value.toInstant())}'`;
-  if (value instanceof Date) return `'${quotedDate(value)}'`;
   if (value instanceof Buffer) return quotedBinary(value);
   if (typeof value === "symbol") {
     const desc = value.description;
@@ -238,6 +211,5 @@ export function typeCast(value: unknown): unknown {
   if (value instanceof Temporal.PlainDate) return formatPlainDateForSql(value);
   if (value instanceof Temporal.PlainTime) return formatPlainTimeForSql(value);
   if (value instanceof Temporal.ZonedDateTime) return formatInstantForSql(value.toInstant());
-  if (value instanceof Date) return quotedDate(value);
   throw new TypeError(`can't cast ${(value as object).constructor?.name ?? typeof value}`);
 }

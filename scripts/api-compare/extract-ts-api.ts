@@ -220,6 +220,44 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
           line,
           file: relPath,
         });
+      } else if (ts.isVariableStatement(node) && isExported(node)) {
+        // Capture `export const X = { method() {...}, ... }` as a module.
+        // This is the shape every `include(Host, Mod)` mixin uses
+        // (see activesupport/src/include.ts), so without recording these
+        // the include-detection pass below has nothing to fold in.
+        for (const decl of node.declarationList.declarations) {
+          if (!decl.name || !ts.isIdentifier(decl.name)) continue;
+          if (!decl.initializer || !ts.isObjectLiteralExpression(decl.initializer)) continue;
+          const methods: MethodInfo[] = [];
+          for (const prop of decl.initializer.properties) {
+            let mname: string | null = null;
+            if (ts.isMethodDeclaration(prop) && prop.name && ts.isIdentifier(prop.name)) {
+              mname = prop.name.text;
+            } else if (
+              ts.isPropertyAssignment(prop) &&
+              ts.isIdentifier(prop.name) &&
+              (ts.isFunctionExpression(prop.initializer) || ts.isArrowFunction(prop.initializer))
+            ) {
+              mname = prop.name.text;
+            }
+            if (!mname) continue;
+            const line =
+              prop.getSourceFile().getLineAndCharacterOfPosition(prop.getStart()).line + 1;
+            methods.push({ name: mname, visibility: "public", params: [], line, file: relPath });
+          }
+          if (methods.length === 0) continue;
+          const modKey = `${relPath}:${decl.name.text}`;
+          if (info.modules[modKey] || info.classes[modKey]) continue;
+          info.modules[modKey] = {
+            name: decl.name.text,
+            file: relPath,
+            includes: [],
+            extends: [],
+            instanceMethods: methods,
+            classMethods: [],
+          };
+          fileHasClassOrModule = true;
+        }
       } else if (
         (ts.isFunctionDeclaration(node) || ts.isVariableStatement(node)) &&
         !isExported(node)
@@ -405,6 +443,93 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
     if (sourceModule) {
       info.modules[key] = { ...sourceModule, name: re.localName, file: re.fromFile };
     }
+  }
+
+  // Include-detection pass: every top-level `include(Host, Mod)` call
+  // (from `@blazetrails/activesupport`) is recorded as `Host.extends +=
+  // Mod`, so compare.ts's existing `getInherited` walker folds Mod's
+  // methods into Host's TS surface. Without this the host class's file
+  // looks empty of the mixed-in methods even when Rails reports them
+  // as part of the host's effective surface (see arel #814).
+  for (const sourceFile of program.getSourceFiles()) {
+    if (!sourceFile.fileName.startsWith(srcDir)) continue;
+    if (sourceFile.fileName.endsWith(".test.ts")) continue;
+    if (sourceFile.fileName.endsWith(".d.ts")) continue;
+
+    let importsInclude = false;
+    ts.forEachChild(sourceFile, (n) => {
+      if (
+        !ts.isImportDeclaration(n) ||
+        !ts.isStringLiteral(n.moduleSpecifier) ||
+        n.moduleSpecifier.text !== "@blazetrails/activesupport" ||
+        !n.importClause?.namedBindings ||
+        !ts.isNamedImports(n.importClause.namedBindings)
+      ) {
+        return;
+      }
+      for (const el of n.importClause.namedBindings.elements) {
+        if ((el.propertyName ?? el.name).text === "include") importsInclude = true;
+      }
+    });
+    if (!importsInclude) continue;
+
+    ts.forEachChild(sourceFile, (n) => {
+      if (!ts.isExpressionStatement(n)) return;
+      const call = n.expression;
+      if (!ts.isCallExpression(call)) return;
+      if (!ts.isIdentifier(call.expression) || call.expression.text !== "include") return;
+      if (call.arguments.length < 2) return;
+      const [hostArg, modArg] = call.arguments;
+      if (!ts.isIdentifier(hostArg)) return;
+
+      const hostSym0 = checker.getSymbolAtLocation(hostArg);
+      if (!hostSym0) return;
+      const hostSym =
+        hostSym0.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(hostSym0) : hostSym0;
+      let hostDecl: ts.Declaration | undefined =
+        hostSym.valueDeclaration ?? hostSym.declarations?.[0];
+      let hostName: string = hostSym.name;
+      // Some sites bind the class through a const cast first, e.g.
+      // `const _NodeExpression = NodeExpression as unknown as new (...) => ...`.
+      // Walk the type's construct signature back to the original class.
+      if (!hostDecl || !ts.isClassDeclaration(hostDecl)) {
+        const t = checker.getTypeAtLocation(hostArg);
+        const ctorSigs = t.getConstructSignatures();
+        const inst = ctorSigs[0]?.getReturnType();
+        const sym = inst?.getSymbol();
+        const decl = sym?.valueDeclaration ?? sym?.declarations?.[0];
+        if (decl && ts.isClassDeclaration(decl) && sym) {
+          hostDecl = decl;
+          hostName = sym.name;
+        } else {
+          return;
+        }
+      }
+      const hostFile = path.relative(srcDir, hostDecl.getSourceFile().fileName).replace(/\\/g, "/");
+      const hostKey = `${hostFile}:${hostName}`;
+      const hostInfo = info.classes[hostKey];
+      if (!hostInfo) return;
+
+      // Resolve the module name. Imports may rebind it (`import { Math
+      // as MathMixin }`), so follow the alias to the original symbol's
+      // name when possible. Property access (`Mod.InstanceMethods`)
+      // takes the rightmost segment.
+      let modName: string | null = null;
+      if (ts.isIdentifier(modArg)) {
+        const sym0 = checker.getSymbolAtLocation(modArg);
+        if (sym0) {
+          const sym = sym0.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym0) : sym0;
+          modName = sym.name;
+        } else {
+          modName = modArg.text;
+        }
+      } else if (ts.isPropertyAccessExpression(modArg) && ts.isIdentifier(modArg.name)) {
+        modName = modArg.name.text;
+      }
+      if (!modName) return;
+
+      if (!hostInfo.extends.includes(modName)) hostInfo.extends.push(modName);
+    });
   }
 
   return info;

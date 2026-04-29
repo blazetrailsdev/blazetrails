@@ -47,9 +47,19 @@ describe("Visitor dispatch", () => {
   });
 
   it("memoizes ancestor lookups in the cache", () => {
-    const v = new TestVisitor();
-    v.accept(new B());
-    expect(TestVisitor.dispatchCache().get(B)).toBe("visitA");
+    // Use a fresh subclass so we own the dispatch cache start state —
+    // earlier tests may already have populated TestVisitor's cache for B.
+    class FreshVisitor extends Visitor {
+      visitA(_n: A): string {
+        return "A";
+      }
+      static {
+        this.dispatchCache().set(A, "visitA");
+      }
+    }
+    expect(FreshVisitor.dispatchCache().has(B)).toBe(false);
+    new FreshVisitor().accept(new B());
+    expect(FreshVisitor.dispatchCache().get(B)).toBe("visitA");
   });
 
   it("throws UnsupportedVisitError for nodes with no handler", () => {

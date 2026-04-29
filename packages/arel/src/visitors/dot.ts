@@ -27,9 +27,9 @@ export class DotNode {
 
 /**
  * Mirrors `Arel::Visitors::Dot::Edge` (a Struct of name/from/to).
- * `to` is set later by `withNode` once the destination Node exists; it
- * stays `undefined` for edges whose target was filtered out (e.g. an
- * unenumerated leaf). `toDot` skips edges with no `to`.
+ * `to` is `undefined` between construction (in `edge()`) and the inner
+ * `withNode()` call that supplies the destination. `toDot` asserts it's
+ * populated by the time the graph is rendered.
  */
 export class DotEdge {
   readonly name: string;
@@ -58,6 +58,14 @@ export class Dot extends Visitor {
   private edgeStack: DotEdge[] = [];
   private seen: Map<unknown, DotNode> = new Map();
   private nextId = 0;
+
+  /**
+   * Sentinel key for `null`/`undefined` in the seen-map. Rails treats
+   * `nil` as a singleton via `nil.object_id`; we collapse JS `null` and
+   * `undefined` onto one entry so a graph with both produces a single
+   * NilClass node, matching Rails' shape.
+   */
+  private static readonly NIL_SENTINEL = Symbol("Dot.NIL_SENTINEL");
 
   override accept(object: Node, collector?: unknown): { value: string } {
     // Lazily register Table — at static-block time `Table` (imported from
@@ -375,10 +383,21 @@ export class Dot extends Visitor {
     // for heap objects (two `String.new("foo")` get distinct entries) but
     // dedupes Ruby singletons (nil/true/false/Symbols/small Integers).
     // JS Map compares primitive keys by value, so memoizing strings would
-    // wrongly collapse two Tables that share a `name`. Memoize only
-    // reference-typed values; primitives get a fresh Dot node every time.
-    if (object !== null && typeof object === "object") {
-      const seenNode = this.seen.get(object);
+    // wrongly collapse two Tables that share a `name`. Memoize:
+    //   - reference-typed values, by reference identity;
+    //   - null/undefined, collapsed onto NIL_SENTINEL so a single
+    //     NilClass node represents Rails' nil singleton;
+    // and skip everything else (numbers, strings, booleans) so two equal
+    // primitives produce two distinct Dot nodes.
+    const seenKey =
+      object === null || object === undefined
+        ? Dot.NIL_SENTINEL
+        : typeof object === "object"
+          ? object
+          : undefined;
+
+    if (seenKey !== undefined) {
+      const seenNode = this.seen.get(seenKey);
       if (seenNode) {
         const e = this.edgeStack[this.edgeStack.length - 1];
         if (e) e.to = seenNode;
@@ -390,8 +409,8 @@ export class Dot extends Visitor {
     // Node entry whose `name` is the value's class. visit_String / visit_Hash
     // / visit_Array then mutate the new node's fields/edges.
     const node = new DotNode(this.classNameOf(object), this.nextId++);
-    if (object !== null && typeof object === "object") {
-      this.seen.set(object, node);
+    if (seenKey !== undefined) {
+      this.seen.set(seenKey, node);
     }
     this.nodes.push(node);
     this.withNode(node, () => {
@@ -432,10 +451,16 @@ export class Dot extends Visitor {
       });
       return `${n.id} [label="${label}"];`;
     });
-    const edgeLines = this.edges
-      // Rails always sets `to` via with_node; defend against orphan edges
-      // (a value that hit visit_String produces no incoming `to`).
-      .flatMap((e) => (e.to ? [`${e.from.id} -> ${e.to.id} [label="${e.name}"];`] : []));
+    // Every visit() in this Dot opens a Node and routes through withNode,
+    // which sets the incoming edge's `to`. So `e.to` is always populated
+    // by the time toDot runs — assert it (rather than silently dropping
+    // edges) so a regression that breaks the invariant fails loudly.
+    const edgeLines = this.edges.map((e) => {
+      if (!e.to) {
+        throw new Error(`Dot: edge "${e.name}" has no destination node`);
+      }
+      return `${e.from.id} -> ${e.to.id} [label="${e.name}"];`;
+    });
     return [header, ...nodeLines, ...edgeLines, "}"].join("\n");
   }
 

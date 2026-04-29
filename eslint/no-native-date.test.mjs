@@ -1,0 +1,65 @@
+import { RuleTester } from "eslint";
+import { parser as tsParser } from "typescript-eslint";
+import rule from "./no-native-date.mjs";
+
+const tester = new RuleTester({
+  languageOptions: {
+    parser: tsParser,
+    ecmaVersion: 2022,
+    sourceType: "module",
+  },
+});
+
+tester.run("no-native-date", rule, {
+  valid: [
+    // No Date usage at all.
+    "const x = 1;",
+    // Locally-bound Date (mirrors AR Type::Date import shadowing global).
+    'import { Date } from "./local.js";\nconst d = new Date();',
+    // Same-line trailing boundary marker.
+    "const d = new Date(); // boundary: legacy callers",
+    // Immediately-preceding boundary marker.
+    "// boundary: legacy callers\nconst d = new Date();",
+    // Block-comment boundary marker on preceding line.
+    "/* boundary: legacy callers */\nconst d = new Date();",
+    // File-level @boundary-file directive exempts the entire file.
+    `/**
+ * @boundary-file: HTTP date handling.
+ */
+const d = new Date();
+function f(x: unknown) {
+  return x instanceof Date;
+}`,
+    // Boundary on guarded instanceof.
+    "function f(x: unknown) { /* boundary: defensive */ if (x instanceof Date) return x; }",
+    // Out of scope: Date.{now,parse,UTC} return numbers, not Date values.
+    "const t = Date.now();",
+    "const t = Date.parse('2024-01-01');",
+    "const t = Date.UTC(2024, 0, 1);",
+    // Out of scope: Date used in TS type position only.
+    "function f(d: Date) { return d.toISOString(); }",
+  ],
+
+  invalid: [
+    {
+      code: "const d = new Date();",
+      errors: [{ messageId: "noNew" }],
+    },
+    {
+      code: "function f(x: unknown) { return x instanceof Date; }",
+      errors: [{ messageId: "noInstanceof" }],
+    },
+    // Boundary keyword in unrelated comment doesn't exempt.
+    {
+      code: "// just a comment\nconst d = new Date();",
+      errors: [{ messageId: "noNew" }],
+    },
+    // Boundary marker on a non-adjacent prior line doesn't exempt.
+    {
+      code: "// boundary: explanation\n\nconst x = 1;\nconst d = new Date();",
+      errors: [{ messageId: "noNew" }],
+    },
+  ],
+});
+
+console.log("no-native-date: all tests passed");

@@ -4199,8 +4199,9 @@ export class Relation<T extends Base> {
       let ts: Temporal.Instant | null = null;
       if (timestamp instanceof Temporal.Instant) {
         ts = timestamp;
-      } else if (timestamp instanceof Date && !Number.isNaN(timestamp.getTime())) {
-        // boundary: aggregate cache-key timestamp from a custom-typed column.
+      }
+      // boundary: aggregate cache-key timestamp from a custom-typed column.
+      else if (timestamp instanceof Date && !Number.isNaN(timestamp.getTime())) {
         ts = Temporal.Instant.fromEpochMilliseconds(timestamp.getTime());
       } else if (typeof timestamp === "number" && Number.isFinite(timestamp)) {
         ts = Temporal.Instant.fromEpochMilliseconds(timestamp);

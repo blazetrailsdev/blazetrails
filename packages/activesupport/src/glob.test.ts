@@ -303,6 +303,24 @@ describe("glob", () => {
     ]);
   });
 
+  it("escapes backslashes inside character classes (no invalid regex)", async () => {
+    // [\b] would otherwise compile to a class containing the JS regex
+    // backspace escape; [a\b] could match unexpected chars. We escape
+    // backslashes so the class is well-defined.
+    await expect(glob("[\\b].rb", { cwd: root })).resolves.toEqual([]);
+    await expect(glob("[a\\b]", { cwd: root })).resolves.toEqual([]);
+  });
+
+  it("matches dotfiles when the pattern explicitly references a dot segment", async () => {
+    // .hidden exists at root from the test fixture. Pattern '.hidden'
+    // (or '**/.hidden') should match without setting dot:true, mirroring
+    // picomatch behavior.
+    expect(await glob(".hidden", { cwd: root })).toEqual([".hidden"]);
+    expect(await glob("**/.hidden", { cwd: root })).toEqual([".hidden"]);
+    // Without explicit dot reference, default dot:false still hides them.
+    expect(await glob("*", { cwd: root })).not.toContain(".hidden");
+  });
+
   it("does not throw on empty character class `[]`", async () => {
     // Empty character class is legal-but-matches-nothing in some JS
     // engines and a syntax error in others. We treat it as a literal

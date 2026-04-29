@@ -42,6 +42,13 @@ interface CompiledPattern {
    * `base`. Used to prune subtree recursion.
    */
   maxDepth: number;
+  /**
+   * Whether the walk for this pattern should include dot entries even
+   * if `opts.dot` is false. Picomatch-style: a pattern that explicitly
+   * references a dot segment (e.g. `**\/.hidden`, `.config/**`) opts
+   * itself in.
+   */
+  allowDot: boolean;
 }
 
 /**
@@ -96,6 +103,7 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
         base,
         re: patternToRegex(p),
         maxDepth: maxRemainingDepth(p, base),
+        allowDot: dot || /(^|\/)\./.test(p),
       });
     }
   }
@@ -106,8 +114,18 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
   // literal prefix using the iterative walker.
   for (const positive of positives) {
     if (!hasGlobSemantics(positive.source)) continue;
-    const { base, re, maxDepth } = positive;
-    walk(fs, path, base ? path.join(cwd, base) : cwd, base, re, negatives, dot, maxDepth, results);
+    const { base, re, maxDepth, allowDot } = positive;
+    walk(
+      fs,
+      path,
+      base ? path.join(cwd, base) : cwd,
+      base,
+      re,
+      negatives,
+      allowDot,
+      maxDepth,
+      results,
+    );
   }
 
   // Literal-pattern fast path: a single existence check, no walk. Use
@@ -279,7 +297,11 @@ function patternToRegex(pattern: string): RegExp {
         // Constrain bracket expressions to non-slash to match the
         // segment-boundary semantics of `*` / `?`. Without this,
         // `a[/]b` would match `a/b`, crossing path boundaries.
-        re += `(?![/])${pattern.slice(i, end + 1)}`;
+        // Also escape any backslash inside the class so glob users
+        // can't produce an invalid regex via `[\b]` etc. (filesystem
+        // paths don't carry meaningful backslashes anyway).
+        const classBody = pattern.slice(i, end + 1).replace(/\\/g, "\\\\");
+        re += `(?![/])${classBody}`;
         i = end + 1;
       }
     } else if (REGEX_META.test(c)) {

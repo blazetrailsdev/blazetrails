@@ -323,6 +323,15 @@ describe("glob", () => {
     expect(await glob("*", { cwd: root })).not.toContain(".hidden");
   });
 
+  it("ignores empty patterns produced by brace expansion edge cases", async () => {
+    // `{a,}` expands to ["a", ""]; without filtering, the empty pattern
+    // would cause the literal fast path to statSync(cwd) and emit "".
+    expect(await glob("{foo.rb,}", { cwd: root })).toEqual(["foo.rb"]);
+    expect(await glob("{,foo.rb}", { cwd: root })).toEqual(["foo.rb"]);
+    // Bare empty pattern resolves to nothing.
+    expect(await glob("", { cwd: root })).toEqual([]);
+  });
+
   it("does not throw on empty character class `[]` (routed to fast path)", async () => {
     // Empty character class is legal-but-matches-nothing in some JS
     // engines and a syntax error in others. We treat it as a literal

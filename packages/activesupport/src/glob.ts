@@ -109,6 +109,10 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
   const positives: CompiledPattern[] = [];
   const negatives: RegExp[] = [];
   for (const p of expanded) {
+    // Skip empty patterns produced by brace expansion edge cases like
+    // `{a,}` or `{,foo}`. Without this, the literal fast path would
+    // statSync(cwd) and add "" to results — surprising and useless.
+    if (p === "" || p === "!") continue;
     if (p.startsWith("!")) {
       negatives.push(patternToRegex(p.slice(1)));
     } else {

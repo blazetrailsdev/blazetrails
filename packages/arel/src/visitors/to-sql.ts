@@ -20,6 +20,9 @@ export function resolveValueForDatabase(value: unknown): unknown {
   return typeof v === "function" ? (v as () => unknown).call(value) : v;
 }
 
+/** Default placeholder block; mirrors Rails' module-level `BIND_BLOCK`. */
+const DEFAULT_BIND_BLOCK: (index: number) => string = () => "?";
+
 /**
  * ToSql visitor — walks the AST and produces SQL strings.
  *
@@ -127,6 +130,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     };
     // Statements
     reg(Nodes.SelectStatement, "visitArelNodesSelectStatement");
+    reg(Nodes.SelectOptions, "visitArelNodesSelectOptions");
     reg(Nodes.SelectCore, "visitArelNodesSelectCore");
     reg(Nodes.InsertStatement, "visitArelNodesInsertStatement");
     reg(Nodes.UpdateStatement, "visitArelNodesUpdateStatement");
@@ -1372,20 +1376,16 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   // -- Helpers --
 
   protected visitNodeOrValue(v: Nodes.NodeOrValue): SQLString {
-    // Duck-type check for SelectManager (not a Node, but has ast/toSql)
+    // Duck-type check for SelectManager (not a Node, but has ast/toSql).
+    // Delegates to visitArelSelectManager — the Rails-named visitor for
+    // a bare SelectManager — so the wrapping behavior lives in one place.
     if (v !== null && v !== undefined && typeof v === "object" && "ast" in v && "toSql" in v) {
-      this.collector.append("(");
-      this.visit((v as { ast: Node }).ast);
-      this.collector.append(")");
-      return this.collector;
+      return this.visitArelSelectManager(v as unknown as { ast: Node });
     }
     if (v instanceof Node) {
       // Duck-type check to avoid circular dependency (SelectManager → ToSql → SelectManager)
       if ("ast" in v && "toSql" in v) {
-        this.collector.append("(");
-        this.visit((v as unknown as { ast: Node }).ast);
-        this.collector.append(")");
-        return this.collector;
+        return this.visitArelSelectManager(v as unknown as { ast: Node });
       }
       return this.visit(v);
     }
@@ -1582,9 +1582,12 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
    * Returns the placeholder-rendering callback the SQLString collector calls
    * for each unbound bind. Dialects override to emit numbered placeholders
    * (e.g. `$1`, `$2` for Postgres-with-binds).
+   *
+   * The default callback is cached at module load (Rails caches it under
+   * `BIND_BLOCK`) so the hot bind path doesn't allocate a closure per call.
    */
   protected bindBlock(): (index: number) => string {
-    return () => "?";
+    return DEFAULT_BIND_BLOCK;
   }
 
   /** Mirrors `to_sql.rb#unboundable?`. */
@@ -1761,18 +1764,15 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   /**
-   * Mirrors Rails: `visit_Arel_Nodes_SelectOptions` — emits limit/offset/lock
-   * via maybeVisit. Trails' SelectStatement carries these directly so this
-   * method is for callers that build a SelectOptions node explicitly.
+   * Mirrors Rails: `visit_Arel_Nodes_SelectOptions` (to_sql.rb:143). Emits
+   * limit/offset/lock via `maybeVisit`. Trails' SelectStatement carries
+   * those fields directly, so this fires only when a caller constructs a
+   * `Nodes.SelectOptions` explicitly. Reachable through the dispatch table.
    */
-  protected visitArelNodesSelectOptions(o: {
-    limit?: Node | null;
-    offset?: Node | null;
-    lock?: Node | null;
-  }): SQLString {
-    this.maybeVisit(o.limit ?? null);
-    this.maybeVisit(o.offset ?? null);
-    this.maybeVisit(o.lock ?? null);
+  protected visitArelNodesSelectOptions(o: Nodes.SelectOptions): SQLString {
+    this.maybeVisit(o.limit);
+    this.maybeVisit(o.offset);
+    this.maybeVisit(o.lock);
     return this.collector;
   }
 }

@@ -1251,6 +1251,15 @@ describe("the to_sql visitor", () => {
       expect(sql).not.toContain("?");
     });
 
+    it("Nodes.SelectOptions visits limit/offset/lock via maybeVisit through dispatch", () => {
+      const opts = new Nodes.SelectOptions(
+        new Nodes.Limit(new Nodes.SqlLiteral("10")),
+        new Nodes.Offset(new Nodes.SqlLiteral("20")),
+      );
+      const sql = new Visitors.ToSql().compile(opts);
+      expect(sql).toBe(" LIMIT 10 OFFSET 20");
+    });
+
     it("visitActiveModelAttribute routes through bindBlock (Rails parity)", () => {
       // ActiveModel::Attribute isn't a Node ctor so it's not reachable
       // through standard dispatch — exercise the visitor method directly

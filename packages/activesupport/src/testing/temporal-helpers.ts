@@ -22,3 +22,8 @@ export function plainTime(iso: string): Temporal.PlainTime {
 export function zonedDateTime(iso: string): Temporal.ZonedDateTime {
   return Temporal.ZonedDateTime.from(iso);
 }
+
+/** Test bridge: build an Instant from a Date. */
+export function instantFromDate(date: Date): Temporal.Instant {
+  return Temporal.Instant.fromEpochMilliseconds(date.getTime());
+}

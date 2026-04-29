@@ -592,6 +592,33 @@ describe("hasSecurePassword — per-attribute confirmation, challenge, and salt"
     expect(valid).toBe(true);
   });
 
+  it("nil assignment clears the digest immediately", async () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recovery_password = "secret123";
+    await u.save({ validate: false });
+    expect(u._readAttribute("recovery_password_digest")).toBeTruthy();
+
+    (u as any).recovery_password = null;
+    expect(u._readAttribute("recovery_password_digest")).toBeNull();
+    await u.save({ validate: false });
+    expect(u._readAttribute("recovery_password_digest")).toBeNull();
+  });
+
+  it("blank challenge is treated as absent and does not trigger challenge validation", async () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recovery_password = "original";
+    await u.save({ validate: false });
+
+    // Blank challenge should normalize to null — no validation error
+    (u as any).recovery_password = "newpassword";
+    (u as any).recoveryPasswordChallenge = "   ";
+    expect((u as any).recoveryPasswordChallenge).toBeNull();
+    const valid = await u.validate();
+    expect((u as any).errors.messages["recovery_password_challenge"]).toBeUndefined();
+  });
+
   it("challenge validation checks current digest after multiple saves", async () => {
     const User = makeModel();
     const u = new User({});

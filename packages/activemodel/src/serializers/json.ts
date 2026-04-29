@@ -1,5 +1,5 @@
 import { serializableHash, type SerializeOptions } from "../serialization.js";
-import { Naming, type ModelName } from "../naming.js";
+import { ModelName } from "../naming.js";
 
 /**
  * JSON serializer mixin host.
@@ -26,10 +26,18 @@ export class JSON {
   // Rails: included do; class_attribute :include_root_in_json, default: false; end
   static includeRootInJson = false;
 
+  // Per-class memo so the static getter can be inherited without
+  // recomputing or sharing state across subclasses (matches Model's
+  // model.ts:1179-1185 pattern).
+  protected static _modelName?: ModelName;
+
   // Rails: included do; extend ActiveModel::Naming; end — surfaces
   // model_name on the host class. Subclasses override to customize.
   static get modelName(): ModelName {
-    return Naming.modelNameFromRecordOrClass(this as unknown as { modelName: ModelName });
+    if (!this._modelName || this._modelName.name !== this.name) {
+      this._modelName = new ModelName(this.name, { klass: this as unknown as { name: string } });
+    }
+    return this._modelName;
   }
 
   /**

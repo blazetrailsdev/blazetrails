@@ -109,7 +109,8 @@ const rule = {
     },
     schema: [],
     messages: {
-      noNew: "Use `Temporal.Instant.fromEpochMilliseconds(...)` or another Temporal constructor instead of `new Date(...)`. Annotate with `// boundary:` if the JS `Date` is intentional.",
+      noNew:
+        "Use `Temporal.Instant.fromEpochMilliseconds(...)` or another Temporal constructor instead of `new Date(...)`. Annotate with `// boundary:` if the JS `Date` is intentional.",
       noInstanceof:
         "Use `Temporal` type checks (e.g. `x instanceof Temporal.Instant`) instead of `instanceof Date`. Annotate with `// boundary:` if the JS `Date` is intentional.",
     },

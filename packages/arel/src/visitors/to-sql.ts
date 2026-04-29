@@ -222,16 +222,16 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.OptimizerHints, "visit_Arel_Nodes_OptimizerHints");
     reg(Nodes.HomogeneousIn, "visitHomogeneousIn");
     // Boolean literals
-    reg(Nodes.True, "visitTrue");
-    reg(Nodes.False, "visitFalse");
+    reg(Nodes.True, "visit_Arel_Nodes_True");
+    reg(Nodes.False, "visit_Arel_Nodes_False");
     // Leaf nodes
     reg(Nodes.Distinct, "visitDistinct");
     reg(Nodes.SqlLiteral, "visitSqlLiteral");
     reg(Nodes.Quoted, "visitQuoted");
-    reg(Nodes.Casted, "visitCasted");
+    reg(Nodes.Casted, "visit_Arel_Nodes_Casted");
     reg(Nodes.UnqualifiedColumn, "visitUnqualifiedColumn");
     reg(Nodes.Attribute, "visitAttribute");
-    reg(Nodes.ValuesList, "visitValuesList");
+    reg(Nodes.ValuesList, "visit_Arel_Nodes_ValuesList");
     reg(Table, "visitTable");
   }
 
@@ -1114,12 +1114,12 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Boolean literals --
 
-  protected visitTrue(_node: Nodes.True): SQLString {
+  protected visit_Arel_Nodes_True(_node: Nodes.True): SQLString {
     this.collector.append("TRUE");
     return this.collector;
   }
 
-  protected visitFalse(_node: Nodes.False): SQLString {
+  protected visit_Arel_Nodes_False(_node: Nodes.False): SQLString {
     this.collector.append("FALSE");
     return this.collector;
   }
@@ -1350,7 +1350,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visitCasted(node: Nodes.Casted): SQLString {
+  protected visit_Arel_Nodes_Casted(node: Nodes.Casted): SQLString {
     const value = node.valueForDatabase();
     if (this._extractBinds) {
       this.collector.addBind(value);
@@ -1360,7 +1360,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitValuesList(node: Nodes.ValuesList): SQLString {
+  private visit_Arel_Nodes_ValuesList(node: Nodes.ValuesList): SQLString {
     this.collector.append("VALUES ");
     for (let i = 0; i < node.rows.length; i++) {
       if (i > 0) this.collector.append(", ");

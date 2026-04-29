@@ -51,12 +51,12 @@ export class SQLite extends ToSql {
     return this.collector;
   }
 
-  protected override visitTrue(_node: Nodes.True): SQLString {
+  protected override visit_Arel_Nodes_True(_node: Nodes.True): SQLString {
     this.collector.append("1");
     return this.collector;
   }
 
-  protected override visitFalse(_node: Nodes.False): SQLString {
+  protected override visit_Arel_Nodes_False(_node: Nodes.False): SQLString {
     this.collector.append("0");
     return this.collector;
   }

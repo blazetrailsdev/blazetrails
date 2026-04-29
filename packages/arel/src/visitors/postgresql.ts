@@ -143,7 +143,7 @@ export class PostgreSQLWithBinds extends PostgreSQL {
     return super.compileWithBinds(node);
   }
 
-  protected override visitCasted(node: Nodes.Casted): SQLString {
+  protected override visit_Arel_Nodes_Casted(node: Nodes.Casted): SQLString {
     if (this._extractBinds) {
       this.bindIndex += 1;
       this.collector.addBind(node.valueForDatabase(), () => `$${this.bindIndex}`);

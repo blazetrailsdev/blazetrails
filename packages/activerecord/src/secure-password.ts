@@ -56,10 +56,15 @@ export function hasSecurePassword(
   const runValidations = options.validations !== false;
   const digestAttr = `${attribute}_digest`;
 
-  // Store the raw password, confirmation, and challenge temporarily (all cleared after hashing).
+  // Store the raw password, confirmation, and challenge temporarily.
+  // Cleared only when a non-blank password is hashed in beforeSave.
   const passwordKey = Symbol(`${attribute}`);
   const confirmationKey = Symbol(`${attribute}_confirmation`);
   const challengeKey = Symbol(`${attribute}_challenge`);
+
+  // Camelized base for property names (e.g. "recovery_password" → "recoveryPassword").
+  const camelBase =
+    camelize(attribute).charAt(0).toLowerCase() + camelize(attribute).slice(1);
 
   // Define setter/getter for the configured secure-password attribute
   // (e.g. password / recovery_password).
@@ -80,7 +85,7 @@ export function hasSecurePassword(
   });
 
   // {attribute}_confirmation — Rails: attr_accessor :"#{attribute}_confirmation"
-  const confirmationProp = `${camelize(attribute).charAt(0).toLowerCase()}${camelize(attribute).slice(1)}Confirmation`;
+  const confirmationProp = `${camelBase}Confirmation`;
   Object.defineProperty(modelClass.prototype, confirmationProp, {
     get: function () {
       return (this as any)[confirmationKey] ?? null;
@@ -93,7 +98,7 @@ export function hasSecurePassword(
 
   // {attribute}_challenge — Rails: attr_accessor :"#{attribute}_challenge"
   // Used to verify the current password before changing it.
-  const challengeProp = `${camelize(attribute).charAt(0).toLowerCase()}${camelize(attribute).slice(1)}Challenge`;
+  const challengeProp = `${camelBase}Challenge`;
   Object.defineProperty(modelClass.prototype, challengeProp, {
     get: function () {
       return (this as any)[challengeKey] ?? null;
@@ -110,7 +115,7 @@ export function hasSecurePassword(
 
   // {attribute}_salt — returns the salt portion of the stored digest.
   // Mirrors: define_method("#{attribute}_salt") in InstanceMethodsOnActivation
-  const saltProp = `${camelize(attribute).charAt(0).toLowerCase()}${camelize(attribute).slice(1)}Salt`;
+  const saltProp = `${camelBase}Salt`;
   Object.defineProperty(modelClass.prototype, saltProp, {
     get: function (this: Base) {
       const digest = this._readAttribute(digestAttr) as string | null;
@@ -166,7 +171,7 @@ export function hasSecurePassword(
   // invalidation to round-trip through the DB.
   modelClass.beforeSave(function (record: Base) {
     const rawPassword = (record as any)[passwordKey];
-    // Rails `password=` setter skips hashing for empty strings
+    // Rails `password=` setter skips hashing for blank values (nil or empty/whitespace)
     // (active_model/secure_password.rb) — an empty password is not a
     // valid password, so we leave the existing digest untouched.
     if (rawPassword != null && !isBlank(rawPassword)) {

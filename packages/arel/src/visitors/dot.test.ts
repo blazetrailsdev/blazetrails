@@ -187,6 +187,48 @@ describe("TestDot", () => {
       );
     });
 
+    it("UpdateStatement walks groups and havings (Trails fields)", () => {
+      const stmt = new UpdateManager()
+        .table(users)
+        .set([[users.get("name"), "x"]])
+        .group(users.get("dept"))
+        .having(users.get("active").eq(true)).ast;
+      const out = dot.compile(stmt);
+      expect(out).toContain("UpdateStatement");
+      expect(out).toMatch(/-> \d+ \[label="groups"\];/);
+      expect(out).toMatch(/-> \d+ \[label="havings"\];/);
+    });
+
+    it("DeleteStatement walks groups and havings (Trails fields)", () => {
+      const stmt = new DeleteManager()
+        .from(users)
+        .group(users.get("dept"))
+        .having(users.get("active").eq(true)).ast;
+      const out = dot.compile(stmt);
+      expect(out).toContain("DeleteStatement");
+      expect(out).toMatch(/-> \d+ \[label="groups"\];/);
+      expect(out).toMatch(/-> \d+ \[label="havings"\];/);
+    });
+
+    it("repeated equal scalar primitives dedupe onto one DotNode (Rails singleton parity)", () => {
+      // Rails' true/false/Integers are singletons with stable object_id, so
+      // two visits of `true` reuse one node. Strings still distinct.
+      const v = new Visitors.Dot();
+      type Internals = { visit(o: unknown): void; toDot(): string };
+      v.compile(new Nodes.SqlLiteral("seed"));
+      (v as unknown as Internals).visit(true);
+      (v as unknown as Internals).visit(true);
+      (v as unknown as Internals).visit(42);
+      (v as unknown as Internals).visit(42);
+      const out = (v as unknown as Internals).toDot();
+      // Booleans and numbers each fire a single labeled node — repeats
+      // shouldn't allocate new ones.
+      const trueMatches = out.match(/<f0>TrueClass\|<f1>true"\];/g) ?? [];
+      expect(trueMatches.length).toBe(1);
+      const fortyTwoMatches = out.match(/<f0>Integer\|<f1>42"\];/g) ?? [];
+      expect(fortyTwoMatches.length).toBe(1);
+    });
+
     it("two Tables sharing a name don't collapse into one node (primitive seen-map fix)", () => {
       // Regression: seen.set(object, node) keyed primitives by value, so
       // two distinct Tables with the same name `"users"` were aliased to

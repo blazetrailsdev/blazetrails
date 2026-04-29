@@ -230,6 +230,8 @@ export class Dot extends Visitor {
     this.visitEdge(o, "relation");
     this.visitEdge(o, "wheres");
     this.visitEdge(o, "values");
+    this.visitEdge(o, "groups");
+    this.visitEdge(o, "havings");
     this.visitEdge(o, "orders");
     this.visitEdge(o, "limit");
     this.visitEdge(o, "offset");
@@ -239,6 +241,8 @@ export class Dot extends Visitor {
   protected visitArelNodesDeleteStatement(o: Nodes.DeleteStatement): void {
     this.visitEdge(o, "relation");
     this.visitEdge(o, "wheres");
+    this.visitEdge(o, "groups");
+    this.visitEdge(o, "havings");
     this.visitEdge(o, "orders");
     this.visitEdge(o, "limit");
     this.visitEdge(o, "offset");
@@ -391,20 +395,35 @@ export class Dot extends Visitor {
   protected override visit(object: unknown, _collector?: unknown): unknown {
     // Rails keys @seen by `object_id` — preserves per-instance identity
     // for heap objects (two `String.new("foo")` get distinct entries) but
-    // dedupes Ruby singletons (nil/true/false/Symbols/small Integers).
-    // JS Map compares primitive keys by value, so memoizing strings would
-    // wrongly collapse two Tables that share a `name`. Memoize:
+    // dedupes Ruby singletons (nil / true / false / Symbols / small
+    // Integers / Floats / Bignums all share a stable object_id).
+    //
+    // JS Map's primitive equality is value-based, which would falsely
+    // collapse two Tables that share a `name` string. Memoize:
     //   - reference-typed values, by reference identity;
     //   - null/undefined, collapsed onto NIL_SENTINEL so a single
     //     NilClass node represents Rails' nil singleton;
-    // and skip everything else (numbers, strings, booleans) so two equal
-    // primitives produce two distinct Dot nodes.
-    const seenKey =
-      object === null || object === undefined
-        ? Dot.NIL_SENTINEL
-        : typeof object === "object"
-          ? object
-          : undefined;
+    //   - booleans / numbers / bigints / symbols, via typed-prefix keys
+    //     so repeated equal scalar edges (e.g. Regexp#caseSensitive) reuse
+    //     one DotNode the way Rails does;
+    //   - strings are explicitly excluded — they DON'T dedupe in Ruby
+    //     (each String.new gets its own object_id), and a value-based
+    //     dedupe would wrongly collapse same-named Tables.
+    const seenKey: unknown = (() => {
+      if (object === null || object === undefined) return Dot.NIL_SENTINEL;
+      const t = typeof object;
+      if (t === "object") return object; // reference identity
+      if (t === "boolean") return `boolean:${object as boolean}`;
+      if (t === "number") {
+        const n = object as number;
+        if (Number.isNaN(n)) return "number:NaN";
+        if (Object.is(n, -0)) return "number:-0";
+        return `number:${n}`;
+      }
+      if (t === "bigint") return `bigint:${(object as bigint).toString()}`;
+      if (t === "symbol") return object; // Symbol identity is reference-like
+      return undefined; // strings: no dedupe
+    })();
 
     if (seenKey !== undefined) {
       const seenNode = this.seen.get(seenKey);
@@ -503,8 +522,10 @@ export class Dot extends Visitor {
   }
 
   /**
-   * Rails: `o.class.name`. We use the JS ctor name; primitives report their
-   * type ("String"/"Number"/"Boolean") so the leaf nodes match Rails' shape.
+   * Rails: `o.class.name`. We use the JS ctor name for objects and emit
+   * Rails-style class names for primitives and nil values — `String`,
+   * `Integer`, `Float`, `TrueClass`, `FalseClass`, `NilClass`, `Symbol`,
+   * `Time` — so leaf nodes match Rails' shape.
    */
   private classNameOf(o: unknown): string {
     if (o === null) return "NilClass";

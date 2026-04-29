@@ -1,6 +1,7 @@
 import type { Included } from "@blazetrails/activesupport";
 import { Node, NodeVisitor } from "./node.js";
 import { Fragments } from "./fragments.js";
+import { buildQuoted } from "./casted.js";
 
 /**
  * SqlLiteral — a raw SQL string passed through unescaped.
@@ -28,6 +29,12 @@ export class SqlLiteral extends Node {
 
   fetchAttribute(_block?: (attr: Node) => unknown): unknown {
     return undefined;
+  }
+
+  // Required by the Predications mixin (mirrors Rails' private
+  // Predications#quoted_node, which calls `Nodes.build_quoted(other, self)`).
+  quotedNode(other: unknown): Node {
+    return other instanceof Node ? other : buildQuoted(other, this);
   }
 
   join(other: Node): Fragments {

@@ -3386,7 +3386,10 @@ describe("quoteSqlValue", () => {
 // ==========================================================================
 
 describe("_applyScopeAttributes — scoping initializeInternalsCallback", () => {
-  const adapter = createTestAdapter();
+  let adapter: ReturnType<typeof createTestAdapter>;
+  beforeEach(() => {
+    adapter = createTestAdapter();
+  });
 
   function makeModel() {
     class User extends Base {
@@ -3437,7 +3440,10 @@ describe("_applyScopeAttributes — scoping initializeInternalsCallback", () => 
 });
 
 describe("_applyScopeAttributes — multiparameter path", () => {
-  const adapter = createTestAdapter();
+  let adapter: ReturnType<typeof createTestAdapter>;
+  beforeEach(() => {
+    adapter = createTestAdapter();
+  });
 
   it("scope attrs applied in multiparameter constructor path", async () => {
     class Event extends Base {
@@ -3483,7 +3489,10 @@ describe("_applyScopeAttributes — multiparameter path", () => {
 });
 
 describe("_applyScopeAttributes — STI type column wins over scope", () => {
-  const adapter = createTestAdapter();
+  let adapter: ReturnType<typeof createTestAdapter>;
+  beforeEach(() => {
+    adapter = createTestAdapter();
+  });
 
   it("STI type column is not overwritten by a scope that sets type", async () => {
     class Vehicle extends Base {

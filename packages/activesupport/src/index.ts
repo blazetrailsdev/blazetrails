@@ -48,6 +48,7 @@ export type { OsAdapter } from "./os-adapter.js";
 export {
   registerProcessAdapter,
   getProcessAdapter,
+  processAdapterConfig,
   env,
   argv,
   stdout,
@@ -68,6 +69,7 @@ import { cryptoAdapterConfig } from "./crypto-adapter.js";
 import { asyncContextAdapterConfig } from "./async-context-adapter.js";
 import { childProcessAdapterConfig } from "./child-process-adapter.js";
 import { osAdapterConfig } from "./os-adapter.js";
+import { processAdapterConfig } from "./process-adapter.js";
 
 /**
  * ActiveSupport configuration — mirrors Rails' ActiveSupport module.
@@ -117,6 +119,13 @@ export const ActiveSupport = {
   },
   set osAdapter(name: string | null) {
     osAdapterConfig.adapter = name;
+  },
+
+  // processAdapter is read-only — there is only one process the program
+  // runs in, and the live `env`/`argv` exports require a single source
+  // of truth. To switch implementations, call `registerProcessAdapter()`.
+  get processAdapter(): string | null {
+    return processAdapterConfig.adapter;
   },
 };
 

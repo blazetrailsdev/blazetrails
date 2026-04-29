@@ -7,6 +7,7 @@ import {
   getProcessAdapter,
   onSignal,
   platform,
+  processAdapterConfig,
   registerProcessAdapter,
   setEnv,
   setExitCode,
@@ -269,6 +270,25 @@ describe("processAdapter", () => {
       expect(env.FAKE_FLAG).toBe("1");
       expect(argv).toEqual(["fake-node", "fake-script"]);
       expect(getProcessAdapter()).not.toBe(broken);
+    });
+  });
+
+  describe("processAdapterConfig", () => {
+    it("reports null when no adapter is registered", () => {
+      _resetProcessAdapter();
+      expect(processAdapterConfig.adapter).toBeNull();
+    });
+
+    it("reports 'node' when the auto-registered Node adapter is active", () => {
+      _resetProcessAdapter();
+      // Trigger auto-register.
+      cwd();
+      expect(processAdapterConfig.adapter).toBe("node");
+    });
+
+    it("reports 'custom' when a user adapter is registered", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(processAdapterConfig.adapter).toBe("custom");
     });
   });
 

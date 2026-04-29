@@ -160,6 +160,27 @@ export function getProcessAdapter(): ProcessAdapter {
   return requireAdapter();
 }
 
+/**
+ * Discoverability hook — symmetry with `fsAdapterConfig`,
+ * `cryptoAdapterConfig`, etc.
+ *
+ * processAdapter intentionally diverges from the named-registry pattern
+ * used by fs/crypto/os/child-process: there is only one "process" the
+ * program runs in, and the exported `env` / `argv` snapshots require a
+ * single source of truth. So `processAdapterConfig.adapter` returns
+ * `"node"` when the auto-registered Node adapter is active, `"custom"`
+ * when a user-supplied adapter is registered, or `null` when none is.
+ * It is read-only — the way to switch is `registerProcessAdapter()`.
+ */
+export const processAdapterConfig = {
+  get adapter(): string | null {
+    if (!currentAdapter) return null;
+    return currentAdapter === nodeAutoRegistered ? "node" : "custom";
+  },
+};
+
+let nodeAutoRegistered: ProcessAdapter | null = null;
+
 // Structural shape of `node:process` we use. Avoids `NodeJS.Process` so
 // this module typechecks without `@types/node`.
 interface NodeStream {
@@ -197,7 +218,9 @@ function tryAutoRegisterNode(): boolean {
   nodeAttempted = true;
   const proc = (globalThis as { process?: NodeProcessLike }).process;
   if (!proc?.versions?.node) return false;
-  registerProcessAdapter(buildNodeAdapter(proc));
+  const adapter = buildNodeAdapter(proc);
+  nodeAutoRegistered = adapter;
+  registerProcessAdapter(adapter);
   return true;
 }
 
@@ -305,6 +328,7 @@ function buildNodeAdapter(proc: NodeProcessLike): ProcessAdapter {
  */
 export function _resetProcessAdapter(): void {
   currentAdapter = null;
+  nodeAutoRegistered = null;
   nodeAttempted = false;
   for (const k of Object.keys(envInternal)) delete envInternal[k];
   argvInternal.length = 0;

@@ -2,55 +2,135 @@ import { EachValidator } from "../validator.js";
 import type { AnyRecord } from "../validator.js";
 import { resolveValue } from "./resolve-value.js";
 
+/**
+ * Mirrors: ActiveModel::Validations::FormatValidator (format.rb)
+ *
+ *   class FormatValidator < EachValidator
+ *     include ResolveValue
+ *
+ *     def validate_each(record, attribute, value)
+ *       if options[:with]
+ *         regexp = resolve_value(record, options[:with])
+ *         record_error(record, attribute, :with, value) unless regexp.match?(value.to_s)
+ *       elsif options[:without]
+ *         regexp = resolve_value(record, options[:without])
+ *         record_error(record, attribute, :without, value) if regexp.match?(value.to_s)
+ *       end
+ *     end
+ *     ...
+ */
 export class FormatValidator extends EachValidator {
-  resolveValue = resolveValue;
-
-  private resolveRegexp(opt: RegExp | ((record: AnyRecord) => RegExp), record: AnyRecord): RegExp {
-    const re = typeof opt === "function" ? opt(record) : opt;
-    if (re.multiline) {
-      throw new Error(
-        "The provided regular expression is using multiline anchors (^ or $), which may present a security risk. Did you mean to use \\A and \\z, or pass the `multiline: true` option?",
-      );
-    }
-    return re;
-  }
+  // Declarations only — actual functions attached to the prototype below.
+  // Prototype attachment (not class fields) so the helpers are present
+  // during EachValidator's constructor-time checkValidity() call. JS class
+  // fields don't initialize until AFTER super() returns. (Same bootstrapping
+  // lesson as PR #994.)
+  declare resolveValue: typeof resolveValue;
+  declare recordError: typeof recordError;
+  declare checkOptionsValidity: typeof checkOptionsValidity;
+  declare regexpUsingMultilineAnchors: typeof regexpUsingMultilineAnchors;
 
   override checkValidity(): void {
-    const withOpt = this.options.with;
-    const withoutOpt = this.options.without;
-    if (!withOpt && !withoutOpt) {
+    // Rails: `unless options.include?(:with) ^ options.include?(:without)`
+    const hasWith = "with" in this.options;
+    const hasWithout = "without" in this.options;
+    if (hasWith === hasWithout) {
       throw new Error("Either :with or :without must be supplied (but not both)");
     }
-    if (withOpt && withoutOpt) {
-      throw new Error("Either :with or :without must be supplied (but not both)");
-    }
-    if (withOpt && withOpt instanceof RegExp && withOpt.multiline) {
-      throw new Error(
-        "The provided regular expression is using multiline anchors (^ or $), which may present a security risk. Did you mean to use \\A and \\z?",
-      );
-    }
+    this.checkOptionsValidity("with");
+    this.checkOptionsValidity("without");
   }
 
   validateEach(record: AnyRecord, attribute: string, value: unknown): void {
-    if (value === null || value === undefined) return;
-    const str = String(value);
-    if (this.options.with) {
-      const re = this.resolveRegexp(
-        this.options.with as RegExp | ((record: AnyRecord) => RegExp),
-        record,
-      );
-      if (!re.test(str)) {
-        record.errors.add(attribute, "invalid", { value, message: this.options.message });
+    if (this.options.with !== undefined) {
+      const regexp = this.resolveValue(record, this.options.with) as RegExp;
+      if (!regexp.test(String(value))) {
+        this.recordError(record, attribute, "with", value);
       }
-    }
-    if (this.options.without) {
-      const re = this.resolveRegexp(
-        this.options.without as RegExp | ((record: AnyRecord) => RegExp),
-        record,
-      );
-      if (re.test(str)) {
-        record.errors.add(attribute, "invalid", { value, message: this.options.message });
+    } else if (this.options.without !== undefined) {
+      const regexp = this.resolveValue(record, this.options.without) as RegExp;
+      if (regexp.test(String(value))) {
+        this.recordError(record, attribute, "without", value);
       }
     }
   }
 }
+
+/**
+ * Mirrors: format.rb:30-32
+ *   def record_error(record, attribute, name, value)
+ *     record.errors.add(attribute, :invalid, **options.except(name).merge!(value: value))
+ *   end
+ */
+export function recordError(
+  this: { options: Record<string, unknown> },
+  record: AnyRecord,
+  attribute: string,
+  name: "with" | "without",
+  value: unknown,
+): void {
+  const rest: Record<string, unknown> = {};
+  for (const key of Object.keys(this.options)) {
+    if (key !== name) rest[key] = this.options[key];
+  }
+  rest.value = value;
+  record.errors.add(attribute, "invalid", rest);
+}
+
+/**
+ * Mirrors: format.rb:34-46
+ *   def check_options_validity(name)
+ *     if option = options[name]
+ *       if option.is_a?(Regexp)
+ *         if options[:multiline] != true && regexp_using_multiline_anchors?(option)
+ *           raise ArgumentError, "...security risk..."
+ *         end
+ *       elsif !option.respond_to?(:call)
+ *         raise ArgumentError, "A regular expression or a proc or lambda must be supplied as :#{name}"
+ *       end
+ *     end
+ *   end
+ */
+export function checkOptionsValidity(
+  this: {
+    options: Record<string, unknown>;
+    regexpUsingMultilineAnchors(regexp: RegExp): boolean;
+  },
+  name: "with" | "without",
+): void {
+  const option = this.options[name];
+  if (option === undefined || option === null) return;
+  if (option instanceof RegExp) {
+    if (this.options.multiline !== true && this.regexpUsingMultilineAnchors(option)) {
+      throw new Error(
+        "The provided regular expression is using multiline anchors (^ or $), " +
+          "which may present a security risk. Did you mean to use \\A and \\z, " +
+          "or forgot to add the :multiline => true option?",
+      );
+    }
+  } else if (typeof option !== "function") {
+    throw new Error(`A regular expression or a proc or lambda must be supplied as :${name}`);
+  }
+}
+
+/**
+ * Mirrors: format.rb:48-51
+ *   def regexp_using_multiline_anchors?(regexp)
+ *     source = regexp.source
+ *     source.start_with?("^") || (source.end_with?("$") && !source.end_with?("\\$"))
+ *   end
+ *
+ * Inspects the regex source text — NOT the `m` (multiline) flag — for
+ * the user-facing `^` / `$` anchors that match per-line in Ruby. Rails
+ * forces the user to opt in via `multiline: true` to acknowledge the
+ * security implication of accepting input across line boundaries.
+ */
+export function regexpUsingMultilineAnchors(regexp: RegExp): boolean {
+  const source = regexp.source;
+  return source.startsWith("^") || (source.endsWith("$") && !source.endsWith("\\$"));
+}
+
+FormatValidator.prototype.resolveValue = resolveValue;
+FormatValidator.prototype.recordError = recordError;
+FormatValidator.prototype.checkOptionsValidity = checkOptionsValidity;
+FormatValidator.prototype.regexpUsingMultilineAnchors = regexpUsingMultilineAnchors;

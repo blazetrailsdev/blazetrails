@@ -15,10 +15,13 @@ describe("FormatValidationTest", () => {
   });
 
   it("validates format of without lambda without arguments", () => {
+    // JS regex has no \A/\z analogues for Ruby's start-of-string /
+    // end-of-string anchors; ^/$ are line anchors, so Rails requires
+    // multiline: true to opt in (format.rb:42).
     class Person extends Model {
       static {
         this.attribute("name", "string");
-        this.validates("name", { format: { with: /^[a-z]+$/ } });
+        this.validates("name", { format: { with: /^[a-z]+$/, multiline: true } });
       }
     }
     expect(new Person({ name: "alice" }).isValid()).toBe(true);
@@ -37,25 +40,29 @@ describe("FormatValidationTest", () => {
   });
 
   it("validates format of when with isnt a regexp should raise error", () => {
-    class Person extends Model {
-      static {
-        this.attribute("name", "string");
-        this.validates("name", { format: { with: "not a regexp" as any } });
+    // Rails check_validity! runs at validator construction, so the
+    // throw fires when `validates(...)` is called — match that timing.
+    expect(() => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { format: { with: "not a regexp" as any } });
+        }
       }
-    }
-    const p = new Person({ name: "test" });
-    expect(() => p.isValid()).toThrow();
+      void Person;
+    }).toThrow(/regular expression or a proc or lambda must be supplied as :with/);
   });
 
   it("validates format of when not isnt a regexp should raise error", () => {
-    class Person extends Model {
-      static {
-        this.attribute("name", "string");
-        this.validates("name", { format: { without: "not a regexp" as any } });
+    expect(() => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { format: { without: "not a regexp" as any } });
+        }
       }
-    }
-    const p = new Person({ name: "test" });
-    expect(() => p.isValid()).toThrow();
+      void Person;
+    }).toThrow(/regular expression or a proc or lambda must be supplied as :without/);
   });
 
   it("validates format of without lambda", () => {
@@ -74,7 +81,7 @@ describe("FormatValidationTest", () => {
     class Person extends Model {
       static {
         this.attribute("title", "string");
-        this.validates("title", { format: { with: /^[A-Z]/ } });
+        this.validates("title", { format: { with: /^[A-Z]/, multiline: true } });
       }
     }
     expect(new Person({ title: "Hello" }).isValid()).toBe(true);
@@ -97,7 +104,7 @@ describe("FormatValidationTest", () => {
       static {
         this.attribute("title", "string");
         this.validates("title", {
-          format: { with: /^[A-Z]/, message: "must start with uppercase" },
+          format: { with: /^[A-Z]/, multiline: true, message: "must start with uppercase" },
         });
       }
     }
@@ -110,7 +117,9 @@ describe("FormatValidationTest", () => {
     class Person extends Model {
       static {
         this.attribute("title", "string");
-        this.validates("title", { format: { with: /^[A-Z]/, allowBlank: true } });
+        this.validates("title", {
+          format: { with: /^[A-Z]/, multiline: true, allowBlank: true },
+        });
       }
     }
     expect(new Person({ title: "" }).isValid()).toBe(true);
@@ -122,7 +131,7 @@ describe("FormatValidationTest", () => {
     class Person extends Model {
       static {
         this.attribute("value", "string");
-        this.validates("value", { format: { with: /^\d+$/ } });
+        this.validates("value", { format: { with: /^\d+$/, multiline: true } });
       }
     }
     expect(new Person({ value: "123" }).isValid()).toBe(true);

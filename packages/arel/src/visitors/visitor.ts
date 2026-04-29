@@ -35,7 +35,7 @@ export abstract class Visitor {
   protected dispatch: Map<NodeCtor, string>;
 
   constructor() {
-    this.dispatch = (this.constructor as VisitorCtor).getDispatchCache();
+    this.dispatch = this.getDispatchCache();
   }
 
   accept(object: Node, collector?: unknown): unknown {
@@ -60,8 +60,12 @@ export abstract class Visitor {
     return cache;
   }
 
-  static getDispatchCache(this: VisitorCtor): Map<NodeCtor, string> {
-    return this.dispatchCache();
+  /**
+   * Instance-side accessor mirroring Rails' private `get_dispatch_cache`.
+   * Returns the class-level dispatch cache for `this.constructor`.
+   */
+  protected getDispatchCache(): Map<NodeCtor, string> {
+    return (this.constructor as VisitorCtor).dispatchCache();
   }
 
   protected visit(object: Node, collector?: unknown): unknown {

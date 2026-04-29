@@ -81,6 +81,9 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   /** @internal */
+  // Rails passes the collector as a second arg through the visit chain;
+  // we route SQL through `this.collector` instance state instead, so the
+  // base's collector argument is unused here by design.
   visit(node: Node): SQLString {
     return super.visit(node) as SQLString;
   }

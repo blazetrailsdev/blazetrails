@@ -374,17 +374,18 @@ export function optionAsNumber(
       // option_as_number propagates the error.
       throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
     }
+    // Rails parse_as_number's elsif chain only falls through for hex
+    // literals when the ANCHORED regex matches (HEXADECIMAL_REGEX uses
+    // \A so leading whitespace doesn't qualify). "  0x10" doesn't
+    // match, falls through to Kernel.Float, and raises — so we should
+    // raise too rather than silently skipping.
+    if (HEXADECIMAL_REGEX.test(resolved)) return undefined;
     const trimmed = resolved.trimStart();
-    // Rails parse_as_number's elsif chain falls through for hex literals
-    // (skips the Kernel.Float branch), returning nil — so option_as_number
-    // returns nil too and the comparison is silently skipped. Mirror that
-    // by returning undefined here rather than raising.
-    if (HEXADECIMAL_REGEX.test(trimmed)) return undefined;
-    // 0b… / 0o… are NOT special-cased in Rails — Kernel.Float just
-    // raises ArgumentError on them — so option_as_number should raise
-    // too. JS Number() would silently coerce, so the explicit guard is
-    // load-bearing on the trails side.
-    if (NON_DECIMAL_LITERAL_REGEX.test(trimmed)) {
+    // Anything non-decimal that survives — leading-whitespace hex,
+    // 0b… / 0o… — is rejected by Rails Kernel.Float. JS Number() would
+    // silently coerce 0b/0o, so the explicit guard is load-bearing
+    // on the trails side.
+    if (HEXADECIMAL_REGEX.test(trimmed) || NON_DECIMAL_LITERAL_REGEX.test(trimmed)) {
       throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
     }
   }

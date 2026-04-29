@@ -88,7 +88,11 @@ export class JSON {
     // so JSON-unsafe values (bigint, undefined, cyclic refs, etc.)
     // surface predictably, matching Model.asJson (model.ts:1708).
     const hash = coerceForJson(this.serializableHash(options)) as Record<string, unknown>;
-    if (!rootOpt) return hash;
+    // Rails uses Ruby truthiness — only false/nil skip the wrap. JS
+    // falsiness would also skip an empty-string root key, which Rails
+    // would happily emit as `{ "" => hash }`. Match Rails semantics
+    // explicitly (json.rb:101-107).
+    if (rootOpt === false || rootOpt == null) return hash;
     const rootKey = rootOpt === true ? ctor.modelName.element : (rootOpt as string);
     return { [rootKey]: hash };
   }
@@ -112,14 +116,16 @@ export class JSON {
     if (!isPlainJsonObject(hash)) {
       throw new TypeError(`fromJson expected a JSON object, got ${describeJsonShape(hash)}`);
     }
-    if (root) {
-      // When includeRootInJson is a string, prefer the explicit key so
-      // multi-key payloads still unwrap deterministically; otherwise fall
-      // back to first-value semantics (Rails json.rb:147 hash.values.first).
+    // Rails truthiness: false/nil skip; empty string still triggers
+    // unwrap (json.rb:146-147). Match that explicitly.
+    if (root !== false && root != null) {
+      // When the resolved root setting is a string, prefer the explicit
+      // key so multi-key payloads still unwrap deterministically;
+      // otherwise fall back to first-value semantics (Rails json.rb:147
+      // hash.values.first).
       hash =
-        typeof ctor.includeRootInJson === "string" &&
-        Object.prototype.hasOwnProperty.call(hash, ctor.includeRootInJson)
-          ? (hash as Record<string, unknown>)[ctor.includeRootInJson]
+        typeof root === "string" && Object.prototype.hasOwnProperty.call(hash, root)
+          ? (hash as Record<string, unknown>)[root]
           : Object.values(hash as Record<string, unknown>)[0];
       if (!isPlainJsonObject(hash)) {
         throw new TypeError(

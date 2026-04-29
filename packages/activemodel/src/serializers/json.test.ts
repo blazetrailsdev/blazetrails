@@ -183,6 +183,15 @@ describe("Serializers::JSON host", () => {
     });
   });
 
+  it("asJson treats empty-string root as truthy (Rails parity)", () => {
+    const p = new Person();
+    p._name = "Hank";
+    p._age = 70;
+    // Ruby: `if root` is true for "", and `root == true` is false, so
+    // Rails wraps under the empty key.
+    expect(p.asJson({ root: "" })).toMatchObject({ "": { name: "Hank", age: 70 } });
+  });
+
   it("Model already implements the same surface ergonomically", () => {
     // Sanity: the JSON host is the canonical mixin form; Model continues
     // to compose asJson/fromJson directly (model.ts already mirrors json.rb).

@@ -12,11 +12,12 @@ export interface TimeValue {
   applySecondsPrecision<T>(value: T): T;
 }
 
-type SubSecondHolder = {
-  millisecond: number;
-  microsecond: number;
-  nanosecond: number;
-  with: (fields: { millisecond: number; microsecond: number; nanosecond: number }) => unknown;
+type Roundable<T> = {
+  round: (options: {
+    smallestUnit: "second" | "millisecond" | "microsecond" | "nanosecond";
+    roundingIncrement?: number;
+    roundingMode: "trunc";
+  }) => T;
 };
 
 /**
@@ -44,29 +45,36 @@ export function applySecondsPrecision<T>(this: { precision?: number }, value: T)
   const precision = this.precision;
   if (precision === undefined || precision === null) return value;
   if (value === null || value === undefined) return value;
-  const holder = value as unknown as SubSecondHolder;
-  // Temporal splits sub-second into three 0-999 fields. Reconstruct
-  // the full 0-999_999_999 nanosecond count Rails' `value.nsec` returns.
-  if (
-    typeof holder.millisecond !== "number" ||
-    typeof holder.microsecond !== "number" ||
-    typeof holder.nanosecond !== "number" ||
-    typeof holder.with !== "function"
-  ) {
-    return value;
-  }
-  const insignificantDigits = 9 - precision;
-  if (insignificantDigits <= 0) return value;
-  const roundPower = 10 ** insignificantDigits;
-  const totalNsec = holder.millisecond * 1_000_000 + holder.microsecond * 1_000 + holder.nanosecond;
-  const remainder = totalNsec % roundPower;
-  if (remainder === 0) return value;
-  const truncated = totalNsec - remainder;
-  return holder.with({
-    millisecond: Math.floor(truncated / 1_000_000),
-    microsecond: Math.floor((truncated % 1_000_000) / 1_000),
-    nanosecond: truncated % 1_000,
-  }) as unknown as T;
+  // Temporal types (Instant, PlainDateTime, PlainTime, ZonedDateTime)
+  // expose a `round` method that accepts `roundingIncrement` and
+  // `roundingMode: "trunc"`, which together match Rails' "drop the
+  // insignificant trailing nanos" semantics. Values without `.round`
+  // (PlainDate, primitives) lack sub-second resolution and pass
+  // through unchanged.
+  const roundable = value as unknown as Partial<Roundable<T>>;
+  if (typeof roundable.round !== "function") return value;
+  if (precision >= 9) return value;
+  const opts =
+    precision <= 0
+      ? { smallestUnit: "second" as const, roundingMode: "trunc" as const }
+      : precision <= 3
+        ? {
+            smallestUnit: "millisecond" as const,
+            roundingIncrement: 10 ** (3 - precision),
+            roundingMode: "trunc" as const,
+          }
+        : precision <= 6
+          ? {
+              smallestUnit: "microsecond" as const,
+              roundingIncrement: 10 ** (6 - precision),
+              roundingMode: "trunc" as const,
+            }
+          : {
+              smallestUnit: "nanosecond" as const,
+              roundingIncrement: 10 ** (9 - precision),
+              roundingMode: "trunc" as const,
+            };
+  return (roundable as Roundable<T>).round(opts);
 }
 
 export function serializeTimeValue(value: unknown): string | null {

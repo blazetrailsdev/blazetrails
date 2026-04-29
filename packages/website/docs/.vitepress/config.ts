@@ -55,22 +55,16 @@ export default defineConfig({
 
     search: {
       provider: "local",
-    },
-  },
-
-  vite: {
-    build: {
-      chunkSizeWarningLimit: 1500,
-      rollupOptions: {
-        output: {
-          // Split the typedoc-generated API reference into one chunk per
-          // package. Without this, Rollup minifies the whole API surface
-          // as a single >500kB chunk, dominating the build phase.
-          manualChunks(id) {
-            const normalizedId = id.replace(/\\/g, "/");
-            const m = normalizedId.match(/\/docs\/api\/@blazetrails\/([^/]+)\//);
-            if (m) return `bt-api-${m[1]}`;
-          },
+      options: {
+        // Exclude the typedoc-generated API reference from the local
+        // search index. Indexing it inflates the search-index chunk to
+        // ~17MB and dominates the VitePress bundle phase. The API is
+        // navigable via the sidebar; losing in-page search there is the
+        // accepted tradeoff for a much smaller, faster build.
+        _render(src, env, md) {
+          const html = md.render(src, env);
+          if (env.relativePath?.startsWith("api/")) return "";
+          return html;
         },
       },
     },

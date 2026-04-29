@@ -6,10 +6,14 @@
  * instead.
  *
  * Honors two escape-hatch markers:
- *   - File-level: a JSDoc block containing `@boundary-file:` in the file's
- *     leading comments (entire file is exempt).
- *   - Line-level: a `boundary:` keyword in a comment on the same line as
- *     the offending construct OR on the immediately-preceding comment line.
+ *   - File-level: a JSDoc block containing `@boundary-file:` in the file
+ *     *header* (before any non-comment token) — entire file is exempt.
+ *   - Line-level: a `boundary:` keyword in a comment that is either
+ *       (a) on the same line as the offending construct,
+ *       (b) attached as a leading comment to the enclosing top-level
+ *           statement, or
+ *       (c) inside the enclosing statement, before the offending node
+ *           (handles multi-line expressions and `} /* ... *​/ else if {` chains).
  *
  * Detected constructs:
  *   - `new Date(...)`
@@ -28,17 +32,15 @@
  */
 
 function hasFileBoundaryDirective(sourceCode) {
-  // Scan leading block comments at the top of the file for `@boundary-file:`.
+  // `@boundary-file:` only counts when it appears in the file *header* — i.e.
+  // before any non-comment token. Honoring it anywhere in the file would let
+  // a function-level JSDoc unintentionally exempt the whole module.
+  const firstToken = sourceCode.getFirstToken(sourceCode.ast);
+  const headerEnd = firstToken ? firstToken.range[0] : sourceCode.text.length;
   for (const comment of sourceCode.getAllComments()) {
-    if (comment.type !== "Block") continue;
-    if (comment.value.includes("@boundary-file:")) return true;
-    // Stop scanning once we pass non-leading comments — directives must be
-    // in the file header, before any non-comment token.
-    if (comment.range[0] > 0) {
-      const before = sourceCode.text.slice(0, comment.range[0]);
-      if (/[^\s]/.test(before.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, ""))) {
-        return false;
-      }
+    if (comment.range[0] >= headerEnd) break;
+    if (comment.type === "Block" && comment.value.includes("@boundary-file:")) {
+      return true;
     }
   }
   return false;
@@ -46,15 +48,14 @@ function hasFileBoundaryDirective(sourceCode) {
 
 function hasBoundaryComment(sourceCode, node) {
   const line = node.loc.start.line;
-  // Same-line trailing comment.
+  // 1. Same-line trailing comment.
   for (const comment of sourceCode.getAllComments()) {
     if (comment.loc.start.line === line && /\bboundary:/i.test(comment.value)) {
       return true;
     }
   }
   // Walk up to the enclosing top-level statement (parent is BlockStatement
-  // or Program). Comments leading that statement count as boundary markers,
-  // and so do comments inside its body before the offending node.
+  // or Program).
   let stmt = node;
   while (
     stmt &&
@@ -65,22 +66,19 @@ function hasBoundaryComment(sourceCode, node) {
     stmt = stmt.parent;
   }
   if (!stmt) return false;
+  // 2. Comments attached as leading the enclosing statement.
   for (const comment of sourceCode.getCommentsBefore(stmt)) {
     if (/\bboundary:/i.test(comment.value)) return true;
   }
-  // Also accept comments within the enclosing block but before the offending
-  // node (covers multi-line expressions where the marker leads a sibling
-  // statement, e.g. `if (...) { /* boundary: */ const x = ...; const y = new Date(); }`).
-  const block = stmt.parent;
-  if (block && /BlockStatement|Program/.test(block.type)) {
-    for (const comment of sourceCode.getAllComments()) {
-      if (
-        comment.range[0] >= block.range[0] &&
-        comment.range[1] <= node.range[1] &&
-        /\bboundary:/i.test(comment.value)
-      ) {
-        return true;
-      }
+  // 3. Comments inside the enclosing statement before the offending node
+  //    (covers multi-line expressions like `} /* boundary: */ else if (x instanceof Date)`).
+  for (const comment of sourceCode.getAllComments()) {
+    if (
+      comment.range[0] >= stmt.range[0] &&
+      comment.range[1] <= node.range[0] &&
+      /\bboundary:/i.test(comment.value)
+    ) {
+      return true;
     }
   }
   return false;

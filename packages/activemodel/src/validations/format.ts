@@ -113,7 +113,11 @@ export function checkOptionsValidity(
   name: "with" | "without",
 ): void {
   const option = this.options[name];
-  if (option === undefined || option === null) return;
+  // Rails `if option = options[name]` skips on Ruby falsiness (nil OR
+  // false). validateEach also short-circuits on these via Rails
+  // truthiness, so the validity check stays consistent with the
+  // dispatch path.
+  if (option === undefined || option === null || option === false) return;
   if (option instanceof RegExp) {
     if (this.options.multiline !== true && this.regexpUsingMultilineAnchors(option)) {
       throw new Error(

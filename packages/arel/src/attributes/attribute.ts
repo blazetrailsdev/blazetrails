@@ -49,7 +49,7 @@ import {
 import { Over } from "../nodes/over.js";
 import { NamedWindow, Window } from "../nodes/window.js";
 import { True } from "../nodes/true.js";
-import { Predications } from "../predications.js";
+import { Predications, type PredicationHost } from "../predications.js";
 
 /**
  * Combines multiple nodes with OR, wrapped in a Grouping.
@@ -385,7 +385,17 @@ export class Attribute extends Node {
   }
 
   protected isOpenEnded(value: unknown): boolean {
-    return Predications.isOpenEnded.call(this, value);
+    // Cast widens this' protected isInfinity/isUnboundable so they
+    // match Predications.isOpenEnded's `this` constraint, which
+    // requires them as public methods. The dispatch still goes through
+    // `this` at runtime, so subclass overrides are honored.
+    return Predications.isOpenEnded.call(
+      this as unknown as PredicationHost & {
+        isInfinity(value: unknown): boolean;
+        isUnboundable(value: unknown): boolean;
+      },
+      value,
+    );
   }
 
   // -- Ordering --

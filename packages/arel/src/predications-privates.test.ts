@@ -30,21 +30,43 @@ describe("Predications.groupingAny / groupingAll", () => {
     const out = Predications.groupingAny.call(attr, (expr: unknown) => attr.eq(expr), [10, 20]);
     expect(out).toBeInstanceOf(Nodes.Grouping);
   });
+
+  it("groupingAny throws a clear TypeError when the method-id isn't callable", () => {
+    // Regression for the dispatch-safety concern: a typo in the
+    // method-id should fail loudly, not blow up with "Cannot read
+    // property 'call' of undefined".
+    const attr = users.attr("id");
+    expect(() => Predications.groupingAny.call(attr, "noSuchMethod", [1])).toThrowError(
+      /noSuchMethod.*Attribute/,
+    );
+  });
 });
 
 describe("Predications.isInfinity / isUnboundable / isOpenEnded", () => {
-  const host = users.attr("id");
+  // Build a minimal PredicationHost-shaped object with public
+  // isInfinity / isUnboundable so isOpenEnded's `this`-dispatch
+  // typechecks. Mirrors how the methods would be reachable on a
+  // class that included Predications via the runtime mixin.
+  const host = {
+    quotedNode: (v: unknown): Nodes.Node => v as Nodes.Node,
+    isInfinity(this: unknown, v: unknown): boolean {
+      return Predications.isInfinity.call(this as never, v);
+    },
+    isUnboundable(this: unknown, v: unknown): boolean {
+      return Predications.isUnboundable.call(this as never, v);
+    },
+  };
 
   it("isInfinity is true for ±Infinity, false otherwise", () => {
-    expect(Predications.isInfinity.call(host, Infinity)).toBe(true);
-    expect(Predications.isInfinity.call(host, -Infinity)).toBe(true);
-    expect(Predications.isInfinity.call(host, 0)).toBe(false);
-    expect(Predications.isInfinity.call(host, "x")).toBe(false);
+    expect(host.isInfinity(Infinity)).toBe(true);
+    expect(host.isInfinity(-Infinity)).toBe(true);
+    expect(host.isInfinity(0)).toBe(false);
+    expect(host.isInfinity("x")).toBe(false);
   });
 
   it("isUnboundable is always false (no Ruby-style protocol in TS)", () => {
-    expect(Predications.isUnboundable.call(host, undefined)).toBe(false);
-    expect(Predications.isUnboundable.call(host, 1)).toBe(false);
+    expect(host.isUnboundable(undefined)).toBe(false);
+    expect(host.isUnboundable(1)).toBe(false);
   });
 
   it("isOpenEnded is true for null/undefined/Infinity, false otherwise", () => {
@@ -54,6 +76,17 @@ describe("Predications.isInfinity / isUnboundable / isOpenEnded", () => {
     expect(Predications.isOpenEnded.call(host, -Infinity)).toBe(true);
     expect(Predications.isOpenEnded.call(host, 0)).toBe(false);
     expect(Predications.isOpenEnded.call(host, "x")).toBe(false);
+  });
+
+  it("isOpenEnded dispatches through `this` so host overrides win", () => {
+    // Regression for the `this`-vs-direct-module-call concern: a host
+    // that overrides isInfinity to claim everything is infinite should
+    // see isOpenEnded honor that override.
+    const overridden = {
+      ...host,
+      isInfinity: () => true,
+    };
+    expect(Predications.isOpenEnded.call(overridden, 42)).toBe(true);
   });
 });
 

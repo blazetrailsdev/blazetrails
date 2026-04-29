@@ -392,12 +392,19 @@ export const Predications = {
 
   // Mirrors Arel::Predications#open_ended? — null, infinite, or
   // unboundable values are treated as "no bound on this side".
-  isOpenEnded(this: PredicationHost, value: unknown): boolean {
+  // Dispatches `isInfinity` / `isUnboundable` through `this` (rather
+  // than calling the Predications module directly) so host classes
+  // can override either check. Mirrors Ruby's method-lookup semantics
+  // for `infinity?` / `unboundable?`.
+  isOpenEnded(
+    this: PredicationHost & {
+      isInfinity(value: unknown): boolean;
+      isUnboundable(value: unknown): boolean;
+    },
+    value: unknown,
+  ): boolean {
     return (
-      value === null ||
-      value === undefined ||
-      Predications.isInfinity.call(this, value) ||
-      Predications.isUnboundable.call(this, value)
+      value === null || value === undefined || this.isInfinity(value) || this.isUnboundable(value)
     );
   },
 };

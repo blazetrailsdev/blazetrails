@@ -49,6 +49,7 @@ import {
 import { Over } from "../nodes/over.js";
 import { NamedWindow, Window } from "../nodes/window.js";
 import { True } from "../nodes/true.js";
+import { Predications, type PredicationHost } from "../predications.js";
 
 /**
  * Combines multiple nodes with OR, wrapped in a Grouping.
@@ -342,58 +343,48 @@ export class Attribute extends Node {
 
   // -- Rails-private helpers (mirror Arel::Predications) --
   //
-  // These mirror the private methods Rails' Attribute inherits from
-  // Predications (Attribute includes Predications). Trails' Attribute
-  // ships hand-rolled public predicates that already use the file-level
-  // groupedAny/groupedAll, so these private methods aren't called
-  // internally — they're surfaced for Rails-fidelity / api:compare
-  // privates coverage and for consumers reaching for the same protocol.
+  // Rails' Attribute inherits these from Predications via `include`.
+  // Trails' Attribute has hand-rolled public predicates (so the include
+  // chain isn't wired) — these methods delegate to the canonical
+  // Predications impls so there's a single source of truth and
+  // behavior stays in lockstep.
 
-  // Mirrors Arel::Predications#grouping_any(method_id, others, *extras).
   groupingAny(
     methodId: string | ((this: Attribute, expr: unknown, ...extras: unknown[]) => Node),
     others: unknown[],
     ...extras: unknown[]
   ): Grouping {
-    const self = this as unknown as Record<string, (...args: unknown[]) => Node>;
-    const fn =
-      typeof methodId === "function"
-        ? (expr: unknown) => methodId.call(this, expr, ...extras)
-        : (expr: unknown) => self[methodId].call(this, expr, ...extras);
-    return groupedAny(others.map(fn));
+    return Predications.groupingAny.call(
+      this as unknown as PredicationHost,
+      methodId as never,
+      others,
+      ...extras,
+    );
   }
 
-  // Mirrors Arel::Predications#grouping_all.
   groupingAll(
     methodId: string | ((this: Attribute, expr: unknown, ...extras: unknown[]) => Node),
     others: unknown[],
     ...extras: unknown[]
   ): Grouping {
-    const self = this as unknown as Record<string, (...args: unknown[]) => Node>;
-    const fn =
-      typeof methodId === "function"
-        ? (expr: unknown) => methodId.call(this, expr, ...extras)
-        : (expr: unknown) => self[methodId].call(this, expr, ...extras);
-    return groupedAll(others.map(fn));
-  }
-
-  // Mirrors Arel::Predications#infinity?
-  isInfinity(value: unknown): boolean {
-    return value === Infinity || value === -Infinity;
-  }
-
-  // Mirrors Arel::Predications#unboundable? — Trails has no Ruby-style
-  // unboundable? protocol, so this is a constant `false`. Kept for
-  // surface fidelity.
-  isUnboundable(_value: unknown): boolean {
-    return false;
-  }
-
-  // Mirrors Arel::Predications#open_ended?
-  isOpenEnded(value: unknown): boolean {
-    return (
-      value === null || value === undefined || this.isInfinity(value) || this.isUnboundable(value)
+    return Predications.groupingAll.call(
+      this as unknown as PredicationHost,
+      methodId as never,
+      others,
+      ...extras,
     );
+  }
+
+  isInfinity(value: unknown): boolean {
+    return Predications.isInfinity.call(this as unknown as PredicationHost, value);
+  }
+
+  isUnboundable(value: unknown): boolean {
+    return Predications.isUnboundable.call(this as unknown as PredicationHost, value);
+  }
+
+  isOpenEnded(value: unknown): boolean {
+    return Predications.isOpenEnded.call(this as unknown as PredicationHost, value);
   }
 
   // -- Ordering --

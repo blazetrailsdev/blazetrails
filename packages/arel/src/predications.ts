@@ -49,6 +49,28 @@ function groupedAll(nodes: Node[]): Grouping {
   return new Grouping(new And(nodes));
 }
 
+// Build the `expr → Node` callback used by groupingAny / groupingAll.
+// Resolves a method-id string against the host (with a clear error if
+// the name doesn't refer to a callable method) or invokes a closure
+// directly. Mirrors Ruby's `send(method_id, expr, *extras)` shape.
+function predicationDispatch<T extends PredicationHost>(
+  host: T,
+  methodId: string | ((this: T, expr: unknown, ...extras: unknown[]) => Node),
+  extras: unknown[],
+): (expr: unknown) => Node {
+  if (typeof methodId === "function") {
+    return (expr) => methodId.call(host, expr, ...extras);
+  }
+  const member = (host as unknown as Record<string, unknown>)[methodId];
+  if (typeof member !== "function") {
+    throw new TypeError(
+      `Predications.groupingAny/All: \`${methodId}\` is not a method on the host (${(host as object).constructor.name})`,
+    );
+  }
+  const fn = member as (...args: unknown[]) => Node;
+  return (expr) => fn.call(host, expr, ...extras);
+}
+
 /**
  * Predications — predicate-builder mixin.
  *
@@ -335,12 +357,7 @@ export const Predications = {
     others: unknown[],
     ...extras: unknown[]
   ): Grouping {
-    const self = this as unknown as Record<string, (...args: unknown[]) => Node>;
-    const fn =
-      typeof methodId === "function"
-        ? (expr: unknown) => methodId.call(this, expr, ...extras)
-        : (expr: unknown) => self[methodId].call(this, expr, ...extras);
-    return groupedAny(others.map(fn));
+    return groupedAny(others.map(predicationDispatch(this, methodId, extras)));
   },
 
   // Mirrors Arel::Predications#grouping_all — fold with AND.
@@ -350,12 +367,7 @@ export const Predications = {
     others: unknown[],
     ...extras: unknown[]
   ): Grouping {
-    const self = this as unknown as Record<string, (...args: unknown[]) => Node>;
-    const fn =
-      typeof methodId === "function"
-        ? (expr: unknown) => methodId.call(this, expr, ...extras)
-        : (expr: unknown) => self[methodId].call(this, expr, ...extras);
-    return groupedAll(others.map(fn));
+    return groupedAll(others.map(predicationDispatch(this, methodId, extras)));
   },
 
   // Mirrors Arel::Predications#infinity? — in the TS port, true only

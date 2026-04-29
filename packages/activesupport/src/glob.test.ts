@@ -364,6 +364,26 @@ describe("glob", () => {
     );
   });
 
+  it("rejects unsafe forms produced by brace expansion (post-expansion validation)", async () => {
+    // {..,foo}/bar expands to ["../bar", "foo/bar"]. Pre-expansion
+    // validation would let this through; post-expansion validation
+    // catches the traversal branch.
+    await expect(glob("{..,foo}/bar", { cwd: root })).rejects.toThrow(
+      /'\.\.' segments are not supported/,
+    );
+    // {/etc/passwd,foo} expands to ["/etc/passwd", "foo"]. The first
+    // branch is absolute and would escape cwd via path.join.
+    await expect(glob("{/etc/passwd,foo}", { cwd: root })).rejects.toThrow(
+      /absolute patterns are not supported/,
+    );
+    // Negated unsafe branches must also be rejected: a negative pattern
+    // shouldn't let an attacker probe paths outside cwd via timing/effects.
+    await expect(glob("foo,{!/etc/passwd}", { cwd: root })).resolves.toEqual([]);
+    await expect(glob("{foo,!../escape}", { cwd: root })).rejects.toThrow(
+      /'\.\.' segments are not supported/,
+    );
+  });
+
   it("ignores empty patterns produced by brace expansion edge cases", async () => {
     // `{a,}` expands to ["a", ""]; without filtering, the empty pattern
     // would cause the literal fast path to statSync(cwd) and emit "".

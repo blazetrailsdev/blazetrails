@@ -105,25 +105,6 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
   const cwd = opts.cwd ?? fs.cwd();
   const dot = opts.dot ?? false;
 
-  // Patterns are relative to `cwd` by contract. Absolute and
-  // drive-relative patterns, plus any form of `..` segment, would let
-  // the walk escape the provided cwd. Both `/` and `\` are treated as
-  // separators here so a Windows-flavored PathAdapter can't slip past.
-  //
-  // Rejected: leading `/` or `\`; any drive prefix `<letter>:` (covers
-  // both `C:/foo` and the drive-relative `C:foo`); any `..` as a
-  // complete segment regardless of separator.
-  if (/^[/\\]/.test(pattern) || /^[a-zA-Z]:/.test(pattern)) {
-    throw new Error(
-      `glob: absolute patterns are not supported (got ${JSON.stringify(pattern)}); use a path relative to \`cwd\``,
-    );
-  }
-  if (/(^|[/\\])\.\.([/\\]|$)/.test(pattern)) {
-    throw new Error(
-      `glob: '..' segments are not supported (got ${JSON.stringify(pattern)}); use a path relative to \`cwd\``,
-    );
-  }
-
   const expanded = expandBraces(pattern);
   const positives: CompiledPattern[] = [];
   const negatives: RegExp[] = [];
@@ -132,6 +113,30 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
     // `{a,}` or `{,foo}`. Without this, the literal fast path would
     // statSync(cwd) and add "" to results — surprising and useless.
     if (p === "" || p === "!") continue;
+
+    // Validate each expanded branch (after stripping leading `!`)
+    // rather than only the pre-expansion pattern. Brace expansion can
+    // otherwise smuggle unsafe forms past validation, e.g.
+    // `{..,foo}/bar` → `../bar` (escapes cwd), `{/etc/passwd,foo}`
+    // → `/etc/passwd` (absolute, would `path.join(cwd, "/etc/...")`).
+    //
+    // Patterns are relative to `cwd` by contract. Both `/` and `\` are
+    // treated as separators so Windows-flavored PathAdapters can't slip
+    // past. Rejected: leading `/` or `\`; any drive prefix
+    // `<letter>:` (covers both `C:/foo` and `C:foo`); any `..` as a
+    // complete segment regardless of separator.
+    const candidate = p.startsWith("!") ? p.slice(1) : p;
+    if (/^[/\\]/.test(candidate) || /^[a-zA-Z]:/.test(candidate)) {
+      throw new Error(
+        `glob: absolute patterns are not supported (got ${JSON.stringify(candidate)}); use a path relative to \`cwd\``,
+      );
+    }
+    if (/(^|[/\\])\.\.([/\\]|$)/.test(candidate)) {
+      throw new Error(
+        `glob: '..' segments are not supported (got ${JSON.stringify(candidate)}); use a path relative to \`cwd\``,
+      );
+    }
+
     if (p.startsWith("!")) {
       negatives.push(patternToRegex(p.slice(1)));
     } else {

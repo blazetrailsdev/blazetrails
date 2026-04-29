@@ -191,9 +191,11 @@ export class InternalMetadata {
   }
 
   private currentTime(): string {
-    // Format: "YYYY-MM-DD HH:MM:SS.mmm" — drop the trailing 'Z' and swap 'T' for ' '.
+    // Format: "YYYY-MM-DD HH:mm:ss.SSS" — drop the trailing 'Z' and swap 'T' for ' '.
+    // Truncate sub-ms (Rails uses ms-precise updated_at strings; default Temporal
+    // rounding is halfExpand which would otherwise round up).
     return Temporal.Now.instant()
-      .toString({ smallestUnit: "millisecond" })
+      .toString({ smallestUnit: "millisecond", roundingMode: "trunc" })
       .replace("T", " ")
       .replace("Z", "");
   }

@@ -44,10 +44,17 @@ interface ClusivityHost {
  * per validator instance, matching Rails' `||=` semantics.
  */
 export function delimiter(this: ClusivityHost): unknown {
-  // Rails `@delimiter ||= ...` re-evaluates if the cached value is
-  // nil/false. Mirror that — only treat a truthy cache as a hit so
-  // null / false / "" recompute on the next call.
-  if (this._delimiterCache) return this._delimiterCache;
+  // Rails `@delimiter ||= ...` recomputes only when the cached value
+  // is nil or false (Ruby falsiness). JS falsiness is wider — `0` and
+  // `""` are truthy in Ruby but falsy in JS — so use an explicit
+  // nil-or-false sentinel check instead of plain truthiness.
+  if (
+    this._delimiterCache !== undefined &&
+    this._delimiterCache !== null &&
+    this._delimiterCache !== false
+  ) {
+    return this._delimiterCache;
+  }
   this._delimiterCache = this.options.in ?? this.options.within;
   return this._delimiterCache;
 }
@@ -172,15 +179,26 @@ export function checkValidityBang(this: ClusivityHost): void {
   if (d === undefined || d === null) {
     throw new Error(ERROR_MESSAGE);
   }
+  // Symmetric with isMemberOf: anything membership accepts must also
+  // pass validity. String is `respond_to?(:include?)` (substring);
+  // Set/Map expose .has; Array + custom collections via duck-typed
+  // .includes / .has; iterables via the iteration fallback.
+  const isStringIncludable = typeof d === "string";
+  const hasIncludeMethod =
+    typeof d === "object" &&
+    d !== null &&
+    (typeof (d as { includes?: unknown }).includes === "function" ||
+      typeof (d as { has?: unknown }).has === "function");
   const isIterable =
     Array.isArray(d) ||
     d instanceof Set ||
+    d instanceof Map ||
     (typeof d === "object" &&
       d !== null &&
       typeof (d as Record<symbol, unknown>)[Symbol.iterator] === "function");
   const isCallable = typeof d === "function";
   const isSymbolic = typeof d === "string";
-  if (!isIterable && !isCallable && !isSymbolic) {
+  if (!isStringIncludable && !hasIncludeMethod && !isIterable && !isCallable && !isSymbolic) {
     throw new Error(ERROR_MESSAGE);
   }
 }

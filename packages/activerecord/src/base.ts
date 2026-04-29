@@ -25,6 +25,7 @@ import {
   primaryAbstractClass,
   stiClassFor,
   polymorphicClassFor,
+  initializeInternalsCallback as inheritanceInitializeInternalsCallback,
 } from "./inheritance.js";
 import {
   NotImplementedError,
@@ -146,7 +147,10 @@ import * as _EnumModule from "./enum.js";
 import * as _Reflection from "./reflection.js";
 import * as _AssocInstance from "./associations/instance-methods.js";
 import { argumentError } from "./relation/query-methods.js";
-import { ScopeRegistry } from "./scoping.js";
+import {
+  ScopeRegistry,
+  initializeInternalsCallback as scopingInitializeInternalsCallback,
+} from "./scoping.js";
 import {
   transaction as _transaction,
   currentTransactionPublic as _currentTransactionPublic,
@@ -2129,12 +2133,21 @@ export class Base extends Model {
       executeMultiparameterAssignment(this as any, multiparams);
       // Re-snapshot so mp attrs are part of the initial clean state.
       (this as any)._dirty.snapshot((this as any)._attributes);
-      // Now fire after_initialize with all attrs assembled.
       if (!wasSuppressed) {
+        // Mirrors Rails Core#initialize: initialize_internals_callback fires
+        // for new records after attributes are assigned (before after_initialize).
+        inheritanceInitializeInternalsCallback.call(this as any);
+        scopingInitializeInternalsCallback.call(this as any);
         ctor._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
       }
     } else {
       super(attrs);
+      // Mirrors Rails Core#initialize: initialize_internals_callback fires
+      // for new records only (not _instantiate, which suppresses via flag).
+      if (!(new.target as typeof Base | undefined)?._suppressInitializeCallback) {
+        inheritanceInitializeInternalsCallback.call(this as any);
+        scopingInitializeInternalsCallback.call(this as any);
+      }
     }
   }
 

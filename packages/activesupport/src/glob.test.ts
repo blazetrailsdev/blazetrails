@@ -235,6 +235,37 @@ describe("glob", () => {
     }
   });
 
+  it("does not count `/` inside character classes when computing depth", async () => {
+    // `app/[/]bar` has only one real path separator. The `/` inside
+    // [/] must not inflate maxDepth — which the (?![/]) guard would
+    // make match nothing anyway, but pruning should still be tight.
+    // Spy on readdirSync and confirm we only read app, not deeper.
+    const realFs = await getFsAsync();
+    const realPath = await getPathAsync();
+    const reads: string[] = [];
+    const tracking: FsAdapter = {
+      ...realFs,
+      readdirSync: ((p: string, opts?: { withFileTypes: true }) => {
+        reads.push(p);
+        return opts ? realFs.readdirSync(p, opts) : realFs.readdirSync(p);
+      }) as FsAdapter["readdirSync"],
+    };
+    const prevAdapter = fsAdapterConfig.adapter;
+    registerFsAdapter("glob-spy-class-slash", tracking, realPath);
+    fsAdapterConfig.adapter = "glob-spy-class-slash";
+    try {
+      // Pattern `app/[abc]bar` has only one real separator (depth=0
+      // remaining after base=`app`). Confirm walk doesn't descend
+      // below app/.
+      await glob("app/[abc]bar", { cwd: root });
+      expect(reads).toContain(join(root, "app"));
+      expect(reads).not.toContain(join(root, "app", "models"));
+      expect(reads).not.toContain(join(root, "app", "controllers"));
+    } finally {
+      fsAdapterConfig.adapter = prevAdapter;
+    }
+  });
+
   it("treats in-segment `**` as plain `*` (no unbounded depth)", async () => {
     // Build a deep tree under app/models. Pattern `app/foo**bar.rb`
     // (with `**` in-segment, not as a path segment) should NOT match

@@ -263,7 +263,28 @@ function literalPrefix(pattern: string): string {
 function maxRemainingDepth(pattern: string, base: string): number {
   if (pattern.split("/").includes("**")) return -1;
   const remaining = base ? pattern.slice(base.length + 1) : pattern;
-  return (remaining.match(/\//g) ?? []).length;
+  return countSeparatorsOutsideClasses(remaining);
+}
+
+/**
+ * Count `/` characters in `s`, skipping any inside a balanced `[...]`
+ * character class. Without this, a pattern like `app/[/]bar` would
+ * count 2 separators (one real, one inside the class) and inflate
+ * `maxDepth`, defeating the intended subtree pruning.
+ */
+function countSeparatorsOutsideClasses(s: string): number {
+  let count = 0;
+  let inClass = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (!inClass) {
+      if (c === "[" && s.indexOf("]", i + 1) !== -1) inClass = true;
+      else if (c === "/") count++;
+    } else if (c === "]") {
+      inClass = false;
+    }
+  }
+  return count;
 }
 
 function literalExists(fs: FsAdapter, path: string): boolean {

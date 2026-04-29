@@ -52,13 +52,26 @@ export abstract class Type<T = unknown> {
    * serialize to skip a redundant cast on already-cast values.
    */
   itselfIfSerializeCastValueCompatible(): this | null {
-    // Rails: ancestors.index(serialize_cast_value.owner) <= ancestors.index(serialize.owner).
-    // A type is compatible when serialize_cast_value is defined at or
-    // above serialize in the ancestor chain — i.e. a subclass that
-    // overrides serialize MUST also override serialize_cast_value to
-    // remain compatible. Walk the prototype chain to find each
-    // method's defining ancestor.
-    let proto: object | null = Object.getPrototypeOf(this);
+    return (
+      this.constructor as unknown as { serializeCastValueCompatible(): boolean }
+    ).serializeCastValueCompatible()
+      ? this
+      : null;
+  }
+
+  /**
+   * Mirrors: ActiveModel::Type::SerializeCastValue::ClassMethods#serialize_cast_value_compatible?
+   * (serialize_cast_value.rb:9-12). Result is memoized on the class:
+   *
+   *   return @serialize_cast_value_compatible if defined?(@serialize_cast_value_compatible)
+   *
+   * Walks the prototype chain to compare ancestor depth of `serialize`
+   * vs `serializeCastValue` — compatible when serializeCastValue is
+   * defined at or above serialize.
+   */
+  static serializeCastValueCompatible(this: { _serializeCastValueCompatible?: boolean }): boolean {
+    if (this._serializeCastValueCompatible !== undefined) return this._serializeCastValueCompatible;
+    let proto: object | null = (this as unknown as { prototype: object }).prototype;
     let serializeDepth = -1;
     let castDepth = -1;
     let depth = 0;
@@ -72,7 +85,9 @@ export abstract class Type<T = unknown> {
       proto = Object.getPrototypeOf(proto);
       depth++;
     }
-    return castDepth >= 0 && serializeDepth >= 0 && castDepth <= serializeDepth ? this : null;
+    const result = castDepth >= 0 && serializeDepth >= 0 && castDepth <= serializeDepth;
+    this._serializeCastValueCompatible = result;
+    return result;
   }
 
   isSerializable(_value: unknown): boolean {

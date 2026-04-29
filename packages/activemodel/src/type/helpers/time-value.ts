@@ -12,7 +12,12 @@ export interface TimeValue {
   applySecondsPrecision<T>(value: T): T;
 }
 
-type WithNanos = { nanosecond: number; with: (fields: { nanosecond: number }) => unknown };
+type SubSecondHolder = {
+  millisecond: number;
+  microsecond: number;
+  nanosecond: number;
+  with: (fields: { millisecond: number; microsecond: number; nanosecond: number }) => unknown;
+};
 
 /**
  * Mirrors: ActiveModel::Type::Helpers::TimeValue#apply_seconds_precision
@@ -39,16 +44,29 @@ export function applySecondsPrecision<T>(this: { precision?: number }, value: T)
   const precision = this.precision;
   if (precision === undefined || precision === null) return value;
   if (value === null || value === undefined) return value;
-  const nsHolder = value as unknown as WithNanos;
-  if (typeof nsHolder.nanosecond !== "number") return value;
-  if (typeof nsHolder.with !== "function") return value;
-  const nsec = nsHolder.nanosecond;
+  const holder = value as unknown as SubSecondHolder;
+  // Temporal splits sub-second into three 0-999 fields. Reconstruct
+  // the full 0-999_999_999 nanosecond count Rails' `value.nsec` returns.
+  if (
+    typeof holder.millisecond !== "number" ||
+    typeof holder.microsecond !== "number" ||
+    typeof holder.nanosecond !== "number" ||
+    typeof holder.with !== "function"
+  ) {
+    return value;
+  }
   const insignificantDigits = 9 - precision;
   if (insignificantDigits <= 0) return value;
   const roundPower = 10 ** insignificantDigits;
-  const remainder = nsec % roundPower;
+  const totalNsec = holder.millisecond * 1_000_000 + holder.microsecond * 1_000 + holder.nanosecond;
+  const remainder = totalNsec % roundPower;
   if (remainder === 0) return value;
-  return nsHolder.with({ nanosecond: nsec - remainder }) as unknown as T;
+  const truncated = totalNsec - remainder;
+  return holder.with({
+    millisecond: Math.floor(truncated / 1_000_000),
+    microsecond: Math.floor((truncated % 1_000_000) / 1_000),
+    nanosecond: truncated % 1_000,
+  }) as unknown as T;
 }
 
 export function serializeTimeValue(value: unknown): string | null {

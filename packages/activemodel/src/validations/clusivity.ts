@@ -7,10 +7,13 @@
  * and ExclusionValidator. It provides `check_validity!`, the membership
  * test `include?`, the cached `delimiter` accessor, and the
  * `inclusion_method(enumerable)` selector. In TS we expose each as a
- * `this`-typed function that the validator classes attach as instance
- * fields, matching Rails' `include Clusivity` mixin shape on a
- * per-instance level (not as prototype overrides — these are fixed
- * Rails helpers, not user-overridable hooks).
+ * `this`-typed function that the validator classes attach to their
+ * prototypes (see InclusionValidator.prototype.* / ExclusionValidator
+ * .prototype.* assignments in inclusion.ts / exclusion.ts). Prototype
+ * placement matters because `EachValidator`'s constructor calls
+ * `this.checkValidity()` before subclass class fields initialize — and
+ * because subclass overrides should be honored, matching Rails' Ruby
+ * method-lookup semantics.
  */
 import { resolveValue } from "./resolve-value.js";
 
@@ -191,11 +194,13 @@ export function checkValidityBang(this: ClusivityHost): void {
   if (d === undefined || d === null) {
     throw new Error(ERROR_MESSAGE);
   }
-  // Symmetric with isMemberOf: anything membership accepts must also
-  // pass validity. String is `respond_to?(:include?)` (substring);
-  // Set/Map expose .has; Array + custom collections via duck-typed
-  // .includes / .has; iterables via the iteration fallback.
-  const isStringIncludable = typeof d === "string";
+  // Symmetric with isMemberOf — anything membership accepts must also
+  // pass validity. Maps Ruby duck checks to TS analogues:
+  //   respond_to?(:include?) ↔ string (substring), Array, Set, iterable,
+  //                            custom .includes / .has
+  //   respond_to?(:call)     ↔ function
+  //   respond_to?(:to_sym)   ↔ string (resolved via resolveValue at call time)
+  const isString = typeof d === "string";
   const hasIncludeMethod =
     typeof d === "object" &&
     d !== null &&
@@ -209,8 +214,7 @@ export function checkValidityBang(this: ClusivityHost): void {
       d !== null &&
       typeof (d as Record<symbol, unknown>)[Symbol.iterator] === "function");
   const isCallable = typeof d === "function";
-  const isSymbolic = typeof d === "string";
-  if (!isStringIncludable && !hasIncludeMethod && !isIterable && !isCallable && !isSymbolic) {
+  if (!isString && !hasIncludeMethod && !isIterable && !isCallable) {
     throw new Error(ERROR_MESSAGE);
   }
 }

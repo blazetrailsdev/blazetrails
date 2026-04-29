@@ -98,19 +98,19 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.visitBinaryOp(node, "<=");
   }
   protected visitArelNodesCount(node: Nodes.Count): SQLString {
-    return this.visitAggregate(node, "COUNT");
+    return this.aggregate("COUNT", node);
   }
   protected visitArelNodesSum(node: Nodes.Sum): SQLString {
-    return this.visitAggregate(node, "SUM");
+    return this.aggregate("SUM", node);
   }
   protected visitArelNodesMax(node: Nodes.Max): SQLString {
-    return this.visitAggregate(node, "MAX");
+    return this.aggregate("MAX", node);
   }
   protected visitArelNodesMin(node: Nodes.Min): SQLString {
-    return this.visitAggregate(node, "MIN");
+    return this.aggregate("MIN", node);
   }
   protected visitArelNodesAvg(node: Nodes.Avg): SQLString {
-    return this.visitAggregate(node, "AVG");
+    return this.aggregate("AVG", node);
   }
 
   static {
@@ -836,19 +836,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.retryable = false;
     this.collector.append(node.name);
     this.collector.append("(");
-    if (node.distinct) this.collector.append("DISTINCT ");
-    this.injectJoin(node.expressions, ", ");
-    this.collector.append(")");
-    if (node.alias) {
-      this.collector.append(" AS ");
-      this.visit(node.alias);
-    }
-    return this.collector;
-  }
-
-  private visitAggregate(node: Nodes.Function, name: string): SQLString {
-    this.collector.retryable = false;
-    this.collector.append(`${name}(`);
     if (node.distinct) this.collector.append("DISTINCT ");
     this.injectJoin(node.expressions, ", ");
     this.collector.append(")");
@@ -1614,28 +1601,26 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   /**
    * Mirrors `to_sql.rb#infix_value_with_paren`. Recursively wraps adjacent
-   * same-class infix nodes in `( ... )` per Rails' shape.
+   * same-class infix nodes in `( ... )` per Rails' shape — Rails compares
+   * `o.left.class == o.class` to keep nested same-operator chains flat.
    */
   protected infixValueWithParen(
-    o: { left: Node; right: Node },
+    o: Node & { left: Node; right: Node },
     value: string,
     suppressParens = false,
   ): SQLString {
+    const sameClass = (child: Node): child is typeof o =>
+      Object.getPrototypeOf(child) === Object.getPrototypeOf(o);
+
     if (!suppressParens) this.collector.append("( ");
-    if (
-      (o.left as { constructor: unknown }).constructor ===
-      (o as { constructor: unknown }).constructor
-    ) {
-      this.infixValueWithParen(o.left as unknown as { left: Node; right: Node }, value, true);
+    if (sameClass(o.left)) {
+      this.infixValueWithParen(o.left, value, true);
     } else {
       this.groupingParentheses(o.left, false);
     }
     this.collector.append(value);
-    if (
-      (o.right as { constructor: unknown }).constructor ===
-      (o as { constructor: unknown }).constructor
-    ) {
-      this.infixValueWithParen(o.right as unknown as { left: Node; right: Node }, value, true);
+    if (sameClass(o.right)) {
+      this.infixValueWithParen(o.right, value, true);
     } else {
       this.groupingParentheses(o.right, false);
     }
@@ -1667,6 +1652,11 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
    * Mirrors `to_sql.rb#aggregate`. Renders `NAME(DISTINCT? expr, ...) AS alias?`.
    */
   protected aggregate(name: string, o: Nodes.Function): SQLString {
+    // Trails-specific: aggregate calls aren't safe to retry against a
+    // detached connection. Rails has no equivalent (the retryable flag is
+    // a Trails collector concern), so this is the one piece of behavior we
+    // carry alongside the Rails-shaped body.
+    this.collector.retryable = false;
     this.collector.append(`${name}(`);
     if (o.distinct) this.collector.append("DISTINCT ");
     this.injectJoin(o.expressions, ", ");

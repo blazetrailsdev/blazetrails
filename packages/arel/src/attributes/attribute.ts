@@ -111,7 +111,15 @@ export class Attribute extends Node {
       : false;
   }
 
-  private buildCasted(value: unknown): Node {
+  /**
+   * Mirrors: Arel::Predications#quoted_node — the type-aware wrapper
+   * that the Predications mixin calls to bring an arbitrary right-hand
+   * value into the AST. Attribute's impl wraps in `Casted(value, this)`
+   * so the visitor can apply column-level type-casting; ActiveModel
+   * attribute instances become BindParam so they extract as binds; raw
+   * Nodes are passed through.
+   */
+  quotedNode(value: unknown): Node {
     if (value instanceof Node) return value;
     if (value === null || value === undefined) return new Quoted(null);
     // ActiveModel::Attribute instances (QueryAttribute etc.) carry their
@@ -126,27 +134,27 @@ export class Attribute extends Node {
   // -- Predicates --
 
   eq(other: unknown): Equality {
-    return new Equality(this, this.buildCasted(other));
+    return new Equality(this, this.quotedNode(other));
   }
 
   notEq(other: unknown): NotEqual {
-    return new NotEqual(this, this.buildCasted(other));
+    return new NotEqual(this, this.quotedNode(other));
   }
 
   gt(other: unknown): GreaterThan {
-    return new GreaterThan(this, this.buildCasted(other));
+    return new GreaterThan(this, this.quotedNode(other));
   }
 
   gteq(other: unknown): GreaterThanOrEqual {
-    return new GreaterThanOrEqual(this, this.buildCasted(other));
+    return new GreaterThanOrEqual(this, this.quotedNode(other));
   }
 
   lt(other: unknown): LessThan {
-    return new LessThan(this, this.buildCasted(other));
+    return new LessThan(this, this.quotedNode(other));
   }
 
   lteq(other: unknown): LessThanOrEqual {
-    return new LessThanOrEqual(this, this.buildCasted(other));
+    return new LessThanOrEqual(this, this.quotedNode(other));
   }
 
   matches(
@@ -155,7 +163,7 @@ export class Attribute extends Node {
     caseSensitive = false,
   ): Matches {
     const right =
-      typeof pattern === "string" ? this.buildCasted(pattern) : (pattern as { ast: Node }).ast;
+      typeof pattern === "string" ? this.quotedNode(pattern) : (pattern as { ast: Node }).ast;
     return new Matches(this, right, escape, caseSensitive);
   }
 
@@ -165,16 +173,16 @@ export class Attribute extends Node {
     caseSensitive = false,
   ): DoesNotMatch {
     const right =
-      typeof pattern === "string" ? this.buildCasted(pattern) : (pattern as { ast: Node }).ast;
+      typeof pattern === "string" ? this.quotedNode(pattern) : (pattern as { ast: Node }).ast;
     return new DoesNotMatch(this, right, escape, caseSensitive);
   }
 
   matchesRegexp(pattern: string, caseSensitive = true): RegexpNode {
-    return new RegexpNode(this, this.buildCasted(pattern), caseSensitive);
+    return new RegexpNode(this, this.quotedNode(pattern), caseSensitive);
   }
 
   doesNotMatchRegexp(pattern: string, caseSensitive = true): NotRegexp {
-    return new NotRegexp(this, this.buildCasted(pattern), caseSensitive);
+    return new NotRegexp(this, this.quotedNode(pattern), caseSensitive);
   }
 
   in(values: unknown[] | { ast: Node }): In {

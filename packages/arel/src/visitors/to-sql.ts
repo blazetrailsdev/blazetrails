@@ -980,16 +980,16 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   // Overridable hook for date bind insertion so PostgreSQLWithBinds can
   // emit $N placeholders instead of ?.
   protected addDateBind(value: unknown): void {
-    this.collector.addBind(value);
+    this.collector.addBind(value, this.bindBlock());
   }
 
   protected visitArelNodesBindParam(node: Nodes.BindParam): SQLString {
     if (this._extractBinds) {
-      this.collector.addBind(node.value !== undefined ? node.value : node);
+      this.collector.addBind(node.value !== undefined ? node.value : node, this.bindBlock());
     } else if (node.value !== undefined) {
       this.collector.append(this.quote(resolveValueForDatabase(node.value)));
     } else {
-      this.collector.addBind(node);
+      this.collector.addBind(node, this.bindBlock());
     }
     return this.collector;
   }
@@ -1348,7 +1348,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   protected visitArelNodesCasted(node: Nodes.Casted): SQLString {
     const value = node.valueForDatabase();
     if (this._extractBinds) {
-      this.collector.addBind(value);
+      this.collector.addBind(value, this.bindBlock());
     } else {
       this.collector.append(this.quote(value));
     }
@@ -1577,9 +1577,14 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return `"${String(name).replace(/"/g, '""')}"`;
   }
 
-  /** Mirrors `to_sql.rb#bind_block`. Default placeholder for unbound binds. */
-  protected bindBlock(): string {
-    return "?";
+  /**
+   * Mirrors `to_sql.rb#bind_block` (which returns Rails' `BIND_BLOCK = proc { "?" }`).
+   * Returns the placeholder-rendering callback the SQLString collector calls
+   * for each unbound bind. Dialects override to emit numbered placeholders
+   * (e.g. `$1`, `$2` for Postgres-with-binds).
+   */
+  protected bindBlock(): (index: number) => string {
+    return () => "?";
   }
 
   /** Mirrors `to_sql.rb#unboundable?`. */
@@ -1724,10 +1729,10 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
    * doesn't dispatch on JS primitives — `visitNodeOrValue` is the
    * equivalent path that handles both Node and non-Node entries.
    */
-  protected visitArray(items: ReadonlyArray<unknown>): SQLString {
+  protected visitArray(items: ReadonlyArray<Nodes.NodeOrValue>): SQLString {
     items.forEach((item, i) => {
       if (i > 0) this.collector.append(", ");
-      this.visitNodeOrValue(item as Nodes.NodeOrValue);
+      this.visitNodeOrValue(item);
     });
     return this.collector;
   }
@@ -1740,7 +1745,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
    * would inline-quote when `_extractBinds` is false).
    */
   protected visitActiveModelAttribute(o: unknown): SQLString {
-    this.collector.addBind(o);
+    this.collector.addBind(o, this.bindBlock());
     return this.collector;
   }
 

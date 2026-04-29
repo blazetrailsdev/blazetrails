@@ -1204,7 +1204,7 @@ describe("the to_sql visitor", () => {
     interface ToSqlInternals {
       isUnboundable(value: unknown): boolean;
       hasGroupByAndHaving(o: { groups: unknown[]; havings: unknown[] }): boolean;
-      bindBlock(): string;
+      bindBlock(): (index: number) => string;
     }
     const make = () => new Visitors.ToSql() as unknown as ToSqlInternals;
 
@@ -1223,8 +1223,32 @@ describe("the to_sql visitor", () => {
       expect(v.hasGroupByAndHaving({ groups: [1], havings: [] })).toBe(false);
     });
 
-    it("bindBlock returns the default ? placeholder", () => {
-      expect(make().bindBlock()).toBe("?");
+    it("bindBlock returns a placeholder callback emitting ? by default", () => {
+      const block = make().bindBlock();
+      expect(block(0)).toBe("?");
+      expect(block(7)).toBe("?");
+    });
+
+    it("an overridden bindBlock takes effect at every base addBind callsite", () => {
+      class NumberedVisitor extends Visitors.ToSql {
+        private idx = 0;
+        protected override bindBlock(): (i: number) => string {
+          return () => `$${++this.idx}`;
+        }
+      }
+      const tbl = new Table("users");
+      // Three bind sites: BindParam (extracted), Casted (extracted),
+      // ActiveModelAttribute (always unbound).
+      const v = new NumberedVisitor();
+      const [sql] = v.compileWithBinds(
+        tbl
+          .where(tbl.get("id").eq(new Nodes.BindParam(1)))
+          .where(tbl.get("name").eq(new Nodes.Casted("hi", tbl.get("name"))))
+          .project(tbl.get("id")).ast,
+      );
+      expect(sql).toContain("$1");
+      expect(sql).toContain("$2");
+      expect(sql).not.toContain("?");
     });
 
     it("visitArelSelectManager wraps the manager's AST in parens", () => {

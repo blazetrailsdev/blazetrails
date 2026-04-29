@@ -3,6 +3,7 @@
  *   RFC 6265 / 6265bis) — `Expires` is an HTTP-date / IMF-fixdate parsed
  *   via JS `Date`; `Max-Age` derives an expiry Date from `Date.now()`.
  */
+
 import { Response } from "./response.js";
 import { SET_COOKIE } from "./constants.js";
 

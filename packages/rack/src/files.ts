@@ -3,6 +3,7 @@
  *   (RFC 7231 HTTP-date) against the file's mtime; JS `Date` is the
  *   canonical type for both.
  */
+
 import { getFs, getPath } from "@blazetrails/activesupport";
 import type { FsStatResult } from "@blazetrails/activesupport";
 import { CONTENT_TYPE, CONTENT_LENGTH } from "./constants.js";

@@ -173,6 +173,20 @@ describe("TestDot", () => {
       expect(out).not.toContain("undefined");
     });
 
+    it("visitEdge throws on a typo'd field (Rails NoMethodError parity)", () => {
+      // Regression: Rails' visit_edge uses public_send which raises
+      // NoMethodError on a typo; the TS port silently treated missing
+      // properties as undefined, emitting a NilClass leaf and hiding the
+      // visitor bug. Now mirrors Rails by failing loudly.
+      const v = new Visitors.Dot();
+      v.compile(new Nodes.SqlLiteral("seed"));
+      type Internals = { visitEdge(o: object, method: string): void };
+      const tbl = new Table("users");
+      expect(() => (v as unknown as Internals).visitEdge(tbl, "definitelyNotAField")).toThrow(
+        /undefined method 'definitelyNotAField' for Table/,
+      );
+    });
+
     it("two Tables sharing a name don't collapse into one node (primitive seen-map fix)", () => {
       // Regression: seen.set(object, node) keyed primitives by value, so
       // two distinct Tables with the same name `"users"` were aliased to

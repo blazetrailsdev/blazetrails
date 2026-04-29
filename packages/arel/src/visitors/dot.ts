@@ -337,8 +337,18 @@ export class Dot extends Visitor {
   // Core machinery (visit, edge, with_node, quote, to_dot)
   // ---------------------------------------------------------------------
 
-  /** Mirrors Rails' Dot#visit_edge — descend into a named field. */
+  /**
+   * Mirrors Rails' Dot#visit_edge — descend into a named field. Rails uses
+   * `o.send(method)`, which raises `NoMethodError` on a typo; we mirror
+   * that by checking the property exists (allowing `null`/`undefined` when
+   * the field is declared but unset). A typo'd field would otherwise
+   * silently emit a NilClass leaf and obscure the visitor bug.
+   */
   protected visitEdge(o: object, method: string): void {
+    if (!(method in o)) {
+      const klass = (o as { constructor?: { name?: string } }).constructor?.name ?? "Object";
+      throw new TypeError(`undefined method '${method}' for ${klass}`);
+    }
     const value = (o as Record<string, unknown>)[method];
     this.edge(method, () => this.visit(value as Node));
   }

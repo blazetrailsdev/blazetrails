@@ -1,6 +1,16 @@
 import { Node } from "../nodes/node.js";
 import { UnsupportedVisitError } from "../errors.js";
 
+/**
+ * Opaque dispatch-cache key for a Node subclass.
+ *
+ * The parameter list is `never[]` (not `unknown[]`) because the dispatch
+ * cache never constructs nodes — the ctor is used purely as a Map key. TS
+ * is contravariant in constructor parameter types, so `never[]` is the
+ * only signature that accepts ctors of arbitrary arity (e.g.
+ * `Binary(left, right)`, `BoundSqlLiteral(sql, binds)`). `unknown[]` would
+ * reject any ctor with a more-specific parameter type.
+ */
 export type NodeCtor = abstract new (...args: never[]) => Node;
 type VisitorCtor = typeof Visitor;
 
@@ -61,9 +71,18 @@ export abstract class Visitor {
   protected visit(object: Node, collector?: unknown): unknown {
     const ctor = object.constructor as NodeCtor;
     const methodName = this.resolveDispatch(ctor);
-    const fn = methodName ? (this as unknown as Record<string, unknown>)[methodName] : undefined;
-    if (typeof fn !== "function") {
+    if (!methodName) {
       throw new UnsupportedVisitError(`Unknown node type: ${ctor.name}`);
+    }
+    const fn = (this as unknown as Record<string, unknown>)[methodName];
+    if (typeof fn !== "function") {
+      // Cache hit but the instance has no such method — almost always a
+      // mis-registration (a typo'd method name landed in the dispatch
+      // cache). Distinct from the "no entry at all" case above so the
+      // failure mode is unambiguous.
+      throw new UnsupportedVisitError(
+        `Dispatch method '${methodName}' is not defined on ${this.constructor.name} for node ${ctor.name}`,
+      );
     }
     return (fn as (n: Node, c?: unknown) => unknown).call(this, object, collector);
   }

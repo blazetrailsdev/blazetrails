@@ -58,6 +58,18 @@ describe("Visitor dispatch", () => {
     expect(() => v.accept(new C())).toThrow(/Unknown node type: C/);
   });
 
+  it("distinguishes a mis-registered method from an unknown node type", () => {
+    class BadVisitor extends Visitor {
+      static {
+        this.dispatchCache().set(A, "visitTypoed");
+      }
+    }
+    const v = new BadVisitor();
+    expect(() => v.accept(new A())).toThrow(
+      /Dispatch method 'visitTypoed' is not defined on BadVisitor for node A/,
+    );
+  });
+
   it("propagates the collector argument from accept through to the visit method", () => {
     const v = new TestVisitor();
     const collector = { sentinel: true };

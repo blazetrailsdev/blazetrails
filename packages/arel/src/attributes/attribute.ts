@@ -524,22 +524,27 @@ export class Attribute extends Node {
   /**
    * PostgreSQL @> (contains) operator.
    *
-   * Mirrors: Arel::Predications#contains — `Arel::Nodes::Contains.new ...`.
+   * Mirrors: Arel::Predications#contains — `Arel::Nodes::Contains.new self, quoted_node(other)`.
    * Returns the dedicated `Contains` subclass (rather than a generic
-   * `InfixOperation("@>", ...)`) so `instanceof` checks line up with the
-   * subclass Rails uses.
+   * `InfixOperation("@>", ...)`) so `instanceof` checks line up. Routes
+   * through `this.quotedNode` so a scalar RHS gets the column-aware
+   * `Casted` wrapping (matching how Rails' `quoted_node` carries the
+   * attribute as type-cast context).
    */
   contains(other: unknown): Contains {
-    return new Contains(this, buildQuoted(other));
+    return new Contains(this, this.quotedNode(other));
   }
 
   /**
    * PostgreSQL && (overlaps) operator.
    *
-   * Mirrors: Arel::Predications#overlaps — `Arel::Nodes::Overlaps.new ...`.
+   * Mirrors: Arel::Predications#overlaps — `Arel::Nodes::Overlaps.new self, quoted_node(other)`.
+   * Routes through `this.quotedNode` (rather than the bare `buildQuoted`)
+   * so a scalar RHS gets the column-aware `Casted` wrapping. Same fidelity
+   * fix as `contains`.
    */
   overlaps(other: unknown): Overlaps {
-    return new Overlaps(this, buildQuoted(other));
+    return new Overlaps(this, this.quotedNode(other));
   }
 
   /**

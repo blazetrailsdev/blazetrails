@@ -51,6 +51,16 @@ describe("Attribute concat / contains / overlaps return typed infix subclasses",
     expect(o).toBeInstanceOf(Nodes.Overlaps);
     expect(compile(o)).toContain("&&");
   });
+
+  it("contains/overlaps route a scalar RHS through quotedNode (Casted)", () => {
+    // Mirrors Rails' Predications#contains/#overlaps which call
+    // `quoted_node(other)`. On Attribute that wraps the value in
+    // Casted(value, this) so the visitor can apply column type-casting.
+    const c = users.attr("ids").contains([1, 2]);
+    expect((c as Nodes.Contains).right).toBeInstanceOf(Nodes.Casted);
+    const o = users.attr("ids").overlaps([1, 2]);
+    expect((o as Nodes.Overlaps).right).toBeInstanceOf(Nodes.Casted);
+  });
 });
 
 describe("Attribute#quotedNode (the public PredicationHost contract)", () => {

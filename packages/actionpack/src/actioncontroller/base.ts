@@ -6,7 +6,7 @@
  */
 
 import { getFs, getPath, getCrypto, Notifications } from "@blazetrails/activesupport";
-import { Temporal } from "@blazetrails/activesupport/temporal";
+import type { Temporal } from "@blazetrails/activesupport/temporal";
 import { Metal } from "./metal.js";
 import { FlashHash } from "../actiondispatch/flash.js";
 import { RequestForgeryProtection } from "../actiondispatch/request-forgery-protection.js";
@@ -409,10 +409,12 @@ export class Base extends Metal {
       this.setHeader("etag", etag);
     }
     if (options.lastModified) {
+      // Positively identify Date so cross-realm or polyfill-variant
+      // Temporal.Instant values still take the Instant branch.
       const lm =
-        options.lastModified instanceof Temporal.Instant
-          ? new Date(options.lastModified.epochMilliseconds)
-          : options.lastModified;
+        options.lastModified instanceof Date
+          ? options.lastModified
+          : new Date(options.lastModified.epochMilliseconds);
       this.setHeader("last-modified", lm.toUTCString());
     }
     if (options.public) {

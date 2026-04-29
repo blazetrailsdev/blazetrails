@@ -125,7 +125,7 @@ export class MySQL extends ToSql {
   // unlike the base ToSql which special-cases the bare name. The
   // relation prefix this leaves on for an Attribute is fine: MySQL's
   // `UPDATE t SET x = t.x + 1` is valid.
-  protected override visitUnqualifiedColumn(node: Nodes.UnqualifiedColumn): SQLString {
+  protected override visitArelNodesUnqualifiedColumn(node: Nodes.UnqualifiedColumn): SQLString {
     if (node.expr instanceof Node) {
       this.visit(node.expr);
     } else if (node.expr !== null) {
@@ -137,14 +137,14 @@ export class MySQL extends ToSql {
   // MySQL's null-safe equality is `<=>`. The standard `IS [NOT] DISTINCT
   // FROM` is supported only on MySQL 8.0.14+; the operator form works
   // on every MySQL version.
-  protected override visitIsNotDistinctFrom(node: Nodes.IsNotDistinctFrom): SQLString {
+  protected override visitArelNodesIsNotDistinctFrom(node: Nodes.IsNotDistinctFrom): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" <=> ");
     this.visitNodeOrValue(node.right);
     return this.collector;
   }
 
-  protected override visitIsDistinctFrom(node: Nodes.IsDistinctFrom): SQLString {
+  protected override visitArelNodesIsDistinctFrom(node: Nodes.IsDistinctFrom): SQLString {
     this.collector.append("NOT ");
     this.visitNodeOrValue(node.left);
     this.collector.append(" <=> ");
@@ -154,15 +154,15 @@ export class MySQL extends ToSql {
 
   // MySQL uses `REGEXP` / `NOT REGEXP`, not the SQL-standard `~` /
   // `!~` (which is Postgres). Mirrors Rails MySQL's `infix_value`
-  // helper — same shape as visitMatches.
-  protected override visitRegexp(node: Nodes.Regexp): SQLString {
+  // helper — same shape as visitArelNodesMatches.
+  protected override visitArelNodesRegexp(node: Nodes.Regexp): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" REGEXP ");
     this.visitNodeOrValue(node.right);
     return this.collector;
   }
 
-  protected override visitNotRegexp(node: Nodes.NotRegexp): SQLString {
+  protected override visitArelNodesNotRegexp(node: Nodes.NotRegexp): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" NOT REGEXP ");
     this.visitNodeOrValue(node.right);

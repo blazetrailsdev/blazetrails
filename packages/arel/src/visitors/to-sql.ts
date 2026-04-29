@@ -142,32 +142,32 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.TableAlias, "visitArelNodesTableAlias");
     reg(Nodes.Cte, "visitArelNodesCte");
     // Joins
-    reg(Nodes.JoinSource, "visitJoinSource");
-    reg(Nodes.InnerJoin, "visitInnerJoin");
-    reg(Nodes.OuterJoin, "visitOuterJoin");
-    reg(Nodes.RightOuterJoin, "visitRightOuterJoin");
-    reg(Nodes.FullOuterJoin, "visitFullOuterJoin");
+    reg(Nodes.JoinSource, "visitArelNodesJoinSource");
+    reg(Nodes.InnerJoin, "visitArelNodesInnerJoin");
+    reg(Nodes.OuterJoin, "visitArelNodesOuterJoin");
+    reg(Nodes.RightOuterJoin, "visitArelNodesRightOuterJoin");
+    reg(Nodes.FullOuterJoin, "visitArelNodesFullOuterJoin");
     reg(Nodes.CrossJoin, "visitCrossJoin");
-    reg(Nodes.StringJoin, "visitStringJoin");
-    reg(Nodes.On, "visitOn");
+    reg(Nodes.StringJoin, "visitArelNodesStringJoin");
+    reg(Nodes.On, "visitArelNodesOn");
     // Predicates
-    reg(Nodes.Equality, "visitEquality");
-    reg(Nodes.NotEqual, "visitNotEqual");
+    reg(Nodes.Equality, "visitArelNodesEquality");
+    reg(Nodes.NotEqual, "visitArelNodesNotEqual");
     reg(Nodes.GreaterThan, "visitGreaterThan");
     reg(Nodes.GreaterThanOrEqual, "visitGreaterThanOrEqual");
     reg(Nodes.LessThan, "visitLessThan");
     reg(Nodes.LessThanOrEqual, "visitLessThanOrEqual");
-    reg(Nodes.Matches, "visitMatches");
-    reg(Nodes.DoesNotMatch, "visitDoesNotMatch");
-    reg(Nodes.In, "visitIn");
-    reg(Nodes.NotIn, "visitNotIn");
-    reg(Nodes.Between, "visitBetween");
-    reg(Nodes.Regexp, "visitRegexp");
-    reg(Nodes.NotRegexp, "visitNotRegexp");
-    reg(Nodes.IsDistinctFrom, "visitIsDistinctFrom");
-    reg(Nodes.IsNotDistinctFrom, "visitIsNotDistinctFrom");
-    reg(Nodes.Assignment, "visitAssignment");
-    reg(Nodes.As, "visitAs");
+    reg(Nodes.Matches, "visitArelNodesMatches");
+    reg(Nodes.DoesNotMatch, "visitArelNodesDoesNotMatch");
+    reg(Nodes.In, "visitArelNodesIn");
+    reg(Nodes.NotIn, "visitArelNodesNotIn");
+    reg(Nodes.Between, "visitArelNodesBetween");
+    reg(Nodes.Regexp, "visitArelNodesRegexp");
+    reg(Nodes.NotRegexp, "visitArelNodesNotRegexp");
+    reg(Nodes.IsDistinctFrom, "visitArelNodesIsDistinctFrom");
+    reg(Nodes.IsNotDistinctFrom, "visitArelNodesIsNotDistinctFrom");
+    reg(Nodes.Assignment, "visitArelNodesAssignment");
+    reg(Nodes.As, "visitArelNodesAs");
     // Unary
     reg(Nodes.Ascending, "visitArelNodesAscending");
     reg(Nodes.Descending, "visitArelNodesDescending");
@@ -179,11 +179,11 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.Bin, "visitArelNodesBin");
     reg(Nodes.NullsFirst, "visitArelNodesNullsFirst");
     reg(Nodes.NullsLast, "visitArelNodesNullsLast");
-    reg(Nodes.UnaryOperation, "visitUnaryOperation");
+    reg(Nodes.UnaryOperation, "visitArelNodesUnaryOperation");
     // Boolean
-    reg(Nodes.And, "visitAnd");
-    reg(Nodes.Or, "visitOr");
-    reg(Nodes.Not, "visitNot");
+    reg(Nodes.And, "visitArelNodesAnd");
+    reg(Nodes.Or, "visitArelNodesOr");
+    reg(Nodes.Not, "visitArelNodesNot");
     reg(Nodes.Grouping, "visitArelNodesGrouping");
     // Window
     reg(Nodes.Over, "visitArelNodesOver");
@@ -196,12 +196,12 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.CurrentRow, "visitArelNodesCurrentRow");
     // Filter / Case / Extract / Infix
     reg(Nodes.Filter, "visitArelNodesFilter");
-    reg(Nodes.Case, "visitCase");
+    reg(Nodes.Case, "visitArelNodesCase");
     reg(Nodes.Extract, "visitArelNodesExtract");
     reg(Nodes.Concat, "visitConcat");
-    reg(Nodes.InfixOperation, "visitInfixOperation");
-    reg(Nodes.BoundSqlLiteral, "visitBoundSqlLiteral");
-    reg(Nodes.BindParam, "visitBindParam");
+    reg(Nodes.InfixOperation, "visitArelNodesInfixOperation");
+    reg(Nodes.BoundSqlLiteral, "visitArelNodesBoundSqlLiteral");
+    reg(Nodes.BindParam, "visitArelNodesBindParam");
     reg(Nodes.Fragments, "visitArelNodesFragments");
     // Functions
     reg(Nodes.NamedFunction, "visitArelNodesNamedFunction");
@@ -226,13 +226,13 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.False, "visitArelNodesFalse");
     // Leaf nodes
     reg(Nodes.Distinct, "visitArelNodesDistinct");
-    reg(Nodes.SqlLiteral, "visitSqlLiteral");
+    reg(Nodes.SqlLiteral, "visitArelNodesSqlLiteral");
     reg(Nodes.Quoted, "visitQuoted");
     reg(Nodes.Casted, "visitArelNodesCasted");
-    reg(Nodes.UnqualifiedColumn, "visitUnqualifiedColumn");
-    reg(Nodes.Attribute, "visitAttribute");
+    reg(Nodes.UnqualifiedColumn, "visitArelNodesUnqualifiedColumn");
+    reg(Nodes.Attribute, "visitArelAttributesAttribute");
     reg(Nodes.ValuesList, "visitArelNodesValuesList");
-    reg(Table, "visitTable");
+    reg(Table, "visitArelTable");
   }
 
   // -- Statements --
@@ -498,7 +498,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Joins --
 
-  private visitJoinSource(node: Nodes.JoinSource): SQLString {
+  private visitArelNodesJoinSource(node: Nodes.JoinSource): SQLString {
     if (node.left) this.visit(node.left);
     for (const join of node.right) {
       this.collector.append(" ");
@@ -507,7 +507,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitInnerJoin(node: Nodes.InnerJoin): SQLString {
+  private visitArelNodesInnerJoin(node: Nodes.InnerJoin): SQLString {
     this.collector.append("INNER JOIN ");
     this.visit(node.left);
     if (node.right) {
@@ -517,7 +517,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitOuterJoin(node: Nodes.OuterJoin): SQLString {
+  private visitArelNodesOuterJoin(node: Nodes.OuterJoin): SQLString {
     this.collector.append("LEFT OUTER JOIN ");
     this.visit(node.left);
     if (node.right) {
@@ -527,7 +527,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitRightOuterJoin(node: Nodes.RightOuterJoin): SQLString {
+  private visitArelNodesRightOuterJoin(node: Nodes.RightOuterJoin): SQLString {
     this.collector.append("RIGHT OUTER JOIN ");
     this.visit(node.left);
     if (node.right) {
@@ -537,7 +537,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitFullOuterJoin(node: Nodes.FullOuterJoin): SQLString {
+  private visitArelNodesFullOuterJoin(node: Nodes.FullOuterJoin): SQLString {
     this.collector.append("FULL OUTER JOIN ");
     this.visit(node.left);
     if (node.right) {
@@ -553,12 +553,12 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitStringJoin(node: Nodes.StringJoin): SQLString {
+  private visitArelNodesStringJoin(node: Nodes.StringJoin): SQLString {
     this.visit(node.left);
     return this.collector;
   }
 
-  private visitOn(node: Nodes.On): SQLString {
+  private visitArelNodesOn(node: Nodes.On): SQLString {
     this.collector.append("ON ");
     if (node.expr instanceof Node) {
       this.visit(node.expr);
@@ -568,7 +568,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Predicates --
 
-  private visitEquality(node: Nodes.Equality): SQLString {
+  private visitArelNodesEquality(node: Nodes.Equality): SQLString {
     if (node.right instanceof Nodes.Quoted && (node.right as Nodes.Quoted).value === null) {
       this.visitNodeOrValue(node.left);
       this.collector.append(" IS NULL");
@@ -580,7 +580,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitNotEqual(node: Nodes.NotEqual): SQLString {
+  private visitArelNodesNotEqual(node: Nodes.NotEqual): SQLString {
     if (node.right instanceof Nodes.Quoted && (node.right as Nodes.Quoted).value === null) {
       this.visitNodeOrValue(node.left);
       this.collector.append(" IS NOT NULL");
@@ -599,15 +599,15 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visitIsDistinctFrom(node: Nodes.IsDistinctFrom): SQLString {
+  protected visitArelNodesIsDistinctFrom(node: Nodes.IsDistinctFrom): SQLString {
     return this.visitBinaryOp(node, "IS DISTINCT FROM");
   }
 
-  protected visitIsNotDistinctFrom(node: Nodes.IsNotDistinctFrom): SQLString {
+  protected visitArelNodesIsNotDistinctFrom(node: Nodes.IsNotDistinctFrom): SQLString {
     return this.visitBinaryOp(node, "IS NOT DISTINCT FROM");
   }
 
-  private visitIn(node: Nodes.In): SQLString {
+  private visitArelNodesIn(node: Nodes.In): SQLString {
     if (Array.isArray(node.right) && node.right.length === 0) {
       // Empty IN is always false — Rails uses 1=0
       this.collector.append("1=0");
@@ -639,7 +639,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitNotIn(node: Nodes.NotIn): SQLString {
+  private visitArelNodesNotIn(node: Nodes.NotIn): SQLString {
     if (Array.isArray(node.right) && node.right.length === 0) {
       // Empty NOT IN is always true — Rails uses 1=1
       this.collector.append("1=1");
@@ -677,7 +677,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitBetween(node: Nodes.Between): SQLString {
+  private visitArelNodesBetween(node: Nodes.Between): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" BETWEEN ");
     if (node.right instanceof Nodes.And) {
@@ -691,7 +691,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitAssignment(node: Nodes.Assignment): SQLString {
+  private visitArelNodesAssignment(node: Nodes.Assignment): SQLString {
     if (this._inUpdateSet && node.left instanceof Nodes.Attribute) {
       this.collector.append(`"${node.left.name}"`);
     } else {
@@ -702,7 +702,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitAs(node: Nodes.As): SQLString {
+  private visitArelNodesAs(node: Nodes.As): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" AS ");
     this.visitNodeOrValue(node.right);
@@ -711,7 +711,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Boolean --
 
-  private visitAnd(node: Nodes.And): SQLString {
+  private visitArelNodesAnd(node: Nodes.And): SQLString {
     for (let i = 0; i < node.children.length; i++) {
       if (i > 0) this.collector.append(" AND ");
       this.visit(node.children[i]);
@@ -719,7 +719,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitOr(node: Nodes.Or): SQLString {
+  private visitArelNodesOr(node: Nodes.Or): SQLString {
     for (let i = 0; i < node.children.length; i++) {
       if (i > 0) this.collector.append(" OR ");
       this.visit(node.children[i]);
@@ -727,7 +727,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitNot(node: Nodes.Not): SQLString {
+  private visitArelNodesNot(node: Nodes.Not): SQLString {
     this.collector.append("NOT (");
     this.visit(node.expr);
     this.collector.append(")");
@@ -808,13 +808,13 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     );
   }
 
-  protected visitRegexp(_node: Nodes.Regexp): SQLString {
+  protected visitArelNodesRegexp(_node: Nodes.Regexp): SQLString {
     throw new NotImplementedError(
       "Regexp (~ operator) is not supported by the base ToSql visitor. Use a database-specific visitor (e.g. PostgreSQL) instead.",
     );
   }
 
-  protected visitNotRegexp(_node: Nodes.NotRegexp): SQLString {
+  protected visitArelNodesNotRegexp(_node: Nodes.NotRegexp): SQLString {
     throw new NotImplementedError(
       "NotRegexp (!~ operator) is not supported by the base ToSql visitor. Use a database-specific visitor (e.g. PostgreSQL) instead.",
     );
@@ -952,7 +952,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Case --
 
-  private visitCase(node: Nodes.Case): SQLString {
+  private visitArelNodesCase(node: Nodes.Case): SQLString {
     this.collector.append("CASE");
     if (node.case) {
       this.collector.append(" ");
@@ -980,7 +980,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.addBind(value);
   }
 
-  protected visitBindParam(node: Nodes.BindParam): SQLString {
+  protected visitArelNodesBindParam(node: Nodes.BindParam): SQLString {
     if (this._extractBinds) {
       this.collector.addBind(node.value !== undefined ? node.value : node);
     } else if (node.value !== undefined) {
@@ -993,7 +993,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- BoundSqlLiteral --
 
-  private visitBoundSqlLiteral(node: Nodes.BoundSqlLiteral): SQLString {
+  private visitArelNodesBoundSqlLiteral(node: Nodes.BoundSqlLiteral): SQLString {
     this.collector.retryable = false;
     for (const part of node.parts) {
       this.visit(part);
@@ -1030,7 +1030,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- InfixOperation --
 
-  private visitInfixOperation(node: Nodes.InfixOperation): SQLString {
+  private visitArelNodesInfixOperation(node: Nodes.InfixOperation): SQLString {
     this.visit(node.left);
     this.collector.append(` ${node.operator} `);
     this.visit(node.right);
@@ -1206,7 +1206,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Matches with ESCAPE --
 
-  protected visitMatches(node: Nodes.Matches): SQLString {
+  protected visitArelNodesMatches(node: Nodes.Matches): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" LIKE ");
     this.visitNodeOrValue(node.right);
@@ -1216,7 +1216,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visitDoesNotMatch(node: Nodes.DoesNotMatch): SQLString {
+  protected visitArelNodesDoesNotMatch(node: Nodes.DoesNotMatch): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" NOT LIKE ");
     this.visitNodeOrValue(node.right);
@@ -1257,7 +1257,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- UnaryOperation --
 
-  private visitUnaryOperation(node: Nodes.UnaryOperation): SQLString {
+  private visitArelNodesUnaryOperation(node: Nodes.UnaryOperation): SQLString {
     // Rails emits ` ${operator} ` — space on both sides — so the operator
     // sits free of surrounding tokens wherever it lands in an expression.
     // Trim the operator first so callers who construct with decorative
@@ -1284,7 +1284,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitTable(node: Table): SQLString {
+  private visitArelTable(node: Table): SQLString {
     const quoted = this.quoteTableName(node.name);
     if (node.tableAlias) {
       this.collector.append(`${quoted} ${this.quoteTableName(node.tableAlias)}`);
@@ -1294,13 +1294,13 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitAttribute(node: Nodes.Attribute): SQLString {
+  private visitArelAttributesAttribute(node: Nodes.Attribute): SQLString {
     const tbl = node.relation.tableAlias || node.relation.name;
     this.collector.append(`${this.quoteTableName(tbl)}.${this.quoteColumnName(node.name)}`);
     return this.collector;
   }
 
-  protected visitUnqualifiedColumn(node: Nodes.UnqualifiedColumn): SQLString {
+  protected visitArelNodesUnqualifiedColumn(node: Nodes.UnqualifiedColumn): SQLString {
     // Mirrors Arel's visit_Arel_Nodes_UnqualifiedColumn — strips the table
     // qualifier so `SET col = col + 1` works in UPDATE statements.
     const attr = node.attribute as Partial<Nodes.Attribute> | undefined;
@@ -1311,7 +1311,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitSqlLiteral(node: Nodes.SqlLiteral): SQLString {
+  private visitArelNodesSqlLiteral(node: Nodes.SqlLiteral): SQLString {
     if (!(node as { retryableFlag?: boolean }).retryableFlag) {
       this.collector.retryable = false;
     }

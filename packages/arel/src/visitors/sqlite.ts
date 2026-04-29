@@ -70,11 +70,11 @@ export class SQLite extends ToSql {
    * `IsNotDistinctFrom` through the SQLite adapter and emits `IS NOT` /
    * `IS` accordingly.
    */
-  protected override visitIsDistinctFrom(node: Nodes.IsDistinctFrom): SQLString {
+  protected override visitArelNodesIsDistinctFrom(node: Nodes.IsDistinctFrom): SQLString {
     return this.visitBinaryOp(node, "IS NOT");
   }
 
-  protected override visitIsNotDistinctFrom(node: Nodes.IsNotDistinctFrom): SQLString {
+  protected override visitArelNodesIsNotDistinctFrom(node: Nodes.IsNotDistinctFrom): SQLString {
     return this.visitBinaryOp(node, "IS");
   }
 }

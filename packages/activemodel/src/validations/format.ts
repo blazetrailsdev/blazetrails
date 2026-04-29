@@ -54,12 +54,12 @@ export class FormatValidator extends EachValidator {
     const target = value == null ? "" : String(value);
     if (this.options.with) {
       const regexp = this.resolveValue(record, this.options.with) as RegExp;
-      if (!regexp.test(target)) {
+      if (!matchStateless(regexp, target)) {
         this.recordError(record, attribute, "with", value);
       }
     } else if (this.options.without) {
       const regexp = this.resolveValue(record, this.options.without) as RegExp;
-      if (regexp.test(target)) {
+      if (matchStateless(regexp, target)) {
         this.recordError(record, attribute, "without", value);
       }
     }
@@ -148,6 +148,23 @@ export function checkOptionsValidity(
 export function regexpUsingMultilineAnchors(regexp: RegExp): boolean {
   const source = regexp.source;
   return source.startsWith("^") || (source.endsWith("$") && !source.endsWith("\\$"));
+}
+
+/**
+ * Stateless equivalent of Rails' `regexp.match?(value.to_s)`. JS
+ * `RegExp#test` mutates `lastIndex` for regexes carrying the `g` /
+ * `y` flag, so a single regex shared across calls would alternate
+ * between passing and failing. Snapshot and restore `lastIndex` so the
+ * caller's regex is observably unchanged.
+ */
+function matchStateless(regexp: RegExp, target: string): boolean {
+  const before = regexp.lastIndex;
+  regexp.lastIndex = 0;
+  try {
+    return regexp.test(target);
+  } finally {
+    regexp.lastIndex = before;
+  }
 }
 
 FormatValidator.prototype.resolveValue = resolveValue;

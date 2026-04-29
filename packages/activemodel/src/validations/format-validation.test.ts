@@ -221,4 +221,21 @@ describe("format with 'without' option", () => {
     expect(n.isValid()).toBe(false);
     expect(n.errors.get("name")).toContain("is invalid");
   });
+
+  it("validate format does not mutate regex lastIndex across calls (g flag)", () => {
+    // Rails regexp.match? is stateless. JS RegExp#test mutates lastIndex
+    // for /g and /y regexes — a shared regex would alternate
+    // pass/fail. Pin the stateless behavior here.
+    const sharedRe = /\d+/g;
+    class P extends Model {
+      static {
+        this.attribute("code", "string");
+        this.validates("code", { format: { with: sharedRe } });
+      }
+    }
+    expect(new P({ code: "abc123" }).isValid()).toBe(true);
+    expect(new P({ code: "abc123" }).isValid()).toBe(true);
+    expect(new P({ code: "abc123" }).isValid()).toBe(true);
+    expect(sharedRe.lastIndex).toBe(0);
+  });
 });

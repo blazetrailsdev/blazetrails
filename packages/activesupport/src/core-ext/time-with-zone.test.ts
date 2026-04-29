@@ -91,6 +91,22 @@ describe("TimeWithZoneTest", () => {
     expect(local).toBeInstanceOf(Temporal.PlainDateTime);
   });
 
+  it("localtime with offset", () => {
+    // @twz UTC instant = 2000-01-01 00:00:00 UTC.
+    // -7h offset → wall-clock 1999-12-31 17:00:00.
+    const twz = maketwz();
+    const local = twz.localtime(-7 * 3600);
+    expect(local).toBeInstanceOf(Temporal.PlainDateTime);
+    expect(local.year).toBe(1999);
+    expect(local.month).toBe(12);
+    expect(local.day).toBe(31);
+    expect(local.hour).toBe(17);
+    expect(local.minute).toBe(0);
+    // getlocal alias mirrors localtime
+    const aliased = twz.getlocal(-7 * 3600);
+    expect(aliased.toString()).toBe(local.toString());
+  });
+
   it("utc?", () => {
     const twz = maketwz();
     expect(twz.isUtc()).toBe(false);

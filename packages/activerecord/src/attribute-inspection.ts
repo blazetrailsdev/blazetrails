@@ -79,6 +79,8 @@ export function formatForInspect(this: any, name: string, value: unknown): strin
   if (typeof filtered === "string") {
     return filtered.length > 50 ? `"${filtered.substring(0, 50)}..."` : `"${filtered}"`;
   }
+  // boundary: user attribute values may still be JS Date if a model uses a custom
+  // type registered outside the trails type registry; format defensively.
   if (filtered instanceof Date) return `"${filtered.toISOString()}"`;
   try {
     const stringified = JSON.stringify(filtered);

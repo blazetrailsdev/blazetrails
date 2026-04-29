@@ -781,6 +781,8 @@ function deepEqual(a: unknown, b: unknown): boolean {
   }
   if (Array.isArray(b)) return false;
 
+  // boundary: deepEqual is a generic value comparator used by the bind-cache.
+  // JS Date arrives from caller-supplied query parameters; compare by epoch.
   if (a instanceof Date) return b instanceof Date && a.getTime() === b.getTime();
   if (b instanceof Date) return false;
 

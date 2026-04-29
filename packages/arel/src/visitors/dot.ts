@@ -302,8 +302,11 @@ export class Dot extends Visitor {
     const e = new DotEdge(name, from);
     this.edgeStack.push(e);
     this.edges.push(e);
-    block();
-    this.edgeStack.pop();
+    try {
+      block();
+    } finally {
+      this.edgeStack.pop();
+    }
   }
 
   /** Mirrors Rails' Dot#with_node — link incoming edge then push node. */
@@ -311,8 +314,11 @@ export class Dot extends Visitor {
     const e = this.edgeStack[this.edgeStack.length - 1];
     if (e) e.to = node;
     this.nodeStack.push(node);
-    block();
-    this.nodeStack.pop();
+    try {
+      block();
+    } finally {
+      this.nodeStack.pop();
+    }
   }
 
   /** Mirrors Rails' Dot#quote — escape `"` for inclusion in a label. */
@@ -449,8 +455,8 @@ export class Dot extends Visitor {
     reg(Nodes.SelectStatement, "visitArelNodesSelectStatement");
     reg(Nodes.UpdateStatement, "visitArelNodesUpdateStatement");
     reg(Nodes.DeleteStatement, "visitArelNodesDeleteStatement");
-    // Misc
-    reg(Table, "visitArelTable");
+    // Misc — `Table` is registered lazily in accept() (it's mid-load
+    // here due to a circular import via tree-manager).
     reg(Nodes.Casted, "visitArelNodesCasted");
     reg(Nodes.HomogeneousIn, "visitArelNodesHomogeneousIn");
     reg(Nodes.Attribute, "visitArelAttributesAttribute");

@@ -322,11 +322,19 @@ function buildNodeAdapter(proc: NodeProcessLike): ProcessAdapter {
 }
 
 /**
- * Test-only helper. Resets the adapter registry and clears `env`/`argv`
- * snapshots so a subsequent `registerProcessAdapter` call (or auto-register)
- * starts fresh. Production code should not call this.
+ * @internal
+ *
+ * Test-only helper — NOT part of the public API. Resets the adapter
+ * registry and clears `env`/`argv` snapshots so a subsequent
+ * `registerProcessAdapter` call (or auto-register) starts fresh.
+ *
+ * Although this function is reachable via the package's `./*` subpath
+ * export, calling it from production code is unsupported and may break
+ * without notice. To switch adapters in a host, call
+ * `registerProcessAdapter()` with the new adapter — that overwrites
+ * the active one.
  */
-export function _resetProcessAdapter(): void {
+export function __INTERNAL_resetProcessAdapter_TEST_ONLY(): void {
   currentAdapter = null;
   nodeAutoRegistered = null;
   nodeAttempted = false;

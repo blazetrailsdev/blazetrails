@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  _resetProcessAdapter,
+  __INTERNAL_resetProcessAdapter_TEST_ONLY,
   argv,
   cwd,
   env,
@@ -19,7 +19,7 @@ import {
 } from "./process-adapter.js";
 
 // Capture the eager module-load auto-register snapshot before any test
-// runs `_resetProcessAdapter()`. Used to regression-test that direct
+// runs `__INTERNAL_resetProcessAdapter_TEST_ONLY()`. Used to regression-test that direct
 // `env.FOO` / `argv[0]` reads see populated values without any prior
 // function call going through the adapter.
 const moduleLoadArgv: readonly string[] = [...argv];
@@ -80,7 +80,7 @@ function makeFakeAdapter(overrides: Partial<ProcessAdapter> = {}): ProcessAdapte
 
 describe("processAdapter", () => {
   afterEach(() => {
-    _resetProcessAdapter();
+    __INTERNAL_resetProcessAdapter_TEST_ONLY();
   });
 
   describe("env snapshot", () => {
@@ -221,7 +221,7 @@ describe("processAdapter", () => {
 
   describe("auto-register node", () => {
     it("auto-registers when running in node and no adapter is set", () => {
-      _resetProcessAdapter();
+      __INTERNAL_resetProcessAdapter_TEST_ONLY();
       // First access triggers auto-register; cwd() should not throw.
       expect(typeof cwd()).toBe("string");
       // Node's process.argv has at least the executable.
@@ -275,12 +275,12 @@ describe("processAdapter", () => {
 
   describe("processAdapterConfig", () => {
     it("reports null when no adapter is registered", () => {
-      _resetProcessAdapter();
+      __INTERNAL_resetProcessAdapter_TEST_ONLY();
       expect(processAdapterConfig.adapter).toBeNull();
     });
 
     it("reports 'node' when the auto-registered Node adapter is active", () => {
-      _resetProcessAdapter();
+      __INTERNAL_resetProcessAdapter_TEST_ONLY();
       // Trigger auto-register.
       cwd();
       expect(processAdapterConfig.adapter).toBe("node");
@@ -294,7 +294,7 @@ describe("processAdapter", () => {
 
   describe("missing adapter", () => {
     it("throws a helpful error when no adapter is configured and node is unavailable", () => {
-      _resetProcessAdapter();
+      __INTERNAL_resetProcessAdapter_TEST_ONLY();
       // Save the full property descriptor so we restore writability/
       // configurability/getter semantics — not just the value.
       const originalProcessDescriptor = Object.getOwnPropertyDescriptor(globalThis, "process");

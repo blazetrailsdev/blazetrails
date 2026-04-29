@@ -47,8 +47,10 @@ export function applySecondsPrecision<T>(this: { precision?: number }, value: T)
   const precision = this.precision;
   if (precision === undefined || precision === null) return value;
   // Reject precisions outside the 0-9 nanosecond window so we never
-  // hand Temporal#round a non-integer or out-of-range roundingIncrement
-  // (matches the guard in type/time.ts and type/date-time.ts).
+  // hand Temporal#round a non-integer or out-of-range roundingIncrement.
+  // Pass-through (rather than coercing to a default) matches Rails'
+  // apply_seconds_precision, which returns value unchanged when the
+  // guard fails (time_value.rb:25 `return value unless precision...`).
   if (!Number.isInteger(precision) || precision < 0 || precision > 9) return value;
   if (value === null || value === undefined) return value;
   // Temporal types (Instant, PlainDateTime, PlainTime, ZonedDateTime)

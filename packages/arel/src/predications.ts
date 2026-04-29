@@ -317,4 +317,71 @@ export const Predications = {
   quotedArray(this: PredicationHost, others: unknown[]): Node[] {
     return others.map((v) => this.quotedNode(v));
   },
+
+  // -- Rails-private helpers (mixed in alongside the public API for
+  //    surface fidelity; not referenced internally because the existing
+  //    *_any/*_all impls call the file-level groupedAny/groupedAll
+  //    above with already-built nodes). --
+
+  // Mirrors Arel::Predications#grouping_any(method_id, others, *extras)
+  // — calls `this[methodId](expr, ...extras)` on each value and folds
+  // the resulting nodes with OR inside a Grouping. The closure variant
+  // (overload 2) lets TS callers skip stringly-typed dispatch.
+  groupingAny(
+    this: PredicationHost,
+    methodId: string | ((this: PredicationHost, expr: unknown, ...extras: unknown[]) => Node),
+    others: unknown[],
+    ...extras: unknown[]
+  ): Grouping {
+    const self = this as unknown as Record<string, (...args: unknown[]) => Node>;
+    const fn =
+      typeof methodId === "function"
+        ? (expr: unknown) => methodId.call(this, expr, ...extras)
+        : (expr: unknown) => self[methodId].call(this, expr, ...extras);
+    return groupedAny(others.map(fn));
+  },
+
+  // Mirrors Arel::Predications#grouping_all — fold with AND.
+  groupingAll(
+    this: PredicationHost,
+    methodId: string | ((this: PredicationHost, expr: unknown, ...extras: unknown[]) => Node),
+    others: unknown[],
+    ...extras: unknown[]
+  ): Grouping {
+    const self = this as unknown as Record<string, (...args: unknown[]) => Node>;
+    const fn =
+      typeof methodId === "function"
+        ? (expr: unknown) => methodId.call(this, expr, ...extras)
+        : (expr: unknown) => self[methodId].call(this, expr, ...extras);
+    return groupedAll(others.map(fn));
+  },
+
+  // Mirrors Arel::Predications#infinity? — true if the value is +/-
+  // Infinity or implements the Ruby `infinite?` protocol. Used by
+  // Rails to decide whether to clamp a `between` bound to an open
+  // half-range.
+  isInfinity(this: PredicationHost, value: unknown): boolean {
+    return value === Infinity || value === -Infinity;
+  },
+
+  // Mirrors Arel::Predications#unboundable? — Rails-side, this catches
+  // values that can't be compared (e.g. an unboundable bind value).
+  // The TS port has no analog of Ruby's `unboundable?` protocol, so
+  // this returns false; kept for surface fidelity.
+  isUnboundable(this: PredicationHost, value: unknown): boolean {
+    void this;
+    void value;
+    return false;
+  },
+
+  // Mirrors Arel::Predications#open_ended? — null, infinite, or
+  // unboundable values are treated as "no bound on this side".
+  isOpenEnded(this: PredicationHost, value: unknown): boolean {
+    return (
+      value === null ||
+      value === undefined ||
+      Predications.isInfinity.call(this, value) ||
+      Predications.isUnboundable.call(this, value)
+    );
+  },
 };

@@ -340,6 +340,62 @@ export class Attribute extends Node {
     return groupedAll(others.map((o) => this.notIn(o)));
   }
 
+  // -- Rails-private helpers (mirror Arel::Predications) --
+  //
+  // These mirror the private methods Rails' Attribute inherits from
+  // Predications (Attribute includes Predications). Trails' Attribute
+  // ships hand-rolled public predicates that already use the file-level
+  // groupedAny/groupedAll, so these private methods aren't called
+  // internally — they're surfaced for Rails-fidelity / api:compare
+  // privates coverage and for consumers reaching for the same protocol.
+
+  // Mirrors Arel::Predications#grouping_any(method_id, others, *extras).
+  groupingAny(
+    methodId: string | ((this: Attribute, expr: unknown, ...extras: unknown[]) => Node),
+    others: unknown[],
+    ...extras: unknown[]
+  ): Grouping {
+    const self = this as unknown as Record<string, (...args: unknown[]) => Node>;
+    const fn =
+      typeof methodId === "function"
+        ? (expr: unknown) => methodId.call(this, expr, ...extras)
+        : (expr: unknown) => self[methodId].call(this, expr, ...extras);
+    return groupedAny(others.map(fn));
+  }
+
+  // Mirrors Arel::Predications#grouping_all.
+  groupingAll(
+    methodId: string | ((this: Attribute, expr: unknown, ...extras: unknown[]) => Node),
+    others: unknown[],
+    ...extras: unknown[]
+  ): Grouping {
+    const self = this as unknown as Record<string, (...args: unknown[]) => Node>;
+    const fn =
+      typeof methodId === "function"
+        ? (expr: unknown) => methodId.call(this, expr, ...extras)
+        : (expr: unknown) => self[methodId].call(this, expr, ...extras);
+    return groupedAll(others.map(fn));
+  }
+
+  // Mirrors Arel::Predications#infinity?
+  isInfinity(value: unknown): boolean {
+    return value === Infinity || value === -Infinity;
+  }
+
+  // Mirrors Arel::Predications#unboundable? — Trails has no Ruby-style
+  // unboundable? protocol, so this is a constant `false`. Kept for
+  // surface fidelity.
+  isUnboundable(_value: unknown): boolean {
+    return false;
+  }
+
+  // Mirrors Arel::Predications#open_ended?
+  isOpenEnded(value: unknown): boolean {
+    return (
+      value === null || value === undefined || this.isInfinity(value) || this.isUnboundable(value)
+    );
+  }
+
   // -- Ordering --
 
   asc(): Ascending {

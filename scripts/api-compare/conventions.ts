@@ -112,6 +112,24 @@ export function rubyMethodToTs(name: string): string[] | null {
   if (name === "to_json") return ["toJSON"];
   if (name === "to_sql") return ["toSql"];
 
+  // Arel visitor convention: Ruby's `visit_Arel_Nodes_Equality` /
+  // `visit_Arel_Attributes_Attribute` / `visit_Arel_Table` map to
+  // Trails' camelCase `visitEquality` / `visitAttribute` / `visitTable`.
+  // The leaf segment is the relevant name; intermediate `Nodes` /
+  // `Attributes` / etc. are dropped.
+  if (name.startsWith("visit_Arel_")) {
+    const segments = name.slice("visit_Arel_".length).split("_");
+    const leaf = segments[segments.length - 1];
+    return ["visit" + leaf];
+  }
+  // Some Arel visitors also override generic helpers like
+  // `visit__regexp` (lowercase regexp) — convert the leaf via the
+  // standard snake-to-camel mapping.
+  if (name.startsWith("visit__")) {
+    const leaf = name.slice("visit__".length);
+    return ["visit" + snakeToCamel(leaf).replace(/^./, (c) => c.toUpperCase())];
+  }
+
   if (name.endsWith("?")) {
     const base = name.slice(0, -1);
     const camel = snakeToCamel(base);

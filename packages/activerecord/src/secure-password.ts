@@ -112,14 +112,14 @@ export function hasSecurePassword(
     },
     set: function (value: string | null) {
       // Rails uses present? to gate challenge validation — normalize blank to null.
-      // Use isBlank after coercion so non-string blanks (false, [], etc.) are also caught.
-      const coerced =
-        value === null || value === undefined
-          ? null
-          : typeof value === "string"
-            ? value
-            : String(value);
-      (this as any)[challengeKey] = coerced === null || isBlank(coerced) ? null : coerced;
+      // Check isBlank BEFORE coercion so non-string blanks (false, [], {}) are
+      // caught as blank rather than stringified to non-blank ("false", "[object Object]").
+      if (value === null || value === undefined || isBlank(value as unknown as string)) {
+        (this as any)[challengeKey] = null;
+        return;
+      }
+      const coerced = typeof value === "string" ? value : String(value);
+      (this as any)[challengeKey] = coerced;
     },
     configurable: true,
   });
@@ -129,8 +129,8 @@ export function hasSecurePassword(
   const saltProp = `${camelBase}Salt`;
   Object.defineProperty(modelClass.prototype, saltProp, {
     get: function (this: Base) {
-      const digest = this._readAttribute(digestAttr) as string | null;
-      if (!digest) return null;
+      const digest = this._readAttribute(digestAttr);
+      if (!digest || typeof digest !== "string") return null;
       const colonIdx = digest.indexOf(":");
       if (colonIdx === -1) return null; // no separator — malformed
       const saltHex = digest.slice(0, colonIdx);
@@ -245,7 +245,11 @@ export function hasSecurePassword(
           typeof record.attributeWas === "function"
             ? record.attributeWas(digestAttr)
             : record._readAttribute(digestAttr);
-        if (!digestWas || !verifyPassword(String(challenge), digestWas as string)) {
+        if (
+          !digestWas ||
+          typeof digestWas !== "string" ||
+          !verifyPassword(String(challenge), digestWas)
+        ) {
           // Rails keys to `#{attribute}_challenge` (snake_case) for i18n parity.
           record.errors.add(`${attribute}_challenge`, "invalid");
         }

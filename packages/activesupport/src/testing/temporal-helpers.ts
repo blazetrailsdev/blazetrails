@@ -1,7 +1,7 @@
 /**
  * Temporal test helpers. Test files use these instead of `new Date(...)`.
  */
-import { Temporal } from "../temporal.js";
+import { Temporal, instantFrom } from "../temporal.js";
 
 export function instant(iso: string): Temporal.Instant {
   return Temporal.Instant.from(iso);
@@ -23,7 +23,5 @@ export function zonedDateTime(iso: string): Temporal.ZonedDateTime {
   return Temporal.ZonedDateTime.from(iso);
 }
 
-/** Test bridge: build an Instant from a Date. */
-export function instantFromDate(date: Date): Temporal.Instant {
-  return Temporal.Instant.fromEpochMilliseconds(date.getTime());
-}
+/** Test bridge: build an Instant from a Date. Re-export of the production helper. */
+export const instantFromDate = instantFrom;

@@ -36,9 +36,10 @@ type Roundable<T> = {
  *     end
  *   end
  *
- * Truncates sub-second precision on Temporal types that carry a
- * `nanosecond` field (PlainDateTime, PlainTime, ZonedDateTime, Instant).
- * Values without nanosecond resolution (PlainDate, primitives) pass
+ * Truncates sub-second precision on Temporal types that expose a
+ * `round({ smallestUnit, roundingIncrement, roundingMode })` method —
+ * Instant, PlainDateTime, PlainTime, and ZonedDateTime. Values without
+ * sub-second resolution (PlainDate, primitives) lack `.round` and pass
  * through unchanged.
  */
 export function applySecondsPrecision<T>(this: { precision?: number }, value: T): T {

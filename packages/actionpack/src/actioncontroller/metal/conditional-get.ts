@@ -37,6 +37,7 @@ export function isFresh(
     return clientTags.some((t) => t === etag || t.replace(/^W\//, "") === normalizedEtag);
   }
   if (ifModifiedSince && lastModified) {
+    // boundary: HTTP RFC 7231 date string parsing for cache freshness check.
     return new Date(ifModifiedSince) >= new Date(lastModified);
   }
   return false;

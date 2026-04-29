@@ -11,6 +11,8 @@ import { Temporal } from "@blazetrails/activesupport/temporal";
 export type CookieExpires = Date | Temporal.Instant;
 
 function toUTCString(expires: CookieExpires): string {
+  // boundary: RFC 7231 cookie expiry strings are produced by Date#toUTCString;
+  // bridge a Temporal.Instant input via epoch ms.
   return expires instanceof Temporal.Instant
     ? new Date(expires.epochMilliseconds).toUTCString()
     : expires.toUTCString();
@@ -193,6 +195,7 @@ export class PermanentCookieJar {
   }
 
   set(key: string, valueOrOptions: string | SetCookieOptions): void {
+    // boundary: PermanentCookieJar fixes a far-future expiry in JS Date form.
     const expires = new Date(Date.now() + PermanentCookieJar.TWENTY_YEARS_MS);
     if (typeof valueOrOptions === "string") {
       this.jar.set(key, { value: valueOrOptions, expires });

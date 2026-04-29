@@ -44,7 +44,7 @@ export class SQLite extends ToSql {
     return this.collector;
   }
 
-  protected override visitLock(_node: Nodes.Lock): SQLString {
+  protected override visitArelNodesLock(_node: Nodes.Lock): SQLString {
     // SQLite does not support locking — silently ignore.
     return this.collector;
   }

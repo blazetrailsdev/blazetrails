@@ -10,7 +10,7 @@ import { quoteArrayLiteral } from "../quote-array.js";
  * Mirrors: Arel::Visitors::PostgreSQL
  */
 export class PostgreSQL extends ToSql {
-  protected override visitDistinctOn(node: Nodes.DistinctOn): SQLString {
+  protected override visitArelNodesDistinctOn(node: Nodes.DistinctOn): SQLString {
     this.collector.append("DISTINCT ON (");
     if (node.expr instanceof Node) {
       this.visit(node.expr);

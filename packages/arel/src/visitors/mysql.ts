@@ -109,7 +109,7 @@ export class MySQL extends ToSql {
   // cast form) rather than the prefix-`BINARY ` operator the previous
   // Trails impl used. Both force binary comparison; this matches Rails'
   // emitted SQL.
-  protected override visitBin(node: Nodes.Bin): SQLString {
+  protected override visitArelNodesBin(node: Nodes.Bin): SQLString {
     this.collector.append("CAST(");
     if (node.expr instanceof Node) {
       this.visit(node.expr);
@@ -169,7 +169,7 @@ export class MySQL extends ToSql {
     return this.collector;
   }
 
-  protected override visitNullsFirst(node: Nodes.NullsFirst): SQLString {
+  protected override visitArelNodesNullsFirst(node: Nodes.NullsFirst): SQLString {
     // MySQL has no NULLS FIRST; emulate: col IS NOT NULL, col ASC/DESC
     const ordering = node.expr as Nodes.Ascending | Nodes.Descending;
     this.visitNodeOrValue(ordering.expr);
@@ -178,7 +178,7 @@ export class MySQL extends ToSql {
     return this.collector;
   }
 
-  protected override visitNullsLast(node: Nodes.NullsLast): SQLString {
+  protected override visitArelNodesNullsLast(node: Nodes.NullsLast): SQLString {
     // MySQL has no NULLS LAST; emulate: col IS NULL, col ASC/DESC
     const ordering = node.expr as Nodes.Ascending | Nodes.Descending;
     this.visitNodeOrValue(ordering.expr);
@@ -187,7 +187,7 @@ export class MySQL extends ToSql {
     return this.collector;
   }
 
-  protected override visitCte(node: Nodes.Cte): SQLString {
+  protected override visitArelNodesCte(node: Nodes.Cte): SQLString {
     // MySQL identifiers are backtick-quoted, not double-quoted, and the
     // MATERIALIZED / NOT MATERIALIZED modifiers Postgres supports are
     // ignored. Mirrors Rails' MySQL visit_Arel_Nodes_Cte which calls

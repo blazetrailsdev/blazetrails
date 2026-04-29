@@ -1,6 +1,6 @@
 import { EachValidator } from "../validator.js";
 import type { AnyRecord } from "../validator.js";
-import { isBlank } from "@blazetrails/activesupport";
+import { isBlank, RoundingHelper } from "@blazetrails/activesupport";
 import { errorOptions } from "./comparability.js";
 import { resolveValue } from "./resolve-value.js";
 
@@ -245,20 +245,9 @@ export function parseFloatRails(num: number, precision: number, scale?: number):
  */
 export function round(num: number, scale?: number): number {
   if (scale === undefined || scale === null) return num;
-  const factor = Math.pow(10, scale);
-  return rubyRound(num * factor) / factor;
-}
-
-/**
- * Half-away-from-zero rounding, with an epsilon adjustment to absorb
- * FP residue (e.g. `1.005 * 100 === 100.49999999999999`). Matches
- * activesupport/src/number-helper/rounding-helper.ts#rubyRound.
- */
-function rubyRound(value: number): number {
-  if (value === 0) return 0;
-  const adjusted = value + (value >= 0 ? Number.EPSILON : -Number.EPSILON);
-  if (adjusted > 0) return Math.floor(adjusted + 0.5);
-  return -Math.floor(-adjusted + 0.5);
+  // Reuse the shared half-away-from-zero rounder so numericality
+  // coercion stays consistent with the rest of the codebase.
+  return new RoundingHelper({ precision: scale }).round(num);
 }
 
 /**
@@ -304,13 +293,13 @@ export function isIsNumber(
   if (this.isIsHexadecimalLiteral(trimmed)) return false;
   if (NON_DECIMAL_LITERAL_REGEX.test(trimmed)) return false;
   // Rails: rescue ArgumentError, TypeError; false; end (numericality.rb:99).
-  try {
-    const coerced = Number(rawValue);
-    if (Number.isNaN(coerced)) return false;
-    return parseAsNumber(coerced, precision, scale) !== undefined;
-  } catch {
-    return false;
-  }
+  // The non-string/non-number paths return early above, and Number(string)
+  // doesn't throw in JS — so the rescue is structurally absent here.
+  // Kept the docstring reference to Rails' rescue for the call-shape
+  // mapping; no try/catch needed.
+  const coerced = Number(rawValue);
+  if (Number.isNaN(coerced)) return false;
+  return parseAsNumber(coerced, precision, scale) !== undefined;
 }
 
 /**

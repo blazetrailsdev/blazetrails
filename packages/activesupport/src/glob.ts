@@ -14,7 +14,13 @@
  * cleanly should be rewritten when ported.
  */
 
-import { getFsAsync, getPathAsync, type FsAdapter, type PathAdapter } from "./fs-adapter.js";
+import {
+  getFsAsync,
+  getPathAsync,
+  type FsAdapter,
+  type FsDirent,
+  type PathAdapter,
+} from "./fs-adapter.js";
 
 export interface GlobOptions {
   cwd?: string;
@@ -68,7 +74,7 @@ function walk(
   dot: boolean,
   results: Set<string>,
 ): void {
-  let entries;
+  let entries: FsDirent[];
   try {
     entries = fs.readdirSync(absDir, { withFileTypes: true });
   } catch {

@@ -2,6 +2,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  fsAdapterConfig,
+  getFsAsync,
+  getPathAsync,
+  registerFsAdapter,
+  type FsAdapter,
+} from "./fs-adapter.js";
 import { glob } from "./glob.js";
 
 let root: string;
@@ -125,9 +132,37 @@ describe("glob", () => {
   });
 
   it("prunes the walk to the literal prefix", async () => {
-    // `app/models/*.rb` should not require reading anything outside
-    // app/models. Verify by globbing into a non-existent prefix and
-    // confirming no error from a sibling tree (lib/) being absent.
-    expect(await glob("lib/tasks/*.rake", { cwd: root })).toEqual(["lib/tasks/deploy.rake"]);
+    // `lib/tasks/*.rake` should ONLY read lib/tasks (not root, not app/,
+    // not lib/). Wrap the active fs adapter to record every readdirSync
+    // call, then assert none escaped the prefix.
+    const realFs = await getFsAsync();
+    const realPath = await getPathAsync();
+    const reads: string[] = [];
+    const tracking: FsAdapter = {
+      ...realFs,
+      readdirSync: ((p: string, opts?: { withFileTypes: true }) => {
+        reads.push(p);
+        return opts ? realFs.readdirSync(p, opts) : realFs.readdirSync(p);
+      }) as FsAdapter["readdirSync"],
+    };
+    registerFsAdapter("glob-spy", tracking, realPath);
+    fsAdapterConfig.adapter = "glob-spy";
+    try {
+      const result = await glob("lib/tasks/*.rake", { cwd: root });
+      expect(result).toEqual(["lib/tasks/deploy.rake"]);
+      // Only directories under lib/tasks (the literal prefix) should be read.
+      const expectedPrefix = join(root, "lib", "tasks");
+      for (const p of reads) {
+        expect(p.startsWith(expectedPrefix)).toBe(true);
+      }
+      // Sanity: at least one read happened.
+      expect(reads.length).toBeGreaterThan(0);
+      // Specifically, no read of root, root/app, root/lib (parent), etc.
+      expect(reads).not.toContain(root);
+      expect(reads).not.toContain(join(root, "app"));
+      expect(reads).not.toContain(join(root, "lib"));
+    } finally {
+      fsAdapterConfig.adapter = null;
+    }
   });
 });

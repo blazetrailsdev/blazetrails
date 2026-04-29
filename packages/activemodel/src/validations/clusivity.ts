@@ -7,8 +7,10 @@
  * and ExclusionValidator. It provides `check_validity!`, the membership
  * test `include?`, the cached `delimiter` accessor, and the
  * `inclusion_method(enumerable)` selector. In TS we expose each as a
- * `this`-typed function that the validator classes attach as prototype
- * methods (matching Rails' `include Clusivity` mixin shape).
+ * `this`-typed function that the validator classes attach as instance
+ * fields, matching Rails' `include Clusivity` mixin shape on a
+ * per-instance level (not as prototype overrides — these are fixed
+ * Rails helpers, not user-overridable hooks).
  */
 import { resolveValue } from "./resolve-value.js";
 
@@ -93,15 +95,47 @@ export function isInclude(this: ClusivityHost, record: unknown, value: unknown):
 }
 
 function isMemberOf(members: unknown, value: unknown): boolean {
+  if (members === null || members === undefined) return false;
+  // String#include? in Ruby is substring match; JS String#includes matches
+  // when value is also a string.
+  if (typeof members === "string") {
+    return typeof value === "string" && members.includes(value);
+  }
+  // Set / Map both expose .has — for Map this is key membership, matching
+  // Ruby's Hash#include?(key). Custom collections that implement .has
+  // pick up the same fast path.
+  if (members instanceof Set || members instanceof Map) return members.has(value);
+  // Array.includes covers Array; many custom collections also expose
+  // .includes(item) and behave like Rails' #include?.
   if (Array.isArray(members)) return members.includes(value);
-  if (members instanceof Set) return members.has(value);
-  if (members && typeof (members as Iterable<unknown>)[Symbol.iterator] === "function") {
+  const m = members as { includes?: (v: unknown) => boolean; has?: (v: unknown) => boolean };
+  if (typeof m.includes === "function") return m.includes(value);
+  if (typeof m.has === "function") return m.has(value);
+  if (typeof (members as Iterable<unknown>)[Symbol.iterator] === "function") {
     for (const item of members as Iterable<unknown>) {
       if (item === value) return true;
     }
     return false;
   }
   return false;
+}
+
+/**
+ * Rails: `options.except(:in, :within).merge!(value: value)` — passes
+ * through every validator option except the collection keys, with the
+ * rejected value merged in for i18n interpolation
+ * (inclusion.rb:11, exclusion.rb:11).
+ */
+export function exceptInWithinMergeValue(
+  options: Record<string, unknown>,
+  value: unknown,
+): Record<string, unknown> {
+  const rest: Record<string, unknown> = {};
+  for (const key of Object.keys(options)) {
+    if (key !== "in" && key !== "within") rest[key] = options[key];
+  }
+  rest.value = value;
+  return rest;
 }
 
 /**

@@ -3,6 +3,7 @@ import type { AnyRecord } from "../validator.js";
 import {
   checkValidityBang,
   delimiter,
+  exceptInWithinMergeValue,
   inclusionMethod,
   isInclude,
   resolveValue,
@@ -20,6 +21,10 @@ import {
  *       end
  *     end
  *   end
+ *
+ * `nil`/`undefined` are NOT pre-skipped here — Rails relies on
+ * EachValidator's allow_nil dispatch (validator.ts:100) so excluding
+ * `nil` works when the excluded set explicitly contains it.
  */
 export class ExclusionValidator extends EachValidator {
   resolveValue = resolveValue;
@@ -32,22 +37,8 @@ export class ExclusionValidator extends EachValidator {
   }
 
   validateEach(record: AnyRecord, attribute: string, value: unknown): void {
-    if (this.options.allowNil !== false && (value === null || value === undefined)) return;
     if (this.isInclude(record, value)) {
-      record.errors.add(attribute, "exclusion", exclusionErrorOptions(this.options, value));
+      record.errors.add(attribute, "exclusion", exceptInWithinMergeValue(this.options, value));
     }
   }
-}
-
-function exclusionErrorOptions(
-  options: Record<string, unknown>,
-  value: unknown,
-): Record<string, unknown> {
-  // Rails: options.except(:in, :within).merge!(value: value)
-  const rest: Record<string, unknown> = {};
-  for (const key of Object.keys(options)) {
-    if (key !== "in" && key !== "within") rest[key] = options[key];
-  }
-  rest.value = value;
-  return rest;
 }

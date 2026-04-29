@@ -63,9 +63,12 @@ export default defineConfig({
       chunkSizeWarningLimit: 1500,
       rollupOptions: {
         output: {
+          // Split the typedoc-generated API reference into one chunk per
+          // package. Without this, Rollup minifies the whole API surface
+          // as a single >500kB chunk, dominating the build phase.
           manualChunks(id) {
-            const apiMatch = id.match(/\/api\/@blazetrails\/([^/]+)\//);
-            if (apiMatch) return `api-${apiMatch[1]}`;
+            const m = id.match(/\/docs\/api\/@blazetrails\/([^/]+)\//);
+            if (m) return `bt-api-${m[1]}`;
           },
         },
       },

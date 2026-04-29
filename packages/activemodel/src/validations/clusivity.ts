@@ -44,7 +44,10 @@ interface ClusivityHost {
  * per validator instance, matching Rails' `||=` semantics.
  */
 export function delimiter(this: ClusivityHost): unknown {
-  if (this._delimiterCache !== undefined) return this._delimiterCache;
+  // Rails `@delimiter ||= ...` re-evaluates if the cached value is
+  // nil/false. Mirror that — only treat a truthy cache as a hit so
+  // null / false / "" recompute on the next call.
+  if (this._delimiterCache) return this._delimiterCache;
   this._delimiterCache = this.options.in ?? this.options.within;
   return this._delimiterCache;
 }
@@ -88,8 +91,21 @@ export function inclusionMethod(_enumerable: unknown): "include?" | "cover?" {
  */
 export function isInclude(this: ClusivityHost, record: unknown, value: unknown): boolean {
   const members = this.resolveValue(record, delimiter.call(this));
+  // Rails: `members.public_send(inclusion_method(members), v)`. Route
+  // through inclusionMethod so the cover-vs-include branch slots in
+  // when a Range type lands without reworking the call path.
+  const method = inclusionMethod(members);
   if (Array.isArray(value)) {
-    return value.every((v) => isMemberOf(members, v));
+    return value.every((v) => testMembership(members, v, method));
+  }
+  return testMembership(members, value, method);
+}
+
+function testMembership(members: unknown, value: unknown, method: "include?" | "cover?"): boolean {
+  if (method === "cover?") {
+    // Range#cover? semantics — start/end endpoint check. No first-class
+    // Range type in TS yet; if/when it lands, dispatch goes here.
+    return isMemberOf(members, value);
   }
   return isMemberOf(members, value);
 }

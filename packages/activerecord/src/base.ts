@@ -2138,6 +2138,9 @@ export class Base extends Model {
         // for new records after attributes are assigned (before after_initialize).
         inheritanceInitializeInternalsCallback.call(this as any);
         scopingInitializeInternalsCallback.call(this as any);
+        // Re-snapshot so internals writes (STI type, scope attrs) are treated
+        // as initial clean state, not as dirty changes.
+        (this as any)._dirty.snapshot((this as any)._attributes);
         ctor._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
       }
     } else {
@@ -2167,6 +2170,9 @@ export class Base extends Model {
       if (!wasSuppressed2) {
         inheritanceInitializeInternalsCallback.call(this as any);
         scopingInitializeInternalsCallback.call(this as any);
+        // Re-snapshot so internals writes (STI type, scope attrs) are treated
+        // as initial clean state, not as dirty changes.
+        (this as any)._dirty.snapshot((this as any)._attributes);
         ctor2._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
       }
     }

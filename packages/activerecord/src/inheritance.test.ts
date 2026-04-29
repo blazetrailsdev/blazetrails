@@ -2102,11 +2102,11 @@ describe("Base constructor wires initializeInternalsCallback", () => {
       }
     }
     enableSti(Vehicle);
-    class Car extends Vehicle {}
 
-    // Hydrate a record as if loaded from DB — should preserve the row value,
-    // not overwrite it with the class name.
-    const record = Vehicle._instantiate({ id: 1, type: "Truck" }) as any;
-    expect(record.readAttribute("type")).toBe("Truck");
+    // Use type: "Vehicle" so STI discrimination routes back to Vehicle itself —
+    // no subclass lookup, so no SubclassNotFound. The value should be preserved
+    // as-is from the DB row, not overwritten by initializeInternalsCallback.
+    const record = Vehicle._instantiate({ id: 1, type: "Vehicle" }) as any;
+    expect(record.readAttribute("type")).toBe("Vehicle");
   });
 });

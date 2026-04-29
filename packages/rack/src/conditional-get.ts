@@ -1,3 +1,8 @@
+/**
+ * @boundary-file: parses RFC 7231 HTTP-date strings (`If-Modified-Since`,
+ *   `Last-Modified`) for cache-freshness comparison; JS `Date` is the
+ *   canonical parser for those formats.
+ */
 import { REQUEST_METHOD, ETAG, CONTENT_TYPE, CONTENT_LENGTH } from "./constants.js";
 import type { RackApp } from "./mock-request.js";
 

@@ -235,3 +235,13 @@ export function _resetProcessAdapter(): void {
   for (const k of Object.keys(envInternal)) delete envInternal[k];
   argvInternal.length = 0;
 }
+
+// Eagerly register the Node default at module load so direct reads of
+// `env.FOO` and `argv[0]` see populated snapshots without first having
+// to call a function that goes through `requireAdapter()`. This also
+// ensures `child-process-adapter`'s default `env` (which spreads the
+// exported `env`) is non-empty when running under Node.
+//
+// In non-Node hosts this is a no-op; the host registers its own adapter
+// before any consumer reads the snapshots.
+tryAutoRegisterNode();

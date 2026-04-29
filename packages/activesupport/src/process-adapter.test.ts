@@ -16,6 +16,13 @@ import {
   type WriteStream,
 } from "./process-adapter.js";
 
+// Capture the eager module-load auto-register snapshot before any test
+// runs `_resetProcessAdapter()`. Used to regression-test that direct
+// `env.FOO` / `argv[0]` reads see populated values without any prior
+// function call going through the adapter.
+const moduleLoadArgv: readonly string[] = [...argv];
+const moduleLoadEnv: Record<string, string | undefined> = { ...env };
+
 function makeFakeStream(): WriteStream & { written: string[] } {
   const written: string[] = [];
   return {
@@ -191,6 +198,17 @@ describe("processAdapter", () => {
       expect(typeof cwd()).toBe("string");
       // Node's process.argv has at least the executable.
       expect(argv.length).toBeGreaterThan(0);
+    });
+
+    it("env/argv are populated on direct read without a prior function call", () => {
+      // Regression: reading env.FOO or argv[0] directly used to return
+      // empty snapshots because auto-register only fired through
+      // requireAdapter(). Module load now eagerly auto-registers under
+      // Node so direct reads work.
+      expect(moduleLoadArgv.length).toBeGreaterThan(0);
+      expect(typeof moduleLoadEnv.PATH === "string" || typeof moduleLoadEnv.Path === "string").toBe(
+        true,
+      );
     });
   });
 

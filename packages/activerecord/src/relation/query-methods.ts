@@ -781,9 +781,9 @@ function deepEqual(a: unknown, b: unknown): boolean {
   }
   if (Array.isArray(b)) return false;
 
-  // boundary: deepEqual underpins structurallyIncompatibleValuesFor — the
-  // and!/or! merge-compatibility check. Caller-supplied JS Date values compare
-  // by epoch (Object.is would treat distinct Date instances as unequal).
+  // boundary: deepEqual underpins the and!/or! merge-compatibility check
+  // (structurallyIncompatibleValuesFor). Caller-supplied JS Date values
+  // compare by epoch since Object.is treats distinct Date instances as unequal.
   if (a instanceof Date) return b instanceof Date && a.getTime() === b.getTime();
   if (b instanceof Date) return false;
 

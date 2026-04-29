@@ -171,7 +171,9 @@ export function quoteSqlValue(v: unknown, asArray = false): string {
   if (typeof v === "number" || typeof v === "bigint") return String(v);
   if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
   // boundary: defensive SQL literal quoting fallback for legacy callers.
-  // Invalid (NaN) Date returns SQL NULL rather than the JSON string 'null'.
+  // Invalid (NaN) Date short-circuits to SQL NULL — toISOString() would throw
+  // a RangeError, and the generic object fallthrough would JSON-stringify it
+  // to the misleading string 'null'.
   if (v instanceof Date) {
     return Number.isNaN(v.getTime()) ? "NULL" : `'${v.toISOString()}'`;
   }

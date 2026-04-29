@@ -218,10 +218,10 @@ export function attributes(attrs: AttributeSet): Record<string, unknown> {
  * Concrete mixin host for `ActiveModel::Attributes`. Rails ships
  * `Attributes` as a module included into a model; in TS this class is
  * the canonical instance-side surface. `Model` composes the same
- * behavior into its own constructor (model.ts:1201) for ergonomic
- * subclassing without forcing inheritance from `Attributes`, but any
- * lighter-weight host that wants the bare attribute machinery can
- * extend this class directly.
+ * behavior into its own constructor for ergonomic subclassing without
+ * forcing inheritance from `Attributes`, but any lighter-weight host
+ * that wants the bare attribute machinery can extend this class
+ * directly.
  *
  * Mirrors: ActiveModel::Attributes (instance side, attributes.rb:31-160)
  */
@@ -234,8 +234,12 @@ export class Attributes {
    *     @attributes = self.class._default_attributes.deep_dup
    *     super
    *   end
+   *
+   * The rest parameter mirrors Rails' `(*)` splat: subclasses can
+   * forward arbitrary arguments via `super(...args)` even though this
+   * base ignores them.
    */
-  constructor() {
+  constructor(..._args: unknown[]) {
     const ctor = this.constructor as { _defaultAttributes?(): AttributeSet };
     this._attributes = ctor._defaultAttributes
       ? ctor._defaultAttributes().deepDup()

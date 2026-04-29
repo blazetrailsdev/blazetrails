@@ -6,6 +6,7 @@
 
 import { TimeWithZone } from "../time-with-zone.js";
 import { Temporal } from "../temporal.js";
+import { currentTime } from "../time-travel.js";
 
 function instantOf(date: Date): Temporal.Instant {
   return Temporal.Instant.fromEpochMilliseconds(date.getTime());
@@ -313,7 +314,7 @@ export class TimeZone {
    * Current time in this timezone.
    */
   now(): TimeWithZone {
-    return new TimeWithZone(Temporal.Now.instant(), this);
+    return new TimeWithZone(instantOf(currentTime()), this);
   }
 
   /**

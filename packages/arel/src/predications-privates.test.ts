@@ -103,6 +103,17 @@ describe("SelectManager#collapse (Rails-fidelity helper)", () => {
     expect(out).toBeInstanceOf(Nodes.And);
     expect((out as Nodes.And).children).toHaveLength(2);
   });
+
+  it("returns an empty And when every input is null/undefined (Rails parity)", () => {
+    // Mirrors Rails: `exprs.compact` then `create_and exprs` — an
+    // empty array hits the `else` branch and yields an empty `And`
+    // node. Rails-side `WHERE ()` is similarly invalid for the same
+    // reason; the limitation is shared with Rails. Callers are
+    // expected to filter empty conditions before reaching `where`.
+    const out = mgr.callCollapse([null, undefined]);
+    expect(out).toBeInstanceOf(Nodes.And);
+    expect((out as Nodes.And).children).toHaveLength(0);
+  });
 });
 
 describe("HomogeneousIn#ivars (Rails-fidelity helper)", () => {
@@ -111,7 +122,7 @@ describe("HomogeneousIn#ivars (Rails-fidelity helper)", () => {
     const node = new Nodes.HomogeneousIn([1, 2, 3], attr, "in");
     // ivars is `protected` so cast to access. The point: the tuple
     // shape matches Rails' `[@attribute, @values, @type]`.
-    const ivars = (node as unknown as { ivars(): [Nodes.Node, unknown[], string] }).ivars();
+    const ivars = (node as unknown as { ivars(): [Nodes.Node, unknown[], "in" | "notin"] }).ivars();
     expect(ivars[0]).toBe(attr);
     expect(ivars[1]).toEqual([1, 2, 3]);
     expect(ivars[2]).toBe("in");

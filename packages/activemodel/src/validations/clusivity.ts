@@ -31,6 +31,8 @@ export interface Clusivity {
 interface ClusivityHost {
   options: Record<string, unknown>;
   resolveValue(record: unknown, value: unknown): unknown;
+  delimiter(): unknown;
+  inclusionMethod(enumerable: unknown): "include?" | "cover?";
   _delimiterCache?: unknown;
 }
 
@@ -103,11 +105,15 @@ export function inclusionMethod(_enumerable: unknown): "include?" | "cover?" {
  * (resolve-value.ts).
  */
 export function isInclude(this: ClusivityHost, record: unknown, value: unknown): boolean {
-  const members = this.resolveValue(record, delimiter.call(this));
-  // Rails: `members.public_send(inclusion_method(members), v)`. Route
-  // through inclusionMethod so the cover-vs-include branch slots in
-  // when a Range type lands without reworking the call path.
-  const method = inclusionMethod(members);
+  // Route through `this.delimiter()` / `this.inclusionMethod(...)` so
+  // a subclass that overrides either gets the same dispatch Rails'
+  // Ruby method lookup would give it. Direct calls to the free
+  // functions would bypass overrides.
+  const members = this.resolveValue(record, this.delimiter());
+  // Rails: `members.public_send(inclusion_method(members), v)`. The
+  // cover-vs-include branch slots in via inclusionMethod when a Range
+  // type lands without reworking the call path.
+  const method = this.inclusionMethod(members);
   if (Array.isArray(value)) {
     return value.every((v) => testMembership(members, v, method));
   }
@@ -181,7 +187,7 @@ export function exceptInWithinMergeValue(
  * - `respond_to?(:to_sym)` ↔ string (resolved via resolveValue at call time)
  */
 export function checkValidityBang(this: ClusivityHost): void {
-  const d = delimiter.call(this);
+  const d = this.delimiter();
   if (d === undefined || d === null) {
     throw new Error(ERROR_MESSAGE);
   }

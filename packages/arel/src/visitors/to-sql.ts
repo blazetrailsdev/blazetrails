@@ -85,16 +85,16 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // Per-class dispatch wrappers for shared helpers — mirrors Rails' per-method
   // form (each operator/aggregate has its own visit method).
-  protected visitGreaterThan(node: Nodes.GreaterThan): SQLString {
+  protected visitArelNodesGreaterThan(node: Nodes.GreaterThan): SQLString {
     return this.visitBinaryOp(node, ">");
   }
-  protected visitGreaterThanOrEqual(node: Nodes.GreaterThanOrEqual): SQLString {
+  protected visitArelNodesGreaterThanOrEqual(node: Nodes.GreaterThanOrEqual): SQLString {
     return this.visitBinaryOp(node, ">=");
   }
-  protected visitLessThan(node: Nodes.LessThan): SQLString {
+  protected visitArelNodesLessThan(node: Nodes.LessThan): SQLString {
     return this.visitBinaryOp(node, "<");
   }
-  protected visitLessThanOrEqual(node: Nodes.LessThanOrEqual): SQLString {
+  protected visitArelNodesLessThanOrEqual(node: Nodes.LessThanOrEqual): SQLString {
     return this.visitBinaryOp(node, "<=");
   }
   protected visitArelNodesCount(node: Nodes.Count): SQLString {
@@ -153,10 +153,10 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     // Predicates
     reg(Nodes.Equality, "visitArelNodesEquality");
     reg(Nodes.NotEqual, "visitArelNodesNotEqual");
-    reg(Nodes.GreaterThan, "visitGreaterThan");
-    reg(Nodes.GreaterThanOrEqual, "visitGreaterThanOrEqual");
-    reg(Nodes.LessThan, "visitLessThan");
-    reg(Nodes.LessThanOrEqual, "visitLessThanOrEqual");
+    reg(Nodes.GreaterThan, "visitArelNodesGreaterThan");
+    reg(Nodes.GreaterThanOrEqual, "visitArelNodesGreaterThanOrEqual");
+    reg(Nodes.LessThan, "visitArelNodesLessThan");
+    reg(Nodes.LessThanOrEqual, "visitArelNodesLessThanOrEqual");
     reg(Nodes.Matches, "visitArelNodesMatches");
     reg(Nodes.DoesNotMatch, "visitArelNodesDoesNotMatch");
     reg(Nodes.In, "visitArelNodesIn");
@@ -198,7 +198,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.Filter, "visitArelNodesFilter");
     reg(Nodes.Case, "visitArelNodesCase");
     reg(Nodes.Extract, "visitArelNodesExtract");
-    reg(Nodes.Concat, "visitConcat");
+    reg(Nodes.Concat, "visitArelNodesConcat");
     reg(Nodes.InfixOperation, "visitArelNodesInfixOperation");
     reg(Nodes.BoundSqlLiteral, "visitArelNodesBoundSqlLiteral");
     reg(Nodes.BindParam, "visitArelNodesBindParam");
@@ -212,12 +212,12 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.Min, "visitArelNodesMin");
     reg(Nodes.Avg, "visitArelNodesAvg");
     // Advanced grouping
-    reg(Nodes.Cube, "visitCube");
-    reg(Nodes.Rollup, "visitRollup");
-    reg(Nodes.GroupingSet, "visitGroupingSet");
+    reg(Nodes.Cube, "visitArelNodesCube");
+    reg(Nodes.Rollup, "visitArelNodesRollUp");
+    reg(Nodes.GroupingSet, "visitArelNodesGroupingSet");
     reg(Nodes.Group, "visitArelNodesGroup");
-    reg(Nodes.GroupingElement, "visitGroupingElement");
-    reg(Nodes.Lateral, "visitLateral");
+    reg(Nodes.GroupingElement, "visitArelNodesGroupingElement");
+    reg(Nodes.Lateral, "visitArelNodesLateral");
     reg(Nodes.Comment, "visitArelNodesComment");
     reg(Nodes.OptimizerHints, "visitArelNodesOptimizerHints");
     reg(Nodes.HomogeneousIn, "visitArelNodesHomogeneousIn");
@@ -959,16 +959,30 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       this.visit(node.case);
     }
     for (const when of node.conditions) {
-      this.collector.append(" WHEN ");
-      this.visitNodeOrValue(when.left);
-      this.collector.append(" THEN ");
-      this.visitNodeOrValue(when.right);
+      this.collector.append(" ");
+      this.visitArelNodesWhen(when);
     }
     if (node.default) {
-      this.collector.append(" ELSE ");
-      this.visitNodeOrValue(node.default.expr);
+      this.collector.append(" ");
+      this.visitArelNodesElse(node.default);
     }
     this.collector.append(" END");
+    return this.collector;
+  }
+
+  // Mirrors Rails: visit_Arel_Nodes_When (to_sql.rb).
+  protected visitArelNodesWhen(node: Nodes.When): SQLString {
+    this.collector.append("WHEN ");
+    this.visitNodeOrValue(node.left);
+    this.collector.append(" THEN ");
+    this.visitNodeOrValue(node.right);
+    return this.collector;
+  }
+
+  // Mirrors Rails: visit_Arel_Nodes_Else (to_sql.rb).
+  protected visitArelNodesElse(node: Nodes.Else): SQLString {
+    this.collector.append("ELSE ");
+    this.visitNodeOrValue(node.expr);
     return this.collector;
   }
 
@@ -1003,7 +1017,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Concat --
 
-  protected visitConcat(node: Nodes.Concat): SQLString {
+  protected visitArelNodesConcat(node: Nodes.Concat): SQLString {
     this.visit(node.left);
     this.collector.append(" || ");
     this.visit(node.right);
@@ -1124,7 +1138,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Advanced grouping --
 
-  protected visitCube(node: Nodes.Cube): SQLString {
+  protected visitArelNodesCube(node: Nodes.Cube): SQLString {
     this.collector.append("CUBE(");
     const exprs = node.expressions;
     for (let i = 0; i < exprs.length; i++) {
@@ -1135,7 +1149,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visitRollup(node: Nodes.Rollup): SQLString {
+  protected visitArelNodesRollUp(node: Nodes.Rollup): SQLString {
     this.collector.append("ROLLUP(");
     const exprs = node.expressions;
     for (let i = 0; i < exprs.length; i++) {
@@ -1146,7 +1160,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visitGroupingElement(node: Nodes.GroupingElement): SQLString {
+  protected visitArelNodesGroupingElement(node: Nodes.GroupingElement): SQLString {
     this.collector.append("(");
     const exprs = node.expressions;
     for (let i = 0; i < exprs.length; i++) {
@@ -1157,7 +1171,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visitGroupingSet(node: Nodes.GroupingSet): SQLString {
+  protected visitArelNodesGroupingSet(node: Nodes.GroupingSet): SQLString {
     this.collector.append("GROUPING SETS(");
     const exprs = node.expressions;
     for (let i = 0; i < exprs.length; i++) {
@@ -1176,7 +1190,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visitLateral(node: Nodes.Lateral): SQLString {
+  protected visitArelNodesLateral(node: Nodes.Lateral): SQLString {
     this.collector.append("LATERAL (");
     this.visit(node.subquery);
     this.collector.append(")");
@@ -1572,5 +1586,180 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   protected quoteColumnName(name: string | Nodes.SqlLiteral): string {
     if (name instanceof Nodes.SqlLiteral) return name.value;
     return `"${String(name).replace(/"/g, '""')}"`;
+  }
+
+  /** Mirrors `to_sql.rb#bind_block`. Default placeholder for unbound binds. */
+  protected bindBlock(): string {
+    return "?";
+  }
+
+  /** Mirrors `to_sql.rb#unboundable?`. */
+  protected isUnboundable(value: unknown): boolean {
+    const v = value as { isUnboundable?: () => unknown } | null | undefined;
+    return typeof v?.isUnboundable === "function" ? Boolean(v.isUnboundable()) : false;
+  }
+
+  /** Mirrors `to_sql.rb#has_group_by_and_having?`. */
+  protected hasGroupByAndHaving(o: { groups: unknown[]; havings: unknown[] }): boolean {
+    return o.groups.length > 0 && o.havings.length > 0;
+  }
+
+  /** Mirrors `to_sql.rb#infix_value`. Visits left, emits literal, visits right. */
+  protected infixValue(o: { left: Node; right: Node }, value: string): SQLString {
+    this.visit(o.left);
+    this.collector.append(value);
+    this.visit(o.right);
+    return this.collector;
+  }
+
+  /**
+   * Mirrors `to_sql.rb#infix_value_with_paren`. Recursively wraps adjacent
+   * same-class infix nodes in `( ... )` per Rails' shape.
+   */
+  protected infixValueWithParen(
+    o: { left: Node; right: Node },
+    value: string,
+    suppressParens = false,
+  ): SQLString {
+    if (!suppressParens) this.collector.append("( ");
+    if (
+      (o.left as { constructor: unknown }).constructor ===
+      (o as { constructor: unknown }).constructor
+    ) {
+      this.infixValueWithParen(o.left as unknown as { left: Node; right: Node }, value, true);
+    } else {
+      this.groupingParentheses(o.left, false);
+    }
+    this.collector.append(value);
+    if (
+      (o.right as { constructor: unknown }).constructor ===
+      (o as { constructor: unknown }).constructor
+    ) {
+      this.infixValueWithParen(o.right as unknown as { left: Node; right: Node }, value, true);
+    } else {
+      this.groupingParentheses(o.right, false);
+    }
+    if (!suppressParens) this.collector.append(" )");
+    return this.collector;
+  }
+
+  /**
+   * Mirrors `to_sql.rb#grouping_parentheses`. Wraps a SelectStatement in
+   * parens when it would otherwise emit ambiguously; otherwise plain visit.
+   */
+  protected groupingParentheses(o: Node, alwaysWrapSelects = true): SQLString {
+    if (o instanceof Nodes.SelectStatement && (alwaysWrapSelects || this.isRequireParentheses(o))) {
+      this.collector.append("(");
+      this.visit(o);
+      this.collector.append(")");
+      return this.collector;
+    }
+    this.visit(o);
+    return this.collector;
+  }
+
+  /** Mirrors `to_sql.rb#require_parentheses?`. */
+  protected isRequireParentheses(o: Nodes.SelectStatement): boolean {
+    return o.orders.length > 0 || Boolean(o.limit) || Boolean(o.offset);
+  }
+
+  /**
+   * Mirrors `to_sql.rb#aggregate`. Renders `NAME(DISTINCT? expr, ...) AS alias?`.
+   */
+  protected aggregate(name: string, o: Nodes.Function): SQLString {
+    this.collector.append(`${name}(`);
+    if (o.distinct) this.collector.append("DISTINCT ");
+    this.injectJoin(o.expressions, ", ");
+    this.collector.append(")");
+    if (o.alias) {
+      this.collector.append(" AS ");
+      this.visit(o.alias);
+    }
+    return this.collector;
+  }
+
+  /**
+   * Mirrors `to_sql.rb#is_distinct_from`. CASE-form fallback for adapters
+   * that lack native `IS [NOT] DISTINCT FROM`.
+   */
+  protected isDistinctFrom(o: { left: Node; right: Node }): SQLString {
+    this.collector.append("CASE WHEN ");
+    this.visit(o.left);
+    this.collector.append(" = ");
+    this.visit(o.right);
+    this.collector.append(" OR (");
+    this.visit(o.left);
+    this.collector.append(" IS NULL AND ");
+    this.visit(o.right);
+    this.collector.append(" IS NULL)");
+    this.collector.append(" THEN 0 ELSE 1 END");
+    return this.collector;
+  }
+
+  /** Mirrors `to_sql.rb#collect_ctes`. Visits each CTE child joined by ", ". */
+  protected collectCtes(children: ReadonlyArray<{ toCte(): Node } | Node>): SQLString {
+    children.forEach((child, i) => {
+      if (i > 0) this.collector.append(", ");
+      const node =
+        typeof (child as { toCte?: () => Node }).toCte === "function"
+          ? (child as { toCte: () => Node }).toCte()
+          : (child as Node);
+      this.visit(node);
+    });
+    return this.collector;
+  }
+
+  /** Mirrors `to_sql.rb#unsupported`. */
+  protected unsupported(o: Node): never {
+    throw new UnsupportedVisitError(`Unknown node type: ${o.constructor.name}`);
+  }
+
+  // ---------------------------------------------------------------------
+  // Non-Arel visit dispatchers (Rails dispatches on Ruby native classes
+  // for stray values that drift into the visitor).
+  // ---------------------------------------------------------------------
+
+  /** Mirrors Rails: `visit_Integer`. */
+  protected visitInteger(o: number): SQLString {
+    this.collector.append(String(o));
+    return this.collector;
+  }
+
+  /** Mirrors Rails: `visit_Array`. */
+  protected visitArray(o: ReadonlyArray<Node>): SQLString {
+    this.injectJoin(o as Node[], ", ");
+    return this.collector;
+  }
+
+  /** Mirrors Rails: `visit_ActiveModel_Attribute` — adds an unbound bind. */
+  protected visitActiveModelAttribute(o: unknown): SQLString {
+    return this.visitArelNodesBindParam({ value: o } as Nodes.BindParam);
+  }
+
+  /**
+   * Mirrors Rails: `visit_Arel_SelectManager` — visits the manager's AST
+   * wrapped in parens so it can be embedded as a subquery.
+   */
+  protected visitArelSelectManager(o: { ast: Node }): SQLString {
+    this.collector.append("(");
+    this.visit(o.ast);
+    this.collector.append(")");
+    return this.collector;
+  }
+
+  /**
+   * Mirrors Rails: `visit_Arel_Nodes_SelectOptions` — emits limit/offset/lock
+   * via maybeVisit. Trails' SelectStatement carries these directly so this
+   * method is for callers that build a SelectOptions node explicitly.
+   */
+  protected visitArelNodesSelectOptions(o: {
+    limit?: Node | null;
+    offset?: Node | null;
+    lock?: Node | null;
+  }): SQLString {
+    this.maybeVisit(o.limit ?? null);
+    this.maybeVisit(o.offset ?? null);
+    this.maybeVisit(o.lock ?? null);
+    return this.collector;
   }
 }

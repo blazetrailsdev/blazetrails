@@ -1199,4 +1199,59 @@ describe("the to_sql visitor", () => {
       expect(sql).toContain('"w""in" AS');
     });
   });
+
+  describe("Rails-mirrored to_sql tail helpers", () => {
+    interface ToSqlInternals {
+      isUnboundable(value: unknown): boolean;
+      hasGroupByAndHaving(o: { groups: unknown[]; havings: unknown[] }): boolean;
+      bindBlock(): string;
+    }
+    const make = () => new Visitors.ToSql() as unknown as ToSqlInternals;
+
+    it("isUnboundable returns true only when the value reports unboundable", () => {
+      const v = make();
+      expect(v.isUnboundable({ isUnboundable: () => 1 })).toBe(true);
+      expect(v.isUnboundable({ isUnboundable: () => false })).toBe(false);
+      expect(v.isUnboundable({})).toBe(false);
+      expect(v.isUnboundable(null)).toBe(false);
+    });
+
+    it("hasGroupByAndHaving requires both groups and havings to be non-empty", () => {
+      const v = make();
+      expect(v.hasGroupByAndHaving({ groups: [1], havings: [1] })).toBe(true);
+      expect(v.hasGroupByAndHaving({ groups: [], havings: [1] })).toBe(false);
+      expect(v.hasGroupByAndHaving({ groups: [1], havings: [] })).toBe(false);
+    });
+
+    it("bindBlock returns the default ? placeholder", () => {
+      expect(make().bindBlock()).toBe("?");
+    });
+
+    it("visitArelSelectManager wraps the manager's AST in parens", () => {
+      // Called directly — SelectManager isn't in the dispatch table because
+      // it's a TreeManager, not a Node. Mirrors Rails' `visit_Arel_SelectManager`
+      // which is invoked when the visitor encounters a SelectManager value.
+      const tbl = new Table("users");
+      const mgr = new SelectManager(tbl).project(tbl.get("id"));
+      const v = new Visitors.ToSql();
+      // Initialize the collector via a no-op compile.
+      v.compile(new Nodes.SqlLiteral(""));
+      (
+        v as unknown as { visitArelSelectManager(o: { ast: Nodes.Node }): void }
+      ).visitArelSelectManager({ ast: mgr.ast as unknown as Nodes.Node });
+      const sql = (v as unknown as { collector: { value: string } }).collector.value;
+      expect(sql).toMatch(/^\(SELECT.*\)$/);
+    });
+
+    it("visitArelNodesWhen / Else are reachable as standalone visits (Case still works)", () => {
+      const tbl = new Table("users");
+      const node = new Nodes.Case(tbl.get("status")).when("ok", 1).when("warn", 2)["else"](0);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("CASE");
+      expect(sql).toContain("WHEN");
+      expect(sql).toContain("THEN");
+      expect(sql).toContain("ELSE");
+      expect(sql).toContain("END");
+    });
+  });
 });

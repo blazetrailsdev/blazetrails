@@ -60,7 +60,7 @@ export class PostgreSQL extends ToSql {
   // Mirrors Rails Postgres formatting: `( expr )` with spaces inside
   // the parens. The base ToSql renders `(expr)` without spaces, so
   // override to match Rails' `visit_Arel_Nodes_GroupingElement`.
-  protected override visitGroupingElement(node: Nodes.GroupingElement): SQLString {
+  protected override visitArelNodesGroupingElement(node: Nodes.GroupingElement): SQLString {
     this.collector.append("( ");
     for (let i = 0; i < node.expressions.length; i++) {
       if (i > 0) this.collector.append(", ");
@@ -73,26 +73,26 @@ export class PostgreSQL extends ToSql {
   // Cube/Rollup/GroupingSet: emit `CUBE` / `ROLLUP` / `GROUPING SETS`
   // followed by `grouping_array_or_grouping_element` formatting — same
   // `( ... )` shape with spaces. Mirrors Rails Postgres.
-  protected override visitCube(node: Nodes.Cube): SQLString {
+  protected override visitArelNodesCube(node: Nodes.Cube): SQLString {
     this.collector.append("CUBE");
-    return this.visitGroupingElement(node);
+    return this.visitArelNodesGroupingElement(node);
   }
 
-  protected override visitRollup(node: Nodes.Rollup): SQLString {
+  protected override visitArelNodesRollUp(node: Nodes.Rollup): SQLString {
     this.collector.append("ROLLUP");
-    return this.visitGroupingElement(node);
+    return this.visitArelNodesGroupingElement(node);
   }
 
-  protected override visitGroupingSet(node: Nodes.GroupingSet): SQLString {
+  protected override visitArelNodesGroupingSet(node: Nodes.GroupingSet): SQLString {
     this.collector.append("GROUPING SETS");
-    return this.visitGroupingElement(node);
+    return this.visitArelNodesGroupingElement(node);
   }
 
   // Lateral: only add wrapping parens when the inner isn't already a
   // Grouping (Rails: `grouping_parentheses`). Trails' base unconditionally
   // wraps, so a `LATERAL (grouping)` pre-existing parens would
   // produce `LATERAL ((expr))`.
-  protected override visitLateral(node: Nodes.Lateral): SQLString {
+  protected override visitArelNodesLateral(node: Nodes.Lateral): SQLString {
     this.collector.append("LATERAL ");
     if (node.subquery instanceof Nodes.Grouping) {
       this.visit(node.subquery);
@@ -118,6 +118,22 @@ export class PostgreSQL extends ToSql {
     this.visitNodeOrValue(node.left);
     this.collector.append(" IS DISTINCT FROM ");
     this.visitNodeOrValue(node.right);
+    return this.collector;
+  }
+
+  /**
+   * Mirrors Rails Postgres `grouping_array_or_grouping_element` (postgresql.rb):
+   * wraps an array `expr` in `( ... )`, otherwise plain visits. Used by the
+   * Cube / Rollup / GroupingSet visitors.
+   */
+  protected groupingArrayOrGroupingElement(o: { expr: unknown }): SQLString {
+    if (Array.isArray(o.expr)) {
+      this.collector.append("( ");
+      this.visit(o.expr as unknown as Node);
+      this.collector.append(" )");
+    } else {
+      this.visit(o.expr as Node);
+    }
     return this.collector;
   }
 }

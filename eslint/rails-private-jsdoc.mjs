@@ -54,11 +54,16 @@ function relFromRepoRoot(filename) {
 
 function packageOf(rel) {
   // packages/<pkg>/... → package id used in manifest.packageGlobals.
-  // actionpack contains both actioncontroller and actionview namespaces.
+  // actionpack hosts both actioncontroller and actiondispatch as
+  // sub-namespaces; actionview is its own top-level package.
+  // packages/rack is a separate Rack implementation (not Rails'
+  // actiondispatch) and has no rails-api counterpart, so it's left
+  // out of package-global matching.
   const m = rel.match(/^packages\/([^/]+)\/src(?:\/([^/]+))?\//);
   if (!m) return null;
-  if (m[1] === "actionpack") return m[2] === "actionview" ? "actionview" : "actioncontroller";
-  if (m[1] === "rack") return "actiondispatch";
+  if (m[1] === "actionpack") {
+    return m[2] === "actiondispatch" ? "actiondispatch" : "actioncontroller";
+  }
   return m[1];
 }
 

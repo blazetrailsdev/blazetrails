@@ -7,8 +7,8 @@
  * private/protected on every class/module hosted in the same Ruby file.
  * The `blazetrails/rails-private-jsdoc` ESLint rule consumes it.
  *
- * Run after `pnpm tsx scripts/api-compare/extract-ruby-api.rb`:
- *   pnpm tsx scripts/build-rails-privates-manifest.ts
+ * Run after `pnpm api:compare` (or `ruby scripts/api-compare/extract-ruby-api.rb`):
+ *   pnpm rails-privates:manifest
  */
 import * as fs from "fs";
 import * as path from "path";
@@ -18,14 +18,17 @@ import { rubyMethodToTs, rubyFileToTs } from "./api-compare/conventions.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
+// Reuses the package layout from scripts/api-compare/config.ts so the
+// two stay in lockstep. Paths are POSIX (forward slashes) — the ESLint
+// rule looks up entries built from `path.relative(...).split(sep).join("/")`.
 const PACKAGE_DIRS: Record<string, string> = {
   arel: "packages/arel/src",
   activemodel: "packages/activemodel/src",
   activerecord: "packages/activerecord/src",
   activesupport: "packages/activesupport/src",
-  actiondispatch: "packages/rack/src",
+  actiondispatch: "packages/actionpack/src/actiondispatch",
   actioncontroller: "packages/actionpack/src/actioncontroller",
-  actionview: "packages/actionpack/src/actionview",
+  actionview: "packages/actionview/src",
   trailties: "packages/trailties/src",
 };
 
@@ -92,7 +95,7 @@ for (const [pkg, rubyPkg] of Object.entries<any>(railsApi.packages)) {
   collect(rubyPkg.modules ?? {});
 
   for (const [rubyFile, names] of fileVis) {
-    const tsRel = path.join(pkgDir, rubyFileToTs(rubyFile));
+    const tsRel = path.posix.join(pkgDir, rubyFileToTs(rubyFile).split(path.sep).join("/"));
     const tsNames = new Set<string>();
     for (const [ruby, status] of names) {
       if (status !== "all-private") continue;

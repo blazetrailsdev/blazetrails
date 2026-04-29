@@ -554,4 +554,49 @@ describe("numericality with in: range", () => {
     const u2 = new User({ score: 100 });
     expect(u2.isValid()).toBe(true);
   });
+
+  it("rejects blank and whitespace-only strings", () => {
+    // Rails Kernel.Float raises ArgumentError on "" / whitespace, so
+    // is_number? returns false. JS Number("") would coerce to 0 and
+    // pass — explicit guard required.
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+        this.validates("name", { numericality: true });
+      }
+    }
+    expect(new User({ name: "" }).isValid()).toBe(false);
+    expect(new User({ name: "   " }).isValid()).toBe(false);
+  });
+
+  it("rejects hexadecimal literal strings (with or without leading whitespace)", () => {
+    // Rails parse_as_number's elsif chain skips Kernel.Float when
+    // is_hexadecimal_literal?, so "0x10" is not-a-number even though
+    // JS Number("0x10") === 16.
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+        this.validates("name", { numericality: true });
+      }
+    }
+    expect(new User({ name: "0x10" }).isValid()).toBe(false);
+    expect(new User({ name: "  0x10" }).isValid()).toBe(false);
+    expect(new User({ name: "+0x10" }).isValid()).toBe(false);
+  });
+
+  it("rejects hexadecimal compare-option values", () => {
+    // optionAsNumber should mirror parse_as_number — a hex string
+    // resolved as a compare option must throw, not silently coerce to
+    // its decimal equivalent (would make greaterThan: '0x10' behave as
+    // greaterThan: 16).
+    class User extends Model {
+      static {
+        this.attribute("score", "integer");
+        this.validates("score", { numericality: { greaterThan: "0x10" } });
+      }
+    }
+    expect(() => new User({ score: 20 }).isValid()).toThrow(
+      /Resolved numericality option must be numeric/,
+    );
+  });
 });

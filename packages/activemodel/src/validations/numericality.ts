@@ -38,9 +38,14 @@ export class NumericalityValidator extends EachValidator {
   /** @internal Rails-private helper. */
   declare isIsHexadecimalLiteral: typeof isIsHexadecimalLiteral;
 
-  private resolveNumeric(val: NumericValue | undefined, record: AnyRecord): number | undefined {
+  private resolveNumeric(
+    val: NumericValue | undefined,
+    record: AnyRecord,
+    precision: number,
+    scale?: number,
+  ): number | undefined {
     if (val === undefined) return undefined;
-    return this.optionAsNumber(record, val, 15, undefined);
+    return this.optionAsNumber(record, val, precision, scale);
   }
 
   override checkValidity(): void {
@@ -96,33 +101,57 @@ export class NumericalityValidator extends EachValidator {
     }
 
     const msg = this.options.message;
-    const gt = this.resolveNumeric(this.options.greaterThan as NumericValue | undefined, record);
+    const gt = this.resolveNumeric(
+      this.options.greaterThan as NumericValue | undefined,
+      record,
+      precision,
+      scale,
+    );
     if (gt !== undefined && !(num > gt)) {
       record.errors.add(attribute, "greater_than", { count: gt, value, message: msg });
     }
     const gte = this.resolveNumeric(
       this.options.greaterThanOrEqualTo as NumericValue | undefined,
       record,
+      precision,
+      scale,
     );
     if (gte !== undefined && !(num >= gte)) {
       record.errors.add(attribute, "greater_than_or_equal_to", { count: gte, value, message: msg });
     }
-    const lt = this.resolveNumeric(this.options.lessThan as NumericValue | undefined, record);
+    const lt = this.resolveNumeric(
+      this.options.lessThan as NumericValue | undefined,
+      record,
+      precision,
+      scale,
+    );
     if (lt !== undefined && !(num < lt)) {
       record.errors.add(attribute, "less_than", { count: lt, value, message: msg });
     }
     const lte = this.resolveNumeric(
       this.options.lessThanOrEqualTo as NumericValue | undefined,
       record,
+      precision,
+      scale,
     );
     if (lte !== undefined && !(num <= lte)) {
       record.errors.add(attribute, "less_than_or_equal_to", { count: lte, value, message: msg });
     }
-    const eq = this.resolveNumeric(this.options.equalTo as NumericValue | undefined, record);
+    const eq = this.resolveNumeric(
+      this.options.equalTo as NumericValue | undefined,
+      record,
+      precision,
+      scale,
+    );
     if (eq !== undefined && num !== eq) {
       record.errors.add(attribute, "equal_to", { count: eq, value, message: msg });
     }
-    const ot = this.resolveNumeric(this.options.otherThan as NumericValue | undefined, record);
+    const ot = this.resolveNumeric(
+      this.options.otherThan as NumericValue | undefined,
+      record,
+      precision,
+      scale,
+    );
     if (ot !== undefined && num === ot) {
       record.errors.add(attribute, "other_than", { count: ot, value, message: msg });
     }
@@ -199,16 +228,25 @@ export function parseFloatRails(num: number, precision: number, scale?: number):
  *     scale ? raw_value.round(scale) : raw_value
  *   end
  *
- * Half-to-even-ish: JS Math.round is half-to-positive-infinity, but
- * matches Ruby's BigDecimal#round default banker's-equivalent for the
- * common decimal cases we hit in validation.
+ * Ruby Float#round is banker's rounding (half-to-even) by default,
+ * matching IEEE 754 round-to-nearest-even. JS Math.round is
+ * half-to-positive-infinity, so a manual implementation is required to
+ * keep tie boundaries (...5) faithful.
  *
  * @internal Rails-private helper.
  */
 export function round(num: number, scale?: number): number {
   if (scale === undefined || scale === null) return num;
   const factor = Math.pow(10, scale);
-  return Math.round(num * factor) / factor;
+  const scaled = num * factor;
+  const floor = Math.floor(scaled);
+  const diff = scaled - floor;
+  // Use a small epsilon to absorb FP residue (e.g. 1.005 * 100 = 100.49999…)
+  const EPS = 1e-9;
+  if (diff < 0.5 - EPS) return floor / factor;
+  if (diff > 0.5 + EPS) return (floor + 1) / factor;
+  // Tie: round to even.
+  return (floor % 2 === 0 ? floor : floor + 1) / factor;
 }
 
 /**
@@ -237,7 +275,17 @@ export function isIsNumber(
   if (this.options.onlyNumeric && typeof rawValue !== "number") return false;
   if (rawValue === null || rawValue === undefined) return false;
   if (typeof rawValue === "number") return Number.isFinite(rawValue);
-  if (this.isIsHexadecimalLiteral(rawValue)) return false;
+  if (typeof rawValue === "string") {
+    // Rails `Kernel.Float` raises on blank strings — JS Number("")
+    // would coerce to 0 and falsely report true.
+    if (rawValue.trim() === "") return false;
+    // Rails `is_hexadecimal_literal?` is anchored at \A (no whitespace),
+    // but Kernel.Float strips leading whitespace before parsing, so a
+    // string like "  0x1" is still a hex literal that Rails rejects.
+    if (this.isIsHexadecimalLiteral(rawValue.trimStart())) return false;
+  } else if (this.isIsHexadecimalLiteral(rawValue)) {
+    return false;
+  }
   const coerced = Number(rawValue);
   if (Number.isNaN(coerced)) return false;
   return parseAsNumber(coerced, precision, scale) !== undefined;
@@ -291,8 +339,17 @@ export function optionAsNumber(
 ): number | undefined {
   const resolved = this.resolveValue(record, optionValue);
   if (resolved === undefined || resolved === null) return undefined;
-  if (typeof resolved === "string" && resolved.trim() === "") {
-    throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
+  if (typeof resolved === "string") {
+    // Rails parse_as_number rejects blank strings (Kernel.Float raises)
+    // and hex literals (the elsif chain returns nil). Mirror both so a
+    // misconfigured compare option fails loudly instead of silently
+    // accepting "0x10" as 16.
+    if (resolved.trim() === "") {
+      throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
+    }
+    if (HEXADECIMAL_REGEX.test(resolved.trimStart())) {
+      throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
+    }
   }
   const numeric = typeof resolved === "number" ? resolved : Number(resolved);
   if (!Number.isFinite(numeric)) {

@@ -193,7 +193,18 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
       - run: pnpm install --frozen-lockfile
+      # `pnpm lint` runs `prelint` which builds the rails-private
+      # manifest from rails-api.json. Fetch + extract upstream so the
+      # manifest reflects real Rails visibility data; otherwise the
+      # rails-private-jsdoc rule no-ops.
+      - name: Fetch Rails source
+        run: bash scripts/api-compare/fetch-rails.sh
+      - name: Extract Ruby API
+        run: cd scripts/api-compare && ruby extract-ruby-api.rb
       - run: pnpm lint
   prettier:
     name: Prettier

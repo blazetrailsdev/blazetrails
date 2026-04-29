@@ -10,6 +10,7 @@
     "prepare": "husky",
     "typecheck": "node scripts/typecheck.mjs",
     "guides:typecheck": "tsx scripts/guides-typecheck/check.ts",
+    "prelint": "pnpm tsx scripts/build-rails-privates-manifest.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

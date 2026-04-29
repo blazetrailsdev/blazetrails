@@ -29,9 +29,23 @@ const PACKAGE_DIRS: Record<string, string> = {
   trailties: "packages/trailties/src",
 };
 
-const railsApi = JSON.parse(
-  fs.readFileSync(path.join(ROOT, "scripts/api-compare/output/rails-api.json"), "utf8"),
-);
+const RAILS_API_PATH = path.join(ROOT, "scripts/api-compare/output/rails-api.json");
+const OUT = path.join(ROOT, "eslint/rails-private-methods.json");
+
+if (!fs.existsSync(RAILS_API_PATH)) {
+  // No Rails source extracted yet — write an empty manifest so the
+  // ESLint rule no-ops gracefully. CI runs `bash fetch-rails.sh` +
+  // `ruby extract-ruby-api.rb` upstream of lint to produce real data.
+  fs.mkdirSync(path.dirname(OUT), { recursive: true });
+  fs.writeFileSync(OUT, JSON.stringify({ files: {}, packageGlobals: {} }, null, 2) + "\n");
+  console.warn(
+    `[build-rails-privates-manifest] ${RAILS_API_PATH} missing; wrote empty manifest. ` +
+      `Run \`pnpm api:compare\` to regenerate with real data.`,
+  );
+  process.exit(0);
+}
+
+const railsApi = JSON.parse(fs.readFileSync(RAILS_API_PATH, "utf8"));
 
 interface Manifest {
   files: Record<string, string[]>;
@@ -116,12 +130,11 @@ for (const k of Object.keys(manifest.packageGlobals).sort()) {
 }
 const final: Manifest = { files: sortedFiles, packageGlobals: sortedGlobals };
 
-const out = path.join(ROOT, "eslint/rails-private-methods.json");
-fs.writeFileSync(out, JSON.stringify(final, null, 2) + "\n");
+fs.writeFileSync(OUT, JSON.stringify(final, null, 2) + "\n");
 const fileCount = Object.keys(final.files).length;
 const fileNames = Object.values(final.files).reduce((n, a) => n + a.length, 0);
 const globalNames = Object.values(final.packageGlobals).reduce((n, a) => n + a.length, 0);
 console.log(
-  `Wrote ${out} — ${fileCount} files (${fileNames} names) + ` +
+  `Wrote ${OUT} — ${fileCount} files (${fileNames} names) + ` +
     `${Object.keys(final.packageGlobals).length} package-global sets (${globalNames} names)`,
 );

@@ -57,7 +57,7 @@ export function hasSecurePassword(
   const digestAttr = `${attribute}_digest`;
 
   // Store the raw password, confirmation, and challenge temporarily.
-  // Cleared only when a non-blank password is hashed in beforeSave.
+  // Cleared only when a non-empty password is hashed in beforeSave.
   const passwordKey = Symbol(`${attribute}`);
   const confirmationKey = Symbol(`${attribute}_confirmation`);
   const challengeKey = Symbol(`${attribute}_challenge`);
@@ -128,8 +128,11 @@ export function hasSecurePassword(
       const digest = this._readAttribute(digestAttr) as string | null;
       if (!digest) return null;
       const colonIdx = digest.indexOf(":");
-      if (colonIdx === -1) return null; // malformed digest — no salt/hash separator
-      return digest.slice(0, colonIdx);
+      if (colonIdx === -1) return null; // no separator — malformed
+      const saltHex = digest.slice(0, colonIdx);
+      const hashHex = digest.slice(colonIdx + 1);
+      if (!saltHex || !hashHex) return null; // empty salt or empty hash — malformed
+      return saltHex;
     },
     configurable: true,
   });

@@ -524,6 +524,27 @@ describe("hasSecurePassword — per-attribute confirmation, challenge, and salt"
     expect((u as any).recoveryPasswordSalt).toMatch(/^[0-9a-f]+$/);
   });
 
+  it("recoveryPasswordSalt returns null for malformed digest (no separator)", () => {
+    const User = makeModel();
+    const u = new User({});
+    u.writeAttribute("recovery_password_digest", "noseparator");
+    expect((u as any).recoveryPasswordSalt).toBeNull();
+  });
+
+  it("recoveryPasswordSalt returns null for malformed digest (empty salt)", () => {
+    const User = makeModel();
+    const u = new User({});
+    u.writeAttribute("recovery_password_digest", ":hashonly");
+    expect((u as any).recoveryPasswordSalt).toBeNull();
+  });
+
+  it("recoveryPasswordSalt returns null for malformed digest (empty hash)", () => {
+    const User = makeModel();
+    const u = new User({});
+    u.writeAttribute("recovery_password_digest", "saltonly:");
+    expect((u as any).recoveryPasswordSalt).toBeNull();
+  });
+
   it("validates recovery_password_confirmation mismatch", async () => {
     const User = makeModel();
     const u = new User({});

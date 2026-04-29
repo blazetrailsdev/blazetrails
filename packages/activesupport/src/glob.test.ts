@@ -233,6 +233,69 @@ describe("glob", () => {
     }
   });
 
+  it("treats in-segment `**` as plain `*` (no unbounded depth)", async () => {
+    // Build a deep tree under app/models. Pattern `app/foo**bar.rb`
+    // (with `**` in-segment, not as a path segment) should NOT match
+    // anything across directory boundaries — `**` here is just `*`.
+    const deep = join(root, "app", "models", "deep1", "deep2");
+    mkdirSync(deep, { recursive: true });
+    writeFileSync(join(deep, "fooXbar.rb"), "");
+    try {
+      const realFs = await getFsAsync();
+      const realPath = await getPathAsync();
+      const reads: string[] = [];
+      const tracking: FsAdapter = {
+        ...realFs,
+        readdirSync: ((p: string, opts?: { withFileTypes: true }) => {
+          reads.push(p);
+          return opts ? realFs.readdirSync(p, opts) : realFs.readdirSync(p);
+        }) as FsAdapter["readdirSync"],
+      };
+      const prevAdapter = fsAdapterConfig.adapter;
+      registerFsAdapter("glob-spy-instar", tracking, realPath);
+      fsAdapterConfig.adapter = "glob-spy-instar";
+      try {
+        // `app/foo**bar.rb`: in-segment **, single-segment match. Should
+        // NOT recurse into deep1/deep2 since maxRemainingDepth is bounded.
+        await glob("app/foo**bar.rb", { cwd: root });
+        expect(reads).not.toContain(join(root, "app", "models", "deep1"));
+        expect(reads).not.toContain(join(root, "app", "models", "deep1", "deep2"));
+      } finally {
+        fsAdapterConfig.adapter = prevAdapter;
+      }
+    } finally {
+      rmSync(join(root, "app", "models", "deep1"), { recursive: true, force: true });
+    }
+  });
+
+  it("rethrows unexpected readdirSync errors (e.g. EACCES)", async () => {
+    const realFs = await getFsAsync();
+    const realPath = await getPathAsync();
+    const erroring: FsAdapter = {
+      ...realFs,
+      readdirSync: ((p: string) => {
+        const err = new Error("EACCES: permission denied") as Error & { code: string };
+        err.code = "EACCES";
+        throw err;
+      }) as FsAdapter["readdirSync"],
+    };
+    const prevAdapter = fsAdapterConfig.adapter;
+    registerFsAdapter("glob-eacces", erroring, realPath);
+    fsAdapterConfig.adapter = "glob-eacces";
+    try {
+      await expect(glob("**/*.rb", { cwd: root })).rejects.toThrow(/EACCES/);
+    } finally {
+      fsAdapterConfig.adapter = prevAdapter;
+    }
+  });
+
+  it("swallows ENOENT/ENOTDIR (expected absence errors)", async () => {
+    // Globbing a non-existent cwd should return [], not throw — that's
+    // the existing "non-existent cwd" behavior, which works because
+    // readdirSync on a missing dir throws ENOENT.
+    expect(await glob("*", { cwd: join(root, "does-not-exist") })).toEqual([]);
+  });
+
   it("handles deep directory trees without stack overflow (iterative walk)", async () => {
     // Build a deeply nested structure (200 levels) under a sibling root.
     const deepRoot = join(root, "deep-stack-test");

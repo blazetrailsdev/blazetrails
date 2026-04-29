@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { Nodes } from "./index.js";
+import { Nodes, Visitors } from "./index.js";
+
+const compile = (n: Nodes.Node): string => new Visitors.ToSql().compile(n);
 
 // Behavior tests for the mixin surface added in this PR — Expressions,
 // AliasPredication, OrderPredications, FilterPredications,
@@ -24,15 +26,22 @@ describe("Expressions mixin (on SqlLiteral)", () => {
     expect(lit.average()).toBeInstanceOf(Nodes.Avg);
   });
 
-  it("count(true) sets the distinct flag on the Count node", () => {
-    expect((lit.count(true) as { distinct: boolean }).distinct).toBe(true);
-    expect((lit.count() as { distinct: boolean }).distinct).toBe(false);
+  it("count(true) emits COUNT(DISTINCT ...)", () => {
+    expect(compile(lit.count())).toBe("COUNT(col)");
+    expect(compile(lit.count(true))).toBe("COUNT(DISTINCT col)");
   });
 
-  it("extract builds an Extract node carrying the field", () => {
+  it("sum/max/min/avg compile to the expected SQL function call", () => {
+    expect(compile(lit.sum())).toBe("SUM(col)");
+    expect(compile(lit.maximum())).toBe("MAX(col)");
+    expect(compile(lit.minimum())).toBe("MIN(col)");
+    expect(compile(lit.average())).toBe("AVG(col)");
+  });
+
+  it("extract compiles to EXTRACT(field FROM expr)", () => {
     const e = lit.extract("year");
     expect(e).toBeInstanceOf(Nodes.Extract);
-    expect((e as { field: string }).field).toBe("year");
+    expect(compile(e)).toBe("EXTRACT(YEAR FROM col)");
   });
 });
 
@@ -46,7 +55,7 @@ describe("AliasPredication mixin", () => {
     const sum = new Nodes.SqlLiteral("col").sum();
     const aliased = sum.as("total");
     expect(aliased).toBe(sum);
-    expect((sum as { alias: { value: string } | null }).alias?.value).toBe("total");
+    expect(compile(aliased)).toBe("SUM(col) AS total");
   });
 });
 
@@ -61,15 +70,22 @@ describe("OrderPredications mixin (on SqlLiteral)", () => {
 describe("WindowPredications.over (mixed into Function)", () => {
   const sum = new Nodes.SqlLiteral("col").sum();
 
-  it("with no argument builds an Over node with null right", () => {
-    const o = sum.over();
-    expect(o).toBeInstanceOf(Nodes.Over);
-    expect((o as { right: unknown }).right).toBe(null);
+  it("with no argument compiles to OVER ()", () => {
+    expect(compile(sum.over())).toBe("SUM(col) OVER ()");
   });
 
-  it("accepts a window-name string and a Node expr", () => {
-    expect(sum.over("w")).toBeInstanceOf(Nodes.Over);
-    expect(sum.over(new Nodes.SqlLiteral("PARTITION BY x"))).toBeInstanceOf(Nodes.Over);
+  it("with a string wraps it in SqlLiteral and emits OVER name", () => {
+    // Regression for copilot review #1: a bare string would otherwise be
+    // rendered as a quoted value (`OVER 'w'`), breaking SQL.
+    expect(compile(sum.over("w"))).toBe("SUM(col) OVER w");
+  });
+
+  it("NamedFunction#over with a NamedWindow doubles embedded quotes in the name", () => {
+    // Regression for copilot review #4: `replace(/"/g, '""')` so a name
+    // containing `"` doesn't escape the identifier.
+    const fn = new Nodes.NamedFunction("MY_FN", [new Nodes.SqlLiteral("x")]);
+    const win = new Nodes.NamedWindow('weird"name');
+    expect(compile(fn.over(win))).toBe('MY_FN(x) OVER "weird""name"');
   });
 });
 

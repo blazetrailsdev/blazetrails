@@ -1,5 +1,6 @@
 import type { Node } from "./nodes/node.js";
 import { Over } from "./nodes/over.js";
+import { SqlLiteral } from "./nodes/sql-literal.js";
 
 /**
  * WindowPredications — `over` mixin.
@@ -15,6 +16,9 @@ export interface WindowPredicationsModule {
 
 export const WindowPredications: WindowPredicationsModule = {
   over(this: Node, expr: Node | string | null = null): Over {
-    return new Over(this, expr as Node | null);
+    // Wrap a window-name string in SqlLiteral so the visitor renders it as
+    // a bare identifier (`OVER w`) rather than a quoted value (`OVER 'w'`).
+    const right = typeof expr === "string" ? new SqlLiteral(expr) : (expr as Node | null);
+    return new Over(this, right);
   },
 };

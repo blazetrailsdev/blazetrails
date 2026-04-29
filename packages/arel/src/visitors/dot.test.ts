@@ -111,4 +111,49 @@ describe("TestDot", () => {
     const out = dot.compile(stmt);
     expect(out).toContain("DeleteStatement");
   });
+
+  describe("output structure (Rails parity)", () => {
+    it("emits the Rails dot.rb header and shape", () => {
+      const out = dot.compile(new Nodes.Distinct());
+      expect(out).toMatch(/^digraph "Arel" \{\n/);
+      expect(out).toContain("node [width=0.375,height=0.25,shape=record];");
+      expect(out).toMatch(/\n\}$/);
+      // A leaf node: id [label="<f0>Name"];
+      expect(out).toMatch(/^\d+ \[label="<f0>Distinct"\];$/m);
+    });
+
+    it("emits one edge per visit_edge declaration with the field name as label", () => {
+      // Binary -> left, right (two visit_edge calls).
+      const node = new Nodes.Equality(users.get("id"), new Nodes.SqlLiteral("1"));
+      const out = dot.compile(node);
+      expect(out).toMatch(/-> \d+ \[label="left"\];/);
+      expect(out).toMatch(/-> \d+ \[label="right"\];/);
+    });
+
+    it("emits an InfixOperation's three edges in Rails order: operator, left, right", () => {
+      const node = new Nodes.InfixOperation("+", users.get("age"), new Nodes.Quoted(1));
+      const out = dot.compile(node);
+      const operatorPos = out.indexOf('[label="operator"]');
+      const leftPos = out.indexOf('[label="left"]');
+      const rightPos = out.indexOf('[label="right"]');
+      expect(operatorPos).toBeGreaterThan(-1);
+      expect(operatorPos).toBeLessThan(leftPos);
+      expect(leftPos).toBeLessThan(rightPos);
+    });
+
+    it("collapses to a leaf for visit_NoEdges nodes (CurrentRow, Distinct)", () => {
+      const out = dot.compile(new Nodes.CurrentRow());
+      // Single node, no edges.
+      const edges = (out.match(/->/g) ?? []).length;
+      expect(edges).toBe(0);
+    });
+
+    it("escapes embedded double-quotes in side-field labels (quote helper)", () => {
+      const node = new Nodes.SqlLiteral('say "hi"');
+      const out = dot.compile(node);
+      // SqlLiteral is dispatched as visit_String — the value becomes a
+      // side-field on the parent node with quote() escaping the `"`.
+      expect(out).toContain('say \\"hi\\"');
+    });
+  });
 });

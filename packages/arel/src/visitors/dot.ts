@@ -243,10 +243,17 @@ export class Dot extends Visitor {
     });
   }
 
-  /** Aliased to Time/Date/DateTime/etc. in dispatch — stash as a side-field. */
+  /**
+   * Aliased to String / Time / Date / Integer / etc. — stash the value as a
+   * side-field on the current node. Rails' `visit_Arel_Nodes_SqlLiteral` is
+   * an alias of `visit_String` and works because `SqlLiteral < String` in
+   * Ruby; Trails wraps the string in `node.value`, so we unwrap here.
+   */
   protected visitString(o: unknown): void {
     const top = this.nodeStack[this.nodeStack.length - 1];
-    if (top) top.fields.push(String(o));
+    if (!top) return;
+    const value = o instanceof Nodes.SqlLiteral ? o.value : o;
+    top.fields.push(String(value));
   }
 
   protected visitArelNodesBindParam(o: Nodes.BindParam): void {
@@ -318,7 +325,7 @@ export class Dot extends Visitor {
    * incoming edge's `to` to the seen node) and recurses through
    * super.visit (the dispatch table) to fire the per-class handler.
    */
-  protected override visit(object: Node, _collector?: unknown): unknown {
+  protected override visit(object: unknown, _collector?: unknown): unknown {
     const seenNode = this.seen.get(object);
     if (seenNode) {
       const e = this.edgeStack[this.edgeStack.length - 1];
@@ -326,21 +333,16 @@ export class Dot extends Visitor {
       return undefined;
     }
 
-    if (this.isPrimitive(object)) {
-      // Primitives have no per-instance node; fire visitString to stash
-      // the value as a side-field on the current node.
-      this.visitString(object);
-      return undefined;
-    }
-
-    const klassName = this.classNameOf(object);
-    const node = new DotNode(klassName, this.nextId++);
+    // Mirrors Rails' Dot#visit: every value (including primitives) gets a
+    // Node entry whose `name` is the value's class. visit_String / visit_Hash
+    // / visit_Array then mutate the new node's fields/edges.
+    const node = new DotNode(this.classNameOf(object), this.nextId++);
     this.seen.set(object, node);
     this.nodes.push(node);
     this.withNode(node, () => {
-      // Hash and Array don't go through the dispatch table (they're not
-      // Node ctors); route them by JS type instead.
-      if (Array.isArray(object)) {
+      if (this.isPrimitive(object)) {
+        this.visitString(object);
+      } else if (Array.isArray(object)) {
         this.visitArray(object);
       } else if (this.isPlainObject(object)) {
         this.visitHash(object as unknown as Record<string, unknown>);
@@ -395,8 +397,19 @@ export class Dot extends Visitor {
     return proto === Object.prototype || proto === null;
   }
 
-  /** Rails: `o.class.name`. We use the JS ctor name and strip the namespace. */
-  private classNameOf(o: object): string {
+  /**
+   * Rails: `o.class.name`. We use the JS ctor name; primitives report their
+   * type ("String"/"Number"/"Boolean") so the leaf nodes match Rails' shape.
+   */
+  private classNameOf(o: unknown): string {
+    if (o === null) return "NilClass";
+    if (o === undefined) return "NilClass";
+    if (typeof o === "string") return "String";
+    if (typeof o === "number") return Number.isInteger(o) ? "Integer" : "Float";
+    if (typeof o === "boolean") return o ? "TrueClass" : "FalseClass";
+    if (typeof o === "bigint") return "Integer";
+    if (typeof o === "symbol") return "Symbol";
+    if (o instanceof Date) return "Time";
     const ctor = (o as { constructor?: { name?: string } }).constructor;
     return ctor?.name ?? "Object";
   }

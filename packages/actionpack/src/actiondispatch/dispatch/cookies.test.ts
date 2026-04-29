@@ -142,7 +142,7 @@ describe("CookiesTest", () => {
     const instant = Temporal.Instant.from("2030-04-15T12:00:00Z");
     jar.set("user_name", { value: "david", expires: instant });
     const headers = jar.getSetCookieHeaders();
-    expect(headers[0]).toContain(`expires=${new Date(instant.epochMilliseconds).toUTCString()}`);
+    expect(headers[0]).toContain("expires=Mon, 15 Apr 2030 12:00:00 GMT");
   });
 
   it("setting cookie for fourteen days with symbols", () => {

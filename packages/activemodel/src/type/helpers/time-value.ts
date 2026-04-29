@@ -46,11 +46,11 @@ type Roundable<T> = {
 export function applySecondsPrecision<T>(this: { precision?: number }, value: T): T {
   const precision = this.precision;
   if (precision === undefined || precision === null) return value;
-  // Reject precisions outside the 0-9 nanosecond window so we never
-  // hand Temporal#round a non-integer or out-of-range roundingIncrement.
-  // Pass-through (rather than coercing to a default) matches Rails'
-  // apply_seconds_precision, which returns value unchanged when the
-  // guard fails (time_value.rb:25 `return value unless precision...`).
+  // Rails' guard only covers nil/falsey precision (and values that do
+  // not respond to `nsec`). This additional pass-through for invalid
+  // numeric precision is trails-specific and preserves the current
+  // behavior instead of coercing to a default — Temporal#round would
+  // otherwise reject a non-integer or out-of-range roundingIncrement.
   if (!Number.isInteger(precision) || precision < 0 || precision > 9) return value;
   if (value === null || value === undefined) return value;
   // Temporal types (Instant, PlainDateTime, PlainTime, ZonedDateTime)

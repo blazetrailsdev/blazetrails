@@ -41,7 +41,9 @@ describe("TimeWithZoneTest", () => {
 
   it("time", () => {
     const twz = maketwz();
-    expect(twz.time.getTime()).toBe(Date.UTC(1999, 11, 31, 19, 0, 0));
+    expect(twz.time.toZonedDateTime("UTC").epochMilliseconds).toBe(
+      Date.UTC(1999, 11, 31, 19, 0, 0),
+    );
   });
 
   it("time zone", () => {
@@ -86,7 +88,7 @@ describe("TimeWithZoneTest", () => {
   it("localtime", () => {
     const twz = maketwz();
     const local = twz.localtime();
-    expect(local).toBeInstanceOf(Date);
+    expect(local).toBeInstanceOf(Temporal.PlainDateTime);
   });
 
   it("utc?", () => {

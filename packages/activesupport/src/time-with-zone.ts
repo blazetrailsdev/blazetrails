@@ -530,7 +530,7 @@ export class TimeWithZone {
       // Fixed duration — advance from UTC
       const ms = interval.inSeconds() * 1000;
       return new TimeWithZone(
-        Temporal.Instant.fromEpochMilliseconds(this._utc.getTime() + ms),
+        Temporal.Instant.fromEpochMilliseconds(Math.trunc(this._utc.getTime() + ms)),
         this._timeZone,
       );
     }
@@ -631,7 +631,7 @@ export class TimeWithZone {
 
     if (ms !== 0) {
       return new TimeWithZone(
-        Temporal.Instant.fromEpochMilliseconds(newLocal._utc.getTime() + ms),
+        Temporal.Instant.fromEpochMilliseconds(Math.trunc(newLocal._utc.getTime() + ms)),
         this._timeZone,
       );
     }
@@ -869,7 +869,10 @@ export class TimeWithZone {
     const ms = this._utc.getTime();
     const precisionMs = precision * 1000;
     const rounded = Math.round(ms / precisionMs) * precisionMs;
-    return new TimeWithZone(Temporal.Instant.fromEpochMilliseconds(rounded), this._timeZone);
+    return new TimeWithZone(
+      Temporal.Instant.fromEpochMilliseconds(Math.round(rounded)),
+      this._timeZone,
+    );
   }
 
   // ---------------------------------------------------------------------------

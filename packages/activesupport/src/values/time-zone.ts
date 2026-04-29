@@ -647,7 +647,10 @@ export class TimeZone {
    * Create a TimeWithZone from a Unix timestamp.
    */
   at(secondsSinceEpoch: number): TimeWithZone {
-    return new TimeWithZone(Temporal.Instant.fromEpochMilliseconds(secondsSinceEpoch * 1000), this);
+    return new TimeWithZone(
+      Temporal.Instant.fromEpochMilliseconds(Math.trunc(secondsSinceEpoch * 1000)),
+      this,
+    );
   }
 
   /**

@@ -122,11 +122,23 @@ export function rubyMethodToTs(name: string): string[] | null {
     const base = name.slice(0, -1);
     const camel = snakeToCamel(base);
     const isPrefixed = "is" + camel.replace(/^./, (c) => c.toUpperCase());
-    // If base already starts with a predicate word, try without "is" prefix first.
-    // `is` is included so `is_number?` → `isNumber` (not `isIsNumber`) — Ruby
-    // already conveys the predicate via the `is_` prefix; doubling it on
-    // the TS side gives the redundant `isIsNumber`.
-    if (/^(is|has|supports|can|should|needs|includes|responds|allows|uses)/.test(camel)) {
+    // Names already starting with `is_` collapse to one candidate so
+    // `is_number?` → ["isNumber"] (not ["isIsNumber", "isNumber"]).
+    // The `isPrefixed` form is intentionally NOT offered as a fallback
+    // here — Ruby already conveys the predicate via the `is_` prefix,
+    // and offering `isIsNumber` would let a trails author land that
+    // doubled form and still get api:compare credit.
+    if (/^is/.test(camel)) {
+      return [camel];
+    }
+    // Other already-predicate Ruby prefixes (has_one?, supports_x?,
+    // can_y?, …) keep both candidates: the canonical camel form
+    // (`hasOne`) and the isPrefixed fallback (`isHasOne`). The
+    // fallback exists because trails sometimes needs the disambiguating
+    // alias when the bare name collides with a macro (e.g. Reflection
+    // exposes `isHasOne()` as a predicate alongside the `Model.hasOne`
+    // association declaration).
+    if (/^(has|supports|can|should|needs|includes|responds|allows|uses)/.test(camel)) {
       return [camel, isPrefixed];
     }
     return [isPrefixed, camel];

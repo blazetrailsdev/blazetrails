@@ -626,4 +626,22 @@ describe("numericality with in: range", () => {
     expect(new User({ score: 20 }).isValid()).toBe(true);
     expect(new User({ score: 5 }).isValid()).toBe(true);
   });
+
+  it("rejects non-string/non-number values (boolean, Date, plain object)", () => {
+    // Rails Kernel.Float raises TypeError for non-Numeric/non-String
+    // input, so is_number? returns false. JS Number(true) === 1 and
+    // Number(new Date()) === epoch would silently pass without the
+    // explicit type narrowing in isNumber.
+    class User extends Model {
+      static {
+        this.attribute("flag", "boolean");
+        this.attribute("when", "datetime");
+        this.validates("flag", { numericality: true });
+        this.validates("when", { numericality: true });
+      }
+    }
+    expect(new User({ flag: true }).isValid()).toBe(false);
+    expect(new User({ flag: false }).isValid()).toBe(false);
+    expect(new User({ when: "2026-04-29T00:00:00Z" }).isValid()).toBe(false);
+  });
 });

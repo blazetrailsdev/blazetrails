@@ -62,9 +62,8 @@ export default defineConfig({
         // navigable via the sidebar; losing in-page search there is the
         // accepted tradeoff for a much smaller, faster build.
         _render(src, env, md) {
-          const html = md.render(src, env);
           if (env.relativePath?.startsWith("api/")) return "";
-          return html;
+          return md.render(src, env);
         },
       },
     },

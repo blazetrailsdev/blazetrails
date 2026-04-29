@@ -9,7 +9,7 @@ import { TimeZone } from "./values/time-zone.js";
 import { Duration } from "./duration.js";
 import { currentTime } from "./time-travel.js";
 import { getZone } from "./time-zone-config.js";
-import { Temporal } from "./temporal.js";
+import { Temporal, instantFrom } from "./temporal.js";
 
 /**
  * Options for the change() method.
@@ -726,18 +726,12 @@ export class TimeWithZone {
   }
 
   isToday(): boolean {
-    const now = new TimeWithZone(
-      Temporal.Instant.fromEpochMilliseconds(currentTime().getTime()),
-      this._timeZone,
-    );
+    const now = new TimeWithZone(instantFrom(currentTime()), this._timeZone);
     return this.year === now.year && this.month === now.month && this.day === now.day;
   }
 
   isTomorrow(): boolean {
-    const now = new TimeWithZone(
-      Temporal.Instant.fromEpochMilliseconds(currentTime().getTime()),
-      this._timeZone,
-    );
+    const now = new TimeWithZone(instantFrom(currentTime()), this._timeZone);
     const tomorrow = now.advance({ days: 1 });
     return (
       this.year === tomorrow.year && this.month === tomorrow.month && this.day === tomorrow.day
@@ -745,10 +739,7 @@ export class TimeWithZone {
   }
 
   isYesterday(): boolean {
-    const now = new TimeWithZone(
-      Temporal.Instant.fromEpochMilliseconds(currentTime().getTime()),
-      this._timeZone,
-    );
+    const now = new TimeWithZone(instantFrom(currentTime()), this._timeZone);
     const yesterday = now.advance({ days: -1 });
     return (
       this.year === yesterday.year && this.month === yesterday.month && this.day === yesterday.day

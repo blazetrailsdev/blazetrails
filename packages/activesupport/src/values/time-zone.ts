@@ -5,12 +5,8 @@
  */
 
 import { TimeWithZone } from "../time-with-zone.js";
-import { Temporal } from "../temporal.js";
+import { Temporal, instantFrom } from "../temporal.js";
 import { currentTime } from "../time-travel.js";
-
-function instantOf(date: Date): Temporal.Instant {
-  return Temporal.Instant.fromEpochMilliseconds(date.getTime());
-}
 
 // Rails maps friendly names to IANA zones
 const MAPPING: Record<string, string> = {
@@ -314,7 +310,7 @@ export class TimeZone {
    * Current time in this timezone.
    */
   now(): TimeWithZone {
-    return new TimeWithZone(instantOf(currentTime()), this);
+    return new TimeWithZone(instantFrom(currentTime()), this);
   }
 
   /**
@@ -346,7 +342,7 @@ export class TimeZone {
       local1.hour === hour &&
       local1.minute === minute
     ) {
-      return new TimeWithZone(instantOf(utc1), this);
+      return new TimeWithZone(instantFrom(utc1), this);
     }
 
     // The offset at the computed UTC may differ — try with that offset
@@ -361,13 +357,13 @@ export class TimeZone {
       local2.hour === hour &&
       local2.minute === minute
     ) {
-      return new TimeWithZone(instantOf(utc2), this);
+      return new TimeWithZone(instantFrom(utc2), this);
     }
 
     // Neither candidate maps back — the requested time is in a DST gap.
     // Spring forward: use the earlier UTC (utc1), which the Intl API already
     // adjusted to the post-transition time (e.g., 2:00 AM → 3:00 AM EDT).
-    return new TimeWithZone(instantOf(utc1), this);
+    return new TimeWithZone(instantFrom(utc1), this);
   }
 
   /**
@@ -417,7 +413,7 @@ export class TimeZone {
     if (isNaN(date.getTime())) {
       throw new Error(`Could not parse time: "${str}"`);
     }
-    return new TimeWithZone(instantOf(date), this);
+    return new TimeWithZone(instantFrom(date), this);
   }
 
   /**
@@ -776,7 +772,7 @@ export class TimeZone {
     if (isNaN(date.getTime())) {
       throw new Error("invalid date");
     }
-    return new TimeWithZone(instantOf(date), this);
+    return new TimeWithZone(instantFrom(date), this);
   }
 
   /**

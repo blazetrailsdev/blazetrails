@@ -56,7 +56,7 @@ export function hasSecurePassword(
   const runValidations = options.validations !== false;
   const digestAttr = `${attribute}_digest`;
 
-  // Store the raw password and confirmation temporarily (cleared after hashing).
+  // Store the raw password, confirmation, and challenge temporarily (all cleared after hashing).
   const passwordKey = Symbol(`${attribute}`);
   const confirmationKey = Symbol(`${attribute}_confirmation`);
   const challengeKey = Symbol(`${attribute}_challenge`);

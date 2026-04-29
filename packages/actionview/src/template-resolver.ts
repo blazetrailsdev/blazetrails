@@ -40,6 +40,8 @@ export interface TemplateResolver {
   /**
    * Find a layout template.
    * Default implementation delegates to find() with "layouts" prefix.
+   *
+   * @internal
    */
   findLayout?(name: string, format: string, extensions: string[]): Template | null;
 }

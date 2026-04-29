@@ -693,7 +693,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   private visitArelNodesAssignment(node: Nodes.Assignment): SQLString {
     if (this._inUpdateSet && node.left instanceof Nodes.Attribute) {
-      this.collector.append(`"${node.left.name}"`);
+      this.collector.append(this.quoteColumnName(node.left.name));
     } else {
       this.visitNodeOrValue(node.left);
     }
@@ -892,7 +892,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   private visitArelNodesNamedWindow(node: Nodes.NamedWindow): SQLString {
-    this.collector.append(`"${node.name}" AS `);
+    this.collector.append(`${this.quoteColumnName(node.name)} AS `);
     return this.visitArelNodesWindow(node);
   }
 
@@ -1105,7 +1105,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     if (node.relation instanceof Nodes.Grouping) {
       this.collector.append(` ${node.name}`);
     } else {
-      this.collector.append(` "${node.name}"`);
+      this.collector.append(` ${this.quoteTableName(node.name)}`);
     }
     return this.collector;
   }
@@ -1243,7 +1243,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   // -- Cte --
 
   protected visitArelNodesCte(node: Nodes.Cte): SQLString {
-    this.collector.append(`"${node.name}" AS `);
+    this.collector.append(`${this.quoteTableName(node.name)} AS `);
     if (node.materialized === "materialized") {
       this.collector.append("MATERIALIZED ");
     } else if (node.materialized === "not_materialized") {

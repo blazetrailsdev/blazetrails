@@ -6,10 +6,11 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
 
 export interface TimeValue {
+  precision?: number;
   serializeCastValue(value: unknown): string | null;
   typeCastForSchema(value: unknown): string;
   userInputInTimeZone(value: unknown, zone?: string): Temporal.ZonedDateTime | null;
-  applySecondsPrecision<T>(value: T): T;
+  applySecondsPrecision<T>(this: TimeValue, value: T): T;
 }
 
 type Roundable<T> = {

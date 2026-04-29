@@ -22,7 +22,7 @@ export class MySQL extends ToSql {
 
     if (node.orders.length > 0) {
       this.collector.append(" ORDER BY ");
-      this.visitArray(node.orders, ", ");
+      this.injectJoin(node.orders, ", ");
     }
 
     if (node.limit) {
@@ -62,7 +62,7 @@ export class MySQL extends ToSql {
 
     if (node.projections.length > 0) {
       this.collector.append(" ");
-      this.visitArray(node.projections, ", ");
+      this.injectJoin(node.projections, ", ");
     }
 
     // MySQL emits FROM DUAL for empty FROM.
@@ -81,7 +81,7 @@ export class MySQL extends ToSql {
 
     if (node.groups.length > 0) {
       this.collector.append(" GROUP BY ");
-      this.visitArray(node.groups, ", ");
+      this.injectJoin(node.groups, ", ");
     }
 
     if (node.havings.length > 0) {
@@ -92,7 +92,7 @@ export class MySQL extends ToSql {
 
     if (node.windows.length > 0) {
       this.collector.append(" WINDOW ");
-      this.visitArray(node.windows, ", ");
+      this.injectJoin(node.windows, ", ");
     }
 
     return this.collector;

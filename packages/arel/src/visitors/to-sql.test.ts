@@ -1106,6 +1106,34 @@ describe("the to_sql visitor", () => {
       expect(v.quoteTableName('weird"name')).toBe('"weird""name"');
       expect(v.quoteTableName(new Nodes.SqlLiteral("users"))).toBe("users");
     });
+
+    it("visitTable and visitAttribute now route through quoteTableName / quoteColumnName", () => {
+      // A table name with a double-quote in it would have crashed pre-PR
+      // because the inline replace was string-only; quoteTableName escapes it.
+      const weird = new Table('we"ird');
+      const sql = new Visitors.ToSql().compile(weird.get('co"l').eq(1));
+      expect(sql).toBe('"we""ird"."co""l" = 1');
+    });
+
+    it("collectNodesFor prefixes the spacer and joins with the connector", () => {
+      const tbl = new Table("users");
+      // Verify via SelectCore: Rails' WHERE collapses on " AND ".
+      const sql = tbl
+        .where(tbl.get("a").eq(1))
+        .where(tbl.get("b").eq(2))
+        .project(tbl.get("a"))
+        .toSql();
+      expect(sql).toContain('WHERE "users"."a" = 1 AND "users"."b" = 2');
+    });
+
+    it("collectNodesFor is a no-op when the list is empty", () => {
+      // SELECT with no projections / no WHERE should not emit those
+      // clauses at all (no stray spacer).
+      const sql = new Table("users").project().toSql();
+      expect(sql).toBe('SELECT FROM "users"');
+      expect(sql).not.toContain("WHERE");
+      expect(sql).not.toContain("GROUP BY");
+    });
   });
 
   describe("Nodes::OptimizerHints (visit)", () => {

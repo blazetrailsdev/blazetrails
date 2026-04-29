@@ -21,7 +21,7 @@ export class SQLite extends ToSql {
 
     if (node.orders.length > 0) {
       this.collector.append(" ORDER BY ");
-      this.visitArray(node.orders, ", ");
+      this.injectJoin(node.orders, ", ");
     }
 
     if (node.limit) {

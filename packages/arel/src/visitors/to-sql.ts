@@ -250,7 +250,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
     if (node.orders.length > 0) {
       this.collector.append(" ORDER BY ");
-      this.visitArray(node.orders, ", ");
+      this.injectJoin(node.orders, ", ");
     }
 
     if (node.limit) {
@@ -285,51 +285,29 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
   }
 
+  // Mirrors Rails: visit_Arel_Nodes_SelectCore (to_sql.rb:149). Where Rails
+  // uses collect_nodes_for to emit `spacer` + injectJoin in one call, we do
+  // the same; wheres/havings collapse multiple predicates with " AND " via
+  // collect_nodes_for's connector arg.
   protected visit_Arel_Nodes_SelectCore(node: Nodes.SelectCore): SQLString {
     this.collector.append("SELECT");
 
-    this.emitOptimizerHints(node);
+    this.collectOptimizerHints(node);
+    this.maybeVisit(node.setQuantifier ?? null);
 
-    if (node.setQuantifier) {
-      this.collector.append(" ");
-      this.visit(node.setQuantifier);
-    }
-
-    if (node.projections.length > 0) {
-      this.collector.append(" ");
-      this.visitArray(node.projections, ", ");
-    }
+    this.collectNodesFor(node.projections, " ");
 
     if (node.source.left) {
       this.collector.append(" FROM ");
       this.visit(node.source);
     }
 
-    if (node.wheres.length > 0) {
-      this.collector.append(" WHERE ");
-      const conditions = node.wheres.length === 1 ? node.wheres[0] : new Nodes.And(node.wheres);
-      this.visit(conditions);
-    }
+    this.collectNodesFor(node.wheres, " WHERE ", " AND ");
+    this.collectNodesFor(node.groups, " GROUP BY ");
+    this.collectNodesFor(node.havings, " HAVING ", " AND ");
+    this.collectNodesFor(node.windows, " WINDOW ");
 
-    if (node.groups.length > 0) {
-      this.collector.append(" GROUP BY ");
-      this.visitArray(node.groups, ", ");
-    }
-
-    if (node.havings.length > 0) {
-      this.collector.append(" HAVING ");
-      const conditions = node.havings.length === 1 ? node.havings[0] : new Nodes.And(node.havings);
-      this.visit(conditions);
-    }
-
-    if (node.windows.length > 0) {
-      this.collector.append(" WINDOW ");
-      this.visitArray(node.windows, ", ");
-    }
-
-    if (node.comment) {
-      this.visit(node.comment);
-    }
+    this.maybeVisit(node.comment ?? null);
 
     return this.collector;
   }
@@ -371,7 +349,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       this.collector.append(" SET ");
       this._inUpdateSet = true;
       try {
-        this.visitArray(node.values, ", ");
+        this.injectJoin(node.values, ", ");
       } finally {
         this._inUpdateSet = false;
       }
@@ -385,7 +363,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
     if (node.orders.length > 0) {
       this.collector.append(" ORDER BY ");
-      this.visitArray(node.orders, ", ");
+      this.injectJoin(node.orders, ", ");
     }
 
     if (node.limit) {
@@ -430,7 +408,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
     if (node.orders.length > 0) {
       this.collector.append(" ORDER BY ");
-      this.visitArray(node.orders, ", ");
+      this.injectJoin(node.orders, ", ");
     }
 
     if (node.limit) {
@@ -861,7 +839,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.append(node.name);
     this.collector.append("(");
     if (node.distinct) this.collector.append("DISTINCT ");
-    this.visitArray(node.expressions, ", ");
+    this.injectJoin(node.expressions, ", ");
     this.collector.append(")");
     if (node.alias) {
       this.collector.append(" AS ");
@@ -874,7 +852,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.retryable = false;
     this.collector.append(`${name}(`);
     if (node.distinct) this.collector.append("DISTINCT ");
-    this.visitArray(node.expressions, ", ");
+    this.injectJoin(node.expressions, ", ");
     this.collector.append(")");
     if (node.alias) {
       this.collector.append(" AS ");
@@ -900,12 +878,12 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.append("(");
     if (node.partitions.length > 0) {
       this.collector.append("PARTITION BY ");
-      this.visitArray(node.partitions, ", ");
+      this.injectJoin(node.partitions, ", ");
     }
     if (node.orders.length > 0) {
       if (node.partitions.length > 0) this.collector.append(" ");
       this.collector.append("ORDER BY ");
-      this.visitArray(node.orders, ", ");
+      this.injectJoin(node.orders, ", ");
     }
     if (node.framing) {
       this.collector.append(" ");
@@ -1103,13 +1081,13 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   private visitWith(node: Nodes.With): SQLString {
     this.collector.append("WITH ");
-    this.visitArray(node.children, ", ");
+    this.injectJoin(node.children, ", ");
     return this.collector;
   }
 
   private visitWithRecursive(node: Nodes.WithRecursive): SQLString {
     this.collector.append("WITH RECURSIVE ");
-    this.visitArray(node.children, ", ");
+    this.injectJoin(node.children, ", ");
     return this.collector;
   }
 
@@ -1314,10 +1292,10 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   private visitTable(node: Table): SQLString {
     const quoted = node.name
       .split(".")
-      .map((p) => `"${p}"`)
+      .map((p) => this.quoteTableName(p))
       .join(".");
     if (node.tableAlias) {
-      this.collector.append(`${quoted} "${node.tableAlias}"`);
+      this.collector.append(`${quoted} ${this.quoteTableName(node.tableAlias)}`);
     } else {
       this.collector.append(quoted);
     }
@@ -1325,9 +1303,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   private visitAttribute(node: Nodes.Attribute): SQLString {
-    const tbl = (node.relation.tableAlias || node.relation.name).replace(/"/g, '""');
-    const col = node.name.replace(/"/g, '""');
-    this.collector.append(`"${tbl}"."${col}"`);
+    const tbl = node.relation.tableAlias || node.relation.name;
+    this.collector.append(`${this.quoteTableName(tbl)}.${this.quoteColumnName(node.name)}`);
     return this.collector;
   }
 
@@ -1338,7 +1315,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     if (!attr || typeof attr.name !== "string") {
       throw new UnsupportedVisitError("UnqualifiedColumn must wrap an Attribute node with a name");
     }
-    this.collector.append(`"${attr.name.replace(/"/g, '""')}"`);
+    this.collector.append(this.quoteColumnName(attr.name));
     return this.collector;
   }
 
@@ -1444,13 +1421,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       this.collector.append(String(v));
     }
     return this.collector;
-  }
-
-  protected visitArray(nodes: Node[], separator: string): void {
-    for (let i = 0; i < nodes.length; i++) {
-      if (i > 0) this.collector.append(separator);
-      this.visit(nodes[i]);
-    }
   }
 
   // Formats a date-like value as a SQL datetime string matching Rails'
@@ -1562,13 +1532,14 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   /**
-   * Mirrors `to_sql.rb#collect_optimizer_hints`. Visits the optimizer hint
-   * if one is present. Trails' SelectCore stores hints inline (an array on
-   * the node) rather than as a separate Arel::Nodes::OptimizerHints; this
-   * helper provides the Rails-shaped seam for callers that pass a node.
+   * Mirrors `to_sql.rb#collect_optimizer_hints`. Rails delegates to
+   * `maybe_visit o.optimizer_hints` since hints are an Arel node;
+   * Trails' SelectCore stores hints inline as `string[]`, so we call into
+   * the existing `emitOptimizerHints` formatter for parity at the seam.
    */
-  protected collectOptimizerHints(o: { optimizerHints?: Node | null }): SQLString {
-    return this.maybeVisit(o.optimizerHints);
+  protected collectOptimizerHints(o: Nodes.SelectCore): SQLString {
+    this.emitOptimizerHints(o);
+    return this.collector;
   }
 
   /**

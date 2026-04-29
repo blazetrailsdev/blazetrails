@@ -76,7 +76,11 @@ export function hasSecurePassword(
     set: function (value: string | null) {
       // Normalize non-string non-nil values to string to match Ruby's implicit to_s.
       const normalized =
-        value === null || value === undefined ? value : typeof value === "string" ? value : String(value);
+        value === null || value === undefined
+          ? value
+          : typeof value === "string"
+            ? value
+            : String(value);
       (this as any)[passwordKey] = normalized;
       // Rails: nil assignment clears the digest immediately
       // (active_model/secure_password.rb InstanceMethodsOnActivation)

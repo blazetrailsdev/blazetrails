@@ -181,6 +181,12 @@ const INTEGER_REGEX = /^[+-]?\d+(?![\s\S])/;
 // Rails: /\A[+-]?0[xX]/ — no leading whitespace permitted.
 const HEXADECIMAL_REGEX = /^[+-]?0[xX]/;
 
+// Trails-only guard: JS Number() also coerces 0b… (binary) and 0o…
+// (octal) literal strings, which Rails Kernel.Float rejects. Reuse the
+// hex check for the elsif-chain semantic Rails would apply, then layer
+// this on for the JS-specific surface.
+const NON_DECIMAL_LITERAL_REGEX = /^[+-]?0[xXbBoO]/;
+
 /**
  * Rails: parse_as_number → branches by Ruby type (Float / BigDecimal /
  * Numeric / integer-string / non-hex string). In TS we just narrow to
@@ -292,7 +298,11 @@ export function isIsNumber(
   // Rails `is_hexadecimal_literal?` is anchored at \A (no whitespace),
   // but Kernel.Float strips leading whitespace before parsing, so a
   // string like "  0x1" is still a hex literal that Rails rejects.
-  if (this.isIsHexadecimalLiteral(rawValue.trimStart())) return false;
+  // Trails extends this to 0b… / 0o… because JS Number() coerces those
+  // too (Rails Kernel.Float would raise).
+  const trimmed = rawValue.trimStart();
+  if (this.isIsHexadecimalLiteral(trimmed)) return false;
+  if (NON_DECIMAL_LITERAL_REGEX.test(trimmed)) return false;
   // Rails: rescue ArgumentError, TypeError; false; end (numericality.rb:99).
   try {
     const coerced = Number(rawValue);
@@ -366,7 +376,11 @@ export function optionAsNumber(
     if (resolved.trim() === "") {
       throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
     }
-    if (HEXADECIMAL_REGEX.test(resolved.trimStart())) {
+    const trimmed = resolved.trimStart();
+    if (HEXADECIMAL_REGEX.test(trimmed) || NON_DECIMAL_LITERAL_REGEX.test(trimmed)) {
+      // Rails parse_as_number rejects hex via the elsif chain;
+      // additionally guard 0b…/0o… because JS Number() would silently
+      // coerce those (Number("0b10") === 2).
       throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
     }
   }

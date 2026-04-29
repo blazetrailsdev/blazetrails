@@ -569,6 +569,34 @@ describe("numericality with in: range", () => {
     expect(new User({ name: "   " }).isValid()).toBe(false);
   });
 
+  it("rejects JS binary and octal literal strings", () => {
+    // Rails Kernel.Float rejects 0b… / 0o… (it only accepts decimal +
+    // optional exponent). JS Number("0b10") === 2 / Number("0o10") === 8
+    // would silently pass without an explicit guard.
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+        this.validates("name", { numericality: true });
+      }
+    }
+    expect(new User({ name: "0b10" }).isValid()).toBe(false);
+    expect(new User({ name: "0o10" }).isValid()).toBe(false);
+    expect(new User({ name: "  0b10" }).isValid()).toBe(false);
+    expect(new User({ name: "+0o10" }).isValid()).toBe(false);
+  });
+
+  it("rejects binary/octal compare-option values", () => {
+    class User extends Model {
+      static {
+        this.attribute("score", "integer");
+        this.validates("score", { numericality: { greaterThan: "0b10" } });
+      }
+    }
+    expect(() => new User({ score: 20 }).isValid()).toThrow(
+      /Resolved numericality option must be numeric/,
+    );
+  });
+
   it("rejects hexadecimal literal strings (with or without leading whitespace)", () => {
     // Rails parse_as_number's elsif chain skips Kernel.Float when
     // is_hexadecimal_literal?, so "0x10" is not-a-number even though

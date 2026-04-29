@@ -1195,16 +1195,14 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // Mirrors Rails: visit_Arel_Nodes_OptimizerHints (to_sql.rb:170). Trails'
-  // SelectCore stores hints inline as `string[]`, so the OptimizerHints node
-  // class isn't constructed in normal use; this method exists for callers
-  // that pass one explicitly. `expr` may be an array or a single value.
+  // Mirrors Rails: visit_Arel_Nodes_OptimizerHints (to_sql.rb:170). The
+  // OptimizerHints node carries a list of hint strings (Rails' `o.expr` is
+  // an array); each hint is sanitized and the joined result wrapped in
+  // /*+ ... */. Trails' SelectCore also stores hints inline as `string[]`
+  // — this method exists for callers that build an OptimizerHints node
+  // explicitly.
   protected visit_Arel_Nodes_OptimizerHints(node: Nodes.OptimizerHints): SQLString {
-    const raw = node.expr as unknown;
-    const list = Array.isArray(raw) ? (raw as unknown[]) : [raw];
-    const hints = list
-      .map((v) => this.sanitizeAsSqlComment(v as string | Nodes.SqlLiteral))
-      .join(" ");
+    const hints = node.hints.map((v) => this.sanitizeAsSqlComment(v)).join(" ");
     this.collector.append(` /*+ ${hints} */`);
     return this.collector;
   }
@@ -1290,10 +1288,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   private visitTable(node: Table): SQLString {
-    const quoted = node.name
-      .split(".")
-      .map((p) => this.quoteTableName(p))
-      .join(".");
+    const quoted = this.quoteTableName(node.name);
     if (node.tableAlias) {
       this.collector.append(`${quoted} ${this.quoteTableName(node.tableAlias)}`);
     } else {
@@ -1559,17 +1554,23 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   /**
    * Mirrors `to_sql.rb#quote_table_name`. SqlLiteral pass-through; otherwise
-   * default double-quoted identifier with embedded `"` doubled. MySQL
-   * overrides to backtick-quote (deferred — see project memory
-   * `arel MySQL identifier quoting`).
+   * default double-quoted identifier with embedded `"` doubled. Schema-
+   * qualified names (e.g. `"schema.table"`) are split on `.` and each
+   * segment is quoted independently — same behavior the connection adapter
+   * provides in Rails. MySQL overrides to backtick-quote (deferred — see
+   * project memory `arel MySQL identifier quoting`).
    */
   protected quoteTableName(name: string | Nodes.SqlLiteral): string {
     if (name instanceof Nodes.SqlLiteral) return name.value;
-    return `"${String(name).replace(/"/g, '""')}"`;
+    return String(name)
+      .split(".")
+      .map((p) => `"${p.replace(/"/g, '""')}"`)
+      .join(".");
   }
 
   /**
-   * Mirrors `to_sql.rb#quote_column_name`. Same shape as `quoteTableName`.
+   * Mirrors `to_sql.rb#quote_column_name`. Column names are not schema-
+   * qualified, so a plain double-quote suffices.
    */
   protected quoteColumnName(name: string | Nodes.SqlLiteral): string {
     if (name instanceof Nodes.SqlLiteral) return name.value;

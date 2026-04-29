@@ -80,5 +80,20 @@ export class GroupingSet extends GroupingElement {
 }
 
 export class Group extends Unary {}
-export class OptimizerHints extends Unary {}
+/**
+ * `OptimizerHints#expr` is a list of hint strings (or SqlLiteral) — Rails'
+ * Arel::Nodes::OptimizerHints stores `[hint1, hint2, ...]`. The Unary base
+ * types `expr` as `Node | string | number | null` and TS won't let us
+ * widen to an array via `declare`, so the constructor accepts the array
+ * and we expose it via a typed `hints` getter. The visitor uses `hints`.
+ */
+export class OptimizerHints extends Unary {
+  constructor(hints: ReadonlyArray<string | import("./sql-literal.js").SqlLiteral>) {
+    super(hints as unknown as null);
+  }
+
+  get hints(): ReadonlyArray<string | import("./sql-literal.js").SqlLiteral> {
+    return this.expr as unknown as ReadonlyArray<string | import("./sql-literal.js").SqlLiteral>;
+  }
+}
 export class RollUp extends Rollup {}

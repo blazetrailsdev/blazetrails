@@ -1138,10 +1138,7 @@ describe("the to_sql visitor", () => {
 
   describe("Nodes::OptimizerHints (visit)", () => {
     it("emits /*+ HINT */ for an OptimizerHints node with array expr", () => {
-      const node = new Nodes.OptimizerHints([
-        "IDX(t1)",
-        "MAX_EXEC_TIME(1000)",
-      ] as unknown as Nodes.Node);
+      const node = new Nodes.OptimizerHints(["IDX(t1)", "MAX_EXEC_TIME(1000)"]);
       const sql = new Visitors.ToSql().compile(node);
       expect(sql).toBe(" /*+ IDX(t1) MAX_EXEC_TIME(1000) */");
     });
@@ -1150,10 +1147,26 @@ describe("the to_sql visitor", () => {
       // Mirrors Rails: sanitize_as_sql_comment removes /* and */ so a hint
       // can't escape the surrounding comment block. The literal SQL inside
       // is preserved as comment text — it's still inside /*+ ... */.
-      const node = new Nodes.OptimizerHints(["A */ DROP /*"] as unknown as Nodes.Node);
+      const node = new Nodes.OptimizerHints(["A */ DROP /*"]);
       const sql = new Visitors.ToSql().compile(node);
       expect(sql).toBe(" /*+ A DROP */");
       expect(sql.match(/\*\//g)?.length).toBe(1);
+    });
+
+    it("accepts SqlLiteral hints (passes through unchanged)", () => {
+      const node = new Nodes.OptimizerHints([new Nodes.SqlLiteral("FORCE INDEX (t)")]);
+      expect(new Visitors.ToSql().compile(node)).toBe(" /*+ FORCE INDEX (t) */");
+    });
+  });
+
+  describe("schema-qualified table identifier", () => {
+    it("quotes each segment of a schema.table name in SELECT and column refs", () => {
+      const tbl = new Table("schema.table");
+      const sql = tbl.project(tbl.get("col")).toSql();
+      // Both the FROM clause and the qualified column reference should
+      // emit "schema"."table" — not "schema.table" (which would be a
+      // single identifier and reference a different relation).
+      expect(sql).toBe('SELECT "schema"."table"."col" FROM "schema"."table"');
     });
   });
 });

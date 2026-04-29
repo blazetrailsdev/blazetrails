@@ -409,12 +409,12 @@ export class Base extends Metal {
       this.setHeader("etag", etag);
     }
     if (options.lastModified) {
-      // Positively identify Date so cross-realm or polyfill-variant
-      // Temporal.Instant values still take the Instant branch.
-      const lm =
-        options.lastModified instanceof Date
-          ? options.lastModified
-          : new Date(options.lastModified.epochMilliseconds);
+      // Realm-safe Date check: instanceof breaks across realms (vm/iframe)
+      // for both Date and Temporal.Instant. Use the brand string instead.
+      const isDate = Object.prototype.toString.call(options.lastModified) === "[object Date]";
+      const lm = isDate
+        ? (options.lastModified as Date)
+        : new Date((options.lastModified as Temporal.Instant).epochMilliseconds);
       this.setHeader("last-modified", lm.toUTCString());
     }
     if (options.public) {

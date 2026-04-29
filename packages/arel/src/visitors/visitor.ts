@@ -4,7 +4,13 @@ import { Node } from "../nodes/node.js";
  * Thrown when no visit method is registered for a node's runtime class
  * (after walking the prototype chain).
  *
- * Mirrors the `TypeError` Rails raises in `Arel::Visitors::Visitor#visit`.
+ * Rails raises a plain `TypeError("Cannot visit #{class}")` from
+ * `Arel::Visitors::Visitor#visit` (`activerecord/lib/arel/visitors/visitor.rb`).
+ * Trails throws this named subclass instead — same condition, but a named
+ * error class is more idiomatic in TS (callers catch by `instanceof`), and
+ * `Visitors.UnsupportedVisitError` was already the public surface before
+ * the dispatch refactor. Pinned by `to-sql.test.ts` "unsupported input
+ * should raise UnsupportedVisitError".
  */
 export class UnsupportedVisitError extends Error {
   constructor(message: string) {

@@ -4197,13 +4197,11 @@ export class Relation<T extends Base> {
       let ts: Temporal.Instant | null = null;
       if (timestamp instanceof Temporal.Instant) {
         ts = timestamp;
-      }
-      // boundary: aggregate cache-key timestamp may arrive as JS Date or
-      // epoch number from custom-typed columns; bridge to Temporal.Instant.
-      else if (timestamp instanceof Date && !Number.isNaN((timestamp as Date).getTime())) {
-        ts = Temporal.Instant.fromEpochMilliseconds((timestamp as Date).getTime());
+      } else if (timestamp instanceof Date && !Number.isNaN(timestamp.getTime())) {
+        // boundary: aggregate cache-key timestamp from a custom-typed column.
+        ts = Temporal.Instant.fromEpochMilliseconds(timestamp.getTime());
       } else if (typeof timestamp === "number" && Number.isFinite(timestamp)) {
-        ts = Temporal.Instant.fromEpochMilliseconds(timestamp as number);
+        ts = Temporal.Instant.fromEpochMilliseconds(timestamp);
       } else if (typeof timestamp === "string") {
         try {
           // Normalize: space → T, short offset ±HH → ±HH:MM (Postgres wire quirk).

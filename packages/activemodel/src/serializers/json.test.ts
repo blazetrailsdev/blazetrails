@@ -138,6 +138,41 @@ describe("Serializers::JSON host", () => {
     expect(c.asJson()).toMatchObject({ author: { name: "Eve" } });
   });
 
+  it("fromJson rejects non-object JSON (Rails would NoMethodError)", () => {
+    expect(() => new Person().fromJson("42")).toThrow(/expected a JSON object/);
+    expect(() => new Person().fromJson("[1,2,3]")).toThrow(/expected a JSON object/);
+  });
+
+  it("fromJson with string includeRootInJson unwraps by that key, not first-value", () => {
+    class Keyed extends JSONHost {
+      static {
+        this.includeRootInJson = "data";
+        Object.defineProperty(this.prototype, "attributes", {
+          get() {
+            return { v: this._v };
+          },
+          set(this: { _v: number }, h: { v: number }) {
+            this._v = h.v;
+          },
+          configurable: true,
+        });
+      }
+      _v = 0;
+    }
+    const k = new Keyed().fromJson('{"meta":1,"data":{"v":7}}');
+    expect(k._v).toBe(7);
+  });
+
+  it("toJSON delegates to asJson (used by JSON.stringify)", () => {
+    const p = new Person();
+    p._name = "Frank";
+    p._age = 50;
+    expect(globalThis.JSON.parse(globalThis.JSON.stringify(p))).toMatchObject({
+      name: "Frank",
+      age: 50,
+    });
+  });
+
   it("Model already implements the same surface ergonomically", () => {
     // Sanity: the JSON host is the canonical mixin form; Model continues
     // to compose asJson/fromJson directly (model.ts already mirrors json.rb).

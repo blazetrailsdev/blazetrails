@@ -95,11 +95,46 @@ export class JSON {
   fromJson(json: string, includeRoot?: boolean): this {
     const ctor = this.constructor as typeof JSON;
     const root = includeRoot ?? ctor.includeRootInJson;
-    let hash = globalThis.JSON.parse(json) as Record<string, unknown>;
-    if (root) {
-      hash = Object.values(hash)[0] as Record<string, unknown>;
+    let hash = globalThis.JSON.parse(json) as unknown;
+    // Rails calls `hash.values.first` and raises NoMethodError if the
+    // decoded JSON isn't a Hash. Surface the same failure mode loudly
+    // instead of silently writing `undefined` into `attributes`.
+    if (hash === null || typeof hash !== "object" || Array.isArray(hash)) {
+      throw new TypeError(`fromJson expected a JSON object, got ${typeof hash}`);
     }
-    (this as unknown as { attributes: Record<string, unknown> }).attributes = hash;
+    if (root) {
+      // When includeRootInJson is a string, prefer the explicit key so
+      // multi-key payloads still unwrap deterministically; otherwise fall
+      // back to first-value semantics (Rails json.rb:147 hash.values.first).
+      hash =
+        typeof ctor.includeRootInJson === "string" &&
+        Object.prototype.hasOwnProperty.call(hash, ctor.includeRootInJson)
+          ? (hash as Record<string, unknown>)[ctor.includeRootInJson]
+          : Object.values(hash as Record<string, unknown>)[0];
+      if (hash === null || typeof hash !== "object" || Array.isArray(hash)) {
+        throw new TypeError(`fromJson root payload must be a JSON object, got ${typeof hash}`);
+      }
+    }
+    (this as unknown as { attributes: Record<string, unknown> }).attributes = hash as Record<
+      string,
+      unknown
+    >;
     return this;
+  }
+
+  /**
+   * `JSON.stringify(instance)` consults a `toJSON` method when present.
+   * Delegating to `asJson()` ensures the host runs the same coercion +
+   * root-wrapping as the Rails entry point. Mirrors Model.toJSON
+   * (model.ts) and matches the surface ActiveSupport adds on Object via
+   * `as_json` indirection in Rails.
+   */
+  toJSON(): Record<string, unknown> {
+    return this.asJson();
+  }
+
+  /** Lower-camel alias for callers that prefer the Ruby-style name. */
+  toJson(): Record<string, unknown> {
+    return this.toJSON();
   }
 }

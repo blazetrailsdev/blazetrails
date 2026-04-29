@@ -106,7 +106,7 @@ export class JSON {
    *     self
    *   end
    */
-  fromJson(json: string, includeRoot?: boolean): this {
+  fromJson(json: string, includeRoot?: boolean | string): this {
     const ctor = this.constructor as typeof JSON;
     const root = includeRoot ?? ctor.includeRootInJson;
     let hash = globalThis.JSON.parse(json) as unknown;

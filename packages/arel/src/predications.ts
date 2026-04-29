@@ -356,10 +356,12 @@ export const Predications = {
     return groupedAll(others.map(fn));
   },
 
-  // Mirrors Arel::Predications#infinity? — true if the value is +/-
-  // Infinity or implements the Ruby `infinite?` protocol. Used by
-  // Rails to decide whether to clamp a `between` bound to an open
-  // half-range.
+  // Mirrors Arel::Predications#infinity? — in the TS port, true only
+  // for JavaScript +/-Infinity values. Ruby's `infinite?` protocol
+  // (which Rails also accepts) has no TS analog; if a future Trails
+  // wrapper type wants to surface infiniteness, this is the place to
+  // teach it. Used to decide whether to clamp a `between` bound to
+  // an open half-range.
   isInfinity(this: PredicationHost, value: unknown): boolean {
     return value === Infinity || value === -Infinity;
   },

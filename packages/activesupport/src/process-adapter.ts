@@ -140,16 +140,20 @@ export function setEnv(key: string, value: string | undefined): void {
 }
 
 export function registerProcessAdapter(adapter: ProcessAdapter): void {
+  // Take both snapshots before mutating module state so a throw from
+  // either method leaves the registry untouched (atomic registration).
+  const envSnapshot = adapter.envSnapshot();
+  const argvSnapshot = adapter.argvSnapshot();
+
   currentAdapter = adapter;
   for (const k of Object.keys(envInternal)) delete envInternal[k];
   // Skip `undefined` values so `key in env` stays consistent with
   // `setEnv(key, undefined)` semantics (both mean "absent").
-  const snapshot = adapter.envSnapshot();
-  for (const [key, value] of Object.entries(snapshot)) {
+  for (const [key, value] of Object.entries(envSnapshot)) {
     if (value !== undefined) envInternal[key] = value;
   }
   argvInternal.length = 0;
-  argvInternal.push(...adapter.argvSnapshot());
+  argvInternal.push(...argvSnapshot);
 }
 
 export function getProcessAdapter(): ProcessAdapter {

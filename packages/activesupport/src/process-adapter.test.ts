@@ -216,6 +216,35 @@ describe("processAdapter", () => {
     });
   });
 
+  describe("atomic registration", () => {
+    it("leaves prior state intact if envSnapshot throws", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(env.FAKE_FLAG).toBe("1");
+      const broken = makeFakeAdapter();
+      broken.envSnapshot = () => {
+        throw new Error("snapshot boom");
+      };
+      expect(() => registerProcessAdapter(broken)).toThrow(/snapshot boom/);
+      // Prior adapter's snapshot must still be present.
+      expect(env.FAKE_FLAG).toBe("1");
+      expect(getProcessAdapter()).not.toBe(broken);
+    });
+
+    it("leaves prior state intact if argvSnapshot throws", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(argv).toEqual(["fake-node", "fake-script"]);
+      const broken = makeFakeAdapter();
+      broken.argvSnapshot = () => {
+        throw new Error("argv boom");
+      };
+      expect(() => registerProcessAdapter(broken)).toThrow(/argv boom/);
+      // env should not have been wiped (argv runs before mutation).
+      expect(env.FAKE_FLAG).toBe("1");
+      expect(argv).toEqual(["fake-node", "fake-script"]);
+      expect(getProcessAdapter()).not.toBe(broken);
+    });
+  });
+
   describe("missing adapter", () => {
     it("throws a helpful error when no adapter is configured and node is unavailable", () => {
       _resetProcessAdapter();

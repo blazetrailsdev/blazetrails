@@ -119,8 +119,7 @@ function check(context, node, name) {
   const pkg = packageOf(rel);
   const globalNames = pkg ? manifest.packageGlobals?.[pkg] : null;
   const matched =
-    (fileNames && fileNames.includes(name)) ||
-    (globalNames && globalNames.includes(name));
+    (fileNames && fileNames.includes(name)) || (globalNames && globalNames.includes(name));
   if (!matched) return;
 
   const sourceCode = context.sourceCode ?? context.getSourceCode();

@@ -68,11 +68,26 @@ function packageOf(rel) {
 }
 
 function jsdocHasInternal(node, sourceCode) {
+  // Only treat the closest preceding JSDoc as attached to `node`. A
+  // file header `/** ... */` separated from the declaration by blank
+  // lines must not be matched, otherwise the autofix would edit the
+  // wrong block. Require the comment to end on the line immediately
+  // above the declaration with no intervening tokens.
   const comments = sourceCode.getCommentsBefore(node);
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
     if (c.type !== "Block") continue;
     if (!c.value.startsWith("*")) continue;
+    if (!c.loc || !node.loc) continue;
+    if (c.loc.end.line !== node.loc.start.line - 1) continue;
+    const tokenBefore = sourceCode.getTokenBefore(node);
+    if (
+      tokenBefore &&
+      tokenBefore.range[0] >= c.range[1] &&
+      tokenBefore.range[1] <= node.range[0]
+    ) {
+      continue;
+    }
     return { tag: c.value.includes("@internal"), comment: c };
   }
   return { tag: false, comment: null };

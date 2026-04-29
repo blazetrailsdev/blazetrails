@@ -93,6 +93,15 @@ tester.run("rails-private-jsdoc", rule, {
       errors: [{ messageId: "missingInternal" }],
       output: `/**\n * Resolve a name.\n *\n * @internal\n */\nexport function computeType() {}\n`,
     },
+    // A non-adjacent file header must NOT be treated as the node's
+    // JSDoc — autofix should add a fresh `/** @internal */` instead of
+    // splicing into the header.
+    {
+      filename: inheritanceFile,
+      code: `/** File header. */\n\nexport function computeType() {}\n`,
+      errors: [{ messageId: "missingInternal" }],
+      output: `/** File header. */\n\n/** @internal */\nexport function computeType() {}\n`,
+    },
   ],
 });
 

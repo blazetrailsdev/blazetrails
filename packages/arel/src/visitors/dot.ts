@@ -268,7 +268,7 @@ export class Dot extends Visitor {
   /** Aliased to And / Or / With in dispatch (Rails: `alias`). */
   protected visitChildren(o: { children: ReadonlyArray<unknown> }): void {
     o.children.forEach((child, i) => {
-      this.edge(String(i), () => this.visit(child as Node));
+      this.edge(String(i), () => this.visit(child));
     });
   }
 
@@ -304,13 +304,13 @@ export class Dot extends Visitor {
    */
   protected visitHash(o: Record<string, unknown>): void {
     Object.entries(o).forEach((pair, i) => {
-      this.edge(`pair_${i}`, () => this.visit(pair as unknown as Node));
+      this.edge(`pair_${i}`, () => this.visit(pair));
     });
   }
 
   protected visitArray(o: ReadonlyArray<unknown>): void {
     o.forEach((member, i) => {
-      this.edge(String(i), () => this.visit(member as Node));
+      this.edge(String(i), () => this.visit(member));
     });
   }
 
@@ -350,7 +350,7 @@ export class Dot extends Visitor {
       throw new TypeError(`undefined method '${method}' for ${klass}`);
     }
     const value = (o as Record<string, unknown>)[method];
-    this.edge(method, () => this.visit(value as Node));
+    this.edge(method, () => this.visit(value));
   }
 
   /** Mirrors Rails' Dot#edge — push edge, run block, pop. */
@@ -428,8 +428,8 @@ export class Dot extends Visitor {
         this.visitString(object);
       } else if (Array.isArray(object)) {
         this.visitArray(object);
-      } else if (object instanceof Node || object instanceof Table) {
-        super.visit(object as Node);
+      } else if (object instanceof Node) {
+        super.visit(object);
       } else if (this.isActiveModelAttribute(object)) {
         // Mirrors Rails' `visit_ActiveModel_Attribute`. Checked after the
         // Node branch — Trails' BindParam *also* exposes a
@@ -496,8 +496,8 @@ export class Dot extends Visitor {
   private isPlainObject(o: unknown): boolean {
     if (!o || typeof o !== "object") return false;
     if (Array.isArray(o)) return false;
+    // Node covers Table (which extends Node).
     if (o instanceof Node) return false;
-    if (o instanceof Table) return false;
     const proto = Object.getPrototypeOf(o);
     return proto === Object.prototype || proto === null;
   }

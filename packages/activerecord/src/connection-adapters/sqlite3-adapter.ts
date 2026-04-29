@@ -132,7 +132,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     if (!filename.startsWith("file:")) return false;
     if (filename.startsWith("file::memory:")) return true;
     // Parse query string so a path containing the text "mode=memory" isn't
-    // misclassified (e.g. /tmp/mode=memory.db). Mirrors SQLiteDatabaseTasks.
+    // misclassified (e.g. file:/tmp/mode=memory.db). Mirrors SQLiteDatabaseTasks.
     const q = filename.indexOf("?");
     if (q === -1) return false;
     return new URLSearchParams(filename.slice(q + 1)).get("mode") === "memory";

@@ -49,7 +49,7 @@ import {
 import { Over } from "../nodes/over.js";
 import { NamedWindow, Window } from "../nodes/window.js";
 import { True } from "../nodes/true.js";
-import { Predications, type PredicationHost } from "../predications.js";
+import { Predications } from "../predications.js";
 
 /**
  * Combines multiple nodes with OR, wrapped in a Grouping.
@@ -347,44 +347,45 @@ export class Attribute extends Node {
   // Trails' Attribute has hand-rolled public predicates (so the include
   // chain isn't wired) — these methods delegate to the canonical
   // Predications impls so there's a single source of truth and
-  // behavior stays in lockstep.
+  // behavior stays in lockstep. Marked `protected` (matching the
+  // visibility of HomogeneousIn#ivars / SelectManager#collapse) since
+  // they exist for Rails-fidelity / api:compare privates coverage,
+  // not as a public API surface.
 
-  groupingAny(
+  protected groupingAny(
     methodId: string | ((this: Attribute, expr: unknown, ...extras: unknown[]) => Node),
     others: unknown[],
     ...extras: unknown[]
   ): Grouping {
-    return Predications.groupingAny.call(
-      this as unknown as PredicationHost,
-      methodId as never,
-      others,
-      ...extras,
-    );
+    return Predications.groupingAny.call<
+      Attribute,
+      [typeof methodId, unknown[], ...unknown[]],
+      Grouping
+    >(this, methodId, others, ...extras);
   }
 
-  groupingAll(
+  protected groupingAll(
     methodId: string | ((this: Attribute, expr: unknown, ...extras: unknown[]) => Node),
     others: unknown[],
     ...extras: unknown[]
   ): Grouping {
-    return Predications.groupingAll.call(
-      this as unknown as PredicationHost,
-      methodId as never,
-      others,
-      ...extras,
-    );
+    return Predications.groupingAll.call<
+      Attribute,
+      [typeof methodId, unknown[], ...unknown[]],
+      Grouping
+    >(this, methodId, others, ...extras);
   }
 
-  isInfinity(value: unknown): boolean {
-    return Predications.isInfinity.call(this as unknown as PredicationHost, value);
+  protected isInfinity(value: unknown): boolean {
+    return Predications.isInfinity.call(this, value);
   }
 
-  isUnboundable(value: unknown): boolean {
-    return Predications.isUnboundable.call(this as unknown as PredicationHost, value);
+  protected isUnboundable(value: unknown): boolean {
+    return Predications.isUnboundable.call(this, value);
   }
 
-  isOpenEnded(value: unknown): boolean {
-    return Predications.isOpenEnded.call(this as unknown as PredicationHost, value);
+  protected isOpenEnded(value: unknown): boolean {
+    return Predications.isOpenEnded.call(this, value);
   }
 
   // -- Ordering --

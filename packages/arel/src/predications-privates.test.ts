@@ -58,14 +58,25 @@ describe("Predications.isInfinity / isUnboundable / isOpenEnded", () => {
 });
 
 describe("Attribute private helpers (mirror Predications)", () => {
+  // The helpers are `protected` for Rails-fidelity / api:compare
+  // coverage, not as a public surface. Tests cast to access them —
+  // same pattern as HomogeneousIn#ivars / SelectManager#collapse.
+  type AttributePrivates = Nodes.Attribute & {
+    groupingAny: (methodId: string, others: unknown[]) => Nodes.Grouping;
+    groupingAll: (methodId: string, others: unknown[]) => Nodes.Grouping;
+    isInfinity: (value: unknown) => boolean;
+    isUnboundable: (value: unknown) => boolean;
+    isOpenEnded: (value: unknown) => boolean;
+  };
+
   it("groupingAny / groupingAll work via method dispatch on Attribute", () => {
-    const attr = users.attr("id");
+    const attr = users.attr("id") as AttributePrivates;
     expect(attr.groupingAny("eq", [1, 2])).toBeInstanceOf(Nodes.Grouping);
     expect(attr.groupingAll("eq", [1, 2])).toBeInstanceOf(Nodes.Grouping);
   });
 
   it("isInfinity / isUnboundable / isOpenEnded match Predications semantics", () => {
-    const attr = users.attr("id");
+    const attr = users.attr("id") as AttributePrivates;
     expect(attr.isInfinity(Infinity)).toBe(true);
     expect(attr.isInfinity(0)).toBe(false);
     expect(attr.isUnboundable(0)).toBe(false);

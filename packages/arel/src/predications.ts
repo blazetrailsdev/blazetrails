@@ -326,10 +326,12 @@ export const Predications = {
   // Mirrors Arel::Predications#grouping_any(method_id, others, *extras)
   // — calls `this[methodId](expr, ...extras)` on each value and folds
   // the resulting nodes with OR inside a Grouping. The closure variant
-  // (overload 2) lets TS callers skip stringly-typed dispatch.
-  groupingAny(
-    this: PredicationHost,
-    methodId: string | ((this: PredicationHost, expr: unknown, ...extras: unknown[]) => Node),
+  // lets TS callers skip stringly-typed dispatch. Generic over the
+  // host type so a class like Attribute (with a richer surface than
+  // bare PredicationHost) can pass typed closures without `as` casts.
+  groupingAny<T extends PredicationHost>(
+    this: T,
+    methodId: string | ((this: T, expr: unknown, ...extras: unknown[]) => Node),
     others: unknown[],
     ...extras: unknown[]
   ): Grouping {
@@ -342,9 +344,9 @@ export const Predications = {
   },
 
   // Mirrors Arel::Predications#grouping_all — fold with AND.
-  groupingAll(
-    this: PredicationHost,
-    methodId: string | ((this: PredicationHost, expr: unknown, ...extras: unknown[]) => Node),
+  groupingAll<T extends PredicationHost>(
+    this: T,
+    methodId: string | ((this: T, expr: unknown, ...extras: unknown[]) => Node),
     others: unknown[],
     ...extras: unknown[]
   ): Grouping {

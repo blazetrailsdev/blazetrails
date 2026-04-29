@@ -116,11 +116,16 @@ export function rubyMethodToTs(name: string): string[] | null {
   // `visit_Arel_Attributes_Attribute` / `visit_Arel_Table` map to
   // Trails' camelCase `visitEquality` / `visitAttribute` / `visitTable`.
   // The leaf segment is the relevant name; intermediate `Nodes` /
-  // `Attributes` / etc. are dropped.
+  // `Attributes` / etc. are dropped. Try the exact leaf first, plus a
+  // capitalization-flattened fallback for Rails constants whose
+  // internal capitalization differs from Trails' visitor method name
+  // (e.g. Rails node `RollUp` → Trails class `Rollup` → `visitRollup`).
   if (name.startsWith("visit_Arel_")) {
     const segments = name.slice("visit_Arel_".length).split("_");
     const leaf = segments[segments.length - 1];
-    return ["visit" + leaf];
+    const exact = "visit" + leaf;
+    const flattened = "visit" + leaf.charAt(0).toUpperCase() + leaf.slice(1).toLowerCase();
+    return exact === flattened ? [exact] : [exact, flattened];
   }
   // Some Arel visitors also override generic helpers like
   // `visit__regexp` (lowercase regexp) — convert the leaf via the

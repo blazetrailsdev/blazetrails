@@ -411,7 +411,7 @@ async function performClassUpdate(
 function _applyScopeAttributes(
   ctor: typeof Base,
   record: InstanceType<typeof Base>,
-  explicitAttrs: Record<string, unknown>,
+  explicitKeys: Set<string>,
 ): void {
   const scope = (ctor as any).currentScope;
   if (!scope) return;
@@ -419,12 +419,13 @@ function _applyScopeAttributes(
   if (!attrs || Object.keys(attrs).length === 0) return;
   const toApply: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(attrs)) {
-    if (!Object.prototype.hasOwnProperty.call(explicitAttrs, k)) {
+    if (!explicitKeys.has(k)) {
       toApply[k] = v;
     }
   }
   if (Object.keys(toApply).length > 0) {
-    (record as any).assignAttributes?.(toApply);
+    // assignAttributes is always mixed into Base instances; call directly.
+    (record as any).assignAttributes(toApply);
   }
 }
 
@@ -2179,7 +2180,11 @@ export class Base extends Model {
         inheritanceInitializeInternalsCallback.call(this as any);
         // Scoping: apply current-scope attrs non-destructively — skip keys
         // already in the explicit multiparams (those take precedence).
-        _applyScopeAttributes(ctor, this as any, { ...multiparams, ...regular });
+        _applyScopeAttributes(
+          ctor,
+          this as any,
+          new Set([...Object.keys(multiparams), ...Object.keys(regular)]),
+        );
         // Re-snapshot so internals writes are part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);
         ctor._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
@@ -2213,7 +2218,7 @@ export class Base extends Model {
         // Scoping: apply current-scope attrs non-destructively — skip keys
         // already in the explicit attrs (explicit attrs take precedence, mirroring
         // Rails where scope attrs are set first then overwritten by explicit attrs).
-        _applyScopeAttributes(ctor2, this as any, attrs);
+        _applyScopeAttributes(ctor2, this as any, new Set(Object.keys(attrs)));
         // Re-snapshot so internals writes are part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);
         ctor2._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);

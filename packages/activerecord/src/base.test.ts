@@ -3384,3 +3384,54 @@ describe("quoteSqlValue", () => {
 // ==========================================================================
 // BasicsTest — targets base_test.rb (continued)
 // ==========================================================================
+
+describe("_applyScopeAttributes — scoping initializeInternalsCallback", () => {
+  const adapter = createTestAdapter();
+
+  function makeModel() {
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("role", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+    return User;
+  }
+
+  it("applies current-scope attributes to new instances", async () => {
+    const User = makeModel();
+    const rel = User.where({ role: "admin" });
+    await User.scoping(rel, async () => {
+      const u = new User({});
+      expect(u.readAttribute("role")).toBe("admin");
+    });
+  });
+
+  it("explicit constructor attrs take precedence over scope attrs", async () => {
+    const User = makeModel();
+    const rel = User.where({ role: "admin" });
+    await User.scoping(rel, async () => {
+      const u = new User({ role: "guest" });
+      expect(u.readAttribute("role")).toBe("guest");
+    });
+  });
+
+  it("scope attrs fill in keys not provided explicitly", async () => {
+    const User = makeModel();
+    const rel = User.where({ role: "admin", status: "active" });
+    await User.scoping(rel, async () => {
+      const u = new User({ role: "guest" }); // only role is explicit
+      expect(u.readAttribute("role")).toBe("guest"); // explicit wins
+      expect(u.readAttribute("status")).toBe("active"); // scope fills in
+    });
+  });
+
+  it("no scope → no change to constructor attrs", async () => {
+    const User = makeModel();
+    const u = new User({ role: "user" });
+    expect(u.readAttribute("role")).toBe("user");
+  });
+});

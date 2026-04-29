@@ -268,8 +268,18 @@ function patternToRegex(pattern: string): RegExp {
       if (end === -1) {
         re += "\\[";
         i++;
+      } else if (end === i + 1) {
+        // Empty character class `[]` — treat both `[` and `]` as
+        // literals so the compiled regex stays valid (some engines
+        // reject `[]`, and even when accepted it matches nothing,
+        // surprising callers who passed a literal-looking pattern).
+        re += "\\[\\]";
+        i += 2;
       } else {
-        re += pattern.slice(i, end + 1);
+        // Constrain bracket expressions to non-slash to match the
+        // segment-boundary semantics of `*` / `?`. Without this,
+        // `a[/]b` would match `a/b`, crossing path boundaries.
+        re += `(?![/])${pattern.slice(i, end + 1)}`;
         i = end + 1;
       }
     } else if (REGEX_META.test(c)) {

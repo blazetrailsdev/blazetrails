@@ -291,6 +291,25 @@ describe("glob", () => {
     }
   });
 
+  it("character classes do not match `/` (segment boundary preserved)", async () => {
+    // a[/]b would match a/b without the (?![/])[...] guard. There is
+    // no real file with that name, so the result must be empty rather
+    // than crossing into a sibling directory.
+    expect(await glob("app[/]models", { cwd: root })).toEqual([]);
+    // Negation: ensure normal classes still work
+    expect(await glob("app/models/[au]*.rb", { cwd: root })).toEqual([
+      "app/models/admin.rb",
+      "app/models/user.rb",
+    ]);
+  });
+
+  it("does not throw on empty character class `[]`", async () => {
+    // Empty character class is legal-but-matches-nothing in some JS
+    // engines and a syntax error in others. We treat it as a literal
+    // `[]` so glob() always behaves predictably.
+    await expect(glob("foo[]", { cwd: root })).resolves.toEqual([]);
+  });
+
   it("treats unbalanced { } [ ] as literals (no walk)", async () => {
     // foo{bar.rb has '{' but no matching '}' — patternToRegex escapes
     // it as a literal, and the walk-vs-fast-path decision should also

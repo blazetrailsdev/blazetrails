@@ -195,11 +195,14 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   }
 
   // filter has the standard type-predicate overload from Array<T>.
+  /** @internal */
   filter<S extends T>(
     predicate: (record: T, index: number, all: T[]) => record is S,
     thisArg?: unknown,
   ): S[];
+  /** @internal */
   filter(predicate: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): T[];
+  /** @internal */
   filter(predicate: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): T[] {
     return this._target.filter(predicate, thisArg);
   }

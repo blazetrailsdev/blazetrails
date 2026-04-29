@@ -80,6 +80,7 @@ export interface WalkOptions {
   baseNames?: readonly string[];
 }
 
+/** @internal */
 export function walk(sourceFile: ts.SourceFile, opts: WalkOptions = {}): ClassInfo[] {
   const baseNames = new Set(opts.baseNames ?? ["Base"]);
   const out: ClassInfo[] = [];

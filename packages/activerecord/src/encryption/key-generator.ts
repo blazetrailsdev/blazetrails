@@ -34,6 +34,7 @@ export class KeyGenerator {
     return getCrypto().randomBytes(length).toString("hex");
   }
 
+  /** @internal */
   deriveKey(password: string, length: number = DEFAULT_KEY_LENGTH, salt?: string): string {
     const crypto = getCrypto();
     const effectiveSalt = salt ?? "";

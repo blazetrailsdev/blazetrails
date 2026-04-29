@@ -50,6 +50,7 @@ export class TokenDefinition {
   readonly purpose: string;
   /** Expiration in seconds, matching Rails Duration semantics. */
   readonly expiresIn: number | undefined;
+  /** @internal */
   readonly block: ((record: any) => unknown) | undefined;
 
   constructor(

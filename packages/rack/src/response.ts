@@ -285,6 +285,7 @@ export class Response {
     }
   }
 
+  /** @internal */
   setCookie(key: string, value: any): void {
     this.addHeader(SET_COOKIE, setCookieHeader(key, value));
   }
@@ -293,6 +294,7 @@ export class Response {
     this.setHeader(SET_COOKIE, deleteSetCookieHeaderBang(this.getHeader(SET_COOKIE), key, value));
   }
 
+  /** @internal */
   cache(duration: number): void {
     if (this.getHeader(CACHE_CONTROL) === "no-cache, must-revalidate") return;
     this.setHeader(CACHE_CONTROL, `public, max-age=${duration}`);

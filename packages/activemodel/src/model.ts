@@ -1236,6 +1236,7 @@ export class Model {
     return this._attributes.fetchValue(resolved) ?? null;
   }
 
+  /** @internal */
   _readAttribute(name: string): unknown {
     if (!this._attributes.has(name)) {
       return this.attributeMissing(name);
@@ -1260,6 +1261,7 @@ export class Model {
     this._writeAttribute(resolved, value);
   }
 
+  /** @internal */
   _writeAttribute(name: string, value: unknown): void {
     const ctor = this.constructor as typeof Model;
     const oldValue = this._attributes.has(name) ? this._attributes.fetchValue(name) : undefined;
@@ -1491,6 +1493,7 @@ export class Model {
     return this._dirty.attributeWas(name);
   }
 
+  /** @internal */
   attributeChange(name: string): [unknown, unknown] | undefined {
     return this._dirty.attributeChange(name);
   }
@@ -1634,6 +1637,8 @@ export class Model {
    *
    * Mirrors: ActiveModel::Dirty#attribute_previous_change (returned as
    * the hash pair by `attribute_previously_was` / `saved_change_to_attribute`).
+   *
+   * @internal
    */
   attributePreviousChange(name: string): [unknown, unknown] | undefined {
     return this._dirty.previousChanges[name];
@@ -1665,6 +1670,8 @@ export class Model {
    * Pending changes diff against the values loaded from the database.
    *
    * Mirrors: ActiveModel::Dirty#mutations_from_database
+   *
+   * @internal
    */
   get mutationsFromDatabase(): Record<string, [unknown, unknown]> {
     return this._dirty.mutationsFromDatabase;
@@ -1674,6 +1681,8 @@ export class Model {
    * Snapshot of the pending changes at the moment of the last save.
    *
    * Mirrors: ActiveModel::Dirty#mutations_before_last_save
+   *
+   * @internal
    */
   get mutationsBeforeLastSave(): Record<string, [unknown, unknown]> {
     return this._dirty.mutationsBeforeLastSave;
@@ -1684,6 +1693,8 @@ export class Model {
    * Used by transactional rollback paths.
    *
    * Mirrors: ActiveModel::Dirty#forget_attribute_assignments
+   *
+   * @internal
    */
   forgetAttributeAssignments(): void {
     this._dirty.forgetAttributeAssignments(this._attributes);
@@ -1693,6 +1704,8 @@ export class Model {
    * Drop a single attribute's pending change without reverting its value.
    *
    * Mirrors: ActiveModel::Dirty#clear_attribute_change
+   *
+   * @internal
    */
   clearAttributeChange(name: string): void {
     this._dirty.clearAttributeChange(this._attributes, name);

@@ -91,6 +91,8 @@ export class MigrationRunner {
    * Get the status of all migrations.
    *
    * Mirrors: ActiveRecord::Migrator#status
+   *
+   * @internal
    */
   async status(): Promise<MigrationStatus[]> {
     await this.ensureTable();

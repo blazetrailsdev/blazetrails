@@ -36,6 +36,7 @@ class FatalWarner {
     throw new FatalWarning(warning);
   }
   flush(): void {}
+  /** @internal */
   string(): string {
     return "";
   }
@@ -53,6 +54,7 @@ class StringIO {
   write(s: string): void {
     this._data += s;
   }
+  /** @internal */
   string(): string {
     return this._data;
   }

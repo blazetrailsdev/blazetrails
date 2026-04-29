@@ -85,6 +85,8 @@ export function toParam(this: Identifiable): string | null {
  * Returns the max of updated_at / updated_on as a Date, or null.
  *
  * Mirrors: ActiveRecord::Integration#max_updated_column_timestamp
+ *
+ * @internal
  */
 function maxUpdatedColumnTimestamp(record: any): TemporalTimestamp | null {
   const candidates: TemporalTimestamp[] = [];

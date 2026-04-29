@@ -2621,6 +2621,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return `${singularize(table)}_${columnName}`;
   }
 
+  /** @internal */
   sequenceNameFromParts(tableName: string, columnName: string, suffix: string): string {
     const maxLen = 63;
     const { table: unqualifiedTable } = this.parseSchemaQualifiedName(tableName);
@@ -2639,6 +2640,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return `${tbl}_${col}_${suffix}`;
   }
 
+  /** @internal */
   assertValidDeferrable(deferrable: unknown): void {
     if (
       deferrable == null ||
@@ -2652,6 +2654,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     );
   }
 
+  /** @internal */
   extractForeignKeyAction(specifier: string): "cascade" | "nullify" | "restrict" | undefined {
     switch (specifier) {
       case "c":
@@ -2665,6 +2668,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
   }
 
+  /** @internal */
   extractConstraintDeferrable(
     deferrable: boolean,
     deferred: boolean,
@@ -2741,6 +2745,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return Object.values(quoted).join(", ");
   }
 
+  /** @internal */
   dataSourceSql(name?: string | null, options: { type?: string } = {}): string {
     const scope = this.quotedScope(name, options);
     const type = scope.type ?? "'r','v','m','p','f'";
@@ -2751,6 +2756,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return sql;
   }
 
+  /** @internal */
   quotedScope(
     name?: string | null,
     options: { type?: string } = {},
@@ -2775,11 +2781,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     };
   }
 
+  /** @internal */
   referenceNameForTable(tableName: string): string {
     const { table } = this.parseSchemaQualifiedName(tableName);
     return singularize(table);
   }
 
+  /** @internal */
   async columnNamesFromColumnNumbers(tableOid: number, columnNumbers: number[]): Promise<string[]> {
     if (columnNumbers.length === 0) return [];
     if (!Number.isSafeInteger(tableOid)) throw new TypeError("tableOid must be a safe integer");

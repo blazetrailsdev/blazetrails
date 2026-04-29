@@ -74,7 +74,9 @@ export class RequestForgeryProtection {
     return token;
   }
 
-  /** Create a masked version of the token for embedding in forms/meta tags. */
+  /** Create a masked version of the token for embedding in forms/meta tags. *
+   * @internal
+   */
   maskToken(rawToken: string): string {
     const tokenBytes = Buffer.from(rawToken, "base64");
     const otp = getCrypto().randomBytes(AUTHENTICITY_TOKEN_LENGTH);
@@ -102,7 +104,9 @@ export class RequestForgeryProtection {
     return this.maskToken(perFormToken);
   }
 
-  /** Unmask a masked token to get the raw token bytes. */
+  /** Unmask a masked token to get the raw token bytes. *
+   * @internal
+   */
   unmaskToken(maskedToken: string): string {
     const decoded = Buffer.from(maskedToken, "base64");
     if (decoded.length === AUTHENTICITY_TOKEN_LENGTH) {

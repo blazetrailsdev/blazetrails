@@ -45,6 +45,8 @@ import { Xml } from "./oid/xml.js";
  * Mirrors: PostgreSQLAdapter.extract_limit — `$1.to_i if sql_type =~ /\((.*)\)/`.
  * Rails captures everything between parens and lets `to_i` parse leading digits;
  * that tolerates whitespace, trailing text, and comma-separated precision/scale.
+ *
+ * @internal
  */
 export function extractLimit(sqlType: string | undefined): number | undefined {
   if (!sqlType) return undefined;
@@ -60,14 +62,18 @@ export function extractLimit(sqlType: string | undefined): number | undefined {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** Mirrors: PostgreSQLAdapter.extract_precision — first number in `(p,s)` or `(p)`. */
+/** Mirrors: PostgreSQLAdapter.extract_precision — first number in `(p,s)` or `(p)`. *
+ * @internal
+ */
 export function extractPrecision(sqlType: string | undefined): number | undefined {
   if (!sqlType) return undefined;
   const match = /\(\s*(\d+)\s*(?:,\s*\d+\s*)?\)/.exec(sqlType);
   return match ? Number.parseInt(match[1], 10) : undefined;
 }
 
-/** Mirrors: PostgreSQLAdapter.extract_scale — second number in `(p,s)`. */
+/** Mirrors: PostgreSQLAdapter.extract_scale — second number in `(p,s)`. *
+ * @internal
+ */
 export function extractScale(sqlType: string | undefined): number | undefined {
   if (!sqlType) return undefined;
   const match = /\(\s*\d+\s*,\s*(\d+)\s*\)/.exec(sqlType);
@@ -77,6 +83,8 @@ export function extractScale(sqlType: string | undefined): number | undefined {
 /**
  * Mirrors: PostgreSQLAdapter.register_class_with_limit(mapping, key, klass).
  * Registers a block that extracts `limit` from the column's `sql_type`.
+ *
+ * @internal
  */
 export function registerClassWithLimit(
   mapping: HashLookupTypeMap,

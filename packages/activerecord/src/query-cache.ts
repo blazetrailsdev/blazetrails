@@ -283,6 +283,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     return this.inner.rollbackToSavepoint(name);
   }
 
+  /** @internal */
   get inTransaction(): boolean {
     return this.inner.inTransaction;
   }

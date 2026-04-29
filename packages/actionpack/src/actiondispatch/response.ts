@@ -143,6 +143,7 @@ export class Response {
     });
   }
 
+  /** @internal */
   get cookies(): Record<string, string> {
     const result: Record<string, string> = {};
     for (const [name, opts] of this._cookies) {

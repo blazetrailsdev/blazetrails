@@ -658,6 +658,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return this._typeMap;
   }
 
+  /** @internal */
   lookupCastType(sqlType: string): import("@blazetrails/activemodel").Type {
     return this.nativeTypeMap.lookup(sqlType.toLowerCase().trim());
   }

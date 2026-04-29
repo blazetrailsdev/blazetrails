@@ -929,6 +929,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
 
   /**
    * Check if we're in a transaction.
+   *
+   * @internal
    */
   get inTransaction(): boolean {
     return this._inTransaction;

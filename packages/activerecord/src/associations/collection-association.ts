@@ -226,6 +226,7 @@ export class CollectionAssociation extends Association {
     return this.target.length;
   }
 
+  /** @internal */
   async countRecords(): Promise<number> {
     const rel = this.scope();
     if (rel && typeof rel.count === "function") {

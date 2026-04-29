@@ -482,6 +482,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   /**
    * Check if we're in a transaction.
+   *
+   * @internal
    */
   get inTransaction(): boolean {
     return this._inTransaction;
@@ -506,6 +508,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    * Resolve a SQL column type string to an ActiveRecord Type instance.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter#lookup_cast_type
+   *
+   * @internal
    */
   lookupCastType(sqlType: string): import("@blazetrails/activemodel").Type {
     // Pass the full sql type to the map so regex registrations (e.g. /decimal/i)

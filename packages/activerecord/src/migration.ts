@@ -156,6 +156,7 @@ export abstract class Migration {
   private _recorder = new CommandRecorder();
   private _name?: string;
   private _version?: string;
+  /** @internal */
   verbose = true;
   static logger: Logger = new Logger();
   private static _disableDdlTransaction = false;
@@ -1430,6 +1431,7 @@ export class Migrator {
   private _internalMetadata: InternalMetadata;
   private _environment: string;
   private _strategy: ExecutionStrategy;
+  /** @internal */
   verbose = true;
 
   constructor(

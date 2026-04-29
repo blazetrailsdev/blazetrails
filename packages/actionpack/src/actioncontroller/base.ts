@@ -284,7 +284,9 @@ export class Base extends Metal {
     });
   }
 
-  /** Verify the CSRF token. Called as a before_action. */
+  /** Verify the CSRF token. Called as a before_action. *
+   * @internal
+   */
   verifyAuthenticityToken(): void {
     const csrf = (this.constructor as typeof Base)._csrfProtection;
     if (!csrf) return;
@@ -306,7 +308,9 @@ export class Base extends Metal {
     }
   }
 
-  /** Get the form authenticity token for the current session. */
+  /** Get the form authenticity token for the current session. *
+   * @internal
+   */
   formAuthenticityToken(): string {
     const csrf = (this.constructor as typeof Base)._csrfProtection;
     if (!csrf) return "";
@@ -486,7 +490,9 @@ export class Base extends Metal {
 
   // --- Cookies ---
 
-  /** Get cookie jar (from request). */
+  /** Get cookie jar (from request). *
+   * @internal
+   */
   get cookies(): Record<string, string> {
     return (this.request as any)?.cookies ?? {};
   }

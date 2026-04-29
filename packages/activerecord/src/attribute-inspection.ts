@@ -69,6 +69,8 @@ export function inspectionFilter(this: CoreHost): ParameterFilter {
  * and AttributeMethods#format_for_inspect.
  *
  * Mirrors: ActiveRecord::AttributeMethods#format_for_inspect
+ *
+ * @internal
  */
 export function formatForInspect(this: any, name: string, value: unknown): string {
   if (value === null || value === undefined) return "nil";

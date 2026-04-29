@@ -347,6 +347,8 @@ export function applyPendingEncryptions(klass: any): void {
 
 /**
  * Check if an attribute is encrypted on a class (pending or applied).
+ *
+ * @internal
  */
 export function isEncryptedAttribute(klass: any, attr: string): boolean {
   let current = klass;
@@ -386,6 +388,8 @@ export function encryptedAttributeQ(record: any, attributeName: string): boolean
  * For unencrypted attributes: returns the serialized DB value.
  *
  * Mirrors: ActiveRecord::Encryption::EncryptableRecord#ciphertext_for
+ *
+ * @internal
  */
 export function ciphertextFor(record: any, attributeName: string): unknown {
   const klass = record.constructor as any;

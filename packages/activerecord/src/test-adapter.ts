@@ -685,6 +685,7 @@ class SchemaAdapter implements DatabaseAdapter {
   clearCacheBang(): void {
     this.inner.clearCacheBang?.();
   }
+  /** @internal */
   get inTransaction(): boolean {
     return this.inner.inTransaction;
   }

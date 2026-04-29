@@ -309,6 +309,8 @@ export function assertEncryptedAttribute(
  *
  * Mirrors Rails' model.ciphertext_for(:attr) in spirit, with the caveat that
  * Rails reads the stored value whereas this re-serializes the current attribute.
+ *
+ * @internal
  */
 export function ciphertextFor(model: any, attrName: string): unknown {
   const klass = model.constructor as any;

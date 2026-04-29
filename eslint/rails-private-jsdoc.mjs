@@ -26,25 +26,40 @@ let manifestCache = null;
 function loadManifest() {
   if (manifestCache) return manifestCache;
   if (!fs.existsSync(MANIFEST_PATH)) {
-    manifestCache = {};
+    manifestCache = { files: {}, packageGlobals: {} };
     return manifestCache;
   }
   manifestCache = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
   return manifestCache;
 }
 
-function relFromRepoRoot(filename) {
-  // The lint config runs from repo root — context.filename is absolute.
-  // Strip a leading repo path so manifest keys (repo-relative) match.
-  // Walk up until we find the repo root marker (pnpm-workspace.yaml).
-  let dir = path.dirname(filename);
+let repoRootCache = null;
+function repoRoot() {
+  if (repoRootCache) return repoRootCache;
+  let dir = __dirname;
   while (dir !== path.parse(dir).root) {
     if (fs.existsSync(path.join(dir, "pnpm-workspace.yaml"))) {
-      return path.relative(dir, filename);
+      repoRootCache = dir;
+      return dir;
     }
     dir = path.dirname(dir);
   }
-  return filename;
+  repoRootCache = process.cwd();
+  return repoRootCache;
+}
+
+function relFromRepoRoot(filename) {
+  return path.relative(repoRoot(), filename);
+}
+
+function packageOf(rel) {
+  // packages/<pkg>/... → package id used in manifest.packageGlobals.
+  // actionpack contains both actioncontroller and actionview namespaces.
+  const m = rel.match(/^packages\/([^/]+)\/src(?:\/([^/]+))?\//);
+  if (!m) return null;
+  if (m[1] === "actionpack") return m[2] === "actionview" ? "actionview" : "actioncontroller";
+  if (m[1] === "rack") return "actiondispatch";
+  return m[1];
 }
 
 function jsdocHasInternal(node, sourceCode) {
@@ -100,8 +115,13 @@ function check(context, node, name) {
   if (!filename) return;
   const rel = relFromRepoRoot(filename);
   const manifest = loadManifest();
-  const names = manifest[rel];
-  if (!names || !names.includes(name)) return;
+  const fileNames = manifest.files?.[rel];
+  const pkg = packageOf(rel);
+  const globalNames = pkg ? manifest.packageGlobals?.[pkg] : null;
+  const matched =
+    (fileNames && fileNames.includes(name)) ||
+    (globalNames && globalNames.includes(name));
+  if (!matched) return;
 
   const sourceCode = context.sourceCode ?? context.getSourceCode();
   const { tag, comment } = jsdocHasInternal(target, sourceCode);

@@ -1023,6 +1023,8 @@ export function highPrecisionCurrentTimestamp(): Nodes.SqlLiteral {
  * the driver, not the Attribute / bind objects used to build the query.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#type_casted_binds
+ *
+ * @internal
  */
 export function typeCastedBinds(binds: unknown[] | undefined): unknown[] {
   return (binds ?? []).map((b: any) => {

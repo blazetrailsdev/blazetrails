@@ -931,6 +931,7 @@ export class Base extends Model {
     return getStiBase(this);
   }
 
+  /** @internal */
   static computeType(typeName: string): typeof Base {
     return inheritanceComputeType(this, typeName);
   }
@@ -1143,6 +1144,8 @@ export class Base extends Model {
   /**
    * Returns true if the attribute is currently stored as encrypted ciphertext.
    * Mirrors: ActiveRecord::Encryption::EncryptableRecord#encrypted_attribute?
+   *
+   * @internal
    */
   encryptedAttribute(attributeName: string): boolean {
     return _encryptedAttributeQ(this, attributeName);
@@ -1151,6 +1154,8 @@ export class Base extends Model {
   /**
    * Returns the raw ciphertext stored for the attribute.
    * Mirrors: ActiveRecord::Encryption::EncryptableRecord#ciphertext_for
+   *
+   * @internal
    */
   ciphertextFor(attributeName: string): unknown {
     return _ciphertextFor(this, attributeName);
@@ -1254,6 +1259,7 @@ export class Base extends Model {
   static _defaultScope: ((rel: any) => any) | null = null;
 
   // --- Default scope (wired via extend() after class body) ---
+  /** @internal */
   declare static defaultScope: typeof _defaultScope;
   declare static unscoped: typeof _unscoped;
 

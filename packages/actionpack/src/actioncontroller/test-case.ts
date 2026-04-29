@@ -79,7 +79,9 @@ export class TestCase {
     return (this.controller as any).flash ?? new FlashHash();
   }
 
-  /** Cookies jar from the response. */
+  /** Cookies jar from the response. *
+   * @internal
+   */
   get cookies(): Record<string, string> {
     return this.response?.cookies ?? {};
   }

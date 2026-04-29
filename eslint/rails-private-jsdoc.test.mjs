@@ -1,24 +1,16 @@
 import { RuleTester } from "eslint";
-import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import rule from "./rails-private-jsdoc.mjs";
 
-// Stage a fake repo root with a manifest the rule can resolve.
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "rails-private-test-"));
-fs.writeFileSync(path.join(tmpRoot, "pnpm-workspace.yaml"), "packages: []\n");
-const pkgDir = path.join(tmpRoot, "packages/sample/src");
-fs.mkdirSync(pkgDir, { recursive: true });
-const fileRel = "packages/sample/src/foo.ts";
-fs.writeFileSync(
-  path.resolve(tmpRoot, "../rails-private-methods.json").replace(/[^/]+$/, "") +
-    "rails-private-methods.json",
-  "{}",
-);
-// The rule loads the manifest from its own __dirname; for test purposes we
-// just verify the AST visitor logic by writing the manifest to its real path.
-// Tests therefore run against a single file whose name matches a real entry
-// in the committed manifest (computeType in inheritance.ts).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, "..");
+
+// Tests run against the committed manifest. `computeType` in
+// inheritance.ts is the file-scoped sentinel; `_createRecord` is the
+// package-global sentinel (private wherever it appears in activerecord).
+const inheritanceFile = path.join(REPO_ROOT, "packages/activerecord/src/inheritance.ts");
+const baseFile = path.join(REPO_ROOT, "packages/activerecord/src/base.ts");
 
 const tester = new RuleTester({
   languageOptions: {
@@ -28,35 +20,53 @@ const tester = new RuleTester({
   },
 });
 
-const filename = path.resolve(tmpRoot, "packages/activerecord/src/inheritance.ts");
-fs.mkdirSync(path.dirname(filename), { recursive: true });
-
 tester.run("rails-private-jsdoc", rule, {
   valid: [
+    // Already tagged.
     {
-      filename,
+      filename: inheritanceFile,
       code: `/** @internal */\nexport function computeType() {}\n`,
     },
+    // Name not in manifest.
     {
-      filename,
-      code: `export function notInManifest() {}\n`,
+      filename: inheritanceFile,
+      code: `export function notARailsName() {}\n`,
+    },
+    // Already tagged inside multi-line JSDoc.
+    {
+      filename: inheritanceFile,
+      code: `/**\n * Doc.\n * @internal\n */\nexport function computeType() {}\n`,
+    },
+    // Class method that's already tagged.
+    {
+      filename: baseFile,
+      code: `class Base {\n  /** @internal */\n  static computeType() {}\n}\n`,
     },
   ],
   invalid: [
+    // File-scoped match: function with no JSDoc.
     {
-      filename,
+      filename: inheritanceFile,
       code: `export function computeType() {}\n`,
       errors: [{ messageId: "missingInternal" }],
       output: `/** @internal */\nexport function computeType() {}\n`,
     },
+    // File-scoped match: function with existing JSDoc — append @internal.
     {
-      filename,
+      filename: inheritanceFile,
       code: `/**\n * Does a thing.\n */\nexport function computeType() {}\n`,
       errors: [{ messageId: "missingInternal" }],
       output: `/**\n * Does a thing.\n *\n * @internal\n */\nexport function computeType() {}\n`,
     },
+    // Package-global match: static method on a class in base.ts (whose
+    // host file isn't the Ruby source of `compute_type`).
+    {
+      filename: baseFile,
+      code: `class Base {\n  static computeType() {}\n}\n`,
+      errors: [{ messageId: "missingInternal" }],
+      output: `class Base {\n  /** @internal */\n  static computeType() {}\n}\n`,
+    },
   ],
 });
 
-fs.rmSync(tmpRoot, { recursive: true, force: true });
 console.log("rails-private-jsdoc: ok");

@@ -108,6 +108,7 @@ export class Scheme {
     this._validate();
   }
 
+  /** @internal */
   get encryptor(): EncryptorLike {
     return this._encryptor;
   }

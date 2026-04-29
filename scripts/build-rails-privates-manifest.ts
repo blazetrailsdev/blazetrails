@@ -32,11 +32,24 @@ const railsApi = JSON.parse(
   fs.readFileSync(path.join(ROOT, "scripts/api-compare/output/rails-api.json"), "utf8"),
 );
 
-const manifest: Record<string, string[]> = {};
+interface Manifest {
+  files: Record<string, string[]>;
+  // Per-package set of names that are private/protected on every Rails
+  // host that defines them and *never* public anywhere in the package.
+  // Catches thin TS wrappers (e.g. `Base.computeType` in base.ts that
+  // delegates to `inheritance.ts#computeType`) whose host file isn't
+  // the Ruby file the helper lives in.
+  packageGlobals: Record<string, string[]>;
+}
+const manifest: Manifest = { files: {}, packageGlobals: {} };
 
 for (const [pkg, rubyPkg] of Object.entries<any>(railsApi.packages)) {
   const pkgDir = PACKAGE_DIRS[pkg];
   if (!pkgDir) continue;
+
+  // Per-package: name → has-public-anywhere-in-package?
+  const pkgPublic = new Set<string>();
+  const pkgPrivate = new Set<string>();
 
   // rubyFile → name → "all-private" | "mixed"
   const fileVis = new Map<string, Map<string, "all-private" | "mixed">>();
@@ -50,6 +63,8 @@ for (const [pkg, rubyPkg] of Object.entries<any>(railsApi.packages)) {
     const prev = m.get(name);
     if (prev === undefined) m.set(name, isPriv ? "all-private" : "mixed");
     else if (prev === "all-private" && !isPriv) m.set(name, "mixed");
+    if (isPriv) pkgPrivate.add(name);
+    else pkgPublic.add(name);
   };
   const collect = (entities: Record<string, any>) => {
     for (const ent of Object.values(entities)) {
@@ -69,20 +84,43 @@ for (const [pkg, rubyPkg] of Object.entries<any>(railsApi.packages)) {
       for (const c of rubyMethodToTs(ruby) ?? []) tsNames.add(c);
     }
     if (tsNames.size === 0) continue;
-    const existing = manifest[tsRel] ?? [];
-    manifest[tsRel] = [...new Set([...existing, ...tsNames])].sort();
+    const existing = manifest.files[tsRel] ?? [];
+    manifest.files[tsRel] = [...new Set([...existing, ...tsNames])].sort();
+  }
+
+  // Package globals: ruby names that are private *somewhere* in the
+  // package and *never* public anywhere in the package.
+  const globalRuby = [...pkgPrivate].filter((n) => !pkgPublic.has(n));
+  const globalTs = new Set<string>();
+  for (const ruby of globalRuby) {
+    for (const c of rubyMethodToTs(ruby) ?? []) globalTs.add(c);
+  }
+  // Drop any TS name that also exists as a public Rails name in the
+  // package (collision via predicate->isFoo etc).
+  const publicTs = new Set<string>();
+  for (const ruby of pkgPublic) {
+    for (const c of rubyMethodToTs(ruby) ?? []) publicTs.add(c);
+  }
+  for (const n of publicTs) globalTs.delete(n);
+  if (globalTs.size > 0) {
+    manifest.packageGlobals[pkg] = [...globalTs].sort();
   }
 }
 
-const sortedKeys = Object.keys(manifest).sort();
-const sorted: Record<string, string[]> = {};
-for (const k of sortedKeys) sorted[k] = manifest[k];
+const sortedFiles: Record<string, string[]> = {};
+for (const k of Object.keys(manifest.files).sort()) sortedFiles[k] = manifest.files[k];
+const sortedGlobals: Record<string, string[]> = {};
+for (const k of Object.keys(manifest.packageGlobals).sort()) {
+  sortedGlobals[k] = manifest.packageGlobals[k];
+}
+const final: Manifest = { files: sortedFiles, packageGlobals: sortedGlobals };
 
 const out = path.join(ROOT, "eslint/rails-private-methods.json");
-fs.writeFileSync(out, JSON.stringify(sorted, null, 2) + "\n");
+fs.writeFileSync(out, JSON.stringify(final, null, 2) + "\n");
+const fileCount = Object.keys(final.files).length;
+const fileNames = Object.values(final.files).reduce((n, a) => n + a.length, 0);
+const globalNames = Object.values(final.packageGlobals).reduce((n, a) => n + a.length, 0);
 console.log(
-  `Wrote ${out} — ${sortedKeys.length} files, ${Object.values(sorted).reduce(
-    (n, a) => n + a.length,
-    0,
-  )} method names`,
+  `Wrote ${out} — ${fileCount} files (${fileNames} names) + ` +
+    `${Object.keys(final.packageGlobals).length} package-global sets (${globalNames} names)`,
 );

@@ -42,17 +42,17 @@ export namespace SerializeCastValue {
  * exist for callers that hold a structurally-typed reference rather
  * than a `Type` subclass.
  */
-type CompatibleType = {
-  itselfIfSerializeCastValueCompatible?: () => unknown;
+type CompatibleType<T> = {
+  itselfIfSerializeCastValueCompatible?: () => T | null;
 };
 
 type CompatibleCtor = {
   serializeCastValueCompatible?: () => boolean;
 };
 
-export function itselfIfSerializeCastValueCompatible<T extends CompatibleType>(type: T): T | null {
+export function itselfIfSerializeCastValueCompatible<T>(type: CompatibleType<T>): T | null {
   return typeof type.itselfIfSerializeCastValueCompatible === "function"
-    ? (type.itselfIfSerializeCastValueCompatible() as T | null)
+    ? type.itselfIfSerializeCastValueCompatible()
     : null;
 }
 

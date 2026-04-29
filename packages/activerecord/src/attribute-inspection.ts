@@ -80,8 +80,11 @@ export function formatForInspect(this: any, name: string, value: unknown): strin
     return filtered.length > 50 ? `"${filtered.substring(0, 50)}..."` : `"${filtered}"`;
   }
   // boundary: legacy custom-typed attributes may still be JS Date.
-  if (filtered instanceof Date && !Number.isNaN(filtered.getTime())) {
-    return `"${filtered.toISOString()}"`;
+  // Invalid (NaN) Date renders as `"Invalid Date"` instead of JSON's `null`.
+  if (filtered instanceof Date) {
+    return Number.isNaN(filtered.getTime())
+      ? `"${String(filtered)}"`
+      : `"${filtered.toISOString()}"`;
   }
   try {
     const stringified = JSON.stringify(filtered);

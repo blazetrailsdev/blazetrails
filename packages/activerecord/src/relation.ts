@@ -2286,8 +2286,11 @@ export class Relation<T extends Base> {
     ) {
       return value;
     }
-    // boundary: bound query inspect accepts caller-supplied values; JS Date guarded.
-    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+    // boundary: bound query inspect accepts caller-supplied values.
+    // Invalid (NaN) Date prints as "Invalid Date" instead of JSON's "null".
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
+    }
     // Temporal values: coerce to ISO string for inspect output.
     // ZonedDateTime uses toInstant().toString() to avoid the bracketed IANA form.
     if (value instanceof Temporal.ZonedDateTime) return value.toInstant().toString();

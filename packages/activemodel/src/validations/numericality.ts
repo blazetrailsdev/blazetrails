@@ -174,9 +174,10 @@ export class NumericalityValidator extends EachValidator {
   }
 }
 
-// Rails: /\A[+-]?\d+\z/ — JS `^/$` without the `m` flag is the same
-// as Ruby \A/\z (start/end of string).
-const INTEGER_REGEX = /^[+-]?\d+$/;
+// Rails: /\A[+-]?\d+\z/ — use a true end-of-string check rather than
+// JS `$`, which can match BEFORE a final trailing newline ("1\n" would
+// match `/^[+-]?\d+$/` but is rejected by Ruby's \z).
+const INTEGER_REGEX = /^[+-]?\d+(?![\s\S])/;
 // Rails: /\A[+-]?0[xX]/ — no leading whitespace permitted.
 const HEXADECIMAL_REGEX = /^[+-]?0[xX]/;
 
@@ -276,19 +277,19 @@ export function isIsNumber(
   if (this.options.onlyNumeric && typeof rawValue !== "number") return false;
   if (rawValue === null || rawValue === undefined) return false;
   if (typeof rawValue === "number") return Number.isFinite(rawValue);
-  if (typeof rawValue === "string") {
-    // Rails `Kernel.Float` raises on blank strings — JS Number("")
-    // would coerce to 0 and falsely report true.
-    if (rawValue.trim() === "") return false;
-    // Rails `is_hexadecimal_literal?` is anchored at \A (no whitespace),
-    // but Kernel.Float strips leading whitespace before parsing, so a
-    // string like "  0x1" is still a hex literal that Rails rejects.
-    if (this.isIsHexadecimalLiteral(rawValue.trimStart())) return false;
-  } else if (this.isIsHexadecimalLiteral(rawValue)) {
-    return false;
-  }
-  // Rails: rescue ArgumentError, TypeError; false; end. Number(Symbol)
-  // throws TypeError; mirror Rails' swallow-and-return-false.
+  // Rails Kernel.Float raises TypeError for non-String/non-Numeric input
+  // (Date, true/false, arbitrary objects), so is_number? returns false.
+  // Restrict the coercion path to strings; JS Number(true) === 1 etc.
+  // would otherwise silently pass.
+  if (typeof rawValue !== "string") return false;
+  // Rails `Kernel.Float` raises on blank strings — JS Number("") would
+  // coerce to 0 and falsely report true.
+  if (rawValue.trim() === "") return false;
+  // Rails `is_hexadecimal_literal?` is anchored at \A (no whitespace),
+  // but Kernel.Float strips leading whitespace before parsing, so a
+  // string like "  0x1" is still a hex literal that Rails rejects.
+  if (this.isIsHexadecimalLiteral(rawValue.trimStart())) return false;
+  // Rails: rescue ArgumentError, TypeError; false; end (numericality.rb:99).
   try {
     const coerced = Number(rawValue);
     if (Number.isNaN(coerced)) return false;
@@ -346,6 +347,13 @@ export function optionAsNumber(
 ): number | undefined {
   const resolved = this.resolveValue(record, optionValue);
   if (resolved === undefined || resolved === null) return undefined;
+  // Rails option_as_number → parse_as_number → Kernel.Float would raise
+  // TypeError on non-Numeric/non-String input (Date, boolean, object).
+  // Throw the consistent validator error rather than silently accepting
+  // values that JS Number() happens to coerce (true → 1, Date → epoch).
+  if (typeof resolved !== "number" && typeof resolved !== "string") {
+    throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
+  }
   if (typeof resolved === "string") {
     // Rails parse_as_number rejects blank strings (Kernel.Float raises)
     // and hex literals (the elsif chain returns nil). Mirror both so a
@@ -358,19 +366,7 @@ export function optionAsNumber(
       throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
     }
   }
-  // Number(Symbol) throws TypeError raw; catch and rethrow with the
-  // consistent validator error so misconfigured procs (e.g. one that
-  // returns a Symbol) fail with the same shape as the other branches.
-  let numeric: number;
-  if (typeof resolved === "number") {
-    numeric = resolved;
-  } else {
-    try {
-      numeric = Number(resolved);
-    } catch {
-      throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
-    }
-  }
+  const numeric = typeof resolved === "number" ? resolved : Number(resolved);
   if (!Number.isFinite(numeric)) {
     throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
   }

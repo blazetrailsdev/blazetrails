@@ -1159,6 +1159,18 @@ describe("the to_sql visitor", () => {
     });
   });
 
+  describe("Nodes::Comment placement", () => {
+    it("emits exactly one space before each comment in SelectCore (no double space)", () => {
+      // Regression: visitArelNodesComment used to prepend its own leading
+      // space, and SelectCore also called maybeVisit() which adds another.
+      // The visitor now leaves the leading space to the caller.
+      const tbl = new Table("users");
+      const sql = tbl.project(tbl.get("id")).comment("hi", "bye").toSql();
+      expect(sql).toBe('SELECT "users"."id" FROM "users" /* hi */ /* bye */');
+      expect(sql).not.toContain("  /*");
+    });
+  });
+
   describe("schema-qualified table identifier", () => {
     it("quotes each segment of a schema.table name in SELECT and column refs", () => {
       const tbl = new Table("schema.table");

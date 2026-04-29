@@ -43,9 +43,7 @@ export class MySQL extends ToSql {
       this.visit(node.lock);
     }
 
-    if (node.comment) {
-      this.visit(node.comment);
-    }
+    this.maybeVisit(node.comment ?? null);
 
     return this.collector;
   }

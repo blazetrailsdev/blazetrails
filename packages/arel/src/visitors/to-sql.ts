@@ -268,9 +268,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       this.visit(node.lock);
     }
 
-    if (node.comment) {
-      this.visit(node.comment);
-    }
+    this.maybeVisit(node.comment ?? null);
 
     return this.collector;
   }
@@ -1185,13 +1183,12 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // Mirrors Rails: visitArelNodesComment (to_sql.rb:175). Rails joins
-  // with " " into a single string; we keep the per-comment structure with a
-  // leading space because callers append directly without a separator.
+  // Mirrors Rails: visitArelNodesComment (to_sql.rb:175) — emits the
+  // joined `/* ... */` blocks without a leading space. Callers add the
+  // leading separator (typically via `maybeVisit`).
   protected visitArelNodesComment(node: Nodes.Comment): SQLString {
-    for (const value of node.values) {
-      this.collector.append(` /* ${this.sanitizeAsSqlComment(value)} */`);
-    }
+    const blocks = node.values.map((v) => `/* ${this.sanitizeAsSqlComment(v)} */`);
+    this.collector.append(blocks.join(" "));
     return this.collector;
   }
 

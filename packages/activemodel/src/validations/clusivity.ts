@@ -133,7 +133,15 @@ function testMembership(members: unknown, value: unknown, method: "include?" | "
 }
 
 function isMemberOf(members: unknown, value: unknown): boolean {
-  if (members === null || members === undefined) return false;
+  // Rails: nil.include?(value) raises NoMethodError. A Proc that returns
+  // nil from resolve_value would surface a misconfigured validator
+  // loudly. Mirror that — silent `return false` would convert a config
+  // bug into a routine validation failure.
+  if (members === null || members === undefined) {
+    throw new TypeError(
+      `inclusion/exclusion: :in or :within resolved to ${members === null ? "null" : "undefined"}`,
+    );
+  }
   // String#include? in Ruby is substring match; JS String#includes matches
   // when value is also a string.
   if (typeof members === "string") {

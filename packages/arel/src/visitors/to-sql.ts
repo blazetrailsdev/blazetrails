@@ -1329,7 +1329,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       typeof (node.value as { toISOString: unknown }).toISOString === "function"
     ) {
       // boundary: bind real Date instances directly (drivers handle them
-      // natively). For non-Date date-like objects (Temporal types), bind the
+      // natively). For other objects with a `toISOString()` method, bind the
       // formatted string so drivers don't receive an unsupported object type.
       const bind =
         node.value instanceof Date
@@ -1404,7 +1404,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     ) {
       if (this._extractBinds) {
         // boundary: see addDateBind branch above — Date binds pass through
-        // natively; Temporal/date-like values stringify first.
+        // natively; non-Date values with toISOString() stringify first.
         const bind =
           v instanceof Date ? v : this.quotedDate(v as { toISOString(): string }).slice(1, -1);
         this.addDateBind(bind);

@@ -249,6 +249,6 @@ export class Attributes {
 
   /** Mirrors: attributes.rb:146-148 — `def attribute_names; @attributes.keys; end` */
   attributeNames(): string[] {
-    return Array.from(this._attributes.keys());
+    return this._attributes.keys();
   }
 }

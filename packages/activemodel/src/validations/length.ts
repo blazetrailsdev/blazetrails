@@ -35,6 +35,9 @@ export class LengthValidator extends EachValidator {
   }
 
   validateEach(record: AnyRecord, attribute: string, value: unknown): void {
+    // Rails length.rb:50 — `value.respond_to?(:length) ? value.length : value.to_s.length`.
+    // For nil → 0 (nil.to_s.length); for non-nil values without a .length
+    // (numbers, booleans, plain objects) → String(value).length.
     let length: number;
     if (typeof value === "string" || Array.isArray(value)) {
       length = value.length;
@@ -46,11 +49,9 @@ export class LengthValidator extends EachValidator {
     ) {
       length = (value as { length: number }).length;
     } else if (value == null) {
-      // Rails: value.respond_to?(:length) ? value.length : value.to_s.length
-      // For nil this returns 0 (nil.to_s.length).
       length = 0;
     } else {
-      length = 0;
+      length = String(value).length;
     }
 
     const inOpt = this.options.in as [number, number] | undefined;
@@ -75,11 +76,13 @@ export class LengthValidator extends EachValidator {
       effectiveMin = 1;
     }
 
-    // Rails skip_nil_check?: maximum-only checks treat nil as length 0
-    // unless allow_nil/allow_blank is set, in which case nil short-circuits
-    // before reaching here via EachValidator dispatch. Mirror that — for
-    // any non-:maximum key, skip when value is nil (Rails branches around
-    // !value.nil? || skip_nil_check?(key)).
+    // Rails length.rb:54 — `!value.nil? || skip_nil_check?(key)`.
+    // Each branch fires the constraint check unless the value is nil AND
+    // skip_nil_check?(key) returns false (meaning Rails would skip nil
+    // for that key). EachValidator's dispatch only short-circuits on
+    // allowNil === true / allowBlank === true; the explicit-false case
+    // and the default case both reach here, so the per-key guard below
+    // is the load-bearing path.
     const valueIsNil = value === null || value === undefined;
 
     if (effectiveMin !== undefined && length < effectiveMin) {

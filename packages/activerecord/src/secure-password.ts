@@ -56,12 +56,14 @@ export function hasSecurePassword(
   const runValidations = options.validations !== false;
   const digestAttr = `${attribute}_digest`;
 
-  // Store the raw password temporarily for hashing during save
+  // Store the raw password and confirmation temporarily (cleared after hashing).
   const passwordKey = Symbol(`${attribute}`);
   const confirmationKey = Symbol(`${attribute}_confirmation`);
+  const challengeKey = Symbol(`${attribute}_challenge`);
 
   // Define setter/getter for the configured secure-password attribute
   // (e.g. password / recovery_password).
+  // Mirrors: attr_reader + define_method("#{attribute}=") in InstanceMethodsOnActivation
   Object.defineProperty(modelClass.prototype, attribute, {
     get: function () {
       return (this as any)[passwordKey] ?? null;
@@ -72,21 +74,46 @@ export function hasSecurePassword(
     configurable: true,
   });
 
-  // password_confirmation setter/getter — only for the default attribute,
-  // matching the surface most apps rely on. Per-attribute confirmation is
-  // a separable follow-up.
-  if (isDefaultAttribute) {
-    Object.defineProperty(modelClass.prototype, "passwordConfirmation", {
-      get: function () {
-        return (this as any)[confirmationKey] ?? null;
-      },
-      set: function (value: string | null) {
-        (this as any)[confirmationKey] = value;
-      },
-      configurable: true,
-    });
+  // {attribute}_confirmation — Rails: attr_accessor :"#{attribute}_confirmation"
+  const confirmationProp = `${camelize(attribute).charAt(0).toLowerCase()}${camelize(attribute).slice(1)}Confirmation`;
+  Object.defineProperty(modelClass.prototype, confirmationProp, {
+    get: function () {
+      return (this as any)[confirmationKey] ?? null;
+    },
+    set: function (value: string | null) {
+      (this as any)[confirmationKey] = value;
+    },
+    configurable: true,
+  });
 
+  // {attribute}_challenge — Rails: attr_accessor :"#{attribute}_challenge"
+  // Used to verify the current password before changing it.
+  const challengeProp = `${camelize(attribute).charAt(0).toLowerCase()}${camelize(attribute).slice(1)}Challenge`;
+  Object.defineProperty(modelClass.prototype, challengeProp, {
+    get: function () {
+      return (this as any)[challengeKey] ?? null;
+    },
+    set: function (value: string | null) {
+      (this as any)[challengeKey] = value;
+    },
+    configurable: true,
+  });
+
+  // {attribute}_salt — returns the salt portion of the stored digest.
+  // Mirrors: define_method("#{attribute}_salt") in InstanceMethodsOnActivation
+  const saltProp = `${camelize(attribute).charAt(0).toLowerCase()}${camelize(attribute).slice(1)}Salt`;
+  Object.defineProperty(modelClass.prototype, saltProp, {
+    get: function (this: Base) {
+      const digest = this._readAttribute(digestAttr) as string | null;
+      if (!digest) return null;
+      return digest.split(":")[0] ?? null;
+    },
+    configurable: true,
+  });
+
+  if (isDefaultAttribute) {
     // `authenticate` (no suffix) is a Rails convenience for the default attribute.
+    // Mirrors: alias_method :authenticate, :authenticate_password
     Object.defineProperty(modelClass.prototype, "authenticate", {
       value: function (this: Base, password: string): Base | false {
         const digest = this._readAttribute(digestAttr);
@@ -134,33 +161,48 @@ export function hasSecurePassword(
     if (rawPassword != null && rawPassword !== "") {
       const digest = hashPassword(rawPassword);
       record.writeAttribute(digestAttr, digest);
-      // Clear the raw password after hashing so subsequent saves don't
-      // rehash with a new random salt (changing the digest on every save
-      // would invalidate outstanding password-reset tokens).
+      // Clear the raw password, confirmation, and challenge after hashing
+      // so subsequent saves don't rehash with a new random salt.
       (record as any)[passwordKey] = null;
       (record as any)[confirmationKey] = null;
+      (record as any)[challengeKey] = null;
     }
   });
 
-  // Add validations (only wired for the default `password` attribute today;
-  // per-attribute validations would mean parameterizing the `errors.add`
-  // keys and message — separable from authenticate_by parity).
-  if (runValidations && isDefaultAttribute) {
+  // Add validations — mirrors Rails' validates_presence_of, validates_confirmation_of,
+  // and challenge validation in has_secure_password.
+  if (runValidations) {
+    const attrLabel = attribute.charAt(0).toUpperCase() + attribute.slice(1).replace(/_./g, (s) => s.slice(1).toUpperCase());
     modelClass.validate(function (record: any) {
       const rawPassword = record[passwordKey];
       const isNew = record.isNewRecord();
 
-      // Password must be present on create or when explicitly set
+      // Presence on create (or when digest is absent): mirrors validates_presence_of
       if (isNew && (rawPassword === null || rawPassword === undefined || rawPassword === "")) {
-        record.errors.add("password", "blank");
+        if (!record._readAttribute(digestAttr)) {
+          record.errors.add(attribute, "blank");
+        }
       }
 
-      // Password confirmation must match if provided
+      // Confirmation must match if provided: mirrors validates_confirmation_of
       const confirmation = record[confirmationKey];
       if (confirmation !== null && confirmation !== undefined && rawPassword !== confirmation) {
-        record.errors.add("password_confirmation", "confirmation", {
-          message: "doesn't match Password",
+        record.errors.add(confirmationProp, "confirmation", {
+          message: `doesn't match ${attrLabel}`,
         });
+      }
+
+      // Challenge validation: current password must verify against stored digest
+      // Mirrors: validates_with ActiveModel::SecurePassword::PasswordChallenge
+      const challenge = record[challengeKey];
+      if (challenge !== null && challenge !== undefined) {
+        const digestWas =
+          typeof record._readAttributeBeforeLastSave === "function"
+            ? record._readAttributeBeforeLastSave(digestAttr)
+            : record._readAttribute(digestAttr);
+        if (!digestWas || !verifyPassword(String(challenge), digestWas as string)) {
+          record.errors.add(challengeProp, "invalid");
+        }
       }
     });
   }

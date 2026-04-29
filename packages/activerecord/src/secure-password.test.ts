@@ -478,11 +478,18 @@ describe("SecurePasswordTest", () => {
 
 describe("hasSecurePassword — per-attribute confirmation, challenge, and salt", () => {
   let adapter: DatabaseAdapter;
-  beforeEach(() => { adapter = freshAdapter(); });
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
 
   const makeModel = () => {
     class User extends Base {
-      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("email", "string"); this.attribute("recovery_password_digest", "string"); }
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("email", "string");
+        this.attribute("recovery_password_digest", "string");
+      }
     }
     hasSecurePassword(User, "recovery_password", { validations: true });
     User.adapter = adapter;

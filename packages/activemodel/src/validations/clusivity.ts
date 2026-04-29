@@ -55,7 +55,13 @@ export function delimiter(this: ClusivityHost): unknown {
   ) {
     return this._delimiterCache;
   }
-  this._delimiterCache = this.options.in ?? this.options.within;
+  // Rails: `options[:in] || options[:within]` — Ruby's `||` falls
+  // back when the left side is nil OR false, not just nullish. JS `??`
+  // would cache an explicit `false` and ignore `within`; reproduce
+  // Ruby semantics explicitly.
+  const inOpt = this.options.in;
+  this._delimiterCache =
+    inOpt !== undefined && inOpt !== null && inOpt !== false ? inOpt : this.options.within;
   return this._delimiterCache;
 }
 

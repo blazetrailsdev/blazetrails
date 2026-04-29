@@ -338,13 +338,28 @@ describe("glob", () => {
     await expect(glob("\\windows\\foo", { cwd: root })).rejects.toThrow(
       /absolute patterns are not supported/,
     );
+    // Drive-relative (no slash after the colon)
+    await expect(glob("C:foo\\bar", { cwd: root })).rejects.toThrow(
+      /absolute patterns are not supported/,
+    );
+    await expect(glob("D:relative.rb", { cwd: root })).rejects.toThrow(
+      /absolute patterns are not supported/,
+    );
   });
 
-  it("rejects `..` segments that could escape cwd", async () => {
+  it("rejects `..` segments that could escape cwd (both separator forms)", async () => {
     await expect(glob("../etc/passwd", { cwd: root })).rejects.toThrow(
       /'\.\.' segments are not supported/,
     );
     await expect(glob("app/../../escape", { cwd: root })).rejects.toThrow(
+      /'\.\.' segments are not supported/,
+    );
+    // Backslash-separated traversal — Windows-flavored PathAdapter
+    // would otherwise route this through `path.join(cwd, "..\\foo")`.
+    await expect(glob("..\\escape", { cwd: root })).rejects.toThrow(
+      /'\.\.' segments are not supported/,
+    );
+    await expect(glob("app\\..\\escape", { cwd: root })).rejects.toThrow(
       /'\.\.' segments are not supported/,
     );
   });

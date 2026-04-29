@@ -105,17 +105,20 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
   const cwd = opts.cwd ?? fs.cwd();
   const dot = opts.dot ?? false;
 
-  // Patterns are relative to `cwd` by contract. Absolute patterns
-  // (POSIX `/foo` or Windows `C:\foo`) and `..` segments would let the
-  // walk escape the provided cwd and emit non-cwd-relative results.
-  // Reject up front with a clear error rather than silently producing
-  // surprising paths.
-  if (/^[/\\]/.test(pattern) || /^[a-zA-Z]:[/\\]/.test(pattern)) {
+  // Patterns are relative to `cwd` by contract. Absolute and
+  // drive-relative patterns, plus any form of `..` segment, would let
+  // the walk escape the provided cwd. Both `/` and `\` are treated as
+  // separators here so a Windows-flavored PathAdapter can't slip past.
+  //
+  // Rejected: leading `/` or `\`; any drive prefix `<letter>:` (covers
+  // both `C:/foo` and the drive-relative `C:foo`); any `..` as a
+  // complete segment regardless of separator.
+  if (/^[/\\]/.test(pattern) || /^[a-zA-Z]:/.test(pattern)) {
     throw new Error(
       `glob: absolute patterns are not supported (got ${JSON.stringify(pattern)}); use a path relative to \`cwd\``,
     );
   }
-  if (pattern.split("/").includes("..")) {
+  if (/(^|[/\\])\.\.([/\\]|$)/.test(pattern)) {
     throw new Error(
       `glob: '..' segments are not supported (got ${JSON.stringify(pattern)}); use a path relative to \`cwd\``,
     );

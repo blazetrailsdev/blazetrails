@@ -70,6 +70,11 @@ export function hasSecurePassword(
     },
     set: function (value: string | null) {
       (this as any)[passwordKey] = value;
+      // Rails: nil assignment clears the digest immediately
+      // (active_model/secure_password.rb InstanceMethodsOnActivation)
+      if (value === null || value === undefined) {
+        this.writeAttribute?.(digestAttr, null);
+      }
     },
     configurable: true,
   });
@@ -175,18 +180,19 @@ export function hasSecurePassword(
     const attrLabel = attribute.charAt(0).toUpperCase() + attribute.slice(1).replace(/_./g, (s) => s.slice(1).toUpperCase());
     modelClass.validate(function (record: any) {
       const rawPassword = record[passwordKey];
-      const isNew = record.isNewRecord();
 
-      // Presence on create (or when digest is absent): mirrors validates_presence_of
-      if (isNew && (rawPassword === null || rawPassword === undefined || rawPassword === "")) {
-        if (!record._readAttribute(digestAttr)) {
-          record.errors.add(attribute, "blank");
-        }
+      // Presence: mirrors `record.errors.add(attribute, :blank) unless digest.present?`
+      // Fires on every validate — catches both new records without passwords
+      // and existing records whose digest was explicitly cleared.
+      if (!record._readAttribute(digestAttr)) {
+        record.errors.add(attribute, "blank");
       }
 
-      // Confirmation must match if provided: mirrors validates_confirmation_of
+      // Confirmation: mirrors `validates_confirmation_of attribute, allow_blank: true`
+      // Skip when password is blank (allow_blank: true).
       const confirmation = record[confirmationKey];
-      if (confirmation !== null && confirmation !== undefined && rawPassword !== confirmation) {
+      const passwordPresent = rawPassword !== null && rawPassword !== undefined && rawPassword !== "";
+      if (passwordPresent && confirmation !== null && confirmation !== undefined && rawPassword !== confirmation) {
         record.errors.add(confirmationProp, "confirmation", {
           message: `doesn't match ${attrLabel}`,
         });

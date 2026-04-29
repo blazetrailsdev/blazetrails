@@ -4,7 +4,7 @@
  * Represents an HTTP response with status, headers, and body.
  */
 
-import { Temporal } from "@blazetrails/activesupport/temporal";
+import type { CookieExpires } from "./cookies.js";
 
 export class Response {
   private _status: number;
@@ -219,7 +219,7 @@ export interface CookieOptions {
   value: string;
   path?: string;
   domain?: string;
-  expires?: Date | Temporal.Instant;
+  expires?: CookieExpires;
   secure?: boolean;
   httpOnly?: boolean;
   sameSite?: "strict" | "lax" | "none";

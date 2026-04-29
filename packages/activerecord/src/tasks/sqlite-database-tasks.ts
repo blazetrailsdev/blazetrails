@@ -16,11 +16,14 @@ import { DatabaseTasks } from "./database-tasks.js";
 import { NoDatabaseError, DatabaseAlreadyExists, NotImplementedError } from "../errors.js";
 
 /**
- * True for SQLite in-memory database names. Mirrors `SQLite3Adapter._isMemoryFilename`
- * so both the adapter and task layer agree on what is in-memory.
+ * True for SQLite in-memory database names per the SQLite URI spec
+ * (https://www.sqlite.org/inmemorydb.html): `:memory:`, `file::memory:?...`,
+ * and named in-memory URIs whose query string contains a real `mode=memory`
+ * parameter (e.g. `file:memdb1?mode=memory&cache=shared`).
  *
- * Covers: `:memory:`, `file::memory:?...`, and named in-memory URIs like
- * `file:memdb1?mode=memory&cache=shared` (see https://www.sqlite.org/inmemorydb.html).
+ * Uses `URLSearchParams` rather than substring matching so paths that happen
+ * to contain the text `mode=memory` are not misclassified. `SQLite3Adapter`
+ * currently uses a broader substring check — aligning it is a follow-up.
  */
 function isInMemoryDatabase(name: string): boolean {
   if (name === ":memory:") return true;

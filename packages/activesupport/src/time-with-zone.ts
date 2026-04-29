@@ -547,7 +547,8 @@ export class TimeWithZone {
   }
 
   /**
-   * Subtract seconds, Duration, or another TimeWithZone/Date (returns seconds difference).
+   * Subtract seconds, Duration, or another TimeWithZone/Date/Temporal.Instant
+   * (returns seconds difference).
    */
   minus(interval: number | Duration): TimeWithZone;
   minus(other: TimeWithZone | Date | Temporal.Instant): number;
@@ -677,7 +678,7 @@ export class TimeWithZone {
   // ---------------------------------------------------------------------------
 
   /**
-   * Compare to another TimeWithZone or Date. Returns -1, 0, or 1.
+   * Compare to another TimeWithZone, Date, or Temporal.Instant. Returns -1, 0, or 1.
    */
   compareTo(other: TimeWithZone | Date | Temporal.Instant): number {
     const otherMs =

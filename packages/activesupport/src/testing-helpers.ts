@@ -9,7 +9,7 @@ import { Temporal } from "./temporal.js";
 // ── Time Travel ───────────────────────────────────────────────────────────────
 
 /**
- * travelTo — sets the current time to the given Date.
+ * travelTo — sets the current time to the given Date or Temporal.Instant.
  * Use travelBack() to restore.
  */
 export function travelTo(time: Date | Temporal.Instant, fn?: () => void): void {

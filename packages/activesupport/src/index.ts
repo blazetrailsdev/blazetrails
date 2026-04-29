@@ -8,6 +8,9 @@ export {
 } from "./fs-adapter.js";
 export type { FsAdapter, FsStatResult, FsDirent, PathAdapter } from "./fs-adapter.js";
 
+export { glob } from "./glob.js";
+export type { GlobOptions } from "./glob.js";
+
 export {
   registerCryptoAdapter,
   getCrypto,

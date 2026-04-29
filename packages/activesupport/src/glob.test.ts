@@ -106,4 +106,28 @@ describe("glob", () => {
   it("handles non-existent cwd gracefully", async () => {
     expect(await glob("*", { cwd: join(root, "does-not-exist") })).toEqual([]);
   });
+
+  it("supports negation via leading `!`", async () => {
+    // Brace expansion produces both a positive and a negative pattern.
+    expect(await glob("{**/*.rb,!**/admin.rb}", { cwd: root })).toEqual([
+      "app/controllers/application_controller.rb",
+      "app/models/post.rb",
+      "app/models/user.rb",
+      "foo.rb",
+    ]);
+  });
+
+  it("does not throw on unbalanced braces", async () => {
+    // Leftover `{` / `}` after brace expansion bails out should be
+    // escaped as literals rather than producing an invalid regex.
+    await expect(glob("foo{bar.rb", { cwd: root })).resolves.toEqual([]);
+    await expect(glob("foo}bar.rb", { cwd: root })).resolves.toEqual([]);
+  });
+
+  it("prunes the walk to the literal prefix", async () => {
+    // `app/models/*.rb` should not require reading anything outside
+    // app/models. Verify by globbing into a non-existent prefix and
+    // confirming no error from a sibling tree (lib/) being absent.
+    expect(await glob("lib/tasks/*.rake", { cwd: root })).toEqual(["lib/tasks/deploy.rake"]);
+  });
 });

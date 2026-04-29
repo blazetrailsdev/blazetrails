@@ -14,7 +14,7 @@
  * cleanly should be rewritten when ported.
  */
 
-import { getFs, getPath } from "./fs-adapter.js";
+import { getFsAsync, getPathAsync, type FsAdapter, type PathAdapter } from "./fs-adapter.js";
 
 export interface GlobOptions {
   cwd?: string;
@@ -22,42 +22,82 @@ export interface GlobOptions {
   dot?: boolean;
 }
 
+interface CompiledPattern {
+  /** Literal directory prefix to start the walk from (relative to cwd). */
+  base: string;
+  /** Regex applied against the path relative to cwd. */
+  re: RegExp;
+}
+
 export async function glob(pattern: string, opts: GlobOptions = {}): Promise<string[]> {
-  const fs = getFs();
-  const path = getPath();
+  // Use async resolution so this works in pure Node ESM without callers
+  // pre-registering an adapter. (sync getFs() relies on CommonJS require.)
+  const fs = await getFsAsync();
+  const path = await getPathAsync();
   const cwd = opts.cwd ?? fs.cwd();
   const dot = opts.dot ?? false;
 
   const expanded = expandBraces(pattern);
-  const positives: RegExp[] = [];
+  const positives: CompiledPattern[] = [];
   const negatives: RegExp[] = [];
   for (const p of expanded) {
-    if (p.startsWith("!")) negatives.push(patternToRegex(p.slice(1)));
-    else positives.push(patternToRegex(p));
+    if (p.startsWith("!")) {
+      negatives.push(patternToRegex(p.slice(1)));
+    } else {
+      positives.push({ base: literalPrefix(p), re: patternToRegex(p) });
+    }
   }
 
   const results = new Set<string>();
 
-  function walk(absDir: string, relDir: string): void {
-    let entries;
-    try {
-      entries = fs.readdirSync(absDir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (!dot && entry.name.startsWith(".")) continue;
-      const absPath = path.join(absDir, entry.name);
-      const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
-      const matches =
-        positives.some((re) => re.test(relPath)) && !negatives.some((re) => re.test(relPath));
-      if (matches) results.add(relPath);
-      if (entry.isDirectory()) walk(absPath, relPath);
-    }
+  for (const { base, re } of positives) {
+    const startAbs = base ? path.join(cwd, base) : cwd;
+    walk(fs, path, startAbs, base, re, negatives, dot, results);
   }
 
-  walk(cwd, "");
   return [...results].sort();
+}
+
+function walk(
+  fs: FsAdapter,
+  path: PathAdapter,
+  absDir: string,
+  relDir: string,
+  positiveRe: RegExp,
+  negatives: RegExp[],
+  dot: boolean,
+  results: Set<string>,
+): void {
+  let entries;
+  try {
+    entries = fs.readdirSync(absDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (!dot && entry.name.startsWith(".")) continue;
+    const absPath = path.join(absDir, entry.name);
+    const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
+    if (positiveRe.test(relPath) && !negatives.some((re) => re.test(relPath))) {
+      results.add(relPath);
+    }
+    if (entry.isDirectory()) walk(fs, path, absPath, relPath, positiveRe, negatives, dot, results);
+  }
+}
+
+/**
+ * Find the longest literal directory prefix of `pattern` (no glob chars).
+ * `app/models/*.rb` → `app/models`. `app/**\/*.rb` → `app`.
+ * `*.rb` → `""`. Used to prune the walk to only the matching subtree.
+ */
+function literalPrefix(pattern: string): string {
+  const firstGlob = pattern.search(/[*?[{]/);
+  if (firstGlob === -1) {
+    const lastSlash = pattern.lastIndexOf("/");
+    return lastSlash === -1 ? "" : pattern.slice(0, lastSlash);
+  }
+  const lastSlash = pattern.lastIndexOf("/", firstGlob);
+  return lastSlash === -1 ? "" : pattern.slice(0, lastSlash);
 }
 
 function expandBraces(pattern: string): string[] {
@@ -103,7 +143,9 @@ function patternToRegex(pattern: string): RegExp {
         re += pattern.slice(i, end + 1);
         i = end + 1;
       }
-    } else if ("^$.+()|/\\".includes(c)) {
+    } else if ("^$.+()|/\\{}".includes(c)) {
+      // Escape regex metachars including `{` and `}` — leftover braces
+      // (e.g. unbalanced) reach this loop after `expandBraces` has run.
       re += `\\${c}`;
       i++;
     } else {

@@ -71,7 +71,14 @@ export abstract class Type<T = unknown> {
    * defined at or above serialize.
    */
   static serializeCastValueCompatible(this: { _serializeCastValueCompatible?: boolean }): boolean {
-    if (this._serializeCastValueCompatible !== undefined) return this._serializeCastValueCompatible;
+    // Per-class memoization: JS static properties are inherited, so a
+    // subclass that overrides serialize/serializeCastValue would otherwise
+    // reuse a parent's cached result. Only treat the cache as set when it
+    // is an own property of THIS constructor — Rails caches in @ivars on
+    // the class object itself for the same reason (serialize_cast_value.rb:9-12).
+    if (Object.hasOwn(this, "_serializeCastValueCompatible")) {
+      return this._serializeCastValueCompatible as boolean;
+    }
     let proto: object | null = (this as unknown as { prototype: object }).prototype;
     let serializeDepth = -1;
     let castDepth = -1;
@@ -87,7 +94,13 @@ export abstract class Type<T = unknown> {
       depth++;
     }
     const result = castDepth >= 0 && serializeDepth >= 0 && castDepth <= serializeDepth;
-    this._serializeCastValueCompatible = result;
+    // Define as own property so subclasses don't read this through the
+    // static prototype chain.
+    Object.defineProperty(this, "_serializeCastValueCompatible", {
+      value: result,
+      writable: true,
+      configurable: true,
+    });
     return result;
   }
 

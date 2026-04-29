@@ -45,6 +45,10 @@ type Roundable<T> = {
 export function applySecondsPrecision<T>(this: { precision?: number }, value: T): T {
   const precision = this.precision;
   if (precision === undefined || precision === null) return value;
+  // Reject precisions outside the 0-9 nanosecond window so we never
+  // hand Temporal#round a non-integer or out-of-range roundingIncrement
+  // (matches the guard in type/time.ts and type/date-time.ts).
+  if (!Number.isInteger(precision) || precision < 0 || precision > 9) return value;
   if (value === null || value === undefined) return value;
   // Temporal types (Instant, PlainDateTime, PlainTime, ZonedDateTime)
   // expose a `round` method that accepts `roundingIncrement` and

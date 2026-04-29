@@ -89,18 +89,15 @@ export class TimeWithZone {
   private readonly _zoned: Temporal.ZonedDateTime;
   /** The timezone */
   private readonly _timeZone: TimeZone;
-  /** Lazily-derived Date snapshot for legacy method bodies and TimeZone helpers. */
-  private _utcCache?: Date;
+  /** Cached Date snapshot for legacy method bodies and TimeZone helpers. */
+  private readonly _utc: Date;
 
   constructor(utcTime: Date, timeZone: TimeZone) {
     this._zoned = Temporal.Instant.fromEpochMilliseconds(utcTime.getTime()).toZonedDateTimeISO(
       timeZone.tzinfo,
     );
     this._timeZone = timeZone;
-  }
-
-  private get _utc(): Date {
-    return (this._utcCache ??= new Date(this._zoned.epochMilliseconds));
+    this._utc = new Date(this._zoned.epochMilliseconds);
   }
 
   // ---------------------------------------------------------------------------

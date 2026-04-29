@@ -1,4 +1,4 @@
-import { getCrypto, camelize, humanize, pbkdf2Async } from "@blazetrails/activesupport";
+import { getCrypto, camelize, humanize, isBlank, pbkdf2Async } from "@blazetrails/activesupport";
 import { ArgumentError } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
 import { generatesTokenFor } from "./token-for.js";
@@ -169,7 +169,7 @@ export function hasSecurePassword(
     // Rails `password=` setter skips hashing for empty strings
     // (active_model/secure_password.rb) — an empty password is not a
     // valid password, so we leave the existing digest untouched.
-    if (rawPassword != null && rawPassword !== "") {
+    if (rawPassword != null && !isBlank(rawPassword)) {
       const digest = hashPassword(rawPassword);
       record.writeAttribute(digestAttr, digest);
       // Clear the raw password, confirmation, and challenge after hashing
@@ -190,8 +190,7 @@ export function hasSecurePassword(
         : humanize(attribute);
     modelClass.validate(function (record: any) {
       const rawPassword = record[passwordKey];
-      const rawPasswordPresent =
-        rawPassword !== null && rawPassword !== undefined && rawPassword !== "";
+      const rawPasswordPresent = rawPassword != null && !isBlank(rawPassword);
 
       // Presence: mirrors `record.errors.add(attribute, :blank) unless digest.present?`
       // In Rails, password= immediately sets the digest (BCrypt). In trails,
@@ -209,7 +208,9 @@ export function hasSecurePassword(
         confirmation !== undefined &&
         rawPassword !== confirmation
       ) {
-        record.errors.add(confirmationProp, "confirmation", {
+        // Rails keys the error to the underscored `#{attribute}_confirmation`
+        // so humanAttributeName and i18n lookups work correctly.
+        record.errors.add(`${attribute}_confirmation`, "confirmation", {
           attribute: attrLabel,
         });
       }
@@ -224,7 +225,8 @@ export function hasSecurePassword(
             ? record.attributeWas(digestAttr)
             : record._readAttribute(digestAttr);
         if (!digestWas || !verifyPassword(String(challenge), digestWas as string)) {
-          record.errors.add(challengeProp, "invalid");
+          // Rails keys to `#{attribute}_challenge` (snake_case) for i18n parity.
+          record.errors.add(`${attribute}_challenge`, "invalid");
         }
       }
     });

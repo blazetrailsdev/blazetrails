@@ -2286,9 +2286,8 @@ export class Relation<T extends Base> {
     ) {
       return value;
     }
-    // boundary: bound query inspect accepts caller-supplied values. JS Date
-    // coerces to ISO string so inspect doesn't double-quote (Temporal handled below).
-    if (value instanceof Date) return value.toISOString();
+    // boundary: bound query inspect accepts caller-supplied values; JS Date guarded.
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
     // Temporal values: coerce to ISO string for inspect output.
     // ZonedDateTime uses toInstant().toString() to avoid the bracketed IANA form.
     if (value instanceof Temporal.ZonedDateTime) return value.toInstant().toString();
@@ -4195,9 +4194,10 @@ export class Relation<T extends Base> {
       let ts: Temporal.Instant | null = null;
       if (timestamp instanceof Temporal.Instant) {
         ts = timestamp;
-        // boundary: aggregate cache-key timestamp may arrive as JS Date or
-        // epoch number from custom-typed columns; bridge to Temporal.Instant.
-      } else if (timestamp instanceof Date && !Number.isNaN((timestamp as Date).getTime())) {
+      }
+      // boundary: aggregate cache-key timestamp may arrive as JS Date or
+      // epoch number from custom-typed columns; bridge to Temporal.Instant.
+      else if (timestamp instanceof Date && !Number.isNaN((timestamp as Date).getTime())) {
         ts = Temporal.Instant.fromEpochMilliseconds((timestamp as Date).getTime());
       } else if (typeof timestamp === "number" && Number.isFinite(timestamp)) {
         ts = Temporal.Instant.fromEpochMilliseconds(timestamp as number);

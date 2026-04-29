@@ -2,11 +2,13 @@
  * Glob matching for fs-adapter.
  *
  * Pattern dialect — node/picomatch-style subset:
- *   `**`      match zero or more directories (when followed by `/`) or any
- *             characters (otherwise)
+ *   `**`      directory wildcard, ONLY when it forms a complete path
+ *             segment (preceded by start or `/`, followed by `/` or
+ *             end). In-segment occurrences (e.g. `foo**bar`) collapse
+ *             to plain `*` semantics — they do NOT cross `/` boundaries.
  *   `*`       match anything except `/`
  *   `?`       match any single char except `/`
- *   `[abc]`   character class
+ *   `[abc]`   character class (cannot match `/`)
  *   `{a,b,c}` brace expansion
  *   leading `!`  negation (post-filter)
  *
@@ -45,8 +47,8 @@ interface CompiledPattern {
   /**
    * Whether the walk for this pattern should include dot entries even
    * if `opts.dot` is false. Picomatch-style: a pattern that explicitly
-   * references a dot segment (e.g. `**\/.hidden`, `.config/**`) opts
-   * itself in.
+   * references a dot segment (e.g. `**` + `/.hidden`, `.config/` + `**`)
+   * opts itself in.
    */
   allowDot: boolean;
 }
@@ -65,7 +67,12 @@ interface CompiledPattern {
 function hasGlobSemantics(pattern: string): boolean {
   if (/[*?]/.test(pattern)) return true;
   const open = pattern.indexOf("[");
-  return open !== -1 && pattern.indexOf("]", open + 1) !== -1;
+  if (open === -1) return false;
+  const close = pattern.indexOf("]", open + 1);
+  // Empty `[]` is treated as a literal pair by `patternToRegex`, so it
+  // shouldn't count as glob semantics here either (otherwise it would
+  // route to the walk path instead of the literal fast path).
+  return close !== -1 && close > open + 1;
 }
 
 /**
@@ -77,7 +84,11 @@ function firstGlobIndex(pattern: string): number {
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
     if (c === "*" || c === "?") return i;
-    if (c === "[" && pattern.indexOf("]", i + 1) !== -1) return i;
+    if (c === "[") {
+      const close = pattern.indexOf("]", i + 1);
+      // Match patternToRegex: empty `[]` is literal, not a class.
+      if (close !== -1 && close > i + 1) return i;
+    }
   }
   return -1;
 }
@@ -191,7 +202,7 @@ function walk(
  * Find the longest literal directory prefix of `pattern` (no real glob
  * chars). Unbalanced `{`/`}`/`[`/`]` are treated as literals.
  *
- * `app/models/*.rb` → `app/models`. `app/**\/*.rb` → `app`.
+ * `app/models/*.rb` → `app/models`. `app/` + `**` + `/*.rb` → `app`.
  * `*.rb` → `""`. `foo{bar.rb` → `""` (whole pattern is literal, but
  * has no `/` to split on).
  *

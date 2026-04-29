@@ -110,7 +110,9 @@ describe("glob", () => {
     expect(await glob("nonexistent/**/*.zzz", { cwd: root })).toEqual([]);
   });
 
-  it("handles non-existent cwd gracefully", async () => {
+  it("handles non-existent cwd gracefully (swallows ENOENT/ENOTDIR)", async () => {
+    // walk() catches ENOENT/ENOTDIR (expected absence) and returns [].
+    // Other errors (EACCES etc.) propagate — covered by a separate test.
     expect(await glob("*", { cwd: join(root, "does-not-exist") })).toEqual([]);
   });
 
@@ -321,11 +323,30 @@ describe("glob", () => {
     expect(await glob("*", { cwd: root })).not.toContain(".hidden");
   });
 
-  it("does not throw on empty character class `[]`", async () => {
+  it("does not throw on empty character class `[]` (routed to fast path)", async () => {
     // Empty character class is legal-but-matches-nothing in some JS
     // engines and a syntax error in others. We treat it as a literal
-    // `[]` so glob() always behaves predictably.
-    await expect(glob("foo[]", { cwd: root })).resolves.toEqual([]);
+    // `[]` so glob() always behaves predictably. Verify by spying that
+    // no readdirSync calls happen — the literal-fast-path takes over.
+    const realFs = await getFsAsync();
+    const realPath = await getPathAsync();
+    const reads: string[] = [];
+    const tracking: FsAdapter = {
+      ...realFs,
+      readdirSync: ((p: string, opts?: { withFileTypes: true }) => {
+        reads.push(p);
+        return opts ? realFs.readdirSync(p, opts) : realFs.readdirSync(p);
+      }) as FsAdapter["readdirSync"],
+    };
+    const prevAdapter = fsAdapterConfig.adapter;
+    registerFsAdapter("glob-spy-empty", tracking, realPath);
+    fsAdapterConfig.adapter = "glob-spy-empty";
+    try {
+      await expect(glob("foo[]", { cwd: root })).resolves.toEqual([]);
+      expect(reads).toEqual([]);
+    } finally {
+      fsAdapterConfig.adapter = prevAdapter;
+    }
   });
 
   it("treats unbalanced { } [ ] as literals (no walk)", async () => {
@@ -385,13 +406,6 @@ describe("glob", () => {
     } finally {
       fsAdapterConfig.adapter = prevAdapter;
     }
-  });
-
-  it("swallows ENOENT/ENOTDIR (expected absence errors)", async () => {
-    // Globbing a non-existent cwd should return [], not throw — that's
-    // the existing "non-existent cwd" behavior, which works because
-    // readdirSync on a missing dir throws ENOENT.
-    expect(await glob("*", { cwd: join(root, "does-not-exist") })).toEqual([]);
   });
 
   it("handles deep directory trees without stack overflow (iterative walk)", async () => {

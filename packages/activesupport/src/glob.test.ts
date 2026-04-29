@@ -2,8 +2,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-// glob is a subpath export, not re-exported from activesupport's index
-import { glob } from "./glob.js";
+// Import via the public subpath so the vitest alias is exercised — same
+// pattern other tests use for /message-verifier, /temporal, etc.
+import { glob } from "@blazetrails/activesupport/glob";
 
 let root: string;
 

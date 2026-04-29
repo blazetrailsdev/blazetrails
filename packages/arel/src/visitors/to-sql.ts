@@ -4,7 +4,9 @@ import { Bind } from "../collectors/bind.js";
 import { Composite } from "../collectors/composite.js";
 import * as Nodes from "../nodes/index.js";
 import { Table } from "../table.js";
-import { Visitor } from "./visitor.js";
+import { Visitor, UnsupportedVisitError, type NodeCtor } from "./visitor.js";
+
+export { UnsupportedVisitError };
 
 /**
  * Resolve a bind's database value. QueryAttribute exposes
@@ -17,13 +19,6 @@ export function resolveValueForDatabase(value: unknown): unknown {
   if (!value || typeof value !== "object" || !("valueForDatabase" in value)) return value;
   const v = (value as Record<string, unknown>).valueForDatabase;
   return typeof v === "function" ? (v as () => unknown).call(value) : v;
-}
-
-export class UnsupportedVisitError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "UnsupportedVisitError";
-  }
 }
 
 export class NotImplementedError extends Error {
@@ -87,14 +82,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   /** @internal */
   visit(node: Node): SQLString {
-    try {
-      return super.visit(node) as SQLString;
-    } catch (e) {
-      if (e instanceof TypeError && e.message.startsWith("Cannot visit ")) {
-        throw new UnsupportedVisitError(`Unknown node type: ${node.constructor.name}`);
-      }
-      throw e;
-    }
+    return super.visit(node) as SQLString;
   }
 
   // Per-class dispatch wrappers for shared helpers — mirrors Rails' per-method
@@ -129,7 +117,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   static {
     const d = ToSql.dispatchCache();
-    const reg = (ctor: abstract new (...a: never[]) => Node, m: string) => d.set(ctor as never, m);
+    const reg = (ctor: NodeCtor, m: string) => d.set(ctor, m);
     // Statements
     reg(Nodes.SelectStatement, "visitSelectStatement");
     reg(Nodes.SelectCore, "visitSelectCore");

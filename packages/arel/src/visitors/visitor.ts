@@ -1,6 +1,24 @@
 import { Node } from "../nodes/node.js";
 
 /**
+ * Thrown when no visit method is registered for a node's runtime class
+ * (after walking the prototype chain).
+ *
+ * Mirrors the `TypeError` Rails raises in `Arel::Visitors::Visitor#visit`.
+ */
+export class UnsupportedVisitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UnsupportedVisitError";
+  }
+}
+
+export type NodeCtor = abstract new (...args: never[]) => Node;
+type VisitorCtor = typeof Visitor;
+
+const PER_CLASS_CACHE = new WeakMap<VisitorCtor, Map<NodeCtor, string>>();
+
+/**
  * Base visitor with class-tagged dispatch.
  *
  * Mirrors: Arel::Visitors::Visitor (activerecord/lib/arel/visitors/visitor.rb).
@@ -13,11 +31,6 @@ import { Node } from "../nodes/node.js";
  * runtime constructor, falling back to the prototype chain (mirroring
  * Ruby's `klass.ancestors` walk).
  */
-type NodeCtor = abstract new (...args: never[]) => Node;
-type VisitorCtor = typeof Visitor;
-
-const PER_CLASS_CACHE = new WeakMap<VisitorCtor, Map<NodeCtor, string>>();
-
 export abstract class Visitor {
   protected dispatch: Map<NodeCtor, string>;
 
@@ -53,26 +66,35 @@ export abstract class Visitor {
 
   protected visit(object: Node, collector?: unknown): unknown {
     const ctor = object.constructor as NodeCtor;
-    let methodName = this.dispatch.get(ctor);
-    if (!methodName) {
-      let cur: NodeCtor | null = ctor;
-      while (cur) {
-        const proto = Object.getPrototypeOf(cur.prototype) as object | null;
-        const parent = proto?.constructor as NodeCtor | undefined;
-        if (!parent || (parent as unknown) === Object) break;
-        const found = this.dispatch.get(parent);
-        if (found) {
-          methodName = found;
-          this.dispatch.set(ctor, found);
-          break;
-        }
-        cur = parent;
-      }
-    }
+    const methodName = this.resolveDispatch(ctor);
     const fn = methodName ? (this as unknown as Record<string, unknown>)[methodName] : undefined;
     if (typeof fn !== "function") {
-      throw new TypeError(`Cannot visit ${ctor.name}`);
+      throw new UnsupportedVisitError(`Unknown node type: ${ctor.name}`);
     }
     return (fn as (n: Node, c?: unknown) => unknown).call(this, object, collector);
+  }
+
+  /**
+   * Resolve the dispatch method name for `ctor`, walking the JS prototype
+   * chain to find an ancestor's handler when there is no direct entry.
+   * Mirrors Ruby's `klass.ancestors.find { |k| respond_to?(dispatch[k]) }`.
+   * Successful lookups are memoized into the cache, matching Rails.
+   */
+  private resolveDispatch(ctor: NodeCtor): string | undefined {
+    const direct = this.dispatch.get(ctor);
+    if (direct) return direct;
+    let cur: NodeCtor | null = ctor;
+    while (cur) {
+      const proto = Object.getPrototypeOf(cur.prototype) as object | null;
+      const parent = proto?.constructor as NodeCtor | undefined;
+      if (!parent || (parent as unknown) === Object) return undefined;
+      const found = this.dispatch.get(parent);
+      if (found) {
+        this.dispatch.set(ctor, found);
+        return found;
+      }
+      cur = parent;
+    }
+    return undefined;
   }
 }

@@ -41,9 +41,15 @@ export class ComparisonValidator extends EachValidator {
     if (typeof a === "number" && typeof b === "number") return a - b;
     if (typeof a === "string" && typeof b === "string") return a < b ? -1 : a > b ? 1 : 0;
     if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
-    throw new TypeError(
-      `Comparison of ${(a as object)?.constructor?.name ?? typeof a} with ${(b as object)?.constructor?.name ?? typeof b} failed`,
-    );
+    // Match Rails ArgumentError format from value.public_send(op, other):
+    //   "comparison of Integer with String failed"
+    const nameOf = (x: unknown) =>
+      x === null
+        ? "NilClass"
+        : x === undefined
+          ? "NilClass"
+          : ((x as object).constructor?.name ?? typeof x);
+    throw new TypeError(`comparison of ${nameOf(a)} with ${nameOf(b)} failed`);
   }
 
   override checkValidity(): void {
@@ -65,20 +71,19 @@ export class ComparisonValidator extends EachValidator {
         return;
       }
 
-      let cmp: number;
       try {
-        cmp = this.compare(value, optionValue);
-      } catch {
-        record.errors.add(attribute, "invalid", this.errorOptions(value, optionValue));
-        return;
-      }
-
-      if (!COMPARE_OPS[optKey](cmp)) {
-        record.errors.add(
-          attribute,
-          COMPARE_KEYS_TO_RAILS[optKey],
-          this.errorOptions(value, optionValue),
-        );
+        const cmp = this.compare(value, optionValue);
+        if (!COMPARE_OPS[optKey](cmp)) {
+          record.errors.add(
+            attribute,
+            COMPARE_KEYS_TO_RAILS[optKey],
+            this.errorOptions(value, optionValue),
+          );
+        }
+      } catch (e) {
+        // Rails comparison.rb:30 — uses the ArgumentError message as the
+        // error key/message and continues to the next compare option.
+        record.errors.add(attribute, (e as Error).message);
       }
     }
   }

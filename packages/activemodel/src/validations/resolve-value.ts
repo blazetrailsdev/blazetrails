@@ -14,7 +14,11 @@ export interface ResolveValue {
 
 export function resolveValue(record: unknown, value: unknown): unknown {
   if (typeof value === "function") {
-    return (value as (record: unknown) => unknown)(record);
+    // Rails distinguishes Proc#arity == 0 (call without record) from
+    // arity > 0 (call with record). resolve_value.rb:9-13.
+    return (value as (...args: unknown[]) => unknown).length === 0
+      ? (value as () => unknown)()
+      : (value as (r: unknown) => unknown)(record);
   }
   if (
     typeof value === "string" &&

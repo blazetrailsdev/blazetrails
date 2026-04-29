@@ -1,0 +1,213 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  _resetProcessAdapter,
+  argv,
+  cwd,
+  env,
+  getProcessAdapter,
+  onSignal,
+  platform,
+  registerProcessAdapter,
+  setEnv,
+  setExitCode,
+  stderr,
+  stdout,
+  type ProcessAdapter,
+  type WriteStream,
+} from "./process-adapter.js";
+
+function makeFakeStream(): WriteStream & { written: string[] } {
+  const written: string[] = [];
+  return {
+    written,
+    write: (chunk) => {
+      written.push(chunk);
+      return true;
+    },
+    isTTY: false,
+    columns: 80,
+    rows: 24,
+  };
+}
+
+function makeFakeAdapter(overrides: Partial<ProcessAdapter> = {}): ProcessAdapter {
+  const stdoutStream = makeFakeStream();
+  const stderrStream = makeFakeStream();
+  let exitCode = 0;
+  const innerEnv: Record<string, string | undefined> = {
+    FAKE_FLAG: "1",
+    NODE_ENV: "test",
+  };
+  const innerArgv = ["fake-node", "fake-script"];
+  return {
+    envSnapshot: () => ({ ...innerEnv }),
+    argvSnapshot: () => [...innerArgv],
+    cwd: () => "/fake/cwd",
+    chdir: () => {},
+    platform: () => "browser",
+    setEnv: (key, value) => {
+      if (value === undefined) delete innerEnv[key];
+      else innerEnv[key] = value;
+    },
+    exit: () => {
+      throw new Error("fake exit");
+    },
+    setExitCode: (code) => {
+      exitCode = code;
+    },
+    onSignal: () => () => {},
+    stdout: stdoutStream,
+    stderr: stderrStream,
+    stdin: {
+      isTTY: false,
+      read: () => Promise.resolve(null),
+    },
+    // exposed via getProcessAdapter for assertion purposes
+    ...(overrides as object),
+    // @ts-expect-error test-only
+    __exitCode: () => exitCode,
+  };
+}
+
+describe("processAdapter", () => {
+  afterEach(() => {
+    _resetProcessAdapter();
+  });
+
+  describe("env snapshot", () => {
+    it("populates env from the registered adapter", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(env.FAKE_FLAG).toBe("1");
+      expect(env.NODE_ENV).toBe("test");
+    });
+
+    it("clears prior keys when re-registering", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(env.FAKE_FLAG).toBe("1");
+      const adapter2 = makeFakeAdapter();
+      adapter2.envSnapshot = () => ({ OTHER: "yes" });
+      registerProcessAdapter(adapter2);
+      expect(env.FAKE_FLAG).toBeUndefined();
+      expect(env.OTHER).toBe("yes");
+    });
+
+    it("supports `in` operator", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect("FAKE_FLAG" in env).toBe(true);
+      expect("NOT_SET" in env).toBe(false);
+    });
+  });
+
+  describe("argv snapshot", () => {
+    it("populates argv from the registered adapter", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(argv).toEqual(["fake-node", "fake-script"]);
+    });
+
+    it("array indexing works", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(argv[0]).toBe("fake-node");
+      expect(argv[1]).toBe("fake-script");
+      expect(argv.length).toBe(2);
+    });
+  });
+
+  describe("setEnv", () => {
+    it("mutates the env export and the underlying adapter", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      setEnv("NEW_KEY", "new-value");
+      expect(env.NEW_KEY).toBe("new-value");
+      expect(getProcessAdapter().envSnapshot().NEW_KEY).toBe("new-value");
+    });
+
+    it("undefined value deletes the key", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(env.FAKE_FLAG).toBe("1");
+      setEnv("FAKE_FLAG", undefined);
+      expect(env.FAKE_FLAG).toBeUndefined();
+      expect("FAKE_FLAG" in env).toBe(false);
+    });
+  });
+
+  describe("delegated reads", () => {
+    it("cwd returns the adapter's cwd", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(cwd()).toBe("/fake/cwd");
+    });
+
+    it("platform returns the adapter's platform", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(platform()).toBe("browser");
+    });
+  });
+
+  describe("streams", () => {
+    it("stdout.write delegates to the adapter", () => {
+      const adapter = makeFakeAdapter();
+      registerProcessAdapter(adapter);
+      stdout.write("hello");
+      expect((adapter.stdout as WriteStream & { written: string[] }).written).toEqual(["hello"]);
+    });
+
+    it("stderr.write delegates to the adapter", () => {
+      const adapter = makeFakeAdapter();
+      registerProcessAdapter(adapter);
+      stderr.write("err");
+      expect((adapter.stderr as WriteStream & { written: string[] }).written).toEqual(["err"]);
+    });
+
+    it("isTTY/columns/rows delegate at access time", () => {
+      registerProcessAdapter(makeFakeAdapter());
+      expect(stdout.isTTY).toBe(false);
+      expect(stdout.columns).toBe(80);
+      expect(stdout.rows).toBe(24);
+    });
+  });
+
+  describe("setExitCode", () => {
+    it("forwards to the adapter", () => {
+      const adapter = makeFakeAdapter();
+      registerProcessAdapter(adapter);
+      setExitCode(2);
+      expect((adapter as unknown as { __exitCode: () => number }).__exitCode()).toBe(2);
+    });
+  });
+
+  describe("onSignal", () => {
+    it("returns the adapter's unsubscribe function", () => {
+      const unsub = vi.fn();
+      const adapter = makeFakeAdapter({ onSignal: () => unsub });
+      registerProcessAdapter(adapter);
+      const off = onSignal("SIGINT", () => {});
+      off();
+      expect(unsub).toHaveBeenCalled();
+    });
+  });
+
+  describe("auto-register node", () => {
+    it("auto-registers when running in node and no adapter is set", () => {
+      _resetProcessAdapter();
+      // First access triggers auto-register; cwd() should not throw.
+      expect(typeof cwd()).toBe("string");
+      // Node's process.argv has at least the executable.
+      expect(argv.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("missing adapter", () => {
+    it("throws a helpful error when no adapter is configured and node is unavailable", () => {
+      _resetProcessAdapter();
+      const originalProcess = (globalThis as { process?: NodeJS.Process }).process;
+      // Hide node's process to force the error path.
+      Object.defineProperty(globalThis, "process", { value: undefined, configurable: true });
+      try {
+        expect(() => cwd()).toThrow(/No process adapter configured/);
+      } finally {
+        Object.defineProperty(globalThis, "process", {
+          value: originalProcess,
+          configurable: true,
+        });
+      }
+    });
+  });
+});

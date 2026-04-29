@@ -1,5 +1,7 @@
 import { Node } from "../nodes/node.js";
-import { Visitor } from "./visitor.js";
+import * as Nodes from "../nodes/index.js";
+import { Table } from "../table.js";
+import { Visitor, type NodeCtor } from "./visitor.js";
 import { PlainString } from "../collectors/plain-string.js";
 
 type AppendableCollector = { append(s: string): unknown; value: string };
@@ -10,92 +12,453 @@ function isAppendableCollector(c: unknown): c is AppendableCollector {
   return typeof obj.append === "function" && typeof obj.value === "string";
 }
 
+/** Mirrors `Arel::Visitors::Dot::Node` — a labeled box with side-fields. */
 export class DotNode {
   readonly name: string;
-  readonly id: string;
+  readonly id: number;
   readonly fields: string[];
 
-  constructor(name: string, id: string, fields: string[] = []) {
+  constructor(name: string, id: number, fields: string[] = []) {
     this.name = name;
     this.id = id;
     this.fields = fields;
   }
 }
 
+/** Mirrors `Arel::Visitors::Dot::Edge` (a Struct of name/from/to). */
 export class DotEdge {
   readonly name: string;
   readonly from: DotNode;
-  readonly to: DotNode;
+  to!: DotNode;
 
-  constructor(name: string, from: DotNode, to: DotNode) {
+  constructor(name: string, from: DotNode) {
     this.name = name;
     this.from = from;
-    this.to = to;
   }
 }
 
 /**
  * Dot visitor — renders the AST as a Graphviz dot graph.
  *
- * Mirrors: Arel::Visitors::Dot (loosely)
+ * Mirrors: Arel::Visitors::Dot (activerecord/lib/arel/visitors/dot.rb).
+ * Each visit method names the children it should walk; `visit_edge`
+ * follows a named field, allocating a Node + Edge per traversed value.
+ * `visit__no_edges` and `visit__children` / `visit__regexp` are aliased
+ * by multiple node types, mirroring Rails' `alias`.
  */
 export class Dot extends Visitor {
-  protected visit(object: Node): unknown {
-    return this.compile(object);
-  }
+  private nodes: DotNode[] = [];
+  private edges: DotEdge[] = [];
+  private nodeStack: DotNode[] = [];
+  private edgeStack: DotEdge[] = [];
+  private seen: Map<unknown, DotNode> = new Map();
+  private nextId = 0;
 
-  accept(object: Node, collector?: unknown): { value: string } {
-    const dot = this.compile(object);
+  override accept(object: Node, collector?: unknown): { value: string } {
+    // Lazily register Table — at static-block time `Table` (imported from
+    // ../table.js) is a partial forwarding ref due to a circular import via
+    // tree-manager.js. By the first instance call the class is fully loaded.
+    if (!this.dispatch.has(Table)) {
+      this.dispatch.set(Table, "visitArelTable");
+    }
+
+    this.nodes = [];
+    this.edges = [];
+    this.nodeStack = [];
+    this.edgeStack = [];
+    this.seen = new Map();
+    this.nextId = 0;
+
+    this.visit(object);
     const sink = isAppendableCollector(collector) ? collector : new PlainString();
-    sink.append(dot);
+    sink.append(this.toDot());
     return sink as { value: string };
   }
 
+  /** Convenience entry that returns the dot string directly. */
   compile(node: Node): string {
-    const seen = new Map<object, string>();
-    const lines: string[] = ["digraph arel {", '  node [shape="box"];'];
-    let nextId = 0;
+    return this.accept(node).value;
+  }
 
-    const idFor = (obj: object): string => {
-      const existing = seen.get(obj);
-      if (existing) return existing;
-      const id = `n${nextId++}`;
-      seen.set(obj, id);
-      const label = (obj as { constructor?: { name?: string } }).constructor?.name ?? "Object";
-      lines.push(`  ${id} [label=${JSON.stringify(label)}];`);
-      return id;
-    };
+  // ---------------------------------------------------------------------
+  // visit_* methods (per-node-type edge declarations)
+  // ---------------------------------------------------------------------
 
-    const visit = (value: unknown, parent?: object): void => {
-      if (!value || typeof value !== "object") return;
+  protected visitArelNodesFunction(o: Nodes.Function): void {
+    this.visitEdge(o, "expressions");
+    this.visitEdge(o, "distinct");
+    this.visitEdge(o, "alias");
+  }
 
-      if (value instanceof Node) {
-        const childId = idFor(value);
-        if (parent) {
-          const parentId = idFor(parent);
-          lines.push(`  ${parentId} -> ${childId};`);
-        }
+  protected visitArelNodesUnary(o: Nodes.Unary): void {
+    this.visitEdge(o, "expr");
+  }
 
-        for (const key of Object.keys(value as unknown as Record<string, unknown>)) {
-          visit((value as unknown as Record<string, unknown>)[key], value);
-        }
-        return;
+  protected visitArelNodesBinary(o: Nodes.Binary): void {
+    this.visitEdge(o, "left");
+    this.visitEdge(o, "right");
+  }
+
+  protected visitArelNodesUnaryOperation(o: Nodes.UnaryOperation): void {
+    this.visitEdge(o, "operator");
+    this.visitEdge(o, "expr");
+  }
+
+  protected visitArelNodesInfixOperation(o: Nodes.InfixOperation): void {
+    this.visitEdge(o, "operator");
+    this.visitEdge(o, "left");
+    this.visitEdge(o, "right");
+  }
+
+  /** Aliased to Regexp / NotRegexp in dispatch (Rails: `alias`). */
+  protected visit_Regexp(o: Nodes.Regexp | Nodes.NotRegexp): void {
+    this.visitEdge(o, "left");
+    this.visitEdge(o, "right");
+    this.visitEdge(o, "caseSensitive");
+  }
+
+  protected visitArelNodesOrdering(o: Nodes.Ordering): void {
+    this.visitEdge(o, "expr");
+  }
+
+  protected visitArelNodesTableAlias(o: Nodes.TableAlias): void {
+    this.visitEdge(o, "name");
+    this.visitEdge(o, "relation");
+  }
+
+  protected visitArelNodesCount(o: Nodes.Count): void {
+    this.visitEdge(o, "expressions");
+    this.visitEdge(o, "distinct");
+  }
+
+  protected visitArelNodesValuesList(o: Nodes.ValuesList): void {
+    this.visitEdge(o, "rows");
+  }
+
+  protected visitArelNodesStringJoin(o: Nodes.StringJoin): void {
+    this.visitEdge(o, "left");
+  }
+
+  protected visitArelNodesWindow(o: Nodes.Window): void {
+    this.visitEdge(o, "partitions");
+    this.visitEdge(o, "orders");
+    this.visitEdge(o, "framing");
+  }
+
+  protected visitArelNodesNamedWindow(o: Nodes.NamedWindow): void {
+    this.visitEdge(o, "partitions");
+    this.visitEdge(o, "orders");
+    this.visitEdge(o, "framing");
+    this.visitEdge(o, "name");
+  }
+
+  /** Aliased to CurrentRow / Distinct in dispatch (Rails: `alias`). */
+  protected visit_NoEdges(_o: Node): void {
+    // intentionally left blank
+  }
+
+  protected visitArelNodesExtract(o: Nodes.Extract): void {
+    this.visitEdge(o, "expressions");
+    this.visitEdge(o, "alias");
+  }
+
+  protected visitArelNodesNamedFunction(o: Nodes.NamedFunction): void {
+    this.visitEdge(o, "name");
+    this.visitEdge(o, "expressions");
+    this.visitEdge(o, "distinct");
+    this.visitEdge(o, "alias");
+  }
+
+  protected visitArelNodesInsertStatement(o: Nodes.InsertStatement): void {
+    this.visitEdge(o, "relation");
+    this.visitEdge(o, "columns");
+    this.visitEdge(o, "values");
+    this.visitEdge(o, "select");
+  }
+
+  protected visitArelNodesSelectCore(o: Nodes.SelectCore): void {
+    this.visitEdge(o, "source");
+    this.visitEdge(o, "projections");
+    this.visitEdge(o, "wheres");
+    this.visitEdge(o, "windows");
+    this.visitEdge(o, "groups");
+    this.visitEdge(o, "comment");
+    this.visitEdge(o, "havings");
+    this.visitEdge(o, "setQuantifier");
+    this.visitEdge(o, "optimizerHints");
+  }
+
+  protected visitArelNodesSelectStatement(o: Nodes.SelectStatement): void {
+    this.visitEdge(o, "cores");
+    this.visitEdge(o, "limit");
+    this.visitEdge(o, "orders");
+    this.visitEdge(o, "offset");
+    this.visitEdge(o, "lock");
+    this.visitEdge(o, "with");
+  }
+
+  protected visitArelNodesUpdateStatement(o: Nodes.UpdateStatement): void {
+    this.visitEdge(o, "relation");
+    this.visitEdge(o, "wheres");
+    this.visitEdge(o, "values");
+    this.visitEdge(o, "orders");
+    this.visitEdge(o, "limit");
+    this.visitEdge(o, "offset");
+    this.visitEdge(o, "key");
+  }
+
+  protected visitArelNodesDeleteStatement(o: Nodes.DeleteStatement): void {
+    this.visitEdge(o, "relation");
+    this.visitEdge(o, "wheres");
+    this.visitEdge(o, "orders");
+    this.visitEdge(o, "limit");
+    this.visitEdge(o, "offset");
+    this.visitEdge(o, "key");
+  }
+
+  protected visitArelTable(o: Table): void {
+    this.visitEdge(o, "name");
+  }
+
+  protected visitArelNodesCasted(o: Nodes.Casted): void {
+    this.visitEdge(o, "value");
+    this.visitEdge(o, "attribute");
+  }
+
+  protected visitArelNodesHomogeneousIn(o: Nodes.HomogeneousIn): void {
+    this.visitEdge(o, "values");
+    this.visitEdge(o, "type");
+    this.visitEdge(o, "attribute");
+  }
+
+  protected visitArelAttributesAttribute(o: Nodes.Attribute): void {
+    this.visitEdge(o, "relation");
+    this.visitEdge(o, "name");
+  }
+
+  /** Aliased to And / Or / With in dispatch (Rails: `alias`). */
+  protected visit_Children(o: { children: ReadonlyArray<unknown> }): void {
+    o.children.forEach((child, i) => {
+      this.edge(String(i), () => this.visit(child as Node));
+    });
+  }
+
+  /** Aliased to Time/Date/DateTime/etc. in dispatch — stash as a side-field. */
+  protected visitString(o: unknown): void {
+    const top = this.nodeStack[this.nodeStack.length - 1];
+    if (top) top.fields.push(String(o));
+  }
+
+  protected visitArelNodesBindParam(o: Nodes.BindParam): void {
+    this.visitEdge(o, "value");
+  }
+
+  protected visitActiveModelAttribute(o: { valueBeforeTypeCast?: unknown }): void {
+    this.visitEdge(o, "valueBeforeTypeCast");
+  }
+
+  protected visitHash(o: Record<string, unknown>): void {
+    Object.entries(o).forEach(([, value], i) => {
+      this.edge(`pair_${i}`, () => this.visit(value as Node));
+    });
+  }
+
+  protected visitArray(o: ReadonlyArray<unknown>): void {
+    o.forEach((member, i) => {
+      this.edge(String(i), () => this.visit(member as Node));
+    });
+  }
+
+  protected visitArelNodesComment(o: Nodes.Comment): void {
+    this.visitEdge(o, "values");
+  }
+
+  protected visitArelNodesCase(o: Nodes.Case): void {
+    this.visitEdge(o, "case");
+    this.visitEdge(o, "conditions");
+    this.visitEdge(o, "default");
+  }
+
+  // ---------------------------------------------------------------------
+  // Core machinery (visit, edge, with_node, quote, to_dot)
+  // ---------------------------------------------------------------------
+
+  /** Mirrors Rails' Dot#visit_edge — descend into a named field. */
+  protected visitEdge(o: object, method: string): void {
+    const value = (o as Record<string, unknown>)[method];
+    this.edge(method, () => this.visit(value as Node));
+  }
+
+  /** Mirrors Rails' Dot#edge — push edge, run block, pop. */
+  protected edge(name: string, block: () => void): void {
+    const from = this.nodeStack[this.nodeStack.length - 1]!;
+    const e = new DotEdge(name, from);
+    this.edgeStack.push(e);
+    this.edges.push(e);
+    block();
+    this.edgeStack.pop();
+  }
+
+  /** Mirrors Rails' Dot#with_node — link incoming edge then push node. */
+  protected withNode(node: DotNode, block: () => void): void {
+    const e = this.edgeStack[this.edgeStack.length - 1];
+    if (e) e.to = node;
+    this.nodeStack.push(node);
+    block();
+    this.nodeStack.pop();
+  }
+
+  /** Mirrors Rails' Dot#quote — escape `"` for inclusion in a label. */
+  protected quote(value: unknown): string {
+    return String(value).replace(/"/g, '\\"');
+  }
+
+  /**
+   * Mirrors Rails' Dot#visit. Reuses an already-emitted node (sets the
+   * incoming edge's `to` to the seen node) and recurses through
+   * super.visit (the dispatch table) to fire the per-class handler.
+   */
+  protected override visit(object: Node, _collector?: unknown): unknown {
+    const seenNode = this.seen.get(object);
+    if (seenNode) {
+      const e = this.edgeStack[this.edgeStack.length - 1];
+      if (e) e.to = seenNode;
+      return undefined;
+    }
+
+    if (this.isPrimitive(object)) {
+      // Primitives have no per-instance node; fire visitString to stash
+      // the value as a side-field on the current node.
+      this.visitString(object);
+      return undefined;
+    }
+
+    const klassName = this.classNameOf(object);
+    const node = new DotNode(klassName, this.nextId++);
+    this.seen.set(object, node);
+    this.nodes.push(node);
+    this.withNode(node, () => {
+      // Hash and Array don't go through the dispatch table (they're not
+      // Node ctors); route them by JS type instead.
+      if (Array.isArray(object)) {
+        this.visitArray(object);
+      } else if (this.isPlainObject(object)) {
+        this.visitHash(object as unknown as Record<string, unknown>);
+      } else {
+        super.visit(object as Node);
       }
+    });
+    return undefined;
+  }
 
-      if (Array.isArray(value)) {
-        for (const v of value) visit(v, parent);
-        return;
-      }
+  /**
+   * Mirrors Rails' Dot#to_dot — emits the digraph header, one
+   * `id [label="..."]` line per node, then one `from -> to [label="..."]`
+   * line per edge.
+   */
+  protected toDot(): string {
+    const header = 'digraph "Arel" {\nnode [width=0.375,height=0.25,shape=record];';
+    const nodeLines = this.nodes.map((n) => {
+      let label = `<f0>${n.name}`;
+      n.fields.forEach((field, i) => {
+        label += `|<f${i + 1}>${this.quote(field)}`;
+      });
+      return `${n.id} [label="${label}"];`;
+    });
+    const edgeLines = this.edges
+      // Rails always sets `to` via with_node; defend against orphan edges
+      // (a value that hit visit_String produces no incoming `to`).
+      .filter((e) => e.to !== undefined)
+      .map((e) => `${e.from.id} -> ${e.to.id} [label="${e.name}"];`);
+    return [header, ...nodeLines, ...edgeLines, "}"].join("\n");
+  }
 
-      // Plain objects: walk values (best-effort).
-      for (const key of Object.keys(value as unknown as Record<string, unknown>)) {
-        visit((value as unknown as Record<string, unknown>)[key], parent);
-      }
-    };
+  private isPrimitive(o: unknown): boolean {
+    if (o === null || o === undefined) return true;
+    const t = typeof o;
+    return (
+      t === "string" ||
+      t === "number" ||
+      t === "boolean" ||
+      t === "bigint" ||
+      t === "symbol" ||
+      o instanceof Date
+    );
+  }
 
-    idFor(node);
-    visit(node);
-    lines.push("}");
-    return lines.join("\n");
+  private isPlainObject(o: unknown): boolean {
+    if (!o || typeof o !== "object") return false;
+    if (Array.isArray(o)) return false;
+    if (o instanceof Node) return false;
+    if (o instanceof Table) return false;
+    const proto = Object.getPrototypeOf(o);
+    return proto === Object.prototype || proto === null;
+  }
+
+  /** Rails: `o.class.name`. We use the JS ctor name and strip the namespace. */
+  private classNameOf(o: object): string {
+    const ctor = (o as { constructor?: { name?: string } }).constructor;
+    return ctor?.name ?? "Object";
+  }
+
+  static {
+    const reg = (ctor: NodeCtor, m: string) => Dot.dispatchCache().set(ctor, m);
+    // Function family
+    reg(Nodes.Function, "visitArelNodesFunction");
+    // Each aggregate has its own Rails alias chain; Trails dispatches them
+    // explicitly to keep the Rails-named helper visible.
+    reg(Nodes.Sum, "visitArelNodesFunction");
+    reg(Nodes.Max, "visitArelNodesFunction");
+    reg(Nodes.Min, "visitArelNodesFunction");
+    reg(Nodes.Avg, "visitArelNodesFunction");
+    reg(Nodes.Exists, "visitArelNodesFunction");
+    reg(Nodes.NamedFunction, "visitArelNodesNamedFunction");
+    reg(Nodes.Count, "visitArelNodesCount");
+    reg(Nodes.Extract, "visitArelNodesExtract");
+    // Unary / Binary / specialized
+    reg(Nodes.Unary, "visitArelNodesUnary");
+    reg(Nodes.Binary, "visitArelNodesBinary");
+    reg(Nodes.UnaryOperation, "visitArelNodesUnaryOperation");
+    reg(Nodes.InfixOperation, "visitArelNodesInfixOperation");
+    reg(Nodes.Regexp, "visit_Regexp");
+    reg(Nodes.NotRegexp, "visit_Regexp");
+    reg(Nodes.Ordering, "visitArelNodesOrdering");
+    reg(Nodes.TableAlias, "visitArelNodesTableAlias");
+    reg(Nodes.ValuesList, "visitArelNodesValuesList");
+    reg(Nodes.StringJoin, "visitArelNodesStringJoin");
+    reg(Nodes.Window, "visitArelNodesWindow");
+    reg(Nodes.NamedWindow, "visitArelNodesNamedWindow");
+    reg(Nodes.CurrentRow, "visit_NoEdges");
+    reg(Nodes.Distinct, "visit_NoEdges");
+    // Statements
+    reg(Nodes.InsertStatement, "visitArelNodesInsertStatement");
+    reg(Nodes.SelectCore, "visitArelNodesSelectCore");
+    reg(Nodes.SelectStatement, "visitArelNodesSelectStatement");
+    reg(Nodes.UpdateStatement, "visitArelNodesUpdateStatement");
+    reg(Nodes.DeleteStatement, "visitArelNodesDeleteStatement");
+    // Misc
+    reg(Table, "visitArelTable");
+    reg(Nodes.Casted, "visitArelNodesCasted");
+    reg(Nodes.HomogeneousIn, "visitArelNodesHomogeneousIn");
+    reg(Nodes.Attribute, "visitArelAttributesAttribute");
+    reg(Nodes.And, "visit_Children");
+    reg(Nodes.Or, "visit_Children");
+    reg(Nodes.With, "visit_Children");
+    reg(Nodes.WithRecursive, "visit_Children");
+    reg(Nodes.SqlLiteral, "visitString");
+    reg(Nodes.BindParam, "visitArelNodesBindParam");
+    reg(Nodes.Comment, "visitArelNodesComment");
+    reg(Nodes.Case, "visitArelNodesCase");
+    // Quoted, True, False, BoundSqlLiteral, Fragments don't extend any
+    // ancestor with a useful Dot handler — register explicitly as leaves.
+    reg(Nodes.Quoted, "visit_NoEdges");
+    reg(Nodes.True, "visit_NoEdges");
+    reg(Nodes.False, "visit_NoEdges");
+    reg(Nodes.BoundSqlLiteral, "visit_NoEdges");
+    reg(Nodes.Fragments, "visit_NoEdges");
+    reg(Nodes.SelectOptions, "visit_NoEdges");
+    // Other Trails nodes inherit from registered ancestors (Unary/Binary/
+    // InfixOperation/Ordering/Function), so the Visitor.resolveDispatch
+    // prototype walk routes them through the right handler at first use.
   }
 }

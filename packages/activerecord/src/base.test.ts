@@ -3435,3 +3435,49 @@ describe("_applyScopeAttributes — scoping initializeInternalsCallback", () => 
     expect(u.readAttribute("role")).toBe("user");
   });
 });
+
+describe("_applyScopeAttributes — multiparameter path", () => {
+  const adapter = createTestAdapter();
+
+  it("scope attrs applied in multiparameter constructor path", async () => {
+    class Event extends Base {
+      static {
+        this._tableName = "events";
+        this.attribute("id", "integer");
+        this.attribute("role", "string");
+        this.attribute("starts_on", "date");
+        this.adapter = adapter;
+      }
+    }
+    const rel = Event.where({ role: "organizer" });
+    await Event.scoping(rel, async () => {
+      // Use multiparameter date keys — triggers the multiparameter constructor path
+      const e = new Event({ "starts_on(1i)": "2024", "starts_on(2i)": "6", "starts_on(3i)": "15" });
+      // Scope attr should be applied (role was not in the explicit multiparams)
+      expect(e.readAttribute("role")).toBe("organizer");
+    });
+  });
+
+  it("explicit multiparameter attrs take precedence over scope attrs with same key", async () => {
+    class Event extends Base {
+      static {
+        this._tableName = "events";
+        this.attribute("id", "integer");
+        this.attribute("role", "string");
+        this.attribute("starts_on", "date");
+        this.adapter = adapter;
+      }
+    }
+    const rel = Event.where({ role: "organizer" });
+    await Event.scoping(rel, async () => {
+      // role is provided explicitly (non-multiparameter key alongside multiparameter keys)
+      const e = new Event({
+        "starts_on(1i)": "2024",
+        "starts_on(2i)": "6",
+        "starts_on(3i)": "15",
+        role: "guest",
+      });
+      expect(e.readAttribute("role")).toBe("guest"); // explicit wins
+    });
+  });
+});

@@ -417,7 +417,7 @@ function _applyScopeAttributes(
   if (!scope) return;
   const attrs = scopeAttributes.call(ctor as any);
   if (!attrs || Object.keys(attrs).length === 0) return;
-  const toApply: Record<string, unknown> = {};
+  const toApply: Record<string, unknown> = Object.create(null);
   for (const [k, v] of Object.entries(attrs)) {
     if (!explicitKeys.has(k)) {
       toApply[k] = v;

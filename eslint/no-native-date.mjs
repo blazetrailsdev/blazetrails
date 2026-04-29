@@ -13,7 +13,8 @@
  *       (b) attached as a leading comment to the enclosing top-level
  *           statement, or
  *       (c) inside the enclosing statement, before the offending node
- *           (handles multi-line expressions and `} /* ... *​/ else if {` chains).
+ *           (handles multi-line expressions and `} /[*] boundary [*]/ else if {`
+ *           chains).
  *
  * Detected constructs:
  *   - `new Date(...)`

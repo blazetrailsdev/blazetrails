@@ -1,5 +1,9 @@
 /**
- * Temporal test helpers. Test files use these instead of `new Date(...)`.
+ * Temporal test helpers for fixtures in tests.
+ *
+ * Prefer these helpers over direct `Temporal.*.from(...)` calls. `Date`
+ * fixtures are allowed only when immediately converted to a
+ * `Temporal.Instant` via `instantFromDate(...)`, never used directly.
  */
 import { Temporal, instantFrom } from "../temporal.js";
 

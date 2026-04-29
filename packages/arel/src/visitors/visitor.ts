@@ -45,6 +45,8 @@ export abstract class Visitor {
   /**
    * Per-class dispatch cache. Each subclass gets its own map seeded from
    * its parent (mirrors Rails' `@dispatch_cache ||= ...` per-class ivar).
+   *
+   * @internal
    */
   static dispatchCache(this: VisitorCtor): Map<NodeCtor, string> {
     let cache = PER_CLASS_CACHE.get(this);

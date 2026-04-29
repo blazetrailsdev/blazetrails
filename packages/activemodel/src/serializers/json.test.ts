@@ -164,6 +164,15 @@ describe("Serializers::JSON host", () => {
     expect(k._v).toBe(7);
   });
 
+  it("toJson returns a JSON string (matches Model#toJson)", () => {
+    const p = new Person();
+    p._name = "Grace";
+    p._age = 60;
+    const s = p.toJson();
+    expect(typeof s).toBe("string");
+    expect(globalThis.JSON.parse(s)).toMatchObject({ name: "Grace", age: 60 });
+  });
+
   it("toJSON delegates to asJson (used by JSON.stringify)", () => {
     const p = new Person();
     p._name = "Frank";

@@ -145,8 +145,12 @@ export class JSON {
     return this.asJson();
   }
 
-  /** Lower-camel alias for callers that prefer the Ruby-style name. */
-  toJson(): Record<string, unknown> {
-    return this.toJSON();
+  /**
+   * Mirrors Ruby's `to_json` — encodes the model to a JSON string. Same
+   * shape as Model#toJson (model.ts:1720-1722) so JSONHost adopters
+   * stay compatible with Model-style consumers.
+   */
+  toJson(options?: SerializeOptions & { root?: boolean | string }): string {
+    return globalThis.JSON.stringify(this.asJson(options));
   }
 }

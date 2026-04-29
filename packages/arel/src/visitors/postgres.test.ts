@@ -406,17 +406,18 @@ describe("PostgreSQL dialect overrides (audit follow-up)", () => {
     expect(compile(node)).toBe('"users"."a" IS DISTINCT FROM "users"."b"');
   });
 
-  it("groupingArrayOrGroupingElement formats an array expr without dispatching the Array", () => {
-    // Regression: the previous impl called this.visit(o.expr) when expr was
-    // an Array, which the dispatch table can't handle (it's keyed on Node
-    // ctors). Now routes through visitArray for proper element iteration.
-    const v = new Visitors.PostgreSQL();
-    v.compile(new Nodes.SqlLiteral(""));
-    type Internals = { groupingArrayOrGroupingElement(o: { expr: unknown }): void };
-    (v as unknown as Internals).groupingArrayOrGroupingElement({
-      expr: [users.get("a"), users.get("b")],
-    });
-    const sql = (v as unknown as { collector: { value: string } }).collector.value;
-    expect(sql).toBe('( "users"."a", "users"."b" )');
+  it("Cube/Rollup/GroupingSet route through groupingArrayOrGroupingElement", () => {
+    // Verify the helper is actually wired into the dialect-public path:
+    // CUBE / ROLLUP / GROUPING SETS each emit their prefix followed by the
+    // helper's `( ... )` formatting.
+    expect(compile(new Nodes.Cube([users.get("a"), users.get("b")]))).toBe(
+      'CUBE( "users"."a", "users"."b" )',
+    );
+    expect(compile(new Nodes.Rollup([users.get("a")]))).toBe('ROLLUP( "users"."a" )');
+    expect(compile(new Nodes.GroupingSet([users.get("a"), users.get("b")]))).toBe(
+      'GROUPING SETS( "users"."a", "users"."b" )',
+    );
+    // GroupingElement itself uses the helper too.
+    expect(compile(new Nodes.GroupingElement([users.get("a")]))).toBe('( "users"."a" )');
   });
 });

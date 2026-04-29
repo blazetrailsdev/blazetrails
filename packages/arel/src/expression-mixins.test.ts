@@ -74,15 +74,15 @@ describe("WindowPredications.over (mixed into Function)", () => {
     expect(compile(sum.over())).toBe("SUM(col) OVER ()");
   });
 
-  it("with a string wraps it in SqlLiteral and emits OVER name", () => {
-    // Regression for copilot review #1: a bare string would otherwise be
-    // rendered as a quoted value (`OVER 'w'`), breaking SQL.
+  it("with a string emits OVER <name> as a raw SQL fragment", () => {
+    // A bare string window name must render as SQL (`OVER w`), not as a
+    // quoted value (`OVER 'w'`) — the latter is invalid SQL.
     expect(compile(sum.over("w"))).toBe("SUM(col) OVER w");
   });
 
   it("NamedFunction#over with a NamedWindow doubles embedded quotes in the name", () => {
-    // Regression for copilot review #4: `replace(/"/g, '""')` so a name
-    // containing `"` doesn't escape the identifier.
+    // Embedded `"` characters in a window name must be doubled when quoting
+    // the identifier so they do not terminate it early.
     const fn = new Nodes.NamedFunction("MY_FN", [new Nodes.SqlLiteral("x")]);
     const win = new Nodes.NamedWindow('weird"name');
     expect(compile(fn.over(win))).toBe('MY_FN(x) OVER "weird""name"');

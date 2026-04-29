@@ -63,8 +63,7 @@ export function hasSecurePassword(
   const challengeKey = Symbol(`${attribute}_challenge`);
 
   // Camelized base for property names (e.g. "recovery_password" → "recoveryPassword").
-  const camelBase =
-    camelize(attribute).charAt(0).toLowerCase() + camelize(attribute).slice(1);
+  const camelBase = camelize(attribute).charAt(0).toLowerCase() + camelize(attribute).slice(1);
 
   // Define setter/getter for the configured secure-password attribute
   // (e.g. password / recovery_password).

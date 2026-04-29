@@ -179,18 +179,17 @@ describe("TestDatabasesTest", () => {
     expect(mockReconstructFromSchema).toHaveBeenCalled();
   });
 
-  it("calls establishConnection to load disk configs when configurations is unset", async () => {
+  it("does not overwrite an unset Base.configurations with an empty registry", async () => {
     vi.spyOn(DatabaseTasks, "reconstructFromSchema").mockResolvedValue(undefined);
-    const mockEstablishConnection = vi
-      .spyOn(await import("./connection-handling.js"), "establishConnection")
-      .mockResolvedValue(undefined);
+    vi.spyOn(await import("./connection-handling.js"), "establishConnection").mockResolvedValue(
+      undefined,
+    );
 
-    // No `configurations` set — should trigger establishConnection (disk-load path)
-    // then return early since configurations is still null after that.
+    // No `configurations` — defensive early return; nothing to suffix.
+    // In Rails this never occurs (app boot sets configurations first).
     const mockModelClass = { configurations: undefined } as any as typeof Base;
-
     await createAndLoadSchema(mockModelClass, 1, { envName: "arunit" });
-    expect(mockEstablishConnection).toHaveBeenCalledWith(mockModelClass);
+    expect((mockModelClass as any).configurations).toBeUndefined();
   });
 
   it("throws a clear error when neither database nor URL yields a name", async () => {

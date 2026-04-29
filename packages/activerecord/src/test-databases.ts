@@ -40,12 +40,12 @@ export async function eachDatabase(
   }
 }
 
-// `:memory:` (canonical) plus the URI variants SQLite recognizes for an
-// in-memory database. See https://www.sqlite.org/inmemorydb.html.
+// Only the canonical `:memory:` name is treated as in-memory by
+// SQLiteDatabaseTasks (create/drop skip it). URI variants like
+// `file::memory:?cache=shared` are not currently special-cased there,
+// so we match only what the task layer actually handles.
 function isInMemorySqlite(name: string): boolean {
-  if (name === ":memory:") return true;
-  if (name.startsWith("file::memory:")) return true;
-  return /[?&]mode=memory(?:&|$)/.test(name);
+  return name === ":memory:";
 }
 
 /**
@@ -65,16 +65,11 @@ export async function createAndLoadSchema(
   index: number,
   { envName }: { envName: string } = { envName: "test" },
 ): Promise<void> {
-  // If configurations haven't been loaded yet, trigger autoConnect so the
-  // disk-load path populates them (mirrors Rails: configs are always loaded
-  // before create_and_load_schema is called via the after_fork_hook).
-  let raw = (modelClass as any).configurations;
-  if (raw == null) {
-    const { establishConnection } = await import("./connection-handling.js");
-    await establishConnection(modelClass);
-    raw = (modelClass as any).configurations;
-  }
-  if (raw == null) return; // truly no config even after disk-load — nothing to do
+  // Rails: configurations is always set before create_and_load_schema is
+  // called (app boots first). Guard here is defensive — if null, there is
+  // nothing to suffix and the finally reconnect handles the rest.
+  const raw = (modelClass as any).configurations;
+  if (raw == null) return;
 
   // Normalize to a DatabaseConfigurations instance. Persist it back so
   // _database mutations and the finally reconnect see the same registry.
@@ -100,11 +95,9 @@ export async function createAndLoadSchema(
             `neither database nor a parseable URL is available`,
         );
       }
-      // Skip suffixing for SQLite in-memory databases — `:memory:` and
-      // `file::memory:?...` are special-cased by SQLiteDatabaseTasks and
-      // are already per-process-isolated, so workers don't need a suffix.
-      // Suffixing would turn `:memory:` into `:memory:-2`, which the
-      // adapter would treat as an on-disk file path.
+      // Skip suffixing for the canonical SQLite in-memory database — `:memory:`
+      // is special-cased by SQLiteDatabaseTasks (create/drop are no-ops) and
+      // suffixing would turn it into an on-disk path like `:memory:-2`.
       if (!isInMemorySqlite(baseName)) {
         dbConfig._database = `${baseName}-${index}`;
       }
@@ -112,13 +105,17 @@ export async function createAndLoadSchema(
     }
   } finally {
     // Rails ensure order: establish_connection first, then restore VERBOSE
-    // (test_databases.rb:18-21).
+    // (test_databases.rb:18-21). Nest VERBOSE restore in its own finally so
+    // it always runs even if establishConnection throws.
     const { establishConnection } = await import("./connection-handling.js");
-    await establishConnection(modelClass);
-    if (old !== undefined) {
-      process.env.VERBOSE = old;
-    } else {
-      delete process.env.VERBOSE;
+    try {
+      await establishConnection(modelClass);
+    } finally {
+      if (old !== undefined) {
+        process.env.VERBOSE = old;
+      } else {
+        delete process.env.VERBOSE;
+      }
     }
   }
 }

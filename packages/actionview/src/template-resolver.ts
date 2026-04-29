@@ -95,6 +95,7 @@ export class FileSystemResolver implements TemplateResolver {
     return null;
   }
 
+  /** @internal */
   findLayout(name: string, format: string, extensions: string[]): Template | null {
     const template = this.find(name, "layouts", format, extensions);
     if (template) {
@@ -193,6 +194,7 @@ export class InMemoryResolver implements TemplateResolver {
     return null;
   }
 
+  /** @internal */
   findLayout(name: string, format: string, extensions: string[]): Template | null {
     const template = this.find(name, "layouts", format, extensions);
     if (template) {

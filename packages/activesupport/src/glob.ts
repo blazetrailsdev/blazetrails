@@ -81,11 +81,14 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
     walk(fs, path, base ? path.join(cwd, base) : cwd, base, re, negatives, dot, maxDepth, results);
   }
 
-  // Literal-pattern fast path: a single existence check, no walk.
+  // Literal-pattern fast path: a single existence check, no walk. Use
+  // statSync with explicit error filtering rather than fs.exists, since
+  // exists() returns false for any error (including EACCES) — we want
+  // to behave consistently with walk() and only swallow ENOENT/ENOTDIR.
   for (const positive of positives) {
     if (GLOB_CHARS.test(positive.source)) continue;
     if (negatives.some((re) => re.test(positive.source))) continue;
-    if (await fs.exists(path.join(cwd, positive.source))) results.add(positive.source);
+    if (literalExists(fs, path.join(cwd, positive.source))) results.add(positive.source);
   }
 
   return [...results].sort();
@@ -167,6 +170,22 @@ function maxRemainingDepth(pattern: string, base: string): number {
   return (remaining.match(/\//g) ?? []).length;
 }
 
+function literalExists(fs: FsAdapter, path: string): boolean {
+  try {
+    fs.statSync(path);
+    return true;
+  } catch (err) {
+    const code = (err as { code?: string } | null)?.code;
+    if (code === "ENOENT" || code === "ENOTDIR") return false;
+    throw err;
+  }
+}
+
+// Standard regex-metacharacter escape. Used to render literal characters
+// inside the compiled glob pattern without ambiguity (in particular, a
+// literal backslash must become \\\\ in the regex source).
+const REGEX_META = /[.*+?^${}()|[\]\\/]/;
+
 function expandBraces(pattern: string): string[] {
   const match = /\{([^{}]+)\}/.exec(pattern);
   if (!match) return [pattern];
@@ -218,10 +237,11 @@ function patternToRegex(pattern: string): RegExp {
         re += pattern.slice(i, end + 1);
         i = end + 1;
       }
-    } else if ("^$.+()|/\\{}".includes(c)) {
-      // Escape regex metachars including `{` and `}` — leftover braces
-      // (e.g. unbalanced) reach this loop after `expandBraces` has run.
-      re += `\\${c}`;
+    } else if (REGEX_META.test(c)) {
+      // Escape regex metachars including `{`/`}` (leftover unbalanced
+      // braces after expandBraces) and `\` (which must become `\\\\` in
+      // the compiled regex source to match a single literal backslash).
+      re += c === "\\" ? "\\\\" : `\\${c}`;
       i++;
     } else {
       re += c;

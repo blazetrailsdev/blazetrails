@@ -268,6 +268,38 @@ describe("glob", () => {
     }
   });
 
+  it("literal-pattern fast path rethrows EACCES instead of swallowing", async () => {
+    const realFs = await getFsAsync();
+    const realPath = await getPathAsync();
+    const erroring: FsAdapter = {
+      ...realFs,
+      statSync: (() => {
+        const err = new Error("EACCES: permission denied") as Error & { code: string };
+        err.code = "EACCES";
+        throw err;
+      }) as FsAdapter["statSync"],
+    };
+    const prevAdapter = fsAdapterConfig.adapter;
+    registerFsAdapter("glob-eacces-stat", erroring, realPath);
+    fsAdapterConfig.adapter = "glob-eacces-stat";
+    try {
+      // Literal pattern (no glob chars) hits the fast path which uses
+      // statSync. EACCES must propagate.
+      await expect(glob("foo.rb", { cwd: root })).rejects.toThrow(/EACCES/);
+    } finally {
+      fsAdapterConfig.adapter = prevAdapter;
+    }
+  });
+
+  it("compiles patterns containing a literal backslash to a valid regex", async () => {
+    // Backslash is a regex metacharacter and must escape to `\\\\` in the
+    // compiled regex source. Prior to the explicit handling, the
+    // template-literal `\\${c}` form was correct but easy to misread.
+    // No need to actually create files with backslashes (illegal on
+    // most filesystems) — just assert the pattern compiles and runs.
+    await expect(glob("foo\\bar.rb", { cwd: root })).resolves.toEqual([]);
+  });
+
   it("rethrows unexpected readdirSync errors (e.g. EACCES)", async () => {
     const realFs = await getFsAsync();
     const realPath = await getPathAsync();

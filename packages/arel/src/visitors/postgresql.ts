@@ -59,7 +59,7 @@ export class PostgreSQL extends ToSql {
 
   // Mirrors Rails Postgres formatting: `( expr )` with spaces inside
   // the parens. The base ToSql renders `(expr)` without spaces, so
-  // override to match Rails' `visitArelNodesGroupingElement`.
+  // override to match Rails' `visit_Arel_Nodes_GroupingElement`.
   protected override visitGroupingElement(node: Nodes.GroupingElement): SQLString {
     this.collector.append("( ");
     for (let i = 0; i < node.expressions.length; i++) {

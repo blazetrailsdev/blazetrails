@@ -283,7 +283,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
   }
 
-  // Mirrors Rails: visitArelNodesSelectCore (to_sql.rb:149). Where Rails
+  // Mirrors Rails: visit_Arel_Nodes_SelectCore (to_sql.rb:149). Where Rails
   // uses collect_nodes_for to emit `spacer` + injectJoin in one call, we do
   // the same; wheres/havings collapse multiple predicates with " AND " via
   // collect_nodes_for's connector arg.
@@ -1183,7 +1183,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // Mirrors Rails: visitArelNodesComment (to_sql.rb:175) — emits the
+  // Mirrors Rails: visit_Arel_Nodes_Comment (to_sql.rb:175) — emits the
   // joined `/* ... */` blocks without a leading space. Callers add the
   // leading separator (typically via `maybeVisit`).
   protected visitArelNodesComment(node: Nodes.Comment): SQLString {
@@ -1192,7 +1192,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // Mirrors Rails: visitArelNodesOptimizerHints (to_sql.rb:170). The
+  // Mirrors Rails: visit_Arel_Nodes_OptimizerHints (to_sql.rb:170). The
   // OptimizerHints node carries a list of hint strings (Rails' `o.expr` is
   // an array); each hint is sanitized and the joined result wrapped in
   // /*+ ... */. Trails' SelectCore also stores hints inline as `string[]`
@@ -1301,7 +1301,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   protected visitUnqualifiedColumn(node: Nodes.UnqualifiedColumn): SQLString {
-    // Mirrors Arel's visitArelNodesUnqualifiedColumn — strips the table
+    // Mirrors Arel's visit_Arel_Nodes_UnqualifiedColumn — strips the table
     // qualifier so `SET col = col + 1` works in UPDATE statements.
     const attr = node.attribute as Partial<Nodes.Attribute> | undefined;
     if (!attr || typeof attr.name !== "string") {

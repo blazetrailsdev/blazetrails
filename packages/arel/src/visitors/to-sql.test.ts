@@ -1161,7 +1161,7 @@ describe("the to_sql visitor", () => {
 
   describe("Nodes::Comment placement", () => {
     it("emits exactly one space before each comment in SelectCore (no double space)", () => {
-      // Regression: visitArelNodesComment used to prepend its own leading
+      // Regression: visit_Arel_Nodes_Comment used to prepend its own leading
       // space, and SelectCore also called maybeVisit() which adds another.
       // The visitor now leaves the leading space to the caller.
       const tbl = new Table("users");

@@ -190,7 +190,7 @@ export class MySQL extends ToSql {
   protected override visitCte(node: Nodes.Cte): SQLString {
     // MySQL identifiers are backtick-quoted, not double-quoted, and the
     // MATERIALIZED / NOT MATERIALIZED modifiers Postgres supports are
-    // ignored. Mirrors Rails' MySQL visitArelNodesCte which calls
+    // ignored. Mirrors Rails' MySQL visit_Arel_Nodes_Cte which calls
     // `quote_table_name` (which emits backticks on the MySQL adapter).
     const escaped = node.name.replace(/`/g, "``");
     this.collector.append(`\`${escaped}\` AS (`);

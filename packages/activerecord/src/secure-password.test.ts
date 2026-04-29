@@ -616,6 +616,7 @@ describe("hasSecurePassword — per-attribute confirmation, challenge, and salt"
     (u as any).recoveryPasswordChallenge = "   ";
     expect((u as any).recoveryPasswordChallenge).toBeNull();
     const valid = await u.validate();
+    expect(valid).toBe(true);
     expect((u as any).errors.messages["recovery_password_challenge"]).toBeUndefined();
   });
 

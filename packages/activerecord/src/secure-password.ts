@@ -112,10 +112,10 @@ export function hasSecurePassword(
     },
     set: function (value: string | null) {
       // Rails uses present? to gate challenge validation — normalize blank to null.
-      (this as any)[challengeKey] =
-        value === null || value === undefined || (typeof value === "string" && !value.trim())
-          ? null
-          : value;
+      // Use isBlank after coercion so non-string blanks (false, [], etc.) are also caught.
+      const coerced =
+        value === null || value === undefined ? null : typeof value === "string" ? value : String(value);
+      (this as any)[challengeKey] = coerced === null || isBlank(coerced) ? null : coerced;
     },
     configurable: true,
   });

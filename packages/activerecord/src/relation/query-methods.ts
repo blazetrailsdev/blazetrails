@@ -784,7 +784,8 @@ function deepEqual(a: unknown, b: unknown): boolean {
   // boundary: deepEqual underpins the and!/or! merge-compatibility check
   // (structurallyIncompatibleValuesFor). Caller-supplied JS Date values
   // compare by epoch since Object.is treats distinct Date instances as unequal.
-  if (a instanceof Date) return b instanceof Date && a.getTime() === b.getTime();
+  // Use Object.is on the epoch so two invalid (NaN) Dates compare equal too.
+  if (a instanceof Date) return b instanceof Date && Object.is(a.getTime(), b.getTime());
   if (b instanceof Date) return false;
 
   const aAny = a as { eql?: (x: unknown) => boolean; equals?: (x: unknown) => boolean };

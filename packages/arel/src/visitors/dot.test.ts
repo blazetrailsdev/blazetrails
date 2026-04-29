@@ -156,6 +156,30 @@ describe("TestDot", () => {
       expect(out).toContain('say \\"hi\\"');
     });
 
+    it("OptimizerHints renders its hints field (not Unary's null expr)", () => {
+      const node = new Nodes.OptimizerHints(["IDX(t1)", "MAX_EXEC_TIME(1000)"]);
+      const out = dot.compile(node);
+      expect(out).toContain("OptimizerHints");
+      expect(out).toMatch(/-> \d+ \[label="hints"\];/);
+      expect(out).toContain("IDX(t1)");
+      expect(out).toContain("MAX_EXEC_TIME(1000)");
+    });
+
+    it("non-Node bind values (ActiveModel::Attribute shape) don't crash", () => {
+      // Regression: Dot.visit used to call super.visit on any non-primitive
+      // non-array non-plain-object value, throwing UnsupportedVisitError
+      // on a class instance the dispatch table didn't know about.
+      const fakeAttribute = {
+        valueBeforeTypeCast: 42,
+      };
+      const bind = new Nodes.BindParam(fakeAttribute);
+      const out = dot.compile(bind);
+      expect(out).toContain("BindParam");
+      // visitActiveModelAttribute walks valueBeforeTypeCast.
+      expect(out).toMatch(/-> \d+ \[label="valueBeforeTypeCast"\];/);
+      expect(out).toContain("42");
+    });
+
     it("visitHash preserves both key and value (Rails parity)", () => {
       // Mirrors Rails dot.rb:227 — visit_Hash emits one edge per entry
       // labeled "pair_<i>" pointing at an Array node, which itself emits

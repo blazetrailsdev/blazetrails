@@ -297,6 +297,15 @@ export class Dot extends Visitor {
     this.visitEdge(o, "default");
   }
 
+  /**
+   * Trails' OptimizerHints carries hints on `hints`, not on Unary's
+   * `expr` field (which stays `null` — see nodes/unary.ts). The default
+   * Unary fallback would visit `expr` and miss the hints entirely.
+   */
+  protected visitArelNodesOptimizerHints(o: Nodes.OptimizerHints): void {
+    this.visitEdge(o, "hints");
+  }
+
   // ---------------------------------------------------------------------
   // Core machinery (visit, edge, with_node, quote, to_dot)
   // ---------------------------------------------------------------------
@@ -361,10 +370,20 @@ export class Dot extends Visitor {
         this.visitString(object);
       } else if (Array.isArray(object)) {
         this.visitArray(object);
+      } else if (object instanceof Node || object instanceof Table) {
+        super.visit(object as Node);
+      } else if (this.isActiveModelAttribute(object)) {
+        // Mirrors Rails' `visit_ActiveModel_Attribute`. Checked after the
+        // Node branch — Trails' BindParam *also* exposes a
+        // `valueBeforeTypeCast` method via NodeExpression duck-typing, so
+        // we only fall here for non-Node value objects.
+        this.visitActiveModelAttribute(object as { valueBeforeTypeCast?: unknown });
       } else if (this.isPlainObject(object)) {
         this.visitHash(object as unknown as Record<string, unknown>);
       } else {
-        super.visit(object as Node);
+        // Unknown non-Node object — render as a leaf with its String form
+        // so unfamiliar value classes don't crash the visitor.
+        this.visitString(object);
       }
     });
     return undefined;
@@ -401,6 +420,12 @@ export class Dot extends Visitor {
       t === "bigint" ||
       t === "symbol" ||
       o instanceof Date
+    );
+  }
+
+  private isActiveModelAttribute(o: unknown): boolean {
+    return (
+      typeof o === "object" && o !== null && "valueBeforeTypeCast" in (o as Record<string, unknown>)
     );
   }
 
@@ -486,6 +511,7 @@ export class Dot extends Visitor {
     reg(Nodes.BoundSqlLiteral, "visit_NoEdges");
     reg(Nodes.Fragments, "visit_NoEdges");
     reg(Nodes.SelectOptions, "visit_NoEdges");
+    reg(Nodes.OptimizerHints, "visitArelNodesOptimizerHints");
     // Other Trails nodes inherit from registered ancestors (Unary/Binary/
     // InfixOperation/Ordering/Function), so the Visitor.resolveDispatch
     // prototype walk routes them through the right handler at first use.

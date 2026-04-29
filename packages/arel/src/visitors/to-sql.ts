@@ -126,11 +126,11 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       d.set(ctor, m);
     };
     // Statements
-    reg(Nodes.SelectStatement, "visitSelectStatement");
-    reg(Nodes.SelectCore, "visitSelectCore");
-    reg(Nodes.InsertStatement, "visitInsertStatement");
-    reg(Nodes.UpdateStatement, "visitUpdateStatement");
-    reg(Nodes.DeleteStatement, "visitDeleteStatement");
+    reg(Nodes.SelectStatement, "visit_Arel_Nodes_SelectStatement");
+    reg(Nodes.SelectCore, "visit_Arel_Nodes_SelectCore");
+    reg(Nodes.InsertStatement, "visit_Arel_Nodes_InsertStatement");
+    reg(Nodes.UpdateStatement, "visit_Arel_Nodes_UpdateStatement");
+    reg(Nodes.DeleteStatement, "visit_Arel_Nodes_DeleteStatement");
     // Set operations
     reg(Nodes.UnionAll, "visitUnionAll");
     reg(Nodes.Union, "visitUnion");
@@ -205,7 +205,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.Fragments, "visitFragments");
     // Functions
     reg(Nodes.NamedFunction, "visitNamedFunction");
-    reg(Nodes.Exists, "visitExists");
+    reg(Nodes.Exists, "visit_Arel_Nodes_Exists");
     reg(Nodes.Count, "visitCount");
     reg(Nodes.Sum, "visitSum");
     reg(Nodes.Max, "visitMax");
@@ -218,7 +218,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.Group, "visitGroup");
     reg(Nodes.GroupingElement, "visitGroupingElement");
     reg(Nodes.Lateral, "visitLateral");
-    reg(Nodes.Comment, "visitComment");
+    reg(Nodes.Comment, "visit_Arel_Nodes_Comment");
+    reg(Nodes.OptimizerHints, "visit_Arel_Nodes_OptimizerHints");
     reg(Nodes.HomogeneousIn, "visitHomogeneousIn");
     // Boolean literals
     reg(Nodes.True, "visitTrue");
@@ -236,7 +237,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Statements --
 
-  protected visitSelectStatement(node: Nodes.SelectStatement): SQLString {
+  protected visit_Arel_Nodes_SelectStatement(node: Nodes.SelectStatement): SQLString {
     if (node.with) {
       this.visit(node.with);
       this.collector.append(" ");
@@ -284,7 +285,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
   }
 
-  protected visitSelectCore(node: Nodes.SelectCore): SQLString {
+  protected visit_Arel_Nodes_SelectCore(node: Nodes.SelectCore): SQLString {
     this.collector.append("SELECT");
 
     this.emitOptimizerHints(node);
@@ -333,7 +334,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitInsertStatement(node: Nodes.InsertStatement): SQLString {
+  protected visit_Arel_Nodes_InsertStatement(node: Nodes.InsertStatement): SQLString {
     this.collector.retryable = false;
     this.collector.append("INSERT INTO ");
     if (node.relation) this.visit(node.relation);
@@ -360,7 +361,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitUpdateStatement(o: Nodes.UpdateStatement): SQLString {
+  protected visit_Arel_Nodes_UpdateStatement(o: Nodes.UpdateStatement): SQLString {
     const node = this.prepareUpdateStatement(o);
     this.collector.retryable = false;
     this.collector.append("UPDATE ");
@@ -395,7 +396,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visitDeleteStatement(o: Nodes.DeleteStatement): SQLString {
+  protected visit_Arel_Nodes_DeleteStatement(o: Nodes.DeleteStatement): SQLString {
     const node = this.prepareDeleteStatement(o);
     this.collector.retryable = false;
     this.collector.append("DELETE ");
@@ -882,7 +883,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitExists(node: Nodes.Exists): SQLString {
+  protected visit_Arel_Nodes_Exists(node: Nodes.Exists): SQLString {
     this.collector.append("EXISTS (");
     this.visit(node.expressions);
     this.collector.append(")");
@@ -1206,11 +1207,27 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitComment(node: Nodes.Comment): SQLString {
+  // Mirrors Rails: visit_Arel_Nodes_Comment (to_sql.rb:175). Rails joins
+  // with " " into a single string; we keep the per-comment structure with a
+  // leading space because callers append directly without a separator.
+  protected visit_Arel_Nodes_Comment(node: Nodes.Comment): SQLString {
     for (const value of node.values) {
-      const sanitized = value.replace(/\/\*/g, "").replace(/\*\//g, "").replace(/\s+/g, " ").trim();
-      this.collector.append(` /* ${sanitized} */`);
+      this.collector.append(` /* ${this.sanitizeAsSqlComment(value)} */`);
     }
+    return this.collector;
+  }
+
+  // Mirrors Rails: visit_Arel_Nodes_OptimizerHints (to_sql.rb:170). Trails'
+  // SelectCore stores hints inline as `string[]`, so the OptimizerHints node
+  // class isn't constructed in normal use; this method exists for callers
+  // that pass one explicitly. `expr` may be an array or a single value.
+  protected visit_Arel_Nodes_OptimizerHints(node: Nodes.OptimizerHints): SQLString {
+    const raw = node.expr as unknown;
+    const list = Array.isArray(raw) ? (raw as unknown[]) : [raw];
+    const hints = list
+      .map((v) => this.sanitizeAsSqlComment(v as string | Nodes.SqlLiteral))
+      .join(" ");
+    this.collector.append(` /*+ ${hints} */`);
     return this.collector;
   }
 
@@ -1503,5 +1520,88 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       .replace(/--/g, "")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  // ---------------------------------------------------------------------
+  // Rails-mirrored private helpers (to_sql.rb).
+  // ---------------------------------------------------------------------
+
+  /**
+   * Mirrors `to_sql.rb#collect_nodes_for`. Emits `spacer` then visits each
+   * node separated by `connector` (default `", "`). No-op when empty.
+   */
+  protected collectNodesFor(nodes: Node[], spacer: string, connector = ", "): SQLString {
+    if (nodes.length === 0) return this.collector;
+    this.collector.append(spacer);
+    this.injectJoin(nodes, connector);
+    return this.collector;
+  }
+
+  /**
+   * Mirrors `to_sql.rb#inject_join`: visits `list[0]`, then for each
+   * subsequent node emits `joinStr` and visits.
+   */
+  protected injectJoin(list: Node[], joinStr: string): SQLString {
+    list.forEach((n, i) => {
+      if (i > 0) this.collector.append(joinStr);
+      this.visit(n);
+    });
+    return this.collector;
+  }
+
+  /**
+   * Mirrors `to_sql.rb#maybe_visit`: if `thing` is non-null, emits a leading
+   * space and visits it; otherwise no-op. Used to thread optional clauses
+   * (limit/offset/lock/comment) through select-statement visitors.
+   */
+  protected maybeVisit(thing: Node | null | undefined): SQLString {
+    if (!thing) return this.collector;
+    this.collector.append(" ");
+    this.visit(thing);
+    return this.collector;
+  }
+
+  /**
+   * Mirrors `to_sql.rb#collect_optimizer_hints`. Visits the optimizer hint
+   * if one is present. Trails' SelectCore stores hints inline (an array on
+   * the node) rather than as a separate Arel::Nodes::OptimizerHints; this
+   * helper provides the Rails-shaped seam for callers that pass a node.
+   */
+  protected collectOptimizerHints(o: { optimizerHints?: Node | null }): SQLString {
+    return this.maybeVisit(o.optimizerHints);
+  }
+
+  /**
+   * Mirrors `to_sql.rb#sanitize_as_sql_comment`. SqlLiteral values pass
+   * through unchanged; otherwise strip newlines and `/*`/`* /` so the value
+   * is safe to embed inside a `/* … * /` SQL comment.
+   */
+  protected sanitizeAsSqlComment(value: string | Nodes.SqlLiteral): string {
+    if (value instanceof Nodes.SqlLiteral) return value.value;
+    return String(value)
+      .replace(/[\r\n]+/g, " ")
+      .replace(/\/\*/g, "")
+      .replace(/\*\//g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /**
+   * Mirrors `to_sql.rb#quote_table_name`. SqlLiteral pass-through; otherwise
+   * default double-quoted identifier with embedded `"` doubled. MySQL
+   * overrides to backtick-quote (deferred — see project memory
+   * `arel MySQL identifier quoting`).
+   */
+  protected quoteTableName(name: string | Nodes.SqlLiteral): string {
+    if (name instanceof Nodes.SqlLiteral) return name.value;
+    return `"${String(name).replace(/"/g, '""')}"`;
+  }
+
+  /**
+   * Mirrors `to_sql.rb#quote_column_name`. Same shape as `quoteTableName`.
+   */
+  protected quoteColumnName(name: string | Nodes.SqlLiteral): string {
+    if (name instanceof Nodes.SqlLiteral) return name.value;
+    return `"${String(name).replace(/"/g, '""')}"`;
   }
 }

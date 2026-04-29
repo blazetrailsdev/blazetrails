@@ -9,7 +9,7 @@ import { ToSql } from "./to-sql.js";
  * Mirrors: Arel::Visitors::MySQL
  */
 export class MySQL extends ToSql {
-  protected override visitSelectStatement(node: Nodes.SelectStatement): SQLString {
+  protected override visit_Arel_Nodes_SelectStatement(node: Nodes.SelectStatement): SQLString {
     if (node.with) {
       this.visit(node.with);
       this.collector.append(" ");
@@ -50,7 +50,7 @@ export class MySQL extends ToSql {
     return this.collector;
   }
 
-  protected override visitSelectCore(node: Nodes.SelectCore): SQLString {
+  protected override visit_Arel_Nodes_SelectCore(node: Nodes.SelectCore): SQLString {
     this.collector.append("SELECT");
 
     this.emitOptimizerHints(node);

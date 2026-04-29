@@ -1076,4 +1076,56 @@ describe("the to_sql visitor", () => {
       expect(new Visitors.ToSql().compile(node)).toContain("IS NOT NULL");
     });
   });
+
+  // Mirrors Rails' to_sql.rb private helpers (sanitize_as_sql_comment,
+  // quote_table_name, quote_column_name).
+  describe("Rails-mirrored private helpers", () => {
+    type ToSqlInternals = {
+      sanitizeAsSqlComment(value: string | Nodes.SqlLiteral): string;
+      quoteTableName(name: string | Nodes.SqlLiteral): string;
+      quoteColumnName(name: string | Nodes.SqlLiteral): string;
+    };
+    const make = (): ToSqlInternals => new Visitors.ToSql() as unknown as ToSqlInternals;
+
+    it("sanitizeAsSqlComment passes through SqlLiteral values", () => {
+      const literal = new Nodes.SqlLiteral("/* raw */");
+      expect(make().sanitizeAsSqlComment(literal)).toBe("/* raw */");
+    });
+
+    it("sanitizeAsSqlComment strips comment delimiters and newlines", () => {
+      const v = make();
+      expect(v.sanitizeAsSqlComment("a /* boom */ b")).toBe("a boom b");
+      expect(v.sanitizeAsSqlComment("multi\nline")).toBe("multi line");
+      expect(v.sanitizeAsSqlComment("trailing */")).toBe("trailing");
+    });
+
+    it("quoteTableName / quoteColumnName double-quote bare names and pass through SqlLiteral", () => {
+      const v = make();
+      expect(v.quoteTableName("users")).toBe('"users"');
+      expect(v.quoteColumnName("name")).toBe('"name"');
+      expect(v.quoteTableName('weird"name')).toBe('"weird""name"');
+      expect(v.quoteTableName(new Nodes.SqlLiteral("users"))).toBe("users");
+    });
+  });
+
+  describe("Nodes::OptimizerHints (visit)", () => {
+    it("emits /*+ HINT */ for an OptimizerHints node with array expr", () => {
+      const node = new Nodes.OptimizerHints([
+        "IDX(t1)",
+        "MAX_EXEC_TIME(1000)",
+      ] as unknown as Nodes.Node);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toBe(" /*+ IDX(t1) MAX_EXEC_TIME(1000) */");
+    });
+
+    it("strips embedded comment delimiters from each hint (Rails parity)", () => {
+      // Mirrors Rails: sanitize_as_sql_comment removes /* and */ so a hint
+      // can't escape the surrounding comment block. The literal SQL inside
+      // is preserved as comment text — it's still inside /*+ ... */.
+      const node = new Nodes.OptimizerHints(["A */ DROP /*"] as unknown as Nodes.Node);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toBe(" /*+ A DROP */");
+      expect(sql.match(/\*\//g)?.length).toBe(1);
+    });
+  });
 });

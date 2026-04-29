@@ -8,7 +8,11 @@
  *             to plain `*` semantics — they do NOT cross `/` boundaries.
  *   `*`       match anything except `/`
  *   `?`       match any single char except `/`
- *   `[abc]`   character class (cannot match `/`)
+ *   `[abc]`   character class (cannot match `/`; empty `[]` is treated
+ *             as a literal pair). Invalid contents (e.g. an out-of-order
+ *             range like `[z-a]`) propagate the underlying
+ *             `new RegExp()` SyntaxError. Glob patterns in this repo
+ *             are author-controlled, so no defensive guard.
  *   `{a,b,c}` brace expansion
  *   leading `!`  negation (post-filter)
  *

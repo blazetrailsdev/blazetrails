@@ -524,7 +524,7 @@ describe("hasSecurePassword — per-attribute confirmation, challenge, and salt"
     (u as any).recoveryPasswordConfirmation = "different";
     const valid = await u.validate();
     expect(valid).toBe(false);
-    expect((u as any).errors.fullMessages().join(", ")).toMatch(/confirmation/i);
+    expect((u as any).errors.fullMessages.join(", ")).toMatch(/confirmation/i);
   });
 
   it("passes validation when confirmation matches", async () => {
@@ -532,6 +532,32 @@ describe("hasSecurePassword — per-attribute confirmation, challenge, and salt"
     const u = new User({});
     (u as any).recovery_password = "secret123";
     (u as any).recoveryPasswordConfirmation = "secret123";
+    const valid = await u.validate();
+    expect(valid).toBe(true);
+  });
+
+  it("challenge validation rejects wrong current password", async () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recovery_password = "original";
+    await u.save({ validate: false });
+
+    // Now change with wrong challenge
+    (u as any).recovery_password = "newpassword";
+    (u as any).recoveryPasswordChallenge = "wrongpassword";
+    const valid = await u.validate();
+    expect(valid).toBe(false);
+    expect((u as any).errors.fullMessages.join(", ")).toMatch(/invalid/i);
+  });
+
+  it("challenge validation passes with correct current password", async () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recovery_password = "original";
+    await u.save({ validate: false });
+
+    (u as any).recovery_password = "newpassword";
+    (u as any).recoveryPasswordChallenge = "original";
     const valid = await u.validate();
     expect(valid).toBe(true);
   });

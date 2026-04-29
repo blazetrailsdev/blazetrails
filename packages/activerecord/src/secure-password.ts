@@ -1,7 +1,8 @@
-import { getCrypto, camelize, pbkdf2Async } from "@blazetrails/activesupport";
+import { getCrypto, camelize, humanize, pbkdf2Async } from "@blazetrails/activesupport";
 import { ArgumentError } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
 import { generatesTokenFor } from "./token-for.js";
+import { attributeBeforeLastSave } from "./attribute-methods/dirty.js";
 
 /**
  * Secure password support using PBKDF2 (Web Crypto API).
@@ -177,35 +178,40 @@ export function hasSecurePassword(
   // Add validations — mirrors Rails' validates_presence_of, validates_confirmation_of,
   // and challenge validation in has_secure_password.
   if (runValidations) {
-    const attrLabel = attribute.charAt(0).toUpperCase() + attribute.slice(1).replace(/_./g, (s) => s.slice(1).toUpperCase());
+    const attrLabel = humanize(attribute);
     modelClass.validate(function (record: any) {
       const rawPassword = record[passwordKey];
+      const rawPasswordPresent =
+        rawPassword !== null && rawPassword !== undefined && rawPassword !== "";
 
       // Presence: mirrors `record.errors.add(attribute, :blank) unless digest.present?`
-      // Fires on every validate — catches both new records without passwords
-      // and existing records whose digest was explicitly cleared.
-      if (!record._readAttribute(digestAttr)) {
+      // In Rails, password= immediately sets the digest (BCrypt). In trails,
+      // hashing defers to beforeSave, so we also check the in-flight raw password
+      // to avoid false :blank errors before the first save.
+      if (!record._readAttribute(digestAttr) && !rawPasswordPresent) {
         record.errors.add(attribute, "blank");
       }
 
       // Confirmation: mirrors `validates_confirmation_of attribute, allow_blank: true`
-      // Skip when password is blank (allow_blank: true).
       const confirmation = record[confirmationKey];
-      const passwordPresent = rawPassword !== null && rawPassword !== undefined && rawPassword !== "";
-      if (passwordPresent && confirmation !== null && confirmation !== undefined && rawPassword !== confirmation) {
+      if (
+        rawPasswordPresent &&
+        confirmation !== null &&
+        confirmation !== undefined &&
+        rawPassword !== confirmation
+      ) {
         record.errors.add(confirmationProp, "confirmation", {
-          message: `doesn't match ${attrLabel}`,
+          attribute: attrLabel,
         });
       }
 
-      // Challenge validation: current password must verify against stored digest
-      // Mirrors: validates_with ActiveModel::SecurePassword::PasswordChallenge
+      // Challenge: verify current password against the pre-change digest.
+      // Mirrors Rails' challenge validation using dirty tracking's "was" value
+      // (`#{attribute}_digest_was`). Falls back to current digest if no prior
+      // save exists (e.g. new record — challenge validation fails gracefully).
       const challenge = record[challengeKey];
       if (challenge !== null && challenge !== undefined) {
-        const digestWas =
-          typeof record._readAttributeBeforeLastSave === "function"
-            ? record._readAttributeBeforeLastSave(digestAttr)
-            : record._readAttribute(digestAttr);
+        const digestWas = attributeBeforeLastSave(record, digestAttr) ?? record._readAttribute(digestAttr);
         if (!digestWas || !verifyPassword(String(challenge), digestWas as string)) {
           record.errors.add(challengeProp, "invalid");
         }

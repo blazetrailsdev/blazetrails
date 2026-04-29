@@ -174,14 +174,16 @@ export function store(
       accessorName = `${accessorName}_${suf}`;
     }
 
-    // Mirrors Rails: accessor closures delegate through read/write_store_attribute
-    // so the type-configured accessor (e.g. StringKeyedHashAccessor for hstore) is used.
+    // Capture `modelClass` at definition time so subclass instances still resolve
+    // the correct accessor even when `record.constructor` differs from the declaring class.
+    // Mirrors Rails: accessor closures delegate through read/write_store_attribute.
+    const declaringClass = modelClass;
     Object.defineProperty(modelClass.prototype, accessorName, {
       get: function (this: Base) {
-        return readStoreAttribute(this, attribute, accessor);
+        return readStoreAttribute(this, attribute, accessor, declaringClass);
       },
       set: function (this: Base, value: unknown) {
-        writeStoreAttribute(this, attribute, accessor, value);
+        writeStoreAttribute(this, attribute, accessor, value, declaringClass);
       },
       configurable: true,
     });
@@ -230,8 +232,16 @@ function storeAccessorFor(modelClass: typeof Base, storeAttribute: string): type
  *
  * Mirrors: ActiveRecord::Store#read_store_attribute (private)
  */
-function readStoreAttribute(record: Base, storeAttribute: string, key: string): unknown {
-  const accessor = storeAccessorFor(record.constructor as typeof Base, storeAttribute);
+function readStoreAttribute(
+  record: Base,
+  storeAttribute: string,
+  key: string,
+  declaringClass?: typeof Base,
+): unknown {
+  // Use the declaring class (where store() was called) so subclass instances
+  // resolve the correct accessor even when record.constructor differs from the parent.
+  const modelClass = declaringClass ?? (record.constructor as typeof Base);
+  const accessor = storeAccessorFor(modelClass, storeAttribute);
   return accessor.read(record, storeAttribute, key);
 }
 
@@ -245,8 +255,10 @@ function writeStoreAttribute(
   storeAttribute: string,
   key: string,
   value: unknown,
+  declaringClass?: typeof Base,
 ): void {
-  const accessor = storeAccessorFor(record.constructor as typeof Base, storeAttribute);
+  const modelClass = declaringClass ?? (record.constructor as typeof Base);
+  const accessor = storeAccessorFor(modelClass, storeAttribute);
   accessor.write(record, storeAttribute, key, value);
 }
 

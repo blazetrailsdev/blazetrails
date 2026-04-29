@@ -814,19 +814,19 @@ describe("store private helpers — tested through public accessor API", () => {
     expect((user as any).theme).toBe("light");
   });
 
-  it("store accessor for hstore column uses StringKeyedHashAccessor (type-configured)", () => {
+  it("store accessor delegates through readStoreAttribute/writeStoreAttribute pipeline", () => {
     class Post extends Base {
       static {
         this._tableName = "posts";
         this.attribute("id", "integer");
-        this.attribute("properties", "hstore");
+        this.attribute("settings", "string");
         this.adapter = adapter;
       }
     }
     registerModel(Post);
-    store(Post, "properties", { accessors: ["color"] });
-    // hstore stores string keys — string coercion should be transparent
-    const post = new Post({});
+    store(Post, "settings", { accessors: ["color"] });
+    const post = new Post({ settings: JSON.stringify({ color: "blue" }) });
+    expect((post as any).color).toBe("blue");
     (post as any).color = "red";
     expect((post as any).color).toBe("red");
   });

@@ -96,6 +96,48 @@ describe("Serializers::JSON host", () => {
     expect(p._age).toBe(40);
   });
 
+  it("asJson coerces JSON-unsafe values (e.g. bigint)", () => {
+    class Big extends JSONHost {
+      static {
+        Object.defineProperty(this.prototype, "attributes", {
+          get() {
+            return { id: this._id };
+          },
+          set(this: { _id: bigint }, h: { id: bigint }) {
+            this._id = h.id;
+          },
+          configurable: true,
+        });
+      }
+      _id = 0n;
+    }
+    const b = new Big();
+    b._id = 9007199254740993n;
+    // Without coerceForJson, JSON.stringify(b.asJson()) would throw.
+    expect(() => globalThis.JSON.stringify(b.asJson())).not.toThrow();
+  });
+
+  it("includeRootInJson accepts a string custom root", () => {
+    class CustomRooted extends JSONHost {
+      static {
+        this.includeRootInJson = "author";
+        Object.defineProperty(this.prototype, "attributes", {
+          get() {
+            return { name: this._name };
+          },
+          set(this: { _name: string }, h: { name: string }) {
+            this._name = h.name;
+          },
+          configurable: true,
+        });
+      }
+      _name = "";
+    }
+    const c = new CustomRooted();
+    c._name = "Eve";
+    expect(c.asJson()).toMatchObject({ author: { name: "Eve" } });
+  });
+
   it("Model already implements the same surface ergonomically", () => {
     // Sanity: the JSON host is the canonical mixin form; Model continues
     // to compose asJson/fromJson directly (model.ts already mirrors json.rb).

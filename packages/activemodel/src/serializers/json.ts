@@ -1,4 +1,4 @@
-import { serializableHash, type SerializeOptions } from "../serialization.js";
+import { serializableHash, coerceForJson, type SerializeOptions } from "../serialization.js";
 import { ModelName } from "../naming.js";
 
 /**
@@ -24,7 +24,9 @@ import { ModelName } from "../naming.js";
  */
 export class JSON {
   // Rails: included do; class_attribute :include_root_in_json, default: false; end
-  static includeRootInJson = false;
+  // Typed boolean | string to match Model.includeRootInJson — Rails
+  // accepts a string here too (treated as a custom root key by as_json).
+  static includeRootInJson: boolean | string = false;
 
   // Per-class memo so the static getter can be inherited without
   // recomputing or sharing state across subclasses (matches Model's
@@ -71,7 +73,11 @@ export class JSON {
       options && Object.prototype.hasOwnProperty.call(options, "root")
         ? options.root
         : ctor.includeRootInJson;
-    const hash = this.serializableHash(options);
+    // Rails calls `serializable_hash(options).as_json` — recursive
+    // JSON-coerce on the resulting hash. Mirror that with coerceForJson
+    // so JSON-unsafe values (bigint, undefined, cyclic refs, etc.)
+    // surface predictably, matching Model.asJson (model.ts:1708).
+    const hash = coerceForJson(this.serializableHash(options)) as Record<string, unknown>;
     if (!rootOpt) return hash;
     const rootKey = rootOpt === true ? ctor.modelName.element : (rootOpt as string);
     return { [rootKey]: hash };

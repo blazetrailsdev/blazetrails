@@ -1,83 +1,136 @@
 /**
  * Clusivity — shared logic for inclusion/exclusion validators.
  *
- * Mirrors: ActiveModel::Validations::Clusivity
+ * Mirrors: ActiveModel::Validations::Clusivity (clusivity.rb)
  *
- * In Rails, Clusivity is a module included by both InclusionValidator
- * and ExclusionValidator. It provides check_validity! which ensures
- * the :in option is an enumerable, and the include?/exclude? membership test.
+ * Rails ships Clusivity as a module included by both InclusionValidator
+ * and ExclusionValidator. It provides `check_validity!`, the membership
+ * test `include?`, the cached `delimiter` accessor, and the
+ * `inclusion_method(enumerable)` selector. In TS we expose each as a
+ * `this`-typed function that the validator classes attach as prototype
+ * methods (matching Rails' `include Clusivity` mixin shape).
  */
 import { resolveValue } from "./resolve-value.js";
 
 export { resolveValue };
 
+export const ERROR_MESSAGE =
+  "An object with the method #include? or a proc, lambda or symbol is required, " +
+  "and must be supplied as the :in (or :within) option of the configuration hash";
+
 export interface Clusivity {
   checkValidity(): void;
   resolveValue(record: unknown, value: unknown): unknown;
+  delimiter(): unknown;
+  inclusionMethod(enumerable: unknown): "include?" | "cover?";
+  isInclude(record: unknown, value: unknown): boolean;
 }
 
-export function checkValidityBang(options: { in?: unknown; within?: unknown }): void {
-  checkClusivityValidity(options);
+interface ClusivityHost {
+  options: Record<string, unknown>;
+  resolveValue(record: unknown, value: unknown): unknown;
+  _delimiterCache?: unknown;
 }
 
-export function checkClusivityValidity(options: { in?: unknown; within?: unknown }): void {
-  const collection = options.in ?? options.within;
-  if (collection === undefined || collection === null) {
-    throw new Error(
-      "An :in or :within option must be supplied (either an Array, a Range, or a Proc)",
-    );
-  }
-  if (
-    !Array.isArray(collection) &&
-    typeof collection !== "function" &&
-    !(
-      typeof collection === "object" &&
-      Symbol.iterator in (collection as object) &&
-      typeof (collection as Record<symbol, unknown>)[Symbol.iterator] === "function"
-    )
-  ) {
-    throw new Error(
-      "An :in or :within option must be supplied (either an Array, a Range, or a Proc)",
-    );
-  }
+/**
+ * Mirrors: clusivity.rb:31-33
+ *   def delimiter
+ *     @delimiter ||= options[:in] || options[:within]
+ *   end
+ *
+ * Memoized so a Proc passed as `:in` / `:within` is captured once
+ * per validator instance, matching Rails' `||=` semantics.
+ */
+export function delimiter(this: ClusivityHost): unknown {
+  if (this._delimiterCache !== undefined) return this._delimiterCache;
+  this._delimiterCache = this.options.in ?? this.options.within;
+  return this._delimiterCache;
 }
 
-export function isMember(
-  collection: unknown[] | (() => unknown[]) | Iterable<unknown>,
-  value: unknown,
-): boolean {
-  const resolved = typeof collection === "function" ? collection() : collection;
+/**
+ * Mirrors: clusivity.rb:40-50
+ *
+ *   def inclusion_method(enumerable)
+ *     if enumerable.is_a? Range
+ *       case enumerable.begin || enumerable.end
+ *       when Numeric, Time, DateTime, Date then :cover?
+ *       else :include?
+ *       end
+ *     else
+ *       :include?
+ *     end
+ *   end
+ *
+ * TS has no first-class Range; iterables are treated uniformly as
+ * `include?`. If a Range-like type lands later, the cover-vs-include
+ * branch slots in here.
+ */
+export function inclusionMethod(_enumerable: unknown): "include?" | "cover?" {
+  return "include?";
+}
 
-  // Rails: if value is an array, check that all elements are members
+/**
+ * Mirrors: clusivity.rb:21-29
+ *   def include?(record, value)
+ *     members = resolve_value(record, delimiter)
+ *     if value.is_a?(Array)
+ *       value.all? { |v| members.public_send(inclusion_method(members), v) }
+ *     else
+ *       members.public_send(inclusion_method(members), value)
+ *     end
+ *   end
+ *
+ * `resolve_value` resolves Procs and Symbol-method references; a string
+ * option treated as a method name only if the record responds to it
+ * (resolve-value.ts).
+ */
+export function isInclude(this: ClusivityHost, record: unknown, value: unknown): boolean {
+  const members = this.resolveValue(record, delimiter.call(this));
   if (Array.isArray(value)) {
-    return value.every((v) => isMemberSingle(resolved, v));
+    return value.every((v) => isMemberOf(members, v));
   }
-
-  return isMemberSingle(resolved, value);
+  return isMemberOf(members, value);
 }
 
-export function isExcluded(
-  collection: unknown[] | (() => unknown[]) | Iterable<unknown>,
-  value: unknown,
-): boolean {
-  const resolved = typeof collection === "function" ? collection() : collection;
-
-  // Exclusion: if value is an array, fail when ANY element is in the excluded set
-  if (Array.isArray(value)) {
-    return value.some((v) => isMemberSingle(resolved, v));
+function isMemberOf(members: unknown, value: unknown): boolean {
+  if (Array.isArray(members)) return members.includes(value);
+  if (members instanceof Set) return members.has(value);
+  if (members && typeof (members as Iterable<unknown>)[Symbol.iterator] === "function") {
+    for (const item of members as Iterable<unknown>) {
+      if (item === value) return true;
+    }
+    return false;
   }
-
-  return isMemberSingle(resolved, value);
-}
-
-function isMemberSingle(resolved: unknown[] | Iterable<unknown>, value: unknown): boolean {
-  if (Array.isArray(resolved)) return resolved.includes(value);
-
-  if (resolved instanceof Set) return resolved.has(value);
-
-  for (const item of resolved as Iterable<unknown>) {
-    if (item === value) return true;
-  }
-
   return false;
+}
+
+/**
+ * Mirrors: clusivity.rb:14-18
+ *   def check_validity!
+ *     unless delimiter.respond_to?(:include?) || delimiter.respond_to?(:call) || delimiter.respond_to?(:to_sym)
+ *       raise ArgumentError, ERROR_MESSAGE
+ *     end
+ *   end
+ *
+ * TS analogues for the three Ruby duck checks:
+ * - `respond_to?(:include?)` ↔ array / iterable / Set
+ * - `respond_to?(:call)` ↔ function
+ * - `respond_to?(:to_sym)` ↔ string (resolved via resolveValue at call time)
+ */
+export function checkValidityBang(this: ClusivityHost): void {
+  const d = delimiter.call(this);
+  if (d === undefined || d === null) {
+    throw new Error(ERROR_MESSAGE);
+  }
+  const isIterable =
+    Array.isArray(d) ||
+    d instanceof Set ||
+    (typeof d === "object" &&
+      d !== null &&
+      typeof (d as Record<symbol, unknown>)[Symbol.iterator] === "function");
+  const isCallable = typeof d === "function";
+  const isSymbolic = typeof d === "string";
+  if (!isIterable && !isCallable && !isSymbolic) {
+    throw new Error(ERROR_MESSAGE);
+  }
 }

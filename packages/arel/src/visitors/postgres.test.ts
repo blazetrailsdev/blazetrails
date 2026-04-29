@@ -382,13 +382,12 @@ describe("PostgreSQL dialect overrides (audit follow-up)", () => {
     expect(compile(g)).toBe('GROUPING SETS( "users"."a", "users"."b" )');
   });
 
-  it("Lateral does not double-wrap an inner Grouping (vs base which does)", () => {
-    // Inner is already a Grouping (renders its own parens) — Postgres'
-    // `grouping_parentheses` helper should not add another set. The
-    // base ToSql unconditionally wraps, producing `LATERAL ((expr))` —
-    // pin the divergence so it can't silently regress.
+  it("Lateral does not double-wrap an inner Grouping", () => {
+    // Inner is already a Grouping (renders its own parens), so the
+    // PostgreSQL visitor should not add another set — Rails Postgres
+    // uses a `grouping_parentheses` helper that wraps only when the
+    // inner isn't a Grouping.
     const inner = new Nodes.Grouping(new Nodes.SqlLiteral("SELECT 1"));
-    expect(new Visitors.ToSql().compile(new Nodes.Lateral(inner))).toBe("LATERAL ((SELECT 1))");
     expect(compile(new Nodes.Lateral(inner))).toBe("LATERAL (SELECT 1)");
   });
 

@@ -62,8 +62,9 @@ export function hasSecurePassword(
   const confirmationKey = Symbol(`${attribute}_confirmation`);
   const challengeKey = Symbol(`${attribute}_challenge`);
 
-  // Camelized base for property names (e.g. "recovery_password" → "recoveryPassword").
-  const camelBase = camelize(attribute).charAt(0).toLowerCase() + camelize(attribute).slice(1);
+  // lowerCamelCase base for property names (e.g. "recovery_password" → "recoveryPassword").
+  // Uses camelize(..., "lower") for correct acronym handling (e.g. "api_key" → "apiKey").
+  const camelBase = camelize(attribute, "lower");
 
   // Define setter/getter for the configured secure-password attribute
   // (e.g. password / recovery_password).
@@ -73,11 +74,14 @@ export function hasSecurePassword(
       return (this as any)[passwordKey] ?? null;
     },
     set: function (value: string | null) {
-      (this as any)[passwordKey] = value;
+      // Normalize non-string non-nil values to string to match Ruby's implicit to_s.
+      const normalized =
+        value === null || value === undefined ? value : typeof value === "string" ? value : String(value);
+      (this as any)[passwordKey] = normalized;
       // Rails: nil assignment clears the digest immediately
       // (active_model/secure_password.rb InstanceMethodsOnActivation)
-      if (value === null || value === undefined) {
-        this.writeAttribute?.(digestAttr, null);
+      if (normalized === null || normalized === undefined) {
+        this.writeAttribute(digestAttr, null);
       }
     },
     configurable: true,
@@ -170,10 +174,10 @@ export function hasSecurePassword(
   // invalidation to round-trip through the DB.
   modelClass.beforeSave(function (record: Base) {
     const rawPassword = (record as any)[passwordKey];
-    // Rails `password=` setter skips hashing for blank values (nil or empty/whitespace)
-    // (active_model/secure_password.rb) — an empty password is not a
-    // valid password, so we leave the existing digest untouched.
-    if (rawPassword != null && !isBlank(rawPassword)) {
+    // Rails `password=` setter skips hashing only for nil and empty string
+    // (`elsif !unencrypted_password.empty?` in InstanceMethodsOnActivation) —
+    // whitespace-only passwords ARE hashed in Rails.
+    if (rawPassword != null && rawPassword !== "") {
       const digest = hashPassword(rawPassword);
       record.writeAttribute(digestAttr, digest);
       // Clear the raw password, confirmation, and challenge after hashing
@@ -187,20 +191,22 @@ export function hasSecurePassword(
   // Add validations — mirrors Rails' validates_presence_of, validates_confirmation_of,
   // and challenge validation in has_secure_password.
   if (runValidations) {
-    // humanAttributeName respects i18n overrides when available; fall back to humanize.
-    const attrLabel =
-      typeof (modelClass as any).humanAttributeName === "function"
-        ? (modelClass as any).humanAttributeName(attribute)
-        : humanize(attribute);
     modelClass.validate(function (record: any) {
+      // Compute inside the callback so it reflects the runtime I18n locale.
+      const attrLabel =
+        typeof (record.constructor as any).humanAttributeName === "function"
+          ? (record.constructor as any).humanAttributeName(attribute)
+          : humanize(attribute);
       const rawPassword = record[passwordKey];
+      // Mirrors Rails: `!empty?` for hashing/presence; `allow_blank: true` for confirmation.
+      const rawPasswordNotEmpty = rawPassword != null && rawPassword !== "";
       const rawPasswordPresent = rawPassword != null && !isBlank(rawPassword);
 
       // Presence: mirrors `record.errors.add(attribute, :blank) unless digest.present?`
       // In Rails, password= immediately sets the digest (BCrypt). In trails,
       // hashing defers to beforeSave, so we also check the in-flight raw password
       // to avoid false :blank errors before the first save.
-      if (!record._readAttribute(digestAttr) && !rawPasswordPresent) {
+      if (!record._readAttribute(digestAttr) && !rawPasswordNotEmpty) {
         record.errors.add(attribute, "blank");
       }
 

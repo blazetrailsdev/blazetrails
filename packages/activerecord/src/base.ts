@@ -2141,12 +2141,33 @@ export class Base extends Model {
         ctor._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
       }
     } else {
-      super(attrs);
-      // Mirrors Rails Core#initialize: initialize_internals_callback fires
-      // for new records only (not _instantiate, which suppresses via flag).
-      if (!(new.target as typeof Base | undefined)?._suppressInitializeCallback) {
+      // For the regular (non-multiparameter) path, mirror the multiparameter
+      // pattern: suppress after_initialize during super() so we can call
+      // initialize_internals_callback first, then fire after_initialize.
+      // This matches Rails' Core#initialize order:
+      //   init_internals → initialize_internals_callback → super → after_initialize
+      const ctor2 = new.target as typeof Base;
+      const suppressor2 = ctor2 as typeof ctor2 & { _suppressInitializeCallback?: boolean };
+      const hadOwn2 = Object.prototype.hasOwnProperty.call(
+        suppressor2,
+        "_suppressInitializeCallback",
+      );
+      const wasSuppressed2 = suppressor2._suppressInitializeCallback;
+      suppressor2._suppressInitializeCallback = true;
+      try {
+        super(attrs);
+      } finally {
+        if (hadOwn2) {
+          suppressor2._suppressInitializeCallback = wasSuppressed2;
+        } else {
+          delete (suppressor2 as { _suppressInitializeCallback?: boolean })
+            ._suppressInitializeCallback;
+        }
+      }
+      if (!wasSuppressed2) {
         inheritanceInitializeInternalsCallback.call(this as any);
         scopingInitializeInternalsCallback.call(this as any);
+        ctor2._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
       }
     }
   }

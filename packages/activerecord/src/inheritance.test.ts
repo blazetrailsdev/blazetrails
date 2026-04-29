@@ -2072,3 +2072,41 @@ describe("ensureProperType / initializeInternalsCallback", () => {
     expect((car as any).readAttribute("type")).toBe("Car");
   });
 });
+
+describe("Base constructor wires initializeInternalsCallback", () => {
+  it("new STI subclass instance auto-sets the type column", async () => {
+    const { enableSti } = await import("./inheritance.js");
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Vehicle);
+    class Car extends Vehicle {}
+
+    const car = new Car({});
+    // type column should be set immediately on construction — no save needed
+    expect(car.readAttribute("type")).toBe("Car");
+  });
+
+  it("_instantiate (DB hydration) does NOT fire initializeInternalsCallback", async () => {
+    const { enableSti } = await import("./inheritance.js");
+    const adapter = createTestAdapter();
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("id", "integer");
+        this.attribute("type", "string");
+        this.adapter = adapter;
+      }
+    }
+    enableSti(Vehicle);
+    class Car extends Vehicle {}
+
+    // Hydrate a record as if loaded from DB — should preserve the row value,
+    // not overwrite it with the class name.
+    const record = Vehicle._instantiate({ id: 1, type: "Truck" }) as any;
+    expect(record.readAttribute("type")).toBe("Truck");
+  });
+});

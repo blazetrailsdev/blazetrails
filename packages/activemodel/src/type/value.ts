@@ -48,11 +48,11 @@ export abstract class Type<T = unknown> {
    * Returns `this` when the type's serialize path can short-circuit
    * through serialize_cast_value (i.e. the subclass has overridden
    * serialize_cast_value at the same level or above its `serialize`
-   * override). Returns null otherwise. Serialization dispatch can use
-   * this predicate to pick the cast-value fast-path over a redundant
-   * `serialize` call (Rails wires that dispatcher at
-   * `serialize_cast_value.rb:25-33`; trails callers do the same check
-   * inline against this method's truthiness).
+   * override). Returns null otherwise. Callers can use this predicate
+   * to choose the cast-value fast-path via `serializeCastValue(...)`
+   * instead of a redundant `serialize(...)` call. Rails wires that
+   * dispatcher at `serialize_cast_value.rb:25-33`; trails callers do
+   * the same check inline against this method's truthiness.
    */
   itselfIfSerializeCastValueCompatible(): this | null {
     return (

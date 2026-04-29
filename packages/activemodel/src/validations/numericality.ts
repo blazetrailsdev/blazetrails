@@ -213,8 +213,9 @@ export function parseAsNumber(num: number, precision: number, scale?: number): n
  *     round(raw_value, scale).to_d(precision)
  *   end
  *
- * Rounds to `scale` decimal places, then truncates to `precision`
+ * Rounds to `scale` decimal places, then rounds to `precision`
  * significant digits — matches Ruby's `BigDecimal(float.round(scale), precision)`.
+ * (Number.prototype.toPrecision performs rounding, not truncation.)
  *
  * @internal Rails-private helper.
  */
@@ -286,9 +287,15 @@ export function isIsNumber(
   } else if (this.isIsHexadecimalLiteral(rawValue)) {
     return false;
   }
-  const coerced = Number(rawValue);
-  if (Number.isNaN(coerced)) return false;
-  return parseAsNumber(coerced, precision, scale) !== undefined;
+  // Rails: rescue ArgumentError, TypeError; false; end. Number(Symbol)
+  // throws TypeError; mirror Rails' swallow-and-return-false.
+  try {
+    const coerced = Number(rawValue);
+    if (Number.isNaN(coerced)) return false;
+    return parseAsNumber(coerced, precision, scale) !== undefined;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -351,7 +358,19 @@ export function optionAsNumber(
       throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
     }
   }
-  const numeric = typeof resolved === "number" ? resolved : Number(resolved);
+  // Number(Symbol) throws TypeError raw; catch and rethrow with the
+  // consistent validator error so misconfigured procs (e.g. one that
+  // returns a Symbol) fail with the same shape as the other branches.
+  let numeric: number;
+  if (typeof resolved === "number") {
+    numeric = resolved;
+  } else {
+    try {
+      numeric = Number(resolved);
+    } catch {
+      throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
+    }
+  }
   if (!Number.isFinite(numeric)) {
     throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
   }

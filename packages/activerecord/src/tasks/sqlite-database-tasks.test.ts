@@ -143,3 +143,30 @@ describe("SQLiteDatabaseTasks", () => {
     }
   });
 });
+
+describe("SQLiteDatabaseTasks in-memory URI variants", () => {
+  it("test_db_create_is_noop_for_file_memory_uri", async () => {
+    const config = new HashConfig("development", "primary", {
+      adapter: "sqlite3",
+      database: "file::memory:?cache=shared",
+    });
+    // Should not throw or create any file
+    await expect(new SQLiteDatabaseTasks(config).create()).resolves.toBeUndefined();
+  });
+
+  it("test_db_drop_is_noop_for_file_memory_uri", async () => {
+    const config = new HashConfig("development", "primary", {
+      adapter: "sqlite3",
+      database: "file::memory:?cache=shared",
+    });
+    await expect(new SQLiteDatabaseTasks(config).drop()).resolves.toBeUndefined();
+  });
+
+  it("test_db_create_is_noop_for_canonical_memory", async () => {
+    const config = new HashConfig("development", "primary", {
+      adapter: "sqlite3",
+      database: ":memory:",
+    });
+    await expect(new SQLiteDatabaseTasks(config).create()).resolves.toBeUndefined();
+  });
+});

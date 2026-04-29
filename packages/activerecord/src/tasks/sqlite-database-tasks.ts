@@ -15,6 +15,17 @@ import type { DatabaseConfig } from "../database-configurations/database-config.
 import { DatabaseTasks } from "./database-tasks.js";
 import { NoDatabaseError, DatabaseAlreadyExists, NotImplementedError } from "../errors.js";
 
+/**
+ * True for SQLite in-memory database names: the canonical `:memory:` and
+ * the URI `file::memory:` variants (with optional query params).
+ * Matches what SQLite itself treats as in-memory per https://www.sqlite.org/inmemorydb.html.
+ */
+function isInMemoryDatabase(name: string): boolean {
+  if (name === ":memory:") return true;
+  if (name.startsWith("file::memory:")) return true;
+  return false;
+}
+
 export class SQLiteDatabaseTasks {
   private readonly dbConfig: DatabaseConfig;
   private readonly root: string;
@@ -32,10 +43,10 @@ export class SQLiteDatabaseTasks {
     const fs = getFs();
     const path = getPath();
     const dbPath = this.resolveDbPath();
-    if (dbPath !== ":memory:" && fs.existsSync(dbPath)) {
+    if (!isInMemoryDatabase(dbPath) && fs.existsSync(dbPath)) {
       throw new DatabaseAlreadyExists(`Database '${dbPath}' already exists`);
     }
-    if (dbPath !== ":memory:") {
+    if (!isInMemoryDatabase(dbPath)) {
       fs.mkdirSync(path.dirname(dbPath), { recursive: true });
       fs.writeFileSync(dbPath, "");
     }
@@ -44,7 +55,7 @@ export class SQLiteDatabaseTasks {
   async drop(): Promise<void> {
     const fs = getFs();
     const dbPath = this.resolveDbPath();
-    if (dbPath === ":memory:") return;
+    if (isInMemoryDatabase(dbPath)) return;
     try {
       fs.unlinkSync(dbPath);
     } catch (error: unknown) {
@@ -265,7 +276,7 @@ export class SQLiteDatabaseTasks {
     // Per PathAdapter contract, a missing isAbsolute means the adapter
     // doesn't model relative/absolute distinctions (e.g. a VFS) — treat
     // every path as already absolute.
-    if (database === ":memory:") return database;
+    if (isInMemoryDatabase(database)) return database;
     if (!path.isAbsolute || path.isAbsolute(database)) return database;
     return path.join(this.root, database);
   }

@@ -57,4 +57,18 @@ export default defineConfig({
       provider: "local",
     },
   },
+
+  vite: {
+    build: {
+      chunkSizeWarningLimit: 1500,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const apiMatch = id.match(/\/api\/@blazetrails\/([^/]+)\//);
+            if (apiMatch) return `api-${apiMatch[1]}`;
+          },
+        },
+      },
+    },
+  },
 });

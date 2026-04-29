@@ -207,14 +207,37 @@ describe("MySQL dialect overrides (audit follow-up)", () => {
     expect(compile(new Nodes.UnqualifiedColumn(users.get("name")))).toBe('"users"."name"');
   });
 
+  it("UnqualifiedColumn renders an UPDATE SET assignment without dialect drift", () => {
+    // The override exists so `UPDATE t SET col = col + 1` works on
+    // MySQL — the LHS of the assignment must compile cleanly through
+    // the inner Attribute. Regression coverage: any future change to
+    // visitUnqualifiedColumn that throws or short-circuits would
+    // break this end-to-end shape.
+    const lhs = new Nodes.UnqualifiedColumn(users.get("counter"));
+    const sql = compile(new Nodes.Assignment(lhs, new Nodes.SqlLiteral("1")));
+    expect(sql).toContain('"users"."counter"');
+    expect(sql).toContain("=");
+    expect(sql).toContain("1");
+  });
+
   it("IsNotDistinctFrom uses MySQL `<=>` operator", () => {
     const node = new Nodes.IsNotDistinctFrom(users.get("a"), users.get("b"));
     expect(compile(node)).toBe('"users"."a" <=> "users"."b"');
   });
 
+  it("IsNotDistinctFrom handles NULL on the right (Rails: `<=> NULL`)", () => {
+    const node = users.get("name").isNotDistinctFrom(null);
+    expect(compile(node)).toBe('"users"."name" <=> NULL');
+  });
+
   it("IsDistinctFrom uses MySQL `NOT ... <=>` operator", () => {
     const node = new Nodes.IsDistinctFrom(users.get("a"), users.get("b"));
     expect(compile(node)).toBe('NOT "users"."a" <=> "users"."b"');
+  });
+
+  it("IsDistinctFrom handles NULL on the right (Rails: `NOT … <=> NULL`)", () => {
+    const node = users.get("name").isDistinctFrom(null);
+    expect(compile(node)).toBe('NOT "users"."name" <=> NULL');
   });
 
   it("Regexp uses MySQL REGEXP keyword (not Postgres `~`)", () => {

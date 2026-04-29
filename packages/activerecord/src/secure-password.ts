@@ -2,7 +2,6 @@ import { getCrypto, camelize, humanize, pbkdf2Async } from "@blazetrails/actives
 import { ArgumentError } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
 import { generatesTokenFor } from "./token-for.js";
-import { attributeBeforeLastSave } from "./attribute-methods/dirty.js";
 
 /**
  * Secure password support using PBKDF2 (Web Crypto API).
@@ -100,7 +99,11 @@ export function hasSecurePassword(
       return (this as any)[challengeKey] ?? null;
     },
     set: function (value: string | null) {
-      (this as any)[challengeKey] = value;
+      // Rails uses present? to gate challenge validation — normalize blank to null.
+      (this as any)[challengeKey] =
+        value === null || value === undefined || (typeof value === "string" && !value.trim())
+          ? null
+          : value;
     },
     configurable: true,
   });
@@ -112,7 +115,9 @@ export function hasSecurePassword(
     get: function (this: Base) {
       const digest = this._readAttribute(digestAttr) as string | null;
       if (!digest) return null;
-      return digest.split(":")[0] ?? null;
+      const colonIdx = digest.indexOf(":");
+      if (colonIdx === -1) return null; // malformed digest — no salt/hash separator
+      return digest.slice(0, colonIdx);
     },
     configurable: true,
   });
@@ -178,7 +183,11 @@ export function hasSecurePassword(
   // Add validations — mirrors Rails' validates_presence_of, validates_confirmation_of,
   // and challenge validation in has_secure_password.
   if (runValidations) {
-    const attrLabel = humanize(attribute);
+    // humanAttributeName respects i18n overrides when available; fall back to humanize.
+    const attrLabel =
+      typeof (modelClass as any).humanAttributeName === "function"
+        ? (modelClass as any).humanAttributeName(attribute)
+        : humanize(attribute);
     modelClass.validate(function (record: any) {
       const rawPassword = record[passwordKey];
       const rawPasswordPresent =
@@ -206,12 +215,14 @@ export function hasSecurePassword(
       }
 
       // Challenge: verify current password against the pre-change digest.
-      // Mirrors Rails' challenge validation using dirty tracking's "was" value
-      // (`#{attribute}_digest_was`). Falls back to current digest if no prior
-      // save exists (e.g. new record — challenge validation fails gracefully).
+      // Mirrors Rails' `#{attribute}_digest_was` via attributeWas — the
+      // value before the current unsaved change, not before the last save.
       const challenge = record[challengeKey];
       if (challenge !== null && challenge !== undefined) {
-        const digestWas = attributeBeforeLastSave(record, digestAttr) ?? record._readAttribute(digestAttr);
+        const digestWas =
+          typeof record.attributeWas === "function"
+            ? record.attributeWas(digestAttr)
+            : record._readAttribute(digestAttr);
         if (!digestWas || !verifyPassword(String(challenge), digestWas as string)) {
           record.errors.add(challengeProp, "invalid");
         }

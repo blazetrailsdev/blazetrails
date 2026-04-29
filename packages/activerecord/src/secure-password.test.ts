@@ -561,4 +561,25 @@ describe("hasSecurePassword — per-attribute confirmation, challenge, and salt"
     const valid = await u.validate();
     expect(valid).toBe(true);
   });
+
+  it("challenge validation checks current digest after multiple saves", async () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recovery_password = "first";
+    await u.save({ validate: false });
+
+    // Second save — update password
+    (u as any).recovery_password = "second";
+    await u.save({ validate: false });
+
+    // Now challenge must match "second", not "first"
+    (u as any).recovery_password = "third";
+    (u as any).recoveryPasswordChallenge = "first"; // old — should fail
+    expect(await u.validate()).toBe(false);
+
+    (u as any).errors.clear?.();
+    (u as any).recovery_password = "third";
+    (u as any).recoveryPasswordChallenge = "second"; // current — should pass
+    expect(await u.validate()).toBe(true);
+  });
 });

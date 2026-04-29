@@ -1,8 +1,9 @@
 /**
  * @boundary-file: ActiveSupport::Notifications::Event exposes `time: Date` /
- *   `end: Date` as a public contract for log subscribers and listeners
- *   (Rails parity — Ruby Event#time returns a Time). The Temporal flip on
- *   this surface is tracked separately as a cross-cutting subscriber refactor.
+ *   `end: Date | null` as a public contract for log subscribers and listeners;
+ *   `end` becomes a `Date` once `finish()` runs (Rails parity — Ruby
+ *   Event#time returns a Time). The Temporal flip on this surface is tracked
+ *   separately as a cross-cutting subscriber refactor.
  */
 
 export type EventPayload = Record<string, unknown>;

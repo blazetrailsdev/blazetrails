@@ -101,12 +101,10 @@ export class TimeWithZone {
     return this._zoned.epochMilliseconds;
   }
 
-  /**
-   * Build a Date snapshot for legacy Date-based helpers and formatters.
-   * boundary: bridges the Temporal-typed storage to the still-Date-typed
-   * `TimeZone` lookup helpers and `time-ext`/`duration` arithmetic.
-   */
+  /** Build a Date snapshot for legacy Date-based helpers and formatters. */
   private _toDate(): Date {
+    // boundary: bridges Temporal-backed state to still-Date-typed TimeZone
+    // helpers and time-ext/duration arithmetic.
     return new Date(this._epochMs);
   }
 
@@ -240,16 +238,17 @@ export class TimeWithZone {
 
   /** Day of the week, 0=Sunday */
   get wday(): number {
-    // boundary: JS Date constructor for cheap weekday-of arithmetic.
     const l = this._local();
+    // boundary: JS Date constructor for cheap weekday-of arithmetic.
     return new Date(l.year, l.month - 1, l.day).getDay();
   }
 
   /** Day of the year, 1-366 */
   get yday(): number {
-    // boundary: JS Date arithmetic for day-of-year span calculation.
     const l = this._local();
+    // boundary: JS Date arithmetic for day-of-year span calculation.
     const jan1 = new Date(l.year, 0, 1);
+    // boundary: JS Date arithmetic for day-of-year span calculation.
     const localDate = new Date(l.year, l.month - 1, l.day);
     return Math.floor((localDate.getTime() - jan1.getTime()) / 86400000) + 1;
   }

@@ -27,10 +27,14 @@ import {
  * `nil` works when the excluded set explicitly contains it.
  */
 export class ExclusionValidator extends EachValidator {
-  resolveValue = resolveValue;
-  delimiter = delimiter;
-  inclusionMethod = inclusionMethod;
-  isInclude = isInclude;
+  // Declarations only — actual functions attached to the prototype below.
+  // Prototype attachment (not class fields) so the Clusivity helpers are
+  // available during super() / EachValidator's constructor-time
+  // checkValidity() call.
+  declare resolveValue: typeof resolveValue;
+  declare delimiter: typeof delimiter;
+  declare inclusionMethod: typeof inclusionMethod;
+  declare isInclude: typeof isInclude;
 
   override checkValidity(): void {
     checkValidityBang.call(this);
@@ -42,3 +46,8 @@ export class ExclusionValidator extends EachValidator {
     }
   }
 }
+
+ExclusionValidator.prototype.resolveValue = resolveValue;
+ExclusionValidator.prototype.delimiter = delimiter;
+ExclusionValidator.prototype.inclusionMethod = inclusionMethod;
+ExclusionValidator.prototype.isInclude = isInclude;

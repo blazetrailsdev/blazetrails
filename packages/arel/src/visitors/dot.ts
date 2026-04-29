@@ -25,11 +25,16 @@ export class DotNode {
   }
 }
 
-/** Mirrors `Arel::Visitors::Dot::Edge` (a Struct of name/from/to). */
+/**
+ * Mirrors `Arel::Visitors::Dot::Edge` (a Struct of name/from/to).
+ * `to` is set later by `withNode` once the destination Node exists; it
+ * stays `undefined` for edges whose target was filtered out (e.g. an
+ * unenumerated leaf). `toDot` skips edges with no `to`.
+ */
 export class DotEdge {
   readonly name: string;
   readonly from: DotNode;
-  to!: DotNode;
+  to?: DotNode;
 
   constructor(name: string, from: DotNode) {
     this.name = name;
@@ -264,9 +269,15 @@ export class Dot extends Visitor {
     this.visitEdge(o, "valueBeforeTypeCast");
   }
 
+  /**
+   * Mirrors Rails: `visit_Hash` (dot.rb:227). The outer edge label is
+   * `pair_#{i}`; the inner `visit pair` dispatches to `visit_Array` so
+   * each key and value becomes a child node under the pair, preserving
+   * both halves of the entry in the graph.
+   */
   protected visitHash(o: Record<string, unknown>): void {
-    Object.entries(o).forEach(([, value], i) => {
-      this.edge(`pair_${i}`, () => this.visit(value as Node));
+    Object.entries(o).forEach((pair, i) => {
+      this.edge(`pair_${i}`, () => this.visit(pair as unknown as Node));
     });
   }
 
@@ -376,8 +387,7 @@ export class Dot extends Visitor {
     const edgeLines = this.edges
       // Rails always sets `to` via with_node; defend against orphan edges
       // (a value that hit visit_String produces no incoming `to`).
-      .filter((e) => e.to !== undefined)
-      .map((e) => `${e.from.id} -> ${e.to.id} [label="${e.name}"];`);
+      .flatMap((e) => (e.to ? [`${e.from.id} -> ${e.to.id} [label="${e.name}"];`] : []));
     return [header, ...nodeLines, ...edgeLines, "}"].join("\n");
   }
 

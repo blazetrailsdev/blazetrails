@@ -155,5 +155,23 @@ describe("TestDot", () => {
       // side-field on the parent node with quote() escaping the `"`.
       expect(out).toContain('say \\"hi\\"');
     });
+
+    it("visitHash preserves both key and value (Rails parity)", () => {
+      // Mirrors Rails dot.rb:227 — visit_Hash emits one edge per entry
+      // labeled "pair_<i>" pointing at an Array node, which itself emits
+      // index-labeled edges for the [key, value] tuple. Both halves of
+      // the entry must end up in the graph.
+      const v = new Visitors.Dot();
+      type Internals = { visit(o: unknown): void };
+      v.compile(new Nodes.SqlLiteral("")); // initialize state
+      (v as unknown as Internals).visit({ alpha: "A", beta: "B" });
+      const out = (v as unknown as { toDot(): string }).toDot();
+      expect(out).toContain('[label="pair_0"]');
+      expect(out).toContain('[label="pair_1"]');
+      expect(out).toContain("alpha");
+      expect(out).toContain("beta");
+      expect(out).toContain("A");
+      expect(out).toContain("B");
+    });
   });
 });

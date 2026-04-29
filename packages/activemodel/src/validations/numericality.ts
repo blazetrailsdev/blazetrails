@@ -230,25 +230,29 @@ export function parseFloatRails(num: number, precision: number, scale?: number):
  *     scale ? raw_value.round(scale) : raw_value
  *   end
  *
- * Ruby Float#round is banker's rounding (half-to-even) by default,
- * matching IEEE 754 round-to-nearest-even. JS Math.round is
- * half-to-positive-infinity, so a manual implementation is required to
- * keep tie boundaries (...5) faithful.
+ * Ruby Float#round defaults to half-away-from-zero (NOT banker's
+ * rounding): 2.5.round == 3, (-2.5).round == -3. Matches the existing
+ * repo helper at activesupport/src/number-helper/rounding-helper.ts
+ * (rubyRound).
  *
  * @internal Rails-private helper.
  */
 export function round(num: number, scale?: number): number {
   if (scale === undefined || scale === null) return num;
   const factor = Math.pow(10, scale);
-  const scaled = num * factor;
-  const floor = Math.floor(scaled);
-  const diff = scaled - floor;
-  // Use a small epsilon to absorb FP residue (e.g. 1.005 * 100 = 100.49999…)
-  const EPS = 1e-9;
-  if (diff < 0.5 - EPS) return floor / factor;
-  if (diff > 0.5 + EPS) return (floor + 1) / factor;
-  // Tie: round to even.
-  return (floor % 2 === 0 ? floor : floor + 1) / factor;
+  return rubyRound(num * factor) / factor;
+}
+
+/**
+ * Half-away-from-zero rounding, with an epsilon adjustment to absorb
+ * FP residue (e.g. `1.005 * 100 === 100.49999999999999`). Matches
+ * activesupport/src/number-helper/rounding-helper.ts#rubyRound.
+ */
+function rubyRound(value: number): number {
+  if (value === 0) return 0;
+  const adjusted = value + (value >= 0 ? Number.EPSILON : -Number.EPSILON);
+  if (adjusted > 0) return Math.floor(adjusted + 0.5);
+  return -Math.floor(-adjusted + 0.5);
 }
 
 /**

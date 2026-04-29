@@ -104,11 +104,24 @@ export const SKIP = new Set([
 
 /**
  * Convert Ruby method name → candidate TS names to try matching.
- * Returns null if the method should be skipped entirely.
- * Returns multiple candidates for predicates where both forms are common:
- *   has_attribute? → ["hasAttribute", "isHasAttribute"]
- *   supports_savepoints? → ["supportsSavepoints", "isSupportsSavepoints"]
- *   valid? → ["isValid", "valid"]
+ *
+ * Returns null if the method should be skipped entirely. Otherwise
+ * returns one or more candidate TS names; compare.ts matches the first
+ * candidate found in the target file's symbol set.
+ *
+ * Predicate naming policy:
+ *   - `is_*?` returns ONLY the camel form (`is_number?` → ["isNumber"]).
+ *     The doubled `isIsNumber` form is always redundant — Ruby already
+ *     conveys the predicate via the `is_` prefix.
+ *   - Other already-predicate prefixes (`has_*?`, `supports_*?`,
+ *     `can_*?`, …) keep BOTH the camel form and the isPrefixed form
+ *     (`has_attribute?` → ["hasAttribute", "isHasAttribute"]). The
+ *     isPrefixed fallback exists because trails sometimes needs the
+ *     disambiguating alias when the bare name collides with a Rails
+ *     macro — e.g. Reflection exposes `isHasOne()` alongside the
+ *     `Model.hasOne` association declaration.
+ *   - Bare predicates (`valid?`, `blank?`) return both forms with the
+ *     isPrefixed form first (`valid?` → ["isValid", "valid"]).
  */
 export function rubyMethodToTs(name: string): string[] | null {
   if (OPERATORS.has(name)) return null;

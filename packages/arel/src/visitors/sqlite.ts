@@ -8,7 +8,7 @@ import { ToSql } from "./to-sql.js";
  * Mirrors: Arel::Visitors::SQLite
  */
 export class SQLite extends ToSql {
-  protected override visit_Arel_Nodes_SelectStatement(node: Nodes.SelectStatement): SQLString {
+  protected override visitArelNodesSelectStatement(node: Nodes.SelectStatement): SQLString {
     if (node.with) {
       this.visit(node.with);
       this.collector.append(" ");
@@ -51,12 +51,12 @@ export class SQLite extends ToSql {
     return this.collector;
   }
 
-  protected override visit_Arel_Nodes_True(_node: Nodes.True): SQLString {
+  protected override visitArelNodesTrue(_node: Nodes.True): SQLString {
     this.collector.append("1");
     return this.collector;
   }
 
-  protected override visit_Arel_Nodes_False(_node: Nodes.False): SQLString {
+  protected override visitArelNodesFalse(_node: Nodes.False): SQLString {
     this.collector.append("0");
     return this.collector;
   }

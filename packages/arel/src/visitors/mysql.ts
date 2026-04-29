@@ -9,7 +9,7 @@ import { ToSql } from "./to-sql.js";
  * Mirrors: Arel::Visitors::MySQL
  */
 export class MySQL extends ToSql {
-  protected override visit_Arel_Nodes_SelectStatement(node: Nodes.SelectStatement): SQLString {
+  protected override visitArelNodesSelectStatement(node: Nodes.SelectStatement): SQLString {
     if (node.with) {
       this.visit(node.with);
       this.collector.append(" ");
@@ -50,7 +50,7 @@ export class MySQL extends ToSql {
     return this.collector;
   }
 
-  protected override visit_Arel_Nodes_SelectCore(node: Nodes.SelectCore): SQLString {
+  protected override visitArelNodesSelectCore(node: Nodes.SelectCore): SQLString {
     this.collector.append("SELECT");
 
     this.emitOptimizerHints(node);
@@ -192,7 +192,7 @@ export class MySQL extends ToSql {
   protected override visitCte(node: Nodes.Cte): SQLString {
     // MySQL identifiers are backtick-quoted, not double-quoted, and the
     // MATERIALIZED / NOT MATERIALIZED modifiers Postgres supports are
-    // ignored. Mirrors Rails' MySQL visit_Arel_Nodes_Cte which calls
+    // ignored. Mirrors Rails' MySQL visitArelNodesCte which calls
     // `quote_table_name` (which emits backticks on the MySQL adapter).
     const escaped = node.name.replace(/`/g, "``");
     this.collector.append(`\`${escaped}\` AS (`);

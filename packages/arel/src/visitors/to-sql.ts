@@ -126,11 +126,11 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       d.set(ctor, m);
     };
     // Statements
-    reg(Nodes.SelectStatement, "visit_Arel_Nodes_SelectStatement");
-    reg(Nodes.SelectCore, "visit_Arel_Nodes_SelectCore");
-    reg(Nodes.InsertStatement, "visit_Arel_Nodes_InsertStatement");
-    reg(Nodes.UpdateStatement, "visit_Arel_Nodes_UpdateStatement");
-    reg(Nodes.DeleteStatement, "visit_Arel_Nodes_DeleteStatement");
+    reg(Nodes.SelectStatement, "visitArelNodesSelectStatement");
+    reg(Nodes.SelectCore, "visitArelNodesSelectCore");
+    reg(Nodes.InsertStatement, "visitArelNodesInsertStatement");
+    reg(Nodes.UpdateStatement, "visitArelNodesUpdateStatement");
+    reg(Nodes.DeleteStatement, "visitArelNodesDeleteStatement");
     // Set operations
     reg(Nodes.UnionAll, "visitUnionAll");
     reg(Nodes.Union, "visitUnion");
@@ -205,7 +205,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.Fragments, "visitFragments");
     // Functions
     reg(Nodes.NamedFunction, "visitNamedFunction");
-    reg(Nodes.Exists, "visit_Arel_Nodes_Exists");
+    reg(Nodes.Exists, "visitArelNodesExists");
     reg(Nodes.Count, "visitCount");
     reg(Nodes.Sum, "visitSum");
     reg(Nodes.Max, "visitMax");
@@ -218,26 +218,26 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Nodes.Group, "visitGroup");
     reg(Nodes.GroupingElement, "visitGroupingElement");
     reg(Nodes.Lateral, "visitLateral");
-    reg(Nodes.Comment, "visit_Arel_Nodes_Comment");
-    reg(Nodes.OptimizerHints, "visit_Arel_Nodes_OptimizerHints");
+    reg(Nodes.Comment, "visitArelNodesComment");
+    reg(Nodes.OptimizerHints, "visitArelNodesOptimizerHints");
     reg(Nodes.HomogeneousIn, "visitHomogeneousIn");
     // Boolean literals
-    reg(Nodes.True, "visit_Arel_Nodes_True");
-    reg(Nodes.False, "visit_Arel_Nodes_False");
+    reg(Nodes.True, "visitArelNodesTrue");
+    reg(Nodes.False, "visitArelNodesFalse");
     // Leaf nodes
     reg(Nodes.Distinct, "visitDistinct");
     reg(Nodes.SqlLiteral, "visitSqlLiteral");
     reg(Nodes.Quoted, "visitQuoted");
-    reg(Nodes.Casted, "visit_Arel_Nodes_Casted");
+    reg(Nodes.Casted, "visitArelNodesCasted");
     reg(Nodes.UnqualifiedColumn, "visitUnqualifiedColumn");
     reg(Nodes.Attribute, "visitAttribute");
-    reg(Nodes.ValuesList, "visit_Arel_Nodes_ValuesList");
+    reg(Nodes.ValuesList, "visitArelNodesValuesList");
     reg(Table, "visitTable");
   }
 
   // -- Statements --
 
-  protected visit_Arel_Nodes_SelectStatement(node: Nodes.SelectStatement): SQLString {
+  protected visitArelNodesSelectStatement(node: Nodes.SelectStatement): SQLString {
     if (node.with) {
       this.visit(node.with);
       this.collector.append(" ");
@@ -285,11 +285,11 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
   }
 
-  // Mirrors Rails: visit_Arel_Nodes_SelectCore (to_sql.rb:149). Where Rails
+  // Mirrors Rails: visitArelNodesSelectCore (to_sql.rb:149). Where Rails
   // uses collect_nodes_for to emit `spacer` + injectJoin in one call, we do
   // the same; wheres/havings collapse multiple predicates with " AND " via
   // collect_nodes_for's connector arg.
-  protected visit_Arel_Nodes_SelectCore(node: Nodes.SelectCore): SQLString {
+  protected visitArelNodesSelectCore(node: Nodes.SelectCore): SQLString {
     this.collector.append("SELECT");
 
     this.collectOptimizerHints(node);
@@ -312,7 +312,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visit_Arel_Nodes_InsertStatement(node: Nodes.InsertStatement): SQLString {
+  protected visitArelNodesInsertStatement(node: Nodes.InsertStatement): SQLString {
     this.collector.retryable = false;
     this.collector.append("INSERT INTO ");
     if (node.relation) this.visit(node.relation);
@@ -339,7 +339,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visit_Arel_Nodes_UpdateStatement(o: Nodes.UpdateStatement): SQLString {
+  protected visitArelNodesUpdateStatement(o: Nodes.UpdateStatement): SQLString {
     const node = this.prepareUpdateStatement(o);
     this.collector.retryable = false;
     this.collector.append("UPDATE ");
@@ -374,7 +374,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visit_Arel_Nodes_DeleteStatement(o: Nodes.DeleteStatement): SQLString {
+  protected visitArelNodesDeleteStatement(o: Nodes.DeleteStatement): SQLString {
     const node = this.prepareDeleteStatement(o);
     this.collector.retryable = false;
     this.collector.append("DELETE ");
@@ -861,7 +861,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visit_Arel_Nodes_Exists(node: Nodes.Exists): SQLString {
+  protected visitArelNodesExists(node: Nodes.Exists): SQLString {
     this.collector.append("EXISTS (");
     this.visit(node.expressions);
     this.collector.append(")");
@@ -1114,12 +1114,12 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   // -- Boolean literals --
 
-  protected visit_Arel_Nodes_True(_node: Nodes.True): SQLString {
+  protected visitArelNodesTrue(_node: Nodes.True): SQLString {
     this.collector.append("TRUE");
     return this.collector;
   }
 
-  protected visit_Arel_Nodes_False(_node: Nodes.False): SQLString {
+  protected visitArelNodesFalse(_node: Nodes.False): SQLString {
     this.collector.append("FALSE");
     return this.collector;
   }
@@ -1185,23 +1185,23 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // Mirrors Rails: visit_Arel_Nodes_Comment (to_sql.rb:175). Rails joins
+  // Mirrors Rails: visitArelNodesComment (to_sql.rb:175). Rails joins
   // with " " into a single string; we keep the per-comment structure with a
   // leading space because callers append directly without a separator.
-  protected visit_Arel_Nodes_Comment(node: Nodes.Comment): SQLString {
+  protected visitArelNodesComment(node: Nodes.Comment): SQLString {
     for (const value of node.values) {
       this.collector.append(` /* ${this.sanitizeAsSqlComment(value)} */`);
     }
     return this.collector;
   }
 
-  // Mirrors Rails: visit_Arel_Nodes_OptimizerHints (to_sql.rb:170). The
+  // Mirrors Rails: visitArelNodesOptimizerHints (to_sql.rb:170). The
   // OptimizerHints node carries a list of hint strings (Rails' `o.expr` is
   // an array); each hint is sanitized and the joined result wrapped in
   // /*+ ... */. Trails' SelectCore also stores hints inline as `string[]`
   // — this method exists for callers that build an OptimizerHints node
   // explicitly.
-  protected visit_Arel_Nodes_OptimizerHints(node: Nodes.OptimizerHints): SQLString {
+  protected visitArelNodesOptimizerHints(node: Nodes.OptimizerHints): SQLString {
     const hints = node.hints.map((v) => this.sanitizeAsSqlComment(v)).join(" ");
     this.collector.append(` /*+ ${hints} */`);
     return this.collector;
@@ -1304,7 +1304,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   protected visitUnqualifiedColumn(node: Nodes.UnqualifiedColumn): SQLString {
-    // Mirrors Arel's visit_Arel_Nodes_UnqualifiedColumn — strips the table
+    // Mirrors Arel's visitArelNodesUnqualifiedColumn — strips the table
     // qualifier so `SET col = col + 1` works in UPDATE statements.
     const attr = node.attribute as Partial<Nodes.Attribute> | undefined;
     if (!attr || typeof attr.name !== "string") {
@@ -1345,7 +1345,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  protected visit_Arel_Nodes_Casted(node: Nodes.Casted): SQLString {
+  protected visitArelNodesCasted(node: Nodes.Casted): SQLString {
     const value = node.valueForDatabase();
     if (this._extractBinds) {
       this.collector.addBind(value);
@@ -1355,7 +1355,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visit_Arel_Nodes_ValuesList(node: Nodes.ValuesList): SQLString {
+  private visitArelNodesValuesList(node: Nodes.ValuesList): SQLString {
     this.collector.append("VALUES ");
     for (let i = 0; i < node.rows.length; i++) {
       if (i > 0) this.collector.append(", ");

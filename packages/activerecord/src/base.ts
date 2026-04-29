@@ -2178,12 +2178,14 @@ export class Base extends Model {
       if (!wasSuppressed) {
         // Mirrors Rails' initialize_internals_callback chain order:
         //   populate_with_current_scope_attributes (scoping) → ensure_proper_type (STI)
-        // Scope attrs applied first so the STI type column write wins last.
-        _applyScopeAttributes(
-          ctor,
-          this as any,
-          new Set([...Object.keys(multiparams), ...Object.keys(regular)]),
-        );
+        // Guard on currentScope before allocating the Set — the no-scope case is the hot path.
+        if ((ctor as any).currentScope) {
+          _applyScopeAttributes(
+            ctor,
+            this as any,
+            new Set([...Object.keys(multiparams), ...Object.keys(regular)]),
+          );
+        }
         inheritanceInitializeInternalsCallback.call(this as any);
         // Re-snapshot so internals writes are part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);
@@ -2216,7 +2218,10 @@ export class Base extends Model {
       if (!wasSuppressed2) {
         // Mirrors Rails' initialize_internals_callback chain order:
         //   populate_with_current_scope_attributes (scoping) → ensure_proper_type (STI)
-        _applyScopeAttributes(ctor2, this as any, new Set(Object.keys(attrs)));
+        // Guard on currentScope before allocating the Set — the no-scope case is the hot path.
+        if ((ctor2 as any).currentScope) {
+          _applyScopeAttributes(ctor2, this as any, new Set(Object.keys(attrs)));
+        }
         inheritanceInitializeInternalsCallback.call(this as any);
         // Re-snapshot so internals writes are part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);

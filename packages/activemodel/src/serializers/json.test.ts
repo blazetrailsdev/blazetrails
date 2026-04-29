@@ -138,9 +138,10 @@ describe("Serializers::JSON host", () => {
     expect(c.asJson()).toMatchObject({ author: { name: "Eve" } });
   });
 
-  it("fromJson rejects non-object JSON (Rails would NoMethodError)", () => {
-    expect(() => new Person().fromJson("42")).toThrow(/expected a JSON object/);
-    expect(() => new Person().fromJson("[1,2,3]")).toThrow(/expected a JSON object/);
+  it("fromJson rejects non-object JSON with shape-accurate diagnostics", () => {
+    expect(() => new Person().fromJson("42")).toThrow(/got number/);
+    expect(() => new Person().fromJson("[1,2,3]")).toThrow(/got array/);
+    expect(() => new Person().fromJson("null")).toThrow(/got null/);
   });
 
   it("fromJson with string includeRootInJson unwraps by that key, not first-value", () => {

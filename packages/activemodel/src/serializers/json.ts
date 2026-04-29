@@ -1,6 +1,16 @@
 import { serializableHash, coerceForJson, type SerializeOptions } from "../serialization.js";
 import { ModelName } from "../naming.js";
 
+function isPlainJsonObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function describeJsonShape(v: unknown): string {
+  if (v === null) return "null";
+  if (Array.isArray(v)) return "array";
+  return typeof v;
+}
+
 /**
  * JSON serializer mixin host.
  *
@@ -99,8 +109,8 @@ export class JSON {
     // Rails calls `hash.values.first` and raises NoMethodError if the
     // decoded JSON isn't a Hash. Surface the same failure mode loudly
     // instead of silently writing `undefined` into `attributes`.
-    if (hash === null || typeof hash !== "object" || Array.isArray(hash)) {
-      throw new TypeError(`fromJson expected a JSON object, got ${typeof hash}`);
+    if (!isPlainJsonObject(hash)) {
+      throw new TypeError(`fromJson expected a JSON object, got ${describeJsonShape(hash)}`);
     }
     if (root) {
       // When includeRootInJson is a string, prefer the explicit key so
@@ -111,8 +121,10 @@ export class JSON {
         Object.prototype.hasOwnProperty.call(hash, ctor.includeRootInJson)
           ? (hash as Record<string, unknown>)[ctor.includeRootInJson]
           : Object.values(hash as Record<string, unknown>)[0];
-      if (hash === null || typeof hash !== "object" || Array.isArray(hash)) {
-        throw new TypeError(`fromJson root payload must be a JSON object, got ${typeof hash}`);
+      if (!isPlainJsonObject(hash)) {
+        throw new TypeError(
+          `fromJson root payload must be a JSON object, got ${describeJsonShape(hash)}`,
+        );
       }
     }
     (this as unknown as { attributes: Record<string, unknown> }).attributes = hash as Record<

@@ -612,19 +612,18 @@ describe("numericality with in: range", () => {
     expect(new User({ name: "+0x10" }).isValid()).toBe(false);
   });
 
-  it("rejects hexadecimal compare-option values", () => {
-    // optionAsNumber should mirror parse_as_number — a hex string
-    // resolved as a compare option must throw, not silently coerce to
-    // its decimal equivalent (would make greaterThan: '0x10' behave as
-    // greaterThan: 16).
+  it("skips hexadecimal compare-option values (Rails option_as_number returns nil)", () => {
+    // Rails parse_as_number's elsif chain falls through for hex literals
+    // (skips Kernel.Float when is_hexadecimal_literal? matches), so
+    // option_as_number returns nil and the comparison is silently
+    // skipped — neither raises nor coerces "0x10" to 16.
     class User extends Model {
       static {
         this.attribute("score", "integer");
         this.validates("score", { numericality: { greaterThan: "0x10" } });
       }
     }
-    expect(() => new User({ score: 20 }).isValid()).toThrow(
-      /Resolved numericality option must be numeric/,
-    );
+    expect(new User({ score: 20 }).isValid()).toBe(true);
+    expect(new User({ score: 5 }).isValid()).toBe(true);
   });
 });

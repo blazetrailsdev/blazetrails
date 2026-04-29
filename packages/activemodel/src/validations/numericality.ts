@@ -369,18 +369,22 @@ export function optionAsNumber(
     throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
   }
   if (typeof resolved === "string") {
-    // Rails parse_as_number rejects blank strings (Kernel.Float raises)
-    // and hex literals (the elsif chain returns nil). Mirror both so a
-    // misconfigured compare option fails loudly instead of silently
-    // accepting "0x10" as 16.
     if (resolved.trim() === "") {
+      // Rails Kernel.Float raises ArgumentError on blank strings, so
+      // option_as_number propagates the error.
       throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
     }
     const trimmed = resolved.trimStart();
-    if (HEXADECIMAL_REGEX.test(trimmed) || NON_DECIMAL_LITERAL_REGEX.test(trimmed)) {
-      // Rails parse_as_number rejects hex via the elsif chain;
-      // additionally guard 0b…/0o… because JS Number() would silently
-      // coerce those (Number("0b10") === 2).
+    // Rails parse_as_number's elsif chain falls through for hex literals
+    // (skips the Kernel.Float branch), returning nil — so option_as_number
+    // returns nil too and the comparison is silently skipped. Mirror that
+    // by returning undefined here rather than raising.
+    if (HEXADECIMAL_REGEX.test(trimmed)) return undefined;
+    // 0b… / 0o… are NOT special-cased in Rails — Kernel.Float just
+    // raises ArgumentError on them — so option_as_number should raise
+    // too. JS Number() would silently coerce, so the explicit guard is
+    // load-bearing on the trails side.
+    if (NON_DECIMAL_LITERAL_REGEX.test(trimmed)) {
       throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
     }
   }

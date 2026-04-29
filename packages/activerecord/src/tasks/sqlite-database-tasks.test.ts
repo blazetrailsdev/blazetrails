@@ -146,8 +146,6 @@ describe("SQLiteDatabaseTasks", () => {
 });
 
 describe("SQLiteDatabaseTasks in-memory URI variants", () => {
-  let mockFs: ReturnType<typeof vi.spyOn>;
-
   afterEach(() => {
     vi.restoreAllMocks();
   });

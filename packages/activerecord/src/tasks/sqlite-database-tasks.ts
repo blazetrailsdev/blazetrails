@@ -25,7 +25,10 @@ import { NoDatabaseError, DatabaseAlreadyExists, NotImplementedError } from "../
 function isInMemoryDatabase(name: string): boolean {
   if (name === ":memory:") return true;
   if (!name.startsWith("file:")) return false;
-  return name.startsWith("file::memory:") || name.includes("mode=memory");
+  if (name.startsWith("file::memory:")) return true;
+  const q = name.indexOf("?");
+  if (q === -1) return false;
+  return new URLSearchParams(name.slice(q + 1)).get("mode") === "memory";
 }
 
 export class SQLiteDatabaseTasks {

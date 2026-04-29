@@ -2176,15 +2176,15 @@ export class Base extends Model {
       // Re-snapshot so mp attrs are part of the initial clean state.
       (this as any)._dirty.snapshot((this as any)._attributes);
       if (!wasSuppressed) {
-        // Fire initialize_internals_callback after attribute assignment.
-        inheritanceInitializeInternalsCallback.call(this as any);
-        // Scoping: apply current-scope attrs non-destructively — skip keys
-        // already in the explicit multiparams (those take precedence).
+        // Mirrors Rails' initialize_internals_callback chain order:
+        //   populate_with_current_scope_attributes (scoping) → ensure_proper_type (STI)
+        // Scope attrs applied first so the STI type column write wins last.
         _applyScopeAttributes(
           ctor,
           this as any,
           new Set([...Object.keys(multiparams), ...Object.keys(regular)]),
         );
+        inheritanceInitializeInternalsCallback.call(this as any);
         // Re-snapshot so internals writes are part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);
         ctor._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
@@ -2214,11 +2214,10 @@ export class Base extends Model {
         }
       }
       if (!wasSuppressed2) {
-        inheritanceInitializeInternalsCallback.call(this as any);
-        // Scoping: apply current-scope attrs non-destructively — skip keys
-        // already in the explicit attrs (explicit attrs take precedence, mirroring
-        // Rails where scope attrs are set first then overwritten by explicit attrs).
+        // Mirrors Rails' initialize_internals_callback chain order:
+        //   populate_with_current_scope_attributes (scoping) → ensure_proper_type (STI)
         _applyScopeAttributes(ctor2, this as any, new Set(Object.keys(attrs)));
+        inheritanceInitializeInternalsCallback.call(this as any);
         // Re-snapshot so internals writes are part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);
         ctor2._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);

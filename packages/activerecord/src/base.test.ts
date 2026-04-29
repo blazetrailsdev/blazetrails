@@ -3481,3 +3481,28 @@ describe("_applyScopeAttributes — multiparameter path", () => {
     });
   });
 });
+
+describe("_applyScopeAttributes — STI type column wins over scope", () => {
+  const adapter = createTestAdapter();
+
+  it("STI type column is not overwritten by a scope that sets type", async () => {
+    class Vehicle extends Base {
+      static {
+        this._tableName = "vehicles";
+        this.attribute("id", "integer");
+        this.attribute("type", "string");
+        this.adapter = adapter;
+      }
+    }
+    const { enableSti } = await import("./inheritance.js");
+    enableSti(Vehicle);
+    class Car extends Vehicle {}
+
+    // Scope includes type: "Vehicle" — but new Car() should still have type: "Car"
+    const rel = Vehicle.where({ type: "Vehicle" });
+    await Vehicle.scoping(rel, async () => {
+      const car = new Car({});
+      expect(car.readAttribute("type")).toBe("Car");
+    });
+  });
+});

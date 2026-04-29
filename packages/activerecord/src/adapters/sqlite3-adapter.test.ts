@@ -574,30 +574,30 @@ describe("SqliteAdapter", () => {
   });
 });
 
-describe("SQLite3Adapter._isMemoryFilename (via supportsConcurrentConnections)", () => {
-  it("treats :memory: as in-memory (no concurrent connections)", () => {
-    const a = new SQLite3Adapter(":memory:");
-    expect(a.supportsConcurrentConnections()).toBe(false);
+describe("SQLite3Adapter._isMemoryFilename", () => {
+  // Access the private static via `as any` — avoids opening any real DB connection.
+  const isMemoryFilename = (SQLite3Adapter as any)._isMemoryFilename.bind(SQLite3Adapter) as (
+    filename: string,
+  ) => boolean;
+
+  it("treats :memory: as in-memory", () => {
+    expect(isMemoryFilename(":memory:")).toBe(true);
   });
 
   it("treats file::memory: URI as in-memory", () => {
-    const a = new SQLite3Adapter("file::memory:?cache=shared");
-    expect(a.supportsConcurrentConnections()).toBe(false);
+    expect(isMemoryFilename("file::memory:?cache=shared")).toBe(true);
   });
 
   it("treats file:?mode=memory URI as in-memory", () => {
-    const a = new SQLite3Adapter("file:memdb1?mode=memory&cache=shared");
-    expect(a.supportsConcurrentConnections()).toBe(false);
+    expect(isMemoryFilename("file:memdb1?mode=memory&cache=shared")).toBe(true);
   });
 
   it("does NOT treat a path containing mode=memory text as in-memory", () => {
     // file:/tmp/mode=memory.db has the text but not as a query param
-    const a = new SQLite3Adapter("file:/tmp/mode=memory.db");
-    expect(a.supportsConcurrentConnections()).toBe(true);
+    expect(isMemoryFilename("file:/tmp/mode=memory.db")).toBe(false);
   });
 
-  it("treats a regular file path as on-disk (concurrent connections ok)", () => {
-    const a = new SQLite3Adapter("/tmp/test.db");
-    expect(a.supportsConcurrentConnections()).toBe(true);
+  it("treats a regular file path as on-disk", () => {
+    expect(isMemoryFilename("/tmp/test.db")).toBe(false);
   });
 });

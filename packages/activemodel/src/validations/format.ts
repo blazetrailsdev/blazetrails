@@ -32,8 +32,10 @@ export class FormatValidator extends EachValidator {
 
   override checkValidity(): void {
     // Rails: `unless options.include?(:with) ^ options.include?(:without)`
-    const hasWith = "with" in this.options;
-    const hasWithout = "without" in this.options;
+    // — Hash#include? checks own keys only; use Object.hasOwn to avoid
+    // prototype-chain surprises (the `in` operator would include inherited).
+    const hasWith = Object.hasOwn(this.options, "with");
+    const hasWithout = Object.hasOwn(this.options, "without");
     if (hasWith === hasWithout) {
       throw new Error("Either :with or :without must be supplied (but not both)");
     }
@@ -42,14 +44,19 @@ export class FormatValidator extends EachValidator {
   }
 
   validateEach(record: AnyRecord, attribute: string, value: unknown): void {
-    if (this.options.with !== undefined) {
+    // Rails uses Ruby truthiness on options[:with] / options[:without] —
+    // nil/false skip the branch entirely. Mirror that so an explicit
+    // `null` / `false` option doesn't crash at .test time.
+    // value.to_s in Ruby coerces nil → ""; JS String(null) → "null".
+    const target = value == null ? "" : String(value);
+    if (this.options.with) {
       const regexp = this.resolveValue(record, this.options.with) as RegExp;
-      if (!regexp.test(String(value))) {
+      if (!regexp.test(target)) {
         this.recordError(record, attribute, "with", value);
       }
-    } else if (this.options.without !== undefined) {
+    } else if (this.options.without) {
       const regexp = this.resolveValue(record, this.options.without) as RegExp;
-      if (regexp.test(String(value))) {
+      if (regexp.test(target)) {
         this.recordError(record, attribute, "without", value);
       }
     }

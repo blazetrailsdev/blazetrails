@@ -16,8 +16,11 @@ describe("FormatValidationTest", () => {
 
   it("validates format of without lambda without arguments", () => {
     // JS regex has no \A/\z analogues for Ruby's start-of-string /
-    // end-of-string anchors; ^/$ are line anchors, so Rails requires
-    // multiline: true to opt in (format.rb:42).
+    // end-of-string anchors. JS ^/$ default to start/end of input
+    // (line anchors only with the `m` flag), but Rails inspects regex
+    // *source* for ^/$ regardless and forces opt-in via multiline: true
+    // — the security check is about the developer's intent, not the
+    // regex engine's flag state (format.rb:42, regexp_using_multiline_anchors?).
     class Person extends Model {
       static {
         this.attribute("name", "string");

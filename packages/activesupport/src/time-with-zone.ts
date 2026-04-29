@@ -870,7 +870,7 @@ export class TimeWithZone {
     const precisionMs = precision * 1000;
     const rounded = Math.round(ms / precisionMs) * precisionMs;
     return new TimeWithZone(
-      Temporal.Instant.fromEpochMilliseconds(Math.round(rounded)),
+      Temporal.Instant.fromEpochMilliseconds(Math.trunc(rounded)),
       this._timeZone,
     );
   }

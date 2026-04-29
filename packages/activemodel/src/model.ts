@@ -1825,11 +1825,11 @@ export class Model {
       const tag = dasherize(key);
       if (value === null || value === undefined) {
         xml += `${indent}<${tag} nil="true"/>\n`;
-        // boundary: exclude Date and Temporal types from the plain-object branch
-        // so they hit their dedicated XML serialization arms below.
       } else if (
         typeof value === "object" &&
         !Array.isArray(value) &&
+        // boundary: exclude Date and Temporal types from the plain-object
+        // branch so they hit dedicated serialization arms below.
         !(value instanceof Date) &&
         !(value instanceof Temporal.Instant) &&
         !(value instanceof Temporal.PlainDateTime) &&

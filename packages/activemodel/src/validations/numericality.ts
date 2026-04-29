@@ -145,8 +145,11 @@ export class NumericalityValidator extends EachValidator {
   }
 }
 
+// Rails: /\A[+-]?\d+\z/ — JS `^/$` without the `m` flag is the same
+// as Ruby \A/\z (start/end of string).
 const INTEGER_REGEX = /^[+-]?\d+$/;
-const HEXADECIMAL_REGEX = /^\s*[+-]?0[xX]/;
+// Rails: /\A[+-]?0[xX]/ — no leading whitespace permitted.
+const HEXADECIMAL_REGEX = /^[+-]?0[xX]/;
 
 /**
  * Rails: parse_as_number → branches by Ruby type (Float / BigDecimal /
@@ -187,7 +190,7 @@ export function parseAsNumber(num: number, precision: number, scale?: number): n
  * @internal Rails-private helper.
  */
 export function parseFloatRails(num: number, precision: number, scale?: number): number {
-  return +round(round(num, scale)).toPrecision(precision);
+  return +round(num, scale).toPrecision(precision);
 }
 
 /**

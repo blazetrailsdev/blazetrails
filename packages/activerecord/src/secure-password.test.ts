@@ -475,3 +475,64 @@ describe("SecurePasswordTest", () => {
     expect(notFound).toBeNull();
   });
 });
+
+describe("hasSecurePassword — per-attribute confirmation, challenge, and salt", () => {
+  let adapter: DatabaseAdapter;
+  beforeEach(() => { adapter = freshAdapter(); });
+
+  const makeModel = () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("email", "string"); this.attribute("recovery_password_digest", "string"); }
+    }
+    hasSecurePassword(User, "recovery_password", { validations: true });
+    User.adapter = adapter;
+    return User;
+  };
+
+  it("defines recoveryPasswordConfirmation getter/setter", () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recoveryPasswordConfirmation = "secret";
+    expect((u as any).recoveryPasswordConfirmation).toBe("secret");
+  });
+
+  it("defines recoveryPasswordChallenge getter/setter", () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recoveryPasswordChallenge = "old";
+    expect((u as any).recoveryPasswordChallenge).toBe("old");
+  });
+
+  it("defines recoveryPasswordSalt getter returning null when no digest", () => {
+    const User = makeModel();
+    const u = new User({});
+    expect((u as any).recoveryPasswordSalt).toBeNull();
+  });
+
+  it("recoveryPasswordSalt returns salt after password is set", async () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recovery_password = "secret123";
+    await u.save({ validate: false });
+    expect((u as any).recoveryPasswordSalt).toMatch(/^[0-9a-f]+$/);
+  });
+
+  it("validates recovery_password_confirmation mismatch", async () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recovery_password = "secret123";
+    (u as any).recoveryPasswordConfirmation = "different";
+    const valid = await u.validate();
+    expect(valid).toBe(false);
+    expect((u as any).errors.fullMessages().join(", ")).toMatch(/confirmation/i);
+  });
+
+  it("passes validation when confirmation matches", async () => {
+    const User = makeModel();
+    const u = new User({});
+    (u as any).recovery_password = "secret123";
+    (u as any).recoveryPasswordConfirmation = "secret123";
+    const valid = await u.validate();
+    expect(valid).toBe(true);
+  });
+});

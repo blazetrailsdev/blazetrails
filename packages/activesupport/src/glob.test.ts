@@ -323,6 +323,32 @@ describe("glob", () => {
     expect(await glob("*", { cwd: root })).not.toContain(".hidden");
   });
 
+  it("rejects absolute patterns", async () => {
+    await expect(glob("/tmp/**/*.rb", { cwd: root })).rejects.toThrow(
+      /absolute patterns are not supported/,
+    );
+    await expect(glob("/etc/passwd", { cwd: root })).rejects.toThrow(
+      /absolute patterns are not supported/,
+    );
+    // Windows-absolute form
+    await expect(glob("C:/Users/foo/*.rb", { cwd: root })).rejects.toThrow(
+      /absolute patterns are not supported/,
+    );
+    // Backslash leading separator
+    await expect(glob("\\windows\\foo", { cwd: root })).rejects.toThrow(
+      /absolute patterns are not supported/,
+    );
+  });
+
+  it("rejects `..` segments that could escape cwd", async () => {
+    await expect(glob("../etc/passwd", { cwd: root })).rejects.toThrow(
+      /'\.\.' segments are not supported/,
+    );
+    await expect(glob("app/../../escape", { cwd: root })).rejects.toThrow(
+      /'\.\.' segments are not supported/,
+    );
+  });
+
   it("ignores empty patterns produced by brace expansion edge cases", async () => {
     // `{a,}` expands to ["a", ""]; without filtering, the empty pattern
     // would cause the literal fast path to statSync(cwd) and emit "".

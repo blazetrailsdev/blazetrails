@@ -105,6 +105,22 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
   const cwd = opts.cwd ?? fs.cwd();
   const dot = opts.dot ?? false;
 
+  // Patterns are relative to `cwd` by contract. Absolute patterns
+  // (POSIX `/foo` or Windows `C:\foo`) and `..` segments would let the
+  // walk escape the provided cwd and emit non-cwd-relative results.
+  // Reject up front with a clear error rather than silently producing
+  // surprising paths.
+  if (/^[/\\]/.test(pattern) || /^[a-zA-Z]:[/\\]/.test(pattern)) {
+    throw new Error(
+      `glob: absolute patterns are not supported (got ${JSON.stringify(pattern)}); use a path relative to \`cwd\``,
+    );
+  }
+  if (pattern.split("/").includes("..")) {
+    throw new Error(
+      `glob: '..' segments are not supported (got ${JSON.stringify(pattern)}); use a path relative to \`cwd\``,
+    );
+  }
+
   const expanded = expandBraces(pattern);
   const positives: CompiledPattern[] = [];
   const negatives: RegExp[] = [];

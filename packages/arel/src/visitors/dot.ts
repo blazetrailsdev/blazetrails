@@ -162,7 +162,23 @@ export class Dot extends Visitor {
     // intentionally left blank
   }
 
+  /**
+   * Trails' Extract extends Unary with `expr` + `field` (rather than Rails'
+   * Function-shaped `expressions` + `alias`). Walk the actual fields so the
+   * graph reflects the AST instead of emitting nil edges.
+   */
   protected visitArelNodesExtract(o: Nodes.Extract): void {
+    this.visitEdge(o, "expr");
+    this.visitEdge(o, "field");
+  }
+
+  /**
+   * Trails' Exists is a standalone Node with `expressions: Node` (single)
+   * and `alias` — not a Function subclass like Rails. Walk only the two
+   * fields it actually has; the generic visitArelNodesFunction would emit
+   * a `distinct` edge that doesn't exist on this node.
+   */
+  protected visitArelNodesExists(o: Nodes.Exists): void {
     this.visitEdge(o, "expressions");
     this.visitEdge(o, "alias");
   }
@@ -468,7 +484,7 @@ export class Dot extends Visitor {
     reg(Nodes.Max, "visitArelNodesFunction");
     reg(Nodes.Min, "visitArelNodesFunction");
     reg(Nodes.Avg, "visitArelNodesFunction");
-    reg(Nodes.Exists, "visitArelNodesFunction");
+    reg(Nodes.Exists, "visitArelNodesExists");
     reg(Nodes.NamedFunction, "visitArelNodesNamedFunction");
     reg(Nodes.Count, "visitArelNodesCount");
     reg(Nodes.Extract, "visitArelNodesExtract");

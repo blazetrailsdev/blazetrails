@@ -173,6 +173,29 @@ describe("TestDot", () => {
       expect(out).not.toContain("undefined");
     });
 
+    it("Extract walks expr + field (Trails shape, not Rails' expressions + alias)", () => {
+      const node = new Nodes.Extract(users.get("created_at"), "year");
+      const out = dot.compile(node);
+      expect(out).toContain("Extract");
+      expect(out).toMatch(/-> \d+ \[label="expr"\];/);
+      expect(out).toMatch(/-> \d+ \[label="field"\];/);
+      expect(out).toContain("year");
+      // No edges to nil-shaped Rails fields.
+      expect(out).not.toMatch(/-> \d+ \[label="expressions"\];/);
+      expect(out).not.toMatch(/-> \d+ \[label="alias"\];/);
+    });
+
+    it("Exists walks expressions + alias (no spurious distinct edge)", () => {
+      const inner = new SelectManager(users).project(users.get("id")).ast;
+      const node = new Nodes.Exists(inner);
+      const out = dot.compile(node);
+      expect(out).toContain("Exists");
+      expect(out).toMatch(/-> \d+ \[label="expressions"\];/);
+      expect(out).toMatch(/-> \d+ \[label="alias"\];/);
+      // Generic Function visitor would have emitted a `distinct` edge.
+      expect(out).not.toMatch(/-> \d+ \[label="distinct"\];/);
+    });
+
     it("OptimizerHints renders its hints field (not Unary's null expr)", () => {
       const node = new Nodes.OptimizerHints(["IDX(t1)", "MAX_EXEC_TIME(1000)"]);
       const out = dot.compile(node);

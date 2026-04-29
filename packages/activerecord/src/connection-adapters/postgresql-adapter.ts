@@ -367,6 +367,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * adapter's HashLookupTypeMap on first access. The map is populated
    * by the instance-level initializer which layers `time`, `timestamp`,
    * `timestamptz` (timezone-aware) on top of the class-level base.
+   *
+   * @internal
    */
   get typeMap(): HashLookupTypeMap {
     if (this._typeMap == null) {
@@ -387,6 +389,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * before falling back to a ValueType. Rails' get_oid_type is sync
    * because Ruby's PG gem blocks; in Node we return a Promise so the
    * underlying pg_type query can be awaited.
+   *
+   * @internal
    */
   async getOidType(
     oid: number,
@@ -558,6 +562,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    *
    * Rails' signature uses oids=nil to mean "reload everything we know";
    * pass an array of OIDs to target a specific miss.
+   *
+   * @internal
    */
   async loadAdditionalTypes(oids?: number[]): Promise<void> {
     const initializer = new TypeMapInitializer(this.typeMap);
@@ -1588,6 +1594,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   /**
    * Check if we're in a transaction.
+   *
+   * @internal
    */
   get inTransaction(): boolean {
     return this._inTransaction;
@@ -1739,6 +1747,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return { concurrently: "CONCURRENTLY" };
   }
 
+  /** @internal */
   get arelVisitor(): Visitors.ToSql {
     return new Visitors.PostgreSQLWithBinds();
   }
@@ -3983,6 +3992,7 @@ const FORMAT_TYPE_ALIASES: Record<string, string> = {
   boolean: "bool",
 };
 
+/** @internal */
 function typeMap(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#type_map is not implemented",
@@ -3995,138 +4005,161 @@ function initializeTypeMap(m?: any): never {
   );
 }
 
+/** @internal */
 function extractValueFromDefault(default_: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#extract_value_from_default is not implemented",
   );
 }
 
+/** @internal */
 function extractDefaultFunction(defaultValue: any, default_: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#extract_default_function is not implemented",
   );
 }
 
+/** @internal */
 function hasDefaultFunction(defaultValue: any, default_: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#has_default_function? is not implemented",
   );
 }
 
+/** @internal */
 function translateException(exception: any, message?: any, sql?: any, binds?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#translate_exception is not implemented",
   );
 }
 
+/** @internal */
 function isRetryableQueryError(exception: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#retryable_query_error? is not implemented",
   );
 }
 
+/** @internal */
 function getOidType(oid: any, fmod: any, columnName: any, sqlType?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#get_oid_type is not implemented",
   );
 }
 
+/** @internal */
 function loadAdditionalTypes(oids?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#load_additional_types is not implemented",
   );
 }
 
+/** @internal */
 function isIsCachedPlanFailure(pgerror: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#is_cached_plan_failure? is not implemented",
   );
 }
 
+/** @internal */
 function isInTransaction(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#in_transaction? is not implemented",
   );
 }
 
+/** @internal */
 function sqlKey(sql: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#sql_key is not implemented",
   );
 }
 
+/** @internal */
 function prepareStatement(sql: any, binds: any, conn: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#prepare_statement is not implemented",
   );
 }
 
+/** @internal */
 function connect(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#connect is not implemented",
   );
 }
 
+/** @internal */
 function reconnect(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#reconnect is not implemented",
   );
 }
 
+/** @internal */
 function configureConnection(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#configure_connection is not implemented",
   );
 }
 
+/** @internal */
 function reconfigureConnectionTimezone(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#reconfigure_connection_timezone is not implemented",
   );
 }
 
+/** @internal */
 function columnDefinitions(tableName: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#column_definitions is not implemented",
   );
 }
 
+/** @internal */
 function arelVisitor(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#arel_visitor is not implemented",
   );
 }
 
+/** @internal */
 function buildStatementPool(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#build_statement_pool is not implemented",
   );
 }
 
+/** @internal */
 function canPerformCaseInsensitiveComparisonFor(column: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#can_perform_case_insensitive_comparison_for? is not implemented",
   );
 }
 
+/** @internal */
 function addPgEncoders(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#add_pg_encoders is not implemented",
   );
 }
 
+/** @internal */
 function updateTypemapForDefaultTimezone(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#update_typemap_for_default_timezone is not implemented",
   );
 }
 
+/** @internal */
 function addPgDecoders(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#add_pg_decoders is not implemented",
   );
 }
 
+/** @internal */
 function constructCoder(row: any, coderClass: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#construct_coder is not implemented",

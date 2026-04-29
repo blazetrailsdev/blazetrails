@@ -1,7 +1,8 @@
 /**
  * @boundary-file: test-only mock parses `Set-Cookie` headers (cookie spec
- *   RFC 6265 / 6265bis) — `Expires` is an HTTP-date / IMF-fixdate parsed
- *   via JS `Date`; `Max-Age` derives an expiry Date from `Date.now()`.
+ *   RFC 6265 / 6265bis) — `Expires` uses a cookie-date and is parsed with
+ *   JS `Date` / `Date.parse` semantics; `Max-Age` derives an expiry Date
+ *   from `Date.now()`.
  */
 
 import { Response } from "./response.js";

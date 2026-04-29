@@ -1,7 +1,7 @@
 /**
  * @boundary-file: parses RFC 7231 HTTP-date strings (`If-Modified-Since`,
- *   `Last-Modified`) for cache-freshness comparison; JS `Date` is the
- *   canonical parser for those formats.
+ *   `Last-Modified`) for cache-freshness comparison using the runtime's
+ *   `Date` parsing semantics.
  */
 
 import { REQUEST_METHOD, ETAG, CONTENT_TYPE, CONTENT_LENGTH } from "./constants.js";

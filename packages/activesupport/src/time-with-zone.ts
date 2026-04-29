@@ -273,7 +273,7 @@ export class TimeWithZone {
   localtime(utcOffsetOverride?: number): Temporal.PlainDateTime {
     if (utcOffsetOverride !== undefined) {
       const shifted = Temporal.Instant.fromEpochMilliseconds(
-        this._utc.getTime() + utcOffsetOverride * 1000,
+        Math.trunc(this._utc.getTime() + utcOffsetOverride * 1000),
       );
       return shifted.toZonedDateTimeISO("UTC").toPlainDateTime();
     }

@@ -81,6 +81,7 @@ function pad3(n: number): string {
 }
 
 function daysInMonth(year: number, month: number): number {
+  // boundary: classic JS days-in-month trick (day 0 of next month).
   return new Date(year, month, 0).getDate();
 }
 
@@ -100,7 +101,11 @@ export class TimeWithZone {
     return this._zoned.epochMilliseconds;
   }
 
-  /** Build a Date snapshot for legacy Date-based helpers and formatters. */
+  /**
+   * Build a Date snapshot for legacy Date-based helpers and formatters.
+   * boundary: bridges the Temporal-typed storage to the still-Date-typed
+   * `TimeZone` lookup helpers and `time-ext`/`duration` arithmetic.
+   */
   private _toDate(): Date {
     return new Date(this._epochMs);
   }
@@ -235,13 +240,14 @@ export class TimeWithZone {
 
   /** Day of the week, 0=Sunday */
   get wday(): number {
-    // Calculate from the local date
+    // boundary: JS Date constructor for cheap weekday-of arithmetic.
     const l = this._local();
     return new Date(l.year, l.month - 1, l.day).getDay();
   }
 
   /** Day of the year, 1-366 */
   get yday(): number {
+    // boundary: JS Date arithmetic for day-of-year span calculation.
     const l = this._local();
     const jan1 = new Date(l.year, 0, 1);
     const localDate = new Date(l.year, l.month - 1, l.day);
@@ -562,6 +568,8 @@ export class TimeWithZone {
     if (arg instanceof TimeWithZone) {
       return (this._epochMs - arg._epochMs) / 1000;
     }
+    // boundary: minus accepts Date for backwards compat with Rails' `t1 - t2`
+    // overload that takes any Time-like value (including Ruby Time / DateTime).
     if (arg instanceof Date) {
       return (this._epochMs - arg.getTime()) / 1000;
     }
@@ -715,6 +723,7 @@ export class TimeWithZone {
     if (other instanceof TimeWithZone) {
       return this._epochMs === other._epochMs;
     }
+    // boundary: eql is duck-typed in Rails (any Time-like); accept Date.
     if (other instanceof Date) {
       return this._epochMs === other.getTime();
     }

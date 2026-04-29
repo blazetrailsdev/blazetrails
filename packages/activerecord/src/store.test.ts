@@ -776,3 +776,72 @@ describe("StoreTest", () => {
     expect((reloaded as any).color).toBe("green");
   });
 });
+
+describe("storeAccessorFor, readStoreAttribute, writeStoreAttribute", () => {
+  let adapter: DatabaseAdapter;
+  beforeEach(() => {
+    adapter = createTestAdapter();
+  });
+
+  it("storeAccessorFor raises ConfigurationError for undeclared store column", async () => {
+    const { storeAccessorFor } = await import("./store.js");
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("settings", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(User);
+    expect(() => storeAccessorFor(User, "settings")).toThrow(/has not been configured as a store/);
+  });
+
+  it("readStoreAttribute reads a key from a declared store column", async () => {
+    const { readStoreAttribute } = await import("./store.js");
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("settings", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(User);
+    store(User, "settings", { accessors: ["theme"] });
+    const user = new User({ settings: JSON.stringify({ theme: "dark" }) });
+    expect(readStoreAttribute(user, "settings", "theme")).toBe("dark");
+  });
+
+  it("writeStoreAttribute writes a key to a declared store column", async () => {
+    const { writeStoreAttribute, readStoreAttribute } = await import("./store.js");
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("settings", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(User);
+    store(User, "settings", { accessors: ["theme"] });
+    const user = new User({});
+    writeStoreAttribute(user, "settings", "theme", "light");
+    expect(readStoreAttribute(user, "settings", "theme")).toBe("light");
+  });
+
+  it("storeAccessorFor does not misidentify prototype properties as declared stores", async () => {
+    const { storeAccessorFor } = await import("./store.js");
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.adapter = adapter;
+      }
+    }
+    registerModel(User);
+    expect(() => storeAccessorFor(User, "toString")).toThrow(/has not been configured as a store/);
+    expect(() => storeAccessorFor(User, "constructor")).toThrow(
+      /has not been configured as a store/,
+    );
+  });
+});

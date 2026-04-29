@@ -348,4 +348,22 @@ describe("JsonSerializationTest", () => {
     expect(json.name).toBe("Konata");
     expect(json.age).toBe(16);
   });
+
+  it("from_json defaults includeRoot to includeRootInJson when no second arg passed", () => {
+    // Rails json.rb:144 — `def from_json(json, include_root = include_root_in_json)`.
+    // When the class sets includeRootInJson = true, callers can pass a wrapped
+    // JSON payload without an explicit second arg.
+    class Wrapped extends Model {
+      static {
+        this.attribute("name", "string");
+        this.includeRootInJson = true;
+      }
+    }
+    try {
+      const w = new Wrapped({}).fromJson('{"wrapped":{"name":"Alice"}}');
+      expect(w.readAttribute("name")).toBe("Alice");
+    } finally {
+      Wrapped.includeRootInJson = false;
+    }
+  });
 });

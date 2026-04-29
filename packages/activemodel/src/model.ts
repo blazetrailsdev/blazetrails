@@ -1754,15 +1754,31 @@ export class Model {
   /**
    * Deserialize a JSON string into this model's attributes.
    *
-   * Mirrors: ActiveModel::Serializers::JSON#from_json
+   * Mirrors: ActiveModel::Serializers::JSON#from_json (json.rb:144-149)
+   *
+   *   def from_json(json, include_root = include_root_in_json)
+   *     hash = ActiveSupport::JSON.decode(json)
+   *     hash = hash.values.first if include_root
+   *     self.attributes = hash
+   *     self
+   *   end
+   *
+   * `includeRoot` defaults to the class-level `includeRootInJson`
+   * (matching Rails); when truthy, unwrap unconditionally via
+   * first-value semantics regardless of the configured root key. Empty
+   * strings are truthy here per Ruby semantics — only `false`/`null`
+   * skip the unwrap.
    */
-  fromJson(json: string, includeRoot = false): this {
+  fromJson(json: string, includeRoot?: boolean | string): this {
+    const ctor = this.constructor as typeof Model;
+    const root = includeRoot ?? ctor.includeRootInJson;
     let attrs = JSON.parse(json);
-    if (includeRoot && typeof attrs === "object") {
-      const keys = Object.keys(attrs);
-      if (keys.length === 1) {
-        attrs = attrs[keys[0]];
+    if (root !== false && root != null) {
+      if (attrs === null || typeof attrs !== "object" || Array.isArray(attrs)) {
+        const shape = attrs === null ? "null" : Array.isArray(attrs) ? "array" : typeof attrs;
+        throw new TypeError(`fromJson root payload must be a JSON object, got ${shape}`);
       }
+      attrs = Object.values(attrs)[0];
     }
     for (const [key, value] of Object.entries(attrs)) {
       this.writeAttribute(key, value);

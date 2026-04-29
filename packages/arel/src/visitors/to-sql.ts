@@ -197,6 +197,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     // Filter / Case / Extract / Infix
     reg(Nodes.Filter, "visitArelNodesFilter");
     reg(Nodes.Case, "visitArelNodesCase");
+    reg(Nodes.When, "visitArelNodesWhen");
+    reg(Nodes.Else, "visitArelNodesElse");
     reg(Nodes.Extract, "visitArelNodesExtract");
     reg(Nodes.Concat, "visitArelNodesConcat");
     reg(Nodes.InfixOperation, "visitArelNodesInfixOperation");
@@ -1715,9 +1717,18 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  /** Mirrors Rails: `visit_Array`. */
-  protected visitArray(o: ReadonlyArray<Node>): SQLString {
-    this.injectJoin(o as Node[], ", ");
+  /**
+   * Mirrors Rails: `visit_Array` (to_sql.rb:858). Rails delegates to
+   * `inject_join` which calls `visit` on each element; in Ruby `visit` of
+   * a primitive routes through `visit_Integer`/`visit_String`/etc. Trails
+   * doesn't dispatch on JS primitives — `visitNodeOrValue` is the
+   * equivalent path that handles both Node and non-Node entries.
+   */
+  protected visitArray(items: ReadonlyArray<unknown>): SQLString {
+    items.forEach((item, i) => {
+      if (i > 0) this.collector.append(", ");
+      this.visitNodeOrValue(item as Nodes.NodeOrValue);
+    });
     return this.collector;
   }
 

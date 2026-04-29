@@ -405,4 +405,18 @@ describe("PostgreSQL dialect overrides (audit follow-up)", () => {
     const node = users.get("a").isDistinctFrom(users.get("b"));
     expect(compile(node)).toBe('"users"."a" IS DISTINCT FROM "users"."b"');
   });
+
+  it("groupingArrayOrGroupingElement formats an array expr without dispatching the Array", () => {
+    // Regression: the previous impl called this.visit(o.expr) when expr was
+    // an Array, which the dispatch table can't handle (it's keyed on Node
+    // ctors). Now routes through visitArray for proper element iteration.
+    const v = new Visitors.PostgreSQL();
+    v.compile(new Nodes.SqlLiteral(""));
+    type Internals = { groupingArrayOrGroupingElement(o: { expr: unknown }): void };
+    (v as unknown as Internals).groupingArrayOrGroupingElement({
+      expr: [users.get("a"), users.get("b")],
+    });
+    const sql = (v as unknown as { collector: { value: string } }).collector.value;
+    expect(sql).toBe('( "users"."a", "users"."b" )');
+  });
 });

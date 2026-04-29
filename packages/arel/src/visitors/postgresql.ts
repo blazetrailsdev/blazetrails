@@ -122,14 +122,20 @@ export class PostgreSQL extends ToSql {
   }
 
   /**
-   * Mirrors Rails Postgres `grouping_array_or_grouping_element` (postgresql.rb):
-   * wraps an array `expr` in `( ... )`, otherwise plain visits. Used by the
-   * Cube / Rollup / GroupingSet visitors.
+   * Mirrors Rails Postgres `grouping_array_or_grouping_element` (postgresql.rb).
+   * Wraps an array `expr` in `( ... )` and joins the entries; otherwise
+   * plain-visits the single node. Used by the Cube / Rollup / GroupingSet
+   * visitors.
+   *
+   * Rails delegates to `visit o.expr` which routes Arrays through
+   * `visit_Array`; we call `visitArray` directly because the dispatch table
+   * only carries Node-keyed entries (JS arrays aren't constructible Node
+   * subclasses).
    */
   protected groupingArrayOrGroupingElement(o: { expr: unknown }): SQLString {
     if (Array.isArray(o.expr)) {
       this.collector.append("( ");
-      this.visit(o.expr as unknown as Node);
+      this.visitArray(o.expr);
       this.collector.append(" )");
     } else {
       this.visit(o.expr as Node);

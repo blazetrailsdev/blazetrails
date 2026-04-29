@@ -1253,5 +1253,27 @@ describe("the to_sql visitor", () => {
       expect(sql).toContain("ELSE");
       expect(sql).toContain("END");
     });
+
+    it("dispatches Nodes.When and Nodes.Else as top-level visits", () => {
+      const tbl = new Table("users");
+      const whenNode = new Nodes.When(tbl.get("status"), new Nodes.SqlLiteral("1"));
+      const elseNode = new Nodes.Else(new Nodes.SqlLiteral("0"));
+      expect(new Visitors.ToSql().compile(whenNode)).toBe('WHEN "users"."status" THEN 1');
+      expect(new Visitors.ToSql().compile(elseNode)).toBe("ELSE 0");
+    });
+
+    it("visitArray handles a mix of Node and primitive entries", () => {
+      const tbl = new Table("users");
+      const v = new Visitors.ToSql();
+      v.compile(new Nodes.SqlLiteral(""));
+      (v as unknown as { visitArray(a: ReadonlyArray<unknown>): void }).visitArray([
+        tbl.get("a"),
+        1,
+        "text",
+      ]);
+      expect((v as unknown as { collector: { value: string } }).collector.value).toBe(
+        '"users"."a", 1, \'text\'',
+      );
+    });
   });
 });

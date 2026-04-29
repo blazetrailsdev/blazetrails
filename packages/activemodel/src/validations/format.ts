@@ -26,8 +26,11 @@ export class FormatValidator extends EachValidator {
   // fields don't initialize until AFTER super() returns. (Same bootstrapping
   // lesson as PR #994.)
   declare resolveValue: typeof resolveValue;
+  /** @internal Rails-private helper. */
   declare recordError: typeof recordError;
+  /** @internal Rails-private helper. */
   declare checkOptionsValidity: typeof checkOptionsValidity;
+  /** @internal Rails-private helper. */
   declare regexpUsingMultilineAnchors: typeof regexpUsingMultilineAnchors;
 
   override checkValidity(): void {
@@ -68,6 +71,8 @@ export class FormatValidator extends EachValidator {
  *   def record_error(record, attribute, name, value)
  *     record.errors.add(attribute, :invalid, **options.except(name).merge!(value: value))
  *   end
+ *
+ * @internal Rails-private helper.
  */
 export function recordError(
   this: { options: Record<string, unknown> },
@@ -97,6 +102,8 @@ export function recordError(
  *       end
  *     end
  *   end
+ *
+ * @internal Rails-private helper.
  */
 export function checkOptionsValidity(
   this: {
@@ -131,6 +138,8 @@ export function checkOptionsValidity(
  * the user-facing `^` / `$` anchors that match per-line in Ruby. Rails
  * forces the user to opt in via `multiline: true` to acknowledge the
  * security implication of accepting input across line boundaries.
+ *
+ * @internal Rails-private helper.
  */
 export function regexpUsingMultilineAnchors(regexp: RegExp): boolean {
   const source = regexp.source;

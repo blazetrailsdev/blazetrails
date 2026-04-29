@@ -371,18 +371,28 @@ export class Dot extends Visitor {
    * super.visit (the dispatch table) to fire the per-class handler.
    */
   protected override visit(object: unknown, _collector?: unknown): unknown {
-    const seenNode = this.seen.get(object);
-    if (seenNode) {
-      const e = this.edgeStack[this.edgeStack.length - 1];
-      if (e) e.to = seenNode;
-      return undefined;
+    // Rails keys @seen by `object_id` — preserves per-instance identity
+    // for heap objects (two `String.new("foo")` get distinct entries) but
+    // dedupes Ruby singletons (nil/true/false/Symbols/small Integers).
+    // JS Map compares primitive keys by value, so memoizing strings would
+    // wrongly collapse two Tables that share a `name`. Memoize only
+    // reference-typed values; primitives get a fresh Dot node every time.
+    if (object !== null && typeof object === "object") {
+      const seenNode = this.seen.get(object);
+      if (seenNode) {
+        const e = this.edgeStack[this.edgeStack.length - 1];
+        if (e) e.to = seenNode;
+        return undefined;
+      }
     }
 
     // Mirrors Rails' Dot#visit: every value (including primitives) gets a
     // Node entry whose `name` is the value's class. visit_String / visit_Hash
     // / visit_Array then mutate the new node's fields/edges.
     const node = new DotNode(this.classNameOf(object), this.nextId++);
-    this.seen.set(object, node);
+    if (object !== null && typeof object === "object") {
+      this.seen.set(object, node);
+    }
     this.nodes.push(node);
     this.withNode(node, () => {
       if (this.isPrimitive(object)) {

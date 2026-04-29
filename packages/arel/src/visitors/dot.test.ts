@@ -173,6 +173,27 @@ describe("TestDot", () => {
       expect(out).not.toContain("undefined");
     });
 
+    it("two Tables sharing a name don't collapse into one node (primitive seen-map fix)", () => {
+      // Regression: seen.set(object, node) keyed primitives by value, so
+      // two distinct Tables with the same name `"users"` were aliased to
+      // a single shared `<f0>String|<f1>users` node. Rails uses
+      // object_id which preserves per-instance identity for heap objects.
+      const a = new Table("users");
+      const b = new Table("users");
+      const v = new Visitors.Dot();
+      type Internals = { visit(o: unknown): void; toDot(): string };
+      v.compile(new Nodes.SqlLiteral("seed"));
+      (v as unknown as Internals).visit(a);
+      (v as unknown as Internals).visit(b);
+      const out = (v as unknown as Internals).toDot();
+      // Two Table nodes (one per Table instance) AND two String "users"
+      // nodes (one per visit_String, since strings shouldn't dedupe).
+      const tableMatches = out.match(/<f0>Table"\];/g) ?? [];
+      expect(tableMatches.length).toBe(2);
+      const stringUsersMatches = out.match(/<f0>String\|<f1>users"\];/g) ?? [];
+      expect(stringUsersMatches.length).toBe(2);
+    });
+
     it("Extract walks expr + field (Trails shape, not Rails' expressions + alias)", () => {
       const node = new Nodes.Extract(users.get("created_at"), "year");
       const out = dot.compile(node);

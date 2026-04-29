@@ -6,6 +6,7 @@
  */
 
 import { getFs, getPath, getCrypto, Notifications } from "@blazetrails/activesupport";
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import { Metal } from "./metal.js";
 import { FlashHash } from "../actiondispatch/flash.js";
 import { RequestForgeryProtection } from "../actiondispatch/request-forgery-protection.js";
@@ -398,13 +399,21 @@ export class Base extends Metal {
   // --- Caching / Conditional GET ---
 
   /** Check if the response should be fresh (304 Not Modified). */
-  freshWhen(options: { etag?: string; lastModified?: Date; public?: boolean }): void {
+  freshWhen(options: {
+    etag?: string;
+    lastModified?: Date | Temporal.Instant;
+    public?: boolean;
+  }): void {
     if (options.etag) {
       const etag = this._generateEtag(options.etag);
       this.setHeader("etag", etag);
     }
     if (options.lastModified) {
-      this.setHeader("last-modified", options.lastModified.toUTCString());
+      const lm =
+        options.lastModified instanceof Temporal.Instant
+          ? new Date(options.lastModified.epochMilliseconds)
+          : options.lastModified;
+      this.setHeader("last-modified", lm.toUTCString());
     }
     if (options.public) {
       this.setHeader("cache-control", "public");
@@ -416,7 +425,11 @@ export class Base extends Metal {
   }
 
   /** Check if the resource is stale. Returns true if a re-render is needed. */
-  stale(options: { etag?: string; lastModified?: Date; public?: boolean }): boolean {
+  stale(options: {
+    etag?: string;
+    lastModified?: Date | Temporal.Instant;
+    public?: boolean;
+  }): boolean {
     this.freshWhen(options);
     return !this.performed;
   }

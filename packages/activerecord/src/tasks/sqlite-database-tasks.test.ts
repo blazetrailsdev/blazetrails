@@ -152,9 +152,9 @@ describe("SQLiteDatabaseTasks in-memory URI variants", () => {
 
   const assertNoFsWrites = () => {
     const fsObj = activesupport.getFs();
-    const mkdirSpy = vi.spyOn(fsObj, "mkdirSync");
-    const writeSpy = vi.spyOn(fsObj, "writeFileSync");
-    const unlinkSpy = vi.spyOn(fsObj, "unlinkSync");
+    const mkdirSpy = vi.spyOn(fsObj, "mkdirSync").mockImplementation(() => undefined);
+    const writeSpy = vi.spyOn(fsObj, "writeFileSync").mockImplementation(() => undefined as any);
+    const unlinkSpy = vi.spyOn(fsObj, "unlinkSync").mockImplementation(() => undefined);
     return { mkdirSpy, writeSpy, unlinkSpy };
   };
 

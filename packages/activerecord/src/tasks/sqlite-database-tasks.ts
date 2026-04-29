@@ -48,10 +48,11 @@ export class SQLiteDatabaseTasks {
     const fs = getFs();
     const path = getPath();
     const dbPath = this.resolveDbPath();
-    if (!isInMemoryDatabase(dbPath) && fs.existsSync(dbPath)) {
+    const inMemory = isInMemoryDatabase(dbPath);
+    if (!inMemory && fs.existsSync(dbPath)) {
       throw new DatabaseAlreadyExists(`Database '${dbPath}' already exists`);
     }
-    if (!isInMemoryDatabase(dbPath)) {
+    if (!inMemory) {
       fs.mkdirSync(path.dirname(dbPath), { recursive: true });
       fs.writeFileSync(dbPath, "");
     }

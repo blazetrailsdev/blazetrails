@@ -44,7 +44,36 @@ interface CompiledPattern {
   maxDepth: number;
 }
 
-const GLOB_CHARS = /[*?[\]{}]/;
+/**
+ * Detect whether a (post-brace-expansion) pattern has real glob
+ * semantics — `*`, `?`, or a balanced `[...]` character class.
+ *
+ * Unbalanced `{`, `}`, `[`, or `]` are treated as literals by
+ * `patternToRegex` (they get escaped), so they should not push a
+ * pattern onto the walk path or prevent a useful `literalPrefix`.
+ *
+ * `expandBraces` has already replaced balanced `{...}` groups before
+ * this is called, so leftover `{`/`}` are necessarily unbalanced.
+ */
+function hasGlobSemantics(pattern: string): boolean {
+  if (/[*?]/.test(pattern)) return true;
+  const open = pattern.indexOf("[");
+  return open !== -1 && pattern.indexOf("]", open + 1) !== -1;
+}
+
+/**
+ * Index of the first character with real glob semantics, or `-1` if
+ * the pattern is effectively literal. Used by `literalPrefix` to find
+ * the deepest directory we can pin the walk to.
+ */
+function firstGlobIndex(pattern: string): number {
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "*" || c === "?") return i;
+    if (c === "[" && pattern.indexOf("]", i + 1) !== -1) return i;
+  }
+  return -1;
+}
 
 export async function glob(pattern: string, opts: GlobOptions = {}): Promise<string[]> {
   // Use async resolution so this works in pure Node ESM without callers
@@ -73,20 +102,21 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
 
   const results = new Set<string>();
 
-  // Walk pass: for patterns with glob metacharacters, recurse from the
+  // Walk pass: for patterns with real glob semantics, recurse from the
   // literal prefix using the iterative walker.
   for (const positive of positives) {
-    if (!GLOB_CHARS.test(positive.source)) continue;
+    if (!hasGlobSemantics(positive.source)) continue;
     const { base, re, maxDepth } = positive;
     walk(fs, path, base ? path.join(cwd, base) : cwd, base, re, negatives, dot, maxDepth, results);
   }
 
   // Literal-pattern fast path: a single existence check, no walk. Use
-  // statSync with explicit error filtering rather than fs.exists, since
-  // exists() returns false for any error (including EACCES) — we want
-  // to behave consistently with walk() and only swallow ENOENT/ENOTDIR.
+  // statSync with explicit error filtering rather than fs.exists, so
+  // unexpected errors (e.g. EACCES) propagate instead of being silently
+  // converted to "not found" — keeping behavior consistent with walk()
+  // regardless of how a custom adapter implements `exists`.
   for (const positive of positives) {
-    if (GLOB_CHARS.test(positive.source)) continue;
+    if (hasGlobSemantics(positive.source)) continue;
     if (negatives.some((re) => re.test(positive.source))) continue;
     if (literalExists(fs, path.join(cwd, positive.source))) results.add(positive.source);
   }
@@ -140,12 +170,17 @@ function walk(
 }
 
 /**
- * Find the longest literal directory prefix of `pattern` (no glob chars).
+ * Find the longest literal directory prefix of `pattern` (no real glob
+ * chars). Unbalanced `{`/`}`/`[`/`]` are treated as literals.
+ *
  * `app/models/*.rb` → `app/models`. `app/**\/*.rb` → `app`.
- * `*.rb` → `""`. Used to prune the walk to only the matching subtree.
+ * `*.rb` → `""`. `foo{bar.rb` → `""` (whole pattern is literal, but
+ * has no `/` to split on).
+ *
+ * Used to prune the walk to only the matching subtree.
  */
 function literalPrefix(pattern: string): string {
-  const firstGlob = pattern.search(GLOB_CHARS);
+  const firstGlob = firstGlobIndex(pattern);
   if (firstGlob === -1) {
     const lastSlash = pattern.lastIndexOf("/");
     return lastSlash === -1 ? "" : pattern.slice(0, lastSlash);

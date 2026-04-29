@@ -291,6 +291,35 @@ describe("glob", () => {
     }
   });
 
+  it("treats unbalanced { } [ ] as literals (no walk)", async () => {
+    // foo{bar.rb has '{' but no matching '}' — patternToRegex escapes
+    // it as a literal, and the walk-vs-fast-path decision should also
+    // treat it as literal so it skips the directory walk entirely.
+    const realFs = await getFsAsync();
+    const realPath = await getPathAsync();
+    const reads: string[] = [];
+    const tracking: FsAdapter = {
+      ...realFs,
+      readdirSync: ((p: string, opts?: { withFileTypes: true }) => {
+        reads.push(p);
+        return opts ? realFs.readdirSync(p, opts) : realFs.readdirSync(p);
+      }) as FsAdapter["readdirSync"],
+    };
+    const prevAdapter = fsAdapterConfig.adapter;
+    registerFsAdapter("glob-spy-unbalanced", tracking, realPath);
+    fsAdapterConfig.adapter = "glob-spy-unbalanced";
+    try {
+      // Three unbalanced cases — none should trigger a walk.
+      await glob("foo{bar.rb", { cwd: root });
+      await glob("foo}bar.rb", { cwd: root });
+      // Single '[' with no matching ']' — also literal.
+      await glob("foo[bar.rb", { cwd: root });
+      expect(reads).toEqual([]);
+    } finally {
+      fsAdapterConfig.adapter = prevAdapter;
+    }
+  });
+
   it("compiles patterns containing a literal backslash to a valid regex", async () => {
     // Backslash is a regex metacharacter and must escape to `\\\\` in the
     // compiled regex source. Prior to the explicit handling, the

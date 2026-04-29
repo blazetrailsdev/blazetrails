@@ -67,7 +67,8 @@ export default defineConfig({
           // package. Without this, Rollup minifies the whole API surface
           // as a single >500kB chunk, dominating the build phase.
           manualChunks(id) {
-            const m = id.match(/\/docs\/api\/@blazetrails\/([^/]+)\//);
+            const normalizedId = id.replace(/\\/g, "/");
+            const m = normalizedId.match(/\/docs\/api\/@blazetrails\/([^/]+)\//);
             if (m) return `bt-api-${m[1]}`;
           },
         },

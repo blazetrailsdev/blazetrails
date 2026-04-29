@@ -271,7 +271,7 @@ function buildNodeAdapter(proc: NodeProcessLike): ProcessAdapter {
                   : null,
             );
           };
-          const onEnd = () => {
+          const onTerminal = () => {
             cleanup();
             resolve(null);
           };
@@ -282,11 +282,16 @@ function buildNodeAdapter(proc: NodeProcessLike): ProcessAdapter {
           };
           const cleanup = () => {
             proc.stdin.off("data", onData);
-            proc.stdin.off("end", onEnd);
+            proc.stdin.off("end", onTerminal);
+            proc.stdin.off("close", onTerminal);
             proc.stdin.off("error", onError);
           };
           proc.stdin.once("data", onData);
-          proc.stdin.once("end", onEnd);
+          // Listen to both `end` and `close` — some streams emit only
+          // `close` (e.g. on destroy without prior end), which previously
+          // could leave the Promise pending and leak the data listener.
+          proc.stdin.once("end", onTerminal);
+          proc.stdin.once("close", onTerminal);
           proc.stdin.once("error", onError);
         }),
     },

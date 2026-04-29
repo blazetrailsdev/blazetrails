@@ -11,6 +11,7 @@ import {
   setEnv,
   setExitCode,
   stderr,
+  stdin,
   stdout,
   type ProcessAdapter,
   type WriteStream,
@@ -168,6 +169,32 @@ describe("processAdapter", () => {
       expect(stdout.isTTY).toBe(false);
       expect(stdout.columns).toBe(80);
       expect(stdout.rows).toBe(24);
+    });
+
+    it("stdin.read() delegates to the adapter and resolves with the adapter's value", async () => {
+      const adapter = makeFakeAdapter();
+      // Override stdin to return a known value.
+      const fakeStdin = {
+        isTTY: true,
+        read: () => Promise.resolve("hello from stdin"),
+      };
+      Object.defineProperty(adapter, "stdin", { value: fakeStdin, configurable: true });
+      registerProcessAdapter(adapter);
+      expect(stdin.isTTY).toBe(true);
+      await expect(stdin.read()).resolves.toBe("hello from stdin");
+    });
+
+    it("stdin.read() propagates rejection from the adapter", async () => {
+      const adapter = makeFakeAdapter();
+      Object.defineProperty(adapter, "stdin", {
+        value: {
+          isTTY: false,
+          read: () => Promise.reject(new Error("stdin boom")),
+        },
+        configurable: true,
+      });
+      registerProcessAdapter(adapter);
+      await expect(stdin.read()).rejects.toThrow(/stdin boom/);
     });
   });
 

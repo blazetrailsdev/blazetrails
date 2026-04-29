@@ -66,6 +66,14 @@ tester.run("rails-private-jsdoc", rule, {
       errors: [{ messageId: "missingInternal" }],
       output: `class Base {\n  /** @internal */\n  static computeType() {}\n}\n`,
     },
+    // Single-line JSDoc must be expanded into a multi-line block, not
+    // mangled into `/** Foo *\n * @internal\n */`.
+    {
+      filename: inheritanceFile,
+      code: `/** Resolve a name. */\nexport function computeType() {}\n`,
+      errors: [{ messageId: "missingInternal" }],
+      output: `/**\n * Resolve a name.\n *\n * @internal\n */\nexport function computeType() {}\n`,
+    },
   ],
 });
 

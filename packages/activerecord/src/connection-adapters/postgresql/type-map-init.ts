@@ -62,7 +62,9 @@ export function extractLimit(sqlType: string | undefined): number | undefined {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** Mirrors: PostgreSQLAdapter.extract_precision — first number in `(p,s)` or `(p)`. *
+/**
+ * Mirrors: PostgreSQLAdapter.extract_precision — first number in `(p,s)` or `(p)`.
+ *
  * @internal
  */
 export function extractPrecision(sqlType: string | undefined): number | undefined {
@@ -71,7 +73,9 @@ export function extractPrecision(sqlType: string | undefined): number | undefine
   return match ? Number.parseInt(match[1], 10) : undefined;
 }
 
-/** Mirrors: PostgreSQLAdapter.extract_scale — second number in `(p,s)`. *
+/**
+ * Mirrors: PostgreSQLAdapter.extract_scale — second number in `(p,s)`.
+ *
  * @internal
  */
 export function extractScale(sqlType: string | undefined): number | undefined {

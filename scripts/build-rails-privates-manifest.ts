@@ -12,9 +12,10 @@
  */
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import { rubyMethodToTs, rubyFileToTs } from "./api-compare/conventions.js";
 
-const __dirname = path.dirname(new URL(import.meta.url).pathname);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
 const PACKAGE_DIRS: Record<string, string> = {

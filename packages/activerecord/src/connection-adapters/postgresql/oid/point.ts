@@ -121,7 +121,9 @@ export class Point extends ValueType<PointValue> {
   }
 }
 
-/** Mirrors Rails' `number.to_s.delete_suffix(".0")` — drop trailing .0 on ints. *
+/**
+ * Mirrors Rails' `number.to_s.delete_suffix(".0")` — drop trailing .0 on ints.
+ *
  * @internal
  */
 function numberForPoint(n: number): string {
@@ -129,7 +131,9 @@ function numberForPoint(n: number): string {
   return s.endsWith(".0") ? s.slice(0, -2) : s;
 }
 
-/** Mirrors Rails' `value.values_at(:x, "x").compact.first` for both keys. *
+/**
+ * Mirrors Rails' `value.values_at(:x, "x").compact.first` for both keys.
+ *
  * @internal
  */
 function valuesArrayFromHash(hash: Record<string, unknown>): [unknown, unknown] {

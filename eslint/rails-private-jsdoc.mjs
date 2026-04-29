@@ -49,7 +49,7 @@ function repoRoot() {
 }
 
 function relFromRepoRoot(filename) {
-  return path.relative(repoRoot(), filename);
+  return path.relative(repoRoot(), filename).split(path.sep).join("/");
 }
 
 function packageOf(rel) {
@@ -80,11 +80,25 @@ function indentOf(line) {
 
 function fixerInsertInternal(fixer, node, sourceCode, jsdocComment) {
   if (jsdocComment) {
-    // Insert ` * @internal` immediately before closing `*/`.
+    // Single-line JSDoc (`/** Foo */`): expand into a multi-line block.
+    if (jsdocComment.loc.start.line === jsdocComment.loc.end.line) {
+      const lineText = sourceCode.lines[jsdocComment.loc.start.line - 1] ?? "";
+      const indent = indentOf(lineText);
+      const inner = jsdocComment.value
+        .replace(/^\*+\s?/, "")
+        .replace(/\s+$/, "")
+        .trim();
+      const lines = [`/**`];
+      if (inner) lines.push(`${indent} * ${inner}`);
+      lines.push(`${indent} *`);
+      lines.push(`${indent} * @internal`);
+      lines.push(`${indent} */`);
+      return fixer.replaceTextRange(jsdocComment.range, lines.join("\n"));
+    }
+    // Multi-line JSDoc: insert ` * @internal` immediately before closing `*/`.
     const text = sourceCode.getText().slice(jsdocComment.range[0], jsdocComment.range[1]);
     const closeIdx = text.lastIndexOf("*/");
     const beforeClose = text.slice(0, closeIdx);
-    // Determine indent from the line containing the closing `*/`.
     const lineNum = jsdocComment.loc.end.line;
     const lineText = sourceCode.lines[lineNum - 1] ?? "";
     const indent = indentOf(lineText);

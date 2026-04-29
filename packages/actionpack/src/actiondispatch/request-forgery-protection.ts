@@ -74,7 +74,9 @@ export class RequestForgeryProtection {
     return token;
   }
 
-  /** Create a masked version of the token for embedding in forms/meta tags. *
+  /**
+   * Create a masked version of the token for embedding in forms/meta tags.
+   *
    * @internal
    */
   maskToken(rawToken: string): string {
@@ -104,7 +106,9 @@ export class RequestForgeryProtection {
     return this.maskToken(perFormToken);
   }
 
-  /** Unmask a masked token to get the raw token bytes. *
+  /**
+   * Unmask a masked token to get the raw token bytes.
+   *
    * @internal
    */
   unmaskToken(maskedToken: string): string {

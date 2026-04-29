@@ -144,7 +144,11 @@ describe("Serializers::JSON host", () => {
     expect(() => new Person().fromJson("null")).toThrow(/got null/);
   });
 
-  it("fromJson with string includeRootInJson unwraps by that key, not first-value", () => {
+  it("fromJson always unwraps via first-value semantics (Rails hash.values.first)", () => {
+    // Rails json.rb:147 — `hash = hash.values.first if include_root`,
+    // ignoring the configured root key. Pin that behavior explicitly so
+    // the read path stays Rails-faithful even when includeRootInJson is
+    // a string.
     class Keyed extends JSONHost {
       static {
         this.includeRootInJson = "data";
@@ -160,8 +164,28 @@ describe("Serializers::JSON host", () => {
       }
       _v = 0;
     }
-    const k = new Keyed().fromJson('{"meta":1,"data":{"v":7}}');
+    const k = new Keyed().fromJson('{"payload":{"v":7},"data":{"v":1}}');
     expect(k._v).toBe(7);
+  });
+
+  it("fromJson uses class-level includeRootInJson default when no second arg passed", () => {
+    class Defaulted extends JSONHost {
+      static {
+        this.includeRootInJson = true;
+        Object.defineProperty(this.prototype, "attributes", {
+          get() {
+            return { v: this._v };
+          },
+          set(this: { _v: number }, h: { v: number }) {
+            this._v = h.v;
+          },
+          configurable: true,
+        });
+      }
+      _v = 0;
+    }
+    const d = new Defaulted().fromJson('{"defaulted":{"v":99}}');
+    expect(d._v).toBe(99);
   });
 
   it("toJson returns a JSON string (matches Model#toJson)", () => {

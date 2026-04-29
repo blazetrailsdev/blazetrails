@@ -116,17 +116,12 @@ export class JSON {
     if (!isPlainJsonObject(hash)) {
       throw new TypeError(`fromJson expected a JSON object, got ${describeJsonShape(hash)}`);
     }
-    // Rails truthiness: false/nil skip; empty string still triggers
-    // unwrap (json.rb:146-147). Match that explicitly.
+    // Rails truthiness: false/nil skip; everything else (including
+    // empty string and any string root key) triggers unwrap via
+    // `hash.values.first` unconditionally — Rails ignores the configured
+    // root key on the read path (json.rb:146-147).
     if (root !== false && root != null) {
-      // When the resolved root setting is a string, prefer the explicit
-      // key so multi-key payloads still unwrap deterministically;
-      // otherwise fall back to first-value semantics (Rails json.rb:147
-      // hash.values.first).
-      hash =
-        typeof root === "string" && Object.prototype.hasOwnProperty.call(hash, root)
-          ? (hash as Record<string, unknown>)[root]
-          : Object.values(hash as Record<string, unknown>)[0];
+      hash = Object.values(hash as Record<string, unknown>)[0];
       if (!isPlainJsonObject(hash)) {
         throw new TypeError(
           `fromJson root payload must be a JSON object, got ${describeJsonShape(hash)}`,

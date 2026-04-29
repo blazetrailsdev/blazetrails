@@ -395,6 +395,17 @@ describe("glob", () => {
     );
   });
 
+  it("rejects mid-pattern backslashes outside character classes", async () => {
+    // Without the check, `app\\models\\*.rb` validates fine but never
+    // matches because the rest of the impl only understands `/`.
+    await expect(glob("app\\models\\*.rb", { cwd: root })).rejects.toThrow(
+      /backslashes outside character classes are not supported/,
+    );
+    // Bracket-class backslashes are still allowed (they're escapes).
+    await expect(glob("[\\b].rb", { cwd: root })).resolves.toEqual([]);
+    await expect(glob("[a\\b]", { cwd: root })).resolves.toEqual([]);
+  });
+
   it("rejects unsafe forms produced by brace expansion (post-expansion validation)", async () => {
     // {..,foo}/bar expands to ["../bar", "foo/bar"]. Pre-expansion
     // validation would let this through; post-expansion validation
@@ -479,14 +490,10 @@ describe("glob", () => {
     }
   });
 
-  it("compiles patterns containing a literal backslash to a valid regex", async () => {
-    // Backslash is a regex metacharacter and must escape to `\\\\` in the
-    // compiled regex source. Prior to the explicit handling, the
-    // template-literal `\\${c}` form was correct but easy to misread.
-    // No need to actually create files with backslashes (illegal on
-    // most filesystems) — just assert the pattern compiles and runs.
-    await expect(glob("foo\\bar.rb", { cwd: root })).resolves.toEqual([]);
-  });
+  // Note: literal-backslash patterns outside character classes are
+  // rejected by the validator (see "rejects mid-pattern backslashes
+  // outside character classes"). Backslash-in-class patterns are
+  // covered by "escapes backslashes inside character classes".
 
   it("rethrows unexpected readdirSync errors (e.g. EACCES)", async () => {
     const realFs = await getFsAsync();

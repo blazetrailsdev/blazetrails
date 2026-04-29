@@ -136,6 +136,17 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
         `glob: '..' segments are not supported (got ${JSON.stringify(candidate)}); use a path relative to \`cwd\``,
       );
     }
+    // Reject mid-pattern backslashes outside character classes. The
+    // rest of the implementation (literalPrefix, maxRemainingDepth,
+    // walk()'s relPath, allowDot detection) only understands `/` as
+    // the separator, so a pattern like `app\models\*.rb` would silently
+    // never match anything. Backslashes inside `[...]` are allowed —
+    // they're escape characters there.
+    if (hasBackslashSeparator(candidate)) {
+      throw new Error(
+        `glob: backslashes outside character classes are not supported (got ${JSON.stringify(candidate)}); use '/' as the path separator`,
+      );
+    }
 
     if (p.startsWith("!")) {
       negatives.push(patternToRegex(p.slice(1)));
@@ -285,6 +296,26 @@ function countSeparatorsOutsideClasses(s: string): number {
     }
   }
   return count;
+}
+
+/**
+ * Scan `pattern` for a backslash outside any balanced `[...]` character
+ * class. Backslashes inside classes are escape characters (e.g.
+ * `[\\b]`) and are allowed; backslashes outside would be path
+ * separators which the rest of the implementation does not support.
+ */
+function hasBackslashSeparator(pattern: string): boolean {
+  let inClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (!inClass) {
+      if (c === "[" && pattern.indexOf("]", i + 1) !== -1) inClass = true;
+      else if (c === "\\") return true;
+    } else if (c === "]") {
+      inClass = false;
+    }
+  }
+  return false;
 }
 
 function literalExists(fs: FsAdapter, path: string): boolean {

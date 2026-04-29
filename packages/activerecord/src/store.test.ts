@@ -845,3 +845,45 @@ describe("storeAccessorFor, readStoreAttribute, writeStoreAttribute", () => {
     );
   });
 });
+
+describe("storeAccessorFor uses type-configured accessor", () => {
+  let adapter: DatabaseAdapter;
+  beforeEach(() => {
+    adapter = createTestAdapter();
+  });
+
+  it("returns StringKeyedHashAccessor for hstore-typed column", async () => {
+    const { storeAccessorFor, StringKeyedHashAccessor } = await import("./store.js");
+    class Post extends Base {
+      static {
+        this._tableName = "posts";
+        this.attribute("id", "integer");
+        this.attribute("properties", "hstore");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(Post);
+    store(Post, "properties", { accessors: ["color"] });
+    const accessor = storeAccessorFor(Post, "properties");
+    expect(accessor).toBe(StringKeyedHashAccessor);
+  });
+});
+
+describe("asRegularHash", () => {
+  it("converts HashWithIndifferentAccess via toHash(), not spread", async () => {
+    const { asRegularHash } = await import("./store.js");
+    const { HashWithIndifferentAccess } = await import("@blazetrails/activesupport");
+    const hwia = new HashWithIndifferentAccess({ foo: "bar", baz: 42 });
+    const result = asRegularHash(hwia);
+    expect(result).toEqual({ foo: "bar", baz: 42 });
+    expect(result).not.toBeInstanceOf(HashWithIndifferentAccess);
+  });
+
+  it("returns a plain object copy when given a regular object", async () => {
+    const { asRegularHash } = await import("./store.js");
+    const obj = { a: 1, b: "two" };
+    const result = asRegularHash(obj);
+    expect(result).toEqual({ a: 1, b: "two" });
+    expect(result).not.toBe(obj);
+  });
+});

@@ -4,9 +4,8 @@ import { Bind } from "../collectors/bind.js";
 import { Composite } from "../collectors/composite.js";
 import * as Nodes from "../nodes/index.js";
 import { Table } from "../table.js";
-import { Visitor, UnsupportedVisitError, type NodeCtor } from "./visitor.js";
-
-export { UnsupportedVisitError };
+import { Visitor, type NodeCtor } from "./visitor.js";
+import { UnsupportedVisitError, NotImplementedError } from "../errors.js";
 
 /**
  * Resolve a bind's database value. QueryAttribute exposes
@@ -19,13 +18,6 @@ export function resolveValueForDatabase(value: unknown): unknown {
   if (!value || typeof value !== "object" || !("valueForDatabase" in value)) return value;
   const v = (value as Record<string, unknown>).valueForDatabase;
   return typeof v === "function" ? (v as () => unknown).call(value) : v;
-}
-
-export class NotImplementedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "NotImplementedError";
-  }
 }
 
 /**
@@ -123,7 +115,16 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   static {
     const d = ToSql.dispatchCache();
-    const reg = (ctor: NodeCtor, m: string) => d.set(ctor, m);
+    // Runtime guard: TS `keyof T` only exposes public members, and the
+    // visit methods are mostly protected, so we can't constrain `m` at
+    // compile time. Asserting here catches typos/renames the next time
+    // the static block runs (i.e. as soon as the file is imported).
+    const reg = (ctor: NodeCtor, m: string) => {
+      if (typeof (ToSql.prototype as unknown as Record<string, unknown>)[m] !== "function") {
+        throw new Error(`ToSql dispatch: method '${m}' is not defined on the prototype`);
+      }
+      d.set(ctor, m);
+    };
     // Statements
     reg(Nodes.SelectStatement, "visitSelectStatement");
     reg(Nodes.SelectCore, "visitSelectCore");

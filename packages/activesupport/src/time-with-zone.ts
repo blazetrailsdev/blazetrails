@@ -100,7 +100,7 @@ export class TimeWithZone {
     return this._zoned.epochMilliseconds;
   }
 
-  /** Build a Date snapshot for TimeZone helpers (`abbreviation` etc.) that take a Date. */
+  /** Build a Date snapshot for legacy Date-based helpers and formatters. */
   private _toDate(): Date {
     return new Date(this._epochMs);
   }

@@ -116,7 +116,7 @@ export class Dot extends Visitor {
   }
 
   /** Aliased to Regexp / NotRegexp in dispatch (Rails: `alias`). */
-  protected visit_Regexp(o: Nodes.Regexp | Nodes.NotRegexp): void {
+  protected visitRegexp(o: Nodes.Regexp | Nodes.NotRegexp): void {
     this.visitEdge(o, "left");
     this.visitEdge(o, "right");
     this.visitEdge(o, "caseSensitive");
@@ -158,7 +158,7 @@ export class Dot extends Visitor {
   }
 
   /** Aliased to CurrentRow / Distinct in dispatch (Rails: `alias`). */
-  protected visit_NoEdges(_o: Node): void {
+  protected visitNoEdges(_o: Node): void {
     // intentionally left blank
   }
 
@@ -242,7 +242,7 @@ export class Dot extends Visitor {
   }
 
   /** Aliased to And / Or / With in dispatch (Rails: `alias`). */
-  protected visit_Children(o: { children: ReadonlyArray<unknown> }): void {
+  protected visitChildren(o: { children: ReadonlyArray<unknown> }): void {
     o.children.forEach((child, i) => {
       this.edge(String(i), () => this.visit(child as Node));
     });
@@ -477,16 +477,16 @@ export class Dot extends Visitor {
     reg(Nodes.Binary, "visitArelNodesBinary");
     reg(Nodes.UnaryOperation, "visitArelNodesUnaryOperation");
     reg(Nodes.InfixOperation, "visitArelNodesInfixOperation");
-    reg(Nodes.Regexp, "visit_Regexp");
-    reg(Nodes.NotRegexp, "visit_Regexp");
+    reg(Nodes.Regexp, "visitRegexp");
+    reg(Nodes.NotRegexp, "visitRegexp");
     reg(Nodes.Ordering, "visitArelNodesOrdering");
     reg(Nodes.TableAlias, "visitArelNodesTableAlias");
     reg(Nodes.ValuesList, "visitArelNodesValuesList");
     reg(Nodes.StringJoin, "visitArelNodesStringJoin");
     reg(Nodes.Window, "visitArelNodesWindow");
     reg(Nodes.NamedWindow, "visitArelNodesNamedWindow");
-    reg(Nodes.CurrentRow, "visit_NoEdges");
-    reg(Nodes.Distinct, "visit_NoEdges");
+    reg(Nodes.CurrentRow, "visitNoEdges");
+    reg(Nodes.Distinct, "visitNoEdges");
     // Statements
     reg(Nodes.InsertStatement, "visitArelNodesInsertStatement");
     reg(Nodes.SelectCore, "visitArelNodesSelectCore");
@@ -498,22 +498,22 @@ export class Dot extends Visitor {
     reg(Nodes.Casted, "visitArelNodesCasted");
     reg(Nodes.HomogeneousIn, "visitArelNodesHomogeneousIn");
     reg(Nodes.Attribute, "visitArelAttributesAttribute");
-    reg(Nodes.And, "visit_Children");
-    reg(Nodes.Or, "visit_Children");
-    reg(Nodes.With, "visit_Children");
-    reg(Nodes.WithRecursive, "visit_Children");
+    reg(Nodes.And, "visitChildren");
+    reg(Nodes.Or, "visitChildren");
+    reg(Nodes.With, "visitChildren");
+    reg(Nodes.WithRecursive, "visitChildren");
     reg(Nodes.SqlLiteral, "visitString");
     reg(Nodes.BindParam, "visitArelNodesBindParam");
     reg(Nodes.Comment, "visitArelNodesComment");
     reg(Nodes.Case, "visitArelNodesCase");
     // Quoted, True, False, BoundSqlLiteral, Fragments don't extend any
     // ancestor with a useful Dot handler — register explicitly as leaves.
-    reg(Nodes.Quoted, "visit_NoEdges");
-    reg(Nodes.True, "visit_NoEdges");
-    reg(Nodes.False, "visit_NoEdges");
-    reg(Nodes.BoundSqlLiteral, "visit_NoEdges");
-    reg(Nodes.Fragments, "visit_NoEdges");
-    reg(Nodes.SelectOptions, "visit_NoEdges");
+    reg(Nodes.Quoted, "visitNoEdges");
+    reg(Nodes.True, "visitNoEdges");
+    reg(Nodes.False, "visitNoEdges");
+    reg(Nodes.BoundSqlLiteral, "visitNoEdges");
+    reg(Nodes.Fragments, "visitNoEdges");
+    reg(Nodes.SelectOptions, "visitNoEdges");
     reg(Nodes.OptimizerHints, "visitArelNodesOptimizerHints");
     // Other Trails nodes inherit from registered ancestors (Unary/Binary/
     // InfixOperation/Ordering/Function), so the Visitor.resolveDispatch

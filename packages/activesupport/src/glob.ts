@@ -21,7 +21,10 @@ export interface GlobOptions {
 }
 
 /**
- * Match files relative to `cwd` using picomatch-style patterns.
+ * Match paths (files AND directories) relative to `cwd` using
+ * picomatch-style patterns. Mirrors Ruby `Dir.glob`'s default behavior
+ * of returning both files and directories — needed by Phase 1 consumers
+ * that walk `app/models/*` and similar.
  *
  * Supports `*`, `**`, `?`, `[abc]`, `{a,b}`, leading `!` for negation.
  * Returns paths relative to `cwd`, sorted.

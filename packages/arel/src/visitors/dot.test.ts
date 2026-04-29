@@ -156,6 +156,23 @@ describe("TestDot", () => {
       expect(out).toContain('say \\"hi\\"');
     });
 
+    it("null/undefined values render as empty side-fields (Rails nil.to_s parity)", () => {
+      // Rails dot.rb's quote(field) does field.to_s; nil.to_s is "" — NOT
+      // "nil" (which would be inspect). Trails matches that exactly so
+      // dot output round-trips against Rails fixtures.
+      const v = new Visitors.Dot();
+      type Internals = {
+        visit(o: unknown): void;
+        toDot(): string;
+      };
+      v.compile(new Nodes.SqlLiteral("seed")); // initialize state
+      (v as unknown as Internals).visit(null);
+      const out = (v as unknown as Internals).toDot();
+      expect(out).toMatch(/<f0>NilClass\|<f1>"/); // no characters between |<f1> and the closing "
+      expect(out).not.toContain("null");
+      expect(out).not.toContain("undefined");
+    });
+
     it("OptimizerHints renders its hints field (not Unary's null expr)", () => {
       const node = new Nodes.OptimizerHints(["IDX(t1)", "MAX_EXEC_TIME(1000)"]);
       const out = dot.compile(node);

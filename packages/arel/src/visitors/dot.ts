@@ -253,12 +253,15 @@ export class Dot extends Visitor {
    * side-field on the current node. Rails' `visit_Arel_Nodes_SqlLiteral` is
    * an alias of `visit_String` and works because `SqlLiteral < String` in
    * Ruby; Trails wraps the string in `node.value`, so we unwrap here.
+   *
+   * `null`/`undefined` render as `""` to match Rails' `nil.to_s` ("") that
+   * `to_dot`'s `quote field` produces — not JS's `String(null)` ("null").
    */
   protected visitString(o: unknown): void {
     const top = this.nodeStack[this.nodeStack.length - 1];
     if (!top) return;
     const value = o instanceof Nodes.SqlLiteral ? o.value : o;
-    top.fields.push(String(value));
+    top.fields.push(value == null ? "" : String(value));
   }
 
   protected visitArelNodesBindParam(o: Nodes.BindParam): void {

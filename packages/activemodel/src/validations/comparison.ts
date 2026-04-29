@@ -5,23 +5,25 @@ import { isBlank } from "@blazetrails/activesupport";
 import { COMPARE_CHECKS, errorOptions } from "./comparability.js";
 import { resolveValue } from "./resolve-value.js";
 
-const COMPARE_OPS: Record<string, (cmp: number) => boolean> = {
+type CompareKey = (typeof COMPARE_CHECKS)[number];
+
+const COMPARE_OPS = {
   greaterThan: (c) => c > 0,
   greaterThanOrEqualTo: (c) => c >= 0,
   equalTo: (c) => c === 0,
   lessThan: (c) => c < 0,
   lessThanOrEqualTo: (c) => c <= 0,
   otherThan: (c) => c !== 0,
-};
+} satisfies Record<CompareKey, (cmp: number) => boolean>;
 
-const COMPARE_KEYS_TO_RAILS: Record<string, string> = {
+const COMPARE_KEYS_TO_RAILS = {
   greaterThan: "greater_than",
   greaterThanOrEqualTo: "greater_than_or_equal_to",
   equalTo: "equal_to",
   lessThan: "less_than",
   lessThanOrEqualTo: "less_than_or_equal_to",
   otherThan: "other_than",
-};
+} satisfies Record<CompareKey, string>;
 
 export class ComparisonValidator extends EachValidator {
   resolveValue = resolveValue;

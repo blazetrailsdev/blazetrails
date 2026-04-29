@@ -14,12 +14,15 @@ export class NumericalityValidator extends EachValidator {
     if (val === undefined) return undefined;
     const resolved = this.resolveValue(record, val);
     if (resolved === undefined || resolved === null) return undefined;
-    const numeric = typeof resolved === "number" ? resolved : Number(resolved);
     // Rails parse_as_number → Kernel.Float raises ArgumentError on
-    // non-numeric input (numericality.rb:81-84). Mirror that here so a
-    // misspelled method name surfaces as a clear option error rather
-    // than silently failing every comparison via NaN semantics.
-    if (Number.isNaN(numeric)) {
+    // non-numeric input (numericality.rb:81-84). Number("") / Number("  ")
+    // coerce to 0 in JS, which would silently accept clearly non-numeric
+    // values, so reject empty/whitespace strings explicitly before coercion.
+    if (typeof resolved === "string" && resolved.trim() === "") {
+      throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
+    }
+    const numeric = typeof resolved === "number" ? resolved : Number(resolved);
+    if (!Number.isFinite(numeric)) {
       throw new Error(`Resolved numericality option must be numeric: ${String(resolved)}`);
     }
     return numeric;

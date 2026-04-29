@@ -13,7 +13,17 @@ import { Equality } from "../nodes/equality.js";
 import { Matches, DoesNotMatch } from "../nodes/matches.js";
 import { In } from "../nodes/in.js";
 import { NotIn } from "../nodes/binary.js";
-import { Addition, Subtraction, Multiplication, Division } from "../nodes/infix-operation.js";
+import {
+  Addition,
+  Subtraction,
+  Multiplication,
+  Division,
+  Concat,
+  Contains,
+  Overlaps,
+} from "../nodes/infix-operation.js";
+import { Count } from "../nodes/count.js";
+import { Sum, Max, Min, Avg } from "../nodes/function.js";
 import { Ascending } from "../nodes/ascending.js";
 import { Descending } from "../nodes/descending.js";
 import { Quoted, Casted, buildQuoted } from "../nodes/casted.js";
@@ -30,7 +40,6 @@ import { Regexp as RegexpNode, NotRegexp } from "../nodes/regexp.js";
 import { IsDistinctFrom, IsNotDistinctFrom } from "../nodes/binary.js";
 import { Case } from "../nodes/case.js";
 import {
-  InfixOperation,
   BitwiseAnd,
   BitwiseOr,
   BitwiseXor,
@@ -374,29 +383,35 @@ export class Attribute extends Node {
   // -- Aliasing --
 
   as(aliasName: string): As {
-    return new As(this, new SqlLiteral(aliasName));
+    return new As(this, new SqlLiteral(aliasName, { retryable: true }));
   }
 
   // -- Aggregate functions --
+  //
+  // Mirrors: Arel::Expressions (mixed into Attribute in Rails). Returns
+  // the typed Function subclasses Rails uses (Count/Sum/Max/Min/Avg) so
+  // `instanceof` checks line up across the codebase. The visitor
+  // (visitAggregate in to-sql.ts) renders them identically to a
+  // NamedFunction with the same name.
 
-  count(distinct = false): NamedFunction {
-    return new NamedFunction("COUNT", [this], undefined, distinct);
+  count(distinct = false): Count {
+    return new Count([this], distinct);
   }
 
-  sum(): NamedFunction {
-    return new NamedFunction("SUM", [this]);
+  sum(): Sum {
+    return new Sum([this]);
   }
 
-  maximum(): NamedFunction {
-    return new NamedFunction("MAX", [this]);
+  maximum(): Max {
+    return new Max([this]);
   }
 
-  minimum(): NamedFunction {
-    return new NamedFunction("MIN", [this]);
+  minimum(): Min {
+    return new Min([this]);
   }
 
-  average(): NamedFunction {
-    return new NamedFunction("AVG", [this]);
+  average(): Avg {
+    return new Avg([this]);
   }
 
   // -- String functions --
@@ -431,8 +446,12 @@ export class Attribute extends Node {
     return new NamedFunction("SUBSTRING", args);
   }
 
-  concat(other: unknown, ...rest: unknown[]): NamedFunction {
-    return new NamedFunction("CONCAT", [this, buildQuoted(other), ...rest.map(buildQuoted)]);
+  // Mirrors: Arel::Predications#concat — `Nodes::Concat.new self, other`,
+  // i.e. SQL `||` infix concatenation. (The previous implementation built
+  // a `CONCAT(...)` NamedFunction call, which was Trails-specific and
+  // varied by dialect; the `||` form is what Rails emits.)
+  concat(other: Node): Concat {
+    return new Concat(this, other);
   }
 
   replace(from: string, to: string): NamedFunction {
@@ -497,19 +516,22 @@ export class Attribute extends Node {
   /**
    * PostgreSQL @> (contains) operator.
    *
-   * Mirrors: Arel::Attributes::Attribute#contains
+   * Mirrors: Arel::Predications#contains — `Arel::Nodes::Contains.new ...`.
+   * Returns the dedicated `Contains` subclass (rather than a generic
+   * `InfixOperation("@>", ...)`) so `instanceof` checks line up with the
+   * subclass Rails uses.
    */
-  contains(other: unknown): InfixOperation {
-    return new InfixOperation("@>", this, buildQuoted(other));
+  contains(other: unknown): Contains {
+    return new Contains(this, buildQuoted(other));
   }
 
   /**
    * PostgreSQL && (overlaps) operator.
    *
-   * Mirrors: Arel::Attributes::Attribute#overlaps
+   * Mirrors: Arel::Predications#overlaps — `Arel::Nodes::Overlaps.new ...`.
    */
-  overlaps(other: unknown): InfixOperation {
-    return new InfixOperation("&&", this, buildQuoted(other));
+  overlaps(other: unknown): Overlaps {
+    return new Overlaps(this, buildQuoted(other));
   }
 
   /**

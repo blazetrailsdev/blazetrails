@@ -697,7 +697,12 @@ function main() {
           if (!methodMatchesMode(rm)) continue;
           const tsCandidates = rubyMethodToTs(rm.name);
           if (tsCandidates === null) continue;
-          const key = tsCandidates[0];
+          // Dedup by Ruby method name (within an FQN/include scope), not
+          // by the first TS candidate — two distinct Ruby methods can
+          // produce the same first TS candidate (e.g. `is_number?` and
+          // `number?` both → "isNumber"), and the previous key choice
+          // dropped the second method silently.
+          const key = rm.name;
           if (!seen.has(key)) {
             seen.set(key, { rubyName: rm.name, rubyModule: item.fqn });
           }

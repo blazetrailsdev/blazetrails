@@ -122,8 +122,11 @@ export function rubyMethodToTs(name: string): string[] | null {
     const base = name.slice(0, -1);
     const camel = snakeToCamel(base);
     const isPrefixed = "is" + camel.replace(/^./, (c) => c.toUpperCase());
-    // If base already starts with a predicate word, try without "is" prefix first
-    if (/^(has|supports|can|should|needs|includes|responds|allows|uses)/.test(camel)) {
+    // If base already starts with a predicate word, try without "is" prefix first.
+    // `is` is included so `is_number?` → `isNumber` (not `isIsNumber`) — Ruby
+    // already conveys the predicate via the `is_` prefix; doubling it on
+    // the TS side gives the redundant `isIsNumber`.
+    if (/^(is|has|supports|can|should|needs|includes|responds|allows|uses)/.test(camel)) {
       return [camel, isPrefixed];
     }
     return [isPrefixed, camel];

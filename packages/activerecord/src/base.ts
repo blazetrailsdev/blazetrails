@@ -147,10 +147,7 @@ import * as _EnumModule from "./enum.js";
 import * as _Reflection from "./reflection.js";
 import * as _AssocInstance from "./associations/instance-methods.js";
 import { argumentError } from "./relation/query-methods.js";
-import {
-  ScopeRegistry,
-  initializeInternalsCallback as scopingInitializeInternalsCallback,
-} from "./scoping.js";
+import { ScopeRegistry } from "./scoping.js";
 import {
   transaction as _transaction,
   currentTransactionPublic as _currentTransactionPublic,
@@ -2134,12 +2131,12 @@ export class Base extends Model {
       // Re-snapshot so mp attrs are part of the initial clean state.
       (this as any)._dirty.snapshot((this as any)._attributes);
       if (!wasSuppressed) {
-        // Mirrors Rails Core#initialize: initialize_internals_callback fires
-        // for new records after attributes are assigned (before after_initialize).
+        // Fire initialize_internals_callback after attribute assignment and
+        // before after_initialize. Scope attribute precedence is already handled
+        // by _mergeCurrentScopeAttrs in the class-level new/create methods, so
+        // only the inheritance callback (STI type column) is called here.
         inheritanceInitializeInternalsCallback.call(this as any);
-        scopingInitializeInternalsCallback.call(this as any);
-        // Re-snapshot so internals writes (STI type, scope attrs) are treated
-        // as initial clean state, not as dirty changes.
+        // Re-snapshot so the STI type write is part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);
         ctor._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
       }
@@ -2169,9 +2166,7 @@ export class Base extends Model {
       }
       if (!wasSuppressed2) {
         inheritanceInitializeInternalsCallback.call(this as any);
-        scopingInitializeInternalsCallback.call(this as any);
-        // Re-snapshot so internals writes (STI type, scope attrs) are treated
-        // as initial clean state, not as dirty changes.
+        // Re-snapshot so the STI type write is part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);
         ctor2._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
       }

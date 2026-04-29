@@ -33,7 +33,16 @@ interface CompiledPattern {
   base: string;
   /** Regex applied against the path relative to cwd. */
   re: RegExp;
+  /**
+   * Max additional directory depth the walk may descend below `base`.
+   * `-1` = unbounded (pattern contains `**`). Otherwise = number of
+   * unconsumed `/` segments in the pattern after `base`. Used to prune
+   * subtree recursion.
+   */
+  maxDepth: number;
 }
+
+const GLOB_CHARS = /[*?[\]{}]/;
 
 export async function glob(pattern: string, opts: GlobOptions = {}): Promise<string[]> {
   // Use async resolution so this works in pure Node ESM without callers
@@ -50,15 +59,30 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
     if (p.startsWith("!")) {
       negatives.push(patternToRegex(p.slice(1)));
     } else {
-      positives.push({ base: literalPrefix(p), re: patternToRegex(p) });
+      const base = literalPrefix(p);
+      positives.push({ base, re: patternToRegex(p), maxDepth: maxRemainingDepth(p, base) });
     }
   }
 
   const results = new Set<string>();
 
-  for (const { base, re } of positives) {
-    const startAbs = base ? path.join(cwd, base) : cwd;
-    walk(fs, path, startAbs, base, re, negatives, dot, results);
+  // Walk pass: for patterns with glob metacharacters, recurse from the
+  // literal prefix using the iterative walker.
+  for (let idx = 0; idx < positives.length; idx++) {
+    const positive = positives[idx]!;
+    const expandedPattern = expanded.filter((p) => !p.startsWith("!"))[idx]!;
+    if (!GLOB_CHARS.test(expandedPattern)) continue; // handled below
+    const { base, re, maxDepth } = positive;
+    walk(fs, path, base ? path.join(cwd, base) : cwd, base, re, negatives, dot, maxDepth, results);
+  }
+
+  // Literal-pattern fast path: for each expanded pattern with no glob
+  // metacharacters, a single existence check is enough — no walk.
+  for (const p of expanded) {
+    if (p.startsWith("!")) continue;
+    if (GLOB_CHARS.test(p)) continue;
+    if (negatives.some((re) => re.test(p))) continue;
+    if (await fs.exists(path.join(cwd, p))) results.add(p);
   }
 
   return [...results].sort();
@@ -67,27 +91,40 @@ export async function glob(pattern: string, opts: GlobOptions = {}): Promise<str
 function walk(
   fs: FsAdapter,
   path: PathAdapter,
-  absDir: string,
-  relDir: string,
+  startAbs: string,
+  startRel: string,
   positiveRe: RegExp,
   negatives: RegExp[],
   dot: boolean,
+  maxDepth: number,
   results: Set<string>,
 ): void {
-  let entries: FsDirent[];
-  try {
-    entries = fs.readdirSync(absDir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (!dot && entry.name.startsWith(".")) continue;
-    const absPath = path.join(absDir, entry.name);
-    const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
-    if (positiveRe.test(relPath) && !negatives.some((re) => re.test(relPath))) {
-      results.add(relPath);
+  // Iterative DFS via an explicit stack so very deep trees can't blow
+  // the JS call stack. depth = number of `/` boundaries crossed below
+  // the literal base.
+  const stack: { absDir: string; relDir: string; depth: number }[] = [
+    { absDir: startAbs, relDir: startRel, depth: 0 },
+  ];
+  while (stack.length > 0) {
+    const { absDir, relDir, depth } = stack.pop()!;
+    let entries: FsDirent[];
+    try {
+      entries = fs.readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      continue;
     }
-    if (entry.isDirectory()) walk(fs, path, absPath, relPath, positiveRe, negatives, dot, results);
+    for (const entry of entries) {
+      if (!dot && entry.name.startsWith(".")) continue;
+      const absPath = path.join(absDir, entry.name);
+      const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
+      if (positiveRe.test(relPath) && !negatives.some((re) => re.test(relPath))) {
+        results.add(relPath);
+      }
+      // Only recurse when the pattern can still match a deeper path.
+      if (entry.isDirectory() && (maxDepth === -1 || depth + 1 <= maxDepth)) {
+        stack.push({ absDir: absPath, relDir: relPath, depth: depth + 1 });
+      }
+    }
   }
 }
 
@@ -97,13 +134,25 @@ function walk(
  * `*.rb` → `""`. Used to prune the walk to only the matching subtree.
  */
 function literalPrefix(pattern: string): string {
-  const firstGlob = pattern.search(/[*?[{]/);
+  const firstGlob = pattern.search(GLOB_CHARS);
   if (firstGlob === -1) {
     const lastSlash = pattern.lastIndexOf("/");
     return lastSlash === -1 ? "" : pattern.slice(0, lastSlash);
   }
   const lastSlash = pattern.lastIndexOf("/", firstGlob);
   return lastSlash === -1 ? "" : pattern.slice(0, lastSlash);
+}
+
+/**
+ * Compute the max additional directory depth a walk needs to consider
+ * below `base`. Returns `-1` if the pattern contains `**` (unbounded).
+ * Otherwise returns the number of `/` boundaries in the unconsumed
+ * portion of the pattern.
+ */
+function maxRemainingDepth(pattern: string, base: string): number {
+  if (pattern.includes("**")) return -1;
+  const remaining = base ? pattern.slice(base.length + 1) : pattern;
+  return (remaining.match(/\//g) ?? []).length;
 }
 
 function expandBraces(pattern: string): string[] {

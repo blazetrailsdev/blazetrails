@@ -145,6 +145,7 @@ describe("glob", () => {
         return opts ? realFs.readdirSync(p, opts) : realFs.readdirSync(p);
       }) as FsAdapter["readdirSync"],
     };
+    const prevAdapter = fsAdapterConfig.adapter;
     registerFsAdapter("glob-spy", tracking, realPath);
     fsAdapterConfig.adapter = "glob-spy";
     try {
@@ -162,7 +163,91 @@ describe("glob", () => {
       expect(reads).not.toContain(join(root, "app"));
       expect(reads).not.toContain(join(root, "lib"));
     } finally {
-      fsAdapterConfig.adapter = null;
+      fsAdapterConfig.adapter = prevAdapter;
+    }
+  });
+
+  it("does not recurse below the pattern's max depth (no `**`)", async () => {
+    // Pattern `app/*/*.rb` allows exactly one directory level below `app`.
+    // Without depth pruning, walk would descend further if any subdir
+    // contained nested dirs. Verify by creating a deep nested tree under
+    // app/models and confirming readdirSync was never called on the
+    // deepest level.
+    const deep = join(root, "app", "models", "deep1", "deep2", "deep3");
+    mkdirSync(deep, { recursive: true });
+    writeFileSync(join(deep, "should-not-be-read.rb"), "");
+    const realFs = await getFsAsync();
+    const realPath = await getPathAsync();
+    const reads: string[] = [];
+    const tracking: FsAdapter = {
+      ...realFs,
+      readdirSync: ((p: string, opts?: { withFileTypes: true }) => {
+        reads.push(p);
+        return opts ? realFs.readdirSync(p, opts) : realFs.readdirSync(p);
+      }) as FsAdapter["readdirSync"],
+    };
+    const prevAdapter = fsAdapterConfig.adapter;
+    registerFsAdapter("glob-spy-depth", tracking, realPath);
+    fsAdapterConfig.adapter = "glob-spy-depth";
+    try {
+      // Pattern matches exactly one dir under app, then a *.rb file.
+      // Pattern depth from base "app" = 1 (one trailing /).
+      const result = await glob("app/*/*.rb", { cwd: root });
+      expect(result).toContain("app/models/admin.rb");
+      // Should have read app/ (depth 0) and app/models, app/controllers
+      // (depth 1). Should NOT have read deep1, deep2, deep3.
+      expect(reads).toContain(join(root, "app"));
+      expect(reads).toContain(join(root, "app", "models"));
+      expect(reads).not.toContain(join(root, "app", "models", "deep1"));
+      expect(reads).not.toContain(join(root, "app", "models", "deep1", "deep2"));
+    } finally {
+      fsAdapterConfig.adapter = prevAdapter;
+      // Cleanup the deep tree so other tests aren't affected.
+      rmSync(join(root, "app", "models", "deep1"), { recursive: true, force: true });
+    }
+  });
+
+  it("uses an existence check for fully literal patterns (no walk)", async () => {
+    const realFs = await getFsAsync();
+    const realPath = await getPathAsync();
+    const reads: string[] = [];
+    const tracking: FsAdapter = {
+      ...realFs,
+      readdirSync: ((p: string, opts?: { withFileTypes: true }) => {
+        reads.push(p);
+        return opts ? realFs.readdirSync(p, opts) : realFs.readdirSync(p);
+      }) as FsAdapter["readdirSync"],
+    };
+    const prevAdapter = fsAdapterConfig.adapter;
+    registerFsAdapter("glob-spy-literal", tracking, realPath);
+    fsAdapterConfig.adapter = "glob-spy-literal";
+    try {
+      const found = await glob("foo.rb", { cwd: root });
+      expect(found).toEqual(["foo.rb"]);
+      const missing = await glob("nonexistent.rb", { cwd: root });
+      expect(missing).toEqual([]);
+      // Literal short-circuit: no readdirSync calls should have happened.
+      expect(reads).toEqual([]);
+    } finally {
+      fsAdapterConfig.adapter = prevAdapter;
+    }
+  });
+
+  it("handles deep directory trees without stack overflow (iterative walk)", async () => {
+    // Build a deeply nested structure (200 levels) under a sibling root.
+    const deepRoot = join(root, "deep-stack-test");
+    let cur = deepRoot;
+    for (let i = 0; i < 200; i++) {
+      cur = join(cur, `d${i}`);
+    }
+    mkdirSync(cur, { recursive: true });
+    writeFileSync(join(cur, "leaf.rb"), "");
+    try {
+      const found = await glob("**/leaf.rb", { cwd: deepRoot });
+      expect(found.length).toBe(1);
+      expect(found[0]!.endsWith("leaf.rb")).toBe(true);
+    } finally {
+      rmSync(deepRoot, { recursive: true, force: true });
     }
   });
 });

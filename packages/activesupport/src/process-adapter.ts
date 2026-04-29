@@ -10,6 +10,9 @@
  *
  * Streams (`stdout`, `stderr`, `stdin`) delegate to the registered
  * adapter at call time so a swap takes effect immediately.
+ *
+ * This module uses structural types only — no `NodeJS.Process` /
+ * `Buffer` references — so it typechecks without `@types/node`.
  */
 
 export interface WriteStream {
@@ -41,7 +44,13 @@ export interface ProcessAdapter {
   readonly stdin: ReadStream;
 }
 
-const envInternal: Record<string, string | undefined> = {};
+// Use a null-prototype object to avoid prototype-pollution semantics if
+// an adapter snapshot or `setEnv` call passes `__proto__`/`constructor`
+// as a key (env keys can come from dotenv shims).
+const envInternal: Record<string, string | undefined> = Object.create(null) as Record<
+  string,
+  string | undefined
+>;
 const argvInternal: string[] = [];
 
 export const env = envInternal as Readonly<Record<string, string | undefined>>;
@@ -133,7 +142,12 @@ export function setEnv(key: string, value: string | undefined): void {
 export function registerProcessAdapter(adapter: ProcessAdapter): void {
   currentAdapter = adapter;
   for (const k of Object.keys(envInternal)) delete envInternal[k];
-  Object.assign(envInternal, adapter.envSnapshot());
+  // Skip `undefined` values so `key in env` stays consistent with
+  // `setEnv(key, undefined)` semantics (both mean "absent").
+  const snapshot = adapter.envSnapshot();
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (value !== undefined) envInternal[key] = value;
+  }
   argvInternal.length = 0;
   argvInternal.push(...adapter.argvSnapshot());
 }
@@ -142,19 +156,48 @@ export function getProcessAdapter(): ProcessAdapter {
   return requireAdapter();
 }
 
+// Structural shape of `node:process` we use. Avoids `NodeJS.Process` so
+// this module typechecks without `@types/node`.
+interface NodeStream {
+  write(chunk: string): boolean;
+  isTTY?: boolean;
+  columns?: number;
+  rows?: number;
+  readableEnded?: boolean;
+  destroyed?: boolean;
+  once(event: string, handler: (...args: unknown[]) => void): void;
+  off(event: string, handler: (...args: unknown[]) => void): void;
+}
+
+interface NodeProcessLike {
+  versions?: { node?: string };
+  env: Record<string, string | undefined>;
+  argv: string[];
+  cwd(): string;
+  chdir(dir: string): void;
+  platform: string;
+  exit(code?: number): never;
+  exitCode: number | string | undefined;
+  on(event: string, handler: () => void): void;
+  off(event: string, handler: () => void): void;
+  stdout: NodeStream;
+  stderr: NodeStream;
+  stdin: NodeStream;
+}
+
 let nodeAttempted = false;
 
 function tryAutoRegisterNode(): boolean {
   if (currentAdapter) return true;
   if (nodeAttempted) return false;
   nodeAttempted = true;
-  const proc = (globalThis as { process?: NodeJS.Process }).process;
+  const proc = (globalThis as { process?: NodeProcessLike }).process;
   if (!proc?.versions?.node) return false;
   registerProcessAdapter(buildNodeAdapter(proc));
   return true;
 }
 
-function buildNodeAdapter(proc: NodeJS.Process): ProcessAdapter {
+function buildNodeAdapter(proc: NodeProcessLike): ProcessAdapter {
   return {
     envSnapshot: () => ({ ...proc.env }),
     argvSnapshot: () => [...proc.argv],
@@ -165,7 +208,7 @@ function buildNodeAdapter(proc: NodeJS.Process): ProcessAdapter {
       if (value === undefined) delete proc.env[key];
       else proc.env[key] = value;
     },
-    exit: (code) => proc.exit(code) as never,
+    exit: (code) => proc.exit(code),
     setExitCode: (code) => {
       proc.exitCode = code;
     },
@@ -204,21 +247,43 @@ function buildNodeAdapter(proc: NodeJS.Process): ProcessAdapter {
         return Boolean(proc.stdin.isTTY);
       },
       read: () =>
-        new Promise<string | null>((resolve) => {
-          const onData = (data: Buffer) => {
+        new Promise<string | null>((resolve, reject) => {
+          // Bail early if the stream is already terminal.
+          if (proc.stdin.readableEnded || proc.stdin.destroyed) {
+            resolve(null);
+            return;
+          }
+          const onData = (...args: unknown[]) => {
             cleanup();
-            resolve(data.toString());
+            const data = args[0];
+            // Node passes Buffer or string depending on encoding. Accept
+            // either — coerce to string structurally without referencing
+            // the `Buffer` type.
+            resolve(
+              typeof data === "string"
+                ? data
+                : data && typeof (data as { toString(): string }).toString === "function"
+                  ? (data as { toString(): string }).toString()
+                  : null,
+            );
           };
           const onEnd = () => {
             cleanup();
             resolve(null);
           };
+          const onError = (...args: unknown[]) => {
+            cleanup();
+            const err = args[0];
+            reject(err instanceof Error ? err : new Error(String(err)));
+          };
           const cleanup = () => {
             proc.stdin.off("data", onData);
             proc.stdin.off("end", onEnd);
+            proc.stdin.off("error", onError);
           };
           proc.stdin.once("data", onData);
           proc.stdin.once("end", onEnd);
+          proc.stdin.once("error", onError);
         }),
     },
   };

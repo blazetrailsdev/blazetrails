@@ -205,26 +205,32 @@ describe("processAdapter", () => {
       // empty snapshots because auto-register only fired through
       // requireAdapter(). Module load now eagerly auto-registers under
       // Node so direct reads work.
+      //
+      // Assert structural alignment with process.env keys rather than
+      // hard-coding PATH so this passes in hermetic envs where PATH
+      // may be unset.
       expect(moduleLoadArgv.length).toBeGreaterThan(0);
-      expect(typeof moduleLoadEnv.PATH === "string" || typeof moduleLoadEnv.Path === "string").toBe(
-        true,
-      );
+      const procEnv = (globalThis as { process: { env: Record<string, string | undefined> } })
+        .process.env;
+      expect(Object.keys(moduleLoadEnv).sort()).toEqual(Object.keys(procEnv).sort());
     });
   });
 
   describe("missing adapter", () => {
     it("throws a helpful error when no adapter is configured and node is unavailable", () => {
       _resetProcessAdapter();
-      const originalProcess = (globalThis as { process?: NodeJS.Process }).process;
-      // Hide node's process to force the error path.
+      // Save the full property descriptor so we restore writability/
+      // configurability/getter semantics — not just the value.
+      const originalProcessDescriptor = Object.getOwnPropertyDescriptor(globalThis, "process");
       Object.defineProperty(globalThis, "process", { value: undefined, configurable: true });
       try {
         expect(() => cwd()).toThrow(/No process adapter configured/);
       } finally {
-        Object.defineProperty(globalThis, "process", {
-          value: originalProcess,
-          configurable: true,
-        });
+        if (originalProcessDescriptor) {
+          Object.defineProperty(globalThis, "process", originalProcessDescriptor);
+        } else {
+          delete (globalThis as { process?: unknown }).process;
+        }
       }
     });
   });

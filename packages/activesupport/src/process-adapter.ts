@@ -342,12 +342,24 @@ export function __INTERNAL_resetProcessAdapter_TEST_ONLY(): void {
   argvInternal.length = 0;
 }
 
-// Eagerly register the Node default at module load so direct reads of
-// `env.FOO` and `argv[0]` see populated snapshots without first having
-// to call a function that goes through `requireAdapter()`. This also
-// ensures `child-process-adapter`'s default `env` (which spreads the
-// exported `env`) is non-empty when running under Node.
+// Eagerly register the Node default at module load.
 //
-// In non-Node hosts this is a no-op; the host registers its own adapter
-// before any consumer reads the snapshots.
+// Why eager rather than lazy/first-access:
+//
+// 1. The exported `env` and `argv` are plain frozen objects populated by
+//    *copying* the adapter's snapshot at registration time. Direct reads
+//    like `env.FOO` and `argv[0]` cannot trigger auto-registration —
+//    they bypass any function call. A lazy approach would require a
+//    Proxy or getters, but the trailties build-out plan explicitly
+//    chose plain frozen objects ("No Proxy") to keep the surface
+//    simple and serializable.
+// 2. `child-process-adapter`'s default `env` for `spawnSync` spreads
+//    the exported `env`. Without eager registration, that would be
+//    empty under Node and strip PATH from spawned processes.
+// 3. Standard env shims (dotenv etc.) run at the entry-point's very
+//    top, before activesupport is imported, so they're already in
+//    `process.env` by the time this snapshot runs.
+//
+// In non-Node hosts this is a no-op; the host registers its own
+// adapter before any consumer reads the snapshots.
 tryAutoRegisterNode();

@@ -1231,15 +1231,15 @@ describe("the to_sql visitor", () => {
 
     it("an overridden bindBlock takes effect at every base addBind callsite", () => {
       class NumberedVisitor extends Visitors.ToSql {
-        private idx = 0;
+        idx = 0;
         protected override bindBlock(): (i: number) => string {
           return () => `$${++this.idx}`;
         }
       }
       const tbl = new Table("users");
-      // Three bind sites: BindParam (extracted), Casted (extracted),
-      // ActiveModelAttribute (always unbound).
       const v = new NumberedVisitor();
+      // Two bind sites reachable via standard dispatch — BindParam (extracted)
+      // and Casted (extracted) — both routed through bindBlock.
       const [sql] = v.compileWithBinds(
         tbl
           .where(tbl.get("id").eq(new Nodes.BindParam(1)))
@@ -1249,6 +1249,24 @@ describe("the to_sql visitor", () => {
       expect(sql).toContain("$1");
       expect(sql).toContain("$2");
       expect(sql).not.toContain("?");
+    });
+
+    it("visitActiveModelAttribute routes through bindBlock (Rails parity)", () => {
+      // ActiveModel::Attribute isn't a Node ctor so it's not reachable
+      // through standard dispatch — exercise the visitor method directly
+      // to confirm Rails' add_bind(o, &bind_block) shape is preserved.
+      class NumberedVisitor extends Visitors.ToSql {
+        idx = 0;
+        protected override bindBlock(): (i: number) => string {
+          return () => `$${++this.idx}`;
+        }
+        run(o: unknown): string {
+          this.compile(new Nodes.SqlLiteral(""));
+          this.visitActiveModelAttribute(o);
+          return (this as unknown as { collector: { value: string } }).collector.value;
+        }
+      }
+      expect(new NumberedVisitor().run({ value: "x" })).toBe("$1");
     });
 
     it("visitArelSelectManager wraps the manager's AST in parens", () => {

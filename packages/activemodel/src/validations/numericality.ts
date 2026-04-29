@@ -1,19 +1,20 @@
 import { EachValidator } from "../validator.js";
 import type { AnyRecord } from "../validator.js";
 import { isBlank } from "@blazetrails/activesupport";
+import { errorOptions } from "./comparability.js";
+import { resolveValue } from "./resolve-value.js";
 
 type NumericValue = number | ((record: AnyRecord) => number) | string;
 
 export class NumericalityValidator extends EachValidator {
+  resolveValue = resolveValue;
+  errorOptions = errorOptions;
+
   private resolveNumeric(val: NumericValue | undefined, record: AnyRecord): number | undefined {
     if (val === undefined) return undefined;
-    if (typeof val === "function") return val(record);
-    if (typeof val === "string") {
-      const method = (record as AnyRecord)[val];
-      if (typeof method === "function") return method.call(record);
-      return Number(method);
-    }
-    return val;
+    const resolved = this.resolveValue(record, val);
+    if (resolved === undefined || resolved === null) return undefined;
+    return typeof resolved === "number" ? resolved : Number(resolved);
   }
 
   override checkValidity(): void {

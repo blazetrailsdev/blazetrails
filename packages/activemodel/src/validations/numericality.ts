@@ -92,19 +92,12 @@ export class NumericalityValidator extends EachValidator {
    */
   override validate(record: AnyRecord): void {
     for (const attribute of this.attributes) {
-      // Same readAttributeForValidation lookup as EachValidator.validate
-      // (validator.ts:90-100). Methods are called directly on `record`
-      // so `this` stays bound — extracting them would unbind and
-      // Model.readAttribute reads this._attributes, which would throw.
-      // The flow runs through prepareValueForValidation BEFORE the
-      // allowNil/allowBlank short-circuits so raw user input ('abc' →
-      // cast null) still gets validated.
-      const cast =
-        typeof record.readAttributeForValidation === "function"
-          ? record.readAttributeForValidation(attribute)
-          : typeof record.readAttribute === "function"
-            ? record.readAttribute(attribute)
-            : record[attribute];
+      // Reuses EachValidator.readAttributeForValidation so the lookup
+      // chain stays in one place. The flow then runs through
+      // prepareValueForValidation BEFORE the allowNil/allowBlank
+      // short-circuits so raw user input ('abc' → cast null) still
+      // gets validated.
+      const cast = this.readAttributeForValidation(record, attribute);
       const value = this.prepareValueForValidation(cast, record, attribute);
       if (value == null && this.options.allowNil === true) continue;
       if (isBlank(value) && this.options.allowBlank === true) continue;
@@ -550,13 +543,13 @@ export function prepareValueForValidation(
   // Rails has an early `return value if record_attribute_changed_in_place?`
   // short-circuit (numericality.rb:121) — in-place mutation means the
   // cast value IS what the user just changed; raw before_type_cast is
-  // stale. Trails skips this optimization today because Model.attribute-
-  // ChangedInPlace returns true for ANY change (not just in-place
-  // mutation), so honoring the short-circuit would let normal
-  // 10 → "abc" updates bypass numericality. The isRecordAttribute-
-  // ChangedInPlace helper is still exported (Rails parity surface),
-  // it just isn't a gate here yet. Revisit once trails grows true
-  // in-place-mutation tracking.
+  // stale. Trails skips this optimization today because
+  // `Model.attributeChangedInPlace` returns true for ANY change (not
+  // just in-place mutation), so honoring the short-circuit would let
+  // normal `10 → "abc"` updates bypass numericality. The
+  // `isRecordAttributeChangedInPlace` helper is still exported (Rails
+  // parity surface), it just isn't a gate here yet. Revisit once
+  // trails grows true in-place-mutation tracking.
   //
   // Trails exposes raw values through the generic
   // `readAttributeBeforeTypeCast(name)` API on Model rather than the

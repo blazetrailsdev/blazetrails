@@ -1316,7 +1316,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   private visitQuoted(node: Nodes.Quoted): SQLString {
-    return this.visitArelNodesCasted(node as unknown as Nodes.Casted);
+    return this.visitArelNodesCasted(node);
   }
 
   protected visitArelNodesCasted(node: Nodes.Casted | Nodes.Quoted): SQLString {

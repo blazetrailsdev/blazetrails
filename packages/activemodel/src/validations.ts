@@ -368,8 +368,11 @@ export function _validatesDefaultKeys(): string[] {
  * validator constructor expects. Mirrors Rails
  * `_parse_validates_options(options)`
  * (activemodel/lib/active_model/validations/validates.rb:166-177):
- * `true` → `{}`, plain hash → unchanged, Range/Array → `{ in: options }`,
- * anything else → `{ with: options }`.
+ * `true` → `{}`, plain hash → unchanged, Array → `{ in: options }`,
+ * anything else → `{ with: options }`. Rails also routes `Range` to
+ * `{ in: ... }`; TS has no first-class Range (see the note in
+ * `validations/clusivity.ts`), so a Range-like dispatch slots in
+ * here when one lands.
  *
  * @internal Rails-private helper.
  */

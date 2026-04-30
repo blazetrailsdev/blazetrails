@@ -4,6 +4,23 @@ import { Temporal } from "@blazetrails/activesupport/temporal";
 type AnyRecord = any;
 
 /**
+ * Set `key` on `target` as an own data property, even when `key` is
+ * `__proto__` (or another magic name that has accessors on
+ * `Object.prototype`). A plain assignment would invoke the inherited
+ * setter and mutate the target's prototype chain. Used everywhere the
+ * key may originate from user input — attribute names, include keys,
+ * association names from a JSON-decoded options bag.
+ */
+function safeSet(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+/**
  * Serialization mixin contract — provides serializable_hash.
  *
  * Mirrors: ActiveModel::Serialization
@@ -61,9 +78,9 @@ export function serializableHash(
   if (options.methods) {
     for (const method of options.methods) {
       if (typeof record[method] === "function") {
-        result[method] = record[method]();
+        safeSet(result, method, record[method]());
       } else if (method in record) {
-        result[method] = record[method];
+        safeSet(result, method, record[method]);
       } else {
         throw new Error(
           `undefined method '${method}' for an instance of ${record.constructor.name}`,
@@ -74,11 +91,15 @@ export function serializableHash(
 
   serializableAddIncludes(record, options, (assocName, records, opts) => {
     if (Array.isArray(records)) {
-      result[assocName] = records.map((r: AnyRecord) => serializableHash(r, opts));
+      safeSet(
+        result,
+        assocName,
+        records.map((r: AnyRecord) => serializableHash(r, opts)),
+      );
     } else if (records && typeof records === "object" && (records as AnyRecord)._attributes) {
-      result[assocName] = serializableHash(records, opts);
+      safeSet(result, assocName, serializableHash(records, opts));
     } else {
-      result[assocName] = records;
+      safeSet(result, assocName, records);
     }
   });
 
@@ -145,15 +166,17 @@ export function serializableAttributes(
   const attrStore = record._attributes;
   const result: Record<string, unknown> = {};
   for (const key of attributeNames) {
+    let value: unknown;
     if (attrStore && typeof attrStore.fetchValue === "function") {
-      result[key] = attrStore.fetchValue(key);
+      value = attrStore.fetchValue(key);
     } else if (attrStore instanceof Map) {
-      result[key] = attrStore.get(key);
+      value = attrStore.get(key);
     } else if (record.readAttribute) {
-      result[key] = record.readAttribute(key);
+      value = record.readAttribute(key);
     } else {
-      result[key] = record.attributes?.[key];
+      value = record.attributes?.[key];
     }
+    safeSet(result, key, value);
   }
   return result;
 }
@@ -361,19 +384,25 @@ function normalizeIncludes(
     | Array<string | Record<string, SerializeOptions>>
     | string,
 ): Record<string, SerializeOptions> {
+  const result: Record<string, SerializeOptions> = {};
   if (typeof include === "string") {
-    return { [include]: {} };
+    safeSet(result as Record<string, unknown>, include, {});
+    return result;
   }
   if (Array.isArray(include)) {
-    const result: Record<string, SerializeOptions> = {};
     for (const entry of include) {
       if (typeof entry === "string") {
-        result[entry] = {};
+        safeSet(result as Record<string, unknown>, entry, {});
       } else {
-        Object.assign(result, entry);
+        for (const [k, v] of Object.entries(entry)) {
+          safeSet(result as Record<string, unknown>, k, v);
+        }
       }
     }
     return result;
   }
-  return include;
+  for (const [k, v] of Object.entries(include)) {
+    safeSet(result as Record<string, unknown>, k, v);
+  }
+  return result;
 }

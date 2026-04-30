@@ -34,12 +34,12 @@ Live numbers come from `pnpm api:compare --package <name>` and
 
 | Doc                                                                    | api:compare               | Priority | Work | Notes                                                                                                                   |
 | ---------------------------------------------------------------------- | ------------------------- | -------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
-| [`activerecord-100-percent.md`](activerecord-100-percent.md)           | 88% (incl priv)           | P1       | L    | Public surface near-done; private parity tracked in `private-api-parity-100-plan.md`.                                   |
-| [`activemodel-privates-100-plan.md`](activemodel-privates-100-plan.md) | 99.1% / ~83% priv         | P1       | S–M  | Track A done. Tracks B + C are small. **Track D** (readAttribute → MissingAttributeError) is its own ~6-PR initiative.  |
-| [`actioncontroller-100-percent.md`](actioncontroller-100-percent.md)   | 57%                       | P1       | L    | Merged with the privates backlog: 4 waves remaining. Biggest gaps: http_authentication (33), test_case (32), live (17). |
+| [`activerecord-100-percent.md`](activerecord-100-percent.md)           | 90.5% pub / 72.1% all     | P1       | L    | Public surface near-done; private parity tracked in `private-api-parity-100-plan.md`.                                   |
+| [`activemodel-privates-100-plan.md`](activemodel-privates-100-plan.md) | 99.1% pub / 82.4% all     | P1       | S–M  | Track A done. Tracks B + C are small. **Track D** (readAttribute → MissingAttributeError) is its own ~6-PR initiative.  |
+| [`actioncontroller-100-percent.md`](actioncontroller-100-percent.md)   | 57% pub / 43.4% all       | P1       | L    | Merged with the privates backlog: 4 waves remaining. Biggest gaps: http_authentication (33), test_case (32), live (17). |
 | [`actiondispatch-100-percent.md`](actiondispatch-100-percent.md)       | 4.9% (api), 30.9% (tests) | P2       | XL   | Missing tests, not stubs. Primarily feature porting + test reconciliation.                                              |
-| [`activesupport-100-percent.md`](activesupport-100-percent.md)         | 24.7%                     | P2       | XL   | Snapshot lags; trickled in alongside other work.                                                                        |
-| [`private-api-parity-100-plan.md`](private-api-parity-100-plan.md)     | 88% AR priv               | P1       | L    | Tier 1/2/4 done. Tier 3 (adapters, ~310 methods, ~16 PRs) is the next big block. Tiers 5–7 in parallel.                 |
+| [`activesupport.md`](activesupport.md)                                 | 24.7% (denominator stale) | P2       | —    | **Not a 100% target.** Scope is "what siblings need + standalone runtime utilities"; Ruby-isms explicitly out.          |
+| [`private-api-parity-100-plan.md`](private-api-parity-100-plan.md)     | 72.1% AR all              | P1       | L    | Tier 1/2/4 done. Tier 3 (adapters, ~310 methods, ~16 PRs) is the next big block. Tiers 5–7 in parallel.                 |
 
 ## Plans / backlogs
 
@@ -60,10 +60,9 @@ Live numbers come from `pnpm api:compare --package <name>` and
 
 ## Verification harnesses
 
-| Doc                                                                                      | Priority | Work | Notes                                                                                         |
-| ---------------------------------------------------------------------------------------- | -------- | ---- | --------------------------------------------------------------------------------------------- |
-| [`activerecord-rails-parity-verification.md`](activerecord-rails-parity-verification.md) | P1       | —    | Schema parity pipeline — implementation contract. Living reference, not a "complete it" plan. |
-| [`query-parity-verification.md`](query-parity-verification.md)                           | P1       | —    | Query parity pipeline — extends schema parity. Same shape, same fixtures.                     |
+| Doc                                                | Priority | Work | Notes                                                                                                                                     |
+| -------------------------------------------------- | -------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [`parity-verification.md`](parity-verification.md) | P1       | —    | Schema + query parity pipelines (`pnpm parity:schema` / `pnpm parity:query`). Both shipped; reference for adding fixtures + format bumps. |
 
 ## Audits (point-in-time snapshots)
 
@@ -82,5 +81,4 @@ of what was true at the audit date and inform plan PRs cited in their wake.
 If you're looking for low-hanging cleanup:
 
 - `activemodel-audit.md` is mostly executed — could become a deletion candidate after one more sweep against current state.
-- `activesupport-100-percent.md` is so stale it may be net-negative; defer to live `api:compare` instead.
 - `frontiers/` is a separate workstream (WS1/2/3) outside the package work — leave alone.

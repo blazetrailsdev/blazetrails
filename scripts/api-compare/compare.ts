@@ -353,8 +353,10 @@ export function flattenIncludedMethodInfos(
  * candidate). Two distinct Ruby methods can produce the same first TS
  * candidate (`is_number?` and `number?` both → `"isNumber"`); keying
  * by the TS candidate would silently drop the second method from the
- * expected set. Same FQN-scoped dedup the original logic provided —
- * just keyed differently. Skips methods with no TS-candidate mapping
+ * expected set. Caller supplies a per-file `seen` map (keyed by method
+ * name); this helper just records the first sighting and ignores
+ * subsequent ones, matching the original per-file dedup behavior with
+ * a different key. Skips methods with no TS-candidate mapping
  * (operators, SKIP list).
  */
 export function dedupeRubyMethodInto(

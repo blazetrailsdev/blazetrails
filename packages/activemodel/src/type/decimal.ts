@@ -42,9 +42,9 @@ export class DecimalType extends ValueType<string> {
       if (!Number.isFinite(value)) return null;
       // Rails dispatches Float through `convert_float_to_big_decimal`
       // (decimal.rb:75-81). Route every JS number through the same hook
-      // so a configured `precision:` truncates per Rails — for Integer
-      // inputs the result still equals `String(value)` since precision
-      // capping is a no-op on whole numbers.
+      // so a configured `precision:` applies the same significant-digit
+      // rounding per Rails; integer-valued inputs may still change when
+      // the value has more digits than `floatPrecision()` preserves.
       return this.convertFloatToBigDecimal(value);
     }
     if (typeof value === "string") {
@@ -135,11 +135,16 @@ export class DecimalType extends ValueType<string> {
  */
 function roundFloatToSignificantDigits(value: number, precision: number): string {
   if (precision <= 0 || !Number.isFinite(value)) return String(value);
-  // Number#toPrecision returns scientific notation for very small / large
-  // magnitudes; normalize back to plain decimal via Number(...) so the
-  // emitted string matches the rest of the cast pipeline.
+  // Number#toPrecision may emit scientific notation for very small / large
+  // magnitudes. Re-parse to a JS number for canonical rounding, then expand
+  // any exponent form back into a plain decimal string so the emitted value
+  // matches the rest of the cast pipeline (which feeds applyScale's regex
+  // matcher — that one rejects exponent forms).
   const rounded = Number(value.toPrecision(precision));
-  return String(rounded);
+  const parts = splitDecimal(String(rounded));
+  if (!parts) return String(rounded);
+  const { sign, intPart, fracPart } = parts;
+  return fracPart.length > 0 ? `${sign}${intPart}.${fracPart}` : `${sign}${intPart}`;
 }
 
 const MAX_EXPONENT_EXPANSION = 4000;

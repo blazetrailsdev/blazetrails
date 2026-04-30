@@ -36,7 +36,18 @@ export class IntegerType extends ValueType<number> {
 
   isSerializable(value: unknown): boolean {
     if (value === null || value === undefined) return true;
-    const num = typeof value === "number" ? value : Number(value);
+    let num: number;
+    if (typeof value === "number") {
+      num = value;
+    } else {
+      // `Number(Symbol())` throws TypeError; catch so callers (e.g.
+      // Attribute.isSerializable) get `false` instead of an exception.
+      try {
+        num = Number(value);
+      } catch {
+        return false;
+      }
+    }
     if (isNaN(num)) return false;
     return this.isInRange(num);
   }

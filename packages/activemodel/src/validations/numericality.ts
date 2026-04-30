@@ -37,6 +37,14 @@ export class NumericalityValidator extends EachValidator {
   declare isInteger: typeof isInteger;
   /** @internal Rails-private helper. */
   declare isHexadecimalLiteral: typeof isHexadecimalLiteral;
+  /** @internal Rails-private helper. */
+  declare filteredOptions: typeof filteredOptions;
+  /** @internal Rails-private helper. */
+  declare isAllowOnlyInteger: typeof isAllowOnlyInteger;
+  /** @internal Rails-private helper. */
+  declare prepareValueForValidation: typeof prepareValueForValidation;
+  /** @internal Rails-private helper. */
+  declare isRecordAttributeChangedInPlace: typeof isRecordAttributeChangedInPlace;
 
   private resolveNumeric(
     val: NumericValue | undefined,
@@ -186,6 +194,27 @@ const HEXADECIMAL_REGEX = /^[+-]?0[xX]/;
 // hex check for the elsif-chain semantic Rails would apply, then layer
 // this on for the JS-specific surface.
 const NON_DECIMAL_LITERAL_REGEX = /^[+-]?0[xXbBoO]/;
+
+// Mirrors Rails numericality.rb:16:
+//   RESERVED_OPTIONS = COMPARE_CHECKS.keys + NUMBER_CHECKS.keys + RANGE_CHECKS.keys + [:only_integer, :only_numeric]
+// camelCased for trails option-key conventions.
+const RESERVED_OPTIONS = [
+  // COMPARE_CHECKS keys
+  "greaterThan",
+  "greaterThanOrEqualTo",
+  "equalTo",
+  "lessThan",
+  "lessThanOrEqualTo",
+  "otherThan",
+  // NUMBER_CHECKS keys
+  "odd",
+  "even",
+  // RANGE_CHECKS keys
+  "in",
+  // Misc
+  "onlyInteger",
+  "onlyNumeric",
+] as const;
 
 /**
  * Rails: parse_as_number → branches by Ruby type (Float / BigDecimal /
@@ -385,9 +414,137 @@ export function optionAsNumber(
   return parseAsNumber(numeric, precision, scale);
 }
 
+/**
+ * Mirrors: numericality.rb:110-114
+ *   def filtered_options(value)
+ *     filtered = options.except(*RESERVED_OPTIONS)
+ *     filtered[:value] = value
+ *     filtered
+ *   end
+ *
+ * Builds the i18n interpolation hash for an error: strips the
+ * comparison/range/number-check option keys and merges in :value.
+ *
+ * @internal Rails-private helper.
+ */
+export function filteredOptions(
+  this: { options: Record<string, unknown> },
+  value: unknown,
+): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
+  for (const key of Object.keys(this.options)) {
+    if (!(RESERVED_OPTIONS as readonly string[]).includes(key)) {
+      filtered[key] = this.options[key];
+    }
+  }
+  filtered.value = value;
+  return filtered;
+}
+
+/**
+ * Mirrors: numericality.rb:116-118
+ *   def allow_only_integer?(record)
+ *     resolve_value(record, options[:only_integer])
+ *   end
+ *
+ * Resolves the :only_integer option per-record, supporting Proc /
+ * symbol-method-name forms via resolveValue. Coerced to boolean to
+ * match Ruby's truthiness expectation at the call site.
+ *
+ * @internal Rails-private helper.
+ */
+export function isAllowOnlyInteger(
+  this: {
+    options: Record<string, unknown>;
+    resolveValue(record: unknown, value: unknown): unknown;
+  },
+  record: AnyRecord,
+): boolean {
+  return Boolean(this.resolveValue(record, this.options.onlyInteger));
+}
+
+interface RecordWithRawAttribute {
+  attributeChangedInPlace?: (name: string) => boolean;
+  readAttribute?: (name: string) => unknown;
+  [key: string]: unknown;
+}
+
+/**
+ * Mirrors: numericality.rb:120-138
+ *
+ *   def prepare_value_for_validation(value, record, attr_name)
+ *     return value if record_attribute_changed_in_place?(record, attr_name)
+ *     came_from_user = :"#{attr_name}_came_from_user?"
+ *     if record.respond_to?(came_from_user)
+ *       if record.public_send(came_from_user)
+ *         raw_value = record.public_send(:"#{attr_name}_before_type_cast")
+ *       elsif record.respond_to?(:read_attribute)
+ *         raw_value = record.read_attribute(attr_name)
+ *       end
+ *     else
+ *       before_type_cast = :"#{attr_name}_before_type_cast"
+ *       if record.respond_to?(before_type_cast)
+ *         raw_value = record.public_send(before_type_cast)
+ *       end
+ *     end
+ *     raw_value || value
+ *   end
+ *
+ * Lets numericality validate against the raw input the user typed
+ * (before type-cast) so e.g. "abc" doesn't get cast to 0 by an
+ * integer column before the validator sees it.
+ *
+ * @internal Rails-private helper.
+ */
+export function prepareValueForValidation(
+  this: {
+    isRecordAttributeChangedInPlace(record: AnyRecord, attrName: string): boolean;
+  },
+  value: unknown,
+  record: AnyRecord,
+  attrName: string,
+): unknown {
+  if (this.isRecordAttributeChangedInPlace(record, attrName)) return value;
+  const r = record as RecordWithRawAttribute;
+  const cameFromUser = `${attrName}CameFromUser`;
+  const beforeTypeCast = `${attrName}BeforeTypeCast`;
+  let rawValue: unknown;
+  if (typeof r[cameFromUser] === "function") {
+    if ((r[cameFromUser] as () => boolean).call(r)) {
+      rawValue = (r[beforeTypeCast] as (() => unknown) | undefined)?.call(r);
+    } else if (typeof r.readAttribute === "function") {
+      rawValue = r.readAttribute(attrName);
+    }
+  } else if (typeof r[beforeTypeCast] === "function") {
+    rawValue = (r[beforeTypeCast] as () => unknown).call(r);
+  }
+  // Rails: raw_value || value — Ruby `||` falls back on nil/false. Use
+  // the same semantic so `false`/`null` raw values fall through to
+  // the cast value rather than being treated as "I read the raw".
+  return rawValue !== undefined && rawValue !== null && rawValue !== false ? rawValue : value;
+}
+
+/**
+ * Mirrors: numericality.rb:140-143
+ *   def record_attribute_changed_in_place?(record, attr_name)
+ *     record.respond_to?(:attribute_changed_in_place?) &&
+ *       record.attribute_changed_in_place?(attr_name.to_s)
+ *   end
+ *
+ * @internal Rails-private helper.
+ */
+export function isRecordAttributeChangedInPlace(record: AnyRecord, attrName: string): boolean {
+  const r = record as RecordWithRawAttribute;
+  return typeof r.attributeChangedInPlace === "function" && r.attributeChangedInPlace(attrName);
+}
+
 NumericalityValidator.prototype.optionAsNumber = optionAsNumber;
 NumericalityValidator.prototype.parseFloat = parseFloatRails;
 NumericalityValidator.prototype.round = round;
 NumericalityValidator.prototype.isNumber = isNumber;
 NumericalityValidator.prototype.isInteger = isInteger;
 NumericalityValidator.prototype.isHexadecimalLiteral = isHexadecimalLiteral;
+NumericalityValidator.prototype.filteredOptions = filteredOptions;
+NumericalityValidator.prototype.isAllowOnlyInteger = isAllowOnlyInteger;
+NumericalityValidator.prototype.prepareValueForValidation = prepareValueForValidation;
+NumericalityValidator.prototype.isRecordAttributeChangedInPlace = isRecordAttributeChangedInPlace;

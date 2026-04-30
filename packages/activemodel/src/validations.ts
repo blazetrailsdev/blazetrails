@@ -273,10 +273,12 @@ export interface ValidationsContextHost {
  */
 export function contextForValidation(this: ContextForValidationHost): ValidationContext {
   if (this._contextForValidation) return this._contextForValidation;
-  const vc = Object.create(ValidationContext.prototype) as ValidationContext;
-  // Override `context` and the underlying `_context` slot the
-  // prototype's `name` getter reads. Both must be aliased so
-  // `vc.name` / `vc.toString()` stay consistent with the live field.
+  // Construct via the real constructor so any future
+  // ValidationContext initialization runs, then replace the
+  // `context` and underlying `_context` slot with a live view of
+  // `_validationContext`. Both must be aliased so `vc.name` /
+  // `vc.toString()` stay consistent with the live field.
+  const vc = new ValidationContext();
   const accessor: PropertyDescriptor = {
     get: (): string | string[] | null => this._validationContext,
     set: (value: string | string[] | null): void => {
@@ -327,7 +329,7 @@ export interface RunValidationsHost {
  *
  * @internal Rails-private helper.
  */
-export function raiseValidationError(this: object): never {
+export function raiseValidationError(this: { errors: Errors }): never {
   throw new ValidationError(this);
 }
 

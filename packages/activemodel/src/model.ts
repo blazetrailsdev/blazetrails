@@ -1100,20 +1100,11 @@ export class Model {
     const parts: Array<(record: AnyRecord) => boolean> = [];
 
     if (options.on !== undefined) {
-      // Rails `predicate_for_validation_context` (validations.rb:294-306):
-      // both the registered `on:` and the model's current
-      // `validation_context` may be Symbols or Arrays of Symbols. A
-      // validator with `on: [:create, :publish]` fires when the model's
-      // context is `:create`, `[:create]`, `[:publish, :foo]`, etc. —
-      // intersection, not equality.
-      const registered = Array.isArray(options.on) ? options.on : [options.on];
-      const registeredSet = new Set(registered);
-      parts.push((record: AnyRecord) => {
-        const ctx = record._validationContext;
-        if (ctx == null) return false;
-        const current = Array.isArray(ctx) ? ctx : [ctx];
-        return current.some((c: unknown) => registeredSet.has(c as string));
-      });
+      // Mirrors Rails (validations.rb:170-172): the `on:` clause is
+      // installed via `predicate_for_validation_context(options[:on])`,
+      // so route through the same module-level cache here. Single
+      // source of truth for the intersection-vs-equality semantics.
+      parts.push(validationsPredicateForValidationContext(options.on));
     }
 
     if (options.if !== undefined) {

@@ -648,21 +648,20 @@ describe("numericality with in: range", () => {
     expect(new User({ when: "2026-04-29T00:00:00Z" }).isValid()).toBe(false);
   });
 
-  it("rejects plain object values via the validateEach path", () => {
-    // Direct exercise of the non-string/non-number narrowing in isNumber
-    // — a plain object would coerce to NaN under Number({}), so this
-    // path could survive a regression that drops the explicit typeof
-    // guard. Use a string-typed attribute so we can write a non-string
-    // value through writeAttribute without trails' own type cast
-    // intercepting first.
-    class Bag extends Model {
-      static {
-        this.attribute("payload", "string");
-        this.validates("payload", { numericality: true });
-      }
-    }
-    const b = new Bag();
-    b.writeAttribute("payload", { not: "a number" } as unknown as string);
-    expect(b.isValid()).toBe(false);
+  it("rejects plain object values via NumericalityValidator.validateEach directly", async () => {
+    // Direct exercise of the non-string/non-number narrowing in isNumber.
+    // Going through Model attributes wouldn't work — string-typed attrs
+    // cast objects to "[object Object]" before validation, value-typed
+    // attrs go through their own cast path. Bypass attribute infra and
+    // call the validator with a stub record so a real plain object
+    // reaches isNumber.
+    const { NumericalityValidator } = await import("./numericality.js");
+    const v = new NumericalityValidator({ attributes: ["x"] });
+    const errors: Array<[string, string]> = [];
+    const stubRecord = {
+      errors: { add: (attr: string, key: string) => errors.push([attr, key]) },
+    };
+    v.validateEach(stubRecord, "x", { not: "a number" });
+    expect(errors).toEqual([["x", "not_a_number"]]);
   });
 });

@@ -321,6 +321,25 @@ export function tsShouldIncludeInIndex(m: MethodInfo, mode: CompareMode): boolea
  * Cycles are guarded by `visited`. Modules outside the package are
  * silently skipped — stdlib like `Comparable`/`Enumerable` falls through.
  */
+/**
+ * Dedup expected Ruby methods by Ruby method name (NOT first TS
+ * candidate). Two distinct Ruby methods can produce the same first TS
+ * candidate (`is_number?` and `number?` both → `"isNumber"`); keying
+ * by the TS candidate would silently drop the second method from the
+ * expected set. Same FQN-scoped dedup the original logic provided —
+ * just keyed differently.
+ */
+export function dedupeRubyMethodInto(
+  seen: Map<string, { rubyName: string; rubyModule: string }>,
+  rm: MethodInfo,
+  itemFqn: string,
+): void {
+  const key = rm.name;
+  if (!seen.has(key)) {
+    seen.set(key, { rubyName: rm.name, rubyModule: itemFqn });
+  }
+}
+
 export function flattenIncludedMethodInfos(
   entity: ClassInfo,
   rubyPkg: PackageInfo,
@@ -695,17 +714,7 @@ function main() {
         const rubyMethods = [...f.instance, ...f.klass];
         for (const rm of rubyMethods) {
           if (!methodMatchesMode(rm)) continue;
-          const tsCandidates = rubyMethodToTs(rm.name);
-          if (tsCandidates === null) continue;
-          // Dedup by Ruby method name (within an FQN/include scope), not
-          // by the first TS candidate — two distinct Ruby methods can
-          // produce the same first TS candidate (e.g. `is_number?` and
-          // `number?` both → "isNumber"), and the previous key choice
-          // dropped the second method silently.
-          const key = rm.name;
-          if (!seen.has(key)) {
-            seen.set(key, { rubyName: rm.name, rubyModule: item.fqn });
-          }
+          dedupeRubyMethodInto(seen, rm, item.fqn);
         }
       }
 

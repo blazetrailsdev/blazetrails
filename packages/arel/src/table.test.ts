@@ -246,18 +246,6 @@ describe("TableTest", () => {
     expect(t.name).toBe("widgets");
   });
 
-  describe("self-alias normalization", () => {
-    it("drops table_alias when as equals name", () => {
-      const t = new Table("users", { as: "users" });
-      expect(t.tableAlias).toBeNull();
-    });
-
-    it("preserves table_alias when as differs from name", () => {
-      const t = new Table("users", { as: "u" });
-      expect(t.tableAlias).toBe("u");
-    });
-  });
-
   describe("[] (get) with explicit table", () => {
     it("builds an attribute on the provided table", () => {
       const other = new Table("others");

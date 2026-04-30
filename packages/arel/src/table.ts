@@ -60,7 +60,7 @@ export class Table extends Node {
     return this.typeCaster != null;
   }
 
-  get(name: string, table?: Table | TableAlias): Attribute {
+  get(name: string, table?: Attribute["relation"]): Attribute {
     return new Attribute(table ?? this, name);
   }
 

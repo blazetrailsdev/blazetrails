@@ -161,10 +161,13 @@ export function newTime(
   offset?: number | null,
 ): Temporal.Instant | null {
   if (year == null || (year === 0 && mon === 0 && mday === 0)) return null;
+  // Rails' ::Time.utc(year, nil, nil, ...) raises TypeError → rescue nil.
+  // Treat missing month/day the same way rather than silently coercing to Jan 1.
+  if (mon == null || mday == null) return null;
   const components = {
     year,
-    month: mon ?? 1,
-    day: mday ?? 1,
+    month: mon,
+    day: mday,
     hour: hour ?? 0,
     minute: min ?? 0,
     second: sec ?? 0,

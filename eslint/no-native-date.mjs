@@ -53,10 +53,15 @@ function hasFileBoundaryDirective(sourceCode) {
 }
 
 function hasBoundaryComment(allComments, sourceCode, node, dateRef) {
-  // 1. Same-line trailing comment — anchored on the `Date` reference itself
+  // 1. Same-line trailing comment — anchored on the `Date` token itself
   //    (not the enclosing expression's start line) so multi-line `instanceof`
   //    / `new` expressions can carry the marker on the `Date` line.
-  const dateLine = (dateRef ?? node).loc.start.line;
+  //    For `globalThis.Date` / `window.Date` we anchor on the property
+  //    identifier so the marker on the `.Date` line is recognised even when
+  //    the namespace token sits on a different line.
+  const dateAnchor =
+    dateRef && dateRef.type === "MemberExpression" ? dateRef.property : (dateRef ?? node);
+  const dateLine = dateAnchor.loc.start.line;
   for (const comment of allComments) {
     if (comment.loc.start.line === dateLine && /\bboundary:/i.test(comment.value)) {
       return true;

@@ -45,6 +45,15 @@ function f(x: unknown) {
     Date // boundary: legacy multi-line shape
   );
 }`,
+    // Multi-line globalThis.Date — marker on the `.Date` line works even
+    // though loc.start of the MemberExpression points at `globalThis`.
+    `function f(x: unknown) {
+  return (
+    x instanceof
+    globalThis
+      .Date // boundary: legacy multi-line shape
+  );
+}`,
   ],
 
   invalid: [

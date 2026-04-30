@@ -272,9 +272,29 @@ describe("TimeExtCalculationsTest", () => {
     expect(isPast(d(2099, 1, 1))).toBe(false);
   });
 
+  it("is_past accepts Temporal.Instant with sub-millisecond precision", () => {
+    expect(isPast(Temporal.Instant.from("2000-01-01T00:00:00Z"))).toBe(true);
+    expect(isPast(Temporal.Instant.from("2099-01-01T00:00:00Z"))).toBe(false);
+    const now = Temporal.Now.instant();
+    const oneNsBefore = now.subtract({ nanoseconds: 1 });
+    const oneNsAfter = now.add({ nanoseconds: 1_000_000_000 });
+    expect(isPast(oneNsBefore)).toBe(true);
+    expect(isPast(oneNsAfter)).toBe(false);
+  });
+
   it("is_future", () => {
     expect(isFuture(d(2099, 1, 1))).toBe(true);
     expect(isFuture(d(2000, 1, 1))).toBe(false);
+  });
+
+  it("is_future accepts Temporal.Instant with sub-millisecond precision", () => {
+    expect(isFuture(Temporal.Instant.from("2099-01-01T00:00:00Z"))).toBe(true);
+    expect(isFuture(Temporal.Instant.from("2000-01-01T00:00:00Z"))).toBe(false);
+    const now = Temporal.Now.instant();
+    const oneNsAfter = now.add({ nanoseconds: 1_000_000_000 });
+    const oneNsBefore = now.subtract({ nanoseconds: 1 });
+    expect(isFuture(oneNsAfter)).toBe(true);
+    expect(isFuture(oneNsBefore)).toBe(false);
   });
 
   it("all_day", () => {

@@ -461,13 +461,13 @@ export function isYesterday(date: Date): boolean {
 }
 
 export function isPast(date: Date | Temporal.Instant): boolean {
-  const ms = date instanceof Date ? date.getTime() : date.epochMilliseconds;
-  return ms < Temporal.Now.instant().epochMilliseconds;
+  const instant = date instanceof Date ? instantFrom(date) : date;
+  return Temporal.Instant.compare(instant, Temporal.Now.instant()) < 0;
 }
 
 export function isFuture(date: Date | Temporal.Instant): boolean {
-  const ms = date instanceof Date ? date.getTime() : date.epochMilliseconds;
-  return ms > Temporal.Now.instant().epochMilliseconds;
+  const instant = date instanceof Date ? instantFrom(date) : date;
+  return Temporal.Instant.compare(instant, Temporal.Now.instant()) > 0;
 }
 
 /**

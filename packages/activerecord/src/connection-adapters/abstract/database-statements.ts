@@ -512,8 +512,7 @@ export async function truncate(
   name?: string | null,
 ): Promise<unknown> {
   const sql = `TRUNCATE TABLE ${this.quoteTableName(tableName)}`;
-  const doExecute = this.execute ?? execute;
-  return doExecute(sql);
+  return (this.execute ?? execute).call(this, sql);
 }
 
 /**
@@ -535,13 +534,13 @@ export async function truncateTables(
 
   const statements = filtered.map((t) => `TRUNCATE TABLE ${this.quoteTableName(t)}`);
 
-  const doExecute = this.execute ?? execute;
+  const exec = this.execute ?? execute;
   const doTruncate = async () => {
     if (this.executeBatch) {
       await this.executeBatch(statements, "Truncate Tables");
     } else {
       for (const stmt of statements) {
-        await doExecute(stmt);
+        await exec.call(this, stmt);
       }
     }
   };
@@ -856,8 +855,7 @@ export async function insertFixture(
       ? `INSERT INTO ${this.quoteTableName(tableName)} (${columns.map((c) => this.quoteColumnName(c)).join(", ")}) VALUES (${values.join(", ")})`
       : `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
 
-  const doExecute = this.execute ?? execute;
-  return doExecute(sql);
+  return (this.execute ?? execute).call(this, sql);
 }
 
 /**
@@ -891,13 +889,13 @@ export async function insertFixturesSet(
 
   const allStatements = [...deleteStatements, ...insertStatements];
 
-  const doExecute = this.execute ?? execute;
+  const exec = this.execute ?? execute;
   const doInserts = async () => {
     if (this.executeBatch) {
       await this.executeBatch(allStatements, "Fixtures Load");
     } else {
       for (const stmt of allStatements) {
-        await doExecute(stmt);
+        await exec.call(this, stmt);
       }
     }
   };

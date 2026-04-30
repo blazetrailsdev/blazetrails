@@ -26,6 +26,7 @@ import {
   isTransactionOpen,
   type DatabaseStatementsHost,
 } from "./database-statements.js";
+import type { Quoting } from "./quoting-interface.js";
 
 describe("DatabaseStatements", () => {
   describe("toSql", () => {
@@ -240,11 +241,12 @@ describe("DatabaseStatements", () => {
       const executed: string[] = [];
       let transactionUsed = false;
       const { insertFixturesSet } = await import("./database-statements.js");
-      const host = {
+      const host: DatabaseStatementsHost &
+        Pick<Quoting, "quote" | "quoteTableName" | "quoteColumnName"> = {
         execute: async (sql: string) => {
           executed.push(sql);
         },
-        transaction: async (fn: (tx?: unknown) => Promise<void> | void) => {
+        transaction: async <T>(fn: (tx?: unknown) => Promise<T> | T) => {
           transactionUsed = true;
           await fn();
           return undefined;
@@ -252,9 +254,9 @@ describe("DatabaseStatements", () => {
         quote: (v: unknown) => (typeof v === "string" ? `'${v}'` : String(v)),
         quoteTableName: (n: string) => `"${n}"`,
         quoteColumnName: (n: string) => `"${n}"`,
-      } as unknown as DatabaseStatementsHost;
+      };
 
-      await (insertFixturesSet as unknown as (...args: unknown[]) => Promise<void>).call(
+      await insertFixturesSet.call(
         host,
         {
           users: [{ name: "Alice" }],

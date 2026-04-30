@@ -77,6 +77,15 @@ describe("rubyMethodToTs predicates", () => {
     expect(rubyMethodToTs("present?")).toEqual(["isPresent", "present"]);
   });
 
+  it("does NOT treat names that merely camelize to start with 'is' as the is_*? family", () => {
+    // The is_*? guard tests the Ruby BASE NAME, not the camel form.
+    // `isolation_level?` camelizes to `isolationLevel` (starts with
+    // 'is'), but the Ruby base doesn't start with `is_` — keep both
+    // candidates so trails methods named either way still match.
+    expect(rubyMethodToTs("isolation_level?")).toEqual(["isIsolationLevel", "isolationLevel"]);
+    expect(rubyMethodToTs("island?")).toEqual(["isIsland", "island"]);
+  });
+
   it("keeps the existing has/supports/can/etc allowlist behavior intact (camel preferred, isPrefixed available as fallback)", () => {
     // Only the `is_*?` family loses the isPrefixed fallback. Other
     // Ruby predicate prefixes keep both candidates because trails

@@ -627,11 +627,14 @@ describe("numericality with in: range", () => {
     expect(new User({ score: 5 }).isValid()).toBe(true);
   });
 
-  it("rejects non-string/non-number values (boolean, Date, plain object)", () => {
+  it("rejects non-string/non-number values (boolean, Temporal.Instant, plain object)", () => {
     // Rails Kernel.Float raises TypeError for non-Numeric/non-String
-    // input, so is_number? returns false. JS Number(true) === 1 and
-    // Number(new Date()) === epoch would silently pass without the
-    // explicit type narrowing in isNumber.
+    // input, so is_number? returns false. In JS, Number(true) === 1
+    // and Number(<object with valueOf>) can coerce silently — the
+    // explicit string|number narrowing in isNumber prevents that.
+    // (Trails casts datetime attributes to Temporal.Instant, not JS
+    // Date, so the datetime case below exercises the
+    // non-string/non-number path for Temporal types specifically.)
     class User extends Model {
       static {
         this.attribute("flag", "boolean");
@@ -643,5 +646,23 @@ describe("numericality with in: range", () => {
     expect(new User({ flag: true }).isValid()).toBe(false);
     expect(new User({ flag: false }).isValid()).toBe(false);
     expect(new User({ when: "2026-04-29T00:00:00Z" }).isValid()).toBe(false);
+  });
+
+  it("rejects plain object values via the validateEach path", () => {
+    // Direct exercise of the non-string/non-number narrowing in isNumber
+    // — a plain object would coerce to NaN under Number({}), so this
+    // path could survive a regression that drops the explicit typeof
+    // guard. Use a string-typed attribute so we can write a non-string
+    // value through writeAttribute without trails' own type cast
+    // intercepting first.
+    class Bag extends Model {
+      static {
+        this.attribute("payload", "string");
+        this.validates("payload", { numericality: true });
+      }
+    }
+    const b = new Bag();
+    b.writeAttribute("payload", { not: "a number" } as unknown as string);
+    expect(b.isValid()).toBe(false);
   });
 });

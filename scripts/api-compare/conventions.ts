@@ -140,8 +140,11 @@ export function rubyMethodToTs(name: string): string[] | null {
     // The `isPrefixed` form is intentionally NOT offered as a fallback
     // here — Ruby already conveys the predicate via the `is_` prefix,
     // and offering `isIsNumber` would let a trails author land that
-    // doubled form and still get api:compare credit.
-    if (/^is/.test(camel)) {
+    // doubled form and still get api:compare credit. Test on the Ruby
+    // base name (with the underscore) so e.g. `isolation_level?` —
+    // which camelizes to `isolationLevel` — is NOT swept into this
+    // branch.
+    if (base.startsWith("is_")) {
       return [camel];
     }
     // Other already-predicate Ruby prefixes (has_one?, supports_x?,

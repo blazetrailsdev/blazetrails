@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { Table, InsertManager, UpdateManager, DeleteManager, SelectManager } from "./index.js";
 
 describe("crud", () => {
@@ -38,44 +38,22 @@ describe("crud", () => {
     // because the underlying statement initializes `key` to `null`, so a
     // post-hoc `manager.key === null` check would pass even with the prior
     // `if (key !== null)` guard in place.
-    function spyKeySetter<T extends object>(
-      proto: T,
-    ): {
-      calls: unknown[];
-      restore: () => void;
-    } {
-      const original = Object.getOwnPropertyDescriptor(proto, "key")!;
-      const calls: unknown[] = [];
-      Object.defineProperty(proto, "key", {
-        ...original,
-        set(value: unknown) {
-          calls.push(value);
-          original.set!.call(this, value);
-        },
-      });
-      return { calls, restore: () => Object.defineProperty(proto, "key", original) };
-    }
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
 
     it("compileUpdate always assigns key, including null", () => {
-      const spy = spyKeySetter(UpdateManager.prototype);
-      try {
-        const mgr = new SelectManager(users);
-        mgr.compileUpdate([[users.get("id"), 1]], null);
-        expect(spy.calls).toEqual([null]);
-      } finally {
-        spy.restore();
-      }
+      const setKey = vi.spyOn(UpdateManager.prototype, "key", "set");
+      const mgr = new SelectManager(users);
+      mgr.compileUpdate([[users.get("id"), 1]], null);
+      expect(setKey).toHaveBeenCalledWith(null);
     });
 
     it("compileDelete always assigns key, including null", () => {
-      const spy = spyKeySetter(DeleteManager.prototype);
-      try {
-        const mgr = new SelectManager(users);
-        mgr.compileDelete(null);
-        expect(spy.calls).toEqual([null]);
-      } finally {
-        spy.restore();
-      }
+      const setKey = vi.spyOn(DeleteManager.prototype, "key", "set");
+      const mgr = new SelectManager(users);
+      mgr.compileDelete(null);
+      expect(setKey).toHaveBeenCalledWith(null);
     });
   });
 });

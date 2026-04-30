@@ -245,4 +245,32 @@ describe("TableTest", () => {
     const t = new Table("widgets");
     expect(t.name).toBe("widgets");
   });
+
+  describe("self-alias normalization", () => {
+    it("drops table_alias when as equals name", () => {
+      const t = new Table("users", { as: "users" });
+      expect(t.tableAlias).toBeNull();
+    });
+
+    it("preserves table_alias when as differs from name", () => {
+      const t = new Table("users", { as: "u" });
+      expect(t.tableAlias).toBe("u");
+    });
+  });
+
+  describe("[] (get) with explicit table", () => {
+    it("builds an attribute on the provided table", () => {
+      const other = new Table("others");
+      const attr = users.get("id", other);
+      expect(attr).toBeInstanceOf(Nodes.Attribute);
+      expect(attr.relation).toBe(other);
+      expect(attr.name).toBe("id");
+    });
+
+    it("builds an attribute on a TableAlias", () => {
+      const aliased = users.as("u");
+      const attr = users.get("id", aliased);
+      expect(attr.relation).toBe(aliased);
+    });
+  });
 });

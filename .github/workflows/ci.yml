@@ -197,13 +197,16 @@ jobs:
       - run: pnpm lint
       - name: Check trailties has no process.* references
         # `process.*` in trailties src must go through @blazetrails/activesupport
-        # (PR 0.3 of the trailties build-out plan). bin.ts is the single
-        # sanctioned node-flavored entry — but as of PR 0.3 it also routes
-        # through the adapter, so even bin.ts should be clean. app-generator.ts
-        # contains template strings that emit user-app code; those are exempt.
+        # (PR 0.3 of the trailties build-out plan). app-generator.ts contains
+        # template strings that emit user-app code; those are exempt.
+        #
+        # Pattern uses `(^|[^[:alnum:]_])` instead of `\b` for portability
+        # across grep variants. `exitCode` is listed explicitly because the
+        # `exit` alternation alone won't match `process.exitCode` (GNU grep
+        # ERE word boundary requires non-word after `exit`).
         run: |
           set -e
-          violations=$(grep -rEn '\bprocess\.(env|cwd|argv|exit|stdout|stderr|platform|on)\b' packages/trailties/src \
+          violations=$(grep -rEn '(^|[^[:alnum:]_])process\.(env|cwd|argv|exit|exitCode|stdout|stderr|platform|on)' packages/trailties/src \
             --include='*.ts' \
             --exclude='*.test.ts' \
             --exclude='app-generator.ts' || true)

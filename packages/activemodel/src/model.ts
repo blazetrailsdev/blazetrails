@@ -1,8 +1,14 @@
 import { Errors, StrictValidationFailed } from "./errors.js";
 import {
-  ValidationError,
   ValidationContext,
   initInternals as validationsInitInternals,
+  contextForValidation as validationsContextForValidation,
+  runValidationsBang as validationsRunValidationsBang,
+  raiseValidationError as validationsRaiseValidationError,
+  predicateForValidationContext as validationsPredicateForValidationContext,
+  _mergeAttributes as validationsMergeAttributes,
+  _validatesDefaultKeys as validationsValidatesDefaultKeys,
+  _parseValidatesOptions as validationsParseValidatesOptions,
 } from "./validations.js";
 import { humanize, underscore, dasherize, htmlEscape } from "@blazetrails/activesupport";
 import { Temporal } from "@blazetrails/activesupport/temporal";
@@ -1210,7 +1216,44 @@ export class Model {
   initInternals(): void {
     validationsInitInternals.call(this);
     dirtyInitInternals.call(this);
+    this._contextForValidation = undefined;
   }
+
+  /**
+   * Build the `if`-predicate that gates a validator on a validation
+   * context. Mirrors Rails `predicate_for_validation_context`
+   * (validations.rb:296-306).
+   *
+   * @internal Rails-private helper.
+   */
+  static predicateForValidationContext = validationsPredicateForValidationContext;
+
+  /**
+   * Normalize the trailing options hash from a `validates_each`
+   * argument list and stamp `attributes:` onto it. Mirrors Rails
+   * `Validations::HelperMethods#_merge_attributes`.
+   *
+   * @internal Rails-private helper.
+   */
+  static _mergeAttributes = validationsMergeAttributes;
+
+  /**
+   * Default option keys recognized by `validates(...)`. Subclasses
+   * override to add custom keys. Mirrors Rails
+   * `_validates_default_keys` (validations/validates.rb:162-164).
+   *
+   * @internal Rails-private helper.
+   */
+  static _validatesDefaultKeys = validationsValidatesDefaultKeys;
+
+  /**
+   * Normalize a validator option value into the option hash the
+   * validator constructor expects. Mirrors Rails
+   * `_parse_validates_options` (validations/validates.rb:166-177).
+   *
+   * @internal Rails-private helper.
+   */
+  static _parseValidatesOptions = validationsParseValidatesOptions;
 
   /**
    * Mirrors: ActiveModel::API#initialize → ActiveModel::Attributes#initialize
@@ -1403,6 +1446,45 @@ export class Model {
   // validators all fire. See `validations.rb:361-368` and `:294-306`.
   _validationContext: string | string[] | null = null;
 
+  /**
+   * Lazy-initialized live `ValidationContext` view. Populated on first
+   * call to `contextForValidation()` and cleared by `initInternals()`.
+   *
+   * @internal
+   */
+  _contextForValidation?: ValidationContext;
+
+  /**
+   * Lazy accessor for the active `ValidationContext`. Mirrors Rails
+   * `context_for_validation` (validations.rb:463-465). The returned
+   * object's `.context` property is a live view of `_validationContext`.
+   *
+   * @internal Rails-private helper.
+   */
+  contextForValidation(): ValidationContext {
+    return validationsContextForValidation.call(this);
+  }
+
+  /**
+   * Run the `:validate` callbacks and report whether the model has no
+   * errors. Mirrors Rails `run_validations!` (validations.rb:473-476).
+   *
+   * @internal Rails-private helper.
+   */
+  runValidationsBang(): boolean {
+    return validationsRunValidationsBang.call(this);
+  }
+
+  /**
+   * Throw `ValidationError` for the current model. Mirrors Rails
+   * `raise_validation_error` (validations.rb:478-480).
+   *
+   * @internal Rails-private helper.
+   */
+  raiseValidationError(): never {
+    return validationsRaiseValidationError.call(this);
+  }
+
   isValid(context?: string | string[] | ValidationContext | null): boolean {
     this.errors.clear();
     const ctor = this.constructor as typeof Model;
@@ -1431,7 +1513,7 @@ export class Model {
         "validation",
         this,
         () => {
-          this._runValidateCallbacks();
+          this.runValidationsBang();
         },
         { strict: "sync" },
       );
@@ -1442,7 +1524,8 @@ export class Model {
     }
   }
 
-  private _runValidateCallbacks(): void {
+  /** @internal */
+  _runValidateCallbacks(): void {
     const ctor = this.constructor as typeof Model;
     ctor._callbackChain.runBefore("validate", this, { strict: "sync" });
   }
@@ -2024,7 +2107,7 @@ export class Model {
    */
   validateBang(context?: string | string[] | ValidationContext | null): true {
     if (!this.isValid(context)) {
-      throw new ValidationError(this);
+      this.raiseValidationError();
     }
     return true;
   }

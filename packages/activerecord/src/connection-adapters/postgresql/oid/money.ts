@@ -40,7 +40,7 @@ export class Money extends DecimalType {
    *   (3) -$2.55            (negative with leading minus)
    *   (4) ($2.55)           (accounting-style parentheses)
    * This method performs the locale-specific stripping and normalization
-   * itself, then delegates to DecimalType via super.cast(...) for
+   * itself, then delegates to DecimalType via super.castValue(...) for
    * numeric casting.
    */
   /**

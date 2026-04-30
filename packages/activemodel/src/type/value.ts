@@ -29,8 +29,8 @@ export abstract class Type<T = unknown> {
    * Public coercion entrypoint. Subclasses normally override
    * {@link castValue} (the protected hook) rather than `cast` itself,
    * so the `value == null → null` short-circuit lives in one place.
-   * Subclasses with non-Rails-shaped coercion (e.g. Integer's blank
-   * string handling) may still override `cast` directly to match Rails.
+   * Override `cast` directly only when the public entrypoint needs
+   * behavior beyond non-null value coercion handled by `castValue`.
    */
   cast(value: unknown): T | null {
     if (value === null || value === undefined) return null;

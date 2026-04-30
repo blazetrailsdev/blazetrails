@@ -160,14 +160,23 @@ function getAccessedProp(node) {
   if (!node.computed && node.property.type === "Identifier") {
     return REPLACEMENTS[node.property.name] ? node.property.name : null;
   }
-  if (
-    node.computed &&
-    node.property.type === "Literal" &&
-    typeof node.property.value === "string"
+  if (!node.computed) return null;
+
+  // Bracket access: `process["env"]` (Literal) and `process[`env`]`
+  // (TemplateLiteral with no expressions) both compile to the same
+  // string property access at runtime; flag both.
+  let key = null;
+  const prop = node.property;
+  if (prop.type === "Literal" && typeof prop.value === "string") {
+    key = prop.value;
+  } else if (
+    prop.type === "TemplateLiteral" &&
+    prop.expressions.length === 0 &&
+    prop.quasis.length === 1
   ) {
-    return REPLACEMENTS[node.property.value] ? node.property.value : null;
+    key = prop.quasis[0].value.cooked;
   }
-  return null;
+  return key && REPLACEMENTS[key] ? key : null;
 }
 
 /**

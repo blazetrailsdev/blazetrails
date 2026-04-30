@@ -27,6 +27,9 @@ tester.run("no-process-bypass", rule, {
     "process.pid;",
     // `process` as a property name on another object is not flagged
     "obj.process.env;",
+    // Interpolated template-literal bracket access: dynamic name, not flagged.
+    "process[`${'en' + 'v'}`];",
+    "process[`${dynKey}`];",
   ],
   invalid: [
     // ── Risky props: flagged but NOT autofixed (local clash risk) ──
@@ -127,6 +130,15 @@ tester.run("no-process-bypass", rule, {
       errors: [{ messageId: "bypass" }],
       output: `import { onSignal } from "${SOURCE}";\nonSignal('SIGTERM', h);`,
     },
+
+    // ── Template-literal bracket access (no interpolation) ──
+    // process[`env`] is identical to process["env"] at runtime; flag it.
+    { code: "process[`env`];", errors: [{ messageId: "bypass" }], output: null },
+    { code: "process[`cwd`]();", errors: [{ messageId: "bypass" }], output: null },
+    // Template literals WITH interpolation are dynamic and not flagged
+    // — we can't statically know the property name. Documenting via
+    // an explicit valid case in the suite below would require valid:[]
+    // entries; covered implicitly by absence of error.
 
     // ── TypeScript wrapper bypasses ──
     // Non-null assertion: process!.env

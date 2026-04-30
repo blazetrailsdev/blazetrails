@@ -327,6 +327,18 @@ describe("TimeExtCalculationsTest", () => {
     expect(result.getSeconds()).toBe(11);
   });
 
+  it("floor and ceil reject non-positive or non-finite ms", () => {
+    const t = new Date(2005, 1, 4, 10, 10, 10, 500);
+    expect(() => floor(t, 0)).toThrow(RangeError);
+    expect(() => floor(t, -1000)).toThrow(RangeError);
+    expect(() => floor(t, Number.NaN)).toThrow(RangeError);
+    expect(() => floor(t, Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    expect(() => ceil(t, 0)).toThrow(RangeError);
+    expect(() => ceil(t, -1000)).toThrow(RangeError);
+    expect(() => ceil(t, Number.NaN)).toThrow(RangeError);
+    expect(() => ceil(t, Number.POSITIVE_INFINITY)).toThrow(RangeError);
+  });
+
   it("to fs", () => {
     const t = d(2005, 2, 4, 10, 10, 10);
     const result = toFs(t);

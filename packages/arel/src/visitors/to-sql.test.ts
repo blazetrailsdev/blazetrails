@@ -1369,6 +1369,63 @@ describe("the to_sql visitor", () => {
         expect(compile(id.lt(5))).toBe('"users"."id" < 5');
         expect(compile(id.eq(5))).toBe('"users"."id" = 5');
       });
+
+      it("Equality with null still emits IS NULL (not the unboundable branch)", () => {
+        // Regression guard: null is bounded — sign is 0, so the `IS NULL`
+        // path must still fire, not the new `1=0` short-circuit.
+        expect(compile(id.eq(null))).toBe('"users"."id" IS NULL');
+        expect(compile(id.notEq(null))).toBe('"users"."id" IS NOT NULL');
+      });
+
+      it("short-circuits when wrapped directly in Nodes.Quoted (not via buildQuoted)", () => {
+        const eq = new Nodes.Equality(id, new Nodes.Quoted(Infinity));
+        expect(compile(eq)).toBe("1=0");
+        const gt = new Nodes.GreaterThan(id, new Nodes.Quoted(-Infinity));
+        expect(compile(gt)).toBe("1=1");
+      });
+    });
+
+    describe("unboundableSign protocol", () => {
+      interface Internals {
+        unboundableSign(v: unknown): 1 | -1 | 0;
+        isUnboundable(v: unknown): boolean;
+      }
+      const v = () => new Visitors.ToSql() as unknown as Internals;
+
+      it("returns +1 for +Infinity, -1 for -Infinity, 0 otherwise", () => {
+        expect(v().unboundableSign(Infinity)).toBe(1);
+        expect(v().unboundableSign(-Infinity)).toBe(-1);
+        expect(v().unboundableSign(0)).toBe(0);
+        expect(v().unboundableSign(null)).toBe(0);
+        expect(v().unboundableSign(undefined)).toBe(0);
+        expect(v().unboundableSign("foo")).toBe(0);
+      });
+
+      it("unwraps Quoted via isInfinite()", () => {
+        expect(v().unboundableSign(new Nodes.Quoted(Infinity))).toBe(1);
+        expect(v().unboundableSign(new Nodes.Quoted(-Infinity))).toBe(-1);
+        expect(v().unboundableSign(new Nodes.Quoted(5))).toBe(0);
+      });
+
+      it("descends through nodes that expose .value (e.g. Casted)", () => {
+        const tbl = new Table("users");
+        const casted = new Nodes.Casted(Infinity, tbl.get("id"));
+        expect(v().unboundableSign(casted)).toBe(1);
+      });
+
+      it("honours an isUnboundable() protocol returning a sign or boolean", () => {
+        expect(v().unboundableSign({ isUnboundable: () => 1 })).toBe(1);
+        expect(v().unboundableSign({ isUnboundable: () => -1 })).toBe(-1);
+        expect(v().unboundableSign({ isUnboundable: () => true })).toBe(1);
+        expect(v().unboundableSign({ isUnboundable: () => false })).toBe(0);
+      });
+
+      it("isUnboundable is the truthy wrapper of unboundableSign", () => {
+        expect(v().isUnboundable(Infinity)).toBe(true);
+        expect(v().isUnboundable(-Infinity)).toBe(true);
+        expect(v().isUnboundable(5)).toBe(false);
+        expect(v().isUnboundable(null)).toBe(false);
+      });
     });
 
     it("visitArray handles a mix of Node and primitive entries", () => {

@@ -1571,6 +1571,25 @@ describe("the to_sql visitor", () => {
       const visitor = new Visitors.ToSql();
       expect(visitor.compile(new Nodes.Quoted(42))).toBe("42");
     });
+
+    it("Quoted string binds raw under extractBinds", () => {
+      const [sql, binds] = new Visitors.ToSql().compileWithBinds(new Nodes.Quoted("hi"));
+      expect(sql).toBe("?");
+      expect(binds).toEqual(["hi"]);
+    });
+
+    it("Quoted number binds raw under extractBinds", () => {
+      const [sql, binds] = new Visitors.ToSql().compileWithBinds(new Nodes.Quoted(42));
+      expect(sql).toBe("?");
+      expect(binds).toEqual([42]);
+    });
+
+    it("Quoted toISOString-bearing object binds raw under extractBinds", () => {
+      const value = { toISOString: () => "2026-04-30T00:00:00.000Z" };
+      const [sql, binds] = new Visitors.ToSql().compileWithBinds(new Nodes.Quoted(value));
+      expect(sql).toBe("?");
+      expect(binds).toEqual([value]);
+    });
   });
 
   describe("Nodes::Lock", () => {

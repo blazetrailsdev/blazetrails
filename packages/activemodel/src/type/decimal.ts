@@ -86,10 +86,10 @@ export class DecimalType extends ValueType<string> {
    * @internal Rails-private helper.
    */
   protected convertFloatToBigDecimal(value: number): string {
-    if (this.precision !== undefined) {
-      return roundFloatToSignificantDigits(value, this.floatPrecision());
-    }
-    return String(value);
+    if (this.precision === undefined) return String(value);
+    const precision = this.floatPrecision();
+    if (precision <= 0) return String(value);
+    return roundFloatToSignificantDigits(value, precision);
   }
 
   /**

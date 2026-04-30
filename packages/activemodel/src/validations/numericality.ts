@@ -538,14 +538,22 @@ interface RecordWithRawAttribute {
  * @internal Rails-private helper.
  */
 export function prepareValueForValidation(
-  this: {
-    isRecordAttributeChangedInPlace(record: AnyRecord, attrName: string): boolean;
-  },
+  this: unknown,
   value: unknown,
   record: AnyRecord,
   attrName: string,
 ): unknown {
-  if (this.isRecordAttributeChangedInPlace(record, attrName)) return value;
+  // Rails has an early `return value if record_attribute_changed_in_place?`
+  // short-circuit (numericality.rb:121) — in-place mutation means the
+  // cast value IS what the user just changed; raw before_type_cast is
+  // stale. Trails skips this optimization today because Model.attribute-
+  // ChangedInPlace returns true for ANY change (not just in-place
+  // mutation), so honoring the short-circuit would let normal
+  // 10 → "abc" updates bypass numericality. The isRecordAttribute-
+  // ChangedInPlace helper is still exported (Rails parity surface),
+  // it just isn't a gate here yet. Revisit once trails grows true
+  // in-place-mutation tracking.
+  //
   // Trails exposes raw values through the generic
   // `readAttributeBeforeTypeCast(name)` API on Model rather than the
   // Rails per-attribute generated `${attr}_before_type_cast` methods.

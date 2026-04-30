@@ -686,6 +686,30 @@ describe("numericality with in: range", () => {
     expect(p.errors.get("age")).toContain("is not a number");
   });
 
+  it("validates raw before-type-cast input on UPDATE even when allowNil is true", () => {
+    // Regression: trails' Model.attributeChangedInPlace returns true for
+    // any change-from-snapshot (not just in-place mutation as Rails
+    // means it). So if numericality's prepareValueForValidation
+    // honored the Rails record_attribute_changed_in_place? short-circuit,
+    // a 10 → 'abc' update on an integer attr would skip the raw read
+    // and let allowNil silently pass. Pin the trails behavior: raw
+    // 'abc' is read regardless of dirty state.
+    class Person extends Model {
+      static {
+        this.attribute("age", "integer");
+        this.validates("age", { numericality: { allowNil: true } });
+      }
+    }
+    const p = new Person({ age: 10 });
+    expect(p.isValid()).toBe(true);
+    p.changesApplied(); // baseline = 10
+    p.writeAttribute("age", "abc");
+    expect(p.readAttribute("age")).toBeNull(); // cast failed
+    expect(p.readAttributeBeforeTypeCast("age")).toBe("abc");
+    expect(p.isValid()).toBe(false); // raw 'abc' wins over null cast + allowNil
+    expect(p.errors.get("age")).toContain("is not a number");
+  });
+
   it("validates raw before-type-cast input even when allowNil is true (overridden validate)", () => {
     // EachValidator.validate skips validateEach when allow_nil: true and
     // value is null. Numericality overrides validate so the raw input

@@ -352,6 +352,20 @@ describe("MySQL dialect overrides (audit follow-up)", () => {
       expect(sql).toContain("__active_record_temp");
       expect(sql).not.toContain("DISTINCT");
     });
+
+    // Full-shape regression for the JOIN+GROUP+HAVING path: pins the
+    // exact subselect wrapping (DISTINCT, `__active_record_temp` alias,
+    // outer projection of the quoted key column) so any future
+    // visitor change that drifts from Rails will be caught here.
+    it("JOIN + GROUP BY + HAVING produces the full Rails-shaped subselect", () => {
+      const stmt = buildUpdate({ withJoin: true, groups: true, havings: true });
+      const out = prep.prepareUpdateStatement(stmt);
+      const sql = visitor.compile(out);
+      expect(sql).toContain('IN (SELECT "id" FROM (SELECT DISTINCT "users"."id" FROM "users"');
+      expect(sql).toContain('INNER JOIN "posts" ON 1=1');
+      expect(sql).toContain('GROUP BY "users"."id" HAVING 1=1');
+      expect(sql).toContain(") AS __active_record_temp)");
+    });
   });
 
   it("Cte uses backtick-quoted identifiers (not double quotes)", () => {

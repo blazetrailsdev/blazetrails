@@ -422,7 +422,7 @@ export class SelectManager extends TreeManager {
    * Rails wraps the splat in `Nodes::OptimizerHints.new(hints)` and only
    * assigns when at least one hint is provided.
    */
-  optimizerHints(...hints: string[]): this {
+  optimizerHints(...hints: (string | SqlLiteral)[]): this {
     if (hints.length > 0) {
       this.core.optimizerHints = new OptimizerHints(hints);
     }

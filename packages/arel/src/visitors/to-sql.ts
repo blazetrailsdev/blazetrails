@@ -1549,9 +1549,9 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
 
   /**
    * Mirrors `to_sql.rb#collect_optimizer_hints`. Rails delegates to
-   * `maybe_visit o.optimizer_hints` since hints are an Arel node;
-   * Trails' SelectCore stores hints inline as `string[]`, so we call into
-   * the existing `emitOptimizerHints` formatter for parity at the seam.
+   * `maybe_visit o.optimizer_hints`; Trails' SelectCore now stores an
+   * `OptimizerHints` node (or null), and `emitOptimizerHints` does the
+   * `maybe_visit` no-op-when-nil dispatch.
    */
   protected collectOptimizerHints(o: Nodes.SelectCore): SQLString {
     this.emitOptimizerHints(o);

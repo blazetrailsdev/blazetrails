@@ -327,13 +327,15 @@ export function tsShouldIncludeInIndex(m: MethodInfo, mode: CompareMode): boolea
  * candidate (`is_number?` and `number?` both → `"isNumber"`); keying
  * by the TS candidate would silently drop the second method from the
  * expected set. Same FQN-scoped dedup the original logic provided —
- * just keyed differently.
+ * just keyed differently. Skips methods with no TS-candidate mapping
+ * (operators, SKIP list).
  */
 export function dedupeRubyMethodInto(
   seen: Map<string, { rubyName: string; rubyModule: string }>,
   rm: MethodInfo,
   itemFqn: string,
 ): void {
+  if (rubyMethodToTs(rm.name) === null) return;
   const key = rm.name;
   if (!seen.has(key)) {
     seen.set(key, { rubyName: rm.name, rubyModule: itemFqn });

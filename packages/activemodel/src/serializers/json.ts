@@ -98,8 +98,8 @@ export class JSON {
    * @internal Rails-private helper.
    */
   protected serializableAddIncludes(
-    options: SerializeOptions,
-    callback: (association: string, records: unknown, opts: SerializeOptions) => void,
+    options: SerializeOptions = {},
+    callback: (association: string, records: unknown, opts: SerializeOptions) => void = () => {},
   ): void {
     serializableAddIncludes(this, options, callback);
   }

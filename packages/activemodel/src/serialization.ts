@@ -19,7 +19,13 @@ export interface SerializeOptions {
   only?: string[];
   except?: string[];
   methods?: string[];
-  include?: Record<string, SerializeOptions> | string[] | string;
+  // Mirrors Rails `:include` polymorphism: a single name, an array of
+  // names, a hash of name → opts, or — like `include: [:posts, { comments: {} }]`
+  // — an array mixing names and hashes.
+  include?:
+    | Record<string, SerializeOptions>
+    | Array<string | Record<string, SerializeOptions>>
+    | string;
 }
 
 /**
@@ -32,10 +38,11 @@ export function serializableHash(
   record: AnyRecord,
   options: SerializeOptions = {},
 ): Record<string, unknown> {
-  // Prefer an instance-level override (Rails' Model.override semantics)
-  // over the standalone helper. When the host class is a JSON / Serialization
-  // mixin host, its delegator method just bounces back to the function below,
-  // so falling through is safe.
+  // Prefer an instance-level override (Rails' subclass-override
+  // semantics) over the standalone helper. The JSON mixin host's
+  // protected delegator just forwards to the standalone
+  // `attributeNamesForSerialization` function below, so calling it
+  // here is safe and respects any genuine override a Model installs.
   const instanceAttrNames = (record as { attributeNamesForSerialization?: () => string[] })
     .attributeNamesForSerialization;
   let keys =
@@ -177,7 +184,7 @@ export function serializableAttributes(
  */
 export function serializableAddIncludes(
   record: AnyRecord,
-  options: SerializeOptions,
+  options: SerializeOptions = {},
   callback: (association: string, records: unknown, opts: SerializeOptions) => void,
 ): void {
   if (!options.include) return;
@@ -185,7 +192,10 @@ export function serializableAddIncludes(
   for (const [assocName, assocOpts] of Object.entries(includes)) {
     const cached =
       record._preloadedAssociations?.get(assocName) ?? record._cachedAssociations?.get(assocName);
-    if (cached !== undefined) {
+    // Rails: `if records = send(association)` skips on nil. The trails
+    // preloader stores `null` in `_cachedAssociations` for has_one
+    // associations with no row, so guard both null and undefined.
+    if (cached !== null && cached !== undefined) {
       callback(assocName, cached, assocOpts);
     }
   }
@@ -338,16 +348,30 @@ function _coerceForJson(
   return value;
 }
 
+/**
+ * Normalize `:include` to a `{ name → opts }` hash. Mirrors Rails'
+ * `Hash[Array(includes).flat_map { |n| n.is_a?(Hash) ? n.to_a : [[n, {}]] }]`
+ * — strings/arrays of strings get empty opts, embedded hashes flatten
+ * into the result so `[:posts, { comments: {} }]` becomes
+ * `{ posts: {}, comments: {} }`.
+ */
 function normalizeIncludes(
-  include: Record<string, SerializeOptions> | string[] | string,
+  include:
+    | Record<string, SerializeOptions>
+    | Array<string | Record<string, SerializeOptions>>
+    | string,
 ): Record<string, SerializeOptions> {
   if (typeof include === "string") {
     return { [include]: {} };
   }
   if (Array.isArray(include)) {
     const result: Record<string, SerializeOptions> = {};
-    for (const name of include) {
-      result[name] = {};
+    for (const entry of include) {
+      if (typeof entry === "string") {
+        result[entry] = {};
+      } else {
+        Object.assign(result, entry);
+      }
     }
     return result;
   }

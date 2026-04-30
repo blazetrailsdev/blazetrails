@@ -321,27 +321,6 @@ export function tsShouldIncludeInIndex(m: MethodInfo, mode: CompareMode): boolea
  * Cycles are guarded by `visited`. Modules outside the package are
  * silently skipped — stdlib like `Comparable`/`Enumerable` falls through.
  */
-/**
- * Dedup expected Ruby methods by Ruby method name (NOT first TS
- * candidate). Two distinct Ruby methods can produce the same first TS
- * candidate (`is_number?` and `number?` both → `"isNumber"`); keying
- * by the TS candidate would silently drop the second method from the
- * expected set. Same FQN-scoped dedup the original logic provided —
- * just keyed differently. Skips methods with no TS-candidate mapping
- * (operators, SKIP list).
- */
-export function dedupeRubyMethodInto(
-  seen: Map<string, { rubyName: string; rubyModule: string }>,
-  rm: MethodInfo,
-  itemFqn: string,
-): void {
-  if (rubyMethodToTs(rm.name) === null) return;
-  const key = rm.name;
-  if (!seen.has(key)) {
-    seen.set(key, { rubyName: rm.name, rubyModule: itemFqn });
-  }
-}
-
 export function flattenIncludedMethodInfos(
   entity: ClassInfo,
   rubyPkg: PackageInfo,
@@ -367,6 +346,27 @@ export function flattenIncludedMethodInfos(
   for (const inc of entity.includes ?? []) walk(inc, false);
   for (const ext of entity.extends ?? []) walk(ext, true);
   return { instance, klass };
+}
+
+/**
+ * Dedup expected Ruby methods by Ruby method name (NOT first TS
+ * candidate). Two distinct Ruby methods can produce the same first TS
+ * candidate (`is_number?` and `number?` both → `"isNumber"`); keying
+ * by the TS candidate would silently drop the second method from the
+ * expected set. Same FQN-scoped dedup the original logic provided —
+ * just keyed differently. Skips methods with no TS-candidate mapping
+ * (operators, SKIP list).
+ */
+export function dedupeRubyMethodInto(
+  seen: Map<string, { rubyName: string; rubyModule: string }>,
+  rm: MethodInfo,
+  itemFqn: string,
+): void {
+  if (rubyMethodToTs(rm.name) === null) return;
+  const key = rm.name;
+  if (!seen.has(key)) {
+    seen.set(key, { rubyName: rm.name, rubyModule: itemFqn });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -707,9 +707,13 @@ function main() {
         }
       }
 
-      // Deduplicate: collect all unique TS method names expected from this file.
-      // Multiple Ruby classes in the same file often define the same method
-      // (e.g., 8 subclasses in binary.rb each override `invert`). Count once.
+      // Deduplicate: collect all unique Ruby methods expected from this
+      // file (keyed by Ruby method name, not first TS candidate, so two
+      // distinct Ruby methods that camelize to the same first candidate
+      // — e.g. `is_number?` and `number?` both → "isNumber" — both
+      // survive). Multiple Ruby classes in the same file often define
+      // the same method (e.g., 8 subclasses in binary.rb each override
+      // `invert`). Count once.
       const seen = new Map<string, { rubyName: string; rubyModule: string }>();
       for (const item of items) {
         const f = flattenIncludedMethodInfos(item.info, rubyPkg, moduleFqnByShort);

@@ -57,7 +57,12 @@ const REPLACEMENTS = {
     // bare reads of process.exitCode are rare enough to leave alone.
     rewrite(memberNode, fixer, localName, context) {
       const parent = memberNode.parent;
-      if (parent && parent.type === "AssignmentExpression" && parent.operator === "=" && parent.left === memberNode) {
+      if (
+        parent &&
+        parent.type === "AssignmentExpression" &&
+        parent.operator === "=" &&
+        parent.left === memberNode
+      ) {
         const sourceCode = context.sourceCode || context.getSourceCode();
         const valueText = sourceCode.getText(parent.right);
         return [fixer.replaceText(parent, `${localName}(${valueText})`)];
@@ -271,8 +276,7 @@ const rule = {
                   ...rewriteFixes,
                 ];
               }
-              const lastSpec =
-                existingImport.specifiers[existingImport.specifiers.length - 1];
+              const lastSpec = existingImport.specifiers[existingImport.specifiers.length - 1];
               return [
                 fixer.insertTextAfter(lastSpec, `, ${replacement.importName}`),
                 ...rewriteFixes,

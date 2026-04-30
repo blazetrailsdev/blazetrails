@@ -22,7 +22,7 @@ import {
 } from "./quoting.js";
 
 describe("PostgreSQL quoting", () => {
-  it("inherits abstract boolean SQL literals", () => {
+  it("inherits abstract boolean SQL literals (Rails PG does not override quoted_true)", () => {
     expect(quotedTrue()).toBe("TRUE");
     expect(quotedFalse()).toBe("FALSE");
   });

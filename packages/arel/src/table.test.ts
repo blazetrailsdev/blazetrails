@@ -271,6 +271,7 @@ describe("TableTest", () => {
       const aliased = users.as("u");
       const attr = users.get("id", aliased);
       expect(attr.relation).toBe(aliased);
+      expect(new Visitors.ToSql().compile(attr)).toBe('"u"."id"');
     });
   });
 });

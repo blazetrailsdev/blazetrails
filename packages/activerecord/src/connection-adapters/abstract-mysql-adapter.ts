@@ -36,6 +36,8 @@ import {
   quoteIdentifier as mysqlQuoteIdentifier,
   quoteTableName as mysqlQuoteTableName,
   quoteColumnName as mysqlQuoteColumnName,
+  quotedTrue as mysqlQuotedTrue,
+  quotedFalse as mysqlQuotedFalse,
   unquotedTrue as mysqlUnquotedTrue,
   unquotedFalse as mysqlUnquotedFalse,
 } from "./mysql/quoting.js";
@@ -194,13 +196,18 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
    * - `quote_column_name` / `quote_table_name` — backticks
    *   (`mysql/quoting.rb:48-53`).
    * - `unquoted_true` / `unquoted_false` → `1` / `0`
-   *   (`mysql/quoting.rb:72-77`). MySQL does NOT override
-   *   `quoted_true`/`quoted_false`; it inherits `"TRUE"`/`"FALSE"` from
-   *   `abstract/quoting.rb:166`. Trails matches that here by NOT
-   *   overriding `quotedTrue`/`quotedFalse` on the adapter — the
-   *   per-module standalones return `"1"`/`"0"` (a pre-existing
-   *   trails-vs-Rails divergence flagged in docs/quoting-refactor.md;
-   *   not addressed in this PR).
+   *   (`mysql/quoting.rb:72-77`).
+   *
+   * Note on `quotedTrue`/`quotedFalse`: Rails MySQL does NOT override
+   * these — it inherits `"TRUE"`/`"FALSE"` from `abstract/quoting.rb:166`.
+   * Trails MySQL's per-module standalone returns `"1"`/`"0"` (a
+   * pre-existing trails-vs-Rails divergence flagged in
+   * `docs/quoting-refactor.md`; not addressed here). We override on
+   * the adapter so `quote(true)` and `quotedTrue()` agree (both `"1"`
+   * via the per-module standalone). Without the override the adapter
+   * would inherit AbstractAdapter#quotedTrue (`"TRUE"`) while
+   * `quote()` returns `"1"`, breaking call sites that switch between
+   * the two through the Quoting interface.
    */
   override quoteIdentifier(name: string): string {
     return mysqlQuoteIdentifier(name);
@@ -212,6 +219,14 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   override quoteColumnName(name: string): string {
     return mysqlQuoteColumnName(name);
+  }
+
+  override quotedTrue(): string {
+    return mysqlQuotedTrue();
+  }
+
+  override quotedFalse(): string {
+    return mysqlQuotedFalse();
   }
 
   override unquotedTrue(): number {

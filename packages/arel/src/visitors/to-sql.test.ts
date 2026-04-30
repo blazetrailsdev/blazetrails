@@ -891,6 +891,36 @@ describe("the to_sql visitor", () => {
     });
   });
 
+  describe("Nodes::Union with ORDER/LIMIT/OFFSET operands", () => {
+    // Mirrors Rails `grouping_parentheses(..., false)` + `require_parentheses?`:
+    // SELECTs that carry orders/limit/offset are wrapped to disambiguate.
+    it("wraps a SELECT operand with ORDER BY", () => {
+      const a = users.project(star);
+      const b = users.project(star).order(users.get("id"));
+      const node = new Nodes.Union(a.ast, b.ast);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toBe(
+        '( SELECT * FROM "users" UNION (SELECT * FROM "users" ORDER BY "users"."id") )',
+      );
+    });
+
+    it("wraps a SELECT operand with LIMIT", () => {
+      const a = users.project(star);
+      const b = users.project(star).take(5);
+      const node = new Nodes.Union(a.ast, b.ast);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toBe('( SELECT * FROM "users" UNION (SELECT * FROM "users" LIMIT 5) )');
+    });
+
+    it("wraps a SELECT operand with OFFSET", () => {
+      const a = users.project(star);
+      const b = users.project(star).skip(10);
+      const node = new Nodes.Union(a.ast, b.ast);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toBe('( SELECT * FROM "users" UNION (SELECT * FROM "users" OFFSET 10) )');
+    });
+  });
+
   describe("Nodes::Intersect", () => {
     it("flattens nested intersects", () => {
       const a = users.project(star);

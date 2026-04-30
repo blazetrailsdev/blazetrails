@@ -541,7 +541,22 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   override quotedBinary(value: unknown): string {
-    return sqliteQuotedBinary(value as Uint8Array);
+    // Mirrors: SQLite3::Quoting#quoted_binary (`sqlite3/quoting.rb:79`)
+    // — Rails calls `value.hex` and would NoMethodError on non-Binary
+    // values. The TS standalone iterates the value as a byte source,
+    // so non-binary inputs (strings, plain arrays) silently produce
+    // garbage hex. Validate at the interface boundary.
+    if (value instanceof Uint8Array) {
+      return sqliteQuotedBinary(value);
+    }
+    if (value instanceof ArrayBuffer) {
+      return sqliteQuotedBinary(new Uint8Array(value));
+    }
+    throw new TypeError(
+      `quotedBinary expects a Uint8Array, ArrayBuffer, or Buffer; got ${
+        value === null ? "null" : typeof value
+      }`,
+    );
   }
 
   /**

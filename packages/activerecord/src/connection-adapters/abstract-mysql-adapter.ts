@@ -653,11 +653,6 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       .replace(MYSQL_ADAPTER_ESCAPE_RE, (ch) => MYSQL_ADAPTER_ESCAPE_MAP[ch] ?? ch);
   }
 
-  /** Retains the literal-quoting helper for legacy callers in this file. */
-  protected _quoteStringLiteral(s: string): string {
-    return mysqlQuoteString(s);
-  }
-
   static dbconsole(
     config: Record<string, unknown>,
     options: Record<string, unknown> = {},

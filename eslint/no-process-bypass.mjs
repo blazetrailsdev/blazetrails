@@ -6,21 +6,99 @@
  * Catches both dotted and bracket access, with or without optional
  * chaining. Points the violator at the corresponding adapter export.
  *
+ * Autofix: enabled for properties where the replacement symbol is
+ * unlikely to clash with local code (`setExitCode`, `onSignal`,
+ * `platform`, `exit`, `stdout`, `stderr`). Skipped for `cwd`, `env`,
+ * and `argv` since those names are commonly used as local variables;
+ * the user should pick an alias rather than risk silent shadowing.
+ *
  * Scope: this rule has no allow-list of files. Wire it up in
  * `eslint.config.mjs` only for the directories that should follow the
  * adapter contract (e.g. `packages/trailties/src/**`).
  */
 
+const SOURCE = "@blazetrails/activesupport/process-adapter";
+
+// Each entry describes one disallowed property. `fixable` controls
+// whether autofix runs; `rewrite(node, fixer, localName)` returns the
+// list of fixer ops for the replacement (excluding the import — that
+// is handled centrally).
 const REPLACEMENTS = {
-  cwd: { import: "cwd", note: "call cwd() instead" },
-  env: { import: "env", note: "use the env snapshot; mutate via setEnv()" },
-  argv: { import: "argv", note: "use the argv snapshot" },
-  exit: { import: "exit", note: "call exit(code) instead" },
-  exitCode: { import: "setExitCode", note: "call setExitCode(code) instead" },
-  stdout: { import: "stdout", note: "use stdout.write(...)" },
-  stderr: { import: "stderr", note: "use stderr.write(...)" },
-  platform: { import: "platform", note: "call platform() instead" },
-  on: { import: "onSignal", note: "call onSignal(name, handler) instead" },
+  cwd: {
+    importName: "cwd",
+    note: "call cwd() instead",
+    fixable: false, // local `cwd` variables are too common to autofix safely
+  },
+  env: {
+    importName: "env",
+    note: "use the env snapshot; mutate via setEnv()",
+    fixable: false,
+  },
+  argv: {
+    importName: "argv",
+    note: "use the argv snapshot",
+    fixable: false,
+  },
+  exit: {
+    importName: "exit",
+    note: "call exit(code) instead",
+    fixable: true,
+    // process.exit(c) → exit(c): replace just `process.exit` with `exit`
+    rewrite(memberNode, fixer, localName) {
+      return [fixer.replaceText(memberNode, localName)];
+    },
+  },
+  exitCode: {
+    importName: "setExitCode",
+    note: "call setExitCode(code) instead",
+    fixable: true,
+    // process.exitCode = N → setExitCode(N): rewrite the parent
+    // AssignmentExpression. Only autofix when parent is `=` assignment;
+    // bare reads of process.exitCode are rare enough to leave alone.
+    rewrite(memberNode, fixer, localName, context) {
+      const parent = memberNode.parent;
+      if (parent && parent.type === "AssignmentExpression" && parent.operator === "=" && parent.left === memberNode) {
+        const sourceCode = context.sourceCode || context.getSourceCode();
+        const valueText = sourceCode.getText(parent.right);
+        return [fixer.replaceText(parent, `${localName}(${valueText})`)];
+      }
+      return null;
+    },
+  },
+  stdout: {
+    importName: "stdout",
+    note: "use stdout.write(...)",
+    fixable: true,
+    rewrite(memberNode, fixer, localName) {
+      return [fixer.replaceText(memberNode, localName)];
+    },
+  },
+  stderr: {
+    importName: "stderr",
+    note: "use stderr.write(...)",
+    fixable: true,
+    rewrite(memberNode, fixer, localName) {
+      return [fixer.replaceText(memberNode, localName)];
+    },
+  },
+  platform: {
+    importName: "platform",
+    note: "call platform() instead",
+    fixable: true,
+    // process.platform → platform() — turn the property access into a call.
+    rewrite(memberNode, fixer, localName) {
+      return [fixer.replaceText(memberNode, `${localName}()`)];
+    },
+  },
+  on: {
+    importName: "onSignal",
+    note: "call onSignal(name, handler) instead",
+    fixable: true,
+    // process.on(...) → onSignal(...): replace `process.on` with `onSignal`.
+    rewrite(memberNode, fixer, localName) {
+      return [fixer.replaceText(memberNode, localName)];
+    },
+  },
 };
 
 function isProcessIdentifier(node) {
@@ -28,8 +106,6 @@ function isProcessIdentifier(node) {
 }
 
 function getAccessedProp(node) {
-  // node is a MemberExpression. Returns the accessed property name if it
-  // matches one of the disallowed props, else null.
   if (!node.computed && node.property.type === "Identifier") {
     return REPLACEMENTS[node.property.name] ? node.property.name : null;
   }
@@ -43,10 +119,41 @@ function getAccessedProp(node) {
   return null;
 }
 
+/**
+ * Find an existing `import ... from "@blazetrails/activesupport/process-adapter"`
+ * statement in the file. Returns the ImportDeclaration node or null.
+ */
+function findAdapterImport(programBody) {
+  for (const stmt of programBody) {
+    if (
+      stmt.type === "ImportDeclaration" &&
+      stmt.source.value === SOURCE &&
+      stmt.importKind !== "type"
+    ) {
+      return stmt;
+    }
+  }
+  return null;
+}
+
+/**
+ * If `importDecl` already imports `name` (possibly aliased), return the
+ * local name. Otherwise return null.
+ */
+function findSpecifier(importDecl, name) {
+  for (const spec of importDecl.specifiers) {
+    if (spec.type === "ImportSpecifier" && spec.imported.name === name) {
+      return spec.local.name;
+    }
+  }
+  return null;
+}
+
 /** @type {import("eslint").Rule.RuleModule} */
 const rule = {
   meta: {
     type: "problem",
+    fixable: "code",
     docs: {
       description:
         "Forbid direct process.<prop> access in favor of @blazetrails/activesupport/process-adapter exports",
@@ -58,23 +165,79 @@ const rule = {
     },
   },
   create(context) {
-    function check(node) {
-      if (!isProcessIdentifier(node.object)) return;
-      const prop = getAccessedProp(node);
-      if (!prop) return;
-      const replacement = REPLACEMENTS[prop];
-      context.report({
-        node,
-        messageId: "bypass",
-        data: {
-          prop,
-          importName: replacement.import,
-          note: replacement.note,
-        },
-      });
-    }
     return {
-      MemberExpression: check,
+      MemberExpression(node) {
+        if (!isProcessIdentifier(node.object)) return;
+        const prop = getAccessedProp(node);
+        if (!prop) return;
+        const replacement = REPLACEMENTS[prop];
+        const sourceCode = context.sourceCode || context.getSourceCode();
+
+        const report = {
+          node,
+          messageId: "bypass",
+          data: {
+            prop,
+            importName: replacement.importName,
+            note: replacement.note,
+          },
+        };
+
+        if (replacement.fixable) {
+          report.fix = (fixer) => {
+            const program = sourceCode.ast;
+            const existingImport = findAdapterImport(program.body);
+            const existingLocal = existingImport
+              ? findSpecifier(existingImport, replacement.importName)
+              : null;
+            const localName = existingLocal ?? replacement.importName;
+
+            const rewriteFixes = replacement.rewrite(node, fixer, localName, context);
+            if (!rewriteFixes) return null;
+
+            // Already imported under that name — just rewrite the access.
+            if (existingLocal) return rewriteFixes;
+
+            // No existing import or no specifier — add one.
+            if (existingImport) {
+              // Append to existing import from the same source. Bail if
+              // it uses default/namespace forms (mixed forms are awkward).
+              const onlyNamed = existingImport.specifiers.every(
+                (s) => s.type === "ImportSpecifier",
+              );
+              if (!onlyNamed) return null;
+              if (existingImport.specifiers.length === 0) {
+                // Edge case: `import {} from "..."` — replace whole import
+                return [
+                  fixer.replaceText(
+                    existingImport,
+                    `import { ${replacement.importName} } from "${SOURCE}";`,
+                  ),
+                  ...rewriteFixes,
+                ];
+              }
+              const lastSpec =
+                existingImport.specifiers[existingImport.specifiers.length - 1];
+              return [
+                fixer.insertTextAfter(lastSpec, `, ${replacement.importName}`),
+                ...rewriteFixes,
+              ];
+            }
+
+            // Insert a new import at the top of the file.
+            const firstStmt = program.body[0];
+            const importText = `import { ${replacement.importName} } from "${SOURCE}";\n`;
+            return [
+              firstStmt
+                ? fixer.insertTextBefore(firstStmt, importText)
+                : fixer.insertTextAfterRange([0, 0], importText),
+              ...rewriteFixes,
+            ];
+          };
+        }
+
+        context.report(report);
+      },
     };
   },
 };

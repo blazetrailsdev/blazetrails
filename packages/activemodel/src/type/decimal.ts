@@ -40,9 +40,12 @@ export class DecimalType extends ValueType<string> {
     if (typeof value === "bigint") return value.toString();
     if (typeof value === "number") {
       if (!Number.isFinite(value)) return null;
-      // `String(0.1)` -> "0.1" — as precise as JS can represent the
-      // input. Callers who need full precision should pass a string.
-      return String(value);
+      // Rails dispatches Float through `convert_float_to_big_decimal`
+      // (decimal.rb:75-81). Route every JS number through the same hook
+      // so a configured `precision:` truncates per Rails — for Integer
+      // inputs the result still equals `String(value)` since precision
+      // capping is a no-op on whole numbers.
+      return this.convertFloatToBigDecimal(value);
     }
     if (typeof value === "string") {
       const trimmed = value.trim();
@@ -57,6 +60,56 @@ export class DecimalType extends ValueType<string> {
     return null;
   }
 
+  /**
+   * Mirrors: ActiveModel::Type::Decimal#convert_float_to_big_decimal
+   * (decimal.rb:75-81).
+   *
+   *   def convert_float_to_big_decimal(value)
+   *     if precision
+   *       BigDecimal(apply_scale(value), float_precision)
+   *     else
+   *       value.to_d
+   *     end
+   *   end
+   *
+   * Trails has no BigDecimal — decimals are strings — so the
+   * `BigDecimal(value, float_precision)` call translates to "round
+   * to `floatPrecision()` significant digits". When no precision is
+   * configured, fall through to `String(value)` (the same form
+   * `_castWithoutScale` would otherwise emit).
+   *
+   * @internal Rails-private helper.
+   */
+  protected convertFloatToBigDecimal(value: number): string {
+    if (this.precision !== undefined) {
+      return roundFloatToSignificantDigits(value, this.floatPrecision());
+    }
+    return String(value);
+  }
+
+  /**
+   * Mirrors: ActiveModel::Type::Decimal#float_precision (decimal.rb:83-89).
+   *
+   *   def float_precision
+   *     if precision.to_i > ::Float::DIG + 1
+   *       ::Float::DIG + 1
+   *     else
+   *       precision.to_i
+   *     end
+   *   end
+   *
+   * Ruby `::Float::DIG` is 15 on IEEE-754 doubles; cap at 16 so we
+   * never request more digits than the underlying representation can
+   * preserve. `precision.to_i` on `nil` gives `0` — matched by
+   * `precision ?? 0`.
+   *
+   * @internal Rails-private helper.
+   */
+  protected floatPrecision(): number {
+    const p = this.precision ?? 0;
+    return p > 16 ? 16 : p;
+  }
+
   type(): string {
     return this.name;
   }
@@ -64,6 +117,21 @@ export class DecimalType extends ValueType<string> {
   typeCastForSchema(value: unknown): string {
     return JSON.stringify(value) ?? String(value);
   }
+}
+
+/**
+ * Round a JS number to `precision` significant digits, returning the
+ * decimal string. Used by `convertFloatToBigDecimal` to emulate
+ * Ruby's `BigDecimal(value, precision)`. Returns `String(value)` when
+ * `precision <= 0` (Rails treats `precision: nil` as no rounding).
+ */
+function roundFloatToSignificantDigits(value: number, precision: number): string {
+  if (precision <= 0 || !Number.isFinite(value)) return String(value);
+  // Number#toPrecision returns scientific notation for very small / large
+  // magnitudes; normalize back to plain decimal via Number(...) so the
+  // emitted string matches the rest of the cast pipeline.
+  const rounded = Number(value.toPrecision(precision));
+  return String(rounded);
 }
 
 const MAX_EXPONENT_EXPANSION = 4000;

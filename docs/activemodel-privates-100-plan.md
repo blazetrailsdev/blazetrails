@@ -189,16 +189,43 @@ Currently 959/963 (99.6%). Only 4 missing tests, but they're worth
 identifying explicitly before scoping. Some may unblock for free as
 Track A privates land.
 
-**PR C0 — Investigation, no code**
-Run `pnpm test:compare --package activemodel` and identify the 4
-missing test names. Map each to which Rails behavior it exercises and
-whether Track A unblocks it. Output: an addendum to this doc with the
-per-test breakdown.
+**PR C0 — Investigation, no code — ✅ done (this section)**
 
-**PR C1+ — Port the 4 tests**
-Likely 1-2 PRs depending on whether the tests cluster by file. Each
-test gets ported under the matching trails `*.test.ts` file with the
-test name preserved per CLAUDE.md.
+The 4 missing tests are all in `type/`, none unblocked by Track A:
+
+| Rails test                                                    | Behavior                                                                                                                                                                                                                | Trails gap                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type/date_test.rb` → **`returns correct year`**              | `Type::Date.new.cast({1=>1, 2=>1, 3=>1})` → `Date(year=1, mon=1, day=1)`. Pins that hash multiparameter assignment with `year=1` doesn't trigger Ruby's two-digit-year guess.                                           | Test name absent. Trails `date.test.ts` has multiparameter coverage via `PlainDateTime input extracts date (multiparameter support)`, but no hash-input case and no year=1 boundary. Verify `Type::Date.cast({1:1,2:1,3:1})` round-trips cleanly. |
+| `type/date_time_test.rb` → **`hash to time`**                 | `Type::DateTime.new.cast({1=>2018, 2=>10, 3=>15})` → `Time.utc(2018,10,15,0,0,0)`. Hash-form multiparameter cast.                                                                                                       | Test name absent. Trails `date-time.test.ts` covers `PlainDateTime input is converted to Instant (multiparameter support)`, but not the raw `{1:..,2:..,3:..}` hash form. Confirm `Type::DateTime.cast(hash)` accepts hash directly.              |
+| `type/date_time_test.rb` → **`string to time with timezone`** | Iterates over `["UTC", "US/Eastern"]` as `Time.zone_default`, then `Type::DateTime.new.cast("Wed, 04 Sep 2013 03:00:00 EAT")` → `Time.utc(2013,9,4,0,0,0)`. RFC2822-ish parse + named-zone abbreviation (EAT = +03:00). | Both gaps: (a) named-TZ-abbrev parsing (`EAT`, `EST`, etc.) is not in the existing `string with offset` helper; (b) no thread-local / AsyncLocalStorage default zone analogous to `Time.zone_default`.                                            |
+| `type/time_test.rb` → **`user input in time zone`**           | `Time.use_zone("Pacific Time (US & Canada)") { type.user_input_in_time_zone(timeStr) }` — pulls offset from current zone, asserts `.hour` and `.formatted_offset`.                                                      | Trails `userInputInTimeZone` exists but takes the zone as an explicit second arg. The Rails test relies on a current-zone context. Need a thread-local zone (AsyncContext / global default) that `userInputInTimeZone(value)` reads.              |
+
+**Findings:**
+
+- 2 of 4 (Date `returns correct year`, DateTime `hash to time`) look like **pure test ports** — trails likely already supports the underlying behavior via existing multiparameter paths; verify and add the named tests.
+- 2 of 4 (DateTime `string to time with timezone`, Time `user input in time zone`) need **real implementation work**: a current-zone context (analogue of Rails' `Time.zone`/`Time.use_zone`) and named-TZ-abbrev parsing in DateTime cast.
+
+**PR C1 — Port `returns correct year` + `hash to time`**
+Pure test additions, one per file. Verify behavior matches before
+asserting; if it doesn't, fix the impl in the same PR (these are the
+type primitives' multiparameter paths — small code change at most).
+
+**PR C2 — Current-zone context + `user input in time zone`**
+Add a current-zone slot (AsyncLocalStorage-backed
+`Time.currentZone()` analogue or a module-level setter; pick the one
+that fits trails' existing time-zone surface). Update
+`userInputInTimeZone(value)` to default to it. Port the test name
+verbatim.
+
+**PR C3 — Named-TZ-abbrev parsing + `string to time with timezone`**
+Extend the DateTime cast string parser to accept zone abbreviations
+(EAT, EST, PST, etc.). Source the abbreviation table from the
+existing `time-zone.ts` mapping if present; otherwise vendor the
+small set Rails uses. Port the test name verbatim.
+
+Order: C1 first (cheap, banks 2/4). C2 before C3 (the
+`Time.zone_default` block in C3's test reuses the current-zone
+infra C2 introduces).
 
 **Track C target:** test:compare 959/963 → 963/963 (100%).
 

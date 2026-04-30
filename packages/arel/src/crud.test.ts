@@ -33,18 +33,49 @@ describe("crud", () => {
 
   describe("compileUpdate / compileDelete key assignment", () => {
     // Mirrors Rails Arel::Crud (activerecord/lib/arel/crud.rb): `um.key = key`
-    // and `dm.key = key` are unconditional, so a `null` key clears any prior
-    // value rather than being skipped.
+    // and `dm.key = key` are unconditional for Rails parity, so `null` is
+    // assigned explicitly rather than being skipped. We spy on the setter
+    // because the underlying statement initializes `key` to `null`, so a
+    // post-hoc `manager.key === null` check would pass even with the prior
+    // `if (key !== null)` guard in place.
+    function spyKeySetter<T extends object>(
+      proto: T,
+    ): {
+      calls: unknown[];
+      restore: () => void;
+    } {
+      const original = Object.getOwnPropertyDescriptor(proto, "key")!;
+      const calls: unknown[] = [];
+      Object.defineProperty(proto, "key", {
+        ...original,
+        set(value: unknown) {
+          calls.push(value);
+          original.set!.call(this, value);
+        },
+      });
+      return { calls, restore: () => Object.defineProperty(proto, "key", original) };
+    }
+
     it("compileUpdate always assigns key, including null", () => {
-      const mgr = new SelectManager(users);
-      const um = mgr.compileUpdate([[users.get("id"), 1]], null);
-      expect(um.key).toBeNull();
+      const spy = spyKeySetter(UpdateManager.prototype);
+      try {
+        const mgr = new SelectManager(users);
+        mgr.compileUpdate([[users.get("id"), 1]], null);
+        expect(spy.calls).toEqual([null]);
+      } finally {
+        spy.restore();
+      }
     });
 
     it("compileDelete always assigns key, including null", () => {
-      const mgr = new SelectManager(users);
-      const dm = mgr.compileDelete(null);
-      expect(dm.key).toBeNull();
+      const spy = spyKeySetter(DeleteManager.prototype);
+      try {
+        const mgr = new SelectManager(users);
+        mgr.compileDelete(null);
+        expect(spy.calls).toEqual([null]);
+      } finally {
+        spy.restore();
+      }
     });
   });
 });

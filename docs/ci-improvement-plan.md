@@ -47,7 +47,6 @@ Lines 562–566 build activesupport → activemodel → arel → activerecord in
 
 ### 8. Minor
 
-- `prettier` doesn't gate on `changes` (runs even on docs-only PRs)
 - `dx-type-tests` and `virtualized-dx-type-tests` both rebuild before testing; could share build artifact
 
 ## DB isolation options (the `--no-file-parallelism` question)
@@ -84,19 +83,6 @@ Open question: how much of the AR suite _can_ run in parallel today? A quick exp
 ## Proposed improvements
 
 ### Phase 0 — Free wins + measure (do today)
-
-**0.2 Gate `prettier` on `changes`.** Currently runs on docs-only PRs (L136–149 has no `if:`). Add `needs: changes` + `if: needs.changes.outputs.docs_only != 'true'`.
-
-- Effort: S — Risk: none.
-
-**0.3 Aggregate `ci` should fail on unexpected skips.** Today the aggregate treats all `skipped` as success. If `changes` flakes and downstream jobs skip, `ci` passes. Tighten: skipped is success only when `docs_only == true` (or the relevant parity gate is false).
-
-- Effort: S — Risk: low (catches real bugs).
-
-**0.4 Job timing report.** Aggregate `ci` pulls `gh api .../jobs` and logs durations descending.
-
-- Effort: S — Risk: none.
-- Output: real numbers for prioritization.
 
 **0.5 Build-graph audit.** Locally: `time pnpm build` cold, then warm. Measure `dist/` size. Determines whether shared-build-artifact (1.2) or `.tsbuildinfo` cache wins — they're mutually exclusive.
 
@@ -157,7 +143,6 @@ Pick after measuring 0.5. Don't ship both — they're alternatives, not compleme
 
 ### Phase 3 — Cleanup
 
-- Gate `prettier` on `changes` (parity with siblings).
 - Per-package path filters in `changes` so AR-only changes can skip non-AR jobs and vice versa. Pair with a nightly full-matrix run so we don't ship regressions through path-filter holes.
 
 ## Phased rollout

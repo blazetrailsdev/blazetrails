@@ -153,7 +153,7 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
   protected valueFromMultiparameterAssignment(
     values: Record<number, unknown>,
   ): DateTimeCastResult | null {
-    const missing = [1, 2, 3].filter((k) => !(k in values));
+    const missing = [1, 2, 3].filter((k) => !Object.hasOwn(values, k));
     if (missing.length > 0) {
       throw new ArgumentError(
         `Provided hash ${JSON.stringify(values)} doesn't contain necessary keys: ${JSON.stringify(missing)}`,

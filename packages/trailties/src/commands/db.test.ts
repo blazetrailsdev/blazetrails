@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { env, setEnv } from "@blazetrails/activesupport";
+import { env, setEnv } from "@blazetrails/activesupport/process-adapter";
 import { createProgram } from "../cli.js";
 import {
   loadDatabaseConfig,

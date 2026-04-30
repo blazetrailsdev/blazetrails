@@ -5,7 +5,7 @@
  * falls through to the Rack app — just like Puma sits behind Rack in Rails.
  */
 
-import { cwd as getCwd } from "@blazetrails/activesupport";
+import { cwd as getCwd } from "@blazetrails/activesupport/process-adapter";
 import type { Plugin, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { bodyToString } from "@blazetrails/rack";

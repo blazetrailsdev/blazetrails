@@ -212,11 +212,17 @@ jobs:
         # would not match `exitCode` (the trailing `C` is a word char).
         run: |
           set -e
-          PROPS='env|cwd|argv|exit|exitCode|stdout|stderr|platform|on'
           # Single grep run, OR the two forms together so output is unified.
           # Form 1: process.PROP / process?.PROP (dotted, optional chaining)
           # Form 2: process["PROP"] / process?.["PROP"] (bracket, single or double quotes)
-          PATTERN="(^|[^[:alnum:]_])process(\??\.(${PROPS})|(\?\.)?\[['\"](${PROPS})['\"])"
+          #
+          # Trailing `($|[^[:alnum:]_])` on Form 1 ensures we match exactly
+          # the listed props — `process.argv0` won't match `argv`. `exitCode`
+          # is listed before `exit` so the alternation tries it first and
+          # matches greedily (avoids an `exit` partial match leaving `Code`
+          # on the right).
+          PROPS='env|cwd|argv|exitCode|exit|stdout|stderr|platform|on'
+          PATTERN="(^|[^[:alnum:]_])process(\??\.(${PROPS})($|[^[:alnum:]_])|(\?\.)?\[['\"](${PROPS})['\"])"
           violations=$(grep -rEn "$PATTERN" packages/trailties/src \
             --include='*.ts' \
             --exclude='*.test.ts' \

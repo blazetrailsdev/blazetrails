@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { argv } from "@blazetrails/activesupport";
+import { argv } from "@blazetrails/activesupport/process-adapter";
 import { createProgram } from "./cli.js";
 
 const program = createProgram();

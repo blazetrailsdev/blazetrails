@@ -1,4 +1,4 @@
-import { cwd } from "@blazetrails/activesupport";
+import { cwd } from "@blazetrails/activesupport/process-adapter";
 import { Command } from "commander";
 import { DevServer } from "../server/dev-server.js";
 

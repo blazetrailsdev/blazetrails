@@ -1,12 +1,6 @@
 import { Command } from "commander";
-import {
-  env,
-  getFsAsync,
-  getPathAsync,
-  Logger,
-  setExitCode,
-  stdout,
-} from "@blazetrails/activesupport";
+import { getFsAsync, getPathAsync, Logger } from "@blazetrails/activesupport";
+import { env, setExitCode, stdout } from "@blazetrails/activesupport/process-adapter";
 import {
   loadDatabaseConfig,
   loadAllDatabaseConfigs,

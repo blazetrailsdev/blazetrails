@@ -1,4 +1,4 @@
-import { cwd } from "@blazetrails/activesupport";
+import { cwd } from "@blazetrails/activesupport/process-adapter";
 import { Command } from "commander";
 import { ModelGenerator } from "../generators/model-generator.js";
 import { MigrationGenerator } from "../generators/migration-generator.js";

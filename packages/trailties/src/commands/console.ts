@@ -1,4 +1,4 @@
-import { cwd } from "@blazetrails/activesupport";
+import { cwd } from "@blazetrails/activesupport/process-adapter";
 import { Command } from "commander";
 import * as path from "node:path";
 import * as fs from "node:fs";

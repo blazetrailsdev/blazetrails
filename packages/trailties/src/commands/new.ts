@@ -1,4 +1,4 @@
-import { cwd as getCwd } from "@blazetrails/activesupport";
+import { cwd as getCwd } from "@blazetrails/activesupport/process-adapter";
 import { Command } from "commander";
 import path from "node:path";
 import { execSync } from "node:child_process";

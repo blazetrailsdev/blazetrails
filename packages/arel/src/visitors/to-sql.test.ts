@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import {
   Table,
   star,
@@ -1559,12 +1560,12 @@ describe("the to_sql visitor", () => {
       expect(visitor.compile(new Nodes.Quoted("hi"))).toBe("'hi'");
     });
 
-    it("Quoted Date binds through unified addBind path under extractBinds", () => {
+    it("Quoted Temporal.Instant binds through unified addBind path under extractBinds", () => {
       const visitor = new Visitors.ToSql();
-      const date = new Date("2026-04-30T12:34:56.000Z");
-      const [sql, binds] = visitor.compileWithBinds(new Nodes.Quoted(date));
+      const instant = Temporal.Instant.from("2026-04-30T12:34:56.000Z");
+      const [sql, binds] = visitor.compileWithBinds(new Nodes.Quoted(instant));
       expect(sql).toBe("?");
-      expect(binds).toEqual([date]);
+      expect(binds).toEqual([instant]);
     });
 
     it("Quoted non-Date inlines under extractBinds=false", () => {

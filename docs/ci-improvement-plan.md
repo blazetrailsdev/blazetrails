@@ -2,7 +2,7 @@
 
 ## Current state
 
-`.github/workflows/ci.yml` — 645 lines, 21 jobs + 1 aggregate (`ci`).
+`.github/workflows/ci.yml` — 813 lines, 21 jobs + 1 aggregate (`ci`).
 
 Counts that matter:
 
@@ -159,7 +159,7 @@ Hard rule: **Phase 0 ships first**. Don't optimize without numbers.
 ## Open questions
 
 1. What are the actual top-3 longest jobs today? (Phase 0)
-2. Is full `pnpm build` actually slow, or is it already incremental + fast? (Phase 0.2)
+2. Is full `pnpm build` actually slow, or is it already incremental + fast? (Phase 0.5)
 3. How many AR test files genuinely need DB isolation vs. how many would run cleanly in parallel against a shared SQLite `:memory:`? Worth a 30-min experiment.
 4. Could `rails-comparison` be path-gated to API-surface changes only, deferring the rest to nightly?
 5. Are postgres+mariadb adapter jobs actually on the critical path, or is SQLite the bottleneck? (Phase 0)

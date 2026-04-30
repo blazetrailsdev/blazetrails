@@ -1,7 +1,12 @@
 # ActionController: Road to 100%
 
-`pnpm api:compare --package actioncontroller` → **236/414 methods (57%)**;
+`pnpm tsx scripts/api-compare/compare.ts --package actioncontroller`
+→ **236/414 methods (57%)** public-only (252/581, 43.4% with privates);
 **28 of 41 files at 100%**.
+
+> `pnpm api:compare` is a chained `&&` script and won't forward
+> `--package` to `compare.ts`; invoke `compare.ts` directly for the
+> scoped totals.
 
 ## Known divergences from Rails
 

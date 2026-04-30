@@ -1,9 +1,15 @@
 # Private API Parity — Path to 100%
 
-`pnpm api:compare --package activerecord` (privates included) reports
-**2991/3398 methods (88%)**. Tier 1, Tier 2 (#924), and Tier 4 (#917)
-are complete. Remaining work concentrates in adapters, encryption,
-migration/schema, and the long tail.
+`pnpm tsx scripts/api-compare/compare.ts --package activerecord --privates`
+reports **3683/5111 methods (72.1%)** with privates included
+(public-only is 3074/3398, 90.5%). Tier 1, Tier 2 (#924), and Tier 4
+(#917) are complete. Remaining work concentrates in adapters,
+encryption, migration/schema, and the long tail.
+
+> Note: `pnpm api:compare` is a chained `&&` script and forwards
+> `--package` / `--privates` only to the LAST command in the chain.
+> Always invoke `compare.ts` directly when you need package-scoped
+> totals or privates numbers.
 
 ## 1. Script improvements
 

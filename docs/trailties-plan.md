@@ -11,8 +11,9 @@ below without proposing a plan-doc change first.
 
 - Existing trailties: CLI shell only — `commands/`, `generators/`,
   `server/`, `database.ts`, `migration-loader.ts`, `schema-source.ts`.
-- `pnpm api:compare --package trailties` baseline: **2/891 methods (0.2%)**,
-  **1/130 files**.
+- `pnpm tsx scripts/api-compare/compare.ts --package trailties` baseline:
+  **2/1076 methods (0.2%)** public-only (2/1560 with privates), **1/134 files**.
+  (`pnpm api:compare` is a chained script — args don't reach `compare.ts`.)
 - Existing matches: one method in `generators/actions.ts`, one in
   `generators/base.ts`. Everything else is greenfield.
 - Actionpack: `MiddlewareStack` exists and is solid. `mount` for engines
@@ -25,9 +26,10 @@ below without proposing a plan-doc change first.
 ## Hard rules
 
 1. **No `node:*` imports** in `packages/trailties/src/` except `bin.ts`.
-   Enforced by CI: `! grep -r "from \"node:" packages/trailties/src/ | grep -v bin.ts`.
+   Repository rule; enforce locally with
+   `! grep -r 'from "node:' packages/trailties/src/ | grep -v bin.ts`.
 2. **No `process.*` references** in `packages/trailties/src/` after PR 0.3.
-   Enforced by CI: `! grep -rE "\bprocess\.(env|cwd|argv|exit|stdout|stderr|platform)" packages/trailties/src/ | grep -v bin.ts`.
+   Enforced by ESLint via `blazetrails/no-process-bypass`.
 3. **`fsAdapter` is async-only.** Every fs call is awaited.
 4. **No new third-party runtime deps in trailties.** `commander` and
    `vite` (behind `./vite` export only) are the only non-workspace deps.
@@ -74,8 +76,8 @@ think one is wrong.
 | `Trailtie` subclass registration                         | Explicit: `Trailtie.register(MyTrailtie)`. No `inherited` hook.                                                                                                   |
 | `config_for` config format                               | TS/JS modules via dynamic `import()`. No YAML.                                                                                                                    |
 | Glob pattern dialect                                     | Node/picomatch-style: `**`, `*`, `?`, `[...]`, `{a,b}`, `!`. Not Ruby parity.                                                                                     |
-| `processAdapter` `env` mutation                          | Immutable by default (frozen). `setEnv` is the only mutation path; rare.                                                                                          |
-| `processAdapter` exports use `Proxy`?                    | No. Plain frozen objects copied on `registerProcessAdapter`.                                                                                                      |
+| `processAdapter` `env` mutation                          | Snapshot values are read-only by convention (typed `Readonly`, null-prototype object). `setEnv` is the only supported mutation path; rare.                        |
+| `processAdapter` exports use `Proxy`?                    | No. Plain copied snapshot objects on `registerProcessAdapter`; no runtime `Object.freeze`.                                                                        |
 | `WriteStream` `isTTY`/`columns`/`rows`                   | Snapshot at register time. No resize event.                                                                                                                       |
 | Test runner integration                                  | Out of scope — Vitest, separate plan.                                                                                                                             |
 | User code STI subclass / `Concern.included` registration | User app maintains a central index file (e.g. `app/models/index.ts`). Future tooling in `trails-tsc` will auto-manage these.                                      |
@@ -87,8 +89,8 @@ think one is wrong.
 
 Every PR must pass:
 
-- `pnpm -r build`, `pnpm -r typecheck`, `pnpm -r test`, `pnpm lint` clean.
-- Hard-rules CI greps (rules 1, 2 above) green.
+- `pnpm -r build`, `pnpm -r typecheck`, `pnpm -r test`, `pnpm lint` clean
+  (lint includes `blazetrails/no-process-bypass` for rule 2).
 - Rails-mirrored tests added where Rails has tests; verbatim names.
 - PR description lists Rails sources kept/skipped per rule 7.
 

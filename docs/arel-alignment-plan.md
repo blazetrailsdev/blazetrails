@@ -34,14 +34,16 @@ because each one moves AR-visible API.
 
 - **Verification** per PR: the exact command(s) that should pass before
   marking done. Default set: `pnpm --filter @blazetrails/arel test`,
-  `pnpm parity:query`, `pnpm api:compare --package arel`. PRs add the
-  specific assertions or fixtures they introduce.
+  `pnpm parity:query`,
+  `pnpm tsx scripts/api-compare/compare.ts --package arel`. PRs add
+  the specific assertions or fixtures they introduce. (`pnpm
+api:compare` is a chained script — args don't reach `compare.ts`.)
 - **Risk** per PR: the breaking-change surface and known failure modes.
 - **Depends on** per PR: hard ordering constraints. Absent ⇒ independent.
 - **Out of scope**: explicit non-goals so reviewers don't expand the PR.
 - All PRs open in **draft** and link to this plan.
 - work from a worktree, pnpm install after creating the worktree
-- Only work on one PR at at time.
+- Only work on one PR at a time.
 - names should be camelCase as Typescript convention - don't underscore
 - Remove your PR from sequencing, add it to completed, and remove details once merged.
 

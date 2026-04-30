@@ -1553,6 +1553,26 @@ describe("the to_sql visitor", () => {
     });
   });
 
+  describe("Quoted/Casted collapse", () => {
+    it("Quoted inlines via quote(valueForDatabase) when not extracting binds", () => {
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(new Nodes.Quoted("hi"))).toBe("'hi'");
+    });
+
+    it("Quoted Date binds through unified addBind path under extractBinds", () => {
+      const visitor = new Visitors.ToSql();
+      const date = new Date("2026-04-30T12:34:56.000Z");
+      const [sql, binds] = visitor.compileWithBinds(new Nodes.Quoted(date));
+      expect(sql).toBe("?");
+      expect(binds).toEqual([date]);
+    });
+
+    it("Quoted non-Date inlines under extractBinds=false", () => {
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(new Nodes.Quoted(42))).toBe("42");
+    });
+  });
+
   describe("Nodes::Lock", () => {
     it("visits the inner expr (no FOR UPDATE fallback)", () => {
       const visitor = new Visitors.ToSql();

@@ -244,15 +244,15 @@ export class SelectManager extends TreeManager {
   }
 
   /**
-   * Make the SELECT DISTINCT (or clear DISTINCT when `value` is `false` /
-   * `null` / `undefined`).
+   * Make the SELECT DISTINCT (or clear DISTINCT when `value` is `false`
+   * or `null`).
    *
    * Mirrors: Arel::SelectManager#distinct (select_manager.rb). Ruby's
-   * `if value` treats only `false` and `nil` as falsy, so we explicitly
-   * test those — `0`, `""`, etc. enable DISTINCT in Rails.
+   * `if value` treats only `false` and `nil` as falsy, so we test those
+   * exactly — `0`, `""`, etc. enable DISTINCT in Rails.
    */
   distinct(value: boolean | null = true): this {
-    this.core.setQuantifier = value === false || value == null ? null : new Distinct();
+    this.core.setQuantifier = value === false || value === null ? null : new Distinct();
     return this;
   }
 

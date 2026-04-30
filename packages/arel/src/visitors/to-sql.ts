@@ -1196,20 +1196,9 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   protected visitArelNodesLateral(node: Nodes.Lateral): SQLString {
-    // Mirrors Rails: `LATERAL ` then `grouping_parentheses` — wraps the
-    // operand in parens only when it is a SelectStatement. A TableAlias
-    // built by SelectManager#as already wraps its inner Grouping (the
-    // alias name renders bare per visitArelNodesTableAlias), so the
-    // outer parens here would double-wrap.
+    // Mirrors Rails: `collector << "LATERAL "; grouping_parentheses(o.expr, ...)`.
     this.collector.append("LATERAL ");
-    if (node.subquery instanceof Nodes.SelectStatement) {
-      this.collector.append("(");
-      this.visit(node.subquery);
-      this.collector.append(")");
-    } else {
-      this.visit(node.subquery);
-    }
-    return this.collector;
+    return this.groupingParentheses(node.subquery);
   }
 
   // Mirrors Rails: visit_Arel_Nodes_Comment (to_sql.rb:175) — emits the

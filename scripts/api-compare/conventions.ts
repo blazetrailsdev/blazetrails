@@ -19,10 +19,17 @@ export function snakeToCamel(name: string): string {
   return prefix + rest.replace(/_+([a-zA-Z0-9])/g, (_, ch: string) => ch.toUpperCase());
 }
 
-/** Ruby file path → expected TS file path (kebab-case, .ts extension) */
+/**
+ * Ruby file path → expected TS file path (kebab-case, .ts extension).
+ *
+ * Uses `path.posix.*` so the mapping stays cross-platform stable —
+ * Ruby source paths are POSIX, the rest of api-compare keys files by
+ * POSIX paths, and the default `path.join` would return backslashes
+ * on Windows.
+ */
 export function rubyFileToTs(rubyFile: string): string {
-  const dir = path.dirname(rubyFile);
-  const base = path.basename(rubyFile, ".rb");
+  const dir = path.posix.dirname(rubyFile);
+  const base = path.posix.basename(rubyFile, ".rb");
   const kebab = base.replace(/_/g, "-");
   const tsFile = kebab.replace(/\berb\b/g, "ejs") + ".ts";
   if (dir === ".") return tsFile;
@@ -30,7 +37,7 @@ export function rubyFileToTs(rubyFile: string): string {
     .split("/")
     .map((d) => d.replace(/_/g, "-").replace(/\berb\b/g, "ejs"))
     .join("/");
-  return path.join(tsDir, tsFile);
+  return path.posix.join(tsDir, tsFile);
 }
 
 export const OPERATORS = new Set([

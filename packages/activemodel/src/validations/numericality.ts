@@ -93,16 +93,18 @@ export class NumericalityValidator extends EachValidator {
   override validate(record: AnyRecord): void {
     for (const attribute of this.attributes) {
       // Same readAttributeForValidation lookup as EachValidator.validate
-      // (validator.ts:90-100), but routed through prepareValueForValidation
-      // BEFORE the allowNil/allowBlank short-circuits so raw user input
-      // ('abc' → cast null) still gets validated.
-      const r = record as Record<string, unknown>;
+      // (validator.ts:90-100). Methods are called directly on `record`
+      // so `this` stays bound — extracting them would unbind and
+      // Model.readAttribute reads this._attributes, which would throw.
+      // The flow runs through prepareValueForValidation BEFORE the
+      // allowNil/allowBlank short-circuits so raw user input ('abc' →
+      // cast null) still gets validated.
       const cast =
-        typeof r.readAttributeForValidation === "function"
-          ? (r.readAttributeForValidation as (n: string) => unknown)(attribute)
-          : typeof r.readAttribute === "function"
-            ? (r.readAttribute as (n: string) => unknown)(attribute)
-            : r[attribute];
+        typeof record.readAttributeForValidation === "function"
+          ? record.readAttributeForValidation(attribute)
+          : typeof record.readAttribute === "function"
+            ? record.readAttribute(attribute)
+            : record[attribute];
       const value = this.prepareValueForValidation(cast, record, attribute);
       if (value == null && this.options.allowNil === true) continue;
       if (isBlank(value) && this.options.allowBlank === true) continue;

@@ -1552,10 +1552,12 @@ export class Model {
    *
    * Rails pre-touches `@errors` and `@context_for_validation` so frozen
    * models can still answer `#errors` and `#validation_context` without
-   * tripping their `||=` lazy-init. We mirror that by going through the
-   * public API (`.errors`, `.validationContext`) — that way, if either
-   * becomes lazy in the future, the pre-materialization still runs
-   * without this method coupling to private fields.
+   * tripping their `||=` lazy-init. Trails mirrors that by reading
+   * `errors` and calling `contextForValidation()` to populate its
+   * cached `ValidationContext`. The `validationContext` getter alone
+   * is not enough — it doesn't write to `_contextForValidation`, so a
+   * subsequent `contextForValidation()` call on the frozen instance
+   * would throw on the cache assignment.
    */
   freeze(): this {
     void this.errors;

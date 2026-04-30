@@ -10,10 +10,6 @@ PRs marked **independent** can be parallelized. Trails files are paths under
 
 ---
 
-Revisions below address each.
-
----
-
 ## Sequencing
 
 PRs 1–5 merged (see Completed below).
@@ -762,7 +758,7 @@ Every PR must pass before merge:
 
 - `pnpm --filter @blazetrails/arel test`
 - `pnpm --filter @blazetrails/arel test:types` (if dx-tests touched)
-- `pnpm api:compare --package arel` (no regressions)
+- `pnpm tsx scripts/api-compare/extract-ts-api.ts && pnpm tsx scripts/api-compare/compare.ts --package arel` (no regressions)
 - `pnpm parity:query` (no new diffs; curate fixture changes when
   intentional)
 - For dialect PRs (3, 4, 17): the matrix CI job for that dialect.

@@ -154,29 +154,29 @@ scripts/parity/
 Common cases. Full table in git history of `query-parity-verification.md`
 (this doc's predecessor) and verified against `packages/arel/src/`.
 
-| Ruby                                 | TypeScript                               |
-| ------------------------------------ | ---------------------------------------- |
-| `Arel::Table.new(:foo)`              | `new Table("foo")`                       |
-| `tbl[:col]`                          | `tbl.get("col")`                         |
-| `tbl[Arel.star]`                     | `tbl.star`                               |
-| `node.eq / lt / gt / not_eq / in`    | `node.eq / lt / gt / notEq / in`         |
-| `node.matches('%x%')`                | `node.matches("%x%")`                    |
-| `~node` (bitwise NOT)                | `new Nodes.BitwiseNot(node)`             |
-| `node & val` / `\|` / `^` / `<<`     | `node.bitwiseAnd / Or / Xor / ShiftLeft` |
-| `node.add / subtract / multiply`     | same camelCase                           |
-| `node.count(true)`                   | `node.count(true)` (distinct)            |
-| `node.sum / maximum / minimum`       | `node.sum() / maximum() / minimum()`     |
-| `node.extract('month')`              | `node.extract("month")`                  |
-| `node.over(window)`                  | `node.over(window)`                      |
-| `tbl.project / where / order / take` | same camelCase                           |
-| `mgr.distinct`                       | `mgr.distinct()`                         |
-| `tbl.join(other)`                    | `tbl.join(other)`                        |
-| `tbl.join(other, OuterJoin)`         | `tbl.join(other, Nodes.OuterJoin)`       |
-| `mgr.with(:recursive, cte)`          | `mgr.withRecursive(cte)`                 |
-| `Arel.sql(str)` / `Arel.star`        | `sql(str)` / `star`                      |
-| `Arel::Nodes::Quoted.new(val)`       | `new Nodes.Quoted(val)`                  |
-| `Time.now` / `Time.zone.now`         | `new Date(frozenAt)`                     |
-| `1.week.ago`                         | `Date.parse(frozenAt) - 7*24*60*60*1000` |
+| Ruby                                 | TypeScript                                         |
+| ------------------------------------ | -------------------------------------------------- |
+| `Arel::Table.new(:foo)`              | `new Table("foo")`                                 |
+| `tbl[:col]`                          | `tbl.get("col")`                                   |
+| `tbl[Arel.star]`                     | `tbl.star`                                         |
+| `node.eq / lt / gt / not_eq / in`    | `node.eq / lt / gt / notEq / in`                   |
+| `node.matches('%x%')`                | `node.matches("%x%")`                              |
+| `~node` (bitwise NOT)                | `new Nodes.BitwiseNot(node)`                       |
+| `node & val` / `\|` / `^` / `<<`     | `node.bitwiseAnd / Or / Xor / ShiftLeft`           |
+| `node.add / subtract / multiply`     | same camelCase                                     |
+| `node.count(true)`                   | `node.count(true)` (distinct)                      |
+| `node.sum / maximum / minimum`       | `node.sum() / maximum() / minimum()`               |
+| `node.extract('month')`              | `node.extract("month")`                            |
+| `node.over(window)`                  | `node.over(window)`                                |
+| `tbl.project / where / order / take` | same camelCase                                     |
+| `mgr.distinct`                       | `mgr.distinct()`                                   |
+| `tbl.join(other)`                    | `tbl.join(other)`                                  |
+| `tbl.join(other, OuterJoin)`         | `tbl.join(other, Nodes.OuterJoin)`                 |
+| `mgr.with(:recursive, cte)`          | `mgr.withRecursive(cte)`                           |
+| `Arel.sql(str)` / `Arel.star`        | `sql(str)` / `star`                                |
+| `Arel::Nodes::Quoted.new(val)`       | `new Nodes.Quoted(val)`                            |
+| `Time.now` / `Time.zone.now`         | `new Date(frozenAt)`                               |
+| `1.week.ago`                         | `new Date(Date.parse(frozenAt) - 7*24*60*60*1000)` |
 
 ## Time freezing (query parity)
 

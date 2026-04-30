@@ -1559,7 +1559,12 @@ export class Model {
    */
   freeze(): this {
     void this.errors;
-    void this.validationContext;
+    // Pre-materialize the lazy ValidationContext cache so callers can
+    // still invoke `contextForValidation()` on a frozen instance —
+    // Rails does the equivalent at validations.rb:374 by touching
+    // `context_for_validation` inside `freeze`. Touching
+    // `validationContext` alone would not populate the cache.
+    void this.contextForValidation();
     Object.freeze(this);
     return this;
   }

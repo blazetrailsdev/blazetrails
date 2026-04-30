@@ -22,8 +22,16 @@ export function setFrozenTime(time: Date | null): void {
   _frozenInstant = time === null ? null : Temporal.Instant.fromEpochMilliseconds(time.getTime());
 }
 
+export function setFrozenInstant(instant: Temporal.Instant | null): void {
+  _frozenInstant = instant;
+}
+
 export function setTimeOffset(offsetMs: number): void {
   _timeOffsetNs = BigInt(Math.trunc(offsetMs)) * 1_000_000n;
+}
+
+export function setTimeOffsetNs(offsetNs: bigint): void {
+  _timeOffsetNs = offsetNs;
 }
 
 /**

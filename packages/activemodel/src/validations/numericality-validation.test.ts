@@ -664,4 +664,44 @@ describe("numericality with in: range", () => {
     v.validateEach(stubRecord, "x", { not: "a number" });
     expect(errors).toEqual([["x", "not_a_number"]]);
   });
+
+  it("validates against the raw before-type-cast value (prepareValueForValidation)", () => {
+    // Rails numericality validates what the user typed, not the cast
+    // value — otherwise integer columns would coerce 'abc' to 0
+    // before the validator sees it. Trails routes the raw read
+    // through readAttributeBeforeTypeCast.
+    class Person extends Model {
+      static {
+        this.attribute("age", "integer");
+        this.validates("age", { numericality: true });
+      }
+    }
+    // "abc" can't cast through IntegerType (trails returns null), but
+    // the validator should see the raw "abc" via
+    // readAttributeBeforeTypeCast and reject it as not_a_number — NOT
+    // accidentally pass via the null-then-allow_nil branch.
+    const p = new Person({ age: "abc" });
+    expect(p.readAttributeBeforeTypeCast("age")).toBe("abc");
+    expect(p.isValid()).toBe(false);
+    expect(p.errors.get("age")).toContain("is not a number");
+  });
+
+  it("isAllowOnlyInteger honors a record-method onlyInteger (Ruby truthiness)", () => {
+    // Rails: allow_only_integer?(record) returns
+    // resolve_value(record, options[:only_integer]). A method name
+    // like 'strictMode' resolves to record.strictMode().
+    class Person extends Model {
+      static {
+        this.attribute("score", "string");
+        this.validates("score", { numericality: { onlyInteger: "strictMode" } });
+      }
+      strictMode(): boolean {
+        return true;
+      }
+    }
+    expect(new Person({ score: "5" }).isValid()).toBe(true);
+    const f = new Person({ score: "5.5" });
+    expect(f.isValid()).toBe(false);
+    expect(f.errors.get("score")).toContain("must be an integer");
+  });
 });

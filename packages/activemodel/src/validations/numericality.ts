@@ -89,6 +89,12 @@ export class NumericalityValidator extends EachValidator {
     precision = 15,
     scale?: number,
   ): void {
+    // Rails: validate_each operates on the raw user input when one is
+    // available (numericality.rb:36 calls prepare_value_for_validation
+    // implicitly via the *_came_from_user? / *_before_type_cast path).
+    // Trails routes the same idea through readAttributeBeforeTypeCast.
+    value = this.prepareValueForValidation(value, record, attribute);
+
     if (value === null || value === undefined) {
       if (this.options.allowNil !== false) return;
       record.errors.add(attribute, "not_a_number", { value, message: this.options.message });
@@ -103,7 +109,10 @@ export class NumericalityValidator extends EachValidator {
 
     const num = parseAsNumber(Number(value), precision, scale) as number;
 
-    if (this.options.onlyInteger && !this.isInteger(value)) {
+    // Rails dispatches through allow_only_integer?(record), not the
+    // raw options[:only_integer] read, so a Proc / method-name option
+    // is honored per-record.
+    if (this.isAllowOnlyInteger(record) && !this.isInteger(value)) {
       record.errors.add(attribute, "not_an_integer", { value, message: this.options.message });
       return;
     }
@@ -460,12 +469,18 @@ export function isAllowOnlyInteger(
   },
   record: AnyRecord,
 ): boolean {
-  return Boolean(this.resolveValue(record, this.options.onlyInteger));
+  // Ruby truthiness: only nil/false count as false. Boolean(0) and
+  // Boolean('') would diverge (Ruby treats both as truthy), so use the
+  // explicit nil-or-false check pattern used elsewhere in trails (see
+  // clusivity.ts:delimiter, comparison.ts).
+  const resolved = this.resolveValue(record, this.options.onlyInteger);
+  return resolved !== undefined && resolved !== null && resolved !== false;
 }
 
 interface RecordWithRawAttribute {
   attributeChangedInPlace?: (name: string) => boolean;
   readAttribute?: (name: string) => unknown;
+  readAttributeBeforeTypeCast?: (name: string) => unknown;
   [key: string]: unknown;
 }
 
@@ -505,19 +520,16 @@ export function prepareValueForValidation(
   attrName: string,
 ): unknown {
   if (this.isRecordAttributeChangedInPlace(record, attrName)) return value;
+  // Trails exposes raw values through the generic
+  // `readAttributeBeforeTypeCast(name)` API on Model rather than the
+  // Rails per-attribute generated `${attr}_before_type_cast` methods.
+  // Duck-type the lookup so other hosts implementing the same shape
+  // (or AR Base subclasses) work too.
   const r = record as RecordWithRawAttribute;
-  const cameFromUser = `${attrName}CameFromUser`;
-  const beforeTypeCast = `${attrName}BeforeTypeCast`;
-  let rawValue: unknown;
-  if (typeof r[cameFromUser] === "function") {
-    if ((r[cameFromUser] as () => boolean).call(r)) {
-      rawValue = (r[beforeTypeCast] as (() => unknown) | undefined)?.call(r);
-    } else if (typeof r.readAttribute === "function") {
-      rawValue = r.readAttribute(attrName);
-    }
-  } else if (typeof r[beforeTypeCast] === "function") {
-    rawValue = (r[beforeTypeCast] as () => unknown).call(r);
-  }
+  const rawValue =
+    typeof r.readAttributeBeforeTypeCast === "function"
+      ? r.readAttributeBeforeTypeCast(attrName)
+      : undefined;
   // Rails: raw_value || value — Ruby `||` falls back on nil/false. Use
   // the same semantic so `false`/`null` raw values fall through to
   // the cast value rather than being treated as "I read the raw".

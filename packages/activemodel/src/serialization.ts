@@ -212,12 +212,19 @@ export function serializableAddIncludes(
 ): void {
   // Rails: `return unless includes = options[:include]` skips on
   // nil/false. Empty string is truthy in Ruby, so JS `!` would
-  // diverge — guard explicitly on null/undefined to mirror Ruby
-  // truthiness. (`SerializeOptions.include` is typed as string /
-  // array / hash, so `false` can't reach this path through the
-  // public API.)
-  if (options.include == null) return;
-  const includes = normalizeIncludes(options.include);
+  // diverge. Guard explicitly on null/undefined/false to mirror
+  // Ruby truthiness without dropping `""`. The `false` branch also
+  // protects against untyped JS callers that bypass the
+  // `SerializeOptions.include` shape.
+  const includeOpt = options.include as
+    | string
+    | Array<string | Record<string, SerializeOptions>>
+    | Record<string, SerializeOptions>
+    | false
+    | null
+    | undefined;
+  if (includeOpt == null || includeOpt === false) return;
+  const includes = normalizeIncludes(includeOpt);
   for (const [assocName, assocOpts] of Object.entries(includes)) {
     const cached =
       record._preloadedAssociations?.get(assocName) ?? record._cachedAssociations?.get(assocName);

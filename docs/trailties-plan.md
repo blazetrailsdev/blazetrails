@@ -105,29 +105,6 @@ These are the only open items. Each is scoped to a specific PR.
 
 ---
 
-## Phase 0 — Activesupport prerequisites
-
-### PR 0.2 — `fsAdapter.glob` (~250 LOC)
-
-**Blocks:** PR 1.1.
-**Blocked by:** none.
-
-**Files changed:**
-
-- `packages/activesupport/src/fs-adapter.ts` — add to interface:
-  ```ts
-  glob(pattern: string, opts?: { cwd?: string; dot?: boolean }): Promise<string[]>;
-  ```
-- `packages/activesupport/src/fs-adapter.test.ts`
-
-Pure-TS recursive walker over `readdir`. Patterns: `**`, `*`, `?`,
-`[...]`, `{a,b}`, leading `!` for negation. No `glob` package dependency.
-
-**Acceptance:** test cases cover each pattern class plus dot-file handling;
-returns paths relative to `cwd` when provided.
-
----
-
 ## Phase 1 — Leaves
 
 PR 1.1 and 1.2 land first; the rest can land in parallel.

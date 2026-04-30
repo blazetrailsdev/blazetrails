@@ -73,8 +73,10 @@ matching Rails' `connection.quote` dispatch. After the refactor:
 | `connection_adapters/sqlite3/quoting.rb`                                     | SQLite overrides `quoted_true → "1"` / `quoted_false → "0"` (only adapter that overrides bool literals); double-quote identifiers.                                                     |
 | `activerecord/lib/active_record/sanitization.rb`                             | `sanitize_sql_array`, `replace_bind_variable`, `quote_bound_value` — calls `connection.quote(value)`                                                                                   |
 
-Use `bin/rails-source` to grep into the bundled Rails checkout when a
-specific override is needed.
+Rails source is fetched into `scripts/api-compare/.rails-source/` by
+`scripts/api-compare/fetch-rails.sh` (also run as part of
+`pnpm api:compare`). Grep there directly when a specific override is
+needed.
 
 ## Phase 0 — Complete adapter quoting modules
 
@@ -85,22 +87,22 @@ specific override is needed.
 
 | Method                           | abstract                    | postgresql             | mysql                     | sqlite3                     |
 | -------------------------------- | --------------------------- | ---------------------- | ------------------------- | --------------------------- |
-| `quote(value)`                   | ✅ `abstract/quoting.ts:57` | ✅ `pg/quoting.ts:156` | ✅ `mysql/quoting.ts:163` | ✅ `sqlite3/quoting.ts:60`  |
-| `quoteString(s)`                 | ✅ `:149`                   | ✅ `pg/quoting.ts:121` | ✅ `mysql/quoting.ts:79`  | ✅ `sqlite3/quoting.ts:56`  |
-| `quoteIdentifier(name)`          | ✅ `:21`                    | ❌                     | ❌                        | ❌                          |
-| `quoteTableName(name)`           | ✅ `:33`                    | ✅ `pg/quoting.ts:78`  | ✅ `mysql/quoting.ts:50`  | ✅ `sqlite3/quoting.ts:45`  |
-| `quoteColumnName(name)`          | ✅ `:45`                    | ✅ `pg/quoting.ts:117` | ✅ `mysql/quoting.ts:57`  | ✅ `sqlite3/quoting.ts:52`  |
-| `quoteTableNameForAssignment`    | ✅ `:158`                   | ✅ `pg/quoting.ts:136` | ❌                        | ✅ `sqlite3/quoting.ts:93`  |
-| `quoteDefaultExpression(v)`      | ✅ `:177`                   | ✅ `pg/quoting.ts:183` | ❌                        | ✅ `sqlite3/quoting.ts:105` |
+| `quote(value)`                   | ✅ `abstract/quoting.ts:57` | ✅ `pg/quoting.ts:164` | ✅ `mysql/quoting.ts:172` | ✅ `sqlite3/quoting.ts:69`  |
+| `quoteString(s)`                 | ✅ `:149`                   | ✅ `pg/quoting.ts:129` | ✅ `mysql/quoting.ts:88`  | ✅ `sqlite3/quoting.ts:65`  |
+| `quoteIdentifier(name)`          | ✅ `:21`                    | ✅ `pg/quoting.ts:82`  | ✅ `mysql/quoting.ts:67`  | ✅ `sqlite3/quoting.ts:61`  |
+| `quoteTableName(name)`           | ✅ `:33`                    | ✅ `pg/quoting.ts:86`  | ✅ `mysql/quoting.ts:50`  | ✅ `sqlite3/quoting.ts:45`  |
+| `quoteColumnName(name)`          | ✅ `:45`                    | ✅ `pg/quoting.ts:125` | ✅ `mysql/quoting.ts:57`  | ✅ `sqlite3/quoting.ts:52`  |
+| `quoteTableNameForAssignment`    | ✅ `:158`                   | ✅ `pg/quoting.ts:144` | ❌                        | ✅ `sqlite3/quoting.ts:102` |
+| `quoteDefaultExpression(v)`      | ✅ `:177`                   | ✅ `pg/quoting.ts:191` | ❌                        | ✅ `sqlite3/quoting.ts:114` |
 | `quotedTrue` / `quotedFalse`     | ✅ `:194`/`:208`            | ✅ `:62`/`:70`         | ✅ `:34`/`:42`            | ✅ `:29`/`:37`              |
 | `unquotedTrue` / `unquotedFalse` | ✅ `:201`/`:215`            | ✅ `:66`/`:74`         | ✅ `:38`/`:46`            | ✅ `:33`/`:41`              |
-| `quotedBinary(value)`            | ✅ `:380`                   | ✅ `pg/quoting.ts:152` | ✅ `mysql/quoting.ts:89`  | ✅ `sqlite3/quoting.ts:97`  |
-| `typeCast(value)`                | ✅ `:90`                    | ✅ `pg/quoting.ts:208` | ✅ `mysql/quoting.ts:207` | ✅ `sqlite3/quoting.ts:119` |
-| `castBoundValue(value)`          | ✅ `:114`                   | ❌                     | ✅ `mysql/quoting.ts:103` | ❌                          |
+| `quotedBinary(value)`            | ✅ `:380`                   | ✅ `pg/quoting.ts:160` | ✅ `mysql/quoting.ts:98`  | ✅ `sqlite3/quoting.ts:106` |
+| `typeCast(value)`                | ✅ `:90`                    | ✅ `pg/quoting.ts:216` | ✅ `mysql/quoting.ts:216` | ✅ `sqlite3/quoting.ts:128` |
+| `castBoundValue(value)`          | ✅ `:114`                   | ❌                     | ✅ `mysql/quoting.ts:112` | ❌                          |
 | `sanitizeAsSqlComment(v)`        | ✅ `:390`                   | ❌                     | ❌                        | ❌                          |
-| `columnNameMatcher`              | ✅ `:403`                   | ✅ `pg/quoting.ts:269` | ✅ `mysql/quoting.ts:115` | ✅ `sqlite3/quoting.ts:315` |
-| `columnNameWithOrderMatcher`     | ✅ `:419`                   | ✅ `pg/quoting.ts:288` | ✅ `mysql/quoting.ts:138` | ✅ `sqlite3/quoting.ts:319` |
-| `lookupCastTypeFromColumn`       | ✅ `:132`                   | ✅ `pg/quoting.ts:314` | ❌                        | ❌                          |
+| `columnNameMatcher`              | ✅ `:403`                   | ✅ `pg/quoting.ts:277` | ✅ `mysql/quoting.ts:124` | ✅ `sqlite3/quoting.ts:324` |
+| `columnNameWithOrderMatcher`     | ✅ `:419`                   | ✅ `pg/quoting.ts:296` | ✅ `mysql/quoting.ts:147` | ✅ `sqlite3/quoting.ts:328` |
+| `lookupCastTypeFromColumn`       | ✅ `:132`                   | ✅ `pg/quoting.ts:322` | ❌                        | ❌                          |
 
 ### Phase 0 work items (PR 1)
 

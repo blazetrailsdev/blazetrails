@@ -199,7 +199,8 @@ describe("TimeTravelTest", () => {
     try {
       const traveled = currentTimeInstant().epochNanoseconds;
       const drift = traveled - before - offsetNs;
-      expect(drift >= -1_000_000_000n && drift <= 1_000_000_000n).toBe(true);
+      expect(drift).toBeGreaterThanOrEqual(-1_000_000_000n);
+      expect(drift).toBeLessThanOrEqual(1_000_000_000n);
     } finally {
       setTimeOffsetNs(0n);
     }

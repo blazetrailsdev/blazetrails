@@ -19,7 +19,13 @@ let _frozenInstant: Temporal.Instant | null = null;
 let _timeOffsetNs: bigint = 0n;
 
 export function setFrozenTime(time: Date | null): void {
-  _frozenInstant = time === null ? null : Temporal.Instant.fromEpochMilliseconds(time.getTime());
+  if (time === null) {
+    _frozenInstant = null;
+    return;
+  }
+  const ms = time.getTime();
+  if (Number.isNaN(ms)) throw new RangeError("`time` must be a valid Date");
+  _frozenInstant = Temporal.Instant.fromEpochMilliseconds(ms);
 }
 
 export function setFrozenInstant(instant: Temporal.Instant | null): void {
@@ -27,6 +33,7 @@ export function setFrozenInstant(instant: Temporal.Instant | null): void {
 }
 
 export function setTimeOffset(offsetMs: number): void {
+  if (!Number.isFinite(offsetMs)) throw new TypeError("offsetMs must be a finite number");
   _timeOffsetNs = BigInt(Math.trunc(offsetMs)) * 1_000_000n;
 }
 

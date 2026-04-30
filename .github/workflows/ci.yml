@@ -195,27 +195,39 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - name: Check trailties has no process.* references
-        # `process.*` in trailties src must go through @blazetrails/activesupport
-        # (PR 0.3 of the trailties build-out plan). app-generator.ts contains
-        # template strings that emit user-app code; those are exempt.
+      - name: Check trailties src does not bypass processAdapter
+        # `process.*` in `packages/trailties/src/**.ts` must go through
+        # @blazetrails/activesupport (PR 0.3 of the trailties build-out plan).
+        # Two exclusions:
+        #   - `*.test.ts` — tests legitimately mock/inspect the host process
+        #   - `app-generator.ts` — template strings emit user-app code that
+        #     runs in the user's app, where direct process.* is fine
         #
-        # Pattern uses `(^|[^[:alnum:]_])` instead of `\b` for portability
-        # across grep variants. `exitCode` is listed explicitly because the
-        # `exit` alternation alone won't match `process.exitCode` (GNU grep
-        # ERE word boundary requires non-word after `exit`).
+        # Two patterns enforce three syntactic forms:
+        #   1. dotted access:  process.env / process?.env
+        #   2. bracket access: process["env"] / process?.["env"]
+        # The leading `(^|[^[:alnum:]_])` is a portable word boundary
+        # (GNU and BSD grep both honor it; \b semantics differ across
+        # variants). `exitCode` is listed explicitly because `exit\b`
+        # would not match `exitCode` (the trailing `C` is a word char).
         run: |
           set -e
-          violations=$(grep -rEn '(^|[^[:alnum:]_])process\.(env|cwd|argv|exit|exitCode|stdout|stderr|platform|on)' packages/trailties/src \
+          PROPS='env|cwd|argv|exit|exitCode|stdout|stderr|platform|on'
+          # Single grep run, OR the two forms together so output is unified.
+          # Form 1: process.PROP / process?.PROP (dotted, optional chaining)
+          # Form 2: process["PROP"] / process?.["PROP"] (bracket, single or double quotes)
+          PATTERN="(^|[^[:alnum:]_])process(\??\.(${PROPS})|(\?\.)?\[['\"](${PROPS})['\"])"
+          violations=$(grep -rEn "$PATTERN" packages/trailties/src \
             --include='*.ts' \
             --exclude='*.test.ts' \
             --exclude='app-generator.ts' || true)
           if [ -n "$violations" ]; then
-            echo "❌ Found process.* references in trailties src (must go through @blazetrails/activesupport):"
+            echo "Found process.* bypasses in packages/trailties/src (excluding *.test.ts, app-generator.ts)."
+            echo "These must go through @blazetrails/activesupport's processAdapter exports:"
             echo "$violations"
             exit 1
           fi
-          echo "✓ No process.* references in trailties src"
+          echo "OK: no process.* bypasses in packages/trailties/src (excluding *.test.ts, app-generator.ts)"
   prettier:
     name: Prettier
     needs: changes

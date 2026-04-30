@@ -3,9 +3,10 @@
  * and ActiveSupport::CoreExt::Date patterns.
  *
  * @boundary-file: Helpers accept JavaScript `Date` inputs for ergonomic interop
- *   with code that still holds Date values. Period-bound and arithmetic helpers
- *   (`beginningOf*`, `endOf*`, `allDay`, …) return `Temporal.Instant`; legacy
- *   helpers below the boundary still return `Date` and will flip in F-6b/c/d.
+ *   with code that still holds Date values. Period-bound, navigation, and
+ *   arithmetic helpers return `Temporal.Instant`. The remaining `Date`-returning
+ *   helpers (`toDate`, `toTime`) and predicates (`isPast`, `isFuture`) flip in
+ *   F-6d.
  */
 
 import { type Temporal, instantFrom } from "./temporal.js";
@@ -471,6 +472,9 @@ export function isFuture(date: Date): boolean {
  * floor — rounds time down to nearest multiple of ms.
  */
 export function floor(date: Date, ms: number): Temporal.Instant {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    throw new RangeError(`floor: ms must be a positive finite number, got ${ms}`);
+  }
   return instantFrom(new Date(Math.floor(date.getTime() / ms) * ms));
 }
 
@@ -478,6 +482,9 @@ export function floor(date: Date, ms: number): Temporal.Instant {
  * ceil — rounds time up to nearest multiple of ms.
  */
 export function ceil(date: Date, ms: number): Temporal.Instant {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    throw new RangeError(`ceil: ms must be a positive finite number, got ${ms}`);
+  }
   return instantFrom(new Date(Math.ceil(date.getTime() / ms) * ms));
 }
 

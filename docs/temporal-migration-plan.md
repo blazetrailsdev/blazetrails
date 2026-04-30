@@ -16,15 +16,11 @@ shipped.
 
 ## Standing decisions (still load-bearing)
 
-- **Data-layer datetime APIs reject `Date`; activesupport `Time`
-  extensions accept `Date` as input but never return it.**
-  `TimeWithZone` and the arel/activemodel/activerecord boundary
-  reject `Date` at the type and runtime layer — convert via
-  `Temporal.Instant.fromEpochMilliseconds(date.getTime())` at the
-  edge. The activesupport ext helpers (`time-ext.ts`, `duration.ts`)
-  accept `Date | Temporal.Instant` for ergonomics; every helper
-  _returns_ `Temporal.*` (the F-6 sweep below closes the last
-  return-side `Date` leaks).
+- **No `Date` interop in datetime APIs.** `TimeWithZone` and every other
+  Temporal-accepting API rejects `Date` at the type and runtime boundary.
+  Users converting from `Date`-typed code call
+  `Temporal.Instant.fromEpochMilliseconds(date.getTime())` themselves at
+  the edge.
 - **ISO 8601 is the canonical serialized form.** `toJSON` emits ISO
   strings with microsecond precision via
   `toString({ smallestUnit: "microsecond" })`. `bigint` is not used as

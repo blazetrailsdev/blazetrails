@@ -2,7 +2,6 @@
 
 Implementation plan to bring `packages/arel/` into behavioral alignment with
 Rails v8.0.2 (`scripts/api-compare/.rails-source/activerecord/lib/arel/`).
-Findings sourced from `docs/arel-audit.md`.
 
 Each PR below targets ≤300 LOC. Order is roughly by SQL-correctness impact;
 PRs marked **independent** can be parallelized. Trails files are paths under
@@ -40,8 +39,7 @@ because each one moves AR-visible API.
 - **Risk** per PR: the breaking-change surface and known failure modes.
 - **Depends on** per PR: hard ordering constraints. Absent ⇒ independent.
 - **Out of scope**: explicit non-goals so reviewers don't expand the PR.
-- All PRs open in **draft**, link to this plan, and reference the
-  `docs/arel-audit.md` section they address.
+- All PRs open in **draft** and link to this plan.
 - work from a worktree, pnpm install after creating the worktree
 - Only work on one PR at at time.
 - names should be camelCase as Typescript convention - don't underscore

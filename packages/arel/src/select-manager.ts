@@ -251,8 +251,8 @@ export class SelectManager extends TreeManager {
    * `if value` treats only `false` and `nil` as falsy, so we test those
    * exactly — `0`, `""`, etc. enable DISTINCT in Rails.
    */
-  distinct(value: boolean | null = true): this {
-    this.core.setQuantifier = value === false || value === null ? null : new Distinct();
+  distinct(value: unknown = true): this {
+    this.core.setQuantifier = value === false || value == null ? null : new Distinct();
     return this;
   }
 

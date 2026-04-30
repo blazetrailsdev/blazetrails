@@ -829,8 +829,9 @@ describe("SelectManagerTest", () => {
     );
   });
 
-  // Mirrors Rails: `distinct(value=true)` clears the set quantifier when
-  // value is falsy (select_manager.rb).
+  // Mirrors Rails: `distinct(value=true)` clears the set quantifier only
+  // when value is `false` or `nil` (select_manager.rb's `if value`); any
+  // other value enables DISTINCT.
   it("distinct(false) clears the set quantifier", () => {
     const mgr = users.project(users.get("name")).distinct();
     expect(mgr.toSql()).toContain("DISTINCT");

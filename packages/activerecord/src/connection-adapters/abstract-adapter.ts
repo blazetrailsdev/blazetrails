@@ -45,8 +45,6 @@ import {
   quotedBinary as abstractQuotedBinary,
   castBoundValue as abstractCastBoundValue,
   sanitizeAsSqlComment as abstractSanitizeAsSqlComment,
-  columnNameMatcher as abstractColumnNameMatcher,
-  columnNameWithOrderMatcher as abstractColumnNameWithOrderMatcher,
 } from "./abstract/quoting.js";
 import type { Quoting } from "./abstract/quoting-interface.js";
 import { include } from "@blazetrails/activesupport";
@@ -275,14 +273,6 @@ export class AbstractAdapter implements Quoting {
 
   sanitizeAsSqlComment(value: unknown): string {
     return abstractSanitizeAsSqlComment(value);
-  }
-
-  columnNameMatcher(): RegExp {
-    return abstractColumnNameMatcher();
-  }
-
-  columnNameWithOrderMatcher(): RegExp {
-    return abstractColumnNameWithOrderMatcher();
   }
 
   /**

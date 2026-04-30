@@ -535,20 +535,6 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return sqliteQuotedBinary(value as Uint8Array);
   }
 
-  override columnNameMatcher(): RegExp {
-    // Delegate to the static — `disallowRawSqlBang` callers already use
-    // the strict static-method regex (relation.ts:211 and
-    // query-methods.ts:155 walk to `adapter.constructor.columnNameMatcher`).
-    // The per-module `ColumnMatcher` class in sqlite3/quoting.ts is a
-    // looser separate matcher; routing the instance method through the
-    // static keeps the unsafe-sql validation behavior consistent.
-    return SQLite3Adapter.columnNameMatcher();
-  }
-
-  override columnNameWithOrderMatcher(): RegExp {
-    return SQLite3Adapter.columnNameWithOrderMatcher();
-  }
-
   /**
    * Close the database connection.
    */

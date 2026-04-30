@@ -56,10 +56,13 @@ export interface Quoting {
 
   /** Mirrors: Quoting#sanitize_as_sql_comment — strip comment-close sequences from comment text. */
   sanitizeAsSqlComment(value: unknown): string;
-
-  /** Mirrors: Quoting::ClassMethods#column_name_matcher — adapter-specific column-list regex. */
-  columnNameMatcher(): RegExp;
-
-  /** Mirrors: Quoting::ClassMethods#column_name_with_order_matcher. */
-  columnNameWithOrderMatcher(): RegExp;
 }
+
+// `column_name_matcher` / `column_name_with_order_matcher` are deliberately
+// NOT on this interface. In Rails they live in `Quoting::ClassMethods`
+// (active_record/connection_adapters/abstract/quoting.rb:18, :33) — the
+// regexes don't depend on instance state, so they're class methods.
+// Trails mirrors that with `static columnNameMatcher()` on each concrete
+// adapter (e.g. SQLite3Adapter:97). Call sites resolve them via
+// `adapter.constructor.columnNameMatcher()` (relation.ts:211,
+// query-methods.ts:155).

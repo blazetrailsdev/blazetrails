@@ -39,8 +39,6 @@ describe("Quoting interface", () => {
       expect(typeof q.typeCast).toBe("function");
       expect(typeof q.castBoundValue).toBe("function");
       expect(typeof q.sanitizeAsSqlComment).toBe("function");
-      expect(typeof q.columnNameMatcher).toBe("function");
-      expect(typeof q.columnNameWithOrderMatcher).toBe("function");
     } finally {
       adapter.disconnectBang();
     }

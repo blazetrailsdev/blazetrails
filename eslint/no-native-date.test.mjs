@@ -1,10 +1,9 @@
 import { RuleTester } from "eslint";
-import { parser as tsParser } from "typescript-eslint";
 import rule from "./no-native-date.mjs";
 
 const tester = new RuleTester({
   languageOptions: {
-    parser: tsParser,
+    parser: (await import("typescript-eslint")).parser,
     ecmaVersion: 2022,
     sourceType: "module",
   },
@@ -48,6 +47,19 @@ function f(x: unknown) {
     {
       code: "function f(x: unknown) { return x instanceof Date; }",
       errors: [{ messageId: "noInstanceof" }],
+    },
+    // globalThis.Date / window.Date / self.Date / global.Date variants.
+    {
+      code: "const d = new globalThis.Date();",
+      errors: [{ messageId: "noNew" }],
+    },
+    {
+      code: "function f(x: unknown) { return x instanceof globalThis.Date; }",
+      errors: [{ messageId: "noInstanceof" }],
+    },
+    {
+      code: "const d = new window.Date();",
+      errors: [{ messageId: "noNew" }],
     },
     // Boundary keyword in unrelated comment doesn't exempt.
     {

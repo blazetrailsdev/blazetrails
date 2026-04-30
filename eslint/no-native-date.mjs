@@ -128,23 +128,34 @@ const rule = {
       context.report({ node, messageId, data });
     }
 
+    // Match `Date` (Identifier resolving to global) OR `globalThis.Date` /
+    // `window.Date` / `self.Date` / `global.Date` (MemberExpression on a
+    // global object).
+    function isGlobalDateRef(refNode) {
+      if (refNode.type === "Identifier" && refNode.name === "Date") {
+        return !isLocallyBoundDate(context, refNode);
+      }
+      if (
+        refNode.type === "MemberExpression" &&
+        !refNode.computed &&
+        refNode.property.type === "Identifier" &&
+        refNode.property.name === "Date" &&
+        refNode.object.type === "Identifier" &&
+        /^(globalThis|window|self|global)$/.test(refNode.object.name)
+      ) {
+        return true;
+      }
+      return false;
+    }
+
     return {
       NewExpression(node) {
-        if (
-          node.callee.type === "Identifier" &&
-          node.callee.name === "Date" &&
-          !isLocallyBoundDate(context, node)
-        ) {
+        if (isGlobalDateRef(node.callee)) {
           report(node, "noNew");
         }
       },
       BinaryExpression(node) {
-        if (
-          node.operator === "instanceof" &&
-          node.right.type === "Identifier" &&
-          node.right.name === "Date" &&
-          !isLocallyBoundDate(context, node)
-        ) {
+        if (node.operator === "instanceof" && isGlobalDateRef(node.right)) {
           report(node, "noInstanceof");
         }
       },

@@ -11,8 +11,8 @@ import { SqlLiteral } from "./sql-literal.js";
 export class Extract extends Unary {
   readonly field: string;
 
-  constructor(expr: Node, field: string) {
-    super(expr);
+  constructor(expr: Node | Node[], field: string) {
+    super(expr as unknown as Node);
     this.field = field;
   }
 

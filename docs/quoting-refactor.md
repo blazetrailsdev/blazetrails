@@ -1,191 +1,127 @@
 # Quoting Refactor: Thread Adapter Through All Call Sites
 
+> **Status (2026-04-30):** Adapter classes (`AbstractAdapter`,
+> `PostgreSQLAdapter`, `AbstractMysqlAdapter`, `SQLite3Adapter`) all have
+> a `quote()` instance method, but ~14 call sites outside the adapter
+> layer still import the **standalone** `quote` / `quoteIdentifier` /
+> `quoteTableName` / `quoteDefaultExpression` from
+> `connection-adapters/abstract/quoting.ts` and pass an
+> `adapter?: "sqlite" | "postgres" | "mysql"` string to select dialect.
+> That string-dispatch path duplicates dialect logic and produces wrong
+> SQL on at least PG (`quote(true) → "TRUE"` instead of `"'t'"`).
+
 ## Problem
 
-In Rails, quoting is an **instance method on the connection adapter**. When code
-needs to quote a value or identifier, it calls `connection.quote(value)`,
-`connection.quote_table_name(name)`, etc. Each adapter (PostgreSQL, MySQL,
-SQLite) overrides the base quoting module, so the right dialect is always used
-automatically.
+Rails routes every quoting call through the connection adapter:
+`connection.quote(value)`, `connection.quote_table_name(name)`. The
+`Quoting` module is mixed into `AbstractAdapter`; each concrete adapter
+overrides what differs (PG: `'t'`/`'f'`, backslash escaping; MySQL:
+`1`/`0`, backtick identifiers; SQLite: `1`/`0`, double-quote
+identifiers). Call sites never touch the module functions directly.
 
-In our codebase, quoting is implemented as **standalone exported functions** in
-`connection-adapters/abstract/quoting.ts`. Many call sites import these directly
-and call them without any adapter context:
+Trails has the per-adapter modules in place
+(`connection-adapters/{postgresql,mysql,sqlite3}/quoting.ts`) and the
+adapter classes' `override quote()` methods exist, but most non-adapter
+call sites still import the standalone `quote` from
+`abstract/quoting.ts` and pass an `adapter` enum string. Two concrete
+bugs:
 
-```ts
-// sanitization.ts — no adapter, always uses abstract defaults
-import { quote } from "./connection-adapters/abstract/quoting.js";
-sanitizeSqlArray(template, ...binds); // quote(true) → "TRUE" always
-```
+1. **PG `quote(true)` returns `"TRUE"`.**
+   `postgresql/quoting.ts:180` falls through to `abstractQuote` for
+   booleans. Should dispatch through `quotedTrue()`
+   (`postgresql/quoting.ts:62` returns `"'t'"`). MySQL's standalone
+   `quote()` does this correctly (`mysql/quoting.ts:165`); PG's does
+   not.
 
-This means:
-
-- `quote(true)` always returns `"TRUE"` (should be `'t'` for PG, `"1"` for MySQL/SQLite)
-- `quoteIdentifier(name)` always uses double quotes (should be backticks for MySQL)
-- `quoteString(value)` uses naive escaping (PG needs `E'...'` for backslashes, MySQL needs control-char escaping)
-
-The adapter-specific modules (`postgresql/quoting.ts`, `mysql/quoting.ts`,
-`sqlite3/quoting.ts`) exist but are only wired into the adapter classes and
-schema operations — not the model/relation/sanitization paths that most
-user-facing queries go through.
-
-## Rails Source Reference
-
-The quoting system in Rails is spread across these files:
-
-- **Base quoting module**: `activerecord/lib/active_record/connection_adapters/abstract/quoting.rb`
-  — defines `quote`, `quote_string`, `quote_column_name`, `quote_table_name`,
-  `quote_table_name_for_assignment`, `quote_default_expression`, `type_cast`,
-  `quoted_true`/`quoted_false`, `quoted_date`, `quoted_time`, `quoted_binary`,
-  `sanitize_as_sql_comment`, `column_name_matcher`, `column_name_with_order_matcher`
-- **PostgreSQL overrides**: `activerecord/lib/active_record/connection_adapters/postgresql/quoting.rb`
-  — overrides `quote`, `quote_string`, `quote_table_name`, `quote_column_name`,
-  `quoted_date`, `quoted_binary`, `type_cast`, plus PG-specific `encode_array`,
-  `determine_encoding_of_strings_in_array`
-- **MySQL overrides**: `activerecord/lib/active_record/connection_adapters/abstract_mysql_adapter.rb`
-  (mixed in from `mysql/quoting.rb` in newer Rails) — overrides `quote`,
-  `quote_string`, `quote_column_name`, `quoted_date`, `quoted_binary`,
-  `quoted_true`/`quoted_false`, `type_cast`, `column_name_matcher`,
-  `column_name_with_order_matcher`
-- **SQLite3 overrides**: `activerecord/lib/active_record/connection_adapters/sqlite3/quoting.rb`
-  — overrides `quote`, `quote_string`, `quote_table_name`, `quote_column_name`,
-  `quoted_date`, `quoted_time`, `quoted_binary`, `type_cast`,
-  `quote_table_name_for_assignment`, `quote_default_expression`,
-  `column_name_matcher`, `column_name_with_order_matcher`
-- **Sanitization**: `activerecord/lib/active_record/sanitization.rb`
-  — `sanitize_sql_array` calls `connection.quote(value)` (not a standalone function)
-
-Key pattern: In Rails, `Quoting` is a module included into
-`AbstractAdapter`. Each concrete adapter (`PostgreSQLAdapter`,
-`AbstractMysqlAdapter`, `SQLite3Adapter`) overrides methods from the module.
-Call sites always go through `connection.quote(...)` — never a standalone
-function.
+2. **Sanitization always uses abstract defaults.**
+   `sanitization.ts:9–14` imports `quote`, `quoteIdentifier`,
+   `quoteTableName` directly. `sanitizeSqlForConditions`
+   (sanitization.ts:120–122) and `quoteBoundValue` (lines 315/326/332/ 338) emit SQL via abstract — same bug as #1, plus identifier
+   quoting always uses double quotes (wrong for MySQL).
 
 ## Goal
 
-Every quoting call should go through the active connection adapter, matching
-Rails' `connection.quote` dispatch. No code outside of the adapter itself should
-import from `abstract/quoting.ts` directly.
+Every quoting call goes through the active connection adapter,
+matching Rails' `connection.quote` dispatch. After the refactor:
 
-## Call Sites to Fix
+- No file outside `connection-adapters/{abstract,postgresql,mysql,sqlite3}/`
+  imports from `abstract/quoting.ts`.
+- The `adapter?: "sqlite" | "postgres" | "mysql"` parameter is removed
+  from the abstract module.
+- Each adapter class implements a shared `Quoting` interface so call
+  sites can depend on a contract, not a concrete class.
 
-### Tier 1 — Hot path (affects every query)
+## Rails source (file-anchored)
 
-These are called on every query and produce wrong SQL for non-default adapters.
+| File                                                                         | What's there                                                                                         |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `activerecord/lib/active_record/connection_adapters/abstract/quoting.rb`     | Base `Quoting` module — `quote`, `quote_string`, `quoted_true/false`, etc.                           |
+| `connection_adapters/postgresql/quoting.rb`                                  | PG overrides — `quote` dispatches through PG `quoted_true → 't'`                                     |
+| `connection_adapters/mysql/quoting.rb` (mixed into `abstract_mysql_adapter`) | MySQL overrides — backtick identifiers, `'1'`/`'0'` bools                                            |
+| `connection_adapters/sqlite3/quoting.rb`                                     | SQLite overrides — minimal divergence from abstract                                                  |
+| `activerecord/lib/active_record/sanitization.rb`                             | `sanitize_sql_array`, `replace_bind_variable`, `quote_bound_value` — calls `connection.quote(value)` |
 
-| File                                                  | Imports                                      | Issue                                                                                           |
-| ----------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `sanitization.ts`                                     | `quote`, `quoteIdentifier`, `quoteTableName` | No adapter context. `sanitizeSql` is called from model class methods — needs `connection.quote` |
-| `relation/query-methods.ts`                           | `quote`                                      | Used in `where` clause building — bare `quote()`                                                |
-| `connection-adapters/abstract/database-statements.ts` | `quote`, `quoteTableName`, `quoteColumnName` | Already within adapter context — should use `this` adapter's quoting                            |
+Use `bin/rails-source` to grep into the bundled Rails checkout when a
+specific override is needed.
 
-### Tier 2 — Schema/DDL path
+## Phase 0 — Complete adapter quoting modules
 
-These affect migrations and schema operations. Some already pass `adapterName`
-but still call the abstract functions instead of the adapter's overrides.
+### Per-adapter gap (audited 2026-04-30)
 
-| File                                                      | Imports                                                                | Issue                                                                                                    |
-| --------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `connection-adapters/abstract/schema-statements.ts`       | `quoteIdentifier`, `quoteDefaultExpression`, `quoteTableName`, `quote` | Has `adapterName` but passes it as string param to abstract functions instead of using adapter's quoting |
-| `connection-adapters/abstract/schema-creation.ts`         | `quoteIdentifier`, `quoteTableName`, `quoteDefaultExpression`          | Same — has `adapterName` constructor param                                                               |
-| `connection-adapters/abstract/schema-definitions.ts`      | `quoteIdentifier`, `quoteTableName`, `quoteDefaultExpression`          | Same pattern                                                                                             |
-| `connection-adapters/mysql/schema-creation.ts`            | `quoteColumnName`, `quoteTableName` from `./quoting.js`                | Correctly uses MySQL quoting                                                                             |
-| `connection-adapters/sqlite3/schema-statements.ts`        | `quoteColumnName` from `./quoting.js`                                  | Correctly uses SQLite quoting                                                                            |
-| `connection-adapters/postgresql/schema-creation.ts`       | `quoteIdentifier`, `quoteTableName` from `../abstract/quoting.js`      | Should use PG quoting                                                                                    |
-| `connection-adapters/postgresql/referential-integrity.ts` | `quoteTableName` from `./quoting.js`                                   | Correctly uses PG quoting                                                                                |
+✅ = function exists, ⚠️ = exists but has a bug or partial coverage,
+❌ = missing.
 
-### Tier 3 — Model/infrastructure path
+| Method                           | abstract                    | postgresql                                      | mysql                     | sqlite3                     |
+| -------------------------------- | --------------------------- | ----------------------------------------------- | ------------------------- | --------------------------- |
+| `quote(value)`                   | ✅ `abstract/quoting.ts:57` | ⚠️ `pg/quoting.ts:156` — bool falls to abstract | ✅ `mysql/quoting.ts:163` | ✅ `sqlite3/quoting.ts:60`  |
+| `quoteString(s)`                 | ✅ `:149`                   | ✅ `pg/quoting.ts:121`                          | ✅ `mysql/quoting.ts:79`  | ✅ `sqlite3/quoting.ts:56`  |
+| `quoteIdentifier(name)`          | ✅ `:21`                    | ❌                                              | ❌                        | ❌                          |
+| `quoteTableName(name)`           | ✅ `:33`                    | ✅ `pg/quoting.ts:78`                           | ✅ `mysql/quoting.ts:50`  | ✅ `sqlite3/quoting.ts:45`  |
+| `quoteColumnName(name)`          | ✅ `:45`                    | ✅ `pg/quoting.ts:117`                          | ✅ `mysql/quoting.ts:57`  | ✅ `sqlite3/quoting.ts:52`  |
+| `quoteTableNameForAssignment`    | ✅ `:158`                   | ✅ `pg/quoting.ts:136`                          | ❌                        | ✅ `sqlite3/quoting.ts:93`  |
+| `quoteDefaultExpression(v)`      | ✅ `:177`                   | ✅ `pg/quoting.ts:183`                          | ❌                        | ✅ `sqlite3/quoting.ts:105` |
+| `quotedTrue` / `quotedFalse`     | ✅ `:194`/`:208`            | ✅ `:62`/`:70`                                  | ✅ `:34`/`:42`            | ✅ `:29`/`:37`              |
+| `unquotedTrue` / `unquotedFalse` | ✅ `:201`/`:215`            | ✅ `:66`/`:74`                                  | ✅ `:38`/`:46`            | ✅ `:33`/`:41`              |
+| `quotedBinary(value)`            | ✅ `:380`                   | ✅ `pg/quoting.ts:152`                          | ✅ `mysql/quoting.ts:89`  | ✅ `sqlite3/quoting.ts:97`  |
+| `typeCast(value)`                | ✅ `:90`                    | ✅ `pg/quoting.ts:208`                          | ✅ `mysql/quoting.ts:207` | ✅ `sqlite3/quoting.ts:119` |
+| `castBoundValue(value)`          | ✅ `:114`                   | ❌                                              | ✅ `mysql/quoting.ts:103` | ❌                          |
+| `sanitizeAsSqlComment(v)`        | ✅ `:390`                   | ❌                                              | ❌                        | ❌                          |
+| `columnNameMatcher`              | ✅ `:403`                   | ✅ `pg/quoting.ts:269`                          | ✅ `mysql/quoting.ts:115` | ✅ `sqlite3/quoting.ts:315` |
+| `columnNameWithOrderMatcher`     | ✅ `:419`                   | ✅ `pg/quoting.ts:288`                          | ✅ `mysql/quoting.ts:138` | ✅ `sqlite3/quoting.ts:319` |
+| `lookupCastTypeFromColumn`       | ✅ `:132`                   | ✅ `pg/quoting.ts:314`                          | ❌                        | ❌                          |
 
-These affect model setup, fixtures, and internal bookkeeping.
-
-| File                               | Imports                                      | Issue                                                         |
-| ---------------------------------- | -------------------------------------------- | ------------------------------------------------------------- |
-| `model-schema.ts`                  | `quote`, `quoteIdentifier`, `quoteTableName` | Model has access to connection — should delegate              |
-| `migration.ts`                     | `quoteIdentifier`, `quoteTableName`          | Migration has connection context                              |
-| `internal-metadata.ts`             | `quoteIdentifier`, `quoteTableName`          | Has connection context                                        |
-| `schema.ts`                        | `quoteIdentifier`, `quoteTableName`          | Has connection context                                        |
-| `attribute-methods/primary-key.ts` | `quoteIdentifier`                            | Instance method — has access to `this.constructor.connection` |
-| `associations/alias-tracker.ts`    | `quoteTableName`                             | Used to build regex for JOIN alias detection                  |
-| `fixture-set/file.ts`              | `quoteIdentifier`, `quoteTableName`          | Fixture loading has connection context                        |
-
-### Arel
-
-Arel itself does **not** import our quoting functions. It uses a `quoter`
-interface (`{ quote(value: unknown): string }`) in `SubstituteBindCollector`,
-which is the correct pattern — the caller provides the quoter. This is already
-aligned with Rails.
-
-## Implementation Plan
-
-### Phase 0: Complete adapter quoting modules
-
-PG and MySQL quoting modules are incomplete — they only override the methods
-that differ from the abstract default (booleans, string escaping, identifiers,
-dates) but don't implement the full surface. Before we can thread quoting
-through call sites, every adapter needs the complete set.
-
-#### Gap table
-
-| Method                              | Abstract |         PG          |        MySQL         | SQLite |
-| ----------------------------------- | :------: | :-----------------: | :------------------: | :----: |
-| `quote(value)`                      |   yes    |       **no**        |        **no**        |  yes   |
-| `quoteString(s)`                    |   yes    |         yes         |         yes          |  yes   |
-| `quoteIdentifier(name)`             |   yes    |       **no**        |        **no**        | **no** |
-| `quoteTableName(name)`              |   yes    |         yes         |         yes          |  yes   |
-| `quoteColumnName(name)`             |   yes    |         yes         |         yes          |  yes   |
-| `quoteTableNameForAssignment(t, a)` |   yes    |       **no**        |        **no**        |  yes   |
-| `quoteDefaultExpression(v)`         |   yes    |       **no**        |        **no**        |  yes   |
-| `quotedTrue/False`                  |   yes    |         yes         |         yes          |  yes   |
-| `unquotedTrue/False`                |   yes    |         yes         |         yes          |  yes   |
-| `quotedDate(date)`                  |   yes    |         yes         |         yes          |  yes   |
-| `quotedTime(date)`                  |   yes    |       **no**        |        **no**        |  yes   |
-| `quotedBinary(value)`               |   yes    | `quoteBinaryColumn` | `quotedBinaryString` |  yes   |
-| `typeCast(value)`                   |   yes    |       **no**        |       partial        |  yes   |
-| `castBoundValue(value)`             |   yes    |       **no**        |        **no**        | **no** |
-| `sanitizeAsSqlComment(v)`           |   yes    |       **no**        |        **no**        | **no** |
-| `columnNameMatcher()`               |   yes    |       **no**        |        **no**        |  yes   |
-| `columnNameWithOrderMatcher()`      |   yes    |       **no**        |        **no**        |  yes   |
-| `lookupCastTypeFromColumn(col)`     |   yes    |       **no**        |        **no**        | **no** |
-
-#### What to do
+### Phase 0 work items (PR 1)
 
 **Critical (blocks Phase 2):**
 
-- **PG `quote(value)`**: Must dispatch through PG's own `quotedTrue()` → `'t'`,
-  `quoteString()` → `E'...'` for backslashes, `quotedDate()`, etc.
-- **MySQL `quote(value)`**: Same — dispatch through MySQL's `quotedTrue()` → `"1"`,
-  `quoteString()` with control-char escaping, etc.
+- [ ] **`postgresql/quoting.ts:156–181` — fix `quote(true)`/`quote(false)`.**
+      Dispatch booleans through `quotedTrue()` / `quotedFalse()` before the
+      fall-through to `abstractQuote`. Current behavior returns `"TRUE"` /
+      `"FALSE"`; should return `"'t'"` / `"'f'"`.
+- [ ] **Add `quoteIdentifier` to all three adapter modules.**
+      PG and SQLite re-export their `quoteColumnName` (both already do
+      double-quote escaping). MySQL re-exports its backtick variant.
+      Removes the abstract fall-back as the only `quoteIdentifier` source.
 
-**Required for full interface (can be done in Phase 1 alongside interface):**
+**Required for full interface (bundle with Phase 1 if size allows):**
 
-- PG and MySQL `quoteIdentifier(name)` — PG uses `"`, MySQL uses backticks
-  (already handled by their `quoteColumnName` but not exported as
-  `quoteIdentifier`)
-- PG and MySQL `quoteTableNameForAssignment` — PG can delegate to abstract,
-  MySQL can too (backtick version)
-- PG and MySQL `quoteDefaultExpression` — PG can mostly delegate to abstract
-  with PG-specific `quote()`; MySQL same
-- PG and MySQL `quotedTime` — PG likely just delegates; MySQL may differ
-- PG and MySQL `typeCast` — PG needs `checkIntegerRange`; MySQL has partial
-  (`typecastForDatabase`) but needs full version
-- Normalize binary quoting names: PG `quoteBinaryColumn` → `quotedBinary`,
-  MySQL `quotedBinaryString` → `quotedBinary`
+- [ ] MySQL `quoteTableNameForAssignment(table, attr)` — backtick
+      variant of the abstract default.
+- [ ] MySQL `quoteDefaultExpression(value)` — delegate to MySQL
+      `quote()`; abstract delegates to its own `quote`.
+- [ ] PG / SQLite `castBoundValue` — delegate to abstract default.
+- [ ] PG / MySQL `sanitizeAsSqlComment` — re-export from abstract
+      (database-agnostic).
+- [ ] MySQL / SQLite `lookupCastTypeFromColumn` — re-export abstract
+      shape; PG already has its own with `checkIntegerRange`.
 
-**Can delegate to abstract (add as pass-through):**
+**Estimated size:** ~150 LOC + tests (under the 300-LOC ceiling).
 
-- `castBoundValue` — all three can use abstract default
-- `sanitizeAsSqlComment` — database-agnostic, abstract is fine
-- `lookupCastTypeFromColumn` — delegates to adapter's `lookupCastType`
-- `columnNameMatcher` / `columnNameWithOrderMatcher` — PG and MySQL can use
-  abstract regex version (SQLite already has its own)
+## Phase 1 — Define the Quoting interface (PR 2)
 
-### Phase 1: Define the Quoting interface
-
-Create a `Quoting` interface that all adapters implement. This is the contract
-that call sites will depend on instead of importing standalone functions.
+**New file:** `packages/activerecord/src/connection-adapters/abstract/quoting-interface.ts`
 
 ```ts
-// connection-adapters/abstract/quoting-interface.ts
 export interface Quoting {
   quote(value: unknown): string;
   quoteString(s: string): string;
@@ -198,93 +134,219 @@ export interface Quoting {
   quotedFalse(): string;
   unquotedTrue(): boolean | number;
   unquotedFalse(): boolean | number;
-  quotedDate(date: Date): string;
   quotedBinary(value: Uint8Array): string;
   typeCast(value: unknown): unknown;
+  castBoundValue(value: unknown): unknown;
   sanitizeAsSqlComment(value: string): string;
   columnNameMatcher(): RegExp;
   columnNameWithOrderMatcher(): RegExp;
 }
 ```
 
-Each adapter already has these as standalone functions in their quoting module.
-Wire them into the adapter class so the adapter satisfies `Quoting`.
+**Wire `implements Quoting` on:**
 
-### Phase 2: Thread connection through Tier 1 call sites
+- `AbstractAdapter` — `connection-adapters/abstract-adapter.ts:118`.
+  Currently has only `quote()` (`:169`) and `typeCast()` as instance
+  methods. Add the rest by binding the standalone abstract functions
+  (this is the base layer; subclasses override).
+- `PostgreSQLAdapter` — `postgresql-adapter.ts:85`. Already overrides
+  `quoteTableName(:1890)`, `quote(:1902)`, `typeCast(:1906)`. Bind the
+  remaining methods from `pg/quoting.ts`.
+- `AbstractMysqlAdapter` — `abstract-mysql-adapter.ts:90`. Already
+  overrides `quote(:156)`, `quoteString(:574)`, `quotedBinary(:481)`.
+  Bind the rest from `mysql/quoting.ts`.
+- `SQLite3Adapter` — `sqlite3-adapter.ts:82`. Already overrides
+  `quote(:466)`. Bind the rest from `sqlite3/quoting.ts`.
 
-**sanitization.ts**: Change `sanitizeSqlArray`, `sanitizeSql`, etc. to accept a
-`quoter: Pick<Quoting, 'quote' | 'quoteIdentifier' | 'quoteTableName'>` param.
-In Rails, these are class methods on the model that access `self.connection` —
-our model class methods should pass `this.connection` when calling sanitization.
+**Use the `this`-typed top-level function pattern from CLAUDE.md.**
+Each `quoting.ts` module exports the standalone functions; adapter
+classes assign them as instance properties so the class satisfies
+`Quoting` without delegation wrappers:
 
-**relation/query-methods.ts**: The relation already holds a reference to the
-model class. Use `this.model.connection` to get the adapter's quoting.
+```ts
+// abstract-adapter.ts
+import { quote, quoteString /* … */ } from "./abstract/quoting.js";
+export class AbstractAdapter implements Quoting {
+  quote = quote;
+  quoteString = quoteString;
+  // …
+}
+```
 
-**database-statements.ts**: These are already adapter mixin methods. Use
-`this.quote()` etc. instead of importing the standalone functions.
+Subclasses re-bind only the methods that diverge.
 
-### Phase 3: Thread connection through Tier 2 (schema/DDL)
+**Estimated size:** ~120 LOC (1 new file + ~10 method bindings on each
+of 4 adapter classes).
 
-**SchemaCreation**: Already receives `adapterName` in constructor. Change to
-receive the adapter (or its `Quoting` interface) instead. Use `this.adapter.quoteTableName()`
-instead of calling standalone functions with `adapterName`.
+## Phase 2 — Tier 1 (hot path) call sites
 
-**SchemaStatements**: Same pattern — already has `_qi()` and `_qt()` helpers.
-Make them delegate to the adapter's quoting methods.
+| File / line                                                                                 | Current import                                               | Change                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sanitization.ts:9–14, 120–122, 315, 326, 332, 338`                                         | `quote, quoteIdentifier, quoteTableName`                     | Accept `quoter: Quoting` on `sanitizeSqlForConditions`, `quoteBoundValue`, `replaceBindVariables`. Model class methods pass `this.connection`.                                                                                        |
+| `relation/query-methods.ts:19–23, 687–688, 1708`                                            | `quote, quoteTableName as quoteTable`                        | `:687–688` → `this.model.connection.quote(value)`. `:1708` → drop the `?? quoteTable(name, dialect)` fallback; adapter is always present.                                                                                             |
+| `relation.ts:16–20`                                                                         | `columnNameMatcher, defaultSqlTimezone, formatInstantForSql` | These are dialect-agnostic helpers (regex + datetime formatting), not real quoting. Re-house under `connection-adapters/abstract/sql-formatting.ts` and update the import; document and skip from "no abstract/quoting imports" rule. |
+| `connection-adapters/abstract-adapter.ts:32, 170`                                           | `quote as abstractQuote, typeCast as abstractTypeCast`       | After Phase 1 the class binds these by reference; drop the wrapper at `:169`.                                                                                                                                                         |
+| `connection-adapters/abstract/database-statements.ts:24, 516, 538, 859, 860, 876, 885, 889` | `quoteIdentifier, quoteTableName, quoteColumnName, quote`    | Already a mixin on the adapter — switch each callsite from `quoteTableName(t)` to `this.quoteTableName(t)`.                                                                                                                           |
 
-**schema-definitions.ts**: These create DDL fragments. They need a quoting
-reference passed from the schema creation context.
+**PR split (each ≤300 LOC):**
 
-**PG schema-creation.ts**: Switch from importing abstract quoting to using
-the adapter's PG quoting methods.
+- **PR 3** — sanitization: `quoter` param plumbed through 3 functions
+  - ~12 caller updates. ~150 LOC.
+- **PR 4** — query-methods rewire + relation.ts neutralization. ~120 LOC.
+- **PR 5** — database-statements internal sweep (mechanical
+  `quoteX(name)` → `this.quoteX(name)` × ~20 sites). ~80 LOC.
 
-### Phase 4: Thread connection through Tier 3
+**Behavioral test required (in PR 3):** PG adapter integration test
+asserting `Model.where({ active: true }).toSql()` emits `… "active" = 't'`
+(not `"TRUE"`). Same for MySQL (`= 1`) and SQLite (`= 1`).
 
-For each remaining file (`model-schema.ts`, `migration.ts`, `schema.ts`,
-`internal-metadata.ts`, `primary-key.ts`, `alias-tracker.ts`, `fixture-set/file.ts`):
-replace the direct import with delegation to the connection's quoting.
+## Phase 3 — Tier 2 (DDL / schema)
 
-Most of these already have a connection available in their call context — it's
-just not being used for quoting.
+The schema files all already receive `adapterName` as a constructor
+parameter and pass it as a string to the standalone functions. Replace
+`adapterName: string` with `adapter: Quoting`.
 
-### Phase 5: Remove the adapter parameter from abstract quoting
+| File / line                                                                                                 | Sites                          | Notes                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `connection-adapters/abstract/schema-statements.ts:30, 53, 57, 225, 237, 242, 305, 318, 685`                | 9                              | Methods like `_qi(name) → quoteIdentifier(name, this.adapterName)` collapse to `this.adapter.quoteIdentifier(name)`.              |
+| `connection-adapters/abstract/schema-creation.ts:23, 70, 83, 95, 105–117, 121, 137, 141, 152, 161–170, 182` | 18                             | Heaviest single file; constructor takes `adapterName`. Switch to `adapter: Quoting`.                                              |
+| `connection-adapters/abstract/schema-definitions.ts:2, 737, 813, 830, 841, 848, 858`                        | 7                              | Same pattern.                                                                                                                     |
+| `connection-adapters/postgresql/schema-creation.ts:10, 33–34`                                               | 2 — imports `abstract/quoting` | Must use `pg/quoting` (or `this.adapter`). The current `"postgres"` string args are no-ops since abstract treats them as default. |
+| `connection-adapters/postgresql/schema-definitions.ts:23, 329, 341, 345, 347`                               | 4                              | Same — switch to PG quoting.                                                                                                      |
 
-Once all call sites go through the adapter, the `adapter?: "sqlite" | "postgres" | "mysql"`
-parameter on the abstract functions becomes dead code. Remove it. The abstract
-functions become the default implementation that adapter-specific modules
-override — matching Rails' inheritance model.
+**PR split:**
 
-The standalone functions in `abstract/quoting.ts` remain as the base
-implementation (used by `AbstractAdapter` or as fallback), but nothing outside
-the adapter layer imports them directly.
+- **PR 6** — abstract schema-creation + schema-definitions (share the
+  constructor change). ~250 LOC.
+- **PR 7** — abstract schema-statements + PG schema-creation /
+  schema-definitions (PG fix is small; bundle). ~200 LOC.
 
-## Scope Estimates
+## Phase 4 — Tier 3 (model / migration / association)
 
-| Phase | Files touched                                                                                         | Methods added/changed                     | PR sizing notes                                                               |
-| ----- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- |
-| 0     | 2 (PG + MySQL quoting modules)                                                                        | ~10 per adapter                           | Single PR — each adapter gets `quote()` + missing methods. ~20 methods total. |
-| 1     | 1 new interface + 3 adapter classes                                                                   | ~1 interface + 3 `implements`             | Can bundle with Phase 0 if under limit, otherwise standalone small PR.        |
-| 2     | 3 files (sanitization, query-methods, database-statements)                                            | ~5 function signatures change             | Single PR — the most impactful change.                                        |
-| 3     | 4 files (schema-creation, schema-statements, schema-definitions, PG schema-creation)                  | ~10 call sites                            | Single PR — mechanical rewiring.                                              |
-| 4     | 7 files (model-schema, migration, internal-metadata, schema, primary-key, alias-tracker, fixture-set) | ~15 call sites                            | Single PR — each file has 1–3 imports to rewire.                              |
-| 5     | 1 file (abstract/quoting.ts)                                                                          | Remove `adapter?` param from ~5 functions | Small cleanup PR.                                                             |
+| File / line                                                               | Sites | Change                                                                                                                                                    |
+| ------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model-schema.ts:13, 65, 70, 310, 316, 318, 319, 325, 332, 336, 340, 374` | 12    | Class methods (`createTable`, `dropTable`, `quotedTableName`) have `this.adapter` — replace `quoteX(name, adapterName)` with `this.adapter.quoteX(name)`. |
+| `migration.ts:14, 1290, 1298`                                             | 3     | Migrations have `connection`. Use `connection.quoteIdentifier` / `quoteTableName`.                                                                        |
+| `internal-metadata.ts:11, 50, 88, 116`                                    | 4     | Holds `_adapterName`; replace with `_adapter: Quoting`.                                                                                                   |
+| `attribute-methods/primary-key.ts:6, 116–117`                             | 2     | Helper takes `adapter` string param — switch to `Quoting`. Callers already have `this.constructor.connection`.                                            |
+| `associations/alias-tracker.ts:8, 40`                                     | 1     | `quoteTableName(name)` (regex anchor) — builder takes a `quoter: Quoting` arg, threaded from the relation.                                                |
+| `associations/association-scope.ts:13, 500–517`                           | ~5    | Already has connection on the scope context; replace direct imports.                                                                                      |
 
-## Acceptance Criteria
+**PR split:**
 
-The refactor is **done** when all of these hold:
+- **PR 8** — model-schema + internal-metadata + primary-key. ~200 LOC.
+- **PR 9** — migration + association-scope + alias-tracker. ~150 LOC.
 
-1. **No external imports of abstract quoting**: `grep -r 'from.*abstract/quoting' --include='*.ts' packages/activerecord/src/` returns only files within `connection-adapters/abstract/` itself.
-2. **Adapter-specific quoting is correct**: A test that creates a PG adapter and calls `adapter.quote(true)` returns `"'t'"`, MySQL returns `"1"`, SQLite returns `"1"`.
-3. **Full Quoting interface coverage**: Each adapter class (`PostgreSQLAdapter`, `AbstractMysqlAdapter`, `SQLite3Adapter`) satisfies `implements Quoting` with no type errors.
-4. **No `adapter?` string parameter**: `grep -r 'adapter.*sqlite.*postgres.*mysql' --include='*.ts' packages/activerecord/src/connection-adapters/abstract/quoting.ts` returns no results.
-5. **All existing tests pass**: `pnpm test` and `pnpm test:types` green across all packages.
-6. **No api:compare regressions**: `pnpm run api:compare` output is equal to or better than baseline.
+## Phase 5 — Remove the `adapter?:` parameter (PR 10)
+
+Once Phases 0–4 land, this is dead code:
+
+```sh
+# Should report 0 callers outside the per-adapter quoting.ts files
+grep -rn '"sqlite" | "postgres" | "mysql"' \
+  packages/activerecord/src/connection-adapters/abstract/quoting.ts
+```
+
+**Steps:**
+
+1. Remove the `adapter?: "sqlite" | "postgres" | "mysql"` parameter from
+   `abstract/quoting.ts:21, 33, 45` (`quoteIdentifier`,
+   `quoteTableName`, `quoteColumnName`).
+2. Drop the in-function `if (adapter === "mysql")` / `"sqlite"` branches
+   — routing is now done by which module's function each adapter class
+   binds.
+3. `quoting.test.ts:21` and `sql-default.test.ts:3` are tests of the
+   abstract module specifically; their imports stay inside the
+   `abstract/` boundary and remain valid.
+4. Final compliance grep (acceptance #1).
+
+**Estimated size:** ~80 LOC removed, no new code.
+
+## Test plan
+
+In addition to existing tests:
+
+1. **Per-adapter `quote()` parity test** — one file, three describe
+   blocks: `pgAdapter.quote(true) === "'t'"`,
+   `mysqlAdapter.quote(true) === "1"`, `sqliteAdapter.quote(true) === "1"`.
+   Same shape for `false`, dates, binaries.
+2. **`where`-through-adapter integration** —
+   `Model.where({ active: true }).toSql()` produces adapter-correct
+   bool literal. Once per adapter test suite.
+3. **Sanitization** —
+   `sanitizeSqlForConditions(["x = ?", true], pgAdapter) === "x = 't'"`.
+   Same for MySQL / SQLite.
+4. **`api:compare` non-regression** — Quoting interface methods land
+   on adapter classes;
+   `pnpm tsx scripts/api-compare/compare.ts --package activerecord --privates`
+   should be flat or improve.
+
+## Sequencing & PR sizing
+
+```
+PR 1 ──► PR 2 ──► PR 3, 4, 5  (phase 2, parallel after PR 2)
+                  PR 6, 7     (phase 3, parallel after PR 2)
+                  PR 8, 9     (phase 4, parallel after PR 2)
+                              └─► PR 10 (phase 5, after all above)
+```
+
+| PR  | Phase | Scope                                          | Est. LOC |
+| --- | ----- | ---------------------------------------------- | -------- |
+| 1   | 0     | PG `quote(bool)` fix + module gap fills        | ~150     |
+| 2   | 1     | `Quoting` interface + adapter `implements`     | ~120     |
+| 3   | 2     | sanitization through `quoter`                  | ~150     |
+| 4   | 2     | query-methods + relation neutralize            | ~120     |
+| 5   | 2     | database-statements `this.quoteX`              | ~80      |
+| 6   | 3     | abstract schema-creation + schema-definitions  | ~250     |
+| 7   | 3     | abstract schema-statements + PG schema files   | ~200     |
+| 8   | 4     | model-schema + internal-metadata + primary-key | ~200     |
+| 9   | 4     | migration + alias-tracker + association-scope  | ~150     |
+| 10  | 5     | remove `adapter?:` param                       | ~80      |
+
+Total: 10 PRs, all under the 300-LOC ceiling.
+
+## Acceptance criteria
+
+1. **No external imports of abstract quoting:**
+
+   ```sh
+   grep -rn 'from.*abstract/quoting' packages/activerecord/src --include='*.ts' \
+     | grep -v 'connection-adapters/abstract/' \
+     | grep -v 'connection-adapters/postgresql/quoting.ts' \
+     | grep -v 'connection-adapters/mysql/quoting.ts' \
+     | grep -v 'connection-adapters/sqlite3/quoting.ts' \
+     | grep -v 'connection-adapters/abstract-adapter.ts'
+   ```
+
+   returns no results. (Test files under `abstract/` are exempt.)
+
+2. **Adapter-specific quoting is correct (behavioral):**
+   - `new PostgreSQLAdapter(...).quote(true) === "'t'"`
+   - `new Mysql2Adapter(...).quote(true) === "1"`
+   - `new SQLite3Adapter(...).quote(true) === "1"`
+
+3. **Full `Quoting` interface coverage:** each adapter class satisfies
+   `implements Quoting` with no `// @ts-expect-error`.
+
+4. **No `adapter?:` enum parameter:**
+
+   ```sh
+   grep -rn '"sqlite" | "postgres" | "mysql"' packages/activerecord/src
+   ```
+
+   matches only documentation strings, not function signatures.
+
+5. **Tests:** `pnpm test` and `pnpm test:types` green.
+
+6. **Parity:** `pnpm parity:schema` and `pnpm parity:query` no
+   regressions; private `api:compare` non-decreasing.
 
 ## Notes
 
-- This is a purely internal refactor — no public API changes
-- The Arel `SubstituteBindCollector` already uses the right pattern (quoter
-  interface injection) and needs no changes
-- MySQL's runtime SQL transformation (`mysqlQuote(sql)` that converts `"` to
-  backticks) can eventually be removed once all quoting goes through the adapter,
-  but that's a separate concern
+- Purely internal refactor — no public API changes.
+- Arel's `SubstituteBindCollector` already uses the right pattern
+  (quoter interface injection); no changes there.
+- MySQL's runtime SQL transformation (`mysqlQuote(sql)` that converts
+  `"` to backticks) becomes redundant once all schema/relation paths
+  use MySQL's quoting directly — removable as a follow-up after Phase
+  4, not part of this refactor.

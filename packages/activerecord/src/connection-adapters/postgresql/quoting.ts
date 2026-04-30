@@ -6,12 +6,7 @@
 
 import { NotImplementedError } from "../../errors.js";
 import { BinaryData } from "@blazetrails/activemodel";
-import {
-  quote as abstractQuote,
-  quotedFalse as abstractQuotedFalse,
-  quotedTrue as abstractQuotedTrue,
-  typeCast as abstractTypeCast,
-} from "../abstract/quoting.js";
+import { quote as abstractQuote, typeCast as abstractTypeCast } from "../abstract/quoting.js";
 import { Data as ArrayData } from "./oid/array.js";
 import { Data as BitData } from "./oid/bit.js";
 import { Range } from "./oid/range.js";
@@ -60,7 +55,7 @@ export interface TypeMapLike {
 }
 
 export function quotedTrue(): string {
-  return abstractQuotedTrue();
+  return "'t'";
 }
 
 export function unquotedTrue(): boolean {
@@ -68,11 +63,19 @@ export function unquotedTrue(): boolean {
 }
 
 export function quotedFalse(): string {
-  return abstractQuotedFalse();
+  return "'f'";
 }
 
 export function unquotedFalse(): boolean {
   return false;
+}
+
+/**
+ * Mirrors: PostgreSQL::Quoting#quote_column_name (re-exported as
+ * quoteIdentifier so the Quoting interface is uniform).
+ */
+export function quoteIdentifier(name: string): string {
+  return quoteColumnName(name);
 }
 
 export function quoteTableName(name: string): string {
@@ -154,6 +157,10 @@ export function quotedBinary(value: Buffer | Uint8Array | string): string {
 }
 
 export function quote(value: unknown): string {
+  // Mirrors: PostgreSQL::Quoting#quote — dispatch booleans through
+  // PG's own quoted_true/quoted_false ('t'/'f'), not the abstract
+  // default (TRUE/FALSE).
+  if (typeof value === "boolean") return value ? quotedTrue() : quotedFalse();
   if (value instanceof XmlData) {
     return `xml ${quoteString(value.toString())}`;
   }

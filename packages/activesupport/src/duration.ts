@@ -180,11 +180,11 @@ export class Duration {
   // ---------------------------------------------------------------------------
 
   since(date: Date | Temporal.Instant = Temporal.Now.instant()): Temporal.Instant {
-    return instantFrom(applyDuration(toDateInput(date), this.parts, 1));
+    return applyDurationPreservingNs(date, this.parts, 1);
   }
 
   ago(date: Date | Temporal.Instant = Temporal.Now.instant()): Temporal.Instant {
-    return instantFrom(applyDuration(toDateInput(date), this.parts, -1));
+    return applyDurationPreservingNs(date, this.parts, -1);
   }
 
   fromNow(): Temporal.Instant {
@@ -423,6 +423,21 @@ function toDateInput(date: Date | Temporal.Instant): Date {
   if (date instanceof Date) return date;
   if (date instanceof Temporal.Instant) return new Date(date.epochMilliseconds);
   throw new TypeError(`expected a time or date, got ${JSON.stringify(date)}`);
+}
+
+/**
+ * Apply a Duration while preserving the sub-millisecond nanosecond remainder
+ * of a Temporal.Instant input. Calendar math runs at ms precision through
+ * applyDuration; the original ns remainder is re-added to the result.
+ */
+function applyDurationPreservingNs(
+  date: Date | Temporal.Instant,
+  parts: DurationParts,
+  direction: 1 | -1,
+): Temporal.Instant {
+  const nsRemainder = date instanceof Temporal.Instant ? date.epochNanoseconds % 1_000_000n : 0n;
+  const result = instantFrom(applyDuration(toDateInput(date), parts, direction));
+  return nsRemainder === 0n ? result : result.add({ nanoseconds: Number(nsRemainder) });
 }
 
 /**

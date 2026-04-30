@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Temporal } from "../temporal.js";
+import { Temporal } from "../temporal.js";
 import { Duration } from "../duration.js";
 
 function asDate(instant: Temporal.Instant): Date {
@@ -243,6 +243,16 @@ describe("DurationTest", () => {
     const t = new Date(2000, 0, 1, 0, 0, 0, 0);
     expect(Duration.seconds(1).since(t).epochMilliseconds).toBe(t.getTime() + 1000);
     expect(Duration.seconds(1).ago(t).epochMilliseconds).toBe(t.getTime() - 1000);
+  });
+
+  it("since and ago preserve sub-millisecond precision of Temporal.Instant inputs", () => {
+    const baseMs = new Date(2000, 0, 1).getTime();
+    const baseNs = BigInt(baseMs) * 1_000_000n + 123_456n; // 123_456 ns past the ms boundary
+    const t = Temporal.Instant.fromEpochNanoseconds(baseNs);
+    const after = Duration.seconds(1).since(t);
+    expect(after.epochNanoseconds).toBe(baseNs + 1_000_000_000n);
+    const before = Duration.seconds(1).ago(t);
+    expect(before.epochNanoseconds).toBe(baseNs - 1_000_000_000n);
   });
 
   it("since and ago accept Temporal.Instant inputs", () => {

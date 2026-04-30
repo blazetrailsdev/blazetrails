@@ -9,6 +9,7 @@ import {
   sanitizeSqlForConditions,
   type Quoter,
 } from "./sanitization.js";
+import { ConnectionNotDefined, ConnectionTimeoutError } from "./errors.js";
 
 const dq = (n: string) => `"${n.replace(/"/g, '""')}"`;
 const bq = (n: string) => `\`${n.replace(/`/g, "``")}\``;
@@ -80,14 +81,25 @@ describe("sanitization class-method dispatch threads `this.connection()`", () =>
     expect(ClassMethods.sanitizeSqlArray.call(mysqlHost, "name = ?", "x")).toBe("name = 'x'");
   });
 
-  it("falls back to abstract quoter when host.connection() throws", () => {
+  it("falls back to abstract quoter when host.connection() throws ConnectionNotDefined", () => {
     const host = {
       connection: () => {
-        throw new Error("ConnectionNotDefined");
+        throw new ConnectionNotDefined("No database connection defined.");
       },
     };
     expect(ClassMethods.sanitizeSqlHashForAssignment.call(host, { name: "x" }, "users")).toBe(
       `"users"."name" = 'x'`,
     );
+  });
+
+  it("propagates non-ConnectionNotDefined errors from host.connection()", () => {
+    const host = {
+      connection: () => {
+        throw new ConnectionTimeoutError("connection timed out");
+      },
+    };
+    expect(() =>
+      ClassMethods.sanitizeSqlHashForAssignment.call(host, { name: "x" }, "users"),
+    ).toThrow(ConnectionTimeoutError);
   });
 });

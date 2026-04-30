@@ -13,7 +13,11 @@ import {
   castBoundValue as abstractCastBoundValue,
 } from "./connection-adapters/abstract/quoting.js";
 import type { Quoting } from "./connection-adapters/abstract/quoting-interface.js";
-import { PreparedStatementInvalid, UnknownAttributeReference } from "./errors.js";
+import {
+  ConnectionNotDefined,
+  PreparedStatementInvalid,
+  UnknownAttributeReference,
+} from "./errors.js";
 
 /** Subset of {@link Quoting} the sanitization helpers need. @internal */
 export type Quoter = Pick<
@@ -158,8 +162,7 @@ function _sanitizeSqlHashForAssignment(
           if (type.serialize) value = type.serialize(value);
         }
       }
-      // Mirrors Rails sanitization.rb:112 — PG/SQLite override
-      // quote_table_name_for_assignment to drop the table prefix.
+      // Rails sanitization.rb:112 — PG/SQLite drop the table prefix.
       const col = table
         ? quoter.quoteTableNameForAssignment(table, attr)
         : quoter.quoteIdentifier(attr);
@@ -227,18 +230,18 @@ interface QuoterHost {
 }
 
 /**
- * Resolves quoting through `connection()`, falling back to the abstract
- * quoter only when no connection is configured (the call throws). Mirrors
- * Rails' `connection` accessor which lazily establishes a pool/connection.
- * @internal
+ * Resolves quoting through `connection()`. Only `ConnectionNotDefined`
+ * (no pool configured) falls back; other failures propagate to avoid a
+ * silent dialect downgrade. @internal
  */
 function quoterFor(host: QuoterHost): Quoter {
   if (typeof host.connection !== "function") return ABSTRACT_QUOTER;
   let conn: Partial<Quoter> | null | undefined;
   try {
     conn = host.connection() as Partial<Quoter> | null | undefined;
-  } catch {
-    return ABSTRACT_QUOTER;
+  } catch (err) {
+    if (err instanceof ConnectionNotDefined) return ABSTRACT_QUOTER;
+    throw err;
   }
   return conn &&
     typeof conn.quote === "function" &&

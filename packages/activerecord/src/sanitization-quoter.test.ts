@@ -17,7 +17,6 @@ const quoteVal = (v: unknown) => (typeof v === "string" ? `'${v.replace(/'/g, "'
 const sqliteQuoter: Quoter = {
   quote: quoteVal,
   quoteIdentifier: dq,
-  quoteTableName: (n) => n.split(".").map(dq).join("."),
   quoteTableNameForAssignment: (_t, a) => dq(a),
   quoteString: (s) => s.replace(/'/g, "''"),
   castBoundValue: (v) => v,
@@ -26,7 +25,6 @@ const pgQuoter: Quoter = { ...sqliteQuoter };
 const mysqlQuoter: Quoter = {
   quote: quoteVal,
   quoteIdentifier: bq,
-  quoteTableName: (n) => n.split(".").map(bq).join("."),
   quoteTableNameForAssignment: (t, a) => `${bq(t)}.${bq(a)}`,
   quoteString: (s) => s.replace(/'/g, "''"),
   castBoundValue: (v) => v,
@@ -63,8 +61,8 @@ describe("sanitization quoter threading (module-level)", () => {
 });
 
 describe("sanitization class-method dispatch threads `this.connection()`", () => {
-  const mysqlHost = { connection: () => mysqlQuoter, isConnectedQ: () => true };
-  const pgHost = { connection: () => pgQuoter, isConnectedQ: () => true };
+  const mysqlHost = { connection: () => mysqlQuoter };
+  const pgHost = { connection: () => pgQuoter };
 
   it("sanitizeSqlHashForAssignment uses MySQL adapter from this.connection()", () => {
     expect(ClassMethods.sanitizeSqlHashForAssignment.call(mysqlHost, { name: "x" }, "users")).toBe(
@@ -80,13 +78,6 @@ describe("sanitization class-method dispatch threads `this.connection()`", () =>
 
   it("sanitizeSqlArray uses dialect quoter for `?` binds", () => {
     expect(ClassMethods.sanitizeSqlArray.call(mysqlHost, "name = ?", "x")).toBe("name = 'x'");
-  });
-
-  it("falls back to abstract quoter when isConnectedQ() returns false", () => {
-    const host = { connection: () => mysqlQuoter, isConnectedQ: () => false };
-    expect(ClassMethods.sanitizeSqlHashForAssignment.call(host, { name: "x" }, "users")).toBe(
-      `"users"."name" = 'x'`,
-    );
   });
 
   it("falls back to abstract quoter when host.connection() throws", () => {

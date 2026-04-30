@@ -8,7 +8,6 @@ import { Nodes, sql as arelSql } from "@blazetrails/arel";
 import {
   quote as abstractQuote,
   quoteIdentifier as abstractQuoteIdentifier,
-  quoteTableName as abstractQuoteTableName,
   quoteTableNameForAssignment as abstractQuoteTableNameForAssignment,
   quoteString as abstractQuoteString,
   castBoundValue as abstractCastBoundValue,
@@ -19,19 +18,13 @@ import { PreparedStatementInvalid, UnknownAttributeReference } from "./errors.js
 /** Subset of {@link Quoting} the sanitization helpers need. @internal */
 export type Quoter = Pick<
   Quoting,
-  | "quote"
-  | "quoteIdentifier"
-  | "quoteTableName"
-  | "quoteTableNameForAssignment"
-  | "quoteString"
-  | "castBoundValue"
+  "quote" | "quoteIdentifier" | "quoteTableNameForAssignment" | "quoteString" | "castBoundValue"
 >;
 
 /** Fallback for callers that haven't been migrated to thread an adapter. @internal */
 const ABSTRACT_QUOTER: Quoter = {
   quote: (v) => abstractQuote(v),
   quoteIdentifier: (n) => abstractQuoteIdentifier(n),
-  quoteTableName: (n) => abstractQuoteTableName(n),
   quoteTableNameForAssignment: (t, a) => abstractQuoteTableNameForAssignment(t, a),
   quoteString: (s) => abstractQuoteString(s),
   castBoundValue: (v) => abstractCastBoundValue(v),
@@ -231,13 +224,16 @@ function sanitizeSqlClassMethod(
 /** @internal */
 interface QuoterHost {
   connection?(): unknown;
-  isConnectedQ?(): boolean;
 }
 
-/** Probes `isConnectedQ()` first to avoid throwing on the no-connection path. @internal */
+/**
+ * Resolves quoting through `connection()`, falling back to the abstract
+ * quoter only when no connection is configured (the call throws). Mirrors
+ * Rails' `connection` accessor which lazily establishes a pool/connection.
+ * @internal
+ */
 function quoterFor(host: QuoterHost): Quoter {
   if (typeof host.connection !== "function") return ABSTRACT_QUOTER;
-  if (typeof host.isConnectedQ === "function" && !host.isConnectedQ()) return ABSTRACT_QUOTER;
   let conn: Partial<Quoter> | null | undefined;
   try {
     conn = host.connection() as Partial<Quoter> | null | undefined;
@@ -247,7 +243,6 @@ function quoterFor(host: QuoterHost): Quoter {
   return conn &&
     typeof conn.quote === "function" &&
     typeof conn.quoteIdentifier === "function" &&
-    typeof conn.quoteTableName === "function" &&
     typeof conn.quoteTableNameForAssignment === "function" &&
     typeof conn.quoteString === "function" &&
     typeof conn.castBoundValue === "function"

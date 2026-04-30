@@ -36,8 +36,8 @@ function f(x: unknown) {
     "const t = Date.now();",
     "const t = Date.parse('2024-01-01');",
     "const t = Date.UTC(2024, 0, 1);",
-    // Out of scope: Date used in TS type position only.
-    "function f(d: Date) { return d.toISOString(); }",
+    // Out of scope: `: Date` type annotations alone don't trigger the rule.
+    "function f(d: Date): string { return ''; }",
   ],
 
   invalid: [

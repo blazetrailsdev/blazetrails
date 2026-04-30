@@ -88,7 +88,7 @@ export default defineConfig(
     },
   },
 
-  // ── blazetrails plugin (shared by no-node-builtins + rails-private-jsdoc) ──
+  // ── blazetrails plugin (no-node-builtins + rails-private-jsdoc + no-native-date) ──
   // Registered without a `files` restriction so any block below can
   // reference its rules without re-declaring the plugin.
   {

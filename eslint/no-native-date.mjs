@@ -47,10 +47,10 @@ function hasFileBoundaryDirective(sourceCode) {
   return false;
 }
 
-function hasBoundaryComment(sourceCode, node) {
+function hasBoundaryComment(allComments, sourceCode, node) {
   const line = node.loc.start.line;
   // 1. Same-line trailing comment.
-  for (const comment of sourceCode.getAllComments()) {
+  for (const comment of allComments) {
     if (comment.loc.start.line === line && /\bboundary:/i.test(comment.value)) {
       return true;
     }
@@ -73,7 +73,7 @@ function hasBoundaryComment(sourceCode, node) {
   }
   // 3. Comments inside the enclosing statement before the offending node
   //    (covers multi-line expressions like `} /* boundary: */ else if (x instanceof Date)`).
-  for (const comment of sourceCode.getAllComments()) {
+  for (const comment of allComments) {
     if (
       comment.range[0] >= stmt.range[0] &&
       comment.range[1] <= node.range[0] &&
@@ -119,8 +119,12 @@ const rule = {
     const sourceCode = context.sourceCode || context.getSourceCode();
     if (hasFileBoundaryDirective(sourceCode)) return {};
 
+    // Cache the file's comment list once — getAllComments is otherwise
+    // O(comments) per reported node.
+    const allComments = sourceCode.getAllComments();
+
     function report(node, messageId, data) {
-      if (hasBoundaryComment(sourceCode, node)) return;
+      if (hasBoundaryComment(allComments, sourceCode, node)) return;
       context.report({ node, messageId, data });
     }
 

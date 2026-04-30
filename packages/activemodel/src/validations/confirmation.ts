@@ -53,23 +53,23 @@ export function setupBang(this: ConfirmationHost, klass: unknown): void {
   const ctor = klass as { prototype: object };
   for (const attribute of this.attributes) {
     const confirmationAttr = `${attribute}Confirmation`;
-    const { hasGetter, hasSetter } = inspectAccessor(ctor.prototype, confirmationAttr);
-    if (hasGetter && hasSetter) continue;
+    const inherited = inspectAccessor(ctor.prototype, confirmationAttr);
+    if (inherited.hasGetter && inherited.hasSetter) continue;
     const slot = `_${confirmationAttr}`;
     // Rails checks reader and writer separately (method_defined? for
-    // both `:#{a}_confirmation` and `:#{a}_confirmation=`). Mirror by
-    // installing only the missing half so a host that pre-defined one
-    // accessor isn't overridden.
-    const existing = Object.getOwnPropertyDescriptor(ctor.prototype, confirmationAttr);
+    // both `:#{a}_confirmation` and `:#{a}_confirmation=`). Install
+    // only the missing half. When one side IS inherited (anywhere in
+    // the prototype chain), reuse it on the new descriptor so
+    // overriding doesn't shadow it.
     Object.defineProperty(ctor.prototype, confirmationAttr, {
       configurable: true,
       get:
-        existing?.get ??
+        inherited.getter ??
         function (this: Record<string, unknown>) {
           return this[slot] as unknown;
         },
       set:
-        existing?.set ??
+        inherited.setter ??
         function (this: Record<string, unknown>, v: unknown) {
           this[slot] = v;
         },
@@ -77,25 +77,53 @@ export function setupBang(this: ConfirmationHost, klass: unknown): void {
   }
 }
 
-function inspectAccessor(
-  prototype: object,
-  name: string,
-): { hasGetter: boolean; hasSetter: boolean } {
+interface InheritedAccessor {
+  hasGetter: boolean;
+  hasSetter: boolean;
+  getter?: (this: object) => unknown;
+  setter?: (this: object, value: unknown) => void;
+}
+
+/**
+ * Walk the prototype chain and capture the first-found accessor
+ * shape for `name`. Distinguishes accessor descriptors (`get`/`set`)
+ * from data descriptors (`"value" in desc` — handles the
+ * `value: undefined` case correctly) and synthesizes a getter/setter
+ * pair from a data property so callers can preserve it in a new
+ * accessor descriptor.
+ */
+function inspectAccessor(prototype: object, name: string): InheritedAccessor {
   let proto: object | null = prototype;
-  let hasGetter = false;
-  let hasSetter = false;
   while (proto && proto !== Object.prototype) {
     const desc = Object.getOwnPropertyDescriptor(proto, name);
     if (desc) {
-      if (desc.get || desc.value !== undefined) hasGetter = true;
-      if (desc.set || desc.writable) hasSetter = true;
-      // Plain data properties act as both reader and writer; either way
-      // we've found what's defined at this level — stop walking.
-      break;
+      if ("value" in desc || "writable" in desc) {
+        // Plain data property — synthesize a getter/setter pair that
+        // mirrors the inherited slot semantics.
+        return {
+          hasGetter: true,
+          hasSetter: desc.writable !== false,
+          getter() {
+            return (this as Record<string, unknown>)[name];
+          },
+          setter:
+            desc.writable !== false
+              ? function (this: object, v: unknown) {
+                  (this as Record<string, unknown>)[name] = v;
+                }
+              : undefined,
+        };
+      }
+      return {
+        hasGetter: typeof desc.get === "function",
+        hasSetter: typeof desc.set === "function",
+        getter: desc.get as ((this: object) => unknown) | undefined,
+        setter: desc.set as ((this: object, v: unknown) => void) | undefined,
+      };
     }
     proto = Object.getPrototypeOf(proto);
   }
-  return { hasGetter, hasSetter };
+  return { hasGetter: false, hasSetter: false };
 }
 
 /**

@@ -34,7 +34,9 @@ export function setFrozenInstant(instant: Temporal.Instant | null): void {
 
 export function setTimeOffset(offsetMs: number): void {
   if (!Number.isFinite(offsetMs)) throw new TypeError("offsetMs must be a finite number");
-  _timeOffsetNs = BigInt(Math.trunc(offsetMs)) * 1_000_000n;
+  const wholeMs = Math.trunc(offsetMs);
+  const fracNs = Math.round((offsetMs - wholeMs) * 1_000_000);
+  _timeOffsetNs = BigInt(wholeMs) * 1_000_000n + BigInt(fracNs);
 }
 
 export function setTimeOffsetNs(offsetNs: bigint): void {

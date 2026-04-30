@@ -203,7 +203,7 @@ jobs:
         #   - `app-generator.ts` — template strings emit user-app code that
         #     runs in the user's app, where direct process.* is fine
         #
-        # Two patterns enforce three syntactic forms:
+        # The pattern enforces two syntactic forms:
         #   1. dotted access:  process.env / process?.env
         #   2. bracket access: process["env"] / process?.["env"]
         # The leading `(^|[^[:alnum:]_])` is a portable word boundary

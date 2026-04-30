@@ -451,7 +451,7 @@ describe("resolveSchemaFormat", () => {
     // --format="", SCHEMA_FORMAT="", schemaFormat: "" in config all
     // represent an explicitly-set knob; they shouldn't silently fall
     // through to inference. Detection is presence-based (`!== undefined`
-    // / `"KEY" in process.env` / `"schemaFormat" in module`) so a
+    // / `"KEY" in env` / `"schemaFormat" in module`) so a
     // deliberately-empty value reaches the validator.
     await expect(resolveSchemaFormat({ format: "" }, tmpDir)).rejects.toThrow(/Invalid --format/);
 

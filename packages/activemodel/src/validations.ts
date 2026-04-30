@@ -285,7 +285,7 @@ export function contextForValidation(this: ContextForValidationHost): Validation
       this._validationContext = value;
     },
     configurable: true,
-    enumerable: true,
+    enumerable: false,
   };
   Object.defineProperty(vc, "context", accessor);
   Object.defineProperty(vc, "_context", accessor);

@@ -762,8 +762,8 @@ describe("AttributeTest", () => {
     });
 
     it("can be constructed with a random object", () => {
-      const node = users.get("age").notBetween(1, 100);
-      expect(node).toBeInstanceOf(Nodes.Grouping);
+      const node = users.get("id").notIn(["random_thing"] as unknown[]);
+      expect(node).toBeInstanceOf(Nodes.NotIn);
     });
 
     it("can be constructed with a subquery", () => {
@@ -916,7 +916,9 @@ describe("AttributeTest", () => {
       const node = users.get("age").notBetween(1, 100);
       expect(node).toBeInstanceOf(Nodes.Grouping);
     });
+  });
 
+  describe("#not_in", () => {
     it("can be constructed with a list", () => {
       const node = users.get("id").notIn([1, 2, 3]);
       const visitor = new Visitors.ToSql();

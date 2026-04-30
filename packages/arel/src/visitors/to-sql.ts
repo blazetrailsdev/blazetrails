@@ -1196,9 +1196,17 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   protected visitArelNodesLateral(node: Nodes.Lateral): SQLString {
-    this.collector.append("LATERAL (");
-    this.visit(node.subquery);
-    this.collector.append(")");
+    // Mirrors Rails: `LATERAL ` then `grouping_parentheses` — wraps the
+    // operand in parens only when it is a SelectStatement. A TableAlias
+    // already renders as `(grouping) "alias"`, so its parens are inherent.
+    this.collector.append("LATERAL ");
+    if (node.subquery instanceof Nodes.SelectStatement) {
+      this.collector.append("(");
+      this.visit(node.subquery);
+      this.collector.append(")");
+    } else {
+      this.visit(node.subquery);
+    }
     return this.collector;
   }
 

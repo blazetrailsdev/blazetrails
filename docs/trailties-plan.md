@@ -388,7 +388,7 @@ generators to extend it. **Refactor existing, don't keep parallel impls.**
 
 **Subclass registration:** explicit. Each subclass calls `Trailtie.register(MyTrailtie)` (typically at bottom of its module). No `inherited` hook. The registered list is what `Application#initialize!` walks.
 
-**Acceptance:** `api:compare --package trailties` matches `Trailtie` to `Railtie` Rails class via the rename map.
+**Acceptance:** `pnpm tsx scripts/api-compare/compare.ts --package trailties` matches `Trailtie` to `Railtie` Rails class via the rename map.
 
 ### PR 2.2 — `Engine` (~550 LOC, split)
 
@@ -552,6 +552,10 @@ Browser `processAdapter` + virtual-fs `fsAdapter`, packaged as `@blazetrails/act
 
 ## Tracking
 
-- Baseline: 2/891 methods (0.2%), 1/130 files (recorded from real `pnpm api:compare`). Update after each PR merges.
-- `pnpm api:compare --package trailties` is the primary signal. Trailties is already in api-compare config (verified).
+- Baseline: 2/1076 methods (0.2%), 1/134 files, matching the plan-start
+  snapshot at the top of this doc. Update after each PR merges.
+- Primary signal:
+  `pnpm tsx scripts/api-compare/compare.ts --package trailties` (after
+  `pnpm tsx scripts/api-compare/extract-ts-api.ts`). Trailties is
+  already wired into api-compare config.
 - Final acceptance: PR 2.6's integration test passes — hello-world fixture imports `Rails`, calls `await Rails.application.initialize()`, serves a route through `actionpack`.

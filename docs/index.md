@@ -29,8 +29,11 @@ Work-size legend (rough order-of-magnitude):
 
 ## Per-package "Road to 100%" trackers
 
-Live numbers come from `pnpm api:compare --package <name>` and
-`pnpm test:compare`; doc snapshots may lag. Re-check before scoping.
+Live package-scoped api numbers come from
+`pnpm tsx scripts/api-compare/compare.ts --package <name>` (after the
+extract step has run; `pnpm api:compare` is a chained `&&` script and
+doesn't forward `--package` to `compare.ts`). Test numbers come from
+`pnpm test:compare`. Doc snapshots may lag — re-check before scoping.
 
 | Doc                                                                    | api:compare               | Priority | Work | Notes                                                                                                                   |
 | ---------------------------------------------------------------------- | ------------------------- | -------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |

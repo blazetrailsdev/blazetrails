@@ -116,10 +116,10 @@ scripts/parity/
     ruby/{Gemfile, dump.rb, canonicalize.rb, canonicalize_test.rb}
     node/{dump.ts, canonicalize.ts, canonicalize.test.ts}
   query/
-    ruby/run.rb
-    node/run.ts
+    ruby/{dump.rb, ar_dump.rb}
+    node/{dump.ts, ar_dump.ts}
+    diff.ts
   translate/arel.ts        # one-shot fixture generator
-  diff.ts
   run.ts                   # orchestrator
 ```
 

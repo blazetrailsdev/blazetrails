@@ -667,9 +667,11 @@ describe("numericality with in: range", () => {
 
   it("validates against the raw before-type-cast value (prepareValueForValidation)", () => {
     // Rails numericality validates what the user typed, not the cast
-    // value — otherwise integer columns would coerce 'abc' to 0
-    // before the validator sees it. Trails routes the raw read
-    // through readAttributeBeforeTypeCast.
+    // value. In trails, IntegerType.cast returns null for non-numeric
+    // strings — so without prepareValueForValidation, 'abc' would read
+    // as null and slip past via the allowNil short-circuit. The raw
+    // read through readAttributeBeforeTypeCast surfaces the original
+    // 'abc' so it's caught as not_a_number.
     class Person extends Model {
       static {
         this.attribute("age", "integer");

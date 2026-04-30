@@ -534,8 +534,10 @@ interface RecordWithRawAttribute {
  *   end
  *
  * Lets numericality validate against the raw input the user typed
- * (before type-cast) so e.g. "abc" doesn't get cast to 0 by an
- * integer column before the validator sees it.
+ * (before type-cast). In trails, IntegerType.cast returns null for
+ * non-numeric strings — so "abc" on an integer column would otherwise
+ * read as null and slip past via the allowNil short-circuit; this
+ * surfaces the original "abc" so it's caught as not_a_number.
  *
  * @internal Rails-private helper.
  */

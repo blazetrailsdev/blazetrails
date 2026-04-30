@@ -5,6 +5,7 @@ import {
   type DateInfinity as DateInfinityType,
   type DateNegativeInfinity as DateNegativeInfinityType,
 } from "./internal/sentinels.js";
+import { AcceptsMultiparameterTime } from "./helpers/accepts-multiparameter-time.js";
 import { isUtc } from "./helpers/timezone.js";
 import { ValueType } from "./value.js";
 
@@ -169,6 +170,6 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
         `Provided hash ${JSON.stringify(values)} doesn't contain necessary keys: ${JSON.stringify(missing)}`,
       );
     }
-    return this.cast(values) as DateTimeCastResult | null;
+    return new AcceptsMultiparameterTime(this).cast(values) as DateTimeCastResult | null;
   }
 }

@@ -76,6 +76,7 @@ export class DateType extends ValueType<DateCastResult> {
    * @internal Rails-private helper.
    */
   protected fastStringToDate(s: string): Temporal.PlainDate | null {
+    if (s.includes("\n")) return null;
     const m = ISO_DATE.exec(s);
     if (!m) return null;
     return this.newDate(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));

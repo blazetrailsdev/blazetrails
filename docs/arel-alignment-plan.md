@@ -40,7 +40,7 @@ api:compare` is a chained script — args don't reach `compare.ts`.)
 - All PRs open in **draft** and link to this plan.
 - work from a worktree, pnpm install after creating the worktree
 - Only work on one PR at a time.
-- names should be camelCase as Typescript convention - don't underscore
+- names should be camelCase as TypeScript convention - don't underscore
 - Remove your PR from sequencing, add it to completed, and remove details once merged.
 
 ---

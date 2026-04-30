@@ -72,10 +72,9 @@ doesn't forward `--package` to `compare.ts`). Test numbers come from
 These are read-once references. Don't actively prune them — they're a record
 of what was true at the audit date and inform plan PRs cited in their wake.
 
-| Doc                                                                    | Date       | Notes                                                                     |
-| ---------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------- |
-| [`activemodel-audit.md`](activemodel-audit.md)                         | 2026-04-26 | Source for activemodel parity PRs; large (569 lines). Mostly executed.    |
-| [`activerecord-dependency-audit.md`](activerecord-dependency-audit.md) | —          | Reimplementation-vs-sibling-package and raw-SQL audit; informs refactors. |
+| Doc                                            | Date       | Notes                                                                  |
+| ---------------------------------------------- | ---------- | ---------------------------------------------------------------------- |
+| [`activemodel-audit.md`](activemodel-audit.md) | 2026-04-26 | Source for activemodel parity PRs; large (569 lines). Mostly executed. |
 
 ---
 

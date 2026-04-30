@@ -86,14 +86,21 @@ type CanonicalQuery = {
   fixture: string; // e.g. "arel-01"
   frozenAt: string; // ISO 8601 UTC — both sides freeze time to this
   sql: string; // result of to_sql / toSql()
-  binds: string[]; // ordered bind values, all stringified
+  paramSql: string; // sql with datetime binds re-inlined; what diff actually compares
+  binds: string[]; // datetime-only bind params as ISO 8601 UTC strings; informational, not diffed
 };
 ```
 
 `sql` is the full SQL for a SelectManager, the condition fragment for
 a predicate node, or the quoted column reference for an Attribute.
-`binds` stringifies Rails' `[["col", val], ...]` to match what trails
-produces.
+
+`paramSql` is the load-bearing field for cross-side comparison: trails
+emits `BindParam` nodes for non-datetime scalars where Rails inlines
+them, so the dump steps re-inline non-datetime binds back into the SQL
+string to remove that structural asymmetry.
+
+`binds` carries only datetime-valued bind params (as ISO 8601 strings)
+and is informational — explicitly excluded from the diff.
 
 ## Directory layout
 
@@ -180,14 +187,20 @@ Common cases. Full table in git history of `query-parity-verification.md`
 
 ## Time freezing (query parity)
 
-- Orchestrator (`scripts/parity/run.ts`) sets
-  `PARITY_FROZEN_AT = new Date().toISOString()` at run start.
+- Orchestrator (`scripts/parity/run.ts`) only forwards `PARITY_FROZEN_AT`
+  to both runners via `--frozen-at` if it's already set in the
+  environment. If unset, each runner falls back to its built-in
+  default frozen timestamp.
 - Ruby side: `ActiveSupport::Testing::TimeHelpers#travel_to`.
-- Node side: `@sinonjs/fake-timers` `FakeTimers.install({ now: new Date(frozenAt) })`,
-  uninstalled after the query runs.
-- `frozenAt` written into the canonical output JSON for auditability.
-- **Fixture-level override:** add `"frozenAt": "..."` to `expected.json`
-  to pin a specific time for that fixture.
+- Node side (`scripts/parity/query/node/dump.ts`): validates `--frozen-at`
+  (must be ISO 8601 UTC with trailing `Z`), resolves `frozenMs`, then
+  installs `@sinonjs/fake-timers` with
+  `FakeTimers.install({ now: frozenMs, toFake: ["Date"] })`. Uninstalls
+  after the query runs.
+- The resolved `frozenAt` is written into the canonical output JSON
+  for auditability.
+- **Override:** export `PARITY_FROZEN_AT=<iso8601>` (or pass
+  `--frozen-at` directly to a runner) to pin a specific time.
 
 ## Follow-ups (not blocking v1)
 

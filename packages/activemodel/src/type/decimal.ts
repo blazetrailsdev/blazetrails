@@ -61,7 +61,8 @@ export class DecimalType extends ValueType<string> {
   }
 
   /**
-   * Mirrors: ActiveModel::Type::Decimal#convert_float_to_big_decimal
+   * Mirrors the float-conversion portion of
+   * ActiveModel::Type::Decimal#convert_float_to_big_decimal
    * (decimal.rb:75-81).
    *
    *   def convert_float_to_big_decimal(value)
@@ -72,11 +73,15 @@ export class DecimalType extends ValueType<string> {
    *     end
    *   end
    *
-   * Trails has no BigDecimal — decimals are strings — so the
-   * `BigDecimal(value, float_precision)` call translates to "round
-   * to `floatPrecision()` significant digits". When no precision is
-   * configured, fall through to `String(value)` (the same form
-   * `_castWithoutScale` would otherwise emit).
+   * Trails keeps the same overall cast pipeline but applies `scale:`
+   * later via the outer `castValue() → applyScale(...)` step rather
+   * than inside this helper, so the inner `apply_scale(value)` call
+   * Rails makes here is intentionally elided. Trails has no
+   * BigDecimal — decimals are strings — so the precision-sensitive
+   * portion translates to "round to `floatPrecision()` significant
+   * digits". When no precision is configured, fall through to
+   * `String(value)` (the same form `_castWithoutScale` would
+   * otherwise emit).
    *
    * @internal Rails-private helper.
    */
@@ -100,13 +105,16 @@ export class DecimalType extends ValueType<string> {
    *
    * Ruby `::Float::DIG` is 15 on IEEE-754 doubles; cap at 16 so we
    * never request more digits than the underlying representation can
-   * preserve. `precision.to_i` on `nil` gives `0` — matched by
-   * `precision ?? 0`.
+   * preserve. `precision.to_i` on `nil` gives `0`, truncates
+   * fractional values toward zero, and treats non-finite values as
+   * `0` — mirror that exactly so a fractional or NaN `precision:`
+   * doesn't trip `Number#toPrecision`'s integer requirement.
    *
    * @internal Rails-private helper.
    */
   protected floatPrecision(): number {
-    const p = this.precision ?? 0;
+    const raw = this.precision ?? 0;
+    const p = Number.isFinite(raw) ? Math.trunc(raw) : 0;
     return p > 16 ? 16 : p;
   }
 

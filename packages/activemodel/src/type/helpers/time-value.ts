@@ -4,6 +4,11 @@
  * Mirrors: ActiveModel::Type::Helpers::TimeValue
  */
 import { Temporal } from "@blazetrails/activesupport/temporal";
+import { isUtc } from "./timezone.js";
+
+function configuredTimezone(): string {
+  return isUtc() ? "UTC" : Temporal.Now.timeZoneId();
+}
 
 export interface TimeValue {
   precision?: number;
@@ -116,6 +121,104 @@ export function userInputInTimeZone(
   }
   try {
     return Temporal.PlainDateTime.from(str.replace(" ", "T")).toZonedDateTime(zone);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Mirrors: ActiveModel::Type::Helpers::TimeValue#new_time
+ * (time_value.rb:48-65)
+ *
+ *   def new_time(year, mon, mday, hour, min, sec, microsec, offset = nil)
+ *     return if year.nil? || (year == 0 && mon == 0 && mday == 0)
+ *     if offset
+ *       time = ::Time.utc(year, mon, mday, hour, min, sec, microsec) rescue nil
+ *       return unless time
+ *       time -= offset unless offset == 0
+ *       is_utc? ? time : time.getlocal
+ *     elsif is_utc?
+ *       ::Time.utc(year, mon, mday, hour, min, sec, microsec) rescue nil
+ *     else
+ *       ::Time.local(year, mon, mday, hour, min, sec, microsec) rescue nil
+ *     end
+ *   end
+ *
+ * Trails returns Temporal.Instant — the closest analogue to Ruby's
+ * `::Time` for the no-zone-info, fixed-instant role this helper plays.
+ * `0000-00-00 00:00:00` short-circuits to null per Rails. With an
+ * offset, build at UTC and subtract the offset (in seconds) to land
+ * the instant; without, interpret the components in the configured
+ * default zone (`isUtc()` → "UTC", else host-local), matching Rails'
+ * `is_utc?` branching.
+ *
+ * @internal Rails-private helper.
+ */
+export function newTime(
+  year: number | null | undefined,
+  mon: number | null | undefined,
+  mday: number | null | undefined,
+  hour: number | null | undefined,
+  min: number | null | undefined,
+  sec: number | null | undefined,
+  microsec: number | null | undefined,
+  offset?: number | null,
+): Temporal.Instant | null {
+  if (year == null || (year === 0 && mon === 0 && mday === 0)) return null;
+  const components = {
+    year,
+    month: mon ?? 1,
+    day: mday ?? 1,
+    hour: hour ?? 0,
+    minute: min ?? 0,
+    second: sec ?? 0,
+    microsecond: microsec ?? 0,
+  };
+  try {
+    if (offset != null) {
+      const instant = Temporal.PlainDateTime.from(components).toZonedDateTime("UTC").toInstant();
+      return offset === 0 ? instant : instant.subtract({ seconds: offset });
+    }
+    return Temporal.PlainDateTime.from(components)
+      .toZonedDateTime(configuredTimezone())
+      .toInstant();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Mirrors: ActiveModel::Type::Helpers::TimeValue#fast_string_to_time
+ * (time_value.rb:79-89, dual definition).
+ *
+ *   def fast_string_to_time(string)
+ *     return unless string.include?("-") #  Time.new("1234") # => 1234-01-01 00:00:00
+ *     if is_utc?
+ *       ::Time.new(string, in: "UTC")
+ *     else
+ *       ::Time.new(string)
+ *     end
+ *   rescue ArgumentError
+ *     nil
+ *   end
+ *
+ * Returns null for strings that don't look like dates (Rails skips
+ * `"1234"` because Ruby's `Time.new("1234")` would interpret it as
+ * year-only). Trails uses Temporal — strings with an offset go
+ * through `Instant.from`; bare strings fall back to PlainDateTime
+ * in the configured zone (matches Rails' `is_utc?` branching).
+ *
+ * @internal Rails-private helper.
+ */
+export function fastStringToTime(s: string): Temporal.Instant | null {
+  if (!s.includes("-")) return null;
+  const normalized = s.replace(" ", "T");
+  const hasOffset = /Z$|[+-]\d{2}(?::?\d{2})?$/.test(normalized);
+  try {
+    if (hasOffset) return Temporal.Instant.from(normalized);
+    return Temporal.PlainDateTime.from(normalized)
+      .toZonedDateTime(configuredTimezone())
+      .toInstant();
   } catch {
     return null;
   }

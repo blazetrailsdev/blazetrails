@@ -24,7 +24,7 @@ export class Table extends Node {
     super();
     this.name = name;
     const as = options?.as ?? null;
-    this.tableAlias = as != null && as === name ? null : as;
+    this.tableAlias = as === name ? null : as;
     this.typeCaster = options?.typeCaster ?? null;
   }
 

@@ -1,5 +1,6 @@
 import { EachValidator } from "../validator.js";
 import type { AnyRecord } from "../validator.js";
+import { inspectAccessor } from "./_accessor.js";
 
 /**
  * Manages lazily-defined virtual attributes for acceptance validation.
@@ -77,8 +78,9 @@ interface AcceptanceHost {
  * Rails lazily materializes attr_reader/attr_writer for the acceptance
  * attributes on first access via method_missing. Trails has no
  * method_missing, so install accessors eagerly on the prototype with
- * a per-instance backing slot. Skips attributes the host already
- * defines.
+ * a per-instance backing slot. Skips attributes that already define
+ * both accessor sides; if only one side exists, defines the missing
+ * half while preserving the existing accessor.
  *
  * @internal Rails-private helper.
  */
@@ -107,64 +109,6 @@ export function setupBang(this: AcceptanceHost, klass: unknown): void {
         },
     });
   }
-}
-
-interface InheritedAccessor {
-  hasGetter: boolean;
-  hasSetter: boolean;
-  getter?: (this: object) => unknown;
-  setter?: (this: object, value: unknown) => void;
-}
-
-/**
- * Walk the prototype chain and capture the first-found accessor
- * shape for `name`. Distinguishes accessor descriptors (`get`/`set`)
- * from data descriptors (`"value" in desc` — handles the
- * `value: undefined` case correctly) and synthesizes a getter/setter
- * pair from a data property so callers can preserve it in a new
- * accessor descriptor.
- */
-function inspectAccessor(prototype: object, name: string): InheritedAccessor {
-  let proto: object | null = prototype;
-  while (proto && proto !== Object.prototype) {
-    const desc = Object.getOwnPropertyDescriptor(proto, name);
-    if (desc) {
-      if ("value" in desc || "writable" in desc) {
-        // Reading `this[name]` would recurse into the accessor we're
-        // about to install — read through the captured proto with
-        // Reflect.get and write as an own property.
-        const inheritedProto = proto;
-        const enumerable = desc.enumerable ?? true;
-        const configurable = desc.configurable ?? true;
-        return {
-          hasGetter: true,
-          hasSetter: desc.writable !== false,
-          getter() {
-            return Reflect.get(inheritedProto, name, this);
-          },
-          setter:
-            desc.writable !== false
-              ? function (this: object, v: unknown) {
-                  Object.defineProperty(this, name, {
-                    value: v,
-                    writable: true,
-                    enumerable,
-                    configurable,
-                  });
-                }
-              : undefined,
-        };
-      }
-      return {
-        hasGetter: typeof desc.get === "function",
-        hasSetter: typeof desc.set === "function",
-        getter: desc.get as ((this: object) => unknown) | undefined,
-        setter: desc.set as ((this: object, v: unknown) => void) | undefined,
-      };
-    }
-    proto = Object.getPrototypeOf(proto);
-  }
-  return { hasGetter: false, hasSetter: false };
 }
 
 /**

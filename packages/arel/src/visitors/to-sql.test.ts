@@ -1565,7 +1565,8 @@ describe("the to_sql visitor", () => {
       const instant = Temporal.Instant.from("2026-04-30T12:34:56.000Z");
       const [sql, binds] = visitor.compileWithBinds(new Nodes.Quoted(instant));
       expect(sql).toBe("?");
-      expect(binds).toEqual([instant]);
+      expect(binds).toHaveLength(1);
+      expect(binds[0]).toBe(instant);
     });
 
     it("Quoted non-Date inlines under extractBinds=false", () => {
@@ -1589,7 +1590,8 @@ describe("the to_sql visitor", () => {
       const value = { toISOString: () => "2026-04-30T00:00:00.000Z" };
       const [sql, binds] = new Visitors.ToSql().compileWithBinds(new Nodes.Quoted(value));
       expect(sql).toBe("?");
-      expect(binds).toEqual([value]);
+      expect(binds).toHaveLength(1);
+      expect(binds[0]).toBe(value);
     });
   });
 

@@ -98,18 +98,28 @@ function inspectAccessor(prototype: object, name: string): InheritedAccessor {
     const desc = Object.getOwnPropertyDescriptor(proto, name);
     if (desc) {
       if ("value" in desc || "writable" in desc) {
-        // Plain data property — synthesize a getter/setter pair that
-        // mirrors the inherited slot semantics.
+        // Plain data property — synthesize a getter/setter that reads
+        // through the captured prototype slot via Reflect.get, and
+        // writes via own-property defineProperty. Reading `this[name]`
+        // would recurse into the new accessor we're about to install.
+        const inheritedProto = proto;
+        const enumerable = desc.enumerable ?? true;
+        const configurable = desc.configurable ?? true;
         return {
           hasGetter: true,
           hasSetter: desc.writable !== false,
           getter() {
-            return (this as Record<string, unknown>)[name];
+            return Reflect.get(inheritedProto, name, this);
           },
           setter:
             desc.writable !== false
               ? function (this: object, v: unknown) {
-                  (this as Record<string, unknown>)[name] = v;
+                  Object.defineProperty(this, name, {
+                    value: v,
+                    writable: true,
+                    enumerable,
+                    configurable,
+                  });
                 }
               : undefined,
         };

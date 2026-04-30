@@ -10,7 +10,19 @@ import { Between } from "./nodes/binary.js";
  * `notBetween` (the mixin) and `Attribute#between` / `notBetween` (the
  * class-side overrides). Mirrors Rails' Predications private helpers
  * (`infinity?`, `unboundable?`, `open_ended?`) and the public `between`
- * / `not_between` decision tree (predications.rb).
+ * / `not_between` decision tree.
+ *
+ * Source of truth: Rails v8.0.2 `activerecord/lib/arel/predications.rb`
+ *   `between` body — Predications#between
+ *   `not_between` body — Predications#not_between
+ *   `infinity?` / `unboundable?` / `open_ended?` — private helpers
+ *
+ * TS deviations (deliberate, called out in the audit):
+ * - `infinitySign` and `unboundableSign` collapse: Trails has no
+ *   `unboundable?` value protocol, so both reduce to checking
+ *   `+/-Infinity` (and a `Quoted` wrapper around the same).
+ * - The TS port accepts three input shapes (array, object, positional)
+ *   instead of Ruby's single `Range`.
  */
 
 export interface RangeLike {

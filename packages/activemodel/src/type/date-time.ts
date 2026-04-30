@@ -7,12 +7,8 @@ import {
 } from "./internal/sentinels.js";
 import { ArgumentError } from "../attribute-assignment.js";
 import { AcceptsMultiparameterTime } from "./helpers/accepts-multiparameter-time.js";
-import { isUtc } from "./helpers/timezone.js";
+import { configuredTimezone } from "./helpers/timezone.js";
 import { ValueType } from "./value.js";
-
-function configuredTimezone(): string {
-  return isUtc() ? "UTC" : Temporal.Now.timeZoneId();
-}
 
 export type DateTimeCastResult = Temporal.Instant | DateInfinityType | DateNegativeInfinityType;
 
@@ -133,9 +129,12 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
       const normalized = s
         .replace(" ", "T")
         .replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?)([-+]\d{2})$/, "$1$2:00");
-      const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(normalized);
-      if (hasOffset) return Temporal.Instant.from(normalized);
-      return Temporal.PlainDateTime.from(normalized, { overflow: "reject" })
+      const datetimeString = /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+        ? `${normalized}T00:00:00`
+        : normalized;
+      const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(datetimeString);
+      if (hasOffset) return Temporal.Instant.from(datetimeString);
+      return Temporal.PlainDateTime.from(datetimeString, { overflow: "reject" })
         .toZonedDateTime(configuredTimezone())
         .toInstant();
     } catch {

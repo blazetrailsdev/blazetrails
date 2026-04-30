@@ -4,11 +4,7 @@
  * Mirrors: ActiveModel::Type::Helpers::TimeValue
  */
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import { isUtc } from "./timezone.js";
-
-function configuredTimezone(): string {
-  return isUtc() ? "UTC" : Temporal.Now.timeZoneId();
-}
+import { configuredTimezone } from "./timezone.js";
 
 export interface TimeValue {
   precision?: number;
@@ -217,10 +213,13 @@ export function fastStringToTime(s: string): Temporal.Instant | null {
   const normalized = s
     .replace(" ", "T")
     .replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?)([-+]\d{2})$/, "$1$2:00");
-  const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(normalized);
+  const datetimeString = /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+    ? `${normalized}T00:00:00`
+    : normalized;
+  const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(datetimeString);
   try {
-    if (hasOffset) return Temporal.Instant.from(normalized);
-    return Temporal.PlainDateTime.from(normalized, { overflow: "reject" })
+    if (hasOffset) return Temporal.Instant.from(datetimeString);
+    return Temporal.PlainDateTime.from(datetimeString, { overflow: "reject" })
       .toZonedDateTime(configuredTimezone())
       .toInstant();
   } catch {

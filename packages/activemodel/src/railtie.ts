@@ -1,5 +1,5 @@
 import { Railtie as BaseRailtie, registerRailtie } from "@blazetrails/activesupport";
-import { env } from "@blazetrails/activesupport/process-adapter";
+import { env as processEnv } from "@blazetrails/activesupport/process-adapter";
 import { SecurePassword } from "./secure-password.js";
 import { Error as ActiveModelError } from "./error.js";
 
@@ -38,9 +38,11 @@ export class Railtie extends BaseRailtie {
   }
 
   private static detectEnv(): string {
-    // env is the activesupport process-adapter snapshot — populated at
-    // module load on Node, empty on browser hosts. Either way, no
-    // `typeof process !== "undefined"` guard needed.
-    return env.NODE_ENV || "development";
+    // processEnv is the activesupport process-adapter snapshot — populated
+    // at module load on Node, empty on browser hosts. Either way, no
+    // `typeof process !== "undefined"` guard needed. Aliased to avoid
+    // shadowing the local `env` variable in `initialize()` and the
+    // `RailtieConfig.env` property.
+    return processEnv.NODE_ENV || "development";
   }
 }

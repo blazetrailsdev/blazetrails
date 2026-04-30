@@ -103,7 +103,7 @@ export default defineConfig(
   },
 
   // ── no-process-bypass: forbid direct process.* in browser-target src ──
-  // process.* must go through @blazetrails/activesupport's processAdapter
+  // process.* must go through @blazetrails/activesupport/process-adapter
   // so these packages can run on browser/non-Node hosts. Test files are
   // always exempt (legit mocking/inspection of the host process).
   // Per-package exemptions noted inline.

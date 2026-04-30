@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Table, Nodes } from "./index.js";
+import { Table, Nodes, Visitors } from "./index.js";
 
 // Mirrors Rails' Arel attribute_test.rb #between / #not_between blocks.
 // The Trails port accepts `[begin, end]`, `{ begin, end, excludeEnd? }`,
@@ -69,6 +69,56 @@ describe("Predications range semantics", () => {
     it("begin..null (open end) collapses to GreaterThanOrEqual", () => {
       const node = id.between({ begin: 1, end: null });
       expect(node).toBeInstanceOf(Nodes.GreaterThanOrEqual);
+    });
+  });
+
+  describe("#between SQL output", () => {
+    const sql = (n: Nodes.Node) => new Visitors.ToSql().compile(n);
+
+    it("inclusive standard range → BETWEEN", () => {
+      expect(sql(id.between({ begin: 1, end: 3 }))).toBe('"users"."id" BETWEEN 1 AND 3');
+    });
+
+    it("exclusive range → >= AND <", () => {
+      expect(sql(id.between({ begin: 1, end: 3, excludeEnd: true }))).toBe(
+        '"users"."id" >= 1 AND "users"."id" < 3',
+      );
+    });
+
+    it("begin == end → equality", () => {
+      expect(sql(id.between({ begin: 5, end: 5 }))).toBe('"users"."id" = 5');
+    });
+
+    it("-Infinity..Infinity → 1=1", () => {
+      expect(sql(id.between({ begin: -Infinity, end: Infinity }))).toBe("1=1");
+    });
+
+    it("Infinity..end (unboundable begin) → 1=0", () => {
+      expect(sql(id.between({ begin: Infinity, end: 3 }))).toBe("1=0");
+    });
+  });
+
+  describe("#not_between SQL output", () => {
+    const sql = (n: Nodes.Node) => new Visitors.ToSql().compile(n);
+
+    it("inclusive range → (col < b OR col > e)", () => {
+      expect(sql(id.notBetween({ begin: 1, end: 3 }))).toBe(
+        '("users"."id" < 1 OR "users"."id" > 3)',
+      );
+    });
+
+    it("exclusive range → (col < b OR col >= e)", () => {
+      expect(sql(id.notBetween({ begin: 1, end: 3, excludeEnd: true }))).toBe(
+        '("users"."id" < 1 OR "users"."id" >= 3)',
+      );
+    });
+
+    it("-Infinity..end → > end (no NOT wrapper)", () => {
+      expect(sql(id.notBetween({ begin: -Infinity, end: 3 }))).toBe('"users"."id" > 3');
+    });
+
+    it("-Infinity..Infinity → 1=0", () => {
+      expect(sql(id.notBetween({ begin: -Infinity, end: Infinity }))).toBe("1=0");
     });
   });
 

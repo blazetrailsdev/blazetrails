@@ -1214,11 +1214,12 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   // /*+ ... */. SelectCore stores its optimizer hints as an OptimizerHints
   // node and `emitOptimizerHints` delegates here.
   protected visitArelNodesOptimizerHints(node: Nodes.OptimizerHints): SQLString {
-    // Mirrors Rails: hints are sanitized (newlines, comment delimiters,
-    // `--` line comments stripped) and dropped when sanitization yields
-    // an empty string. No output when all hints sanitize away.
+    // Mirrors Rails: plain string hints are sanitized (newlines, comment
+    // delimiters, `--` line comments stripped) and empty results dropped.
+    // SqlLiteral hints are the explicit escape hatch and pass through
+    // unchanged — same contract as `sanitizeAsSqlComment`.
     const sanitized = node.hints
-      .map((h) => this.sanitizeHint(typeof h === "string" ? h : h.value))
+      .map((h) => (h instanceof Nodes.SqlLiteral ? h.value : this.sanitizeHint(h)))
       .filter((h) => h.length > 0);
     if (sanitized.length === 0) return this.collector;
     this.collector.append(` /*+ ${sanitized.join(" ")} */`);

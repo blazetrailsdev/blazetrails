@@ -93,11 +93,18 @@ export class Logger {
 
   add(severity: number, message?: string | null, progname?: string): boolean {
     if (severity < this.level) return true;
-    const effectiveProgname = progname ?? this.progname;
-    const msg = message != null ? String(message) : effectiveProgname;
+    let msg: string;
+    let formatterProgname: string;
+    if (message != null) {
+      msg = String(message);
+      formatterProgname = progname ?? this.progname;
+    } else {
+      msg = progname ?? this.progname;
+      formatterProgname = this.progname;
+    }
     const severityName = (LEVEL_NAMES[severity] ?? "unknown").toUpperCase();
     const line = this.formatter
-      ? this.formatter(severityName, Temporal.Now.instant(), effectiveProgname, msg)
+      ? this.formatter(severityName, Temporal.Now.instant(), formatterProgname, msg)
       : `${msg}\n`;
     this.output?.write(line);
     return true;

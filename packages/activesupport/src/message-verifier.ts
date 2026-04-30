@@ -60,9 +60,11 @@ export class MessageVerifier {
     const payload: Record<string, unknown> = { value };
 
     if (options.expiresAt) {
-      payload._expiresAt = options.expiresAt.toString();
+      payload._expiresAt = options.expiresAt.toString({ smallestUnit: "millisecond" });
     } else if (options.expiresIn !== undefined) {
-      payload._expiresAt = Temporal.Now.instant().add({ seconds: options.expiresIn }).toString();
+      payload._expiresAt = Temporal.Now.instant()
+        .add({ seconds: options.expiresIn })
+        .toString({ smallestUnit: "millisecond" });
     }
 
     if (options.purpose) {

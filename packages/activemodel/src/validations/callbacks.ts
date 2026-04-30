@@ -78,10 +78,10 @@ export function setOptionsForCallback(options: CallbackOptions): void {
  *
  * The interface declaration above adds `runValidationsBang()` to the
  * Callbacks contract — host classes that want before/after validation
- * dispatch implement the method to wrap their own validation pass in
- * the callback chain. Trails Model.runValidations already does this
- * by walking the validation CallbackChain; this export documents the
- * Rails surface and gives downstream hosts a typed reference.
+ * dispatch implement the method to wrap their underlying validation
+ * pass in the callback chain. This export documents the Rails surface
+ * and gives downstream hosts a typed reference for that
+ * callback-wrapping behavior.
  *
  * @internal Rails-private helper.
  */

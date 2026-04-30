@@ -5,7 +5,7 @@
 
 import { Logger, taggedLogging as _taggedLogging } from "./logger.js";
 import type { TaggedLogger } from "./logger.js";
-import { Temporal } from "./temporal.js";
+import type { Temporal } from "./temporal.js";
 
 export class TagStack {
   private _tags: string[] = [];

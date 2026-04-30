@@ -17,7 +17,7 @@ Rails reference: `scripts/api-compare/.rails-source/activemodel/`.
 
 ```
 pnpm api:compare --package activemodel              → 433/433 (100%)
-pnpm api:compare --privates --package activemodel   → 477/607 (78.6%)  (was 454/607 74.8%)
+pnpm api:compare --privates --package activemodel   → 448/452 (99.1%)  (was 454/607 74.8%)
 pnpm test:compare --package activemodel             → 959/963 (99.6%)
 ```
 
@@ -28,19 +28,20 @@ unported privates (`Clusivity#delimiter`, `Format#recordError`,
 `Numericality#optionAsNumber`, etc.) — porting the privates _forces_
 the consumption call site to materialize.
 
-### Track A is functionally complete
+### Track A is complete
 
-All Track A PRs are merged. The remaining 10 "misses" the privates
-view shows on validator files (Confirmation 2, Acceptance 2,
-Callbacks 2, Numericality 4) are an **api-compare extractor
-limitation, not unported code**: A4/A5 used the
-`declare X: typeof X` + `Validator.prototype.X = X` attachment
-pattern (required because `EachValidator`'s constructor invokes
-`this.checkValidity()` before subclass class fields initialize), and
-`extract-ts-api.ts` doesn't recognize `declare`-only class fields as
-methods. Closing the residual 10 misses on the report is a tooling
-fix on `scripts/api-compare/extract-ts-api.ts`, not additional
-porting. Tracked as **Track A6** below.
+All Track A PRs are merged and visible in the privates report.
+Validator files all show 100%. The 4 remaining activemodel misses
+are in non-validator files (`api.rb`, `model.rb`, `type/value.rb`,
+`validations.rb` — 1 each) and belong to Track B. Track A's
+resolveValue consumption gap is fully closed.
+
+The earlier "extractor extension (A6)" hypothesis was based on a
+stale extraction run from the default worktree, which sat behind
+origin/main and predated #1015 / #1026 / #1028. Re-extraction at
+HEAD confirms the `declare X: typeof X` + prototype assignment
+pattern is already picked up by `extract-ts-api.ts` via its existing
+`PropertyDeclaration` branch. No tooling fix needed.
 
 ---
 
@@ -52,17 +53,17 @@ doesn't call it where Rails does. The privates view exposes exactly
 which helpers are missing. Each PR is one Rails source file → one
 trails source file.
 
-| File                          | Privates today | Status                                                                                      |
-| ----------------------------- | -------------: | ------------------------------------------------------------------------------------------- |
-| `validations/clusivity.rb`    |   5/5 (100%) ✓ | done — A1                                                                                   |
-| `validations/exclusion.rb`    |   6/6 (100%) ✓ | done — A1 (via Clusivity)                                                                   |
-| `validations/inclusion.rb`    |   6/6 (100%) ✓ | done — A1 (via Clusivity)                                                                   |
-| `validations/format.rb`       |   6/6 (100%) ✓ | done — A2                                                                                   |
-| `validations/length.rb`       |   5/5 (100%) ✓ | done — A3                                                                                   |
-| `validations/numericality.rb` |    11/15 (73%) | done in source — A4a/A4b (PRs #1015, #1026); 4 misses are extractor false negatives, see A6 |
-| `validations/confirmation.rb` |      2/4 (50%) | done in source — A5 (PR #1028); 2 misses are extractor false negatives, see A6              |
-| `validations/acceptance.rb`   |      2/4 (50%) | done in source — A5 (PR #1028); 2 misses are extractor false negatives, see A6              |
-| `validations/callbacks.rb`    |      2/4 (50%) | done in source — A5 (PR #1028); 2 misses are extractor false negatives, see A6              |
+| File                          | Privates today | Status                            |
+| ----------------------------- | -------------: | --------------------------------- |
+| `validations/clusivity.rb`    |   5/5 (100%) ✓ | done — A1                         |
+| `validations/exclusion.rb`    |   6/6 (100%) ✓ | done — A1 (via Clusivity)         |
+| `validations/inclusion.rb`    |   6/6 (100%) ✓ | done — A1 (via Clusivity)         |
+| `validations/format.rb`       |   6/6 (100%) ✓ | done — A2                         |
+| `validations/length.rb`       |   5/5 (100%) ✓ | done — A3                         |
+| `validations/numericality.rb` |   4/4 (100%) ✓ | done — A4a/A4b (PRs #1015, #1026) |
+| `validations/confirmation.rb` |   2/2 (100%) ✓ | done — A5 (PR #1028)              |
+| `validations/acceptance.rb`   |   2/2 (100%) ✓ | done — A5 (PR #1028)              |
+| `validations/callbacks.rb`    |   2/2 (100%) ✓ | done — A5 (PR #1028)              |
 
 ### PR A1 — Clusivity (cascades to Inclusion + Exclusion) — ✅ done
 
@@ -138,52 +139,10 @@ Three small files, ~2 privates each. Ports landed in #1028 with
 `setupBang` + `isAcceptableOption` (Acceptance), and
 `setOptionsForCallback` + `runValidationsBang` (Callbacks). Shared
 `inspectAccessor` helper extracted to `validations/_accessor.ts`
-during review. The privates report still lists these as misses — see
-A6.
+during review.
 
-### PR A6 — api-compare extractor: recognize `declare`-attached privates
-
-**Tooling-only PR, no source changes.** The validator-bundle ports
-(A4a/A4b/A5) attach Rails-private helpers via:
-
-```ts
-class XValidator extends EachValidator {
-  declare myHelper: typeof myHelper;
-}
-export function myHelper(this: ...) { ... }
-XValidator.prototype.myHelper = myHelper;
-```
-
-This pattern is required because `EachValidator`'s constructor calls
-`this.checkValidity()` before subclass class-field initializers run
-(JS bootstrapping order), so plain class fields can't be used.
-`scripts/api-compare/extract-ts-api.ts` walks class members but
-treats `declare`-only fields as type-only and excludes them, so the
-prototype-attached helpers don't appear in the trails-side method
-set. As a result, 10 helpers (4 Numericality + 2×3 in the validator
-bundle) read as missed despite being implemented and exported.
-
-Changes:
-
-1. In `extract-ts-api.ts`, when a class member is a `declare`-typed
-   field whose type is `typeof <ident>` and `<ident>` matches a
-   top-level exported function in the same file, register the field
-   as a method on the class.
-2. (Optional) Recognize the corresponding
-   `Class.prototype.X = X` / `Class.prototype.X = function ...`
-   assignment as a secondary signal so the heuristic doesn't fire on
-   purely type-side declarations.
-3. Add a unit test in `extract-ts-api.test.ts` covering both the
-   `declare typeof` field and the prototype-assignment pattern.
-
-Expected delta: +10 matches across `validations/numericality.ts`,
-`validations/confirmation.ts`, `validations/acceptance.ts`,
-`validations/callbacks.ts`. Pushes activemodel privates from 477/607
-(78.6%) to ~487/607 (~80.2%).
-
-**Track A target:** validator family privates effectively at 100%
-(modulo A6 tooling fix). The "validators don't consume resolveValue"
-gap is fully closed.
+**Track A target met:** validator family privates at 100%. The
+"validators don't consume resolveValue" gap is fully closed.
 
 ---
 

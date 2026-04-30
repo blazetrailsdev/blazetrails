@@ -149,7 +149,11 @@ function analyzeTsDepUsage(pkgSrcDir: string, tsImport: string, tsIdentifiers: s
     if (sourceFile.fileName.endsWith(".test.ts")) continue;
     if (sourceFile.fileName.endsWith(".d.ts")) continue;
 
-    const relPath = path.relative(pkgSrcDir, sourceFile.fileName);
+    // Normalize separators to POSIX so the keys match rubyFileToTs
+    // output (which uses path.posix.* for cross-platform stability).
+    // Without this, Windows path.relative emits backslashes and the
+    // tsDepMap.get(rubyFileToTs(...)) lookup misses.
+    const relPath = path.relative(pkgSrcDir, sourceFile.fileName).split(path.sep).join("/");
 
     // Collect import bindings from the target package
     const importedNames = new Set<string>();

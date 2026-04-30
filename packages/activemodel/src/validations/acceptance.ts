@@ -45,27 +45,15 @@ function isNonStringIterable(value: unknown): value is Iterable<unknown> {
 export class AcceptanceValidator extends EachValidator {
   static readonly lazilyDefineAttributes = new LazilyDefineAttributes([]);
 
+  /** @internal Rails-private helper. */
+  declare setupBang: typeof setupBang;
+  /** @internal Rails-private helper. */
+  declare isAcceptableOption: typeof isAcceptableOption;
+
   validateEach(record: AnyRecord, attribute: string, value: unknown): void {
     const allowNil = this.options.allowNil ?? true;
     if (allowNil && (value === null || value === undefined)) return;
-    // Rails activemodel/lib/active_model/validations/acceptance.rb
-    // `acceptable_option?` calls `Array(options[:accept]).include?(value)`,
-    // so a scalar `accept:` still works. Normalize here with the same shape.
-    // Rails checks key presence via `options.key?(:accept)`, so an explicit
-    // `accept: nil` is treated as `Array(nil) #=> []` (rejects everything)
-    // rather than falling back to the default. Mirror that with a hasOwn
-    // check on this.options.
-    const hasAccept = Object.prototype.hasOwnProperty.call(this.options, "accept");
-    let accepted: unknown[];
-    if (!hasAccept) accepted = ["1", true];
-    else {
-      const rawAccept = this.options.accept;
-      if (rawAccept === null || rawAccept === undefined) accepted = [];
-      else if (Array.isArray(rawAccept)) accepted = rawAccept;
-      else if (isNonStringIterable(rawAccept)) accepted = Array.from(rawAccept);
-      else accepted = [rawAccept];
-    }
-    if (!accepted.includes(value)) {
+    if (!this.isAcceptableOption(value)) {
       record.errors.add(attribute, "accepted", { message: this.options.message });
     }
   }
@@ -74,3 +62,74 @@ export class AcceptanceValidator extends EachValidator {
     return new LazilyDefineAttributes(attributes);
   }
 }
+
+interface AcceptanceHost {
+  attributes: readonly string[];
+}
+
+/**
+ * Mirrors: acceptance.rb:18-22
+ *   def setup!(klass)
+ *     define_attributes = LazilyDefineAttributes.new(attributes)
+ *     klass.include(define_attributes) unless klass.included_modules.include?(define_attributes)
+ *   end
+ *
+ * Rails lazily materializes attr_reader/attr_writer for the acceptance
+ * attributes on first access via method_missing. Trails has no
+ * method_missing, so install accessors eagerly on the prototype with
+ * a per-instance backing slot. Skips attributes the host already
+ * defines.
+ *
+ * @internal Rails-private helper.
+ */
+export function setupBang(this: AcceptanceHost, klass: unknown): void {
+  if (typeof klass !== "function") return;
+  const ctor = klass as { prototype: object };
+  for (const attribute of this.attributes) {
+    if (attribute in ctor.prototype) continue;
+    const slot = `_${attribute}`;
+    Object.defineProperty(ctor.prototype, attribute, {
+      configurable: true,
+      get(this: Record<string, unknown>) {
+        return this[slot] as unknown;
+      },
+      set(this: Record<string, unknown>, v: unknown) {
+        this[slot] = v;
+      },
+    });
+  }
+}
+
+/**
+ * Mirrors: acceptance.rb:24-26
+ *   def acceptable_option?(value)
+ *     Array(options[:accept]).include?(value)
+ *   end
+ *
+ * Rails `Array(options[:accept])` coerces missing → []; scalar → [s];
+ * iterable → flattened. Rails checks `options.key?(:accept)` separately
+ * at the constructor (defaults to `["1", true]` when missing). This
+ * port keeps both behaviors: when the key isn't set the default
+ * applies; when set, explicit `null` collapses to `[]`.
+ *
+ * @internal Rails-private helper.
+ */
+export function isAcceptableOption(
+  this: { options: Record<string, unknown> },
+  value: unknown,
+): boolean {
+  const hasAccept = Object.prototype.hasOwnProperty.call(this.options, "accept");
+  let accepted: unknown[];
+  if (!hasAccept) accepted = ["1", true];
+  else {
+    const rawAccept = this.options.accept;
+    if (rawAccept === null || rawAccept === undefined) accepted = [];
+    else if (Array.isArray(rawAccept)) accepted = rawAccept;
+    else if (isNonStringIterable(rawAccept)) accepted = Array.from(rawAccept);
+    else accepted = [rawAccept];
+  }
+  return accepted.includes(value);
+}
+
+AcceptanceValidator.prototype.setupBang = setupBang;
+AcceptanceValidator.prototype.isAcceptableOption = isAcceptableOption;

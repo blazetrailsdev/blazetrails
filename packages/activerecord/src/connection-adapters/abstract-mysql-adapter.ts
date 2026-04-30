@@ -222,6 +222,20 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return mysqlUnquotedFalse();
   }
 
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_table_name_for_assignment
+   * (`abstract/quoting.rb:153-155`) — Rails MySQL inherits from
+   * abstract. Dispatching `quote_table_name("#{table}.#{attr}")`
+   * resolves polymorphically to `MySQL::Quoting#quote_table_name` which
+   * splits on `.` and backticks each part. The TS port doesn't get
+   * polymorphic dispatch from the abstract standalone (it would call
+   * the abstract module's `quoteTableName` and emit double quotes), so
+   * we override on the MySQL adapter to route through `this.quoteTableName`.
+   */
+  override quoteTableNameForAssignment(table: string, attr: string): string {
+    return this.quoteTableName(`${table}.${attr}`);
+  }
+
   isMariadb(): boolean {
     return this._mariadb;
   }

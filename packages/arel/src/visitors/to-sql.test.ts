@@ -602,6 +602,15 @@ describe("the to_sql visitor", () => {
       expect(sql).toBe('DELETE FROM "users"');
     });
 
+    it("treats a JoinSource with no joins as no-join-source (Rails has_join_sources?)", () => {
+      // Mirrors Rails: `has_join_sources?` requires non-empty `right`.
+      // A bare JoinSource(table) renders via the plain `DELETE FROM` path,
+      // identical to passing the table directly.
+      const stmt = new Nodes.DeleteStatement(new Nodes.JoinSource(users));
+      const sql = new Visitors.ToSql().compile(stmt);
+      expect(sql).toBe('DELETE FROM "users"');
+    });
+
     it("renders TableAlias on the left when join sources are present", () => {
       const aliased = new Nodes.TableAlias(users, "u");
       const join = new Nodes.InnerJoin(

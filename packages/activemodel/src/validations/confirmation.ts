@@ -53,18 +53,49 @@ export function setupBang(this: ConfirmationHost, klass: unknown): void {
   const ctor = klass as { prototype: object };
   for (const attribute of this.attributes) {
     const confirmationAttr = `${attribute}Confirmation`;
-    if (confirmationAttr in ctor.prototype) continue;
+    const { hasGetter, hasSetter } = inspectAccessor(ctor.prototype, confirmationAttr);
+    if (hasGetter && hasSetter) continue;
     const slot = `_${confirmationAttr}`;
+    // Rails checks reader and writer separately (method_defined? for
+    // both `:#{a}_confirmation` and `:#{a}_confirmation=`). Mirror by
+    // installing only the missing half so a host that pre-defined one
+    // accessor isn't overridden.
+    const existing = Object.getOwnPropertyDescriptor(ctor.prototype, confirmationAttr);
     Object.defineProperty(ctor.prototype, confirmationAttr, {
       configurable: true,
-      get(this: Record<string, unknown>) {
-        return this[slot] as unknown;
-      },
-      set(this: Record<string, unknown>, v: unknown) {
-        this[slot] = v;
-      },
+      get:
+        existing?.get ??
+        function (this: Record<string, unknown>) {
+          return this[slot] as unknown;
+        },
+      set:
+        existing?.set ??
+        function (this: Record<string, unknown>, v: unknown) {
+          this[slot] = v;
+        },
     });
   }
+}
+
+function inspectAccessor(
+  prototype: object,
+  name: string,
+): { hasGetter: boolean; hasSetter: boolean } {
+  let proto: object | null = prototype;
+  let hasGetter = false;
+  let hasSetter = false;
+  while (proto && proto !== Object.prototype) {
+    const desc = Object.getOwnPropertyDescriptor(proto, name);
+    if (desc) {
+      if (desc.get || desc.value !== undefined) hasGetter = true;
+      if (desc.set || desc.writable) hasSetter = true;
+      // Plain data properties act as both reader and writer; either way
+      // we've found what's defined at this level — stop walking.
+      break;
+    }
+    proto = Object.getPrototypeOf(proto);
+  }
+  return { hasGetter, hasSetter };
 }
 
 /**

@@ -12,20 +12,25 @@ import type { CallbackFn, CallbackConditions } from "../callbacks.js";
 export interface CallbacksClassMethods {
   beforeValidation(fn: CallbackFn, conditions?: CallbackConditions): void;
   afterValidation(fn: CallbackFn, conditions?: CallbackConditions): void;
+}
+
+export interface CallbacksInstanceMethods {
   /** @internal Rails-private helper. */
   runValidationsBang(): boolean;
 }
 
-export type Callbacks = CallbacksClassMethods;
+export type Callbacks = CallbacksClassMethods & CallbacksInstanceMethods;
+
+type Conditional = ((record: unknown) => boolean) | string;
 
 interface CallbackOptions {
-  on?: string | string[];
-  if?: Array<((record: unknown) => boolean) | string> | ((record: unknown) => boolean) | string;
-  unless?: Array<((record: unknown) => boolean) | string> | ((record: unknown) => boolean) | string;
+  on?: string | string[] | null;
+  if?: Conditional | Conditional[];
+  unless?: Conditional | Conditional[];
 }
 
 interface CallbackHostRecord {
-  validationContext?: string | string[];
+  validationContext?: string | string[] | null;
 }
 
 /**
@@ -49,20 +54,19 @@ interface CallbackHostRecord {
  */
 export function setOptionsForCallback(options: CallbackOptions): void {
   if (!Object.prototype.hasOwnProperty.call(options, "on")) return;
-  const onArr = Array.isArray(options.on)
-    ? options.on
-    : options.on === undefined
-      ? []
-      : [options.on];
+  // Ruby `Array(nil)` produces `[]` — treat both undefined and null
+  // the same, so `on: null` doesn't accidentally match a `null`
+  // validation context.
+  const onArr = Array.isArray(options.on) ? options.on : options.on == null ? [] : [options.on];
   options.on = onArr;
   const contextGuard = (o: unknown) => {
     const ctx = (o as CallbackHostRecord).validationContext;
-    const ctxArr = ctx === undefined ? [] : Array.isArray(ctx) ? ctx : [ctx];
+    const ctxArr = Array.isArray(ctx) ? ctx : ctx == null ? [] : [ctx];
     return onArr.some((on) => ctxArr.includes(on));
   };
   const existingIf = options.if;
   const existingArr =
-    existingIf === undefined ? [] : Array.isArray(existingIf) ? existingIf : [existingIf];
+    existingIf == null ? [] : Array.isArray(existingIf) ? existingIf : [existingIf];
   options.if = [contextGuard, ...existingArr];
 }
 

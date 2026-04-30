@@ -86,18 +86,47 @@ export function setupBang(this: AcceptanceHost, klass: unknown): void {
   if (typeof klass !== "function") return;
   const ctor = klass as { prototype: object };
   for (const attribute of this.attributes) {
-    if (attribute in ctor.prototype) continue;
+    const { hasGetter, hasSetter } = inspectAccessor(ctor.prototype, attribute);
+    if (hasGetter && hasSetter) continue;
     const slot = `_${attribute}`;
+    // Rails checks reader and writer separately (attribute_method?(name)
+    // vs attribute_method?("#{name}=")). Mirror by installing only the
+    // missing half so a host that pre-defined one accessor isn't
+    // overridden.
+    const existing = Object.getOwnPropertyDescriptor(ctor.prototype, attribute);
     Object.defineProperty(ctor.prototype, attribute, {
       configurable: true,
-      get(this: Record<string, unknown>) {
-        return this[slot] as unknown;
-      },
-      set(this: Record<string, unknown>, v: unknown) {
-        this[slot] = v;
-      },
+      get:
+        existing?.get ??
+        function (this: Record<string, unknown>) {
+          return this[slot] as unknown;
+        },
+      set:
+        existing?.set ??
+        function (this: Record<string, unknown>, v: unknown) {
+          this[slot] = v;
+        },
     });
   }
+}
+
+function inspectAccessor(
+  prototype: object,
+  name: string,
+): { hasGetter: boolean; hasSetter: boolean } {
+  let proto: object | null = prototype;
+  let hasGetter = false;
+  let hasSetter = false;
+  while (proto && proto !== Object.prototype) {
+    const desc = Object.getOwnPropertyDescriptor(proto, name);
+    if (desc) {
+      if (desc.get || desc.value !== undefined) hasGetter = true;
+      if (desc.set || desc.writable) hasSetter = true;
+      break;
+    }
+    proto = Object.getPrototypeOf(proto);
+  }
+  return { hasGetter, hasSetter };
 }
 
 /**

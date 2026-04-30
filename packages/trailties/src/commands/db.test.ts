@@ -126,31 +126,32 @@ describe("DbCommand", () => {
 
 describe("resolveEnv", () => {
   const origRailsEnv = env.TRAILS_ENV;
+  const origNodeEnv = env.NODE_ENV;
 
   afterEach(() => {
     setEnv("TRAILS_ENV", origRailsEnv);
+    setEnv("NODE_ENV", origNodeEnv);
   });
 
-  it("reads TRAILS_ENV", () => {
+  it("prefers TRAILS_ENV", () => {
     setEnv("TRAILS_ENV", "staging");
     expect(resolveEnv()).toBe("staging");
   });
 
-  it("defaults to development when TRAILS_ENV is unset", () => {
+  it("defaults to development", () => {
     setEnv("TRAILS_ENV", undefined);
     expect(resolveEnv()).toBe("development");
   });
 
+  // Behavior change: previously this suite had a "falls back to
+  // NODE_ENV" test. NODE_ENV is a build-time bundler hint in JS
+  // (dead-code elimination, etc.), not a runtime env selector;
+  // conflating it with the runtime env caused action-at-a-distance.
+  // The replacement test below locks in the new behavior.
   it("ignores NODE_ENV", () => {
-    // NODE_ENV is a build-time bundler hint, not a runtime env
-    // selector. resolveEnv must not fall back to it.
     setEnv("TRAILS_ENV", undefined);
     setEnv("NODE_ENV", "production");
-    try {
-      expect(resolveEnv()).toBe("development");
-    } finally {
-      setEnv("NODE_ENV", undefined);
-    }
+    expect(resolveEnv()).toBe("development");
   });
 });
 

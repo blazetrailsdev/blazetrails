@@ -1,9 +1,11 @@
 # activemodel post-100% follow-up plan
 
 `pnpm api:compare --package activemodel` reached **433/433 (100%)** on
-2026-04-29. Public surface is done. This doc tracks the remaining
-follow-up tracks: privates, the small `test:compare` gap, and the
-`readAttribute` Rails-parity refactor.
+2026-04-29 — that was the public-surface milestone at the time. The
+"Current state" totals below are the source of truth after later
+Rails-source re-extraction shifted the public denominator to 452.
+This doc tracks the remaining follow-up tracks: privates, the small
+`test:compare` gap, and the `readAttribute` Rails-parity refactor.
 
 Read the Rails source before each PR. Don't paraphrase from memory.
 Per CLAUDE.md: ≤ 300 LOC per PR, draft, branch from `main`, no

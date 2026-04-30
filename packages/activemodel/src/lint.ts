@@ -48,9 +48,10 @@ export namespace Tests {
       throw new Error("toKey must return null or an array");
     }
 
-    assertBoolean(m.isPersisted(), "isPersisted");
+    const persisted = m.isPersisted();
+    assertBoolean(persisted, "isPersisted");
 
-    if (m.isPersisted() && key === null) {
+    if (persisted && key === null) {
       throw new Error("toKey must not return null when the model is persisted");
     }
   }

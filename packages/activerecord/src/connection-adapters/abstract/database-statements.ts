@@ -512,7 +512,8 @@ export async function truncate(
   name?: string | null,
 ): Promise<unknown> {
   const sql = `TRUNCATE TABLE ${this.quoteTableName(tableName)}`;
-  return (this.execute ?? execute).call(this, sql);
+  // Rails: execute(build_truncate_statement(table_name), name)
+  return (this.execute ?? execute).call(this, sql, name);
 }
 
 /**
@@ -855,7 +856,8 @@ export async function insertFixture(
       ? `INSERT INTO ${this.quoteTableName(tableName)} (${columns.map((c) => this.quoteColumnName(c)).join(", ")}) VALUES (${values.join(", ")})`
       : `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
 
-  return (this.execute ?? execute).call(this, sql);
+  // Rails: execute(build_fixture_sql(...), "Fixture Insert")
+  return (this.execute ?? execute).call(this, sql, "Fixture Insert");
 }
 
 /**

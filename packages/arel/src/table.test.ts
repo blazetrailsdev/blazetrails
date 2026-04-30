@@ -83,8 +83,8 @@ describe("TableTest", () => {
 
     it("ignores as if it equals name", () => {
       const t = new Table("users", { as: "users" });
-      // tableAlias is set to 'users' -- just proves it accepts the option
       expect(t.name).toBe("users");
+      expect(t.tableAlias).toBeNull();
     });
 
     it("should accept literal SQL", () => {

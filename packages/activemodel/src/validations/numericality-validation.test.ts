@@ -686,6 +686,23 @@ describe("numericality with in: range", () => {
     expect(p.errors.get("age")).toContain("is not a number");
   });
 
+  it("validates raw before-type-cast input even when allowNil is true (overridden validate)", () => {
+    // EachValidator.validate skips validateEach when allow_nil: true and
+    // value is null. Numericality overrides validate so the raw input
+    // is read FIRST — 'abc' on an integer column casts to null but
+    // should still be caught as not_a_number even with allowNil: true.
+    class Person extends Model {
+      static {
+        this.attribute("age", "integer");
+        this.validates("age", { numericality: { allowNil: true } });
+      }
+    }
+    expect(new Person({}).isValid()).toBe(true); // genuinely nil → skip
+    const bad = new Person({ age: "abc" });
+    expect(bad.isValid()).toBe(false); // raw 'abc' wins over null cast
+    expect(bad.errors.get("age")).toContain("is not a number");
+  });
+
   it("isAllowOnlyInteger honors a record-method onlyInteger (Ruby truthiness)", () => {
     // Rails: allow_only_integer?(record) returns
     // resolve_value(record, options[:only_integer]). A method name

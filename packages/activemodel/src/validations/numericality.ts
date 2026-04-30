@@ -82,6 +82,34 @@ export class NumericalityValidator extends EachValidator {
   }
 
   // Rails: validate_each(record, attr_name, value, precision: Float::DIG, scale: nil)
+  /**
+   * Override EachValidator.validate so prepareValueForValidation runs
+   * BEFORE the allow_nil short-circuit. Rails' EachValidator
+   * normally would skip nil values when allow_nil: true, but
+   * Numericality wants to validate what the user actually typed —
+   * an integer column casting "abc" to null mustn't bypass the check
+   * (numericality.rb's validate_each operates on raw input).
+   */
+  override validate(record: AnyRecord): void {
+    for (const attribute of this.attributes) {
+      // Same readAttributeForValidation lookup as EachValidator.validate
+      // (validator.ts:90-100), but routed through prepareValueForValidation
+      // BEFORE the allowNil/allowBlank short-circuits so raw user input
+      // ('abc' → cast null) still gets validated.
+      const r = record as Record<string, unknown>;
+      const cast =
+        typeof r.readAttributeForValidation === "function"
+          ? (r.readAttributeForValidation as (n: string) => unknown)(attribute)
+          : typeof r.readAttribute === "function"
+            ? (r.readAttribute as (n: string) => unknown)(attribute)
+            : r[attribute];
+      const value = this.prepareValueForValidation(cast, record, attribute);
+      if (value == null && this.options.allowNil === true) continue;
+      if (isBlank(value) && this.options.allowBlank === true) continue;
+      this.validateEach(record, attribute, value);
+    }
+  }
+
   validateEach(
     record: AnyRecord,
     attribute: string,
@@ -89,21 +117,15 @@ export class NumericalityValidator extends EachValidator {
     precision = 15,
     scale?: number,
   ): void {
-    // Rails: validate_each operates on the raw user input when one is
-    // available (numericality.rb:36 calls prepare_value_for_validation
-    // implicitly via the *_came_from_user? / *_before_type_cast path).
-    // Trails routes the same idea through readAttributeBeforeTypeCast.
-    value = this.prepareValueForValidation(value, record, attribute);
-
     if (value === null || value === undefined) {
       if (this.options.allowNil !== false) return;
-      record.errors.add(attribute, "not_a_number", { value, message: this.options.message });
+      record.errors.add(attribute, "not_a_number", this.filteredOptions(value));
       return;
     }
     if (this.options.allowBlank && isBlank(value)) return;
 
     if (!this.isNumber(value, precision, scale)) {
-      record.errors.add(attribute, "not_a_number", { value, message: this.options.message });
+      record.errors.add(attribute, "not_a_number", this.filteredOptions(value));
       return;
     }
 
@@ -113,11 +135,19 @@ export class NumericalityValidator extends EachValidator {
     // raw options[:only_integer] read, so a Proc / method-name option
     // is honored per-record.
     if (this.isAllowOnlyInteger(record) && !this.isInteger(value)) {
-      record.errors.add(attribute, "not_an_integer", { value, message: this.options.message });
+      record.errors.add(attribute, "not_an_integer", this.filteredOptions(value));
       return;
     }
 
-    const msg = this.options.message;
+    // Rails uses filtered_options(value).merge!(count: option_value)
+    // for compare/range branches and filtered_options(value) (no count)
+    // for odd/even. Build a fresh filtered base each branch so non-
+    // reserved validator options (message, if, unless, …) reach i18n.
+    const withCount = (count: unknown): Record<string, unknown> => ({
+      ...this.filteredOptions(value),
+      count,
+    });
+
     const gt = this.resolveNumeric(
       this.options.greaterThan as NumericValue | undefined,
       record,
@@ -125,7 +155,7 @@ export class NumericalityValidator extends EachValidator {
       scale,
     );
     if (gt !== undefined && !(num > gt)) {
-      record.errors.add(attribute, "greater_than", { count: gt, value, message: msg });
+      record.errors.add(attribute, "greater_than", withCount(gt));
     }
     const gte = this.resolveNumeric(
       this.options.greaterThanOrEqualTo as NumericValue | undefined,
@@ -134,7 +164,7 @@ export class NumericalityValidator extends EachValidator {
       scale,
     );
     if (gte !== undefined && !(num >= gte)) {
-      record.errors.add(attribute, "greater_than_or_equal_to", { count: gte, value, message: msg });
+      record.errors.add(attribute, "greater_than_or_equal_to", withCount(gte));
     }
     const lt = this.resolveNumeric(
       this.options.lessThan as NumericValue | undefined,
@@ -143,7 +173,7 @@ export class NumericalityValidator extends EachValidator {
       scale,
     );
     if (lt !== undefined && !(num < lt)) {
-      record.errors.add(attribute, "less_than", { count: lt, value, message: msg });
+      record.errors.add(attribute, "less_than", withCount(lt));
     }
     const lte = this.resolveNumeric(
       this.options.lessThanOrEqualTo as NumericValue | undefined,
@@ -152,7 +182,7 @@ export class NumericalityValidator extends EachValidator {
       scale,
     );
     if (lte !== undefined && !(num <= lte)) {
-      record.errors.add(attribute, "less_than_or_equal_to", { count: lte, value, message: msg });
+      record.errors.add(attribute, "less_than_or_equal_to", withCount(lte));
     }
     const eq = this.resolveNumeric(
       this.options.equalTo as NumericValue | undefined,
@@ -161,7 +191,7 @@ export class NumericalityValidator extends EachValidator {
       scale,
     );
     if (eq !== undefined && num !== eq) {
-      record.errors.add(attribute, "equal_to", { count: eq, value, message: msg });
+      record.errors.add(attribute, "equal_to", withCount(eq));
     }
     const ot = this.resolveNumeric(
       this.options.otherThan as NumericValue | undefined,
@@ -170,23 +200,19 @@ export class NumericalityValidator extends EachValidator {
       scale,
     );
     if (ot !== undefined && num === ot) {
-      record.errors.add(attribute, "other_than", { count: ot, value, message: msg });
+      record.errors.add(attribute, "other_than", withCount(ot));
     }
     if (this.options.in !== undefined) {
       const [min, max] = this.options.in as [number, number];
       if (num < min || num > max) {
-        record.errors.add(attribute, "in", {
-          message: msg,
-          value,
-          count: `${min}..${max}`,
-        });
+        record.errors.add(attribute, "in", withCount(`${min}..${max}`));
       }
     }
     if (this.options.odd && num % 2 === 0) {
-      record.errors.add(attribute, "odd", { value, message: msg });
+      record.errors.add(attribute, "odd", this.filteredOptions(value));
     }
     if (this.options.even && num % 2 !== 0) {
-      record.errors.add(attribute, "even", { value, message: msg });
+      record.errors.add(attribute, "even", this.filteredOptions(value));
     }
   }
 }

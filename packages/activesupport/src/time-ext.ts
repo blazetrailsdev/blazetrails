@@ -8,7 +8,7 @@
  *   helpers below the boundary still return `Date` and will flip in F-6b/c/d.
  */
 
-import { Temporal, instantFrom } from "./temporal.js";
+import { type Temporal, instantFrom } from "./temporal.js";
 
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 

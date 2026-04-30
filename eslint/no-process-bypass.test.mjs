@@ -1,7 +1,16 @@
 import { RuleTester } from "eslint";
 import rule from "./no-process-bypass.mjs";
 
-const tester = new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: "module" } });
+// Use the TypeScript parser since this rule is enforced on *.ts files.
+// Without it, TS-only bypasses (process!, process as any, etc.) wouldn't
+// even parse in the test, let alone get exercised.
+const tester = new RuleTester({
+  languageOptions: {
+    ecmaVersion: 2022,
+    sourceType: "module",
+    parser: (await import("typescript-eslint")).parser,
+  },
+});
 
 const SOURCE = "@blazetrails/activesupport/process-adapter";
 
@@ -75,6 +84,52 @@ tester.run("no-process-bypass", rule, {
       code: `import { setExitCode as setEC } from "${SOURCE}";\nprocess.exitCode = 1;`,
       errors: [{ messageId: "bypass" }],
       output: `import { setExitCode as setEC } from "${SOURCE}";\nsetEC(1);`,
+    },
+
+    // ── TypeScript wrapper bypasses ──
+    // Non-null assertion: process!.env
+    { code: "process!.env;", errors: [{ messageId: "bypass" }], output: null },
+    // `as` type assertion: (process as any).cwd()
+    { code: "(process as any).cwd();", errors: [{ messageId: "bypass" }], output: null },
+    // Old-style type assertion: <any>process .env (rarely used in TS files)
+    { code: "(<any>process).env;", errors: [{ messageId: "bypass" }], output: null },
+    // Parenthesized: (process).env
+    { code: "(process).env;", errors: [{ messageId: "bypass" }], output: null },
+    // satisfies: (process satisfies object).env
+    { code: "(process satisfies object).env;", errors: [{ messageId: "bypass" }], output: null },
+    // Combined: ((process as any)!).env
+    { code: "((process as any)!).env;", errors: [{ messageId: "bypass" }], output: null },
+
+    // ── Destructuring ──
+    // Direct destructure of process
+    {
+      code: "const { env } = process;",
+      errors: [{ messageId: "bypass" }],
+      output: null,
+    },
+    // Multiple props in one declarator
+    {
+      code: "const { env, cwd } = process;",
+      errors: [{ messageId: "bypass" }, { messageId: "bypass" }],
+      output: null,
+    },
+    // Renamed destructure
+    {
+      code: "const { env: e } = process;",
+      errors: [{ messageId: "bypass" }],
+      output: null,
+    },
+    // Destructure of an unwrapped TS expression
+    {
+      code: "const { env } = process!;",
+      errors: [{ messageId: "bypass" }],
+      output: null,
+    },
+    // Mix of safe + unsafe props — only the unsafe one is reported
+    {
+      code: "const { pid, env } = process;",
+      errors: [{ messageId: "bypass" }],
+      output: null,
     },
   ],
 });

@@ -101,8 +101,30 @@ const REPLACEMENTS = {
   },
 };
 
+/**
+ * Unwrap TypeScript wrapper expressions that don't change the runtime
+ * value: non-null assertion (`x!`), type assertions (`x as T`,
+ * `<T>x`), and parenthesized expressions. Without unwrapping, forms
+ * like `process!.env` or `(process as any).env` would silently bypass
+ * the rule.
+ */
+function unwrap(node) {
+  while (
+    node &&
+    (node.type === "TSNonNullExpression" ||
+      node.type === "TSAsExpression" ||
+      node.type === "TSTypeAssertion" ||
+      node.type === "TSSatisfiesExpression" ||
+      node.type === "ParenthesizedExpression")
+  ) {
+    node = node.expression;
+  }
+  return node;
+}
+
 function isProcessIdentifier(node) {
-  return node && node.type === "Identifier" && node.name === "process";
+  const inner = unwrap(node);
+  return inner && inner.type === "Identifier" && inner.name === "process";
 }
 
 function getAccessedProp(node) {
@@ -165,7 +187,40 @@ const rule = {
     },
   },
   create(context) {
+    /**
+     * Catch destructuring forms: `const { env, cwd } = process;` and
+     * `const { env: e } = process;`. Each disallowed property in the
+     * pattern is reported separately so the message points at the
+     * exact violation.
+     */
+    function checkDestructuring(declarator) {
+      if (!declarator.init) return;
+      if (declarator.id.type !== "ObjectPattern") return;
+      if (!isProcessIdentifier(declarator.init)) return;
+      for (const propNode of declarator.id.properties) {
+        if (propNode.type !== "Property" || propNode.computed) continue;
+        const keyName =
+          propNode.key.type === "Identifier"
+            ? propNode.key.name
+            : propNode.key.type === "Literal" && typeof propNode.key.value === "string"
+              ? propNode.key.value
+              : null;
+        if (!keyName || !REPLACEMENTS[keyName]) continue;
+        const replacement = REPLACEMENTS[keyName];
+        context.report({
+          node: propNode,
+          messageId: "bypass",
+          data: {
+            prop: keyName,
+            importName: replacement.importName,
+            note: replacement.note,
+          },
+        });
+      }
+    }
+
     return {
+      VariableDeclarator: checkDestructuring,
       MemberExpression(node) {
         if (!isProcessIdentifier(node.object)) return;
         const prop = getAccessedProp(node);

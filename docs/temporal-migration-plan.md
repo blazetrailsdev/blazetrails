@@ -63,33 +63,6 @@ become unreachable and get deleted in a sweep PR.
 
 Each PR ≤300 LOC. The chain is independent — any can land first.
 
-### F-6a — `time-ext.ts` period bounds (≈15 helpers)
-
-Flip return types to `Temporal.Instant`:
-
-- `beginningOfDay`, `middleOfDay`, `endOfDay`
-- `beginningOfHour`, `endOfHour`
-- `beginningOfMinute`, `endOfMinute`
-- `beginningOfWeek`, `endOfWeek`
-- `beginningOfMonth`, `endOfMonth`
-- `beginningOfQuarter`, `endOfQuarter`
-- `beginningOfYear`, `endOfYear`
-
-Each computes a wall-clock boundary from the input. Inputs stay
-`Date` (with a `Temporal.Instant` overload added). Internal arithmetic
-moves to `Temporal.PlainDateTime` / `ZonedDateTime` so we don't lose
-precision.
-
-### F-6b — `time-ext.ts` navigation (≈11 helpers)
-
-- `nextDay`, `prevDay`
-- `nextWeek`, `prevWeek`, `lastWeek`
-- `nextMonth`, `prevMonth`
-- `nextYear`, `prevYear`
-- `nextOccurring`, `prevOccurring`
-
-Same shape: accept `Date | Temporal.Instant`, return `Temporal.Instant`.
-
 ### F-6c — `time-ext.ts` arithmetic (≈6 helpers)
 
 - `ago`, `since`

@@ -1,7 +1,7 @@
 # activerecord test:compare → 100% Plan
 
 Snapshot 2026-04-30: `activerecord 5872/8177 (71.8%) | 334/334 files | 0 misplaced`.
-Total pending: **2304 tests** across skipped tests; zero missing files, zero misplaced.
+Total pending: **2305 tests** across skipped tests; zero missing files, zero misplaced.
 
 PR sizing follows the repo rule (≤20 methods/feature touchpoints unless trivial).
 For each PR the rails source path(s) and trails source/test paths are listed.

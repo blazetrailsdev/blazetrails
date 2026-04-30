@@ -14,12 +14,12 @@ PRs marked **independent** can be parallelized. Trails files are paths under
 
 PRs 1–5 merged (see Completed below).
 
-| Wave | PRs                                | Notes                                    |
-| ---- | ---------------------------------- | ---------------------------------------- |
-| 1    | 11, 13, 15, 17, 18, 19, 20, 21, 22 | independent fixes                        |
-| 2    | 6, 8, 12, 14                       | depend on wave-1 helpers / shape changes |
-| 3    | 7, 16, 23, 24                      | breaking-change wave; ship serially      |
-| 4    | 10, 25, 26                         | dialect / cross-package work             |
+| Wave | PRs                        | Notes                                    |
+| ---- | -------------------------- | ---------------------------------------- |
+| 1    | 13, 15, 18, 19, 20, 21, 22 | independent fixes                        |
+| 2    | 6, 8, 12, 14               | depend on wave-1 helpers / shape changes |
+| 3    | 7, 16, 23, 24              | breaking-change wave; ship serially      |
+| 4    | 10, 25, 26                 | dialect / cross-package work             |
 
 Wave-1 PRs can be opened in parallel. Wave-3 requires sequential merge
 because each one moves AR-visible API.
@@ -53,6 +53,8 @@ api:compare` is a chained script — args don't reach `compare.ts`.)
 - PR 4 — SQLite UNION grouping — merged in #1034.
 - PR 5 — Set-op parenthesization (`infixValueWithParen` + flatten) — merged in #1035.
 - PR 9 — `Table` self-alias normalization + 2-arg `[]` overload — merged in #1038.
+- PR 11 — `Math` over-quoting + `bitwiseNot` — merged in #1042.
+- PR 17 — `crud.ts` always assign `key` — merged in #1045.
 
 ---
 
@@ -246,44 +248,6 @@ Rails (`@klass.attribute_aliases`).
 
 ---
 
-## PR 11 — `Math` over-quoting + `bitwiseNot` **[independent]**
-
-### Rails reference
-
-- `math.rb` — operator methods pass `other` through unchanged.
-
-### Trails files to change
-
-- `math.ts` — drop `buildQuoted(other)` in `multiply`, `add`, `subtract`,
-  `divide`, `bitwiseAnd`, `bitwiseOr`, `bitwiseXor`, `bitwiseShiftLeft`,
-  `bitwiseShiftRight`. Add `bitwiseNot()` → `BitwiseNot(this)`.
-- `nodes/unary.ts` — add `BitwiseNot extends Unary`.
-- `visitors/to-sql.ts` — `visitArelNodesBitwiseNot` → emit `~ ` then visit
-  expr. Match Rails spacing.
-
-### Tests to add
-
-- `math.test.ts` — for each operator, pass a `Node` arg and assert the
-  AST contains it raw (no Quoted around it).
-- `math.test.ts` — `bitwiseNot()` AST + SQL.
-
-### Risk
-
-- Visitors that currently rely on the `Quoted` wrapper to render scalars
-  (a `5`-as-Quoted vs raw number) must already handle raw values, since
-  attribute-side scalars are already Quoted by the predicate path. Spot
-  check `visitNodeOrValue`.
-
-### Verification
-
-- New tests pass; `pnpm parity:query` math fixtures unchanged.
-
-### Size
-
-~50 LOC src + ~70 LOC test.
-
----
-
 ## PR 12 — `InsertManager` shape parity
 
 ### Rails reference
@@ -436,22 +400,6 @@ manager file and share a test file. Strictly under 100 LOC.
 ### Size
 
 ~40 LOC src + ~70 LOC test.
-
----
-
-## PR 17 — `crud.ts`: always assign `key` **[independent]**
-
-### Change
-
-- `crud.ts` `compileUpdate` / `compileDelete`: always `um.key = key`.
-
-### Test
-
-- `crud.test.ts` — `compileUpdate(values, null)` → `um.key === null`.
-
-### Size
-
-~5 LOC src + ~15 LOC test.
 
 ---
 

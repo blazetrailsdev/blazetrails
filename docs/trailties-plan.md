@@ -30,7 +30,9 @@ below without proposing a plan-doc change first.
    `! grep -r 'from "node:' packages/trailties/src/ | grep -v bin.ts`.
 2. **No `process.*` references** in `packages/trailties/src/` after PR 0.3.
    Enforced by ESLint via `blazetrails/no-process-bypass`.
-3. **`fsAdapter` is async-only.** Every fs call is awaited.
+3. **Trailties code uses async fs only.** `fsAdapter` exposes both
+   sync and async surfaces; trailties imports only the async ones
+   (`exists`, `mkdtemp`, etc.) and `await`s every call.
 4. **No new third-party runtime deps in trailties.** `commander` and
    `vite` (behind `./vite` export only) are the only non-workspace deps.
 5. **PR size ceiling: 300 LOC** (CLAUDE.md). Splits are pre-planned per PR

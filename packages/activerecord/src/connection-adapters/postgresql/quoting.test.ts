@@ -22,14 +22,9 @@ import {
 } from "./quoting.js";
 
 describe("PostgreSQL quoting", () => {
-  it("uses PostgreSQL's 't'/'f' boolean SQL literals (Rails parity)", () => {
-    expect(quotedTrue()).toBe("'t'");
-    expect(quotedFalse()).toBe("'f'");
-  });
-
-  it("quote(boolean) dispatches through PG's quotedTrue/quotedFalse", () => {
-    expect(quote(true)).toBe("'t'");
-    expect(quote(false)).toBe("'f'");
+  it("inherits abstract boolean SQL literals (Rails PG does not override quoted_true)", () => {
+    expect(quotedTrue()).toBe("TRUE");
+    expect(quotedFalse()).toBe("FALSE");
   });
 
   it("type casts binary data using the PG binary bind shape", () => {

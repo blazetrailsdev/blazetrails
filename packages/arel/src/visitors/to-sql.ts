@@ -1057,7 +1057,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   private visitArelNodesExtract(node: Nodes.Extract): SQLString {
     this.collector.append(`EXTRACT(${String(node.field).toUpperCase()} FROM `);
     if (Array.isArray(node.expr)) {
-      this.visitArray(node.expr as unknown as Nodes.NodeOrValue[]);
+      this.visitArray(node.expr);
     } else if (node.expr instanceof Node) {
       this.visit(node.expr);
     } else if (node.expr !== null && node.expr !== undefined) {

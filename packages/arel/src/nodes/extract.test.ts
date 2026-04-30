@@ -29,7 +29,7 @@ describe("Arel::Nodes::ExtractTest", () => {
     const createdAt = users.get("created_at");
     const node = createdAt.extract("year");
     expect(Array.isArray(node.expr)).toBe(true);
-    expect((node.expr as unknown as Nodes.Node[])[0]).toBe(createdAt);
+    expect((node.expr as Nodes.Node[])[0]).toBe(createdAt);
     expect(new Visitors.ToSql().compile(node)).toBe('EXTRACT(YEAR FROM "users"."created_at")');
   });
 

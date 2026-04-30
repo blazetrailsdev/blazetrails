@@ -12,7 +12,7 @@ export class Extract extends Unary {
   readonly field: string;
 
   constructor(expr: Node | Node[], field: string) {
-    super(expr as unknown as Node);
+    super(expr);
     this.field = field;
   }
 

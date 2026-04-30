@@ -37,6 +37,14 @@ function f(x: unknown) {
     "const t = Date.UTC(2024, 0, 1);",
     // Out of scope: `: Date` type annotations alone don't trigger the rule.
     "function f(d: Date): string { return ''; }",
+    // Multi-line instanceof — boundary marker on the `Date` line, not the
+    // start line of the surrounding expression.
+    `function f(x: unknown) {
+  return (
+    x instanceof
+    Date // boundary: legacy multi-line shape
+  );
+}`,
   ],
 
   invalid: [
@@ -59,6 +67,11 @@ function f(x: unknown) {
     },
     {
       code: "const d = new window.Date();",
+      errors: [{ messageId: "noNew" }],
+    },
+    // Non-JSDoc block comment with @boundary-file: doesn't exempt the file.
+    {
+      code: "/* @boundary-file: not-jsdoc */\nconst d = new Date();",
       errors: [{ messageId: "noNew" }],
     },
     // Boundary keyword in unrelated comment doesn't exempt.

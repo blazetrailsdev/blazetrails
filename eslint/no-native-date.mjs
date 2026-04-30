@@ -33,25 +33,32 @@
  */
 
 function hasFileBoundaryDirective(sourceCode) {
-  // `@boundary-file:` only counts when it appears in the file *header* — i.e.
-  // before any non-comment token. Honoring it anywhere in the file would let
-  // a function-level JSDoc unintentionally exempt the whole module.
+  // `@boundary-file:` only counts when it appears in a *JSDoc* block comment
+  // in the file header — i.e. before any non-comment token AND the comment
+  // body starts with `*` (the JSDoc shape). Honoring an arbitrary block
+  // comment would let any `/* @boundary-file: */` slip through.
   const firstToken = sourceCode.getFirstToken(sourceCode.ast);
   const headerEnd = firstToken ? firstToken.range[0] : sourceCode.text.length;
   for (const comment of sourceCode.getAllComments()) {
     if (comment.range[0] >= headerEnd) break;
-    if (comment.type === "Block" && comment.value.includes("@boundary-file:")) {
+    if (
+      comment.type === "Block" &&
+      comment.value.startsWith("*") &&
+      comment.value.includes("@boundary-file:")
+    ) {
       return true;
     }
   }
   return false;
 }
 
-function hasBoundaryComment(allComments, sourceCode, node) {
-  const line = node.loc.start.line;
-  // 1. Same-line trailing comment.
+function hasBoundaryComment(allComments, sourceCode, node, dateRef) {
+  // 1. Same-line trailing comment — anchored on the `Date` reference itself
+  //    (not the enclosing expression's start line) so multi-line `instanceof`
+  //    / `new` expressions can carry the marker on the `Date` line.
+  const dateLine = (dateRef ?? node).loc.start.line;
   for (const comment of allComments) {
-    if (comment.loc.start.line === line && /\bboundary:/i.test(comment.value)) {
+    if (comment.loc.start.line === dateLine && /\bboundary:/i.test(comment.value)) {
       return true;
     }
   }
@@ -123,8 +130,8 @@ const rule = {
     // O(comments) per reported node.
     const allComments = sourceCode.getAllComments();
 
-    function report(node, messageId, data) {
-      if (hasBoundaryComment(allComments, sourceCode, node)) return;
+    function report(node, messageId, dateRef, data) {
+      if (hasBoundaryComment(allComments, sourceCode, node, dateRef)) return;
       context.report({ node, messageId, data });
     }
 
@@ -151,12 +158,12 @@ const rule = {
     return {
       NewExpression(node) {
         if (isGlobalDateRef(node.callee)) {
-          report(node, "noNew");
+          report(node, "noNew", node.callee);
         }
       },
       BinaryExpression(node) {
         if (node.operator === "instanceof" && isGlobalDateRef(node.right)) {
-          report(node, "noInstanceof");
+          report(node, "noInstanceof", node.right);
         }
       },
     };

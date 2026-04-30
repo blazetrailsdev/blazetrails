@@ -1691,12 +1691,14 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Resolve the active adapter for a model. Lets `Base.adapter` propagate
+ * its `ConnectionNotDefined` (or other connection errors) so callers
+ * see the real cause rather than a `TypeError` on the next `.quote*`
+ * access.
+ */
 function adapterFor(modelClass: any): any {
-  try {
-    return modelClass?.adapter;
-  } catch {
-    return undefined;
-  }
+  return modelClass?.adapter;
 }
 
 function safeQuoteTableName(modelClass: any, name: string): string {

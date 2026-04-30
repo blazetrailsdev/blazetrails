@@ -864,7 +864,9 @@ describe("the to_sql visitor", () => {
       const c = users.project(star);
       const node = new Nodes.UnionAll(a.ast, new Nodes.UnionAll(b.ast, c.ast));
       const sql = new Visitors.ToSql().compile(node);
-      expect(sql).toContain("UNION ALL");
+      expect(sql).toBe(
+        '( SELECT * FROM "users" UNION ALL SELECT * FROM "users" UNION ALL SELECT * FROM "users" )',
+      );
     });
   });
 
@@ -875,7 +877,9 @@ describe("the to_sql visitor", () => {
       const c = users.project(star);
       const node = new Nodes.Union(a.ast, new Nodes.Union(b.ast, c.ast));
       const sql = new Visitors.ToSql().compile(node);
-      expect(sql).toContain("UNION");
+      expect(sql).toBe(
+        '( SELECT * FROM "users" UNION SELECT * FROM "users" UNION SELECT * FROM "users" )',
+      );
     });
 
     it("encloses SELECT statements with parentheses", () => {
@@ -883,8 +887,33 @@ describe("the to_sql visitor", () => {
       const m2 = users.project(star);
       const node = new Nodes.Union(m1.ast, m2.ast);
       const sql = new Visitors.ToSql().compile(node);
-      expect(sql).toContain("UNION");
-      expect(sql).toContain("(");
+      expect(sql).toBe('( SELECT * FROM "users" UNION SELECT * FROM "users" )');
+    });
+  });
+
+  describe("Nodes::Intersect", () => {
+    it("flattens nested intersects", () => {
+      const a = users.project(star);
+      const b = users.project(star);
+      const c = users.project(star);
+      const node = new Nodes.Intersect(a.ast, new Nodes.Intersect(b.ast, c.ast));
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toBe(
+        '( SELECT * FROM "users" INTERSECT SELECT * FROM "users" INTERSECT SELECT * FROM "users" )',
+      );
+    });
+  });
+
+  describe("Nodes::Except", () => {
+    it("flattens nested excepts", () => {
+      const a = users.project(star);
+      const b = users.project(star);
+      const c = users.project(star);
+      const node = new Nodes.Except(a.ast, new Nodes.Except(b.ast, c.ast));
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toBe(
+        '( SELECT * FROM "users" EXCEPT SELECT * FROM "users" EXCEPT SELECT * FROM "users" )',
+      );
     });
   });
 

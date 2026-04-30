@@ -14,10 +14,10 @@ PRs marked **independent** can be parallelized. Trails files are paths under
 
 PRs 1–5 merged (see Completed below).
 
-| Wave | PRs          | Notes                               |
-| ---- | ------------ | ----------------------------------- |
-| 3    | 23b, 23c, 24 | breaking-change wave; ship serially |
-| 4    | 10, 25, 26   | dialect / cross-package work        |
+| Wave | PRs        | Notes                               |
+| ---- | ---------- | ----------------------------------- |
+| 3    | 23c, 24    | breaking-change wave; ship serially |
+| 4    | 10, 25, 26 | dialect / cross-package work        |
 
 Waves 1 and 2 are complete. Wave-3 requires sequential merge because
 each one moves AR-visible API.

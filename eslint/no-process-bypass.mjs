@@ -52,22 +52,29 @@ const REPLACEMENTS = {
     importName: "setExitCode",
     note: "call setExitCode(code) instead",
     fixable: true,
-    // process.exitCode = N → setExitCode(N): rewrite the parent
-    // AssignmentExpression. Only autofix when parent is `=` assignment;
-    // bare reads of process.exitCode are rare enough to leave alone.
+    // process.exitCode = N → setExitCode(N): only autofix when the
+    // assignment is a top-level ExpressionStatement. The assignment's
+    // value is `N` (assignment expressions evaluate to the RHS), so
+    // rewriting `if ((process.exitCode = 1)) ...` to
+    // `if (setExitCode(1)) ...` would silently change the condition
+    // (setExitCode returns void). Bail when the parent isn't a
+    // statement so the user can rewrite by hand.
     rewrite(memberNode, fixer, localName, context) {
-      const parent = memberNode.parent;
+      const assign = memberNode.parent;
       if (
-        parent &&
-        parent.type === "AssignmentExpression" &&
-        parent.operator === "=" &&
-        parent.left === memberNode
+        !assign ||
+        assign.type !== "AssignmentExpression" ||
+        assign.operator !== "=" ||
+        assign.left !== memberNode
       ) {
-        const sourceCode = context.sourceCode || context.getSourceCode();
-        const valueText = sourceCode.getText(parent.right);
-        return [fixer.replaceText(parent, `${localName}(${valueText})`)];
+        return null;
       }
-      return null;
+      if (!assign.parent || assign.parent.type !== "ExpressionStatement") {
+        return null;
+      }
+      const sourceCode = context.sourceCode || context.getSourceCode();
+      const valueText = sourceCode.getText(assign.right);
+      return [fixer.replaceText(assign, `${localName}(${valueText})`)];
     },
   },
   stdout: {
@@ -99,8 +106,25 @@ const REPLACEMENTS = {
     importName: "onSignal",
     note: "call onSignal(name, handler) instead",
     fixable: true,
-    // process.on(...) → onSignal(...): replace `process.on` with `onSignal`.
+    // process.on(name, h) → onSignal(name, h): only autofix when the
+    // first argument is a string literal of a signal name onSignal
+    // accepts. `process.on('exit', h)`, `process.on('message', h)`,
+    // etc. are NOT signals — onSignal would reject them at the type
+    // level. Leave those as a manual rewrite.
     rewrite(memberNode, fixer, localName) {
+      const call = memberNode.parent;
+      if (
+        !call ||
+        call.type !== "CallExpression" ||
+        call.callee !== memberNode ||
+        call.arguments.length === 0
+      ) {
+        return null;
+      }
+      const first = call.arguments[0];
+      const isSignalLiteral =
+        first.type === "Literal" && (first.value === "SIGINT" || first.value === "SIGTERM");
+      if (!isSignalLiteral) return null;
       return [fixer.replaceText(memberNode, localName)];
     },
   },

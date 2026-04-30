@@ -86,6 +86,48 @@ tester.run("no-process-bypass", rule, {
       output: `import { setExitCode as setEC } from "${SOURCE}";\nsetEC(1);`,
     },
 
+    // ── Autofix safety gates ──
+    // exitCode in expression context: flagged but NOT autofixed (semantics
+    // would change — assignment evaluates to the RHS but setExitCode is void)
+    {
+      code: "if ((process.exitCode = 1)) {}",
+      errors: [{ messageId: "bypass" }],
+      output: null,
+    },
+    {
+      code: "foo(process.exitCode = 1);",
+      errors: [{ messageId: "bypass" }],
+      output: null,
+    },
+    {
+      code: "const x = process.exitCode = 1;",
+      errors: [{ messageId: "bypass" }],
+      output: null,
+    },
+    // process.on with a non-signal event name: flagged but NOT autofixed
+    {
+      code: "process.on('exit', () => {});",
+      errors: [{ messageId: "bypass" }],
+      output: null,
+    },
+    {
+      code: "process.on('message', () => {});",
+      errors: [{ messageId: "bypass" }],
+      output: null,
+    },
+    // process.on with dynamic name: flagged but NOT autofixed
+    {
+      code: "process.on(name, () => {});",
+      errors: [{ messageId: "bypass" }],
+      output: null,
+    },
+    // process.on with SIGTERM: autofixed (other supported signal)
+    {
+      code: "process.on('SIGTERM', h);",
+      errors: [{ messageId: "bypass" }],
+      output: `import { onSignal } from "${SOURCE}";\nonSignal('SIGTERM', h);`,
+    },
+
     // ── TypeScript wrapper bypasses ──
     // Non-null assertion: process!.env
     { code: "process!.env;", errors: [{ messageId: "bypass" }], output: null },

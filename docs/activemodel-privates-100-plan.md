@@ -16,10 +16,18 @@ Rails reference: `scripts/api-compare/.rails-source/activemodel/`.
 ## Current state
 
 ```
-pnpm api:compare --package activemodel              → 433/433 (100%)
-pnpm api:compare --privates --package activemodel   → 448/452 (99.1%)  (was 454/607 74.8%)
-pnpm test:compare --package activemodel             → 959/963 (99.6%)
+pnpm api:compare --package activemodel                                        → 433/433 (100%)
+pnpm tsx scripts/api-compare/compare.ts --privates --package activemodel      → 505/625 (80.8%)
+pnpm test:compare --package activemodel                                       → 959/963 (99.6%)
 ```
+
+> ⚠️ **Don't run `pnpm api:compare --privates …` for the privates view.**
+> The `api:compare` script chains four commands with `&&`, and pnpm
+> forwards arguments only to the LAST command in the chain (the
+> `build-rails-privates-manifest` step). `compare.ts` ends up running
+> with no flags (= public-only mode), and the printed numbers come
+> from the manifest builder, not from the comparison report. Always
+> invoke `compare.ts` directly when you need privates totals.
 
 The privates view is what surfaces internal Rails behaviors that the
 public view doesn't enforce. Most of the validator-family
@@ -30,11 +38,12 @@ the consumption call site to materialize.
 
 ### Track A is complete
 
-All Track A PRs are merged and visible in the privates report.
-Validator files all show 100%. The 4 remaining activemodel misses
-are in non-validator files (`api.rb`, `model.rb`, `type/value.rb`,
-`validations.rb` — 1 each) and belong to Track B. Track A's
-resolveValue consumption gap is fully closed.
+All Track A PRs are merged. Direct invocation of `compare.ts` shows
+every validator file at 100% (Clusivity 5/5, Inclusion 6/6, Exclusion
+6/6, Format 6/6, Length 5/5, Numericality 15/15, Confirmation 4/4,
+Acceptance 4/4, Callbacks 4/4 — only `validator.rb` itself has 1
+remaining miss: `prepareValueForValidation`). Track A's
+`resolveValue` consumption gap is fully closed.
 
 The earlier "extractor extension (A6)" hypothesis was based on a
 stale extraction run from the default worktree, which sat behind
@@ -148,38 +157,129 @@ during review.
 
 ## Track B — Privates beyond validators
 
-Lower priority. Sequence after Track A.
+~120 misses across activemodel non-validator files. Real per-file
+miss list (from `pnpm tsx scripts/api-compare/compare.ts --privates
+--package activemodel --missing` at HEAD `1a9aaaf9b`):
 
-| Cluster         | File                                                                                                      |   Misses |
-| --------------- | --------------------------------------------------------------------------------------------------------- | -------: |
-| Serialization   | `serializers/json.rb`                                                                                     |        5 |
-| Serialization   | `serialization.rb`                                                                                        |        3 |
-| Type primitives | `type/integer.rb`                                                                                         |        7 |
-| Type primitives | `type/date.rb`                                                                                            |        5 |
-| Type primitives | `type/date_time.rb`                                                                                       |        4 |
-| Type primitives | `type/decimal.rb`                                                                                         |        3 |
-| Type primitives | `type/helpers/numeric.rb`                                                                                 |        3 |
-| Type primitives | `type/helpers/time_value.rb`                                                                              |        2 |
-| Core            | `model.rb`                                                                                                |        8 |
-| Core            | `validations.rb`                                                                                          |       11 |
-| Core            | `lint.rb`                                                                                                 |        2 |
-| Misc            | `naming.rb`, `validator.rb`, type/{boolean, big_integer, immutable_string, registry, string, time, value} | 1-2 each |
+| File                                                                     | Misses | Methods                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------ | -----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `validations.rb`                                                         |     11 | contextForValidation, initInternals, runValidationsBang, raiseValidationError, \_mergeAttributes, predicateForValidationContext, \_validatesDefaultKeys, \_parseValidatesOptions, \_define{Before,Around,After}ModelCallback |
+| `attribute_methods.rb`                                                   |     12 | isAttributeMethod, matchedAttributeMethod, missingAttribute, \_readAttribute, resolveAttributeName, … (12 total)                                                                                                             |
+| `model.rb`                                                               |      8 | \_assignAttributes, \_assignAttribute, sanitizeForMassAssignment, contextForValidation, initInternals, … (overlaps validations + attribute_assignment)                                                                       |
+| `api.rb`                                                                 |      8 | same shape as model.rb (both share the assignment / validation entrypoints)                                                                                                                                                  |
+| `dirty.rb`                                                               |      8 | initInternals, attributePreviousChange, attributeWillChangeBang, restoreAttributeBang, isAttributeMethod, …                                                                                                                  |
+| `type/integer.rb`                                                        |      7 | range, isInRange, castValue, ensureInRange, maxValue, minValue, \_limit                                                                                                                                                      |
+| `attribute_registration.rb`                                              |      6 | applyTo, pendingAttributeModifications, resetDefaultAttributesBang, resolveAttributeName, resolveTypeName, …                                                                                                                 |
+| `attributes.rb`                                                          |      6 | \_writeAttribute, isAttributeMethod, matchedAttributeMethod, missingAttribute, \_readAttribute, …                                                                                                                            |
+| `type/date.rb`                                                           |      5 | castValue, fastStringToDate, fallbackStringToDate, newDate, valueFromMultiparameterAssignment                                                                                                                                |
+| `attribute_set/builder.rb`                                               |      5 | additionalTypes, defaultAttribute, materialize, delegateHash, assignDefaultValue                                                                                                                                             |
+| `type/date_time.rb`                                                      |      4 | castValue, microseconds, fallbackStringToTime, valueFromMultiparameterAssignment                                                                                                                                             |
+| `type/decimal.rb`                                                        |      3 | castValue, convertFloatToBigDecimal, floatPrecision                                                                                                                                                                          |
+| `type/helpers/numeric.rb`                                                |      3 | isEqualNan, isNumberToNonNumber, isNonNumericString                                                                                                                                                                          |
+| `serializers/json.rb`                                                    |      3 | attributeNamesForSerialization, serializableAttributes, serializableAddIncludes                                                                                                                                              |
+| `serialization.rb`                                                       |      3 | (same 3 — duplicated in serializers/json.rb)                                                                                                                                                                                 |
+| `callbacks.rb`                                                           |      3 | \_define{Before,Around,After}ModelCallback                                                                                                                                                                                   |
+| `attribute_assignment.rb`                                                |      2 | \_assignAttributes, \_assignAttribute                                                                                                                                                                                        |
+| `type/helpers/time_value.rb`                                             |      2 | newTime, fastStringToTime                                                                                                                                                                                                    |
+| `attribute.rb`                                                           |      2 | \_valueForDatabase, \_originalValueForDatabase                                                                                                                                                                               |
+| `attribute_mutation_tracker.rb`                                          |      2 | fetchValue, typeCast                                                                                                                                                                                                         |
+| `lint.rb`                                                                |      2 | model, assertBoolean                                                                                                                                                                                                         |
+| `naming.rb`                                                              |      2 | \_singularize, i18nKeys                                                                                                                                                                                                      |
+| `type/{value,boolean,float,immutable_string,string,time,big_integer}.rb` | 1 each | castValue (or maxValue for big_integer)                                                                                                                                                                                      |
+| `type/registry.rb`                                                       |      1 | registrations                                                                                                                                                                                                                |
+| `errors.rb`                                                              |      1 | normalizeArguments                                                                                                                                                                                                           |
+| `error.rb`                                                               |      1 | attributesForHash                                                                                                                                                                                                            |
+| `attribute_set.rb`                                                       |      1 | defaultAttribute                                                                                                                                                                                                             |
+| `validator.rb`                                                           |      1 | prepareValueForValidation                                                                                                                                                                                                    |
+| `validations/absence.rb`                                                 |      1 | \_mergeAttributes                                                                                                                                                                                                            |
 
-**PR B1 — `serializers/json.rb` privates**
-Likely candidates from Rails source: `_filter_only_or_except`-style helpers feeding `as_json` / `from_json`. Worth a fresh Rails read; some may unblock test cases under `json_serialization_test.rb`.
+**Cross-cutting observations:**
 
-**PR B2 — Type primitive privates (split per file)**
-Sub-second + coercion internals. These tend to surface real Rails
-divergences in numeric edge cases. One PR per file is over-scope; bundle
-related primitives (e.g. `date.rb` + `date_time.rb` + `time_value.rb`
-in one PR; `integer.rb` + `decimal.rb` + helpers/numeric in another).
+- **`castValue` family (10 files)**: Rails' `Type::Value#cast_value`
+  is the protected hook subclasses override for the actual coercion.
+  Trails uses inline logic in `cast`. Either rename + rewire, or add
+  a thin `castValue` indirection per type. Single-PR-able if scoped
+  carefully (one source-of-truth in `value.ts`, mechanical updates
+  in subclasses).
+- **Multiparameter cluster** (`type/date.rb`, `type/date_time.rb`,
+  `type/helpers/time_value.rb`, `attribute_assignment.rb`):
+  `valueFromMultiparameterAssignment`, `fastStringToTime`,
+  `fallbackStringToTime`, `newTime`, `_assignAttribute(s)` —
+  closely related, also overlaps with **Track C1's** hash-form
+  multiparameter test ports.
+- **Internals callback cluster** (`validations.rb`, `model.rb`,
+  `api.rb`, `dirty.rb`, `attribute_registration.rb`, `callbacks.rb`):
+  `initInternals`, `_defineBefore/Around/AfterModelCallback`,
+  `contextForValidation`. These read like the same handful of methods
+  re-exposed across files via Ruby `include` — likely small once
+  one is ported.
+- **Attribute-method dispatch cluster** (`attribute_methods.rb`,
+  `attributes.rb`): `isAttributeMethod`, `matchedAttributeMethod`,
+  `missingAttribute`, `_readAttribute`, `resolveAttributeName`. These
+  overlap with **Track D** (the readAttribute/MissingAttributeError
+  refactor); land Track D's caller-audit (D0) before scoping these
+  further.
 
-**PR B3 — `model.rb` (8 misses) and `validations.rb` (11 misses)**
-Largest single-file gaps. Likely needs scoping investigation before
-committing to a single PR — could be 2-3 PRs each. Defer until Track A
-and B1/B2 land so the scope is stable.
+### Suggested PR breakdown
 
-**Track B target:** activemodel privates 74.8% → ~95%.
+**PR B1 — `castValue` indirection across Type primitives**
+Single PR rewiring every `Type` subclass to expose `castValue` as
+the protected coercion hook (matching Rails). Closes ~10 misses
+(value, boolean, float, immutable_string, string, time, big_integer,
+date, date_time, decimal, integer's `castValue` slot). Mechanical
+once the pattern is set in `value.ts`.
+
+**PR B2 — Numeric primitives bundle (`type/integer.rb` + `type/decimal.rb` + `type/helpers/numeric.rb`)**
+After B1 lands `castValue`. Adds the remaining numeric privates:
+range/isInRange/ensureInRange/maxValue/minValue/\_limit (integer),
+convertFloatToBigDecimal/floatPrecision (decimal),
+isEqualNan/isNumberToNonNumber/isNonNumericString (numeric helpers).
+~13 misses.
+
+**PR B3 — Date/DateTime/TimeValue helpers + Multiparameter**
+After B1. fastStringToDate/fallbackStringToDate/newDate (date),
+microseconds/fallbackStringToTime (date_time), newTime/fastStringToTime
+(time_value), valueFromMultiparameterAssignment (date+date_time).
+~9 misses. **Coordinate with Track C1/C2/C3** — same surface.
+
+**PR B4 — Serialization (`serialization.rb` + `serializers/json.rb`)**
+attributeNamesForSerialization, serializableAttributes,
+serializableAddIncludes. The two files share the trio (mixin), so
+one PR closes 6 misses.
+
+**PR B5 — Internals callbacks + validation lifecycle (`validations.rb` + `callbacks.rb` + cross-file initInternals)**
+The 3 `_defineXxxModelCallback` methods + `initInternals` +
+`runValidationsBang` + `raiseValidationError` +
+`predicateForValidationContext` + `contextForValidation` +
+`_mergeAttributes`. Mostly one shared cluster surfaced across
+multiple files. ~15-18 misses across `validations.rb`, `callbacks.rb`,
+`model.rb`, `api.rb`, `dirty.rb`. Likely needs splitting into B5a
+(definitions) + B5b (consumption rewiring).
+
+**PR B6 — Attribute method dispatch cluster (`attribute_methods.rb` + `attributes.rb` + `attribute_set/builder.rb`)**
+isAttributeMethod, matchedAttributeMethod, missingAttribute,
+\_readAttribute, \_writeAttribute, resolveAttributeName,
+defaultAttribute, materialize. ~20 misses, but overlaps Track D —
+**defer until Track D0 has scoped the readAttribute caller audit**.
+
+**PR B7 — Tail (lint, naming, errors, error, attribute, attribute_registration, attribute_assignment, attribute_mutation_tracker, validator, validations/absence)**
+The remaining 1-6 each. Bundle by reasonable cohesion, probably 2-3
+PRs.
+
+**Track B target:** activemodel privates 80.8% → ~99%. Final 1% is
+non-portable Ruby internals (lifecycle hooks, `method_missing`,
+etc.) that should remain in the api-compare skip list.
+
+### Suggested order
+
+1. **B1** (castValue) — unblocks B2+B3 cleanly; mechanical, low risk.
+2. **B4** (serialization) — small, isolated, no dependencies.
+3. **B5a** (internals callbacks definitions) — sets up the shared
+   surface that B5b/B6 rewire to.
+4. **B2 + B3** in parallel (numeric vs date/time clusters).
+5. **B5b** (validation lifecycle consumption) — after B5a.
+6. **Defer B6** until Track D0 lands the readAttribute audit.
+7. **B7** in the gaps.
 
 ---
 

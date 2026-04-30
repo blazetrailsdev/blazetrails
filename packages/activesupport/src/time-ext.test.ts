@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Temporal } from "./temporal.js";
 import {
   beginningOfDay,
@@ -273,13 +273,16 @@ describe("TimeExtCalculationsTest", () => {
   });
 
   it("is_past accepts Temporal.Instant with sub-millisecond precision", () => {
-    expect(isPast(Temporal.Instant.from("2000-01-01T00:00:00Z"))).toBe(true);
-    expect(isPast(Temporal.Instant.from("2099-01-01T00:00:00Z"))).toBe(false);
-    const now = Temporal.Now.instant();
-    const oneNsBefore = now.subtract({ nanoseconds: 1 });
-    const oneNsAfter = now.add({ nanoseconds: 1_000_000_000 });
-    expect(isPast(oneNsBefore)).toBe(true);
-    expect(isPast(oneNsAfter)).toBe(false);
+    const fixed = Temporal.Instant.from("2025-06-15T12:00:00.000Z");
+    const spy = vi.spyOn(Temporal.Now, "instant").mockReturnValue(fixed);
+    try {
+      expect(isPast(fixed.subtract({ nanoseconds: 1 }))).toBe(true);
+      expect(isPast(fixed.add({ nanoseconds: 1 }))).toBe(false);
+      expect(isPast(Temporal.Instant.from("2000-01-01T00:00:00Z"))).toBe(true);
+      expect(isPast(Temporal.Instant.from("2099-01-01T00:00:00Z"))).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("is_future", () => {
@@ -288,13 +291,16 @@ describe("TimeExtCalculationsTest", () => {
   });
 
   it("is_future accepts Temporal.Instant with sub-millisecond precision", () => {
-    expect(isFuture(Temporal.Instant.from("2099-01-01T00:00:00Z"))).toBe(true);
-    expect(isFuture(Temporal.Instant.from("2000-01-01T00:00:00Z"))).toBe(false);
-    const now = Temporal.Now.instant();
-    const oneNsAfter = now.add({ nanoseconds: 1_000_000_000 });
-    const oneNsBefore = now.subtract({ nanoseconds: 1 });
-    expect(isFuture(oneNsAfter)).toBe(true);
-    expect(isFuture(oneNsBefore)).toBe(false);
+    const fixed = Temporal.Instant.from("2025-06-15T12:00:00.000Z");
+    const spy = vi.spyOn(Temporal.Now, "instant").mockReturnValue(fixed);
+    try {
+      expect(isFuture(fixed.add({ nanoseconds: 1 }))).toBe(true);
+      expect(isFuture(fixed.subtract({ nanoseconds: 1 }))).toBe(false);
+      expect(isFuture(Temporal.Instant.from("2099-01-01T00:00:00Z"))).toBe(true);
+      expect(isFuture(Temporal.Instant.from("2000-01-01T00:00:00Z"))).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("all_day", () => {

@@ -1314,6 +1314,63 @@ describe("the to_sql visitor", () => {
       expect(new Visitors.ToSql().compile(elseNode)).toBe("ELSE 0");
     });
 
+    // Mirrors Rails to_sql.rb#visit_Arel_Nodes_{Equality,NotEqual,GreaterThan,
+    // GreaterThanOrEqual,LessThan,LessThanOrEqual,In,NotIn} short-circuits
+    // when the right operand reports `unboundable?` (±Float::INFINITY).
+    describe("unboundable short-circuits", () => {
+      const tbl = new Table("users");
+      const compile = (n: Nodes.Node) => new Visitors.ToSql().compile(n);
+      const id = tbl.get("id");
+
+      it("Equality with +Infinity collapses to 1=0", () => {
+        expect(compile(id.eq(Infinity))).toBe("1=0");
+      });
+      it("Equality with -Infinity collapses to 1=0", () => {
+        expect(compile(id.eq(-Infinity))).toBe("1=0");
+      });
+      it("NotEqual with +Infinity collapses to 1=1", () => {
+        expect(compile(id.notEq(Infinity))).toBe("1=1");
+      });
+      it("NotEqual with -Infinity collapses to 1=1", () => {
+        expect(compile(id.notEq(-Infinity))).toBe("1=1");
+      });
+      it("GreaterThan +Infinity → 1=0; -Infinity → 1=1", () => {
+        expect(compile(id.gt(Infinity))).toBe("1=0");
+        expect(compile(id.gt(-Infinity))).toBe("1=1");
+      });
+      it("GreaterThanOrEqual +Infinity → 1=0; -Infinity → 1=1", () => {
+        expect(compile(id.gteq(Infinity))).toBe("1=0");
+        expect(compile(id.gteq(-Infinity))).toBe("1=1");
+      });
+      it("LessThan +Infinity → 1=1; -Infinity → 1=0", () => {
+        expect(compile(id.lt(Infinity))).toBe("1=1");
+        expect(compile(id.lt(-Infinity))).toBe("1=0");
+      });
+      it("LessThanOrEqual +Infinity → 1=1; -Infinity → 1=0", () => {
+        expect(compile(id.lteq(Infinity))).toBe("1=1");
+        expect(compile(id.lteq(-Infinity))).toBe("1=0");
+      });
+      it("In filters unboundable values; all-unboundable collapses to 1=0", () => {
+        expect(compile(id.in([Infinity, -Infinity]))).toBe("1=0");
+      });
+      it("In retains bounded values when mixed with unboundable", () => {
+        const sql = compile(id.in([1, Infinity, 2]));
+        expect(sql).toBe('"users"."id" IN (1, 2)');
+      });
+      it("NotIn filters unboundable values; all-unboundable collapses to 1=1", () => {
+        expect(compile(id.notIn([Infinity, -Infinity]))).toBe("1=1");
+      });
+      it("NotIn retains bounded values when mixed with unboundable", () => {
+        const sql = compile(id.notIn([1, Infinity, 2]));
+        expect(sql).toBe('"users"."id" NOT IN (1, 2)');
+      });
+      it("bounded comparisons are unaffected", () => {
+        expect(compile(id.gt(5))).toBe('"users"."id" > 5');
+        expect(compile(id.lt(5))).toBe('"users"."id" < 5');
+        expect(compile(id.eq(5))).toBe('"users"."id" = 5');
+      });
+    });
+
     it("visitArray handles a mix of Node and primitive entries", () => {
       const tbl = new Table("users");
       const v = new Visitors.ToSql();

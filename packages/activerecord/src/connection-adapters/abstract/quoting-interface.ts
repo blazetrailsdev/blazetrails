@@ -1,0 +1,65 @@
+/**
+ * Quoting interface — the contract every connection adapter satisfies
+ * for value/identifier quoting.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::Quoting (mixed into
+ * AbstractAdapter; PG/MySQL/SQLite override what differs).
+ *
+ * Call sites depend on this interface — never on the standalone
+ * functions in `abstract/quoting.ts` — so dialect dispatch happens via
+ * the active adapter rather than a string-enum parameter.
+ *
+ * @internal
+ */
+export interface Quoting {
+  /** Mirrors: Quoting#quote — SQL-literal form of a value. */
+  quote(value: unknown): string;
+
+  /** Mirrors: Quoting#quote_string — escape-only (no surrounding quotes). */
+  quoteString(s: string): string;
+
+  /** Mirrors: Quoting#quote_column_name (identifier-form). PG/SQLite double-quote, MySQL backtick. */
+  quoteIdentifier(name: string): string;
+
+  /** Mirrors: Quoting#quote_table_name (handles schema-qualified names). */
+  quoteTableName(name: string): string;
+
+  /** Mirrors: Quoting#quote_column_name. */
+  quoteColumnName(name: string): string;
+
+  /** Mirrors: Quoting#quote_table_name_for_assignment (`UPDATE ... SET col = ...`). */
+  quoteTableNameForAssignment(table: string, attr: string): string;
+
+  /** Mirrors: Quoting#quote_default_expression (DDL DEFAULT clause). */
+  quoteDefaultExpression(value: unknown): string;
+
+  /** Mirrors: Quoting#quoted_true. Abstract/PG/MySQL: `"TRUE"`; SQLite: `"1"`. */
+  quotedTrue(): string;
+
+  /** Mirrors: Quoting#quoted_false. */
+  quotedFalse(): string;
+
+  /** Mirrors: Quoting#unquoted_true. PG: `true`; MySQL/SQLite: `1`. */
+  unquotedTrue(): boolean | number;
+
+  /** Mirrors: Quoting#unquoted_false. */
+  unquotedFalse(): boolean | number;
+
+  /** Mirrors: Quoting#quoted_binary — adapter-specific binary literal. */
+  quotedBinary(value: unknown): string;
+
+  /** Mirrors: Quoting#type_cast — primitive form for bind params. */
+  typeCast(value: unknown): unknown;
+
+  /** Mirrors: Quoting#cast_bound_value — bound-param coercion. */
+  castBoundValue(value: unknown): unknown;
+
+  /** Mirrors: Quoting#sanitize_as_sql_comment — strip comment-close sequences from comment text. */
+  sanitizeAsSqlComment(value: unknown): string;
+
+  /** Mirrors: Quoting::ClassMethods#column_name_matcher — adapter-specific column-list regex. */
+  columnNameMatcher(): RegExp;
+
+  /** Mirrors: Quoting::ClassMethods#column_name_with_order_matcher. */
+  columnNameWithOrderMatcher(): RegExp;
+}

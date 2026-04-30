@@ -42,6 +42,14 @@ import {
   quoteString,
   quoteTableName,
   quoteColumnName,
+  quoteIdentifier as sqliteQuoteIdentifier,
+  quoteTableNameForAssignment as sqliteQuoteTableNameForAssignment,
+  quoteDefaultExpression as sqliteQuoteDefaultExpression,
+  quotedTrue as sqliteQuotedTrue,
+  unquotedTrue as sqliteUnquotedTrue,
+  quotedFalse as sqliteQuotedFalse,
+  unquotedFalse as sqliteUnquotedFalse,
+  quotedBinary as sqliteQuotedBinary,
 } from "./sqlite3/quoting.js";
 import {
   CheckConstraintDefinition,
@@ -469,6 +477,76 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   override typeCast(value: unknown): unknown {
     return sqliteTypeCast(value);
+  }
+
+  /**
+   * SQLite-specific quoting overrides — route every Quoting interface
+   * method to the per-adapter module so call sites can dispatch via
+   * `connection.quoteX(...)` and get the dialect-correct form
+   * (double-quote identifiers, `"1"`/`"0"` bools, hex binary literals).
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::Quoting overrides.
+   */
+  override quoteString(s: string): string {
+    // Mirrors: SQLite3::Quoting#quote_string — escape-only (no
+    // surrounding quotes). The standalone sqlite3/quoting.ts
+    // `quoteString` wraps for historical reasons; this override
+    // matches the Rails contract: just `'` → `''`.
+    return s.replace(/'/g, "''");
+  }
+
+  override quoteIdentifier(name: string): string {
+    return sqliteQuoteIdentifier(name);
+  }
+
+  override quoteTableName(name: string): string {
+    return quoteTableName(name);
+  }
+
+  override quoteColumnName(name: string): string {
+    return quoteColumnName(name);
+  }
+
+  override quoteTableNameForAssignment(table: string, attr: string): string {
+    return sqliteQuoteTableNameForAssignment(table, attr);
+  }
+
+  override quoteDefaultExpression(value: unknown): string {
+    return sqliteQuoteDefaultExpression(value);
+  }
+
+  override quotedTrue(): string {
+    return sqliteQuotedTrue();
+  }
+
+  override quotedFalse(): string {
+    return sqliteQuotedFalse();
+  }
+
+  override unquotedTrue(): number {
+    return sqliteUnquotedTrue();
+  }
+
+  override unquotedFalse(): number {
+    return sqliteUnquotedFalse();
+  }
+
+  override quotedBinary(value: unknown): string {
+    return sqliteQuotedBinary(value as Uint8Array);
+  }
+
+  override columnNameMatcher(): RegExp {
+    // Delegate to the static — `disallowRawSqlBang` callers already use
+    // the strict static-method regex (relation.ts:211 and
+    // query-methods.ts:155 walk to `adapter.constructor.columnNameMatcher`).
+    // The per-module `ColumnMatcher` class in sqlite3/quoting.ts is a
+    // looser separate matcher; routing the instance method through the
+    // static keeps the unsafe-sql validation behavior consistent.
+    return SQLite3Adapter.columnNameMatcher();
+  }
+
+  override columnNameWithOrderMatcher(): RegExp {
+    return SQLite3Adapter.columnNameWithOrderMatcher();
   }
 
   /**

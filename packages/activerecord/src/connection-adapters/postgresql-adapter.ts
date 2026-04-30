@@ -3269,7 +3269,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return { schema: pgName.schema, table: pgName.identifier };
   }
 
-  private quoteIdentifier(name: string): string {
+  override quoteIdentifier(name: string): string {
     return pgQuoteColumnName(name);
   }
 

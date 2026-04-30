@@ -8,7 +8,7 @@
  *   helpers below the boundary still return `Date` and will flip in F-6b/c/d.
  */
 
-import { Temporal } from "./temporal.js";
+import { Temporal, instantFrom } from "./temporal.js";
 
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
@@ -22,11 +22,6 @@ function clone(date: Date): Date {
   return new Date(date.getTime());
 }
 
-/** @internal */
-function instantFromDate(d: Date): Temporal.Instant {
-  return Temporal.Instant.fromEpochMilliseconds(d.getTime());
-}
-
 // ---------------------------------------------------------------------------
 // Day boundaries
 // ---------------------------------------------------------------------------
@@ -34,19 +29,19 @@ function instantFromDate(d: Date): Temporal.Instant {
 export function beginningOfDay(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setHours(0, 0, 0, 0);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 export function middleOfDay(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setHours(12, 0, 0, 0);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 export function endOfDay(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setHours(23, 59, 59, 999);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 // ---------------------------------------------------------------------------
@@ -56,13 +51,13 @@ export function endOfDay(date: Date): Temporal.Instant {
 export function beginningOfHour(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setMinutes(0, 0, 0);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 export function endOfHour(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setMinutes(59, 59, 999);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 // ---------------------------------------------------------------------------
@@ -72,38 +67,40 @@ export function endOfHour(date: Date): Temporal.Instant {
 export function beginningOfMinute(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setSeconds(0, 0);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 export function endOfMinute(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setSeconds(59, 999);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 // ---------------------------------------------------------------------------
 // Week boundaries
-// startDay: 0 = Sunday (default Rails), 1 = Monday
+// startDay: 0 = Sunday, 1 = Monday (default Rails)
 // ---------------------------------------------------------------------------
 
-export function beginningOfWeek(date: Date, startDay = 1): Temporal.Instant {
+/** @internal */
+function _beginningOfWeekDate(date: Date, startDay = 1): Date {
   const d = clone(date);
   const currentDay = d.getDay();
   let diff = currentDay - startDay;
   if (diff < 0) diff += 7;
   d.setDate(d.getDate() - diff);
   d.setHours(0, 0, 0, 0);
-  return instantFromDate(d);
+  return d;
+}
+
+export function beginningOfWeek(date: Date, startDay = 1): Temporal.Instant {
+  return instantFrom(_beginningOfWeekDate(date, startDay));
 }
 
 export function endOfWeek(date: Date, startDay = 1): Temporal.Instant {
-  const d = clone(date);
-  const currentDay = d.getDay();
-  let diff = currentDay - startDay;
-  if (diff < 0) diff += 7;
-  d.setDate(d.getDate() - diff + 6);
+  const d = _beginningOfWeekDate(date, startDay);
+  d.setDate(d.getDate() + 6);
   d.setHours(23, 59, 59, 999);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +111,7 @@ export function beginningOfMonth(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setDate(1);
   d.setHours(0, 0, 0, 0);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 export function endOfMonth(date: Date): Temporal.Instant {
@@ -123,7 +120,7 @@ export function endOfMonth(date: Date): Temporal.Instant {
   d.setMonth(d.getMonth() + 1, 1);
   d.setHours(0, 0, 0, 0);
   d.setTime(d.getTime() - 1);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 // ---------------------------------------------------------------------------
@@ -136,7 +133,7 @@ export function beginningOfQuarter(date: Date): Temporal.Instant {
   const quarterStartMonth = Math.floor(month / 3) * 3;
   d.setMonth(quarterStartMonth, 1);
   d.setHours(0, 0, 0, 0);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 export function endOfQuarter(date: Date): Temporal.Instant {
@@ -146,7 +143,7 @@ export function endOfQuarter(date: Date): Temporal.Instant {
   d.setMonth(quarterEndMonth + 1, 1);
   d.setHours(0, 0, 0, 0);
   d.setTime(d.getTime() - 1);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 // ---------------------------------------------------------------------------
@@ -157,29 +154,19 @@ export function beginningOfYear(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setMonth(0, 1);
   d.setHours(0, 0, 0, 0);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 export function endOfYear(date: Date): Temporal.Instant {
   const d = clone(date);
   d.setMonth(11, 31);
   d.setHours(23, 59, 59, 999);
-  return instantFromDate(d);
+  return instantFrom(d);
 }
 
 // ---------------------------------------------------------------------------
 // next/prev Week/Month/Year/Day
 // ---------------------------------------------------------------------------
-
-function _beginningOfWeekDate(date: Date, startDay = 1): Date {
-  const d = clone(date);
-  const currentDay = d.getDay();
-  let diff = currentDay - startDay;
-  if (diff < 0) diff += 7;
-  d.setDate(d.getDate() - diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 export function nextWeek(date: Date, day = "monday"): Date {
   const targetDay = dayIndex(day);

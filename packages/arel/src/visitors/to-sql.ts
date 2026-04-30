@@ -1393,6 +1393,11 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     if (v !== null && v !== undefined && typeof v === "object" && "ast" in v && "toSql" in v) {
       return this.visitArelSelectManager(v as unknown as { ast: Node });
     }
+    if (Array.isArray(v)) {
+      // Mirrors Rails: `visit_Array` (to_sql.rb) — primitives and Nodes in
+      // arrays both flow through here, joined by ", ".
+      return this.visitArray(v);
+    }
     if (v instanceof Node) {
       // Duck-type check to avoid circular dependency (SelectManager → ToSql → SelectManager)
       if ("ast" in v && "toSql" in v) {

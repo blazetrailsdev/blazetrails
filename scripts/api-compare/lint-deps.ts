@@ -334,7 +334,12 @@ function crossReference(
     if (!tsCandidates) continue;
 
     const tsFile = rubyFileToTs(rm.rubyFile);
-    const dedupeKey = `${tsFile}:${tsCandidates[0]}`;
+    // Key by Ruby method name, not first TS candidate — two distinct
+    // Ruby methods can produce the same first TS candidate
+    // (`is_number?` and `number?` both → "isNumber"), and keying by
+    // the TS candidate would silently drop the second method. Same
+    // fix as compare.ts:dedupeRubyMethodInto.
+    const dedupeKey = `${tsFile}:${rm.rubyName}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 

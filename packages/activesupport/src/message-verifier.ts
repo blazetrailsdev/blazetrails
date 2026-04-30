@@ -103,7 +103,7 @@ export class MessageVerifier {
 
       if (payload._expiresAt) {
         const expiresAt = Temporal.Instant.from(payload._expiresAt as string);
-        if (Temporal.Instant.compare(expiresAt, Temporal.Now.instant()) < 0) {
+        if (Temporal.Instant.compare(expiresAt, Temporal.Now.instant()) <= 0) {
           throw new InvalidSignature("Expired message");
         }
       }

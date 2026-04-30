@@ -126,29 +126,31 @@ describe("DbCommand", () => {
 
 describe("resolveEnv", () => {
   const origRailsEnv = env.TRAILS_ENV;
-  const origNodeEnv = env.NODE_ENV;
 
   afterEach(() => {
     setEnv("TRAILS_ENV", origRailsEnv);
-    setEnv("NODE_ENV", origNodeEnv);
   });
 
-  it("prefers TRAILS_ENV", () => {
+  it("reads TRAILS_ENV", () => {
     setEnv("TRAILS_ENV", "staging");
-    setEnv("NODE_ENV", "production");
     expect(resolveEnv()).toBe("staging");
   });
 
-  it("falls back to NODE_ENV", () => {
+  it("defaults to development when TRAILS_ENV is unset", () => {
     setEnv("TRAILS_ENV", undefined);
-    setEnv("NODE_ENV", "production");
-    expect(resolveEnv()).toBe("production");
+    expect(resolveEnv()).toBe("development");
   });
 
-  it("defaults to development", () => {
+  it("ignores NODE_ENV", () => {
+    // NODE_ENV is a build-time bundler hint, not a runtime env
+    // selector. resolveEnv must not fall back to it.
     setEnv("TRAILS_ENV", undefined);
-    setEnv("NODE_ENV", undefined);
-    expect(resolveEnv()).toBe("development");
+    setEnv("NODE_ENV", "production");
+    try {
+      expect(resolveEnv()).toBe("development");
+    } finally {
+      setEnv("NODE_ENV", undefined);
+    }
   });
 });
 

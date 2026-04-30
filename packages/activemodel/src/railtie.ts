@@ -38,11 +38,19 @@ export class Railtie extends BaseRailtie {
   }
 
   private static detectEnv(): string {
-    // processEnv is the activesupport process-adapter snapshot — populated
-    // at module load on Node, empty on browser hosts. Either way, no
-    // `typeof process !== "undefined"` guard needed. Aliased to avoid
-    // shadowing the local `env` variable in `initialize()` and the
-    // `RailtieConfig.env` property.
-    return processEnv.NODE_ENV || "development";
+    // processEnv is the activesupport process-adapter snapshot —
+    // populated at module load on Node, empty on browser hosts. Either
+    // way, no `typeof process !== "undefined"` guard needed. Aliased to
+    // avoid shadowing the local `env` variable in `initialize()` and
+    // the `RailtieConfig.env` property.
+    //
+    // Mirrors Rails' RAILS_ENV: TRAILS_ENV only. We deliberately do
+    // NOT fall back to NODE_ENV — the JS ecosystem treats NODE_ENV as
+    // a build-time hint (bundler optimization, dependency dead-code
+    // elimination), not a runtime environment selector. Conflating
+    // the two has bitten us: a script running with NODE_ENV=test
+    // silently dropping into test-mode SecurePassword.minCost
+    // settings is the kind of action-at-a-distance we want to avoid.
+    return processEnv.TRAILS_ENV || "development";
   }
 }

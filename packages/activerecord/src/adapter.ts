@@ -103,6 +103,8 @@ export type AdapterName = "sqlite" | "postgres" | "mysql";
  *
  * Mirrors: the adapter-family branching Rails applies throughout ActiveRecord
  * when it checks `adapter_name` against known families.
+ *
+ * @internal
  */
 export function adapterNameFromConfig(configAdapter: string | undefined): AdapterName {
   switch (configAdapter?.toLowerCase()) {

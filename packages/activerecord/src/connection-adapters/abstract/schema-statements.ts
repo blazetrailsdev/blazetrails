@@ -28,7 +28,7 @@ import {
 import { SchemaCreation } from "./schema-creation.js";
 import { detectAdapterName } from "../../adapter-name.js";
 import { quote } from "./quoting.js";
-import type { Quoting } from "./quoting-interface.js";
+import type { SchemaQuoter } from "./assert-schema-adapter.js";
 import { Column } from "../column.js";
 import { SqlTypeMetadata } from "../sql-type-metadata.js";
 import { deduplicate } from "../deduplicable.js";
@@ -41,7 +41,7 @@ export class SchemaStatements {
   private _schemaCreation?: SchemaCreation;
 
   constructor(
-    protected adapter: DatabaseAdapter & Quoting,
+    protected adapter: DatabaseAdapter & SchemaQuoter,
     protected adapterName: "sqlite" | "postgres" | "mysql" = detectAdapterName(adapter),
   ) {}
 

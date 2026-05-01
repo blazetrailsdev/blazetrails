@@ -212,7 +212,6 @@ export default defineConfig({
     projects: [
       {
         // DB-free AR tests: always run in parallel across CPU cores.
-        resolve: { alias },
         test: {
           name: "ar-unit",
           include: AR_UNIT_FILES,
@@ -224,7 +223,6 @@ export default defineConfig({
         // DB-dependent AR tests: single fork to prevent table conflicts on
         // shared PG/MySQL servers. SQLite :memory: would be safe in parallel,
         // but single-fork is correct for all three backends.
-        resolve: { alias },
         test: {
           name: "ar-db",
           include: ["packages/activerecord/src/**/*.test.ts"],
@@ -241,7 +239,6 @@ export default defineConfig({
       },
       {
         // All non-AR packages + scripts: parallel, no DB concerns.
-        resolve: { alias },
         test: {
           name: "other",
           include: [

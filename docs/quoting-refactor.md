@@ -1,17 +1,15 @@
 # Quoting Refactor: Thread Adapter Through All Call Sites
 
-> **Status (2026-04-30):** Adapter classes (`AbstractAdapter`,
-> `PostgreSQLAdapter`, `AbstractMysqlAdapter`, `SQLite3Adapter`) all have
-> a `quote()` instance method, but ~14 call sites outside the adapter
-> layer still import the **standalone** `quote` / `quoteIdentifier` /
-> `quoteTableName` / `quoteDefaultExpression` from
-> `connection-adapters/abstract/quoting.ts` and pass an
-> `adapter?: "sqlite" | "postgres" | "mysql"` string to select dialect.
-> That string-dispatch path duplicates dialect logic and produces wrong
-> SQL when the adapter dispatch on the receiver would diverge from the
-> abstract default — most importantly identifier quoting (MySQL
-> backticks vs. abstract double-quotes) inside `sanitization.ts`,
-> `relation/query-methods.ts`, and the model-schema / migration paths.
+> **Status (2026-05-01):** Phases 0–3 merged
+> (#1051, #1058, #1065, #1068, #1070, #1072, #1075). The hot path
+> (sanitization, query-methods, database-statements) and abstract +
+> PostgreSQL schema layers all route quoting through the adapter's
+> `Quoting` interface. **Remaining:** Phase 4 (model-schema +
+> internal-metadata + primary-key + migration + alias-tracker +
+> association-scope) and Phase 5 (remove the
+> `adapter?: "sqlite" | "postgres" | "mysql"` enum from
+> `abstract/quoting.ts`). Until Phase 5 lands, the enum still exists and
+> the abstract module still has dialect branches.
 
 ## Problem
 
@@ -302,20 +300,21 @@ PR 1 ──► PR 2 ──► PR 3, 4, 5  (phase 2, parallel after PR 2)
                               └─► PR 10 (phase 5, after all above)
 ```
 
-| PR  | Phase | Scope                                            | Est. LOC |
-| --- | ----- | ------------------------------------------------ | -------- |
-| 1   | 0     | uniform `quoteIdentifier` across adapter modules | ~50      |
-| 2   | 1     | `Quoting` interface + adapter `implements`       | ~120     |
-| 3   | 2     | sanitization through `quoter`                    | ~150     |
-| 4   | 2     | query-methods + relation neutralize              | ~120     |
-| 5   | 2     | database-statements `this.quoteX`                | ~80      |
-| 6   | 3     | abstract schema-creation + schema-definitions    | ~250     |
-| 7   | 3     | abstract schema-statements + PG schema files     | ~200     |
-| 8   | 4     | model-schema + internal-metadata + primary-key   | ~200     |
-| 9   | 4     | migration + alias-tracker + association-scope    | ~150     |
-| 10  | 5     | remove `adapter?:` param                         | ~80      |
+| PR  | Phase | Scope                                            | Est. LOC | Status        |
+| --- | ----- | ------------------------------------------------ | -------- | ------------- |
+| 1   | 0     | uniform `quoteIdentifier` across adapter modules | ~50      | merged #1051  |
+| 2   | 1     | `Quoting` interface + adapter `implements`       | ~120     | merged #1058  |
+| 3   | 2     | sanitization through `quoter`                    | ~150     | merged #1065  |
+| 4   | 2     | query-methods + relation neutralize              | ~120     | merged #1068  |
+| 5   | 2     | database-statements `this.quoteX`                | ~80      | merged #1070  |
+| 6   | 3     | abstract schema-creation + schema-definitions    | ~250     | merged #1072  |
+| 7   | 3     | abstract schema-statements + PG schema files     | ~200     | merged #1075  |
+| 8   | 4     | model-schema + internal-metadata + primary-key   | ~200     | open          |
+| 9   | 4     | migration + alias-tracker + association-scope    | ~150     | open          |
+| 10  | 5     | remove `adapter?:` param                         | ~80      | open          |
 
-Total: 10 PRs, all under the 300-LOC ceiling.
+Total: 10 PRs, all under the 300-LOC ceiling. PRs 8/9 parallel; PR 10
+gates on both.
 
 ## Acceptance criteria
 

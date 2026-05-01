@@ -12,15 +12,14 @@ PRs marked **independent** can be parallelized. Trails files are paths under
 
 ## Sequencing
 
-PRs 1–5 merged (see Completed below).
+Waves 1 and 2 (PRs 1–9, 11–23, 23b, 23c) are merged — see **Completed**
+below for the full list. Remaining waves:
 
-| Wave | PRs        | Notes                               |
-| ---- | ---------- | ----------------------------------- |
-| 3    | 24         | breaking-change wave; ship serially |
-| 4    | 10, 25, 26 | dialect / cross-package work        |
-
-Waves 1 and 2 are complete. Wave-3 requires sequential merge because
-each one moves AR-visible API.
+| Wave | PRs         | Notes                                                                          |
+| ---- | ----------- | ------------------------------------------------------------------------------ |
+| 3    | 24          | breaking-change wave (Binary reparenting); ship before wave 4                  |
+| 4    | 10, 25a, 26 | dialect / cross-package work; 25a is formatting-only and independent           |
+| 5    | 25b         | gates on quoting-refactor Phases 4–5 (PRs 8/9/10 in `docs/quoting-refactor.md`) |
 
 ---
 
@@ -67,7 +66,7 @@ api:compare` is a chained script — args don't reach `compare.ts`.)
 - PR 7 — `SelectManager#limit` / `#offset` getters return inner expr — merged in #1063.
 - PR 16 — `DeleteStatement` / `InsertStatement` visitor shape — merged in #1066.
 - PR 23 — Visitor leaf alignment (Lock + outer-join guards slice) — merged in #1069.
-- PR 23b — Casted/Quoted visitor collapse + Date-bind branch removal — merged in #1074.
+- PR 23b — Casted/Quoted collapse + Date-bind removal — merged in #1074.
 - PR 23c — In-array wrap, Table-name-Node, PostgreSQL ESCAPE — merged in #1078.
 
 ---
@@ -76,17 +75,21 @@ api:compare` is a chained script — args don't reach `compare.ts`.)
 
 Requires Table↔Model wiring. Larger; can defer if not blocking.
 
-### Pre-PR design decision
+### Design decision (resolved)
 
-Two viable shapes:
+**Option 2 — lazy `klass` ref.** Table holds an optional structural
+`klass?: { attributeAliases?: Record<string, string> }`; `get(name)`
+resolves `klass?.attributeAliases?.[name] ?? name`.
 
-1. **Inject on construct**: `new Table("users", { attributeAliases: {...} })`.
-   AR's `Model.arelTable` populates from `Model.attributeAliases`.
-2. **Lazy lookup**: Table holds an optional `klass` ref;
-   `get(name)` calls `klass?.attributeAliases?.[name] ?? name`.
-
-Recommendation: option 2 — fewer construction sites change, matches
-Rails (`@klass.attribute_aliases`).
+Rationale: literal port of Rails' `@klass.attribute_aliases` duck typing,
+expressed via TS structural typing so arel keeps zero runtime/import
+dependency on activerecord. Merging the packages to mirror Ruby's
+single-gem layout was considered and rejected — the package boundary is
+load-bearing for `api:compare`, the website TypeDoc build, and public
+consumers; structural typing already gives us what Ruby gets from
+duck typing. Option 1 (inject aliases dict at construct) was rejected
+because it diverges from Rails (Rails passes the class, not a snapshot
+of the alias map) and forces every `arelTable` site to re-snapshot.
 
 ### Trails files to change
 
@@ -128,33 +131,51 @@ Rails (`@klass.attribute_aliases`).
 
 - `nodes/binary.rb` — `const_set(:Union, ..., Binary)` etc.
 
+### Decision (audit complete)
+
+Reparent: `Union`, `UnionAll`, `Intersect`, `Except` extend `Binary`
+directly. `Join` (the abstract base in `nodes/binary.ts`) extends
+`Binary`; `InnerJoin`/`OuterJoin`/`RightOuterJoin`/`FullOuterJoin`/
+`StringJoin`/`CrossJoin` keep `extends Join` (one level up only — Rails
+also only changes `Join`'s parent). Pre-release, no consumers, no
+migration matrix entry needed.
+
+### Audit findings (2026-05-01)
+
+- `to-sql.ts` has explicit leaf visitors for every reparented class
+  (`visitArelNodesUnion`/`UnionAll`/`Intersect`/`Except` and all
+  `Join` leaves). Direct dispatch wins over ancestor walk → no
+  behavior change.
+- `dot.ts` defines `visitArelNodesBinary` (walks `left`/`right`) and
+  has **no** leaf visitors for set ops or non-string joins. After
+  reparenting, ancestor walk lands on `Binary` and emits the
+  `left`/`right` edges those nodes already carry — strict improvement
+  over today's generic-Node fallback.
+- `dot.ts` `visitArelNodesStringJoin` (line 151, walks only `left`)
+  remains a direct hit; `Join`'s own leaf in dot doesn't exist, so no
+  conflict.
+- PG/MySQL/SQLite use a `visitBinaryOp(node, op)` helper, not a
+  `visit_Arel_Nodes_Binary` reflection target — unaffected.
+
 ### Changes
 
-- `nodes/binary.ts`: redefine `Union`, `UnionAll`, `Intersect`, `Except`
-  as `extends Binary`.
-- `nodes/inner-join.ts`, `outer-join.ts`, `right-outer-join.ts`,
-  `full-outer-join.ts`, `string-join.ts`: extend `Binary` (they likely
-  extend an abstract `Join`; switch `Join` to extend `Binary`).
-- Audit `visitors/visitor.ts`: per-class dispatch cache is keyed by
-  constructor; the `WeakMap` per `VisitorCtor` doesn't need invalidation
-  because each visitor subclass seeds its dispatch on construction. Each
-  visitor subclass's `dispatchCache` already registers
-  `Union → "visitArelNodesUnion"` etc; verify the registration list still
-  matches.
-- Run dispatch tests on subclass instances — `instance.constructor` is
-  still the leaf class, so direct dispatch hits don't change. Ancestor
-  walk now finds `Binary` if a visitor doesn't register a leaf — confirm
-  no leaf relies on a missing-method fallthrough.
+- `nodes/binary.ts`: redeclare `Union`/`UnionAll`/`Intersect`/`Except`
+  as `extends Binary`; switch `Join` to `extends Binary`.
+- Drop the now-redundant explicit `left`/`right` fields and
+  constructor on each set-op class — `Binary` already carries them.
 
 ### Tests
 
 - `nodes/binary.test.ts`: `union.as("u") instanceof As`,
-  `union.and(other) instanceof And`.
+  `union.and(other) instanceof And`, `union instanceof Binary`.
 - `visitors/to-sql.test.ts`: existing UNION/JOIN snapshots unchanged.
+- `visitors/dot.test.ts`: snapshot a UNION graph — should now show
+  `left`/`right` edges via the Binary fallback.
 
 ### Verification
 
-- Full arel test suite green (smoke for visitor dispatch).
+- `pnpm --filter @blazetrails/arel test`.
+- `pnpm parity:query` unchanged.
 
 ### Size
 
@@ -162,74 +183,140 @@ Rails (`@klass.attribute_aliases`).
 
 ---
 
-## PR 25 — MySQL `Concat` / `Cte` formatting + identifier quoting
+## PR 25a — MySQL `Concat` / `Cte` formatting
 
-Folds in the long-deferred `arel MySQL identifier quoting` memory.
+Visitor-side formatting only; no identifier-quoting changes. Independent
+of the quoting refactor.
 
 ### Changes
 
 - `visitors/mysql.ts`:
   - `visitArelNodesConcat`: emit `CONCAT(...)` with surrounding spaces
-    (Rails infix_value).
-  - `visitArelNodesCte`: drop the explicit `(`...`)` (let inner Grouping
-    render).
-  - Override `quoteTableName` / `quoteColumnName` to backtick-escape:
-    `` `name` `` with embedded backticks doubled.
-  - `visitArelTable` / `visitArelNodesAttribute` already call those
-    overrides; verify.
+    (Rails `infix_value`).
+  - `visitArelNodesCte`: drop the explicit `(`...`)` (let inner
+    `Grouping` render).
 
 ### Tests
 
 - `visitors/mysql.test.ts`:
   - `CONCAT` in expression context (e.g. `WHERE name = CONCAT(a, b)`).
   - CTE: `WITH x AS (SELECT 1)` (no double parens).
-  - SELECT/UPDATE/INSERT/DELETE with backtick-quoted identifiers.
+
+### Verification
+
+- `pnpm --filter @blazetrails/arel test`.
+- `pnpm parity:query` unchanged (no identifier-quoting churn yet).
+
+### Size
+
+~30 LOC src + ~60 LOC test.
+
+---
+
+## PR 25b — MySQL identifier quoting via `Quoting` injection
+
+Folds in the long-deferred `arel MySQL identifier quoting` memory.
+**Depends on `docs/quoting-refactor.md` Phase 2 (merged) and ideally
+Phase 4–5 to remove the residual `mysqlQuote(sql)` post-processor.**
+
+### Design decision (resolved)
+
+The arel visitor must NOT carry dialect identifier logic. Instead, it
+receives a `Quoting`-shaped quoter (the contract introduced in
+quoting-refactor PR 2 / #1058) and delegates identifier emission:
+
+```ts
+// visitors/to-sql.ts — base
+quoteTableName(name: string): string {
+  return this.quoter.quoteTableName(name);
+}
+quoteColumnName(name: string): string {
+  return this.quoter.quoteColumnName(name);
+}
+```
+
+`SubstituteBindCollector` already takes a quoter; same pattern. MySQL
+backticks fall out automatically because the MySQL adapter's `Quoting`
+implementation already emits them — no per-visitor override needed.
+
+### Changes
+
+- `visitors/to-sql.ts`:
+  - Constructor accepts `quoter: Quoting` (structural type — arel
+    declares its own minimal `Quoting` interface; activerecord's
+    `Quoting` is structurally compatible).
+  - `visitArelTable` / `visitArelNodesAttribute` /
+    `quoteTableName` / `quoteColumnName` route through `this.quoter`.
+- `visitors/mysql.ts`, `postgresql.ts`, `sqlite.ts`: drop any local
+  identifier overrides that exist; they're now redundant.
+- `activerecord` arel-visitor construction sites: pass
+  `connection` (which `implements Quoting`) as the quoter.
+
+### Tests
+
+- `visitors/mysql.test.ts`:
+  - SELECT/UPDATE/INSERT/DELETE with backtick-quoted identifiers when
+    constructed with a MySQL quoter.
   - Identifier with embedded backtick → doubled.
+- `visitors/to-sql.test.ts`:
+  - Default (no-op) quoter still emits double-quoted identifiers for
+    base/PG/SQLite parity.
 
 ### Risk
 
 - Identifier quoting changes every MySQL SQL fixture. Snapshot churn is
   expected; reviewer accepts the diff.
+- Constructor signature change for `ToSql` and dialect subclasses —
+  audit every in-tree construction site (activerecord adapters, tests,
+  parity harness) and migrate atomically.
 
 ### Verification
 
 - `pnpm parity:query` on MySQL — expect a wave of fixture updates;
   curate these in the PR.
+- After merge: the `mysqlQuote(sql)` runtime post-processor in
+  activerecord becomes redundant — schedule removal as a follow-up
+  (cross-references quoting-refactor.md final note).
 
 ### Size
 
-~60 LOC src + ~150 LOC test (incl. fixture updates).
+~80 LOC src + ~150 LOC test (incl. fixture updates).
 
 ---
 
 ## PR 26 — `BoundSqlLiteral` visitor parity
 
-### Design decision (must be made before opening PR)
+### Design decision (resolved)
 
-Trails' `BoundSqlLiteral.parts` (pre-parsed) is the current contract. Two
-options:
+**Option 2 — drop `parts`; store `sqlWithSubstitutes` + `bindValues`.**
+Match Rails' node shape exactly; visitor parses `?` placeholders at
+visit time. All in-tree consumers of `parts` migrate atomically (no
+shim).
 
-1. **Keep `parts`**: rewrite the visitor to do per-part dispatch
-   (Arel-node value → visit, Array → recurse, else → quote/bind).
-2. **Drop `parts`, add `sqlWithSubstitutes` + `bindValues`**: parse at
-   visit time. Closer to Rails but breaks the node API.
-
-Recommendation: option 1 (less churn, same SQL).
+Rationale: Rails-shape parity for the node, even at the cost of
+re-parsing on each visit. Aligns the node fields one-for-one with
+`nodes/bound_sql_literal.rb` and removes a Trails-only contract.
 
 ### Rails reference
 
 - `visitors/to_sql.rb` — `visit_Arel_Nodes_BoundSqlLiteral`.
-- `nodes/bound_sql_literal.rb` — `BindError` text.
+- `nodes/bound_sql_literal.rb` — `BindError` text, field shape.
 
 ### Changes
 
+- `nodes/bound-sql-literal.ts`:
+  - Replace `parts` with `sqlWithSubstitutes: string` and
+    `bindValues: unknown[]`.
+  - Update constructor + any `eql`/`hash`/inspection paths.
+  - `BindError` message text matches Rails verbatim.
 - `visitors/to-sql.ts` `visitArelNodesBoundSqlLiteral`:
-  - For each part of the BoundSqlLiteral:
-    - if `part` is an `Arel::Node` (or Trails `Node`) → `visit(part)`.
-    - if `Array.isArray(part)` → visit each, comma-joined.
-    - if `part` is a literal string segment → emit verbatim.
-    - else → quote/bind.
-- `errors.ts` — match Rails BindError messages.
+  - Walk `sqlWithSubstitutes`, splitting on `?` placeholders; for each
+    bind: `Node` → `visit`, `Array` → visit each comma-joined, else →
+    `quote` (or bind via collector).
+  - Mismatched bind count → `BindError`.
+- All in-tree call sites that constructed `BoundSqlLiteral` with `parts`
+  migrate to the new constructor in the same PR.
+- `errors.ts` — `BindError` text aligned with Rails.
 
 ### Tests
 
@@ -238,9 +325,16 @@ Recommendation: option 1 (less churn, same SQL).
   - Array value flattens with `, `.
   - Missing/extra binds → BindError with Rails-shaped message text.
 
+### Risk
+
+- Breaking change to the `BoundSqlLiteral` node API. Audit every
+  in-tree consumer (search for `BoundSqlLiteral` and `.parts`) before
+  opening; migrate atomically.
+
 ### Size
 
-~80 LOC src + ~110 LOC test.
+~100 LOC src + ~110 LOC test (constructor migration adds ~20 LOC over
+Option 1).
 
 ---
 
@@ -252,7 +346,8 @@ deprecated aliases, no shims.
 | PR  | Surface                                        | Notes                |
 | --- | ---------------------------------------------- | -------------------- |
 | 24  | `Union/Intersect/Except/Join` extends `Binary` | API gain only        |
-| 25  | MySQL identifier quoting                       | curate snapshot diff |
+| 25b | MySQL identifier quoting via Quoting injection | curate snapshot diff |
+| 26  | `BoundSqlLiteral` node fields (`parts` → Rails shape) | atomic in-tree migrate |
 
 ---
 

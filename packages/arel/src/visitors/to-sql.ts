@@ -1207,9 +1207,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.visitNodeOrValue(node.left);
     this.collector.append(" LIKE ");
     this.visitNodeOrValue(node.right);
-    if (node.escape) {
-      this.collector.append(` ESCAPE '${node.escape}'`);
-    }
+    this.appendEscape(node.escape);
     return this.collector;
   }
 
@@ -1217,10 +1215,22 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.visitNodeOrValue(node.left);
     this.collector.append(" NOT LIKE ");
     this.visitNodeOrValue(node.right);
-    if (node.escape) {
-      this.collector.append(` ESCAPE '${node.escape}'`);
-    }
+    this.appendEscape(node.escape);
     return this.collector;
+  }
+
+  // Mirrors Rails to_sql.rb: when ESCAPE is set, Rails calls `visit
+  // o.escape, collector`. Trails' `escape` is `string | Node | null`; for
+  // Node we visit, for string we route through `quote()` so embedded
+  // quotes are escaped properly.
+  protected appendEscape(escape: string | Node | null): void {
+    if (!escape) return;
+    this.collector.append(" ESCAPE ");
+    if (escape instanceof Node) {
+      this.visit(escape);
+    } else {
+      this.collector.append(this.quote(escape));
+    }
   }
 
   // -- NullsFirst / NullsLast --

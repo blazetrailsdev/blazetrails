@@ -238,21 +238,21 @@ export interface DatabaseAdapter {
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_identifier
    */
-  quoteIdentifier?(name: string): string;
+  quoteIdentifier(name: string): string;
 
   /**
    * Quote a table name for use in SQL.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_table_name
    */
-  quoteTableName?(name: string): string;
+  quoteTableName(name: string): string;
 
   /**
    * Quote a column name for use in SQL.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_column_name
    */
-  quoteColumnName?(name: string): string;
+  quoteColumnName(name: string): string;
 
   /**
    * Cast a value to the primitive form drivers expect for binds.

@@ -255,7 +255,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm vitest run --no-file-parallelism packages/activerecord
+      - run: pnpm vitest run packages/activerecord
 
   postgres-tests:
     name: PostgreSQL Tests

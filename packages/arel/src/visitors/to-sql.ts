@@ -1224,7 +1224,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   // Node we visit, for string we route through `quote()` so embedded
   // quotes are escaped properly.
   protected appendEscape(escape: string | Node | null): void {
-    if (!escape) return;
+    if (escape == null) return;
     this.collector.append(" ESCAPE ");
     if (escape instanceof Node) {
       this.visit(escape);

@@ -9,6 +9,7 @@ import { SchemaReflection, BoundSchemaReflection } from "./connection-adapters/s
 import { HashConfig } from "./database-configurations/hash-config.js";
 import { createTestAdapter } from "./test-adapter.js";
 import { AbstractAdapter } from "./connection-adapters/abstract-adapter.js";
+import { adapterNameFromConfig } from "./adapter.js";
 import type { AdapterName, DatabaseAdapter } from "./adapter.js";
 import { Result } from "./result.js";
 
@@ -1021,28 +1022,27 @@ describe("ConnectionPool schema cache", () => {
   });
 });
 
-describe("adapter proxy adapterName before first checkout", () => {
-  function makeProxyPool(adapter: string): ConnectionPool {
-    const dbConfig = new HashConfig("test", "primary", {
-      adapter,
-      database: "test.db",
-      reapingFrequency: null,
-    });
-    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
-      adapterFactory: createTestAdapter,
-    });
-    return new ConnectionPool(pc);
-  }
-
-  it("returns postgres for postgresql config", () => {
-    expect(makeProxyPool("postgresql").migrationContext.adapter.adapterName).toBe("postgres");
+describe("adapterNameFromConfig", () => {
+  it("maps postgresql variants to postgres", () => {
+    expect(adapterNameFromConfig("postgresql")).toBe("postgres");
+    expect(adapterNameFromConfig("postgres")).toBe("postgres");
+    expect(adapterNameFromConfig("pg")).toBe("postgres");
   });
 
-  it("returns mysql for mysql2 config", () => {
-    expect(makeProxyPool("mysql2").migrationContext.adapter.adapterName).toBe("mysql");
+  it("maps mysql variants to mysql", () => {
+    expect(adapterNameFromConfig("mysql2")).toBe("mysql");
+    expect(adapterNameFromConfig("mysql")).toBe("mysql");
+    expect(adapterNameFromConfig("trilogy")).toBe("mysql");
+    expect(adapterNameFromConfig("mariadb")).toBe("mysql");
   });
 
-  it("returns sqlite for sqlite3 config", () => {
-    expect(makeProxyPool("sqlite3").migrationContext.adapter.adapterName).toBe("sqlite");
+  it("maps sqlite variants to sqlite", () => {
+    expect(adapterNameFromConfig("sqlite3")).toBe("sqlite");
+    expect(adapterNameFromConfig("sqlite")).toBe("sqlite");
+  });
+
+  it("defaults unknown to sqlite", () => {
+    expect(adapterNameFromConfig(undefined)).toBe("sqlite");
+    expect(adapterNameFromConfig("unknown")).toBe("sqlite");
   });
 });

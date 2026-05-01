@@ -11,7 +11,13 @@
  * This prevents agents from gaming the metric with empty interfaces.
  *
  * Usage:
- *   npx tsx scripts/api-compare/compare.ts [--package activerecord] [--missing] [--files] [--incomplete]
+ *   npx tsx scripts/api-compare/compare.ts \
+ *     [--package activerecord] [--missing] [--files] [--incomplete] \
+ *     [--inheritance] [--json] [--public-only | --privates-only]
+ *
+ * The default reports the full surface (public + private). `--public-only`
+ * drops Rails-private/internal methods on both sides for a contract-only
+ * view; `--privates-only` is the inverse.
  *
  * Each host class's expected method set is expanded with the instance
  * methods of every module it `include`s (and class methods of modules it
@@ -381,6 +387,50 @@ export function dedupeRubyMethodInto(
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
+
+/**
+ * Pick the best candidate sibling TS file for a Ruby file whose
+ * expected TS path doesn't exist. Returns the path, or null if no
+ * cluster meets all three thresholds:
+ *
+ * 1. Absolute floor (`MISPLACED_MIN_HITS`, currently 3) — at least
+ *    this many of the Ruby file's candidate method names appear.
+ *    Filters out 1- or 2-method noise hits.
+ * 2. Coverage floor (`bestCount * 2 >= rubyMethodCount`) — the
+ *    cluster covers at least 50% of the Ruby file's expected methods.
+ * 3. Separation (`bestCount >= secondCount * 2`) — the leader has at
+ *    least 2× the runner-up's hits. Without this, a Ruby file whose
+ *    methods are evenly scattered across many TS files (generic names
+ *    like `name`/`value`/`run`) would arbitrarily latch onto whichever
+ *    file iterated first.
+ *
+ * All three together rule out the `deprecator.rb ↦ migration.ts`
+ * pattern observed during development: 3 hits but only 43% coverage
+ * and no separation from the noise floor.
+ */
+export const MISPLACED_MIN_HITS = 3;
+export function selectMisplacedFile(
+  fileHits: Map<string, number>,
+  rubyMethodCount: number,
+): string | null {
+  let bestFile: string | null = null;
+  let bestCount = 0;
+  let secondCount = 0;
+  for (const [f, c] of fileHits) {
+    if (c > bestCount) {
+      secondCount = bestCount;
+      bestFile = f;
+      bestCount = c;
+    } else if (c > secondCount) {
+      secondCount = c;
+    }
+  }
+  if (!bestFile) return null;
+  if (bestCount < MISPLACED_MIN_HITS) return null;
+  if (bestCount * 2 < rubyMethodCount) return null;
+  if (bestCount < secondCount * 2) return null;
+  return bestFile;
+}
 
 function main() {
   const args = process.argv.slice(2);
@@ -755,15 +805,9 @@ function main() {
         }
       }
 
-      // Misplaced-file detection: if the expected TS file doesn't exist,
-      // tally per-sibling-file how many candidate methods land there. The
-      // file with the strongest cluster is treated as the actual location
-      // and reported as misplaced. Threshold combines an absolute floor
-      // (≥3 matches), a coverage floor (≥50% of the Ruby file's methods),
-      // and a separation requirement (≥2× the runner-up). Without all
-      // three, generic names (`name`/`value`/`run`) randomly pair a Ruby
-      // file with an unrelated TS file — e.g. `deprecator.rb`'s `behavior`
-      // and `silenced` colliding with `migration.ts`.
+      // Misplaced-file detection: tally per-sibling-file how many of
+      // this Ruby file's expected TS candidates land there, then pick
+      // the strongest cluster (see `selectMisplacedFile` for thresholds).
       let misplacedActualFile: string | null = null;
       if (!tsFileExists && seen.size > 0) {
         const fileHits = new Map<string, number>();
@@ -779,26 +823,7 @@ function main() {
             fileHits.set(f, (fileHits.get(f) || 0) + 1);
           }
         }
-        let bestFile: string | null = null;
-        let bestCount = 0;
-        let secondCount = 0;
-        for (const [f, c] of fileHits) {
-          if (c > bestCount) {
-            secondCount = bestCount;
-            bestFile = f;
-            bestCount = c;
-          } else if (c > secondCount) {
-            secondCount = c;
-          }
-        }
-        if (
-          bestFile &&
-          bestCount >= 3 &&
-          bestCount * 2 >= seen.size &&
-          bestCount >= secondCount * 2
-        ) {
-          misplacedActualFile = bestFile;
-        }
+        misplacedActualFile = selectMisplacedFile(fileHits, seen.size);
       }
       const actualMethods = misplacedActualFile
         ? tsMethodsByFile.get(misplacedActualFile) || new Set<string>()

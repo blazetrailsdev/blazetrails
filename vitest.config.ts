@@ -158,6 +158,11 @@ const AR_UNIT_FILES = [
   "packages/activerecord/src/yaml-serialization.test.ts",
 ];
 
+// When a real DB is present each worker gets its own database (rails_js_test_N),
+// so we can run ar-db files in parallel. SQLite uses :memory: which is already
+// isolated per fork; its parallelism is governed by the default CPU-count pool.
+const AR_DB_FORKS = process.env.PG_TEST_URL || process.env.MYSQL_TEST_URL ? 4 : undefined;
+
 const SHARED_EXCLUDE = [
   "**/node_modules/**",
   "**/dist/**",
@@ -221,12 +226,10 @@ export default defineConfig({
         },
       },
       {
-        // DB-dependent AR tests: default forks pool so each file runs in its
-        // own fork process. On fork exit the OS closes all TCP connections,
-        // which is the only reliable way to release mysql2 pool connections
-        // between files. singleFork causes pool accumulation that exhausts
-        // MariaDB's max_connections. CI runs with --no-file-parallelism so
-        // only one fork is active at a time (no table conflicts).
+        // DB-dependent AR tests. Each fork gets its own database (rails_js_test_N
+        // for PG/MySQL) so files can run in parallel. SQLite uses :memory: which
+        // is isolated per fork by default. On fork exit the OS closes TCP
+        // connections, preventing mysql2 pool accumulation.
         resolve: { alias },
         test: {
           name: "ar-db",
@@ -238,6 +241,8 @@ export default defineConfig({
               ? ["./packages/activerecord/src/test-setup-mysql.ts"]
               : []),
           ],
+          pool: "forks",
+          poolOptions: { forks: { maxForks: AR_DB_FORKS } },
         },
       },
       {

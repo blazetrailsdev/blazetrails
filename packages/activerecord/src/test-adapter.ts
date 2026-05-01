@@ -24,8 +24,19 @@ import { isWriteQuerySql } from "./connection-adapters/sql-classification.js";
 import type { Result } from "./result.js";
 import { _setOnAdapterSetHook } from "./base.js";
 
-const PG_TEST_URL = process.env.PG_TEST_URL;
-const MYSQL_TEST_URL = process.env.MYSQL_TEST_URL;
+// Append _N to the database name so each vitest worker gets its own DB.
+// VITEST_WORKER_ID is 1-indexed; worker 1 uses the base DB name unchanged
+// so the single-worker case (SQLite, local dev) needs no extra setup.
+function workerDbUrl(baseUrl: string): string {
+  const id = process.env.VITEST_WORKER_ID;
+  if (!id || id === "1") return baseUrl;
+  return baseUrl.replace(/\/([^/?]+)(\?.*)?$/, (_, db, qs) => `/${db}_${id}${qs ?? ""}`);
+}
+
+const PG_TEST_URL = process.env.PG_TEST_URL ? workerDbUrl(process.env.PG_TEST_URL) : undefined;
+const MYSQL_TEST_URL = process.env.MYSQL_TEST_URL
+  ? workerDbUrl(process.env.MYSQL_TEST_URL)
+  : undefined;
 
 /** Which adapter backend is active. */
 export const adapterType: "sqlite" | "postgres" | "mysql" = PG_TEST_URL

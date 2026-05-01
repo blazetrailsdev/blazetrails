@@ -687,7 +687,7 @@ export class SchemaStatements {
       }
       case "mysql": {
         const rows = await this.adapter.execute(
-          `SHOW INDEX FROM ${this.adapter.quoteIdentifier(tableName)} WHERE Key_name != 'PRIMARY'`,
+          `SHOW INDEX FROM ${this._qt(tableName)} WHERE Key_name != 'PRIMARY'`,
         );
         const indexMap = new Map<string, { unique: boolean; seqs: [number, string][] }>();
         for (const row of rows as any[]) {

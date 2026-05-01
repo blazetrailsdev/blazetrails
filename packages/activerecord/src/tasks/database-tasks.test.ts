@@ -1154,9 +1154,9 @@ describe("DatabaseTasks schema cache", () => {
 describe("DatabaseTasks _appendSchemaInformation adapter quoting", () => {
   /**
    * Build the smallest stub that _appendSchemaInformation needs:
-   * an adapterName (for the quoting kind dispatch) and SchemaMigration's
-   * read path (versions + tableExists return values come back through
-   * adapter.execute).
+   * a quoteTableName method (called directly for identifier quoting) and
+   * SchemaMigration's read path (versions + tableExists return values come
+   * back through adapter.execute).
    */
   function stubAdapter(adapterName: string, versions: string[]) {
     const isMySQL =

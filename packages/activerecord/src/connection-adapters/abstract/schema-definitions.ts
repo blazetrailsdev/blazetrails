@@ -7,12 +7,8 @@ import {
 import type { SchemaQuoter } from "./assert-schema-adapter.js";
 import { singularize } from "@blazetrails/activesupport";
 
-/**
- * Build a fallback quoter from the dialect-name string for the legacy
- * code path where construction sites haven't yet been migrated to pass
- * an adapter. Removed in PR 10. @internal
- */
-function quoterForAdapterName(name: "sqlite" | "postgres" | "mysql"): SchemaQuoter {
+/** @internal */
+function quoterForAdapterName(_name: "sqlite" | "postgres" | "mysql"): SchemaQuoter {
   return {
     quoteIdentifier: (n) => abstractQuoteIdentifier(n),
     quoteTableName: (n) => abstractQuoteTableName(n),

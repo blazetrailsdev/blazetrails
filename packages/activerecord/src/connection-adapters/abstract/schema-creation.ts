@@ -27,13 +27,8 @@ import {
 } from "./quoting.js";
 import type { SchemaQuoter } from "./assert-schema-adapter.js";
 
-/**
- * Build a fallback quoter from the dialect-name string for the legacy
- * code path where construction sites haven't been migrated to pass an
- * adapter. Each PR in the refactor moves one call site over until this
- * fallback can be removed in PR 10. @internal
- */
-function quoterForAdapterName(name: "sqlite" | "postgres" | "mysql"): SchemaQuoter {
+/** @internal */
+function quoterForAdapterName(_name: "sqlite" | "postgres" | "mysql"): SchemaQuoter {
   return {
     quoteIdentifier: (n) => abstractQuoteIdentifier(n),
     quoteTableName: (n) => abstractQuoteTableName(n),

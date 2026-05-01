@@ -212,29 +212,7 @@ export interface DatabaseAdapter {
 
   /**
    * Quote an identifier (table or column name) for use in SQL.
-   * Abstract and SQLite/PG use double-quotes; MySQL uses backticks.
-   *
-   * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_identifier
-   */
-  quoteIdentifier(name: string): string;
-
-  /**
-   * Quote a table name for use in SQL.
-   *
-   * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_table_name
-   */
-  quoteTableName(name: string): string;
-
-  /**
-   * Quote a column name for use in SQL.
-   *
-   * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_column_name
-   */
-  quoteColumnName(name: string): string;
-
-  /**
-   * Quote an identifier (table or column name) for use in SQL.
-   * Abstract and SQLite/PG use double-quotes; MySQL uses backticks.
+   * Dispatch is per-adapter: abstract/SQLite/PG use double-quotes; MySQL uses backticks.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_identifier
    */

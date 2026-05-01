@@ -423,13 +423,13 @@ describe("PostgreSQL dialect overrides (audit follow-up)", () => {
     });
 
     it("visits a Node escape", () => {
-      const node = new Nodes.Matches(users.get("name"), "x%", new Nodes.SqlLiteral("'!'"));
+      const node = new Nodes.Matches(users.get("name"), "x%", new Nodes.Quoted("!"));
       const sql = new Visitors.PostgreSQL().compile(node);
       expect(sql).toContain("ESCAPE '!'");
     });
 
     it("visits a Node escape on DoesNotMatch", () => {
-      const node = new Nodes.DoesNotMatch(users.get("name"), "x%", new Nodes.SqlLiteral("'!'"));
+      const node = new Nodes.DoesNotMatch(users.get("name"), "x%", new Nodes.Quoted("!"));
       const sql = new Visitors.PostgreSQL().compile(node);
       expect(sql).toContain("ESCAPE '!'");
     });

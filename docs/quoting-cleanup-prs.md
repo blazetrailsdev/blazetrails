@@ -6,13 +6,39 @@ in parallel after. File:line refs are against the worktree at HEAD
 (`worktree-quoting-pr8`); Rails refs are under
 `scripts/api-compare/.rails-source/`.
 
+## Alternative: drive this with `api:compare --privates-only`
+
+Before hand-rolling the list, consider spiking `api:compare --privates-only`
+for the four quoting modules (the same pattern that drove
+`arel-privates-100-plan.md` and the activemodel privates track). It would
+auto-surface the **missing-method** items here (PRs A, F, J's stub list
+plus `quoted_date`, `encode_array`, `type_cast_array`,
+`type_cast_range_value`, `type_casted_binds`, `lookup_cast_type`) and
+give a continuous regression metric. It will **not** catch the
+behavioral or structural items — contract inversions (PR D), extra
+methods that shouldn't exist (PR C `mysqlQuote`), signature drift
+(PR B `column` arg), `RegExp` subclassing (PR I), or memoization
+shape (PR H). Recommended sequence: PR A first (smallest correctness
+fix, establishes the binding pattern), then the privates-compare
+spike, then PRs B–K with the spike's deficit list folded in.
+
+## Dependency graph
+
 ```
-PR A ──► PR B ──► PR C ─┐
-                        ├──► PR F ──► PR G
-PR D ───────────────────┤
-PR E (parallel) ────────┘
-PR H, I, J (parallel, anytime)
+PR A ──► PR B ──► PR C
+  │                │
+  └──► PR D        ├──► PR E
+                   │
+                   └──► PR F, G, H, I, J  (parallel, after C)
+
+PR K  (decision-only; schedule after A–E)
 ```
+
+- **A → B**: B reuses A's "bind PG instance override" pattern.
+- **A → D**: D removes the deprecated `pgQuoteString` re-export A introduces.
+- **B → C**: C is the largest behavioral change; B-in-place catches default-value regressions.
+- **C → E**: sanitization callers may currently depend on `mysqlQuote`'s post-process.
+- **C → F/G/H/I/J**: independent of each other but all benefit from C landing first to avoid merge conflicts in the adapter classes.
 
 | PR  | Title                                              | Tier | Est. LOC  |
 | --- | -------------------------------------------------- | ---- | --------- |
@@ -378,19 +404,6 @@ radius before deciding. Pure decision/docs PR if (b); ~30 LOC + fixture
 churn if (a).
 
 ---
-
-## Sequencing rationale
-
-- **A → B → C** is the correctness arc and should land first in order
-  (B builds on A's pattern of binding instance overrides; C is the
-  largest behavioral change and benefits from B being in place to catch
-  regressions).
-- **D** depends on A (drops the deprecated `pgQuoteString` re-export).
-- **E** depends on C (sanitization callers may currently rely on the
-  fallback for paths that go through `mysqlQuote`).
-- **F, G, H, I, J** are independent and can land in any order after C.
-- **K** is a decision; schedule once A–E are merged so the decision
-  has the cleanest possible context.
 
 ## Acceptance for the whole track
 

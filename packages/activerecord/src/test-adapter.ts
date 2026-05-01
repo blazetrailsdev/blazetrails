@@ -28,9 +28,14 @@ import { _setOnAdapterSetHook } from "./base.js";
 // VITEST_WORKER_ID is 1-indexed; worker 1 uses the base DB name unchanged
 // so the single-worker case (SQLite, local dev) needs no extra setup.
 function workerDbUrl(baseUrl: string): string {
-  const id = process.env.VITEST_WORKER_ID;
-  if (!id || id === "1") return baseUrl;
-  return baseUrl.replace(/\/([^/?]+)(\?.*)?$/, (_, db, qs) => `/${db}_${id}${qs ?? ""}`);
+  const raw = parseInt(process.env.VITEST_WORKER_ID ?? "1", 10);
+  // VITEST_WORKER_ID is a global incrementing counter across all forks.
+  // Map it to slot 1-4 so each concurrent fork hits a distinct database.
+  // With maxForks=4, concurrent forks always have consecutive IDs, so
+  // mod-4 guarantees all four slots are used without overlap.
+  const slot = ((raw - 1) % 4) + 1;
+  if (slot === 1) return baseUrl;
+  return baseUrl.replace(/\/([^/?]+)(\?.*)?$/, (_, db, qs) => `/${db}_${slot}${qs ?? ""}`);
 }
 
 const PG_TEST_URL = process.env.PG_TEST_URL ? workerDbUrl(process.env.PG_TEST_URL) : undefined;

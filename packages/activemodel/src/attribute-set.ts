@@ -55,7 +55,7 @@ export class AttributeSet {
   }
 
   /** @internal */
-  private defaultAttribute(name: string): Attribute {
+  protected defaultAttribute(name: string): Attribute {
     return Attribute.null(name);
   }
 

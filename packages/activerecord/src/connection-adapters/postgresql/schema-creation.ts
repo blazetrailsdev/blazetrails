@@ -7,11 +7,9 @@
 import { NotImplementedError } from "../../errors.js";
 import { SchemaCreation as AbstractSchemaCreation } from "../abstract/schema-creation.js";
 import type { ForeignKeyDefinition, ReferentialAction } from "../abstract/schema-definitions.js";
-import type { Quoting } from "../abstract/quoting-interface.js";
+import type { SchemaQuoter } from "../abstract/assert-schema-adapter.js";
 import { singularize, underscore } from "@blazetrails/activesupport";
 import { Utils } from "./utils.js";
-
-type SchemaQuoter = Pick<Quoting, "quoteIdentifier" | "quoteTableName" | "quoteDefaultExpression">;
 
 export class SchemaCreation extends AbstractSchemaCreation {
   constructor(adapter?: SchemaQuoter) {

@@ -20,9 +20,7 @@ import type {
   ColumnType,
   SchemaStatementsLike,
 } from "../abstract/schema-definitions.js";
-import type { Quoting } from "../abstract/quoting-interface.js";
-
-type SchemaQuoter = Pick<Quoting, "quoteIdentifier" | "quoteTableName" | "quoteDefaultExpression">;
+import type { SchemaQuoter } from "../abstract/assert-schema-adapter.js";
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace PostgreSQL {

@@ -137,13 +137,13 @@ describe("MysqlTest", () => {
     it("concats columns", () => {
       const node = new Nodes.Concat(users.get("name"), users.get("email"));
       const sql = new Visitors.MySQL().compile(node);
-      expect(sql).toBe('CONCAT("users"."name", "users"."email")');
+      expect(sql).toBe(' CONCAT("users"."name", "users"."email") ');
     });
 
     it("concats a string", () => {
       const node = new Nodes.Concat(users.get("name"), new Nodes.Quoted("x"));
       const sql = new Visitors.MySQL().compile(node);
-      expect(sql).toBe('CONCAT("users"."name", \'x\')');
+      expect(sql).toBe(' CONCAT("users"."name", \'x\') ');
     });
   });
 
@@ -370,10 +370,17 @@ describe("MySQL dialect overrides (audit follow-up)", () => {
 
   it("Cte uses backtick-quoted identifiers (not double quotes)", () => {
     const inner = new SelectManager(users).project(users.get("id"));
-    const cte = new Nodes.Cte("recent", inner.ast);
+    const cte = new Nodes.Cte("recent", new Nodes.Grouping(inner.ast));
     expect(compile(cte)).toMatch(/^`recent` AS \(/);
     // Embedded backticks must be doubled.
-    const weird = new Nodes.Cte("we`ird", inner.ast);
+    const weird = new Nodes.Cte("we`ird", new Nodes.Grouping(inner.ast));
     expect(compile(weird)).toMatch(/^`we``ird` AS \(/);
+  });
+
+  it("Cte renders exactly one set of parens around relation", () => {
+    const inner = new SelectManager(users).project(users.get("id"));
+    const cte = new Nodes.Cte("x", new Nodes.Grouping(inner.ast));
+    const sql = compile(cte);
+    expect(sql).toBe('`x` AS (SELECT "users"."id" FROM "users")');
   });
 });

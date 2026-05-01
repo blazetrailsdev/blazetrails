@@ -4,6 +4,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseTasks, DatabaseNotSupported } from "./database-tasks.js";
+import { quoteTableName as mysqlQuoteTableName } from "../connection-adapters/mysql/quoting.js";
+import { quoteTableName as abstractQuoteTableName } from "../connection-adapters/abstract/quoting.js";
 import { HashConfig } from "../database-configurations/hash-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { createTestAdapter } from "../test-adapter.js";
@@ -1165,15 +1167,7 @@ describe("DatabaseTasks _appendSchemaInformation adapter quoting", () => {
     return {
       adapterName,
       quoteTableName: (name: string) =>
-        isMySQL
-          ? name
-              .split(".")
-              .map((p) => `\`${p.replace(/`/g, "``")}\``)
-              .join(".")
-          : name
-              .split(".")
-              .map((p) => `"${p.replace(/"/g, '""')}"`)
-              .join("."),
+        isMySQL ? mysqlQuoteTableName(name) : abstractQuoteTableName(name),
       execute: async (sql: string) => {
         // Both tableExists() and versions() funnel through execute().
         // Return one row to claim the table exists; for the versions

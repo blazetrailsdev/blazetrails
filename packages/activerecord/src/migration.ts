@@ -162,7 +162,7 @@ export abstract class Migration {
   static logger: Logger = new Logger();
   private static _disableDdlTransaction = false;
 
-  /** Determine adapter type from the adapter class name. */
+  /** Return the normalized adapter name from the configured adapter. */
   protected get _adapterName(): "sqlite" | "postgres" | "mysql" {
     return this.adapter.adapterName;
   }

@@ -1068,11 +1068,11 @@ export class MigrationContext {
     if (options?.ifNotExists && this.tableExists(name)) {
       return;
     }
+    assertSchemaAdapter(this.adapter);
     const td = new TableDefinition(name, {
       id: options?.id,
       adapterName: this._adapterName,
-      adapter: this
-        .adapter as unknown as import("./connection-adapters/abstract/assert-schema-adapter.js").SchemaQuoter,
+      adapter: this.adapter,
     });
     if (fn) fn(td);
     await this.adapter.executeMutation(td.toSql());

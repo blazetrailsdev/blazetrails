@@ -25,10 +25,21 @@ import {
   quoteTableName as abstractQuoteTableName,
   quoteDefaultExpression as abstractQuoteDefaultExpression,
 } from "./quoting.js";
+import {
+  quoteIdentifier as mysqlQuoteIdentifier,
+  quoteTableName as mysqlQuoteTableName,
+} from "../mysql/quoting.js";
 import type { SchemaQuoter } from "./assert-schema-adapter.js";
 
 /** @internal */
-function quoterForAdapterName(_name: "sqlite" | "postgres" | "mysql"): SchemaQuoter {
+function quoterForAdapterName(name: "sqlite" | "postgres" | "mysql"): SchemaQuoter {
+  if (name === "mysql") {
+    return {
+      quoteIdentifier: (n) => mysqlQuoteIdentifier(n),
+      quoteTableName: (n) => mysqlQuoteTableName(n),
+      quoteDefaultExpression: (v) => abstractQuoteDefaultExpression(v),
+    };
+  }
   return {
     quoteIdentifier: (n) => abstractQuoteIdentifier(n),
     quoteTableName: (n) => abstractQuoteTableName(n),

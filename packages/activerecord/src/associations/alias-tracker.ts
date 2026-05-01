@@ -44,8 +44,8 @@ export class AliasTracker {
     return new AliasTracker(tableAliasLength, map, joins, quoter);
   }
 
-  initialCountFor(name: string, tableJoins: any[]): number {
-    const quotedName = this._quoter ? this._quoter.quoteTableName(name) : `"${name}"`;
+  static initialCountFor(quoter: Quoting | undefined, name: string, tableJoins: any[]): number {
+    const quotedName = quoter ? quoter.quoteTableName(name) : `"${name}"`;
     const quotedNameEscaped = quotedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const nameEscaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const pattern = new RegExp(
@@ -72,7 +72,7 @@ export class AliasTracker {
   private _getCount(key: string): number {
     if (this.aliases.has(key)) return this.aliases.get(key)!;
     if (this._joins.length > 0) {
-      const count = this.initialCountFor(key, this._joins);
+      const count = AliasTracker.initialCountFor(this._quoter, key, this._joins);
       this.aliases.set(key, count);
       return count;
     }

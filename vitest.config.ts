@@ -236,6 +236,7 @@ export default defineConfig({
           include: ["packages/activerecord/src/**/*.test.ts"],
           exclude: [...AR_UNIT_FILES, ...SHARED_EXCLUDE],
           setupFiles: [
+            "./packages/activerecord/src/test-setup-worker-db.ts",
             "./packages/activerecord/src/test-setup.ts",
             ...(process.env.MYSQL_TEST_URL
               ? ["./packages/activerecord/src/test-setup-mysql.ts"]

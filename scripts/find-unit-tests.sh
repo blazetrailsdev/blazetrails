@@ -22,8 +22,11 @@ UNIT_CANDIDATES=$(grep -rL \
 # Guard against empty input (grep reads stdin when given no files) and treat
 # no-match as an empty list rather than a script failure.
 if [ -n "$UNIT_CANDIDATES" ]; then
+  # Note: \b is not a word boundary in POSIX grep (it matches backspace).
+  # The patterns are intentionally broad — false positives here only make
+  # the unit-test list more conservative (smaller), never incorrectly large.
   DIRECT_ADAPTER=$(echo "$UNIT_CANDIDATES" | xargs grep -rl \
-    "SQLite3Adapter\|PostgreSQLAdapter\|Mysql2Adapter\|new.*Adapter\b\|\.execute\b\|\.exec\b" \
+    "SQLite3Adapter\|PostgreSQLAdapter\|Mysql2Adapter\|new.*Adapter\|\.execute\|\.exec" \
     2>/dev/null | sort -u || true)
 else
   DIRECT_ADAPTER=""

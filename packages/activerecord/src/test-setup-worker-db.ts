@@ -1,6 +1,7 @@
 /**
- * Vitest setupFile for ar-db: applies a per-worker database suffix to
- * PG_TEST_URL and MYSQL_TEST_URL before any test code or import runs.
+ * Vitest setupFile for the activerecord project: applies a per-worker
+ * database suffix to PG_TEST_URL and MYSQL_TEST_URL before any test code
+ * or import runs.
  *
  * Mutating process.env here ensures every consumer in this fork — including
  * adapter test helpers that read process.env directly — connects to the

@@ -211,13 +211,19 @@ export default defineConfig({
     globals: true,
     projects: [
       {
-        // DB-free AR tests: always run in parallel across CPU cores.
+        // DB-free AR tests: run sequentially within a single fork so the
+        // ar-unit and ar-db forks don't compete for MariaDB connections when
+        // both projects start concurrently. ar-unit files don't use the DB,
+        // but the forks-pool pre-creates workers that share the connection
+        // limit with ar-db's fork. singleFork keeps the total fork count at 2.
         resolve: { alias },
         test: {
           name: "ar-unit",
           include: AR_UNIT_FILES,
           exclude: SHARED_EXCLUDE,
           setupFiles: ["./packages/activerecord/src/test-setup.ts"],
+          pool: "forks",
+          poolOptions: { forks: { singleFork: true } },
         },
       },
       {

@@ -11,6 +11,35 @@ import * as fs from "fs";
 import type { ApiManifest, PackageInfo, ClassInfo, MethodInfo, ParamInfo } from "./types.js";
 import { ROOT_DIR, OUTPUT_DIR, PACKAGES, PACKAGE_DIR_OVERRIDES, packageSrcDir } from "./config.js";
 
+// Per-package cache: extracting all packages with the TS Compiler API
+// takes ~16s; only a handful of packages typically change between runs.
+// We fingerprint each package by the max(mtimeMs) of its source files
+// plus a SCHEMA_VERSION bump so we can invalidate cache when the
+// extractor itself changes meaning. Set `API_COMPARE_FORCE=1` to skip
+// the cache entirely.
+const SCHEMA_VERSION = 1;
+const CACHE_DIR = path.join(OUTPUT_DIR, "ts-api-cache");
+
+interface CacheEntry {
+  schemaVersion: number;
+  fingerprint: string;
+  package: PackageInfo;
+}
+
+function packageFingerprint(files: string[]): string {
+  // Use max mtime + count + total size — cheap to compute and changes
+  // on any edit. The TS extractor also depends on the package's
+  // tsconfig.json, so include its mtime too.
+  let maxMtime = 0;
+  let totalSize = 0;
+  for (const f of files) {
+    const st = fs.statSync(f);
+    if (st.mtimeMs > maxMtime) maxMtime = st.mtimeMs;
+    totalSize += st.size;
+  }
+  return `${files.length}:${maxMtime}:${totalSize}`;
+}
+
 function main() {
   const manifest: ApiManifest = {
     source: "typescript",
@@ -18,9 +47,38 @@ function main() {
     packages: {},
   };
 
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+  const force = process.env.API_COMPARE_FORCE === "1";
+  const cacheStats: { hit: string[]; miss: string[] } = { hit: [], miss: [] };
+
   for (const pkg of PACKAGES) {
     const pkgDir = packageSrcDir(pkg);
-    manifest.packages[pkg] = extractPackage(pkg, pkgDir);
+    const files = getAllTsFiles(pkgDir);
+    const dirName = PACKAGE_DIR_OVERRIDES[pkg] ?? pkg;
+    const tsConfigPath = path.join(ROOT_DIR, "packages", dirName, "tsconfig.json");
+    const fingerprintInputs = [...files];
+    if (fs.existsSync(tsConfigPath)) fingerprintInputs.push(tsConfigPath);
+    const fingerprint = packageFingerprint(fingerprintInputs);
+    const cachePath = path.join(CACHE_DIR, `${pkg}.json`);
+
+    if (!force && fs.existsSync(cachePath)) {
+      try {
+        const cached = JSON.parse(fs.readFileSync(cachePath, "utf-8")) as CacheEntry;
+        if (cached.schemaVersion === SCHEMA_VERSION && cached.fingerprint === fingerprint) {
+          manifest.packages[pkg] = cached.package;
+          cacheStats.hit.push(pkg);
+          continue;
+        }
+      } catch {
+        // Corrupt cache — fall through to re-extract.
+      }
+    }
+
+    cacheStats.miss.push(pkg);
+    const data = extractPackage(pkg, pkgDir);
+    manifest.packages[pkg] = data;
+    const entry: CacheEntry = { schemaVersion: SCHEMA_VERSION, fingerprint, package: data };
+    fs.writeFileSync(cachePath, JSON.stringify(entry));
   }
 
   // Print summary
@@ -31,15 +89,21 @@ function main() {
     for (const cls of Object.values(data.classes)) {
       methodCount += cls.instanceMethods.length + cls.classMethods.length;
     }
+    const tag = cacheStats.hit.includes(pkg) ? " (cached)" : "";
     console.log(
-      `  ${pkg}: ${classCount} classes, ${moduleCount} modules, ${methodCount} public methods`,
+      `  ${pkg}: ${classCount} classes, ${moduleCount} modules, ${methodCount} public methods${tag}`,
+    );
+  }
+  if (cacheStats.hit.length > 0) {
+    console.log(
+      `\n  ${cacheStats.hit.length}/${PACKAGES.length} packages served from cache (set API_COMPARE_FORCE=1 to rebuild).`,
     );
   }
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   const outputPath = path.join(OUTPUT_DIR, "ts-api.json");
   fs.writeFileSync(outputPath, JSON.stringify(manifest, null, 2));
-  console.log(`\nWritten to ${outputPath}`);
+  console.log(`Written to ${outputPath}`);
 }
 
 interface PendingReExport {

@@ -248,13 +248,19 @@ export class MySQL extends ToSql {
     // MATERIALIZED / NOT MATERIALIZED modifiers Postgres supports are
     // ignored. Mirrors Rails' MySQL visit_Arel_Nodes_Cte which calls
     // `quote_table_name` (which emits backticks on the MySQL adapter).
-    // Parens are explicit here because Trails stores a SelectStatement in
-    // the Cte (not a SelectManager as Rails does). Rails' visitor relies on
-    // visit_Arel_SelectManager adding parens; we must add them ourselves.
+    // Parens: Trails stores a SelectStatement in Cte.relation (not a
+    // SelectManager as Rails does), so we add them explicitly. But
+    // buildWithExpressionFromValue wraps SqlLiteral relations in a Grouping,
+    // which visits with its own parens — skip the explicit wrap in that case.
     const escaped = node.name.replace(/`/g, "``");
-    this.collector.append(`\`${escaped}\` AS (`);
-    this.visit(node.relation);
-    this.collector.append(")");
+    this.collector.append(`\`${escaped}\` AS `);
+    if (node.relation instanceof Nodes.Grouping) {
+      this.visit(node.relation);
+    } else {
+      this.collector.append("(");
+      this.visit(node.relation);
+      this.collector.append(")");
+    }
     return this.collector;
   }
 }

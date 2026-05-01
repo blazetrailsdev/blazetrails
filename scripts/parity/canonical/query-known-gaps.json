@@ -7,6 +7,10 @@
     "side": "diff",
     "reason": "Same datetime-precision gap as ar-01 (BETWEEN form): rails binds are 'YYYY-MM-DDTHH:MM:SS.000Z' (truncated to seconds for an unprecisioned DATETIME column), trails binds keep the millisecond component from the frozen-at value, and the inlined SQL gains '.NNN000' microseconds. Flakes whenever the parity workflow's frozen-at is not on a whole second."
   },
+  "ar-65": {
+    "side": "diff",
+    "reason": "Same datetime-precision gap as ar-01/ar-52 (equality form): Order.where(created_at: Time.now) — rails truncates to whole seconds for the unprecisioned DATETIME column, trails keeps subsecond precision in both the bind and the inlined SQL. Flakes whenever the frozen-at is not on a whole second."
+  },
   "ar-134": {
     "side": "trails-missing",
     "reason": "joins() crashes on nested hash arguments: Rails resolves joins({books: :reviews}) to two INNER JOINs via the association graph; Trails accepts the object argument into _rawJoins and later attempts to use it as a join node during SQL generation, causing a runtime failure instead of producing a valid query. Root cause: Relation#joins does not handle object/hash arguments \u2014 they fall through to _rawJoins and fail when the SQL builder encounters a non-string join entry. Real fix: handle nested object/hash arguments in Relation#joins by resolving them through _resolveAssociationJoin and applying the resulting joins via _applyJoinsToManager."

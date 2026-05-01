@@ -1020,3 +1020,29 @@ describe("ConnectionPool schema cache", () => {
     );
   });
 });
+
+describe("adapter proxy adapterName before first checkout", () => {
+  function makeProxyPool(adapter: string): ConnectionPool {
+    const dbConfig = new HashConfig("test", "primary", {
+      adapter,
+      database: "test.db",
+      reapingFrequency: null,
+    });
+    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
+      adapterFactory: createTestAdapter,
+    });
+    return new ConnectionPool(pc);
+  }
+
+  it("returns postgres for postgresql config", () => {
+    expect(makeProxyPool("postgresql").migrationContext.adapter.adapterName).toBe("postgres");
+  });
+
+  it("returns mysql for mysql2 config", () => {
+    expect(makeProxyPool("mysql2").migrationContext.adapter.adapterName).toBe("mysql");
+  });
+
+  it("returns sqlite for sqlite3 config", () => {
+    expect(makeProxyPool("sqlite3").migrationContext.adapter.adapterName).toBe("sqlite");
+  });
+});

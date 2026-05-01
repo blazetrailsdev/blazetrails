@@ -16,12 +16,13 @@ import type { ApiManifest, PackageInfo, ClassInfo, MethodInfo, ParamInfo } from 
 import { ROOT_DIR, OUTPUT_DIR, PACKAGES, PACKAGE_DIR_OVERRIDES, packageSrcDir } from "./config.js";
 
 // Per-package cache: extracting all packages with the TS Compiler API
-// takes ~16s; only a handful of packages typically change between runs.
-// We fingerprint each package by the max(mtimeMs) of its source files
-// plus a SCHEMA_VERSION bump so we can invalidate cache when the
-// extractor itself changes meaning. Set `API_COMPARE_FORCE=1` to skip
-// the cache entirely.
-const SCHEMA_VERSION = 2;
+// takes ~16s; only a handful of packages typically change between
+// runs. Each package's PackageInfo is cached at
+// output/ts-api-cache/<package>.json keyed by `packageFingerprint`
+// (SHA-1 over sorted (relPath, mtimeMs, size) triples) plus a
+// SCHEMA_VERSION constant we can bump when the extractor's output
+// shape changes. Set `API_COMPARE_FORCE=1` to skip the cache entirely.
+const SCHEMA_VERSION = 3;
 const CACHE_DIR = path.join(OUTPUT_DIR, "ts-api-cache");
 
 interface CacheEntry {
@@ -38,8 +39,10 @@ interface CacheEntry {
  * approach would silently keep a stale cache when same-sized files
  * were swapped or renamed without bumping any mtime.
  *
- * `baseDir` keys paths to the package root so absolute paths don't
- * change the digest when the repo is moved or run from a worktree.
+ * `baseDir` is the package root (e.g. `packages/arel`) so all inputs
+ * — every src `.ts` file and the sibling `tsconfig.json` — appear as
+ * forward paths in the digest, and absolute paths don't change the
+ * result when the repo is moved or run from a worktree.
  */
 export function packageFingerprint(files: string[], baseDir: string): string {
   const entries = files.map((f) => {
@@ -56,10 +59,10 @@ export function packageFingerprint(files: string[], baseDir: string): string {
   return hash.digest("hex");
 }
 
-// Worker entry: when this module loads inside a worker thread, run the
-// requested extraction synchronously and ship the result back to the
-// parent. Workers inherit tsx's loader from the parent process so .ts
-// files resolve transparently.
+// Worker entry: when this module loads inside a worker thread (after
+// the .mjs bootstrap below has registered tsx's ESM loader on this
+// thread — see WORKER_BOOTSTRAP), run the requested extraction
+// synchronously and ship the result back to the parent.
 interface WorkerInput {
   package: string;
   srcDir: string;
@@ -132,7 +135,8 @@ async function main() {
 
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   const force = process.env.API_COMPARE_FORCE === "1";
-  const cacheStats: { hit: string[]; miss: string[] } = { hit: [], miss: [] };
+  // `Set` so the per-package summary loop's membership check is O(1).
+  const cacheHits = new Set<string>();
 
   // Pass 1: serve every cache hit synchronously and record the
   // metadata needed to extract the misses below.
@@ -148,10 +152,14 @@ async function main() {
     const pkgDir = packageSrcDir(pkg);
     const files = getAllTsFiles(pkgDir);
     const dirName = PACKAGE_DIR_OVERRIDES[pkg] ?? pkg;
-    const tsConfigPath = path.join(ROOT_DIR, "packages", dirName, "tsconfig.json");
+    const pkgRoot = path.join(ROOT_DIR, "packages", dirName);
+    const tsConfigPath = path.join(pkgRoot, "tsconfig.json");
     const fingerprintInputs = [...files];
     if (fs.existsSync(tsConfigPath)) fingerprintInputs.push(tsConfigPath);
-    const fingerprint = packageFingerprint(fingerprintInputs, pkgDir);
+    // Anchor relative paths at the package root so tsconfig.json
+    // doesn't show up as `../tsconfig.json` (which it would if we
+    // anchored at the src dir).
+    const fingerprint = packageFingerprint(fingerprintInputs, pkgRoot);
     const cachePath = path.join(CACHE_DIR, `${pkg}.json`);
 
     if (!force && fs.existsSync(cachePath)) {
@@ -159,7 +167,7 @@ async function main() {
         const cached = JSON.parse(fs.readFileSync(cachePath, "utf-8")) as CacheEntry;
         if (cached.schemaVersion === SCHEMA_VERSION && cached.fingerprint === fingerprint) {
           manifest.packages[pkg] = cached.package;
-          cacheStats.hit.push(pkg);
+          cacheHits.add(pkg);
           continue;
         }
       } catch {
@@ -168,7 +176,6 @@ async function main() {
     }
 
     pending.push({ pkg, srcDir: pkgDir, fingerprint, cachePath });
-    cacheStats.miss.push(pkg);
   }
 
   // Pass 2: extract cache misses in parallel via worker threads.
@@ -199,14 +206,14 @@ async function main() {
     for (const cls of Object.values(data.classes)) {
       methodCount += cls.instanceMethods.length + cls.classMethods.length;
     }
-    const tag = cacheStats.hit.includes(pkg) ? " (cached)" : "";
+    const tag = cacheHits.has(pkg) ? " (cached)" : "";
     console.log(
       `  ${pkg}: ${classCount} classes, ${moduleCount} modules, ${methodCount} methods${tag}`,
     );
   }
-  if (cacheStats.hit.length > 0) {
+  if (cacheHits.size > 0) {
     console.log(
-      `\n  ${cacheStats.hit.length}/${PACKAGES.length} packages served from cache (set API_COMPARE_FORCE=1 to rebuild).`,
+      `\n  ${cacheHits.size}/${PACKAGES.length} packages served from cache (set API_COMPARE_FORCE=1 to rebuild).`,
     );
   }
 

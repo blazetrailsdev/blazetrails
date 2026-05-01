@@ -6,7 +6,7 @@
  * resolve to the same target.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import * as ts from "typescript";
 import * as path from "path";
 import * as fs from "node:fs";
@@ -435,8 +435,23 @@ describe("extractFromProgram — include() detection", () => {
 });
 
 describe("packageFingerprint (per-package cache key)", () => {
+  // Track every tmp dir we create so afterEach can clean up; otherwise
+  // repeated test runs leave /tmp/fp-*/ entries behind.
+  const tmpDirs: string[] = [];
+  function makeTmpDir(prefix: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    tmpDirs.push(dir);
+    return dir;
+  }
+  afterEach(() => {
+    while (tmpDirs.length > 0) {
+      const dir = tmpDirs.pop()!;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   function fixture(): { dir: string; files: string[] } {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-"));
+    const dir = makeTmpDir("fp-");
     fs.writeFileSync(path.join(dir, "a.ts"), "export const a = 1;\n");
     fs.writeFileSync(path.join(dir, "b.ts"), "export const b = 22;\n");
     return { dir, files: [path.join(dir, "a.ts"), path.join(dir, "b.ts")] };
@@ -487,7 +502,7 @@ describe("packageFingerprint (per-package cache key)", () => {
     for (const f of files) fs.utimesSync(f, fixedMtime, fixedMtime);
     const before = packageFingerprint(files, dir);
 
-    const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), "fp2-"));
+    const dir2 = makeTmpDir("fp2-");
     const moved = files.map((f) => {
       const dest = path.join(dir2, path.basename(f));
       fs.copyFileSync(f, dest);

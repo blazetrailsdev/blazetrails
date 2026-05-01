@@ -466,6 +466,10 @@ function main() {
   const privatesOnly = args.includes("--privates-only");
   const publicOnly = args.includes("--public-only");
   const privatesAlias = args.includes("--privates");
+  if (privatesOnly && publicOnly) {
+    console.error("Error: --public-only and --privates-only are mutually exclusive — pick one.");
+    process.exit(1);
+  }
   if (privatesAlias && (privatesOnly || publicOnly)) {
     console.error(
       "Error: --privates (alias for the default full-surface mode) cannot be combined with --public-only or --privates-only.",

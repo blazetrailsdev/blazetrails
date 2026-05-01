@@ -111,8 +111,10 @@ export function isDangerousAttributeMethod(_this: PrimaryKeyHost, name: string):
 export function quotedPrimaryKey(this: PrimaryKeyHost & { adapter?: any }): string {
   const pk = this.primaryKey;
   const quoter = this.adapter;
-  if (Array.isArray(pk)) return pk.map((k) => quoter?.quoteColumnName(k) ?? `"${k}"`).join(", ");
-  return quoter?.quoteColumnName(pk) ?? `"${pk}"`;
+  const fallback = (k: string) => `"${k.replace(/"/g, '""')}"`;
+  if (Array.isArray(pk))
+    return pk.map((k) => (quoter ? quoter.quoteColumnName!(k) : fallback(k))).join(", ");
+  return quoter ? quoter.quoteColumnName!(pk as string) : fallback(pk as string);
 }
 
 export function resetPrimaryKey(this: PrimaryKeyHost): void {

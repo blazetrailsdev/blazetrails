@@ -42,7 +42,7 @@ export class InternalMetadata {
   readonly arelTable: Table;
 
   private _q(name: string): string {
-    return (this._adapter as any).quoteIdentifier(name);
+    return this._adapter.quoteIdentifier!(name);
   }
 
   get primaryKey(): string {
@@ -80,7 +80,7 @@ export class InternalMetadata {
     const tsType = detectAdapterName(this._adapter) === "postgres" ? "TIMESTAMP" : "DATETIME";
     const q = (n: string) => this._q(n);
     await this._adapter.executeMutation(
-      `CREATE TABLE IF NOT EXISTS ${(this._adapter as any).quoteTableName(this.tableName)} (` +
+      `CREATE TABLE IF NOT EXISTS ${this._adapter.quoteTableName!(this.tableName)} (` +
         `${q("key")} VARCHAR(255) NOT NULL PRIMARY KEY, ` +
         `${q("value")} VARCHAR(255), ` +
         `${q("created_at")} ${tsType} NOT NULL, ` +
@@ -108,7 +108,7 @@ export class InternalMetadata {
     // config or adapter is actively using.
     if (!this._enabled) return;
     await this._adapter.executeMutation(
-      `DROP TABLE IF EXISTS ${(this._adapter as any).quoteTableName(this.tableName)}`,
+      `DROP TABLE IF EXISTS ${this._adapter.quoteTableName!(this.tableName)}`,
     );
   }
 

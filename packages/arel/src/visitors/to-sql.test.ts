@@ -1650,4 +1650,15 @@ describe("the to_sql visitor", () => {
       expect(sql).toContain('IN (SELECT "users"."id"');
     });
   });
+
+  describe("DeleteManager subselect", () => {
+    it("renders WHERE pk IN (SELECT pk ...) when limit is present", () => {
+      const dm = new DeleteManager();
+      dm.from(users);
+      dm.take(1);
+      dm.key = users.get("id");
+      const sql = new Visitors.ToSql().compile(dm.ast);
+      expect(sql).toContain('IN (SELECT "users"."id"');
+    });
+  });
 });

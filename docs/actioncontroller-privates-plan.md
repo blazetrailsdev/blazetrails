@@ -68,8 +68,9 @@ Constraints (CLAUDE.md):
   threaded through the function signature.
 - Ruby `compact` → `.filter((e) => e !== null && e !== undefined)`, NOT
   `.filter(Boolean)` (which also drops `0`, `""`, `false`).
-- Ruby `Hash#key?` → `"K" in obj`, NOT `obj["K"] != null` (Ruby returns true
-  for nil values).
+- Ruby `Hash#key?` → `Object.hasOwn(obj, "K")`, NOT `obj["K"] != null`
+  (Ruby returns true for nil values; `"K" in obj` walks the prototype
+  chain). Matches `docs/actioncontroller-100-percent.md:175-176`.
 
 Sequencing rules:
 

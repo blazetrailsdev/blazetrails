@@ -118,37 +118,108 @@ duck typing. Option 1 (inject aliases dict at construct) was rejected
 because it diverges from Rails (Rails passes the class, not a snapshot
 of the alias map) and forces every `arelTable` site to re-snapshot.
 
-### Trails files to change
+### Rails reference
 
-- `arel/src/table.ts`:
-  - Add optional `klass` field with a minimal `{ attributeAliases?: Record<string,string> }`
-    interface (do not import AR — keep arel free of AR deps).
-  - `get(name, ...)` resolves `name = klass?.attributeAliases?.[name] ?? name`.
-- `activerecord/src/model.ts` (or `relation.ts`) — pass `klass: this`
-  when building `arelTable`.
+- `activerecord/lib/arel/table.rb` — `def [](name, table = self)` calls
+  `name = klass.attribute_aliases[name.to_s] || name if klass`.
+- `activerecord/lib/active_record/model_schema.rb` —
+  `def arel_table` builds `Arel::Table.new(table_name, klass: self)`.
 
-### Tests to add
+### Step-by-step
 
-- `arel/src/table.test.ts` — pass a fake `klass` with aliases; assert
-  resolution.
-- `activerecord/src/...alias.test.ts` — model with
-  `aliasAttribute("nickname", "name")`; `Model.arelTable.get("nickname")`
-  returns `Attribute(table, "name")`.
+1. **`packages/arel/src/table.ts`** — add a structural `Klass` interface
+   and an optional field:
+
+   ```ts
+   /** Structural duck-type for Rails' `@klass.attribute_aliases`.
+    *  Kept minimal so arel does not import activerecord. */
+   export interface TableKlass {
+     readonly _attributeAliases?: Record<string, string>;
+   }
+
+   export interface TableOptions {
+     typeCaster?: TypeCaster;
+     klass?: TableKlass;
+   }
+   ```
+
+   In the `Table` class, store `readonly klass?: TableKlass` from
+   options and use it in `get(name, table = this)`:
+
+   ```ts
+   get(name: string, table: Table | Node = this): Attribute {
+     const resolved = this.klass?._attributeAliases?.[name] ?? name;
+     return new Attribute(table, resolved);
+   }
+   ```
+
+   Note: the model field is `_attributeAliases` (see
+   `packages/activemodel/src/model.ts:93`); we match that key, not the
+   Rails-camelCase getter name. If a getter `attributeAliases` is
+   added later, widen the interface to either form.
+
+2. **`packages/activerecord/src/base.ts:735`** — current
+   `static get arelTable()` returns
+   `new Table(this.tableName, { typeCaster: new TypeCasterMap(this) })`.
+   Add `klass: this`:
+
+   ```ts
+   static get arelTable(): Table {
+     return new Table(this.tableName, {
+       typeCaster: new TypeCasterMap(this),
+       klass: this,
+     });
+   }
+   ```
+
+   The `static this` here satisfies `TableKlass` structurally because
+   `_attributeAliases` is declared on `activemodel/src/model.ts:93`.
+
+3. **Other `new Table(...)` sites in `relation.ts`** (lines 398, 436,
+   554–555, 585, 1332–1333, 1366–1367, 1429–1430, 1462, 1535+ —
+   `grep -n "new Table(" packages/activerecord/src/relation.ts`) build
+   tables for join targets / through associations from raw table
+   names. They have no model class to attach; leave them untouched
+   (alias resolution only applies to `Model.arelTable`, matching
+   Rails — joined tables don't carry the source model's aliases).
+
+### Tests
+
+- `packages/arel/src/table.test.ts`:
+  - `new Table("users", { klass: { _attributeAliases: { nickname: "name" } } }).get("nickname")`
+    → `Attribute` with `name === "name"`.
+  - Same call with `get("name")` returns `Attribute("name")` (passthrough).
+  - `new Table("users").get("nickname")` (no klass) returns
+    `Attribute("nickname")` (passthrough).
+- `packages/activerecord/src/attribute-methods/aliasing.test.ts`
+  (or wherever `aliasAttribute` is currently tested):
+  - `class M extends Model {} ; M.aliasAttribute("nickname", "name");`
+  - `M.arelTable.get("nickname")` resolves to attribute on `name`.
+  - `M.where({ nickname: "x" }).toSql()` emits `users.name = 'x'`.
+- Mirror the Rails test name: search
+  `scripts/api-compare/.rails-source/activerecord/test/cases/relation/where_test.rb`
+  for `attribute_aliases` and reuse the test title verbatim.
 
 ### Risk
 
-- Circular-import hazard: arel must not import AR types. Use a local
-  structural interface.
-- Memory cycle (Table ↔ Model class): WeakRef not needed since both are
-  long-lived; document in comment.
+- Circular-import hazard: arel must NOT import any activerecord type.
+  Use only the structural `TableKlass` interface declared in
+  `arel/src/table.ts`.
+- Memory cycle (Table ↔ Model class): `Model.arelTable` is a getter
+  that builds a new Table per call; the Table holds a ref to the
+  class, the class holds no ref back. No cycle. (If we ever cache
+  `arelTable`, revisit — but Rails doesn't cache it either.)
 
 ### Verification
 
-- `pnpm test` green; new tests pass.
+- `pnpm --filter @blazetrails/arel test` green.
+- `pnpm --filter @blazetrails/activerecord test` green.
+- `pnpm parity:query` unchanged on fixtures without aliases; new
+  alias-bearing fixture (if added) emits the resolved column name.
 
 ### Size
 
-~60 LOC src + ~80 LOC test.
+~30 LOC src in arel + ~5 LOC src in activerecord + ~80 LOC test.
 
 ---
 
@@ -184,12 +255,55 @@ migration matrix entry needed.
 - PG/MySQL/SQLite use a `visitBinaryOp(node, op)` helper, not a
   `visit_Arel_Nodes_Binary` reflection target — unaffected.
 
-### Changes
+### Step-by-step
 
-- `nodes/binary.ts`: redeclare `Union`/`UnionAll`/`Intersect`/`Except`
-  as `extends Binary`; switch `Join` to `extends Binary`.
-- Drop the now-redundant explicit `left`/`right` fields and
-  constructor on each set-op class — `Binary` already carries them.
+1. **`packages/arel/src/nodes/binary.ts`** — change parent classes.
+   Each of `Union`, `UnionAll`, `Intersect`, `Except`, and the
+   abstract `Join` currently `extends Node` and redeclares
+   `readonly left` / `readonly right` plus a constructor that assigns
+   them. Change to `extends Binary` and remove those duplicated
+   members. Example:
+
+   ```ts
+   // before
+   export class Union extends Node {
+     readonly left: Node;
+     readonly right: Node;
+     constructor(left: Node, right: Node) {
+       super();
+       this.left = left;
+       this.right = right;
+     }
+     accept<T>(visitor: NodeVisitor<T>): T { return visitor.visit(this); }
+   }
+
+   // after
+   export class Union extends Binary {}
+   ```
+
+   The same pattern for `UnionAll`, `Intersect`, `Except`. For
+   `Join`: change `extends Node` to `extends Binary` and drop the
+   `readonly left/right` + constructor. `Binary`'s constructor takes
+   `(left, right = null)` which already covers `Join`'s
+   `(left, right = null)` shape — verify line by line before
+   deleting.
+
+2. **`packages/arel/src/nodes/inner-join.ts`,
+   `outer-join.ts`, `right-outer-join.ts`, `full-outer-join.ts`,
+   `string-join.ts`, `cross-join.ts`** — no change. They already
+   `extends Join`, which now transitively extends `Binary`.
+
+3. **`accept` methods** — `Binary` already declares `accept` calling
+   `visitor.visit(this)`. Subclasses dropping their override inherit
+   this; verify the test suite still resolves dispatch (the
+   per-leaf `dispatchCache` registration in `to-sql.ts:150-166` is
+   unchanged, so dispatch keys still hit the leaf class names).
+
+### Changes summary
+
+- `nodes/binary.ts`: 5 classes (`Union`/`UnionAll`/`Intersect`/`Except`/`Join`)
+  switch parent to `Binary`; drop their duplicated `left`/`right` +
+  constructor + `accept`.
 
 ### Tests
 
@@ -215,28 +329,93 @@ migration matrix entry needed.
 Visitor-side formatting only; no identifier-quoting changes. Independent
 of the quoting refactor.
 
-### Changes
+### Rails reference
 
-- `visitors/mysql.ts`:
-  - `visitArelNodesConcat`: emit `CONCAT(...)` with surrounding spaces
-    (Rails `infix_value`).
-  - `visitArelNodesCte`: drop the explicit `(`...`)` (let inner
-    `Grouping` render).
+`activerecord/lib/arel/visitors/mysql.rb`:
+
+```ruby
+def visit_Arel_Nodes_Concat(o, collector)
+  collector << " CONCAT("
+  visit o.left, collector
+  collector << ", "
+  visit o.right, collector
+  collector << ") "
+end
+
+def visit_Arel_Nodes_Cte(o, collector)
+  collector << quote_table_name(o.name)
+  collector << " AS "
+  visit o.relation, collector
+end
+```
+
+Two divergences from current Trails:
+
+1. **Concat** has leading and trailing spaces around `CONCAT(...)` in
+   Rails. Trails emits `CONCAT(...)` flush, no surrounding spaces
+   (`packages/arel/src/visitors/mysql.ts:99-106`).
+2. **Cte** in Rails relies on `o.relation` being a `Grouping` that
+   renders its own parens. Trails wraps with explicit
+   `` `name` AS ( ... ) `` parens
+   (`packages/arel/src/visitors/mysql.ts:251-255`), which collides
+   with the inner Grouping and produces `((SELECT ...))`.
+
+### Step-by-step
+
+1. **`packages/arel/src/visitors/mysql.ts:99-106`** —
+   `visitArelNodesConcat`. Change to:
+
+   ```ts
+   protected override visitArelNodesConcat(node: Nodes.Concat): SQLString {
+     this.collector.append(" CONCAT(");
+     this.visitNodeOrValue(node.left);
+     this.collector.append(", ");
+     this.visitNodeOrValue(node.right);
+     this.collector.append(") ");
+     return this.collector;
+   }
+   ```
+
+2. **`packages/arel/src/visitors/mysql.ts:246-256`** —
+   `visitArelNodesCte`. Drop the literal `(` / `)` around
+   `node.relation`; the relation visit emits its own parens via
+   `Grouping`:
+
+   ```ts
+   protected override visitArelNodesCte(node: Nodes.Cte): SQLString {
+     const escaped = node.name.replace(/`/g, "``");
+     this.collector.append(`\`${escaped}\` AS `);
+     this.visit(node.relation);
+     return this.collector;
+   }
+   ```
+
+   (Backtick-escaping stays here for now; PR 25b removes it once the
+   visitor delegates identifier quoting to a Quoting quoter.)
 
 ### Tests
 
-- `visitors/mysql.test.ts`:
-  - `CONCAT` in expression context (e.g. `WHERE name = CONCAT(a, b)`).
-  - CTE: `WITH x AS (SELECT 1)` (no double parens).
+- `packages/arel/src/visitors/mysql.test.ts`:
+  - **Concat**: build `Nodes.Concat(attr("a"), attr("b"))`, render
+    via MySQL visitor → SQL contains `" CONCAT(a, b) "` (note the
+    surrounding spaces; assert via substring or full snapshot of
+    a `WHERE name = CONCAT(a, b)`-style expression).
+  - **Cte**: build a `Cte("x", new Grouping(<select>))`, render →
+    `` `x` AS (SELECT ...) `` — exactly one set of parens.
+  - Mirror Rails test names from
+    `scripts/api-compare/.rails-source/activerecord/test/cases/arel/visitors/mysql_test.rb`
+    (look for `concat` and `cte`).
 
 ### Verification
 
 - `pnpm --filter @blazetrails/arel test`.
-- `pnpm parity:query` unchanged (no identifier-quoting churn yet).
+- `pnpm parity:query` — should remain unchanged (these visitors are
+  rarely hit by the parity fixtures; if a CTE fixture exists,
+  expect the snapshot to lose its extra parens — curate).
 
 ### Size
 
-~30 LOC src + ~60 LOC test.
+~10 LOC src + ~50 LOC test.
 
 ---
 
@@ -271,48 +450,124 @@ quoteColumnName(name: string): string {
 backticks fall out automatically because the MySQL adapter's `Quoting`
 implementation already emits them — no per-visitor override needed.
 
-### Changes
+### Step-by-step
 
-- `visitors/to-sql.ts`:
-  - Constructor accepts `quoter: Quoting` (structural type — arel
-    declares its own minimal `Quoting` interface; activerecord's
-    `Quoting` is structurally compatible).
-  - `visitArelTable` / `visitArelNodesAttribute` /
-    `quoteTableName` / `quoteColumnName` route through `this.quoter`.
-- `visitors/mysql.ts`, `postgresql.ts`, `sqlite.ts`: drop any local
-  identifier overrides that exist; they're now redundant.
-- `activerecord` arel-visitor construction sites: pass
-  `connection` (which `implements Quoting`) as the quoter.
+1. **`packages/arel/src/visitors/to-sql.ts`** — add a minimal
+   `Quoting` interface and accept it in the constructor:
+
+   ```ts
+   /** Structural duck-type. activerecord's full `Quoting` interface
+    *  is a superset; both satisfy this. */
+   export interface ArelQuoter {
+     quoteTableName(name: string): string;
+     quoteColumnName(name: string): string;
+     quoteString(s: string): string;
+     quote(value: unknown): string;
+   }
+
+   export class ToSql extends Visitor implements NodeVisitor<SQLString> {
+     protected readonly quoter: ArelQuoter;
+
+     constructor(quoter: ArelQuoter = defaultQuoter) {
+       super();
+       this.quoter = quoter;
+     }
+     // ...
+     protected quoteTableName(name: string): string {
+       return this.quoter.quoteTableName(name);
+     }
+     protected quoteColumnName(name: string): string {
+       return this.quoter.quoteColumnName(name);
+     }
+   }
+   ```
+
+   Provide a `defaultQuoter` exported from a new
+   `packages/arel/src/visitors/default-quoter.ts` that emits the
+   abstract Rails defaults (double-quoted identifiers, `'…'` string
+   escaping). This keeps no-arg `new ToSql()` working for tests and
+   `tree-manager.ts:77` semantics.
+
+2. **`packages/arel/src/visitors/mysql.ts`,
+   `postgresql.ts`, `sqlite.ts`** — drop any local backtick /
+   identifier override logic. The MySQL `visitArelNodesCte`
+   identifier escape (added in PR 25a as
+   `name.replace(/`/g, "``")` + literal backticks) becomes
+   `this.quoteTableName(node.name)`.
+
+3. **Activerecord visitor construction sites** — every place
+   that instantiates an arel visitor must pass the connection
+   (which already `implements Quoting` per quoting-refactor PR 2):
+
+   - `packages/activerecord/src/connection-adapters/abstract-adapter.ts:731`
+     `return new Visitors.ToSql();` → `return new Visitors.ToSql(this);`
+   - `packages/activerecord/src/connection-adapters/sqlite3-adapter.ts:127`
+     `return new Visitors.SQLite();` → `return new Visitors.SQLite(this);`
+   - `packages/activerecord/src/connection-adapters/postgresql-adapter.ts:1754`
+     `return new Visitors.PostgreSQLWithBinds();` → pass `this`.
+   - `packages/activerecord/src/insert-all.ts:417-419` — the three
+     dialect branches each need the connection threaded in. The
+     `_dialect` string lookup is itself a code smell; replace with
+     `return this.model.connection.arelVisitor()` (which returns a
+     fresh visitor with the right quoter) once available, otherwise
+     pass `this.model.connection`.
+   - `packages/activerecord/src/relation.ts:134, 562, 3458` and
+     `packages/activerecord/src/relation/where-clause.ts:323` —
+     each `new Visitors.ToSql()` becomes
+     `new Visitors.ToSql(this.model.connection)` (or thread
+     `connection` from the call context).
+
+4. **`packages/arel/src/nodes/node.ts:119` `setToSqlVisitor`** —
+   the no-arg factory used by `Node#toSql()`. Either extend the
+   factory signature to optionally take a quoter, or document
+   that `Node#toSql()` (with no connection in scope) uses the
+   `defaultQuoter` and is not for production SQL. The latter is
+   simpler and matches Rails — `Arel::Node#to_sql` without a
+   connection is a debug aid.
 
 ### Tests
 
-- `visitors/mysql.test.ts`:
-  - SELECT/UPDATE/INSERT/DELETE with backtick-quoted identifiers when
-    constructed with a MySQL quoter.
-  - Identifier with embedded backtick → doubled.
-- `visitors/to-sql.test.ts`:
-  - Default (no-op) quoter still emits double-quoted identifiers for
-    base/PG/SQLite parity.
+- `packages/arel/src/visitors/to-sql.test.ts`:
+  - Default-quoter ToSql emits double-quoted identifiers
+    (`"users"."id"`) — current behavior, locked in.
+  - `new ToSql(stubQuoter)` where `stubQuoter.quoteTableName` returns
+    `<<x>>` → output contains `<<users>>`.
+- `packages/arel/src/visitors/mysql.test.ts`:
+  - `new MySQL(mysqlQuoter)` SELECT emits `` `users`.`id` ``.
+  - Identifier with embedded backtick → doubled (uses the quoter's
+    own escape).
+- `packages/activerecord/src/relation.test.ts` (or wherever
+  visitor wiring is exercised):
+  - `Model.where(...).toSql()` on MySQL adapter emits backticks
+    end-to-end.
 
 ### Risk
 
-- Identifier quoting changes every MySQL SQL fixture. Snapshot churn is
-  expected; reviewer accepts the diff.
-- Constructor signature change for `ToSql` and dialect subclasses —
-  audit every in-tree construction site (activerecord adapters, tests,
-  parity harness) and migrate atomically.
+- **Snapshot churn:** identifier quoting changes every MySQL SQL
+  fixture. Curate the diff in the PR.
+- **Constructor signature change for `ToSql` and dialect subclasses.**
+  Default-arg `quoter = defaultQuoter` keeps no-arg construction
+  working; tests that construct directly continue to pass.
+- **`ArelQuoter` vs activerecord `Quoting`** — the structural shape
+  must be a strict subset of activerecord's `Quoting` interface.
+  Verify with a one-line check in a `.test-d.ts`:
+  `expectAssignable<ArelQuoter>(connection)`.
 
 ### Verification
 
+- `pnpm --filter @blazetrails/arel test` green.
+- `pnpm --filter @blazetrails/activerecord test` green.
 - `pnpm parity:query` on MySQL — expect a wave of fixture updates;
   curate these in the PR.
 - After merge: the `mysqlQuote(sql)` runtime post-processor in
-  activerecord becomes redundant — schedule removal as a follow-up
-  (cross-references quoting-refactor.md final note).
+  activerecord (search `grep -rn mysqlQuote packages/activerecord/src`)
+  becomes redundant — schedule removal as a follow-up
+  (cross-references `docs/quoting-refactor.md` final note).
 
 ### Size
 
-~80 LOC src + ~150 LOC test (incl. fixture updates).
+~120 LOC src + ~200 LOC test (incl. fixture updates and 8–10
+construction-site migrations).
 
 ---
 
@@ -320,53 +575,162 @@ implementation already emits them — no per-visitor override needed.
 
 ### Design decision (resolved)
 
-**Option 2 — drop `parts`; store `sqlWithSubstitutes` + `bindValues`.**
-Match Rails' node shape exactly; visitor parses `?` placeholders at
-visit time. All in-tree consumers of `parts` migrate atomically (no
-shim).
+**Option 2 — drop `parts`; visitor walks
+`sqlWithSubstitutes` + `positionalBinds` / `namedBinds` directly.**
+Match Rails' node shape: rename `sql` → `sqlWithSubstitutes`, remove
+the `parts` getter, and have the visitor do the placeholder walk
+itself (Rails: `visit_Arel_Nodes_BoundSqlLiteral` in `to_sql.rb`).
 
-Rationale: Rails-shape parity for the node, even at the cost of
-re-parsing on each visit. Aligns the node fields one-for-one with
-`nodes/bound_sql_literal.rb` and removes a Trails-only contract.
+Rationale: the trails node already carries `positionalBinds` and
+`namedBinds` (matching Rails `positional_binds` / `named_binds`); the
+remaining drift is the `sql` field name and the trails-only `parts`
+abstraction. Removing `parts` shrinks the node API to a strict
+subset of Rails.
 
 ### Rails reference
 
-- `visitors/to_sql.rb` — `visit_Arel_Nodes_BoundSqlLiteral`.
-- `nodes/bound_sql_literal.rb` — `BindError` text, field shape.
+- `activerecord/lib/arel/nodes/bound_sql_literal.rb`:
+  - `attr_reader :sql_with_substitutes, :positional_binds, :named_binds`.
+  - `BindError` message: `"wrong number of bind variables (X for Y) in: <sql>"`
+    (positional) or `"missing value for :<name> in <sql>"` (named).
+- `activerecord/lib/arel/visitors/to_sql.rb` —
+  `visit_Arel_Nodes_BoundSqlLiteral` walks `sql_with_substitutes`,
+  for each bind: `Arel::Node` → `visit`, `Array` → visit each
+  comma-joined, otherwise → `quote(value)`.
 
-### Changes
+### Step-by-step
 
-- `nodes/bound-sql-literal.ts`:
-  - Replace `parts` with `sqlWithSubstitutes: string` and
-    `bindValues: unknown[]`.
-  - Update constructor + any `eql`/`hash`/inspection paths.
-  - `BindError` message text matches Rails verbatim.
-- `visitors/to-sql.ts` `visitArelNodesBoundSqlLiteral`:
-  - Walk `sqlWithSubstitutes`, splitting on `?` placeholders; for each
-    bind: `Node` → `visit`, `Array` → visit each comma-joined, else →
-    `quote` (or bind via collector).
-  - Mismatched bind count → `BindError`.
-- All in-tree call sites that constructed `BoundSqlLiteral` with `parts`
-  migrate to the new constructor in the same PR.
-- `errors.ts` — `BindError` text aligned with Rails.
+1. **`packages/arel/src/nodes/bound-sql-literal.ts`** —
+   - Rename field `sql` → `sqlWithSubstitutes` (and the constructor
+     parameter).
+   - Drop the `parts` getter (lines 66-131) and the
+     `sqlWithPlaceholders` getter.
+   - Keep `positionalBinds`, `namedBinds`, and the `validate()` call.
+   - Update `BindError` strings to match Rails verbatim
+     (the messages in `validate()` and the count-mismatch error
+     thrown from the old `parts` getter — those move to the
+     visitor's bind walk in step 3).
+
+2. **In-tree call sites** — update both constructor positional args
+   and any `.sql` / `.parts` reads. Known sites:
+   - `packages/activerecord/src/relation/query-methods.ts:1338, 1357`
+     (constructor calls — first arg is the SQL string; rename param
+     locally if helpful but the positional API doesn't break).
+   - `packages/arel/src/update-manager.ts:60` — `instanceof
+     BoundSqlLiteral` branch; no field access, no change needed.
+   - `packages/arel/src/visitors/to-sql.ts:1006` — old visitor reads
+     `node.parts`. Replace per step 3.
+   - `packages/arel/src/visitors/dot.ts:598` — registered as
+     `visitNoEdges`; no field access, no change.
+   - `grep -rn "BoundSqlLiteral\|\.parts\b" packages/` to confirm no
+     other consumers before merging.
+
+3. **`packages/arel/src/visitors/to-sql.ts:1004-…`** —
+   `visitArelNodesBoundSqlLiteral` rewrite. Replace the
+   `for (const part of node.parts)` loop with a placeholder walk on
+   `node.sqlWithSubstitutes`:
+
+   ```ts
+   private visitArelNodesBoundSqlLiteral(node: Nodes.BoundSqlLiteral): SQLString {
+     const sql = node.sqlWithSubstitutes;
+     const hasPositional = node.positionalBinds.length > 0;
+     const hasNamed = Object.keys(node.namedBinds).length > 0;
+
+     if (hasPositional) {
+       const segments = sql.split("?");
+       if (segments.length - 1 !== node.positionalBinds.length) {
+         throw new BindError(
+           `wrong number of bind variables (${node.positionalBinds.length} for ${segments.length - 1}) in: ${sql}`,
+         );
+       }
+       segments.forEach((seg, i) => {
+         this.collector.append(seg);
+         if (i < node.positionalBinds.length) {
+           this.visitBindValue(node.positionalBinds[i]);
+         }
+       });
+     } else if (hasNamed) {
+       const re = /:([a-zA-Z]\w*)/g;
+       let last = 0;
+       let m: RegExpExecArray | null;
+       while ((m = re.exec(sql))) {
+         this.collector.append(sql.slice(last, m.index));
+         const name = m[1];
+         if (!(name in node.namedBinds)) {
+           throw new BindError(`missing value for :${name} in ${sql}`);
+         }
+         this.visitBindValue(node.namedBinds[name]);
+         last = m.index + m[0].length;
+       }
+       this.collector.append(sql.slice(last));
+     } else {
+       this.collector.append(sql);
+     }
+     return this.collector;
+   }
+
+   private visitBindValue(value: unknown): void {
+     if (value instanceof Node) {
+       this.visit(value);
+     } else if (Array.isArray(value)) {
+       value.forEach((v, i) => {
+         if (i > 0) this.collector.append(", ");
+         this.visitBindValue(v);
+       });
+     } else {
+       this.collector.append(this.quoter.quote(value));
+     }
+   }
+   ```
+
+   `visitBindValue` is private; do not promote it to a `visit_*`
+   reflection target.
+
+4. **`packages/arel/src/errors.ts`** — add or align `BindError`
+   class with Rails-shaped message strings (`wrong number of bind
+   variables …` and `missing value for :<name> …`). Existing
+   `Error("Cannot mix positional and named bind parameters")` cases
+   in `validate()` retain trails phrasing — Rails doesn't have an
+   exact analog there.
 
 ### Tests
 
-- `nodes/bound-sql-literal.test.ts`:
-  - Mixed `?` placeholders + Arel-node value.
-  - Array value flattens with `, `.
-  - Missing/extra binds → BindError with Rails-shaped message text.
+- `packages/arel/src/nodes/bound-sql-literal.test.ts`:
+  - Constructor takes `sqlWithSubstitutes`; `node.sqlWithSubstitutes`
+    reads back unchanged.
+  - `node.parts` is no longer defined (TS error or `undefined`).
+  - Validation errors fire with Rails phrasing.
+- `packages/arel/src/visitors/to-sql.test.ts`:
+  - `?` placeholder + Arel-node bind → emitted SQL contains the
+    visited node's SQL, not its quoted toString.
+  - Array bind value → comma-joined.
+  - Wrong positional count → `BindError` with
+    `"wrong number of bind variables (N for M)"` text.
+  - Missing named bind → `BindError` with `"missing value for :name"`.
+- Mirror Rails test names from
+  `scripts/api-compare/.rails-source/activerecord/test/cases/arel/visitors/to_sql_test.rb`
+  (search for `bound_sql_literal`).
 
 ### Risk
 
-- Breaking change to the `BoundSqlLiteral` node API. Audit every
-  in-tree consumer (search for `BoundSqlLiteral` and `.parts`) before
-  opening; migrate atomically.
+- Breaking change to `BoundSqlLiteral` node API (`sql` field rename,
+  `parts` removal). Pre-release, no external consumers; in-tree
+  audit per step 2.
+- `BindError` exception identity: confirm whether trails has an
+  existing `BindError` class (`grep -rn "class BindError" packages/`)
+  — if not, add to `arel/src/errors.ts` and export.
+
+### Verification
+
+- `pnpm --filter @blazetrails/arel test` green.
+- `pnpm --filter @blazetrails/activerecord test` green.
+- `pnpm parity:query` unchanged — the visitor still emits the same
+  SQL for the same input; only the node-internal API moved.
 
 ### Size
 
-~100 LOC src + ~110 LOC test (constructor migration adds ~20 LOC over
-Option 1).
+~80 LOC src (mostly the visitor rewrite; node loses more LOC than
+it gains) + ~120 LOC test.
 
 ---
 

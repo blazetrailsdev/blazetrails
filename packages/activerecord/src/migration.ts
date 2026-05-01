@@ -13,7 +13,6 @@ import {
   SchemaStatements,
   assertSchemaAdapter,
 } from "./connection-adapters/abstract/schema-statements.js";
-import { detectAdapterName } from "./adapter-name.js";
 import { CommandRecorder } from "./migration/command-recorder.js";
 import { SchemaMigration } from "./schema-migration.js";
 import { InternalMetadata } from "./internal-metadata.js";
@@ -165,7 +164,7 @@ export abstract class Migration {
 
   /** Determine adapter type from the adapter class name. */
   protected get _adapterName(): "sqlite" | "postgres" | "mysql" {
-    return detectAdapterName(this.adapter);
+    return this.adapter.adapterName;
   }
 
   private _schema?: SchemaStatements;
@@ -1043,7 +1042,7 @@ export class MigrationContext {
   constructor(private adapter: DatabaseAdapter) {}
 
   private get _adapterName(): "sqlite" | "postgres" | "mysql" {
-    return detectAdapterName(this.adapter);
+    return this.adapter.adapterName;
   }
 
   async createTable(
@@ -1319,8 +1318,7 @@ export class MigrationContext {
       indexName = `index_${table}_on_${cols.join("_and_")}`;
     }
     if (indexName) {
-      const adp = detectAdapterName(this.adapter);
-      if (adp === "mysql") {
+      if (this.adapter.adapterName === "mysql") {
         await this.adapter.executeMutation(`DROP INDEX \`${indexName}\` ON \`${table}\``);
       } else {
         await this.adapter.executeMutation(`DROP INDEX "${indexName}"`);

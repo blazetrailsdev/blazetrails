@@ -94,13 +94,21 @@ export function inspectExplainOption(o: unknown): string {
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter
  */
+/**
+ * Normalized adapter family name used for dialect branching.
+ *
+ * Mirrors: the three families Rails branches on throughout
+ * ActiveRecord (sqlite3, postgresql, mysql2/trilogy).
+ */
+export type AdapterName = "sqlite" | "postgres" | "mysql";
+
 export interface DatabaseAdapter {
   /**
-   * Human-readable adapter name (e.g. "SQLite", "PostgreSQL", "Mysql2").
+   * Normalized adapter family: `"sqlite"`, `"postgres"`, or `"mysql"`.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#adapter_name
    */
-  readonly adapterName: string;
+  readonly adapterName: AdapterName;
 
   /**
    * Execute a SQL query and return rows.

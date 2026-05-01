@@ -90,11 +90,6 @@ export function inspectExplainOption(o: unknown): string {
 }
 
 /**
- * Database adapter interface — pluggable backends.
- *
- * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter
- */
-/**
  * Normalized adapter family name used for dialect branching.
  *
  * Mirrors: the three families Rails branches on throughout
@@ -102,6 +97,11 @@ export function inspectExplainOption(o: unknown): string {
  */
 export type AdapterName = "sqlite" | "postgres" | "mysql";
 
+/**
+ * Database adapter interface — pluggable backends.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter
+ */
 export interface DatabaseAdapter {
   /**
    * Normalized adapter family: `"sqlite"`, `"postgres"`, or `"mysql"`.

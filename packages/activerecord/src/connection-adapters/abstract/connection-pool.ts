@@ -338,7 +338,8 @@ export class ConnectionPool implements ReapablePool {
       const pool = this;
       this._adapterProxy = new Proxy({} as DatabaseAdapter, {
         get(_target, prop) {
-          if (prop === "adapterName") return (pool.poolConfig as any).adapterClass ?? "sqlite";
+          if (prop === "adapterName")
+            return (pool.activeConnection ?? pool.connections[0])?.adapterName ?? "sqlite";
           return (...args: unknown[]) => {
             return pool.withConnection((conn) => (conn as any)[prop](...args));
           };

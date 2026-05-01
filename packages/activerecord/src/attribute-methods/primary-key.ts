@@ -113,8 +113,8 @@ export function quotedPrimaryKey(this: PrimaryKeyHost & { adapter?: any }): stri
   const quoter = this.adapter;
   const fallback = (k: string) => `"${k.replace(/"/g, '""')}"`;
   if (Array.isArray(pk))
-    return pk.map((k) => (quoter ? quoter.quoteColumnName!(k) : fallback(k))).join(", ");
-  return quoter ? quoter.quoteColumnName!(pk as string) : fallback(pk as string);
+    return pk.map((k) => (quoter ? quoter.quoteColumnName(k) : fallback(k))).join(", ");
+  return quoter ? quoter.quoteColumnName(pk as string) : fallback(pk as string);
 }
 
 export function resetPrimaryKey(this: PrimaryKeyHost): void {

@@ -10,7 +10,7 @@ import {
   polymorphicName,
 } from "../inheritance.js";
 import { CompositePrimaryKeyMismatchError } from "./errors.js";
-import { quoteTableName, quoteColumnName, quote } from "../connection-adapters/abstract/quoting.js";
+import type { Quoting } from "../connection-adapters/abstract/quoting-interface.js";
 
 /**
  * Lambda applied to each FK/type bind value before it reaches the
@@ -159,6 +159,7 @@ export class ReflectionProxy {
  */
 export class AssociationScope {
   private readonly _valueTransformation: ValueTransformation;
+  private _quoter?: Quoting;
 
   constructor(valueTransformation: ValueTransformation) {
     this._valueTransformation = valueTransformation;
@@ -232,6 +233,7 @@ export class AssociationScope {
    */
   scope(association: AssociationScopeable): unknown {
     const { owner, reflection, klass } = association;
+    this._quoter = klass.adapter as unknown as Quoting;
     // Rails: `klass.unscoped` (association_scope.rb:23). Rails' unscoped
     // bypasses default_scope but STILL applies the STI `type_condition`
     // because `relation()` adds it for `finder_needs_type_condition?`
@@ -254,7 +256,7 @@ export class AssociationScope {
     // default seeding with `klass.arel_table`). The tracker is
     // shared across the chain walk within this call so repeated
     // joins to the same table get unique aliases.
-    const tracker = AliasTracker.create(null, klass.arelTable.name, []);
+    const tracker = AliasTracker.create(null, klass.arelTable.name, [], undefined, this._quoter);
     const chain = this._getChain(reflection, tracker);
     scope = this._addConstraints(scope, owner, chain, klass);
     if (!reflection.isCollection()) {
@@ -497,13 +499,15 @@ export class AssociationScope {
     // Relation is stored as a SQL string and re-wrapped in
     // Nodes.SqlLiteral at apply time, so we still produce a string —
     // but the identifiers/values are escape-safe.
-    const qTable = quoteTableName(table);
-    const qForeignTable = quoteTableName(foreignTable);
+    const q = this._quoter;
+    const qtName = (n: string) => (q ? q.quoteTableName(n) : `"${n}"`);
+    const qcName = (n: string) => (q ? q.quoteColumnName(n) : `"${n}"`);
+    const qVal = (v: unknown) => (q ? q.quote(v) : `'${String(v)}'`);
+    const qTable = qtName(table);
+    const qForeignTable = qtName(foreignTable);
     const conditions: string[] = [];
     for (let i = 0; i < joinPks.length; i++) {
-      conditions.push(
-        `${qTable}.${quoteColumnName(joinPks[i])} = ${qForeignTable}.${quoteColumnName(joinFks[i])}`,
-      );
+      conditions.push(`${qTable}.${qcName(joinPks[i])} = ${qForeignTable}.${qcName(joinFks[i])}`);
     }
     let onClause = conditions.join(" AND ");
     if (r.type) {
@@ -514,7 +518,7 @@ export class AssociationScope {
       // STI) and the value-transformation lambda.
       const nextKlass = (nextReflection as { klass?: typeof Base }).klass;
       const nextName = nextKlass ? polymorphicName(nextKlass) : "";
-      onClause += ` AND ${qTable}.${quoteColumnName(r.type)} = ${quote(this._transformValue(nextName))}`;
+      onClause += ` AND ${qTable}.${qcName(r.type)} = ${qVal(this._transformValue(nextName))}`;
     }
     return (scope as { joins: (table: string, on: string) => unknown }).joins(
       foreignTable,

@@ -18,6 +18,7 @@
 
 import { inspectExplainOption } from "./adapter.js";
 import type { AdapterName, DatabaseAdapter, ExplainOption } from "./adapter.js";
+import { Visitors } from "@blazetrails/arel";
 import { DatabaseStatements } from "./connection-adapters/abstract/database-statements.js";
 import { include } from "@blazetrails/activesupport";
 import { isWriteQuerySql } from "./connection-adapters/sql-classification.js";
@@ -799,6 +800,15 @@ class SchemaAdapter implements DatabaseAdapter {
     const inner = this.inner as { quoteString?: (s: string) => string };
     if (typeof inner.quoteString === "function") return inner.quoteString(s);
     return s.replace(/\\/g, "\\\\").replace(/'/g, "''");
+  }
+
+  get arelVisitor(): Visitors.ToSql {
+    // Use the base ToSql visitor with this adapter as quoter. The base visitor
+    // does not apply dialect-specific suppressions (e.g. SQLite silently drops
+    // FOR UPDATE), so test assertions about SQL structure remain dialect-neutral.
+    // Identifier quoting is still correct because SchemaAdapter delegates
+    // quoteTableName/quoteColumnName to the inner adapter.
+    return new Visitors.ToSql(this);
   }
 
   async cleanup(): Promise<void> {

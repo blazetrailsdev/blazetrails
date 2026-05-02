@@ -75,6 +75,8 @@ export class RollUp extends GroupingElement {
 
 /** @deprecated Use RollUp (Rails casing) */
 export const Rollup = RollUp;
+/** @deprecated Use RollUp (Rails casing) */
+export type Rollup = RollUp;
 
 export class GroupingSet extends GroupingElement {
   accept<T>(visitor: NodeVisitor<T>): T {

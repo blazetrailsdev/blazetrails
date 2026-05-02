@@ -137,7 +137,7 @@ export class Model {
   }
 
   /** @internal Rails-private helper. */
-  static resolveAttributeName(name: string | symbol): string {
+  static resolveAttributeName(name: string): string {
     return _resolveAttributeNameHelper.call(this, name);
   }
 

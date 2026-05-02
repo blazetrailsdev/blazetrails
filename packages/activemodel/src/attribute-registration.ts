@@ -312,8 +312,8 @@ export function resetDefaultAttributesBang(this: AnyAttributeHost): void {
  *
  * @internal Rails-private helper.
  */
-export function resolveAttributeName(this: AnyAttributeHost, name: string | symbol): string {
-  return String(name);
+export function resolveAttributeName(this: AnyAttributeHost, name: string): string {
+  return name;
 }
 
 /**

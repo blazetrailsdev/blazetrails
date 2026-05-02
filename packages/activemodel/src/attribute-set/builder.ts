@@ -39,7 +39,34 @@ export class Builder {
  *
  * Mirrors: ActiveModel::LazyAttributeSet
  */
-export class LazyAttributeSet extends AttributeSet {}
+export class LazyAttributeSet extends AttributeSet {
+  private _additionalTypes: Map<string, Type>;
+
+  constructor(
+    attributes: Map<string, Attribute> = new Map(),
+    additionalTypes: Map<string, Type> = new Map(),
+  ) {
+    super(attributes);
+    this._additionalTypes = additionalTypes;
+  }
+
+  /** @internal Rails-private helper. Mirrors: LazyAttributeSet#additional_types (attr_reader) */
+  additionalTypes(): Map<string, Type> {
+    return this._additionalTypes;
+  }
+
+  /**
+   * @internal Rails-private helper. Mirrors: LazyAttributeSet#attributes (protected)
+   * Materializes the lazy set by resolving all keys into the attribute map.
+   */
+  materialize(): Map<string, Attribute> {
+    const result = new Map<string, Attribute>();
+    for (const key of this.keys()) {
+      result.set(key, this.getAttribute(key));
+    }
+    return result;
+  }
+}
 
 /**
  * Lazy hash of attribute objects, materializes on demand.
@@ -122,6 +149,19 @@ export class LazyAttributeHash {
 
   static marshalLoad(data: [Map<string, Type>, Record<string, unknown>]): LazyAttributeHash {
     return new LazyAttributeHash(data[0], data[1]);
+  }
+
+  /** @internal Rails-private helper. Mirrors: LazyAttributeHash#delegate_hash (attr_reader) */
+  delegateHash(): Map<string, Attribute> {
+    return this.delegate;
+  }
+
+  /**
+   * @internal Rails-private helper. Mirrors: LazyAttributeHash#assign_default_value
+   * Materializes an attribute entry for `name` from the value/type tables.
+   */
+  assignDefaultValue(name: string): Attribute {
+    return this.assignDefault(name);
   }
 
   private assignDefault(name: string): Attribute {

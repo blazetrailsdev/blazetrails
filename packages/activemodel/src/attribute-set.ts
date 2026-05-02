@@ -191,7 +191,7 @@ export class AttributeSet {
     }
   }
 
-  private cloneAttribute(attr: Attribute, cache: Map<Attribute, Attribute>): Attribute {
+  protected cloneAttribute(attr: Attribute, cache: Map<Attribute, Attribute>): Attribute {
     const existing = cache.get(attr);
     if (existing) return existing;
 

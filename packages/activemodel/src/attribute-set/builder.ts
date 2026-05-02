@@ -61,10 +61,26 @@ export class LazyAttributeSet extends AttributeSet {
    */
   materialize(): Map<string, Attribute> {
     const result = new Map<string, Attribute>();
-    // forEach iterates all entries including uninitialized ones, matching
-    // Rails' loop over @values / @types / @additional_types keys.
+    // forEach covers all stored entries including uninitialized ones, matching
+    // Rails' @values/@types loops. Then add any additionalTypes-only keys.
     this.forEach((attr, name) => result.set(name, attr));
+    for (const [name, type] of this._additionalTypes) {
+      if (!result.has(name)) result.set(name, Attribute.uninitialized(name, type));
+    }
     return result;
+  }
+
+  override deepDup(): LazyAttributeSet {
+    const cache = new Map<Attribute, Attribute>();
+    const newAttrs = new Map<string, Attribute>();
+    this.forEach((attr, name) => newAttrs.set(name, this.cloneAttribute(attr, cache)));
+    return new LazyAttributeSet(newAttrs, new Map(this._additionalTypes));
+  }
+
+  override map(fn: (attr: Attribute) => Attribute): LazyAttributeSet {
+    const newAttrs = new Map<string, Attribute>();
+    this.forEach((attr, name) => newAttrs.set(name, fn(attr)));
+    return new LazyAttributeSet(newAttrs, new Map(this._additionalTypes));
   }
 }
 

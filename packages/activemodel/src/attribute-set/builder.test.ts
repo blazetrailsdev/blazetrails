@@ -50,6 +50,32 @@ describe("LazyAttributeSet", () => {
     expect(result.has("age")).toBe(true);
     expect(result.get("age")!.isInitialized()).toBe(false);
   });
+
+  it("materialize includes additionalTypes keys not in the attribute map", () => {
+    const attrs = new Map([["name", Attribute.fromDatabase("name", "Alice", strType)]]);
+    const extra = new Map([["score", intType]]);
+    const lazy = new LazyAttributeSet(attrs, extra);
+    const result = lazy.materialize();
+    expect(result.has("score")).toBe(true);
+    expect(result.get("score")!.isInitialized()).toBe(false);
+  });
+
+  it("deepDup preserves additionalTypes", () => {
+    const extra = new Map([["score", intType]]);
+    const lazy = new LazyAttributeSet(new Map(), extra);
+    const dup = lazy.deepDup();
+    expect(dup).toBeInstanceOf(LazyAttributeSet);
+    expect(dup.additionalTypes()).toEqual(extra);
+    expect(dup.additionalTypes()).not.toBe(extra);
+  });
+
+  it("map preserves additionalTypes", () => {
+    const extra = new Map([["score", intType]]);
+    const lazy = new LazyAttributeSet(new Map(), extra);
+    const mapped = lazy.map((a) => a);
+    expect(mapped).toBeInstanceOf(LazyAttributeSet);
+    expect((mapped as LazyAttributeSet).additionalTypes()).toEqual(extra);
+  });
 });
 
 describe("LazyAttributeHash", () => {

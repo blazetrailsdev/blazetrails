@@ -262,6 +262,11 @@ export class AttributeSet {
     return this.attributes.has(name);
   }
 
+  /** Write an attribute directly, bypassing the frozen guard (for lazy init). */
+  protected setAttributeUnfrozen(name: string, attr: Attribute): void {
+    this.attributes.set(name, attr);
+  }
+
   accessed(): string[] {
     const result: string[] = [];
     for (const [name, attr] of this.attributes) {

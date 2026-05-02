@@ -11,7 +11,7 @@ import {
 } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
-import { RecordNotSaved, RecordNotUnique } from "./errors.js";
+import { RecordNotSaved, RecordNotUnique, UnmodifiableRelation } from "./errors.js";
 import { disallowRawSqlBang } from "./sanitization.js";
 import {
   columnNameMatcher as abstractColumnNameMatcher,
@@ -3480,6 +3480,157 @@ export class Relation<T extends Base> {
 
   private _compileArelNode(node: Nodes.Node): string {
     return this._arelVisitor().compile(node);
+  }
+
+  /**
+   * Mirrors Rails `Relation#assert_modifiable!` (relation/query_methods.rb).
+   * Raises {@link UnmodifiableRelation} once a relation is loaded, so
+   * mutation builders (`where!`, `order!`, …) refuse to alter a relation
+   * whose records have already been fetched.
+   *
+   * @internal
+   */
+  assertModifiableBang(): void {
+    if (this._loaded) {
+      throw new UnmodifiableRelation();
+    }
+  }
+
+  /**
+   * Mirrors Rails `Relation#check_if_method_has_arguments!`
+   * (relation/query_methods.rb). Used by chainable scope-builders
+   * (`select`, `order`, `group`, …) to reject empty argument lists with
+   * a method-specific error message before further processing.
+   *
+   * @internal
+   */
+  checkIfMethodHasArgumentsBang(
+    methodName: string | symbol,
+    args: unknown[],
+    message?: string,
+  ): void {
+    if (args === undefined || args === null || args.length === 0) {
+      const name = typeof methodName === "symbol" ? methodName.description : methodName;
+      throw new Error(message ?? `The method .${String(name)}() must contain arguments.`);
+    }
+  }
+
+  /**
+   * Mirrors Rails `Relation#table_name_matches?` (relation/query_methods.rb).
+   * Returns true when the relation's primary table name appears as a bare
+   * identifier inside a custom `from()` expression — used by `arelColumn`
+   * to decide whether bare attribute references can be qualified to the
+   * model's own table.
+   *
+   * @internal
+   */
+  isTableNameMatches(from: unknown): boolean {
+    if (from == null) return false;
+    const fromStr = String(from);
+    const tableName = this._modelClass.tableName;
+    if (!tableName) return false;
+    const escaped = tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Match the bare or quoted table name not preceded by FROM and not
+    // followed by `.` (i.e. used as an alias rather than a qualifier).
+    const re = new RegExp(`(?:^|(?<!FROM)\\s)(?:\\b${escaped}\\b|"${escaped}")(?!\\.)`, "i");
+    return re.test(fromStr);
+  }
+
+  /**
+   * Mirrors Rails `Relation#arel_column_with_table` (relation/query_methods.rb).
+   * Builds a cross-table {@link Attribute} for `"table.column"`-style
+   * references and registers `tableName` in `references_values` so eager
+   * loading promotes the join correctly.
+   *
+   * @internal
+   */
+  arelColumnWithTable(tableName: string, columnName: string): Nodes.Node {
+    if (!this._referencesValues.includes(tableName)) {
+      this._referencesValues.push(tableName);
+    }
+    if (typeof columnName === "symbol" || /^\w+$/.test(columnName)) {
+      return new Table(tableName).get(columnName);
+    }
+    return new Nodes.SqlLiteral(`"${tableName}".${columnName}`);
+  }
+
+  /**
+   * Mirrors Rails `Relation#arel_column` (relation/query_methods.rb).
+   * Resolves a single field reference to an Arel node — applying
+   * attribute aliases, qualifying bare names to the model's table when
+   * the from-clause permits, and falling back to {@link Nodes.SqlLiteral}
+   * for arbitrary SQL fragments.
+   *
+   * @internal
+   */
+  arelColumn(field: string | Nodes.Node): Nodes.Node {
+    if (field instanceof Nodes.Node) return field;
+    const aliases = (this._modelClass as any)._attributeAliases as
+      | Record<string, string>
+      | undefined;
+    const resolved = aliases?.[field] ?? field;
+    const fromValue = this._fromClause.isEmpty()
+      ? null
+      : (this._fromClause.name ?? this._fromClause.value);
+    const known = this._modelClass._attributeDefinitions.has(resolved);
+    if (known && (!fromValue || this.isTableNameMatches(fromValue))) {
+      return this._modelClass.arelTable.get(resolved);
+    }
+    const dotMatch = resolved.match(/^((?:\w+\.)?\w+)\.(\w+)$/);
+    if (dotMatch) return this.arelColumnWithTable(dotMatch[1], dotMatch[2]);
+    return new Nodes.SqlLiteral(resolved);
+  }
+
+  /**
+   * Mirrors Rails `Relation#arel_columns_from_hash`
+   * (relation/query_methods.rb). Expands `{table: cols}` form passed to
+   * `select`/`group`/`order` into per-column Arel attributes.
+   *
+   * @internal
+   */
+  arelColumnsFromHash(fields: Record<string, string | string[]>): Nodes.Node[] {
+    const out: Nodes.Node[] = [];
+    for (const [tableName, columns] of Object.entries(fields)) {
+      if (typeof columns === "string") {
+        out.push(this.arelColumnWithTable(tableName, columns));
+      } else if (Array.isArray(columns)) {
+        for (const col of columns) out.push(this.arelColumnWithTable(tableName, col));
+      } else {
+        throw new TypeError(
+          `Expected String or Array, got: ${(columns as object)?.constructor?.name ?? typeof columns}`,
+        );
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Mirrors Rails `Relation#arel_columns` (relation/query_methods.rb).
+   * Maps a heterogeneous list of column specs (strings, Arel nodes,
+   * hashes, thunks) to Arel nodes — the canonical column resolver shared
+   * by `select`, `group`, `pluck`, and aggregates.
+   *
+   * @internal
+   */
+  arelColumns(columns: ReadonlyArray<unknown>): Nodes.Node[] {
+    const out: Nodes.Node[] = [];
+    for (const field of columns) {
+      if (typeof field === "string") {
+        out.push(this.arelColumn(field));
+      } else if (field instanceof Nodes.Node) {
+        out.push(field);
+      } else if (typeof field === "function") {
+        const result = (field as () => unknown)();
+        if (Array.isArray(result)) {
+          for (const r of result) out.push(r as Nodes.Node);
+        } else {
+          out.push(result as Nodes.Node);
+        }
+      } else if (field && typeof field === "object") {
+        out.push(...this.arelColumnsFromHash(field as Record<string, string | string[]>));
+      }
+    }
+    return out;
   }
 
   // Returns true when `col` is a known schema attribute OR is (part of) the

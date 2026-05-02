@@ -59,8 +59,9 @@ describe("Relation private build-arel helpers", () => {
       expect(relation().isTableNameMatches("posts")).toBe(true);
     });
 
-    it("matches the quoted table name", () => {
-      expect(relation().isTableNameMatches('"posts"')).toBe(true);
+    it("matches the adapter-quoted table name", () => {
+      const quoted = (Post.adapter as any).quoteTableName("posts");
+      expect(relation().isTableNameMatches(quoted)).toBe(true);
     });
 
     it("does not match when used as a qualifier", () => {

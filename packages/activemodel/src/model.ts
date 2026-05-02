@@ -48,6 +48,9 @@ import {
 } from "./attribute-methods.js";
 import {
   assignAttributes as assignAttrs,
+  _assignAttributes as attrAssign,
+  _assignAttribute as attrAssignOne,
+  sanitizeForMassAssignment as attrSanitize,
   attributeWriterMissing as defaultAttributeWriterMissing,
   ArgumentError,
 } from "./attribute-assignment.js";
@@ -1225,7 +1228,9 @@ export class Model {
    *
    * @internal Rails-private helper.
    */
-  static _mergeAttributes = validationsMergeAttributes;
+  static _mergeAttributes(attrNames: unknown[]): Record<string, unknown> {
+    return validationsMergeAttributes(attrNames);
+  }
 
   /**
    * Default option keys recognized by `validates(...)`. Subclasses
@@ -2015,6 +2020,27 @@ export class Model {
    */
   assignAttributes(attrs: Record<string, unknown>): void {
     assignAttrs(this, attrs);
+  }
+
+  /**
+   * @internal Rails-private helper.
+   */
+  _assignAttributes(attributes: Record<string, unknown>): void {
+    attrAssign(this, attributes);
+  }
+
+  /**
+   * @internal Rails-private helper.
+   */
+  _assignAttribute(k: string, v: unknown): void {
+    attrAssignOne(this, k, v);
+  }
+
+  /**
+   * @internal Rails-private helper.
+   */
+  sanitizeForMassAssignment(attributes: Record<string, unknown>): Record<string, unknown> {
+    return attrSanitize(attributes);
   }
 
   /**

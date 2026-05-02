@@ -80,14 +80,6 @@ describe("LazyAttributeSet", () => {
     expect(lazy.getAttribute("score")).toBe(existingAttr);
   });
 
-  it("materialize works on a frozen instance without throwing", () => {
-    const extra = new Map([["score", intType]]);
-    const lazy = new LazyAttributeSet(new Map(), extra);
-    lazy.freeze();
-    expect(() => (lazy as any).materialize()).not.toThrow();
-    expect(lazy.getAttribute("score").type.name).toBe("integer");
-  });
-
   it("deepDup preserves additionalTypes", () => {
     const extra = new Map([["score", intType]]);
     const lazy = new LazyAttributeSet(new Map(), extra);

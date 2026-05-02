@@ -65,8 +65,7 @@ export class LazyAttributeSet extends AttributeSet {
     // subsequent getAttribute/has/forEach calls can see them — mirrors
     // Rails' @additional_types.each_key { |name| self[name] } side-effect.
     for (const [name, type] of this._additionalTypes) {
-      if (!this.hasAttribute(name))
-        this.setAttributeUnfrozen(name, Attribute.uninitialized(name, type));
+      if (!this.hasAttribute(name)) this.set(name, Attribute.uninitialized(name, type));
     }
     const result = new Map<string, Attribute>();
     this.forEach((attr, name) => result.set(name, attr));

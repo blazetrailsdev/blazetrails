@@ -46,6 +46,12 @@ describe("Relation private build-arel helpers", () => {
     it("does not raise when args has at least one entry", () => {
       expect(() => relation().checkIfMethodHasArgumentsBang("select", ["id"])).not.toThrow();
     });
+
+    it("flattens and compacts args in place (mirrors Rails flatten! + compact_blank!)", () => {
+      const args: unknown[] = [["a", null, ""], "b", undefined];
+      relation().checkIfMethodHasArgumentsBang("select", args);
+      expect(args).toEqual(["a", "b"]);
+    });
   });
 
   describe("isTableNameMatches", () => {

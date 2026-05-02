@@ -3483,11 +3483,8 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Mirrors Rails `Relation#assert_modifiable!` (relation/query_methods.rb).
-   * Raises {@link UnmodifiableRelation} once a relation is loaded, so
-   * mutation builders (`where!`, `order!`, …) refuse to alter a relation
-   * whose records have already been fetched.
-   *
+   * Rails `Relation#assert_modifiable!`. Raises {@link UnmodifiableRelation}
+   * when the relation has already been loaded.
    * @internal
    */
   assertModifiableBang(): void {
@@ -3497,31 +3494,35 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Mirrors Rails `Relation#check_if_method_has_arguments!`
-   * (relation/query_methods.rb). Used by chainable scope-builders
-   * (`select`, `order`, `group`, …) to reject empty argument lists with
-   * a method-specific error message before further processing.
-   *
+   * Rails `Relation#check_if_method_has_arguments!`. Throws on empty args,
+   * otherwise mutates `args` in place via flatten + blank-compaction.
    * @internal
    */
   checkIfMethodHasArgumentsBang(
     methodName: string | symbol,
     args: unknown[],
     message?: string,
+    block?: (args: unknown[]) => void,
   ): void {
     if (args === undefined || args === null || args.length === 0) {
       const name = typeof methodName === "symbol" ? methodName.description : methodName;
       throw new Error(message ?? `The method .${String(name)}() must contain arguments.`);
     }
+    block?.(args);
+    // Mirror Rails' args.flatten! + compact_blank! mutation.
+    const flat = args.flat(Infinity).filter((v) => {
+      if (v === null || v === undefined) return false;
+      if (typeof v === "string") return v.trim().length > 0;
+      if (Array.isArray(v)) return v.length > 0;
+      return true;
+    });
+    args.length = 0;
+    args.push(...flat);
   }
 
   /**
-   * Mirrors Rails `Relation#table_name_matches?` (relation/query_methods.rb).
-   * Returns true when the relation's primary table name appears as a bare
-   * identifier inside a custom `from()` expression — used by `arelColumn`
-   * to decide whether bare attribute references can be qualified to the
-   * model's own table.
-   *
+   * Rails `Relation#table_name_matches?`. Used by {@link arelColumn} to
+   * decide whether a bare name can be qualified to the model's table.
    * @internal
    */
   isTableNameMatches(from: unknown): boolean {
@@ -3529,19 +3530,19 @@ export class Relation<T extends Base> {
     const fromStr = String(from);
     const tableName = this._modelClass.tableName;
     if (!tableName) return false;
-    const escaped = tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    // Match the bare or quoted table name not preceded by FROM and not
-    // followed by `.` (i.e. used as an alias rather than a qualifier).
-    const re = new RegExp(`(?:^|(?<!FROM)\\s)(?:\\b${escaped}\\b|"${escaped}")(?!\\.)`, "i");
+    const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escaped = escape(tableName);
+    const adapter = (this._modelClass as any).adapter as
+      | { quoteTableName?: (n: string) => string }
+      | undefined;
+    const quoted = escape(adapter?.quoteTableName?.(tableName) ?? `"${tableName}"`);
+    const re = new RegExp(`(?:^|(?<!FROM)\\s)(?:\\b${escaped}\\b|${quoted})(?!\\.)`, "i");
     return re.test(fromStr);
   }
 
   /**
-   * Mirrors Rails `Relation#arel_column_with_table` (relation/query_methods.rb).
-   * Builds a cross-table {@link Attribute} for `"table.column"`-style
-   * references and registers `tableName` in `references_values` so eager
-   * loading promotes the join correctly.
-   *
+   * Rails `Relation#arel_column_with_table`. Adds `tableName` to
+   * references_values and returns the cross-table Arel attribute.
    * @internal
    */
   arelColumnWithTable(tableName: string, columnName: string): Nodes.Node {
@@ -3555,12 +3556,8 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Mirrors Rails `Relation#arel_column` (relation/query_methods.rb).
-   * Resolves a single field reference to an Arel node — applying
-   * attribute aliases, qualifying bare names to the model's table when
-   * the from-clause permits, and falling back to {@link Nodes.SqlLiteral}
-   * for arbitrary SQL fragments.
-   *
+   * Rails `Relation#arel_column`. Resolves a field via attribute aliases,
+   * model table, table.column form, or raw SQL fallback.
    * @internal
    */
   arelColumn(field: string | Nodes.Node): Nodes.Node {
@@ -3582,10 +3579,7 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Mirrors Rails `Relation#arel_columns_from_hash`
-   * (relation/query_methods.rb). Expands `{table: cols}` form passed to
-   * `select`/`group`/`order` into per-column Arel attributes.
-   *
+   * Rails `Relation#arel_columns_from_hash`. Expands `{table: cols}` form.
    * @internal
    */
   arelColumnsFromHash(fields: Record<string, string | string[]>): Nodes.Node[] {
@@ -3605,11 +3599,7 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Mirrors Rails `Relation#arel_columns` (relation/query_methods.rb).
-   * Maps a heterogeneous list of column specs (strings, Arel nodes,
-   * hashes, thunks) to Arel nodes — the canonical column resolver shared
-   * by `select`, `group`, `pluck`, and aggregates.
-   *
+   * Rails `Relation#arel_columns`. Heterogeneous list → Arel nodes.
    * @internal
    */
   arelColumns(columns: ReadonlyArray<unknown>): Nodes.Node[] {

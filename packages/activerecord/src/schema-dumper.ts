@@ -557,9 +557,7 @@ export class SchemaDumper {
           if (this.isIgnored(tableName)) continue;
           await this.table(tableName, lines);
         }
-        const adapter =
-          this._source instanceof AdapterSchemaSource ? this._source.adapter : undefined;
-        if (adapter) {
+        if (this._fkHookHost() !== undefined) {
           for (const tableName of names) {
             if (this.isIgnored(tableName)) continue;
             await this.foreignKeys(tableName, lines);
@@ -728,13 +726,37 @@ export class SchemaDumper {
     }
   }
 
+  /**
+   * Resolve the host that exposes optional `checkConstraints(table)` /
+   * `foreignKeys(table)` hooks. Both an `AdapterSchemaSource`'s wrapped
+   * adapter and a `SchemaStatements`-backed source can provide them, so
+   * check both — keeps dumps consistent regardless of which entry point
+   * the dumper was constructed with.
+   * @internal
+   */
+  private _hookHost(method: "checkConstraints" | "foreignKeys"): unknown {
+    const candidates: unknown[] = [
+      this._source,
+      this._source instanceof AdapterSchemaSource ? this._source.adapter : undefined,
+    ];
+    for (const c of candidates) {
+      const fn = (c as Record<string, unknown> | undefined)?.[method];
+      if (typeof fn === "function") return c;
+    }
+    return undefined;
+  }
+
+  /** @internal */
+  private _fkHookHost(): unknown {
+    return this._hookHost("foreignKeys");
+  }
+
   /** @internal */
   async checkConstraintsInCreate(tableName: string, lines: string[]): Promise<void> {
-    const adapter = this._source instanceof AdapterSchemaSource ? this._source.adapter : undefined;
-    const fn = (adapter as Record<string, unknown> | undefined)?.checkConstraints;
-    if (typeof fn !== "function") return;
-    const constraints =
-      (await (fn as (t: string) => Promise<unknown[]>).call(adapter, tableName)) ?? [];
+    const host = this._hookHost("checkConstraints");
+    if (!host) return;
+    const fn = (host as { checkConstraints: (t: string) => Promise<unknown[]> }).checkConstraints;
+    const constraints = (await fn.call(host, tableName)) ?? [];
     const stripped = this.removePrefixAndSuffix(tableName);
     for (const chk of constraints as { expression: string; name?: string; validate?: boolean }[]) {
       const [expr, ...opts] = this.checkParts(chk);
@@ -753,10 +775,10 @@ export class SchemaDumper {
 
   /** @internal */
   async foreignKeys(tableName: string, lines: string[]): Promise<void> {
-    const adapter = this._source instanceof AdapterSchemaSource ? this._source.adapter : undefined;
-    const fn = (adapter as Record<string, unknown> | undefined)?.foreignKeys;
-    if (typeof fn !== "function") return;
-    const fks = (await (fn as (t: string) => Promise<unknown[]>).call(adapter, tableName)) ?? [];
+    const host = this._hookHost("foreignKeys");
+    if (!host) return;
+    const fn = (host as { foreignKeys: (t: string) => Promise<unknown[]> }).foreignKeys;
+    const fks = (await fn.call(host, tableName)) ?? [];
     type Fk = {
       fromTable?: string;
       toTable: string;

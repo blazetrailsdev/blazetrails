@@ -225,8 +225,13 @@ export function undefineAttributeMethods(this: AttributeMethodHost): void {
   this._generatedMethods.clear();
   // Clear the pattern-match cache so stale entries don't survive after patterns change.
   // Mirrors: Rails attribute_method_patterns_cache.clear in undefine_attribute_methods.
-  const h = this as AttributeMethodHost & { _attributeMethodPatternsCache?: Map<unknown, unknown> };
-  if (h._attributeMethodPatternsCache) h._attributeMethodPatternsCache.clear();
+  // Only clear an own-property cache; don't reach up and clear a parent's cache
+  // via inherited prototype-chain lookup.
+  if (Object.prototype.hasOwnProperty.call(this, "_attributeMethodPatternsCache")) {
+    (
+      this as AttributeMethodHost & { _attributeMethodPatternsCache: Map<unknown, unknown> }
+    )._attributeMethodPatternsCache.clear();
+  }
 }
 
 export function defineAttributeMethods(this: AttributeMethodHost, ...attrNames: string[]): void {

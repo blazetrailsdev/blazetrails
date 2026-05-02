@@ -119,7 +119,7 @@ export abstract class Attribute {
       type: Type,
       originalAttribute: Attribute | null,
     ) => Attribute;
-    return new Ctor(this.name, this._valueBeforeTypeCast, type, this.originalAttribute);
+    return new Ctor(this.name, this.valueBeforeTypeCast, type, this.originalAttribute);
   }
 
   isInitialized(): boolean {

@@ -37,20 +37,31 @@ describe("Relation private build-arel helpers", () => {
   });
 
   describe("checkIfMethodHasArgumentsBang", () => {
-    it("raises when args is empty", () => {
-      expect(() => relation().checkIfMethodHasArgumentsBang("select", [])).toThrow(
-        /\.select\(\) must contain arguments/,
-      );
+    it("raises ArgumentError-named error when args is empty", () => {
+      try {
+        relation().checkIfMethodHasArgumentsBang("select", []);
+        expect.fail("expected throw");
+      } catch (err) {
+        expect((err as Error).name).toBe("ArgumentError");
+        expect((err as Error).message).toMatch(/\.select\(\) must contain arguments/);
+      }
     });
 
     it("does not raise when args has at least one entry", () => {
       expect(() => relation().checkIfMethodHasArgumentsBang("select", ["id"])).not.toThrow();
     });
 
-    it("flattens and compacts args in place (mirrors Rails flatten! + compact_blank!)", () => {
-      const args: unknown[] = [["a", null, ""], "b", undefined];
+    it("flattens arrays and compacts blanks (nil, false, '', [], {}) per Rails compact_blank!", () => {
+      const args: unknown[] = [["a", null, "", false], "b", undefined, {}, [], "  "];
       relation().checkIfMethodHasArgumentsBang("select", args);
       expect(args).toEqual(["a", "b"]);
+    });
+
+    it("does not flatten plain-object/hash args (Ruby Array#flatten skips Hashes)", () => {
+      const hash = { comments: ["id"] };
+      const args: unknown[] = [hash];
+      relation().checkIfMethodHasArgumentsBang("select", args);
+      expect(args).toEqual([hash]);
     });
   });
 

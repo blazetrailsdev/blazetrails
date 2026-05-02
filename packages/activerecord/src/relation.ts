@@ -3504,16 +3504,21 @@ export class Relation<T extends Base> {
     message?: string,
     block?: (args: unknown[]) => void,
   ): void {
+    const name = typeof methodName === "symbol" ? methodName.description : methodName;
     if (args === undefined || args === null || args.length === 0) {
-      const name = typeof methodName === "symbol" ? methodName.description : methodName;
-      throw new Error(message ?? `The method .${String(name)}() must contain arguments.`);
+      throw argumentError(message ?? `The method .${String(name)}() must contain arguments.`);
     }
     block?.(args);
-    // Mirror Rails' args.flatten! + compact_blank! mutation.
+    // Rails: args.flatten! + compact_blank! — Ruby Array#flatten only
+    // recurses into Arrays (Hashes pass through), and Object#blank?
+    // returns true for nil, false, "", whitespace, [], {}.
     const flat = args.flat(Infinity).filter((v) => {
-      if (v === null || v === undefined) return false;
+      if (v === null || v === undefined || v === false) return false;
       if (typeof v === "string") return v.trim().length > 0;
       if (Array.isArray(v)) return v.length > 0;
+      if (typeof v === "object" && (v as object).constructor === Object) {
+        return Object.keys(v as object).length > 0;
+      }
       return true;
     });
     args.length = 0;
@@ -3527,7 +3532,14 @@ export class Relation<T extends Base> {
    */
   isTableNameMatches(from: unknown): boolean {
     if (from == null) return false;
-    const fromStr = String(from);
+    let fromStr: string;
+    if (from instanceof Nodes.Node) {
+      fromStr = this._compileArelNode(from);
+    } else if (from instanceof Relation) {
+      fromStr = (from as Relation<any>).toSql();
+    } else {
+      fromStr = String(from);
+    }
     const tableName = this._modelClass.tableName;
     if (!tableName) return false;
     const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -3549,10 +3561,14 @@ export class Relation<T extends Base> {
     if (!this._referencesValues.includes(tableName)) {
       this._referencesValues.push(tableName);
     }
-    if (typeof columnName === "symbol" || /^\w+$/.test(columnName)) {
+    if (/^\w+$/.test(columnName)) {
       return new Table(tableName).get(columnName);
     }
-    return new Nodes.SqlLiteral(`"${tableName}".${columnName}`);
+    const adapter = (this._modelClass as any).adapter as
+      | { quoteTableName?: (n: string) => string }
+      | undefined;
+    const quoted = adapter?.quoteTableName?.(tableName) ?? `"${tableName}"`;
+    return new Nodes.SqlLiteral(`${quoted}.${columnName}`);
   }
 
   /**

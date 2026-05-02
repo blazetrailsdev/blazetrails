@@ -91,15 +91,38 @@ describe("AttributeMutationTracker", () => {
   });
 
   it("forceChange stores the live value reference (in-place mutations are observed)", () => {
+    class ExposedTracker extends AttributeMutationTracker {
+      stored(name: string): unknown {
+        return this.forcedChanges.get(name);
+      }
+    }
     const arr: string[] = ["a", "b"];
     const set = buildSet({ tags: arr });
-    const tracker = new AttributeMutationTracker(set);
+    const tracker = new ExposedTracker(set);
 
     tracker.forceChange("tags");
-    arr.push("c");
+    expect(tracker.stored("tags")).toBe(arr);
 
-    expect(tracker.changedAttributeNames()).toContain("tags");
-    expect(tracker.anyChanges()).toBe(true);
+    arr.push("c");
+    expect(tracker.stored("tags")).toBe(arr);
+    expect(tracker.stored("tags")).toEqual(["a", "b", "c"]);
+  });
+
+  it("forceChange overwrites any previously stored value (Rails parity)", () => {
+    class ExposedTracker extends AttributeMutationTracker {
+      stored(name: string): unknown {
+        return this.forcedChanges.get(name);
+      }
+    }
+    const set = buildSet({ name: "Alice" });
+    const tracker = new ExposedTracker(set);
+
+    tracker.forceChange("name");
+    expect(tracker.stored("name")).toBe("Alice");
+
+    set.writeFromUser("name", "Bob");
+    tracker.forceChange("name");
+    expect(tracker.stored("name")).toBe("Bob");
   });
 
   it("originalValue is sourced from the attribute chain, not the tracker's stored value", () => {

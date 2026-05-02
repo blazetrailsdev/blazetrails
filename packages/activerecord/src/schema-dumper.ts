@@ -456,6 +456,9 @@ export class SchemaDumper {
   dump(): string | Promise<string> {
     const lines: string[] = [];
     this.header(lines);
+    this.schemas(lines);
+    this.extensions(lines);
+    this.types(lines);
     const result = this.dumpTables(lines);
     if (result instanceof Promise) {
       return result.then(async () => {
@@ -536,7 +539,8 @@ export class SchemaDumper {
   private dumpTables(lines: string[]): void | Promise<void> {
     const tableNames = this._source.tables();
     if (tableNames instanceof Promise) {
-      return tableNames.then(async (names) => {
+      return tableNames.then(async (raw) => {
+        const names = [...raw].sort();
         for (const tableName of names) {
           if (this.isIgnored(tableName)) continue;
           await this.table(tableName, lines);
@@ -551,7 +555,8 @@ export class SchemaDumper {
         }
       });
     }
-    for (const tableName of tableNames) {
+    const sorted = [...(tableNames as string[])].sort();
+    for (const tableName of sorted) {
       if (this.isIgnored(tableName)) continue;
       const columns = this._source.columns(tableName);
       const indexes = this._source.indexes(tableName);

@@ -39,9 +39,14 @@ describe("BindParam", () => {
       expect(bp.isInfinite()).toBeNull();
     });
 
-    it("delegates to value.isInfinite when present", () => {
+    it("delegates to value.isInfinite when present — positive", () => {
       const bp = new Nodes.BindParam({ isInfinite: () => 1 });
       expect(bp.isInfinite()).toBe(1);
+    });
+
+    it("delegates to value.isInfinite when present — negative", () => {
+      const bp = new Nodes.BindParam({ isInfinite: () => -1 });
+      expect(bp.isInfinite()).toBe(-1);
     });
   });
 

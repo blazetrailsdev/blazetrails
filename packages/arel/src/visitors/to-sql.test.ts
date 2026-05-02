@@ -1258,6 +1258,30 @@ describe("the to_sql visitor", () => {
     });
   });
 
+  describe("BindParam infinite short-circuit", () => {
+    const infinite = (sign: 1 | -1) => new Nodes.BindParam({ isInfinite: () => sign });
+
+    it("GreaterThan short-circuits to 1=0 for positive infinite", () => {
+      const node = new Nodes.GreaterThan(users.get("id"), infinite(1));
+      expect(new Visitors.ToSql().compile(node)).toBe("1=0");
+    });
+
+    it("GreaterThan short-circuits to 1=1 for negative infinite", () => {
+      const node = new Nodes.GreaterThan(users.get("id"), infinite(-1));
+      expect(new Visitors.ToSql().compile(node)).toBe("1=1");
+    });
+
+    it("LessThan short-circuits to 1=1 for positive infinite", () => {
+      const node = new Nodes.LessThan(users.get("id"), infinite(1));
+      expect(new Visitors.ToSql().compile(node)).toBe("1=1");
+    });
+
+    it("LessThan short-circuits to 1=0 for negative infinite", () => {
+      const node = new Nodes.LessThan(users.get("id"), infinite(-1));
+      expect(new Visitors.ToSql().compile(node)).toBe("1=0");
+    });
+  });
+
   // Mirrors Rails' to_sql.rb private helpers (sanitize_as_sql_comment,
   // quote_table_name, quote_column_name).
   describe("Rails-mirrored private helpers", () => {

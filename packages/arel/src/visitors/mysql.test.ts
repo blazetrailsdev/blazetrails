@@ -187,7 +187,7 @@ describe("MysqlTest", () => {
       const cte = new Nodes.Cte("t", users.project(users.get("id")).ast, false);
       const stmt = new SelectManager().with(cte).project("1");
       const sql = new Visitors.MySQL().compile(stmt.ast);
-      expect(sql).not.toContain("NOT MATERIALIZED");
+      expect(sql).not.toContain("MATERIALIZED");
     });
   });
 });

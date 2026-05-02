@@ -1,7 +1,7 @@
 # ActiveModel Validations Audit
 
 Date: 2026-05-02 (verified pass)
-Scope: validations, validator, validates, with, presence, absence, acceptance, comparison, comparability, confirmation, format, exclusion, inclusion, length, numericality, clusivity, resolve-value, callbacks, _accessor.
+Scope: validations, validator, validates, with, presence, absence, acceptance, comparison, comparability, confirmation, format, exclusion, inclusion, length, numericality, clusivity, resolve-value, callbacks, \_accessor.
 
 Trails source: `packages/activemodel/src/`
 Rails source: `scripts/api-compare/.rails-source/activemodel/lib/active_model/`

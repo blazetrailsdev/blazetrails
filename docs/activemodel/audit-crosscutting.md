@@ -12,29 +12,29 @@ Rails source: `scripts/api-compare/.rails-source/activemodel/lib/active_model/`
 
 All 25 keys from Rails `locale/en.yml` are present in `i18n.ts:259-296`.
 
-| Rails key | Trails line | Notes |
-|---|---|---|
-| `errors.format` | 301 | via `defaultEnTranslations` |
-| `errors.messages.model_invalid` | 295 | match |
-| `errors.messages.inclusion` | 285 | match |
-| `errors.messages.exclusion` | 286 | match |
-| `errors.messages.invalid` | 260 | match |
-| `errors.messages.confirmation` | 288 | match |
-| `errors.messages.accepted` | 289 | match |
-| `errors.messages.empty` | 290 | match |
-| `errors.messages.blank` | 261 | match |
-| `errors.messages.present` | 262 | match |
-| `errors.messages.too_long` (one/other) | 267-270 | match |
-| `errors.messages.password_too_long` | 293 | match (cross-ref: secure-password emits wrong type — see lifecycle audit §7) |
-| `errors.messages.too_short` | 263-266 | match |
-| `errors.messages.wrong_length` | 271-274 | match |
-| `errors.messages.not_a_number` / `not_an_integer` | 275-276 | match |
-| `errors.messages.greater_than(_or_equal_to)` | 277-278 | match |
-| `errors.messages.equal_to` | 281 | match |
-| `errors.messages.less_than(_or_equal_to)` | 279-280 | match |
-| `errors.messages.other_than` | 282 | match |
-| `errors.messages.in` | 283 | match |
-| `errors.messages.odd` / `even` | 284-285 | match |
+| Rails key                                         | Trails line | Notes                                                                        |
+| ------------------------------------------------- | ----------- | ---------------------------------------------------------------------------- |
+| `errors.format`                                   | 301         | via `defaultEnTranslations`                                                  |
+| `errors.messages.model_invalid`                   | 295         | match                                                                        |
+| `errors.messages.inclusion`                       | 285         | match                                                                        |
+| `errors.messages.exclusion`                       | 286         | match                                                                        |
+| `errors.messages.invalid`                         | 260         | match                                                                        |
+| `errors.messages.confirmation`                    | 288         | match                                                                        |
+| `errors.messages.accepted`                        | 289         | match                                                                        |
+| `errors.messages.empty`                           | 290         | match                                                                        |
+| `errors.messages.blank`                           | 261         | match                                                                        |
+| `errors.messages.present`                         | 262         | match                                                                        |
+| `errors.messages.too_long` (one/other)            | 267-270     | match                                                                        |
+| `errors.messages.password_too_long`               | 293         | match (cross-ref: secure-password emits wrong type — see lifecycle audit §7) |
+| `errors.messages.too_short`                       | 263-266     | match                                                                        |
+| `errors.messages.wrong_length`                    | 271-274     | match                                                                        |
+| `errors.messages.not_a_number` / `not_an_integer` | 275-276     | match                                                                        |
+| `errors.messages.greater_than(_or_equal_to)`      | 277-278     | match                                                                        |
+| `errors.messages.equal_to`                        | 281         | match                                                                        |
+| `errors.messages.less_than(_or_equal_to)`         | 279-280     | match                                                                        |
+| `errors.messages.other_than`                      | 282         | match                                                                        |
+| `errors.messages.in`                              | 283         | match                                                                        |
+| `errors.messages.odd` / `even`                    | 284-285     | match                                                                        |
 
 Trails extras (additive, not in Rails en.yml): `taken` (287), `not_a_date` (291), `required` (292) — AR-compatible additions.
 
@@ -46,18 +46,18 @@ Trails extras (additive, not in Rails en.yml): `taken` (287), `not_a_date` (291)
 
 Rails `include`/`extend` is unavailable in TS. Trails uses `this`-typed functions assigned as static methods on `Model`.
 
-| Rails module | Trails equivalent | Status |
-|---|---|---|
-| `AttributeAssignment` | `_assignAttributes` (model.ts:2077), `_assignAttribute` (:2083) | Present |
-| `Validations` | `isValid`, `validate`, `validateBang`, `validatesWith`, `_validators` Map | Present |
-| `Conversion` | `_toPartialPath`, `toParam`, `toKey`, `toModel` | Present |
-| `Naming` | `ModelName`, `modelName` static | Present |
-| `Translation` | `humanAttributeName` | Present (impl in model.ts; see lifecycle §9 for translation.ts gap) |
-| `Callbacks` + `:validate` | `CallbackChain`, `defineModelCallbacks`, `_ensureOwnCallbacks` (:956) | Present |
-| `Access` | `slice`, `valuesAt` | Present |
-| `AttributeMethods` | full surface | Present |
-| `Dirty` | `DirtyTracker` via `_dirty` field | Present |
-| `Serialization` | `serializableHash`, `toJson` | Present |
+| Rails module              | Trails equivalent                                                         | Status                                                              |
+| ------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `AttributeAssignment`     | `_assignAttributes` (model.ts:2077), `_assignAttribute` (:2083)           | Present                                                             |
+| `Validations`             | `isValid`, `validate`, `validateBang`, `validatesWith`, `_validators` Map | Present                                                             |
+| `Conversion`              | `_toPartialPath`, `toParam`, `toKey`, `toModel`                           | Present                                                             |
+| `Naming`                  | `ModelName`, `modelName` static                                           | Present                                                             |
+| `Translation`             | `humanAttributeName`                                                      | Present (impl in model.ts; see lifecycle §9 for translation.ts gap) |
+| `Callbacks` + `:validate` | `CallbackChain`, `defineModelCallbacks`, `_ensureOwnCallbacks` (:956)     | Present                                                             |
+| `Access`                  | `slice`, `valuesAt`                                                       | Present                                                             |
+| `AttributeMethods`        | full surface                                                              | Present                                                             |
+| `Dirty`                   | `DirtyTracker` via `_dirty` field                                         | Present                                                             |
+| `Serialization`           | `serializableHash`, `toJson`                                              | Present                                                             |
 
 **No missing modules.**
 
@@ -77,12 +77,12 @@ Rails uses `inherited` (via `ActiveSupport::DescendantsTracker`) to eagerly copy
 
 ## 4. Dispatch Wiring
 
-| Rails | Trails | File |
-|---|---|---|
-| `run_validations!` | `runValidationsBang()` | model.ts:1501, validations.ts:312 |
-| `_run_validate_callbacks` (full chain) | `_runValidateCallbacks()` (before only) + outer `runCallbacks("validation")` | model.ts:1555-1558, :1525 |
-| `_assign_attributes` | `_assignAttributes()` | model.ts:2077 |
-| `_write_attribute` | `_writeAttribute()` | model.ts:1380 |
+| Rails                                  | Trails                                                                       | File                              |
+| -------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------- |
+| `run_validations!`                     | `runValidationsBang()`                                                       | model.ts:1501, validations.ts:312 |
+| `_run_validate_callbacks` (full chain) | `_runValidateCallbacks()` (before only) + outer `runCallbacks("validation")` | model.ts:1555-1558, :1525         |
+| `_assign_attributes`                   | `_assignAttributes()`                                                        | model.ts:2077                     |
+| `_write_attribute`                     | `_writeAttribute()`                                                          | model.ts:1380                     |
 
 Two-level design: outer `runCallbacks("validation")` wraps `runValidationsBang` which calls `_runValidateCallbacks` (before) — equivalent observable behavior to Rails' single-level chain. Naming is slightly confusing but functionally correct.
 
@@ -103,14 +103,14 @@ Two-level design: outer `runCallbacks("validation")` wraps `runValidationsBang` 
 
 ## 6. Error Class Hierarchy
 
-| Rails | Trails | Export | Source |
-|---|---|---|---|
-| `ValidationError` | `ValidationError` | index.ts:11 | validations.ts:141 |
-| `MissingAttributeError` | `MissingAttributeError` | index.ts:18 | attribute-methods.ts:29 |
-| `UnknownAttributeError` | `UnknownAttributeError` | index.ts:7 | errors.ts |
+| Rails                      | Trails                     | Export      | Source                               |
+| -------------------------- | -------------------------- | ----------- | ------------------------------------ |
+| `ValidationError`          | `ValidationError`          | index.ts:11 | validations.ts:141                   |
+| `MissingAttributeError`    | `MissingAttributeError`    | index.ts:18 | attribute-methods.ts:29              |
+| `UnknownAttributeError`    | `UnknownAttributeError`    | index.ts:7  | errors.ts                            |
 | `ForbiddenAttributesError` | `ForbiddenAttributesError` | index.ts:19 | forbidden-attributes-protection.ts:6 |
-| `StrictValidationFailed` | `StrictValidationFailed` | index.ts:6 | errors.ts |
-| `RangeError` | `ActiveModelRangeError` | index.ts:8 | errors.ts |
+| `StrictValidationFailed`   | `StrictValidationFailed`   | index.ts:6  | errors.ts                            |
+| `RangeError`               | `ActiveModelRangeError`    | index.ts:8  | errors.ts                            |
 
 All six present and exported. `ActiveModelRangeError` rename avoids clobbering global `RangeError` — reasonable TS choice.
 

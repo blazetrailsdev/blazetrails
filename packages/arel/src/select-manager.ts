@@ -123,8 +123,12 @@ export class SelectManager extends TreeManager {
   /**
    * Add ORDER BY clauses.
    */
-  order(...exprs: (Node | string)[]): this {
-    this.ast.orders.push(...exprs.map((x) => (typeof x === "string" ? new SqlLiteral(x) : x)));
+  order(...exprs: (Node | string | symbol)[]): this {
+    this.ast.orders.push(
+      ...exprs.map((x) =>
+        typeof x === "string" || typeof x === "symbol" ? new SqlLiteral(x.toString()) : x,
+      ),
+    );
     return this;
   }
 

@@ -67,11 +67,14 @@ export class Cube extends GroupingElement {
   }
 }
 
-export class Rollup extends GroupingElement {
+export class RollUp extends GroupingElement {
   accept<T>(visitor: NodeVisitor<T>): T {
     return visitor.visit(this);
   }
 }
+
+/** @deprecated Use RollUp (Rails casing) */
+export const Rollup = RollUp;
 
 export class GroupingSet extends GroupingElement {
   accept<T>(visitor: NodeVisitor<T>): T {
@@ -94,4 +97,3 @@ export class OptimizerHints extends Unary {
     this.hints = hints;
   }
 }
-export class RollUp extends Rollup {}

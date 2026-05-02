@@ -61,9 +61,9 @@ export class LazyAttributeSet extends AttributeSet {
    */
   materialize(): Map<string, Attribute> {
     const result = new Map<string, Attribute>();
-    for (const key of this.keys()) {
-      result.set(key, this.getAttribute(key));
-    }
+    // forEach iterates all entries including uninitialized ones, matching
+    // Rails' loop over @values / @types / @additional_types keys.
+    this.forEach((attr, name) => result.set(name, attr));
     return result;
   }
 }

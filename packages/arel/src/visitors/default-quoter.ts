@@ -1,7 +1,7 @@
 import type { ArelQuoter } from "./to-sql.js";
 
 /**
- * MySQL default quoter: backtick-quoted identifiers, same escaping as abstractQuoter.
+ * MySQL default quoter: backtick-quoted identifiers, same escaping as the abstract adapter.
  * Used when `new MySQL()` is constructed without a connection quoter (test / debug use).
  */
 export const mysqlDefaultQuoter: ArelQuoter = {

@@ -29,7 +29,7 @@ export class Composite {
 
   addBind(value: unknown, block?: (index: number) => string): this {
     this.left.addBind(value, block);
-    this.right.addBind(value);
+    this.right.addBind(value, block);
     return this;
   }
 

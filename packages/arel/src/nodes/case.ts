@@ -35,6 +35,15 @@ export class Case extends NodeExpression {
     return this;
   };
 
+  // Mirrors Arel::Nodes::Case#then — sets the right side of the most
+  // recent When clause. Rails: `@conditions.last.right = build_quoted(expression)`.
+  then(result: Node | unknown): this {
+    const last = this.conditions[this.conditions.length - 1];
+    if (!last) throw new Error("Case#then called before Case#when");
+    (last as { right: Node }).right = buildQuoted(result === undefined ? null : result);
+    return this;
+  }
+
   else(result: Node | unknown): this {
     this.default = new Else(buildQuoted(result === undefined ? null : result));
     return this;

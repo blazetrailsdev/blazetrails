@@ -3,6 +3,16 @@ import { Nodes } from "../index.js";
 import { BindError } from "../errors.js";
 
 describe("BoundSqlLiteralTest", () => {
+  describe("#plus", () => {
+    it("returns a Fragments node containing self and other", () => {
+      const bsl = new Nodes.BoundSqlLiteral("a = ?", [1]);
+      const other = new Nodes.SqlLiteral(" AND b = 2");
+      const frag = bsl.plus(other);
+      expect(frag).toBeInstanceOf(Nodes.Fragments);
+      expect(frag.values).toEqual([bsl, other]);
+    });
+  });
+
   describe("equality", () => {
     it("is equal with equal components", () => {
       const a = new Nodes.BoundSqlLiteral("id = ?", [1]);

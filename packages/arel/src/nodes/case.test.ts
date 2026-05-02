@@ -81,6 +81,29 @@ describe("NodesTest", () => {
       });
     });
 
+    describe("#then", () => {
+      it("sets the right side of the most recent When clause", () => {
+        const node = new Nodes.Case(users.get("status"));
+        node.when("active").then("A");
+        expect(node.conditions).toHaveLength(1);
+        expect(node.conditions[0].right).toBeInstanceOf(Nodes.Quoted);
+        expect((node.conditions[0].right as Nodes.Quoted).value).toBe("A");
+      });
+
+      it("supports chained when/then", () => {
+        const node = new Nodes.Case(users.get("status"));
+        node.when("active").then("A").when("pending").then("P").else("Z");
+        expect(node.conditions).toHaveLength(2);
+        expect((node.conditions[0].right as Nodes.Quoted).value).toBe("A");
+        expect((node.conditions[1].right as Nodes.Quoted).value).toBe("P");
+      });
+
+      it("throws when called before #when", () => {
+        const node = new Nodes.Case(users.get("status"));
+        expect(() => node.then("A")).toThrow(/Case#then called before Case#when/);
+      });
+    });
+
     describe("#initialize", () => {
       it("sets case expression from first argument", () => {
         const node = new Nodes.Case(new Nodes.Quoted("foo"));

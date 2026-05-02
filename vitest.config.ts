@@ -81,9 +81,9 @@ export default defineConfig({
               : []),
           ],
           pool: "forks",
-          // minForks = maxForks so VITEST_WORKER_ID stays within [1, AR_DB_FORKS].
-          // Without this each file gets a new fork; IDs wrap mod AR_DB_FORKS, so
-          // workers share the same DB and race on table mutations mid-test.
+          // minForks = maxForks so VITEST_WORKER_ID stays within [1, AR_DB_MAX_FORKS].
+          // Without this each file gets a new fork; IDs wrap mod AR_DB_MAX_FORKS,
+          // so workers share the same DB and race on table mutations mid-test.
           poolOptions: { forks: { maxForks: AR_DB_MAX_FORKS, minForks: AR_DB_MAX_FORKS } },
         },
       },

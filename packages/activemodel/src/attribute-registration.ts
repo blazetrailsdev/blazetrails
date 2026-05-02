@@ -265,7 +265,7 @@ export function attributeTypes(this: AnyAttributeHost): Record<string, Type> {
   const cast = _defaultAttributes.call(this).castTypes();
   return new Proxy(cast, {
     get(target, prop, receiver) {
-      if (typeof prop === "string" && !(prop in target)) {
+      if (typeof prop === "string" && !Object.hasOwn(target, prop)) {
         return typeRegistry.lookup("value");
       }
       return Reflect.get(target, prop, receiver);

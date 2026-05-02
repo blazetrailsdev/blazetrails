@@ -178,10 +178,10 @@ Generated: 2026-05-01. Rails source: `.rails-source/activerecord/lib/arel/`. TS 
 
 #### Behavioral
 
-**B1 — `materialized` type differs**
+**B1 — `materialized` type differs** ✅ fixed in PR 31
 
 - Rails: `materialized:` keyword arg is a tristate (`nil` / `true` / `false`). The visitor (to_sql.rb:736) branches on `true` / `false`.
-- TS: `materialized` is `"materialized" | "not_materialized" | undefined`. The TS visitor checks for the string values. The values are semantically equivalent but the types are incompatible with any cross-boundary code.
+- TS: now `boolean | null` (default `null`). Visitor branches on `=== true` / `=== false`, matching Rails exactly.
 
 **B2 — `Cte.toCte()` delegates to self vs. constructing**
 

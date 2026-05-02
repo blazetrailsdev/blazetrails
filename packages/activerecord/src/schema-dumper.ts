@@ -576,8 +576,13 @@ export class SchemaDumper {
             "Use the async schema dumper path (make tables() return a Promise) or ensure all schema methods are synchronous.",
         );
       }
-      this.emitTable(lines, tableName, columns as ColumnInfo[], indexes as IndexInfo[]);
-      lines.push("");
+      this.tableName = tableName;
+      try {
+        this.emitTable(lines, tableName, columns as ColumnInfo[], indexes as IndexInfo[]);
+        lines.push("");
+      } finally {
+        this.tableName = undefined;
+      }
     }
   }
 

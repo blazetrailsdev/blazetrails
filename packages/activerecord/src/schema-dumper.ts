@@ -567,6 +567,7 @@ export class SchemaDumper {
         );
       }
       this.emitTable(lines, tableName, columns as ColumnInfo[], indexes as IndexInfo[]);
+      lines.push("");
     }
   }
 
@@ -607,6 +608,8 @@ export class SchemaDumper {
       const columns = await this._source.columns(tableName);
       const indexes = await this._source.indexes(tableName);
       this.emitTable(lines, tableName, columns, indexes);
+      await this.checkConstraintsInCreate(tableName, lines);
+      lines.push("");
     } finally {
       this.tableName = undefined;
     }
@@ -683,9 +686,6 @@ export class SchemaDumper {
     lines.push("  });");
 
     this.indexesInCreate(tableName, lines, indexes);
-    void this.checkConstraintsInCreate(tableName, lines);
-
-    lines.push("");
   }
 
   /** @internal */

@@ -338,9 +338,11 @@ export function _writeAttribute(
 /**
  * Mirrors: ActiveModel::Attributes::ClassMethods#define_method_attribute=
  *
- * Defines the generated `attr=` writer method on the owner. Trails handles
- * attribute writers via Object.defineProperty in attribute(); this function
- * records metadata for the writer in the same way Rails' code generator would.
+ * In Rails this generates a `canonical_name=` writer via code evaluation.
+ * Trails installs writers via Object.defineProperty in `attribute()`, so no
+ * code generation is required here. The method exists for API-compare parity
+ * and to expose the AttrNames accessor-method computation that Rails uses
+ * to derive the writer method name.
  *
  * @internal Rails-private helper.
  */
@@ -348,6 +350,9 @@ export function defineMethodAttribute(
   canonicalName: string,
   _options?: { owner?: unknown; as?: string },
 ): void {
+  // Writers are already installed by attribute() via Object.defineProperty.
+  // Compute and expose the method name the same way Rails would, for callers
+  // that inspect the name (e.g. alias generation paths).
   const { methodName } = AttrNames.defineAttributeAccessorMethod(canonicalName, true);
   void methodName;
 }

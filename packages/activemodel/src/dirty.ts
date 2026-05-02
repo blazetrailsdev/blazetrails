@@ -113,6 +113,21 @@ export class DirtyTracker {
     }
   }
 
+  /**
+   * Force-mark an attribute as changed regardless of whether from === to.
+   * Used by `attribute_will_change!` for in-place mutations (e.g. array push)
+   * where the object reference stays the same but the content has changed.
+   *
+   * Mirrors: ActiveModel::AttributeMutationTracker#force_change
+   */
+  forceChange(name: string): void {
+    if (this._changedAttributes.has(name)) return;
+    const original = this._originalHas.has(name)
+      ? resolveValue(this._originalAttributes.get(name))
+      : undefined;
+    this._changedAttributes.set(name, [original, original]);
+  }
+
   get changed(): boolean {
     return this._changedAttributes.size > 0;
   }
@@ -383,15 +398,14 @@ export function attributePreviousChange(
 /**
  * Mirrors: ActiveModel::Dirty#attribute_will_change!
  *
- * Dispatch target for `*_will_change!` per-attribute methods. Marks the
- * attribute as changed in the current mutation tracker without knowing the
- * new value (used for in-place mutations on mutable objects like arrays).
+ * Dispatch target for `*_will_change!` per-attribute methods. Force-marks
+ * an attribute as changed for in-place mutations (e.g. array push) where
+ * the object reference stays the same but the content has changed.
  *
  * @internal Rails-private helper.
  */
 export function attributeWillChangeBang(this: DirtyDispatchHost, attrName: string): void {
-  const current = this._attributes.fetchValue(attrName);
-  this._dirty.attributeWillChange(attrName, current, current);
+  this._dirty.forceChange(attrName);
 }
 
 /**

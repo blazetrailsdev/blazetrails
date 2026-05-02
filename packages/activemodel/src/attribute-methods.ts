@@ -223,6 +223,10 @@ export function undefineAttributeMethods(this: AttributeMethodHost): void {
     }
   }
   this._generatedMethods.clear();
+  // Clear the pattern-match cache so stale entries don't survive after patterns change.
+  // Mirrors: Rails attribute_method_patterns_cache.clear in undefine_attribute_methods.
+  const h = this as AttributeMethodHost & { _attributeMethodPatternsCache?: Map<unknown, unknown> };
+  if (h._attributeMethodPatternsCache) h._attributeMethodPatternsCache.clear();
 }
 
 export function defineAttributeMethods(this: AttributeMethodHost, ...attrNames: string[]): void {
@@ -405,7 +409,12 @@ export function defineProxyCall(
   ensureOwnGeneratedMethods(this);
   const fn = function (this: AnyRecord, ...args: unknown[]) {
     const handler = this[proxyTarget];
-    if (typeof handler === "function") return handler.call(this, attrName, ...args);
+    if (typeof handler !== "function") {
+      throw new MissingAttributeError(
+        `attribute_missing dispatch failed: ${proxyTarget} not defined`,
+      );
+    }
+    return handler.call(this, attrName, ...args);
   };
   (fn as AnyRecord).__generatedAttributeMethod = true;
   Object.defineProperty(this.prototype, name, { value: fn, writable: true, configurable: true });

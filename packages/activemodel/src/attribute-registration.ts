@@ -35,7 +35,8 @@ type AnyAttributeHost = any;
 // Mirrors: ActiveModel::AttributeRegistration::ClassMethods private structs
 // ---------------------------------------------------------------------------
 
-interface PendingModification {
+/** @internal Rails-private helper. */
+export interface PendingModification {
   /** @internal */
   applyTo(attributeSet: AttributeSet): void;
 }
@@ -124,15 +125,7 @@ export function registerWithSuperclass(cls: AnyAttributeHost): void {
  * @internal
  */
 export function resetDefaultAttributes(cls: AnyAttributeHost): void {
-  cls._cachedDefaultAttributes = null;
-  // _attributesBuilder is an AR-specific derived cache. Unconditionally
-  // shadow it with undefined so prototype-chain lookup never returns a stale
-  // superclass builder after this class's attributes change. For STI
-  // subclasses, attributesBuilder() removes the shadow after writing the
-  // fresh builder to cacheHost, restoring normal prototype-chain access.
-  // AM-only classes that never call attributesBuilder() carry the undefined
-  // own property harmlessly (a single extra slot per class).
-  cls._attributesBuilder = undefined;
+  resetDefaultAttributesBang.call(cls);
   for (const sub of DescendantsTracker.subclasses(cls)) {
     resetDefaultAttributes(sub);
   }
@@ -314,6 +307,10 @@ export function pendingAttributeModifications(this: AnyAttributeHost): PendingMo
  */
 export function resetDefaultAttributesBang(this: AnyAttributeHost): void {
   this._cachedDefaultAttributes = null;
+  // _attributesBuilder is an AR-specific derived cache. Shadow with undefined
+  // so prototype-chain lookup never returns a stale superclass builder after
+  // this class's attributes change. STI subclasses remove the shadow after
+  // writing the fresh builder; AM-only classes carry it harmlessly.
   this._attributesBuilder = undefined;
 }
 

@@ -367,6 +367,12 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     );
   }
 
+  quoteString(s: string): string {
+    const inner = this.inner as { quoteString?: (s: string) => string };
+    if (typeof inner.quoteString === "function") return inner.quoteString(s);
+    return s.replace(/\\/g, "\\\\").replace(/'/g, "''");
+  }
+
   quoteDefaultExpression(value: unknown): string {
     const inner = this.inner as { quoteDefaultExpression?: (v: unknown) => string };
     if (typeof inner.quoteDefaultExpression === "function")

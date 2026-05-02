@@ -129,9 +129,12 @@ function _addAssocJoin(
 }
 
 /** Compile one or more Arel predicate nodes to the ON string used in _joinClauses. */
-function _buildOnString(...predicates: Nodes.Node[]): string {
+function _buildOnString(
+  quoter: Visitors.ArelQuoter | null | undefined,
+  ...predicates: Nodes.Node[]
+): string {
   const node = predicates.length === 1 ? predicates[0] : new Nodes.And(predicates);
-  return new Visitors.ToSql().compile(node);
+  return new Visitors.ToSql(quoter ?? undefined).compile(node);
 }
 
 /**
@@ -559,7 +562,10 @@ export class Relation<T extends Base> {
         onPredicates.push(tgt.get(typeCol).eq(modelClass.name));
       }
       const onNode = onPredicates.length === 1 ? onPredicates[0] : new Nodes.And(onPredicates);
-      const on = new Visitors.ToSql().compile(onNode);
+      const rawAdapter = (this._modelClass as any)._adapter as {
+        arelVisitor?: Visitors.ToSql;
+      } | null;
+      const on = (rawAdapter?.arelVisitor ?? new Visitors.ToSql()).compile(onNode);
       return { joins: [{ table: targetTable, on }], table: targetTable, pks: ["id"] };
     }
     return null;
@@ -1343,7 +1349,10 @@ export class Relation<T extends Base> {
         predicates.push(tgt.get(inheritanceCol).in(stiNames));
       }
 
-      return { table: targetTable, on: _buildOnString(...predicates) };
+      return {
+        table: targetTable,
+        on: _buildOnString((this._modelClass as any)._adapter, ...predicates),
+      };
     }
 
     if (assocDef.type === "hasOne" || assocDef.type === "hasMany") {
@@ -1383,7 +1392,10 @@ export class Relation<T extends Base> {
         predicates.push(tgt.get(inheritanceCol).in(stiNames));
       }
 
-      return { table: targetTable, on: _buildOnString(...predicates) };
+      return {
+        table: targetTable,
+        on: _buildOnString((this._modelClass as any)._adapter, ...predicates),
+      };
     }
 
     // hasManyThrough (test-data style where type is literally "hasManyThrough")
@@ -1495,8 +1507,14 @@ export class Relation<T extends Base> {
     }
 
     return [
-      { table: throughTable, on: _buildOnString(...throughPredicates) },
-      { table: targetTable, on: _buildOnString(...targetPredicates) },
+      {
+        table: throughTable,
+        on: _buildOnString((this._modelClass as any)._adapter, ...throughPredicates),
+      },
+      {
+        table: targetTable,
+        on: _buildOnString((this._modelClass as any)._adapter, ...targetPredicates),
+      },
     ];
   }
 
@@ -1536,10 +1554,19 @@ export class Relation<T extends Base> {
     const joinT = new Table(joinTable);
     const tgtT = new Table(targetTable);
     return [
-      { table: joinTable, on: _buildOnString(joinT.get(ownerFk).eq(srcT.get(sourcePk))) },
+      {
+        table: joinTable,
+        on: _buildOnString(
+          (this._modelClass as any)._adapter,
+          joinT.get(ownerFk).eq(srcT.get(sourcePk)),
+        ),
+      },
       {
         table: targetTable,
-        on: _buildOnString(tgtT.get(targetPk as string).eq(joinT.get(targetFk))),
+        on: _buildOnString(
+          (this._modelClass as any)._adapter,
+          tgtT.get(targetPk as string).eq(joinT.get(targetFk)),
+        ),
       },
     ];
   }
@@ -3455,7 +3482,9 @@ export class Relation<T extends Base> {
   }
 
   private _compileArelNode(node: Nodes.Node): string {
-    return new Visitors.ToSql().compile(node);
+    const adapter = (this._modelClass as any)._adapter as { arelVisitor?: Visitors.ToSql } | null;
+    const visitor = adapter?.arelVisitor;
+    return (visitor ?? new Visitors.ToSql()).compile(node);
   }
 
   // Returns true when `col` is a known schema attribute OR is (part of) the

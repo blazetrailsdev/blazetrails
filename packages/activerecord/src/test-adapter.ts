@@ -795,6 +795,12 @@ class SchemaAdapter implements DatabaseAdapter {
     );
   }
 
+  quoteString(s: string): string {
+    const inner = this.inner as { quoteString?: (s: string) => string };
+    if (typeof inner.quoteString === "function") return inner.quoteString(s);
+    return s.replace(/\\/g, "\\\\").replace(/'/g, "''");
+  }
+
   async cleanup(): Promise<void> {
     await dropAllTables(this.inner);
   }

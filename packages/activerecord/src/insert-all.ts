@@ -414,6 +414,8 @@ export class Builder {
   }
 
   private _visitor(): Visitors.ToSql {
+    const v = this._insertAll.connection.arelVisitor;
+    if (v) return v;
     if (this._dialect === "mysql") return new Visitors.MySQL();
     if (this._dialect === "postgres") return new Visitors.PostgreSQL();
     return new Visitors.SQLite();

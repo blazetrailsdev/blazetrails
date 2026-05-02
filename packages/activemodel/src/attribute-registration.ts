@@ -1,5 +1,6 @@
 import { DescendantsTracker } from "@blazetrails/activesupport";
 import { Type } from "./type/value.js";
+import { typeRegistry } from "./type/registry.js";
 import { Attribute } from "./attribute.js";
 import { AttributeSet } from "./attribute-set.js";
 
@@ -39,7 +40,8 @@ interface PendingModification {
   applyTo(attributeSet: AttributeSet): void;
 }
 
-class PendingType implements PendingModification {
+/** @internal Rails-private helper. */
+export class PendingType implements PendingModification {
   constructor(
     readonly name: string,
     readonly type: Type,
@@ -52,7 +54,8 @@ class PendingType implements PendingModification {
   }
 }
 
-class PendingDefault implements PendingModification {
+/** @internal Rails-private helper. */
+export class PendingDefault implements PendingModification {
   constructor(
     readonly name: string,
     readonly default_: unknown,
@@ -65,7 +68,8 @@ class PendingDefault implements PendingModification {
   }
 }
 
-class PendingDecorator implements PendingModification {
+/** @internal Rails-private helper. */
+export class PendingDecorator implements PendingModification {
   constructor(
     readonly names: string[] | null,
     readonly decorator: (name: string, type: Type) => Type,
@@ -284,4 +288,69 @@ export function attributeTypes(this: AnyAttributeHost): Record<string, Type> {
  */
 export function typeForAttribute(this: AnyAttributeHost, name: string): Type | null {
   return attributeTypes.call(this)[name] ?? null;
+}
+
+/**
+ * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#pending_attribute_modifications
+ *
+ * Lazily initializes the own-class pending-modification queue and returns it.
+ *
+ * @internal Rails-private helper.
+ */
+export function pendingAttributeModifications(this: AnyAttributeHost): PendingModification[] {
+  if (!Object.prototype.hasOwnProperty.call(this, "_pendingAttributeModifications")) {
+    this._pendingAttributeModifications = [];
+  }
+  return this._pendingAttributeModifications as PendingModification[];
+}
+
+/**
+ * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#reset_default_attributes!
+ *
+ * Clears only the cached state on this class (no subclass cascade).
+ * resetDefaultAttributes() calls this first, then recurses.
+ *
+ * @internal Rails-private helper.
+ */
+export function resetDefaultAttributesBang(this: AnyAttributeHost): void {
+  this._cachedDefaultAttributes = null;
+  this._attributesBuilder = undefined;
+}
+
+/**
+ * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#resolve_attribute_name
+ *
+ * Coerces an attribute name to a string.
+ *
+ * @internal Rails-private helper.
+ */
+export function resolveAttributeName(this: AnyAttributeHost, name: string | symbol): string {
+  return String(name);
+}
+
+/**
+ * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#resolve_type_name
+ *
+ * Looks up a registered Type by symbolic name.
+ *
+ * @internal Rails-private helper.
+ */
+export function resolveTypeName(
+  this: AnyAttributeHost,
+  name: string,
+  _options?: Record<string, unknown>,
+): Type {
+  return typeRegistry.lookup(name);
+}
+
+/**
+ * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#hook_attribute_type
+ *
+ * Extension point for other modules (e.g. AR encryption) to decorate a
+ * type immediately after resolution. Base implementation is a pass-through.
+ *
+ * @internal Rails-private helper.
+ */
+export function hookAttributeType(this: AnyAttributeHost, _attribute: string, type: Type): Type {
+  return type;
 }

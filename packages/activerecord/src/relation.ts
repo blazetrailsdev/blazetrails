@@ -36,6 +36,12 @@ import {
   areStructurallyCompatible,
   VALID_UNSCOPING_VALUES,
   argumentError,
+  checkIfMethodHasArgumentsBang as _checkIfMethodHasArgumentsBang,
+  isTableNameMatches as _isTableNameMatches,
+  arelColumn as _arelColumn,
+  arelColumns as _arelColumns,
+  arelColumnWithTable as _arelColumnWithTable,
+  arelColumnsFromHash as _arelColumnsFromHash,
   type UnscopeType,
   type AssociationSpec,
 } from "./relation/query-methods.js";
@@ -3494,155 +3500,69 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Rails `Relation#check_if_method_has_arguments!`. Throws on empty args,
-   * otherwise mutates `args` in place via flatten + blank-compaction.
+   * Rails `Relation#check_if_method_has_arguments!`. Delegates to the
+   * canonical implementation in `relation/query-methods.ts` so all call
+   * sites share one definition of "blank" / flatten semantics.
    * @internal
    */
   checkIfMethodHasArgumentsBang(
     methodName: string | symbol,
     args: unknown[],
     message?: string,
-    block?: (args: unknown[]) => void,
   ): void {
     const name =
       typeof methodName === "symbol"
         ? (methodName.description ?? methodName.toString())
         : methodName;
-    if (args === undefined || args === null || args.length === 0) {
-      throw argumentError(message ?? `The method .${String(name)}() must contain arguments.`);
-    }
-    block?.(args);
-    // Rails: args.flatten! + compact_blank! — Ruby Array#flatten only
-    // recurses into Arrays (Hashes pass through), and Object#blank?
-    // returns true for nil, false, "", whitespace, [], {}.
-    const flat = args.flat(Infinity).filter((v) => {
-      if (v === null || v === undefined || v === false) return false;
-      if (typeof v === "string") return v.trim().length > 0;
-      if (Array.isArray(v)) return v.length > 0;
-      if (typeof v === "object" && (v as object).constructor === Object) {
-        return Object.keys(v as object).length > 0;
-      }
-      return true;
-    });
-    args.length = 0;
-    args.push(...flat);
+    return _checkIfMethodHasArgumentsBang.call(this as any, name, args, message);
   }
 
   /**
-   * Rails `Relation#table_name_matches?`. Used by {@link arelColumn} to
-   * decide whether a bare name can be qualified to the model's table.
+   * Rails `Relation#table_name_matches?`. Delegates to the canonical
+   * helper in `relation/query-methods.ts` (handles arel/relation toSql
+   * conversion + adapter-quoted forms).
    * @internal
    */
   isTableNameMatches(from: unknown): boolean {
-    if (from == null) return false;
-    let fromStr: string;
-    if (from instanceof Nodes.Node) {
-      fromStr = this._compileArelNode(from);
-    } else if (from instanceof Relation) {
-      fromStr = (from as Relation<any>).toSql();
-    } else {
-      fromStr = String(from);
-    }
-    const tableName = this._modelClass.tableName;
-    if (!tableName) return false;
-    const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const escaped = escape(tableName);
-    const adapter = (this._modelClass as any).adapter as
-      | { quoteTableName?: (n: string) => string }
-      | undefined;
-    const quoted = escape(adapter?.quoteTableName?.(tableName) ?? `"${tableName}"`);
-    const re = new RegExp(`(?:^|(?<!FROM)\\s)(?:\\b${escaped}\\b|${quoted})(?!\\.)`, "i");
-    return re.test(fromStr);
+    return _isTableNameMatches.call(this as any, from);
   }
 
   /**
-   * Rails `Relation#arel_column_with_table`. Adds `tableName` to
-   * references_values and returns the cross-table Arel attribute.
+   * Rails `Relation#arel_column_with_table`. Delegates to the canonical
+   * helper, which handles schema-qualified names and predicateBuilder
+   * resolution.
    * @internal
    */
-  arelColumnWithTable(tableName: string, columnName: string): Nodes.Node {
-    if (!this._referencesValues.includes(tableName)) {
-      this._referencesValues.push(tableName);
-    }
-    if (/^\w+$/.test(columnName)) {
-      return new Table(tableName).get(columnName);
-    }
-    const adapter = (this._modelClass as any).adapter as
-      | { quoteTableName?: (n: string) => string }
-      | undefined;
-    const quoted = adapter?.quoteTableName?.(tableName) ?? `"${tableName}"`;
-    return new Nodes.SqlLiteral(`${quoted}.${columnName}`);
+  arelColumnWithTable(tableName: string, columnName: string | symbol): unknown {
+    return _arelColumnWithTable.call(this as any, tableName, columnName);
   }
 
   /**
-   * Rails `Relation#arel_column`. Resolves a field via attribute aliases,
-   * model table, table.column form, or raw SQL fallback.
+   * Rails `Relation#arel_column`. Delegates to the canonical helper.
    * @internal
    */
-  arelColumn(field: string | Nodes.Node): Nodes.Node {
+  arelColumn(field: string | symbol | Nodes.Node, fallback?: (attr: string) => unknown): unknown {
     if (field instanceof Nodes.Node) return field;
-    const aliases = (this._modelClass as any)._attributeAliases as
-      | Record<string, string>
-      | undefined;
-    const resolved = aliases?.[field] ?? field;
-    const fromValue = this._fromClause.isEmpty()
-      ? null
-      : (this._fromClause.name ?? this._fromClause.value);
-    const known = this._modelClass._attributeDefinitions.has(resolved);
-    if (known && (!fromValue || this.isTableNameMatches(fromValue))) {
-      return this._modelClass.arelTable.get(resolved);
-    }
-    const dotMatch = resolved.match(/^((?:\w+\.)?\w+)\.(\w+)$/);
-    if (dotMatch) return this.arelColumnWithTable(dotMatch[1], dotMatch[2]);
-    return new Nodes.SqlLiteral(resolved);
+    return _arelColumn.call(this as any, field as string | symbol, fallback);
   }
 
   /**
-   * Rails `Relation#arel_columns_from_hash`. Expands `{table: cols}` form.
+   * Rails `Relation#arel_columns_from_hash`. Delegates to the canonical
+   * helper.
    * @internal
    */
-  arelColumnsFromHash(fields: Record<string, string | string[]>): Nodes.Node[] {
-    const out: Nodes.Node[] = [];
-    for (const [tableName, columns] of Object.entries(fields)) {
-      if (typeof columns === "string") {
-        out.push(this.arelColumnWithTable(tableName, columns));
-      } else if (Array.isArray(columns)) {
-        for (const col of columns) out.push(this.arelColumnWithTable(tableName, col));
-      } else {
-        throw new TypeError(
-          `Expected String or Array, got: ${(columns as object)?.constructor?.name ?? typeof columns}`,
-        );
-      }
-    }
-    return out;
+  arelColumnsFromHash(fields: Record<string, unknown>): unknown[] {
+    return _arelColumnsFromHash.call(this as any, fields);
   }
 
   /**
-   * Rails `Relation#arel_columns`. Heterogeneous list → Arel nodes.
+   * Rails `Relation#arel_columns`. Delegates to the canonical helper.
+   * Returns `unknown[]` because Rails' `else` branch passes non-Arel
+   * values through unchanged (numerics, raw SQL fragments, etc.).
    * @internal
    */
-  arelColumns(columns: ReadonlyArray<unknown>): Nodes.Node[] {
-    const out: Nodes.Node[] = [];
-    const resolve = (field: unknown): void => {
-      if (typeof field === "string") {
-        out.push(this.arelColumn(field));
-      } else if (field instanceof Nodes.Node) {
-        out.push(field);
-      } else if (typeof field === "function") {
-        const result = (field as () => unknown)();
-        if (Array.isArray(result)) result.forEach(resolve);
-        else resolve(result);
-      } else if (field && typeof field === "object" && (field as object).constructor === Object) {
-        out.push(...this.arelColumnsFromHash(field as Record<string, string | string[]>));
-      } else {
-        // Rails' `else` branch: pass field through as-is (Arel expressions,
-        // numerics, etc.). The hash branch above is gated on plain objects
-        // so Table/Node instances don't accidentally route through it.
-        out.push(field as Nodes.Node);
-      }
-    };
-    for (const field of columns) resolve(field);
-    return out;
+  arelColumns(columns: ReadonlyArray<unknown>): unknown[] {
+    return _arelColumns.call(this as any, columns as unknown[]);
   }
 
   // Returns true when `col` is a known schema attribute OR is (part of) the

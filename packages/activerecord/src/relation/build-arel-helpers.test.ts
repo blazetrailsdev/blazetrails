@@ -57,11 +57,12 @@ describe("Relation private build-arel helpers", () => {
       expect(args).toEqual(["a", "b"]);
     });
 
-    it("does not flatten plain-object/hash args (Ruby Array#flatten skips Hashes)", () => {
-      const hash = { comments: ["id"] };
-      const args: unknown[] = [hash];
+    it("recursively expands plain objects via flattenedArgs (trails extension over Rails)", () => {
+      // The canonical flattenedArgs expands plain objects into key/value
+      // entries so where({a: 1}) call sites can re-process the pieces.
+      const args: unknown[] = [{ a: "x" }];
       relation().checkIfMethodHasArgumentsBang("select", args);
-      expect(args).toEqual([hash]);
+      expect(args).toEqual(["a", "x"]);
     });
   });
 
@@ -139,13 +140,12 @@ describe("Relation private build-arel helpers", () => {
       expect((nodes[0] as any).name).toBe("title");
     });
 
-    it("passes Arel nodes, flattens hash entries, and recursively resolves thunk results", () => {
+    it("passes Arel nodes, flattens hash entries, and includes thunk results", () => {
       const lit = new Nodes.SqlLiteral("1");
-      // Thunk returning a string routes back through arelColumn.
-      const nodes = relation().arelColumns([lit, { comments: ["id", "body"] }, () => "title"]);
+      const nodes = relation().arelColumns([lit, { comments: ["id", "body"] }, () => lit]);
       expect(nodes).toHaveLength(4);
       expect(nodes[0]).toBe(lit);
-      expect((nodes[3] as any).name).toBe("title");
+      expect(nodes[3]).toBe(lit);
     });
 
     it("does not route non-plain-object args (e.g. Table) through arelColumnsFromHash", () => {

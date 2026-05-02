@@ -444,6 +444,24 @@ describe("AttributeTest", () => {
     expect(u.originalValue).toBe(UNINITIALIZED_ORIGINAL_VALUE);
   });
 
+  it("with_type on UserProvidedDefault preserves proc defaults unevaluated", async () => {
+    const { UserProvidedDefault } = await import("./attribute/user-provided-default.js");
+    const stringType = typeRegistry.lookup("string");
+    const otherType = typeRegistry.lookup("string");
+    let calls = 0;
+    const proc = () => {
+      calls++;
+      return `value-${calls}`;
+    };
+    const upd = new UserProvidedDefault("name", proc, stringType, null);
+    const retyped = upd.withType(otherType) as InstanceType<typeof UserProvidedDefault>;
+    expect(retyped).toBeInstanceOf(UserProvidedDefault);
+    expect(retyped.userProvidedValue).toBe(proc);
+    expect(calls).toBe(0);
+    expect(retyped.valueBeforeTypeCast).toBe("value-1");
+    expect(calls).toBe(1);
+  });
+
   it("UNINITIALIZED_ORIGINAL_VALUE is a singleton across import paths", () => {
     expect(UNINITIALIZED_ORIGINAL_VALUE).toBe(UNINITIALIZED_FROM_INDEX);
   });

@@ -52,7 +52,7 @@ describe("BoundSqlLiteralTest", () => {
 
     it("error message matches Rails phrasing", () => {
       expect(() => new Nodes.BoundSqlLiteral("id IN (?, ?, ?)", [1, 2])).toThrow(
-        "wrong number of bind variables (2 for 3) in: id IN (?, ?, ?)",
+        'wrong number of bind variables (2 for 3) in: "id IN (?, ?, ?)"',
       );
     });
   });
@@ -66,7 +66,7 @@ describe("BoundSqlLiteralTest", () => {
 
     it("error message matches Rails phrasing", () => {
       expect(() => new Nodes.BoundSqlLiteral("id IN (:foo, :bar)", [], { foo: 1 })).toThrow(
-        "missing value for :bar in: id IN (:foo, :bar)",
+        'missing value for :bar in: "id IN (:foo, :bar)"',
       );
     });
   });

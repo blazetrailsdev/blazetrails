@@ -98,7 +98,7 @@ export class Casted extends NodeExpression {
  */
 export class Quoted extends Unary {
   constructor(value: unknown) {
-    super(value as Node | null);
+    super(value);
   }
 
   get value(): unknown {

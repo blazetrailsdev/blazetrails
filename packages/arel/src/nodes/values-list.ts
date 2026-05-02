@@ -9,10 +9,10 @@ import { Unary } from "./unary.js";
  */
 export class ValuesList extends Unary {
   constructor(rows: unknown[][]) {
-    super(rows as unknown as import("./node.js").Node);
+    super(rows);
   }
 
   get rows(): unknown[][] {
-    return this.expr as unknown as unknown[][];
+    return this.expr as unknown[][];
   }
 }

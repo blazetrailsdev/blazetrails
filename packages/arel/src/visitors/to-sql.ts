@@ -1007,7 +1007,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   // Mirrors Rails: visit_Arel_Nodes_Else (to_sql.rb).
   protected visitArelNodesElse(node: Nodes.Else): SQLString {
     this.collector.append("ELSE ");
-    this.visitNodeOrValue(node.expr);
+    this.visitNodeOrValue(node.expr as Nodes.NodeOrValue);
     return this.collector;
   }
 

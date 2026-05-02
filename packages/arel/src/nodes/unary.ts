@@ -2,9 +2,9 @@ import { Node, NodeVisitor } from "./node.js";
 import { NodeExpression } from "./node-expression.js";
 
 export class Unary extends NodeExpression {
-  readonly expr: Node | Node[] | string | number | null;
+  readonly expr: unknown;
 
-  constructor(expr: Node | Node[] | string | number | null) {
+  constructor(expr: unknown) {
     super();
     this.expr = expr;
   }

@@ -472,11 +472,18 @@ export function missingAttribute(this: InstanceHost, attrName: string): never {
 
 /**
  * @internal Rails-private helper. Mirrors: #_read_attribute
- * In AM, calls __send__(attr); in trails reads directly from the attribute store.
+ * Bypasses alias resolution and reads directly from the attribute store,
+ * matching Rails AR _read_attribute (fetch_value without alias lookup).
  */
 export function _readAttribute(
-  this: InstanceHost & { readAttribute?(name: string): unknown },
+  this: InstanceHost & {
+    _attributes?: { fetchValue(name: string): unknown };
+    _readAttribute?(name: string): unknown;
+  },
   attr: string,
 ): unknown {
-  return this.readAttribute ? this.readAttribute(attr) : null;
+  if (typeof this._readAttribute === "function" && this._readAttribute !== _readAttribute) {
+    return this._readAttribute(attr);
+  }
+  return this._attributes?.fetchValue(attr) ?? null;
 }

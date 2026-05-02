@@ -118,14 +118,26 @@ export class DirtyTracker {
    * Used by `attribute_will_change!` for in-place mutations (e.g. array push)
    * where the object reference stays the same but the content has changed.
    *
+   * `currentValue` is the value at the moment the force is requested (before
+   * the in-place mutation). Rails snapshots this via `clone_value` so the
+   * stored "was" stays stable even as the live object mutates.
+   *
    * Mirrors: ActiveModel::AttributeMutationTracker#force_change
    */
-  forceChange(name: string): void {
+  forceChange(name: string, currentValue: unknown): void {
     if (this._changedAttributes.has(name)) return;
-    const original = this._originalHas.has(name)
-      ? resolveValue(this._originalAttributes.get(name))
-      : undefined;
-    this._changedAttributes.set(name, [original, original]);
+    // Clone so the stored "was" side isn't mutated along with the live object.
+    // Mirrors Rails' clone_value: shallow-clone when possible, else keep as-is.
+    let cloned: unknown;
+    try {
+      cloned =
+        currentValue !== null && typeof currentValue === "object"
+          ? structuredClone(currentValue)
+          : currentValue;
+    } catch {
+      cloned = currentValue;
+    }
+    this._changedAttributes.set(name, [cloned, cloned]);
   }
 
   get changed(): boolean {
@@ -405,7 +417,7 @@ export function attributePreviousChange(
  * @internal Rails-private helper.
  */
 export function attributeWillChangeBang(this: DirtyDispatchHost, attrName: string): void {
-  this._dirty.forceChange(attrName);
+  this._dirty.forceChange(attrName, this._attributes.fetchValue(attrName));
 }
 
 /**

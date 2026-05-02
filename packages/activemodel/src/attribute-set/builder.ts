@@ -59,7 +59,7 @@ export class LazyAttributeSet extends AttributeSet {
    * @internal Rails-private helper. Mirrors: LazyAttributeSet#attributes (protected)
    * Materializes the lazy set by resolving all keys into the attribute map.
    */
-  materialize(): Map<string, Attribute> {
+  protected materialize(): Map<string, Attribute> {
     const result = new Map<string, Attribute>();
     // forEach covers all stored entries including uninitialized ones, matching
     // Rails' @values/@types loops. Then add any additionalTypes-only keys.

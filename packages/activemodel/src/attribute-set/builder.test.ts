@@ -35,7 +35,7 @@ describe("LazyAttributeSet", () => {
   it("materialize includes initialized attributes", () => {
     const attrs = new Map([["name", Attribute.fromDatabase("name", "Alice", strType)]]);
     const lazy = new LazyAttributeSet(attrs);
-    const result = lazy.materialize();
+    const result = (lazy as any).materialize() as Map<string, Attribute>;
     expect(result.get("name")).toBeDefined();
     expect(result.get("name")!.value).toBe("Alice");
   });
@@ -46,7 +46,7 @@ describe("LazyAttributeSet", () => {
       ["age", Attribute.uninitialized("age", intType)],
     ]);
     const lazy = new LazyAttributeSet(attrs);
-    const result = lazy.materialize();
+    const result = (lazy as any).materialize() as Map<string, Attribute>;
     expect(result.has("age")).toBe(true);
     expect(result.get("age")!.isInitialized()).toBe(false);
   });
@@ -55,7 +55,7 @@ describe("LazyAttributeSet", () => {
     const attrs = new Map([["name", Attribute.fromDatabase("name", "Alice", strType)]]);
     const extra = new Map([["score", intType]]);
     const lazy = new LazyAttributeSet(attrs, extra);
-    const result = lazy.materialize();
+    const result = (lazy as any).materialize() as Map<string, Attribute>;
     expect(result.has("score")).toBe(true);
     expect(result.get("score")!.isInitialized()).toBe(false);
   });

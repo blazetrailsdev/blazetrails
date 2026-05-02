@@ -132,10 +132,10 @@ describe("Node base polymorphic defaults", () => {
       expect(collected[0]).toBe(attr);
     });
 
-    it("is inherited by all Binary subclasses without override", () => {
+    it("is active on FetchAttribute Binary subclasses per Rails binary.rb", () => {
       const attr = users.get("id");
       const q = new Nodes.Quoted(1);
-      const subclasses = [
+      const withFetch = [
         new Nodes.Between(attr, q),
         new Nodes.NotEqual(attr, q),
         new Nodes.GreaterThan(attr, q),
@@ -146,11 +146,27 @@ describe("Node base polymorphic defaults", () => {
         new Nodes.In(attr, q),
         new Nodes.NotIn(attr, q),
       ];
-      for (const node of subclasses) {
+      for (const node of withFetch) {
         const hits: unknown[] = [];
         node.fetchAttribute((a) => hits.push(a));
         expect(hits).toHaveLength(1);
         expect(hits[0]).toBe(attr);
+      }
+    });
+
+    it("is a no-op on Binary subclasses without FetchAttribute (Assignment, Union, Intersect, Except)", () => {
+      const attr = users.get("id");
+      const q = new Nodes.Quoted(1);
+      const noFetch = [
+        new Nodes.As(attr, q),
+        new Nodes.Union(attr as unknown as Nodes.Node, q),
+        new Nodes.Intersect(attr as unknown as Nodes.Node, q),
+        new Nodes.Except(attr as unknown as Nodes.Node, q),
+      ];
+      for (const node of noFetch) {
+        const hits: unknown[] = [];
+        node.fetchAttribute((a) => hits.push(a));
+        expect(hits).toHaveLength(0);
       }
     });
   });

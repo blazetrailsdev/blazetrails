@@ -94,6 +94,68 @@ describe("TestNode", () => {
   });
 });
 
+describe("Node base polymorphic defaults", () => {
+  const users = new Table("users");
+
+  describe("isEquality", () => {
+    it("returns false on base Node subclasses", () => {
+      expect(new Nodes.SqlLiteral("x").isEquality()).toBe(false);
+      expect(new Nodes.Quoted(1).isEquality()).toBe(false);
+      expect(new Nodes.GreaterThan(users.get("id"), new Nodes.Quoted(1)).isEquality()).toBe(false);
+    });
+
+    it("returns true for Equality and In", () => {
+      expect(new Nodes.Equality(users.get("id"), new Nodes.Quoted(1)).isEquality()).toBe(true);
+      expect(new Nodes.In(users.get("id"), [new Nodes.Quoted(1)]).isEquality()).toBe(true);
+    });
+  });
+
+  describe("fetchAttribute", () => {
+    it("is a no-op on base Node (returns undefined)", () => {
+      const result = new Nodes.SqlLiteral("x").fetchAttribute(() => "hit");
+      expect(result).toBeUndefined();
+    });
+
+    it("yields the left attribute on Binary nodes", () => {
+      const attr = users.get("id");
+      const collected: unknown[] = [];
+      new Nodes.GreaterThan(attr, new Nodes.Quoted(1)).fetchAttribute((a) => collected.push(a));
+      expect(collected).toHaveLength(1);
+      expect(collected[0]).toBe(attr);
+    });
+
+    it("yields the right attribute when left is not an attribute", () => {
+      const attr = users.get("id");
+      const collected: unknown[] = [];
+      new Nodes.GreaterThan(new Nodes.Quoted(1), attr).fetchAttribute((a) => collected.push(a));
+      expect(collected).toHaveLength(1);
+      expect(collected[0]).toBe(attr);
+    });
+
+    it("is inherited by all Binary subclasses without override", () => {
+      const attr = users.get("id");
+      const q = new Nodes.Quoted(1);
+      const subclasses = [
+        new Nodes.Between(attr, q),
+        new Nodes.NotEqual(attr, q),
+        new Nodes.GreaterThan(attr, q),
+        new Nodes.GreaterThanOrEqual(attr, q),
+        new Nodes.LessThan(attr, q),
+        new Nodes.LessThanOrEqual(attr, q),
+        new Nodes.Equality(attr, q),
+        new Nodes.In(attr, q),
+        new Nodes.NotIn(attr, q),
+      ];
+      for (const node of subclasses) {
+        const hits: unknown[] = [];
+        node.fetchAttribute((a) => hits.push(a));
+        expect(hits).toHaveLength(1);
+        expect(hits[0]).toBe(attr);
+      }
+    });
+  });
+});
+
 describe("setToSqlVisitor", () => {
   // The override is process-global (it mutates the module-level
   // registry). Restore the default in `finally` so subsequent tests in

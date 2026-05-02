@@ -45,6 +45,10 @@ export class Binary extends NodeExpression {
     this.right = right;
   }
 
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+
   as(aliasName: string): As {
     return new As(this, new SqlLiteral(aliasName, { retryable: true }));
   }
@@ -90,11 +94,7 @@ export class As extends Binary {
   }
 }
 
-export class Between extends Binary {
-  fetchAttribute(block: (attr: Node) => unknown): unknown {
-    return fetchAttributeFromBinary(this.left, this.right, block);
-  }
-}
+export class Between extends Binary {}
 
 export class NotEqual extends Binary {
   invert(): Node {
@@ -105,19 +105,11 @@ export class NotEqual extends Binary {
     }
     return new _invertRegistry.Equality(this.left, this.right);
   }
-
-  fetchAttribute(block: (attr: Node) => unknown): unknown {
-    return fetchAttributeFromBinary(this.left, this.right, block);
-  }
 }
 
 export class GreaterThan extends Binary {
   invert(): Node {
     return new LessThanOrEqual(this.left, this.right);
-  }
-
-  fetchAttribute(block: (attr: Node) => unknown): unknown {
-    return fetchAttributeFromBinary(this.left, this.right, block);
   }
 }
 
@@ -125,19 +117,11 @@ export class GreaterThanOrEqual extends Binary {
   invert(): Node {
     return new LessThan(this.left, this.right);
   }
-
-  fetchAttribute(block: (attr: Node) => unknown): unknown {
-    return fetchAttributeFromBinary(this.left, this.right, block);
-  }
 }
 
 export class LessThan extends Binary {
   invert(): Node {
     return new GreaterThanOrEqual(this.left, this.right);
-  }
-
-  fetchAttribute(block: (attr: Node) => unknown): unknown {
-    return fetchAttributeFromBinary(this.left, this.right, block);
   }
 }
 
@@ -145,19 +129,11 @@ export class LessThanOrEqual extends Binary {
   invert(): Node {
     return new GreaterThan(this.left, this.right);
   }
-
-  fetchAttribute(block: (attr: Node) => unknown): unknown {
-    return fetchAttributeFromBinary(this.left, this.right, block);
-  }
 }
 
 export class IsDistinctFrom extends Binary {
   invert(): Node {
     return new IsNotDistinctFrom(this.left, this.right);
-  }
-
-  fetchAttribute(block: (attr: Node) => unknown): unknown {
-    return fetchAttributeFromBinary(this.left, this.right, block);
   }
 
   accept<T>(visitor: NodeVisitor<T>): T {
@@ -168,10 +144,6 @@ export class IsDistinctFrom extends Binary {
 export class IsNotDistinctFrom extends Binary {
   invert(): Node {
     return new IsDistinctFrom(this.left, this.right);
-  }
-
-  fetchAttribute(block: (attr: Node) => unknown): unknown {
-    return fetchAttributeFromBinary(this.left, this.right, block);
   }
 
   accept<T>(visitor: NodeVisitor<T>): T {
@@ -187,10 +159,6 @@ export class NotIn extends Binary {
       );
     }
     return new _invertRegistry.In(this.left, this.right);
-  }
-
-  fetchAttribute(block: (attr: Node) => unknown): unknown {
-    return fetchAttributeFromBinary(this.left, this.right, block);
   }
 }
 

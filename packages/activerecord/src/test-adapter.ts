@@ -803,7 +803,7 @@ class SchemaAdapter implements DatabaseAdapter {
   }
 
   get arelVisitor(): Visitors.ToSql | undefined {
-    return (this.inner as { arelVisitor?: Visitors.ToSql }).arelVisitor;
+    return undefined;
   }
 
   async cleanup(): Promise<void> {

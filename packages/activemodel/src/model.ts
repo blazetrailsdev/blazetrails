@@ -47,7 +47,6 @@ import {
   attributeMissing,
 } from "./attribute-methods.js";
 import {
-  _assignAttributes as attrAssign,
   _assignAttribute as attrAssignOne,
   sanitizeForMassAssignment as attrSanitize,
   attributeWriterMissing as defaultAttributeWriterMissing,
@@ -2042,7 +2041,9 @@ export class Model {
    * @internal Rails-private helper.
    */
   _assignAttributes(attributes: Record<string, unknown>): void {
-    attrAssign(this, attributes);
+    for (const [k, v] of Object.entries(attributes)) {
+      this._assignAttribute(k, v);
+    }
   }
 
   /**

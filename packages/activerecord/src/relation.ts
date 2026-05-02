@@ -3504,7 +3504,10 @@ export class Relation<T extends Base> {
     message?: string,
     block?: (args: unknown[]) => void,
   ): void {
-    const name = typeof methodName === "symbol" ? methodName.description : methodName;
+    const name =
+      typeof methodName === "symbol"
+        ? (methodName.description ?? methodName.toString())
+        : methodName;
     if (args === undefined || args === null || args.length === 0) {
       throw argumentError(message ?? `The method .${String(name)}() must contain arguments.`);
     }
@@ -3620,22 +3623,25 @@ export class Relation<T extends Base> {
    */
   arelColumns(columns: ReadonlyArray<unknown>): Nodes.Node[] {
     const out: Nodes.Node[] = [];
-    for (const field of columns) {
+    const resolve = (field: unknown): void => {
       if (typeof field === "string") {
         out.push(this.arelColumn(field));
       } else if (field instanceof Nodes.Node) {
         out.push(field);
       } else if (typeof field === "function") {
         const result = (field as () => unknown)();
-        if (Array.isArray(result)) {
-          for (const r of result) out.push(r as Nodes.Node);
-        } else {
-          out.push(result as Nodes.Node);
-        }
-      } else if (field && typeof field === "object") {
+        if (Array.isArray(result)) result.forEach(resolve);
+        else resolve(result);
+      } else if (field && typeof field === "object" && (field as object).constructor === Object) {
         out.push(...this.arelColumnsFromHash(field as Record<string, string | string[]>));
+      } else {
+        // Rails' `else` branch: pass field through as-is (Arel expressions,
+        // numerics, etc.). The hash branch above is gated on plain objects
+        // so Table/Node instances don't accidentally route through it.
+        out.push(field as Nodes.Node);
       }
-    }
+    };
+    for (const field of columns) resolve(field);
     return out;
   }
 

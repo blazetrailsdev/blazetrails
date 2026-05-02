@@ -7,7 +7,7 @@
  * conventions where applicable.
  */
 import { describe, it, expect } from "vitest";
-import { Nodes } from "@blazetrails/arel";
+import { Nodes, Table as ArelTable } from "@blazetrails/arel";
 import { Base, Relation, UnmodifiableRelation } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 
@@ -139,12 +139,19 @@ describe("Relation private build-arel helpers", () => {
       expect((nodes[0] as any).name).toBe("title");
     });
 
-    it("passes Arel nodes, flattens hash entries, and invokes function thunks", () => {
+    it("passes Arel nodes, flattens hash entries, and recursively resolves thunk results", () => {
       const lit = new Nodes.SqlLiteral("1");
-      const nodes = relation().arelColumns([lit, { comments: ["id", "body"] }, () => lit]);
+      // Thunk returning a string routes back through arelColumn.
+      const nodes = relation().arelColumns([lit, { comments: ["id", "body"] }, () => "title"]);
       expect(nodes).toHaveLength(4);
       expect(nodes[0]).toBe(lit);
-      expect(nodes[3]).toBe(lit);
+      expect((nodes[3] as any).name).toBe("title");
+    });
+
+    it("does not route non-plain-object args (e.g. Table) through arelColumnsFromHash", () => {
+      const table = new ArelTable("posts");
+      const nodes = relation().arelColumns([table]);
+      expect(nodes).toEqual([table]);
     });
   });
 });

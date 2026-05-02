@@ -51,6 +51,15 @@ describe("Relation private build-arel helpers", () => {
       expect(() => relation().checkIfMethodHasArgumentsBang("select", ["id"])).not.toThrow();
     });
 
+    it("uses a symbol's description in the error message (Rails passes a Symbol via __callee__)", () => {
+      try {
+        relation().checkIfMethodHasArgumentsBang(Symbol("select"), []);
+        expect.fail("expected throw");
+      } catch (err) {
+        expect((err as Error).message).toMatch(/\.select\(\) must contain arguments/);
+      }
+    });
+
     it("flattens arrays and compacts blanks (nil, false, '', [], {}) per Rails compact_blank!", () => {
       const args: unknown[] = [["a", null, "", false], "b", undefined, {}, [], "  "];
       relation().checkIfMethodHasArgumentsBang("select", args);

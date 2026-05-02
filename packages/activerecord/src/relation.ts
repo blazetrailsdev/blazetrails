@@ -36,6 +36,7 @@ import {
   areStructurallyCompatible,
   VALID_UNSCOPING_VALUES,
   argumentError,
+  assertModifiableBang as _assertModifiableBang,
   checkIfMethodHasArgumentsBang as _checkIfMethodHasArgumentsBang,
   isTableNameMatches as _isTableNameMatches,
   arelColumn as _arelColumn,
@@ -3494,9 +3495,7 @@ export class Relation<T extends Base> {
    * @internal
    */
   assertModifiableBang(): void {
-    if (this._loaded) {
-      throw new UnmodifiableRelation();
-    }
+    return _assertModifiableBang.call(this as any);
   }
 
   /**
@@ -3510,10 +3509,12 @@ export class Relation<T extends Base> {
     args: unknown[],
     message?: string,
   ): void {
+    // Rails passes a Symbol via __callee__; we collapse it to its
+    // description so the error message reads `.select()` rather than
+    // the verbose `.Symbol(select)()`. Anonymous symbols (no
+    // description) fall through to "<anonymous>".
     const name =
-      typeof methodName === "symbol"
-        ? (methodName.description ?? methodName.toString())
-        : methodName;
+      typeof methodName === "symbol" ? (methodName.description ?? "<anonymous>") : methodName;
     return _checkIfMethodHasArgumentsBang.call(this as any, name, args, message);
   }
 
@@ -3551,7 +3552,7 @@ export class Relation<T extends Base> {
    * helper.
    * @internal
    */
-  arelColumnsFromHash(fields: Record<string, unknown>): unknown[] {
+  arelColumnsFromHash(fields: Record<PropertyKey, unknown>): unknown[] {
     return _arelColumnsFromHash.call(this as any, fields);
   }
 

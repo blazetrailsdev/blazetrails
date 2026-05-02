@@ -11,6 +11,7 @@ import {
   ConfigurationError,
   IrreversibleOrderError,
   PreparedStatementInvalid,
+  UnmodifiableRelation,
 } from "../errors.js";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
@@ -1240,9 +1241,9 @@ function async(this: QueryMethodsHost): QueryMethodsHost {
 }
 
 /** @internal */
-function assertModifiableBang(this: QueryMethodsHost): void {
+export function assertModifiableBang(this: QueryMethodsHost): void {
   if ((this as any)._loaded) {
-    throw new ActiveRecordError("can't modify a loaded relation");
+    throw new UnmodifiableRelation();
   }
 }
 
@@ -1793,7 +1794,7 @@ export function arelColumnWithTable(
 /** @internal */
 export function arelColumnsFromHash(
   this: QueryMethodsHost,
-  fields: Record<string, unknown>,
+  fields: Record<PropertyKey, unknown>,
 ): unknown[] {
   return Reflect.ownKeys(fields).flatMap((key) => {
     const columns = (fields as Record<string | symbol, unknown>)[key];

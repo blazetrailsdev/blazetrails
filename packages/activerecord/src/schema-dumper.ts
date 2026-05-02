@@ -70,6 +70,8 @@ export type SchemaDumpLanguage = "ts" | "js";
 export interface SchemaDumperOptions {
   /** Output language for the generated schema DSL: "ts" (default) or "js". */
   language?: SchemaDumpLanguage;
+  /** Migration version string, surfaced via `defineParams()` in the header. */
+  version?: string;
 }
 
 interface DslMapping {
@@ -449,7 +451,7 @@ export class SchemaDumper {
         version = versions[versions.length - 1];
       }
     }
-    const schema = await (this.dump(adapter, options) as Promise<string>);
+    const schema = await (this.dump(adapter, { ...options, version }) as Promise<string>);
     return `// Schema version: ${version}\n${schema}`;
   }
 
@@ -521,6 +523,8 @@ export class SchemaDumper {
   private header(lines: string[]): void {
     lines.push("// This file is auto-generated from the current state of the database.");
     lines.push("// Instead of editing this file, please use the migrations feature.");
+    const params = this.defineParams();
+    if (params) lines.push(`// ${params}`);
     lines.push("");
     if (this._language === "ts") {
       lines.push(`import type { MigrationContext } from "@blazetrails/activerecord";`);

@@ -81,6 +81,14 @@ export class MessagePackMessageSerializer {
     if (!("p" in d) || typeof d["p"] !== "string") {
       throw new DecryptionError("Invalid data format: hash without payload");
     }
+    if (
+      "h" in d &&
+      d["h"] !== null &&
+      d["h"] !== undefined &&
+      (typeof d["h"] !== "object" || Array.isArray(d["h"]))
+    ) {
+      throw new DecryptionError("Invalid data format: headers must be an object");
+    }
   }
 
   /** @internal */

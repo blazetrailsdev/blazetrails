@@ -15,6 +15,7 @@ import type { Message } from "./message.js";
 
 export class EnvelopeEncryptionKeyProvider {
   private _primaryKeyProviderOverride?: KeyProvider;
+  private _primaryKeyProviderCache?: KeyProvider;
   private _activePrimaryKey?: Key;
 
   constructor(primaryKeyProvider?: KeyProvider) {
@@ -64,7 +65,10 @@ export class EnvelopeEncryptionKeyProvider {
   /** @internal */
   private primaryKeyProvider(): KeyProvider {
     if (this._primaryKeyProviderOverride) return this._primaryKeyProviderOverride;
-    return new DerivedSecretKeyProvider(Configurable.config.get("primaryKey") as string);
+    this._primaryKeyProviderCache ??= new DerivedSecretKeyProvider(
+      Configurable.config.get("primaryKey") as string,
+    );
+    return this._primaryKeyProviderCache;
   }
 
   /** @internal */

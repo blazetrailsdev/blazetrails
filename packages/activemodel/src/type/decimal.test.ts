@@ -160,4 +160,10 @@ describe("DecimalType", () => {
     expect(type.serialize("1.5")).toBe("1.5");
     expect(type.serialize("")).toBeNull();
   });
+
+  it("casting booleans via Helpers::Numeric — true → '1', false → '0'", () => {
+    const type = new Types.DecimalType();
+    expect(type.cast(true)).toBe("1");
+    expect(type.cast(false)).toBe("0");
+  });
 });

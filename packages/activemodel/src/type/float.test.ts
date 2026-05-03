@@ -41,4 +41,10 @@ describe("FloatTest", () => {
     const type = new Types.FloatType();
     expect(type.isChanged(NaN, NaN, NaN)).toBe(false);
   });
+
+  it("casting booleans via Helpers::Numeric — true → 1.0, false → 0.0", () => {
+    const type = new Types.FloatType();
+    expect(type.cast(true)).toBe(1);
+    expect(type.cast(false)).toBe(0);
+  });
 });

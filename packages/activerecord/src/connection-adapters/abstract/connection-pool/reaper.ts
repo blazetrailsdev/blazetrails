@@ -126,7 +126,13 @@ export class Reaper {
  */
 function spawnThread(frequency: number): ReturnType<typeof setInterval> | null {
   if (!frequency || frequency <= 0 || !Number.isFinite(frequency)) return null;
-  return (
-    Reaper as unknown as { _spawnTimer: (f: number) => ReturnType<typeof setInterval> }
-  )._spawnTimer(frequency);
+  const internals = Reaper as unknown as {
+    _timers: Map<number, ReturnType<typeof setInterval>>;
+    _spawnTimer: (f: number) => ReturnType<typeof setInterval>;
+  };
+  const existing = internals._timers.get(frequency);
+  if (existing) return existing;
+  const timer = internals._spawnTimer(frequency);
+  internals._timers.set(frequency, timer);
+  return timer;
 }

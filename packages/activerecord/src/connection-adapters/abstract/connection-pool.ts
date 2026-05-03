@@ -1129,21 +1129,39 @@ function acquireConnection(
     if (err instanceof ConnectionTimeoutError) err.setPool(pool);
     return err;
   };
+  const ensureLive = () => {
+    if (pool.isDiscarded?.()) {
+      throw new ConnectionNotEstablished("Connection pool has been discarded", {
+        connectionPool: pool,
+      });
+    }
+  };
+  const accept = (c: DatabaseAdapter): DatabaseAdapter => {
+    pool._checkedOut.add(c);
+    return c;
+  };
   try {
+    ensureLive();
     let conn = pool._available?.poll() as DatabaseAdapter | undefined;
-    if (conn) return conn;
+    if (conn) return accept(conn);
     conn = tryToCheckoutNewConnection(pool) ?? undefined;
-    if (conn) return conn;
+    if (conn) return conn; // tryToCheckoutNewConnection already adds to _checkedOut
     pool.reap();
     conn = pool._available?.poll() as DatabaseAdapter | undefined;
-    if (conn) return conn;
+    if (conn) return accept(conn);
     conn = tryToCheckoutNewConnection(pool) ?? undefined;
     if (conn) return conn;
     const result = pool._available?.poll(checkoutTimeout);
     if (result instanceof Promise) {
-      return result.catch((err: unknown) => {
-        throw tagPool(err);
-      });
+      return result.then(
+        (c) => {
+          ensureLive();
+          return accept(c);
+        },
+        (err: unknown) => {
+          throw tagPool(err);
+        },
+      );
     }
     if (result == null) {
       throw new ConnectionTimeoutError(
@@ -1151,7 +1169,7 @@ function acquireConnection(
         { connectionPool: pool },
       );
     }
-    return result;
+    return accept(result);
   } catch (err) {
     throw tagPool(err);
   }

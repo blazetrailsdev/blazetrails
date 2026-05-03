@@ -1,6 +1,10 @@
 import type { Base } from "../base.js";
 import type { AssociationDefinition } from "../associations.js";
 import { HasOneAssociation } from "./has-one-association.js";
+import {
+  HasOneThroughCantAssociateThroughHasOneOrManyReflection,
+  HasOneThroughNestedAssociationsAreReadonly,
+} from "./errors.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::HasOneThroughAssociation
@@ -103,14 +107,9 @@ function buildJoinAttributes(
  * @internal
  */
 function transaction(assoc: HasOneThroughAssociation, block: () => Promise<void>): Promise<void> {
-  const throughName = assoc.reflection.options.through as string | undefined;
-  const ctor = assoc.owner.constructor as { _reflectOnAssociation?: (n: string) => unknown };
-  const throughKlass = throughName
-    ? ((ctor._reflectOnAssociation?.(throughName) as { klass?: { transaction?: Function } } | null)
-        ?.klass ?? null)
-    : null;
-  if (throughKlass && typeof throughKlass.transaction === "function") {
-    return throughKlass.transaction(block);
+  const tr = throughReflection(assoc) as { klass?: { transaction?: Function } } | null;
+  if (tr?.klass && typeof tr.klass.transaction === "function") {
+    return tr.klass.transaction(block);
   }
   return block();
 }
@@ -123,16 +122,22 @@ function transaction(assoc: HasOneThroughAssociation, block: () => Promise<void>
  * @internal
  */
 function throughReflection(assoc: HasOneThroughAssociation): unknown {
-  const refl = assoc.reflection as {
-    throughReflection?: () => unknown;
-    options: { through?: string };
+  type Refl = {
+    throughReflection?: Refl | null;
+    isThroughReflection?: () => boolean;
+    options?: { through?: string };
   };
-  const direct = refl.throughReflection?.();
-  if (direct) return direct;
-  const throughName = refl.options.through;
-  if (!throughName) return null;
-  const ctor = assoc.owner.constructor as { _reflectOnAssociation?: (n: string) => unknown };
-  return ctor._reflectOnAssociation?.(throughName) ?? null;
+  let refl = (assoc.reflection as Refl).throughReflection ?? null;
+  if (!refl) {
+    const throughName = assoc.reflection.options.through as string | undefined;
+    if (!throughName) return null;
+    const ctor = assoc.owner.constructor as { _reflectOnAssociation?: (n: string) => Refl | null };
+    refl = ctor._reflectOnAssociation?.(throughName) ?? null;
+  }
+  while (refl?.isThroughReflection?.() && refl.throughReflection) {
+    refl = refl.throughReflection;
+  }
+  return refl;
 }
 
 /**
@@ -181,10 +186,9 @@ function constructJoinAttributes(
     joinAttributes = { [sourceRefl.name]: records.length === 1 ? records[0] : records };
   } else {
     const fk: string = sourceRefl.foreignKey ?? `${sourceRefl.name}_id`;
+    const read = (r: any, k: string) => r._readAttribute?.(k) ?? r.readAttribute?.(k);
     const values = records.map((r: any) =>
-      pkArr.length === 1
-        ? (r.readAttribute?.(pkArr[0]) ?? r.id)
-        : pkArr.map((k: string) => r.readAttribute?.(k)),
+      pkArr.length === 1 ? (read(r, pkArr[0]) ?? r.id) : pkArr.map((k: string) => read(r, k)),
     );
     joinAttributes = { [fk]: records.length === 1 ? values[0] : values };
   }
@@ -207,10 +211,15 @@ function constructJoinAttributes(
  * @internal
  */
 function ensureMutable(assoc: HasOneThroughAssociation): void {
-  const sourceRefl = (assoc.reflection as any).sourceReflection?.() as { macro?: string } | null;
-  if (sourceRefl && sourceRefl.macro !== "belongsTo") {
-    throw new Error(
-      `Cannot modify association '${assoc.reflection.name}': through associations with a non-belongs-to source are read-only.`,
+  const sourceRefl = (assoc.reflection as any).sourceReflection?.() as {
+    isBelongsTo?: () => boolean;
+    macro?: string;
+  } | null;
+  const isBelongs = sourceRefl?.isBelongsTo?.() ?? sourceRefl?.macro === "belongsTo";
+  if (!isBelongs) {
+    throw new HasOneThroughCantAssociateThroughHasOneOrManyReflection(
+      (assoc.owner.constructor as { name: string }).name,
+      assoc.reflection.name,
     );
   }
 }
@@ -224,13 +233,11 @@ function ensureMutable(assoc: HasOneThroughAssociation): void {
  * @internal
  */
 function ensureNotNested(assoc: HasOneThroughAssociation): void {
-  const throughName = assoc.reflection.options.through as string | undefined;
-  if (!throughName) return;
-  const ctor = assoc.owner.constructor as { _reflectOnAssociation?: (n: string) => unknown };
-  const throughRefl = ctor._reflectOnAssociation?.(throughName) as {
-    options?: { through?: unknown };
-  } | null;
-  if (throughRefl?.options?.through) {
-    throw new Error(`Nested through associations are read-only.`);
+  const refl = assoc.reflection as { isNested?: () => boolean };
+  if (refl.isNested?.()) {
+    throw new HasOneThroughNestedAssociationsAreReadonly(
+      (assoc.owner.constructor as { name: string }).name,
+      assoc.reflection.name,
+    );
   }
 }

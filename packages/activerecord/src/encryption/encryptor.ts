@@ -4,15 +4,14 @@
  * Mirrors: ActiveRecord::Encryption::Encryptor
  */
 
-import { NotImplementedError } from "../errors.js";
 import { Cipher } from "./cipher/aes256-gcm.js";
 import { Message } from "./message.js";
 import { MessageSerializer } from "./message-serializer.js";
-import { ConfigError, DecryptionError, ForbiddenClass } from "./errors.js";
+import { Configurable } from "./configurable.js";
+import { DecryptionError, ForbiddenClass } from "./errors.js";
 import type { Compressor } from "./config.js";
 import { defaultCompressor } from "./config.js";
 
-// Mirrors: ActiveRecord::Encryption::Encryptor::THRESHOLD_TO_JUSTIFY_COMPRESSION
 const THRESHOLD_TO_JUSTIFY_COMPRESSION = 140;
 
 export interface EncryptorOptions {
@@ -20,13 +19,6 @@ export interface EncryptorOptions {
   compressor?: Compressor;
 }
 
-/**
- * Structural encryptor surface accepted by `Scheme.encryptor`. The
- * concrete `Encryptor` class satisfies this interface. Keeps the
- * scheme decoupled from any one implementation so a compatible
- * subtype (or test double) can be passed in without casting through
- * `never`.
- */
 export interface EncryptorLike {
   encrypt(clearText: string, options?: Record<string, unknown>): string;
   decrypt(encryptedText: string, options?: Record<string, unknown>): string;
@@ -40,8 +32,6 @@ export interface KeyProviderLike {
 }
 
 export class Encryptor {
-  private _cipher = new Cipher();
-  private _serializer = new MessageSerializer();
   private _compress: boolean;
   private _compressor: Compressor;
 
@@ -54,49 +44,33 @@ export class Encryptor {
     clearText: string,
     options?: { keyProvider?: KeyProviderLike; key?: string; deterministic?: boolean },
   ): string {
-    if (typeof clearText !== "string") {
-      throw new ForbiddenClass(`Can only encrypt strings, got ${typeof clearText}`);
-    }
+    this.validatePayloadType(clearText);
+    const keyProvider = options?.keyProvider ?? (this.defaultKeyProvider() as KeyProviderLike);
+    const encKeyObj = options?.key
+      ? { secret: options.key, publicTags: undefined }
+      : keyProvider?.encryptionKey();
+    const key = encKeyObj?.secret;
+    if (!key) throw new DecryptionError("No encryption key provided");
 
-    const encKeyObj = options?.keyProvider?.encryptionKey();
-    const key = options?.key ?? encKeyObj?.secret;
-    if (!key) {
-      throw new ConfigError("No encryption key provided");
-    }
-
-    // Pass string or raw compressed Buffer to cipher — mirrors Rails which feeds
-    // raw binary bytes from deflate directly into AES without base64 encoding.
     let cipherInput: string | Buffer = clearText;
     let compressed = false;
-    if (this._compress) {
-      const originalByteLength = Buffer.byteLength(clearText, "utf-8");
-      if (originalByteLength > THRESHOLD_TO_JUSTIFY_COMPRESSION) {
-        const deflated = this._compressor.deflate(clearText);
-        const compressedBuf = Buffer.isBuffer(deflated) ? deflated : Buffer.from(deflated);
-        if (compressedBuf.length < originalByteLength) {
-          cipherInput = compressedBuf;
-          compressed = true;
-        }
-      }
-    }
+    [cipherInput, compressed] = this.compressIfWorthIt(clearText);
 
-    const { payload, iv, authTag } = this._cipher.encrypt(cipherInput, key, {
+    const cipherObj = this.cipher();
+    const { payload, iv, authTag } = cipherObj.encrypt(cipherInput, key, {
       deterministic: options?.deterministic,
     });
 
     const message = new Message(payload);
     message.addHeaders({ iv, at: authTag });
-    if (compressed) {
-      message.addHeader("c", true);
-    }
-
+    if (compressed) message.addHeader("c", true);
     if (encKeyObj?.publicTags) {
       for (const [k, v] of Object.entries(encKeyObj.publicTags)) {
         message.addHeader(k, v);
       }
     }
 
-    return this._serializer.dump(message);
+    return this.serializeMessage(message);
   }
 
   decrypt(
@@ -107,14 +81,12 @@ export class Encryptor {
       throw new DecryptionError(`Can only decrypt strings, got ${typeof encryptedText}`);
     }
 
-    const message = this._serializer.load(encryptedText);
+    const message = this.deserializeMessage(encryptedText);
     const iv = message.headers.get("iv") as string;
     const authTag = message.headers.get("at") as string;
     const compressed = message.headers.get("c") === true;
 
-    if (!iv || !authTag) {
-      throw new DecryptionError("Missing IV or auth tag");
-    }
+    if (!iv || !authTag) throw new DecryptionError("Missing IV or auth tag");
 
     let keys: string[];
     if (options?.key) {
@@ -122,23 +94,18 @@ export class Encryptor {
     } else if (options?.keyProvider) {
       keys = options.keyProvider.decryptionKeys(message).map((k) => k.secret);
     } else {
-      throw new DecryptionError("No decryption key provided");
+      const kp = this.defaultKeyProvider() as KeyProviderLike | undefined;
+      if (!kp) throw new DecryptionError("No decryption key provided");
+      keys = kp.decryptionKeys(message).map((k) => k.secret);
     }
 
-    // cipher.decrypt returns raw bytes — inflate directly for compressed payloads,
-    // decode as UTF-8 for plain text. Mirrors Rails which passes raw bytes to/from cipher.
-    const decryptedBuf = this._cipher.decrypt(message.payload, keys, iv, authTag);
-
-    if (compressed) {
-      return this._compressor.inflate(decryptedBuf);
-    }
-
-    return decryptedBuf.toString("utf-8");
+    const decryptedBuf = this.cipher().decrypt(message.payload, keys, iv, authTag);
+    return this.uncompressIfNeeded(decryptedBuf, compressed);
   }
 
   isEncrypted(text: string): boolean {
     try {
-      this._serializer.load(text);
+      this.deserializeMessage(text);
       return true;
     } catch {
       return false;
@@ -146,7 +113,7 @@ export class Encryptor {
   }
 
   isBinary(): boolean {
-    return this._serializer.isBinary();
+    return this.serializer().isBinary();
   }
 
   get compressor(): Compressor {
@@ -156,91 +123,100 @@ export class Encryptor {
   isCompress(): boolean {
     return this._compress;
   }
-}
 
-/** @internal */
-function defaultKeyProvider(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#default_key_provider is not implemented",
-  );
-}
+  /** @internal */
+  private defaultKeyProvider(): unknown {
+    return Configurable.keyProvider;
+  }
 
-/** @internal */
-function validatePayloadType(clearText: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#validate_payload_type is not implemented",
-  );
-}
+  /** @internal */
+  private validatePayloadType(clearText: unknown): void {
+    if (typeof clearText !== "string") {
+      throw new ForbiddenClass(
+        `The encryptor can only encrypt string values (${typeof clearText})`,
+      );
+    }
+  }
 
-/** @internal */
-function cipher(): never {
-  throw new NotImplementedError("ActiveRecord::Encryption::Encryptor#cipher is not implemented");
-}
+  /** @internal */
+  private cipher(): Cipher {
+    return new Cipher();
+  }
 
-/** @internal */
-function buildEncryptedMessage(clearText: any, keyProvider?: any, cipherOptions?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#build_encrypted_message is not implemented",
-  );
-}
+  /** @internal */
+  private buildEncryptedMessage(
+    clearText: string,
+    keyProvider: KeyProviderLike,
+    cipherOptions: Record<string, unknown>,
+  ): Message {
+    const key = keyProvider.encryptionKey();
+    const [cipherInput, wasCompressed] = this.compressIfWorthIt(clearText);
+    const cipherObj = this.cipher();
+    const { payload, iv, authTag } = cipherObj.encrypt(cipherInput, key.secret, cipherOptions);
+    const message = new Message(payload);
+    message.addHeaders({ iv, at: authTag });
+    if (wasCompressed) message.addHeader("c", true);
+    if (key.publicTags) {
+      for (const [k, v] of Object.entries(key.publicTags)) {
+        message.addHeader(k, v);
+      }
+    }
+    return message;
+  }
 
-/** @internal */
-function serializeMessage(message: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#serialize_message is not implemented",
-  );
-}
+  /** @internal */
+  private serializeMessage(message: Message): string {
+    return this.serializer().dump(message);
+  }
 
-/** @internal */
-function deserializeMessage(message: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#deserialize_message is not implemented",
-  );
-}
+  /** @internal */
+  private deserializeMessage(encryptedText: string): Message {
+    return this.serializer().load(encryptedText);
+  }
 
-/** @internal */
-function serializer(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#serializer is not implemented",
-  );
-}
+  /** @internal */
+  private serializer(): MessageSerializer {
+    return new MessageSerializer();
+  }
 
-/** @internal */
-function compressIfWorthIt(string: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#compress_if_worth_it is not implemented",
-  );
-}
+  /** @internal */
+  private compressIfWorthIt(string: string): [string | Buffer, boolean] {
+    if (this._compress && Buffer.byteLength(string, "utf-8") > THRESHOLD_TO_JUSTIFY_COMPRESSION) {
+      const deflated = this._compressor.deflate(string);
+      const compressedBuf = Buffer.isBuffer(deflated) ? deflated : Buffer.from(deflated);
+      if (compressedBuf.length < Buffer.byteLength(string, "utf-8")) {
+        return [compressedBuf, true];
+      }
+    }
+    return [string, false];
+  }
 
-/** @internal */
-function compress(data: any): never {
-  throw new NotImplementedError("ActiveRecord::Encryption::Encryptor#compress is not implemented");
-}
+  /** @internal */
+  private compress(data: string): Buffer {
+    const result = this._compressor.deflate(data);
+    return Buffer.isBuffer(result) ? result : Buffer.from(result);
+  }
 
-/** @internal */
-function uncompressIfNeeded(data: any, compressed: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#uncompress_if_needed is not implemented",
-  );
-}
+  /** @internal */
+  private uncompressIfNeeded(data: Buffer, compressed: boolean): string {
+    if (compressed) {
+      return this.uncompress(data);
+    }
+    return data.toString("utf-8");
+  }
 
-/** @internal */
-function uncompress(data: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#uncompress is not implemented",
-  );
-}
+  /** @internal */
+  private uncompress(data: Buffer | Uint8Array): string {
+    return this._compressor.inflate(data);
+  }
 
-/** @internal */
-function forceEncodingIfNeeded(value: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#force_encoding_if_needed is not implemented",
-  );
-}
+  /** @internal */
+  private forceEncodingIfNeeded(value: string): string {
+    return value;
+  }
 
-/** @internal */
-function forcedEncodingForDeterministicEncryption(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Encryptor#forced_encoding_for_deterministic_encryption is not implemented",
-  );
+  /** @internal */
+  private forcedEncodingForDeterministicEncryption(): string {
+    return Configurable.config.forcedEncodingForDeterministicEncryption;
+  }
 }

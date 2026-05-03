@@ -26,12 +26,13 @@ export class HasManyThroughAssociation extends HasManyAssociation {
 
 /** @internal */
 function buildThroughRecord(assoc: HasManyThroughAssociation, record: Base): Base | null {
-  const throughName = assoc.reflection.options.through as string | undefined;
-  if (!throughName) return null;
-  const throughAssoc = (assoc.owner as any).association?.(throughName);
-  if (!throughAssoc) return null;
-  const attrs = buildSourceJoinAttributes(assoc, record);
-  return typeof throughAssoc.build === "function" ? throughAssoc.build(attrs) : null;
+  ensureMutable(assoc);
+  const proxy = throughAssociation(assoc) as {
+    build?: (attrs: Record<string, unknown>) => Base;
+  } | null;
+  if (!proxy) return null;
+  const attrs = constructJoinAttributes(assoc, record);
+  return typeof proxy.build === "function" ? proxy.build(attrs) : null;
 }
 
 /** @internal */
@@ -156,7 +157,7 @@ function throughRecordsFor(assoc: HasManyThroughAssociation, record: Base): Base
 
   // Use constructJoinAttributes to get the FK → PK map for this record,
   // then filter the through-association's in-memory target by those constraints.
-  const joinAttrs = buildSourceJoinAttributes(assoc, record);
+  const joinAttrs = constructJoinAttributes(assoc, record);
   const candidates: Base[] = Array.isArray(throughAssoc.target)
     ? throughAssoc.target
     : throughAssoc.target
@@ -192,40 +193,6 @@ function deleteThroughRecords(assoc: HasManyThroughAssociation, records: Base[])
     }
   }
   return Promise.resolve();
-}
-
-function buildSourceJoinAttributes(
-  assoc: { owner: Base; reflection: any },
-  record: Base,
-): Record<string, unknown> {
-  const refl = assoc.reflection as any;
-  const sourceRefl = refl.sourceReflection?.() as any;
-  if (!sourceRefl) return {};
-  const assocPk = sourceRefl.associationPrimaryKey?.(refl.klass) ?? sourceRefl.primaryKey ?? "id";
-  const pkArr: string[] = Array.isArray(assocPk) ? assocPk : [assocPk];
-  const compositeConstraints: string[] = refl.klass?.compositeQueryConstraintsList ?? [];
-
-  let joinAttributes: Record<string, unknown>;
-  if (
-    pkArr.length === compositeConstraints.length &&
-    pkArr.every((k: string, i: number) => k === compositeConstraints[i]) &&
-    !refl.options?.sourceType
-  ) {
-    joinAttributes = { [sourceRefl.name]: record };
-  } else {
-    const fk: string = sourceRefl.foreignKey ?? `${sourceRefl.name}_id`;
-    const pkValues =
-      pkArr.length === 1
-        ? ((record as any).readAttribute?.(pkArr[0]) ?? (record as any).id)
-        : pkArr.map((k: string) => (record as any).readAttribute?.(k));
-    joinAttributes = { [fk]: pkValues };
-  }
-
-  if (refl.options?.sourceType) {
-    const foreignType: string = sourceRefl.foreignType ?? `${sourceRefl.name}_type`;
-    joinAttributes[foreignType] = refl.options.sourceType;
-  }
-  return joinAttributes;
 }
 
 /**

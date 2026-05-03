@@ -2194,6 +2194,7 @@ export async function touchBelongsToParents(record: Base): Promise<void> {
 function initInternals(record: Base): void {
   record._associationInstances.clear();
   record._collectionProxies.clear();
+  record._preloadedAssociations.clear();
 }
 
 /**

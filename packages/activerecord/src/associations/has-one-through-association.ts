@@ -45,7 +45,8 @@ async function createThroughRecord(
   }
 
   if (record) {
-    const attrs = buildJoinAttributes(assoc, record);
+    ensureMutable(assoc);
+    const attrs = constructJoinAttributes(assoc, record);
 
     if (throughRecord) {
       if ((throughRecord as any).isNewRecord?.()) {
@@ -60,40 +61,6 @@ async function createThroughRecord(
     }
   }
   return record;
-}
-
-function buildJoinAttributes(
-  assoc: { owner: Base; reflection: any },
-  record: Base,
-): Record<string, unknown> {
-  const refl = assoc.reflection as any;
-  const sourceRefl = refl.sourceReflection?.() as any;
-  if (!sourceRefl) return {};
-  const assocPk = sourceRefl.associationPrimaryKey?.(refl.klass) ?? sourceRefl.primaryKey ?? "id";
-  const pkArr: string[] = Array.isArray(assocPk) ? assocPk : [assocPk];
-  const compositeConstraints: string[] = refl.klass?.compositeQueryConstraintsList ?? [];
-
-  let joinAttributes: Record<string, unknown>;
-  if (
-    pkArr.length === compositeConstraints.length &&
-    pkArr.every((k: string, i: number) => k === compositeConstraints[i]) &&
-    !refl.options?.sourceType
-  ) {
-    joinAttributes = { [sourceRefl.name]: record };
-  } else {
-    const fk: string = sourceRefl.foreignKey ?? `${sourceRefl.name}_id`;
-    const pkVal =
-      pkArr.length === 1
-        ? ((record as any).readAttribute?.(pkArr[0]) ?? (record as any).id)
-        : pkArr.map((k: string) => (record as any).readAttribute?.(k));
-    joinAttributes = { [fk]: pkVal };
-  }
-
-  if (refl.options?.sourceType) {
-    const foreignType: string = sourceRefl.foreignType ?? `${sourceRefl.name}_type`;
-    joinAttributes[foreignType] = refl.options.sourceType;
-  }
-  return joinAttributes;
 }
 
 /**

@@ -204,6 +204,7 @@ describe("confirmation options pass-through", () => {
     const u = new User({ title: "alice" });
     u._attributes.set("titleConfirmation", "bob");
     u.isValid();
+    expect(u.errors.count).toBeGreaterThan(0);
     expect(
       u.errors.details.find((d) => d.attribute === "titleConfirmation")?.options?.caseSensitive,
     ).toBeUndefined();

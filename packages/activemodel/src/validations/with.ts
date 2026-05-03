@@ -21,8 +21,9 @@ export class WithValidator extends EachValidator {
       );
     }
     // Mirrors with.rb:8-12: arity == 0 → call without arg, else with attr.
-    // JS divergence: rest-param functions ((...args) => {}) have Function.length 0
-    // and are treated as zero-arity; Ruby gives them arity -1 and passes the attr.
+    // JS divergence: rest-param ((...args) => {}) and default-param ((x = "") => {})
+    // functions both have Function.length 0 and are treated as zero-arity; Ruby
+    // gives them negative arity and Rails passes the attr. Documented in tests.
     if (method.length === 0) {
       method.call(record);
     } else {

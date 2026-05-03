@@ -305,10 +305,10 @@ describe("WithValidator arity dispatch", () => {
     expect(capturedArg).toBe("name");
   });
 
-  // JS Function.length excludes rest parameters ((...args) => {} has length 0),
-  // so rest-param methods are dispatched without the attribute — unlike Ruby where
-  // *args gives arity -1 and Rails passes the attribute. Documented divergence;
-  // detecting rest params requires Function.toString() parsing which is fragile.
+  // JS Function.length excludes rest and default parameters (both yield length 0),
+  // so such methods are dispatched without the attribute — unlike Ruby where
+  // *args or optional args give negative arity and Rails passes the attribute.
+  // Documented divergence; detecting these via Function.toString() is fragile.
   it("known divergence: rest-param method called without args (JS length 0 vs Ruby arity -1)", () => {
     const received: unknown[] = [];
     const record = {
@@ -320,5 +320,19 @@ describe("WithValidator arity dispatch", () => {
     validator.validateEach(record, "name", "value");
     // Function.length of a rest-param function is 0, so no arg is passed
     expect(received).toHaveLength(0);
+  });
+
+  it("known divergence: default-param method called without args (JS length 0 vs Ruby arity -1)", () => {
+    let capturedArg: unknown = "not-called";
+    const record = {
+      // eslint-disable-next-line @typescript-eslint/no-inferrable-types
+      myCheck(attr: string = "") {
+        capturedArg = attr;
+      },
+    };
+    const validator = new WithValidator({ attributes: ["name"], with: "myCheck" });
+    validator.validateEach(record, "name", "value");
+    // Function.length excludes default params, so length is 0 → called without arg
+    expect(capturedArg).toBe("");
   });
 });

@@ -220,6 +220,7 @@ describe("acceptance options pass-through", () => {
     }
     const t = new Terms({ terms: "no" });
     t.isValid();
+    expect(t.errors.count).toBeGreaterThan(0);
     expect(t.errors.details.find((d) => d.attribute === "terms")?.options?.accept).toBeUndefined();
   });
 });

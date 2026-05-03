@@ -1,77 +1,97 @@
-import { NotImplementedError } from "../errors.js";
-import { Message } from "./message.js";
-import { MessageSerializer } from "./message-serializer.js";
-
 /**
  * A message serializer that mirrors Rails'
  * ActiveRecord::Encryption::MessagePackMessageSerializer API but
- * currently delegates entirely to the JSON-based MessageSerializer.
- *
- * This implementation does not yet use MessagePack or any binary
- * serialization format; it exists as a compatibility layer so callers
- * can rely on the same interface as Rails while we remain JSON-only.
- *
- * TODO: Optionally integrate a real MessagePack library (e.g.
- * @msgpack/msgpack) in the future for compact binary serialization.
+ * delegates to the JSON-based MessageSerializer.
  *
  * Mirrors: ActiveRecord::Encryption::MessagePackMessageSerializer
  */
+
+import { Message } from "./message.js";
+import { Properties } from "./properties.js";
+import { DecryptionError, ForbiddenClass } from "./errors.js";
+
 export class MessagePackMessageSerializer {
-  private _fallback: MessageSerializer;
-
-  constructor() {
-    this._fallback = new MessageSerializer();
-  }
-
   dump(message: Message): string {
-    return this._fallback.dump(message);
+    if (!(message instanceof Message)) {
+      throw new ForbiddenClass(`Can only serialize Message instances, got ${typeof message}`);
+    }
+    return JSON.stringify(this.messageToHash(message));
   }
 
   load(serialized: string): Message {
-    return this._fallback.load(serialized);
+    if (typeof serialized !== "string") {
+      throw new TypeError(`Expected string, got ${typeof serialized}`);
+    }
+    let data: unknown;
+    try {
+      data = JSON.parse(serialized);
+    } catch {
+      throw new DecryptionError("Failed to load MessagePack message");
+    }
+    return this.hashToMessage(data, 1);
   }
 
-  // Rails returns true here because real MessagePack is binary.
-  // This implementation delegates to JSON, so false is correct for
-  // our current output format — the guard in EncryptedAttributeType
-  // that prevents binary data from being stored in text columns must
-  // not fire while we're producing JSON strings.
   isBinary(): boolean {
-    return this._fallback.isBinary();
+    return false;
   }
-}
 
-/** @internal */
-function messageToHash(message: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::MessagePackMessageSerializer#message_to_hash is not implemented",
-  );
-}
+  /** @internal */
+  private messageToHash(message: Message): Record<string, unknown> {
+    return {
+      p: message.payload,
+      h: this.headersToHash(message.headers),
+    };
+  }
 
-/** @internal */
-function headersToHash(headers: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::MessagePackMessageSerializer#headers_to_hash is not implemented",
-  );
-}
+  /** @internal */
+  private headersToHash(headers: Properties): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of headers.entries()) {
+      result[key] = value instanceof Message ? this.messageToHash(value) : value;
+    }
+    return result;
+  }
 
-/** @internal */
-function hashToMessage(data: any, level: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::MessagePackMessageSerializer#hash_to_message is not implemented",
-  );
-}
+  /** @internal */
+  private hashToMessage(data: unknown, level: number): Message {
+    this.validateMessageDataFormat(data, level);
+    const d = data as Record<string, unknown>;
+    const message = new Message(d["p"] as string | null);
+    const headers = this.parseProperties(d["h"] as Record<string, unknown> | null, level);
+    for (const [key, value] of headers.entries()) {
+      message.headers.set(key, value);
+    }
+    return message;
+  }
 
-/** @internal */
-function validateMessageDataFormat(data: any, level: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::MessagePackMessageSerializer#validate_message_data_format is not implemented",
-  );
-}
+  /** @internal */
+  private validateMessageDataFormat(data: unknown, level: number): void {
+    if (level > 2) {
+      throw new DecryptionError("More than one level of hash nesting in headers is not supported");
+    }
+    if (typeof data !== "object" || data === null || Array.isArray(data)) {
+      throw new DecryptionError("Invalid data format: hash without payload");
+    }
+    if (!("p" in (data as object))) {
+      throw new DecryptionError("Invalid data format: hash without payload");
+    }
+  }
 
-/** @internal */
-function parseProperties(headers: any, level: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::MessagePackMessageSerializer#parse_properties is not implemented",
-  );
+  /** @internal */
+  private parseProperties(
+    headers: Record<string, unknown> | null | undefined,
+    level: number,
+  ): Properties {
+    const properties = new Properties();
+    if (headers) {
+      for (const [key, value] of Object.entries(headers)) {
+        const decoded =
+          typeof value === "object" && value !== null && !Array.isArray(value)
+            ? this.hashToMessage(value, level + 1)
+            : value;
+        properties.set(key, decoded);
+      }
+    }
+    return properties;
+  }
 }

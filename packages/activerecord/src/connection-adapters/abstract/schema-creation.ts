@@ -131,19 +131,19 @@ export class SchemaCreation {
       parts.push(this.visitAddColumnDefinition(add));
     }
     for (const fk of o.foreignKeyAdds) {
-      parts.push(`ADD ${this.visitForeignKeyDefinition(fk)}`);
+      parts.push(visitAddForeignKey.call(this, fk));
     }
     for (const name of o.foreignKeyDrops) {
-      parts.push(`DROP CONSTRAINT ${this.adapter.quoteIdentifier(name)}`);
+      parts.push(this.visitDropConstraint(name));
     }
     for (const chk of o.checkConstraintAdds) {
-      parts.push(`ADD ${this.visitCheckConstraintDefinition(chk)}`);
+      parts.push(this.visitAddCheckConstraint(chk));
     }
     for (const name of o.checkConstraintDrops) {
-      parts.push(`DROP CONSTRAINT ${this.adapter.quoteIdentifier(name)}`);
+      parts.push(this.visitDropConstraint(name));
     }
     for (const name of o.constraintDrops) {
-      parts.push(`DROP CONSTRAINT ${this.adapter.quoteIdentifier(name)}`);
+      parts.push(this.visitDropConstraint(name));
     }
     for (const change of o.columnDefaultChanges) {
       const col = this.adapter.quoteIdentifier(change.columnName);

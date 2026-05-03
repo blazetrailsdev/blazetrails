@@ -9,8 +9,6 @@
 import type { SchemaSource, ColumnInfo } from "../../schema-dumper.js";
 import { SchemaDumper as BaseSchemaDumper } from "../../schema-dumper.js";
 
-const DEFAULT_DATETIME_PRECISION = 6;
-
 /** Column-shaped interface this dumper depends on. */
 interface Column extends ColumnInfo {
   bigint?: boolean;
@@ -101,7 +99,7 @@ export class SchemaDumper extends BaseSchemaDumper {
   protected schemaPrecision(column: Column): string | undefined {
     if (column.type === "datetime") {
       if (column.precision == null) return "nil";
-      if (column.precision === DEFAULT_DATETIME_PRECISION) return undefined;
+      if (column.precision === BaseSchemaDumper.DEFAULT_DATETIME_PRECISION) return undefined;
       return String(column.precision);
     }
     if (column.precision != null) return String(column.precision);

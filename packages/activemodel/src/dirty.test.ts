@@ -724,8 +724,27 @@ describe("numeric type.isChanged integration via dirty tracking", () => {
 
     const m = new Metric({ ratio: NaN });
     m.changesApplied();
-    m.writeAttribute("ratio", NaN);
+    // Write via the string "NaN" so valueBeforeTypeCast is a string — this
+    // exercises the fixed isEqualNan path (now compares against the cast value,
+    // not the raw string).
+    m.writeAttribute("ratio", "NaN");
     expect(m.changedAttributes).not.toContain("ratio");
     expect(m.changes).not.toHaveProperty("ratio");
+  });
+
+  it("float attribute NaN → non-NaN → NaN clears dirty state on revert", () => {
+    class Metric extends Model {
+      constructor(attrs: Record<string, unknown> = {}) {
+        super(attrs);
+      }
+    }
+    Metric.attribute("ratio", "float");
+
+    const m = new Metric({ ratio: NaN });
+    m.changesApplied();
+    m.writeAttribute("ratio", 1.0);
+    expect(m.changedAttributes).toContain("ratio");
+    m.writeAttribute("ratio", "NaN");
+    expect(m.changedAttributes).not.toContain("ratio");
   });
 });

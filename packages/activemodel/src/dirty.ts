@@ -40,6 +40,12 @@ function resolveValue(value: unknown): unknown {
   return AttributeSet.resolveSnapshotValue(value);
 }
 
+/** @internal */
+function nanSafeEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  return typeof a === "number" && typeof b === "number" && Number.isNaN(a) && Number.isNaN(b);
+}
+
 /**
  * Per-instance reset hook for dirty-tracking state. Mirrors Rails
  * `ActiveModel::Dirty#init_internals`
@@ -96,7 +102,7 @@ export class DirtyTracker {
   }
 
   attributeWillChange(name: string, from: unknown, to: unknown): void {
-    if (from === to) {
+    if (nanSafeEqual(from, to)) {
       this._changedAttributes.delete(name);
     } else {
       if (!this._originalHas.has(name)) {
@@ -104,7 +110,7 @@ export class DirtyTracker {
         this._changedAttributes.set(name, [undefined, to]);
       } else {
         const original = resolveValue(this._originalAttributes.get(name));
-        if (to === original) {
+        if (nanSafeEqual(to, original)) {
           this._changedAttributes.delete(name);
         } else {
           this._changedAttributes.set(name, [original, to]);

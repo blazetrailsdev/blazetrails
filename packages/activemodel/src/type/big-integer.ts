@@ -13,10 +13,11 @@ export class BigIntegerType extends IntegerType {
     if (typeof value === "string") {
       const trimmed = value.trim();
       if (trimmed === "") return null;
-      if (/^[+-]?\d+$/.test(trimmed)) {
-        // BigInt() rejects a leading "+"; strip it first.
-        return BigInt(trimmed.startsWith("+") ? trimmed.slice(1) : trimmed) as unknown as number;
-      }
+      // Mirror Ruby String#to_i: extract a leading signed-digit run (e.g. "123abc" → 123).
+      // BigInt() rejects a leading "+"; strip it first.
+      const lead = trimmed.match(/^([+-]?\d+)/)?.[1];
+      if (!lead) return null;
+      return BigInt(lead.startsWith("+") ? lead.slice(1) : lead) as unknown as number;
     }
     return super.castValue(value);
   }

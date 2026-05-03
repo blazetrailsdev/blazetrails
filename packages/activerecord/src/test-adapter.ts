@@ -99,6 +99,27 @@ function sqlType(typeName: string): string {
 }
 
 /**
+ * Resolve the SQL column type for a single attribute definition. Centralized
+ * so both bulk extraction (extractColumnsFromModels) and the recovery-path
+ * fallback (lookupDeclaredColumnType) apply the same `limit`/PK normalization.
+ *
+ * @internal
+ */
+function sqlTypeForAttribute(def: any, isPkCol: boolean): string {
+  const innerType = def?.type?.castType ?? def?.type;
+  const innerTypeName = innerType?.name;
+  let colType = sqlType(innerTypeName || "string");
+  const limit = def?.limit;
+  const isStringType = innerTypeName === "string" || innerTypeName === "text";
+  if (limit != null && isStringType && (colType === "TEXT" || colType === "VARCHAR(255)")) {
+    colType = `VARCHAR(${limit})`;
+  } else if (isMysql() && isPkCol && colType === "TEXT") {
+    colType = "VARCHAR(255)";
+  }
+  return colType;
+}
+
+/**
  * Register a model class for table creation. Called from Base.adapter setter.
  * We store the model class reference and extract attributes lazily in
  * processPendingModels(), because some tests call this.adapter = x
@@ -131,17 +152,7 @@ function extractColumnsFromModels(): void {
     if (attrs) {
       for (const [name, def] of attrs) {
         if (name === "id" && !isCpk && !isCustomPk) continue;
-        const innerType = (def.type as any)?.castType ?? def.type;
-        let colType = sqlType(innerType?.name || "string");
-        const limit = (def as any).limit;
-        const innerTypeName = innerType?.name;
-        const isStringType = innerTypeName === "string" || innerTypeName === "text";
-        if (limit != null && isStringType && (colType === "TEXT" || colType === "VARCHAR(255)")) {
-          colType = `VARCHAR(${limit})`;
-        } else if (isMysql() && pkCols.includes(name) && colType === "TEXT") {
-          colType = "VARCHAR(255)";
-        }
-        columns.set(name, colType);
+        columns.set(name, sqlTypeForAttribute(def, pkCols.includes(name)));
       }
     }
 
@@ -190,8 +201,11 @@ function lookupDeclaredColumnType(tableName: string, colName: string): string | 
     if (modelClass.tableName !== tableName) continue;
     const def = modelClass._attributeDefinitions?.get(colName);
     if (!def) continue;
-    const innerType = (def.type as any)?.castType ?? def.type;
-    return sqlType(innerType?.name || "string");
+    const pk = modelClass.primaryKey;
+    const isPkCol = Array.isArray(pk)
+      ? pk.includes(colName)
+      : typeof pk === "string" && pk === colName;
+    return sqlTypeForAttribute(def, isPkCol);
   }
   return undefined;
 }

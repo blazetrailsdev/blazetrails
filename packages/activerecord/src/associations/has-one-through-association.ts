@@ -30,7 +30,7 @@ async function createThroughRecord(
   record: Base | null,
   save: boolean,
 ): Promise<Base | null> {
-  ensureNotNestedThrough(assoc);
+  ensureNotNested(assoc);
 
   const throughName = assoc.reflection.options.through as string | undefined;
   if (!throughName) return null;
@@ -60,17 +60,6 @@ async function createThroughRecord(
     }
   }
   return record;
-}
-
-function ensureNotNestedThrough(assoc: { reflection: any; owner: Base }): void {
-  if (assoc.reflection.options.through) {
-    const throughRefl = (assoc.owner.constructor as any)._reflectOnAssociation?.(
-      assoc.reflection.options.through,
-    );
-    if (throughRefl?.options?.through) {
-      throw new Error(`Nested through associations are read-only.`);
-    }
-  }
 }
 
 function buildJoinAttributes(

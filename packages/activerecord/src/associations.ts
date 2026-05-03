@@ -2230,7 +2230,7 @@ function associationInstanceSet(record: Base, name: string, association: unknown
     def?.type ??
     (association as { reflection?: { type?: string } } | null)?.reflection?.type ??
     null;
-  if (kind === "hasMany" || kind === "hasAndBelongsToMany") {
+  if (kind === "hasMany" || kind === "hasAndBelongsToMany" || kind === "hasManyThrough") {
     record._collectionProxies.set(name, association);
   } else {
     record._associationInstances.set(name, association as AssociationInstance);

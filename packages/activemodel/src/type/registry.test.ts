@@ -42,6 +42,12 @@ describe("TypeRegistry", () => {
     expect(() => Types.typeRegistry.lookup("imaginary")).toThrow("Unknown type: imaginary");
   });
 
+  it("uuid, json, array are not registered in AM (PG-specific types live in AR's OID layer)", () => {
+    expect(() => Types.typeRegistry.lookup("uuid")).toThrow("Unknown type: uuid");
+    expect(() => Types.typeRegistry.lookup("json")).toThrow("Unknown type: json");
+    expect(() => Types.typeRegistry.lookup("array")).toThrow("Unknown type: array");
+  });
+
   it("a class can be registered for a symbol", () => {
     // Use a uniquely-scoped name — the type registry is a global singleton,
     // so generic names ("custom", "mytype") risk colliding as the test set

@@ -5,11 +5,9 @@
  * Rails: `class Jsonb < Type::Json`. Only overrides `type` to return :jsonb.
  */
 
-import { JsonType } from "@blazetrails/activemodel";
+import { Json } from "../../../type/json.js";
 
-export class Jsonb extends JsonType {
-  override readonly name: string = "jsonb";
-
+export class Jsonb extends Json {
   override type(): string {
     return "jsonb";
   }

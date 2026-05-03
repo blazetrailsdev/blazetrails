@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Model } from "../index.js";
+import { WithValidator } from "./with.js";
 
 describe("ValidatesWithTest", () => {
   it("validates_with with options", () => {
@@ -279,5 +280,26 @@ describe("ValidatesWithTest", () => {
     }
     expect(new Person({ name: "ab" }).isValid()).toBe(false);
     expect(new Person({ name: "abcde" }).isValid()).toBe(true);
+  });
+});
+
+describe("WithValidator arity dispatch", () => {
+  it("calls zero-arity method without arguments", () => {
+    const spy = vi.fn();
+    const record = { myCheck: spy };
+    const validator = new WithValidator({ attributes: ["name"], with: "myCheck" });
+    validator.validateEach(record, "name", "value");
+    expect(spy).toHaveBeenCalledWith();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls one-arity method with attribute name", () => {
+    const spy = vi.fn();
+    const record = { myCheck: spy };
+    const validator = new WithValidator({ attributes: ["name"], with: "myCheck" });
+    // Give the spy a declared parameter so Function.length === 1
+    Object.defineProperty(spy, "length", { value: 1 });
+    validator.validateEach(record, "name", "value");
+    expect(spy).toHaveBeenCalledWith("name");
   });
 });

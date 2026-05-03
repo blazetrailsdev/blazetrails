@@ -134,6 +134,34 @@ export class EachValidator extends Validator {
     throw new Error("Subclasses must implement validateEach(record, attribute, value)");
   }
 
+  /**
+   * Returns `this.options` minus universal validator control keys and any
+   * additional validator-specific reserved keys, for forwarding to
+   * `errors.add` as i18n interpolation variables.
+   *
+   * Mirrors the `options.except(*RESERVED_OPTIONS)` pattern used in Rails
+   * validators (e.g. acceptance.rb:31, confirmation.rb:19).
+   *
+   * @internal Rails-private helper.
+   */
+  filteredOptions(additionalReserved: string[] = []): Record<string, unknown> {
+    const reserved = new Set([
+      "if",
+      "unless",
+      "on",
+      "allowBlank",
+      "allowNil",
+      "strict",
+      "exceptOn",
+      ...additionalReserved,
+    ]);
+    const filtered: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(this.options)) {
+      if (!reserved.has(key)) filtered[key] = val;
+    }
+    return filtered;
+  }
+
   checkValidity(): void {
     // Override in subclasses to validate options
   }

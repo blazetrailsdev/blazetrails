@@ -25,4 +25,20 @@ describe("FloatTest", () => {
     const type = new Types.FloatType();
     expect(type.cast("not-a-number")).toBe(null);
   });
+
+  it("blank string casts to null via Helpers::Numeric", () => {
+    const type = new Types.FloatType();
+    expect(type.cast("")).toBeNull();
+    expect(type.cast("   ")).toBeNull();
+  });
+
+  it("serialize delegates to cast via Helpers::Numeric", () => {
+    const type = new Types.FloatType();
+    expect(type.serialize("3.14")).toBe(3.14);
+  });
+
+  it("isChanged returns false for two NaN values", () => {
+    const type = new Types.FloatType();
+    expect(type.isChanged(NaN, NaN, NaN)).toBe(false);
+  });
 });

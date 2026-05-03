@@ -41,10 +41,9 @@ describe("IntegerTest", () => {
   });
 
   it("casting booleans for database", () => {
-    // In Rails, true casts to 1 and false to 0
-    // In our implementation, parseInt("true") and parseInt("false") are NaN -> null
-    expect(type.cast(true)).toBeNull();
-    expect(type.cast(false)).toBeNull();
+    // Rails Helpers::Numeric#cast converts true → 1, false → 0 before castValue
+    expect(type.cast(true)).toBe(1);
+    expect(type.cast(false)).toBe(0);
   });
 
   it("casting duration", () => {
@@ -131,5 +130,32 @@ describe("IntegerTest", () => {
       const serialized = type.serialize(v);
       expect(serialized).toBe(cast);
     }
+  });
+
+  it("blank string casts to null via Helpers::Numeric", () => {
+    expect(type.cast("")).toBeNull();
+    expect(type.cast("   ")).toBeNull();
+  });
+
+  it("serialize casts first via mixin — serialize(10.5) returns 10", () => {
+    expect(type.serialize(10.5)).toBe(10);
+  });
+
+  it("isChanged returns true for number-to-non-number — number_to_non_number? forces change", () => {
+    // Old value 0, new raw "wibble" casts to null in Trails (0 in Ruby): still flagged changed
+    expect(type.isChanged(0, null, "wibble")).toBe(true);
+  });
+
+  it("AR integration: setting integer attribute to non-numeric string marks changed, restoring original clears it", () => {
+    class MyModel extends Model {
+      static {
+        this.attribute("score", "integer");
+      }
+    }
+    const m = new MyModel({ score: 10 });
+    m.writeAttribute("score", "abc");
+    expect(m.attributeChanged("score")).toBe(true);
+    m.writeAttribute("score", 10);
+    expect(m.attributeChanged("score")).toBe(false);
   });
 });

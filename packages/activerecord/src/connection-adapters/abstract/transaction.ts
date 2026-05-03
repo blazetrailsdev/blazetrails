@@ -577,7 +577,7 @@ export class Transaction {
   }
 
   /** @internal */
-  uniqueRecords(recs: unknown[]): unknown[] {
+  private uniqueRecords(recs: unknown[]): unknown[] {
     const seen = new Set<unknown>();
     const result: unknown[] = [];
     for (const record of recs) {
@@ -590,7 +590,7 @@ export class Transaction {
   }
 
   /** @internal */
-  runActionOnRecords(
+  private runActionOnRecords(
     records: unknown[],
     instancesToRunCallbacksOn: Map<unknown, unknown>,
     action: (record: unknown, shouldRunCallbacks: boolean) => void,
@@ -603,7 +603,7 @@ export class Transaction {
   }
 
   /** @internal */
-  prepareInstancesToRunCallbacksOn(records: unknown[]): Map<unknown, unknown> {
+  private prepareInstancesToRunCallbacksOn(records: unknown[]): Map<unknown, unknown> {
     const candidates = new Map<unknown, unknown>();
     for (const record of records) {
       if (
@@ -996,7 +996,7 @@ export class TransactionManager {
    *     @connection.clear_cache!
    */
   /** @internal */
-  afterFailureActions(transaction: unknown, error: unknown): void {
+  private afterFailureActions(transaction: unknown, error: unknown): void {
     if (!(transaction instanceof RealTransaction)) return;
     if (!(error instanceof PreparedStatementCacheExpired)) return;
     this._connection.clearCacheBang?.();

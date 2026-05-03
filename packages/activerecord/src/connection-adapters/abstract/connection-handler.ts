@@ -243,17 +243,17 @@ export class ConnectionHandler {
   }
 
   /** @internal */
-  connectionNameToPoolManager(): Map<string, PoolManager> {
+  private connectionNameToPoolManager(): Map<string, PoolManager> {
     return this._connectionNameToPoolManager;
   }
 
   /** @internal */
-  getPoolManager(connectionName: string): PoolManager | undefined {
+  private getPoolManager(connectionName: string): PoolManager | undefined {
     return this._connectionNameToPoolManager.get(connectionName);
   }
 
   /** @internal */
-  setPoolManager(connectionName: string): PoolManager {
+  private setPoolManager(connectionName: string): PoolManager {
     let manager = this._connectionNameToPoolManager.get(connectionName);
     if (!manager) {
       manager = new PoolManager();
@@ -263,12 +263,16 @@ export class ConnectionHandler {
   }
 
   /** @internal */
-  poolManagers(): PoolManager[] {
+  private poolManagers(): PoolManager[] {
     return [...this._connectionNameToPoolManager.values()];
   }
 
   /** @internal */
-  disconnectPoolFromPoolManager(poolManager: PoolManager, role: string, shard: string): void {
+  private disconnectPoolFromPoolManager(
+    poolManager: PoolManager,
+    role: string,
+    shard: string,
+  ): void {
     const poolConfig = poolManager.removePoolConfig(role, shard);
     if (poolConfig) {
       poolConfig.disconnect();
@@ -276,7 +280,7 @@ export class ConnectionHandler {
   }
 
   /** @internal */
-  resolvePoolConfig(
+  private resolvePoolConfig(
     config: DatabaseConfig | Record<string, unknown>,
     connectionName: string,
     role: string,

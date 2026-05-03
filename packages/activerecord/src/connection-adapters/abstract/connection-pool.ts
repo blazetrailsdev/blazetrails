@@ -177,6 +177,10 @@ export class LeaseRegistry {
     return lease;
   }
 
+  peek(context: string): Lease | undefined {
+    return this._map.get(context);
+  }
+
   clear(): void {
     this._map.clear();
   }
@@ -1149,7 +1153,7 @@ function removeConnectionFromThreadCache(
   ownerThread?: string | number,
 ): void {
   const owner = ownerThread ?? (conn as unknown as { owner?: string | number }).owner;
-  if (owner != null) pool._leases?.get(String(owner))?.clear(conn);
+  if (owner != null) pool._leases?.peek(String(owner))?.clear(conn);
 }
 
 /** @internal */
@@ -1178,6 +1182,7 @@ function tryToCheckoutNewConnection(pool: Pool): DatabaseAdapter | null {
   }
   const conn = checkoutNewConnection(pool);
   adoptConnection(pool, conn);
+  pool._checkedOut.add(conn);
   (conn as unknown as PoolManagedConnection).lease?.();
   return conn;
 }

@@ -1,6 +1,6 @@
 import { NotImplementedError } from "../../errors.js";
 import { Notifications } from "@blazetrails/activesupport";
-import type { DatabaseStatementsHost } from "./database-statements.js";
+import { typeCastedBinds, type DatabaseStatementsHost } from "./database-statements.js";
 
 const DEFAULT_MAX_SIZE = 100;
 
@@ -405,6 +405,7 @@ function cacheNotificationInfo(
   return {
     sql,
     binds,
+    type_casted_binds: typeCastedBinds(binds),
     name: name ?? "SQL",
     connection: this,
     cached: true,

@@ -281,6 +281,7 @@ export class DirtyTracker {
     name: string,
   ): void {
     this._changedAttributes.delete(name);
+    this._forcedNames.delete(name);
     // Fast path: avoid snapshotting every attribute when only one baseline
     // needs rebinding. AttributeSet exposes has/fetchValue per-attribute;
     // fall back to the full snapshot for plain Maps / other shapes.
@@ -326,6 +327,7 @@ export class DirtyTracker {
       this._restoreOne(attributes, name);
     }
     this._changedAttributes.clear();
+    this._forcedNames.clear();
   }
 
   /**

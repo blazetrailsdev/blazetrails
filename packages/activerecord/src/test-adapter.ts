@@ -728,9 +728,12 @@ class SchemaAdapter implements DatabaseAdapter {
         );
       }
     }
-    // table.column references
+    // table.column references — only refs qualified by the missing table
+    // itself contribute columns. Otherwise multi-table SQL (joins/subqueries)
+    // would leak columns from other tables into this CREATE.
     const colMatches = sql.matchAll(/["`](\w+)["`]\.\s*["`](\w+)["`]/g);
     for (const m of colMatches) {
+      if (m[1] !== tableName) continue;
       if (m[2] === "id" || m[2] === "*") continue;
       cols.set(
         m[2],

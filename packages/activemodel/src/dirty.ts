@@ -102,7 +102,7 @@ export class DirtyTracker {
   }
 
   attributeWillChange(name: string, from: unknown, to: unknown): void {
-    if (nanSafeEqual(from, to)) {
+    if (from === to) {
       this._changedAttributes.delete(name);
     } else {
       if (!this._originalHas.has(name)) {
@@ -110,6 +110,7 @@ export class DirtyTracker {
         this._changedAttributes.set(name, [undefined, to]);
       } else {
         const original = resolveValue(this._originalAttributes.get(name));
+        // nanSafeEqual so NaN → 1 → NaN correctly reverts to the original NaN.
         if (nanSafeEqual(to, original)) {
           this._changedAttributes.delete(name);
         } else {
@@ -144,11 +145,6 @@ export class DirtyTracker {
       cloned = currentValue;
     }
     this._changedAttributes.set(name, [cloned, cloned]);
-  }
-
-  /** @internal */
-  clearChange(name: string): void {
-    this._changedAttributes.delete(name);
   }
 
   get changed(): boolean {

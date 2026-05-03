@@ -473,6 +473,11 @@ it("clearReloadableConnections only disconnects reloadable adapters", () => {
   expect(spy2).not.toHaveBeenCalled();
   expect(pool.connections).toContain(c2);
   expect(pool.connections).not.toContain(c1);
+  // Survivor must not stay stuck in _checkedOut — it should be reusable.
+  expect(pool.stat().busy).toBe(0);
+  const reused = pool.checkout();
+  expect(reused).toBe(c2);
+  pool.checkin(reused);
 });
 
 it.skip("pool sets connection visitor", () => {

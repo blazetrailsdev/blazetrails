@@ -708,9 +708,19 @@ export class ConnectionPool implements ReapablePool {
 
   clearReloadableConnections(raiseOnAcquisitionTimeout: boolean = true): void {
     withExclusivelyAcquiredAllConnections(this, raiseOnAcquisitionTimeout, () => {
+      const ctx = String(executionContextId());
       for (const conn of this._connections ?? []) {
+        // Mirrors Rails: `if conn.in_use? then conn.steal!; checkin conn`.
+        // The exclusive acquisition above leased every conn to us; release
+        // them now so survivors are eligible to re-enter _available via
+        // withNewConnectionsBlocked's reseed.
+        if (this._checkedOut.has(conn)) {
+          this._checkedOut.delete(conn);
+          this._leases?.peek(ctx)?.clear(conn);
+        }
         if ((conn as unknown as { requiresReloading?: () => boolean }).requiresReloading?.()) {
           (conn as unknown as { disconnectBang?: () => void }).disconnectBang?.();
+          this._lastCheckinAt.delete(conn);
         }
       }
       if (this._connections) {

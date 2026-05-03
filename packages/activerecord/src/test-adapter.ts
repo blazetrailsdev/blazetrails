@@ -50,6 +50,13 @@ const _createdColumns = new Map<string, Set<string>>();
 // Populated when Base.adapter is set. Consumed before first DB operation.
 const _pendingModels = new Map<string, Map<string, string>>();
 
+// Long-lived mirror of every declared column we've ever seen, keyed by
+// table → column → sqlType. Unlike `_pendingModels` (drained in setup) and
+// `_registeredModelClasses` (cleared in extractColumnsFromModels), this map
+// persists across cleanup so the recovery path can look up the model's
+// declared type long after the model finished registering.
+const _declaredColumns = new Map<string, Map<string, string>>();
+
 // Tables with composite primary keys: table → string[] of PK columns.
 const _pendingCpk = new Map<string, string[]>();
 
@@ -150,6 +157,13 @@ function extractColumnsFromModels(): void {
     } else {
       _pendingModels.set(tableName, columns);
     }
+
+    let declared = _declaredColumns.get(tableName);
+    if (!declared) {
+      declared = new Map();
+      _declaredColumns.set(tableName, declared);
+    }
+    for (const [col, type] of columns) declared.set(col, type);
   }
   _registeredModelClasses.clear();
 }
@@ -163,8 +177,14 @@ function extractColumnsFromModels(): void {
  * @internal
  */
 function lookupDeclaredColumnType(tableName: string, colName: string): string | undefined {
+  // Check the long-lived declared-column registry first — it survives the
+  // setup drain that empties _pendingModels and _registeredModelClasses.
+  const declared = _declaredColumns.get(tableName)?.get(colName);
+  if (declared) return declared;
   const pending = _pendingModels.get(tableName)?.get(colName);
   if (pending) return pending;
+  // Models registered but not yet extracted (e.g. recovery firing
+  // between registerModel and the next setup pass).
   for (const modelClass of _registeredModelClasses) {
     if (modelClass.abstractClass) continue;
     if (modelClass.tableName !== tableName) continue;

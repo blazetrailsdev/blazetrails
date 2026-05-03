@@ -144,7 +144,7 @@ export class EachValidator extends Validator {
    *
    * @internal Rails-private helper.
    */
-  filteredOptions(additionalReserved: string[] = []): Record<string, unknown> {
+  filteredErrorOptions(additionalReserved: string[] = []): Record<string, unknown> {
     const reserved = new Set([
       "if",
       "unless",

@@ -22,7 +22,7 @@ export class ConfirmationValidator extends EachValidator {
         ? modelClass.humanAttributeName(attribute)
         : humanize(attribute);
       record.errors.add(confirmationAttr, "confirmation", {
-        ...this.filteredOptions(["caseSensitive"]),
+        ...this.filteredErrorOptions(["caseSensitive"]),
         attribute: humanAttr,
       });
     }

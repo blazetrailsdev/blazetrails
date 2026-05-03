@@ -294,12 +294,14 @@ describe("WithValidator arity dispatch", () => {
   });
 
   it("calls one-arity method with attribute name", () => {
-    const spy = vi.fn();
-    const record = { myCheck: spy };
+    let capturedArg: unknown;
+    const record = {
+      myCheck(attr: string) {
+        capturedArg = attr;
+      },
+    };
     const validator = new WithValidator({ attributes: ["name"], with: "myCheck" });
-    // Give the spy a declared parameter so Function.length === 1
-    Object.defineProperty(spy, "length", { value: 1 });
     validator.validateEach(record, "name", "value");
-    expect(spy).toHaveBeenCalledWith("name");
+    expect(capturedArg).toBe("name");
   });
 });

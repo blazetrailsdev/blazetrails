@@ -1297,13 +1297,23 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   // Mirrors Rails to_sql.rb: when ESCAPE is set, Rails calls `visit
-  // o.escape, collector`. `escape` is wrapped to a Node in the
+  // o.escape, collector`. The escape is wrapped to a Node in the
   // Matches/DoesNotMatch constructor (matches.rb does the same via
-  // Nodes.build_quoted), so we visit unconditionally.
+  // Nodes.build_quoted), normally a Quoted/Casted. Rails' visit_Arel_
+  // Nodes_Quoted/Casted always renders inline via `quote(value_for_database)`
+  // (to_sql.rb:87-90) — never as a bind placeholder. Trails' generic
+  // Casted/Quoted visitor routes through `add_bind` under
+  // `_extractBinds`; the ESCAPE field is meant to always be inlined,
+  // so render literally here.
   protected appendEscape(escape: Node | null): void {
     if (escape == null) return;
     this.collector.append(" ESCAPE ");
-    this.visit(escape);
+    if (escape instanceof Nodes.Quoted || (escape as Nodes.Casted).valueForDatabase !== undefined) {
+      const v = (escape as Nodes.Quoted | Nodes.Casted).valueForDatabase();
+      this.collector.append(this.quote(v));
+    } else {
+      this.visit(escape);
+    }
   }
 
   // -- NullsFirst / NullsLast --

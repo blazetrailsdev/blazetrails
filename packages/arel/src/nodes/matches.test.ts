@@ -23,6 +23,18 @@ describe("MatchesTest", () => {
     });
   });
 
+  describe("ESCAPE under bind extraction (compileWithBinds)", () => {
+    it("inlines a string escape literal even in bind-extraction mode", async () => {
+      const { Visitors } = await import("../index.js");
+      const node = new Nodes.Matches(users.get("name"), "x%", "!");
+      const visitor = new Visitors.ToSql();
+      const [sql] = visitor.compileWithBinds(node);
+      // ESCAPE value must be inlined ('!'), not turned into a bind placeholder.
+      expect(sql).toContain("ESCAPE '!'");
+      expect(sql).not.toContain("ESCAPE ?");
+    });
+  });
+
   describe("DoesNotMatch", () => {
     it("inherits from Matches", () => {
       const node = new Nodes.DoesNotMatch(users.get("name"), "x%", "!");

@@ -14,7 +14,7 @@ export class Matches extends Binary {
   constructor(
     left: NodeOrValue,
     right: NodeOrValue,
-    escape: unknown = null,
+    escape: string | Node | null = null,
     caseSensitive = false,
   ) {
     super(left, right);

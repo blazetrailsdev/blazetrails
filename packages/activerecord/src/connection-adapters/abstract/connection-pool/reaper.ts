@@ -124,7 +124,8 @@ export class Reaper {
  *
  * @internal
  */
-function spawnThread(frequency: number): ReturnType<typeof setInterval> {
+function spawnThread(frequency: number): ReturnType<typeof setInterval> | null {
+  if (!frequency || frequency <= 0 || !Number.isFinite(frequency)) return null;
   return (
     Reaper as unknown as { _spawnTimer: (f: number) => ReturnType<typeof setInterval> }
   )._spawnTimer(frequency);

@@ -1017,9 +1017,25 @@ function attemptToCheckoutAllExistingConnections(
   let release = false;
   try {
     for (const conn of conns) {
-      if (!pool._checkedOut.has(conn)) {
-        const acquired = checkoutForExclusiveAccess(pool, pool.checkoutTimeout);
-        if (acquired) newlyCheckedOut.push(acquired);
+      if (pool._checkedOut.has(conn)) continue;
+      try {
+        if (pool._available?.remove?.(conn) === false) {
+          // Not idle — fall back to a generic checkout to surface a timeout.
+          const acquired = checkoutForExclusiveAccess(pool, pool.checkoutTimeout);
+          if (acquired) newlyCheckedOut.push(acquired);
+          continue;
+        }
+        pool._checkedOut.add(conn);
+        (conn as unknown as PoolManagedConnection).lease?.();
+        newlyCheckedOut.push(conn);
+      } catch (innerErr) {
+        if (innerErr instanceof ConnectionTimeoutError) {
+          throw new ExclusiveConnectionTimeoutError(
+            `could not obtain ownership of all database connections in ${pool.checkoutTimeout} seconds`,
+            { connectionPool: pool },
+          );
+        }
+        throw innerErr;
       }
     }
   } catch (err) {
@@ -1105,7 +1121,14 @@ function withNewConnectionsBlocked<R>(pool: Pool, block: () => R): R {
  *
  * @internal
  */
-function acquireConnection(pool: Pool, checkoutTimeout: number): DatabaseAdapter {
+function acquireConnection(
+  pool: Pool,
+  checkoutTimeout: number,
+): DatabaseAdapter | Promise<DatabaseAdapter> {
+  const tagPool = (err: unknown) => {
+    if (err instanceof ConnectionTimeoutError) err.setPool(pool);
+    return err;
+  };
   try {
     let conn = pool._available?.poll() as DatabaseAdapter | undefined;
     if (conn) return conn;
@@ -1118,12 +1141,9 @@ function acquireConnection(pool: Pool, checkoutTimeout: number): DatabaseAdapter
     if (conn) return conn;
     const result = pool._available?.poll(checkoutTimeout);
     if (result instanceof Promise) {
-      // Trails' acquireConnection mirrors Rails' synchronous shape; async
-      // waits go through checkoutAsync / withConnection paths instead.
-      throw new ConnectionTimeoutError(
-        "Connection pool exhausted; use checkoutAsync for non-blocking waits",
-        { connectionPool: pool },
-      );
+      return result.catch((err: unknown) => {
+        throw tagPool(err);
+      });
     }
     if (result == null) {
       throw new ConnectionTimeoutError(
@@ -1133,8 +1153,7 @@ function acquireConnection(pool: Pool, checkoutTimeout: number): DatabaseAdapter
     }
     return result;
   } catch (err) {
-    if (err instanceof ConnectionTimeoutError) err.setPool(pool);
-    throw err;
+    throw tagPool(err);
   }
 }
 
@@ -1152,8 +1171,8 @@ function removeConnectionFromThreadCache(
   conn: DatabaseAdapter,
   ownerThread?: string | number,
 ): void {
-  const owner = ownerThread ?? (conn as unknown as { owner?: string | number }).owner;
-  if (owner != null) pool._leases?.peek(String(owner))?.clear(conn);
+  const owner = ownerThread ?? executionContextId();
+  pool._leases?.peek(String(owner))?.clear(conn);
 }
 
 /** @internal */
@@ -1197,7 +1216,12 @@ function tryToCheckoutNewConnection(pool: Pool): DatabaseAdapter | null {
  * @internal
  */
 function adoptConnection(pool: Pool, conn: DatabaseAdapter): void {
-  (conn as unknown as { pool?: ConnectionPool }).pool = pool;
+  // Only AbstractAdapter has a `pool` slot reserved for this back-reference;
+  // concrete driver adapters use `pool` for their own driver pool. Mirror the
+  // gate already used by ConnectionPool#newConnection.
+  if (conn instanceof AbstractAdapter) {
+    (conn as unknown as { pool?: ConnectionPool }).pool = pool;
+  }
   if (pool._connections && !pool._connections.includes(conn)) {
     pool._connections.push(conn);
   }

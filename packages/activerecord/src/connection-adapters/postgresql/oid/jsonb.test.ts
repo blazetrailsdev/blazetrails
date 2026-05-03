@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import { Jsonb } from "./jsonb.js";
 
 describe("PostgreSQL::OID::Jsonb", () => {
-  it("type() returns jsonb", () => {
-    expect(new Jsonb().type()).toBe("jsonb");
+  it("type() and name both return jsonb", () => {
+    const t = new Jsonb();
+    expect(t.type()).toBe("jsonb");
+    expect(t.name).toBe("jsonb");
   });
 
   it("cast parses JSON strings", () => {

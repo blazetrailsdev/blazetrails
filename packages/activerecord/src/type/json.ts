@@ -6,7 +6,7 @@ import { ActiveSupportJSON } from "@blazetrails/activesupport";
 import { StringKeyedHashAccessor } from "../store.js";
 
 export class Json extends ValueType<unknown> {
-  readonly name = "json";
+  readonly name: string = "json";
 
   /**
    * Mirrors: ActiveRecord::Type::Json#type

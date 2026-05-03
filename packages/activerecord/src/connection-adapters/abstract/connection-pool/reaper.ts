@@ -12,7 +12,6 @@
  * static maps and `setInterval`, using WeakRef to avoid preventing pool GC.
  */
 
-import { NotImplementedError } from "../../../errors.js";
 export interface ReapablePool {
   reap?(): void;
   flush?(): void;
@@ -115,9 +114,18 @@ export class Reaper {
   }
 }
 
-/** @internal */
-function spawnThread(frequency: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::ConnectionPool::Reaper#spawn_thread is not implemented",
-  );
+/**
+ * Spawns the per-frequency reaper "thread". Rails creates a real thread
+ * that loops on `sleep frequency; reap; flush; ...`; the JS analogue is a
+ * `setInterval`-driven scan of registered weak-ref pools, set up by
+ * `Reaper._spawnTimer`. Returns the underlying timer handle.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::Reaper.spawn_thread
+ *
+ * @internal
+ */
+function spawnThread(frequency: number): ReturnType<typeof setInterval> {
+  return (
+    Reaper as unknown as { _spawnTimer: (f: number) => ReturnType<typeof setInterval> }
+  )._spawnTimer(frequency);
 }

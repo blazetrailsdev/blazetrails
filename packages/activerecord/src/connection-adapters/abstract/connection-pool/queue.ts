@@ -345,11 +345,18 @@ export class ConnectionLeasingQueue extends Queue {
 // Rails: `include BiasableQueue` in ConnectionLeasingQueue
 include(ConnectionLeasingQueue, BiasableQueue);
 
-/** @internal */
-function synchronize(block?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#synchronize is not implemented",
-  );
+/**
+ * Runs `block` under the queue's monitor. JS is single-threaded so the
+ * critical section is implicit — invoking the block synchronously preserves
+ * Rails' `@lock.synchronize(&block)` semantics for callers that need an
+ * `enqueue`-or-`signal` window.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#synchronize
+ *
+ * @internal
+ */
+function synchronize<R>(_queue: unknown, block: () => R): R {
+  return block();
 }
 
 /** @internal */

@@ -698,3 +698,34 @@ describe("hasChangesToSave", () => {
     expect(u.hasChangesToSave).toBe(true);
   });
 });
+
+describe("numeric type.isChanged integration via dirty tracking", () => {
+  it("integer attribute set to non-numeric string still appears in changes — number_to_non_number? path", () => {
+    class Item extends Model {
+      constructor(attrs: Record<string, unknown> = {}) {
+        super(attrs);
+      }
+    }
+    Item.attribute("count", "integer");
+
+    const item = new Item({ count: 10 });
+    item.changesApplied();
+    item.writeAttribute("count", "abc");
+    expect(item.changedAttributes).toContain("count");
+  });
+
+  it("float attribute NaN-to-NaN does NOT appear in changes — equal_nan? exemption", () => {
+    class Metric extends Model {
+      constructor(attrs: Record<string, unknown> = {}) {
+        super(attrs);
+      }
+    }
+    Metric.attribute("ratio", "float");
+
+    const m = new Metric({ ratio: NaN });
+    m.changesApplied();
+    m.writeAttribute("ratio", NaN);
+    expect(m.changedAttributes).not.toContain("ratio");
+    expect(m.changes).not.toHaveProperty("ratio");
+  });
+});

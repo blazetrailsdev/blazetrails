@@ -140,6 +140,11 @@ export class DirtyTracker {
     this._changedAttributes.set(name, [cloned, cloned]);
   }
 
+  /** @internal */
+  clearChange(name: string): void {
+    this._changedAttributes.delete(name);
+  }
+
   get changed(): boolean {
     return this._changedAttributes.size > 0;
   }

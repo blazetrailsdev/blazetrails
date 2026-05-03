@@ -194,6 +194,24 @@ describe("ForcedMutationTracker", () => {
   });
 });
 
+describe("forceChange and type.isChanged independence", () => {
+  it("forceChange marks attribute changed even when type.isChanged returns false — NaN-to-NaN case", () => {
+    const floatType = typeRegistry.lookup("float");
+    const attrs = new Map<string, Attribute>();
+    attrs.set("ratio", Attribute.fromUserWithValue("ratio", NaN, NaN, floatType));
+    const set = new AttributeSet(attrs);
+    const tracker = new AttributeMutationTracker(set);
+
+    // NaN-to-NaN: type.isChanged returns false — not dirty by type semantics
+    set.writeFromUser("ratio", NaN);
+    expect(tracker.changedAttributeNames()).not.toContain("ratio");
+
+    // forceChange overrides type — must appear as changed regardless
+    tracker.forceChange("ratio");
+    expect(tracker.changedAttributeNames()).toContain("ratio");
+  });
+});
+
 describe("NullMutationTracker", () => {
   it("always reports no changes", () => {
     const tracker = new NullMutationTracker();

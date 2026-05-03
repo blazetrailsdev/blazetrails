@@ -165,3 +165,21 @@ function difference(_assoc: HasManyAssociation, a: Base[], b: Base[]): Base[] {
 function intersection(_assoc: HasManyAssociation, a: Base[], b: Base[]): Base[] {
   return a.filter((r) => b.includes(r));
 }
+
+/**
+ * Build the attribute hash that nullifies the owner-side foreign key (and
+ * polymorphic type column, when applicable) on dependent records — used by
+ * `dependent: :nullify` bulk updates to drop the FK without destroying rows.
+ *
+ * Mirrors: ActiveRecord::Associations::ForeignAssociation#nullified_owner_attributes
+ *
+ * @internal
+ */
+function nullifiedOwnerAttributes(assoc: HasManyAssociation): Record<string, null> {
+  const refl = assoc.reflection as unknown as { foreignKey: string | string[]; type?: string };
+  const attrs: Record<string, null> = {};
+  const fks = Array.isArray(refl.foreignKey) ? refl.foreignKey : [refl.foreignKey];
+  for (const fk of fks) attrs[fk] = null;
+  if (refl.type) attrs[refl.type] = null;
+  return attrs;
+}

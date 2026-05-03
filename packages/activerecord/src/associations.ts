@@ -49,12 +49,7 @@ export async function initializeAssociations(): Promise<void> {
     import("./association-relation.js"),
   ]);
 }
-import {
-  StrictLoadingViolationError,
-  ConfigurationError,
-  Rollback,
-  NotImplementedError,
-} from "./errors.js";
+import { StrictLoadingViolationError, ConfigurationError, Rollback } from "./errors.js";
 import {
   AssociationNotFoundError,
   DeleteRestrictionError,
@@ -64,6 +59,7 @@ import {
 } from "./associations/errors.js";
 import { ForeignAssociation } from "./associations/foreign-association.js";
 import { AssociationScope } from "./associations/association-scope.js";
+import type { Association as AssociationInstance } from "./associations/association.js";
 import { validateThroughReflection } from "./associations/validate-through-reflection.js";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { getInheritanceColumn, findStiClass } from "./inheritance.js";
@@ -2184,21 +2180,51 @@ export async function touchBelongsToParents(record: Base): Promise<void> {
   }
 }
 
-/** @internal */
-function initInternals(): never {
-  throw new NotImplementedError("ActiveRecord::Associations#init_internals is not implemented");
+/**
+ * Per-instance association-cache reset hook. Rails initializes
+ * `@association_cache = {}` here; our equivalents (`_associationInstances`
+ * and `_collectionProxies`) are pre-allocated by the `Base` class fields,
+ * so this only needs to clear them when called on an existing record
+ * (e.g. from `initialize_dup`).
+ *
+ * Mirrors: ActiveRecord::Associations#init_internals
+ *
+ * @internal
+ */
+function initInternals(record: Base): void {
+  record._associationInstances.clear();
+  record._collectionProxies.clear();
 }
 
-/** @internal */
-function associationInstanceGet(name: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Associations#association_instance_get is not implemented",
-  );
+/**
+ * Returns the cached Association wrapper for `name`, or `null` if none has
+ * been built yet. Trails' equivalent of Rails' `@association_cache` is split
+ * across two maps on the record: `_associationInstances` for singular
+ * (belongsTo/hasOne) and `_collectionProxies` for collection
+ * (hasMany/habtm) wrappers — check both.
+ *
+ * Mirrors: ActiveRecord::Associations#association_instance_get
+ *
+ * @internal
+ */
+function associationInstanceGet(record: Base, name: string): unknown {
+  return record._associationInstances.get(name) ?? record._collectionProxies.get(name) ?? null;
 }
 
-/** @internal */
-function associationInstanceSet(name: any, association: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Associations#association_instance_set is not implemented",
-  );
+/**
+ * Stores `association` in the appropriate cache on `record`. Routes
+ * collection wrappers to `_collectionProxies` and singular ones to
+ * `_associationInstances`, mirroring Rails' single `@association_cache`.
+ *
+ * Mirrors: ActiveRecord::Associations#association_instance_set
+ *
+ * @internal
+ */
+function associationInstanceSet(record: Base, name: string, association: unknown): void {
+  const macro = (association as { reflection?: { macro?: string } } | null)?.reflection?.macro;
+  if (macro === "hasMany" || macro === "hasAndBelongsToMany") {
+    record._collectionProxies.set(name, association);
+  } else {
+    record._associationInstances.set(name, association as AssociationInstance);
+  }
 }

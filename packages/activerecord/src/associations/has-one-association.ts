@@ -268,3 +268,21 @@ function transactionIf(
   }
   return block();
 }
+
+/**
+ * Build the attribute hash that nullifies the owner-side foreign key (and
+ * polymorphic type column, when applicable) on the dependent record — used
+ * by `dependent: :nullify` to drop the FK without destroying the row.
+ *
+ * Mirrors: ActiveRecord::Associations::ForeignAssociation#nullified_owner_attributes
+ *
+ * @internal
+ */
+function nullifiedOwnerAttributes(assoc: HasOneAssociation): Record<string, null> {
+  const refl = assoc.reflection as unknown as { foreignKey: string | string[]; type?: string };
+  const attrs: Record<string, null> = {};
+  const fks = Array.isArray(refl.foreignKey) ? refl.foreignKey : [refl.foreignKey];
+  for (const fk of fks) attrs[fk] = null;
+  if (refl.type) attrs[refl.type] = null;
+  return attrs;
+}

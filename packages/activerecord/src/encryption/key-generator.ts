@@ -9,8 +9,6 @@ import { Configurable } from "./configurable.js";
 
 export class KeyGenerator {
   private _hashDigestClass: string;
-  private _keyDerivationSalt: string | undefined;
-  private _keyLength: number | undefined;
 
   constructor(hashDigestClass?: string) {
     this._hashDigestClass = hashDigestClass ?? Configurable.config.hashDigestClass;
@@ -47,13 +45,11 @@ export class KeyGenerator {
 
   /** @internal */
   private keyDerivationSalt(): string {
-    this._keyDerivationSalt ??= Configurable.config.get("keyDerivationSalt") as string;
-    return this._keyDerivationSalt;
+    return Configurable.config.get("keyDerivationSalt") as string;
   }
 
   /** @internal */
   private keyLength(): number {
-    this._keyLength ??= 32; // AES-256 key length, mirrors Cipher.key_length
-    return this._keyLength;
+    return 32; // AES-256 key length, mirrors Cipher.key_length
   }
 }

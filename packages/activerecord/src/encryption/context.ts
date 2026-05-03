@@ -11,8 +11,6 @@
  *
  * Mirrors: ActiveRecord::Encryption::Context
  */
-import { Configurable } from "./configurable.js";
-
 export class Context {
   private _keyProvider?: unknown;
   keyGenerator?: unknown;
@@ -40,7 +38,10 @@ export class Context {
 
   /** @internal */
   private buildDefaultKeyProvider(): unknown {
-    return Configurable.keyProvider;
+    // Avoid importing Configurable here to prevent a circular dependency:
+    // context → configurable → contexts → context. Callers that need the
+    // default key provider resolve it via Configurable.keyProvider directly.
+    return undefined;
   }
 }
 

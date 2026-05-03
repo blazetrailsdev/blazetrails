@@ -47,7 +47,6 @@ export class Cipher {
     options?: { deterministic?: boolean },
   ): { payload: string; iv: string; authTag: string } {
     this._validateKeyLength(key);
-    const crypto = getCrypto();
     const keyBuf = Buffer.from(key, "base64").subarray(0, KEY_LENGTH);
     // Accept Buffer (e.g. compressed binary data) or string (UTF-8 text).
     const inputBuf = Buffer.isBuffer(data) ? data : Buffer.from(data, "utf-8");

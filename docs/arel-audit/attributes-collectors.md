@@ -22,7 +22,7 @@
 ### composite.rb → composite.ts — **OK**
 
 - All methods present: append (`<<`), addBind, addBinds, value (returns `[left, right]`), retryable, preparable.
-- DRIFT: TS `Composite#addBind` calls `right.addBind(value)` without the block argument that `left.addBind(value, block)` receives. Rails forwards the block to both. **GAP**: this could matter if the right collector cares about the `bindIndex` block — verify.
+- ✅ Resolved (PR #1120): `Composite#addBind` and `Composite#addBinds` now forward the `block` argument to both child collectors, matching Rails' `&block` forwarding.
 
 ### plain_string.rb → plain-string.ts — **OK**
 

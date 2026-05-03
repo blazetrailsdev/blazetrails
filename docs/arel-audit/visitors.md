@@ -29,7 +29,7 @@ Source: `activerecord-8.0.2/lib/arel/visitors/*.rb` vs `packages/arel/src/visito
 
 - Rails (8 overrides + 1 helper + 1 const): Matches/DoesNotMatch (LIKE/ILIKE + ESCAPE), Regexp/NotRegexp (`~` / `~*`, `!~` / `!~*`), DistinctOn, GroupingElement, Cube, RollUp, GroupingSet, Lateral, IsNotDistinctFrom/IsDistinctFrom, `BIND_BLOCK`, `bind_block`, `grouping_array_or_grouping_element`.
 - TS sized at 166 LOC — verify each present. (Implementation noted earlier; prior PR audits show all Postgres-specific handlers present.)
-- GAP/verify: `BIND_BLOCK = $1, $2, ...` — Trails handles this via `BindParam` rendering; check `postgresql.ts` does the same.
+- ✅ `BIND_BLOCK = $1, $2, ...` — covered. `postgresql.ts` implements numbered bind rendering (`PostgreSQLWithBinds` emits `$1`, `$2`, …) matching Rails' `BIND_BLOCK = proc { |i| "$#{i}" }`.
 
 ## mysql.rb → mysql.ts — **OK**
 

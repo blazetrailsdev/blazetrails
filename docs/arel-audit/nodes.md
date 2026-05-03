@@ -22,7 +22,7 @@ Source: `activerecord-8.0.2/lib/arel/nodes/*.rb` vs `packages/arel/src/nodes/*.t
 
 - Rails `const_set` list: `Bin, Cube, DistinctOn, Group, GroupingElement, GroupingSet, Lateral, Limit, Lock, Not, Offset, On, OptimizerHints, RollUp`.
 - TS has all 14, plus extras `Top` (not in Rails — verify if needed; api:compare will flag).
-- DRIFT: TS `Not` extends `Node` (not `Unary`); TS `Lateral` extends `Node`; TS `GroupingElement`/`Cube`/`RollUp`/`GroupingSet` extend `Node`. Rails has them all extending `Unary`. **GAP**: Subclass hierarchy diverges — visitor dispatch may treat `Lateral` / `Not` / `GroupingElement` differently from other `Unary` subclasses.
+- ✅ Resolved (PRs #1126 + #1129): `Not`, `Lateral`, `GroupingElement`, `Cube`, `RollUp`, `GroupingSet` all now extend `Unary`, matching Rails. `Lateral.subquery` and `GroupingElement.expressions` are preserved as back-compat getters mapped to the inherited `expr` slot.
 - DRIFT: `OptimizerHints` carries a typed `hints: ReadonlyArray<string|SqlLiteral>` field instead of using the inherited `expr` slot. Rails uses `expr`. Documented.
 - DRIFT: TS `Unary#expr` is `unknown`; Rails is implicit Ruby. PR 31/32 widening preserves backward compat. ✓
 - EXTRA: Backwards-compat alias `Rollup = RollUp` (deprecated). Recently added.
@@ -70,11 +70,11 @@ Source: `activerecord-8.0.2/lib/arel/nodes/*.rb` vs `packages/arel/src/nodes/*.t
 ## bound_sql_literal.rb → bound-sql-literal.ts — **OK**
 
 - Validates positional/named bind mismatches with `BindError`. TS mirrors Rails decision tree. Recently fixed JSON.stringify (#1110).
-- DRIFT: Rails has `+` operator returning `Fragments`. TS likely lacks (`bound-sql-literal.ts` excerpt didn't show it). **GAP** — verify.
+- ✅ Resolved (PR #1120): `BoundSqlLiteral#plus(other)` ports Rails' `+` operator, returning a `Fragments([self, other])` with a runtime `instanceof Node` guard mirroring Rails' `Arel.arel_node?` check.
 
 ## case.rb → case.ts — **OK**
 
-- `case`, `conditions`, `default`, `when`, `then`, `else`, eql/hash. TS has `case`, `conditions`, `default`, `when`, `else`, `clone`. **GAP**: TS missing `then` method (Rails: sets `last condition.right`). Worth porting.
+- `case`, `conditions`, `default`, `when`, `then`, `else`, eql/hash. All present in TS (`then` ported in PR #1120 — sets `last condition.right` per Rails, with a JS thenable-hazard guard).
 - Rails has classes `When < Binary` and `Else < Unary`. TS exports `When extends Binary` and `Else extends Unary`. ✓
 
 ## comment.rb → comment.ts — **OK**
@@ -107,12 +107,12 @@ Source: `activerecord-8.0.2/lib/arel/nodes/*.rb` vs `packages/arel/src/nodes/*.t
 
 ## filter.rb → filter.ts — **OK**
 
-- Extends Binary. Rails includes WindowPredications + AliasPredication. TS adds method `over` — matches WindowPredications. AliasPredication's `as` not implemented on Filter directly. **GAP minor** — Filter#as via mixin.
+- Extends Binary. Rails includes WindowPredications + AliasPredication. TS adds method `over` — matches WindowPredications. ✅ Filter inherits `as()` from `Binary` (binary.ts:48); no separate impl needed.
 
-## homogeneous_in.rb → homogeneous-in.ts — **OK**
+## homogeneous_in.rb → homogeneous-in.ts — **OK** (PR #1125)
 
 - attribute/values/type, isEquality, invert, left, right, castedValues, procForBinds, fetchAttribute, ivars. TS has all. ✓
-- DRIFT: Rails `right` calls `attribute.quoted_array(values)`; TS maps `Quoted` directly. Behavior differs when attribute provides type-casting. **GAP** to verify.
+- ✅ Resolved (PR #1125): `right` now delegates to `attribute.quotedArray(values)` (and falls back to `buildQuoted(v, attribute)` if the attribute lacks the method) so non-Node values become `Casted` carrying the type-cast context — matching Rails' `attribute.quoted_array(values)`. `Attribute#quotedArray` itself was patched in the same PR to pass `this` to `buildQuoted`.
 
 ## in.rb → in.ts — **OK**
 
@@ -132,9 +132,9 @@ Source: `activerecord-8.0.2/lib/arel/nodes/*.rb` vs `packages/arel/src/nodes/*.t
 
 - left (single source), right (joinop array), `isEmpty` (Rails `empty?`).
 
-## matches.rb → matches.ts — **OK**
+## matches.rb → matches.ts — **OK** (PR #1123)
 
-- escape, caseSensitive. Rails wraps escape via `build_quoted`; TS stores escape raw. **GAP**: missing `Nodes.build_quoted(escape)` wrap. Verify visitor handles raw strings.
+- escape, caseSensitive. ✅ Resolved (PR #1123): `Matches` constructor wraps escape via `buildQuoted` (matches Rails). `DoesNotMatch` reparented to extend `Matches` (Rails: `class DoesNotMatch < Matches`). Visitor `appendEscape` simplified and forced to inline-render Quoted/Casted to match Rails' always-inline behavior.
 
 ## named_function.rb → named-function.ts — **OK**
 
@@ -146,7 +146,7 @@ Source: `activerecord-8.0.2/lib/arel/nodes/*.rb` vs `packages/arel/src/nodes/*.t
 
 ## over.rb → over.ts — **OK**
 
-- Extends Binary, operator="OVER". Rails includes AliasPredication; TS doesn't add `as` directly — relies on inherited Binary mixins. **GAP minor** — Over#as.
+- Extends Binary, operator="OVER". Rails includes AliasPredication; TS picks it up via inherited `Binary#as` (binary.ts:48). ✅ No gap.
 
 ## regexp.rb → regexp.ts — **OK**
 
@@ -159,7 +159,7 @@ Source: `activerecord-8.0.2/lib/arel/nodes/*.rb` vs `packages/arel/src/nodes/*.t
 
 ## select_statement.rb → select-statement.ts — **OK**
 
-- cores, orders, limit, offset, lock, with. TS adds `comment` field on the statement (Rails has it on `SelectCore`!). **GAP**: TS duplicates `comment` on both? Rails only has it on SelectCore. The duplication isn't necessarily wrong (different scopes) but worth verifying visitor doesn't render twice.
+- cores, orders, limit, offset, lock, with. ✅ Resolved (PR #1126): the duplicate `comment` field on `SelectStatement` was removed; `SelectManager#comment` now sets `core.comment` matching Rails' `@ctx.comment = Nodes::Comment.new(values)`. Visitors emit the comment exactly once via `visitArelNodesSelectCore`.
 - EXTRA: TS exports `SelectOptions` for parity with `Arel::Nodes::SelectOptions`.
 
 ## table_alias.rb → table-alias.ts — **OK**
@@ -186,7 +186,7 @@ Source: `activerecord-8.0.2/lib/arel/nodes/*.rb` vs `packages/arel/src/nodes/*.t
 
 - Window: orders, partitions, framing, `order`, `partition`, `frame`, `rows`, `range`, eql/hash. ✓
 - NamedWindow: name. ✓
-- Rows, Range: extend Unary in Rails. **TS extends Node** — diverges from Unary base. Same for Preceding, Following, CurrentRow.
+- ✅ Resolved (PR #1126): `Rows`, `Range`, `Preceding`, `Following` now extend `Unary` (matching Rails). `CurrentRow` correctly stays as `Node` per Rails (`window.rb`: `CurrentRow < Node`).
 - GAP: TS `rows()`/`range()` always returns `this` after framing OR a new `Rows`/`Range`. Rails: returns the new node when `@framing` is set. Behavior matches but typing is `Rows | this`.
 
 ## with.rb → with.ts — **OK**

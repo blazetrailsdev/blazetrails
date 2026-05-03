@@ -15,5 +15,5 @@ Sections:
 - [nodes.md](nodes.md) — every file under `nodes/`.
 - [visitors.md](visitors.md) — every file under `visitors/`.
 - [attributes-collectors.md](attributes-collectors.md) — `attributes/`, `collectors/`.
-- [extras.md](extras.md) — files present in ours that aren't in Rails (`predications-range`, `quote-array`, split-out node files like `and`/`or`/`not`/`bin`/`distinct`/`as`/`sum`).
+- [extras.md](extras.md) — files present in ours that aren't in Rails (`predications-range`, `quote-array`, split-out node files `and`/`or`).
 - [summary.md](summary.md) — confirmed behavioral GAPs, necessary TS deviations, api:compare housekeeping notes.

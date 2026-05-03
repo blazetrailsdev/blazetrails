@@ -1221,7 +1221,7 @@ function tryToCheckoutNewConnection(pool: Pool): DatabaseAdapter | null {
   adoptConnection(pool, conn);
   pool._checkedOut.add(conn);
   (conn as unknown as PoolManagedConnection).lease?.();
-  return conn;
+  return checkoutAndVerify(pool, conn);
 }
 
 /**

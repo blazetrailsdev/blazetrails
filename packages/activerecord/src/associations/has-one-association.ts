@@ -280,14 +280,30 @@ function transactionIf(
  * @internal
  */
 function nullifiedOwnerAttributes(assoc: HasOneAssociation): Record<string, null> {
-  const opts = assoc.reflection.options as {
-    foreignKey?: string | string[];
-    as?: string;
+  // Resolve the rich reflection so foreignKey expansion (composite PKs,
+  // primaryKey overrides, polymorphic foreignType) matches what the
+  // association itself uses. Fall back to the HasOneAssociation's own
+  // foreignKeyColumns() derivation, then to options-based defaults.
+  const ctor = assoc.owner.constructor as {
+    name: string;
+    _reflectOnAssociation?: (n: string) => {
+      foreignKey?: string | string[];
+      foreignType?: string;
+    } | null;
   };
-  const ctor = assoc.owner.constructor as { name: string };
-  const asName = opts.as;
-  const foreignKey =
-    opts.foreignKey ?? (asName ? `${underscore(asName)}_id` : `${underscore(ctor.name)}_id`);
-  const typeCol = asName ? `${underscore(asName)}_type` : null;
+  const refl = ctor._reflectOnAssociation?.(assoc.reflection.name) ?? null;
+  let foreignKey: string | string[] | undefined = refl?.foreignKey;
+  const reflTypeCol: string | null = refl?.foreignType ?? null;
+  if (foreignKey == null) {
+    const fks = (assoc as unknown as { foreignKeyColumns?: () => string[] }).foreignKeyColumns?.();
+    if (fks?.length) foreignKey = fks;
+  }
+  if (foreignKey == null) {
+    const opts = assoc.reflection.options as { foreignKey?: string | string[]; as?: string };
+    foreignKey =
+      opts.foreignKey ?? (opts.as ? `${underscore(opts.as)}_id` : `${underscore(ctor.name)}_id`);
+  }
+  const asName = assoc.reflection.options.as;
+  const typeCol = reflTypeCol ?? (asName ? `${underscore(asName)}_type` : null);
   return ForeignAssociation.nullifiedOwnerAttributes({ foreignKey, type: typeCol });
 }

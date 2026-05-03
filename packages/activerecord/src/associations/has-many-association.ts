@@ -178,14 +178,34 @@ function intersection(_assoc: HasManyAssociation, a: Base[], b: Base[]): Base[] 
  * @internal
  */
 function nullifiedOwnerAttributes(assoc: HasManyAssociation): Record<string, null> {
-  const opts = assoc.reflection.options as {
-    foreignKey?: string | string[];
-    as?: string;
+  // Resolve the rich reflection so foreignKey expansion (composite PKs,
+  // primaryKey overrides, polymorphic foreignType) matches what the
+  // association itself uses. Fall back to the CollectionAssociation's
+  // own FK column derivation, then to the simple options-based shape.
+  const ctor = assoc.owner.constructor as {
+    name: string;
+    _reflectOnAssociation?: (n: string) => {
+      foreignKey?: string | string[];
+      foreignType?: string;
+    } | null;
   };
-  const ctor = assoc.owner.constructor as { name: string };
-  const asName = opts.as;
-  const foreignKey =
-    opts.foreignKey ?? (asName ? `${underscore(asName)}_id` : `${underscore(ctor.name)}_id`);
-  const typeCol = asName ? `${underscore(asName)}_type` : null;
-  return ForeignAssociation.nullifiedOwnerAttributes({ foreignKey, type: typeCol });
+  const refl = ctor._reflectOnAssociation?.(assoc.reflection.name) ?? null;
+  let foreignKey: string | string[] | undefined = refl?.foreignKey;
+  const typeCol: string | null = refl?.foreignType ?? null;
+  if (foreignKey == null) {
+    const fks = (assoc as unknown as { foreignKeyColumns?: () => string[] }).foreignKeyColumns?.();
+    if (fks?.length) foreignKey = fks;
+  }
+  if (foreignKey == null) {
+    const opts = assoc.reflection.options as { foreignKey?: string | string[]; as?: string };
+    foreignKey =
+      opts.foreignKey ?? (opts.as ? `${underscore(opts.as)}_id` : `${underscore(ctor.name)}_id`);
+  }
+  const polyType = typeCol ?? deriveAsTypeCol(assoc);
+  return ForeignAssociation.nullifiedOwnerAttributes({ foreignKey, type: polyType });
+}
+
+function deriveAsTypeCol(assoc: { reflection: { options: { as?: string } } }): string | null {
+  const asName = assoc.reflection.options.as;
+  return asName ? `${underscore(asName)}_type` : null;
 }

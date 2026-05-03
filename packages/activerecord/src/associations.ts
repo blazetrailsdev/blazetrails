@@ -2197,51 +2197,32 @@ function initInternals(record: Base): void {
 }
 
 /**
- * Returns the cached Association wrapper for `name`, or `null` if none has
- * been built yet. Trails' equivalent of Rails' `@association_cache` is split
- * across two maps on the record: `_associationInstances` for singular
- * (belongsTo/hasOne) and `_collectionProxies` for collection
- * (hasMany/habtm) wrappers — check both.
+ * Returns the cached `Association` wrapper for `name`, or `null` if none
+ * has been built yet. Mirrors Rails' `@association_cache[name]` lookup —
+ * always reads `_associationInstances` (the canonical Association cache,
+ * matching how `instance-methods.ts:association()` populates it).
+ * `_collectionProxies` is a separate, Trails-specific user-facing layer
+ * and is intentionally not consulted here.
  *
  * Mirrors: ActiveRecord::Associations#association_instance_get
  *
  * @internal
  */
 function associationInstanceGet(record: Base, name: string): unknown {
-  return record._associationInstances.get(name) ?? record._collectionProxies.get(name) ?? null;
+  return record._associationInstances.get(name) ?? null;
 }
 
 /**
- * Stores `association` in the appropriate cache on `record`. Routes
- * collection wrappers to `_collectionProxies` and singular ones to
- * `_associationInstances`, mirroring Rails' single `@association_cache`.
+ * Stores the built `Association` wrapper for `name` in the canonical
+ * `_associationInstances` cache, mirroring Rails'
+ * `@association_cache[name] = association`. The Trails-specific
+ * `_collectionProxies` wrapper map is populated separately by the
+ * collection-proxy machinery, not here.
  *
  * Mirrors: ActiveRecord::Associations#association_instance_set
  *
  * @internal
  */
 function associationInstanceSet(record: Base, name: string, association: unknown): void {
-  // AssociationDefinition uses `type` (e.g. "hasMany", "hasManyThrough") for
-  // the macro — look it up on the record's class. If the definition isn't
-  // registered there, fall back to the rich reflection's macro / isCollection
-  // (note: AssociationReflection's `type` field is the polymorphic type
-  // column, not the macro — don't read that).
-  const ctor = record.constructor as { _associations?: AssociationDefinition[] };
-  const def = ctor._associations?.find((a) => a.name === name);
-  const refl = (
-    association as { reflection?: { macro?: string; isCollection?: () => boolean } } | null
-  )?.reflection;
-  const defType = def?.type as string | undefined;
-  const isCollection =
-    defType === "hasMany" ||
-    defType === "hasAndBelongsToMany" ||
-    defType === "hasManyThrough" ||
-    refl?.isCollection?.() ||
-    refl?.macro === "hasMany" ||
-    refl?.macro === "hasAndBelongsToMany";
-  if (isCollection) {
-    record._collectionProxies.set(name, association);
-  } else {
-    record._associationInstances.set(name, association as AssociationInstance);
-  }
+  record._associationInstances.set(name, association as AssociationInstance);
 }

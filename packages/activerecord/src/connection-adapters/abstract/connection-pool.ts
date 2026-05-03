@@ -709,6 +709,12 @@ export class ConnectionPool implements ReapablePool {
   clearReloadableConnections(raiseOnAcquisitionTimeout: boolean = true): void {
     withExclusivelyAcquiredAllConnections(this, raiseOnAcquisitionTimeout, () => {
       const ctx = String(executionContextId());
+      const reloadable = new Set<DatabaseAdapter>();
+      for (const conn of this._connections ?? []) {
+        if ((conn as unknown as { requiresReloading?: () => boolean }).requiresReloading?.()) {
+          reloadable.add(conn);
+        }
+      }
       for (const conn of this._connections ?? []) {
         // Mirrors Rails: `if conn.in_use? then conn.steal!; checkin conn`.
         // The exclusive acquisition above leased every conn to us; release
@@ -718,15 +724,13 @@ export class ConnectionPool implements ReapablePool {
           this._checkedOut.delete(conn);
           this._leases?.peek(ctx)?.clear(conn);
         }
-        if ((conn as unknown as { requiresReloading?: () => boolean }).requiresReloading?.()) {
+        if (reloadable.has(conn)) {
           (conn as unknown as { disconnectBang?: () => void }).disconnectBang?.();
           this._lastCheckinAt.delete(conn);
         }
       }
       if (this._connections) {
-        this._connections = this._connections.filter(
-          (c) => !(c as unknown as { requiresReloading?: () => boolean }).requiresReloading?.(),
-        );
+        this._connections = this._connections.filter((c) => !reloadable.has(c));
       }
       this._available?.clear();
     });

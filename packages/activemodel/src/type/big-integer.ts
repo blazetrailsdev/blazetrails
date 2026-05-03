@@ -13,7 +13,9 @@ export class BigIntegerType extends IntegerType {
     if (typeof value === "string") {
       const trimmed = value.trim();
       if (trimmed === "") return null;
-      // Mirror Ruby String#to_i: extract a leading signed-digit run (e.g. "123abc" → 123).
+      // Extract a leading signed-digit run (e.g. "123abc" → 123n), matching Rails to_i behavior
+      // for strings that start with digits. Unlike Ruby to_i, non-numeric strings return null
+      // rather than 0 — consistent with IntegerType's parseInt/NaN → null path.
       // BigInt() rejects a leading "+"; strip it first.
       const lead = trimmed.match(/^([+-]?\d+)/)?.[1];
       if (!lead) return null;

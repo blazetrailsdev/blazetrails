@@ -5,7 +5,6 @@
  * Builds a query against the model's table to check for existing records
  * with the same value, optionally scoped to other columns.
  */
-import { NotImplementedError } from "../errors.js";
 import { EachValidator } from "@blazetrails/activemodel";
 
 /**
@@ -59,10 +58,20 @@ export class UniquenessValidator extends EachValidator {
   validateEach(record: any, attribute: string, value: unknown): void {
     if (value == null) return;
 
-    const modelClass = (this._klass ?? record.constructor) as any;
+    const finderClass = findFinderClassFor(record, this._klass);
+    const modelClass = (finderClass ?? record.constructor) as any;
     if (!modelClass.where) return;
 
-    let relation = modelClass.where({ [attribute]: value });
+    const mapped = mapEnumAttribute(modelClass, attribute, value);
+
+    if (
+      record.isPersisted?.() &&
+      !isValidationNeeded(modelClass, record, attribute, this.options as Record<string, unknown>)
+    ) {
+      return;
+    }
+
+    let relation = modelClass.where({ [attribute]: mapped });
 
     if (record.isPersisted?.()) {
       const pk = modelClass.primaryKey ?? "id";
@@ -83,12 +92,7 @@ export class UniquenessValidator extends EachValidator {
 
     const opts = this.options as any;
 
-    if (opts?.scope) {
-      const scopes = Array.isArray(opts.scope) ? opts.scope : [opts.scope];
-      for (const scopeAttr of scopes) {
-        relation = relation.where({ [scopeAttr]: record.readAttribute(scopeAttr) });
-      }
-    }
+    relation = scopeRelation(record, relation, this.options as Record<string, unknown>);
 
     if (opts?.conditions && typeof opts.conditions === "function") {
       const conditioned =
@@ -118,51 +122,194 @@ export class UniquenessValidator extends EachValidator {
   }
 }
 
-/** @internal */
-function findFinderClassFor(record: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Validations::UniquenessValidator#find_finder_class_for is not implemented",
-  );
+/**
+ * Walks up the inheritance chain from `record.class` to the validator's
+ * configured `:class` option, returning the first non-abstract class —
+ * mirrors Rails' rule that the existence check must run from a concrete
+ * (non-abstract) class.
+ *
+ * Mirrors: ActiveRecord::Validations::UniquenessValidator#find_finder_class_for
+ *
+ * @internal
+ */
+function findFinderClassFor(record: any, klassOption: any): any {
+  let current = record.constructor;
+  let found: any = null;
+  // Walk up the prototype chain. Stop when we reach `klassOption` (or top).
+  while (current) {
+    if (!current.abstractClass) found = current;
+    if (current === klassOption || current === Object) break;
+    const parent = Object.getPrototypeOf(current);
+    if (!parent || parent === Function.prototype) break;
+    current = parent;
+  }
+  return found ?? record.constructor;
 }
 
-/** @internal */
-function isValidationNeeded(klass: any, record: any, attribute: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Validations::UniquenessValidator#validation_needed? is not implemented",
+/**
+ * Returns false when the value (and any scope columns) hasn't changed AND
+ * a unique index covers them — Rails skips the round-trip in that case.
+ *
+ * Mirrors: ActiveRecord::Validations::UniquenessValidator#validation_needed?
+ *
+ * @internal
+ */
+function isValidationNeeded(
+  klass: any,
+  record: any,
+  attribute: string,
+  options: Record<string, unknown>,
+): boolean {
+  if (options.conditions || Object.prototype.hasOwnProperty.call(options, "caseSensitive")) {
+    return true;
+  }
+  const scope = Array.isArray(options.scope)
+    ? (options.scope as string[])
+    : options.scope
+      ? [options.scope as string]
+      : [];
+  const attrs = resolveAttributes(record, [...scope, attribute]);
+  const dirty = (record as any)._dirty;
+  const anyChangedOrNull = attrs.some(
+    (a) => dirty?.attributeChanged?.(a) || record.readAttribute?.(a) == null,
   );
+  if (anyChangedOrNull) return true;
+  return !isCoveredByUniqueIndex(klass, record, attribute, scope, options);
 }
 
-/** @internal */
-function isCoveredByUniqueIndex(klass: any, record: any, attribute: any, scope: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Validations::UniquenessValidator#covered_by_unique_index? is not implemented",
-  );
+/**
+ * Returns true when the configured attribute (plus scope columns) is
+ * covered by a unique, non-partial index on the table — used to skip a
+ * redundant SELECT before save when the DB already enforces uniqueness.
+ *
+ * Mirrors: ActiveRecord::Validations::UniquenessValidator#covered_by_unique_index?
+ *
+ * @internal
+ */
+function isCoveredByUniqueIndex(
+  klass: any,
+  record: any,
+  attribute: string,
+  scope: string[],
+  options: Record<string, unknown>,
+): boolean {
+  const attrs = resolveAttributes(record, [...scope, attribute]);
+  const cache = klass?.schemaCache;
+  const indexes = cache?.indexes?.(klass.tableName) ?? [];
+  const targetAttrs =
+    options.attributes && Array.isArray(options.attributes)
+      ? (options.attributes as string[])
+      : [attribute];
+  return targetAttrs.some((attr) => {
+    const cols = resolveAttributes(record, [...scope, attr]);
+    return indexes.some(
+      (ix: any) =>
+        ix.unique && ix.where == null && cols.every((c) => (ix.columns ?? []).includes(c)),
+    );
+  });
 }
 
-/** @internal */
-function resolveAttributes(record: any, attributes: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Validations::UniquenessValidator#resolve_attributes is not implemented",
-  );
+/**
+ * Expands association names to their underlying foreign-key (and
+ * foreign-type for polymorphic) columns; non-association attributes pass
+ * through. Mirrors Rails' resolve_attributes which lets uniqueness scope
+ * by association (e.g. `scope: :user`).
+ *
+ * Mirrors: ActiveRecord::Validations::UniquenessValidator#resolve_attributes
+ *
+ * @internal
+ */
+function resolveAttributes(record: any, attributes: string[]): string[] {
+  const out: string[] = [];
+  for (const attr of attributes) {
+    const ctor = record.constructor;
+    const refl = ctor._reflectOnAssociation?.(String(attr));
+    if (!refl) {
+      out.push(String(attr));
+    } else if (typeof refl.isPolymorphic === "function" ? refl.isPolymorphic() : refl.polymorphic) {
+      out.push(refl.foreignKey, refl.foreignType);
+    } else {
+      const fk = refl.foreignKey;
+      if (Array.isArray(fk)) out.push(...fk);
+      else out.push(fk);
+    }
+  }
+  return out.filter((x) => x != null);
 }
 
-/** @internal */
-function buildRelation(klass: any, attribute: any, value: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Validations::UniquenessValidator#build_relation is not implemented",
-  );
+/**
+ * Builds the base existence-check relation: `klass.unscoped.where(attr = value)`,
+ * with case-sensitivity honoring the `:case_sensitive` option (and the
+ * adapter's default collation when unspecified).
+ *
+ * Mirrors: ActiveRecord::Validations::UniquenessValidator#build_relation
+ *
+ * @internal
+ */
+function buildRelation(
+  klass: any,
+  attribute: string,
+  value: unknown,
+  options: Record<string, unknown>,
+): any {
+  const base = typeof klass.unscoped === "function" ? klass.unscoped() : klass.where({});
+  if (Object.prototype.hasOwnProperty.call(options, "caseSensitive") && !options.caseSensitive) {
+    // Best-effort case-insensitive comparison via SQL LOWER(); adapters
+    // with a CI default collation will treat this as a no-op.
+    if (typeof value === "string") {
+      const arel = (klass.arelTable as any) ?? null;
+      if (arel && typeof arel.column === "function" && typeof base.where === "function") {
+        return base.where(arel.column(attribute).lower().eq(value.toLowerCase()));
+      }
+    }
+  }
+  return base.where({ [attribute]: value });
 }
 
-/** @internal */
-function scopeRelation(record: any, relation: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Validations::UniquenessValidator#scope_relation is not implemented",
-  );
+/**
+ * Adds `WHERE scope = record.scope` clauses for each `:scope` option,
+ * resolving association-name scopes to their underlying FK value.
+ *
+ * Mirrors: ActiveRecord::Validations::UniquenessValidator#scope_relation
+ *
+ * @internal
+ */
+function scopeRelation(record: any, relation: any, options: Record<string, unknown>): any {
+  const scope = options.scope;
+  if (scope == null) return relation;
+  const scopes = Array.isArray(scope) ? (scope as string[]) : [scope as string];
+  let r = relation;
+  for (const item of scopes) {
+    const ctor = record.constructor;
+    const refl = ctor._reflectOnAssociation?.(item);
+    let value: unknown;
+    if (refl) {
+      const assoc = record.association?.(item);
+      value =
+        typeof assoc?.reader === "function"
+          ? assoc.reader()
+          : (record[item] ?? record.readAttribute?.(item));
+    } else {
+      value = record.readAttribute?.(item);
+    }
+    r = r.where({ [item]: value });
+  }
+  return r;
 }
 
-/** @internal */
-function mapEnumAttribute(klass: any, attribute: any, value: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Validations::UniquenessValidator#map_enum_attribute is not implemented",
-  );
+/**
+ * Translates a public enum value to its underlying column value before
+ * comparison — Rails enums map symbol/string labels to integers (or
+ * strings) in the DB, and uniqueness must compare on the stored value.
+ *
+ * Mirrors: ActiveRecord::Validations::UniquenessValidator#map_enum_attribute
+ *
+ * @internal
+ */
+function mapEnumAttribute(klass: any, attribute: string, value: unknown): unknown {
+  const enums = klass?.definedEnums?.[String(attribute)];
+  if (value != null && enums && Object.prototype.hasOwnProperty.call(enums, String(value))) {
+    return (enums as Record<string, unknown>)[String(value)];
+  }
+  return value;
 }

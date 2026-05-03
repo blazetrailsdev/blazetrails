@@ -41,12 +41,6 @@ function resolveValue(value: unknown): unknown {
   return AttributeSet.resolveSnapshotValue(value);
 }
 
-/** @internal */
-function nanSafeEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  return typeof a === "number" && typeof b === "number" && Number.isNaN(a) && Number.isNaN(b);
-}
-
 /**
  * Per-instance reset hook for dirty-tracking state. Mirrors Rails
  * `ActiveModel::Dirty#init_internals`
@@ -85,6 +79,8 @@ export class DirtyTracker {
   private _originalHas: Set<string> = new Set();
   private _changedAttributes: Map<string, [unknown, unknown]> = new Map();
   private _previousChanges: Map<string, [unknown, unknown]> = new Map();
+  /** Names explicitly force-dirtied via attribute_will_change!. @internal */
+  private _forcedNames: Set<string> = new Set();
 
   /**
    * Take a snapshot of the current attributes as the "clean" state.
@@ -100,25 +96,7 @@ export class DirtyTracker {
       this._originalHas = new Set(this._originalAttributes.keys());
     }
     this._changedAttributes.clear();
-  }
-
-  attributeWillChange(name: string, from: unknown, to: unknown): void {
-    if (from === to) {
-      this._changedAttributes.delete(name);
-    } else {
-      if (!this._originalHas.has(name)) {
-        // Attribute was absent/uninitialized — any write is a change
-        this._changedAttributes.set(name, [undefined, to]);
-      } else {
-        const original = resolveValue(this._originalAttributes.get(name));
-        // nanSafeEqual so NaN → 1 → NaN correctly reverts to the original NaN.
-        if (nanSafeEqual(to, original)) {
-          this._changedAttributes.delete(name);
-        } else {
-          this._changedAttributes.set(name, [original, to]);
-        }
-      }
-    }
+    this._forcedNames.clear();
   }
 
   /**
@@ -146,6 +124,7 @@ export class DirtyTracker {
       cloned = currentValue;
     }
     this._changedAttributes.set(name, [cloned, cloned]);
+    this._forcedNames.add(name);
   }
 
   /**
@@ -162,16 +141,13 @@ export class DirtyTracker {
       return;
     }
     const original = resolveValue(this._originalAttributes.get(name));
-    if (type.isChanged(original, newValue, rawValue)) {
+    if (type.isChanged(original, newValue, rawValue) || this._forcedNames.has(name)) {
+      // Preserve forced dirty entries — a force_change must not be silently
+      // cleared by a subsequent type-equal write.
       this._changedAttributes.set(name, [original, newValue]);
     } else {
       this._changedAttributes.delete(name);
     }
-  }
-
-  /** @internal */
-  clearChange(name: string): void {
-    this._changedAttributes.delete(name);
   }
 
   get changed(): boolean {
@@ -216,6 +192,7 @@ export class DirtyTracker {
       this._originalHas = new Set(this._originalAttributes.keys());
     }
     this._changedAttributes.clear();
+    this._forcedNames.clear();
   }
 
   get previousChanges(): Record<string, [unknown, unknown]> {
@@ -229,11 +206,13 @@ export class DirtyTracker {
   clearChangesInformation(): void {
     this._changedAttributes.clear();
     this._previousChanges.clear();
+    this._forcedNames.clear();
   }
 
   clearAttributeChanges(attributes: string[]): void {
     for (const attr of attributes) {
       this._changedAttributes.delete(attr);
+      this._forcedNames.delete(attr);
     }
   }
 
@@ -360,6 +339,7 @@ export class DirtyTracker {
     if (!this._changedAttributes.has(name)) return;
     this._restoreOne(attributes, name);
     this._changedAttributes.delete(name);
+    this._forcedNames.delete(name);
   }
 
   private _restoreOne(

@@ -714,6 +714,23 @@ describe("numeric type.isChanged integration via dirty tracking", () => {
     expect(item.changedAttributes).toContain("count");
   });
 
+  it("force-change survives a subsequent type-equal write — NaN-to-NaN case", () => {
+    // attribute_will_change! (forceChange) must not be wiped out by a write
+    // where type.isChanged returns false.
+    class Metric extends Model {
+      constructor(attrs: Record<string, unknown> = {}) {
+        super(attrs);
+      }
+    }
+    Metric.attribute("ratio", "float");
+
+    const m = new Metric({ ratio: NaN });
+    m.changesApplied();
+    m._dirty.forceChange("ratio", NaN); // mirrors attribute_will_change!
+    m.writeAttribute("ratio", "NaN"); // type-equal write
+    expect(m.changedAttributes).toContain("ratio");
+  });
+
   it("float attribute NaN-to-NaN does NOT appear in changes — equal_nan? exemption", () => {
     class Metric extends Model {
       constructor(attrs: Record<string, unknown> = {}) {

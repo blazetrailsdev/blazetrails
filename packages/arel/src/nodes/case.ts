@@ -37,6 +37,8 @@ export class Case extends NodeExpression {
 
   // Mirrors Arel::Nodes::Case#then — sets the right side of the most
   // recent When clause. Rails: `@conditions.last.right = build_quoted(expression)`.
+  // Rails raises NoMethodError on `nil.right=` if no #when has been called;
+  // we throw a clearer error for the same condition.
   then(result: Node | unknown): this {
     const last = this.conditions[this.conditions.length - 1];
     if (!last) throw new Error("Case#then called before Case#when");

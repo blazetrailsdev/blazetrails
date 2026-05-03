@@ -61,7 +61,11 @@ export class BoundSqlLiteral extends NodeExpression {
   // Mirrors Arel::Nodes::BoundSqlLiteral#+ — concatenates with another
   // Arel node by wrapping both in a Fragments node. Method-renamed to
   // `plus` because TS classes can't define an arithmetic operator.
+  // Rails: `raise ArgumentError, "Expected Arel node" unless Arel.arel_node?(other)`.
   plus(other: Node): Fragments {
+    if (!(other instanceof Node)) {
+      throw new TypeError("Expected Arel node");
+    }
     return new Fragments([this, other]);
   }
 

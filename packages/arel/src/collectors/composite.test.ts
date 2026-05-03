@@ -30,6 +30,27 @@ describe("TestComposite", () => {
     expect(calls).toEqual([1]);
   });
 
+  it("addBinds forwards block to both collectors", () => {
+    const left = new Collectors.SQLString();
+    const calls: number[] = [];
+    const right = {
+      append: () => right,
+      addBind: () => right,
+      addBinds: (
+        _binds: unknown[],
+        _proc?: ((v: unknown) => unknown) | null,
+        block?: (i: number) => string,
+      ) => {
+        if (block) calls.push(1);
+        return right;
+      },
+    };
+    const composite = new Collectors.Composite(left, right);
+    composite.addBinds([1, 2], null, (i) => `$${i}`);
+    expect(left.value).toBe("$1, $2");
+    expect(calls).toEqual([1]);
+  });
+
   it("retryable on composite collector propagates", () => {
     const sql = new Collectors.SQLString();
     const binds = new Collectors.Bind();

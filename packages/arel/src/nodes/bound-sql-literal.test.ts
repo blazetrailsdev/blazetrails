@@ -11,6 +11,11 @@ describe("BoundSqlLiteralTest", () => {
       expect(frag).toBeInstanceOf(Nodes.Fragments);
       expect(frag.values).toEqual([bsl, other]);
     });
+
+    it("throws when other is not an Arel node", () => {
+      const bsl = new Nodes.BoundSqlLiteral("a = ?", [1]);
+      expect(() => bsl.plus("not a node" as unknown as Nodes.Node)).toThrow(/Expected Arel node/);
+    });
   });
 
   describe("equality", () => {

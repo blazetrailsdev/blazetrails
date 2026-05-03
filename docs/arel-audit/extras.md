@@ -23,7 +23,7 @@ All other Rails-bundled subclasses live in their Rails file in TS too: `Bin`/`No
 
 ## visitors/
 
-- **`default-quoter.ts`** — Trails-only quoter abstraction (62 LOC). See `visitors.md` for rationale.
+- **`default-quoter.ts`** — Trails-only quoter abstraction. See `visitors.md` for rationale.
 - **`dispatch-contamination.test.ts`** — regression test for per-class dispatch cache isolation. TS-only mechanism.
 - **`index.ts`** — barrel.
 
@@ -31,13 +31,13 @@ All other Rails-bundled subclasses live in their Rails file in TS too: `Bin`/`No
 
 These pin behavior that Rails covers via implicit Ruby semantics:
 
-- `attribute-alignment.test.ts` (115 LOC)
-- `expression-mixins.test.ts` (124 LOC)
-- `predications-privates.test.ts` (174 LOC)
-- `predications-range.test.ts` (173 LOC)
-- `quote-array.test.ts` (51 LOC)
-- `factory-methods.test.ts` (111 LOC)
-- `attributes.test.ts` (26 LOC)
-- `nodes.test.ts` (22 LOC)
+- `attribute-alignment.test.ts`
+- `expression-mixins.test.ts`
+- `predications-privates.test.ts`
+- `predications-range.test.ts`
+- `quote-array.test.ts`
+- `factory-methods.test.ts`
+- `attributes.test.ts`
+- `nodes.test.ts`
 
 These are healthy and align with the "implementation-first" working principle.

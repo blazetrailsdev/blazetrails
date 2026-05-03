@@ -34,6 +34,6 @@ All 9 confirmed behavioral GAPs identified by this audit have been resolved thro
 ## Quality bar
 
 - Documentation in source files is excellent — most deviations from Rails carry inline JSDoc explaining why.
-- `to-sql.test.ts` (1784 LOC), `select-manager.test.ts` (1351 LOC), `table.test.ts` (312 LOC) cover most observable behaviour.
+- `to-sql.test.ts`, `select-manager.test.ts`, and `table.test.ts` cover most observable behaviour.
 - `pnpm api:compare --package arel` — 884/884 methods (100%), 69/69 inheritance (100%).
 - `pnpm test:compare` (arel slice) — clean.

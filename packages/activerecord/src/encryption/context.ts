@@ -11,7 +11,8 @@
  *
  * Mirrors: ActiveRecord::Encryption::Context
  */
-import { NotImplementedError } from "../errors.js";
+import { Configurable } from "./configurable.js";
+
 export class Context {
   private _keyProvider?: unknown;
   keyGenerator?: unknown;
@@ -20,14 +21,26 @@ export class Context {
   encryptor?: unknown;
   frozenEncryption: boolean = false;
 
-  constructor() {}
+  constructor() {
+    this.setDefaults();
+  }
 
   get keyProvider(): unknown {
-    return this._keyProvider;
+    return (this._keyProvider ??= this.buildDefaultKeyProvider());
   }
 
   set keyProvider(value: unknown) {
     this._keyProvider = value;
+  }
+
+  /** @internal */
+  private setDefaults(): void {
+    this.frozenEncryption = false;
+  }
+
+  /** @internal */
+  private buildDefaultKeyProvider(): unknown {
+    return Configurable.keyProvider;
   }
 }
 
@@ -103,18 +116,4 @@ export function isEncryptionDisabled(): boolean {
 
 export function isProtectedMode(): boolean {
   return currentContext().protectedMode === true;
-}
-
-/** @internal */
-function setDefaults(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Context#set_defaults is not implemented",
-  );
-}
-
-/** @internal */
-function buildDefaultKeyProvider(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::Context#build_default_key_provider is not implemented",
-  );
 }

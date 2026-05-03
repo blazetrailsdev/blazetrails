@@ -11,7 +11,7 @@
  */
 
 import type { DatabaseAdapter } from "../../../adapter.js";
-import { ConnectionTimeoutError, NotImplementedError } from "../../../errors.js";
+import { ConnectionTimeoutError } from "../../../errors.js";
 import { include, type Included } from "@blazetrails/activesupport";
 
 /**
@@ -359,16 +359,20 @@ function synchronize<R>(_queue: unknown, block: () => R): R {
   return block();
 }
 
-/** @internal */
-function isAny(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#any? is not implemented",
-  );
+/**
+ * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#any?
+ *
+ * @internal
+ */
+function isAny(queue: Queue): boolean {
+  return queue.any;
 }
 
-/** @internal */
-function remove(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#remove is not implemented",
-  );
+/**
+ * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::Queue#remove
+ *
+ * @internal
+ */
+function remove(queue: Queue, conn: DatabaseAdapter): boolean {
+  return queue.remove(conn);
 }

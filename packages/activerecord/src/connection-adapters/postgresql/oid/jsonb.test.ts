@@ -1,0 +1,21 @@
+import { describe, it, expect } from "vitest";
+import { Jsonb } from "./jsonb.js";
+
+describe("PostgreSQL::OID::Jsonb", () => {
+  it("type() returns jsonb", () => {
+    expect(new Jsonb().type()).toBe("jsonb");
+  });
+
+  it("cast parses JSON strings", () => {
+    const t = new Jsonb();
+    expect(t.cast('{"a":1}')).toEqual({ a: 1 });
+    expect(t.cast({ a: 1 })).toEqual({ a: 1 });
+    expect(t.cast(null)).toBeNull();
+  });
+
+  it("serialize encodes objects to JSON strings", () => {
+    const t = new Jsonb();
+    expect(t.serialize({ a: 1 })).toBe('{"a":1}');
+    expect(t.serialize(null)).toBeNull();
+  });
+});

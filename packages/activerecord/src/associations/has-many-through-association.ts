@@ -5,6 +5,15 @@ import {
   HasManyThroughCantAssociateThroughHasOneOrManyReflection,
   HasManyThroughNestedAssociationsAreReadonly,
 } from "./errors.js";
+import { compositeQueryConstraintsList } from "../persistence.js";
+
+function safeKlass(refl: { klass?: unknown } | null | undefined): any {
+  try {
+    return refl?.klass ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Mirrors: ActiveRecord::Associations::HasManyThroughAssociation
@@ -228,9 +237,10 @@ function buildSourceJoinAttributes(
  * @internal
  */
 function transaction(assoc: HasManyThroughAssociation, block: () => Promise<void>): Promise<void> {
-  const tr = throughReflection(assoc) as { klass?: { transaction?: Function } } | null;
-  if (tr?.klass && typeof tr.klass.transaction === "function") {
-    return tr.klass.transaction(block);
+  const tr = throughReflection(assoc) as { klass?: unknown } | null;
+  const klass = safeKlass(tr) as { transaction?: Function } | null;
+  if (klass && typeof klass.transaction === "function") {
+    return klass.transaction(block);
   }
   return block();
 }
@@ -296,9 +306,17 @@ function constructJoinAttributes(
   const refl = ctor._reflectOnAssociation?.(assoc.reflection.name);
   const sourceRefl = refl?.sourceReflection as any;
   if (!sourceRefl) return {};
-  const assocPk = sourceRefl.associationPrimaryKey?.(refl.klass) ?? sourceRefl.primaryKey ?? "id";
+  const reflKlass = safeKlass(refl);
+  const assocPk =
+    (typeof sourceRefl.associationPrimaryKeyFor === "function"
+      ? sourceRefl.associationPrimaryKeyFor(reflKlass)
+      : sourceRefl.associationPrimaryKey) ??
+    sourceRefl.primaryKey ??
+    "id";
   const pkArr: string[] = Array.isArray(assocPk) ? assocPk : [assocPk];
-  const compositeConstraints: string[] = refl.klass?.compositeQueryConstraintsList ?? [];
+  const compositeConstraints: string[] = reflKlass
+    ? compositeQueryConstraintsList.call(reflKlass)
+    : [];
 
   let joinAttributes: Record<string, unknown>;
   if (

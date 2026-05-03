@@ -45,7 +45,8 @@ async function createThroughRecord(
   }
 
   if (record) {
-    ensureMutable(assoc);
+    // Mutability is enforced inside constructJoinAttributes — keep the
+    // precondition in one place.
     const attrs = constructJoinAttributes(assoc, record);
 
     if (throughRecord) {
@@ -91,16 +92,19 @@ function transaction<R>(
  * @internal
  */
 function throughReflection(assoc: HasOneThroughAssociation): unknown {
+  // Resolve the rich reflection first — assoc.reflection is the
+  // AssociationDefinition (no throughReflection getter), so we need
+  // ThroughReflection#throughReflection from the registry.
   type Refl = {
     throughReflection?: Refl | null;
     isThroughReflection?: () => boolean;
-    options?: { through?: string };
   };
-  let refl = (assoc.reflection as Refl).throughReflection ?? null;
+  const ctor = assoc.owner.constructor as { _reflectOnAssociation?: (n: string) => Refl | null };
+  let refl: Refl | null =
+    (ctor._reflectOnAssociation?.(assoc.reflection.name) as Refl | null)?.throughReflection ?? null;
   if (!refl) {
     const throughName = assoc.reflection.options.through as string | undefined;
     if (!throughName) return null;
-    const ctor = assoc.owner.constructor as { _reflectOnAssociation?: (n: string) => Refl | null };
     refl = ctor._reflectOnAssociation?.(throughName) ?? null;
   }
   while (refl?.isThroughReflection?.() && refl.throughReflection) {

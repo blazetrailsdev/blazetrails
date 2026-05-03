@@ -26,7 +26,9 @@ export class HasManyThroughAssociation extends HasManyAssociation {
 
 /** @internal */
 function buildThroughRecord(assoc: HasManyThroughAssociation, record: Base): Base | null {
-  ensureMutable(assoc);
+  // Mutability is enforced inside constructJoinAttributes — keep the
+  // precondition in one place (Rails' build_through_record calls
+  // ensure_mutable once; our equivalent inherits it via the helper).
   const proxy = throughAssociation(assoc) as {
     build?: (attrs: Record<string, unknown>) => Base;
   } | null;
@@ -223,16 +225,19 @@ function transaction<R>(
  * @internal
  */
 function throughReflection(assoc: HasManyThroughAssociation): unknown {
+  // Resolve the rich reflection first — assoc.reflection is the
+  // AssociationDefinition (no throughReflection getter), so we need
+  // ThroughReflection#throughReflection from the registry.
   type Refl = {
     throughReflection?: Refl | null;
     isThroughReflection?: () => boolean;
-    options?: { through?: string };
   };
-  let refl = (assoc.reflection as Refl).throughReflection ?? null;
+  const ctor = assoc.owner.constructor as { _reflectOnAssociation?: (n: string) => Refl | null };
+  let refl: Refl | null =
+    (ctor._reflectOnAssociation?.(assoc.reflection.name) as Refl | null)?.throughReflection ?? null;
   if (!refl) {
     const throughName = assoc.reflection.options.through as string | undefined;
     if (!throughName) return null;
-    const ctor = assoc.owner.constructor as { _reflectOnAssociation?: (n: string) => Refl | null };
     refl = ctor._reflectOnAssociation?.(throughName) ?? null;
   }
   while (refl?.isThroughReflection?.() && refl.throughReflection) {

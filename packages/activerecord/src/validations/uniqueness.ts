@@ -16,7 +16,12 @@ import { EachValidator } from "@blazetrails/activemodel";
 export function validatesUniqueness(
   this: unknown,
   attribute: string,
-  options: { scope?: string | string[]; message?: string; conditions?: (this: any) => any } = {},
+  options: {
+    scope?: string | string[];
+    message?: string;
+    conditions?: (this: any) => any;
+    caseSensitive?: boolean;
+  } = {},
 ): void {
   const klass = this as { _asyncValidations?: Array<unknown> };
   if (!Object.prototype.hasOwnProperty.call(klass, "_asyncValidations")) {
@@ -198,7 +203,6 @@ function isCoveredByUniqueIndex(
   scope: string[],
   options: Record<string, unknown>,
 ): boolean {
-  const attrs = resolveAttributes(record, [...scope, attribute]);
   const cache = klass?.schemaCache;
   const indexes = cache?.indexes?.(klass.tableName) ?? [];
   const targetAttrs =
@@ -262,9 +266,9 @@ function buildRelation(
     // Best-effort case-insensitive comparison via SQL LOWER(); adapters
     // with a CI default collation will treat this as a no-op.
     if (typeof value === "string") {
-      const arel = (klass.arelTable as any) ?? null;
-      if (arel && typeof arel.column === "function" && typeof base.where === "function") {
-        return base.where(arel.column(attribute).lower().eq(value.toLowerCase()));
+      const arel = klass.arelTable as { get?: (n: string) => any } | null;
+      if (arel && typeof arel.get === "function" && typeof base.where === "function") {
+        return base.where(arel.get(attribute).lower().eq(value.toLowerCase()));
       }
     }
   }
@@ -287,17 +291,22 @@ function scopeRelation(record: any, relation: any, options: Record<string, unkno
   for (const item of scopes) {
     const ctor = record.constructor;
     const refl = ctor._reflectOnAssociation?.(item);
-    let value: unknown;
     if (refl) {
-      const assoc = record.association?.(item);
-      value =
-        typeof assoc?.reader === "function"
-          ? assoc.reader()
-          : (record[item] ?? record.readAttribute?.(item));
+      // Read FK (and foreignType for polymorphic) directly off the record —
+      // do NOT load the association (Rails routes through the proxy reader,
+      // but in TS this can trigger lazy-load and strict-loading violations).
+      const isPoly =
+        typeof refl.isPolymorphic === "function" ? refl.isPolymorphic() : refl.polymorphic;
+      const fks = Array.isArray(refl.foreignKey) ? refl.foreignKey : [refl.foreignKey];
+      for (const fk of fks) {
+        r = r.where({ [fk]: record.readAttribute?.(fk) });
+      }
+      if (isPoly && refl.foreignType) {
+        r = r.where({ [refl.foreignType]: record.readAttribute?.(refl.foreignType) });
+      }
     } else {
-      value = record.readAttribute?.(item);
+      r = r.where({ [item]: record.readAttribute?.(item) });
     }
-    r = r.where({ [item]: value });
   }
   return r;
 }

@@ -1297,17 +1297,13 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   }
 
   // Mirrors Rails to_sql.rb: when ESCAPE is set, Rails calls `visit
-  // o.escape, collector`. Trails' `escape` is `string | Node | null`; for
-  // Node we visit, for string we route through `quote()` so embedded
-  // quotes are escaped properly.
-  protected appendEscape(escape: string | Node | null): void {
+  // o.escape, collector`. `escape` is wrapped to a Node in the
+  // Matches/DoesNotMatch constructor (matches.rb does the same via
+  // Nodes.build_quoted), so we visit unconditionally.
+  protected appendEscape(escape: Node | null): void {
     if (escape == null) return;
     this.collector.append(" ESCAPE ");
-    if (escape instanceof Node) {
-      this.visit(escape);
-    } else {
-      this.collector.append(this.quote(escape));
-    }
+    this.visit(escape);
   }
 
   // -- NullsFirst / NullsLast --

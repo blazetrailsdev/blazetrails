@@ -708,19 +708,17 @@ export class ConnectionPool implements ReapablePool {
 
   clearReloadableConnections(raiseOnAcquisitionTimeout: boolean = true): void {
     withExclusivelyAcquiredAllConnections(this, raiseOnAcquisitionTimeout, () => {
-      const reloadable = (this._connections ?? []).filter((c) =>
-        (c as unknown as { requiresReloading?: () => boolean }).requiresReloading?.(),
-      );
-      for (const conn of reloadable) {
-        (conn as unknown as { disconnectBang?: () => void }).disconnectBang?.();
+      for (const conn of this._connections ?? []) {
+        if ((conn as unknown as { requiresReloading?: () => boolean }).requiresReloading?.()) {
+          (conn as unknown as { disconnectBang?: () => void }).disconnectBang?.();
+        }
       }
       if (this._connections) {
-        this._connections = this._connections.filter((c) => !reloadable.includes(c));
+        this._connections = this._connections.filter(
+          (c) => !(c as unknown as { requiresReloading?: () => boolean }).requiresReloading?.(),
+        );
       }
       this._available?.clear();
-      for (const conn of this._connections ?? []) {
-        if (!this._checkedOut.has(conn)) this._available?.add(conn);
-      }
     });
   }
 

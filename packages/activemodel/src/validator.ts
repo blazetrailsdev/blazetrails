@@ -4,8 +4,8 @@ import { isBlank, underscore } from "@blazetrails/activesupport";
 export type AnyRecord = any;
 
 /**
- * Universal validator control keys that are never i18n interpolation variables.
- * Shared by `EachValidator#filteredErrorOptions` and `_validatesDefaultKeys`.
+ * Universal validator control keys recognised by `validates(...)`.
+ * Shared by `_validatesDefaultKeys` and `filteredErrorOptions`.
  */
 export const VALIDATOR_DEFAULT_KEYS = [
   "if",
@@ -16,6 +16,15 @@ export const VALIDATOR_DEFAULT_KEYS = [
   "strict",
   "exceptOn",
 ] as const;
+
+/**
+ * Subset of `VALIDATOR_DEFAULT_KEYS` that must NOT be forwarded to
+ * `errors.add`. `strict` is intentionally absent — `errors.add` reads it
+ * to raise `StrictValidationFailed`, mirroring Rails errors.rb:342-354.
+ */
+const FILTER_FROM_ERROR_OPTIONS = VALIDATOR_DEFAULT_KEYS.filter(
+  (k) => k !== "strict",
+) as readonly string[];
 
 export type ConditionFn = ((record: AnyRecord) => boolean) | string;
 
@@ -159,10 +168,7 @@ export class EachValidator extends Validator {
    * @internal Rails-private helper.
    */
   filteredErrorOptions(additionalReserved: string[] = []): Record<string, unknown> {
-    const reserved = new Set([
-      ...(VALIDATOR_DEFAULT_KEYS as readonly string[]),
-      ...additionalReserved,
-    ]);
+    const reserved = new Set([...FILTER_FROM_ERROR_OPTIONS, ...additionalReserved]);
     const filtered: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(this.options)) {
       if (!reserved.has(key)) filtered[key] = val;

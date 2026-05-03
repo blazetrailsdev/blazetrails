@@ -11,6 +11,7 @@
 import { NotImplementedError } from "../../errors.js";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { getDefaultTimezone } from "../../type/internal/timezone.js";
+import { Attribute as ModelAttribute } from "@blazetrails/activemodel";
 
 /**
  * Quote a SQL identifier (table name, column name, index name).
@@ -488,12 +489,8 @@ function typeCastedBinds(
   binds: unknown[] | null | undefined,
 ): unknown[] | undefined {
   return binds?.map((value: any) => {
-    if (
-      value !== null &&
-      typeof value === "object" &&
-      typeof value.valueForDatabase === "function"
-    ) {
-      return this.typeCast(value.valueForDatabase());
+    if (value instanceof ModelAttribute) {
+      return this.typeCast(value.valueForDatabase);
     }
     return this.typeCast(value);
   });

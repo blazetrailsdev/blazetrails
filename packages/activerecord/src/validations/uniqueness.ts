@@ -71,7 +71,12 @@ export class UniquenessValidator extends EachValidator {
       return;
     }
 
-    let relation = modelClass.where({ [attribute]: mapped });
+    let relation = buildRelation(
+      modelClass,
+      attribute,
+      mapped,
+      this.options as Record<string, unknown>,
+    );
 
     if (record.isPersisted?.()) {
       const pk = modelClass.primaryKey ?? "id";

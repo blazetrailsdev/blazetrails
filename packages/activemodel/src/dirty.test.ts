@@ -458,6 +458,28 @@ describe("clearChangesInformation", () => {
     expect(Object.keys(p.previousChanges).length).toBe(0);
   });
 });
+describe("clearAttributeChanges clears forced-dirty state", () => {
+  it("force-dirtied attribute is no longer dirty after clearAttributeChanges — forced flag must not leak", () => {
+    class Metric extends Model {
+      constructor(attrs: Record<string, unknown> = {}) {
+        super(attrs);
+      }
+    }
+    Metric.attribute("ratio", "float");
+
+    const m = new Metric({ ratio: NaN });
+    m.changesApplied();
+    m._dirty.forceChange("ratio", NaN);
+    expect(m.changedAttributes).toContain("ratio");
+
+    m.clearAttributeChanges(["ratio"]);
+    // After clearAttributeChanges, _forcedNames must also be cleared so a
+    // subsequent type-equal write does not re-appear as dirty.
+    m.writeAttribute("ratio", "NaN");
+    expect(m.changedAttributes).not.toContain("ratio");
+  });
+});
+
 describe("clearAttributeChanges", () => {
   it("clears changes for specific attributes only", () => {
     class Person extends Model {
@@ -712,6 +734,26 @@ describe("numeric type.isChanged integration via dirty tracking", () => {
     item.changesApplied();
     item.writeAttribute("count", "abc");
     expect(item.changedAttributes).toContain("count");
+  });
+
+  it("force-change is cleared by restoreAttributes — forced flag must not survive restore", () => {
+    class Metric extends Model {
+      constructor(attrs: Record<string, unknown> = {}) {
+        super(attrs);
+      }
+    }
+    Metric.attribute("ratio", "float");
+
+    const m = new Metric({ ratio: NaN });
+    m.changesApplied();
+    m._dirty.forceChange("ratio", NaN);
+    expect(m.changedAttributes).toContain("ratio");
+
+    m.restoreAttributes();
+    // After restoreAttributes(), _forcedNames must be cleared so a subsequent
+    // type-equal write does not re-appear as dirty.
+    m.writeAttribute("ratio", "NaN");
+    expect(m.changedAttributes).not.toContain("ratio");
   });
 
   it("force-change is cleared by changesApplied — forced state must not leak across save boundaries", () => {

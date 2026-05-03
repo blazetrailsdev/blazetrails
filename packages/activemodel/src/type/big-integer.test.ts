@@ -54,6 +54,12 @@ describe("BigIntegerTest", () => {
     expect(type.cast(large)).toBe(BigInt(large));
   });
 
+  it("leading + in numeric string casts to bigint (Rails to_i accepts leading +)", () => {
+    const type = new BigIntegerType();
+    expect(type.cast("+42")).toBe(42n);
+    expect(type.cast("+99999999999999999999")).toBe(BigInt("99999999999999999999"));
+  });
+
   it("numeric string casts to bigint", () => {
     const type = new BigIntegerType();
     expect(type.cast("42")).toBe(42n);

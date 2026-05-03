@@ -673,20 +673,25 @@ export class ConnectionPool implements ReapablePool {
 
   // --- Lifecycle ---
 
-  disconnect(): void {
-    this._pinnedConnections.clear();
-    if (this._connections) this._connections.length = 0;
-    this._available?.rejectAll(
-      new ConnectionNotEstablished("Connection pool has been disconnected"),
-    );
-    this._available?.clear();
-    this._checkedOut.clear();
-    this._leases?.clear();
-    this._lastCheckinAt.clear();
+  disconnect(raiseOnAcquisitionTimeout: boolean = true): void {
+    withExclusivelyAcquiredAllConnections(this, raiseOnAcquisitionTimeout, () => {
+      for (const conn of this._connections ?? []) {
+        (conn as unknown as { disconnectBang?: () => void }).disconnectBang?.();
+      }
+      this._pinnedConnections.clear();
+      if (this._connections) this._connections.length = 0;
+      this._available?.rejectAll(
+        new ConnectionNotEstablished("Connection pool has been disconnected"),
+      );
+      this._available?.clear();
+      this._checkedOut.clear();
+      this._leases?.clear();
+      this._lastCheckinAt.clear();
+    });
   }
 
   disconnectBang(): void {
-    this.disconnect();
+    this.disconnect(false);
   }
 
   discardBang(): void {
@@ -701,12 +706,26 @@ export class ConnectionPool implements ReapablePool {
     this._lastCheckinAt.clear();
   }
 
-  clearReloadableConnections(): void {
-    this.disconnect();
+  clearReloadableConnections(raiseOnAcquisitionTimeout: boolean = true): void {
+    withExclusivelyAcquiredAllConnections(this, raiseOnAcquisitionTimeout, () => {
+      const reloadable = (this._connections ?? []).filter((c) =>
+        (c as unknown as { requiresReloading?: () => boolean }).requiresReloading?.(),
+      );
+      for (const conn of reloadable) {
+        (conn as unknown as { disconnectBang?: () => void }).disconnectBang?.();
+      }
+      if (this._connections) {
+        this._connections = this._connections.filter((c) => !reloadable.includes(c));
+      }
+      this._available?.clear();
+      for (const conn of this._connections ?? []) {
+        if (!this._checkedOut.has(conn)) this._available?.add(conn);
+      }
+    });
   }
 
   clearReloadableConnectionsBang(): void {
-    this.clearReloadableConnections();
+    this.clearReloadableConnections(false);
   }
 
   reap(): void {

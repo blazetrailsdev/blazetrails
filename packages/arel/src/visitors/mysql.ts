@@ -96,6 +96,12 @@ export class MySQL extends ToSql {
       this.injectJoin(node.windows, ", ");
     }
 
+    // Mirrors base ToSql#visitArelNodesSelectCore — emits the optional
+    // SQL comment after WINDOW. Rails' MySQL visitor (mysql.rb) inherits
+    // the SelectCore visitor from to_sql.rb; Trails overrides for the
+    // FROM DUAL behavior so the comment emission has to be replicated.
+    this.maybeVisit(node.comment ?? null);
+
     return this.collector;
   }
 

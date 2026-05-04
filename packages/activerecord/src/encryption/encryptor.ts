@@ -35,6 +35,7 @@ export interface KeyProviderLike {
 export class Encryptor {
   private _compress: boolean;
   private _compressor: Compressor;
+  private _defaultKeyProviderCache?: KeyProviderLike;
 
   constructor(options?: { compress?: boolean; compressor?: Compressor }) {
     this._compress = options?.compress ?? true;
@@ -137,7 +138,10 @@ export class Encryptor {
     if (ctxKp) return ctxKp;
     const primaryKey = Configurable.config.primaryKey;
     if (!primaryKey) return undefined;
-    return new DerivedSecretKeyProvider(primaryKey) as unknown as KeyProviderLike;
+    this._defaultKeyProviderCache ??= new DerivedSecretKeyProvider(
+      primaryKey,
+    ) as unknown as KeyProviderLike;
+    return this._defaultKeyProviderCache;
   }
 
   /** @internal */
@@ -202,7 +206,13 @@ export class Encryptor {
 
   /** @internal */
   private forceEncodingIfNeeded(value: string): string {
-    return value;
+    const enc = this.forcedEncodingForDeterministicEncryption();
+    if (!enc) return value;
+    const normalized = enc.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normalized === "utf8" || normalized === "utf16" || normalized === "utf16le") return value;
+    // For ASCII/binary encodings, replace characters outside the safe range.
+    const limit = normalized === "ascii" ? 0x7f : 0xff;
+    return value.replace(/[\s\S]/g, (ch) => (ch.codePointAt(0)! < limit ? ch : "�"));
   }
 
   /** @internal */

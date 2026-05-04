@@ -55,5 +55,9 @@ export {
   keyLength,
   ivLength,
   eagerLoadBang,
+  context,
+  configure,
+  onEncryptedAttributeDeclared,
+  encryptedAttributeWasDeclared,
 } from "../encryption.js";
 export type { Encryptor as LegacyEncryptor, EncryptsOptions } from "../encryption.js";

@@ -13,24 +13,28 @@ import type { AttributeSetCodec, AttributeSetEnvelope } from "../coder.js";
  * - Float specials (NaN, Infinity, -Infinity) serialize to null via
  *   JSON.stringify and decode as null.
  */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 export const jsonCodec: AttributeSetCodec = {
   encode(envelope: AttributeSetEnvelope): string {
-    return JSON.stringify(envelope);
+    return JSON.stringify(envelope, (_key, value) =>
+      typeof value === "bigint" ? String(value) : value,
+    );
   },
   decode(input: string): AttributeSetEnvelope {
     const parsed: unknown = JSON.parse(input);
     if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      Array.isArray(parsed) ||
+      !isPlainObject(parsed) ||
       !("v" in parsed) ||
-      !("types" in parsed) ||
-      !("values" in parsed)
+      !isPlainObject((parsed as Record<string, unknown>).types) ||
+      !isPlainObject((parsed as Record<string, unknown>).values)
     ) {
       throw new AttributeSetCoderError(
         "jsonCodec.decode: input is not a valid AttributeSetEnvelope",
       );
     }
-    return parsed as AttributeSetEnvelope;
+    return parsed as unknown as AttributeSetEnvelope;
   },
 };

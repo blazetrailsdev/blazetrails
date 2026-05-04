@@ -29,6 +29,21 @@ describe("jsonCodec", () => {
     expect(() => jsonCodec.decode("null")).toThrow(AttributeSetCoderError);
     expect(() => jsonCodec.decode("[]")).toThrow(AttributeSetCoderError);
     expect(() => jsonCodec.decode('{"v":1}')).toThrow(AttributeSetCoderError);
+    expect(() => jsonCodec.decode('{"v":1,"types":null,"values":{}}')).toThrow(
+      AttributeSetCoderError,
+    );
+  });
+
+  it("encodes bigint values as strings without throwing", () => {
+    const bigintEnvelope: AttributeSetEnvelope = {
+      v: 1,
+      types: { id: "big_integer" },
+      values: { id: BigInt("9007199254740993") as unknown as unknown },
+    };
+    const encoded = jsonCodec.encode(bigintEnvelope);
+    expect(encoded).toContain('"9007199254740993"');
+    const decoded = jsonCodec.decode(encoded);
+    expect(decoded.values.id).toBe("9007199254740993");
   });
 
   it("envelope shape snapshot", () => {

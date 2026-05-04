@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { AttributeSetCoder, AttributeSetCoderError } from "./coder.js";
+import type { AttributeSetCodec, AttributeSetEnvelope } from "./coder.js";
 import { AttributeSet } from "../attribute-set.js";
 import { Attribute } from "../attribute.js";
 import { typeRegistry } from "../type/registry.js";
@@ -88,6 +89,36 @@ describe("AttributeSetCoder", () => {
     });
     const decoded = coder.decode(json, schema);
     expect(decoded.fetchValue("extra")).toBe("bonus");
+  });
+
+  it("uses attr.type.name (registry key) not type() for type storage", () => {
+    // ImmutableStringType.type() returns "string" (Rails API alias) but
+    // name = "immutable_string" (registry key). Encode must store the key.
+    const immutableType = typeRegistry.lookup("immutable_string");
+    const attr = Attribute.fromUser("flag", "t", immutableType);
+    const set = makeSet(new Map([["flag", attr]]));
+    const envelope = JSON.parse(coder.encode(set));
+    expect(envelope.types.flag).toBe("immutable_string");
+    // Decode recovers the correct type
+    const decoded = coder.decode(coder.encode(set));
+    expect(decoded.fetchValue("flag")).toBe("t");
+  });
+
+  it("delegates encode/decode through an injected custom codec", () => {
+    const encoded: AttributeSetEnvelope[] = [];
+    const customCodec: AttributeSetCodec = {
+      encode: vi.fn((env: AttributeSetEnvelope) => {
+        encoded.push(env);
+        return JSON.stringify(env);
+      }),
+      decode: vi.fn((input: string) => JSON.parse(input) as AttributeSetEnvelope),
+    };
+    const customCoder = new AttributeSetCoder(typeRegistry, { codec: customCodec });
+    const set = makeSet(new Map([["x", stringAttr("x", "hi")]]));
+    customCoder.decode(customCoder.encode(set));
+    expect(customCodec.encode).toHaveBeenCalledOnce();
+    expect(customCodec.decode).toHaveBeenCalledOnce();
+    expect(encoded[0].types.x).toBe("string");
   });
 
   it("schema attr not in envelope resolves to Uninitialized", () => {

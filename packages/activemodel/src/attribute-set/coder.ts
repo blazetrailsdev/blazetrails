@@ -70,7 +70,7 @@ export class AttributeSetCoder {
         defaultAttributes.push(name);
         return;
       }
-      types[name] = attr.type.type();
+      types[name] = attr.type.name;
       values[name] = attr.valueBeforeTypeCast;
     });
 

@@ -410,6 +410,11 @@ export function id(this: any, value?: unknown): unknown {
   const pk = ctor.primaryKey as string | string[];
   if (value !== undefined) {
     if (Array.isArray(pk)) {
+      if (!Array.isArray(value)) {
+        throw new TypeError(
+          `Expected an array for composite primary key [${pk.join(", ")}], got ${value === null ? "null" : typeof value}`,
+        );
+      }
       pk.forEach((col: string, i: number) => this._writeAttribute(col, (value as unknown[])[i]));
     } else {
       this._writeAttribute(pk, value);

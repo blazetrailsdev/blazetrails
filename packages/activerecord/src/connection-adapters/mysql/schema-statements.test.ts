@@ -201,7 +201,9 @@ describe("MySQL::SchemaStatements", () => {
     expect(sql).toContain("SELECT table_name FROM information_schema.tables");
     expect(sql).toContain("WHERE table_schema = database()");
     expect(dataSourceSql("users")).toContain("AND table_name = 'users'");
-    expect(dataSourceSql(undefined, "BASE TABLE")).toContain("AND table_type = 'BASE TABLE'");
+    expect(dataSourceSql(undefined, { type: "BASE TABLE" })).toContain(
+      "AND table_type = 'BASE TABLE'",
+    );
     const qualified = dataSourceSql("mydb.users");
     expect(qualified).toContain("table_schema = 'mydb'");
     expect(qualified).toContain("table_name = 'users'");

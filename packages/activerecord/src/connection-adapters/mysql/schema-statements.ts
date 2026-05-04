@@ -228,8 +228,8 @@ export function addOptionsForIndexColumns(
 }
 
 /** @internal */
-export function dataSourceSql(name?: string, type?: string): string {
-  const scope = quotedScope(name, { type });
+export function dataSourceSql(name?: string | null, options: { type?: string } = {}): string {
+  const scope = quotedScope(name, options);
   let sql = `SELECT table_name FROM information_schema.tables WHERE table_schema = ${scope.schema}`;
   if (scope.name) {
     sql += ` AND table_name = ${scope.name}`;
@@ -241,7 +241,7 @@ export function dataSourceSql(name?: string, type?: string): string {
 
 /** @internal */
 export function quotedScope(
-  name?: string,
+  name?: string | null,
   options: { type?: string } = {},
 ): { schema: string; name?: string; type?: string } {
   const [schema, tableName] = extractSchemaQualifiedName(name);

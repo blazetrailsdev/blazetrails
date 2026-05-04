@@ -384,7 +384,7 @@ export interface ColumnMethods {
 export class ReferenceDefinition {
   readonly name: string;
   /** @internal */
-  readonly polymorphic: boolean;
+  readonly polymorphic: boolean | Record<string, unknown>;
   readonly index: boolean | AddIndexOptions;
   readonly foreignKey: boolean | AddForeignKeyOptions;
   readonly type: ColumnType;
@@ -393,7 +393,7 @@ export class ReferenceDefinition {
   constructor(
     name: string,
     options: ColumnOptions & {
-      polymorphic?: boolean;
+      polymorphic?: boolean | Record<string, unknown>;
       foreignKey?: boolean | AddForeignKeyOptions;
       index?: boolean | AddIndexOptions;
       type?: ColumnType;
@@ -873,10 +873,12 @@ export class TableDefinition {
   references(
     name: string,
     options: ColumnOptions & {
-      polymorphic?: boolean;
+      polymorphic?: boolean | Record<string, unknown>;
       foreignKey?: boolean | AddForeignKeyOptions;
       index?: boolean | AddIndexOptions;
       type?: ColumnType;
+      ifExists?: boolean;
+      ifNotExists?: boolean;
     } = {},
   ): this {
     new ReferenceDefinition(name, options).addTo(this);

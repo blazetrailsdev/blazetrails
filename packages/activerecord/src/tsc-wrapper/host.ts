@@ -4,12 +4,20 @@ import { virtualize, type VirtualizeResult } from "../type-virtualization/virtua
 import { resolveAutoImports } from "./auto-import.js";
 
 const STATIC_BLOCK_PATTERN = /\bstatic\s*\{/;
-// Cheap pre-filter for files using `include(...)` from
-// `@blazetrails/activesupport`. Both substrings must appear before the
-// virtualizer parses the file — the syntactic walker enforces the
-// stricter import-source check.
-const INCLUDE_CALL_PATTERN = /\binclude\s*\(/;
-const ACTIVESUPPORT_IMPORT_PATTERN = /@blazetrails\/activesupport/;
+// Cheap pre-filter for files using top-level `include(...)` from
+// `@blazetrails/activesupport`. The patterns are intentionally
+// conservative: false negatives are caught by users not seeing the
+// merge (loud), but false positives cost real compile time
+// (re-parsing + auto-import resolution) on every file that imports
+// from activesupport. We require:
+//   - a top-of-line `include(` (`^` with the `m` flag) to skip
+//     `.include(` method calls and occurrences in block comments
+//   - a named import line that actually binds the local name
+//     `include` from `@blazetrails/activesupport`
+// The syntactic walker enforces the same constraints exactly.
+const INCLUDE_CALL_PATTERN = /^\s*include\s*\(/m;
+const ACTIVESUPPORT_INCLUDE_IMPORT_PATTERN =
+  /import\s*\{[^}]*\binclude\b[^}]*\}\s*from\s*["']@blazetrails\/activesupport["']/;
 
 export interface TrailsCompilerHost extends ts.CompilerHost {
   getDeltasForFile(fileName: string): VirtualizeResult["deltas"] | undefined;
@@ -56,7 +64,7 @@ export function buildCompilerHost(
     // interface-merge appendix even if they don't extend Base — e.g.
     // utility classes that mix in plain modules.
     const hasIncludeCall =
-      INCLUDE_CALL_PATTERN.test(text) && ACTIVESUPPORT_IMPORT_PATTERN.test(text);
+      INCLUDE_CALL_PATTERN.test(text) && ACTIVESUPPORT_INCLUDE_IMPORT_PATTERN.test(text);
     if (hasIncludeCall) return true;
     // Fast-path skip for files that don't reference a Base-like class.
     // When schema columns are available, a class extending Base may

@@ -175,12 +175,15 @@ export function virtualize(
     }
   }
 
-  // Insert auto-imported `import type` lines AFTER any leading
-  // directives (shebangs, triple-slash refs, @ts-nocheck) that must
-  // stay at the top of the file. Erased at runtime (type-only).
-  const prependImports = effectivePrepends.length > 0 ? effectivePrepends : undefined;
-  if (prependImports && prependImports.length > 0) {
-    const importBlock = prependImports.join("\n") + "\n";
+  // Insert the prepend block AFTER any leading directives (shebangs,
+  // triple-slash refs, @ts-nocheck) that must stay at the top of the
+  // file. The block is one line per entry — entries may be `import type`
+  // lines (auto-imports + the `Included` alias) AND/OR synthesized
+  // `interface X extends ...` declarations from include() bridging.
+  // All entries are erased at runtime (types only).
+  const prependLines = effectivePrepends.length > 0 ? effectivePrepends : undefined;
+  if (prependLines && prependLines.length > 0) {
+    const importBlock = prependLines.join("\n") + "\n";
     const insertPos = findDirectiveEnd(text);
     // Compute the virtual line BEFORE which the import block is
     // inserted: `-1` if the block is truly at the start of the file,
@@ -196,7 +199,7 @@ export function virtualize(
     const insertedAtLine =
       insertPos === 0 ? -1 : before.endsWith("\n") ? newlineCount - 1 : newlineCount;
     text = text.slice(0, insertPos) + importBlock + text.slice(insertPos);
-    const prependedLines = prependImports.length;
+    const prependedLines = prependLines.length;
     for (const d of deltas) {
       d.insertedAtLine += prependedLines;
     }

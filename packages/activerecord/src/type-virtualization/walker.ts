@@ -366,9 +366,10 @@ function readRecordLiteral(node: ts.Expression | undefined): RecordLiteral {
 
 /**
  * Find every top-level `include(ClassName, ModuleExpr)` call where
- * `include` is imported from `@blazetrails/activesupport`. The returned
- * pairs are grouped by the synthesizer into interface-merge declarations
- * that surface the mixed-in instance methods to the type checker.
+ * `include` is imported from `@blazetrails/activesupport`. Returns a
+ * flat list — `virtualize()` is responsible for grouping by class name
+ * and emitting one interface-merge declaration per class that surfaces
+ * the mixed-in instance methods to the type checker.
  *
  * Constraints:
  * - The first argument must be a bare identifier referencing a class

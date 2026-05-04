@@ -9,7 +9,10 @@ import {
   quotedScope,
   assertValidDeferrable,
   extractGeneratedType,
+  newColumnFromField,
 } from "./schema-statements.js";
+import { SqlTypeMetadata } from "../sql-type-metadata.js";
+import { Column } from "./column.js";
 import { SchemaCreation } from "./schema-creation.js";
 import { SchemaDumper } from "./schema-dumper.js";
 
@@ -193,6 +196,83 @@ describe("SQLite3::SchemaStatements", () => {
 
     it("returns undefined for hidden=0", () => {
       expect(extractGeneratedType({ hidden: 0 })).toBeUndefined();
+    });
+  });
+
+  describe("newColumnFromField", () => {
+    function makeAdapter(sqlType = "varchar") {
+      return {
+        fetchTypeMetadata: (t: string) =>
+          new SqlTypeMetadata({ sqlType: t, type: t.toLowerCase() }),
+      } as any;
+    }
+
+    const defs = [{ pk: 0 }, { pk: 0 }];
+
+    it("constructs a Column with name and nullability", () => {
+      const field = { name: "title", type: "varchar", notnull: 0, dflt_value: null, pk: 0 };
+      const col = newColumnFromField(makeAdapter(), "posts", field, defs);
+      expect(col).toBeInstanceOf(Column);
+      expect(col.name).toBe("title");
+      expect(col.null).toBe(true);
+    });
+
+    it("respects notnull=1", () => {
+      const field = { name: "title", type: "varchar", notnull: 1, dflt_value: null, pk: 0 };
+      const col = newColumnFromField(makeAdapter(), "posts", field, defs);
+      expect(col.null).toBe(false);
+    });
+
+    it("extracts string defaults", () => {
+      const field = { name: "status", type: "varchar", notnull: 0, dflt_value: "'active'", pk: 0 };
+      const col = newColumnFromField(makeAdapter(), "posts", field, defs);
+      expect(col.default).toBe("active");
+    });
+
+    it("sets defaultFunction for CURRENT_TIMESTAMP", () => {
+      const field = {
+        name: "created_at",
+        type: "datetime",
+        notnull: 0,
+        dflt_value: "CURRENT_TIMESTAMP",
+        pk: 0,
+        hidden: 0,
+      };
+      const col = newColumnFromField(makeAdapter("datetime"), "posts", field, defs);
+      expect(col.defaultFunction).toBe("CURRENT_TIMESTAMP");
+    });
+
+    it("marks generated virtual columns", () => {
+      const field = {
+        name: "full_name",
+        type: "varchar",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+        hidden: 2,
+      };
+      const col = newColumnFromField(makeAdapter(), "posts", field, defs);
+      expect(col.isVirtual()).toBe(true);
+    });
+
+    it("marks generated stored columns", () => {
+      const field = {
+        name: "full_name",
+        type: "varchar",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+        hidden: 3,
+      };
+      const col = newColumnFromField(makeAdapter(), "posts", field, defs);
+      expect(col.isVirtualStored()).toBe(true);
+    });
+
+    it("marks INTEGER PK as rowid", () => {
+      const field = { name: "id", type: "INTEGER", notnull: 1, dflt_value: null, pk: 1 };
+      const singlePkDefs = [{ pk: 1 }];
+      const col = newColumnFromField(makeAdapter("INTEGER"), "posts", field, singlePkDefs);
+      expect(col.rowid).toBe(true);
     });
   });
 });

@@ -143,7 +143,7 @@ function validateIndexLengthBang(_tableName: string, _newName: string, internal 
 }
 
 /** @internal */
-function newColumnFromField(
+export function newColumnFromField(
   adapter: SQLite3SchemaAdapter,
   _tableName: string,
   field: Record<string, unknown>,

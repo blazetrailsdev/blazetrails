@@ -8,7 +8,9 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 export const yamlCodec: AttributeSetCodec = {
   encode(envelope: AttributeSetEnvelope): string {
-    return yamlStringify(envelope);
+    return yamlStringify(envelope, (_key, value) =>
+      typeof value === "bigint" ? String(value) : value,
+    );
   },
   decode(input: string): AttributeSetEnvelope {
     const parsed: unknown = yamlParse(input);

@@ -1822,7 +1822,7 @@ export class SchemaStatements {
 
   /** @internal */
   changeColumnDefaultForAlter(
-    tableName: string,
+    _tableName: string,
     columnName: string,
     defaultOrChanges: unknown,
   ): string {

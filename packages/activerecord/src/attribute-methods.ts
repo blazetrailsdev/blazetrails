@@ -404,7 +404,7 @@ export function toKey(this: any): unknown[] | null {
   return arr.some((v: unknown) => v == null) ? null : arr;
 }
 
-/** Mirrors: ActiveRecord::AttributeMethods#id, id=, id? */
+/** Mirrors: ActiveRecord::AttributeMethods#id, id= */
 export function id(this: any, value?: unknown): unknown {
   const ctor = this.constructor as any;
   const pk = ctor.primaryKey as string | string[];

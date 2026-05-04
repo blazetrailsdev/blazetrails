@@ -172,7 +172,7 @@ export function primaryKey(this: PrimaryKeyHost, value?: string | string[]): str
 }
 
 /**
- * Mirrors: ActiveRecord::AttributeMethods::PrimaryKey#id, id=, id?
+ * Mirrors: ActiveRecord::AttributeMethods::PrimaryKey#id, id=
  */
 export function id(this: PrimaryKeyInstance, value?: unknown): unknown {
   if (value !== undefined) {

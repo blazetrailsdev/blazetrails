@@ -585,6 +585,18 @@ describe("LengthValidationTest", () => {
     expect(err.options).toHaveProperty("count");
   });
 
+  it("allowBlank: false with only maximum forces minimum of 1", () => {
+    // Mirrors length.rb:22-24: if allow_blank == false && minimum.nil? && is.nil? → minimum = 1
+    class Person extends Model {
+      static {
+        this.attribute("title", "string");
+        this.validates("title", { length: { maximum: 10, allowBlank: false } });
+      }
+    }
+    expect(new Person({ title: "" }).isValid()).toBe(false);
+    expect(new Person({ title: "a" }).isValid()).toBe(true);
+  });
+
   it("throws at definition time when constraint is a non-integer", () => {
     expect(() => {
       class Person extends Model {

@@ -106,7 +106,9 @@ export class LengthValidator extends EachValidator {
       ) {
         continue;
       }
-      throw new Error(`:${key} must be a non-negative Integer, Infinity, Symbol, or Proc`);
+      throw new Error(
+        `:${key} must be a non-negative Integer, Infinity, string (method name), or Proc`,
+      );
     }
   }
 

@@ -691,44 +691,9 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return args;
   }
 
-  // Mirrors: AbstractMysqlAdapter::initialize_type_map + extended_type_map
   static buildTypeMap(options: { emulateBooleans?: boolean } = {}): TypeMap {
     const map = new TypeMap();
-    const intType = (limit: number) => (sql: string) =>
-      /\bunsigned\b/i.test(sql) ? new UnsignedInteger({ limit }) : new IntegerType({ limit });
-
-    map.registerType(/tinytext/i, undefined, () => new TextType());
-    map.registerType(/tinyblob/i, undefined, () => new BinaryType());
-    map.registerType(/mediumtext/i, undefined, () => new TextType());
-    map.registerType(/mediumblob/i, undefined, () => new BinaryType());
-    map.registerType(/longtext/i, undefined, () => new TextType());
-    map.registerType(/longblob/i, undefined, () => new BinaryType());
-    map.registerType(/text/i, undefined, () => new TextType());
-    map.registerType(/blob/i, undefined, () => new BinaryType());
-    map.registerType(/^float/i, undefined, () => new FloatType());
-    map.registerType(/^double/i, undefined, () => new FloatType());
-    map.registerType(/^bigint/i, undefined, intType(8));
-    map.registerType(/^mediumint/i, undefined, intType(3));
-    map.registerType(/^smallint/i, undefined, intType(2));
-    map.registerType(/^tinyint/i, undefined, intType(1));
-    map.registerType(/^int/i, undefined, intType(4));
-    map.registerType(/^year/i, undefined, () => new IntegerType());
-    map.registerType(/^bit/i, undefined, () => new BinaryType());
-    map.registerType(/^binary/i, undefined, () => new BinaryType());
-    map.registerType(/^varbinary/i, undefined, () => new BinaryType());
-    map.registerType(/^enum/i, undefined, () => new StringType());
-    map.registerType(/^set/i, undefined, () => new StringType());
-    map.registerType(/^char/i, undefined, () => new StringType());
-    map.registerType(/^varchar/i, undefined, () => new StringType());
-    map.registerType(/decimal/i, undefined, () => new DecimalType());
-    map.registerType(/numeric/i, undefined, () => new DecimalType());
-    map.registerType("boolean", new BooleanType());
-    map.registerType("date", new DateType());
-    map.registerType(/^datetime/i, undefined, () => new DateTimeType());
-    map.registerType(/^timestamp/i, undefined, () => new DateTimeType());
-    map.registerType(/^time\b/i, undefined, () => new TimeType());
-    map.registerType("json", new JsonType());
-    // emulate_booleans: tinyint(1) → boolean
+    AbstractMysqlAdapter.initializeTypeMap(map);
     if (options.emulateBooleans) {
       map.registerType(/^tinyint\(1\)/i, undefined, () => new BooleanType());
     }
@@ -1059,6 +1024,22 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   /** @internal */
   protected static initializeTypeMap(m: TypeMap): void {
+    // Base types (mirrors AbstractAdapter#initialize_type_map via super)
+    m.registerType(/^boolean/i, undefined, () => new BooleanType());
+    m.registerType(/^char/i, undefined, () => new StringType());
+    m.registerType(/^varchar/i, undefined, () => new StringType());
+    m.registerType(/^enum/i, undefined, () => new StringType());
+    m.registerType(/^set/i, undefined, () => new StringType());
+    m.registerType(/^binary/i, undefined, () => new BinaryType());
+    m.registerType(/^varbinary/i, undefined, () => new BinaryType());
+    m.registerType(/^date$/i, new DateType());
+    m.registerType(/^time\b/i, undefined, () => new TimeType());
+    m.registerType(/^datetime/i, undefined, () => new DateTimeType());
+    m.registerType(/decimal/i, undefined, () => new DecimalType());
+    m.registerType(/numeric/i, undefined, () => new DecimalType());
+    m.registerType("json", new JsonType());
+
+    // MySQL-specific overrides (mirrors MySQL's initialize_type_map additions)
     m.registerType(/tinytext/i, undefined, () => new TextType());
     m.registerType(/tinyblob/i, undefined, () => new BinaryType());
     m.registerType(/text/i, undefined, () => new TextType());
@@ -1076,6 +1057,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     AbstractMysqlAdapter.registerIntegerType(m, /^tinyint/i, { limit: 1 });
     m.registerType(/^year/i, undefined, () => new IntegerType());
     m.registerType(/^bit/i, undefined, () => new BinaryType());
+    m.registerType(/^timestamp/i, undefined, () => new DateTimeType());
   }
 
   /** @internal */
@@ -1092,10 +1074,12 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   /** @internal */
   protected extractPrecision(sqlType: string): number | null {
+    const match = /\((\d+)(?:,\d+)?\)/.exec(sqlType);
+    const parsed = match ? parseInt(match[1], 10) : null;
     if (/^(?:date)?time(?:stamp)?\b/i.test(sqlType)) {
-      return 0;
+      return parsed ?? 0;
     }
-    return null;
+    return parsed;
   }
 }
 

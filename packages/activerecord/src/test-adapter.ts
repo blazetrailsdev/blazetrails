@@ -363,9 +363,11 @@ async function dropAllTables(inner: any): Promise<void> {
 
 /**
  * MySQL drop-all using a single pinned pool connection so
- * FOREIGN_KEY_CHECKS=0 covers the whole drop sequence. Releasing the
- * connection after the loop also implicitly resets the session flag
- * for future borrowers.
+ * FOREIGN_KEY_CHECKS=0 covers the whole drop sequence. The flag is
+ * restored in `finally`; if anything between the SET and the restore
+ * throws, we destroy the connection rather than releasing it back to
+ * the pool — releasing a connection that still has FOREIGN_KEY_CHECKS=0
+ * would silently disable FK enforcement for the next borrower.
  *
  * @internal
  */
@@ -373,6 +375,7 @@ async function dropAllMysqlTables(adapter: any): Promise<void> {
   const driverPool = adapter._driverPool;
   if (!driverPool) return;
   const conn = await driverPool.getConnection();
+  let restored = false;
   try {
     await conn.query(`SET FOREIGN_KEY_CHECKS=0`);
     const [tableRows] = (await conn.query(
@@ -396,8 +399,22 @@ async function dropAllMysqlTables(adapter: any): Promise<void> {
       } catch {}
     }
     await conn.query(`SET FOREIGN_KEY_CHECKS=1`);
+    restored = true;
   } finally {
-    conn.release();
+    if (restored) {
+      conn.release();
+    } else {
+      // Connection state may be stale (FK_CHECKS=0, half-finished txn).
+      // Destroy instead of release so the pool opens a fresh session.
+      try {
+        await conn.query(`SET FOREIGN_KEY_CHECKS=1`);
+        conn.release();
+      } catch {
+        try {
+          conn.destroy();
+        } catch {}
+      }
+    }
   }
 }
 
@@ -490,7 +507,29 @@ export async function resetTestAdapterState(): Promise<void> {
     if (isPg()) {
       // current_schemas(false) returns the search path with system schemas
       // (pg_catalog, information_schema) excluded — the same scope the
-      // adapter's tables() method uses.
+      // adapter's tables() method uses. Drop materialized views and views
+      // before tables; standalone views that don't depend on a dropped
+      // table wouldn't be reached by CASCADE.
+      const matviews = (await _sharedAdapter.execute(
+        `SELECT schemaname, matviewname AS name FROM pg_matviews
+         WHERE schemaname = ANY(current_schemas(false))`,
+      )) as { schemaname: string; name: string }[];
+      for (const { schemaname, name } of matviews) {
+        try {
+          await _sharedAdapter.exec(
+            `DROP MATERIALIZED VIEW IF EXISTS "${schemaname}"."${name}" CASCADE`,
+          );
+        } catch {}
+      }
+      const views = (await _sharedAdapter.execute(
+        `SELECT schemaname, viewname AS name FROM pg_views
+         WHERE schemaname = ANY(current_schemas(false))`,
+      )) as { schemaname: string; name: string }[];
+      for (const { schemaname, name } of views) {
+        try {
+          await _sharedAdapter.exec(`DROP VIEW IF EXISTS "${schemaname}"."${name}" CASCADE`);
+        } catch {}
+      }
       const rows = (await _sharedAdapter.execute(
         `SELECT schemaname, tablename FROM pg_tables
          WHERE schemaname = ANY(current_schemas(false))`,
@@ -503,8 +542,17 @@ export async function resetTestAdapterState(): Promise<void> {
     } else if (isMysql()) {
       await dropAllMysqlTables(_sharedAdapter);
     } else {
-      // SQLite :memory: — query sqlite_master so we drop tables created
-      // via raw adapter.exec() (which bypass _createdTables) too.
+      // SQLite :memory: — query sqlite_master so objects created via raw
+      // adapter.exec() (which bypass _createdTables) also get dropped.
+      // Drop views first since SQLite has no CASCADE.
+      const views = (await _sharedAdapter.execute(
+        `SELECT name FROM sqlite_master WHERE type='view' AND name NOT LIKE 'sqlite_%'`,
+      )) as { name: string }[];
+      for (const { name } of views) {
+        try {
+          await _sharedAdapter.exec(`DROP VIEW IF EXISTS "${name}"`);
+        } catch {}
+      }
       const rows = (await _sharedAdapter.execute(
         `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
       )) as { name: string }[];

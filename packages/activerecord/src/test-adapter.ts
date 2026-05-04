@@ -415,10 +415,16 @@ export async function cleanupTestAdapter(adapter: DatabaseAdapter): Promise<void
 /**
  * Reset every piece of module-level test-adapter state so the next test
  * starts from a clean slate. Called from a global `beforeEach` hook in
- * test-setup.ts — running unconditionally before every test eliminates
+ * test-setup-ar.ts — running unconditionally before every test eliminates
  * cross-test bleed (stale `_declaredColumns`, leaked `_registeredModelClasses`,
- * stuck `_needsCleanup`/`_setupLock`/`_cleanupPromise` from a prior tests's
+ * stuck `_needsCleanup`/`_setupLock`/`_cleanupPromise` from a prior test's
  * recovery path) that the lazy "first DB op cleans up" model couldn't.
+ *
+ * Drops tables based on the *actual database state* (pg_tables / SHOW TABLES)
+ * rather than trusting `_createdTables`, because the recovery path,
+ * file-load-time cleanup, and direct adapter use can all leave the in-memory
+ * tracking out of sync with the real schema. SQLite uses :memory: per fork
+ * so an in-memory drop suffices there.
  *
  * Idempotent and safe to call when no tables exist.
  *
@@ -430,8 +436,28 @@ export async function resetTestAdapterState(): Promise<void> {
   while (_setupLock) await _setupLock;
   while (_cleanupPromise) await _cleanupPromise;
 
-  if (_sharedAdapter && _createdTables.size > 0) {
-    await dropAllTables(_sharedAdapter);
+  if (_sharedAdapter) {
+    if (isPg()) {
+      const rows = await _sharedAdapter.execute(
+        `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
+      );
+      for (const r of rows) {
+        try {
+          await _sharedAdapter.exec(`DROP TABLE IF EXISTS "${(r as any).tablename}" CASCADE`);
+        } catch {}
+      }
+    } else if (isMysql()) {
+      const rows = await _sharedAdapter.execute(`SHOW TABLES`);
+      for (const r of rows) {
+        const table = Object.values(r)[0] as string;
+        try {
+          await _sharedAdapter.exec(`DROP TABLE IF EXISTS \`${table}\``);
+        } catch {}
+      }
+    } else if (_createdTables.size > 0) {
+      // SQLite :memory: — only drop what we tracked, no DB-level enumeration.
+      await dropAllTables(_sharedAdapter);
+    }
   }
   _createdTables.clear();
   _createdColumns.clear();

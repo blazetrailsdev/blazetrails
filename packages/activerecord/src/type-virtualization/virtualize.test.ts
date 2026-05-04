@@ -579,6 +579,18 @@ describe("virtualize — include() interface bridge", () => {
     expect(text).not.toMatch(/interface Relation<T> extends __TrailsIncluded/);
   });
 
+  test("does not inject the __TrailsIncluded import when every target has a user interface", () => {
+    const src =
+      'import { include } from "@blazetrails/activesupport";\n' +
+      'import { FinderMethods } from "./finder-methods.js";\n' +
+      "export class Relation<T> {}\n" +
+      "export interface Relation<T> { find(...args: unknown[]): Promise<T>; }\n" +
+      "include(Relation, FinderMethods);\n";
+    const { text } = virtualize(src, "relation.ts");
+    // No interface emitted (user has one), and no dangling alias import.
+    expect(text).not.toMatch(/__TrailsIncluded/);
+  });
+
   test("accepts `include as include` (local binding still `include`)", () => {
     const src =
       'import { include as include } from "@blazetrails/activesupport";\n' +

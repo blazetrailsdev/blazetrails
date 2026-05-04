@@ -156,7 +156,6 @@ export function virtualize(
     //     the wrong symbol.
     const aliasState = checkIncludedAliasBinding(sf, INCLUDED_ALIAS);
     if (aliasState !== "different") {
-      if (aliasState === "absent") effectivePrepends.push(INCLUDED_IMPORT_LINE);
       // Skip auto-bridging classes whose name already has a top-level
       // `interface` declaration in the file — the user is hand-typing
       // refined signatures (e.g. overloads narrower than the module's
@@ -180,14 +179,20 @@ export function virtualize(
             typeParams: inc.classTypeParams,
           });
       }
+      const interfaceLines: string[] = [];
       for (const [className, { mods, exported, typeParams }] of grouped) {
         const heritage = mods.map((m) => `${INCLUDED_ALIAS}<typeof ${m}>`).join(", ");
         // Match the class's export modifier and generic parameters —
         // declaration merging requires both to line up.
         const prefix = exported ? "export " : "";
-        effectivePrepends.push(
-          `${prefix}interface ${className}${typeParams} extends ${heritage} {}`,
-        );
+        interfaceLines.push(`${prefix}interface ${className}${typeParams} extends ${heritage} {}`);
+      }
+      // Only inject the alias import when at least one interface line
+      // will actually use it — otherwise the import would dangle and
+      // trigger noUnusedLocals.
+      if (interfaceLines.length > 0) {
+        if (aliasState === "absent") effectivePrepends.push(INCLUDED_IMPORT_LINE);
+        effectivePrepends.push(...interfaceLines);
       }
     }
   }

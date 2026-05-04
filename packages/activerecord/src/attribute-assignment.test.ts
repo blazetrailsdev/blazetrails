@@ -135,6 +135,14 @@ describe("AttributeAssignmentTest", () => {
     it("returns string when no type suffix", () => {
       expect(typeCastAttributeValue("written_on(1)", "2004")).toBe("2004");
     });
+
+    it("returns 0 for blank integer (mirrors Ruby String#to_i)", () => {
+      expect(typeCastAttributeValue("written_on(1i)", "")).toBe(0);
+    });
+
+    it("returns 0.0 for blank float (mirrors Ruby String#to_f)", () => {
+      expect(typeCastAttributeValue("amount(1f)", "")).toBe(0.0);
+    });
   });
 
   describe("findParameterPosition", () => {

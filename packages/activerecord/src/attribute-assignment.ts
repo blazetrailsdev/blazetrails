@@ -110,8 +110,15 @@ export function typeCastAttributeValue(multiparameterName: string, value: string
   const match = multiparameterName.match(/\(\d*([if])\)/);
   if (!match) return value;
   const flag = match[1];
-  if (flag === "i") return parseInt(value, 10);
-  if (flag === "f") return parseFloat(value);
+  // Ruby's String#to_i / #to_f return 0 / 0.0 for blank/invalid input.
+  if (flag === "i") {
+    const n = parseInt(value, 10);
+    return isNaN(n) ? 0 : n;
+  }
+  if (flag === "f") {
+    const n = parseFloat(value);
+    return isNaN(n) ? 0.0 : n;
+  }
   return value;
 }
 

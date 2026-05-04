@@ -182,7 +182,7 @@ function newColumnFromField(
 const INTEGER_REGEX = /integer/i;
 
 /** @internal */
-function isColumnTheRowid(
+export function isColumnTheRowid(
   field: Record<string, unknown>,
   columnDefinitions: Record<string, unknown>[],
 ): boolean {
@@ -191,7 +191,7 @@ function isColumnTheRowid(
 }
 
 /** @internal */
-function dataSourceSql(name?: string, type?: string): string {
+export function dataSourceSql(name?: string, type?: string): string {
   const scope = quotedScope(name, type);
   if (!scope.type) scope.type = "'table','view'";
   let sql = "SELECT name FROM pragma_table_list WHERE schema <> 'temp'";
@@ -202,7 +202,7 @@ function dataSourceSql(name?: string, type?: string): string {
 }
 
 /** @internal */
-function quotedScope(name?: string, type?: string): { name?: string; type?: string } {
+export function quotedScope(name?: string, type?: string): { name?: string; type?: string } {
   const resolvedType =
     type === "BASE TABLE"
       ? "'table'"
@@ -218,7 +218,7 @@ function quotedScope(name?: string, type?: string): { name?: string; type?: stri
 }
 
 /** @internal */
-function assertValidDeferrable(deferrable: unknown): void {
+export function assertValidDeferrable(deferrable: unknown): void {
   if (!deferrable || deferrable === "immediate" || deferrable === "deferred") return;
   throw new Error(
     `deferrable must be "immediate" or "deferred", got: ${JSON.stringify(deferrable)}`,
@@ -226,7 +226,9 @@ function assertValidDeferrable(deferrable: unknown): void {
 }
 
 /** @internal */
-function extractGeneratedType(field: Record<string, unknown>): "virtual" | "stored" | undefined {
+export function extractGeneratedType(
+  field: Record<string, unknown>,
+): "virtual" | "stored" | undefined {
   switch (field["hidden"]) {
     case 2:
       return "virtual";
@@ -237,7 +239,8 @@ function extractGeneratedType(field: Record<string, unknown>): "virtual" | "stor
   }
 }
 
-function _extractValueFromDefault(dfltValue: string | null): unknown {
+/** @internal */
+export function _extractValueFromDefault(dfltValue: string | null): unknown {
   if (dfltValue === null) return null;
   if (/^null$/i.test(dfltValue)) return null;
   const single = /^'([\s\S]*)'$/.exec(dfltValue);
@@ -245,6 +248,8 @@ function _extractValueFromDefault(dfltValue: string | null): unknown {
   const double = /^"([\s\S]*)"$/.exec(dfltValue);
   if (double) return double[1].replace(/""/g, '"');
   if (/^-?\d+(\.\d*)?$/.test(dfltValue)) return dfltValue;
+  const hex = /^x'([0-9a-fA-F]*)'$/i.exec(dfltValue);
+  if (hex) return Buffer.from(hex[1], "hex");
   return null;
 }
 

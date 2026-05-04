@@ -132,13 +132,44 @@ export function virtualize(
     return d;
   });
 
-  // Detect `include(...)` calls early so we can fold the auxiliary
-  // `import type { Included as ... }` line into the same prepend pass
-  // (otherwise we'd double-shift deltas).
+  // Detect `include(...)` calls and fold both the aliased
+  // `import type` line AND the generated interface-merge declarations
+  // into the same prepend pass. Appending at end-of-file would leave
+  // diagnostics on those lines un-remappable (no delta entry), which
+  // causes `getPositionOfLineAndCharacter` to crash. Putting them in
+  // the prepend block reuses the existing delta math.
+  // Declaration merging is order-agnostic — TS resolves
+  // `interface Foo extends ...` before the class declaration just
+  // fine.
   const includes = findIncludeCalls(sf);
   const effectivePrepends: string[] = [];
   if (options.prependImports) effectivePrepends.push(...options.prependImports);
-  if (includes.length > 0) effectivePrepends.push(INCLUDED_IMPORT_LINE);
+  if (includes.length > 0) {
+    effectivePrepends.push(INCLUDED_IMPORT_LINE);
+    interface Group {
+      mods: string[];
+      exported: boolean;
+      typeParams: string;
+    }
+    const grouped = new Map<string, Group>();
+    for (const inc of includes) {
+      const entry = grouped.get(inc.className);
+      if (entry) entry.mods.push(inc.moduleExpr);
+      else
+        grouped.set(inc.className, {
+          mods: [inc.moduleExpr],
+          exported: inc.classExported,
+          typeParams: inc.classTypeParams,
+        });
+    }
+    for (const [className, { mods, exported, typeParams }] of grouped) {
+      const heritage = mods.map((m) => `${INCLUDED_ALIAS}<typeof ${m}>`).join(", ");
+      // Match the class's export modifier and generic parameters —
+      // declaration merging requires both to line up.
+      const prefix = exported ? "export " : "";
+      effectivePrepends.push(`${prefix}interface ${className}${typeParams} extends ${heritage} {}`);
+    }
+  }
 
   // Insert auto-imported `import type` lines AFTER any leading
   // directives (shebangs, triple-slash refs, @ts-nocheck) that must
@@ -166,31 +197,6 @@ export function virtualize(
       d.insertedAtLine += prependedLines;
     }
     deltas.unshift({ insertedAtLine, lineCount: prependedLines });
-  }
-
-  // Append interface-merge declarations for every
-  // `include(ClassName, ModuleExpr)` call. The mixed-in instance
-  // methods are runtime-copied onto the prototype by `include()`; this
-  // appendix makes them visible to TypeScript via declaration merging
-  // — replacing the manual
-  // `interface ClassName extends Included<typeof Mod> {}` line users
-  // would otherwise write themselves. The aliased
-  // `__TrailsIncluded` import is prepended above so this never collides
-  // with a user-imported `Included`.
-  if (includes.length > 0) {
-    const grouped = new Map<string, string[]>();
-    for (const inc of includes) {
-      const arr = grouped.get(inc.className);
-      if (arr) arr.push(inc.moduleExpr);
-      else grouped.set(inc.className, [inc.moduleExpr]);
-    }
-    const lines: string[] = [];
-    for (const [className, mods] of grouped) {
-      const heritage = mods.map((m) => `${INCLUDED_ALIAS}<typeof ${m}>`).join(", ");
-      lines.push(`interface ${className} extends ${heritage} {}`);
-    }
-    const appendix = (text.endsWith("\n") ? "" : "\n") + lines.join("\n") + "\n";
-    text += appendix;
   }
 
   return { text, deltas };

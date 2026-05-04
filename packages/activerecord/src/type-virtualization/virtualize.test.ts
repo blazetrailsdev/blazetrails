@@ -462,6 +462,39 @@ describe("virtualize — include() interface bridge", () => {
     expect(text).not.toMatch(/interface External/);
   });
 
+  test("preserves export modifier and generic type params on the merged interface", () => {
+    const src =
+      'import { include } from "@blazetrails/activesupport";\n' +
+      'import { QM } from "./qm.js";\n' +
+      "export class Relation<T extends Base> {}\n" +
+      "include(Relation, QM);\n";
+    const { text } = virtualize(src, "relation.ts");
+    expect(text).toMatch(
+      /export interface Relation<T extends Base> extends __TrailsIncluded<typeof QM> \{\}/,
+    );
+  });
+
+  test("skips include() with non-typeof-queryable module expressions (object literals)", () => {
+    const src =
+      'import { include } from "@blazetrails/activesupport";\n' +
+      "export class Foo {}\n" +
+      "include(Foo, { bar() {} });\n";
+    const { text } = virtualize(src, "foo.ts");
+    expect(text).not.toMatch(/interface Foo extends/);
+  });
+
+  test("accepts property-access module expressions (typeof Mod.InstanceMethods)", () => {
+    const src =
+      'import { include } from "@blazetrails/activesupport";\n' +
+      'import * as Persistence from "./persistence.js";\n' +
+      "export class Foo {}\n" +
+      "include(Foo, Persistence.InstanceMethods);\n";
+    const { text } = virtualize(src, "foo.ts");
+    expect(text).toMatch(
+      /interface Foo extends __TrailsIncluded<typeof Persistence\.InstanceMethods> \{\}/,
+    );
+  });
+
   test("aliased include import (`include as inc`) is not picked up", () => {
     // Conservative: we only match the unqualified `include` name. An
     // aliased import would fall through to be treated as a no-op.

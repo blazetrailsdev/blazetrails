@@ -163,7 +163,7 @@ interface DirtyPrivateHost {
 }
 
 /** @internal */
-function initInternals(this: DirtyPrivateHost): void {
+export function initInternals(this: DirtyPrivateHost): void {
   this._mutationsBeforeLastSave = null;
   this._mutationsFromDatabase = null;
   this._touchAttrNames = null;
@@ -171,7 +171,7 @@ function initInternals(this: DirtyPrivateHost): void {
 }
 
 /** @internal */
-function _touchRow(
+export function _touchRow(
   this: DirtyPrivateHost,
   attributeNames: string[],
   time?: Temporal.Instant | null,
@@ -211,7 +211,7 @@ function _touchRow(
 }
 
 /** @internal */
-function _updateRecord(this: DirtyPrivateHost, _attributeNames?: string[]): Promise<number> {
+export function _updateRecord(this: DirtyPrivateHost, _attributeNames?: string[]): Promise<number> {
   return this._performUpdate().then((rows) => {
     this.changesApplied();
     return rows;
@@ -219,7 +219,10 @@ function _updateRecord(this: DirtyPrivateHost, _attributeNames?: string[]): Prom
 }
 
 /** @internal */
-function _createRecord(this: DirtyPrivateHost, _attributeNames?: string[]): Promise<unknown> {
+export function _createRecord(
+  this: DirtyPrivateHost,
+  _attributeNames?: string[],
+): Promise<unknown> {
   return this._performInsert().then((id) => {
     this.changesApplied();
     return id;
@@ -227,14 +230,14 @@ function _createRecord(this: DirtyPrivateHost, _attributeNames?: string[]): Prom
 }
 
 /** @internal */
-function attributeNamesForPartialUpdates(this: DirtyPrivateHost): string[] {
+export function attributeNamesForPartialUpdates(this: DirtyPrivateHost): string[] {
   return this.constructor.partialUpdates
     ? this.changedAttributeNamesToSave
     : this.constructor.attributeNames();
 }
 
 /** @internal */
-function attributeNamesForPartialInserts(this: DirtyPrivateHost): string[] {
+export function attributeNamesForPartialInserts(this: DirtyPrivateHost): string[] {
   if (this.constructor.partialInserts) {
     return this.changedAttributeNamesToSave;
   }

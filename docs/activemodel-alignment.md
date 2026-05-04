@@ -311,7 +311,7 @@ Suggested merge order (one cluster at a time): **P1 → P2 → P3 → P4** (attr
    **Depends on**: P5 (numeric mixin shape stable).
    **Blocks**: none.
 
-### P17 — Length `:in` Range + `RESERVED_OPTIONS` strip
+### P17 — Length `:in` Range + `RESERVED_OPTIONS` strip ✅ merged #1171
 
 **Audit ref**: validations §14 (#27).
 **Files**:

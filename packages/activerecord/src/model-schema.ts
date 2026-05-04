@@ -357,6 +357,7 @@ interface SchemaHost {
   _ignoredColumns?: string[];
   _protectedEnvironments?: string[];
   _attributeDefinitions: Map<string, any>;
+  _defaultAttributes(): { deepDup(): { toHash(): Record<string, unknown> } };
   _columnsHash?: Record<string, any>;
   _columns?: any[];
   _attributesBuilder?: any;
@@ -958,7 +959,7 @@ export function ignoredColumns(this: SchemaHost, value?: string[]): string[] {
 
 /** Mirrors: ActiveRecord::ModelSchema::ClassMethods#column_defaults */
 export function columnDefaults(this: SchemaHost): Record<string, unknown> {
-  return (this as any)._defaultAttributes().deepDup().toHash();
+  return this._defaultAttributes().deepDup().toHash();
 }
 
 export async function tableExists(this: SchemaHost): Promise<boolean> {

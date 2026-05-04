@@ -8,6 +8,8 @@
  *
  * Mirrors: Rails::Railtie (railties/lib/rails/railtie.rb)
  */
+import type { Deprecation } from "./deprecation.js";
+
 export class Railtie {
   /**
    * All registered subclasses — tracked so the application can enumerate
@@ -24,7 +26,7 @@ export class Railtie {
    *
    * Mirrors: Rails `app.deprecators` (Rails::Application::DeprecatorsProxy)
    */
-  static readonly deprecators: Partial<Record<string, unknown>> = {};
+  static readonly deprecators: Partial<Record<string, Deprecation>> = {};
 
   private static _config: Record<string, unknown> = {};
 

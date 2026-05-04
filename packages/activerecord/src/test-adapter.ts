@@ -362,6 +362,48 @@ async function dropAllTables(inner: any): Promise<void> {
 }
 
 /**
+ * Drop every materialized view, view, and table in the named PG schema
+ * using the adapter's own identifier quoting (which doubles embedded
+ * quotes). Used for `public`, which the AR adapter assumes exists.
+ *
+ * @internal
+ */
+async function dropPgObjectsInSchema(adapter: any, schema: string): Promise<void> {
+  const qSchema = adapter.quoteIdentifier(schema);
+  const matviews = (await adapter.execute(
+    `SELECT matviewname AS name FROM pg_matviews WHERE schemaname = $1`,
+    [schema],
+  )) as { name: string }[];
+  for (const { name } of matviews) {
+    try {
+      await adapter.exec(
+        `DROP MATERIALIZED VIEW IF EXISTS ${qSchema}.${adapter.quoteIdentifier(name)} CASCADE`,
+      );
+    } catch {}
+  }
+  const views = (await adapter.execute(
+    `SELECT viewname AS name FROM pg_views WHERE schemaname = $1`,
+    [schema],
+  )) as { name: string }[];
+  for (const { name } of views) {
+    try {
+      await adapter.exec(`DROP VIEW IF EXISTS ${qSchema}.${adapter.quoteIdentifier(name)} CASCADE`);
+    } catch {}
+  }
+  const tables = (await adapter.execute(
+    `SELECT tablename AS name FROM pg_tables WHERE schemaname = $1`,
+    [schema],
+  )) as { name: string }[];
+  for (const { name } of tables) {
+    try {
+      await adapter.exec(
+        `DROP TABLE IF EXISTS ${qSchema}.${adapter.quoteIdentifier(name)} CASCADE`,
+      );
+    } catch {}
+  }
+}
+
+/**
  * MySQL drop-all using a single pinned pool connection so
  * FOREIGN_KEY_CHECKS=0 covers the whole drop sequence. The flag is
  * restored in `finally`; if anything between the SET and the restore
@@ -388,14 +430,14 @@ async function dropAllMysqlTables(adapter: any): Promise<void> {
       const name = r.table_name ?? r.TABLE_NAME;
       if (!name) continue;
       try {
-        await conn.query(`DROP VIEW IF EXISTS \`${name}\``);
+        await conn.query(`DROP VIEW IF EXISTS ${adapter.quoteTableName(name)}`);
       } catch {}
     }
     for (const r of tableRows) {
       const name = r.table_name ?? r.TABLE_NAME;
       if (!name) continue;
       try {
-        await conn.query(`DROP TABLE IF EXISTS \`${name}\``);
+        await conn.query(`DROP TABLE IF EXISTS ${adapter.quoteTableName(name)}`);
       } catch {}
     }
     await conn.query(`SET FOREIGN_KEY_CHECKS=1`);
@@ -505,52 +547,47 @@ export async function resetTestAdapterState(): Promise<void> {
 
   if (_sharedAdapter) {
     if (isPg()) {
-      // current_schemas(false) returns the search path with system schemas
-      // (pg_catalog, information_schema) excluded — the same scope the
-      // adapter's tables() method uses. Drop materialized views and views
-      // before tables; standalone views that don't depend on a dropped
-      // table wouldn't be reached by CASCADE.
-      const matviews = (await _sharedAdapter.execute(
-        `SELECT schemaname, matviewname AS name FROM pg_matviews
-         WHERE schemaname = ANY(current_schemas(false))`,
-      )) as { schemaname: string; name: string }[];
-      for (const { schemaname, name } of matviews) {
-        try {
-          await _sharedAdapter.exec(
-            `DROP MATERIALIZED VIEW IF EXISTS "${schemaname}"."${name}" CASCADE`,
-          );
-        } catch {}
-      }
-      const views = (await _sharedAdapter.execute(
-        `SELECT schemaname, viewname AS name FROM pg_views
-         WHERE schemaname = ANY(current_schemas(false))`,
-      )) as { schemaname: string; name: string }[];
-      for (const { schemaname, name } of views) {
-        try {
-          await _sharedAdapter.exec(`DROP VIEW IF EXISTS "${schemaname}"."${name}" CASCADE`);
-        } catch {}
-      }
-      const rows = (await _sharedAdapter.execute(
-        `SELECT schemaname, tablename FROM pg_tables
-         WHERE schemaname = ANY(current_schemas(false))`,
-      )) as { schemaname: string; tablename: string }[];
-      for (const { schemaname, tablename } of rows) {
-        try {
-          await _sharedAdapter.exec(`DROP TABLE IF EXISTS "${schemaname}"."${tablename}" CASCADE`);
-        } catch {}
+      // Enumerate every user schema in the cluster, not just those on the
+      // session search_path. Tests that create a custom schema and never
+      // adjust search_path leave tables behind that current_schemas(false)
+      // can't see. Filter system + temp schemas; everything else is fair
+      // game. CASCADE drops dependent objects (views, sequences, etc).
+      const userSchemasSql = `
+        SELECT nspname FROM pg_namespace
+        WHERE nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+          AND nspname NOT LIKE 'pg_temp_%'
+          AND nspname NOT LIKE 'pg_toast_temp_%'`;
+      const schemaRows = (await _sharedAdapter.execute(userSchemasSql)) as {
+        nspname: string;
+      }[];
+      for (const { nspname } of schemaRows) {
+        if (nspname === "public") {
+          // Don't drop `public` itself — the AR adapter assumes it exists.
+          // Drop its contents (matviews, views, tables) instead, using the
+          // adapter's own quoting to handle embedded quotes correctly.
+          await dropPgObjectsInSchema(_sharedAdapter, "public");
+        } else {
+          try {
+            await _sharedAdapter.exec(
+              `DROP SCHEMA IF EXISTS ${_sharedAdapter.quoteIdentifier(nspname)} CASCADE`,
+            );
+          } catch {}
+        }
       }
     } else if (isMysql()) {
       await dropAllMysqlTables(_sharedAdapter);
     } else {
       // SQLite :memory: — query sqlite_master so objects created via raw
       // adapter.exec() (which bypass _createdTables) also get dropped.
-      // Drop views first since SQLite has no CASCADE.
+      // Drop views first since SQLite has no CASCADE. (ATTACH'd databases
+      // are out of scope: the only test using ATTACH —
+      // sqlite3-introspection.test.ts — bypasses the shared adapter.)
       const views = (await _sharedAdapter.execute(
         `SELECT name FROM sqlite_master WHERE type='view' AND name NOT LIKE 'sqlite_%'`,
       )) as { name: string }[];
       for (const { name } of views) {
         try {
-          await _sharedAdapter.exec(`DROP VIEW IF EXISTS "${name}"`);
+          await _sharedAdapter.exec(`DROP VIEW IF EXISTS ${_sharedAdapter.quoteTableName(name)}`);
         } catch {}
       }
       const rows = (await _sharedAdapter.execute(
@@ -558,7 +595,7 @@ export async function resetTestAdapterState(): Promise<void> {
       )) as { name: string }[];
       for (const { name } of rows) {
         try {
-          await _sharedAdapter.exec(`DROP TABLE IF EXISTS "${name}"`);
+          await _sharedAdapter.exec(`DROP TABLE IF EXISTS ${_sharedAdapter.quoteTableName(name)}`);
         } catch {}
       }
     }

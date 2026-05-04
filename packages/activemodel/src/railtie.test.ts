@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { env as processEnv, setEnv } from "@blazetrails/activesupport/process-adapter";
-import { Railtie, deprecators } from "./railtie.js";
+import { Railtie } from "./railtie.js";
 import { Railtie as BaseRailtie } from "@blazetrails/activesupport";
+const { deprecators } = BaseRailtie;
 import { SecurePassword } from "./secure-password.js";
 import { Error as ActiveModelError } from "./error.js";
 import { deprecator } from "./deprecator.js";

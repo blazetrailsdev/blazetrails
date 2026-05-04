@@ -1,5 +1,4 @@
 import { Railtie as BaseRailtie, registerRailtie } from "@blazetrails/activesupport";
-import type { Deprecation } from "@blazetrails/activesupport";
 import { env as processEnv } from "@blazetrails/activesupport/process-adapter";
 import { SecurePassword } from "./secure-password.js";
 import { Error as ActiveModelError } from "./error.js";
@@ -17,12 +16,6 @@ export interface RailtieConfig {
 }
 
 /**
- * Framework-level deprecators registry.
- * Mirrors: `app.deprecators` — a keyed collection of per-framework deprecators.
- */
-export const deprecators: Partial<Record<string, Deprecation>> = {};
-
-/**
  * Railtie — initialization hooks for ActiveModel.
  *
  * Mirrors: ActiveModel::Railtie < ::Rails::Railtie
@@ -37,7 +30,7 @@ export class Railtie extends BaseRailtie {
     registerRailtie(this);
 
     this.initializer("active_model.deprecator", () => {
-      deprecators["activeModel"] = deprecator();
+      BaseRailtie.deprecators["activeModel"] = deprecator();
     });
 
     this.initializer("active_model.secure_password", () => {

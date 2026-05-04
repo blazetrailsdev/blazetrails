@@ -17,6 +17,15 @@ export class Railtie {
    */
   static readonly subclasses: Array<typeof Railtie> = [];
 
+  /**
+   * Shared registry of per-framework deprecators, keyed by framework name.
+   * Each framework's railtie registers its own deprecator here during
+   * initialization.
+   *
+   * Mirrors: Rails `app.deprecators` (Rails::Application::DeprecatorsProxy)
+   */
+  static readonly deprecators: Partial<Record<string, unknown>> = {};
+
   private static _config: Record<string, unknown> = {};
 
   /**

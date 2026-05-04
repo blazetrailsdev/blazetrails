@@ -46,7 +46,7 @@ describe("yamlCodec", () => {
     const bigintEnvelope: AttributeSetEnvelope = {
       v: 1,
       types: { id: "big_integer" },
-      values: { id: BigInt("9007199254740993") as unknown as unknown },
+      values: { id: BigInt("9007199254740993") as unknown },
     };
     const decoded = yamlCodec.decode(yamlCodec.encode(bigintEnvelope));
     expect(decoded.values.id).toBe("9007199254740993");

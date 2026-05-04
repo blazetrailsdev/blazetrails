@@ -283,15 +283,15 @@ _Component C — Deduplicable cluster (5 files)_
 **PR 12 — `postgresql/schema_creation.rb` (14%)**
 
 - Rails: `$AR/connection_adapters/postgresql/schema_creation.rb` (160 LOC)
-- TS: `$TS/connection-adapters/postgresql/schema-creation.ts` (150 LOC scaffold, 2 matched, 12 missing, 14%)
-- Missing (12): `visitAlterTable`, `visitAddForeignKey`, `visitForeignKeyDefinition`, `visitCheckConstraintDefinition`, `visitValidateConstraint`, `visitExclusionConstraintDefinition`, `visitUniqueConstraintDefinition`, `visitAddExclusionConstraint`, `visitAddUniqueConstraint`, `visitChangeColumnDefinition`, `visitChangeColumnDefaultDefinition`, `addColumnOptions!`, `quotedIncludeColumns`, `tableModifierInCreate`
+- TS: `$TS/connection-adapters/postgresql/schema-creation.ts` (150 LOC scaffold, 2 matched, 14 missing, 14%)
+- Missing (14): `visitAlterTable`, `visitAddForeignKey`, `visitForeignKeyDefinition`, `visitCheckConstraintDefinition`, `visitValidateConstraint`, `visitExclusionConstraintDefinition`, `visitUniqueConstraintDefinition`, `visitAddExclusionConstraint`, `visitAddUniqueConstraint`, `visitChangeColumnDefinition`, `visitChangeColumnDefaultDefinition`, `addColumnOptions!`, `quotedIncludeColumns`, `tableModifierInCreate`
 - LOC: Rails 160 LOC, TS 150 LOC → ~220 net
 - Dependencies: PR 5
 
 **PR 13 — `postgresql/schema_dumper.rb` (0%)**
 
 - Rails: `$AR/connection_adapters/postgresql/schema_dumper.rb` (128 LOC)
-- TS: `$TS/connection-adapters/postgresql/schema-dumper.ts` (91 LOC scaffold, 0 matched, 11 missing)
+- TS: `$TS/connection-adapters/postgresql/schema-dumper.ts` (91 LOC scaffold, 0 matched, 10 missing)
 - Missing (10): `columnSpec`, `prepareColumnOptions`, `schemaType`, `schemaLimit`, `schemaPrecision`, `schemaScale`, `schemaDefault`, `schemaExpression`, `schemaCollation`, `defaultPrimaryKey?` (all PG-specific overrides of abstract base)
 - LOC: Rails 128 LOC → ~200 net
 - Dependencies: PR 7
@@ -369,7 +369,7 @@ _Component C — Deduplicable cluster (5 files)_
   - PR 21 (12): `initializeTypeMap` + all `register*Types` helpers + `typeToSql`, `newColumnDefinition` (type-map core)
   - PR 21b (10): `columnSpec`, `fullVersionString`, `getMysqlVariable`, `setMysqlVariable`, `caseInsensitiveComparison`, `caseSensitiveComparison`, `limitedSupports*`, `renameTableIndexes` (query/schema helpers)
 - LOC: ~250 net each
-- Dependencies: PR 1, PR 11, PR 18/19
+- Dependencies: PR 1, PR 11, PR 18/18b
 
 **PR 22 — `mysql2_adapter.rb` (64%) + `mysql2_adapter` test parity** _(~250 net LOC)_
 
@@ -518,7 +518,7 @@ _Component C — Deduplicable cluster (5 files)_
   - PR 37c (22): Group D public methods missing from relation.ts
   - PR 37d (20): remaining (verify against fresh api:compare before starting — some names may differ)
 - LOC: ~220 net each
-- Dependencies: PR M2, PR 35, PR 36, Waves 2–5
+- Dependencies: PR M2, PR 35 (and PR 35b if model_schema is split out), Waves 2–5
 - Risk: `relation.ts` is 4591 LOC. Many "missing" privates may exist under slightly different camelCase names — audit with `grep -n "def " $AR/relation.rb` and cross-reference against `grep "^\s*(private\s+)?\w\+" $TS/relation.ts` before implementing each split.
 
 ---
@@ -529,9 +529,9 @@ _Component C — Deduplicable cluster (5 files)_
 
 - Rails: `$AR/base.rb` (338 LOC — mostly `include` and `extend` calls that wire modules)
 - TS: `$TS/base.ts` (3148 LOC)
-- Wire: `attributeAssignment` (PR 26), `timestamp` (PR 29), `autosaveAssociation` (PR 30), `nestedAttributes` (PR 31), `counterCache` (PR 33), `aggregations` (PR 34), `locking/optimistic` (PR 32)
+- Wire: `attributeAssignment` (PR 26), `timestamp` (PR 29), `autosaveAssociation` (PR 30), `nestedAttributes` (PR 31), `counterCache` (in PR 32 combined), `aggregations` (in PR 28 combined), `locking/optimistic` (in PR 32 combined)
 - LOC: ~150 net (ensure each module's `include()` / class decorators properly merge)
-- Dependencies: PRs 26–34, PR 37
+- Dependencies: PRs 26, 27, 28, 29, 30, 31, 32, 37 (PRs 33 and 34 from the prior revision were folded into PR 32 and PR 28 respectively)
 - Risk: Wave 8 also depends on PR 37 (relation.rb) — the original plan omitted this dependency.
 
 **PR 38b — base.rb wiring part 2 + `inheritance.rb` finisher** _(~240 net LOC)_
@@ -733,7 +733,7 @@ _Component C — Deduplicable cluster (5 files)_
 - enum missing (7): `enum`, `definedEnums`, `_enum`, `enumValues`, `buildEnumScopeMethod`, `buildEnumSingletonMethods`, `buildEnumInstanceMethods`
 - reflection missing (7): `derivedJoinTableName`, `hasThroughReflections?`, `joinTable`, `joinPrimaryKey`, `joinForeignKey`, `checkValidityForMacro`, `ensureNotPolymorphic`
 - LOC: ~140 + ~120 → ~260
-- Dependencies: PR 36 (for enum)
+- Dependencies: PR 35 (model_schema component)
 - Rationale: both define class-level metadata generators; reflection's `derivedJoinTableName` overlaps `model_schema.derivedJoinTableName`.
 
 **PR 56 — `insert_all.rb` (58%)**
@@ -742,7 +742,7 @@ _Component C — Deduplicable cluster (5 files)_
 - TS: `$TS/insert-all.ts` (19 matched, 14 missing, 58%)
 - Missing (14): `buildScopeAttributes`, `buildReturning`, `buildConflictTarget`, `buildConflictResolution`, `buildUpdates`, `buildUpdateCondition`, `allDefaultAttributes`, `allDefaultAttributesExcluding`, `customUpdateSql`, `primaryKey?`, `uniqueByColumns`, `returningClause`, `conflictTargetClause`, `updateSql`
 - LOC: ~220 + ~50 of upsert/conflict integration tests → ~270 net
-- Dependencies: PR 36, PR 8
+- Dependencies: PR 35 (model_schema component), PR 8
 
 **PR 57 — Long-tail 1-missers + pg quoting residual (combined)** _(~270 net LOC)_
 

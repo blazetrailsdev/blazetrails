@@ -1,12 +1,26 @@
 import { Railtie as BaseRailtie, registerRailtie } from "@blazetrails/activesupport";
+import type { Deprecation } from "@blazetrails/activesupport";
 import { env as processEnv } from "@blazetrails/activesupport/process-adapter";
 import { SecurePassword } from "./secure-password.js";
 import { Error as ActiveModelError } from "./error.js";
+import { deprecator } from "./deprecator.js";
+
+export interface ActiveModelConfig {
+  i18nCustomizeFullMessage?: boolean;
+}
 
 export interface RailtieConfig {
   env?: string;
+  /** @deprecated Use `activeModel.i18nCustomizeFullMessage` instead. Kept for backwards compat. */
   i18nCustomizeFullMessage?: boolean;
+  activeModel?: ActiveModelConfig;
 }
+
+/**
+ * Framework-level deprecators registry.
+ * Mirrors: `app.deprecators` — a keyed collection of per-framework deprecators.
+ */
+export const deprecators: Record<string, Deprecation> = {};
 
 /**
  * Railtie — initialization hooks for ActiveModel.
@@ -22,8 +36,19 @@ export class Railtie extends BaseRailtie {
   static {
     registerRailtie(this);
 
+    this.initializer("active_model.deprecator", () => {
+      deprecators["activeModel"] = deprecator();
+    });
+
     this.initializer("active_model.secure_password", () => {
       SecurePassword.minCost = Railtie.detectEnv() === "test";
+    });
+
+    this.initializer("active_model.i18n_customize_full_message", () => {
+      const cfg = Railtie.config as RailtieConfig;
+      const value =
+        cfg.activeModel?.i18nCustomizeFullMessage ?? cfg.i18nCustomizeFullMessage ?? false;
+      ActiveModelError.i18nCustomizeFullMessage = value;
     });
   }
 
@@ -34,7 +59,8 @@ export class Railtie extends BaseRailtie {
   static initialize(config?: RailtieConfig): void {
     const env = config?.env ?? Railtie.detectEnv();
     SecurePassword.minCost = env === "test";
-    ActiveModelError.i18nCustomizeFullMessage = config?.i18nCustomizeFullMessage ?? false;
+    ActiveModelError.i18nCustomizeFullMessage =
+      config?.activeModel?.i18nCustomizeFullMessage ?? config?.i18nCustomizeFullMessage ?? false;
   }
 
   private static detectEnv(): string {

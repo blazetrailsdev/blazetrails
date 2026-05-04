@@ -1340,9 +1340,7 @@ export class SchemaStatements {
     const adapter = this.adapter as any;
     const supportsForeignKeys =
       typeof adapter.supportsForeignKeys === "function" ? adapter.supportsForeignKeys() : true;
-    const foreignKeysEnabled =
-      typeof adapter.foreignKeysEnabled === "function" ? adapter.foreignKeysEnabled() : true;
-    return supportsForeignKeys && foreignKeysEnabled;
+    return supportsForeignKeys && this.isForeignKeysEnabled();
   }
 
   async bulkChangeTable(
@@ -1503,7 +1501,9 @@ export class SchemaStatements {
       options = { ...options, name: this.indexName(tableName, { column: columnName! }) };
       columnNames = [];
     } else {
-      columnNames = this.indexColumnNames(columnName ?? options.column ?? "");
+      const rawColumn = columnName ?? options.column;
+      columnNames =
+        rawColumn !== undefined && rawColumn !== "" ? this.indexColumnNames(rawColumn) : [];
     }
 
     if (options.name) {
@@ -1666,7 +1666,7 @@ export class SchemaStatements {
     const suffix: string = adapter.tableNameSuffix ?? "";
     const str = String(tableName);
     if (prefix || suffix) {
-      const re = new RegExp(`^${prefix}(.+?)${suffix}$`);
+      const re = new RegExp(`^${prefix}(.+)${suffix}$`);
       const m = str.match(re);
       if (m) return m[1];
     }

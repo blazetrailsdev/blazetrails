@@ -1590,7 +1590,13 @@ export class SchemaStatements {
     });
   }
 
-  /** @internal */
+  /**
+   * @internal
+   * Diverges from Rails: Rails wraps `AlterTable.new(create_table_definition(name))` so the
+   * alter table has access to the underlying TableDefinition. The TS AlterTable constructor
+   * was designed to take a name string directly; wrap a TableDefinition here once AlterTable
+   * is updated to match Rails' shape.
+   */
   createAlterTable(name: string): AlterTable {
     return new AlterTable(name);
   }
@@ -1646,7 +1652,14 @@ export class SchemaStatements {
     return typeof columnName === "string" && /\W/.test(columnName);
   }
 
-  /** @internal */
+  /**
+   * @internal
+   * Diverges from Rails: Rails reads `Base.table_name_prefix` / `Base.table_name_suffix`
+   * (model-class globals). Importing Base here creates a circular dependency
+   * (base.ts → connection-adapters/abstract/connection-handler.ts). Instead, we read from
+   * the adapter, which callers can populate from `Base.tableNamePrefix` at the connection
+   * layer if needed.
+   */
   stripTableNamePrefixAndSuffix(tableName: string): string {
     const adapter = this.adapter as any;
     const prefix: string = adapter.tableNamePrefix ?? "";
@@ -1722,7 +1735,12 @@ export class SchemaStatements {
     options: { name?: string; expression?: string } = {},
   ): string {
     if (options.name) return options.name;
-    const expression = options.expression ?? "";
+    if (options.expression === undefined) {
+      throw new ArgumentError(
+        `check_constraint_name requires either :name or :expression to be specified`,
+      );
+    }
+    const expression = options.expression;
     const identifier = `${tableName}_${expression}_chk`;
     const hex = getCrypto().createHash("sha256").update(identifier).digest("hex").slice(0, 10);
     return `chk_rails_${hex}`;

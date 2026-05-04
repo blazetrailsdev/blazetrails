@@ -93,6 +93,7 @@ describe("SchemaStatements privates (PR 8)", () => {
     expect(ss.checkConstraintName("users", { expression: "age > 0" })).toMatch(
       /^chk_rails_[0-9a-f]{10}$/,
     );
+    expect(() => ss.checkConstraintName("users", {})).toThrow(/expression/);
   });
 
   it("createTableDefinition returns TableDefinition", () => {

@@ -59,6 +59,7 @@ export class SchemaDumper extends AbstractSchemaDumper {
 
   private pgAdapter(): any {
     const src = (this as any)._source;
-    return src?.adapter ?? undefined;
+    // AdapterSchemaSource wraps the adapter; raw adapter passed directly (e.g. createSchemaDumper)
+    return src?.adapter ?? src;
   }
 }

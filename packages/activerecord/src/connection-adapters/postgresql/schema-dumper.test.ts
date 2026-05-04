@@ -118,6 +118,49 @@ describe("PostgreSQL::SchemaDumper", () => {
       const spec = dumper.prepareColumnOptions(col);
       expect(spec["array"]).toBeUndefined();
     });
+
+    it("adds virtual column options when adapter supports virtual columns", () => {
+      // Mirrors createSchemaDumper(adapter) — raw adapter passed as source
+      const mockAdapter = {
+        tables: () => [],
+        columns: () => [],
+        indexes: () => [],
+        supportsVirtualColumns: () => true,
+      };
+      const dumper = new (SchemaDumper as any)(mockAdapter) as any;
+      const col = new Column("computed", null, { sqlType: "integer", type: "integer" }, true, {
+        defaultFunction: "(a + b)",
+        generated: "s",
+      });
+      const spec = dumper.prepareColumnOptions(col);
+      expect(spec["as"]).toBe(JSON.stringify("(a + b)"));
+      expect(spec["stored"]).toBe(true);
+      expect(spec["type"]).toBe(":integer");
+    });
+
+    it("skips virtual options when adapter does not support virtual columns", () => {
+      const mockAdapter = {
+        tables: () => [],
+        columns: () => [],
+        indexes: () => [],
+        supportsVirtualColumns: () => false,
+      };
+      const dumper = new (SchemaDumper as any)(mockAdapter) as any;
+      const col = new Column("computed", null, { sqlType: "integer", type: "integer" }, true, {
+        defaultFunction: "(a + b)",
+        generated: "s",
+      });
+      const spec = dumper.prepareColumnOptions(col);
+      expect(spec["as"]).toBeUndefined();
+    });
+
+    it("adds enum_type for enum columns", () => {
+      const dumper = SchemaDumper.create(emptySource) as any;
+      // isEnum checks sqlTypeMetadata.type === "enum"
+      const col = new Column("status", null, { sqlType: "mood", type: "enum" }, true, {});
+      const spec = dumper.prepareColumnOptions(col);
+      expect(spec["enum_type"]).toBe(JSON.stringify("mood"));
+    });
   });
 
   describe("extractExpressionForVirtualColumn", () => {

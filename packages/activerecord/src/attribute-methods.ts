@@ -378,14 +378,16 @@ export function attributeForInspect(this: any, attr: string): string {
 
 /** Mirrors: ActiveRecord::AttributeMethods#read_attribute */
 export function readAttribute(this: any, name: string): unknown {
-  const pk = (this.constructor as any)?.primaryKey;
-  const resolved = name === "id" && pk && !Array.isArray(pk) ? (pk as string) : name;
+  const aliases = (this.constructor as any)?._attributeAliases ?? {};
+  const resolved = (aliases[name] as string | undefined) ?? name;
   return this._readAttribute(resolved);
 }
 
 /** Mirrors: ActiveRecord::AttributeMethods#write_attribute */
 export function writeAttribute(this: any, name: string, value: unknown): void {
-  _writeAttribute.call(this, name, value);
+  const aliases = (this.constructor as any)?._attributeAliases ?? {};
+  const resolved = (aliases[name] as string | undefined) ?? name;
+  _writeAttribute.call(this, resolved, value);
 }
 
 /** Mirrors: ActiveRecord::AttributeMethods#query_attribute */

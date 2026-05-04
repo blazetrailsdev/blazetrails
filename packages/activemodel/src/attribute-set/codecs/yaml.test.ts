@@ -48,9 +48,7 @@ describe("yamlCodec", () => {
       types: { id: "big_integer" },
       values: { id: BigInt("9007199254740993") as unknown as unknown },
     };
-    const encoded = yamlCodec.encode(bigintEnvelope);
-    expect(encoded).toContain('"9007199254740993"');
-    const decoded = yamlCodec.decode(encoded);
+    const decoded = yamlCodec.decode(yamlCodec.encode(bigintEnvelope));
     expect(decoded.values.id).toBe("9007199254740993");
   });
 

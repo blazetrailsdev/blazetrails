@@ -21,13 +21,11 @@ describe("IndexDefinition#concise_options", () => {
     expect(idx.orders).toEqual({ a: "asc", b: "asc" });
   });
 
-  it("conciseOptions method collapses uniform values to scalar", () => {
-    const idx = new IndexDefinition("t", "i", false, ["a", "b"], {});
-    expect((idx as any).conciseOptions({ a: "asc", b: "asc" })).toBe("asc");
-    expect((idx as any).conciseOptions({ a: "asc", b: "desc" })).toEqual({
-      a: "asc",
-      b: "desc",
+  it("collapses to scalar when all values are identical and count matches columns", () => {
+    const idx = new IndexDefinition("t", "i", false, ["a", "b"], {
+      orders: { a: "asc", b: "asc" },
     });
+    expect(idx.orders).toBe("asc");
   });
 });
 
@@ -104,35 +102,40 @@ describe("TableDefinition#aliased_types", () => {
 });
 
 describe("Table#raise_on_if_exist_options", () => {
-  it("raises when ifExists is passed", () => {
-    const fakeSchema: any = {
-      addColumn: async () => {},
-      removeColumn: async () => {},
-      renameColumn: async () => {},
-      addIndex: async () => {},
-      removeIndex: async () => {},
-      addReference: async () => {},
-      removeReference: async () => {},
-      addTimestamps: async () => {},
-      removeTimestamps: async () => {},
-    };
+  const fakeSchema: any = {
+    addColumn: async () => {},
+    removeColumn: async () => {},
+    renameColumn: async () => {},
+    addIndex: async () => {},
+    removeIndex: async () => {},
+    addReference: async () => {},
+    removeReference: async () => {},
+    addTimestamps: async () => {},
+    removeTimestamps: async () => {},
+    addForeignKey: async () => {},
+    removeForeignKey: async () => {},
+    changeColumn: async () => {},
+  };
+
+  it("raises via column() when ifExists is passed", async () => {
     const t = new Table("users", fakeSchema);
-    expect(() => (t as any).raiseOnIfExistOptions({ ifExists: true })).toThrow("if_exists");
+    await expect(t.column("name", "string", { ifExists: true } as any)).rejects.toThrow(
+      "if_exists",
+    );
   });
 
-  it("raises when ifNotExists is passed", () => {
-    const fakeSchema: any = {
-      addColumn: async () => {},
-      removeColumn: async () => {},
-      renameColumn: async () => {},
-      addIndex: async () => {},
-      removeIndex: async () => {},
-      addReference: async () => {},
-      removeReference: async () => {},
-      addTimestamps: async () => {},
-      removeTimestamps: async () => {},
-    };
+  it("raises via index() when ifNotExists is passed", async () => {
     const t = new Table("users", fakeSchema);
-    expect(() => (t as any).raiseOnIfExistOptions({ ifNotExists: true })).toThrow("if_not_exists");
+    await expect(t.index("name", { ifNotExists: true } as any)).rejects.toThrow("if_not_exists");
+  });
+
+  it("raises via timestamps() when ifExists is passed", async () => {
+    const t = new Table("users", fakeSchema);
+    await expect(t.timestamps({ ifExists: true } as any)).rejects.toThrow("if_exists");
+  });
+
+  it("raises via references() when ifNotExists is passed", async () => {
+    const t = new Table("users", fakeSchema);
+    await expect(t.references("user", { ifNotExists: true })).rejects.toThrow("if_not_exists");
   });
 });

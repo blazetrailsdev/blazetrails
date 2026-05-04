@@ -255,9 +255,9 @@ export class IndexDefinition {
   readonly unique: boolean;
   readonly columns: string[];
   readonly where?: string;
-  readonly orders: Record<string, string>;
-  readonly lengths: Record<string, number>;
-  readonly opclasses: Record<string, string>;
+  readonly orders: Record<string, string> | string;
+  readonly lengths: Record<string, number> | number;
+  readonly opclasses: Record<string, string> | string;
   readonly type?: string;
   readonly using?: string;
   readonly include?: string[];
@@ -292,9 +292,9 @@ export class IndexDefinition {
     this.unique = unique;
     this.columns = columns;
     this.where = options.where;
-    this.orders = options.orders ?? {};
-    this.lengths = options.lengths ?? {};
-    this.opclasses = options.opclasses ?? {};
+    this.orders = this.conciseOptions(options.orders ?? {});
+    this.lengths = this.conciseOptions(options.lengths ?? {});
+    this.opclasses = this.conciseOptions(options.opclasses ?? {});
     this.type = options.type;
     this.using = options.using;
     this.include = options.include;
@@ -306,9 +306,9 @@ export class IndexDefinition {
   }
 
   columnOptions(): {
-    length: Record<string, number>;
-    order: Record<string, string>;
-    opclass: Record<string, string>;
+    length: Record<string, number> | number;
+    order: Record<string, string> | string;
+    opclass: Record<string, string> | string;
   } {
     return {
       length: this.lengths,
@@ -874,16 +874,12 @@ export class TableDefinition {
     name: string,
     options: ColumnOptions & {
       polymorphic?: boolean;
-      foreignKey?: boolean;
+      foreignKey?: boolean | AddForeignKeyOptions;
+      index?: boolean | AddIndexOptions;
+      type?: ColumnType;
     } = {},
   ): this {
-    this.integer(`${name}_id`, options);
-    if (options.polymorphic) {
-      this.string(`${name}_type`, options);
-    }
-    if (options.index !== false) {
-      this.index([`${name}_id`]);
-    }
+    new ReferenceDefinition(name, options).addTo(this);
     return this;
   }
 
@@ -1120,16 +1116,20 @@ export class Table {
   async rename(oldName: string, newName: string): Promise<void> {
     await this._schema.renameColumn(this._tableName, oldName, newName);
   }
-  async index(columns: string | string[], options?: AddIndexOptions): Promise<void> {
+  async index(columns: string | string[], options: AddIndexOptions = {}): Promise<void> {
+    this.raiseOnIfExistOptions(options as Record<string, unknown>);
     await this._schema.addIndex(this._tableName, columns, options);
   }
-  async removeIndex(options: { column?: string | string[]; name?: string }): Promise<void> {
+  async removeIndex(options: { column?: string | string[]; name?: string } = {}): Promise<void> {
+    this.raiseOnIfExistOptions(options as Record<string, unknown>);
     await this._schema.removeIndex(this._tableName, options);
   }
-  async references(name: string, options?: AddReferenceOptions): Promise<void> {
+  async references(name: string, options: AddReferenceOptions = {}): Promise<void> {
+    this.raiseOnIfExistOptions(options as Record<string, unknown>);
     await this._schema.addReference(this._tableName, name, options);
   }
-  async timestamps(options?: ColumnOptions): Promise<void> {
+  async timestamps(options: ColumnOptions = {}): Promise<void> {
+    this.raiseOnIfExistOptions(options as Record<string, unknown>);
     await this._schema.addTimestamps(this._tableName, options);
   }
 
@@ -1142,6 +1142,7 @@ export class Table {
     type: ColumnType,
     options: Omit<ColumnOptions, "index"> & { index?: boolean | AddIndexOptions } = {},
   ): Promise<void> {
+    this.raiseOnIfExistOptions(options as Record<string, unknown>);
     const { index: indexOpt, ...colOpts } = options;
     await this._schema.addColumn(this._tableName, columnName, type, colOpts as ColumnOptions);
     if (indexOpt) {
@@ -1173,7 +1174,8 @@ export class Table {
     return this._require("renameIndex").call(this._schema, this._tableName, oldName, newName);
   }
 
-  async change(columnName: string, type: ColumnType, options?: ColumnOptions): Promise<void> {
+  async change(columnName: string, type: ColumnType, options: ColumnOptions = {}): Promise<void> {
+    this.raiseOnIfExistOptions(options as Record<string, unknown>);
     return this._require("changeColumn").call(
       this._schema,
       this._tableName,
@@ -1206,17 +1208,22 @@ export class Table {
     return this._require("removeTimestamps").call(this._schema, this._tableName, options);
   }
 
-  async removeReferences(name: string, options?: AddReferenceOptions): Promise<void> {
+  async removeReferences(name: string, options: AddReferenceOptions = {}): Promise<void> {
+    this.raiseOnIfExistOptions(options as Record<string, unknown>);
     return this._require("removeReference").call(this._schema, this._tableName, name, options);
   }
 
-  async foreignKey(toTable: string, options?: Partial<AddForeignKeyOptions>): Promise<void> {
+  async foreignKey(toTable: string, options: Partial<AddForeignKeyOptions> = {}): Promise<void> {
+    this.raiseOnIfExistOptions(options as Record<string, unknown>);
     return this._require("addForeignKey").call(this._schema, this._tableName, toTable, options);
   }
 
   async removeForeignKey(
-    toTableOrOptions?: string | { column?: string; name?: string },
+    toTableOrOptions: string | { column?: string; name?: string } = {},
   ): Promise<void> {
+    this.raiseOnIfExistOptions(
+      (typeof toTableOrOptions === "object" ? toTableOrOptions : {}) as Record<string, unknown>,
+    );
     return this._require("removeForeignKey").call(this._schema, this._tableName, toTableOrOptions);
   }
 

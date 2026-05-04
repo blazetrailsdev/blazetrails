@@ -48,12 +48,16 @@ describe("MySQL::SchemaDumper", () => {
   });
 
   describe("schemaPrecision", () => {
-    it("time/timestamp precision 0 → undefined", () => {
-      for (const t of ["time", "timestamp"])
-        expect(
-          (make() as any).schemaPrecision(col({ type: "datetime", sqlType: t, precision: 0 })),
-        ).toBeUndefined();
-    });
+    it("time precision 0 → undefined", () =>
+      expect(
+        (make() as any).schemaPrecision(col({ type: "time", sqlType: "time", precision: 0 })),
+      ).toBeUndefined());
+    it("timestamp (datetime type) precision 0 → undefined", () =>
+      expect(
+        (make() as any).schemaPrecision(
+          col({ type: "datetime", sqlType: "timestamp", precision: 0 }),
+        ),
+      ).toBeUndefined());
     it("datetime precision 0 → 'nil'", () =>
       expect(
         (make() as any).schemaPrecision(

@@ -361,6 +361,46 @@ async function dropAllTables(inner: any): Promise<void> {
   }
 }
 
+/**
+ * MySQL drop-all using a single pinned pool connection so
+ * FOREIGN_KEY_CHECKS=0 covers the whole drop sequence. Releasing the
+ * connection after the loop also implicitly resets the session flag
+ * for future borrowers.
+ *
+ * @internal
+ */
+async function dropAllMysqlTables(adapter: any): Promise<void> {
+  const driverPool = adapter._driverPool;
+  if (!driverPool) return;
+  const conn = await driverPool.getConnection();
+  try {
+    await conn.query(`SET FOREIGN_KEY_CHECKS=0`);
+    const [tableRows] = (await conn.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'`,
+    )) as [Array<{ table_name?: string; TABLE_NAME?: string }>, unknown];
+    const [viewRows] = (await conn.query(
+      `SELECT table_name FROM information_schema.views WHERE table_schema = DATABASE()`,
+    )) as [Array<{ table_name?: string; TABLE_NAME?: string }>, unknown];
+    for (const r of viewRows) {
+      const name = r.table_name ?? r.TABLE_NAME;
+      if (!name) continue;
+      try {
+        await conn.query(`DROP VIEW IF EXISTS \`${name}\``);
+      } catch {}
+    }
+    for (const r of tableRows) {
+      const name = r.table_name ?? r.TABLE_NAME;
+      if (!name) continue;
+      try {
+        await conn.query(`DROP TABLE IF EXISTS \`${name}\``);
+      } catch {}
+    }
+    await conn.query(`SET FOREIGN_KEY_CHECKS=1`);
+  } finally {
+    conn.release();
+  }
+}
+
 let _factory: () => DatabaseAdapter;
 
 if (PG_TEST_URL) {
@@ -420,11 +460,21 @@ export async function cleanupTestAdapter(adapter: DatabaseAdapter): Promise<void
  * stuck `_needsCleanup`/`_setupLock`/`_cleanupPromise` from a prior test's
  * recovery path) that the lazy "first DB op cleans up" model couldn't.
  *
- * Drops tables based on the *actual database state* (pg_tables / SHOW TABLES)
- * rather than trusting `_createdTables`, because the recovery path,
- * file-load-time cleanup, and direct adapter use can all leave the in-memory
- * tracking out of sync with the real schema. SQLite uses :memory: per fork
- * so an in-memory drop suffices there.
+ * Drops tables based on the *actual database state*, not in-memory
+ * tracking — the recovery path, file-load cleanup, and direct adapter
+ * use can all leave `_createdTables` out of sync with the real schema.
+ *
+ *   - PG: enumerate every user schema via `current_schemas(false)`, not
+ *     just `public`. Tests that create custom schemas (e.g. schema.test.ts
+ *     with test_schema/test_schema2) leak tables that survive a public-only
+ *     drop and continue to bleed state.
+ *   - MySQL: drops on a single dedicated pool connection with
+ *     FOREIGN_KEY_CHECKS=0 for the whole sequence. Per-statement exec()s
+ *     can't reliably bracket the drops because each call may pick a
+ *     different pool connection.
+ *   - SQLite: query `sqlite_master` (excluding internal `sqlite_*`
+ *     tables) so tables created via raw `adapter.exec()` — which bypass
+ *     `_createdTables` — also get dropped.
  *
  * Idempotent and safe to call when no tables exist.
  *
@@ -438,25 +488,31 @@ export async function resetTestAdapterState(): Promise<void> {
 
   if (_sharedAdapter) {
     if (isPg()) {
-      const rows = await _sharedAdapter.execute(
-        `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
-      );
-      for (const r of rows) {
+      // current_schemas(false) returns the search path with system schemas
+      // (pg_catalog, information_schema) excluded — the same scope the
+      // adapter's tables() method uses.
+      const rows = (await _sharedAdapter.execute(
+        `SELECT schemaname, tablename FROM pg_tables
+         WHERE schemaname = ANY(current_schemas(false))`,
+      )) as { schemaname: string; tablename: string }[];
+      for (const { schemaname, tablename } of rows) {
         try {
-          await _sharedAdapter.exec(`DROP TABLE IF EXISTS "${(r as any).tablename}" CASCADE`);
+          await _sharedAdapter.exec(`DROP TABLE IF EXISTS "${schemaname}"."${tablename}" CASCADE`);
         } catch {}
       }
     } else if (isMysql()) {
-      const rows = await _sharedAdapter.execute(`SHOW TABLES`);
-      for (const r of rows) {
-        const table = Object.values(r)[0] as string;
+      await dropAllMysqlTables(_sharedAdapter);
+    } else {
+      // SQLite :memory: — query sqlite_master so we drop tables created
+      // via raw adapter.exec() (which bypass _createdTables) too.
+      const rows = (await _sharedAdapter.execute(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
+      )) as { name: string }[];
+      for (const { name } of rows) {
         try {
-          await _sharedAdapter.exec(`DROP TABLE IF EXISTS \`${table}\``);
+          await _sharedAdapter.exec(`DROP TABLE IF EXISTS "${name}"`);
         } catch {}
       }
-    } else if (_createdTables.size > 0) {
-      // SQLite :memory: — only drop what we tracked, no DB-level enumeration.
-      await dropAllTables(_sharedAdapter);
     }
   }
   _createdTables.clear();

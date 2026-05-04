@@ -25,7 +25,7 @@ export class Time extends ActiveModelTime {
     return super.serialize(value);
   }
 
-  serializeCastValue(value: Temporal.PlainTime | null): string | null {
+  override serializeCastValue(value: Temporal.PlainTime | null): string | null {
     return super.serializeCastValue(value);
   }
 

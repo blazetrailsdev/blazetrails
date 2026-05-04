@@ -90,6 +90,7 @@ describe("NullColumn", () => {
     const result = col.deduplicate();
     expect(result).toBe(col);
     expect(spy).toHaveBeenCalledOnce();
+    spy.mockRestore();
   });
 
   it("deduplicate is a no-op when sqlTypeMetadata is null", () => {

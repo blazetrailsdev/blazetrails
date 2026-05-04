@@ -24,6 +24,12 @@ describe("UnsignedIntegerTest", () => {
     expect(t.cast("17")).toBe(17);
   });
 
+  it("cast passes negatives through (range enforced by serialize, not cast)", () => {
+    const t = new UnsignedInteger();
+    expect(t.cast(-1)).toBe(-1);
+    expect(t.cast("-7")).toBe(-7);
+  });
+
   it("cast propagates null/undefined", () => {
     const t = new UnsignedInteger();
     expect(t.cast(null)).toBeNull();

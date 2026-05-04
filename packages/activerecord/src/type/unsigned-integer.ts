@@ -1,12 +1,11 @@
 import { IntegerType } from "@blazetrails/activemodel";
 
 /**
- * Integer type that only allows unsigned (non-negative) values.
+ * Mirrors: ActiveRecord::Type::UnsignedInteger.
  *
- * Mirrors: ActiveRecord::Type::UnsignedInteger. Rails overrides
- * `min_value` to `0` and doubles the signed max via `max_value`.
- * The parent cast raises RangeError for out-of-range values; in TS
- * we catch that and return null instead.
+ * Doubles the signed max and floors the min at 0 so that
+ * serialize / serializeCastValue raise RangeError for out-of-range values
+ * via the inherited ensureInRange hook (same as Rails).
  */
 export class UnsignedInteger extends IntegerType {
   protected override maxValue(): number {
@@ -15,15 +14,5 @@ export class UnsignedInteger extends IntegerType {
 
   protected override minValue(): number {
     return 0;
-  }
-
-  override cast(value: unknown): number | null {
-    const result = super.cast(value);
-    if (result === null) return null;
-    return result < 0 ? null : result;
-  }
-
-  override isSerializable(value: unknown): boolean {
-    return value == null || this.cast(value) !== null;
   }
 }

@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::Migration::JoinTable
  */
 
-export interface JoinTableHost {
+interface JoinTableHost {
   /** @internal */
   joinTableName(table1: string, table2: string): string;
 }

@@ -284,8 +284,12 @@ function checkIncludedAliasBinding(sf: ts.SourceFile, alias: string): AliasBindi
       (ts.isTypeAliasDeclaration(stmt) ||
         ts.isInterfaceDeclaration(stmt) ||
         ts.isClassDeclaration(stmt) ||
-        ts.isFunctionDeclaration(stmt)) &&
-      stmt.name?.text === alias
+        ts.isFunctionDeclaration(stmt) ||
+        ts.isEnumDeclaration(stmt) ||
+        ts.isModuleDeclaration(stmt)) &&
+      stmt.name &&
+      ts.isIdentifier(stmt.name) &&
+      stmt.name.text === alias
     ) {
       escalate("different");
       continue;

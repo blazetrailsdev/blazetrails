@@ -579,6 +579,23 @@ describe("virtualize — include() interface bridge", () => {
     expect(text).not.toMatch(/interface Relation<T> extends __TrailsIncluded/);
   });
 
+  test("bails when __TrailsIncluded is bound by an enum or namespace", () => {
+    for (const decl of [
+      "enum __TrailsIncluded { A }",
+      "namespace __TrailsIncluded { export const x = 1; }",
+    ]) {
+      const src =
+        decl +
+        "\n" +
+        'import { include } from "@blazetrails/activesupport";\n' +
+        "export class Relation {}\n" +
+        "include(Relation, QM);\n";
+      const { text } = virtualize(src, "relation.ts");
+      expect(text).not.toMatch(/import type \{ Included as __TrailsIncluded \}/);
+      expect(text).not.toMatch(/interface Relation extends __TrailsIncluded/);
+    }
+  });
+
   test("does not inject the __TrailsIncluded import when every target has a user interface", () => {
     const src =
       'import { include } from "@blazetrails/activesupport";\n' +

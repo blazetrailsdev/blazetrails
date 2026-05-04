@@ -12,7 +12,7 @@ describe("ImmutableStringTest", () => {
 
   it("casts booleans to the PG literal form", () => {
     // Rails type/immutable_string.rb#cast_value:
-    //   case value when true then @true; when false then @false; else value.to_s
+    //   case value when true then @true; when false then @false; else value.to_s.freeze
     const type = Types.typeRegistry.lookup("immutable_string");
     expect(type.cast(true)).toBe("t");
     expect(type.cast(false)).toBe("f");

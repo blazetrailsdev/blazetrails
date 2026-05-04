@@ -93,6 +93,6 @@ function attributeForDatabase(this: AttributeOwner, attrName: string): unknown {
 }
 
 /** @internal */
-function isAttributeCameFromUser(this: AttributeOwner, attrName: string): boolean {
+export function isAttributeCameFromUser(this: AttributeOwner, attrName: string): boolean {
   return this._attributes.getAttribute(attrName).cameFromUser();
 }

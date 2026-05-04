@@ -230,7 +230,7 @@ export class Encryptor {
     // Replace characters outside the encodable range with "?" to match _replaceUnencodable.
     const out: string[] = [];
     for (const ch of value) {
-      out.push((ch.codePointAt(0) ?? 0) < limit ? ch : "?");
+      out.push((ch.codePointAt(0) ?? 0) <= limit ? ch : "?");
     }
     return out.join("");
   }

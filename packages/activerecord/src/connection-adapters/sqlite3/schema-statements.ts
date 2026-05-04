@@ -11,7 +11,7 @@
 import type { DatabaseAdapter } from "../../adapter.js";
 import type { CheckConstraintDefinition } from "../abstract/schema-definitions.js";
 import { SqlTypeMetadata } from "../sql-type-metadata.js";
-import { quoteColumnName } from "./quoting.js";
+import { quoteColumnName, extractValueFromDefault } from "./quoting.js";
 import { SchemaCreation } from "./schema-creation.js";
 import { SchemaDumper as AbstractSchemaDumper } from "../abstract/schema-dumper.js";
 import { SchemaDumper } from "./schema-dumper.js";
@@ -152,7 +152,7 @@ export function newColumnFromField(
   const dfltValue = (field["dflt_value"] as string | null) ?? null;
   const sqlType = String(field["type"] ?? "");
   const typeMetadata = adapter.fetchTypeMetadata(sqlType);
-  const defaultValue = _extractValueFromDefault(dfltValue);
+  const defaultValue = extractValueFromDefault(dfltValue);
   const generatedType = extractGeneratedType(field);
 
   let defaultFunction: string | null = null;
@@ -245,19 +245,7 @@ export function extractGeneratedType(
   }
 }
 
-/** @internal */
-export function _extractValueFromDefault(dfltValue: string | null): unknown {
-  if (dfltValue === null) return null;
-  if (/^null$/i.test(dfltValue)) return null;
-  const single = /^'([\s\S]*)'$/.exec(dfltValue);
-  if (single) return single[1].replace(/''/g, "'");
-  const double = /^"([\s\S]*)"$/.exec(dfltValue);
-  if (double) return double[1].replace(/""/g, '"');
-  if (/^-?\d+(\.\d*)?$/.test(dfltValue)) return dfltValue;
-  const hex = /^x'([0-9a-fA-F]*)'$/i.exec(dfltValue);
-  if (hex) return Buffer.from(hex[1], "hex");
-  return null;
-}
+export { extractValueFromDefault as _extractValueFromDefault };
 
 function _extractDefaultFunction(defaultValue: unknown, dflt: string | null): string | null {
   if (defaultValue == null && dflt != null && /\w+\(.*\)|CURRENT_DATE|CURRENT_TIME/i.test(dflt)) {

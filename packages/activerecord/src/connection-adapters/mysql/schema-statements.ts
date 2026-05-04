@@ -178,9 +178,7 @@ export function fetchTypeMetadata(sqlType: string, extra: string = ""): TypeMeta
 }
 
 /** @internal */
-export function extractForeignKeyAction(
-  specifier: string,
-): "cascade" | "nullify" | "restrict" | undefined {
+export function extractForeignKeyAction(specifier: string): "cascade" | "nullify" | undefined {
   // RESTRICT is MySQL's default; omit it so FK definitions stay clean.
   if (specifier === "RESTRICT") return undefined;
   switch (specifier) {

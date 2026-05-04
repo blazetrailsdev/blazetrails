@@ -154,4 +154,9 @@ describe("Table#raise_on_if_exist_options", () => {
     const t = new Table("users", fakeSchema);
     await expect(t.references("user", { ifNotExists: true })).rejects.toThrow("if_not_exists");
   });
+
+  it("raises via string() type helper when ifExists is passed", async () => {
+    const t = new Table("users", fakeSchema);
+    await expect(t.string("name", { ifExists: true })).rejects.toThrow("if_exists");
+  });
 });

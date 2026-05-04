@@ -1084,37 +1084,37 @@ export class Table {
   }
 
   async string(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "string", options);
+    await this.column(name, "string", options);
   }
   async text(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "text", options);
+    await this.column(name, "text", options);
   }
   async integer(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "integer", options);
+    await this.column(name, "integer", options);
   }
   async float(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "float", options);
+    await this.column(name, "float", options);
   }
   async decimal(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "decimal", options);
+    await this.column(name, "decimal", options);
   }
   async boolean(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "boolean", options);
+    await this.column(name, "boolean", options);
   }
   async date(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "date", options);
+    await this.column(name, "date", options);
   }
   async datetime(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "datetime", options);
+    await this.column(name, "datetime", options);
   }
   async bigint(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "bigint", options);
+    await this.column(name, "bigint", options);
   }
   async char(name: string, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, "char", options);
+    await this.column(name, "char", options);
   }
   async array(name: string, type: ColumnType, options: ColumnOptions = {}): Promise<void> {
-    await this._schema.addColumn(this._tableName, name, type, { ...options, array: true });
+    await this.column(name, type, { ...options, array: true });
   }
   async remove(name: string): Promise<void> {
     await this._schema.removeColumn(this._tableName, name);

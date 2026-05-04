@@ -6,7 +6,7 @@
  */
 
 import { Cipher as AesGcmCipher } from "./cipher/aes256-gcm.js";
-import { DecryptionError } from "./errors.js";
+import { ConfigError, DecryptionError } from "./errors.js";
 
 export class Cipher {
   static readonly keyLength = AesGcmCipher.keyLength;
@@ -37,6 +37,7 @@ export class Cipher {
         const buf = this.cipherFor(key).decrypt(data.p, key, data.iv, data.at);
         return buf.toString("utf-8");
       } catch (e) {
+        if (e instanceof ConfigError) throw e;
         lastError = e;
       }
     }

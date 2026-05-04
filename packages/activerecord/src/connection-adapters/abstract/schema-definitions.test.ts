@@ -61,6 +61,22 @@ describe("ReferenceDefinition helpers", () => {
     expect(td.foreignKeys[0].toTable).toBe("users");
   });
 
+  it("addTo respects toTable in foreignKey options", () => {
+    const ref = new ReferenceDefinition("author", {
+      foreignKey: { toTable: "accounts" },
+      index: false,
+    });
+    const td = new TableDefinition("posts", { id: false });
+    ref.addTo(td);
+    expect(td.foreignKeys[0].toTable).toBe("accounts");
+  });
+
+  it("raises when both polymorphic and foreignKey are set", () => {
+    expect(
+      () => new ReferenceDefinition("taggable", { polymorphic: true, foreignKey: true }),
+    ).toThrow("Cannot add a foreign key to a polymorphic relation");
+  });
+
   it("polymorphic columns are ordered type before id", () => {
     const ref = new ReferenceDefinition("taggable", { polymorphic: true, index: false });
     const td = new TableDefinition("taggings", { id: false });

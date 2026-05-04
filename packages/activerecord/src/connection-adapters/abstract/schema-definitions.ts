@@ -93,6 +93,7 @@ export interface AddForeignKeyOptions {
   column?: string;
   primaryKey?: string;
   name?: string;
+  toTable?: string;
   onDelete?: ReferentialAction;
   onUpdate?: ReferentialAction;
   deferrable?: "immediate" | "deferred" | false;
@@ -401,6 +402,9 @@ export class ReferenceDefinition {
       ifNotExists?: boolean;
     } = {},
   ) {
+    if (options.polymorphic && options.foreignKey) {
+      throw new Error("Cannot add a foreign key to a polymorphic relation");
+    }
     this.name = name;
     this.polymorphic = options.polymorphic ?? false;
     this.index = options.index !== false ? (options.index ?? true) : false;
@@ -488,7 +492,7 @@ export class ReferenceDefinition {
   /** @internal */
   private foreignTableName(): string {
     const fkOpts = this.foreignKeyOptions();
-    return (fkOpts as any).toTable ?? pluralize(this.name);
+    return fkOpts.toTable ?? pluralize(this.name);
   }
 
   /** @internal */

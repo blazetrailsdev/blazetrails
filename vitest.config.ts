@@ -86,8 +86,8 @@ export default defineConfig({
               : []),
           ],
           // Real-DB tests share a per-worker DB; the module-level state in
-          // test-adapter.ts has known race windows (see
-          // project_test_adapter_drift_fix). Retry intermittents on PG/MySQL
+          // test-adapter.ts has known race windows (see PR #1114 for prior
+          // _createdTables drift recovery). Retry intermittents on PG/MySQL
           // only. The SQLite job (retry=0) covers every AR test file too, so
           // a deterministic regression in a SQLite-only unit test still fails
           // there — retries here can mask it on PG/MySQL but not in the matrix.

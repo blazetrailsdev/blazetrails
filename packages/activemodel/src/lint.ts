@@ -112,7 +112,7 @@ export namespace Tests {
   }
 
   type ModelNamingHost = {
-    modelName?: { human: string; singular: string; plural: string };
+    modelName: { human: string; singular: string; plural: string };
     constructor: { modelName?: { human: string; singular: string; plural: string } };
   };
   export function testModelNaming(model: ModelNamingHost): void {

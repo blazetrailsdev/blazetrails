@@ -1909,11 +1909,11 @@ export class SchemaStatements {
 
   /** @internal */
   findJoinTableName(table1: string, table2: string, options: { tableName?: string } = {}): string {
-    return _findJoinTableName.call(this, table1, table2, options);
+    return _findJoinTableName(table1, table2, options);
   }
 
   /** @internal */
   joinTableName(table1: string, table2: string): string {
-    return _joinTableName.call(this, table1, table2);
+    return _joinTableName(table1, table2);
   }
 }

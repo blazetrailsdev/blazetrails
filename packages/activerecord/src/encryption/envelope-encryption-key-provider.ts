@@ -11,6 +11,7 @@ import { Encryptor } from "./encryptor.js";
 import { KeyProvider } from "./key-provider.js";
 import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { Configurable } from "./configurable.js";
+import { DecryptionError } from "./errors.js";
 import type { Message } from "./message.js";
 
 export class EnvelopeEncryptionKeyProvider {
@@ -60,8 +61,9 @@ export class EnvelopeEncryptionKeyProvider {
       return new Encryptor({ compress: false }).decrypt(encryptedDataKey, {
         keyProvider: this.primaryKeyProvider(),
       });
-    } catch {
-      return null;
+    } catch (e) {
+      if (e instanceof DecryptionError) return null;
+      throw e;
     }
   }
 

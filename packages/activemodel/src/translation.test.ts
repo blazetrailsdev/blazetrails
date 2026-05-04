@@ -225,6 +225,12 @@ describe("P11 humanAttributeName — dotted attributes, options, ancestor walk",
     expect(() => User.humanAttributeName("foo")).toThrow();
   });
 
+  it("explicit raise:false suppresses the global raiseOnMissingTranslations toggle", () => {
+    class User extends Model {}
+    raiseOnMissingTranslations(true);
+    expect(User.humanAttributeName("foo", { raise: false })).toBe("Foo");
+  });
+
   it("inherits humanAttributeName from parent class via ancestor walk", () => {
     class Parent extends Model {}
     class Child extends Parent {}

@@ -510,7 +510,7 @@ export class TableDefinition {
 
     if (this._id !== false) {
       const pkType = (typeof this._id === "string" ? this._id : "primary_key") as ColumnType;
-      this.columns.push(new ColumnDefinition("id", pkType, { primaryKey: true }));
+      this.columns.push(this.newColumnDefinition("id", pkType, { primaryKey: true }));
     }
   }
 
@@ -529,7 +529,7 @@ export class TableDefinition {
 
     const pkName = primaryKey ?? "id";
     const pkType = (typeof id === "string" ? id : "primary_key") as ColumnType;
-    this.columns.unshift(new ColumnDefinition(pkName, pkType, { primaryKey: true }));
+    this.columns.unshift(this.newColumnDefinition(pkName, pkType, { primaryKey: true }));
   }
 
   primaryKeys(name?: string): string[] {

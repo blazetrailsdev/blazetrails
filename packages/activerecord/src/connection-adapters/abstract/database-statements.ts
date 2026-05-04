@@ -673,7 +673,7 @@ export function transactionManager(this: DatabaseStatementsHost): TransactionMan
 export function resetTransaction(this: DatabaseStatementsHost): void;
 export function resetTransaction(
   this: DatabaseStatementsHost,
-  options: { restore?: boolean },
+  options: { restore: true },
 ): Promise<void>;
 export function resetTransaction(
   this: DatabaseStatementsHost,

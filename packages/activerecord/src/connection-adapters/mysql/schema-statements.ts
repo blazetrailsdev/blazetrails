@@ -5,6 +5,7 @@
  */
 
 import { ArgumentError } from "@blazetrails/activemodel";
+import { Version } from "../abstract-adapter.js";
 import { SqlTypeMetadata } from "../sql-type-metadata.js";
 import { TypeMetadata } from "./type-metadata.js";
 import { TableDefinition } from "./schema-definitions.js";
@@ -85,21 +86,9 @@ export interface SchemaStatements {
 }
 
 /** @internal */
-function versionGte(version: string, threshold: string): boolean {
-  const parse = (v: string) => v.split(".").map(Number);
-  const a = parse(version);
-  const b = parse(threshold);
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const av = a[i] ?? 0;
-    const bv = b[i] ?? 0;
-    if (av !== bv) return av > bv;
-  }
-  return true;
-}
-
-/** @internal */
 export function isRowFormatDynamicByDefault(isMariaDb: boolean, databaseVersion: string): boolean {
-  return isMariaDb ? versionGte(databaseVersion, "10.2.2") : versionGte(databaseVersion, "5.7.9");
+  const v = new Version(databaseVersion);
+  return isMariaDb ? v.gte("10.2.2") : v.gte("5.7.9");
 }
 
 /** @internal */
@@ -138,7 +127,7 @@ export function defaultType(
   const defaultPre = match?.[2];
   if (defaultPre === "'") return "string";
   if (defaultPre?.match(/^\d+$/)) return "integer";
-  if (defaultPre?.match(/^[A-Za-z]+$/)) return "function";
+  if (defaultPre?.match(/^[A-z]+$/)) return "function";
   return undefined;
 }
 
@@ -177,7 +166,13 @@ export function newColumnFromField(
 
 /** @internal */
 export function fetchTypeMetadata(sqlType: string, extra: string = ""): TypeMetadata {
-  const meta = new SqlTypeMetadata({ sqlType });
+  // Strip modifiers (e.g. "datetime(6)" → "datetime", "varchar(255)" → "varchar")
+  // so type-based checks in newColumnFromField fire correctly.
+  const baseType = sqlType
+    .replace(/\(.*\).*$/, "")
+    .trim()
+    .toLowerCase();
+  const meta = new SqlTypeMetadata({ sqlType, type: baseType });
   return new TypeMetadata(meta, { extra });
 }
 

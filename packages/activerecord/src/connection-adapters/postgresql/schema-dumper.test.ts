@@ -54,11 +54,11 @@ describe("PostgreSQL::SchemaDumper", () => {
       expect(dumper.schemaType(col)).toBe("serial");
     });
 
-    it("delegates to super for non-serial columns", () => {
+    it("returns semantic type for non-serial non-bigint columns", () => {
       const dumper = SchemaDumper.create(emptySource) as any;
+      // sqlType = "character varying", but sqlTypeMetadata.type = "string" (semantic)
       const col = makeColumn({ sqlType: "character varying", type: "string" });
-      // abstract base returns column.type (sqlType takes precedence in the base getter)
-      expect(dumper.schemaType(col)).toBe("character varying");
+      expect(dumper.schemaType(col)).toBe("string");
     });
   });
 

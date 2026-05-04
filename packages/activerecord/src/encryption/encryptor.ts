@@ -208,12 +208,31 @@ export class Encryptor {
   private forceEncodingIfNeeded(value: string): string {
     const enc = this.forcedEncodingForDeterministicEncryption();
     if (!enc) return value;
-    const normalized = enc.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (normalized === "utf8" || normalized === "utf16" || normalized === "utf16le") return value;
-    // For ASCII/binary encodings, replace characters outside the safe range.
-    // Use "?" to match _replaceUnencodable in EncryptedAttributeType.
-    const limit = normalized === "ascii" ? 0x7f : 0xff;
-    return value.replace(/[\s\S]/g, (ch) => (ch.codePointAt(0)! < limit ? ch : "?"));
+    // Normalize encoding name the same way EncryptedAttributeType does.
+    const key = enc.toLowerCase().replace(/[^a-z0-9]/g, "");
+    let limit: number;
+    switch (key) {
+      case "utf8":
+        return value;
+      case "ascii":
+      case "usascii":
+        limit = 0x7f;
+        break;
+      case "latin1":
+      case "iso88591":
+      case "binary":
+      case "ascii8bit":
+        limit = 0xff;
+        break;
+      default:
+        return value;
+    }
+    // Replace characters outside the encodable range with "?" to match _replaceUnencodable.
+    const out: string[] = [];
+    for (const ch of value) {
+      out.push((ch.codePointAt(0) ?? 0) < limit ? ch : "?");
+    }
+    return out.join("");
   }
 
   /** @internal */

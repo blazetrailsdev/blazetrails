@@ -9,7 +9,8 @@ import { formatForInspect as _formatForInspect } from "./attribute-inspection.js
 import { attributeForInspect as _attrForInspect } from "./core.js";
 import { writeAttribute as _writeAttribute } from "./readonly-attributes.js";
 import { queryAttribute as _queryAttribute } from "./attribute-methods/query.js";
-import { toKey as _toKey, getId, setId } from "./attribute-methods/primary-key.js";
+// toKey/id: inline to avoid a circular dependency (primary-key.ts imports
+// dangerousAttributeMethods from this file)
 import { reload as _reload } from "./persistence.js";
 import {
   serializableHash as _serializableHash,
@@ -397,16 +398,26 @@ export function queryAttribute(this: any, name: string): boolean {
 
 /** Mirrors: ActiveRecord::AttributeMethods#to_key */
 export function toKey(this: any): unknown[] | null {
-  return _toKey.call(this);
+  const pk = this.id;
+  if (pk == null) return null;
+  const arr = Array.isArray(pk) ? pk : [pk];
+  return arr.some((v: unknown) => v == null) ? null : arr;
 }
 
 /** Mirrors: ActiveRecord::AttributeMethods#id, id=, id? */
 export function id(this: any, value?: unknown): unknown {
+  const ctor = this.constructor as any;
+  const pk = ctor.primaryKey as string | string[];
   if (value !== undefined) {
-    setId.call(this, value);
+    if (Array.isArray(pk)) {
+      pk.forEach((col: string, i: number) => this._writeAttribute(col, (value as unknown[])[i]));
+    } else {
+      this._writeAttribute(pk, value);
+    }
     return value;
   }
-  return getId.call(this);
+  if (Array.isArray(pk)) return pk.map((col: string) => this._readAttribute(col));
+  return this._readAttribute(pk);
 }
 
 /** Mirrors: ActiveRecord::AttributeMethods#reload */

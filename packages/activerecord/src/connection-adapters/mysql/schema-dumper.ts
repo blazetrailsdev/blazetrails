@@ -19,29 +19,9 @@ interface MysqlColumn extends ColumnInfo {
   extra?: string;
 }
 
-/** Minimal connection interface for schemaCollation and extractExpressionForVirtualColumn. */
-export interface MysqlConnection {
-  isMariadb?(): boolean;
-  databaseVersion?: string;
-  quote(value: string): string;
-  quoteColumnName(name: string): string;
-  internalExecQuery(
-    sql: string,
-    name: string,
-  ): Array<Record<string, unknown>> | Promise<Array<Record<string, unknown>>>;
-  queryValue(sql: string, name: string): unknown | Promise<unknown>;
-  /** @internal */ createTableInfo?(tableName: string): string | Promise<string>;
-  /** @internal */ quotedScope?(
-    tableName: string,
-  ): Record<string, string> | Promise<Record<string, string>>;
-}
-
 export class SchemaDumper extends AbstractSchemaDumper {
-  /** Injected adapter connection; used by schemaCollation and extractExpressionForVirtualColumn. */
-  connection?: MysqlConnection;
-  /** Keyed by table name; populated by adapter before column iteration. */
+  connection?: object;
   tableCollationCache: Record<string, string> = {};
-  /** table → column → generation expression; populated by adapter before column iteration. */
   virtualExpressionCache: Record<string, Record<string, string>> = {};
 
   defaultPrimaryKeyType(): string {
@@ -125,9 +105,8 @@ export class SchemaDumper extends AbstractSchemaDumper {
   }
 
   /**
-   * Returns the generation expression for a virtual column from `virtualExpressionCache`,
-   * which the adapter populates before iterating columns. Mirrors Rails'
-   * `extract_expression_for_virtual_column` (queries `information_schema` or CREATE TABLE).
+   * Returns the generation expression for a virtual column from `virtualExpressionCache`.
+   * The adapter populates the cache before iterating columns (queries `information_schema`).
    * @internal
    */
   protected extractExpressionForVirtualColumn(column: MysqlColumn): string | undefined {

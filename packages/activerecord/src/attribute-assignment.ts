@@ -2,6 +2,13 @@
  * AttributeAssignment — bulk and multiparameter attribute assignment.
  *
  * Mirrors: ActiveRecord::AttributeAssignment
+ *
+ * Runtime note: the public `assignAttributes` entry-point lives in
+ * `persistence.ts` (wired onto Base), which delegates to the helpers in
+ * `multiparameter-attribute-assignment.ts`. The functions exported here are
+ * the Rails-private layer (`_assign_attributes`, `assign_multiparameter_attributes`,
+ * etc.) that Rails' `assign_attributes` calls internally — they exist here for
+ * Rails-layout parity (`api:compare`) and are @internal.
  */
 import {
   extractMultiparameterCallstack,
@@ -26,9 +33,9 @@ export function _assignAttributes(
 
   for (const [k, v] of Object.entries(attributes)) {
     if (k.includes("(")) {
-      (multiParameterAttributes ??= {})[k] = v;
+      (multiParameterAttributes ??= Object.create(null))[k] = v;
     } else if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-      (nestedParameterAttributes ??= {})[k] = v;
+      (nestedParameterAttributes ??= Object.create(null))[k] = v;
     } else {
       this.writeAttribute(k, v);
     }

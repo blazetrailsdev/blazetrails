@@ -7,12 +7,16 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./yaml": {
-      "import": "./dist/attribute-set/codecs/yaml.js",
-      "types": "./dist/attribute-set/codecs/yaml.d.ts"
+      "types": "./dist/attribute-set/codecs/yaml.d.ts",
+      "default": "./dist/attribute-set/codecs/yaml.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
     }
   },
   "scripts": {

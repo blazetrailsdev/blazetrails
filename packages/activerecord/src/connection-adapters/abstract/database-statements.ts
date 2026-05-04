@@ -84,7 +84,7 @@ export interface DatabaseStatementsHost {
  */
 export class DatabaseStatementsBase {
   constructor() {
-    (this as any)._transactionManager = null;
+    (this as any)._transactionManager = new TransactionManager(this as any);
   }
 }
 

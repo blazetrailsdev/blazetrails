@@ -80,6 +80,7 @@ interface AttributeOwner {
       cameFromUser(): boolean;
     };
   };
+  constructor: { _attributeAliases?: Record<string, string> };
 }
 
 /** @internal */
@@ -94,5 +95,6 @@ function attributeForDatabase(this: AttributeOwner, attrName: string): unknown {
 
 /** @internal */
 export function isAttributeCameFromUser(this: AttributeOwner, attrName: string): boolean {
-  return this._attributes.getAttribute(attrName).cameFromUser();
+  const name = this.constructor._attributeAliases?.[attrName] ?? attrName;
+  return this._attributes.getAttribute(name).cameFromUser();
 }

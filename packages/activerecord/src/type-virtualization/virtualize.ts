@@ -199,7 +199,13 @@ export function virtualize(
     const insertedAtLine =
       insertPos === 0 ? -1 : before.endsWith("\n") ? newlineCount - 1 : newlineCount;
     text = text.slice(0, insertPos) + importBlock + text.slice(insertPos);
-    const prependedLines = prependLines.length;
+    // Count physical newlines in the inserted block rather than
+    // trusting `prependLines.length`. Synthesized entries derived from
+    // `getText()` (module expressions, type parameter lists) may carry
+    // embedded newlines when the original source formats them across
+    // lines — undercounting here breaks delta remapping for every
+    // line below the prepend block.
+    const prependedLines = (importBlock.match(/\r?\n/g) ?? []).length;
     for (const d of deltas) {
       d.insertedAtLine += prependedLines;
     }

@@ -415,6 +415,16 @@ describe("virtualize — multiple classes", () => {
   });
 });
 
+function indexOfNthNewline(text: string, n: number): number {
+  let idx = 0;
+  for (let i = 0; i < n; i++) {
+    const next = text.indexOf("\n", idx);
+    if (next === -1) return text.length;
+    idx = next + 1;
+  }
+  return idx;
+}
+
 describe("virtualize — include() interface bridge", () => {
   test("emits interface-merge for include() of a local class", () => {
     const src =
@@ -507,6 +517,26 @@ describe("virtualize — include() interface bridge", () => {
     const { text } = virtualize(src, "foo.ts");
     expect(text).not.toMatch(/interface Foo extends/);
     expect(text).not.toMatch(/__TrailsIncluded/);
+  });
+
+  test("multi-line module expression — delta math survives embedded newlines", () => {
+    const src =
+      'import { include } from "@blazetrails/activesupport";\n' +
+      'import * as Persistence from "./persistence.js";\n' +
+      "export class Foo {}\n" +
+      "include(\n  Foo,\n  Persistence\n    .InstanceMethods,\n);\n" +
+      "const target = 42;\n";
+    const { text, deltas } = virtualize(src, "foo.ts");
+    // The synthesized declare must round-trip the multi-line text without losing newlines.
+    expect(text).toMatch(/__TrailsIncluded<typeof Persistence[\s\S]*\.InstanceMethods>/);
+    // Delta line count must reflect ACTUAL physical lines in the
+    // prepended block, not the entry count.
+    const headDelta = deltas[0]!;
+    const headLines = text
+      .slice(0, indexOfNthNewline(text, headDelta.insertedAtLine + headDelta.lineCount + 1))
+      .split(/\r?\n/);
+    // The line at insertedAtLine+1 (start of injection) should be the first prepend line.
+    expect(headLines[headDelta.insertedAtLine + 1]).toMatch(/import type \{ Included as/);
   });
 
   test("re-virtualizing already-virtualized output does not re-inject", () => {

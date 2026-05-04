@@ -166,12 +166,13 @@ export function newColumnFromField(
 
 /** @internal */
 export function fetchTypeMetadata(sqlType: string, extra: string = ""): TypeMetadata {
-  // Strip modifiers (e.g. "datetime(6)" → "datetime", "varchar(255)" → "varchar")
-  // so type-based checks in newColumnFromField fire correctly.
-  const baseType = sqlType
+  // Strip modifiers and normalize: "datetime(6)" → "datetime", "timestamp(3)" → "datetime"
+  // (MySQL alias_type maps timestamp → datetime in the abstract type map).
+  let baseType = sqlType
     .replace(/\(.*\).*$/, "")
     .trim()
     .toLowerCase();
+  if (/^timestamp/.test(baseType)) baseType = "datetime";
   const meta = new SqlTypeMetadata({ sqlType, type: baseType });
   return new TypeMetadata(meta, { extra });
 }

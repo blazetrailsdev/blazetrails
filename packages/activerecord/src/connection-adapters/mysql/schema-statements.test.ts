@@ -78,6 +78,23 @@ describe("MySQL::SchemaStatements", () => {
     expect(col.collation).toBe("utf8_general_ci");
   });
 
+  it("newColumnFromField: CURRENT_TIMESTAMP default becomes defaultFunction on timestamp (alias for datetime)", () => {
+    const noInfo = () => null;
+    const col = newColumnFromField(
+      "events",
+      {
+        Field: "updated_at",
+        Type: "timestamp",
+        Null: "NO",
+        Default: "CURRENT_TIMESTAMP",
+        Extra: "",
+      },
+      noInfo,
+    );
+    expect(col.default).toBeNull();
+    expect(col.defaultFunction).toBe("CURRENT_TIMESTAMP");
+  });
+
   it("newColumnFromField: CURRENT_TIMESTAMP default becomes defaultFunction on datetime", () => {
     const noInfo = () => null;
     const col = newColumnFromField(

@@ -32,10 +32,10 @@ describe("AcceptsMultiparameterTime defaults", () => {
     expect(instant.toZonedDateTimeISO("UTC").hour).toBe(0);
   });
 
-  it("no defaults, only second-slot hash → null (Date-type year-zero guard)", () => {
+  it("no defaults, missing year/month/day keys → null (key-based guard)", () => {
     const type = new Types.DateType();
     const wrapper = new AcceptsMultiparameterTime(type);
-    // Only key "6" (second) present, no defaults → positional year slot gets value 0 → null guard fires.
+    // Only key "6" (second) present, no defaults → keys "1"/"2"/"3" absent → guard fires.
     const result = wrapper.cast({ "6": 0 });
     expect(result).toBeNull();
   });

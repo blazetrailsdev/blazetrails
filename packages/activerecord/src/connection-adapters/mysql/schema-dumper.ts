@@ -119,9 +119,9 @@ export class SchemaDumper extends AbstractSchemaDumper {
     if (!column.collation) return undefined;
     const tableName = this.tableName;
     if (!tableName) return JSON.stringify(column.collation);
+    if (!Object.hasOwn(this.tableCollationCache, tableName))
+      return JSON.stringify(column.collation);
     const cached = this.tableCollationCache[tableName];
-    // If the table's default collation hasn't been loaded, always emit.
-    if (cached === undefined) return JSON.stringify(column.collation);
     return column.collation !== cached ? JSON.stringify(column.collation) : undefined;
   }
 

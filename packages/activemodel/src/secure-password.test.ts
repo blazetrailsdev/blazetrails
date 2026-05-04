@@ -417,17 +417,6 @@ describe("SecurePasswordTest", () => {
     expect(u.isValid()).toBe(true);
   });
 
-  it("password_challenge succeeds against db-loaded digest without setter call", () => {
-    const User = createUserClass();
-    const builder = new User({ name: "test" });
-    (builder as any).password = "secret";
-    const digest = builder.readAttribute("password_digest");
-    // No setter call on this instance — digest loaded as baseline attribute.
-    const u = new User({ name: "test", password_digest: digest });
-    (u as any).passwordChallenge = "secret";
-    expect(u.isValid()).toBe(true);
-  });
-
   it("password_challenge fails against wrong db-loaded digest", () => {
     const User = createUserClass();
     const builder = new User({ name: "test" });

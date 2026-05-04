@@ -79,6 +79,7 @@ When NOT to use this:
   PR body.
 - Do NOT use subagents unless explicitly requested.
 - Do use worktrees for any changes; leave the default worktree for the user.
+  Always use `scripts/start-worktree.sh` to start a worktree.
 - Open new PRs in **draft** status.
 - After opening a PR, run the `/link` skill with the PR number so webhook
   notifications (Copilot reviews, CI failures) are delivered to this pane.

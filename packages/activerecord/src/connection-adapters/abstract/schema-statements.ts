@@ -1679,7 +1679,10 @@ export class SchemaStatements {
     options: { name?: string; column?: string | string[] },
   ): string {
     if (options.name) return options.name;
-    const cols = Array.isArray(options.column) ? options.column : [String(options.column)];
+    if (options.column === undefined) {
+      throw new ArgumentError(`foreign_key_name requires either :name or :column to be specified`);
+    }
+    const cols = Array.isArray(options.column) ? options.column : [options.column];
     const identifier = `${tableName}_${cols.join("_and_")}_fk`;
     const hex = getCrypto().createHash("sha256").update(identifier).digest("hex").slice(0, 10);
     return `fk_rails_${hex}`;

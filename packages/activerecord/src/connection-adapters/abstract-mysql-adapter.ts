@@ -691,9 +691,12 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return args;
   }
 
-  static buildTypeMap(options: { emulateBooleans?: boolean } = {}): TypeMap {
+  static buildTypeMap(
+    this: typeof AbstractMysqlAdapter,
+    options: { emulateBooleans?: boolean } = {},
+  ): TypeMap {
     const map = new TypeMap();
-    AbstractMysqlAdapter.initializeTypeMap(map);
+    this.initializeTypeMap(map);
     if (options.emulateBooleans) {
       map.registerType(/^tinyint\(1\)/i, undefined, () => new BooleanType());
     }

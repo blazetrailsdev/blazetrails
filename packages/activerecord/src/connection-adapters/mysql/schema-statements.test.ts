@@ -5,6 +5,7 @@ import {
   validPrimaryKeyOptions,
   createTableDefinition,
   defaultType,
+  newColumnFromField,
   fetchTypeMetadata,
   extractForeignKeyAction,
   addIndexLength,
@@ -55,6 +56,70 @@ describe("MySQL::SchemaStatements", () => {
     expect(defaultType("`count` int DEFAULT 42", "count")).toBe("integer");
     expect(defaultType("`updated_at` datetime DEFAULT NOW", "updated_at")).toBe("function");
     expect(defaultType(null, "name")).toBeUndefined();
+  });
+
+  it("newColumnFromField: builds Column from SHOW COLUMNS field hash", () => {
+    const noInfo = () => null;
+    const col = newColumnFromField(
+      {
+        Field: "name",
+        Type: "varchar(255)",
+        Null: "YES",
+        Default: "Dean",
+        Extra: "",
+        Collation: "utf8_general_ci",
+      },
+      noInfo,
+      "users",
+    );
+    expect(col.name).toBe("name");
+    expect(col.default).toBe("Dean");
+    expect(col.null).toBe(true);
+    expect(col.collation).toBe("utf8_general_ci");
+  });
+
+  it("newColumnFromField: CURRENT_TIMESTAMP default becomes defaultFunction on datetime", () => {
+    const noInfo = () => null;
+    const col = newColumnFromField(
+      {
+        Field: "created_at",
+        Type: "datetime",
+        Null: "NO",
+        Default: "CURRENT_TIMESTAMP",
+        Extra: "",
+      },
+      noInfo,
+      "events",
+    );
+    expect(col.default).toBeNull();
+    expect(col.defaultFunction).toBe("CURRENT_TIMESTAMP");
+  });
+
+  it("newColumnFromField: DEFAULT_GENERATED extra becomes defaultFunction", () => {
+    const noInfo = () => null;
+    const col = newColumnFromField(
+      {
+        Field: "total",
+        Type: "decimal(10,2)",
+        Null: "YES",
+        Default: "price * qty",
+        Extra: "DEFAULT_GENERATED",
+      },
+      noInfo,
+      "orders",
+    );
+    expect(col.default).toBeNull();
+    expect(col.defaultFunction).toBe("(price * qty)");
+  });
+
+  it("newColumnFromField: text default strips surrounding quotes", () => {
+    const noInfo = () => null;
+    const col = newColumnFromField(
+      { Field: "bio", Type: "text", Null: "YES", Default: "'hello world'", Extra: "" },
+      noInfo,
+      "users",
+    );
+    expect(col.default).toBe("hello world");
   });
 
   it("fetchTypeMetadata wraps sqlType with MySQL TypeMetadata", () => {

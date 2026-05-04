@@ -504,6 +504,87 @@ describe("LengthValidationTest", () => {
     expect(new Person({ title: "abcdef", limit: 5 }).isValid()).toBe(false);
   });
 
+  it("accepts :in as a range object { begin, end }", () => {
+    class Person extends Model {
+      static {
+        this.attribute("title", "string");
+        this.validates("title", { length: { in: { begin: 3, end: 10 } } });
+      }
+    }
+    expect(new Person({ title: "ab" }).isValid()).toBe(false);
+    expect(new Person({ title: "abc" }).isValid()).toBe(true);
+    expect(new Person({ title: "abcdefghij" }).isValid()).toBe(true);
+    expect(new Person({ title: "abcdefghijk" }).isValid()).toBe(false);
+  });
+
+  it("accepts :in as a range object with excludeEnd", () => {
+    class Person extends Model {
+      static {
+        this.attribute("title", "string");
+        // { begin: 3, end: 5, excludeEnd: true } → minimum: 3, maximum: 4
+        this.validates("title", { length: { in: { begin: 3, end: 5, excludeEnd: true } } });
+      }
+    }
+    expect(new Person({ title: "abc" }).isValid()).toBe(true);
+    expect(new Person({ title: "abcd" }).isValid()).toBe(true);
+    expect(new Person({ title: "abcde" }).isValid()).toBe(false);
+  });
+
+  it("does not leak reserved keys into errors.add options", () => {
+    class Person extends Model {
+      static {
+        this.attribute("title", "string");
+        this.validates("title", { length: { in: [3, 5] } });
+      }
+    }
+    const p = new Person({ title: "ab" });
+    p.isValid();
+    const err = p.errors.objects[0];
+    expect(err).toBeDefined();
+    expect(err.options).not.toHaveProperty("minimum");
+    expect(err.options).not.toHaveProperty("maximum");
+    expect(err.options).not.toHaveProperty("tooShort");
+    expect(err.options).not.toHaveProperty("tooLong");
+    expect(err.options).not.toHaveProperty("within");
+    expect(err.options).not.toHaveProperty("is");
+    expect(err.options).toHaveProperty("count");
+  });
+
+  it("throws at definition time when constraint is a non-integer", () => {
+    expect(() => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { minimum: 2.5 } });
+        }
+      }
+      // reference to suppress unused-class lint
+      return Person;
+    }).toThrow(/minimum must be a non-negative Integer/);
+  });
+
+  it("throws at definition time when constraint is negative", () => {
+    expect(() => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { minimum: -1 } });
+        }
+      }
+      return Person;
+    }).toThrow(/minimum must be a non-negative Integer/);
+  });
+
+  it("accepts Infinity as a valid maximum constraint", () => {
+    class Person extends Model {
+      static {
+        this.attribute("title", "string");
+        this.validates("title", { length: { minimum: 1, maximum: Infinity } });
+      }
+    }
+    expect(new Person({ title: "x".repeat(10000) }).isValid()).toBe(true);
+  });
+
   it("validates length of with symbol method name", () => {
     // Rails: a Symbol resolves via record.send(:method_name). In TS a
     // string option that names a method on the record is resolved the

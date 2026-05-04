@@ -413,6 +413,36 @@ export async function cleanupTestAdapter(adapter: DatabaseAdapter): Promise<void
 }
 
 /**
+ * Reset every piece of module-level test-adapter state so the next test
+ * starts from a clean slate. Called from a global `beforeEach` hook in
+ * test-setup.ts — running unconditionally before every test eliminates
+ * cross-test bleed (stale `_declaredColumns`, leaked `_registeredModelClasses`,
+ * stuck `_needsCleanup`/`_setupLock`/`_cleanupPromise` from a prior tests's
+ * recovery path) that the lazy "first DB op cleans up" model couldn't.
+ *
+ * Idempotent and safe to call when no tables exist.
+ *
+ * @internal
+ */
+export async function resetTestAdapterState(): Promise<void> {
+  // Wait for any in-flight cleanup or setup to settle before we tear down,
+  // otherwise we'd race against an already-running drop/create.
+  while (_setupLock) await _setupLock;
+  while (_cleanupPromise) await _cleanupPromise;
+
+  if (_sharedAdapter && _createdTables.size > 0) {
+    await dropAllTables(_sharedAdapter);
+  }
+  _createdTables.clear();
+  _createdColumns.clear();
+  _declaredColumns.clear();
+  _pendingModels.clear();
+  _pendingCpk.clear();
+  _registeredModelClasses.clear();
+  _needsCleanup = false;
+}
+
+/**
  * Thin wrapper around a real database adapter that:
  *   1. Deletes all data on first operation of each test (lazy cleanup)
  *   2. Creates tables from registered model attribute definitions

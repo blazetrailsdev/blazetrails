@@ -15,6 +15,12 @@ export interface Deduplicable {
 }
 
 const registries = new Map<string, WeakRef<object>>();
+const _finalizer =
+  typeof FinalizationRegistry !== "undefined"
+    ? new FinalizationRegistry<string>((key) => {
+        registries.delete(key);
+      })
+    : null;
 
 export function registry(): Map<string, WeakRef<object>> {
   return registries;
@@ -22,13 +28,15 @@ export function registry(): Map<string, WeakRef<object>> {
 
 export function deduplicate<T extends Deduplicable>(obj: T): T {
   const key = `${obj.constructor.name}:${obj.deduplicateKey()}`;
-  const ref = registries.get(key);
-  if (ref) {
-    const existing = ref.deref();
+  const cached = registries.get(key);
+  if (cached) {
+    const existing = cached.deref();
     if (existing) return existing as T;
   }
   const deduped = obj.deduplicated();
-  registries.set(key, new WeakRef(deduped));
+  const weakRef = new WeakRef(deduped);
+  registries.set(key, weakRef);
+  _finalizer?.register(deduped, key);
   return deduped;
 }
 

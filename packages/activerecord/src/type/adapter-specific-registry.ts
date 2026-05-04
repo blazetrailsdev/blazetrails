@@ -125,7 +125,7 @@ export class DecorationRegistration extends Registration {
   call(registry: AdapterSpecificRegistry, symbol: string, options?: Record<string, unknown>): Type {
     const filtered: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(options ?? {})) {
-      if (k !== "adapter" && !(k in this._options)) filtered[k] = v;
+      if (!(k in this._options)) filtered[k] = v;
     }
     const subtype = registry.lookup(
       symbol,

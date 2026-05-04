@@ -25,8 +25,9 @@ export function deduplicate<T extends Deduplicable>(obj: T): T {
     const existing = ref.deref();
     if (existing) return existing as T;
   }
-  registries.set(key, new WeakRef(obj));
-  return obj;
+  const deduped = deduplicated(obj);
+  registries.set(key, new WeakRef(deduped));
+  return deduped;
 }
 
 /** @internal */

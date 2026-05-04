@@ -6,6 +6,15 @@
 import { isBlank } from "@blazetrails/activesupport";
 import { resolveAliasName } from "@blazetrails/activemodel";
 import { formatForInspect as _formatForInspect } from "./attribute-inspection.js";
+import { attributeForInspect as _attrForInspect } from "./core.js";
+import { writeAttribute as _writeAttribute } from "./readonly-attributes.js";
+import { queryAttribute as _queryAttribute } from "./attribute-methods/query.js";
+import { toKey as _toKey, getId, setId } from "./attribute-methods/primary-key.js";
+import { reload as _reload } from "./persistence.js";
+import {
+  serializableHash as _serializableHash,
+  attributeNamesForSerialization as _attrNamesForSerialization,
+} from "./serialization.js";
 // ActiveModel provides aliasAttribute and undefineAttributeMethods on Model.
 // aliasAttribute delegates via the prototype chain. defineAttributeMethods
 // is implemented here since AM doesn't expose it as a static on Model.
@@ -356,4 +365,63 @@ interface AttributeNamesHost {
  */
 export function attributeNames(this: AttributeNamesHost): string[] {
   return [...this._attributeDefinitions.keys()];
+}
+
+// ---------------------------------------------------------------------------
+// Instance methods mirrored from attribute_methods.rb
+// ---------------------------------------------------------------------------
+
+/** Mirrors: ActiveRecord::AttributeMethods#attribute_for_inspect */
+export function attributeForInspect(this: any, attr: string): string {
+  return _attrForInspect.call(this, attr);
+}
+
+/** Mirrors: ActiveRecord::AttributeMethods#read_attribute */
+export function readAttribute(this: any, name: string): unknown {
+  const pk = (this.constructor as any)?.primaryKey;
+  const resolved = name === "id" && pk && !Array.isArray(pk) ? (pk as string) : name;
+  return this._readAttribute(resolved);
+}
+
+/** Mirrors: ActiveRecord::AttributeMethods#write_attribute */
+export function writeAttribute(this: any, name: string, value: unknown): void {
+  _writeAttribute.call(this, name, value);
+}
+
+/** Mirrors: ActiveRecord::AttributeMethods#query_attribute */
+export function queryAttribute(this: any, name: string): boolean {
+  return _queryAttribute.call(this, name);
+}
+
+/** Mirrors: ActiveRecord::AttributeMethods#to_key */
+export function toKey(this: any): unknown[] | null {
+  return _toKey.call(this);
+}
+
+/** Mirrors: ActiveRecord::AttributeMethods#id, id=, id? */
+export function id(this: any, value?: unknown): unknown {
+  if (value !== undefined) {
+    setId.call(this, value);
+    return value;
+  }
+  return getId.call(this);
+}
+
+/** Mirrors: ActiveRecord::AttributeMethods#reload */
+export async function reload(this: any): Promise<typeof this> {
+  return _reload.call(this);
+}
+
+/** Mirrors: ActiveRecord::AttributeMethods#serializable_hash */
+export function serializableHash(this: any, options?: unknown): Record<string, unknown> {
+  return _serializableHash.call(this, options as any);
+}
+
+/**
+ * Mirrors: ActiveRecord::AttributeMethods#attribute_names_for_serialization
+ *
+ * @internal
+ */
+export function attributeNamesForSerialization(this: any): string[] {
+  return _attrNamesForSerialization.call(this);
 }

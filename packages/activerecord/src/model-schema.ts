@@ -956,6 +956,11 @@ export function ignoredColumns(this: SchemaHost, value?: string[]): string[] {
   return this._ignoredColumns ?? [];
 }
 
+/** Mirrors: ActiveRecord::ModelSchema::ClassMethods#column_defaults */
+export function columnDefaults(this: SchemaHost): Record<string, unknown> {
+  return (this as any)._defaultAttributes().deepDup().toHash();
+}
+
 export async function tableExists(this: SchemaHost): Promise<boolean> {
   const { adapter } = this;
   const cache = adapter.schemaCache;

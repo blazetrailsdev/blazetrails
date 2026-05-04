@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { yamlCodec } from "./yaml.js";
+import { yamlCodec } from "@blazetrails/activemodel/yaml";
 import { AttributeSetCoderError } from "../coder.js";
 import type { AttributeSetEnvelope } from "../coder.js";
 

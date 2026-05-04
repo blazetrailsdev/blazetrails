@@ -23,16 +23,13 @@ export class SchemaDumper extends AbstractSchemaDumper {
   /** Injected adapter; presence signals that caches have been (or will be) populated. */
   connection?: object;
   /** table → table-default collation. Populated by adapter before column iteration. */
-  tableCollationCache: Record<string, string> = Object.create(null) as Record<string, string>;
+  tableCollationCache: Record<string, string | undefined> = Object.create(null);
   /**
    * table → column → pre-serialized generation expression (already `.inspect`-equivalent,
    * i.e. a JSON string literal like `"\"CONCAT(a, b)\""` ready to emit as schema value).
    * Populated by adapter before column iteration via `information_schema` query.
    */
-  virtualExpressionCache: Record<string, Record<string, string>> = Object.create(null) as Record<
-    string,
-    Record<string, string>
-  >;
+  virtualExpressionCache: Record<string, Record<string, string> | undefined> = Object.create(null);
 
   defaultPrimaryKeyType(): string {
     return "bigint";

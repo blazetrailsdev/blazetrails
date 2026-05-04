@@ -25,6 +25,11 @@ export async function selectAll(
   name?: string | null,
   binds?: unknown[],
 ): Promise<Result> {
+  // TODO: Rails wraps `super` in `unprepared_statement { ... }` when
+  // `ExplainRegistry.collect? && prepared_statements`, so EXPLAIN collection
+  // sees literal SQL instead of prepared-statement placeholders. ExplainRegistry
+  // is not yet wired in TS — once it lands (see plan PR 58), guard this path
+  // with `if (ExplainRegistry.collect && this.preparedStatements) { … unprepared … }`.
   return this.execQuery(sql, name, binds);
 }
 

@@ -14,8 +14,8 @@ import { resolveValue } from "./resolve-value.js";
 
 /** Rails-style range object accepted by the `:in` / `:within` option. */
 export interface LengthRange {
-  begin: number;
-  end: number;
+  begin?: number;
+  end?: number;
   excludeEnd?: boolean;
 }
 
@@ -67,7 +67,9 @@ export class LengthValidator extends EachValidator {
           options["maximum"] = r.excludeEnd ? r.end - 1 : r.end;
         }
       } else {
-        throw new Error(":in and :within must be a Range or [min, max] tuple");
+        throw new Error(
+          ":in and :within must be a [min, max] tuple or { begin, end, excludeEnd? } object",
+        );
       }
     }
 

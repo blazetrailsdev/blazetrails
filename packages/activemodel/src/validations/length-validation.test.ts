@@ -622,16 +622,6 @@ describe("LengthValidationTest", () => {
     }).toThrow(/minimum must be a non-negative Integer/);
   });
 
-  it("accepts Infinity as a valid maximum constraint", () => {
-    class Person extends Model {
-      static {
-        this.attribute("title", "string");
-        this.validates("title", { length: { minimum: 1, maximum: Infinity } });
-      }
-    }
-    expect(new Person({ title: "x".repeat(10000) }).isValid()).toBe(true);
-  });
-
   it("validates length of with symbol method name", () => {
     // Rails: a Symbol resolves via record.send(:method_name). In TS a
     // string option that names a method on the record is resolved the

@@ -1190,7 +1190,7 @@ export class Model {
 
   // -- Naming (Phase 1300) --
 
-  static lookupAncestors(): Array<{ modelName: ModelName }> {
+  static lookupAncestors(): Array<{ new (...args: never[]): unknown; modelName: ModelName }> {
     return translationLookupAncestors.call(this);
   }
 

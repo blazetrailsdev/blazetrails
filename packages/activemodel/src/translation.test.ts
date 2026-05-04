@@ -170,6 +170,7 @@ describe("P11 humanAttributeName — dotted attributes, options, ancestor walk",
   });
   afterEach(() => {
     raiseOnMissingTranslations(false);
+    I18n.reset();
   });
 
   it("humanizes flat attribute with no locale entry", () => {

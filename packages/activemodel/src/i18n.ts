@@ -140,7 +140,7 @@ class I18nService {
       return interpolate(options.defaultValue, this._interpolationOptions(options));
     }
 
-    if (options?.raise || raiseOnMissingTranslations()) {
+    if (options?.raise ?? raiseOnMissingTranslations()) {
       throw new Error(`Translation missing: ${key}`);
     }
     return key;

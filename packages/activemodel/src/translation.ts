@@ -14,7 +14,7 @@ import type { ModelName } from "./naming.js";
 
 export interface TranslationClassMethods {
   readonly i18nScope: string;
-  lookupAncestors(): unknown[];
+  lookupAncestors(): Array<{ new (...args: never[]): unknown; modelName: ModelName }>;
   humanAttributeName(attr: string, options?: HumanAttributeNameOptions): string;
 }
 
@@ -28,7 +28,7 @@ export interface HumanAttributeNameOptions {
 
 interface TranslationHost {
   readonly i18nScope: string;
-  lookupAncestors(): Array<{ modelName: ModelName }>;
+  lookupAncestors(): Array<{ new (...args: never[]): unknown; modelName: ModelName }>;
 }
 
 /** @internal Mirrors ActiveModel::Translation::MISSING_TRANSLATION */
@@ -125,17 +125,21 @@ function _appendUserDefaults(
  *
  * @internal Mirrors ActiveModel::Translation#lookup_ancestors
  */
-export function lookupAncestors(this: object): Array<{ modelName: ModelName }> {
+export function lookupAncestors(
+  this: object,
+): Array<{ new (...args: never[]): unknown; modelName: ModelName }> {
   return _walkAncestors(this);
 }
 
-function _walkAncestors(start: object): Array<{ modelName: ModelName }> {
-  const result: Array<{ modelName: ModelName }> = [];
+function _walkAncestors(
+  start: object,
+): Array<{ new (...args: never[]): unknown; modelName: ModelName }> {
+  const result: Array<{ new (...args: never[]): unknown; modelName: ModelName }> = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let klass: any = start;
   while (klass != null && klass !== Function.prototype && klass !== Object.prototype) {
     if (klass.modelName != null) {
-      result.push(klass as { modelName: ModelName });
+      result.push(klass as { new (...args: never[]): unknown; modelName: ModelName });
     }
     klass = Object.getPrototypeOf(klass);
   }

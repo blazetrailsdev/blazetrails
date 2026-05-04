@@ -91,6 +91,26 @@ describe("AttributeSetCoder", () => {
     expect(decoded.fetchValue("extra")).toBe("bonus");
   });
 
+  it("prefers schema attr type over registry lookup when names match", () => {
+    // Simulates an AR-specific type (e.g. uuid, jsonb) that isn't in AM's registry.
+    // When schemaAttributes provides the type, decode should use it directly.
+    const customType = typeRegistry.lookup("integer");
+    const schemaAttr = Attribute.fromUser("qty", 0, customType);
+    const schema = new Map<string, Attribute>([["qty", schemaAttr]]);
+    const json = JSON.stringify({
+      v: 1,
+      types: { qty: "integer" },
+      values: { qty: 5 },
+    });
+    const decoded = coder.decode(json, schema);
+    // type instance should come from the schema, not a fresh registry.lookup()
+    expect(decoded.fetchValue("qty")).toBe(5);
+    // Confirm the schema type object is reused (same reference)
+    const decodedType = (decoded as unknown as { castTypes(): Record<string, unknown> }).castTypes()
+      .qty;
+    expect(decodedType).toBe(customType);
+  });
+
   it("uses attr.type.name (registry key) not type() for type storage", () => {
     // ImmutableStringType.type() returns "string" (Rails API alias) but
     // name = "immutable_string" (registry key). Encode must store the key.

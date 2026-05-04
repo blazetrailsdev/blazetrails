@@ -12,6 +12,8 @@ import type { AttributeSetCodec, AttributeSetEnvelope } from "../coder.js";
  *   JSON-serializable and will corrupt on round-trip.
  * - Float specials (NaN, Infinity, -Infinity) serialize to null via
  *   JSON.stringify and decode as null.
+ * - Symbol-valued raw values (e.g. DateInfinity sentinel) are silently dropped
+ *   by JSON.stringify; those attributes decode with undefined raw value.
  */
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);

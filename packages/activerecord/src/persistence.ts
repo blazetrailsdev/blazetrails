@@ -57,7 +57,7 @@ export async function create(
   if (Array.isArray(attrs)) {
     const records: any[] = [];
     for (const a of attrs) {
-      records.push(await create.call(this, a, block));
+      records.push(await (this as any).create(a, block));
     }
     return records;
   }
@@ -79,7 +79,7 @@ export async function createBang(
   if (Array.isArray(attrs)) {
     const records: any[] = [];
     for (const a of attrs) {
-      records.push(await createBang.call(this, a, block));
+      records.push(await (this as any).createBang(a, block));
     }
     return records;
   }

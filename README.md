@@ -201,7 +201,7 @@ from Rails on purpose (and why): [ActiveRecord](packages/website/docs/guides/act
 | `@blazetrails/actionview` | [ActionView](https://api.rubyonrails.org/classes/ActionView.html)             | **1.2%**  | **5.1%**  | Templates, rendering, view helpers                     |
 | `@blazetrails/trailties`  | [Railties](https://api.rubyonrails.org/classes/Rails.html)                    | —         | —         | CLI, generators, application bootstrap                 |
 
-**Tests** = `test:compare` — matches our test names against the Rails test suite. **API** = `api:compare --public-only` — matches individual public methods against Rails source (method-level, not class/module wrappers). Rack doesn't have API comparison yet (it's not a Rails gem); Railties source isn't bundled by `fetch-rails.sh`.
+**Tests** = `test:compare` — matches our test names against the Rails test suite. **API** = `pnpm api:compare -- --public-only` — matches individual public methods against Rails source (method-level, not class/module wrappers). The default `api:compare` mode also includes Rails-private/internal helpers; this README reports the public-surface filter so the headline percentages reflect contract coverage. Rack doesn't have API comparison yet (it's not a Rails gem); Railties source isn't bundled by `fetch-rails.sh`.
 
 **52.6%** overall public API coverage (4,977 / 9,465 methods). CI runs both comparisons on every push.
 

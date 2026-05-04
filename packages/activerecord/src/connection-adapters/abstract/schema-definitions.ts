@@ -540,6 +540,21 @@ export class TableDefinition {
     return this.columns.filter((c) => c.options.primaryKey).map((c) => c.name);
   }
 
+  /**
+   * Creates a new ColumnDefinition for a column with the given name, type, and options.
+   * Subclasses override to add adapter-specific type normalization.
+   *
+   * @internal
+   * Mirrors: ActiveRecord::ConnectionAdapters::TableDefinition#new_column_definition
+   */
+  newColumnDefinition(
+    name: string,
+    type: ColumnType,
+    options: ColumnOptions = {},
+  ): ColumnDefinition {
+    return new ColumnDefinition(name, type, options);
+  }
+
   /** @internal */
   aliasedTypes(name: string, fallback: string): string {
     return name === "bigint" ? "integer" : fallback;

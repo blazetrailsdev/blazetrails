@@ -118,12 +118,37 @@ export class TableDefinition extends AbstractTableDefinition {
     );
   }
 
-  newColumnDefinition(
+  override newColumnDefinition(
     name: string,
     type: ColumnType,
     options: ColumnOptions = {},
   ): ColumnDefinition {
+    if ((type as string) === "primary_key") {
+      (options as any).limit = (options as any).limit ?? 8;
+      (options as any).primaryKey = true;
+      return new ColumnDefinition(name, "integer" as ColumnType, options);
+    }
     return new ColumnDefinition(name, type, options);
+  }
+
+  /** @internal */
+  override aliasedTypes(_name: string, fallback: string): string {
+    return fallback;
+  }
+
+  /** @internal */
+  static override defineColumnMethods(...columnTypes: string[]): void {
+    for (const type of columnTypes) {
+      if (!(type in TableDefinition.prototype)) {
+        (TableDefinition.prototype as any)[type] = function (
+          this: TableDefinition,
+          name: string,
+          options: ColumnOptions = {},
+        ) {
+          return this.column(name, type as ColumnType, options);
+        };
+      }
+    }
   }
 
   private mysqlColumn(
@@ -142,6 +167,15 @@ export class TableDefinition extends AbstractTableDefinition {
 export class Table extends AbstractTable {
   constructor(tableName: string, schema: SchemaStatementsLike) {
     super(tableName, schema);
+  }
+
+  /**
+   * Returns the primary key column name for this table.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::TableDefinition#primary_key
+   */
+  async primaryKey(): Promise<string | null> {
+    return super.primaryKey();
   }
 }
 

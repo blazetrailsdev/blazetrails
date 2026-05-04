@@ -46,3 +46,25 @@ export function deduplicate<T extends Deduplicable>(obj: T): T {
 function deduplicated<T extends object>(obj: T): T {
   return obj;
 }
+
+/**
+ * Base class for deduplicable value objects.
+ * Subclasses implement `deduplicateKey` and optionally override `deduplicated`.
+ * The constructor deduplicates the instance against the global registry.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::Deduplicable::ClassMethods#new
+ */
+export class DeduplicableBase implements Deduplicable {
+  constructor() {
+    return deduplicate(this);
+  }
+
+  deduplicateKey(): string {
+    return "";
+  }
+
+  /** @internal */
+  deduplicated(): this {
+    return this;
+  }
+}

@@ -75,6 +75,19 @@ export interface DatabaseStatementsHost {
   preprocessQuery?(sql: string): string;
 }
 
+/**
+ * Base class for connection adapters that include DatabaseStatements.
+ * The constructor resets the transaction state, mirroring Rails'
+ * `DatabaseStatements#initialize` which calls `reset_transaction`.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements (initialize)
+ */
+export class DatabaseStatementsBase {
+  constructor() {
+    (this as any)._transactionManager = null;
+  }
+}
+
 // --- Query conversion ---
 
 /**
@@ -648,6 +661,33 @@ export async function transaction<T>(
  */
 export function transactionManager(this: DatabaseStatementsHost): TransactionManager | null {
   return (this as any)._transactionManager ?? null;
+}
+
+/**
+ * Resets the transaction manager, discarding any open transactions.
+ * When called with `{ restore: true }`, attempts to restore restorable
+ * transactions first, then replaces the manager.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#reset_transaction
+ */
+export function resetTransaction(this: DatabaseStatementsHost): void;
+export function resetTransaction(
+  this: DatabaseStatementsHost,
+  options: { restore: true },
+): Promise<void>;
+export function resetTransaction(
+  this: DatabaseStatementsHost,
+  options?: { restore?: boolean },
+): void | Promise<void> {
+  const self = this as any;
+  if (options?.restore) {
+    if (self._transactionManager?.isRestorable()) {
+      return self._transactionManager.restoreTransactions().then(() => {});
+    }
+    self._transactionManager = new TransactionManager(self);
+    return Promise.resolve();
+  }
+  self._transactionManager = new TransactionManager(self);
 }
 
 /**

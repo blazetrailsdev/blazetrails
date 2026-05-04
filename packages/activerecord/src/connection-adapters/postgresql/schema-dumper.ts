@@ -17,7 +17,8 @@ export class SchemaDumper extends AbstractSchemaDumper {
     if (adapter?.supportsVirtualColumns?.() && column.isVirtual()) {
       spec["as"] = this.extractExpressionForVirtualColumn(column);
       spec["stored"] = true;
-      return { type: JSON.stringify(this.schemaType(column)), ...spec };
+      // Rails: { type: schema_type(column).inspect } — symbol inspect gives ":bigserial"
+      return { type: `:${this.schemaType(column)}`, ...spec };
     }
 
     if (column.isEnum) spec["enum_type"] = JSON.stringify(column.sqlType);

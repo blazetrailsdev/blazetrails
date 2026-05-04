@@ -63,7 +63,7 @@ export class SqlTypeMetadata implements Deduplicable {
   }
 
   /** @internal */
-  protected deduplicated(): this {
+  deduplicated(): this {
     return this;
   }
 }

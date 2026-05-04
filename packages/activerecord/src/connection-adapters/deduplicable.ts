@@ -10,6 +10,8 @@
 
 export interface Deduplicable {
   deduplicateKey(): string;
+  /** @internal */
+  deduplicated(): this;
 }
 
 const registries = new Map<string, WeakRef<object>>();
@@ -25,7 +27,7 @@ export function deduplicate<T extends Deduplicable>(obj: T): T {
     const existing = ref.deref();
     if (existing) return existing as T;
   }
-  const deduped = deduplicated(obj);
+  const deduped = obj.deduplicated();
   registries.set(key, new WeakRef(deduped));
   return deduped;
 }

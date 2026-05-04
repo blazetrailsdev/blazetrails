@@ -14,7 +14,14 @@ describe("RailtieTest", () => {
 
   beforeEach(() => {
     savedSubclasses = [...BaseRailtie.subclasses];
-    savedConfig = structuredClone ? structuredClone(Railtie.config) : { ...Railtie.config };
+    try {
+      savedConfig =
+        typeof structuredClone === "function"
+          ? structuredClone(Railtie.config)
+          : { ...Railtie.config };
+    } catch {
+      savedConfig = { ...Railtie.config };
+    }
   });
 
   afterEach(() => {

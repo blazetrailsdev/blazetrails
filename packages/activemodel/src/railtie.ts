@@ -20,7 +20,7 @@ export interface RailtieConfig {
  * Framework-level deprecators registry.
  * Mirrors: `app.deprecators` — a keyed collection of per-framework deprecators.
  */
-export const deprecators: Record<string, Deprecation> = {};
+export const deprecators: Partial<Record<string, Deprecation>> = {};
 
 /**
  * Railtie — initialization hooks for ActiveModel.

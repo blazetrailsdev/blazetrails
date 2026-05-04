@@ -1528,7 +1528,7 @@ function lastInsertedId(result: any): never {
  * @internal
  */
 export function returningColumnValues(this: DatabaseStatementsHost, result: Result): unknown[] {
-  return [this.lastInsertedId?.(result)];
+  return [singleValueFromRows(result.rows as unknown[][])];
 }
 
 /**
@@ -1554,7 +1554,7 @@ export function extractTableRefFromInsertSql(
   this: DatabaseStatementsHost,
   sql: string,
 ): string | null {
-  const match = sql.match(/into\s+("?[A-Za-z0-9_."[\]\s]+"?)\s*/i);
+  const match = sql.match(/into\s("[ A-Za-z0-9_."[\]]+"|[A-Za-z0-9_.[\]"]+)\s*/im);
   if (!match) return null;
   return match[1].replace(/"/g, "").trim();
 }

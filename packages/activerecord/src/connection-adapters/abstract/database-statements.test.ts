@@ -504,11 +504,14 @@ describe("defaultInsertValue", () => {
 });
 
 describe("returningColumnValues", () => {
-  it("returns array with lastInsertedId result", () => {
-    const host: DatabaseStatementsHost = {
-      lastInsertedId: () => 42,
-    };
-    const fakeResult = Result.empty();
-    expect(returningColumnValues.call(host, fakeResult)).toEqual([42]);
+  it("returns [first value of first row] from result", () => {
+    const host: DatabaseStatementsHost = {};
+    const result = new Result(["id"], [[42]]);
+    expect(returningColumnValues.call(host, result)).toEqual([42]);
+  });
+
+  it("returns [undefined] for empty result", () => {
+    const host: DatabaseStatementsHost = {};
+    expect(returningColumnValues.call(host, Result.empty())).toEqual([undefined]);
   });
 });

@@ -19,8 +19,8 @@ export class TableDefinition extends AbstractTableDefinition {
     return super.references(name, { type: "integer", ...options } as any);
   }
 
-  get belongsTo() {
-    return this.references.bind(this);
+  belongsTo(name: string, options: Record<string, unknown> = {}): this {
+    return this.references(name, options);
   }
 
   changeColumn(columnName: string, type: ColumnType, options: ColumnOptions = {}): void {

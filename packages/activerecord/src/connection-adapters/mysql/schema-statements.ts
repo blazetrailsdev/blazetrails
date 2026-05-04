@@ -187,7 +187,7 @@ export function addIndexLength(
   quotedColumns: Map<string, string>,
   options: { length?: Record<string, number> | number } = {},
 ): Map<string, string> {
-  if (!options.length) return quotedColumns;
+  if (options.length == null) return quotedColumns;
   const lengthMap = typeof options.length === "object" ? options.length : null;
   const scalar = typeof options.length === "number" ? options.length : null;
   for (const [name, col] of quotedColumns) {
@@ -259,7 +259,7 @@ export function extractSchemaQualifiedName(
 /** @internal */
 export function typeWithSizeToSql(type: string, size: string | null | undefined): string {
   const s = size?.toString();
-  if (s === undefined || s === null || s === "tiny" || s === "medium" || s === "long") {
+  if (s === undefined || s === "tiny" || s === "medium" || s === "long") {
     return `${s ?? ""}${type}`;
   }
   throw new ArgumentError(

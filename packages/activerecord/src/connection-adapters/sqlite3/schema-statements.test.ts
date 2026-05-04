@@ -158,7 +158,7 @@ describe("SQLite3::SchemaStatements", () => {
   });
 
   describe("assertValidDeferrable", () => {
-    it("accepts falsy", () => {
+    it("accepts null, undefined, false (Ruby nil/false)", () => {
       expect(() => assertValidDeferrable(false)).not.toThrow();
       expect(() => assertValidDeferrable(null)).not.toThrow();
       expect(() => assertValidDeferrable(undefined)).not.toThrow();
@@ -169,7 +169,15 @@ describe("SQLite3::SchemaStatements", () => {
       expect(() => assertValidDeferrable("deferred")).not.toThrow();
     });
 
-    it("throws for invalid value", () => {
+    it("throws for empty string (truthy in Ruby, rejected by symbol check)", () => {
+      expect(() => assertValidDeferrable("")).toThrow();
+    });
+
+    it("throws for 0 (truthy in Ruby, rejected by symbol check)", () => {
+      expect(() => assertValidDeferrable(0)).toThrow();
+    });
+
+    it("throws for invalid string", () => {
       expect(() => assertValidDeferrable("exclusive")).toThrow();
     });
   });

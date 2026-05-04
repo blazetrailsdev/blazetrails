@@ -219,7 +219,13 @@ export function quotedScope(name?: string, type?: string): { name?: string; type
 
 /** @internal */
 export function assertValidDeferrable(deferrable: unknown): void {
-  if (!deferrable || deferrable === "immediate" || deferrable === "deferred") return;
+  if (
+    deferrable == null ||
+    deferrable === false ||
+    deferrable === "immediate" ||
+    deferrable === "deferred"
+  )
+    return;
   throw new Error(
     `deferrable must be "immediate" or "deferred", got: ${JSON.stringify(deferrable)}`,
   );

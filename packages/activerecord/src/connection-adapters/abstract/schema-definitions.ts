@@ -389,11 +389,11 @@ export class ReferenceDefinition {
   readonly index: boolean | AddIndexOptions;
   readonly foreignKey: boolean | AddForeignKeyOptions;
   readonly type: ColumnType;
-  readonly options: ColumnOptions & { ifExists?: boolean; ifNotExists?: boolean };
+  readonly options: Omit<ColumnOptions, "index"> & { ifExists?: boolean; ifNotExists?: boolean };
 
   constructor(
     name: string,
-    options: ColumnOptions & {
+    options: Omit<ColumnOptions, "index"> & {
       polymorphic?: boolean | Record<string, unknown>;
       foreignKey?: boolean | AddForeignKeyOptions;
       index?: boolean | AddIndexOptions;
@@ -876,7 +876,7 @@ export class TableDefinition {
 
   references(
     name: string,
-    options: ColumnOptions & {
+    options: Omit<ColumnOptions, "index"> & {
       polymorphic?: boolean | Record<string, unknown>;
       foreignKey?: boolean | AddForeignKeyOptions;
       index?: boolean | AddIndexOptions;

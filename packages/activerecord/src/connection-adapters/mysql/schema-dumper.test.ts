@@ -110,11 +110,17 @@ describe("MySQL::SchemaDumper", () => {
       expect((make() as any).isDefaultPrimaryKey(col({ bigint: true }))).toBe(false));
   });
 
-  it("isExplicitPrimaryKeyDefault: true for integer, false with autoIncrement", () => {
-    expect((make() as any).isExplicitPrimaryKeyDefault(col({ type: "integer" }))).toBe(true);
-    expect(
-      (make() as any).isExplicitPrimaryKeyDefault(col({ type: "integer", autoIncrement: true })),
-    ).toBe(false);
+  describe("isExplicitPrimaryKeyDefault", () => {
+    it("true when integer + autoIncrement explicitly false", () =>
+      expect(
+        (make() as any).isExplicitPrimaryKeyDefault(col({ type: "integer", autoIncrement: false })),
+      ).toBe(true));
+    it("false when autoIncrement true", () =>
+      expect(
+        (make() as any).isExplicitPrimaryKeyDefault(col({ type: "integer", autoIncrement: true })),
+      ).toBe(false));
+    it("false when autoIncrement undefined (not explicitly set)", () =>
+      expect((make() as any).isExplicitPrimaryKeyDefault(col({ type: "integer" }))).toBe(false));
   });
 
   describe("prepareColumnOptions", () => {

@@ -88,7 +88,7 @@ export class SchemaDumper extends AbstractSchemaDumper {
 
   /** @internal */
   protected override isExplicitPrimaryKeyDefault(column: MysqlColumn): boolean {
-    return column.type === "integer" && !column.autoIncrement;
+    return column.type === "integer" && column.autoIncrement === false;
   }
 
   /** @internal */

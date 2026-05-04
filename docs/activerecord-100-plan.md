@@ -35,7 +35,7 @@
 **Net effect of in-flight PRs:**
 
 - Wave 2 PRs 5 + 7 are covered by #1139 (pending merge). After merge, schema_creation and schema_dumper move to 100%.
-- Wave 9 (encryption) is ~70% covered by E2/E3/E4. After those merge, remaining encryption work is ~16 methods across `encryption.ts` (11 missing), `encryption/config.ts` (2), `encryption/cipher/aes256-gcm.ts` (2), `encryption/context.ts` (2), `encryption/key-generator.ts` (2), `encryption/key-provider.ts` (1), `encryption/message.ts` (1), `encryption/properties.ts` (1), `encryption/scheme.ts` (4).
+- Wave 9 (encryption) is ~70% covered by E2/E3/E4. After those merge, remaining encryption work is **~27 methods** across 10 files: `encryption.ts` (11), `encryption/config.ts` (2), `encryption/cipher/aes256-gcm.ts` (2), `encryption/context.ts` (2), `encryption/key-generator.ts` (2), `encryption/key-provider.ts` (1), `encryption/message.ts` (1), `encryption/properties.ts` (1), `encryption/scheme.ts` (4), `encryption/derived-secret-key-provider.ts` (1). See PR 43 for the consolidated list.
 - #1136 touches the type registry — verify interaction with Wave 1 PR 2 before starting.
 
 ---
@@ -182,7 +182,7 @@ _Component C — Deduplicable cluster (5 files)_
 
 - Missing methods (9 total):
   - `deduplicable.ts` (1): `deduplicate`
-  - `column.ts` (2): `autoPoppulated?`, `virtual?`
+  - `column.ts` (2): `autoPopulated?`, `virtual?` _(api:compare reports `autoPoppulated?` — confirmed typo in tooling output; Rails source `$AR/connection_adapters/column.rb` defines `auto_populated?`)_
   - `sql-type-metadata.ts` (2): `deduplicated`, `hash`
   - `mysql/type-metadata.ts` (2): `deduplicated`, `hash`
   - `postgresql/type-metadata.ts` (2): `deduplicated`, `hash`
@@ -292,7 +292,7 @@ _Component C — Deduplicable cluster (5 files)_
 
 - Rails: `$AR/connection_adapters/postgresql/schema_dumper.rb` (128 LOC)
 - TS: `$TS/connection-adapters/postgresql/schema-dumper.ts` (91 LOC scaffold, 0 matched, 11 missing)
-- Missing (11): `columnSpec`, `prepareColumnOptions`, `schemaType`, `schemaLimit`, `schemaPrecision`, `schemaScale`, `schemaDefault`, `schemaExpression`, `schemaCollation`, `schemaCollatation`, `defaultPrimaryKey?` (all PG-specific overrides of abstract base)
+- Missing (10): `columnSpec`, `prepareColumnOptions`, `schemaType`, `schemaLimit`, `schemaPrecision`, `schemaScale`, `schemaDefault`, `schemaExpression`, `schemaCollation`, `defaultPrimaryKey?` (all PG-specific overrides of abstract base)
 - LOC: Rails 128 LOC → ~200 net
 - Dependencies: PR 7
 
@@ -354,13 +354,7 @@ _Component C — Deduplicable cluster (5 files)_
   - PR 18b: pg `execNoCache`, `execCache`, `executeAndClear`, `getLastColumn`, `returnStringValuesWithin`, `queryTypemapForColumn`, `defaultInsertValue`, `buildTruncateStatement` (~180)
 - Dependencies: PR 4, PR 17 (for cross-adapter consistency)
 
-**PR 20 — `postgresql/database_statements.rb` (54%)**
-
-- Rails: `$AR/connection_adapters/postgresql/database_statements.rb` (231 LOC)
-- TS: `$TS/connection-adapters/postgresql/database-statements.ts` (156 LOC, 13 matched, 11 missing, 54%)
-- Missing (11): `performQuery`, `castResult`, `affectedRows`, `execNoCache`, `execCache`, `executeAndClear`, `getLastColumn`, `returnStringValuesWithin`, `queryTypemapForColumn`, `defaultInsertValue`, `buildTruncateStatement`
-- LOC: Rails 231 LOC, TS 156 LOC → ~180 net
-- Dependencies: PR 4
+> **PR 20 (postgresql/database_statements.rb) folded into PR 18 / PR 18b** — see Wave 4 PR 18 above. Listed here previously as a separate entry; that was a stale duplicate from the pre-consolidation revision.
 
 ---
 
@@ -395,7 +389,7 @@ _Component C — Deduplicable cluster (5 files)_
   - PR 23 (9): `connectAndConfigure`, `configureConnection`, `reconnect!`, `disconnect!`, `discard!`, `truncateTable`, `getAdvisoryLock`, `releaseAdvisoryLock`, `allSchemas`
   - PR 23b (8): `encoderFor`, `decoderFor`, `pgEncoderForType`, `pgDecoderForType`, `initializeTypeMap`, `registerDateTimeTypes`, `schema`, `enableExtension`
 - LOC: ~250 net each
-- Dependencies: PR 14, PR 20
+- Dependencies: PR 14, PR 18b
 
 **PR 24 — `sqlite3_adapter.rb` (75%)**
 
@@ -579,24 +573,23 @@ _Component C — Deduplicable cluster (5 files)_
 
 - After E1–E4 merge, remaining work across:
 
-| File                                             | TS path                                              | Missing |
-| ------------------------------------------------ | ---------------------------------------------------- | ------- |
-| `encryption.rb`                                  | `$TS/encryption.ts`                                  | 11      |
-| `encryption/config.rb`                           | `$TS/encryption/config.ts`                           | 2       |
-| `encryption/cipher/aes256_gcm.rb`                | `$TS/encryption/cipher/aes256-gcm.ts`                | 2       |
-| `encryption/context.rb`                          | `$TS/encryption/context.ts`                          | 2       |
-| `encryption/key_generator.rb`                    | `$TS/encryption/key-generator.ts`                    | 2       |
-| `encryption/key_provider.rb`                     | `$TS/encryption/key-provider.ts`                     | 1       |
-| `encryption/message.rb`                          | `$TS/encryption/message.ts`                          | 1       |
-| `encryption/properties.rb`                       | `$TS/encryption/properties.ts`                       | 1       |
-| `encryption/scheme.rb`                           | `$TS/encryption/scheme.ts`                           | 4       |
-| `encryption/auto_filtered_parameters.rb`         | `$TS/encryption/auto-filtered-parameters.ts`         | 4       |
-| `encryption/envelope_encryption_key_provider.rb` | `$TS/encryption/envelope-encryption-key-provider.ts` | 4       |
-| `encryption/derived_secret_key_provider.rb`      | `$TS/encryption/derived-secret-key-provider.ts`      | 1       |
-| `encryption/extended_deterministic_queries.rb`   | `$TS/encryption/extended-deterministic-queries.ts`   | 2       |
+| File                                        | TS path                                         | Missing |
+| ------------------------------------------- | ----------------------------------------------- | ------- |
+| `encryption.rb`                             | `$TS/encryption.ts`                             | 11      |
+| `encryption/config.rb`                      | `$TS/encryption/config.ts`                      | 2       |
+| `encryption/cipher/aes256_gcm.rb`           | `$TS/encryption/cipher/aes256-gcm.ts`           | 2       |
+| `encryption/context.rb`                     | `$TS/encryption/context.ts`                     | 2       |
+| `encryption/key_generator.rb`               | `$TS/encryption/key-generator.ts`               | 2       |
+| `encryption/key_provider.rb`                | `$TS/encryption/key-provider.ts`                | 1       |
+| `encryption/message.rb`                     | `$TS/encryption/message.ts`                     | 1       |
+| `encryption/properties.rb`                  | `$TS/encryption/properties.ts`                  | 1       |
+| `encryption/scheme.rb`                      | `$TS/encryption/scheme.ts`                      | 4       |
+| `encryption/derived_secret_key_provider.rb` | `$TS/encryption/derived-secret-key-provider.ts` | 1       |
 
-- ~39 methods, ~220 net LOC
-- Dependencies: PRs 39–42
+> **Removed from this list (already covered by E2 #1142):** `encryption/auto_filtered_parameters.rb`, `encryption/envelope_encryption_key_provider.rb`, `encryption/extended_deterministic_queries.rb`. Verify each is at 100% on `api:compare` after E2 lands; if any regressions appear, restore here.
+
+- ~27 methods across 10 files, ~180 net LOC
+- Dependencies: PRs 39–42 (E1–E4 stack)
 
 ---
 
@@ -664,7 +657,7 @@ _Component C — Deduplicable cluster (5 files)_
   - `database-selector/resolver/session.ts` (8): `initialize`, `lastWriteTimestamp`, `updateLastWriteTimestamp`, `save`, `restoreSession`, `contextFor`, `delete`, `stale?`
   - `shard-selector.ts` (6): `initialize`, `call`, `selectShard`, `instrumenter`, `shardResolver`, `shardSelectorStrategy`
 - LOC: ~260 net
-- Dependencies: PR 49
+- Dependencies: PR 48
 - Risk: These depend on Rack-style middleware infrastructure. Verify how `connection-handling.ts` implements the middleware interface before implementing.
 
 **PR 51 — Tasks cluster**
@@ -680,7 +673,7 @@ _Component C — Deduplicable cluster (5 files)_
 
 - Missing (25 total, sample from `database_tasks.rb`): `databaseConfiguration`, `dbConfig`, `checkSchemaFile`, `loadConfigAndConnectTo`, `migrate`, `maintainTestSchema`, `raiseForMultipleDatabases`, `createAll`, `dropAll`, `purge`, `purgeAll`, `dumpSchemaCache`, `checkTargetVersion`
 - LOC: ~260 net
-- Dependencies: PR 49
+- Dependencies: PR 48
 
 **PR 52 — Misc small files (21 files)**
 
@@ -791,7 +784,7 @@ Folds former PRs 58 + 59 plus the remaining unassigned 1-missers from the PR 52 
 
 10. **`visitAddForeignKey` signature conflict** (noted in #1139): Legacy `(fromTable, toTable, options)` vs Rails `(o: ForeignKeyDefinition)`. The file-local helper workaround in #1139 must survive through PRs 9, 12 which also override this method.
 
-11. **`mysql2/` directory missing entirely**: `$TS/connection-adapters/mysql2/` does not exist. PR 19 must create directory + file. Verify `tsconfig.json` and `package.json` exports map do not need updating.
+11. **`mysql2/` directory missing entirely**: `$TS/connection-adapters/mysql2/` does not exist. PR 18 must create directory + file. Verify `tsconfig.json` and `package.json` exports map do not need updating.
 
 12. **`railtie.ts` + `middleware/` directory both missing**: These require creating new top-level files and directories. Verify `$TS/index.ts` or barrel exports need updating after PR 50 and PR 53.
 
@@ -799,10 +792,10 @@ Folds former PRs 58 + 59 plus the remaining unassigned 1-missers from the PR 52 
 
 ## Critical Files
 
-- `/home/dean/github/blazetrailsdev/trails/packages/activerecord/src/connection-adapters/abstract-adapter.ts`
-- `/home/dean/github/blazetrailsdev/trails/packages/activerecord/src/connection-adapters/abstract/database-statements.ts`
-- `/home/dean/github/blazetrailsdev/trails/packages/activerecord/src/connection-adapters/abstract/schema-statements.ts`
-- `/home/dean/github/blazetrailsdev/trails/packages/activerecord/src/relation.ts`
-- `/home/dean/github/blazetrailsdev/trails/packages/activerecord/src/base.ts`
+- `packages/activerecord/src/connection-adapters/abstract-adapter.ts`
+- `packages/activerecord/src/connection-adapters/abstract/database-statements.ts`
+- `packages/activerecord/src/connection-adapters/abstract/schema-statements.ts`
+- `packages/activerecord/src/relation.ts`
+- `packages/activerecord/src/base.ts`
 
 ---

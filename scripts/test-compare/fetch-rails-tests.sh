@@ -21,16 +21,13 @@ git sparse-checkout add \
   activesupport/test \
   actionpack/test/dispatch \
   actionpack/test/controller \
-  actionview/test
-# Note: railties/test is intentionally omitted. The $RAILS_TAG release tag
-# strips test/ from the railties gem (`git ls-tree HEAD railties/` shows
-# only bin/, exe/, lib/), so adding it to the sparse list materializes
-# nothing and produces a misleading "not found" warning.
+  actionview/test \
+  railties/test
 
 echo "Rails test source ready at $RAILS_DIR"
 
 # Quick check that test dirs exist
-for dir in "activerecord/test/cases/arel" "activemodel/test/cases" "activerecord/test/cases" "activesupport/test" "actionview/test"; do
+for dir in "activerecord/test/cases/arel" "activemodel/test/cases" "activerecord/test/cases" "activesupport/test" "actionview/test" "railties/test"; do
   if [ -d "$dir" ]; then
     count=$(find "$dir" -name "*_test.rb" -o -name "test_*.rb" | wc -l)
     echo "  $dir: $count test files"

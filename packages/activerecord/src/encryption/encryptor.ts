@@ -227,10 +227,12 @@ export class Encryptor {
       default:
         return value;
     }
-    // Replace characters outside the encodable range with "?" to match _replaceUnencodable.
+    // Replace characters outside the encodable range or lone surrogates with "?"
+    // to match _replaceUnencodable in EncryptedAttributeType.
     const out: string[] = [];
     for (const ch of value) {
-      out.push((ch.codePointAt(0) ?? 0) <= limit ? ch : "?");
+      const cp = ch.codePointAt(0) ?? 0;
+      out.push(cp > limit || (cp >= 0xd800 && cp <= 0xdfff) ? "?" : ch);
     }
     return out.join("");
   }

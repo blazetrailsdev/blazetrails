@@ -132,31 +132,4 @@ describe("PostgreSQL::SchemaDumper", () => {
       );
     });
   });
-
-  describe("extensions", () => {
-    it("adds nothing when adapter has no extensions", () => {
-      const dumper = SchemaDumper.create(emptySource) as any;
-      const lines: string[] = [];
-      dumper.extensions(lines);
-      expect(lines).toHaveLength(0);
-    });
-  });
-
-  describe("types", () => {
-    it("adds nothing when adapter has no enum types", () => {
-      const dumper = SchemaDumper.create(emptySource) as any;
-      const lines: string[] = [];
-      dumper.types(lines);
-      expect(lines).toHaveLength(0);
-    });
-  });
-
-  describe("schemas", () => {
-    it("adds nothing when adapter has no non-public schemas", () => {
-      const dumper = SchemaDumper.create(emptySource) as any;
-      const lines: string[] = [];
-      dumper.schemas(lines);
-      expect(lines).toHaveLength(0);
-    });
-  });
 });

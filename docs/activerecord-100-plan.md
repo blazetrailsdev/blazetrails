@@ -319,12 +319,11 @@ _Component C — Deduplicable cluster (5 files)_
 - LOC: ~180 net
 - Dependencies: PR 5, PR 7
 
-**PR 16 — `sqlite3/schema_statements.rb` (50%)**
+**PR 16 — `sqlite3/schema_statements.rb` ✅ merged #1191**
 
 - Rails: `$AR/connection_adapters/sqlite3/schema_statements.rb` (223 LOC)
-- TS: `$TS/connection-adapters/sqlite3/schema-statements.ts` (9 matched, 9 missing, 50%)
-- Missing (9): `createTable`, `addColumn`, `changeColumn`, `changeColumnDefault`, `changeColumnNull`, `removeColumn`, `renameTable`, `renameColumn`, `addPrimaryKeyConstraint`
-- LOC: Rails 223 LOC → ~160 net
+- TS: `$TS/connection-adapters/sqlite3/schema-statements.ts` (18/18, 100%)
+- Key: implemented 9 private helpers (were NotImplementedError stubs, skipped by api:compare); extracted extractValueFromDefault to quoting.ts (shared with adapter)
 - Dependencies: PR 8/8b, PR 15
 
 ---

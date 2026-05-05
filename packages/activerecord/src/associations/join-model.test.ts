@@ -1,7 +1,7 @@
 /**
  * Mirrors Rails activerecord/test/cases/associations/join_model_test.rb
  */
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { Base, registerModel, association, enableSti, registerSubclass } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
@@ -44,10 +44,18 @@ async function registerSchemaFor(adapter: DatabaseAdapter, ...models: any[]): Pr
   for (const M of models) registerModel(M);
 }
 
-// Disable the dynamic-adapter auto-schema path for this entire file.
-// Must be set before any describe/beforeEach runs so that createTestAdapter()
-// and all SchemaAdapter.setup() calls see the flag immediately.
-vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
+// Disable the dynamic-adapter auto-schema path for this entire file. Must be
+// set before any describe/beforeEach runs so that createTestAdapter() and all
+// SchemaAdapter.setup() calls see the flag immediately.
+//
+// We mutate process.env directly instead of vi.stubEnv because
+// vi.unstubAllEnvs() is global to the worker — when sibling test files in the
+// same fork (e.g. dirty/store/serialized-attribute after their TS-4 migration)
+// also call unstubAllEnvs in their own afterAll, they wipe this file's stub
+// too, racing this file's tests against an unset flag and producing
+// "relation X does not exist" failures on shared PG/MariaDB workers.
+const _priorNoAutoSchema = process.env.AR_NO_AUTO_SCHEMA;
+process.env.AR_NO_AUTO_SCHEMA = "1";
 
 // ==========================================================================
 // AssociationsJoinModelTest — mirrors join_model_test.rb
@@ -60,7 +68,8 @@ describe("AssociationsJoinModelTest", () => {
     try {
       await dropAllTables(adapter);
     } finally {
-      vi.unstubAllEnvs();
+      if (_priorNoAutoSchema === undefined) delete process.env.AR_NO_AUTO_SCHEMA;
+      else process.env.AR_NO_AUTO_SCHEMA = _priorNoAutoSchema;
     }
   });
 

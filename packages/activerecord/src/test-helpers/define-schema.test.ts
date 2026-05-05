@@ -10,7 +10,7 @@ beforeEach(() => {
 });
 
 describe("defineSchema", () => {
-  it("creates a single table with all column types", async () => {
+  it("creates a single table with common column types", async () => {
     await defineSchema(adapter, {
       things: {
         name: "string",
@@ -66,6 +66,14 @@ describe("defineSchema", () => {
       .filter((sql) => /CREATE TABLE/i.test(sql))
       .map((sql) => sql.match(/"(\w+)"/)?.[1]);
     expect(order).toEqual(["a", "b", "c"]);
+  });
+
+  it("self-referential table does not throw", async () => {
+    await expect(
+      defineSchema(adapter, {
+        categories: { parent_id: { type: "integer", references: "categories" } },
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it("cycle throws clearly", async () => {

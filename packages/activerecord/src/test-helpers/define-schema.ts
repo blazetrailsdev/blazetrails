@@ -39,7 +39,7 @@ function resolveReferences(schema: Schema): string[] {
     refs.set(table, new Set());
     for (const spec of Object.values(columns)) {
       if (typeof spec === "object" && spec.references) {
-        if (spec.references in schema) {
+        if (spec.references in schema && spec.references !== table) {
           refs.get(table)!.add(spec.references);
         }
       }

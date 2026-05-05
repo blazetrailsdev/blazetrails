@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Base, transaction, savepoint, Rollback, afterAllTransactionsCommit } from "./index.js";
 
 import { createTestAdapter } from "./test-adapter.js";
@@ -32,10 +32,6 @@ function makeSQLiteTopic() {
 function freshAdapter(): DatabaseAdapter {
   return createTestAdapter();
 }
-
-beforeAll(() => {
-  vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
-});
 
 // Close all SQLite adapters after every test regardless of which describe block.
 afterEach(() => {

@@ -3,10 +3,6 @@ import { createTestAdapter, cleanupTestAdapter, resetTestAdapterState } from "./
 import { defineSchema } from "./test-helpers/define-schema.js";
 import type { DatabaseAdapter } from "./adapter.js";
 
-// ---------------------------------------------------------------------------
-// Control group: AR_NO_AUTO_SCHEMA unset — existing behavior unchanged
-// ---------------------------------------------------------------------------
-
 describe("AR_NO_AUTO_SCHEMA unset (control)", () => {
   let adapter: DatabaseAdapter;
 
@@ -36,10 +32,6 @@ describe("AR_NO_AUTO_SCHEMA unset (control)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// AR_NO_AUTO_SCHEMA=1: dynamic adapter degrades to a thin pass-through
-// ---------------------------------------------------------------------------
-
 describe("AR_NO_AUTO_SCHEMA=1", () => {
   beforeEach(() => {
     vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
@@ -67,8 +59,6 @@ describe("AR_NO_AUTO_SCHEMA=1", () => {
     }
     void Gadget;
 
-    // The hook was not registered, so no pending models were queued.
-    // A query against the missing table should fail with a DB error, not succeed.
     await expect(adapter.execute(`SELECT * FROM "gadgets"`)).rejects.toThrow();
   });
 

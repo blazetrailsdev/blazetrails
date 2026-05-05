@@ -1,10 +1,24 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Base } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
+import { defineSchema } from "./test-helpers/define-schema.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
+import type { DatabaseAdapter } from "./adapter.js";
+
+let adapter: DatabaseAdapter;
+
+beforeAll(() => {
+  adapter = createTestAdapter();
+});
+beforeAll(async () => {
+  await defineSchema(adapter, { posts: { title: "string" } });
+});
+afterAll(async () => {
+  await dropAllTables(adapter);
+});
 
 describe("AnnotateTest", () => {
   it("annotate wraps content in an inline comment", () => {
-    const adapter = createTestAdapter();
     class Post extends Base {
       static {
         this.attribute("title", "string");
@@ -16,7 +30,6 @@ describe("AnnotateTest", () => {
   });
 
   it("annotate is sanitized", () => {
-    const adapter = createTestAdapter();
     class Post extends Base {
       static {
         this.attribute("title", "string");

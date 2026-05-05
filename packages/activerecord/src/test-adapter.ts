@@ -42,8 +42,13 @@ const isMysql = (): boolean => !!MYSQL_TEST_URL;
 
 /**
  * Tracks how many times the regex-based "missing table/column" recovery in
- * `handleMissingSchemaError` fired and patched a real schema mismatch. The
- * recovery path is the historical cause of cross-test drift (PRs #1190,
+ * `handleMissingSchemaError` *would have fired* (i.e. matched a recoverable
+ * error). In soft mode this also reflects DDL that ran; in strict mode the
+ * counter increments but no DDL runs (we throw first). The counter is about
+ * "schema mismatches the recovery path detected", not "schema patches
+ * applied" — both modes count the same event, just with different actions.
+ *
+ * The recovery path is the historical cause of cross-test drift (PRs #1190,
  * #1192, project_test_adapter_drift_fix); it papers over real schema bugs
  * by inferring types from regex parsing of SQL strings.
  *
@@ -105,7 +110,12 @@ function buildRecoveryDiag(
   sql: string,
   strict: boolean,
 ): string {
-  const head = `[test-adapter] schema recovery fired (${kind}): ${msg.slice(0, 200)} | sql=${sql.slice(0, 200)}`;
+  // Collapse all whitespace runs (including newlines) to single spaces so
+  // the diagnostic is one greppable line. Multi-line driver messages and
+  // pretty-printed SQL otherwise break the "one event = one log line"
+  // contract we rely on for `grep -c` in CI.
+  const oneLine = (s: string): string => s.replace(/\s+/g, " ").trim();
+  const head = `[test-adapter] schema recovery fired (${kind}): ${oneLine(msg).slice(0, 200)} | sql=${oneLine(sql).slice(0, 200)}`;
   if (!strict) return head;
   const guidance =
     kind === "table"

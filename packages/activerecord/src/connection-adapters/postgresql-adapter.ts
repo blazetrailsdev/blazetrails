@@ -1532,6 +1532,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     this._configuredClients = new WeakSet<pg.PoolClient>();
     this._statementPools = new WeakMap<pg.PoolClient, StatementPool>();
     this._clientsNeedingDeallocateAll = new WeakSet<pg.PoolClient>();
+    this.resetTransaction();
     this.connect();
   }
 
@@ -1592,6 +1593,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * raw socket to /dev/null; we simply null out all references.
    */
   override discardBang(): void {
+    // Capture before nulling so we can fire a non-blocking end() to
+    // release server-side resources (mirrors Rails reopen to /dev/null).
+    this._driverPool?.end().catch(() => {});
     this._driverPool = null;
     this._advisoryLockClient = null;
     this._client = null;

@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Base, registerModel } from "../index.js";
 import { Associations } from "../associations.js";
 
@@ -13,8 +13,10 @@ import type { DatabaseAdapter } from "../adapter.js";
 
 describe("AssociationValidationTest", () => {
   let adapter: DatabaseAdapter;
-  beforeAll(async () => {
+  beforeAll(() => {
     adapter = createTestAdapter();
+  });
+  beforeEach(async () => {
     await defineSchema(adapter, {
       posts: { title: "string" },
       comments: { body: "string", post_id: "integer" },

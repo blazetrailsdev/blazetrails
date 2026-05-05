@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Base } from "../index.js";
 import { NumericalityValidator } from "./numericality.js";
 
@@ -13,8 +13,10 @@ import type { DatabaseAdapter } from "../adapter.js";
 
 describe("NumericalityValidationTest", () => {
   let adapter: DatabaseAdapter;
-  beforeAll(async () => {
+  beforeAll(() => {
     adapter = createTestAdapter();
+  });
+  beforeEach(async () => {
     await defineSchema(adapter, {
       widgets: { price: "float", quantity: "integer" },
       widget2s: { price: "float" },

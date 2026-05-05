@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Base } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
@@ -8,8 +8,10 @@ import type { DatabaseAdapter } from "../adapter.js";
 describe("Validation Contexts (Rails-guided)", () => {
   let adapter: DatabaseAdapter;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     adapter = createTestAdapter();
+  });
+  beforeEach(async () => {
     await defineSchema(adapter, {
       users: { name: "string", terms: "string", change_reason: "string" },
     });

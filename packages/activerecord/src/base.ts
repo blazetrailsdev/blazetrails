@@ -249,26 +249,8 @@ export function _setScopeProxyWrapper(wrapper: (rel: any) => any): void {
 }
 
 /** @internal Hook called when a model's adapter is set. Used by test-adapter.ts. */
-let _onAdapterSet: ((modelClass: any) => void) | null = null;
-export function _setOnAdapterSetHook(hook: ((modelClass: any) => void) | null): void {
-  _onAdapterSet = hook;
-}
-
-/**
- * @internal
- *
- * Manually fire the adapter-set hook for a model that didn't go through the
- * usual `Base.adapter = …` assignment path. Used by HABTM join-model
- * creation, where the JoinModel delegates adapter access to the LHS model
- * via a getter — so its setter is a no-op and the hook never fires
- * automatically. The test-adapter relies on this hook to learn which
- * tables/columns to create, so a JoinModel that skips the hook leaves its
- * join table unregistered and the test-adapter's regex-recovery path has
- * to fix it on the first INSERT.
- */
-export function _fireAdapterSetHook(modelClass: any): void {
-  if (_onAdapterSet) _onAdapterSet(modelClass);
-}
+export { setOnAdapterSetHook as _setOnAdapterSetHook } from "./_adapter-set-hook.js";
+import { fireAdapterSetHook } from "./_adapter-set-hook.js";
 
 // Mirrors Rails' AbstractAdapter#arel_visitor — routes Node#toSql() through the
 // dialect-specific visitor (e.g. SQLite booleans as 1/0, no FOR UPDATE, etc.).
@@ -758,7 +740,7 @@ export class Base extends Model {
     }
     this._adapter = adapter;
     _wireArelVisitor(adapter);
-    if (_onAdapterSet) _onAdapterSet(this);
+    fireAdapterSetHook(this);
 
     // Full schema reset on adapter swap: drops schema-sourced defs and
     // their prototype accessors (preserves user-declared defs), and
@@ -828,7 +810,7 @@ export class Base extends Model {
     if (modelPool) {
       this._adapter = modelPool.checkout();
       _wireArelVisitor(this._adapter);
-      if (_onAdapterSet) _onAdapterSet(this);
+      fireAdapterSetHook(this);
       return this._adapter;
     }
 
@@ -840,7 +822,7 @@ export class Base extends Model {
       if (!connectionClass._adapter) {
         connectionClass._adapter = connPool.checkout();
         _wireArelVisitor(connectionClass._adapter);
-        if (_onAdapterSet) _onAdapterSet(connectionClass);
+        fireAdapterSetHook(connectionClass);
       }
       return connectionClass._adapter;
     }

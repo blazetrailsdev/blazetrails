@@ -40,7 +40,7 @@ export class SQLCounter {
 
 async function withSubscribed(counter: SQLCounter, fn: () => void | Promise<void>): Promise<void> {
   const sub = Notifications.subscribe("sql.active_record", (event: NotificationEvent) => {
-    counter.call(event.name, null!, null!, "", event.payload as Record<string, unknown>);
+    counter.call(event.name, null, null, "", event.payload as Record<string, unknown>);
   });
   try {
     await fn();

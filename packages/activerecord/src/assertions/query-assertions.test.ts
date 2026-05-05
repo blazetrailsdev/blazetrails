@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
+import { Notifications } from "@blazetrails/activesupport";
 import {
   SQLCounter,
   assertQueriesCount,
@@ -6,13 +7,14 @@ import {
   assertQueriesMatch,
   assertNoQueriesMatch,
 } from "../testing/query-assertions.js";
-import { Notifications } from "@blazetrails/activesupport";
 
 function publishSql(sql: string, name = "SELECT"): void {
   Notifications.publish("sql.active_record", { sql, name, cached: false, binds: [] });
 }
 
 describe("QueryAssertionsTest", () => {
+  afterEach(() => Notifications.unsubscribeAll());
+
   it("assert queries count any", async () => {
     await assertQueriesCount(1, async () => {
       publishSql("SELECT 1");

@@ -155,6 +155,17 @@ describe("MySQL::SchemaStatements", () => {
     expect(meta.limit).toBe(8);
   });
 
+  it("newColumnFromField: limit from lookupCastType is preserved on Column", () => {
+    const lookup = (s: string) => ({ type: "integer", limit: 8, precision: null, scale: null });
+    const col = newColumnFromField(
+      "t",
+      { Field: "id", Type: "bigint", Null: "NO", Default: null, Extra: "" },
+      () => null,
+      lookup,
+    );
+    expect(col.sqlTypeMetadata?.limit).toBe(8);
+  });
+
   it("fetchTypeMetadata: lookupCastType boolean mapping (tinyint(1) emulation)", () => {
     const lookup = (s: string) => ({ type: "boolean", limit: null, precision: null, scale: null });
     const meta = fetchTypeMetadata("tinyint(1)", "", lookup);

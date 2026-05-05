@@ -111,9 +111,9 @@ export function validPrimaryKeyOptions(): string[] {
 /** @internal */
 export function createTableDefinition(
   name: string,
-  options: Record<string, unknown> = {},
+  options: { id?: boolean | "uuid"; charset?: string | null; collation?: string | null } = {},
 ): TableDefinition {
-  return new TableDefinition(name, options as any);
+  return new TableDefinition(name, options);
 }
 
 /** @internal */

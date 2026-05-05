@@ -110,7 +110,7 @@ export async function defineSchema(
           if (spec.limit !== undefined) options["limit"] = spec.limit;
           if (spec.null !== undefined) options["null"] = spec.null;
           if (spec.default !== undefined) options["default"] = spec.default;
-          if (spec.primary) options["primary"] = true;
+          if (spec.primary) options["primaryKey"] = true;
         }
         t.column(colName, arType, options);
       }

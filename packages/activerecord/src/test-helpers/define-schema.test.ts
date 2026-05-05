@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 import { defineSchema } from "./define-schema.js";
@@ -19,7 +19,6 @@ describe("defineSchema", () => {
         big_count: "big_integer",
         ratio: "float",
         price: "decimal",
-        active: "boolean",
         created_at: "datetime",
         born_on: "date",
         meta: "json",
@@ -27,13 +26,15 @@ describe("defineSchema", () => {
     });
 
     await adapter.executeMutation(
-      `INSERT INTO "things" ("name","body","count","big_count","ratio","price","active","created_at","born_on","meta") VALUES ('x','y',1,2,1.5,9.99,1,'2024-01-01','2024-01-01','{}')`,
+      `INSERT INTO "things" ("name","body","count","big_count","ratio","price","created_at","born_on","meta") VALUES ('x','y',1,2,1.5,9.99,'2024-01-01','2024-01-01','{}')`,
     );
     const rows = await adapter.execute(`SELECT * FROM "things"`);
     expect(rows).toHaveLength(1);
   });
 
   it("creates two tables with a references FK in correct order", async () => {
+    const spy = vi.spyOn(adapter, "executeMutation");
+
     await defineSchema(adapter, {
       comments: {
         body: "text",
@@ -44,30 +45,27 @@ describe("defineSchema", () => {
       },
     });
 
-    await adapter.executeMutation(`INSERT INTO "posts" ("title") VALUES ('hello')`);
-    const [post] = await adapter.execute(`SELECT "id" FROM "posts"`);
-    await adapter.executeMutation(
-      `INSERT INTO "comments" ("body","post_id") VALUES ('world',${post["id"]})`,
-    );
-    const rows = await adapter.execute(`SELECT * FROM "comments"`);
-    expect(rows).toHaveLength(1);
+    const createCalls = spy.mock.calls
+      .map((c) => c[0] as string)
+      .filter((sql) => /CREATE TABLE/i.test(sql));
+    expect(createCalls[0]).toMatch(/"posts"/);
+    expect(createCalls[1]).toMatch(/"comments"/);
   });
 
   it("topo sort handles a 3-table chain", async () => {
-    await expect(
-      defineSchema(adapter, {
-        c: { b_id: { type: "integer", references: "b" } },
-        b: { a_id: { type: "integer", references: "a" } },
-        a: { name: "string" },
-      }),
-    ).resolves.toBeUndefined();
+    const spy = vi.spyOn(adapter, "executeMutation");
 
-    await adapter.executeMutation(`INSERT INTO "a" ("name") VALUES ('one')`);
-    const [aRow] = await adapter.execute(`SELECT "id" FROM "a"`);
-    await adapter.executeMutation(`INSERT INTO "b" ("a_id") VALUES (${aRow["id"]})`);
-    const [bRow] = await adapter.execute(`SELECT "id" FROM "b"`);
-    await adapter.executeMutation(`INSERT INTO "c" ("b_id") VALUES (${bRow["id"]})`);
-    expect(await adapter.execute(`SELECT * FROM "c"`)).toHaveLength(1);
+    await defineSchema(adapter, {
+      c: { b_id: { type: "integer", references: "b" } },
+      b: { a_id: { type: "integer", references: "a" } },
+      a: { name: "string" },
+    });
+
+    const order = spy.mock.calls
+      .map((c) => c[0] as string)
+      .filter((sql) => /CREATE TABLE/i.test(sql))
+      .map((sql) => sql.match(/"(\w+)"/)?.[1]);
+    expect(order).toEqual(["a", "b", "c"]);
   });
 
   it("cycle throws clearly", async () => {

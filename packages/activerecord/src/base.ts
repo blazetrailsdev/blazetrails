@@ -72,6 +72,7 @@ import { Association as AssociationInstance } from "./associations/association.j
 import { ConnectionHandler } from "./connection-adapters/abstract/connection-handler.js";
 import * as ConnectionHandling from "./connection-handling.js";
 import * as ModelSchema from "./model-schema.js";
+import { fireAdapterSetHook } from "./_adapter-set-hook.js";
 import {
   createOrUpdate as callbacksCreateOrUpdate,
   _createRecord as callbacksCreateRecord,
@@ -250,7 +251,6 @@ export function _setScopeProxyWrapper(wrapper: (rel: any) => any): void {
 
 /** @internal Hook called when a model's adapter is set. Used by test-adapter.ts. */
 export { setOnAdapterSetHook as _setOnAdapterSetHook } from "./_adapter-set-hook.js";
-import { fireAdapterSetHook } from "./_adapter-set-hook.js";
 
 // Mirrors Rails' AbstractAdapter#arel_visitor — routes Node#toSql() through the
 // dialect-specific visitor (e.g. SQLite booleans as 1/0, no FOR UPDATE, etc.).

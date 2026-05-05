@@ -1502,7 +1502,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * @internal
    */
   connect(): void {
-    if (!this._pgPoolOptions) return;
+    if (!this._pgPoolOptions || this._driverPool) return;
     this._driverPool = new pg.Pool(this._pgPoolOptions);
   }
 
@@ -1595,10 +1595,17 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * further queries can start.
    */
   override discardBang(): void {
+    if (this._advisoryLockClient) {
+      this._advisoryLockClient.release();
+      this._advisoryLockClient = null;
+    }
+    if (this._client) {
+      this._releaseStatementPool(this._client);
+      this._client.release();
+      this._client = null;
+    }
     this._driverPool?.end().catch(() => {});
     this._driverPool = null;
-    this._advisoryLockClient = null;
-    this._client = null;
     this._inTransaction = false;
     this._lastReleasedTxnClient = null;
     this._configuredClients = new WeakSet<pg.PoolClient>();

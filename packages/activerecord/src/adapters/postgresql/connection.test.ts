@@ -208,15 +208,16 @@ describeIfPg("PostgresqlConnectionTest", () => {
 
   it("discardBang fires async pool cleanup", async () => {
     const a = new PostgreSQLAdapter(PG_TEST_URL);
+    const pool = a._driverPoolForTest();
     try {
       expect(a.active).toBe(true);
       a.discardBang();
       expect(a.active).toBe(false);
       expect(a.isConnected()).toBe(false);
     } finally {
-      // discardBang already fired pool.end() fire-and-forget; close()
-      // is a no-op (pool is null) but ensures any lingering work finishes.
-      await a.close();
+      // discardBang fires pool.end() internally; await the same handle
+      // here so the test doesn't exit with open sockets.
+      await pool?.end().catch(() => {});
     }
   });
 

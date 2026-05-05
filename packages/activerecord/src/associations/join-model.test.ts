@@ -2,6 +2,7 @@
  * Mirrors Rails activerecord/test/cases/associations/join_model_test.rb
  */
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { dbg, dbgPgTables } from "../test-adapter-debug.js";
 import { Base, registerModel, association, enableSti, registerSubclass } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
@@ -101,19 +102,24 @@ describe("AssociationsJoinModelTest", () => {
     }
   }
 
-  beforeEach(async () => {
+  beforeEach(async (ctx) => {
+    dbg("test:beforeEach:enter", {
+      test: ctx.task?.name,
+      env: process.env.AR_NO_AUTO_SCHEMA,
+    });
     adapter = freshAdapter();
+    await dbgPgTables(adapter, "after-freshAdapter");
     Author.adapter = adapter;
     Post.adapter = adapter;
     Tag.adapter = adapter;
     Tagging.adapter = adapter;
-    // AR_NO_AUTO_SCHEMA=1 (stubbed in beforeAll) disables the dynamic
-    // adapter path; tests declare their schema explicitly via
-    // registerSchemaFor instead.
     await registerSchemaFor(adapter, Author, Post, Tag, Tagging);
+    await dbgPgTables(adapter, "after-defineSchema");
+    dbg("test:beforeEach:exit", { test: ctx.task?.name });
   });
 
   it("has many", async () => {
+    await dbgPgTables(adapter, "test-has-many:start");
     const author = await Author.create({ name: "DHH" });
     await Post.create({ author_id: author.id, title: "Intro", body: "Hello" });
     const posts = await loadHasMany(author, "posts", {

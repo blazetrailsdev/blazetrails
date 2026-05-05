@@ -25,6 +25,7 @@ import { include } from "@blazetrails/activesupport";
 import { isWriteQuerySql } from "./connection-adapters/sql-classification.js";
 import type { Result } from "./result.js";
 import { _setOnAdapterSetHook } from "./base.js";
+import { dbg } from "./test-adapter-debug.js";
 
 // process.env.PG_TEST_URL / MYSQL_TEST_URL are already worker-scoped by
 // test-setup-worker-db.ts (a setupFile that runs before this module loads).
@@ -135,7 +136,14 @@ function sqlTypeForAttribute(def: any, isPkCol: boolean): string {
  * Checks noAutoSchema() at call time so vi.stubEnv works after module load.
  */
 function registerModel(modelClass: any): void {
-  if (noAutoSchema()) return;
+  const noAuto = noAutoSchema();
+  dbg("registerModel", {
+    table: modelClass?.tableName,
+    name: modelClass?.name,
+    noAutoSchema: noAuto,
+    skipped: noAuto,
+  });
+  if (noAuto) return;
   _registeredModelClasses.add(modelClass);
 }
 
@@ -364,6 +372,7 @@ async function execDdlWithSavepoint(inner: any, sql: string): Promise<void> {
  * Drop tables that were created via the SchemaAdapter and reset tracking state.
  */
 async function dropTrackedTables(inner: any): Promise<void> {
+  dbg("dropTrackedTables:enter", { tables: [..._createdTables], adapter: inner?.adapterName });
   // Wait for any in-flight cleanup to finish, then run our own. The previous
   // early-return-after-await pattern was unsound: if another setup() had
   // already re-populated _createdTables between the moment we started waiting
@@ -387,6 +396,7 @@ async function dropTrackedTables(inner: any): Promise<void> {
     }
     _createdTables.clear();
     _createdColumns.clear();
+    dbg("dropTrackedTables:exit");
   } finally {
     _cleanupPromise = null;
     resolve();
@@ -434,6 +444,7 @@ _setOnAdapterSetHook(registerModel);
  */
 export function createTestAdapter(): DatabaseAdapter {
   _needsCleanup = true;
+  dbg("createTestAdapter", { setNeedsCleanup: true });
   return _factory();
 }
 
@@ -479,6 +490,14 @@ export async function cleanupTestAdapter(adapter: DatabaseAdapter): Promise<void
  * @internal
  */
 export async function resetTestAdapterState(): Promise<void> {
+  dbg("resetTestAdapterState:enter", {
+    createdTables: [..._createdTables],
+    pendingModels: [..._pendingModels.keys()],
+    registeredModels: [..._registeredModelClasses].map((m: any) => m?.tableName ?? m?.name),
+    needsCleanup: _needsCleanup,
+    hasSetupLock: !!_setupLock,
+    hasCleanupPromise: !!_cleanupPromise,
+  });
   // Wait for any in-flight cleanup or setup to settle before we tear down,
   // otherwise we'd race against an already-running drop/create.
   while (_setupLock) await _setupLock;
@@ -504,6 +523,7 @@ export async function resetTestAdapterState(): Promise<void> {
     _pendingCpk.clear();
     _registeredModelClasses.clear();
     _needsCleanup = false;
+    dbg("resetTestAdapterState:exit");
   } finally {
     _cleanupPromise = null;
     resolveLock();
@@ -558,12 +578,23 @@ class SchemaAdapter implements DatabaseAdapter {
   }
 
   private async setup(): Promise<void> {
+    dbg("setup:enter", {
+      needsCleanup: _needsCleanup,
+      registeredModels: _registeredModelClasses.size,
+      pendingModels: _pendingModels.size,
+      createdTables: [..._createdTables],
+      hasSetupLock: !!_setupLock,
+      hasCleanupPromise: !!_cleanupPromise,
+    });
     // Wait for any in-flight setup or cleanup to complete
     while (_setupLock) await _setupLock;
     if (_cleanupPromise) await _cleanupPromise;
 
     // Check if there's any work to do
-    if (!_needsCleanup && _registeredModelClasses.size === 0 && _pendingModels.size === 0) return;
+    if (!_needsCleanup && _registeredModelClasses.size === 0 && _pendingModels.size === 0) {
+      dbg("setup:exit:no-work");
+      return;
+    }
 
     // Acquire module-level lock
     let resolve!: () => void;
@@ -585,6 +616,7 @@ class SchemaAdapter implements DatabaseAdapter {
           await processPendingModels(this.inner);
         }
       }
+      dbg("setup:exit:done", { createdTables: [..._createdTables] });
     } finally {
       _setupLock = null;
       resolve();

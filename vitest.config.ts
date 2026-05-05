@@ -102,7 +102,9 @@ export default defineConfig({
           // letting CI fail on every transient race — burns more reviewer
           // time than the rare hidden flake costs. Revisit if a real
           // regression slips through.
-          retry: process.env.PG_TEST_URL || process.env.MYSQL_TEST_URL ? 2 : 0,
+          // TEMP: retries disabled for join-model PG flake investigation —
+          // retries mask the initial failure state. Restore before merging.
+          retry: 0,
           pool: "forks",
           // minForks = maxForks so VITEST_WORKER_ID stays within [1, AR_DB_MAX_FORKS].
           // Without this each file gets a new fork; IDs wrap mod AR_DB_MAX_FORKS,

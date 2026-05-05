@@ -43,32 +43,17 @@ describe("QueryAssertionsTest", () => {
     ).rejects.toThrow("instead of 0 queries");
   });
 
-  it("counter records multiple queries", async () => {
+  it("counter records multiple queries", () => {
     const counter = new SQLCounter();
-    counter.call("", new Date(), new Date(), "", {
-      sql: "SELECT 1",
-      name: "SELECT",
-      cached: false,
-      binds: [],
-    });
-    counter.call("", new Date(), new Date(), "", {
-      sql: "SELECT 2",
-      name: "SELECT",
-      cached: false,
-      binds: [],
-    });
+    counter.call("", null, null, "", { sql: "SELECT 1", name: "SELECT", cached: false, binds: [] });
+    counter.call("", null, null, "", { sql: "SELECT 2", name: "SELECT", cached: false, binds: [] });
     expect(counter.log).toEqual(["SELECT 1", "SELECT 2"]);
     expect(counter.logAll).toEqual(["SELECT 1", "SELECT 2"]);
   });
 
-  it("counter does not record cached queries", async () => {
+  it("counter does not record cached queries", () => {
     const counter = new SQLCounter();
-    counter.call("", new Date(), new Date(), "", {
-      sql: "SELECT 1",
-      name: "SELECT",
-      cached: true,
-      binds: [],
-    });
+    counter.call("", null, null, "", { sql: "SELECT 1", name: "SELECT", cached: true, binds: [] });
     expect(counter.log).toEqual([]);
   });
 

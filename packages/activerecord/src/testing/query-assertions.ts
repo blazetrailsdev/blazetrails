@@ -10,13 +10,10 @@ import { Notifications, type NotificationEvent } from "@blazetrails/activesuppor
  * Mirrors: ActiveRecord::Assertions::QueryAssertions::SQLCounter
  */
 export class SQLCounter {
-  logFull: Array<[string, unknown[]]> = [];
-  logAll: string[] = [];
-
-  constructor() {
-    this.logFull = [];
-    this.logAll = [];
-  }
+  constructor(
+    public logFull: Array<[string, unknown[]]> = [],
+    public logAll: string[] = [],
+  ) {}
 
   get log(): string[] {
     return this.logFull.map(([sql]) => sql);
@@ -86,7 +83,7 @@ export async function assertNoQueries(
 ): Promise<void> {
   return typeof optsOrFn === "function"
     ? assertQueriesCount(0, optsOrFn)
-    : assertQueriesCount(0, optsOrFn, fn!);
+    : assertQueriesCount(0, optsOrFn, fn);
 }
 
 /**
@@ -136,5 +133,5 @@ export async function assertNoQueriesMatch(
 ): Promise<void> {
   return typeof optsOrFn === "function"
     ? assertQueriesMatch(match, { count: 0 }, optsOrFn)
-    : assertQueriesMatch(match, { count: 0, includeSchema: optsOrFn.includeSchema }, fn!);
+    : assertQueriesMatch(match, { count: 0, includeSchema: optsOrFn.includeSchema }, fn);
 }

@@ -195,8 +195,15 @@ describe("NormalizedAttributeTest", () => {
 });
 
 describe("normalizes on Base", () => {
+  let _adapter: DatabaseAdapter;
+
+  afterAll(async () => {
+    if (_adapter) await dropAllTables(_adapter);
+  });
+
   it("normalizes attributes before persistence", async () => {
     const adapter = freshAdapter();
+    _adapter = adapter;
     await defineSchema(adapter, { users: { email: "string" } });
     class User extends Base {
       static _tableName = "users";

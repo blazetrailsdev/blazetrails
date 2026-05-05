@@ -4,6 +4,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { Base } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 
 function withCacheVersioning(klass: typeof Base, fn: () => void) {
   const original = klass.cacheVersioning;
@@ -36,6 +37,10 @@ afterAll(() => {
 });
 
 describe("IntegrationTest", () => {
+  afterAll(async () => {
+    await dropAllTables(createTestAdapter());
+  });
+
   it("to param should return string", async () => {
     class Client extends Base {
       static {

@@ -40,6 +40,38 @@ export const adapterType: "sqlite" | "postgres" | "mysql" = PG_TEST_URL
 const isPg = (): boolean => !!PG_TEST_URL;
 const isMysql = (): boolean => !!MYSQL_TEST_URL;
 
+/**
+ * Tracks how many times the regex-based "missing table/column" recovery in
+ * `handleMissingSchemaError` fired and patched a real schema mismatch. The
+ * recovery path is the historical cause of cross-test drift (PRs #1190,
+ * #1192, project_test_adapter_drift_fix); it papers over real schema bugs
+ * by inferring types from regex parsing of SQL strings.
+ *
+ * After PRs #1190 and #1192 made cleanup eager, recovery should never need
+ * to fire — every model declares its attributes via `attribute()`, and
+ * `processPendingModels` creates the table from those declarations before
+ * any query runs.
+ *
+ * Tests can read this counter (`getRecoveryFireCount()`) to assert it stays
+ * at 0; CI can opt into strict mode via `AR_TEST_STRICT_SCHEMA=1` to throw
+ * on any recovery firing. We keep the recovery in default mode for now so
+ * we get a soft-landing if some test path still depends on it; once strict
+ * mode is clean across full PG/MySQL CI, the recovery can be deleted.
+ *
+ * @internal
+ */
+let _schemaRecoveryFires = 0;
+const STRICT_SCHEMA = process.env.AR_TEST_STRICT_SCHEMA === "1";
+
+/** @internal */
+export function getRecoveryFireCount(): number {
+  return _schemaRecoveryFires;
+}
+/** @internal */
+export function resetRecoveryFireCount(): void {
+  _schemaRecoveryFires = 0;
+}
+
 let _sharedAdapter: any = null;
 
 // Schema tracking — what tables/columns have been created in the DB.
@@ -805,8 +837,32 @@ class SchemaAdapter implements DatabaseAdapter {
   /**
    * If the error is about a missing table or column, recover by creating
    * the table or adding the column. Returns true if recovery succeeded.
+   *
+   * Wrapper around `_handleMissingSchemaErrorInner` that increments the
+   * recovery-fire counter on success, throws in strict mode, and emits a
+   * one-line diagnostic in soft mode so CI logs can be grep'd for tests
+   * that still depend on schema recovery.
    */
   private async handleMissingSchemaError(e: any, sql: string): Promise<boolean> {
+    const recovered = await this._handleMissingSchemaErrorInner(e, sql);
+    if (!recovered) return false;
+    _schemaRecoveryFires += 1;
+    const msg = e?.message || e?.sqlMessage || "";
+    const diag = `[test-adapter] schema recovery fired: ${msg.slice(0, 200)} | sql=${sql.slice(0, 200)}`;
+    if (STRICT_SCHEMA) {
+      throw new Error(
+        `AR_TEST_STRICT_SCHEMA: ${diag}\n` +
+          `Recovery patches schema mismatches with regex-inferred column types — a real bug ` +
+          `was hidden. Declare the missing column on the model via attribute(...) so it gets ` +
+          `created in processPendingModels at adapter-set time.`,
+      );
+    }
+
+    console.warn(diag);
+    return true;
+  }
+
+  private async _handleMissingSchemaErrorInner(e: any, sql: string): Promise<boolean> {
     const msg = e?.message || e?.sqlMessage || "";
 
     // Handle missing column: add the column and retry

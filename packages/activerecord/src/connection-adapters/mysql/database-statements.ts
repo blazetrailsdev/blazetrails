@@ -7,6 +7,7 @@
 import type { ExplainOption } from "../../adapter.js";
 import type { Nodes } from "@blazetrails/arel";
 import { Result } from "../../result.js";
+import { defaultInsertValue as abstractDefaultInsertValue } from "../abstract/database-statements.js";
 
 export interface DatabaseStatements {
   execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
@@ -79,11 +80,10 @@ export function isAnalyzeWithoutExplain(
 }
 
 /** @internal */
-export function defaultInsertValue(_column: AutoIncrementColumnHost): undefined {
-  // Rails: `super unless column.auto_increment?` — returns nil/undefined for
-  // auto-increment columns so the driver fills the value; delegates to super otherwise.
-  if (_column.autoIncrement) return undefined;
-  return undefined;
+export function defaultInsertValue(column: AutoIncrementColumnHost): Nodes.SqlLiteral | undefined {
+  // Rails: `super unless column.auto_increment?`
+  if (column.autoIncrement) return undefined;
+  return abstractDefaultInsertValue(column);
 }
 
 /** @internal */
@@ -99,11 +99,14 @@ export function returningColumnValues(
 }
 
 /** @internal */
-export function combineMultiStatements(totalSql: string[]): string[] {
-  const maxPacket = 16_777_216; // default 16 MiB; real value comes from show_variable
+export function combineMultiStatements(
+  this: { maxAllowedPacket?(): Promise<number> } | void,
+  totalSql: string[],
+): string[] {
+  const maxPacket = 16_777_216; // default 16 MiB; caller should supply via maxAllowedPacket()
   return totalSql.reduce<string[]>((chunks, sql) => {
     const prev = chunks[chunks.length - 1];
-    if (prev === undefined || sql.length + prev.length + 2 > maxPacket) {
+    if (isMaxAllowedPacketReached(sql, prev, maxPacket)) {
       chunks.push(sql);
     } else {
       chunks[chunks.length - 1] = `${prev};\n${sql}`;
@@ -118,13 +121,14 @@ export function isMaxAllowedPacketReached(
   previousPacket: string | undefined,
   maxPacket: number,
 ): boolean {
-  if (currentPacket.length > maxPacket) {
+  const currentSize = Buffer.byteLength(currentPacket, "utf8");
+  if (currentSize > maxPacket) {
     throw new Error(
-      `Fixtures set is too large ${currentPacket.length}. Consider increasing the max_allowed_packet variable.`,
+      `Fixtures set is too large ${currentSize}. Consider increasing the max_allowed_packet variable.`,
     );
   }
   if (previousPacket === undefined) return true;
-  return currentPacket.length + previousPacket.length + 2 > maxPacket;
+  return currentSize + Buffer.byteLength(previousPacket, "utf8") + 2 > maxPacket;
 }
 
 /** @internal */

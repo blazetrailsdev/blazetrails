@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { instrument } from "./job-runtime.js";
 import * as RuntimeRegistry from "../runtime-registry.js";
 
 describe("JobRuntimeTest", () => {
+  beforeEach(() => RuntimeRegistry.reset());
+
   it("sets dbRuntime in payload for perform operations", () => {
-    RuntimeRegistry.reset();
     const payload: Record<string, unknown> = {};
     instrument.call({}, "perform", payload, () => {
       RuntimeRegistry.record("SELECT", 5.0);

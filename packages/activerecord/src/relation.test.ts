@@ -1199,13 +1199,11 @@ describe("RelationTest", () => {
   });
 
   it("find_by with multi-arg conditions returns the first matching record", async () => {
-    const adp = freshAdapter();
-    await defineSchema(adp, { posts: { title: "string", body: "string" } });
     class Post extends Base {
       static {
         this.attribute("title", "string");
         this.attribute("body", "string");
-        this.adapter = adp;
+        this.adapter = adapter;
       }
     }
     await Post.create({ title: "t", body: "b" });

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Base } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
@@ -10,7 +10,7 @@ let adapter: DatabaseAdapter;
 beforeAll(() => {
   adapter = createTestAdapter();
 });
-beforeAll(async () => {
+beforeEach(async () => {
   await defineSchema(adapter, {
     posts: { title: "string", lock_version: "integer" },
   });

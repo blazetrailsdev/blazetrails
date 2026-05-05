@@ -1,20 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { Base } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
-import { defineSchema } from "./test-helpers/define-schema.js";
-import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import type { DatabaseAdapter } from "./adapter.js";
 
 let adapter: DatabaseAdapter;
 
 beforeAll(() => {
   adapter = createTestAdapter();
-});
-beforeAll(async () => {
-  await defineSchema(adapter, { posts: { title: "string" } });
-});
-afterAll(async () => {
-  await dropAllTables(adapter);
 });
 
 describe("AnnotateTest", () => {

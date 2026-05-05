@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { Base } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
@@ -11,8 +11,8 @@ let adapter: DatabaseAdapter;
 beforeAll(() => {
   adapter = createTestAdapter();
 });
-beforeAll(async () => {
-  await defineSchema(adapter, { events: { start_date: "string" } });
+beforeEach(async () => {
+  await defineSchema(adapter, { events: { start_date: "date" } });
 });
 afterAll(async () => {
   await dropAllTables(adapter);

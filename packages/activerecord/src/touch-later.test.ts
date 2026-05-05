@@ -18,7 +18,7 @@ beforeAll(() => {
 });
 beforeEach(async () => {
   await defineSchema(adapter, {
-    invoices: { amount: "integer", updated_at: "string", created_at: "string" },
+    invoices: { amount: "integer", updated_at: "datetime", created_at: "datetime" },
   });
 });
 afterAll(async () => {

@@ -58,14 +58,14 @@ describe("AssociationsJoinModelTest", () => {
 
   beforeEach(async () => {
     adapter = freshAdapter();
-    // Pre-create the schema explicitly. This bypasses the dynamic test-adapter's
-    // CREATE-TABLE-IF-NOT-EXISTS path and its recovery-on-failure path, both of
-    // which can drift across test files in a shared worker (PG/MariaDB share a
-    // singleton `_sharedAdapter`). Stale `_declaredColumns` entries from a
-    // sibling file's `Post` class — combined with the recovery path's TEXT
-    // fallback when a declaration is missing — could leave `author_id` typed as
-    // TEXT on PG, which silently breaks integer-keyed lookups and causes the
-    // counts in "has many with multiple authors" to flake.
+    // Pre-create the schema explicitly. The dynamic test-adapter still runs
+    // its normal CREATE-TABLE-IF-NOT-EXISTS / ADD-COLUMN setup on the first
+    // query (defineSchema doesn't update its `_createdTables` tracking — see
+    // docs/explicit-test-schema-plan.md for the deferred-to-TS-3 limitation),
+    // but with the columns already created by defineSchema, the recovery
+    // path's `_id`/`TEXT` fallback can no longer mistype `author_id` under
+    // DDL contention on PG/MariaDB. The PR #1200 id-set filter below is
+    // retained until TS-3 lets us disable the dynamic adapter outright.
     await defineSchema(adapter, {
       authors: { name: "string" },
       posts: {

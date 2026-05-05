@@ -72,6 +72,55 @@ export function resetRecoveryFireCount(): void {
   _schemaRecoveryFires = 0;
 }
 
+/**
+ * Classify a DB error message as a recoverable missing-table/missing-column
+ * case based on the same regexes `_handleMissingSchemaErrorInner` uses.
+ * Returns the kind so strict mode can throw with a tailored message before
+ * any DDL runs, and so the soft-mode diagnostic can name what was missing.
+ *
+ * @internal
+ */
+function classifyRecoverableError(msg: string): "column" | "table" | null {
+  if (
+    /column "(\w+)" of relation "(\w+)" does not exist/i.test(msg) ||
+    /Unknown column '(\w+)' in/i.test(msg) ||
+    /table (\w+) has no column named (\w+)/i.test(msg)
+  ) {
+    return "column";
+  }
+  if (
+    /relation "(\w+)" does not exist/i.test(msg) ||
+    /Table '(?:[\w]+\.)?(\w+)' doesn't exist/i.test(msg) ||
+    /no such table: (\w+)/i.test(msg)
+  ) {
+    return "table";
+  }
+  return null;
+}
+
+/** @internal */
+function buildRecoveryDiag(
+  kind: "column" | "table" | "unknown",
+  msg: string,
+  sql: string,
+  strict: boolean,
+): string {
+  const head = `[test-adapter] schema recovery fired (${kind}): ${msg.slice(0, 200)} | sql=${sql.slice(0, 200)}`;
+  if (!strict) return head;
+  const guidance =
+    kind === "table"
+      ? `Recovery patches missing tables by inferring columns from SQL — that's regex SQL parsing, ` +
+        `not a real schema. Register the table at decl time: a Model class via attribute(...), or ` +
+        `a HABTM join table via the association builder (which fires the adapter-set hook).`
+      : kind === "column"
+        ? `Recovery patches schema mismatches with regex-inferred column types — a real bug was ` +
+          `hidden. Declare the missing column on the model via attribute(...) so it gets created ` +
+          `in processPendingModels at adapter-set time.`
+        : `Recovery fired for an unclassified error — extend classifyRecoverableError if this is ` +
+          `a real recoverable case, otherwise surface the underlying bug.`;
+  return `AR_TEST_STRICT_SCHEMA: ${head}\n${guidance}`;
+}
+
 let _sharedAdapter: any = null;
 
 // Schema tracking — what tables/columns have been created in the DB.
@@ -612,6 +661,9 @@ export async function resetTestAdapterState(): Promise<void> {
     _pendingCpk.clear();
     _registeredModelClasses.clear();
     _needsCleanup = false;
+    // Reset the recovery counter so per-test assertions on it don't depend
+    // on execution order. The global beforeEach owns this reset.
+    _schemaRecoveryFires = 0;
   } finally {
     _cleanupPromise = null;
     resolveLock();
@@ -839,26 +891,27 @@ class SchemaAdapter implements DatabaseAdapter {
    * the table or adding the column. Returns true if recovery succeeded.
    *
    * Wrapper around `_handleMissingSchemaErrorInner` that increments the
-   * recovery-fire counter on success, throws in strict mode, and emits a
-   * one-line diagnostic in soft mode so CI logs can be grep'd for tests
-   * that still depend on schema recovery.
+   * recovery-fire counter on success, throws in strict mode (BEFORE any
+   * recovery DDL runs, so the DB stays unmodified), and emits a one-line
+   * diagnostic in soft mode so CI logs can be grep'd for tests that still
+   * depend on schema recovery.
    */
   private async handleMissingSchemaError(e: any, sql: string): Promise<boolean> {
+    const msg = e?.message || e?.sqlMessage || "";
+    const kind = classifyRecoverableError(msg);
+    // Strict mode: detect recoverability from the error text alone and throw
+    // before _handleMissingSchemaErrorInner runs any CREATE/ALTER. Otherwise
+    // strict mode would still patch the DB and only surface the failure
+    // afterwards, masking follow-on behavior in the same process.
+    if (kind && STRICT_SCHEMA) {
+      _schemaRecoveryFires += 1;
+      throw new Error(buildRecoveryDiag(kind, msg, sql, /* strict */ true));
+    }
     const recovered = await this._handleMissingSchemaErrorInner(e, sql);
     if (!recovered) return false;
     _schemaRecoveryFires += 1;
-    const msg = e?.message || e?.sqlMessage || "";
-    const diag = `[test-adapter] schema recovery fired: ${msg.slice(0, 200)} | sql=${sql.slice(0, 200)}`;
-    if (STRICT_SCHEMA) {
-      throw new Error(
-        `AR_TEST_STRICT_SCHEMA: ${diag}\n` +
-          `Recovery patches schema mismatches with regex-inferred column types — a real bug ` +
-          `was hidden. Declare the missing column on the model via attribute(...) so it gets ` +
-          `created in processPendingModels at adapter-set time.`,
-      );
-    }
 
-    console.warn(diag);
+    console.warn(buildRecoveryDiag(kind ?? "unknown", msg, sql, /* strict */ false));
     return true;
   }
 

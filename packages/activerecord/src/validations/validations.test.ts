@@ -1,17 +1,21 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Base } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
+import { defineSchema } from "../test-helpers/define-schema.js";
+import { dropAllTables } from "../test-helpers/drop-all-tables.js";
 import type { DatabaseAdapter } from "../adapter.js";
-
-function freshAdapter(): DatabaseAdapter {
-  return createTestAdapter();
-}
 
 describe("Validation Contexts (Rails-guided)", () => {
   let adapter: DatabaseAdapter;
 
-  beforeEach(() => {
-    adapter = freshAdapter();
+  beforeAll(async () => {
+    adapter = createTestAdapter();
+    await defineSchema(adapter, {
+      users: { name: "string", terms: "string", change_reason: "string" },
+    });
+  });
+  afterAll(async () => {
+    await dropAllTables(adapter);
   });
 
   // Rails: test "validation on: :create"

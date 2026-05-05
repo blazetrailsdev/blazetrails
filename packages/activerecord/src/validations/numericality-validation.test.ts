@@ -2,22 +2,27 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Base } from "../index.js";
 import { NumericalityValidator } from "./numericality.js";
 
 import { createTestAdapter } from "../test-adapter.js";
+import { defineSchema } from "../test-helpers/define-schema.js";
+import { dropAllTables } from "../test-helpers/drop-all-tables.js";
 import type { DatabaseAdapter } from "../adapter.js";
-
-// -- Helpers --
-function freshAdapter(): DatabaseAdapter {
-  return createTestAdapter();
-}
 
 describe("NumericalityValidationTest", () => {
   let adapter: DatabaseAdapter;
-  beforeEach(() => {
-    adapter = freshAdapter();
+  beforeAll(async () => {
+    adapter = createTestAdapter();
+    await defineSchema(adapter, {
+      widgets: { price: "float", quantity: "integer" },
+      widget2s: { price: "float" },
+      decimals: { amount: "decimal" },
+    });
+  });
+  afterAll(async () => {
+    await dropAllTables(adapter);
   });
   function makeModel() {
     class Widget extends Base {

@@ -22,9 +22,9 @@ describe("TimestampTest", () => {
   beforeEach(async () => {
     adapter = freshAdapter();
     await defineSchema(adapter, {
-      posts: { title: "string", updated_at: "datetime", created_at: "datetime" },
+      posts: { title: "string", updated_at: "string", created_at: "string" },
       simples: { name: "string" },
-      authors: { name: "string", updated_at: "datetime" },
+      authors: { name: "string", updated_at: "string" },
     });
   });
 
@@ -332,7 +332,7 @@ describe("TimestampTest", () => {
   it("auto-sets created_at and updated_at on insert", async () => {
     const adapter = freshAdapter();
     await defineSchema(adapter, {
-      posts: { title: "string", created_at: "datetime", updated_at: "datetime" },
+      posts: { title: "string", created_at: "string", updated_at: "string" },
     });
     class Post extends Base {
       static {
@@ -363,7 +363,7 @@ describe("TimestampTest", () => {
   it("created_at round-trips through the database as Temporal.Instant", async () => {
     const adapter = freshAdapter();
     await defineSchema(adapter, {
-      posts: { title: "string", created_at: "datetime", updated_at: "datetime" },
+      posts: { title: "string", created_at: "string", updated_at: "string" },
     });
     class Post extends Base {
       static {
@@ -384,7 +384,7 @@ describe("TimestampTest", () => {
   it("does not overwrite explicitly set timestamps on insert", async () => {
     const adapter = freshAdapter();
     await defineSchema(adapter, {
-      posts: { title: "string", created_at: "datetime", updated_at: "datetime" },
+      posts: { title: "string", created_at: "string", updated_at: "string" },
     });
     class Post extends Base {
       static {
@@ -409,7 +409,7 @@ describe("TimestampTest", () => {
   it("saving a changed record updates its timestamp", async () => {
     const adapter = freshAdapter();
     await defineSchema(adapter, {
-      posts: { title: "string", created_at: "datetime", updated_at: "datetime" },
+      posts: { title: "string", created_at: "string", updated_at: "string" },
     });
     class Post extends Base {
       static {
@@ -450,7 +450,7 @@ describe("TimestampTest", () => {
 describe("TimestampTest", () => {
   it("touching a record updates its timestamp", async () => {
     const adapter = freshAdapter();
-    await defineSchema(adapter, { posts: { title: "string", updated_at: "datetime" } });
+    await defineSchema(adapter, { posts: { title: "string", updated_at: "string" } });
 
     class Post extends Base {
       static {
@@ -475,7 +475,7 @@ describe("TimestampTest", () => {
   it("touching an attribute updates it", async () => {
     const adapter = freshAdapter();
     await defineSchema(adapter, {
-      posts: { title: "string", updated_at: "datetime", published_at: "datetime" },
+      posts: { title: "string", updated_at: "string", published_at: "string" },
     });
 
     class Post extends Base {
@@ -496,7 +496,7 @@ describe("TimestampTest", () => {
 
   it("touch returns false on new record", async () => {
     const adapter = freshAdapter();
-    await defineSchema(adapter, { posts: { title: "string", updated_at: "datetime" } });
+    await defineSchema(adapter, { posts: { title: "string", updated_at: "string" } });
 
     class Post extends Base {
       static {
@@ -512,7 +512,7 @@ describe("TimestampTest", () => {
 
   it("touch skips callbacks", async () => {
     const adapter = freshAdapter();
-    await defineSchema(adapter, { posts: { title: "string", updated_at: "datetime" } });
+    await defineSchema(adapter, { posts: { title: "string", updated_at: "string" } });
     const log: string[] = [];
 
     class Post extends Base {
@@ -537,7 +537,7 @@ describe("TimestampTest", () => {
 describe("TimestampTest", () => {
   it("touch persists to database", async () => {
     const adapter = freshAdapter();
-    await defineSchema(adapter, { posts: { title: "string", updated_at: "datetime" } });
+    await defineSchema(adapter, { posts: { title: "string", updated_at: "string" } });
 
     class Post extends Base {
       static {
@@ -559,9 +559,9 @@ describe("TimestampTest", () => {
     await defineSchema(adapter, {
       posts: {
         title: "string",
-        updated_at: "datetime",
-        replied_at: "datetime",
-        viewed_at: "datetime",
+        updated_at: "string",
+        replied_at: "string",
+        viewed_at: "string",
       },
     });
 
@@ -603,7 +603,7 @@ describe("TimestampTest", () => {
   let adapter: DatabaseAdapter;
   beforeEach(async () => {
     adapter = freshAdapter();
-    await defineSchema(adapter, { items: { updated_at: "datetime" } });
+    await defineSchema(adapter, { items: { updated_at: "string" } });
   });
 
   it("updates timestamps on all matching records", async () => {
@@ -666,7 +666,7 @@ describe("TimestampTest", () => {
   beforeEach(async () => {
     adapter = freshAdapter();
     await defineSchema(adapter, {
-      posts: { title: "string", created_at: "datetime", updated_at: "datetime" },
+      posts: { title: "string", created_at: "string", updated_at: "string" },
       simples: { name: "string" },
     });
   });
@@ -813,7 +813,7 @@ describe("TimestampTest", () => {
   let adapter: DatabaseAdapter;
   beforeEach(async () => {
     adapter = freshAdapter();
-    await defineSchema(adapter, { items: { updated_at: "datetime" } });
+    await defineSchema(adapter, { items: { updated_at: "string" } });
   });
 
   it("touchAll updates timestamps on all records", async () => {
@@ -845,7 +845,7 @@ describe("TimestampTest", () => {
   beforeEach(async () => {
     adapter = freshAdapter();
     await defineSchema(adapter, {
-      articles: { title: "string", body: "string", created_at: "datetime", updated_at: "datetime" },
+      articles: { title: "string", body: "string", created_at: "string", updated_at: "string" },
     });
     Article.adapter = adapter;
   });
@@ -899,7 +899,7 @@ describe("TimestampTest", () => {
   beforeEach(async () => {
     adapter = freshAdapter();
     await defineSchema(adapter, {
-      posts: { title: "string", updated_at: "datetime" },
+      posts: { title: "string", updated_at: "string" },
       comments: { body: "string", post_id: "integer" },
     });
   });

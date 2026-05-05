@@ -1,5 +1,5 @@
 /**
- * Railtie — initialization hooks for ActiveRecord.
+ * Trailtie — initialization hooks for ActiveRecord.
  *
  * Mirrors: ActiveRecord::Railtie < Rails::Railtie (railtie.rb)
  *
@@ -9,7 +9,7 @@
 import { Railtie as BaseRailtie, registerRailtie } from "@blazetrails/activesupport";
 import { deprecator } from "./deprecator.js";
 
-export class Railtie extends BaseRailtie {
+export class Trailtie extends BaseRailtie {
   constructor() {
     super();
   }

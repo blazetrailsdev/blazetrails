@@ -323,6 +323,6 @@ export {
 export { Connection as TypeCasterConnection } from "./type-caster/connection.js";
 export { Map as TypeCasterMap } from "./type-caster/map.js";
 
-export { Railtie } from "./railtie.js";
+export { Trailtie } from "./trailtie.js";
 export { deprecator, gemVersion, version } from "./deprecator.js";
 export { JobRuntime } from "./railties/job-runtime.js";

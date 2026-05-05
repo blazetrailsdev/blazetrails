@@ -20,6 +20,17 @@ export function snakeToCamel(name: string): string {
 }
 
 /**
+ * File-level overrides: Ruby file path → TS file path.
+ *
+ * Used for cases where the TS file intentionally uses a different name
+ * than the Rails convention would produce (e.g. railtie → trailtie to
+ * signal that trails railties are not Rails railties).
+ */
+const FILE_OVERRIDES: Record<string, string> = {
+  "railtie.rb": "trailtie.ts",
+};
+
+/**
  * Ruby file path → expected TS file path (kebab-case, .ts extension).
  *
  * Uses `path.posix.*` so the mapping stays cross-platform stable —
@@ -28,6 +39,7 @@ export function snakeToCamel(name: string): string {
  * on Windows.
  */
 export function rubyFileToTs(rubyFile: string): string {
+  if (FILE_OVERRIDES[rubyFile]) return FILE_OVERRIDES[rubyFile];
   const dir = path.posix.dirname(rubyFile);
   const base = path.posix.basename(rubyFile, ".rb");
   const kebab = base.replace(/_/g, "-");

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { Railtie } from "./railtie.js";
+import { Trailtie } from "./trailtie.js";
 import { Railtie as BaseRailtie } from "@blazetrails/activesupport";
 import { deprecator } from "./deprecator.js";
 
@@ -21,11 +21,11 @@ describe("RailtieTest", () => {
   });
 
   it("ActiveRecord::Railtie is registered in the global subclasses list", () => {
-    expect(BaseRailtie.subclasses).toContain(Railtie);
+    expect(BaseRailtie.subclasses).toContain(Trailtie);
   });
 
   it("runInitializers registers the ActiveRecord deprecator", () => {
-    Railtie.runInitializers();
+    Trailtie.runInitializers();
     expect(deprecators["activeRecord"]).toBe(deprecator());
   });
 });

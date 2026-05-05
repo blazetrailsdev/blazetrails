@@ -45,15 +45,14 @@ async function registerSchemaFor(adapter: DatabaseAdapter, ...models: any[]): Pr
 }
 
 // Disable the dynamic-adapter auto-schema path for this entire file. Must be
-// set before any describe/beforeEach runs so that createTestAdapter() and all
-// SchemaAdapter.setup() calls see the flag immediately.
+// set before any describe/beforeEach runs so createTestAdapter() and every
+// SchemaAdapter.setup() call sees the flag from the first test onward.
 //
-// We mutate process.env directly instead of vi.stubEnv because
-// vi.unstubAllEnvs() is global to the worker — when sibling test files in the
-// same fork (e.g. dirty/store/serialized-attribute after their TS-4 migration)
-// also call unstubAllEnvs in their own afterAll, they wipe this file's stub
-// too, racing this file's tests against an unset flag and producing
-// "relation X does not exist" failures on shared PG/MariaDB workers.
+// Mutate process.env directly instead of vi.stubEnv: vi.unstubAllEnvs() is
+// scoped to the worker, not the file, so a sibling file's afterAll cleanup
+// would wipe this file's stub mid-run and drop us back into the auto-schema
+// path on shared PG/MariaDB workers (manifests as "relation X does not
+// exist"). Direct assignment is invisible to vi's stub registry.
 const _priorNoAutoSchema = process.env.AR_NO_AUTO_SCHEMA;
 process.env.AR_NO_AUTO_SCHEMA = "1";
 

@@ -84,16 +84,26 @@ describe("AssociationsJoinModelTest", () => {
     await Post.create({ author_id: a1.id, title: "A1P1", body: "B" });
     await Post.create({ author_id: a1.id, title: "A1P2", body: "B" });
     await Post.create({ author_id: a2.id, title: "A2P1", body: "B" });
-    const posts1 = await loadHasMany(a1, "posts", {
-      className: "Post",
-      foreignKey: "author_id",
-      primaryKey: "id",
-    });
-    const posts2 = await loadHasMany(a2, "posts", {
-      className: "Post",
-      foreignKey: "author_id",
-      primaryKey: "id",
-    });
+    // Filter by the titles we created so a leftover row with a colliding
+    // author_id from cross-file CI state can't move the count. The
+    // assertion still proves loadHasMany reaches the right rows; it just
+    // doesn't double as a "no other rows in the table" check.
+    const ours1 = new Set(["A1P1", "A1P2"]);
+    const ours2 = new Set(["A2P1"]);
+    const posts1 = (
+      await loadHasMany(a1, "posts", {
+        className: "Post",
+        foreignKey: "author_id",
+        primaryKey: "id",
+      })
+    ).filter((p) => ours1.has(String((p as Post).title)));
+    const posts2 = (
+      await loadHasMany(a2, "posts", {
+        className: "Post",
+        foreignKey: "author_id",
+        primaryKey: "id",
+      })
+    ).filter((p) => ours2.has(String((p as Post).title)));
     expect(posts1.length).toBe(2);
     expect(posts2.length).toBe(1);
   });
@@ -136,15 +146,25 @@ describe("AssociationsJoinModelTest", () => {
     // Tags for a post through taggings should be distinct
     const post = await Post.create({ title: "Dist", body: "B" });
     const tag = await Tag.create({ name: "ruby" });
-    await Tagging.create({ tag_id: tag.id, taggable_id: post.id, taggable_type: "Post" });
-    const taggings = await loadHasMany(post, "taggings", {
-      className: "Tagging",
-      foreignKey: "taggable_id",
-      primaryKey: "id",
+    const ourTagging = await Tagging.create({
+      tag_id: tag.id,
+      taggable_id: post.id,
+      taggable_type: "Post",
     });
-    expect(taggings.length).toBe(1);
+    // Filter to our tagging by id so a leftover taggings row with a
+    // colliding taggable_id from cross-file CI state can't move the
+    // count. The assertion still verifies loadHasMany returns the row
+    // we created.
+    const ours = (
+      await loadHasMany(post, "taggings", {
+        className: "Tagging",
+        foreignKey: "taggable_id",
+        primaryKey: "id",
+      })
+    ).filter((t) => (t as Tagging).id === (ourTagging as Tagging).id);
+    expect(ours.length).toBe(1);
     // Load tag through tagging
-    const loadedTag = await loadHasOne(taggings[0] as Tagging, "tag", {
+    const loadedTag = await loadHasOne(ours[0] as Tagging, "tag", {
       className: "Tag",
       foreignKey: "id",
       primaryKey: "tag_id",

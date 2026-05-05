@@ -15,6 +15,9 @@ import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 beforeAll(() => {
   vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
 });
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 // -- Helpers --
 function freshAdapter(): DatabaseAdapter {
@@ -29,7 +32,7 @@ describe("TokenForTest", () => {
       users: { name: "string", password_digest: "string" },
       user_short_expiries: { name: "string", password_digest: "string" },
       user2s: { name: "string" },
-      user_xs: { name: "string" },
+      user_xes: { name: "string" },
       parents: { name: "string", digest: "string" },
       children: { name: "string", digest: "string" },
       custom_pk_items: { uuid: "string", name: "string" },
@@ -260,7 +263,7 @@ describe("TokenForTest", () => {
   beforeEach(async () => {
     adapter2 = freshAdapter();
     await defineSchema(adapter2, {
-      users: { id: "integer", name: "string", password_digest: "string" },
+      users: { name: "string", password_digest: "string" },
     });
     setTokenForSecret("blazetrails-test-token-secret");
   });

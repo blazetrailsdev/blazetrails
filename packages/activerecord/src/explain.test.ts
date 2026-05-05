@@ -13,6 +13,9 @@ import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 beforeAll(() => {
   vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
 });
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 // -- Helpers --
 function freshAdapter(): DatabaseAdapter {

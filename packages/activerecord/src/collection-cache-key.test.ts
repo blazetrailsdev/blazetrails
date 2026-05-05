@@ -1,6 +1,6 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { instant } from "@blazetrails/activesupport/testing/temporal-helpers";
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { Base } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
 import { hexdigest } from "@blazetrails/activesupport";
@@ -8,6 +8,9 @@ import { defineSchema } from "./test-helpers/define-schema.js";
 
 beforeAll(() => {
   vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
 });
 
 function expectedUsec(ts: Temporal.Instant): string {

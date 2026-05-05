@@ -738,6 +738,10 @@ describe("Migration DDL (extended)", () => {
 
   it("reversible renameTable reverses correctly", async () => {
     const adapter = freshAdapter();
+    const ctx = new MigrationContext(adapter);
+    await ctx.createTable("people", {}, (t) => {
+      t.string("name");
+    });
     class RenameUsers extends Migration {
       async change() {
         await this.renameTable("people", "users");
@@ -894,7 +898,8 @@ describe("Rails-guided: migrations", () => {
     expect(await adapter.execute(`SELECT * FROM "widgets"`)).toHaveLength(1);
 
     await m.run(adapter, "down");
-    expect(await adapter.execute(`SELECT * FROM "widgets"`)).toHaveLength(0);
+    // The reversed migration dropped "widgets"; verify it no longer exists
+    expect((adapter as any).tables.has("widgets")).toBe(false);
   });
 
   it("reversible removeColumn with type auto-reverses", async () => {

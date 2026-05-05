@@ -4223,6 +4223,7 @@ describe("RelationTest", () => {
   let adapter: DatabaseAdapter;
   beforeEach(() => {
     adapter = freshAdapter();
+    Post.adapter = adapter;
   });
 
   function makePost() {

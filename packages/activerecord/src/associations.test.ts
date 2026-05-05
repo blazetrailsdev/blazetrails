@@ -1484,7 +1484,14 @@ describe("HasAndBelongsToManyAssociations", () => {
         this.adapter = adapter;
       }
     }
+    class Project extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
     registerModel(Developer);
+    registerModel(Project);
 
     // Create the join table
     await adapter.executeMutation(

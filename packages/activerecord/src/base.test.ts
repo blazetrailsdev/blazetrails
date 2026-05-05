@@ -1041,6 +1041,7 @@ describe("BasicsTest", () => {
       static {
         this.primaryKey = ["shop_id", "id"];
         this.attribute("shop_id", "integer");
+        this.attribute("id", "integer");
         this.attribute("name", "string");
         this.adapter = adapter;
       }

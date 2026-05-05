@@ -8,8 +8,8 @@
  * an adapter for execution, matching the codebase's mixin pattern.
  */
 
-import { NotImplementedError } from "../../errors.js";
-import type { Result } from "../../result.js";
+import { TransactionIsolationError } from "../../errors.js";
+import { Result } from "../../result.js";
 import { stripSqlComments } from "../sql-classification.js";
 
 // Matches Rails' build_read_query_regexp(:pragma) which combines
@@ -86,66 +86,153 @@ export async function resetIsolationLevel(
   }
 }
 
-/** @internal */
-function internalBeginTransaction(mode: any, isolation: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#internal_begin_transaction is not implemented",
-  );
+// Minimal better-sqlite3 types used by the private helpers below.
+interface Sqlite3PreparedStatement {
+  columns(): Array<{ name: string }>;
+  all(...params: unknown[]): Record<string, unknown>[];
+  run(...params: unknown[]): { changes: number };
+}
+
+interface Sqlite3RawConnection {
+  prepare(sql: string): Sqlite3PreparedStatement;
+  exec(sql: string): void;
+  readonly changes: number;
+}
+
+interface InternalBeginTransactionHost {
+  executeMutation(sql: string): Promise<unknown>;
+  queryValue?(sql: string, name?: string): Promise<unknown>;
+  _previousReadUncommitted?: unknown;
+}
+
+interface PerformQueryHost {
+  _statements?: Map<string, Sqlite3PreparedStatement>;
+  _lastAffectedRows?: number;
+}
+
+interface ExecuteBatchHost {
+  executeMutation(sql: string, binds?: unknown[], name?: string): Promise<unknown>;
+}
+
+interface QuoteTableNameHost {
+  quoteTableName(tableName: string): string;
 }
 
 /** @internal */
-function performQuery(
-  rawConnection: any,
-  sql: any,
-  binds: any,
-  typeCastedBinds: any,
-  prepare?: any,
-  notificationPayload?: any,
-  batch?: any,
-): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#perform_query is not implemented",
-  );
+export async function internalBeginTransaction(
+  this: InternalBeginTransactionHost,
+  mode: "deferred" | "immediate",
+  isolation?: string | null,
+): Promise<void> {
+  if (isolation) {
+    if (isolation !== "read_uncommitted") {
+      throw new TransactionIsolationError(
+        "SQLite3 only supports the `read_uncommitted` transaction isolation level",
+      );
+    }
+  }
+  await this.executeMutation(`BEGIN ${mode.toUpperCase()} TRANSACTION`);
+  if (isolation) {
+    this._previousReadUncommitted = await this.queryValue?.("PRAGMA read_uncommitted");
+    await this.executeMutation("PRAGMA read_uncommitted=ON");
+  }
 }
 
 /** @internal */
-function castResult(result: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#cast_result is not implemented",
-  );
+export function performQuery(
+  this: PerformQueryHost,
+  rawConnection: Sqlite3RawConnection,
+  sql: string,
+  binds: unknown[],
+  typeCastedBinds: unknown[],
+  options: {
+    prepare?: boolean;
+    notificationPayload?: Record<string, unknown>;
+    batch?: boolean;
+  } = {},
+): Result {
+  const { prepare = false, notificationPayload, batch = false } = options;
+  let result: Result;
+
+  if (batch) {
+    rawConnection.exec(sql);
+    result = Result.empty();
+  } else if (prepare) {
+    if (!this._statements) this._statements = new Map();
+    let stmt = this._statements.get(sql);
+    if (!stmt) {
+      stmt = rawConnection.prepare(sql);
+      this._statements.set(sql, stmt);
+    }
+    const cols = stmt.columns();
+    if (cols.length === 0) {
+      stmt.run(...typeCastedBinds);
+      result = Result.empty();
+    } else {
+      result = Result.fromRowHashes(stmt.all(...typeCastedBinds));
+    }
+  } else {
+    const stmt = rawConnection.prepare(sql);
+    const hasBind = binds != null && binds.length > 0;
+    const cols = stmt.columns();
+    if (cols.length === 0) {
+      if (hasBind) {
+        stmt.run(...typeCastedBinds);
+      } else {
+        stmt.run();
+      }
+      result = Result.empty();
+    } else {
+      result = Result.fromRowHashes(hasBind ? stmt.all(...typeCastedBinds) : stmt.all());
+    }
+  }
+
+  this._lastAffectedRows = rawConnection.changes;
+  if (notificationPayload) notificationPayload["row_count"] = result.length;
+  return result;
 }
 
 /** @internal */
-function affectedRows(result: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#affected_rows is not implemented",
-  );
+export function castResult(result: Result): Result {
+  // SQLite3 already returns an ActiveRecord::Result; nothing to cast.
+  return result;
 }
 
 /** @internal */
-function executeBatch(statements: any, name?: any, kwargs?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#execute_batch is not implemented",
-  );
+export function affectedRows(this: PerformQueryHost, _result: unknown): number {
+  return this._lastAffectedRows ?? 0;
 }
 
 /** @internal */
-function buildTruncateStatement(tableName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#build_truncate_statement is not implemented",
-  );
+export async function executeBatch(
+  this: ExecuteBatchHost,
+  statements: string[],
+  name?: string | null,
+): Promise<void> {
+  const sql = statements.join(";\n");
+  await this.executeMutation(sql, [], name ?? "SQL");
 }
 
 /** @internal */
-function returningColumnValues(result: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#returning_column_values is not implemented",
-  );
+export function buildTruncateStatement(this: QuoteTableNameHost | void, tableName: string): string {
+  const quoted =
+    (this as QuoteTableNameHost | null)?.quoteTableName(tableName) ??
+    `"${tableName.replace(/"/g, '""')}"`;
+  return `DELETE FROM ${quoted}`;
 }
 
 /** @internal */
-function defaultInsertValue(column: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#default_insert_value is not implemented",
-  );
+export function returningColumnValues(result: Result): unknown[] | undefined {
+  return result.rows[0] as unknown[] | undefined;
+}
+
+/** @internal */
+export function defaultInsertValue(column: {
+  defaultFunction?: string | null;
+  default?: unknown;
+}): unknown {
+  if (column.defaultFunction) {
+    return column.defaultFunction;
+  }
+  return column.default;
 }

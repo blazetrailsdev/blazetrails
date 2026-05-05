@@ -1336,7 +1336,11 @@ describe("DefaultScopingTest", () => {
         this.adapter = adp;
       }
     }
-    class Dog extends Animal {}
+    class Dog extends Animal {
+      static {
+        this.adapter = adp;
+      }
+    }
     const dog = (await Dog.create({ name: "Rex", active: true })) as any;
     expect(dog.name).toBe("Rex");
   });

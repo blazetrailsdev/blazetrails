@@ -569,7 +569,11 @@ describe("SerializedAttributeTestWithYamlSafeLoad", () => {
         this.adapter = adapter;
       }
     }
-    class VeryImportantTopic extends ImportantTopic {}
+    class VeryImportantTopic extends ImportantTopic {
+      static {
+        this.adapter = adapter;
+      }
+    }
     serialize(ImportantTopic, "content");
     const payload = { foo: "bar" };
     const t = await VeryImportantTopic.create({

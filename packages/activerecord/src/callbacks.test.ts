@@ -155,7 +155,11 @@ describe("CallbacksTest", () => {
       log.push("before_create");
     });
 
-    class Dog extends Animal {}
+    class Dog extends Animal {
+      static {
+        this.adapter = adapter;
+      }
+    }
     await Dog.create({ name: "Rex" });
     expect(log).toContain("before_create");
   });

@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import { Base, RecordNotFound } from "./index.js";
+import { Base, RecordNotFound, enableSti, registerSubclass } from "./index.js";
 import { setSignedIdVerifierSecret } from "./signed-id.js";
 
 import { createTestAdapter } from "./test-adapter.js";
@@ -120,11 +120,13 @@ describe("SignedIdTest", () => {
         this.attribute("name", "string");
         this.attribute("type", "string");
         this.adapter = adapter;
+        enableSti(this);
       }
     }
     class Dog extends Animal {
-      // eslint-disable-next-line no-empty-static-block
-      static {}
+      static {
+        registerSubclass(this);
+      }
     }
     const d = await Dog.create({ name: "Rex" });
     const token = await d.signedId();
@@ -147,11 +149,13 @@ describe("SignedIdTest", () => {
         this.attribute("name", "string");
         this.attribute("type", "string");
         this.adapter = adapter;
+        enableSti(this);
       }
     }
     class Car extends Vehicle {
-      // eslint-disable-next-line no-empty-static-block
-      static {}
+      static {
+        registerSubclass(this);
+      }
     }
     const c = await Car.create({ name: "Sedan" });
     const token = await c.signedId();

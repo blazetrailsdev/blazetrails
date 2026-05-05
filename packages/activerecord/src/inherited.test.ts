@@ -17,6 +17,7 @@ describe("InheritedTest", () => {
     }
     class Child extends Parent {
       static {
+        this.adapter = adapter;
         this.beforeCreate(function () {
           log.push("child_before");
         });
@@ -42,6 +43,7 @@ describe("InheritedTest", () => {
     }
     class Child extends Parent {
       static {
+        this.adapter = adapter;
         this.afterCreate(function () {
           log.push("child_after");
         });

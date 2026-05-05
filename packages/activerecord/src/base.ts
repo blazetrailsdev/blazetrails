@@ -733,9 +733,12 @@ export class Base extends Model {
    * infrastructure. Prefer `establishConnection` for production use.
    */
   static set adapter(adapter: DatabaseAdapter) {
-    // Reassigning the same adapter is a no-op — avoid dropping reflected
-    // columns/types unnecessarily when user code re-sets the same ref.
-    if (this._adapter === adapter) {
+    // Reassigning the same adapter to the same class is a no-op — avoid
+    // dropping reflected columns/types unnecessarily. Use hasOwnProperty so a
+    // subclass that calls `this.adapter = parent.adapter` still fires the hook
+    // and gets registered for table creation, even when the adapter reference
+    // matches what it inherited from the parent class.
+    if (Object.prototype.hasOwnProperty.call(this, "_adapter") && this._adapter === adapter) {
       return;
     }
     this._adapter = adapter;

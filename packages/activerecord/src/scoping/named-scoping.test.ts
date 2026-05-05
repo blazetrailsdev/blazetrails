@@ -972,7 +972,11 @@ describe("NamedScopingTest", () => {
         this.adapter = adp;
       }
     }
-    class Dog extends Animal {}
+    class Dog extends Animal {
+      static {
+        this.adapter = adp;
+      }
+    }
     const dog = (await Dog.create({ name: "Fido" })) as any;
     expect(dog.name).toBe("Fido");
     expect((await Dog.where({ name: "Fido" }).toArray()).length).toBe(1);

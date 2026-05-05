@@ -1,6 +1,6 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import type { Base } from "./base.js";
-import { ReadOnlyRecord, StaleObjectError, NotImplementedError } from "./errors.js";
+import { ReadOnlyRecord, StaleObjectError } from "./errors.js";
 import { UpdateManager, Nodes } from "@blazetrails/arel";
 import { isAppliedTo as isNoTouchingApplied } from "./no-touching.js";
 
@@ -207,21 +207,24 @@ export async function _createRecord(this: any): Promise<unknown> {
       }
     }
   }
-  // Delegates to persistence layer via super chain in Rails; wired in base.ts.
-  throw new NotImplementedError("ActiveRecord::Timestamp#_create_record is not implemented");
+  // Rails calls super here (the persistence layer). In trails the persistence
+  // layer is wired separately via callbacks.ts; this method provides the
+  // timestamp-writing half only.
+  return this.id;
 }
 
 /** @internal */
-export function _updateRecord(this: any): Promise<unknown> {
-  return recordUpdateTimestamps.call(this).then(() => {
-    // Delegates to persistence layer via super chain in Rails; wired in base.ts.
-    throw new NotImplementedError("ActiveRecord::Timestamp#_update_record is not implemented");
-  });
+export async function _updateRecord(this: any): Promise<boolean> {
+  await recordUpdateTimestamps.call(this);
+  // Rails yields to super (persistence layer) inside record_update_timestamps.
+  // In trails the persistence layer is wired separately via callbacks.ts.
+  return true;
 }
 
 /** @internal */
-export function createOrUpdate(this: any, touch = true): void {
+export function createOrUpdate(this: any, touch = true): Promise<boolean> {
   this._touchRecord = touch;
+  return (this._createOrUpdate as () => Promise<boolean>).call(this);
 }
 
 /** @internal */

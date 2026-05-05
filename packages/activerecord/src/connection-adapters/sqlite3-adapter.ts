@@ -1468,7 +1468,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     // constraints — Rails' schema cache records user-defined indexes
     // only, and the auto ones are redundant with the CREATE TABLE sql.
     const userIndexes = rows.filter((r) => r.origin === "c");
-    const result: Array<{ name: string; columns: string[]; unique: boolean }> = [];
+    const sqliteMaster = schema ? `${quoteColumnName(schema)}.sqlite_master` : "sqlite_master";
+    const result: Array<{ name: string; columns: string[]; unique: boolean; where?: string }> = [];
     for (const idx of userIndexes) {
       // index_info takes the bare index name; the schema qualifier, if
       // any, comes before the PRAGMA keyword — same shape as above.
@@ -1477,10 +1478,17 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         [],
         "SCHEMA",
       )) as Array<{ name: string; seqno: number }>;
+      const idxSqlRow = this.db
+        .prepare(
+          `SELECT sql FROM ${sqliteMaster} WHERE type='index' AND name=${sqliteQuoteStringLiteral(idx.name)}`,
+        )
+        .get() as { sql: string } | undefined;
+      const whereMatch = idxSqlRow?.sql ? /\bWHERE\b\s+(.+)$/i.exec(idxSqlRow.sql) : null;
       result.push({
         name: idx.name,
         columns: cols.sort((a, b) => a.seqno - b.seqno).map((c) => c.name),
         unique: idx.unique === 1,
+        ...(whereMatch ? { where: whereMatch[1].trim() } : {}),
       });
     }
     return result;

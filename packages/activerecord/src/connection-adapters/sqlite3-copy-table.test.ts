@@ -118,6 +118,17 @@ describe("SQLite3Adapter table-rebuild cluster", () => {
     expect(idxList[0].unique).toBe(1);
   });
 
+  it("copyTableIndexes preserves partial index WHERE clause", async () => {
+    db.exec("CREATE TABLE src (id INTEGER, active INTEGER, email TEXT)");
+    db.exec("CREATE UNIQUE INDEX index_src_on_email_active ON src (email) WHERE active = 1");
+    db.exec("CREATE TABLE dst (id INTEGER, active INTEGER, email TEXT)");
+    await (db as any).copyTableIndexes("src", "dst");
+    const idxSql = db.raw
+      .prepare("SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='dst'")
+      .get() as { sql: string } | undefined;
+    expect(idxSql?.sql).toMatch(/WHERE\s+active\s*=\s*1/i);
+  });
+
   // --- copyTable ---
 
   it("copyTable creates destination with same schema and data", async () => {

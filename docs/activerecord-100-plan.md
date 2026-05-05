@@ -378,15 +378,12 @@ _Component C — Deduplicable cluster (5 files)_
 - LOC: ~150 impl + ~100 tests → ~250 net
 - Dependencies: PR 21
 
-**PR 23 — `postgresql_adapter.rb` (82%)**
+**PR 23 — `postgresql_adapter.rb` connection lifecycle ✓ MERGED (#1199)**
 
 - Rails: `$AR/connection_adapters/postgresql_adapter.rb` (1189 LOC)
-- TS: `$TS/connection-adapters/postgresql-adapter.ts` (4212 LOC, 76 matched, 17 missing, 82%)
-- Missing (17): `connectAndConfigure`, `configureConnection`, `reconnect!`, `disconnect!`, `discard!`, `truncateTable`, `getAdvisoryLock`, `releaseAdvisoryLock`, `allSchemas`, `schema`, `encoderFor`, `decoderFor`, `pgEncoderForType`, `pgDecoderForType`, `initializeTypeMap`, `registerDateTimeTypes`, `enableExtension`
-- Split:
-  - PR 23 (9): `connectAndConfigure`, `configureConnection`, `reconnect!`, `disconnect!`, `discard!`, `truncateTable`, `getAdvisoryLock`, `releaseAdvisoryLock`, `allSchemas`
-  - PR 23b (8): `encoderFor`, `decoderFor`, `pgEncoderForType`, `pgDecoderForType`, `initializeTypeMap`, `registerDateTimeTypes`, `schema`, `enableExtension`
-- LOC: ~250 net each
+- TS: `$TS/connection-adapters/postgresql-adapter.ts` (76→78 matched, 82%→84%)
+- Merged: `connect`, `reconnect`, `configureConnection`, `disconnectBang`, `discardBang`, `reconnectBang`
+- PR 23b (8): `encoderFor`, `decoderFor`, `pgEncoderForType`, `pgDecoderForType`, `initializeTypeMap`, `registerDateTimeTypes`, `schema`, `enableExtension`
 - Dependencies: PR 14, PR 18b
 
 **PR 24 — `sqlite3_adapter.rb` (75% → 86%) — table-rebuild cluster ✓ MERGED**

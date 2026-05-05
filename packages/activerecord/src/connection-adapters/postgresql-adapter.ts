@@ -1507,11 +1507,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /**
-   * Mirrors Rails' private `PostgreSQLAdapter#reconnect`. Tears down the
-   * current pool, resets per-connection state, and calls `connect()` to
-   * establish a fresh pool. Rails resets the single raw PG connection;
-   * here we rebuild the entire pool so that all pooled clients start
-   * fresh (matching the intent: no stale server-side state).
+   * Mirrors Rails' private `PostgreSQLAdapter#reconnect`. Fires a
+   * non-blocking `pool.end()` on the old pool (fire-and-forget), resets
+   * all per-connection state, and immediately creates a fresh pool via
+   * `connect()`. Rails resets the single raw PG connection; here the
+   * old pool drains asynchronously while the new pool is already live.
    *
    * @internal
    */

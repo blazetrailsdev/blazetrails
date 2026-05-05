@@ -503,8 +503,19 @@ export async function resetTestAdapterState(): Promise<void> {
   while (_setupLock) await _setupLock;
   while (_cleanupPromise) await _cleanupPromise;
 
-  if (_sharedAdapter) {
-    if (isPg()) {
+  // Publish our own cleanup lock for the duration of the drops. SchemaAdapter
+  // .setup() blocks on _cleanupPromise (and _setupLock), so any late async
+  // DB call from a prior test that fires during reset waits behind our drops
+  // instead of racing them. The finally clause guarantees the lock releases
+  // even on swallowed driver errors.
+  let resolveLock!: () => void;
+  _cleanupPromise = new Promise<void>((r) => {
+    resolveLock = r;
+  });
+  try {
+    if (!_sharedAdapter) {
+      // No DB to clean — only clear in-memory state below.
+    } else if (isPg()) {
       // current_schemas(false) returns the search path with system schemas
       // (pg_catalog, information_schema) excluded — the same scope the
       // adapter's tables() method uses. Drop materialized views and views
@@ -562,14 +573,17 @@ export async function resetTestAdapterState(): Promise<void> {
         } catch {}
       }
     }
+    _createdTables.clear();
+    _createdColumns.clear();
+    _declaredColumns.clear();
+    _pendingModels.clear();
+    _pendingCpk.clear();
+    _registeredModelClasses.clear();
+    _needsCleanup = false;
+  } finally {
+    _cleanupPromise = null;
+    resolveLock();
   }
-  _createdTables.clear();
-  _createdColumns.clear();
-  _declaredColumns.clear();
-  _pendingModels.clear();
-  _pendingCpk.clear();
-  _registeredModelClasses.clear();
-  _needsCleanup = false;
 }
 
 /**

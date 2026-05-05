@@ -639,223 +639,35 @@ class SchemaAdapter implements DatabaseAdapter {
   async execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]> {
     await this.setup();
     sql = this.fixSqliteCompat(sql);
-    let lastError: unknown;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      // In PG, errors inside a transaction abort it. Use a savepoint so we
-      // can rollback the failed statement and retry after auto-creating the
-      // missing table/column.
-      const useSp = isPg() && this.inTransaction;
-      const sp = useSp ? `_sr_${attempt}` : "";
-      try {
-        if (useSp) await this.inner.createSavepoint(sp);
-        const result = await this.inner.execute(sql, binds, name);
-        if (useSp) await this.inner.releaseSavepoint(sp);
-        return result;
-      } catch (e: any) {
-        lastError = e;
-        if (useSp) {
-          try {
-            await this.inner.rollbackToSavepoint(sp);
-            await this.inner.releaseSavepoint(sp);
-          } catch {}
-        }
-        if (await this.handleMissingSchemaError(e, sql)) {
-          continue;
-        }
-        throw e;
-      }
-    }
-    throw lastError;
+    return this.inner.execute(sql, binds, name);
   }
 
   async executeMutation(sql: string, binds?: unknown[], name?: string): Promise<number> {
     await this.setup();
     sql = this.fixSqliteCompat(sql);
 
-    // Detect DDL shape ahead of time. We record table tracking only AFTER the
-    // SQL succeeds — recording up front poisons _createdTables when the SQL
-    // fails, which then makes handleMissingSchemaError refuse to recover.
     const createMatch = sql.match(/CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+["`](\w+)["`]/i);
     const dropMatch = sql.match(/DROP\s+TABLE(?:\s+IF\s+EXISTS)?\s+["`](\w+)["`]/i);
 
-    // Auto-add IF NOT EXISTS to CREATE TABLE to prevent "already exists" errors
     if (/CREATE\s+TABLE\s+(?!IF)/i.test(sql)) {
       sql = sql.replace(/CREATE\s+TABLE\s+/i, "CREATE TABLE IF NOT EXISTS ");
     }
-    // Auto-add IF EXISTS to DROP TABLE
     if (/DROP\s+TABLE\s+(?!IF)/i.test(sql)) {
       sql = sql.replace(/DROP\s+TABLE\s+/i, "DROP TABLE IF EXISTS ");
     }
 
-    let lastError: unknown;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const useSp = isPg() && this.inTransaction;
-      const sp = useSp ? `_sr_m_${attempt}` : "";
-      try {
-        if (useSp) await this.inner.createSavepoint(sp);
-        const result = await this.inner.executeMutation(sql, binds, name);
-        if (useSp) await this.inner.releaseSavepoint(sp);
-        if (createMatch) {
-          _createdTables.add(createMatch[1]);
-          if (!_createdColumns.has(createMatch[1])) {
-            _createdColumns.set(createMatch[1], new Set(["id"]));
-          }
-        }
-        if (dropMatch) {
-          _createdTables.delete(dropMatch[1]);
-          _createdColumns.delete(dropMatch[1]);
-        }
-        return result;
-      } catch (e: any) {
-        lastError = e;
-        if (useSp) {
-          try {
-            await this.inner.rollbackToSavepoint(sp);
-            await this.inner.releaseSavepoint(sp);
-          } catch {}
-        }
-        if (await this.handleMissingSchemaError(e, sql)) {
-          continue;
-        }
-        throw e;
+    const result = await this.inner.executeMutation(sql, binds, name);
+    if (createMatch) {
+      _createdTables.add(createMatch[1]);
+      if (!_createdColumns.has(createMatch[1])) {
+        _createdColumns.set(createMatch[1], new Set(["id"]));
       }
     }
-    throw lastError;
-  }
-
-  /**
-   * If the error is about a missing table or column, recover by creating
-   * the table or adding the column. Returns true if recovery succeeded.
-   */
-  private async handleMissingSchemaError(e: any, sql: string): Promise<boolean> {
-    if (NO_AUTO_SCHEMA) return false;
-    const msg = e?.message || e?.sqlMessage || "";
-
-    // Handle missing column: add the column and retry
-    let colName: string | undefined;
-    let colTableName: string | undefined;
-
-    const pgColMatch = msg.match(/column "(\w+)" of relation "(\w+)" does not exist/i);
-    if (pgColMatch) {
-      colName = pgColMatch[1];
-      colTableName = pgColMatch[2];
-    } else {
-      const mysqlColMatch = msg.match(/Unknown column '(\w+)' in/i);
-      if (mysqlColMatch) {
-        colName = mysqlColMatch[1];
-        colTableName = this.extractTableFromSql(sql) || undefined;
-      } else {
-        const sqliteColMatch = msg.match(/table (\w+) has no column named (\w+)/i);
-        if (sqliteColMatch) {
-          colTableName = sqliteColMatch[1];
-          colName = sqliteColMatch[2];
-        }
-      }
+    if (dropMatch) {
+      _createdTables.delete(dropMatch[1]);
+      _createdColumns.delete(dropMatch[1]);
     }
-
-    if (colTableName && colName) {
-      // The DB error proves this column is missing in the real schema.
-      // Drop any stale `_createdColumns` entry first, otherwise
-      // processPendingModels skips re-adding it on the next pass and we
-      // loop back into recovery on every query — which is how typed
-      // columns (e.g. `lock_version` integer) historically ended up as
-      // TEXT on PG under DDL contention.
-      _createdColumns.get(colTableName)?.delete(colName);
-
-      // Prefer the model's declared SQL type; fall back to the legacy
-      // `_id` heuristic only when no declaration is reachable.
-      let colType = lookupDeclaredColumnType(colTableName, colName);
-      if (!colType) colType = colName.endsWith("_id") ? "INTEGER" : "TEXT";
-      try {
-        const alterSql = isMysql()
-          ? `ALTER TABLE \`${colTableName}\` ADD COLUMN \`${colName}\` ${colType}`
-          : `ALTER TABLE "${colTableName}" ADD COLUMN "${colName}" ${colType}`;
-        await execDdlWithSavepoint(this.inner, alterSql);
-        let known = _createdColumns.get(colTableName);
-        if (!known) {
-          known = new Set(["id"]);
-          _createdColumns.set(colTableName, known);
-        }
-        known.add(colName);
-        return true;
-      } catch (alterErr: any) {
-        const alterMsg = String(alterErr?.message ?? "").toLowerCase();
-        if (alterMsg.includes("duplicate column") || alterMsg.includes("already exists")) {
-          let known = _createdColumns.get(colTableName);
-          if (!known) {
-            known = new Set(["id"]);
-            _createdColumns.set(colTableName, known);
-          }
-          known.add(colName);
-          return true;
-        }
-        return false;
-      }
-    }
-
-    const tableMatch =
-      msg.match(/relation "(\w+)" does not exist/i) ||
-      msg.match(/Table '(?:[\w]+\.)?(\w+)' doesn't exist/i) ||
-      msg.match(/no such table: (\w+)/i);
-    if (!tableMatch) return false;
-
-    const tableName = tableMatch[1];
-    if (_createdTables.has(tableName)) {
-      // The DB error says the table is missing but our in-memory tracker thinks
-      // it exists. The trackers can drift from DB state (e.g. a prior CREATE
-      // TABLE through this adapter recorded the table before failing, or a
-      // concurrent dropAllTables early-returned without re-running its drops).
-      // Trust the DB error: drop the stale tracking entry and recover.
-      _createdTables.delete(tableName);
-      _createdColumns.delete(tableName);
-    }
-
-    // Extract columns from SQL
-    const cols = new Map<string, string>();
-    // INSERT columns
-    const insertMatch = sql.match(/INSERT\s+INTO\s+["`]\w+["`]\s+\(([^)]*)\)/i);
-    if (insertMatch && insertMatch[1].trim()) {
-      for (const c of insertMatch[1].split(",")) {
-        const col = c.trim().replace(/"/g, "").replace(/`/g, "");
-        if (col === "id") continue;
-        cols.set(
-          col,
-          lookupDeclaredColumnType(tableName, col) ?? (col.endsWith("_id") ? "INTEGER" : "TEXT"),
-        );
-      }
-    }
-    // Collect SQL aliases for the missing table (FROM/JOIN ... [AS] alias).
-    // Without this, `JOIN "posts" AS "p" ON "p"."id" = ...` wouldn't
-    // contribute any columns because all refs are qualified as "p".
-    const accepted = new Set<string>([tableName]);
-    const aliasRe = new RegExp(
-      `(?:FROM|JOIN)\\s+["\`]${tableName}["\`](?:\\s+AS)?\\s+["\`](\\w+)["\`]`,
-      "gi",
-    );
-    for (const a of sql.matchAll(aliasRe)) accepted.add(a[1]);
-
-    // table.column references — only refs qualified by the missing table or
-    // one of its aliases contribute columns. Otherwise multi-table SQL
-    // (joins/subqueries) would leak columns from other tables into this CREATE.
-    const colMatches = sql.matchAll(/["`](\w+)["`]\.\s*["`](\w+)["`]/g);
-    for (const m of colMatches) {
-      if (!accepted.has(m[1])) continue;
-      if (m[2] === "id" || m[2] === "*") continue;
-      cols.set(
-        m[2],
-        lookupDeclaredColumnType(tableName, m[2]) ?? (m[2].endsWith("_id") ? "INTEGER" : "TEXT"),
-      );
-    }
-
-    _pendingModels.set(tableName, cols);
-    await processPendingModels(this.inner);
-    return _createdTables.has(tableName);
-  }
-
-  private extractTableFromSql(sql: string): string | null {
-    const m = sql.match(/(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|FROM)\s+(?:["`](\w+)["`]|(\w+))/i);
-    if (!m) return null;
-    return m[1] || m[2] || null;
+    return result;
   }
 
   async beginTransaction(): Promise<void> {

@@ -270,7 +270,7 @@ _Component C — Deduplicable cluster (5 files)_
 - Dependencies: PR 7
 - Note: snapshot tests vs schema.rb output are necessary; bringing the LOC into target range.
 
-**PR 11 — `mysql/schema_statements.rb` (38%)**
+**PR 11 — `mysql/schema_statements.rb` (38%) ✅ DONE #1182**
 
 - Rails: `$AR/connection_adapters/mysql/schema_statements.rb` (307 LOC)
 - TS: `$TS/connection-adapters/mysql/schema-statements.ts` (191 LOC, 10 matched, 16 missing, 38%)

@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel, association, enableSti, registerSubclass } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
+import { defineSchema } from "../test-helpers/define-schema.js";
 import type { DatabaseAdapter } from "../adapter.js";
 import {
   Associations,
@@ -55,8 +56,31 @@ describe("AssociationsJoinModelTest", () => {
     }
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     adapter = freshAdapter();
+    // Pre-create the schema explicitly. This bypasses the dynamic test-adapter's
+    // CREATE-TABLE-IF-NOT-EXISTS path and its recovery-on-failure path, both of
+    // which can drift across test files in a shared worker (PG/MariaDB share a
+    // singleton `_sharedAdapter`). Stale `_declaredColumns` entries from a
+    // sibling file's `Post` class — combined with the recovery path's TEXT
+    // fallback when a declaration is missing — could leave `author_id` typed as
+    // TEXT on PG, which silently breaks integer-keyed lookups and causes the
+    // counts in "has many with multiple authors" to flake.
+    await defineSchema(adapter, {
+      authors: { name: "string" },
+      posts: {
+        author_id: "integer",
+        title: "string",
+        body: "string",
+        type: "string",
+      },
+      tags: { name: "string" },
+      taggings: {
+        tag_id: "integer",
+        taggable_id: "integer",
+        taggable_type: "string",
+      },
+    });
     Author.adapter = adapter;
     Post.adapter = adapter;
     Tag.adapter = adapter;
@@ -81,27 +105,19 @@ describe("AssociationsJoinModelTest", () => {
   it("has many with multiple authors", async () => {
     const a1 = await Author.create({ name: "Author1" });
     const a2 = await Author.create({ name: "Author2" });
-    const p1a = await Post.create({ author_id: a1.id, title: "A1P1", body: "B" });
-    const p1b = await Post.create({ author_id: a1.id, title: "A1P2", body: "B" });
-    const p2a = await Post.create({ author_id: a2.id, title: "A2P1", body: "B" });
-    // Filter by ids we created so leftover rows with colliding author_ids
-    // from cross-file CI state can't move the count.
-    const ours1 = new Set([(p1a as Post).id, (p1b as Post).id]);
-    const ours2 = new Set([(p2a as Post).id]);
-    const posts1 = (
-      await loadHasMany(a1, "posts", {
-        className: "Post",
-        foreignKey: "author_id",
-        primaryKey: "id",
-      })
-    ).filter((p) => ours1.has((p as Post).id));
-    const posts2 = (
-      await loadHasMany(a2, "posts", {
-        className: "Post",
-        foreignKey: "author_id",
-        primaryKey: "id",
-      })
-    ).filter((p) => ours2.has((p as Post).id));
+    await Post.create({ author_id: a1.id, title: "A1P1", body: "B" });
+    await Post.create({ author_id: a1.id, title: "A1P2", body: "B" });
+    await Post.create({ author_id: a2.id, title: "A2P1", body: "B" });
+    const posts1 = await loadHasMany(a1, "posts", {
+      className: "Post",
+      foreignKey: "author_id",
+      primaryKey: "id",
+    });
+    const posts2 = await loadHasMany(a2, "posts", {
+      className: "Post",
+      foreignKey: "author_id",
+      primaryKey: "id",
+    });
     expect(posts1.length).toBe(2);
     expect(posts2.length).toBe(1);
   });
@@ -149,19 +165,11 @@ describe("AssociationsJoinModelTest", () => {
       taggable_id: post.id,
       taggable_type: "Post",
     });
-    // Use polymorphic `as: "taggable"` so the load applies the
-    // taggable_type constraint, then filter to the tagging whose tag_id
-    // matches the tag we created. Cross-file leakage on shared CI DBs
-    // can leave taggings whose tag_id points to a since-dropped tag,
-    // which would make the downstream loadHasOne return null.
-    const taggings = (
-      await loadHasMany(post, "taggings", {
-        as: "taggable",
-        className: "Tagging",
-        foreignKey: "taggable_id",
-        primaryKey: "id",
-      })
-    ).filter((t) => (t as Tagging).tag_id === (tag as Tag).id);
+    const taggings = await loadHasMany(post, "taggings", {
+      className: "Tagging",
+      foreignKey: "taggable_id",
+      primaryKey: "id",
+    });
     expect(taggings.length).toBe(1);
     // Load tag through tagging
     const loadedTag = await loadHasOne(taggings[0] as Tagging, "tag", {

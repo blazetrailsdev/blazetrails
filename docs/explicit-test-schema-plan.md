@@ -1,0 +1,50 @@
+# Explicit test schema migration plan
+
+The dynamic test-adapter (`packages/activerecord/src/test-adapter.ts`) creates
+tables on demand from model `attribute()` introspection and recovers from
+missing-table / missing-column errors by parsing the failing SQL and issuing
+ALTER TABLE. That works in isolation but is fragile across files in a shared
+worker — PG and MariaDB both share a singleton `_sharedAdapter` per worker, so
+any drift in `_declaredColumns` or in the recovery-path heuristics can survive
+into the next file's tests.
+
+The plan is to migrate test files to declare their schema explicitly via
+`defineSchema()`, so the dynamic CREATE-IF-NOT-EXISTS path becomes a no-op
+and the recovery path never needs to fire.
+
+## Tickets
+
+| ID    | Description                                          | Status          |
+| ----- | ---------------------------------------------------- | --------------- |
+| TS-1  | `defineSchema()` test helper                         | ✅ #1201        |
+| TS-2  | `dropAllTables()` test helper                        | 🟡 #1202 (open) |
+| TS-3  | Env flag to disable the dynamic auto-schema path     | ⏳ not started  |
+| TS-4a | Migrate `join-model.test.ts` (canary)                | ✅ this PR      |
+| TS-4… | Migrate remaining association/STI/polymorphic suites | ⏳ scheduled    |
+
+## Known flaky tests
+
+| Test                                                                      | Diagnosed root cause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Fix             |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `AssociationsJoinModelTest > has many with multiple authors` (PG/MariaDB) | Cross-file `_declaredColumns` drift in the test-adapter's recovery path. Sibling test files declare a different `class Post extends Base` (different attributes / different table) for the same `posts` table name. Under DDL contention on PG, the recovery path can fall back to its `_id`/`TEXT` heuristic for `author_id`, and an integer FK silently typed as `TEXT` makes `WHERE author_id = $1` mismatch on the rebuild path. PR #1200's `.filter(ours)` workaround papered over the symptom. | TS-4a (this PR) |
+
+## Migration pattern (TS-4a canary)
+
+```ts
+import { defineSchema } from "../test-helpers/define-schema.js";
+
+beforeEach(async () => {
+  adapter = createTestAdapter();
+  await defineSchema(adapter, {
+    authors: { name: "string" },
+    posts: { author_id: "integer", title: "string", body: "string", type: "string" },
+    tags: { name: "string" },
+    taggings: { tag_id: "integer", taggable_id: "integer", taggable_type: "string" },
+  });
+  // ...attach adapter and registerModel
+});
+```
+
+After this, `_declaredColumns` is irrelevant for the named tables — the
+schema is whatever `defineSchema` wrote, not whatever sibling files happened
+to register first.

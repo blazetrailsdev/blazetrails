@@ -11,7 +11,6 @@ export type PrimitiveColumnSpec =
   | "boolean"
   | "datetime"
   | "date"
-  | "time"
   | "binary"
   | "json";
 
@@ -82,7 +81,6 @@ const COLUMN_TYPE_MAP: Record<PrimitiveColumnSpec, string> = {
   boolean: "boolean",
   datetime: "datetime",
   date: "date",
-  time: "time",
   binary: "binary",
   json: "json",
 };

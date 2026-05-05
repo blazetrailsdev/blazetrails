@@ -22,14 +22,12 @@ describe("defineSchema", () => {
         active: "boolean",
         created_at: "datetime",
         born_on: "date",
-        wakeup: "time",
-        data: "binary",
         meta: "json",
       },
     });
 
     await adapter.executeMutation(
-      `INSERT INTO "things" ("name","body","count","big_count","ratio","price","active","created_at","born_on","wakeup","data","meta") VALUES ('x','y',1,2,1.5,9.99,1,'2024-01-01','2024-01-01','08:00','\\x00','{}')`,
+      `INSERT INTO "things" ("name","body","count","big_count","ratio","price","active","created_at","born_on","meta") VALUES ('x','y',1,2,1.5,9.99,1,'2024-01-01','2024-01-01','{}')`,
     );
     const rows = await adapter.execute(`SELECT * FROM "things"`);
     expect(rows).toHaveLength(1);

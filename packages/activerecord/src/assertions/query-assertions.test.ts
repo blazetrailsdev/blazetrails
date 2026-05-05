@@ -104,6 +104,19 @@ describe("QueryAssertionsTest", () => {
     ).rejects.toThrow("instead of 0 queries");
   });
 
+  it("counts queries published after an await inside the block", async () => {
+    await assertQueriesCount(1, async () => {
+      await Promise.resolve();
+      publishSql("SELECT 1");
+    });
+  });
+
+  it("assertQueriesCount throws clearly when no block is provided", async () => {
+    await expect(
+      assertQueriesCount(1, { includeSchema: false } as Parameters<typeof assertQueriesCount>[1]),
+    ).rejects.toThrow("requires a block");
+  });
+
   it.skip("assert queries count include schema", () => {});
   it.skip("assert no queries include schema", () => {});
   it.skip("assert queries match include schema", () => {});

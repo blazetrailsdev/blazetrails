@@ -38,12 +38,12 @@ export class SQLCounter {
   }
 }
 
-function withSubscribed<T>(counter: SQLCounter, fn: () => T): T {
+async function withSubscribed(counter: SQLCounter, fn: () => void | Promise<void>): Promise<void> {
   const sub = Notifications.subscribe("sql.active_record", (event: NotificationEvent) => {
     counter.call(event.name, null!, null!, "", event.payload as Record<string, unknown>);
   });
   try {
-    return fn();
+    await fn();
   } finally {
     Notifications.unsubscribe(sub);
   }
@@ -60,10 +60,10 @@ export async function assertQueriesCount(
   fn?: () => void | Promise<void>,
 ): Promise<void> {
   const includeSchema = typeof optsOrFn !== "function" ? (optsOrFn.includeSchema ?? false) : false;
-  const block = typeof optsOrFn === "function" ? optsOrFn : fn!;
+  const block = typeof optsOrFn === "function" ? optsOrFn : fn;
+  if (!block) throw new Error("assertQueriesCount requires a block");
   const counter = new SQLCounter();
-  const result = withSubscribed(counter, block);
-  if (result instanceof Promise) await result;
+  await withSubscribed(counter, block);
   const queries = includeSchema ? counter.logAll : counter.log;
   if (count !== null && count !== undefined) {
     if (queries.length !== count)
@@ -100,13 +100,17 @@ export async function assertQueriesMatch(
   fn?: () => void | Promise<void>,
 ): Promise<void> {
   const opts = typeof optsOrFn !== "function" ? optsOrFn : {};
-  const block = typeof optsOrFn === "function" ? optsOrFn : fn!;
+  const block = typeof optsOrFn === "function" ? optsOrFn : fn;
+  if (!block) throw new Error("assertQueriesMatch requires a block");
   const counter = new SQLCounter();
-  const result = withSubscribed(counter, block);
-  if (result instanceof Promise) await result;
+  await withSubscribed(counter, block);
   const queries = opts.includeSchema ? counter.logAll : counter.log;
-  const re = match instanceof RegExp ? match : new RegExp(match);
-  const matched = queries.filter((q) => re.test(q));
+  // Use source+flags clone to avoid stateful lastIndex on g/y regexps
+  const re = match instanceof RegExp ? new RegExp(match.source, match.flags) : new RegExp(match);
+  const matched = queries.filter((q) => {
+    re.lastIndex = 0;
+    return re.test(q);
+  });
   const count = opts.count;
   if (count !== null && count !== undefined) {
     if (matched.length !== count)

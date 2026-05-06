@@ -42,11 +42,9 @@ abstraction.
 ### `TRAILS_ENV` vs `NODE_ENV`
 
 The JS ecosystem treats `NODE_ENV` as a _build-time hint_ (bundlers replace it
-statically), not a reliable runtime value. `trailties/database.ts` already
-prefers `TRAILS_ENV` with a `NODE_ENV` fallback. BC-2 codifies this
-everywhere: `TRAILS_ENV` is the canonical runtime environment name; `NODE_ENV`
-remains a silent read-only fallback indefinitely (never written, never
-advertised, but never removed — too many apps set only `NODE_ENV`).
+statically), not a reliable runtime value. BC-2 replaces all `NODE_ENV` reads
+with `TRAILS_ENV` — no fallback, no shim. Pre-release means no backwards
+compat obligations.
 
 ### SQLite driver registry
 
@@ -73,10 +71,8 @@ function getEnv(key: string, defaultValue: string): string;
 function getEnv(key: string): string | undefined;
 ```
 
-Read-back policy: check `TRAILS_ENV` first; fall back to `NODE_ENV` silently.
-The fallback is indefinite — `NODE_ENV` is never advertised but never removed,
-because too many existing apps set only `NODE_ENV`. `TRAILS_ENV` always wins
-when both are set; neither is ever written by `getEnv`.
+Read-back policy: read `TRAILS_ENV`, no fallback. Pre-release — direct
+replacement with no shim.
 
 Files to migrate:
 

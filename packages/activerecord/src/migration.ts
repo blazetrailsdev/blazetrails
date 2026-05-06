@@ -1056,24 +1056,8 @@ export abstract class Migration {
   }
 
   /** @internal */
-  static isAnySchemaNeedsUpdate(): boolean {
-    return false;
-  }
-
-  /** @internal */
-  static dbConfigsInCurrentEnv(): unknown[] {
-    return [];
-  }
-
-  /** @internal */
   static env(): string {
     return getEnv("TRAILS_ENV") ?? getEnv("NODE_ENV") ?? "development";
-  }
-
-  /** @internal */
-  static loadSchemaBang(): void {
-    // No-op: in Rails this runs `bin/rails db:test:prepare` as a subprocess.
-    // In TS there is no Rake subprocess; callers invoke Migrator directly.
   }
 }
 
@@ -2179,10 +2163,9 @@ export class Migrator {
   // Rails: MigrationContext#valid_migration_timestamp?
   /** @internal */
   isValidMigrationTimestamp(version: string | number): boolean {
-    const tomorrowMs = Temporal.Now.instant().epochMilliseconds + 86400000;
-    const zdt = Temporal.Instant.fromEpochMilliseconds(tomorrowMs).toZonedDateTimeISO("UTC");
+    const tomorrow = Temporal.Now.plainDateTimeISO("UTC").add({ days: 1 });
     const limit = Number(
-      `${zdt.year}${String(zdt.month).padStart(2, "0")}${String(zdt.day).padStart(2, "0")}${String(zdt.hour).padStart(2, "0")}${String(zdt.minute).padStart(2, "0")}${String(zdt.second).padStart(2, "0")}`,
+      `${tomorrow.year}${String(tomorrow.month).padStart(2, "0")}${String(tomorrow.day).padStart(2, "0")}${String(tomorrow.hour).padStart(2, "0")}${String(tomorrow.minute).padStart(2, "0")}${String(tomorrow.second).padStart(2, "0")}`,
     );
     return Number(version) < limit;
   }
@@ -2403,6 +2386,25 @@ function generateMigratorAdvisoryLockId(): never {
   throw new NotImplementedError(
     "ActiveRecord::Migrator#generate_migrator_advisory_lock_id is not implemented",
   );
+}
+
+/** @internal */
+function isAnySchemaNeedsUpdate(): never {
+  throw new NotImplementedError(
+    "ActiveRecord::Migration#any_schema_needs_update? is not implemented",
+  );
+}
+
+/** @internal */
+function dbConfigsInCurrentEnv(): never {
+  throw new NotImplementedError(
+    "ActiveRecord::Migration#db_configs_in_current_env is not implemented",
+  );
+}
+
+/** @internal */
+function loadSchemaBang(): never {
+  throw new NotImplementedError("ActiveRecord::Migration#load_schema! is not implemented");
 }
 
 /** @internal */

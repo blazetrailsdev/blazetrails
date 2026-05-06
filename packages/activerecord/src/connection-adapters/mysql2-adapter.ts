@@ -1009,7 +1009,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
 
   /** @internal */
   private isTextType(type: string): boolean {
-    const t = this.nativeTypeMap.lookup(type);
+    const t = this.nativeTypeMap.lookup(type.toLowerCase().trim());
     return t instanceof StringType || t instanceof TextType;
   }
 
@@ -1034,6 +1034,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * @internal
    */
   async getFullVersion(): Promise<string> {
+    if (this._fullVersionString) return this._fullVersionString;
     const conn = await this.getConn();
     try {
       const [[row]] = (await conn.query("SELECT VERSION() AS v")) as [

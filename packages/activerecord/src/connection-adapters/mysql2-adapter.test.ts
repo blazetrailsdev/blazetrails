@@ -811,6 +811,12 @@ describeIfMysql("Mysql2Adapter", () => {
       expect((adapter as any).isTextType("bigint")).toBe(false);
     });
 
+    it("isTextType normalizes case and whitespace like lookupCastType", () => {
+      expect((adapter as any).isTextType("  VARCHAR(255)  ")).toBe(true);
+      expect((adapter as any).isTextType("TEXT")).toBe(true);
+      expect((adapter as any).isTextType("  INT  ")).toBe(false);
+    });
+
     it("connect is a no-op and leaves the adapter connected", () => {
       expect(adapter.isConnected()).toBe(true);
       (adapter as any).connect();

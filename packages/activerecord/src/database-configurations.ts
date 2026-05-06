@@ -1,4 +1,5 @@
 import { getEnv } from "@blazetrails/activesupport";
+import { AdapterNotSpecified } from "./errors.js";
 import {
   DatabaseConfig,
   type DatabaseConfigOptions,
@@ -375,9 +376,8 @@ export class DatabaseConfigurations {
 
   /** @internal */
   private buildConfigs(configs: RawConfigurations | DatabaseConfig[]): DatabaseConfig[] {
-    return this._buildConfigs(
-      this._mergeDatabaseUrl(configs as RawConfigurations, DatabaseConfigurations.defaultEnv),
-    );
+    if (Array.isArray(configs)) return configs;
+    return this._buildConfigs(this._mergeDatabaseUrl(configs, DatabaseConfigurations.defaultEnv));
   }
 
   /** @internal */
@@ -395,7 +395,7 @@ export class DatabaseConfigurations {
     const dbConfig = this.findDbConfig(name);
     if (dbConfig) return dbConfig;
     const defaultEnv = DatabaseConfigurations.defaultEnv;
-    throw new Error(
+    throw new AdapterNotSpecified(
       `The \`${name}\` database is not configured for the \`${defaultEnv}\` environment.\n\n  Available database configurations are:\n\n  ${this.buildConfigurationSentence()}`,
     );
   }

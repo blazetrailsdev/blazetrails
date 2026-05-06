@@ -372,6 +372,14 @@ export class MacroReflection extends AbstractReflection {
     return relation;
   }
 
+  /**
+   * @internal
+   * Derives class name from association name. Used by `className` getter.
+   */
+  protected deriveClassName(): string {
+    return camelize(this.name);
+  }
+
   private normalizeOptions(options: Record<string, unknown>): Record<string, unknown> {
     const counterCache = options.counterCache;
     if (counterCache) {
@@ -883,6 +891,32 @@ export class AssociationReflection extends MacroReflection {
     }
     return camelize(this.name);
   }
+
+  /** @internal */
+  protected actualSourceReflection(): this {
+    return this;
+  }
+
+  /**
+   * @internal
+   * Raises if the given option was passed a class instead of a string.
+   */
+  protected ensureOptionNotGivenAsClassBang(optionName: string): void {
+    const val = this.options[optionName];
+    if (val && (val as any).constructor === Function) {
+      throw new Error(`A class was passed to \`:${optionName}\` but we are expecting a string.`);
+    }
+  }
+
+  /**
+   * @internal
+   * Derives the join table name for hasAndBelongsToMany associations.
+   */
+  protected deriveJoinTable(): string {
+    return [underscore(this.activeRecord.tableName), underscore(this.klass.tableName)]
+      .sort()
+      .join("_");
+  }
 }
 
 /**
@@ -1021,6 +1055,11 @@ export class HasAndBelongsToManyReflection extends AssociationReflection {
  */
 export class ThroughReflection extends AbstractReflection {
   private _delegate: AssociationReflection;
+
+  /** @internal */
+  get delegateReflection(): AssociationReflection {
+    return this._delegate;
+  }
   private _sourceReflectionCache: AssociationReflection | ThroughReflection | null | undefined =
     undefined;
   private _throughReflectionCache: AssociationReflection | ThroughReflection | null | undefined =
@@ -1185,7 +1224,7 @@ export class ThroughReflection extends AbstractReflection {
   }
 
   collectJoinChain(): AbstractReflection[] {
-    return this._collectJoinReflections([this]);
+    return this.collectJoinReflections([this]);
   }
 
   clearAssociationScopeCache(): void {
@@ -1359,21 +1398,41 @@ export class ThroughReflection extends AbstractReflection {
   }
 
   addAsSource(seed: AbstractReflection[]): AbstractReflection[] {
-    return this._collectJoinReflections(seed);
+    return this.collectJoinReflections(seed);
   }
 
   addAsPolymorphicThrough(
     reflection: AbstractReflection,
     seed: AbstractReflection[],
   ): AbstractReflection[] {
-    return this._collectJoinReflections([...seed, new PolymorphicReflection(this, reflection)]);
+    return this.collectJoinReflections([...seed, new PolymorphicReflection(this, reflection)]);
   }
 
   addAsThrough(seed: AbstractReflection[]): AbstractReflection[] {
-    return this._collectJoinReflections([...seed, this]);
+    return this.collectJoinReflections([...seed, this]);
   }
 
-  private _collectJoinReflections(seed: AbstractReflection[]): AbstractReflection[] {
+  /** @internal */
+  protected actualSourceReflection(): AbstractReflection {
+    const src = this.sourceReflection;
+    if (!src) return this;
+    return (src as any).actualSourceReflection?.() ?? src;
+  }
+
+  /** @internal */
+  protected deriveClassName(): string {
+    return (
+      (this.options.sourceType as string) ||
+      (this.sourceReflection as any)?.className ||
+      this._delegate.className
+    );
+  }
+
+  /**
+   * @internal
+   * Walks the through chain collecting all intermediate reflections.
+   */
+  private collectJoinReflections(seed: AbstractReflection[]): AbstractReflection[] {
     const src = this.sourceReflection;
     if (!src) return seed;
     const a = src.addAsSource(seed);
@@ -1450,11 +1509,11 @@ export class PolymorphicReflection extends AbstractReflection {
 
   constraints(): Array<(...args: any[]) => any> {
     const reflConstraints = (this._reflection as any).constraints?.() ?? [];
-    const typeConstraint = this._sourceTypeScope();
-    return [...reflConstraints, typeConstraint];
+    return [...reflConstraints, this.sourceTypeScope()];
   }
 
-  private _sourceTypeScope(): (...args: any[]) => any {
+  /** @internal */
+  private sourceTypeScope(): (...args: any[]) => any {
     const typeCol = (this._previousReflection as any).foreignType;
     const sourceType = (this._previousReflection as any).options?.sourceType;
     return (rel: any) => rel?.where?.({ [typeCol]: sourceType }) ?? rel;

@@ -575,10 +575,15 @@ function validateCollectionAssociation(this: any, reflection: any): void {
 }
 
 /** @internal */
-function isAssociationValid(reflection: any, record: any, owner: any): boolean {
+function isAssociationValid(
+  reflection: any,
+  record: any,
+  owner: any,
+  context?: ValidationContextArg,
+): boolean {
   if (typeof record.isDestroyed === "function" && record.isDestroyed()) return true;
   if (reflection.options?.autosave && isMarkedForDestruction(record)) return true;
-  const isChildValid = typeof record.isValid === "function" ? record.isValid() : true;
+  const isChildValid = typeof record.isValid === "function" ? record.isValid(context) : true;
   if (!isChildValid) {
     const parentErrors = owner?.errors;
     if (parentErrors && reflection.options?.autosave) {
@@ -625,12 +630,15 @@ async function saveHasOneAssociation(this: any, reflection: any): Promise<void> 
 
 /** @internal */
 function is_recordChanged(reflection: any, record: any, key: any[]): boolean {
+  const fkCols: string[] = Array.isArray(reflection.foreignKey)
+    ? reflection.foreignKey
+    : [reflection.foreignKey];
   return (
     (typeof record.isNewRecord === "function" ? record.isNewRecord() : false) ||
     isAssociationForeignKeyChanged(reflection, record, key) ||
     isInversePolymorphicAssociationChanged(reflection, record) ||
     (typeof record.willSaveChangeToAttribute === "function"
-      ? record.willSaveChangeToAttribute(reflection.foreignKey)
+      ? fkCols.some((col) => record.willSaveChangeToAttribute(col))
       : false)
   );
 }
@@ -642,9 +650,9 @@ function isAssociationForeignKeyChanged(reflection: any, record: any, key: any[]
     ? reflection.foreignKey
     : [reflection.foreignKey];
   if (!fk.every((k: string) => record._hasAttribute?.(k) !== false)) return false;
-  const recordFk = fk.map((k: string) => record._readAttribute?.(k));
-  const keyArr = Array.isArray(key) ? key : [key];
-  return JSON.stringify(recordFk) !== JSON.stringify(keyArr);
+  const recordFk = fk.map((k: string) => String(record._readAttribute?.(k) ?? ""));
+  const keyArr = (Array.isArray(key) ? key : [key]).map((v) => String(v ?? ""));
+  return recordFk.join("\0") !== keyArr.join("\0");
 }
 
 /** @internal */
@@ -686,11 +694,31 @@ function defineNonCyclicMethod(klass: any, name: string, fn: (this: any) => any)
       this._alreadyCalled ??= {};
       if (this._alreadyCalled[name]) return true;
       this._alreadyCalled[name] = true;
-      try {
-        return fn.call(this);
-      } finally {
+      const clear = () => {
         this._alreadyCalled[name] = false;
+      };
+      let result: any;
+      try {
+        result = fn.call(this);
+      } catch (e) {
+        clear();
+        throw e;
       }
+      // Keep the guard set until async work settles to prevent re-entrant autosave cycles.
+      if (result != null && typeof result.then === "function") {
+        return result.then(
+          (v: any) => {
+            clear();
+            return v;
+          },
+          (e: any) => {
+            clear();
+            throw e;
+          },
+        );
+      }
+      clear();
+      return result;
     };
   }
 }

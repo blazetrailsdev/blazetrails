@@ -4,7 +4,6 @@
  * Mirrors: ActiveRecord::Tasks::DatabaseTasks
  */
 
-import { NotImplementedError } from "../errors.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
@@ -1085,111 +1084,133 @@ export interface DatabaseTaskHandler {
 }
 
 /** @internal */
-function truncateTables(dbConfig: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#truncate_tables is not implemented",
-  );
+export async function withTemporaryPool(
+  dbConfig: DatabaseConfig,
+  fn: (adapter: import("../adapter.js").DatabaseAdapter) => Promise<void>,
+): Promise<void> {
+  await DatabaseTasks.withTemporaryConnection(dbConfig, fn);
 }
 
 /** @internal */
-export function withTemporaryPool(dbConfig: any, clobber?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#with_temporary_pool is not implemented",
-  );
+export function resolveConfiguration(configuration: unknown): DatabaseConfig {
+  if (!DatabaseTasks.databaseConfiguration) {
+    throw new Error("DatabaseTasks.databaseConfiguration is not set");
+  }
+  return DatabaseTasks.databaseConfiguration.resolve(configuration);
 }
 
 /** @internal */
-function configsFor(options?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#configs_for is not implemented",
-  );
+export function isVerbose(): boolean {
+  const v = getEnv("VERBOSE");
+  return v !== undefined ? v !== "false" : true;
 }
 
 /** @internal */
-export function resolveConfiguration(configuration: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#resolve_configuration is not implemented",
-  );
+export function databaseAdapterFor(
+  dbConfig: DatabaseConfig,
+  ...arguments_: unknown[]
+): import("../adapter.js").DatabaseAdapter | null {
+  void arguments_;
+  return DatabaseTasks.migrationConnection();
 }
 
 /** @internal */
-export function isVerbose(): never {
-  throw new NotImplementedError("ActiveRecord::Tasks::DatabaseTasks#verbose? is not implemented");
+export function classForAdapter(adapter: string): DatabaseTaskHandler {
+  const handler = DatabaseTasks.resolveTask(adapter);
+  if (!handler) {
+    throw new DatabaseNotSupported(`Rake tasks not supported by '${adapter}' adapter`);
+  }
+  return handler;
 }
 
 /** @internal */
-export function databaseAdapterFor(dbConfig: any, ...arguments_: any[]): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#database_adapter_for is not implemented",
-  );
+export function eachCurrentConfiguration(environment: string, name?: string): DatabaseConfig[] {
+  const results: DatabaseConfig[] = [];
+  for (const env of eachCurrentEnvironment(environment)) {
+    for (const cfg of DatabaseTasks.configsFor(env)) {
+      if (name && name !== cfg.name) continue;
+      results.push(cfg);
+    }
+  }
+  return results;
 }
 
 /** @internal */
-export function classForAdapter(adapter: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#class_for_adapter is not implemented",
-  );
+export function eachCurrentEnvironment(environment: string): string[] {
+  const envs = [environment];
+  if (environment === "development" && !getEnv("SKIP_TEST_DATABASE") && !getEnv("DATABASE_URL")) {
+    envs.push("test");
+  }
+  return envs;
 }
 
 /** @internal */
-export function eachCurrentConfiguration(environment: any, name?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#each_current_configuration is not implemented",
-  );
+export function isLocalDatabase(dbConfig: DatabaseConfig): boolean {
+  const host = dbConfig.host;
+  return !host || host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 /** @internal */
-export function eachCurrentEnvironment(environment: any, block?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#each_current_environment is not implemented",
-  );
+export function schemaSha1(file: string): string {
+  const contents = getFs().readFileSync(file, "utf-8");
+  const nodeCrypto = (
+    globalThis as {
+      require?: (mod: string) => {
+        createHash(a: string): { update(d: string): { digest(e: string): string } };
+      };
+    }
+  ).require?.("node:crypto");
+  if (!nodeCrypto) throw new Error("schemaSha1 requires a Node.js crypto module");
+  return nodeCrypto.createHash("sha1").update(contents).digest("hex");
 }
 
 /** @internal */
-function eachLocalConfiguration(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#each_local_configuration is not implemented",
-  );
+export function structureDumpFlagsFor(adapter: string): string | string[] | null {
+  const flags = DatabaseTasks.structureDumpFlags;
+  if (!flags) return null;
+  if (typeof flags === "string" || Array.isArray(flags)) return flags;
+  return (flags as Record<string, string | string[]>)[adapter] ?? null;
 }
 
 /** @internal */
-export function isLocalDatabase(dbConfig: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#local_database? is not implemented",
-  );
+export function structureLoadFlagsFor(adapter: string): string | string[] | null {
+  const flags = DatabaseTasks.structureLoadFlags;
+  if (!flags) return null;
+  if (typeof flags === "string" || Array.isArray(flags)) return flags;
+  return (flags as Record<string, string | string[]>)[adapter] ?? null;
 }
 
 /** @internal */
-export function schemaSha1(file: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#schema_sha1 is not implemented",
-  );
+export async function checkCurrentProtectedEnvironmentBang(
+  dbConfig: DatabaseConfig,
+): Promise<void> {
+  await DatabaseTasks.withTemporaryConnection(dbConfig, async () => {
+    await DatabaseTasks.checkProtectedEnvironmentsBang(dbConfig.envName);
+  });
 }
 
 /** @internal */
-export function structureDumpFlagsFor(adapter: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#structure_dump_flags_for is not implemented",
-  );
-}
-
-/** @internal */
-export function structureLoadFlagsFor(adapter: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#structure_load_flags_for is not implemented",
-  );
-}
-
-/** @internal */
-export function checkCurrentProtectedEnvironmentBang(dbConfig: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#check_current_protected_environment! is not implemented",
-  );
-}
-
-/** @internal */
-export function initializeDatabase(dbConfig: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::DatabaseTasks#initialize_database is not implemented",
-  );
+export async function initializeDatabase(dbConfig: DatabaseConfig): Promise<boolean> {
+  return DatabaseTasks.withTemporaryConnection(dbConfig, async () => {
+    const { SchemaMigration } = await import("../schema-migration.js");
+    const adapter = DatabaseTasks.migrationConnection();
+    if (!adapter) return false;
+    let alreadyInitialized: boolean;
+    try {
+      const sm = new SchemaMigration(adapter);
+      alreadyInitialized = await sm.tableExists();
+    } catch {
+      await DatabaseTasks.create(dbConfig);
+      const sm = new SchemaMigration(adapter);
+      alreadyInitialized = await sm.tableExists();
+    }
+    if (!alreadyInitialized) {
+      const schemaDumpPath = DatabaseTasks.schemaDumpPath(dbConfig);
+      const { getFs: fs } = await import("@blazetrails/activesupport");
+      if (schemaDumpPath && fs().existsSync(schemaDumpPath)) {
+        await DatabaseTasks.loadSchema(dbConfig, DatabaseTasks.schemaFormat);
+      }
+    }
+    return !alreadyInitialized;
+  });
 }

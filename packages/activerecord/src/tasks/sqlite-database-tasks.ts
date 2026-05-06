@@ -9,11 +9,16 @@
  * subprocess required.
  */
 
-import { getFs, getPath } from "@blazetrails/activesupport";
+import {
+  getFs,
+  getPath,
+  getChildProcessAsync,
+  type SpawnSyncResult,
+} from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseTasks } from "./database-tasks.js";
-import { NoDatabaseError, DatabaseAlreadyExists, NotImplementedError } from "../errors.js";
+import { NoDatabaseError, DatabaseAlreadyExists } from "../errors.js";
 
 /**
  * True for SQLite in-memory database names per the SQLite URI spec
@@ -300,6 +305,18 @@ export class SQLiteDatabaseTasks {
     if (typeof close === "function") await close.call(adapter);
   }
 
+  /** @internal */
+  private connection(): DatabaseAdapter | null {
+    return DatabaseTasks.migrationConnection();
+  }
+
+  /** @internal */
+  private async establishConnection(config?: DatabaseConfig): Promise<void> {
+    const cfg = config ?? this.dbConfig;
+    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+    DatabaseTasks.setAdapter(new SQLite3Adapter(cfg.database ?? this.resolveDbPath()));
+  }
+
   static register(): void {
     DatabaseTasks.registerTask(/sqlite/, {
       create: async (config) => new SQLiteDatabaseTasks(config).create(),
@@ -375,29 +392,21 @@ function splitSqlStatements(sql: string): string[] {
 }
 
 /** @internal */
-export function connection(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::SQLiteDatabaseTasks#connection is not implemented",
-  );
+export async function runCmd(cmd: string, args: string[], out: string): Promise<void> {
+  const childProcess = await getChildProcessAsync();
+  const result: SpawnSyncResult = childProcess.spawnSync(cmd, args, { encoding: "utf8" });
+  if (result.error || result.status !== 0 || result.signal) {
+    throw new Error(runCmdError(cmd, args));
+  }
+  if (out && result.stdout) {
+    getFs().writeFileSync(out, String(result.stdout));
+  }
 }
 
 /** @internal */
-export function establishConnection(config?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::SQLiteDatabaseTasks#establish_connection is not implemented",
-  );
-}
-
-/** @internal */
-export function runCmd(cmd: any, args: any, out: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::SQLiteDatabaseTasks#run_cmd is not implemented",
-  );
-}
-
-/** @internal */
-export function runCmdError(cmd: any, args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Tasks::SQLiteDatabaseTasks#run_cmd_error is not implemented",
+export function runCmdError(cmd: string, args: string[]): string {
+  return (
+    `failed to execute:\n${cmd} ${args.join(" ")}\n\n` +
+    `Please check the output above for any errors and make sure that \`${cmd}\` is installed in your PATH and has proper permissions.\n\n`
   );
 }

@@ -2731,21 +2731,13 @@ export interface Base extends Included<typeof AutosaveAssociation> {
   /** @internal */
   initInternals(): void;
   /** @internal */
-  destroyRow(superFn: () => number | Promise<number>): number | Promise<number>;
+  _createRecord(): Promise<boolean>;
   /** @internal */
-  _touchRow(
-    touchAttrNames: string[],
-    time: unknown,
-    superFn: (names: string[], time: unknown) => unknown,
-  ): unknown;
+  destroyRow(): Promise<number>;
   /** @internal */
-  _updateRow(
-    attributeNames: string[],
-    attemptedAction: string,
-    superFn: (names: string[], action: string) => Promise<number>,
-  ): Promise<number>;
+  _touchRow(touchAttrNames: string[], time?: unknown): Promise<number>;
   /** @internal */
-  _createRecord(attributeNames: string[], superFn: (names: string[]) => unknown): unknown;
+  _updateRow(attributeNames: string[], attemptedAction?: string): Promise<number>;
   slice(...keys: string[]): Record<string, unknown>;
   valuesAt(...keys: string[]): unknown[];
   assignAttributes(attrs: Record<string, unknown>): void;

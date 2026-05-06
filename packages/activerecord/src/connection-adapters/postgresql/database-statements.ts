@@ -276,31 +276,52 @@ export function suppressCompositePrimaryKey(pk: string | string[] | undefined): 
   return Array.isArray(pk) ? undefined : pk;
 }
 
+/** @internal */
+interface HandleWarningsHost extends IsWarningIgnoredHost {
+  _noticeReceiverSqlWarnings?: Array<{ level?: string; sql?: unknown; [k: string]: unknown }>;
+}
+
 /**
- * Dispatches accumulated notice-receiver warnings to the configured warnings action.
- * Rails passes the PG::Result to this method (named `sql` in the source) so each
- * warning can have its `sql` attribute set; we receive the pg.QueryResult here.
+ * Iterates notice-receiver warnings accumulated during the query, attaches the
+ * result object (Rails attaches the PG::Result; node-pg equivalent here), and
+ * dispatches each actionable warning. No-ops when no warnings were collected.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#handle_warnings
  * @internal
  */
-export function handleWarnings(
-  this: { _noticeReceiverSqlWarnings?: Array<{ level?: string; sql?: unknown }> },
-  result: pg.QueryResult,
-): void {
+export function handleWarnings(this: HandleWarningsHost, result: pg.QueryResult): void {
   if (!this._noticeReceiverSqlWarnings?.length) return;
   for (const warning of this._noticeReceiverSqlWarnings) {
-    if (isWarningIgnored(warning)) continue;
+    if (isWarningIgnored.call(this, warning)) continue;
     warning.sql = result;
   }
 }
 
-const IGNORED_LEVELS = new Set(["WARNING", "ERROR", "FATAL", "PANIC"]);
+// Levels that Rails treats as actionable (not ignored). Anything outside
+// this set (e.g. NOTICE, DEBUG) is silently dropped.
+const ACTIONABLE_LEVELS = new Set(["WARNING", "ERROR", "FATAL", "PANIC"]);
+
+/** @internal */
+interface IsWarningIgnoredHost {
+  /** @internal */
+  isWarningIgnored(warning: {
+    message?: string;
+    code?: string | number;
+    [k: string]: unknown;
+  }): boolean;
+}
 
 /**
+ * A warning is ignored if its level is below the actionable threshold OR if
+ * the base adapter's pattern matchers (db_warnings_ignore) say to ignore it.
+ *
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#warning_ignored?
  * @internal
  */
-export function isWarningIgnored(warning: { level?: string }): boolean {
-  return !IGNORED_LEVELS.has(warning.level ?? "");
+export function isWarningIgnored(
+  this: IsWarningIgnoredHost | void,
+  warning: { level?: string; message?: string; code?: string | number; [k: string]: unknown },
+): boolean {
+  const belowThreshold = !ACTIONABLE_LEVELS.has(warning.level ?? "");
+  return belowThreshold || (this != null && this.isWarningIgnored(warning));
 }

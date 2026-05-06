@@ -654,7 +654,7 @@ describe("Migrator advisory lock wrapping", () => {
   it("acquires and releases advisory lock when adapter supports it", async () => {
     const adapter = createTestAdapter();
     const lockLog: string[] = [];
-    adapter.supportsAdvisoryLocks = () => true;
+    addAdvisoryLockSupport(adapter);
     adapter.getAdvisoryLock = async () => {
       lockLog.push("lock");
       return true;
@@ -672,7 +672,7 @@ describe("Migrator advisory lock wrapping", () => {
   it("throws ConcurrentMigrationError when lock cannot be acquired", async () => {
     const { ConcurrentMigrationError } = await import("./migration.js");
     const adapter = createTestAdapter();
-    adapter.supportsAdvisoryLocks = () => true;
+    addAdvisoryLockSupport(adapter);
     adapter.getAdvisoryLock = async () => false;
 
     const migrator = new Migrator(adapter, [makeMigration("1", "M1")]);
@@ -682,7 +682,7 @@ describe("Migrator advisory lock wrapping", () => {
   it("releases lock even when migration throws", async () => {
     const adapter = createTestAdapter();
     const lockLog: string[] = [];
-    adapter.supportsAdvisoryLocks = () => true;
+    addAdvisoryLockSupport(adapter);
     adapter.getAdvisoryLock = async () => {
       lockLog.push("lock");
       return true;
@@ -711,7 +711,7 @@ describe("Migrator advisory lock wrapping", () => {
   it("wraps rollback in advisory lock", async () => {
     const adapter = createTestAdapter();
     const lockLog: string[] = [];
-    adapter.supportsAdvisoryLocks = () => true;
+    addAdvisoryLockSupport(adapter);
     adapter.getAdvisoryLock = async () => {
       lockLog.push("lock");
       return true;
@@ -731,7 +731,7 @@ describe("Migrator advisory lock wrapping", () => {
   it("wraps run in advisory lock", async () => {
     const adapter = createTestAdapter();
     const lockLog: string[] = [];
-    adapter.supportsAdvisoryLocks = () => true;
+    addAdvisoryLockSupport(adapter);
     adapter.getAdvisoryLock = async () => {
       lockLog.push("lock");
       return true;
@@ -746,10 +746,15 @@ describe("Migrator advisory lock wrapping", () => {
     expect(lockLog).toEqual(["lock", "unlock"]);
   });
 
+  function addAdvisoryLockSupport(adapter: DatabaseAdapter) {
+    adapter.supportsAdvisoryLocks = () => true;
+    (adapter as unknown as Record<string, unknown>).currentDatabase = async () => "test_db";
+  }
+
   function lockableAdapter() {
     const adapter = createTestAdapter();
     const lockLog: string[] = [];
-    adapter.supportsAdvisoryLocks = () => true;
+    addAdvisoryLockSupport(adapter);
     adapter.getAdvisoryLock = async () => {
       lockLog.push("lock");
       return true;
@@ -786,7 +791,7 @@ describe("Migrator advisory lock wrapping", () => {
 
   it("raises ConcurrentMigrationError with RELEASE_LOCK_FAILED_MESSAGE when releaseAdvisoryLock returns false", async () => {
     const adapter = createTestAdapter();
-    adapter.supportsAdvisoryLocks = () => true;
+    addAdvisoryLockSupport(adapter);
     adapter.getAdvisoryLock = async () => true;
     adapter.releaseAdvisoryLock = async () => false;
     const migrator = new Migrator(adapter, [makeMigration("1", "M1")]);
@@ -810,5 +815,30 @@ describe("Migrator advisory lock wrapping", () => {
     // Ruby: Zlib.crc32("myapp_test") == 601888509
     // Rails: MIGRATOR_SALT (2053462845) * 601888509 == 1235955690063948105
     expect(lockIds[0]).toBe(1235955690063948105n);
+  });
+
+  it("lock ID is deterministic for the same db name", async () => {
+    const adapter = createTestAdapter();
+    const lockIds: bigint[] = [];
+    adapter.supportsAdvisoryLocks = () => true;
+    adapter.getAdvisoryLock = async (id) => {
+      lockIds.push(id as bigint);
+      return true;
+    };
+    adapter.releaseAdvisoryLock = async () => true;
+    (adapter as unknown as Record<string, unknown>).currentDatabase = async () => "myapp_test";
+    const migrator = new Migrator(adapter, []);
+    await migrator.migrate();
+    await migrator.migrate();
+    expect(lockIds[0]).toBe(lockIds[1]);
+  });
+
+  it("throws when adapter supports advisory locks but lacks currentDatabase()", async () => {
+    const adapter = createTestAdapter();
+    adapter.supportsAdvisoryLocks = () => true;
+    adapter.getAdvisoryLock = async () => true;
+    adapter.releaseAdvisoryLock = async () => true;
+    const migrator = new Migrator(adapter, []);
+    await expect(migrator.migrate()).rejects.toThrow("must implement currentDatabase()");
   });
 });

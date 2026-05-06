@@ -187,7 +187,11 @@ export abstract class Migration {
   private _recording = false;
   private _recorder = new CommandRecorder();
   private _name?: string;
-  /** @internal */
+  /**
+   * Class-level delegation target set from outside (mirrors Rails `class << self; attr_accessor :delegate`).
+   * Distinct from the instance `delegate` getter, which returns the current adapter.
+   * @internal
+   */
   static delegate: DatabaseAdapter | null = null;
   private _version?: string;
   verbose = true;
@@ -1050,6 +1054,7 @@ export abstract class Migration {
 
   // --- Delegation (Rails: Migration#nearest_delegate, #delegate) ---
 
+  /** Instance delegation target — returns the current adapter. Distinct from the class-level `Migration.delegate`. */
   get delegate(): DatabaseAdapter {
     return this.adapter;
   }
@@ -1062,6 +1067,7 @@ export abstract class Migration {
   methodMissing(name: string, ...args: unknown[]): unknown {
     const conn = this.adapter as unknown as Record<string, unknown>;
     if (typeof conn[name] !== "function") {
+      // JS has no NoMethodError; TypeError is the closest stdlib equivalent.
       throw new TypeError(`undefined method '${name}' for ${this.adapter.constructor.name}`);
     }
     return (conn[name] as (...a: unknown[]) => unknown).apply(conn, args);
@@ -1705,7 +1711,17 @@ export class Migrator {
     });
   }
 
-  /** @internal Mirrors: ActiveRecord::Migrator#run_without_lock */
+  /**
+   * @internal Mirrors: ActiveRecord::Migrator#run_without_lock
+   *
+   * Signature differs from Rails: Rails reads `@direction`/`@target_version` from
+   * per-invocation instance state; TS takes them as explicit params.
+   *
+   * The already-applied guards replicate the skip logic in Rails'
+   * `execute_migration_in_transaction` (migration.rb:1528-1530), which checks
+   * `migrated.include?(migration.version)` before running. Our `_runMigration`
+   * doesn't carry that check, so the guard lives here instead.
+   */
   async runWithoutLock(direction: "up" | "down", targetVersion: string | number): Promise<void> {
     this._validateTargetVersion(targetVersion);
     await this._ensureSchemaTable();
@@ -1791,13 +1807,21 @@ export class Migrator {
   /** @internal Mirrors: ActiveRecord::Migrator#generate_migrator_advisory_lock_id */
   async generateMigratorAdvisoryLockId(): Promise<bigint> {
     const adapter = this._adapter as unknown as { currentDatabase?(): Promise<string> };
-    if (typeof adapter.currentDatabase === "function") {
-      const dbName = await adapter.currentDatabase();
-      if (dbName) {
-        return BigInt(Migrator._MIGRATOR_SALT) * BigInt(_crc32(dbName));
-      }
+    if (typeof adapter.currentDatabase !== "function") {
+      // Rails always calls connection.current_database; a missing implementation is a
+      // bug in the adapter. Throw here so it surfaces rather than silently sharing a
+      // global lock ID across databases (which defeats multi-DB advisory-lock isolation).
+      throw new Error(
+        `${this._adapter.constructor.name} must implement currentDatabase() to support advisory-locked migrations`,
+      );
     }
-    return BigInt(Migrator._MIGRATOR_SALT);
+    const dbName = await adapter.currentDatabase();
+    if (!dbName) {
+      // currentDatabase() returned empty — adapter bug (MySQL stub returns "").
+      // Fall back to the salt so migrations don't hard-fail; file a fix for the adapter.
+      return BigInt(Migrator._MIGRATOR_SALT);
+    }
+    return BigInt(Migrator._MIGRATOR_SALT) * BigInt(_crc32(dbName));
   }
 
   /**

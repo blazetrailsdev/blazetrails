@@ -61,19 +61,6 @@ export class DatabaseSelector {
   }
 
   /** @internal */
-  isReadFromPrimary(request: MiddlewareRequest): boolean {
-    const context = this.contextKlass.call(request);
-    const resolver = this.resolverKlass.call(context, this.options);
-    return !resolver.isReadingRequest(request);
-  }
-
-  /** @internal */
-  updateLastWriteTimestamp(request: MiddlewareRequest): void {
-    const context = this.contextKlass.call(request);
-    context.updateLastWriteTimestamp();
-  }
-
-  /** @internal */
   selectDatabase(request: MiddlewareRequest, blk: () => Promise<unknown>): Promise<unknown> {
     const context = this.contextKlass.call(request);
     const resolver = this.resolverKlass.call(context, this.options);

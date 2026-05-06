@@ -421,7 +421,7 @@ export class DatabaseConfigurations {
     config: string | DatabaseConfigOptions,
   ): DatabaseConfig {
     if (typeof config === "string") return this.buildDbConfigFromString(envName, name, config);
-    if (typeof config === "object" && config !== null)
+    if (typeof config === "object" && config !== null && !Array.isArray(config))
       return this.buildDbConfigFromHash(envName, name, config);
     throw new InvalidConfigurationError(
       `'{ ${envName} => ${String(config)} }' is not a valid configuration. Expected a URL string or a Hash.`,

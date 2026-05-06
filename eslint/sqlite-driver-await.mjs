@@ -22,16 +22,55 @@
 
 /**
  * @internal
+ * Strip TS-only and parenthesized wrapper expressions that don't change the
+ * runtime value: non-null assertion (`x!`), type assertions (`x as T`,
+ * `<T>x`), satisfies (`x satisfies T`), and parenthesized expressions.
+ * Without unwrapping, forms like `driver!.run(...)` or
+ * `(driver as SqliteDriver).run(...)` would silently bypass the rule.
+ */
+function unwrap(node) {
+  while (
+    node &&
+    (node.type === "TSNonNullExpression" ||
+      node.type === "TSAsExpression" ||
+      node.type === "TSTypeAssertion" ||
+      node.type === "TSSatisfiesExpression" ||
+      node.type === "ParenthesizedExpression")
+  ) {
+    node = node.expression;
+  }
+  return node;
+}
+
+/**
+ * @internal
  * Returns true when `node` (a CallExpression whose callee is `driver.<method>`)
- * is safely consumed — either awaited or chained.
+ * is safely consumed — either awaited or chained with .then/.catch/.finally.
+ * Walks up through transparent wrapper nodes (parentheses, TS assertions) so
+ * that `await (driver.run(...))` is correctly recognised as safe.
  */
 function isSafelyConsumed(node) {
-  const parent = node.parent;
-  if (!parent) return false;
-  // await driver.foo()
-  if (parent.type === "AwaitExpression") return true;
+  let ancestor = node.parent;
+  // Walk up through transparent wrappers (e.g. parenthesized expressions).
+  while (
+    ancestor &&
+    (ancestor.type === "ParenthesizedExpression" ||
+      ancestor.type === "TSNonNullExpression" ||
+      ancestor.type === "TSAsExpression" ||
+      ancestor.type === "TSTypeAssertion" ||
+      ancestor.type === "TSSatisfiesExpression")
+  ) {
+    ancestor = ancestor.parent;
+  }
+  if (!ancestor) return false;
+  // await driver.foo()  /  await (driver.foo())
+  if (ancestor.type === "AwaitExpression") return true;
   // driver.foo().then(...) / .catch(...) / .finally(...)
+  // The immediate parent of the original node must still be the MemberExpression
+  // callee — don't allow wrappers between the call and the chain accessor.
+  const parent = node.parent;
   if (
+    parent &&
     parent.type === "MemberExpression" &&
     parent.object === node &&
     parent.property.type === "Identifier" &&
@@ -63,11 +102,11 @@ const rule = {
     return {
       CallExpression(node) {
         const callee = node.callee;
-        // Match driver.<method>(...) where `driver` is an Identifier (local var or param).
-        // `this.driver.<method>()` has a MemberExpression object, not an Identifier — excluded.
         if (callee.type !== "MemberExpression") return;
-        const obj = callee.object;
-        if (obj.type !== "Identifier" || obj.name !== "driver") return;
+        // Unwrap TS wrappers on the object so `driver!.run()` and
+        // `(driver as SqliteDriver).run()` are caught alongside plain `driver.run()`.
+        const obj = unwrap(callee.object);
+        if (!obj || obj.type !== "Identifier" || obj.name !== "driver") return;
         const method = callee.property;
         if (method.type !== "Identifier") return;
         if (isSafelyConsumed(node)) return;

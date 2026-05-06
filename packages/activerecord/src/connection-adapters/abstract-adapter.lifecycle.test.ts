@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { AbstractAdapter } from "./abstract-adapter.js";
-import { ConnectionNotEstablished, ConnectionNotDefined } from "../errors.js";
+import {
+  ConnectionNotEstablished,
+  ConnectionNotDefined,
+  ConnectionFailed,
+  Deadlocked,
+  LockWaitTimeout,
+} from "../errors.js";
 
 describe("AbstractAdapter connection lifecycle privates", () => {
   it("verifiedBang sets _verified and _lastActivity", () => {
@@ -12,12 +18,11 @@ describe("AbstractAdapter connection lifecycle privates", () => {
 
   it("retryable error predicates match Rails semantics", () => {
     const a = new AbstractAdapter();
-    const named = (n: string) => Object.assign(new Error(""), { name: n });
     expect(a.isRetryableConnectionError(new ConnectionNotEstablished("x"))).toBe(true);
     expect(a.isRetryableConnectionError(new ConnectionNotDefined("x"))).toBe(false);
-    expect(a.isRetryableConnectionError(named("ConnectionFailed"))).toBe(true);
-    expect(a.isRetryableQueryError(named("Deadlocked"))).toBe(true);
-    expect(a.isRetryableQueryError(named("LockWaitTimeout"))).toBe(true);
+    expect(a.isRetryableConnectionError(new ConnectionFailed("x"))).toBe(true);
+    expect(a.isRetryableQueryError(new Deadlocked("x"))).toBe(true);
+    expect(a.isRetryableQueryError(new LockWaitTimeout("x"))).toBe(true);
     expect(a.isRetryableQueryError(new Error("other"))).toBe(false);
   });
 

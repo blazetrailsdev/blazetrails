@@ -12,6 +12,10 @@ import {
   NotImplementedError,
   ConnectionNotEstablished,
   ConnectionNotDefined,
+  ConnectionFailed,
+  TransactionRollbackError,
+  Deadlocked,
+  LockWaitTimeout,
 } from "../errors.js";
 import { SchemaCache } from "./schema-cache.js";
 import { stripSqlComments } from "./sql-classification.js";
@@ -1137,12 +1141,12 @@ export class AbstractAdapter implements Quoting {
     ) {
       return true;
     }
-    return exception instanceof Error && exception.name === "ConnectionFailed";
+    return exception instanceof ConnectionFailed;
   }
 
   /** @internal Mirrors: AbstractAdapter#invalidate_transaction */
   invalidateTransaction(exception: unknown): void {
-    if (!(exception instanceof Error) || exception.name !== "TransactionRollbackError") return;
+    if (!(exception instanceof TransactionRollbackError)) return;
     if (!this.isSavepointErrorsInvalidateTransactions()) return;
     const tx = this.currentTransaction() as { invalidateBang?: () => void };
     tx.invalidateBang?.();
@@ -1152,8 +1156,7 @@ export class AbstractAdapter implements Quoting {
   isRetryableQueryError(exception: unknown): boolean {
     const tx = this.currentTransaction() as { isInvalidated?: () => boolean };
     if (tx.isInvalidated?.()) return false;
-    if (!(exception instanceof Error)) return false;
-    return exception.name === "Deadlocked" || exception.name === "LockWaitTimeout";
+    return exception instanceof Deadlocked || exception instanceof LockWaitTimeout;
   }
 
   /** @internal Mirrors: AbstractAdapter#backoff (100ms × counter) */

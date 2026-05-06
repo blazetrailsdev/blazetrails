@@ -32,7 +32,7 @@ export class Session {
 
   lastWriteTimestamp(): Temporal.Instant {
     const raw = this.session.get("lastWrite");
-    return Session.convertTimestampToTime(typeof raw === "number" ? raw : undefined);
+    return Session.convertTimestampToTime(Number.isFinite(raw) ? (raw as number) : undefined);
   }
 
   updateLastWriteTimestamp(): void {

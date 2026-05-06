@@ -27,8 +27,6 @@ type ContextClass = {
   call(request: MiddlewareRequest): ResolverContext;
 };
 
-type NextHandler = () => Promise<unknown>;
-
 export class DatabaseSelector {
   /** @internal */
   readonly resolverKlass: ResolverClass;
@@ -37,10 +35,10 @@ export class DatabaseSelector {
   /** @internal */
   readonly options: Record<string, unknown>;
 
-  private readonly app: (next: NextHandler) => Promise<unknown>;
+  private readonly app: (request: MiddlewareRequest) => Promise<unknown>;
 
   constructor(
-    app: (next: NextHandler) => Promise<unknown>,
+    app: (request: MiddlewareRequest) => Promise<unknown>,
     resolverKlass?: ResolverClass,
     contextKlass?: ContextClass,
     options: Record<string, unknown> = {},
@@ -52,7 +50,7 @@ export class DatabaseSelector {
   }
 
   async call(request: MiddlewareRequest): Promise<unknown> {
-    return this.selectDatabase(request, () => this.app(() => Promise.resolve()));
+    return this.selectDatabase(request, () => this.app(request));
   }
 
   /** @internal */

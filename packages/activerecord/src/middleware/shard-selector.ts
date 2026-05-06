@@ -14,18 +14,16 @@ export interface ShardRequest {
 
 type ShardResolverFn = (request: ShardRequest) => string | symbol;
 
-type NextHandler = () => Promise<unknown>;
-
 export class ShardSelector {
   /** @internal */
   readonly resolver: ShardResolverFn;
   /** @internal */
   readonly options: { lock?: boolean };
 
-  private readonly app: (next: NextHandler) => Promise<unknown>;
+  private readonly app: (request: ShardRequest) => Promise<unknown>;
 
   constructor(
-    app: (next: NextHandler) => Promise<unknown>,
+    app: (request: ShardRequest) => Promise<unknown>,
     resolver: ShardResolverFn,
     options: { lock?: boolean } = {},
   ) {
@@ -36,7 +34,7 @@ export class ShardSelector {
 
   async call(request: ShardRequest): Promise<unknown> {
     const shard = this.selectShard(request);
-    return this.setShard(shard, () => this.app(() => Promise.resolve()));
+    return this.setShard(shard, () => this.app(request));
   }
 
   /** @internal */
@@ -64,8 +62,14 @@ export class ShardSelector {
   }
 
   private async setShard<T>(shard: string | symbol, block: () => T | Promise<T>): Promise<T> {
-    const shardKey =
-      typeof shard === "string" ? shard : (Symbol.keyFor(shard) ?? shard.description ?? "");
+    let shardKey: string;
+    if (typeof shard === "string") {
+      shardKey = shard;
+    } else {
+      const name = Symbol.keyFor(shard) ?? shard.description;
+      if (!name) throw new Error(`Cannot convert symbol to shard key: ${String(shard)}`);
+      shardKey = name;
+    }
     return Base.connectedTo({ shard: shardKey }, () =>
       Base.prohibitShardSwapping(() => block(), this.options.lock ?? true),
     ) as Promise<T>;

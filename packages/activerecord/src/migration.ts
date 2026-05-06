@@ -1933,6 +1933,9 @@ export class Migrator {
     // presence check instead to preserve Rails semantics.
     // TRAILS_DISABLE_DATABASE_ENVIRONMENT_CHECK is the canonical name; DISABLE_DATABASE_ENVIRONMENT_CHECK
     // is the legacy fallback (one-release window — remove when BC-4 lint rule ships).
+    // The !== undefined check (not a truthiness check) is intentional: an empty string is "present"
+    // in Ruby (truthy), so any set value — including "" — must bypass the check. Do not simplify
+    // this to a falsy/truthiness test; that would silently break Rails parity.
     if (
       (getEnv("TRAILS_DISABLE_DATABASE_ENVIRONMENT_CHECK") ??
         getEnv("DISABLE_DATABASE_ENVIRONMENT_CHECK")) !== undefined

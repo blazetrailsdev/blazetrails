@@ -51,69 +51,10 @@ export class Resolver {
   }
 
   /** @internal */
-  isReadPrimary(): boolean {
-    return this.isReadFromPrimaryQ();
-  }
-
-  /** @internal */
-  isReadReplica(): boolean {
-    return !this.isReadFromPrimaryQ();
-  }
-
-  /** @internal */
-  isPreventWritesToPrimary(): boolean {
-    return false;
-  }
-
-  /** @internal */
-  isRequiresPrimary(): boolean {
-    return this.isReadFromPrimaryQ();
-  }
-
-  /** @internal */
-  isSendRequestToPrimary(): boolean {
-    return this.isReadFromPrimaryQ();
-  }
-
-  updateLastWriteTimestamp(): void {
-    this.context.updateLastWriteTimestamp();
-  }
-
-  /** @internal */
-  isPotentialWriteOperation(request: { method: string }): boolean {
-    return !this.isReadingRequest(request);
-  }
-
-  /** @internal */
-  isSavedRecentWrite(): boolean {
-    return !this.isTimeSinceLastWriteOk();
-  }
-
-  /** @internal */
-  isRecentWrite(time: Temporal.Instant): boolean {
-    return Temporal.Now.instant().epochMilliseconds - time.epochMilliseconds < this.delay;
-  }
-
-  /** @internal */
   sendToReplicaDelay(): number {
     return this.delay;
   }
 
-  /** @internal */
-  secondsSinceLastWriteTimestamp(): number {
-    return (
-      (Temporal.Now.instant().epochMilliseconds -
-        this.context.lastWriteTimestamp().epochMilliseconds) /
-      1000
-    );
-  }
-
-  /** @internal */
-  contextFor(_request: unknown): ResolverContext {
-    return this.context;
-  }
-
-  /** @internal */
   private isReadFromPrimaryQ(): boolean {
     return !this.isTimeSinceLastWriteOk();
   }
@@ -127,24 +68,28 @@ export class Resolver {
   }
 
   private async readFromPrimary<T>(blk: () => T | Promise<T>): Promise<T> {
-    return (Base as any).connectedTo({ role: "writing", preventWrites: true }, () =>
-      Notifications.instrumentAsync("database_selector.active_record.read_from_primary", {}, () =>
-        Promise.resolve(blk()),
+    return Base.connectedTo({ role: "writing", preventWrites: true }, () =>
+      this.instrumenter.instrumentAsync(
+        "database_selector.active_record.read_from_primary",
+        {},
+        () => Promise.resolve(blk()),
       ),
-    );
+    ) as Promise<T>;
   }
 
   private async readFromReplica<T>(blk: () => T | Promise<T>): Promise<T> {
-    return (Base as any).connectedTo({ role: "reading", preventWrites: true }, () =>
-      Notifications.instrumentAsync("database_selector.active_record.read_from_replica", {}, () =>
-        Promise.resolve(blk()),
+    return Base.connectedTo({ role: "reading", preventWrites: true }, () =>
+      this.instrumenter.instrumentAsync(
+        "database_selector.active_record.read_from_replica",
+        {},
+        () => Promise.resolve(blk()),
       ),
-    );
+    ) as Promise<T>;
   }
 
   private async writeToPrimary<T>(blk: () => T | Promise<T>): Promise<T> {
-    return (Base as any).connectedTo({ role: "writing", preventWrites: false }, () =>
-      Notifications.instrumentAsync(
+    return Base.connectedTo({ role: "writing", preventWrites: false }, () =>
+      this.instrumenter.instrumentAsync(
         "database_selector.active_record.wrote_to_primary",
         {},
         async () => {
@@ -155,7 +100,7 @@ export class Resolver {
           }
         },
       ),
-    );
+    ) as Promise<T>;
   }
 }
 

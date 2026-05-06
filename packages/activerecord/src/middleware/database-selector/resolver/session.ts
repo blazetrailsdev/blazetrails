@@ -39,26 +39,4 @@ export class Session {
   }
 
   save(_response: unknown): void {}
-
-  /** @internal */
-  restoreSession(request: { session: SessionStore }): void {
-    this.session.set("lastWrite", request.session.get("lastWrite"));
-  }
-
-  /** @internal */
-  contextFor(request: { session: SessionStore }): Session {
-    return new Session(request.session);
-  }
-
-  /** @internal */
-  delete(key: string): void {
-    this.session.delete(key);
-  }
-
-  /** @internal */
-  isStale(delaySeconds: number): boolean {
-    const elapsed =
-      Temporal.Now.instant().epochMilliseconds - this.lastWriteTimestamp().epochMilliseconds;
-    return elapsed >= delaySeconds * 1000;
-  }
 }

@@ -5,7 +5,7 @@
  */
 
 import pg from "pg";
-import { NotImplementedError, PreparedStatementCacheExpired } from "../../errors.js";
+import { PreparedStatementCacheExpired } from "../../errors.js";
 import type { Type } from "@blazetrails/activemodel";
 import type { Nodes } from "@blazetrails/arel";
 import type { ExplainOption } from "../../adapter.js";
@@ -90,17 +90,20 @@ interface CastResultHost {
   getOidType(oid: number, fmod: number, columnName: string, sqlType?: string): Promise<Type>;
 }
 
+/** @internal */
+interface CancelAnyRunningQueryHost {
+  _cancelAnyRunningQuery(): void;
+}
+
 /**
- * node-pg has no equivalent of PG::Connection#cancel; requires a separate
- * backend connection issuing pg_cancel_backend(pid).
+ * Delegates to the adapter's `_cancelAnyRunningQuery` which uses node-pg's
+ * internal `client.cancel()` to send a CancelRequest before ROLLBACK.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#cancel_any_running_query
  * @internal
  */
-export function cancelAnyRunningQuery(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#cancel_any_running_query is not implemented",
-  );
+export function cancelAnyRunningQuery(this: CancelAnyRunningQueryHost): void {
+  this._cancelAnyRunningQuery();
 }
 
 /**
@@ -220,7 +223,7 @@ export async function executeBatch(
   statements: string[],
   name: string | null = null,
 ): Promise<unknown> {
-  return this.execute(statements.join("; "), [], name);
+  return this.execute(statements.join("; "), [], name ?? undefined);
 }
 
 /** @internal */

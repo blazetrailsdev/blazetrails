@@ -99,7 +99,10 @@ interface LockingHost {
   _lockingColumn: string;
   lockOptimistically?: boolean;
   updateCounters?(id: unknown, counters: Record<string, number>): Promise<number>;
-  _updateRecord?(values: Record<string, unknown>, constraints: Record<string, unknown>): Promise<number>;
+  _updateRecord?(
+    values: Record<string, unknown>,
+    constraints: Record<string, unknown>,
+  ): Promise<number>;
 }
 
 /**

@@ -1023,8 +1023,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   /** @internal */
   private configureConnection(): void {
     // In Rails this sets @raw_connection.query_options[:as] = :array and
-    // database_timezone. In our pool model these options are applied via
-    // the pool.on("connection") hook inside newClient — no work here.
+    // database_timezone on the single raw connection. In our pool model
+    // we have no single raw connection to configure here; mysql2's typeCast
+    // handles temporal fields and results are returned as objects (not arrays).
   }
 
   /**

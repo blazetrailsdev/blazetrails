@@ -776,7 +776,29 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(ver).toMatch(/\d+\.\d+\.\d+/);
     });
 
-    it("getFullVersion populates fullVersion cache", async () => {
+    it("getFullVersion returns the full raw string including any server suffix", async () => {
+      const full = await (adapter as any).getFullVersion();
+      // The raw string from SELECT VERSION() may include suffixes like
+      // "-MySQL Community Server - GPL" or "10.x.x-MariaDB". We store it
+      // verbatim so fullVersion() can report it faithfully.
+      expect(full).toBe((adapter as any)._fullVersionString);
+    });
+
+    it("getFullVersion populates _databaseVersion with the parsed semver", async () => {
+      await (adapter as any).getFullVersion();
+      const dv = (adapter as any)._databaseVersion;
+      expect(dv).not.toBeNull();
+      expect(typeof dv.toString()).toBe("string");
+      expect(dv.toString()).toMatch(/^\d+\.\d+\.\d+$/);
+    });
+
+    it("getFullVersion sets _mariadb based on version string content", async () => {
+      const full = await (adapter as any).getFullVersion();
+      const expectedMariadb = /mariadb/i.test(full);
+      expect((adapter as any)._mariadb).toBe(expectedMariadb);
+    });
+
+    it("getFullVersion cache: second call via fullVersion returns same value", async () => {
       const full = await (adapter as any).getFullVersion();
       expect(await (adapter as any).fullVersion()).toBe(full);
     });

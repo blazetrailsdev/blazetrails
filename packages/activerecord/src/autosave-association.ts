@@ -531,12 +531,12 @@ function validateHasOneAssociation(this: any, reflection: any): void {
       ? reflection.inverseOf()
       : (reflection.inverseOf ?? null);
   if (inverse) {
-    const inverseAssoc =
-      record._cachedAssociations?.get(inverse.name) !== undefined ? inverse : null;
+    const inverseLoaded =
+      record._cachedAssociations?.has(inverse.name) ||
+      record._preloadedAssociations?.has(inverse.name);
     if (
-      inverseAssoc &&
-      (record.isValidatingBelongsToFor?.(inverseAssoc) ||
-        record.isAutosavingBelongsToFor?.(inverseAssoc))
+      inverseLoaded &&
+      (record.isValidatingBelongsToFor?.(inverse) || record.isAutosavingBelongsToFor?.(inverse))
     )
       return;
   }
@@ -578,14 +578,11 @@ function validateCollectionAssociation(this: any, reflection: any): void {
 }
 
 /** @internal */
-function isAssociationValid(
-  reflection: any,
-  record: any,
-  owner: any,
-  context?: ValidationContextArg,
-): boolean {
+function isAssociationValid(reflection: any, record: any, owner: any): boolean {
   if (typeof record.isDestroyed === "function" && record.isDestroyed()) return true;
   if (reflection.options?.autosave && isMarkedForDestruction(record)) return true;
+  // Mirror Rails: read validation_context from the owner when a custom context is active.
+  const context: ValidationContextArg | undefined = owner?._validationContext ?? undefined;
   const isChildValid = typeof record.isValid === "function" ? record.isValid(context) : true;
   if (!isChildValid) {
     const parentErrors = owner?.errors;

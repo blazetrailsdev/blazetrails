@@ -171,6 +171,8 @@ import {
 } from "./scoping/default.js";
 import * as NamedScoping from "./scoping/named.js";
 import { Associations as _Associations, updateCounterCaches } from "./associations.js";
+import * as _AttributeAssignment from "./attribute-assignment.js";
+import * as _NestedAttributes from "./nested-attributes.js";
 import {
   hasMultiparameterKeys,
   extractMultiparameterCallstack,
@@ -2726,6 +2728,8 @@ export interface Base extends Included<typeof AutosaveAssociation> {
   delete(): Promise<this>;
   reload(): Promise<this>;
   initializeDup(other: unknown): void;
+  /** @internal */
+  initInternals(): void;
   slice(...keys: string[]): Record<string, unknown>;
   valuesAt(...keys: string[]): unknown[];
   assignAttributes(attrs: Record<string, unknown>): void;
@@ -2851,12 +2855,15 @@ include(Base, {
   toKey: _toKey,
 });
 include(Base, LockingPessimistic.InstanceMethods);
+include(Base, LockingOptimistic.InstanceMethods);
 include(Base, Timestamp.InstanceMethods);
 include(Base, TouchLater.InstanceMethods);
 include(Base, _Aggregations.InstanceMethods);
 // Aggregations#reload must override Persistence#reload (include() won't replace).
 (Base.prototype as any).reload = _Aggregations.reload;
+include(Base, _AttributeAssignment.InstanceMethods);
 include(Base, AutosaveAssociation);
+include(Base, _NestedAttributes.InstanceMethods);
 include(Base, _AssocInstance.InstanceMethods);
 include(Base, {
   readAttributeForValidation: _Validations.readAttributeForValidation,

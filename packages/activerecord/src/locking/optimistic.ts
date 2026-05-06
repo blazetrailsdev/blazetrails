@@ -294,3 +294,13 @@ export function hookAttributeType(this: LockingHost, name: string, castType: Typ
   }
   return castType;
 }
+
+export const InstanceMethods = {
+  _createRecord,
+  _touchRow,
+  _updateRow,
+  destroyRow,
+  _lockValueForDatabase,
+  _clearLockingColumn,
+  _queryConstraintsHash,
+};

@@ -287,4 +287,12 @@ export const ClassMethods = {
  */
 export const InstanceMethods = {
   touch,
+  recordUpdateTimestamps,
+  shouldRecordTimestamps,
+  timestampAttributesForCreateInModel,
+  timestampAttributesForUpdateInModel,
+  allTimestampAttributesInModel,
+  currentTimeFromProperTimezone,
+  maxUpdatedColumnTimestamp,
+  clearTimestampAttributes,
 };

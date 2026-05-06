@@ -101,18 +101,25 @@ class BetterSqlite3Connection implements SqliteConnection {
 function resolveDatabasePath(database: string): string | null {
   if (database === ":memory:") return null;
   if (!database.startsWith("file:")) return database;
-  // Anchor relative `file:foo.db` against a fixed base so URL accepts it; the
-  // base is discarded because we read pathname (and the host check below
-  // rejects file://example/...). file::memory: is special-cased first.
+  // Special-case `file::memory:` (with or without query) before URL parsing —
+  // the SQLite URI shape doesn't round-trip through `new URL` cleanly.
   if (database.startsWith("file::memory:")) return null;
   let url: URL;
   try {
+    // Anchor relative forms (`file:foo.db`) against a fixed base so URL
+    // accepts them; the base is discarded because we only read pathname.
     url = new URL(database, "file:///");
   } catch {
     return database;
   }
   if (url.searchParams.get("mode") === "memory") return null;
-  return decodeURIComponent(url.pathname);
+  // decodeURIComponent throws on malformed escapes (e.g. lone "%"); fall back
+  // to the raw pathname so databaseExists() stays a total function.
+  try {
+    return decodeURIComponent(url.pathname);
+  } catch {
+    return url.pathname;
+  }
 }
 
 /** @internal */

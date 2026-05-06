@@ -1127,6 +1127,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       // "default" maps to "ALGORITHM = DEFAULT" in the table but means no algorithm clause
       algorithmSql = algorithmKey === "default" ? undefined : algorithms[algorithmKey];
     }
+    const comment = options.comment as string | undefined;
     const idx = new IndexDefinition(tableName, indexName, !!options.unique, columnNames, {
       where: options.where as string | undefined,
       using: options.using as string | undefined,
@@ -1134,10 +1135,11 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       lengths: (options.length ?? {}) as Record<string, number>,
       orders: (options.order ?? {}) as Record<string, string>,
       include: options.include as string[] | undefined,
+      comment,
     });
     // Mirrors visit_IndexDefinition(o, create=false): no ON clause, no CREATE prefix.
     // Lengths applied per MySQL's add_index_length: col(N) for prefix indexes.
-    // Algorithm appended with ", " separator per Rails' add_index_for_alter.
+    // Comment appended via addSqlCommentBang pattern. Algorithm with ", " separator.
     const lengths = idx.lengths as Record<string, number> | number | undefined;
     const indexType = idx.type?.toUpperCase() ?? (idx.unique ? "UNIQUE" : undefined);
     const parts: string[] = [];
@@ -1157,7 +1159,8 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       })
       .join(", ");
     parts.push(`(${quotedCols})`);
-    const idxSql = parts.join(" ");
+    let idxSql = parts.join(" ");
+    if (comment) idxSql += ` COMMENT ${mysqlQuoteString(comment)}`;
     return algorithmSql ? `ADD ${idxSql}, ${algorithmSql}` : `ADD ${idxSql}`;
   }
 

@@ -2730,6 +2730,22 @@ export interface Base extends Included<typeof AutosaveAssociation> {
   initializeDup(other: unknown): void;
   /** @internal */
   initInternals(): void;
+  /** @internal */
+  destroyRow(superFn: () => number | Promise<number>): number | Promise<number>;
+  /** @internal */
+  _touchRow(
+    touchAttrNames: string[],
+    time: unknown,
+    superFn: (names: string[], time: unknown) => unknown,
+  ): unknown;
+  /** @internal */
+  _updateRow(
+    attributeNames: string[],
+    attemptedAction: string,
+    superFn: (names: string[], action: string) => Promise<number>,
+  ): Promise<number>;
+  /** @internal */
+  _createRecord(attributeNames: string[], superFn: (names: string[]) => unknown): unknown;
   slice(...keys: string[]): Record<string, unknown>;
   valuesAt(...keys: string[]): unknown[];
   assignAttributes(attrs: Record<string, unknown>): void;

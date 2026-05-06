@@ -244,7 +244,7 @@ export async function recordUpdateTimestamps(this: any): Promise<void> {
 export function shouldRecordTimestamps(this: any): boolean {
   const ctor = this.constructor as any;
   return (
-    ctor.recordTimestamps !== false && (!ctor.partialUpdates || this.hasChangesToSave?.() !== false)
+    ctor.recordTimestamps !== false && (!ctor.partialUpdates || this.hasChangesToSave !== false)
   );
 }
 
@@ -289,9 +289,16 @@ export const InstanceMethods = {
   touch,
   recordUpdateTimestamps,
   shouldRecordTimestamps,
-  timestampAttributesForCreateInModel,
-  timestampAttributesForUpdateInModel,
-  allTimestampAttributesInModel,
+  // Rails instance methods delegate to the class; mirrors `self.class.xxx_in_model`.
+  timestampAttributesForCreateInModel(this: any): string[] {
+    return timestampAttributesForCreateInModel.call(this.constructor);
+  },
+  timestampAttributesForUpdateInModel(this: any): string[] {
+    return timestampAttributesForUpdateInModel.call(this.constructor);
+  },
+  allTimestampAttributesInModel(this: any): string[] {
+    return allTimestampAttributesInModel.call(this.constructor);
+  },
   currentTimeFromProperTimezone,
   maxUpdatedColumnTimestamp,
   clearTimestampAttributes,

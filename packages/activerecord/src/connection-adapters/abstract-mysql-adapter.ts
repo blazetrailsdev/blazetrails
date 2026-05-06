@@ -978,6 +978,13 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   /** @internal */
   override extendedTypeMapKey(): { defaultTimezone?: string; emulateBooleans: boolean } | null {
+    // Mirrors Rails AbstractMysqlAdapter#extended_type_map_key (lines 762–768):
+    // pair defaultTimezone with emulateBooleans when set; otherwise fall
+    // back to the booleans-only key.
+    const tz = this._config.defaultTimezone;
+    if (typeof tz === "string") {
+      return { defaultTimezone: tz, emulateBooleans: this._emulateBooleans };
+    }
     if (this._emulateBooleans) return { emulateBooleans: true };
     return null;
   }

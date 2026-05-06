@@ -1210,13 +1210,6 @@ export class AbstractAdapter implements Quoting {
 include(AbstractAdapter, DatabaseStatements);
 
 /** @internal */
-function canPerformCaseInsensitiveComparisonFor(column: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractAdapter#can_perform_case_insensitive_comparison_for? is not implemented",
-  );
-}
-
-/** @internal */
 function translateExceptionClass(nativeError: any, sql: any, binds: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::AbstractAdapter#translate_exception_class is not implemented",

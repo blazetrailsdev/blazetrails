@@ -452,7 +452,7 @@ TS paths use `$TS/` = `packages/activerecord/src/`.
 - LOC: ~220 + ~50 of upsert/conflict integration tests → ~270 net
 - Dependencies: PR 35 (model_schema component), PR 8
 
-**PR 57 — Long-tail 1-missers + pg quoting residual (combined)** _(~270 net LOC)_
+**PR 57 — Long-tail 1-missers + pg quoting residual (combined)** ✅ #1258 _(~270 net LOC)_
 
 Folds former PRs 58 + 59 plus the remaining unassigned 1-missers from the PR 52 catch-all that share quoting/explain concerns.
 

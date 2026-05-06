@@ -4,9 +4,11 @@
  * Mirrors: ActiveRecord::Tasks::SQLiteDatabaseTasks.
  *
  * Unlike Rails (which shells out to the `sqlite3` CLI for structureDump /
- * structureLoad), trails runs these operations through the SQLite3Adapter so
- * the same code works under sqlite-wasm + the activesupport vfs adapter — no
- * subprocess required.
+ * structureLoad), trails runs structureDump/structureLoad through the
+ * SQLite3Adapter so the same code works under sqlite-wasm + the
+ * activesupport vfs adapter. The exported `runCmd` helper shells out via
+ * `sqlite3` only for Rails API parity and is not invoked by the public
+ * task methods above.
  */
 
 import {
@@ -405,9 +407,7 @@ export async function runCmd(cmd: string, args: string[], out: string): Promise<
     if (result.stdout) details.push(`stdout:\n${String(result.stdout).trimEnd()}`);
     throw new Error(runCmdError(cmd, args) + (details.length ? details.join("\n") + "\n" : ""));
   }
-  if (out) {
-    getFs().writeFileSync(out, result.stdout ?? "");
-  }
+  getFs().writeFileSync(out, result.stdout ?? "");
 }
 
 /** @internal */

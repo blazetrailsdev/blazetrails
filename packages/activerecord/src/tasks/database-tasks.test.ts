@@ -3,7 +3,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
-import { DatabaseTasks, DatabaseNotSupported } from "./database-tasks.js";
+import {
+  DatabaseTasks,
+  DatabaseNotSupported,
+  isVerbose,
+  eachCurrentEnvironment,
+  schemaSha1,
+  structureDumpFlagsFor,
+  structureLoadFlagsFor,
+  initializeDatabase,
+} from "./database-tasks.js";
 import { quoteTableName as mysqlQuoteTableName } from "../connection-adapters/mysql/quoting.js";
 import { quoteTableName as abstractQuoteTableName } from "../connection-adapters/abstract/quoting.js";
 import { HashConfig } from "../database-configurations/hash-config.js";
@@ -1244,15 +1253,6 @@ describe("DatabaseTasks _appendSchemaInformation adapter quoting", () => {
     }
   });
 });
-
-import {
-  isVerbose,
-  eachCurrentEnvironment,
-  schemaSha1,
-  structureDumpFlagsFor,
-  structureLoadFlagsFor,
-  initializeDatabase,
-} from "./database-tasks.js";
 
 describe("isVerbose", () => {
   afterEach(() => {

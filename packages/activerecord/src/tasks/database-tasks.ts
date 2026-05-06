@@ -1080,11 +1080,11 @@ export interface DatabaseTaskHandler {
 }
 
 /** @internal */
-export async function withTemporaryPool(
+export async function withTemporaryPool<T = void>(
   dbConfig: DatabaseConfig,
-  fn: (adapter: import("../adapter.js").DatabaseAdapter) => Promise<void>,
-): Promise<void> {
-  await DatabaseTasks.withTemporaryConnection(dbConfig, fn);
+  fn: (adapter: import("../adapter.js").DatabaseAdapter) => Promise<T>,
+): Promise<T> {
+  return DatabaseTasks.withTemporaryConnection(dbConfig, fn);
 }
 
 /** @internal */

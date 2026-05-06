@@ -125,6 +125,10 @@ export async function performQuery(
     // @types/pg requires text in QueryConfig but node-pg accepts {name,values} at runtime.
     const stmtKey = await this.prepareStatement(sql, binds, rawConnection);
     if (notificationPayload) notificationPayload["statement_name"] = stmtKey;
+    // Omit `text` intentionally: the statement is already PREPAREd on the server
+    // via prepareStatement(). Passing `text` here would trigger node-pg to re-PARSE
+    // under the same name, which the server rejects as a duplicate. @types/pg
+    // requires `text` in QueryConfig but node-pg's runtime accepts {name,values}.
     const execPrepared = (name: string) =>
       rawConnection.query({
         name,

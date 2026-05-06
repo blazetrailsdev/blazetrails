@@ -134,7 +134,8 @@ export async function performQuery(
       throw err;
     }
   } else {
-    const [result, resultFields] = (await rawConnection.execute(sql, typeCastedBinds as any[])) as [
+    // prepare=false with binds: use query() (COM_QUERY), not execute() (COM_STMT_*).
+    const [result, resultFields] = (await rawConnection.query(sql, typeCastedBinds as any[])) as [
       mysql.RowDataPacket[] | mysql.ResultSetHeader,
       mysql.FieldPacket[],
     ];

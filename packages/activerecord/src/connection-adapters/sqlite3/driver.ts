@@ -1,6 +1,8 @@
-import type { SQLite3AdapterOptions } from "../../adapter.js";
-
-export type SqliteConfig = SQLite3AdapterOptions & { database: string };
+/** Minimal driver-level config — adapter-only knobs live on SQLite3AdapterOptions. */
+export interface SqliteConfig {
+  database: string;
+  readonly?: boolean;
+}
 
 export interface RunResult {
   changes: number;

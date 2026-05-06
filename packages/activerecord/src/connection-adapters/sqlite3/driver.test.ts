@@ -7,37 +7,42 @@ describe("SqliteDriver — better-sqlite3 round-trip", () => {
 
   beforeAll(async () => {
     driver = await betterSqlite3DriverFactory.open({ database: ":memory:" });
-    const stmt = await driver.prepare(
+    const create = await driver.prepare(
       "CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT NOT NULL, qty INTEGER)",
     );
-    await stmt.run();
+    await create.run();
+    const insert = await driver.prepare("INSERT INTO widgets (name, qty) VALUES (?, ?)");
+    await insert.run("sprocket", 42);
+    await insert.run("gear", 7);
   });
 
   afterAll(async () => {
     await driver.close();
   });
 
-  it("inserts and retrieves a row", async () => {
-    const insert = await driver.prepare("INSERT INTO widgets (name, qty) VALUES (?, ?)");
-    const result = await insert.run("sprocket", 42);
-    expect(result.changes).toBe(1);
-    expect(
-      typeof result.lastInsertRowid === "number" || typeof result.lastInsertRowid === "bigint",
-    ).toBe(true);
-
+  it("retrieves a row by name", async () => {
     const select = await driver.prepare("SELECT id, name, qty FROM widgets WHERE name = ?");
     const row = (await select.get("sprocket")) as Record<string, unknown>;
     expect(row["name"]).toBe("sprocket");
     expect(row["qty"]).toBe(42);
   });
 
-  it("returns all rows", async () => {
+  it("run() returns changes and lastInsertRowid", async () => {
     const insert = await driver.prepare("INSERT INTO widgets (name, qty) VALUES (?, ?)");
-    await insert.run("gear", 7);
+    const result = await insert.run("bolt", 99);
+    expect(result.changes).toBe(1);
+    expect(
+      typeof result.lastInsertRowid === "number" || typeof result.lastInsertRowid === "bigint",
+    ).toBe(true);
+  });
 
+  it("returns all rows", async () => {
     const select = await driver.prepare("SELECT id, name, qty FROM widgets ORDER BY id");
     const rows = (await select.all()) as Record<string, unknown>[];
     expect(rows.length).toBeGreaterThanOrEqual(2);
+    const names = rows.map((r) => r["name"]);
+    expect(names).toContain("sprocket");
+    expect(names).toContain("gear");
   });
 
   it("columns() matches ColumnInfo shape", async () => {

@@ -3,6 +3,7 @@ import { Nodes, Visitors } from "@blazetrails/arel";
 import { SerializeCastValue } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
 import { quoteSqlValue } from "./base.js";
+import { stiName } from "./inheritance.js";
 import type { Relation } from "./relation.js";
 import type { AdapterName } from "./adapter.js";
 
@@ -210,8 +211,7 @@ export class InsertAll {
 
   /** @internal */
   private uniqueByColumns(): string[] {
-    if (!this.uniqueBy) return [];
-    return Array.isArray(this.uniqueBy) ? this.uniqueBy : [this.uniqueBy];
+    return this.findUniqueIndexFor(this.uniqueBy);
   }
 
   /** @internal */
@@ -229,26 +229,20 @@ export class InsertAll {
 
   /** @internal */
   private hasAttributeAliases(attributes: Record<string, unknown>): boolean {
-    return Object.keys(attributes).some(
-      (attr) =>
-        typeof (this.model as any).attributeAlias === "function" &&
-        (this.model as any).attributeAlias(attr) != null,
-    );
+    const aliases = (this.model as any)._attributeAliases as Record<string, string> | undefined;
+    if (!aliases) return false;
+    return Object.keys(attributes).some((attr) => attr in aliases);
   }
 
   /** @internal */
   private resolveSti(): void {
-    if (
-      typeof (this.model as any).descendsFromActiveRecord === "function" &&
-      (this.model as any).descendsFromActiveRecord()
-    )
-      return;
-    const inheritanceCol = (this.model as any).inheritanceColumn as string | undefined;
+    // descendsFromActiveRecord? is not yet implemented; use inheritanceColumn as proxy
+    const inheritanceCol = this.model.inheritanceColumn;
     if (!inheritanceCol) return;
-    const stiType = (this.model as any).stiName ?? this.model.name;
+    const type = stiName(this.model);
     for (const insert of this.inserts) {
       if (insert[inheritanceCol] == null) {
-        insert[inheritanceCol] = stiType;
+        insert[inheritanceCol] = type;
       }
     }
   }
@@ -267,22 +261,29 @@ export class InsertAll {
 
   /** @internal */
   private resolveAttributeAlias(attribute: string): string {
-    if (typeof (this.model as any).attributeAlias === "function") {
-      return (this.model as any).attributeAlias(attribute) ?? attribute;
-    }
-    return attribute;
+    const aliases = (this.model as any)._attributeAliases as Record<string, string> | undefined;
+    return aliases?.[attribute] ?? attribute;
   }
 
   /** @internal */
   private findUniqueIndexFor(uniqueBy: string | string[] | undefined): string[] {
-    const cols =
+    const nameOrCols =
       uniqueBy == null ? this.primaryKeys() : Array.isArray(uniqueBy) ? uniqueBy : [uniqueBy];
-    return cols;
+    const sortedMatch = [...nameOrCols].sort().join(",");
+    const idx = this.uniqueIndexes().find(
+      (i: any) =>
+        nameOrCols.includes(i.name) ||
+        (Array.isArray(i.columns) && [...i.columns].sort().join(",") === sortedMatch),
+    ) as any;
+    if (idx) return Array.isArray(idx.columns) ? idx.columns : nameOrCols;
+    if (uniqueBy == null || sortedMatch === [...this.primaryKeys()].sort().join(","))
+      return uniqueBy == null ? [] : this.primaryKeys();
+    throw new Error(`No unique index found for ${JSON.stringify(uniqueBy)}`);
   }
 
   /** @internal */
   private uniqueIndexes(): unknown[] {
-    const schemaCache = (this.model as any).schemaCache ?? (this.model as any).schema_cache;
+    const schemaCache = (this.model as any).schemaCache;
     if (!schemaCache) return [];
     const indexes = schemaCache.indexes?.(this.model.arelTable.name) ?? [];
     return (indexes as any[]).filter((i: any) => i.unique);
@@ -296,8 +297,8 @@ export class InsertAll {
 
   /** @internal */
   private disallowRawSqlBang(value: unknown): void {
+    if (value instanceof Nodes.SqlLiteral) return;
     if (typeof value !== "string") return;
-    if ((value as any) instanceof Nodes.SqlLiteral) return;
     throw new Error(
       `Dangerous query method called with raw SQL string: ${value}. ` +
         "Known-safe values can be passed by wrapping them in Arel.sql().",

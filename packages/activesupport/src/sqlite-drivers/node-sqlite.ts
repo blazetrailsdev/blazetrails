@@ -15,7 +15,7 @@ import {
 } from "../sqlite-adapter.js";
 
 // Soft-load: Node 22.5+ only. Sync via createRequire so the module stays sync.
-// open() rejects with a clear error on Node < 22 instead of crashing on import.
+// open() rejects with a clear error on Node < 22.5 instead of crashing on import.
 type NodeSqliteModule = typeof import("node:sqlite");
 let nodeSqlite: NodeSqliteModule | undefined;
 try {
@@ -23,6 +23,9 @@ try {
 } catch {
   /* Node < 22.5 or --experimental-sqlite not set */
 }
+
+/** True when node:sqlite loaded successfully; use as a describe.skipIf gate in tests. */
+export const isNodeSqliteAvailable = nodeSqlite !== undefined;
 
 /** @internal */
 function expandBinds(binds: SqliteBinds | undefined): unknown[] {

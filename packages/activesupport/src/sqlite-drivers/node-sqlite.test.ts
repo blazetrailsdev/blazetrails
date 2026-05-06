@@ -1,15 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { SqliteConnection } from "../sqlite-adapter.js";
+import { isNodeSqliteAvailable, nodeSqliteDriver } from "./node-sqlite.js";
 
-const nodeMajor = parseInt(process.versions.node.split(".")[0]!, 10);
-const hasNodeSqlite = nodeMajor >= 22;
-
-describe.skipIf(!hasNodeSqlite)("SqliteDriver — node-sqlite round-trip", () => {
+describe.skipIf(!isNodeSqliteAvailable)("SqliteDriver — node-sqlite round-trip", () => {
   let conn: SqliteConnection;
-  let nodeSqliteDriver: (typeof import("./node-sqlite.js"))["nodeSqliteDriver"];
 
   beforeAll(async () => {
-    ({ nodeSqliteDriver } = await import("./node-sqlite.js"));
     conn = await nodeSqliteDriver.open({ database: ":memory:" });
     const create = await conn.prepare(
       "CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT NOT NULL, qty INTEGER)",
@@ -60,6 +56,14 @@ describe.skipIf(!hasNodeSqlite)("SqliteDriver — node-sqlite round-trip", () =>
     const select = await conn.prepare("SELECT qty FROM widgets WHERE name = $name");
     const row = (await select.get({ name: "sprocket" })) as Record<string, unknown>;
     expect(row["qty"]).toBe(42);
+  });
+
+  it("columns() returns column metadata", async () => {
+    const stmt = await conn.prepare("SELECT id, name, qty FROM widgets");
+    const cols = stmt.columns();
+    expect(cols.length).toBe(3);
+    expect(cols[0]!.name).toBe("id");
+    expect(cols[0]!.column === null || typeof cols[0]!.column === "string").toBe(true);
   });
 
   it("setReadBigInts enables bigint returns", async () => {

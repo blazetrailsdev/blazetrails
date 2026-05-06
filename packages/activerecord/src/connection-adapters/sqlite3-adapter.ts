@@ -134,7 +134,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return new Visitors.SQLite(this);
   }
 
-  private db: Database.Database;
+  private db!: Database.Database;
   override get active(): boolean {
     return this.db?.open ?? false;
   }
@@ -199,18 +199,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     // Apply adapter-level options FIRST so invalid values fail before
     // the native driver opens a file handle that would otherwise leak.
     if (options.statementLimit !== undefined) this.statementLimit = options.statementLimit;
-    try {
-      this.db = new Database(filename, { readonly: this._readonly });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      throw new DatabaseConnectionError(`Unable to open database '${filename}': ${msg}`, {
-        cause: e,
-      });
-    }
-    if (!this._readonly) {
-      this.db.pragma("journal_mode = WAL");
-      this.db.pragma("foreign_keys = ON");
-    }
+    this.connect();
+    this.configureConnection();
     this._nativeTypeMap = SQLite3Adapter._buildTypeMap();
   }
 

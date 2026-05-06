@@ -66,13 +66,16 @@ function byteSize(value: unknown): number {
 export function renderBind(connection: any, attr: unknown): [string | null, unknown] {
   // Mirrors Rails: `if ActiveModel::Attribute === attr`
   if (attr instanceof Attribute) {
+    const dbValue =
+      typeof attr.valueForDatabase === "function"
+        ? (attr.valueForDatabase as () => unknown)()
+        : attr.valueForDatabase;
     const isBinary = (attr.type as any)?.binary?.() ?? (attr.type as any)?.isBinary?.() ?? false;
-    if (isBinary && attr.value != null) {
-      const raw = attr.valueForDatabase;
-      const bytes = byteSize(raw);
+    if (isBinary && (attr.value ?? dbValue) != null) {
+      const bytes = byteSize(dbValue ?? attr.value);
       return [attr.name, `<${bytes} bytes of binary data>`];
     }
-    return [attr.name, connection?.typeCast?.(attr.valueForDatabase) ?? attr.valueForDatabase];
+    return [attr.name, connection?.typeCast?.(dbValue) ?? dbValue];
   }
   const value = connection?.typeCast?.(attr) ?? attr;
   return [null, value];

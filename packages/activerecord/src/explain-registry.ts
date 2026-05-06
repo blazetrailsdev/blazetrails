@@ -108,18 +108,16 @@ export class ExplainRegistry {
 }
 
 /**
- * Returns the per-execution-context ExplainRegistry instance, creating one if
- * needed. Rails uses IsolatedExecutionState (thread-local); trails uses
- * AsyncLocalStorage via the async context adapter.
+ * Returns an ExplainRegistry instance. Rails stores one per thread in
+ * IsolatedExecutionState; trails stores async-local state in a Slot bag
+ * and the ExplainRegistry class delegates all static methods to it.
+ * Because the constructor is a no-op, a new instance is functionally
+ * equivalent to the "cached" thread-local one.
  *
  * Mirrors: ActiveRecord::ExplainRegistry.instance (private class method)
  *
  * @internal
  */
 export function instance(): ExplainRegistry {
-  // Rails: IsolatedExecutionState[:active_record_explain_registry] ||= new
-  // The Slot is the async-local state bag, not an ExplainRegistry instance.
-  // Return a real ExplainRegistry; its constructor is a no-op and the static
-  // methods (collect, queries, reset) delegate to the current slot automatically.
   return new ExplainRegistry();
 }

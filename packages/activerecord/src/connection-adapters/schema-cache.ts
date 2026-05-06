@@ -796,10 +796,10 @@ export function open(
       content += data;
     },
   });
-  // Write to a temp file first, then overwrite the target. This reduces the window
-  // for a truncated file on crash vs writing directly to `filename` (mirrors Rails'
-  // File.atomic_write intent). FsAdapter does not expose rename, so we write the
-  // temp then immediately write to the real path once the content is ready.
+  // Best-effort safer write: build content in a temp file, then overwrite the target.
+  // FsAdapter does not expose renameSync, so this is not fully atomic — a crash
+  // between the two writes can still leave a truncated target. This mirrors the
+  // intent of Rails' File.atomic_write but without the rename guarantee.
   const tmp = `${filename}.tmp.${process.pid}`;
   try {
     fs.writeFileSync(tmp, content, "utf-8");

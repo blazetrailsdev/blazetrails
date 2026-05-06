@@ -220,6 +220,14 @@ describe("CommandRecorder", () => {
       const [cmd] = new CommandRecorder().invertRemoveUniqueConstraint(["users", "email"]);
       expect(cmd).toBe("addUniqueConstraint");
     });
+
+    it("invertRemoveUniqueConstraint handles array column names without mistaking array for options", () => {
+      const [cmd] = new CommandRecorder().invertRemoveUniqueConstraint([
+        "users",
+        ["email", "name"],
+      ]);
+      expect(cmd).toBe("addUniqueConstraint");
+    });
   });
 
   describe("invertRenameTable / invertRenameColumn", () => {

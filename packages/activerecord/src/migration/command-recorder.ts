@@ -315,7 +315,13 @@ export class CommandRecorder {
   /** @internal */
   invertRemoveUniqueConstraint(args: unknown[]): [string, unknown[]] {
     const a = args.slice();
-    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+    // extract_options! only strips a trailing Hash, never an Array
+    if (
+      a.length > 0 &&
+      typeof a[a.length - 1] === "object" &&
+      a[a.length - 1] !== null &&
+      !Array.isArray(a[a.length - 1])
+    ) {
       a.pop();
     }
     const columns = a[1];

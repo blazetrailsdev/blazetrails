@@ -599,10 +599,7 @@ export class DatabaseTasks {
 
   private static _environmentsFor(environment?: string): string[] {
     const env = this._normalizeEnv(environment);
-    if (!environment?.trim() && env === "development") {
-      return ["development", "test"];
-    }
-    return [env];
+    return eachCurrentEnvironment(env);
   }
 
   static async structureDump(

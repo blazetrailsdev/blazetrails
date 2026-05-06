@@ -2008,11 +2008,15 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
           continue;
         }
         const scalar =
-          typeof value === "number" || typeof value === "boolean"
-            ? String(value)
-            : SAFE_PRAGMA_VALUE.test(String(value))
+          typeof value === "boolean"
+            ? value
+              ? "1"
+              : "0"
+            : typeof value === "number"
               ? String(value)
-              : null;
+              : SAFE_PRAGMA_VALUE.test(value)
+                ? value
+                : null;
         if (scalar === null) {
           console.warn(`Skipping SQLite pragma '${pragma}': value contains unsafe characters`);
           continue;

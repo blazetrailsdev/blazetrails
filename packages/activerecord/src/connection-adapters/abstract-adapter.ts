@@ -141,7 +141,7 @@ export interface AbstractAdapter {
 export class AbstractAdapter implements Quoting {
   static readonly Version = Version;
 
-  private _connection: DatabaseAdapter | null = null;
+  protected _connection: DatabaseAdapter | null = null;
   private _owner: string | null = null;
   private _inUse = false;
   private _preparedStatements = false;
@@ -1150,8 +1150,8 @@ export class AbstractAdapter implements Quoting {
 
   /** @internal Mirrors: AbstractAdapter#retryable_query_error? */
   isRetryableQueryError(exception: unknown): boolean {
-    const tx = this.currentTransaction() as { invalidated?: boolean };
-    if (tx.invalidated) return false;
+    const tx = this.currentTransaction() as { isInvalidated?: () => boolean };
+    if (tx.isInvalidated?.()) return false;
     if (!(exception instanceof Error)) return false;
     return exception.name === "Deadlocked" || exception.name === "LockWaitTimeout";
   }

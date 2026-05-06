@@ -47,9 +47,11 @@ describe("AbstractAdapter connection lifecycle privates", () => {
   it("withRawConnection serializes concurrent calls and yields the connection", async () => {
     const a = new AbstractAdapter();
     const order: number[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
     const p1 = a.withRawConnection(async () => {
       order.push(1);
-      await new Promise((r) => setTimeout(r, 10));
+      await gate;
       order.push(2);
       return "a";
     });
@@ -57,8 +59,15 @@ describe("AbstractAdapter connection lifecycle privates", () => {
       order.push(3);
       return "b";
     });
+    release();
     expect(await Promise.all([p1, p2])).toEqual(["a", "b"]);
     expect(order).toEqual([1, 2, 3]);
+  });
+
+  it("withRawConnection rejects when no callback is provided", async () => {
+    await expect(
+      (new AbstractAdapter().withRawConnection as unknown as () => Promise<unknown>)(),
+    ).rejects.toThrow(TypeError);
   });
 
   it("configureConnection invokes checkVersion", () => {

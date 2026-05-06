@@ -1156,13 +1156,6 @@ function removeIndexForAlter(tableName: any, columnName?: any, options?: any): n
 }
 
 /** @internal */
-function configureConnection(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#configure_connection is not implemented",
-  );
-}
-
-/** @internal */
 function columnDefinitions(tableName: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#column_definitions is not implemented",

@@ -756,8 +756,9 @@ export function deriveColumnsHashAndDeduplicateValues(cache: SchemaCache): void 
 }
 
 /**
- * Recursively deduplicate strings/arrays/hashes. Rails uses `-value` (String#+@)
- * to intern strings; TS has no equivalent so this is a structural identity pass.
+ * Recursively deep-clone arrays and plain objects. Rails uses `-value` (String#+@)
+ * to intern strings; TS has no string interning, so primitives are returned as-is
+ * and only arrays/objects are cloned (no identity preservation).
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::SchemaCache#deep_deduplicate (private)
  *
@@ -776,8 +777,9 @@ export function deepDeduplicate<T>(value: T): T {
 }
 
 /**
- * Open a file for atomic writing, creating parent directories as needed.
- * Rails uses File.atomic_write; TS writes synchronously via the fs module.
+ * Write content to a file, creating parent directories as needed.
+ * Rails uses File.atomic_write; TS writes synchronously (not atomically —
+ * FsAdapter lacks renameSync).
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::SchemaCache#open (private)
  *

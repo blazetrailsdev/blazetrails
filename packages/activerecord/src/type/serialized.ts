@@ -118,7 +118,10 @@ export function encoded(serialized: Serialized, value: unknown): unknown {
   }
   const payload = serialized.coder.dump(value);
   // Rails: if payload && subtype.binary? → ActiveModel::Type::Binary::Data.new(payload)
-  if (payload && (serialized.subtype as any).binary?.()) {
+  if (
+    payload &&
+    ((serialized.subtype as any).binary?.() ?? (serialized.subtype as any).isBinary?.())
+  ) {
     return new BinaryData(payload);
   }
   return payload;

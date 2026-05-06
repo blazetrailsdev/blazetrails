@@ -213,8 +213,10 @@ export function collectionCacheKey(
 
 /**
  * Returns true when the raw DB timestamp string can be converted directly
- * to a cache version without re-parsing (fast path). Requires usec format,
- * UTC timezone, and no user-provided value.
+ * to a cache version without re-parsing (fast path). Checks: string type
+ * and usec format. The UTC-timezone and updatedAtCameFromUser? checks from
+ * Rails are omitted — they require an async connection call that can't be
+ * made synchronously here.
  *
  * Mirrors: ActiveRecord::Integration#can_use_fast_cache_version? (private)
  *

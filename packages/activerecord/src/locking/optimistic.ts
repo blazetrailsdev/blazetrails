@@ -1,6 +1,8 @@
 import type { Base } from "../base.js";
 import { StaleObjectError } from "../errors.js";
 import { Type, ValueType } from "@blazetrails/activemodel";
+import { isWillSaveChangeToAttribute, attributeInDatabase } from "../attribute-methods/dirty.js";
+import { queryConstraintsList } from "../persistence.js";
 
 /**
  * Optimistic locking support for ActiveRecord models.
@@ -70,6 +72,23 @@ function toInt(value: unknown): number {
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 }
 
+function buildBaseConstraints(
+  instance: InstanceLockingHost,
+  ctor: typeof Base,
+): Record<string, unknown> {
+  const constraintsList = queryConstraintsList.call(ctor as any);
+  if (!constraintsList) {
+    const pk = ctor.primaryKey as string;
+    return { [pk]: (instance as any).idInDatabase?.() ?? (instance as any).id };
+  }
+  return Object.fromEntries(
+    constraintsList.map((col: string) => [
+      col,
+      (instance as any).attributeInDatabase?.(col) ?? instance.readAttribute(col),
+    ]),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Class methods — mirrors ActiveRecord::Locking::Optimistic::ClassMethods
 // ---------------------------------------------------------------------------
@@ -80,6 +99,7 @@ interface LockingHost {
   _lockingColumn: string;
   lockOptimistically?: boolean;
   updateCounters?(id: unknown, counters: Record<string, number>): Promise<number>;
+  _updateRecord?(values: Record<string, unknown>, constraints: Record<string, unknown>): Promise<number>;
 }
 
 /**
@@ -132,10 +152,12 @@ export async function updateCounters(
 }
 
 type InstanceLockingHost = {
-  constructor: typeof Base;
+  constructor: typeof Base & LockingHost;
   readAttribute(name: string): unknown;
   writeAttribute(name: string, value: unknown): void;
   clearAttributeChange(name: string): void;
+  attributesWithValues(names: string[]): Record<string, unknown>;
+  changes: Record<string, [unknown, unknown]>;
 };
 
 /**
@@ -167,8 +189,7 @@ export function _touchRow(
 ): unknown {
   const ctor = this.constructor;
   if (ctor.lockingEnabled) {
-    const col = ctor.lockingColumn;
-    if (!touchAttrNames.includes(col)) touchAttrNames = [...touchAttrNames, col];
+    touchAttrNames = [...touchAttrNames, ctor.lockingColumn];
   }
   return superFn(touchAttrNames, time);
 }
@@ -177,19 +198,34 @@ export function _touchRow(
  * @internal
  * Mirrors: ActiveRecord::Locking::Optimistic#_update_row
  */
-export function _updateRow(
+export async function _updateRow(
   this: InstanceLockingHost,
   attributeNames: string[],
   attemptedAction: string,
-  superFn: (names: string[], action: string) => unknown,
-): unknown {
+  superFn: (names: string[], action: string) => Promise<number>,
+): Promise<number> {
   const ctor = this.constructor;
   if (!ctor.lockingEnabled) return superFn(attributeNames, attemptedAction);
+
   const col = ctor.lockingColumn;
-  const currentVersion = (this.readAttribute(col) as number) ?? 0;
-  this.writeAttribute(col, currentVersion + 1);
-  const names = attributeNames.includes(col) ? attributeNames : [...attributeNames, col];
-  return superFn(names, attemptedAction);
+  const lockAttributeWas = (this as any)._attributes?.[col];
+  const baseConstraints = buildBaseConstraints(this, ctor);
+  const updateConstraints = { ...baseConstraints, [col]: _lockValueForDatabase.call(this, col) };
+
+  attributeNames = [...attributeNames, col];
+  this.writeAttribute(col, ((this.readAttribute(col) as number) ?? 0) + 1);
+
+  try {
+    const affectedRows = await ctor._updateRecord!(
+      this.attributesWithValues(attributeNames),
+      updateConstraints,
+    );
+    if (affectedRows !== 1) throw new StaleObjectError(this, attemptedAction);
+    return affectedRows;
+  } catch (e) {
+    if (lockAttributeWas !== undefined) (this as any)._attributes[col] = lockAttributeWas;
+    throw e;
+  }
 }
 
 /**
@@ -213,7 +249,10 @@ export function destroyRow(
  * Mirrors: ActiveRecord::Locking::Optimistic#_lock_value_for_database
  */
 export function _lockValueForDatabase(this: InstanceLockingHost, col: string): unknown {
-  return this.readAttribute(col) ?? 0;
+  if (isWillSaveChangeToAttribute(this as any, col)) {
+    return this.readAttribute(col) ?? 0;
+  }
+  return attributeInDatabase(this as any, col) ?? 0;
 }
 
 /**
@@ -245,7 +284,9 @@ export function _queryConstraintsHash(
  * @internal
  * Mirrors: ActiveRecord::Locking::Optimistic::ClassMethods#hook_attribute_type
  */
-export function hookAttributeType(name: string, castType: Type, lockCol: string): Type {
-  if (name === lockCol) return new LockingType(castType);
+export function hookAttributeType(this: LockingHost, name: string, castType: Type): Type {
+  if (this.lockOptimistically && name === this._lockingColumn) {
+    return new LockingType(castType);
+  }
   return castType;
 }

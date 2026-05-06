@@ -252,6 +252,8 @@ export const ClassMethods = {
 type InstanceCounterHost = {
   constructor: typeof Base;
   destroyedByAssociation: unknown;
+  association(name: string): any;
+  counterCachedAssociationNames: string[];
 };
 
 /**
@@ -261,10 +263,11 @@ type InstanceCounterHost = {
 export async function _createRecord(
   this: InstanceCounterHost,
   superFn: () => Promise<unknown>,
-  incrementFn: () => Promise<void>,
 ): Promise<unknown> {
   const id = await superFn();
-  await incrementFn();
+  for (const name of this.counterCachedAssociationNames) {
+    await this.association(name).incrementCounters();
+  }
   return id;
 }
 
@@ -275,14 +278,16 @@ export async function _createRecord(
 export async function destroyRow(
   this: InstanceCounterHost,
   superFn: () => Promise<number>,
-  decrementFn: (assocForeignKey: unknown, reflectionForeignKey: unknown) => Promise<void>,
 ): Promise<number> {
   const affectedRows = await superFn();
   if (affectedRows > 0) {
-    await decrementFn(
-      (this.destroyedByAssociation as any)?.foreignKey,
-      undefined,
-    );
+    for (const name of this.counterCachedAssociationNames) {
+      const assoc = this.association(name);
+      const dba = this.destroyedByAssociation as any;
+      if (!dba || !is_foreignKeysEqual(dba.foreignKey, assoc.reflection?.foreignKey)) {
+        await assoc.decrementCounters();
+      }
+    }
   }
   return affectedRows;
 }

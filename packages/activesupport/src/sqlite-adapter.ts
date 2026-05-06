@@ -102,7 +102,17 @@ export interface SqliteDriver {
   databaseExists?(config: SqliteOpenConfig): boolean | Promise<boolean>;
 }
 
-const registry = new Map<string, SqliteDriver>();
+// Stash the registry on globalThis under a Symbol so that module duplication
+// (vi.resetModules in tests, or pkg-manager hoisting splits in apps) doesn't
+// drop driver registrations. Drivers self-register on import; without this,
+// the second module instance starts empty and breaks any consumer holding the
+// first instance's getSqlite reference (and vice versa).
+const REGISTRY_KEY = Symbol.for("@blazetrails/activesupport/sqlite-adapter/registry");
+type GlobalWithRegistry = typeof globalThis & {
+  [REGISTRY_KEY]?: Map<string, SqliteDriver>;
+};
+const registry: Map<string, SqliteDriver> = ((globalThis as GlobalWithRegistry)[REGISTRY_KEY] ??=
+  new Map());
 
 export function registerSqliteDriver(driver: SqliteDriver): void {
   if (registry.has(driver.name)) {

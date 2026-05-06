@@ -17,7 +17,6 @@
  *     the subtype and emits `Range` instances from `castValue`/`serialize`.
  */
 
-import { NotImplementedError } from "../../../errors.js";
 import { ValueType } from "@blazetrails/activemodel";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 
@@ -220,8 +219,9 @@ function inspect(value: unknown): string {
 }
 
 /** @internal */
-function unquote(value: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Range#unquote is not implemented",
-  );
+function unquote(value: string): string {
+  if (value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1).replace(/""/g, '"').replace(/\\\\/g, "\\");
+  }
+  return value;
 }

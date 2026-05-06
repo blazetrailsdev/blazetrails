@@ -1,4 +1,3 @@
-import { NotImplementedError } from "../errors.js";
 import type { Base } from "../base.js";
 import type { Relation } from "../relation.js";
 
@@ -90,9 +89,12 @@ export const ClassMethods = {
   defaultExtensions,
 };
 
-/** @internal */
-function singletonMethodAdded(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Scoping::Named#singleton_method_added is not implemented",
-  );
+/**
+ * Mirrors: Scoping::Named::ClassMethods#singleton_method_added. In Rails this
+ * auto-generates a relation proxy method when a Kernel method is added to the
+ * class. JS has no equivalent hook; this is a no-op placeholder.
+ * @internal
+ */
+function singletonMethodAdded(_name: string | symbol): void {
+  // no-op: JS has no singleton_method_added hook equivalent
 }

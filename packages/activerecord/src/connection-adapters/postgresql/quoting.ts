@@ -4,7 +4,6 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting
  */
 
-import { NotImplementedError } from "../../errors.js";
 import { BinaryData } from "@blazetrails/activemodel";
 import {
   quote as abstractQuote,
@@ -344,6 +343,21 @@ export function checkIntegerRange(value: bigint | number): void {
   }
 }
 
+/**
+ * Mirrors: PostgreSQL::Quoting#quoted_date. Appends " BC" for years ≤ 0
+ * (where year 0 in JS corresponds to 1 BC in the proleptic Gregorian calendar).
+ * @internal
+ */
+export function quotedDate(value: Date): string {
+  const year = value.getUTCFullYear();
+  if (year <= 0) {
+    const bceYear = String(-year + 1).padStart(4, "0");
+    const iso = value.toISOString().replace("T", " ").replace("Z", "");
+    return `'${bceYear}${iso.slice(iso.indexOf("-", 1))} BC'`;
+  }
+  return abstractQuote(value) as string;
+}
+
 /** @internal */
 function encodeRange(value: Range): string {
   const lower = value.begin == null || value.begin === -Infinity ? "" : String(value.begin);
@@ -360,44 +374,71 @@ function isSqlLiteral(value: unknown): value is { value: string } {
   );
 }
 
-/** @internal */
-function lookupCastType(sqlType: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#lookup_cast_type is not implemented",
-  );
+/**
+ * Mirrors: PostgreSQL::Quoting#lookup_cast_type. Queries the DB for the OID of
+ * the given SQL type; adapter-level only (requires a live connection). The
+ * module-level helper is a no-op placeholder; the real dispatch happens inside
+ * PostgreSQLAdapter where a connection is available.
+ * @internal
+ */
+function lookupCastType(_sqlType: string): null {
+  return null;
 }
 
-/** @internal */
-function encodeArray(arrayData: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#encode_array is not implemented",
-  );
+/**
+ * Mirrors: PostgreSQL::Quoting#encode_array. Recursively type-casts the array
+ * values and joins them into a PG literal string: `{v1,v2,...}`.
+ * @internal
+ */
+function encodeArray(arrayData: ArrayData): string {
+  const values = typeCastArray(arrayData.values);
+  return formatArray(values);
 }
 
-/** @internal */
-function determineEncodingOfStringsInArray(value: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#determine_encoding_of_strings_in_array is not implemented",
-  );
+function formatArray(values: unknown[]): string {
+  const items = values.map((v) => {
+    if (Array.isArray(v)) return formatArray(v);
+    if (v == null) return "NULL";
+    const s = String(v);
+    if (/[{},"\\\s]/.test(s)) return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    return s;
+  });
+  return `{${items.join(",")}}`;
 }
 
-/** @internal */
-function typeCastArray(values: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#type_cast_array is not implemented",
-  );
+/**
+ * Mirrors: PostgreSQL::Quoting#determine_encoding_of_strings_in_array. In
+ * Ruby this returns the encoding of the first string found (used to
+ * force-encode the PG encoder output). JS strings are always UTF-16 internally
+ * so encoding coercion is a no-op; we return null to signal "no re-encoding".
+ * @internal
+ */
+function determineEncodingOfStringsInArray(_value: unknown): null {
+  return null;
 }
 
-/** @internal */
-function typeCastRangeValue(value: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#type_cast_range_value is not implemented",
-  );
+/**
+ * Mirrors: PostgreSQL::Quoting#type_cast_array. Recursively calls typeCast
+ * on leaf values.
+ * @internal
+ */
+function typeCastArray(values: unknown[]): unknown[] {
+  return values.map((item) => (Array.isArray(item) ? typeCastArray(item) : typeCast(item)));
 }
 
-/** @internal */
-function isInfinity(value: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#infinity? is not implemented",
-  );
+/**
+ * Mirrors: PostgreSQL::Quoting#type_cast_range_value. Returns empty string for
+ * infinite bounds, otherwise delegates to typeCast.
+ * @internal
+ */
+function typeCastRangeValue(value: unknown): unknown {
+  return isInfinity(value) ? "" : typeCast(value);
+}
+
+/**
+ * Mirrors: PostgreSQL::Quoting#infinity?. Returns true when value is ±Infinity.
+ * @internal
+ */
+function isInfinity(value: unknown): boolean {
+  return value === Infinity || value === -Infinity;
 }

@@ -1470,7 +1470,6 @@ describe("initializeDatabase", () => {
       });
       vi.spyOn(DatabaseTasks, "create").mockResolvedValue(undefined);
       const loadSchemaSpy = vi.spyOn(DatabaseTasks, "loadSchema").mockResolvedValue(undefined);
-      const origPath = DatabaseTasks.schemaDumpPath;
       vi.spyOn(DatabaseTasks, "schemaDumpPath").mockReturnValue(schemaFile);
       const config = new HashConfig("test", "primary", {
         adapter: "sqlite3",

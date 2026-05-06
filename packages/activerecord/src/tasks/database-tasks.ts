@@ -1208,9 +1208,14 @@ export async function initializeDatabase(dbConfig: DatabaseConfig): Promise<bool
       }
     }
     if (!alreadyInitialized) {
-      const schemaDumpPath = DatabaseTasks.schemaDumpPath(dbConfig);
-      if (schemaDumpPath && getFs().existsSync(schemaDumpPath)) {
-        await DatabaseTasks.loadSchema(dbConfig, DatabaseTasks.schemaFormat);
+      const rawPath = DatabaseTasks.schemaDumpPath(dbConfig);
+      if (rawPath) {
+        const p = getPath();
+        const resolved =
+          p.isAbsolute && !p.isAbsolute(rawPath) ? p.resolve(DatabaseTasks.root, rawPath) : rawPath;
+        if (getFs().existsSync(resolved)) {
+          await DatabaseTasks.loadSchema(dbConfig, DatabaseTasks.schemaFormat, resolved);
+        }
       }
     }
     return !alreadyInitialized;

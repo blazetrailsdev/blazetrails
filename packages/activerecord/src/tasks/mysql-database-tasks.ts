@@ -377,6 +377,6 @@ export class MySQLDatabaseTasks {
 export function runCmdError(cmd: string, _args: string[], _action: string): string {
   return (
     `failed to execute: \`${cmd}\`\n` +
-    `Please check the output above for any errors and make sure that \`${cmd}\` is installed in your PATH and has proper permissions.\n\n`
+    `Please check the output for any errors and make sure that \`${cmd}\` is installed in your PATH and has proper permissions.\n\n`
   );
 }

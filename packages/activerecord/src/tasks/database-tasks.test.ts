@@ -1372,6 +1372,7 @@ describe("structureDumpFlagsFor / structureLoadFlagsFor", () => {
 describe("initializeDatabase", () => {
   afterEach(() => {
     DatabaseTasks.setAdapter(null);
+    vi.restoreAllMocks();
   });
 
   it("returns true (fresh DB) when schema_migrations table does not exist", async () => {
@@ -1405,20 +1406,16 @@ describe("initializeDatabase", () => {
   });
 
   it("re-throws unexpected errors from the probe query", async () => {
-    const spy = vi.spyOn(DatabaseTasks as any, "_connectFor").mockResolvedValue({
+    vi.spyOn(DatabaseTasks as any, "_connectFor").mockResolvedValue({
       execute: async () => {
         throw new Error("unexpected connection error");
       },
       close: async () => {},
     });
-    try {
-      const config = new HashConfig("test", "primary", {
-        adapter: "sqlite3",
-        database: ":memory:",
-      });
-      await expect(initializeDatabase(config)).rejects.toThrow("unexpected connection error");
-    } finally {
-      spy.mockRestore();
-    }
+    const config = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: ":memory:",
+    });
+    await expect(initializeDatabase(config)).rejects.toThrow("unexpected connection error");
   });
 });

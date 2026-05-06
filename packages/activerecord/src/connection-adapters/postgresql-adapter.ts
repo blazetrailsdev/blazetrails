@@ -4160,11 +4160,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   extractValueFromDefault(defaultExpr: string | null): unknown {
     if (defaultExpr == null) return null;
-    // 'value'::type — quoted literal
-    const quoted = /^\(?(B)?'((?:[^']|'')*)'\)?(?:::(?:[\w ]+))?(?:\[\])?$/.exec(defaultExpr);
+    // Quoted types: [(B]?'...'.*::"?([\w. ]+)"?(?:\[\])? — Rails uses /m so . matches newline
+    const quoted = /^[(B]?'([\s\S]*)'.*::"?([\w. ]+)"?(?:\[\])?$/.exec(defaultExpr);
     if (quoted) {
-      if (quoted[2] === "now" && /::date/.test(defaultExpr)) return null;
-      return quoted[2].replace(/''/g, "'");
+      if (quoted[1] === "now" && quoted[2] === "date") return null;
+      return quoted[1].replace(/''/g, "'");
     }
     if (defaultExpr === "true" || defaultExpr === "false") return defaultExpr;
     // Numeric: optional parens, optional ::bigint cast

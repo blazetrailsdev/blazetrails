@@ -1755,6 +1755,7 @@ export class Migrator {
   /** @internal Mirrors: ActiveRecord::Migrator#record_environment */
   async recordEnvironment(): Promise<void> {
     if (this._internalMetadata.enabled) {
+      await this._ensureSchemaTable();
       await this._internalMetadata.set("environment", this._environment);
     }
   }
@@ -1823,8 +1824,12 @@ export class Migrator {
 
   /** @internal Mirrors: ActiveRecord::Migrator#generate_migrator_advisory_lock_id */
   async generateMigratorAdvisoryLockId(): Promise<bigint> {
-    // currentDatabase presence is already verified by _withAdvisoryLock before this is called.
-    const dbName = await this._adapter.currentDatabase!();
+    if (typeof this._adapter.currentDatabase !== "function") {
+      throw new Error(
+        `${this._adapter.constructor.name} must implement currentDatabase() to support advisory-locked migrations`,
+      );
+    }
+    const dbName = await this._adapter.currentDatabase();
     if (!dbName) {
       // currentDatabase() returned empty — adapter bug (MySQL stub returns "").
       // Fall back to the salt; file a fix for the adapter.

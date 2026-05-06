@@ -796,19 +796,8 @@ export function open(
       content += data;
     },
   });
-  // Best-effort safer write: build content in a temp file, then overwrite the target.
-  // FsAdapter does not expose renameSync, so this is not fully atomic — a crash
-  // between the two writes can still leave a truncated target. This mirrors the
-  // intent of Rails' File.atomic_write but without the rename guarantee.
-  const tmp = `${filename}.tmp.${process.pid}`;
-  try {
-    fs.writeFileSync(tmp, content, "utf-8");
-    fs.writeFileSync(filename, content, "utf-8");
-  } finally {
-    try {
-      fs.unlinkSync(tmp);
-    } catch {
-      /* ignore cleanup error */
-    }
-  }
+  // FsAdapter does not expose renameSync, so a true atomic write is not possible.
+  // Write directly to the target file (mirrors Rails' File.atomic_write intent;
+  // full atomicity would require renameSync support in FsAdapter).
+  fs.writeFileSync(filename, content, "utf-8");
 }

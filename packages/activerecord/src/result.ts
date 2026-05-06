@@ -271,9 +271,10 @@ export function hashRows(
   rows: unknown[][],
   colIndexes: Record<string, number>,
 ): Record<string, unknown>[] {
+  const entries = Object.entries(colIndexes);
   return rows.map((row) => {
     const obj: Record<string, unknown> = {};
-    for (const [key, i] of Object.entries(colIndexes)) obj[key] = row[i];
+    for (const [key, i] of entries) obj[key] = row[i];
     return obj;
   });
 }

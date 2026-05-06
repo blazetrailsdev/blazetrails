@@ -253,8 +253,15 @@ type InstanceCounterHost = {
   constructor: typeof Base;
   destroyedByAssociation: unknown;
   association(name: string): any;
-  counterCachedAssociationNames: string[];
 };
+
+function counterCachedAssociationNames(ctor: typeof Base): string[] {
+  const associations: Array<{ type: string; name: string; options: any }> =
+    (ctor as any)._associations ?? [];
+  return associations
+    .filter((a) => a.type === "belongsTo" && a.options?.counterCache)
+    .map((a) => a.name);
+}
 
 /**
  * @internal
@@ -265,7 +272,7 @@ export async function _createRecord(
   superFn: () => Promise<unknown>,
 ): Promise<unknown> {
   const id = await superFn();
-  for (const name of this.counterCachedAssociationNames) {
+  for (const name of counterCachedAssociationNames(this.constructor)) {
     await this.association(name).incrementCounters();
   }
   return id;
@@ -281,7 +288,7 @@ export async function destroyRow(
 ): Promise<number> {
   const affectedRows = await superFn();
   if (affectedRows > 0) {
-    for (const name of this.counterCachedAssociationNames) {
+    for (const name of counterCachedAssociationNames(this.constructor)) {
       const assoc = this.association(name);
       const dba = this.destroyedByAssociation as any;
       if (!dba || !is_foreignKeysEqual(dba.foreignKey, assoc.reflection?.foreignKey)) {

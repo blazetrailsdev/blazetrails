@@ -2,7 +2,7 @@ import type { Base } from "../base.js";
 import { StaleObjectError } from "../errors.js";
 import { Type, ValueType } from "@blazetrails/activemodel";
 import { isWillSaveChangeToAttribute, attributeInDatabase } from "../attribute-methods/dirty.js";
-import { queryConstraintsList } from "../persistence.js";
+import { queryConstraintsList, _updateRecord as persistenceUpdateRecord } from "../persistence.js";
 
 /**
  * Optimistic locking support for ActiveRecord models.
@@ -211,22 +211,23 @@ export async function _updateRow(
   if (!ctor.lockingEnabled) return superFn(attributeNames, attemptedAction);
 
   const col = ctor.lockingColumn;
-  const lockAttributeWas = (this as any)._attributes?.[col];
+  const lockVersionWas = this.readAttribute(col);
   const baseConstraints = buildBaseConstraints(this, ctor);
   const updateConstraints = { ...baseConstraints, [col]: _lockValueForDatabase.call(this, col) };
 
   attributeNames = [...attributeNames, col];
-  this.writeAttribute(col, ((this.readAttribute(col) as number) ?? 0) + 1);
+  this.writeAttribute(col, (Number(this.readAttribute(col)) || 0) + 1);
 
   try {
-    const affectedRows = await ctor._updateRecord!(
+    const affectedRows = await persistenceUpdateRecord.call(
+      ctor as any,
       this.attributesWithValues(attributeNames),
       updateConstraints,
     );
     if (affectedRows !== 1) throw new StaleObjectError(this, attemptedAction);
     return affectedRows;
   } catch (e) {
-    if (lockAttributeWas !== undefined) (this as any)._attributes[col] = lockAttributeWas;
+    this.writeAttribute(col, lockVersionWas);
     throw e;
   }
 }
@@ -288,7 +289,7 @@ export function _queryConstraintsHash(
  * Mirrors: ActiveRecord::Locking::Optimistic::ClassMethods#hook_attribute_type
  */
 export function hookAttributeType(this: LockingHost, name: string, castType: Type): Type {
-  if (this.lockOptimistically && name === this._lockingColumn) {
+  if (this.lockOptimistically !== false && name === this._lockingColumn) {
     return new LockingType(castType);
   }
   return castType;

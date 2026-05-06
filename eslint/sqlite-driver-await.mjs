@@ -3,7 +3,7 @@
  *
  * Flags `driver.<method>(...)` call sites — where `driver` is a local
  * identifier (variable or parameter) — that are not wrapped in `await` or
- * chained with `.then()` / `.catch()`.  The SqliteDriver interface returns
+ * chained with `.then()` / `.catch()` / `.finally()`.  The SqliteDriver interface returns
  * `T | Promise<T>` so that the same surface can back both the current
  * synchronous better-sqlite3 implementation and a future async driver.  A
  * forgotten `await` silently discards the Promise when the async path is

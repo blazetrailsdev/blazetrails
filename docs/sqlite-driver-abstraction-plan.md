@@ -34,7 +34,7 @@ reliably.
 The `blazetrails/sqlite-driver-await` ESLint rule (`eslint/sqlite-driver-await.mjs`)
 flags any `driver.<method>(...)` call (where `driver` is a local identifier —
 e.g. a helper-function parameter or destructured variable) that is not wrapped
-in `await` or chained with `.then()`/`.catch()`.
+in `await` or chained with `.then()`/`.catch()`/`.finally()`.
 
 Whitelisted (always synchronous):
 

@@ -262,6 +262,7 @@ async function processNestedAttributes(record: Base): Promise<void> {
 
 const UNASSIGNABLE_KEYS = new Set(["id", "_destroy"]);
 
+/** @internal Stateless; one instance shared across all calls. */
 const _booleanType = new BooleanType();
 
 /** @internal */
@@ -327,7 +328,14 @@ function assignToOrMarkForDestruction(
 }
 
 /** @internal */
-function findRecordById(_klass: typeof Base, records: Base[], id: unknown): Base | undefined {
+function findRecordById(klass: typeof Base, records: Base[], id: unknown): Base | undefined {
+  if (Array.isArray((klass as any).primaryKey)) {
+    const needle = (Array.isArray(id) ? id : [id]).map(String);
+    return records.find((r) => {
+      const rid = Array.isArray(r.id) ? r.id : [r.id];
+      return rid.map(String).join(",") === needle.join(",");
+    });
+  }
   return records.find((r) => String(r.id) === String(id));
 }
 

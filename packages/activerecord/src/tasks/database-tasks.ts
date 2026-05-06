@@ -1193,22 +1193,26 @@ export async function checkCurrentProtectedEnvironmentBang(
 /** @internal */
 export async function initializeDatabase(dbConfig: DatabaseConfig): Promise<boolean> {
   return DatabaseTasks.withTemporaryConnection(dbConfig, async () => {
+    const adapter = DatabaseTasks.migrationConnection()!;
+    const { NoDatabaseError } = await import("../errors.js");
     const { SchemaMigration } = await import("../schema-migration.js");
-    const adapter = DatabaseTasks.migrationConnection();
-    if (!adapter) return false;
-    let alreadyInitialized: boolean;
+    let alreadyInitialized = false;
     try {
+      // Probe DB connectivity first — throws NoDatabaseError if the DB doesn't exist.
+      // tableExists() swallows all errors internally so can't detect a missing DB.
+      await adapter.execute("SELECT 1");
       const sm = new SchemaMigration(adapter);
       alreadyInitialized = await sm.tableExists();
-    } catch {
-      await DatabaseTasks.create(dbConfig);
-      const sm = new SchemaMigration(adapter);
-      alreadyInitialized = await sm.tableExists();
+    } catch (error) {
+      if (error instanceof NoDatabaseError) {
+        await DatabaseTasks.create(dbConfig);
+      } else {
+        throw error;
+      }
     }
     if (!alreadyInitialized) {
       const schemaDumpPath = DatabaseTasks.schemaDumpPath(dbConfig);
-      const { getFs: fs } = await import("@blazetrails/activesupport");
-      if (schemaDumpPath && fs().existsSync(schemaDumpPath)) {
+      if (schemaDumpPath && getFs().existsSync(schemaDumpPath)) {
         await DatabaseTasks.loadSchema(dbConfig, DatabaseTasks.schemaFormat);
       }
     }

@@ -396,7 +396,14 @@ export async function runCmd(cmd: string, args: string[], out: string): Promise<
   const childProcess = await getChildProcessAsync();
   const result: SpawnSyncResult = childProcess.spawnSync(cmd, args, { encoding: "utf8" });
   if (result.error || result.status !== 0 || result.signal) {
-    throw new Error(runCmdError(cmd, args));
+    const details: string[] = [];
+    if (result.error) details.push(`Error: ${result.error.message}`);
+    if (result.status !== null && result.status !== 0)
+      details.push(`Exit status: ${result.status}`);
+    if (result.signal) details.push(`Signal: ${result.signal}`);
+    if (result.stderr) details.push(`stderr:\n${String(result.stderr).trimEnd()}`);
+    if (result.stdout) details.push(`stdout:\n${String(result.stdout).trimEnd()}`);
+    throw new Error(runCmdError(cmd, args) + (details.length ? details.join("\n") + "\n" : ""));
   }
   if (out && result.stdout) {
     getFs().writeFileSync(out, String(result.stdout));

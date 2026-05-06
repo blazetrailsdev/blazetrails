@@ -1115,9 +1115,18 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     const indexName =
       (options.name as string | undefined) ?? `index_${tableName}_on_${columnNames.join("_and_")}`;
     const algorithmKey = (options.algorithm as string | undefined)?.toLowerCase();
-    const algorithmSql = algorithmKey
-      ? (this.indexAlgorithms() as Record<string, string>)[algorithmKey]
-      : undefined;
+    let algorithmSql: string | undefined;
+    if (algorithmKey) {
+      const algorithms = this.indexAlgorithms() as Record<string, string>;
+      if (!(algorithmKey in algorithms)) {
+        const valid = Object.keys(algorithms);
+        throw new Error(
+          `Algorithm must be one of the following: ${valid.map((a) => `'${a}'`).join(", ")}`,
+        );
+      }
+      // "default" maps to "ALGORITHM = DEFAULT" in the table but means no algorithm clause
+      algorithmSql = algorithmKey === "default" ? undefined : algorithms[algorithmKey];
+    }
     const idx = new IndexDefinition(tableName, indexName, !!options.unique, columnNames, {
       where: options.where as string | undefined,
       using: options.using as string | undefined,

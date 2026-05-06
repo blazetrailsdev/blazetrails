@@ -349,9 +349,8 @@ export class CommandRecorder {
 
   /** @internal */
   invertTransaction(args: unknown[]): [string, unknown[]] {
-    // Cannot invert a transaction block without re-executing it
     throw new IrreversibleMigration(
-      "invertTransaction requires a block and is not supported in this context.",
+      "This migration uses transaction, which is not automatically reversible.",
     );
   }
 

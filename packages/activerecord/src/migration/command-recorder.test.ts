@@ -299,6 +299,37 @@ describe("CommandRecorder", () => {
     });
   });
 
+  describe("invertRenameEnum", () => {
+    it("swaps name and new_name", () => {
+      const [cmd, args] = new CommandRecorder().invertRenameEnum(["status", "state"]);
+      expect(cmd).toBe("renameEnum");
+      expect(args).toEqual(["state", "status"]);
+    });
+
+    it("handles { to: newName } hash form", () => {
+      const [cmd, args] = new CommandRecorder().invertRenameEnum(["status", { to: "state" }]);
+      expect(cmd).toBe("renameEnum");
+      expect(args).toEqual(["state", "status"]);
+    });
+  });
+
+  describe("invertRenameEnumValue", () => {
+    it("swaps from/to values", () => {
+      const [cmd, args] = new CommandRecorder().invertRenameEnumValue([
+        "status",
+        { from: "active", to: "enabled" },
+      ]);
+      expect(cmd).toBe("renameEnumValue");
+      expect(args[1]).toEqual({ from: "enabled", to: "active" });
+    });
+
+    it("throws without from/to options", () => {
+      expect(() =>
+        new CommandRecorder().invertRenameEnumValue(["status", { value: "active" }]),
+      ).toThrow(IrreversibleMigration);
+    });
+  });
+
   describe("invertDropEnum", () => {
     it("throws without values arg", () => {
       expect(() => new CommandRecorder().invertDropEnum(["my_enum"])).toThrow(

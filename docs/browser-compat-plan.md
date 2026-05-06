@@ -73,11 +73,10 @@ function getEnv(key: string, defaultValue: string): string;
 function getEnv(key: string): string | undefined;
 ```
 
-Read-back policy: check `TRAILS_ENV` first; fall back to `NODE_ENV` with a
-deprecation warning for one release; then drop the fallback. Because many
-existing apps set only `NODE_ENV`, the fallback should remain indefinite as
-a read-only alias — `TRAILS_ENV` takes precedence, `NODE_ENV` is a silent
-fallback, never written.
+Read-back policy: check `TRAILS_ENV` first; fall back to `NODE_ENV` silently.
+The fallback is indefinite — `NODE_ENV` is never advertised but never removed,
+because too many existing apps set only `NODE_ENV`. `TRAILS_ENV` always wins
+when both are set; neither is ever written by `getEnv`.
 
 Files to migrate:
 

@@ -1103,9 +1103,13 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     if (this.supportsRenameColumn()) {
       return `RENAME COLUMN ${this.quoteIdentifier(columnName)} TO ${this.quoteIdentifier(newColumnName)}`;
     }
-    // Fallback: SHOW COLUMNS + recreate; requires DB access — must be overridden by driver subclass
+    // TODO: implement CHANGE-column fallback for older MySQL/MariaDB
+    //   (matches abstract_mysql_adapter.rb:rename_column_for_alter when !supports_rename_column?).
+    //   Requires fetching the existing column type via columnDefinitions() and building a
+    //   ChangeColumnDefinition. Safe to skip for modern servers: MySQL ≥8.0.3 and
+    //   MariaDB ≥10.5.2 always hit the fast path above.
     throw new Error(
-      "renameColumnForAlter fallback path requires driver-level DB access; override in subclass",
+      "renameColumnForAlter fallback path (CHANGE clause for older MySQL/MariaDB) not yet implemented",
     );
   }
 

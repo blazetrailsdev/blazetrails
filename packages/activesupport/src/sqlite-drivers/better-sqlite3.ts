@@ -93,18 +93,26 @@ class BetterSqlite3Connection implements SqliteConnection {
 }
 
 /**
- * Decode `file:` URIs and `:memory:` aliases. Returns `null` for memory
- * databases, otherwise the bare filesystem path.
+ * Decode `file:` URIs (including `file://`, percent-encoding, and `?mode=`
+ * query strings) and `:memory:` aliases. Returns `null` for memory databases,
+ * otherwise the bare decoded filesystem path.
  * @internal
  */
 function resolveDatabasePath(database: string): string | null {
   if (database === ":memory:") return null;
   if (!database.startsWith("file:")) return database;
-  const q = database.indexOf("?");
-  const path = q === -1 ? database.slice("file:".length) : database.slice("file:".length, q);
-  const params = q === -1 ? null : new URLSearchParams(database.slice(q + 1));
-  if (path === ":memory:" || params?.get("mode") === "memory") return null;
-  return path;
+  // Anchor relative `file:foo.db` against a fixed base so URL accepts it; the
+  // base is discarded because we read pathname (and the host check below
+  // rejects file://example/...). file::memory: is special-cased first.
+  if (database.startsWith("file::memory:")) return null;
+  let url: URL;
+  try {
+    url = new URL(database, "file:///");
+  } catch {
+    return database;
+  }
+  if (url.searchParams.get("mode") === "memory") return null;
+  return decodeURIComponent(url.pathname);
 }
 
 /** @internal */

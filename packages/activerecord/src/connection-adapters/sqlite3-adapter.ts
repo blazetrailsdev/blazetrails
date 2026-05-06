@@ -1986,8 +1986,21 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   private connect(): void {
     try {
       const driverOpt = (this._config as SQLite3AdapterOptions).driver;
-      const factory: SqliteDriver =
-        typeof driverOpt === "object" && driverOpt !== null ? driverOpt : getSqlite(driverOpt);
+      let factory: SqliteDriver;
+      if (driverOpt !== null && typeof driverOpt === "object") {
+        if (
+          typeof (driverOpt as SqliteDriver).name !== "string" ||
+          typeof (driverOpt as SqliteDriver).open !== "function"
+        ) {
+          throw new TypeError(
+            "config.driver must be a registered driver name or a SqliteDriver " +
+              "(object with `name: string` and `open(config)` function).",
+          );
+        }
+        factory = driverOpt as SqliteDriver;
+      } else {
+        factory = getSqlite(driverOpt);
+      }
       if (!factory.openSync) {
         // PR 3 lifts connect() onto an awaited factory.open(); for now we
         // require an inProcessSync driver so the existing sync constructor

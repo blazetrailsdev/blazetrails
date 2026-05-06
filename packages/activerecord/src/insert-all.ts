@@ -14,8 +14,9 @@ const TIMESTAMP_COLUMNS = ["created_at", "updated_at"] as const;
 const UPDATE_TIMESTAMP_COLUMNS = ["updated_at"] as const;
 
 // Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#column_name_with_order_matcher
-// Allows safe column names (optionally table-qualified, with optional ASC/DESC/NULLS).
-// Used by disallowRawSqlBang to distinguish Ruby-symbol-equivalent strings from raw SQL.
+// Intentionally more restrictive than Rails: quoted identifiers ("col", `col`) and COLLATE
+// clauses are not matched. Callers with those forms must use Arel.sql(). This is the safe
+// direction — false-negatives force Arel.sql(), false-positives would allow SQL injection.
 const COLUMN_NAME_WITH_ORDER =
   /^\s*(?:(?:\w+\.)?\w+|\w+\((?:|(?:\w+\.)?[\w,\s]*)\))(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?(?:\s*,\s*(?:(?:\w+\.)?\w+|\w+\((?:|(?:\w+\.)?[\w,\s]*)\))(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)*\s*$/i;
 
@@ -239,6 +240,7 @@ export class InsertAll {
 
   /** @internal */
   private hasAttributeAliases(attributes: Record<string, unknown>): boolean {
+    // _attributeAliases is on the AttributeMethods mixin host, not yet declared on typeof Base
     const aliases = (this.model as any)._attributeAliases as Record<string, string> | undefined;
     if (!aliases) return false;
     return Object.keys(attributes).some((attr) => attr in aliases);
@@ -286,6 +288,9 @@ export class InsertAll {
         (Array.isArray(i.columns) && [...i.columns].sort().join(",") === sortedMatch),
     ) as any;
     if (idx) return Array.isArray(idx.columns) ? idx.columns : nameOrCols;
+    // uniqueBy == null → caller wants PK uniqueness; PKs are already in readonlyColumns()
+    // so returning [] here is equivalent (they're excluded from updatableColumns either way).
+    // uniqueBy matching primary keys explicitly → return the PK columns directly.
     if (uniqueBy == null || sortedMatch === [...this.primaryKeys()].sort().join(","))
       return uniqueBy == null ? [] : this.primaryKeys();
     throw new Error(`No unique index found for ${JSON.stringify(uniqueBy)}`);
@@ -293,16 +298,15 @@ export class InsertAll {
 
   /** @internal */
   private uniqueIndexes(): unknown[] {
-    const schemaCache = (this.model as any).schemaCache;
-    if (!schemaCache) return [];
-    const indexes = schemaCache.indexes?.(this.model.arelTable.name) ?? [];
+    const cache = this.model.schemaCache;
+    if (!cache) return [];
+    const indexes = (cache as any).indexes?.(this.model.arelTable.name) ?? [];
     return (indexes as any[]).filter((i: any) => i.unique);
   }
 
   /** @internal */
   private readonlyColumns(): string[] {
-    const readonlyAttrs: string[] = (this.model as any).readonlyAttributes ?? [];
-    return [...this.primaryKeys(), ...readonlyAttrs];
+    return [...this.primaryKeys(), ...this.model.readonlyAttributes];
   }
 
   /** @internal */

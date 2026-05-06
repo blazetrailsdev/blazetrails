@@ -567,20 +567,20 @@ export function arelTable(this: CoreHost): Table {
 function initInternals(
   this: CoreRecord & {
     _readonly: boolean;
+    _previouslyNewRecord: boolean;
     _destroyed: boolean;
-    _markedForDestruction: boolean;
     _destroyedByAssociation: unknown;
     _strictLoading: boolean;
-    _strictLoadingMode: StrictLoadingMode;
+    _strictLoadingMode?: StrictLoadingMode;
   },
 ): void {
   this._readonly = false;
+  this._previouslyNewRecord = false;
   this._destroyed = false;
-  this._markedForDestruction = false;
   this._destroyedByAssociation = null;
   const klass = this.constructor as any;
   this._strictLoading = klass.strictLoadingByDefault ?? false;
-  this._strictLoadingMode = klass.strictLoadingMode ?? "all";
+  this._strictLoadingMode = klass.strictLoadingMode;
 }
 
 /** @internal */
@@ -594,15 +594,21 @@ function isCustomInspectMethodDefined(this: { constructor: { prototype: object }
 }
 
 /** @internal */
-function inspectWithAttributes(this: CoreRecord, attributesToList: string[]): string {
+function inspectWithAttributes(
+  this: CoreRecord & { _attributes: any },
+  attributesToList: string[],
+): string {
   const ctor = this.constructor as { name: string };
   if (!this._attributes) return `#<${ctor.name} not initialized>`;
-  const attrMap = new Map(Array.from(this._attributes));
-  const attrs = attributesToList
-    .filter((name) => attrMap.has(name))
-    .map((name) => `${name}: ${formatForInspect.call(this, name, this.readAttribute(name))}`)
-    .join(", ");
-  return `#<${ctor.name} ${attrs}>`;
+  // Rails: attributes_to_list.filter_map { |name| ... if _has_attribute?(name) }
+  // _has_attribute? checks @attributes.key?(name) — same as checking the attribute set
+  const knownKeys = new Set<string>(
+    Array.from(this._attributes as Iterable<[string, unknown]>).map(([k]) => k),
+  );
+  const parts = attributesToList
+    .filter((name) => knownKeys.has(name))
+    .map((name) => `${name}: ${formatForInspect.call(this, name, this.readAttribute(name))}`);
+  return `#<${ctor.name} ${parts.join(", ")}>`;
 }
 
 /** @internal */

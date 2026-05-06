@@ -1030,8 +1030,14 @@ function initializeLoadSchemaMonitor(this: SchemaHost): void {
 }
 
 /** @internal */
-function reloadSchemaFromCache(this: SchemaHost): void {
+function reloadSchemaFromCache(this: SchemaHost, recursive = true): void {
   resetColumnInformation.call(this);
+  if (recursive) {
+    const subclasses: SchemaHost[] = (this as any).subclasses ?? [];
+    for (const sub of subclasses) {
+      reloadSchemaFromCache.call(sub, true);
+    }
+  }
 }
 
 /** @internal */

@@ -1032,15 +1032,17 @@ export abstract class Migration {
 
   /** @internal */
   formatArguments(args: unknown[]): string {
-    const argList = args.slice(0, -1).map((a) => JSON.stringify(a));
+    const safeJson = (v: unknown) =>
+      JSON.stringify(v, (_k, val) => (typeof val === "bigint" ? `${val}n` : val));
+    const argList = args.slice(0, -1).map((a) => safeJson(a));
     const last = args[args.length - 1];
     if (last !== null && typeof last === "object" && !Array.isArray(last)) {
       const filtered = Object.fromEntries(
         Object.entries(last as Record<string, unknown>).filter(([k]) => !this.isInternalOption(k)),
       );
-      if (Object.keys(filtered).length > 0) argList.push(JSON.stringify(filtered));
+      if (Object.keys(filtered).length > 0) argList.push(safeJson(filtered));
     } else if (last !== undefined) {
-      argList.push(JSON.stringify(last));
+      argList.push(safeJson(last));
     }
     return argList.join(", ");
   }
@@ -2157,6 +2159,8 @@ export class Migrator {
   // Rails: MigrationContext#validate_timestamp?
   /** @internal */
   isValidateTimestamp(): boolean {
+    // Rails: ActiveRecord.timestamped_migrations (default true) && ActiveRecord.validate_migration_timestamps (default false)
+    // true && false = false, so false is the correct default until these config flags are wired.
     return false;
   }
 
@@ -2174,16 +2178,20 @@ export class Migrator {
   /** @internal */
   async move(direction: "up" | "down", steps: number): Promise<void> {
     const current = await this.currentVersion();
-    const sorted = [...this._migrations].sort((a, b) => {
-      const va = BigInt(a.version);
-      const vb = BigInt(b.version);
-      return va < vb ? -1 : va > vb ? 1 : 0;
-    });
-    const startIndex = current === 0 ? 0 : sorted.findIndex((m) => m.version === String(current));
+    // Mirror Migrator#migrations: ascending for :up, descending for :down.
+    // MigrationContext#move uses migrator.migrations[start_index + steps], so the
+    // direction of the list determines which version "steps" positions forward lands on.
+    const asc = (a: MigrationProxy, b: MigrationProxy) =>
+      BigInt(a.version) < BigInt(b.version) ? -1 : 1;
+    const ordered =
+      direction === "up"
+        ? [...this._migrations].sort(asc)
+        : [...this._migrations].sort(asc).reverse();
+    const startIndex = current === 0 ? 0 : ordered.findIndex((m) => m.version === String(current));
     if (current !== 0 && startIndex === -1) {
       throw new UnknownMigrationVersionError(String(current));
     }
-    const finish = sorted[startIndex + steps];
+    const finish = ordered[startIndex + steps];
     const targetVersion = finish ? Number(finish.version) : 0;
     if (direction === "up") {
       await this.up(targetVersion);

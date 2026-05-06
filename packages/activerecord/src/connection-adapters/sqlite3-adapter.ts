@@ -1946,7 +1946,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   private _translateException(e: unknown, sql: string, binds: unknown[]): Error {
     const msg = e instanceof Error ? e.message : String(e);
-    const exc = e instanceof Error ? e : new Error(msg);
+    // Wrap non-Error throws so translateException always receives an Error,
+    // but preserve the original thrown value as the cause so it isn't dropped.
+    const exc = e instanceof Error ? e : new Error(msg, { cause: e });
     return translateException(exc, msg, sql, binds);
   }
 

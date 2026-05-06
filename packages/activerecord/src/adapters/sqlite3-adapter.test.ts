@@ -603,7 +603,7 @@ describe("SQLite3Adapter._isMemoryFilename", () => {
 });
 
 describe("SQLite3Adapter pragmas option", () => {
-  let adapter: SQLite3Adapter;
+  let adapter: SQLite3Adapter | undefined;
 
   afterEach(() => {
     adapter?.close();

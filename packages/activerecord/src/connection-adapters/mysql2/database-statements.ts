@@ -149,17 +149,23 @@ export async function performQuery(
   } else if (prepare) {
     // Cached prepared-statement path. node-mysql2's `execute()` transparently
     // prepares and caches on the server side; the driver manages COM_STMT_CLOSE
-    // on connection teardown.
-    const [result, resultFields] = (await rawConnection.execute(sql, typeCastedBinds as any[])) as [
-      mysql.RowDataPacket[] | mysql.ResultSetHeader,
-      mysql.FieldPacket[],
-    ];
-    if (Array.isArray(result)) {
-      rows = result as Record<string, unknown>[];
-      fields = (resultFields ?? []) as Array<{ name: string }>;
-      affectedRows = rows.length;
-    } else {
-      affectedRows = (result as mysql.ResultSetHeader).affectedRows ?? 0;
+    // on connection teardown. On error, evict the SQL key from our cache (mirrors
+    // Rails' `@statements.delete(sql)` rescue block) so the next call re-prepares.
+    try {
+      const [result, resultFields] = (await rawConnection.execute(
+        sql,
+        typeCastedBinds as any[],
+      )) as [mysql.RowDataPacket[] | mysql.ResultSetHeader, mysql.FieldPacket[]];
+      if (Array.isArray(result)) {
+        rows = result as Record<string, unknown>[];
+        fields = (resultFields ?? []) as Array<{ name: string }>;
+        affectedRows = rows.length;
+      } else {
+        affectedRows = (result as mysql.ResultSetHeader).affectedRows ?? 0;
+      }
+    } catch (err) {
+      this._statements?.delete(sql);
+      throw err;
     }
   } else {
     // Non-cached prepared-statement path. node-mysql2 does not expose a
@@ -203,11 +209,12 @@ export function castResult(rawResult: Mysql2RawResult): Result {
   if (rawResult.rows == null) return Result.empty();
 
   const fields = rawResult.fields.map((f) => f.name);
-  if (fields.length === 0) return Result.empty();
+
+  const result = fields.length === 0 ? Result.empty() : Result.fromRowHashes(rawResult.rows);
 
   freeRawResult(rawResult);
 
-  return Result.fromRowHashes(rawResult.rows);
+  return result;
 }
 
 /**

@@ -5,7 +5,7 @@
  */
 
 import pg from "pg";
-import { NotImplementedError } from "../../errors.js";
+import { NotImplementedError, PreparedStatementCacheExpired } from "../../errors.js";
 import type { Type } from "@blazetrails/activemodel";
 import type { Nodes } from "@blazetrails/arel";
 import type { ExplainOption } from "../../adapter.js";
@@ -77,6 +77,8 @@ interface PerformQueryHost {
   preparedStatements?: boolean;
   prepareStatement?(sql: string, binds: unknown[], client: pg.PoolClient): Promise<string>;
   isCachedPlanFailure?(err: unknown): boolean;
+  /** Flush the cached statement key so the next prepare picks a fresh name. */
+  deleteStatementKey?(sql: string): void;
   inTransaction?: boolean;
   /** @internal */
   handleWarnings?(result: pg.QueryResult): void;
@@ -140,9 +142,12 @@ export async function performQuery(
     } catch (err) {
       if (this.isCachedPlanFailure?.(err)) {
         if (this.inTransaction) {
-          throw err;
+          // Inside a transaction all subsequent commands raise InFailedSQLTransaction;
+          // wrap as PreparedStatementCacheExpired so callers can handle appropriately.
+          throw new PreparedStatementCacheExpired((err as Error).message);
         }
         // Outside a transaction: flush the cached plan and retry once.
+        this.deleteStatementKey?.(sql);
         result = await rawConnection.query({
           name: stmtKey,
           text: sql,
@@ -186,7 +191,7 @@ export async function castResult(this: CastResultHost, result: pg.QueryResult): 
   const columnTypes: Record<string | number, Type> = {};
   for (let i = 0; i < fields.length; i++) {
     const f = fields[i];
-    const type = await this.getOidType(f.dataTypeID, (f as any).dataTypeModifier ?? -1, f.name, "");
+    const type = await this.getOidType(f.dataTypeID, f.dataTypeModifier ?? -1, f.name, "");
     columnTypes[i] = type;
     if (!/^\d+$/.test(f.name)) columnTypes[f.name] = type;
   }

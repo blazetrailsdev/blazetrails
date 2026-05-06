@@ -190,7 +190,16 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     const { statementLimit, preparedStatements, ...mysqlConfig } = config;
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
-    this._database = mysqlConfig.database as string | undefined;
+    this._database =
+      (mysqlConfig.database as string | undefined) ??
+      (() => {
+        try {
+          const uri = (mysqlConfig as { uri?: string }).uri;
+          return uri ? new URL(uri).pathname.replace(/^\/+/, "") || undefined : undefined;
+        } catch {
+          return undefined;
+        }
+      })();
     this._driverPool = Mysql2Adapter.newClient(mysqlConfig);
   }
 

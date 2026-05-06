@@ -244,24 +244,24 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     // handle internally, but we no longer cache across executes.
     if (!this.preparedStatements) {
       const stmt = this.driver.prepare(sql) as SqliteStatement;
-      this._maybeEnableSafeIntegers(sql, stmt);
+      this._maybeEnableReadBigInts(sql, stmt);
       return stmt;
     }
     let stmt = this._statementPool.get(sql);
     if (!stmt) {
       stmt = this.driver.prepare(sql) as SqliteStatement;
-      this._maybeEnableSafeIntegers(sql, stmt);
+      this._maybeEnableReadBigInts(sql, stmt);
       this._statementPool.set(sql, stmt);
     }
     return stmt;
   }
 
-  // Enable setReadBigInts on row-returning statements that expose bigint-declared
+  // Enable readBigInts on row-returning statements that expose bigint-declared
   // columns so the driver returns JS bigint rather than a lossy number.
-  // Non-bigint integer columns in the same row also return bigint when
-  // setReadBigInts is enabled — IntegerType.cast handles bigint → number for those.
+  // Non-bigint integer columns in the same row also return bigint when enabled —
+  // IntegerType.cast handles bigint → number for those.
   // stmt.reader gates out PRAGMA/EXPLAIN and other non-row statements.
-  private _maybeEnableSafeIntegers(sql: string, stmt: SqliteStatement): void {
+  private _maybeEnableReadBigInts(sql: string, stmt: SqliteStatement): void {
     if (isWriteQuerySql(sql) || !stmt.reader) return;
     const cols = stmt.columns();
     if (cols.some((c) => c.type !== null && /bigint/i.test(c.type))) {

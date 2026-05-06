@@ -4,7 +4,7 @@ import type {
   AdapterName,
   DatabaseAdapter,
   ExplainOption,
-  TrailsAdapterOptions,
+  SQLite3AdapterOptions,
 } from "../adapter.js";
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
@@ -184,7 +184,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   constructor(
     filename: string | ":memory:" = ":memory:",
-    options: TrailsAdapterOptions & { readonly?: boolean } = {},
+    options: SQLite3AdapterOptions & { readonly?: boolean } = {},
   ) {
     super();
     this._config = { ...options };

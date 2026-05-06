@@ -1593,6 +1593,11 @@ export class Migrator {
     ) {
       return fn();
     }
+    if (typeof adapter.currentDatabase !== "function") {
+      throw new Error(
+        `${adapter.constructor.name} must implement currentDatabase() to support advisory-locked migrations`,
+      );
+    }
     const lockId = await this.generateMigratorAdvisoryLockId();
     const locked = await adapter.getAdvisoryLock(lockId);
     if (!locked) {
@@ -1818,19 +1823,11 @@ export class Migrator {
 
   /** @internal Mirrors: ActiveRecord::Migrator#generate_migrator_advisory_lock_id */
   async generateMigratorAdvisoryLockId(): Promise<bigint> {
-    const adapter = this._adapter;
-    if (typeof adapter.currentDatabase !== "function") {
-      // Rails always calls connection.current_database; a missing implementation is a
-      // bug in the adapter. Throw here so it surfaces rather than silently sharing a
-      // global lock ID across databases (which defeats multi-DB advisory-lock isolation).
-      throw new Error(
-        `${this._adapter.constructor.name} must implement currentDatabase() to support advisory-locked migrations`,
-      );
-    }
-    const dbName = await adapter.currentDatabase();
+    // currentDatabase presence is already verified by _withAdvisoryLock before this is called.
+    const dbName = await this._adapter.currentDatabase!();
     if (!dbName) {
       // currentDatabase() returned empty — adapter bug (MySQL stub returns "").
-      // Fall back to the salt so migrations don't hard-fail; file a fix for the adapter.
+      // Fall back to the salt; file a fix for the adapter.
       return BigInt(Migrator._MIGRATOR_SALT);
     }
     return BigInt(Migrator._MIGRATOR_SALT) * BigInt(_crc32(dbName));
@@ -2040,7 +2037,6 @@ export class Migrator {
    * scoped to `target_version` and calls `#run`).
    */
   async run(direction: "up" | "down", targetVersion: number | string): Promise<void> {
-    this._validateTargetVersion(targetVersion);
     await this._withAdvisoryLock(() => this.runWithoutLock(direction, targetVersion));
   }
 

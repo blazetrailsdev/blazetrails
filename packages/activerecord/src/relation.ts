@@ -4495,6 +4495,12 @@ export class Relation<T extends Base> {
   // QueryMethods bang mutations — mirrors ActiveRecord::QueryMethods (relation/query_methods.rb).
   // Rails mixes these into Relation via `include QueryMethods`. Declared here
   // as explicit instance methods so api:compare attributes them to relation.rb.
+  //
+  // Each wrapper calls `QueryMethodBangs.X.call(this as any, ...)`. The `as any`
+  // is required because Relation is a generic class (Relation<T extends Base>)
+  // while QueryMethodBangs functions carry `this: QueryMethodsHost` — TypeScript
+  // doesn't consider the two compatible at call-sites without casting. Threading
+  // generic markers through all of query-methods.ts would be a separate PR.
   // ---------------------------------------------------------------------------
 
   /** @internal */
@@ -4626,11 +4632,6 @@ export class Relation<T extends Base> {
   }
 
   /** @internal */
-  isNullRelation(): boolean {
-    return QueryMethodBangs.isNullRelation.call(this as any);
-  }
-
-  /** @internal */
   readonlyBang(value = true): this {
     return QueryMethodBangs.readonlyBang.call(this as any, value);
   }
@@ -4695,6 +4696,16 @@ export class Relation<T extends Base> {
     return QueryMethodBangs.excludingBang.call(this as any, records);
   }
 
+  // ---------------------------------------------------------------------------
+  // QueryMethods non-bang helpers — predicates and builders mixed in from
+  // ActiveRecord::QueryMethods but not pure bang mutations.
+  // ---------------------------------------------------------------------------
+
+  /** @internal */
+  isNullRelation(): boolean {
+    return QueryMethodBangs.isNullRelation.call(this as any);
+  }
+
   /** @internal */
   constructJoinDependency(associations: string | AssociationSpec[], _joinType?: unknown): any {
     return QueryMethodBangs.constructJoinDependency.call(this as any, associations, _joinType);
@@ -4702,8 +4713,7 @@ export class Relation<T extends Base> {
 
   /** @internal */
   asyncBang(): this {
-    (this as any)._async = true;
-    return this;
+    return QueryMethodBangs.asyncBang.call(this as any) as unknown as this;
   }
 }
 

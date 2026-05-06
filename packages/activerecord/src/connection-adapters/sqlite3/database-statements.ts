@@ -88,16 +88,20 @@ export async function resetIsolationLevel(
 }
 
 // Minimal better-sqlite3 types used by the private helpers below.
+interface Sqlite3RunResult {
+  changes: number;
+  lastInsertRowid: number | bigint;
+}
+
 interface Sqlite3PreparedStatement {
   columns(): Array<{ name: string }>;
   all(...params: unknown[]): Record<string, unknown>[];
-  run(...params: unknown[]): { changes: number };
+  run(...params: unknown[]): Sqlite3RunResult;
 }
 
 interface Sqlite3RawConnection {
   prepare(sql: string): Sqlite3PreparedStatement;
   exec(sql: string): void;
-  readonly changes: number;
 }
 
 interface InternalBeginTransactionHost {
@@ -161,6 +165,8 @@ export function performQuery(
   const { prepare = false, notificationPayload, batch = false } = options;
   let result: Result;
 
+  let lastChanges = 0;
+
   if (batch) {
     rawConnection.exec(sql);
     result = Result.empty();
@@ -173,7 +179,7 @@ export function performQuery(
     }
     const cols = stmt.columns();
     if (cols.length === 0) {
-      stmt.run(...typeCastedBinds);
+      lastChanges = stmt.run(...typeCastedBinds).changes;
       result = Result.empty();
     } else {
       result = Result.fromRowHashes(stmt.all(...typeCastedBinds));
@@ -183,18 +189,14 @@ export function performQuery(
     const hasBind = binds != null && binds.length > 0;
     const cols = stmt.columns();
     if (cols.length === 0) {
-      if (hasBind) {
-        stmt.run(...typeCastedBinds);
-      } else {
-        stmt.run();
-      }
+      lastChanges = (hasBind ? stmt.run(...typeCastedBinds) : stmt.run()).changes;
       result = Result.empty();
     } else {
       result = Result.fromRowHashes(hasBind ? stmt.all(...typeCastedBinds) : stmt.all());
     }
   }
 
-  this._lastAffectedRows = rawConnection.changes;
+  this._lastAffectedRows = lastChanges;
   if (notificationPayload) notificationPayload["row_count"] = result.length;
   return result;
 }

@@ -62,13 +62,59 @@ git -C "$MAIN_REPO" worktree add -b "$NAME" "$TARGET" origin/main
 flock -u 9
 exec 9>&-
 
+# If anything below this point fails (e.g. a required link_source missing,
+# pnpm install dying), tear down the half-created worktree so the operator
+# can re-run the script after fixing the underlying issue. Cleared on the
+# successful exit at the bottom of the file.
+WORKTREE_CREATED=1
+cleanup_partial_worktree() {
+  if [[ "${WORKTREE_CREATED:-0}" == 1 ]]; then
+    echo "==> Removing partial worktree $TARGET" >&2
+    git -C "$MAIN_REPO" worktree remove --force "$TARGET" 2>/dev/null || true
+    git -C "$MAIN_REPO" branch -D "$NAME" 2>/dev/null || true
+  fi
+}
+trap cleanup_partial_worktree EXIT
+
 link_source() {
+  # Symlink a path from the main worktree into the new worktree.
+  # `required` (default) — exit 1 with a recovery hint if the source is missing.
+  # `optional`            — log a skip and continue.
+  #
+  # Required because PR #1260 demonstrated this class of silent failure:
+  # `.claude/skills` was untracked from git but no longer present in main,
+  # so new worktrees got a "skip" log line and agents launched without
+  # prompt-agent / link / copilot-review skills. Failing fast forces the
+  # operator to restore the source before spawning agents that depend on it.
   local rel="$1"
+  local mode="${2:-required}"
   local src="$MAIN_REPO/$rel"
   local dst="$TARGET/$rel"
   if [[ ! -e "$src" ]]; then
-    echo "    skip $rel (not present in main worktree)"
-    return
+    if [[ "$mode" == "optional" ]]; then
+      echo "    skip $rel (not present in main worktree, optional)"
+      return
+    fi
+    echo "    ERROR: required source $rel is missing from main worktree at $src" >&2
+    echo "    The new worktree cannot be set up without it." >&2
+    # Look for a sibling worktree that still has this path so we can suggest
+    # a precise recovery command rather than a placeholder.
+    local donor=""
+    for candidate in "$WORKTREES_ROOT"/*/"$rel"; do
+      if [[ -e "$candidate" ]]; then
+        donor="$candidate"
+        break
+      fi
+    done
+    echo "    Recovery:" >&2
+    if [[ -n "$donor" ]]; then
+      echo "      cp -r $(printf %q "$donor") $(printf %q "$src")" >&2
+    else
+      echo "      No sibling worktree has $rel either. Re-run the appropriate fetch" >&2
+      echo "      script (e.g. scripts/api-compare/fetch-rails.sh for .rails-source)" >&2
+      echo "      or copy from a backup." >&2
+    fi
+    exit 1
   fi
   mkdir -p "$(dirname "$dst")"
   rm -rf "$dst"
@@ -78,14 +124,16 @@ link_source() {
 
 echo "==> Linking Rails and Rack source from main worktree"
 link_source "scripts/api-compare/.rails-source"
-link_source "scripts/api-compare/.rack-source"
+link_source "scripts/api-compare/.rack-source" optional
 
 echo "==> Linking .claude config from main worktree (skills + per-machine permissions)"
 link_source ".claude/skills"
-link_source ".claude/settings.local.json"
+link_source ".claude/settings.local.json" optional
 
 echo "==> Running pnpm install"
 ( cd "$TARGET" && pnpm install )
+
+WORKTREE_CREATED=0  # success — disable EXIT-trap cleanup
 
 echo
 echo "Done. New worktree:"

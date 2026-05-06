@@ -64,10 +64,19 @@ No code changes.
 
 ### BC-2 — `getEnv()` accessor + migrate 6 activerecord files (~80 LOC)
 
-Add `getEnv(key: string, defaultValue?: string): string | undefined` to
-`packages/activesupport/src/environment.ts`. One-release read-back: check
-`TRAILS_ENV` first, fall back to `NODE_ENV` with a deprecation warning, then
-drop the fallback in the following release.
+Add `getEnv` to `packages/activesupport/src/environment.ts` with two
+overloads:
+
+```ts
+function getEnv(key: string, defaultValue: string): string;
+function getEnv(key: string): string | undefined;
+```
+
+Read-back policy: check `TRAILS_ENV` first; fall back to `NODE_ENV` with a
+deprecation warning for one release; then drop the fallback. Because many
+existing apps set only `NODE_ENV`, the fallback should remain indefinite as
+a read-only alias — `TRAILS_ENV` takes precedence, `NODE_ENV` is a silent
+fallback, never written.
 
 Files to migrate:
 
@@ -96,6 +105,12 @@ proven and we can copy it verbatim.
 - Move `import pg from "pg"` and `import Database from "better-sqlite3"` out
   of barrel-reachable files and into the adapter subpath entry points only.
 - Promote `pg` and `mysql2` to optional peer deps in `package.json`.
+
+**Important:** registries self-register on import. An app that never imports
+`@blazetrails/activerecord/adapters/postgresql` will find no registered
+driver and get a clear "no adapter registered for postgresql" error at
+connection time. The error message should name the missing subpath import so
+the fix is obvious.
 
 Files that currently eagerly import native deps (all move to subpath entries):
 
@@ -138,15 +153,16 @@ rack) get their status set to ✅ or flagged as ❌ after a grep-and-review pass
 
 ## 5. CI gates (added in BC-4)
 
-| Gate                    | Tooling                                 | Trigger    |
-| ----------------------- | --------------------------------------- | ---------- |
-| Browser-bundle smoke    | `esbuild --platform=browser` per barrel | Every push |
-| No bare native imports  | Custom ESLint rule                      | Every push |
-| No direct `process.env` | Custom ESLint rule                      | Every push |
+| Gate                    | Tooling                                                                                           | Job                    | Trigger    |
+| ----------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- | ---------- |
+| Browser-bundle smoke    | `esbuild --bundle --platform=browser --bundle <barrel> 2>&1 \| grep -E "^(✘\|error)"` per package | `Browser Bundle` (new) | Every push |
+| No bare native imports  | `blazetrails/no-native-import` ESLint rule                                                        | `Lint` (existing)      | Every push |
+| No direct `process.env` | `blazetrails/no-direct-process-env` ESLint rule                                                   | `Lint` (existing)      | Every push |
 
-A package barrel that resolves `node:fs` in the browser-bundle smoke test
-fails the build immediately. This is the hard signal that a new dep has leaked
-past the adapter layer.
+A package barrel that resolves `node:fs` in the browser-bundle step fails
+the `Browser Bundle` job with a non-zero exit code — the hard signal that a
+dep has leaked past the adapter layer. This catches regressions that
+tree-shaker analysis would miss.
 
 ## 6. Open questions
 
@@ -158,6 +174,9 @@ past the adapter layer.
   WebSocket)? Current stance: PostgreSQL and MySQL remain server-only; the
   goal is _bundle-cleanliness_, not browser execution. Revisit only if an
   explicit consumer requests it.
-- **`TRAILS_ENV` deprecation window.** One release of `NODE_ENV` fallback may
-  not be enough for apps that set only `NODE_ENV`. Should the fallback be
-  indefinite (read both, prefer `TRAILS_ENV`)? Decide before BC-2 ships.
+- **MySQL driver abstraction.** Should MySQL follow the same driver-registry
+  path as SQLite (a `MysqlDriver` interface, `mysql2` as the default
+  implementation, a future `planetscale-driver` possible)? Or is MySQL
+  strictly server-only forever? Currently leaning server-only — the bundle
+  goal is met by BC-3's lazy loading alone — but document this if a consumer
+  requests it.

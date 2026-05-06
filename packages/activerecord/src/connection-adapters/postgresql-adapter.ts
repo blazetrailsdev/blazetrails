@@ -4217,9 +4217,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * @internal
    */
   isRetryableQueryError(_exception: unknown): boolean {
-    // node-pg doesn't expose transaction_status on the pool client in the
-    // same way; we conservatively delegate to the base-class check (always
-    // true for non-transaction errors) so the retry path works.
+    // Rails checks @raw_connection.transaction_status != PG::PQTRANS_INERROR.
+    // node-pg doesn't expose the PG transaction status byte, so we conservatively
+    // return true (same as the base class). Callers already guard on open_transactions.
     return true;
   }
 
@@ -4251,13 +4251,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   async prepareStatement(sql: string, _binds: unknown[], client: pg.PoolClient): Promise<string> {
     const pool = this._poolFor(client);
-    const key = this.sqlKey(sql);
-    let name = pool.get(key)?.name;
-    if (name == null) {
-      name = pool.nextKey();
-      await client.query({ name, text: sql });
-      pool.set(key, { name });
-    }
+    // Use same cache key as _preparedNameFor so prepared statements created here
+    // are visible to / deduped with the internal query path.
+    const existing = pool.get(sql);
+    if (existing) return existing.name;
+    const name = pool.nextKey();
+    // PREPARE ... AS avoids executing the statement (node-pg's { name, text } form
+    // both prepares and executes in a single roundtrip).
+    await client.query(`PREPARE ${pgQuoteColumnName(name)} AS ${sql}`);
+    pool.set(sql, { name });
     return name;
   }
 

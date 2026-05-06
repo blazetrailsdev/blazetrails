@@ -369,7 +369,8 @@ export class MySQLDatabaseTasks {
 
   /** @internal */
   private configurationHashWithoutDatabase(): ConfigHash {
-    return { ...this.configurationHash, database: undefined };
+    const { database: _db, ...rest } = this.configurationHash;
+    return rest;
   }
 }
 

@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::Tasks::DatabaseTasks
  */
 
-import type { DatabaseConfig } from "../database-configurations/database-config.js";
+import { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
 import { getFs, getPath, getCryptoAsync, getOs, getEnv } from "@blazetrails/activesupport";
@@ -1089,7 +1089,11 @@ export async function withTemporaryPool(
 
 /** @internal */
 export function resolveConfiguration(configuration: unknown): DatabaseConfig {
-  const configs = DatabaseTasks.databaseConfiguration ?? new DatabaseConfigurations([]);
+  // DatabaseConfig instances don't need a configurations registry — return as-is.
+  // Avoids constructing a new DatabaseConfigurations (which mutates the global singleton).
+  if (configuration instanceof DatabaseConfig) return configuration;
+  const configs = DatabaseTasks.databaseConfiguration;
+  if (!configs) throw new Error("DatabaseTasks.databaseConfiguration is not set");
   return configs.resolve(configuration);
 }
 
@@ -1200,7 +1204,7 @@ export async function initializeDatabase(dbConfig: DatabaseConfig): Promise<bool
       const sm = new SchemaMigration(adapter);
       alreadyInitialized = await sm.tableExists();
     } catch (error) {
-      if (error instanceof NoDatabaseError) {
+      if (error instanceof NoDatabaseError || _isMissingDatabaseError(error)) {
         await DatabaseTasks.create(dbConfig);
       } else {
         throw error;
@@ -1214,4 +1218,14 @@ export async function initializeDatabase(dbConfig: DatabaseConfig): Promise<bool
     }
     return !alreadyInitialized;
   });
+}
+
+function _isMissingDatabaseError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: unknown; errno?: unknown; message?: unknown };
+  // MySQL: ER_BAD_DB_ERROR (errno 1049) — adapter doesn't translate this to NoDatabaseError yet
+  if (e.code === "ER_BAD_DB_ERROR" || e.errno === 1049) return true;
+  // PostgreSQL: SQLSTATE 3D000 "invalid_catalog_name" — database does not exist
+  if (e.code === "3D000") return true;
+  return false;
 }

@@ -206,11 +206,63 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         cause: e,
       });
     }
-    if (!this._readonly) {
-      this.db.pragma("journal_mode = WAL");
-      this.db.pragma("foreign_keys = ON");
-    }
+    this._applyPragmas(options);
     this._nativeTypeMap = SQLite3Adapter._buildTypeMap();
+  }
+
+  private _applyPragmas(options: SQLite3AdapterOptions): void {
+    if (!this._readonly) {
+      // Rails DEFAULT_PRAGMAS — best effort; an unsupported PRAGMA on a
+      // non-standard SQLite build should warn, not abort construction.
+      const defaults: Array<[string, string]> = [
+        ["foreign_keys", "ON"],
+        ["journal_mode", "WAL"],
+        ["synchronous", "NORMAL"],
+        ["mmap_size", "134217728"],
+        ["journal_size_limit", "67108864"],
+        ["cache_size", "2000"],
+      ];
+      for (const [name, value] of defaults) {
+        try {
+          this.db.pragma(`${name} = ${value}`);
+        } catch (e) {
+          console.warn(
+            `SQLite default pragma '${name}' failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+    }
+    const pragmas = options.pragmas;
+    if (!pragmas) return;
+    const SAFE_NAME = /^\w+$/;
+    const SAFE_VALUE = /^\w+$/;
+    for (const [name, value] of Object.entries(pragmas)) {
+      if (!SAFE_NAME.test(name)) {
+        console.warn(`Skipping invalid SQLite pragma name: ${name}`);
+        continue;
+      }
+      const scalar =
+        typeof value === "boolean"
+          ? value
+            ? "1"
+            : "0"
+          : typeof value === "number"
+            ? String(value)
+            : SAFE_VALUE.test(value)
+              ? value
+              : null;
+      if (scalar === null) {
+        console.warn(`Skipping SQLite pragma '${name}': value contains unsafe characters`);
+        continue;
+      }
+      try {
+        this.db.pragma(`${name} = ${scalar}`);
+      } catch (e) {
+        console.warn(
+          `SQLite pragma '${name}' failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
   }
 
   /**

@@ -8,8 +8,14 @@
  * stay in callers (e.g. `Sqlite3Adapter`) so PG/MySQL/SQLite share one path.
  */
 
-/** Anything a sqlite driver must accept as a bound parameter. */
-export type SqliteBindValue = null | string | number | bigint | boolean | Uint8Array | Date;
+/**
+ * Anything a sqlite driver must accept as a bound parameter. Date is
+ * intentionally NOT in the union: the rest of trails uses Temporal types and
+ * the AR quoting layer pre-formats temporal values to strings before they
+ * reach a driver. Including Date here would force every driver author to
+ * carry a dead branch that callers never exercise.
+ */
+export type SqliteBindValue = null | string | number | bigint | boolean | Uint8Array;
 
 /** Positional or named binds; statement methods accept either form. */
 export type SqliteBinds = readonly SqliteBindValue[] | { readonly [name: string]: SqliteBindValue };
@@ -61,6 +67,33 @@ export interface SqliteConnection {
   readonly raw: unknown;
 }
 
+/**
+ * Synchronous narrowing of `SqliteStatement` for `inProcessSync` drivers. The
+ * adapter binds to this until PR 3 lifts every call site to `await`. Until
+ * then, async drivers can't be wired through `openSync()` — they'd return
+ * Promises that the sync path silently casts as concrete values.
+ */
+export interface SyncSqliteStatement {
+  run(binds?: SqliteBinds): RunResult;
+  get(binds?: SqliteBinds): unknown;
+  all(binds?: SqliteBinds): unknown[];
+  iterate(binds?: SqliteBinds): Iterable<unknown>;
+  columns(): ColumnInfo[];
+  setReadBigInts(on: boolean): void;
+  readonly reader: boolean;
+  finalize?(): void;
+}
+
+/** Synchronous narrowing of `SqliteConnection`. See `SyncSqliteStatement`. */
+export interface SyncSqliteConnection {
+  prepare(sql: string): SyncSqliteStatement;
+  exec(sql: string): void;
+  pragma(source: string, opts?: { simple?: boolean }): unknown;
+  close(): void;
+  isOpen(): boolean;
+  readonly raw: unknown;
+}
+
 export interface SqliteOpenConfig {
   /** File path or special URI (`:memory:`, `file::memory:?cache=shared`). */
   database: string;
@@ -90,10 +123,12 @@ export interface SqliteDriver {
   /**
    * Sync open for `inProcessSync` drivers. The async-aware adapter (PR 3)
    * lifts everything onto `open()`; this hook bridges the existing sync
-   * `connect()` path until that lands.
+   * `connect()` path until that lands. Returns the narrowed
+   * `SyncSqliteConnection` so the adapter can call statement methods without
+   * `await` and have the type system reject async drivers wired here.
    * @internal
    */
-  openSync?(config: SqliteOpenConfig): SqliteConnection;
+  openSync?(config: SqliteOpenConfig): SyncSqliteConnection;
   /**
    * Pre-flight existence check. Optional — drivers that can't statelessly
    * answer (network-backed) leave undefined and callers fall back to

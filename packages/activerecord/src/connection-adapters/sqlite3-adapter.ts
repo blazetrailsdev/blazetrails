@@ -1,12 +1,17 @@
-import type Database from "better-sqlite3";
 import type {
-  RunResult,
   SqliteBinds,
-  SqliteConnection,
   SqliteDriver,
-  SqliteStatement,
+  SyncSqliteConnection,
+  SyncSqliteStatement,
 } from "@blazetrails/activesupport/sqlite-adapter";
 import { getSqlite } from "@blazetrails/activesupport/sqlite-adapter";
+
+// Local aliases keep call sites readable while the adapter is bound to the
+// sync sub-types. PR 3 (async-aware adapter) will rebind these to the
+// async-tolerant `SqliteStatement` / `SqliteConnection` and lift each
+// statement call to `await`.
+type SqliteStatement = SyncSqliteStatement;
+type SqliteConnection = SyncSqliteConnection;
 import { Visitors } from "@blazetrails/arel";
 import type {
   AdapterName,
@@ -249,13 +254,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     // `prepared_statements`. better-sqlite3 still uses its own statement
     // handle internally, but we no longer cache across executes.
     if (!this.preparedStatements) {
-      const stmt = this.driver.prepare(sql) as SqliteStatement;
+      const stmt = this.driver.prepare(sql);
       this._maybeEnableReadBigInts(sql, stmt);
       return stmt;
     }
     let stmt = this._statementPool.get(sql);
     if (!stmt) {
-      stmt = this.driver.prepare(sql) as SqliteStatement;
+      stmt = this.driver.prepare(sql);
       this._maybeEnableReadBigInts(sql, stmt);
       this._statementPool.set(sql, stmt);
     }
@@ -325,7 +330,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return Notifications.instrumentAsync("sql.active_record", payload, async () => {
       try {
         const stmt = this._cachedStatement(sql);
-        const result = stmt.run(binds as SqliteBinds) as RunResult;
+        const result = stmt.run(binds as SqliteBinds);
         this.dirtyCurrentTransaction();
         payload.row_count = typeof result.changes === "number" ? result.changes : 0;
 
@@ -368,7 +373,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         "You need to enable the shared-cache mode in SQLite mode before attempting to change the transaction isolation level",
       );
     }
-    const row = (this.driver.prepare("PRAGMA read_uncommitted") as SqliteStatement).get() as
+    const row = this.driver.prepare("PRAGMA read_uncommitted").get() as
       | { read_uncommitted: number }
       | undefined;
     this._previousReadUncommitted = row?.read_uncommitted ?? 0;
@@ -453,9 +458,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     binds: unknown[] = [],
     _options: ExplainOption[] = [],
   ): Promise<string> {
-    const rows = (this.driver.prepare(`EXPLAIN QUERY PLAN ${sql}`) as SqliteStatement).all(
-      binds as SqliteBinds,
-    ) as Record<string, unknown>[];
+    const rows = this.driver
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(binds as SqliteBinds) as Record<string, unknown>[];
     return rows.map((r) => `${r.id}|${r.parent}|${r.notused}|${r.detail}`).join("\n");
   }
 
@@ -588,13 +593,12 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   /**
    * Driver-specific escape hatch — returns whatever the registered SqliteDriver
-   * exposes as `connection.raw`. The default better-sqlite3 driver exposes the
-   * `Database` instance, hence the convenience type below; consumers using a
-   * different driver (node:sqlite, sqlite-wasm, expo-sqlite, …) should cast
-   * to whichever raw handle that driver documents.
+   * exposes as `connection.raw`. With better-sqlite3, that's the `Database`
+   * instance; with node:sqlite, sqlite-wasm, expo-sqlite, etc., it's whichever
+   * handle that driver documents. Consumers cast at the use site.
    */
-  get raw(): Database.Database {
-    return this.driver.raw as Database.Database;
+  get raw(): unknown {
+    return this.driver.raw;
   }
 
   /**
@@ -770,9 +774,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   override getDatabaseVersion(): Version {
     if (!this._databaseVersion) {
-      const row = (
-        this.driver.prepare("SELECT sqlite_version() AS v") as SqliteStatement
-      ).get() as any;
+      const row = this.driver.prepare("SELECT sqlite_version() AS v").get() as any;
       this._databaseVersion = new Version(row?.v ?? "0.0.0");
     }
     return this._databaseVersion;
@@ -1212,7 +1214,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
              UNION ALL
              SELECT sql FROM sqlite_master WHERE type='table' AND name=${sqliteQuoteStringLiteral(bare)}`;
     }
-    const row = (this.driver.prepare(sql) as SqliteStatement).get() as { sql: string } | undefined;
+    const row = this.driver.prepare(sql).get() as { sql: string } | undefined;
     return row?.sql ?? null;
   }
 
@@ -1431,11 +1433,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         [],
         "SCHEMA",
       )) as Array<{ name: string; seqno: number }>;
-      const idxSqlRow = (
-        this.driver.prepare(
+      const idxSqlRow = this.driver
+        .prepare(
           `SELECT sql FROM ${sqliteMaster} WHERE type='index' AND name=${sqliteQuoteStringLiteral(idx.name)}`,
-        ) as SqliteStatement
-      ).get() as { sql: string } | undefined;
+        )
+        .get() as { sql: string } | undefined;
       const whereMatch = idxSqlRow?.sql ? /\bWHERE\b\s+(.+)$/i.exec(idxSqlRow.sql) : null;
       result.push({
         name: idx.name,
@@ -1614,11 +1616,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     const { schema, bare: bareTable } = this._splitTableName(tableName);
     const pragmaPrefix = schema ? `${quoteColumnName(schema)}.` : "";
     const qTable = quoteTableName(tableName);
-    const tableInfo = (
-      this.driver.prepare(
-        `PRAGMA ${pragmaPrefix}table_info(${quoteColumnName(bareTable)})`,
-      ) as SqliteStatement
-    ).all() as Array<Record<string, unknown>>;
+    const tableInfo = this.driver
+      .prepare(`PRAGMA ${pragmaPrefix}table_info(${quoteColumnName(bareTable)})`)
+      .all() as Array<Record<string, unknown>>;
 
     const columns: Record<string, Record<string, unknown>> = {};
     for (const col of tableInfo) {
@@ -1628,21 +1628,19 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     modify(columns);
 
     // Collect existing indexes to recreate after table rebuild
-    const indexList = (
-      this.driver.prepare(
-        `PRAGMA ${pragmaPrefix}index_list(${quoteColumnName(bareTable)})`,
-      ) as SqliteStatement
-    ).all() as Array<Record<string, unknown>>;
+    const indexList = this.driver
+      .prepare(`PRAGMA ${pragmaPrefix}index_list(${quoteColumnName(bareTable)})`)
+      .all() as Array<Record<string, unknown>>;
     const indexDefs: string[] = [];
     for (const idx of indexList) {
       const idxName = idx.name as string;
       // Skip auto-created indexes (sqlite_autoindex_*)
       if (idxName.startsWith("sqlite_autoindex_")) continue;
-      const createSql = (
-        this.driver.prepare(
+      const createSql = this.driver
+        .prepare(
           `SELECT sql FROM ${pragmaPrefix}sqlite_master WHERE type='index' AND name=${sqliteQuoteStringLiteral(idxName)}`,
-        ) as SqliteStatement
-      ).get() as { sql: string } | undefined;
+        )
+        .get() as { sql: string } | undefined;
       if (createSql?.sql) {
         indexDefs.push(createSql.sql);
       }
@@ -1807,9 +1805,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   /** @internal */
   private tableStructureSql(tableName: string, columnNames?: string[]): string[] {
     const querySql = `SELECT sql FROM (SELECT * FROM sqlite_master UNION ALL SELECT * FROM sqlite_temp_master) WHERE type = 'table' AND name = ${sqliteQuoteStringLiteral(tableName)}`;
-    const row = (this.driver.prepare(querySql) as SqliteStatement).get() as
-      | { sql: string }
-      | undefined;
+    const row = this.driver.prepare(querySql).get() as { sql: string } | undefined;
     if (!row?.sql) return [];
     const body = row.sql.replace(/\);\s*$/, "").replace(/^[^(]*\(/, "");
     const names = columnNames ?? [];

@@ -10,6 +10,8 @@ import {
   type SqliteDriverCapabilities,
   type SqliteOpenConfig,
   type SqliteStatement,
+  type SyncSqliteConnection,
+  type SyncSqliteStatement,
 } from "../sqlite-adapter.js";
 
 /** @internal */
@@ -20,7 +22,7 @@ function bindArgs(binds?: SqliteBinds): unknown[] {
 }
 
 /** @internal */
-class BetterSqlite3Statement implements SqliteStatement {
+class BetterSqlite3Statement implements SqliteStatement, SyncSqliteStatement {
   constructor(private readonly stmt: Database.Statement) {}
 
   run(binds?: SqliteBinds): RunResult {
@@ -64,7 +66,7 @@ class BetterSqlite3Statement implements SqliteStatement {
 }
 
 /** @internal */
-class BetterSqlite3Connection implements SqliteConnection {
+class BetterSqlite3Connection implements SqliteConnection, SyncSqliteConnection {
   readonly raw: Database.Database;
 
   constructor(db: Database.Database) {
@@ -152,7 +154,7 @@ export const betterSqlite3Driver: SqliteDriver = {
     return Promise.resolve(new BetterSqlite3Connection(openDatabase(config)));
   },
 
-  openSync(config: SqliteOpenConfig): SqliteConnection {
+  openSync(config: SqliteOpenConfig): SyncSqliteConnection {
     return new BetterSqlite3Connection(openDatabase(config));
   },
 

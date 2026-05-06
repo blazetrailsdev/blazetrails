@@ -4,8 +4,8 @@ import {
   getSqlite,
   getSqliteAsync,
   registerSqliteDriver,
-  type SqliteConnection,
   type SqliteDriver,
+  type SyncSqliteConnection,
 } from "./sqlite-adapter.js";
 import { betterSqlite3Driver } from "./sqlite-drivers/better-sqlite3.js";
 
@@ -21,7 +21,7 @@ function stubDriver(name: string): SqliteDriver {
       immediateTransactions: false,
     },
     open: () => Promise.reject(new Error("stub")),
-    openSync: () => ({}) as SqliteConnection,
+    openSync: () => ({}) as SyncSqliteConnection,
   };
 }
 

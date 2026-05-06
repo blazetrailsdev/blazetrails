@@ -4,7 +4,7 @@ import type {
   AdapterName,
   DatabaseAdapter,
   ExplainOption,
-  TrailsAdapterOptions,
+  SQLite3AdapterOptions,
 } from "../adapter.js";
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
@@ -183,10 +183,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     this._statementPool.setMaxSize(value);
   }
 
-  constructor(
-    filename: string | ":memory:" = ":memory:",
-    options: TrailsAdapterOptions & { readonly?: boolean } = {},
-  ) {
+  constructor(filename: string | ":memory:" = ":memory:", options: SQLite3AdapterOptions = {}) {
     super();
     this._config = { ...options };
     this._filename = filename;
@@ -1999,21 +1996,33 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       this.db.pragma("journal_size_limit = 67108864");
       this.db.pragma("cache_size = 2000");
     }
-    const pragmas = (this._config as Record<string, unknown>)?.pragmas as
-      | Record<string, unknown>
-      | undefined;
+    const pragmas = (this._config as SQLite3AdapterOptions).pragmas;
     if (pragmas) {
       // Validate pragma name is a safe SQLite identifier before interpolating.
-      const SAFE_PRAGMA = /^\w+$/;
+      const SAFE_PRAGMA_NAME = /^\w+$/;
+      // Restrict values to identifier-like strings (enum pragmas) or scalars.
+      const SAFE_PRAGMA_VALUE = /^\w+$/;
       for (const [pragma, value] of Object.entries(pragmas)) {
-        if (!SAFE_PRAGMA.test(pragma)) {
+        if (!SAFE_PRAGMA_NAME.test(pragma)) {
           console.warn(`Skipping invalid SQLite pragma name: ${pragma}`);
           continue;
         }
+        const scalar =
+          typeof value === "number" || typeof value === "boolean"
+            ? String(value)
+            : SAFE_PRAGMA_VALUE.test(String(value))
+              ? String(value)
+              : null;
+        if (scalar === null) {
+          console.warn(`Skipping SQLite pragma '${pragma}': value contains unsafe characters`);
+          continue;
+        }
         try {
-          this.db.pragma(`${pragma} = ${String(value)}`);
-        } catch {
-          console.warn(`Unknown SQLite pragma: ${pragma}`);
+          this.db.pragma(`${pragma} = ${scalar}`);
+        } catch (e) {
+          console.warn(
+            `SQLite pragma '${pragma}' failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
       }
     }

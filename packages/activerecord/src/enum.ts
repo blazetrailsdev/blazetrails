@@ -282,6 +282,7 @@ export class EnumMethods {
   ): void {
     const klass = this._klass;
     if (instanceMethods) {
+      detectEnumConflictBang.call(klass, name, `${valueMethodName}?`);
       Object.defineProperty(klass.prototype, `${valueMethodName}?`, {
         value: function (this: any) {
           return this.readAttributeForDatabase(name) === value;
@@ -289,6 +290,7 @@ export class EnumMethods {
         writable: true,
         configurable: true,
       });
+      detectEnumConflictBang.call(klass, name, `${valueMethodName}!`);
       Object.defineProperty(klass.prototype, `${valueMethodName}!`, {
         value: async function (this: any) {
           await this.updateBang({ [name]: value });
@@ -298,11 +300,11 @@ export class EnumMethods {
       });
     }
     if (scopes) {
+      const notName = `not${valueMethodName.charAt(0).toUpperCase()}${valueMethodName.slice(1)}`;
+      detectEnumConflictBang.call(klass, name, valueMethodName, true);
       klass.scope(valueMethodName, (rel: any) => rel.where({ [name]: value }));
-      klass.scope(
-        `not${valueMethodName.charAt(0).toUpperCase()}${valueMethodName.slice(1)}`,
-        (rel: any) => rel.whereNot({ [name]: value }),
-      );
+      detectEnumConflictBang.call(klass, name, notName, true);
+      klass.scope(notName, (rel: any) => rel.whereNot({ [name]: value }));
     }
   }
 }
@@ -456,6 +458,7 @@ export function _enum(
 
 /** Cache of per-class EnumMethods modules.
  * @internal */
+// JS-idiomatic equivalent of Rails' per-class `@_enum_methods_module` ivar.
 const _enumMethodsModuleRegistry = new WeakMap<typeof import("./base.js").Base, EnumMethods>();
 
 /**
@@ -487,9 +490,9 @@ export function detectEnumConflictBang(
   methodName: string,
   _klassMethod = false,
 ): void {
-  // Check if the method already exists on prototype (instance conflict) or class (scope conflict).
+  // Walk the prototype chain (mirrors Rails method_defined? semantics).
   const target = _klassMethod ? this : this.prototype;
-  if (Object.prototype.hasOwnProperty.call(target, methodName)) {
+  if (methodName in (target as object)) {
     raiseConflictError.call(this, enumName, methodName);
   }
 }

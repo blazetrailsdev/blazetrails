@@ -903,7 +903,7 @@ export class AssociationReflection extends MacroReflection {
    */
   protected ensureOptionNotGivenAsClassBang(optionName: string): void {
     const val = this.options[optionName];
-    if (val && (val as any).constructor === Function) {
+    if (typeof val === "function" && (val as any).prototype != null) {
       throw new ArgumentError(
         `A class was passed to \`:${optionName}\` but we are expecting a string.`,
       );
@@ -1423,7 +1423,7 @@ export class ThroughReflection extends AbstractReflection {
 
   /** @internal */
   protected deriveClassName(): string {
-    return (this.options.sourceType as string) || (this.sourceReflection as any)?.className;
+    return (this.options.sourceType as string) || (this.sourceReflection as any)?.className || "";
   }
 
   /**

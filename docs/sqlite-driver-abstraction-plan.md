@@ -13,10 +13,14 @@ the adapter layer.
 
 Added `packages/activerecord/src/connection-adapters/sqlite3/driver.ts`:
 
-- `SqliteDriver` interface with `open`, `prepare`, `exec`, `pragma`, `close`,
-  `raw`, `setReadBigInts` (sync config setter), `finalize` (optional teardown).
-- `BetterSqlite3Driver` wrapper over the existing `better-sqlite3` `Database`.
-- `SqliteStatement` interface wrapping `better-sqlite3`'s `Statement`.
+- `SqliteDriver` interface: `prepare`, `exec`, `pragma`, `close` (all
+  `T | Promise<T>`), plus readonly `open: boolean` and `raw: unknown`.
+- `SqliteStatement` interface: `run`, `get`, `all` (all `T | Promise<T>`),
+  `columns()`, `setReadBigInts(on)` (sync setter), optional `finalize()`,
+  and readonly `reader: boolean`.
+- `DriverFactory` interface: `name` + `open(config)` (returns
+  `Promise<SqliteDriver>`).
+- `BetterSqlite3Driver` wrapper implementing `SqliteDriver` over `better-sqlite3`.
 
 ### PR 2 — Route Sqlite3Adapter through SqliteDriver (#1240)
 
@@ -36,13 +40,12 @@ flags any `driver.<method>(...)` call (where `driver` is a local identifier —
 e.g. a helper-function parameter or destructured variable) that is not wrapped
 in `await` or chained with `.then()`/`.catch()`/`.finally()`.
 
-Whitelisted (always synchronous):
-
-| Method                               | Reason                                |
-| ------------------------------------ | ------------------------------------- |
-| `setReadBigInts`                     | synchronous configuration setter      |
-| `finalize`                           | optional teardown, no-op in sync impl |
-| Property access (`driver.raw`, etc.) | not a call; no Promise returned       |
+No `SqliteDriver` methods are unconditionally synchronous — every callable
+member returns `T | Promise<T>`. Property accesses (`driver.raw`,
+`driver.open`) are never `CallExpression` nodes and are therefore never
+matched by the rule. (`setReadBigInts` and `finalize` live on
+`SqliteStatement`, not `SqliteDriver`, and cannot appear as
+`driver.<method>()` calls.)
 
 `this.driver.<method>()` call sites are **excluded by design** — the rule
 targets local `driver` variables / parameters, which are the likely pattern

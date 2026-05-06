@@ -13,16 +13,12 @@
  * receiver and are covered by the TypeScript compiler once return types
  * move to `Promise<T>`.
  *
- * Whitelisted (sync by spec):
- *   - `driver.setReadBigInts(…)` — synchronous configuration setter
- *   - `driver.finalize(…)`        — optional teardown helper (no-op in sync impl)
- *   - `driver.raw`                — property access, not a call
+ * No SqliteDriver methods are unconditionally synchronous — every callable
+ * member returns `T | Promise<T>`.  Property accesses (`driver.raw`,
+ * `driver.open`) are never CallExpressions and therefore never matched.
  *
  * Scoped to sqlite3/** and sqlite3-adapter.ts only (see eslint.config.mjs).
  */
-
-/** @internal */
-const SYNC_METHODS = new Set(["setReadBigInts", "finalize"]);
 
 /**
  * @internal
@@ -74,7 +70,6 @@ const rule = {
         if (obj.type !== "Identifier" || obj.name !== "driver") return;
         const method = callee.property;
         if (method.type !== "Identifier") return;
-        if (SYNC_METHODS.has(method.name)) return;
         if (isSafelyConsumed(node)) return;
         context.report({ node, messageId: "missingAwait" });
       },

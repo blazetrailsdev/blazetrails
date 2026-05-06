@@ -15,12 +15,9 @@ tester.run("sqlite-driver-await", rule, {
     { code: "driver.run('SELECT 1').catch(e => e);" },
     // .finally() chain
     { code: "driver.run('SELECT 1').finally(() => cleanup());" },
-    // property access (no call) — driver.raw
+    // property access (no call) — driver.raw, driver.open
     { code: "const db = driver.raw;" },
-    // whitelisted sync: setReadBigInts
-    { code: "driver.setReadBigInts(true);" },
-    // whitelisted sync: finalize
-    { code: "driver.finalize();" },
+    { code: "const ok = driver.open;" },
     // this.driver.exec() — member expression object, not identifier; excluded by design
     { code: "this.driver.exec('PRAGMA x');" },
     // deeply nested await

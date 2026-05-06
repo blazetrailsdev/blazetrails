@@ -108,6 +108,12 @@ class NodeSqliteConnection implements SqliteConnection, SyncSqliteConnection {
 
   pragma(source: string, opts?: { simple?: boolean }): unknown {
     const stmt = this.raw.prepare(`PRAGMA ${source}`);
+    // Write PRAGMAs (source contains `=`) don't return rows; must use run().
+    // better-sqlite3 throws if all() is called on a non-reader statement.
+    if (source.includes("=")) {
+      stmt.run();
+      return [];
+    }
     if (opts?.simple) {
       const row = stmt.get() as Record<string, unknown> | undefined;
       return row !== undefined ? Object.values(row)[0] : undefined;

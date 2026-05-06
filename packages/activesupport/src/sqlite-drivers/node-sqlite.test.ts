@@ -83,6 +83,10 @@ describe.skipIf(!isNodeSqliteAvailable)("SqliteDriver — node-sqlite round-trip
     expect(result).toBeDefined();
   });
 
+  it("write pragma does not throw and returns []", async () => {
+    expect(await conn.pragma("foreign_keys = ON")).toEqual([]);
+  });
+
   it("isOpen() is true while connected", () => {
     expect(conn.isOpen()).toBe(true);
   });

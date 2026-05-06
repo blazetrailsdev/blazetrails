@@ -180,6 +180,8 @@ export async function castResult(this: CastResultHost, result: pg.QueryResult): 
     const f = fields[i];
     const type = await this.getOidType(f.dataTypeID, f.dataTypeModifier ?? -1, f.name, "");
     columnTypes[i] = type;
+    // Rails sets types[fname] = types[i] unconditionally; we guard against a column
+    // named "1" colliding with integer index 1 in a plain JS object key space.
     if (!/^\d+$/.test(f.name)) columnTypes[f.name] = type;
   }
 

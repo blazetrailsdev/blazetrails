@@ -211,12 +211,18 @@ export function collectionCacheKey(
   return Promise.resolve("");
 }
 
+// Matches DB timestamp strings in the form "YYYY-MM-DD HH:MM:SS" or
+// "YYYY-MM-DD HH:MM:SS.ffffff" — the only shapes rawTimestampToCacheVersion
+// can reliably strip-and-pad to a 20-char usec key.
+const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
+
 /**
  * Returns true when the raw DB timestamp string can be converted directly
- * to a cache version without re-parsing (fast path). Checks: string type
- * and usec format. The UTC-timezone and updatedAtCameFromUser? checks from
- * Rails are omitted — they require an async connection call that can't be
- * made synchronously here.
+ * to a cache version without re-parsing (fast path). Checks: string type,
+ * usec format, and expected DB timestamp shape. The UTC-timezone and
+ * updatedAtCameFromUser? guards from Rails are omitted — they require an
+ * async connection call that can't be made synchronously here; the shape
+ * check acts as a partial proxy that prevents broken cache keys.
  *
  * Mirrors: ActiveRecord::Integration#can_use_fast_cache_version? (private)
  *
@@ -226,9 +232,7 @@ export function canUseFastCacheVersion(record: Identifiable, timestamp: unknown)
   if (typeof timestamp !== "string") return false;
   const klass = record.constructor as any;
   if ((klass.cacheTimestampFormat ?? "usec") !== "usec") return false;
-  // We cannot reliably check the connection's default_timezone without an
-  // async call here; callers that need this check should do it explicitly.
-  return true;
+  return TIMESTAMP_RE.test(timestamp);
 }
 
 /**

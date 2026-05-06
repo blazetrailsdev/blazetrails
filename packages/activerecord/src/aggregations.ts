@@ -80,10 +80,9 @@ function readerMethod(
   mapping: [string, string][],
   klass: new (...args: any[]) => any,
 ): void {
-  const descriptor = (Object.getOwnPropertyDescriptor(modelClass.prototype, name) ??
-    {}) as PropertyDescriptor;
+  const existing = Object.getOwnPropertyDescriptor(modelClass.prototype, name);
   Object.defineProperty(modelClass.prototype, name, {
-    ...descriptor,
+    enumerable: existing?.enumerable ?? false,
     get(this: Base): unknown {
       const cache = getAggregationCache(this);
       if (cache.has(name)) return cache.get(name);
@@ -108,10 +107,10 @@ function writerMethod(
   klass: new (...args: any[]) => any,
   converter?: (value: unknown) => unknown,
 ): void {
-  const descriptor = (Object.getOwnPropertyDescriptor(modelClass.prototype, name) ??
-    {}) as PropertyDescriptor;
+  const existing = Object.getOwnPropertyDescriptor(modelClass.prototype, name);
   Object.defineProperty(modelClass.prototype, name, {
-    ...descriptor,
+    enumerable: existing?.enumerable ?? false,
+    get: existing?.get,
     set(this: Base, value: unknown): void {
       const cache = getAggregationCache(this);
       if (value === null || value === undefined) {

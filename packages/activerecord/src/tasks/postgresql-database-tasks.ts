@@ -388,7 +388,7 @@ export class PostgreSQLDatabaseTasks {
 
   /** @internal */
   private publicSchemaConfig(): ConfigHash {
-    return { ...this.configurationHash, database: "postgres", schema_search_path: "public" };
+    return { ...this.configurationHash, database: "postgres", schemaSearchPath: "public" };
   }
 }
 

@@ -405,8 +405,8 @@ export async function runCmd(cmd: string, args: string[], out: string): Promise<
     if (result.stdout) details.push(`stdout:\n${String(result.stdout).trimEnd()}`);
     throw new Error(runCmdError(cmd, args) + (details.length ? details.join("\n") + "\n" : ""));
   }
-  if (out && result.stdout) {
-    getFs().writeFileSync(out, String(result.stdout));
+  if (out) {
+    getFs().writeFileSync(out, result.stdout ?? "");
   }
 }
 

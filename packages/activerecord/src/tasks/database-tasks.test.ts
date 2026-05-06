@@ -1307,26 +1307,26 @@ describe("eachCurrentEnvironment", () => {
 });
 
 describe("schemaSha1", () => {
-  it("returns a 40-char hex SHA1 of the file contents", () => {
+  it("returns a 40-char hex SHA1 of the file contents", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-sha1-"));
     const file = path.join(tmp, "schema.ts");
     try {
       fs.writeFileSync(file, "export default () => {};");
-      const result = schemaSha1(file);
+      const result = await schemaSha1(file);
       expect(result).toMatch(/^[0-9a-f]{40}$/);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
 
-  it("returns different hashes for different content", () => {
+  it("returns different hashes for different content", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-sha1-"));
     const a = path.join(tmp, "a.ts");
     const b = path.join(tmp, "b.ts");
     try {
       fs.writeFileSync(a, "content A");
       fs.writeFileSync(b, "content B");
-      expect(schemaSha1(a)).not.toBe(schemaSha1(b));
+      expect(await schemaSha1(a)).not.toBe(await schemaSha1(b));
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

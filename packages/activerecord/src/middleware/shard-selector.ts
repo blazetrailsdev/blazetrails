@@ -33,7 +33,7 @@ export class ShardSelector {
   }
 
   async call(request: ShardRequest): Promise<unknown> {
-    const shard = this.selectShard(request);
+    const shard = this.selectedShard(request);
     return this.setShard(shard, () => this.app(request));
   }
 
@@ -55,10 +55,6 @@ export class ShardSelector {
   /** @internal */
   selectedShard(request: ShardRequest): string | symbol {
     return this.resolver(request);
-  }
-
-  private selectShard(request: ShardRequest): string | symbol {
-    return this.selectedShard(request);
   }
 
   private async setShard<T>(shard: string | symbol, block: () => T | Promise<T>): Promise<T> {

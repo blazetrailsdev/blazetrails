@@ -17,7 +17,7 @@
 > - **PR 58 + 59 + tail of 52**: long-tail 1-missers + pg quoting (~270)
 > - **PR 38b**: extended with inheritance.rb finisher (~240)
 
-## Open PRs in flight (refreshed 2026-05-03)
+## Open PRs in flight (refreshed 2026-05-06)
 
 `gh pr list --state open --limit 50` returns:
 
@@ -29,6 +29,8 @@
 | #1139 (B)   | abstract schema_creation + schema_dumper to 100%           | feat/abstract-adapters-B       | OPEN   |
 | #1136 (P25) | drop AM uuid/json/array, consolidate to AR PG OIDs         | worktree-refactor+oid-layering | OPEN   |
 | #281        | add Frontiers sandbox + marketing website                  | worktree-frontiers             | DRAFT  |
+
+**Merged since last refresh:** #1245 (PR 52 — misc small files batch, 21 files to 100%).
 
 **E1 (#1140) is not in the open list — assumed merged.** Verify with `gh pr view 1140` before starting Wave 9.
 

@@ -8,6 +8,7 @@
  * an adapter for execution, matching the codebase's mixin pattern.
  */
 
+import { sql as arelSql } from "@blazetrails/arel";
 import { TransactionIsolationError } from "../../errors.js";
 import { Result } from "../../result.js";
 import { stripSqlComments } from "../sql-classification.js";
@@ -232,7 +233,7 @@ export function defaultInsertValue(column: {
   default?: unknown;
 }): unknown {
   if (column.defaultFunction) {
-    return column.defaultFunction;
+    return arelSql(column.defaultFunction);
   }
   return column.default;
 }

@@ -23,6 +23,7 @@ import {
 } from "../errors.js";
 import { sql as arelSql, type Nodes, Visitors } from "@blazetrails/arel";
 import { StatementPool as ConnectionStatementPool } from "./statement-pool.js";
+import { SchemaCreation as MysqlSchemaCreation } from "./mysql/schema-creation.js";
 import {
   quoteString as mysqlQuoteString,
   quote as mysqlQuote,
@@ -1088,17 +1089,20 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     options: Record<string, unknown> = {},
   ): string {
     const cd = this.buildChangeColumnDefinition(tableName, columnName, type, options);
-    return (
-      this as unknown as { schemaCreation: { accept(o: unknown): string } }
-    ).schemaCreation.accept(cd);
+    return new MysqlSchemaCreation().accept(
+      cd as unknown as Parameters<MysqlSchemaCreation["accept"]>[0],
+    );
   }
 
   /** @internal */
   renameColumnForAlter(tableName: string, columnName: string, newColumnName: string): string {
-    void tableName;
-    void columnName;
-    void newColumnName;
-    throw new Error("renameColumnForAlter requires driver implementation");
+    if (this.supportsRenameColumn()) {
+      return `RENAME COLUMN ${this.quoteIdentifier(columnName)} TO ${this.quoteIdentifier(newColumnName)}`;
+    }
+    // Fallback: SHOW COLUMNS + recreate; requires DB access — must be overridden by driver subclass
+    throw new Error(
+      "renameColumnForAlter fallback path requires driver-level DB access; override in subclass",
+    );
   }
 
   /** @internal */
@@ -1110,7 +1114,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     void tableName;
     void columnName;
     void options;
-    throw new Error("addIndexForAlter requires driver implementation");
+    throw new Error("addIndexForAlter: not yet wired (requires SchemaStatements.addIndexOptions)");
   }
 
   /** @internal */
@@ -1122,19 +1126,20 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     void tableName;
     void columnName;
     void options;
-    throw new Error("removeIndexForAlter requires driver implementation");
+    throw new Error(
+      "removeIndexForAlter: not yet wired (requires SchemaStatements.indexNameForRemove)",
+    );
   }
 
   /** @internal */
   async columnDefinitions(tableName: string): Promise<Record<string, unknown>[]> {
-    void tableName;
-    return [];
+    return this.schemaQuery(`SHOW FULL FIELDS FROM ${this.quoteTableName(tableName)}`);
   }
 
   /** @internal */
   async createTableInfo(tableName: string): Promise<string | null> {
-    void tableName;
-    return null;
+    const rows = await this.schemaQuery(`SHOW CREATE TABLE ${this.quoteTableName(tableName)}`);
+    return (rows[0]?.["Create Table"] as string | null | undefined) ?? null;
   }
 
   /** @internal */

@@ -41,7 +41,12 @@ import {
   unquotedTrue as mysqlUnquotedTrue,
   unquotedFalse as mysqlUnquotedFalse,
 } from "./mysql/quoting.js";
-import { ForeignKeyDefinition, IndexDefinition } from "./abstract/schema-definitions.js";
+import {
+  ChangeColumnDefinition,
+  ColumnDefinition,
+  ForeignKeyDefinition,
+  IndexDefinition,
+} from "./abstract/schema-definitions.js";
 import { TypeMap } from "../type/type-map.js";
 import {
   StringType,
@@ -1088,10 +1093,9 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     type: string,
     options: Record<string, unknown> = {},
   ): string {
-    const cd = this.buildChangeColumnDefinition(tableName, columnName, type, options);
-    return new MysqlSchemaCreation().accept(
-      cd as unknown as Parameters<MysqlSchemaCreation["accept"]>[0],
-    );
+    const colDef = new ColumnDefinition(columnName, type, options);
+    const cd = new ChangeColumnDefinition(colDef, columnName);
+    return new MysqlSchemaCreation().accept(cd);
   }
 
   /** @internal */

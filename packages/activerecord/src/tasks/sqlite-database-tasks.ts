@@ -375,28 +375,28 @@ function splitSqlStatements(sql: string): string[] {
 }
 
 /** @internal */
-function connection(): never {
+export function connection(): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::SQLiteDatabaseTasks#connection is not implemented",
   );
 }
 
 /** @internal */
-function establishConnection(config?: any): never {
+export function establishConnection(config?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::SQLiteDatabaseTasks#establish_connection is not implemented",
   );
 }
 
 /** @internal */
-function runCmd(cmd: any, args: any, out: any): never {
+export function runCmd(cmd: any, args: any, out: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::SQLiteDatabaseTasks#run_cmd is not implemented",
   );
 }
 
 /** @internal */
-function runCmdError(cmd: any, args: any): never {
+export function runCmdError(cmd: any, args: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::SQLiteDatabaseTasks#run_cmd_error is not implemented",
   );

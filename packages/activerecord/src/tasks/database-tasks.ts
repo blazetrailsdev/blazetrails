@@ -1092,7 +1092,7 @@ function truncateTables(dbConfig: any): never {
 }
 
 /** @internal */
-function withTemporaryPool(dbConfig: any, clobber?: any): never {
+export function withTemporaryPool(dbConfig: any, clobber?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#with_temporary_pool is not implemented",
   );
@@ -1106,40 +1106,40 @@ function configsFor(options?: any): never {
 }
 
 /** @internal */
-function resolveConfiguration(configuration: any): never {
+export function resolveConfiguration(configuration: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#resolve_configuration is not implemented",
   );
 }
 
 /** @internal */
-function isVerbose(): never {
+export function isVerbose(): never {
   throw new NotImplementedError("ActiveRecord::Tasks::DatabaseTasks#verbose? is not implemented");
 }
 
 /** @internal */
-function databaseAdapterFor(dbConfig: any, ...arguments_: any[]): never {
+export function databaseAdapterFor(dbConfig: any, ...arguments_: any[]): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#database_adapter_for is not implemented",
   );
 }
 
 /** @internal */
-function classForAdapter(adapter: any): never {
+export function classForAdapter(adapter: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#class_for_adapter is not implemented",
   );
 }
 
 /** @internal */
-function eachCurrentConfiguration(environment: any, name?: any): never {
+export function eachCurrentConfiguration(environment: any, name?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#each_current_configuration is not implemented",
   );
 }
 
 /** @internal */
-function eachCurrentEnvironment(environment: any, block?: any): never {
+export function eachCurrentEnvironment(environment: any, block?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#each_current_environment is not implemented",
   );
@@ -1153,42 +1153,42 @@ function eachLocalConfiguration(): never {
 }
 
 /** @internal */
-function isLocalDatabase(dbConfig: any): never {
+export function isLocalDatabase(dbConfig: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#local_database? is not implemented",
   );
 }
 
 /** @internal */
-function schemaSha1(file: any): never {
+export function schemaSha1(file: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#schema_sha1 is not implemented",
   );
 }
 
 /** @internal */
-function structureDumpFlagsFor(adapter: any): never {
+export function structureDumpFlagsFor(adapter: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#structure_dump_flags_for is not implemented",
   );
 }
 
 /** @internal */
-function structureLoadFlagsFor(adapter: any): never {
+export function structureLoadFlagsFor(adapter: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#structure_load_flags_for is not implemented",
   );
 }
 
 /** @internal */
-function checkCurrentProtectedEnvironmentBang(dbConfig: any): never {
+export function checkCurrentProtectedEnvironmentBang(dbConfig: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#check_current_protected_environment! is not implemented",
   );
 }
 
 /** @internal */
-function initializeDatabase(dbConfig: any): never {
+export function initializeDatabase(dbConfig: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::DatabaseTasks#initialize_database is not implemented",
   );

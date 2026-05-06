@@ -336,28 +336,28 @@ export class MySQLDatabaseTasks {
 }
 
 /** @internal */
-function connection(): never {
+export function connection(): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::MySQLDatabaseTasks#connection is not implemented",
   );
 }
 
 /** @internal */
-function establishConnection(config?: any): never {
+export function establishConnection(config?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::MySQLDatabaseTasks#establish_connection is not implemented",
   );
 }
 
 /** @internal */
-function configurationHashWithoutDatabase(): never {
+export function configurationHashWithoutDatabase(): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::MySQLDatabaseTasks#configuration_hash_without_database is not implemented",
   );
 }
 
 /** @internal */
-function runCmdError(cmd: any, args: any, action: any): never {
+export function runCmdError(cmd: any, args: any, action: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Tasks::MySQLDatabaseTasks#run_cmd_error is not implemented",
   );

@@ -20,7 +20,6 @@ import {
   StatementInvalid,
   ValueTooLong,
   sqlTypeToMigrationKeyword,
-  NotImplementedError,
 } from "../errors.js";
 import { sql as arelSql, type Nodes, Visitors } from "@blazetrails/arel";
 import { StatementPool as ConnectionStatementPool } from "./statement-pool.js";
@@ -831,29 +830,31 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   /**
+   * @internal
    * Build a MismatchedForeignKey from a MySQL FK constraint error.
    * Parses the FK SQL to identify the mismatched columns, then looks up
    * the referenced column's type to produce a helpful suggestion.
    *
    * Mirrors: AbstractMysqlAdapter#mismatched_foreign_key (abstract_mysql_adapter.rb:1001)
    */
-  protected _mismatchedForeignKey(
+  protected mismatchedForeignKey(
     message: string,
     sql: string,
     binds: unknown[],
     cause: unknown,
   ): MismatchedForeignKey {
-    const details = this._mismatchedForeignKeyDetails(message, sql);
+    const details = this.mismatchedForeignKeyDetails(message, sql);
     return new MismatchedForeignKey({ message, sql, binds, cause, ...details });
   }
 
   /**
+   * @internal
    * Parse a CREATE TABLE / ALTER TABLE SQL statement to extract the FK
    * details needed for a helpful MismatchedForeignKey error message.
    *
    * Mirrors: AbstractMysqlAdapter#mismatched_foreign_key_details (abstract_mysql_adapter.rb:978)
    */
-  private _mismatchedForeignKeyDetails(
+  protected mismatchedForeignKeyDetails(
     message: string,
     sql: string,
   ): Partial<ConstructorParameters<typeof MismatchedForeignKey>[0]> {
@@ -943,10 +944,10 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
         return new InvalidForeignKey(msg, { sql, binds, cause });
       case ER_CANNOT_ADD_FOREIGN:
       case ER_FK_INCOMPATIBLE_COLUMNS:
-        return this._mismatchedForeignKey(msg, sql, binds, cause);
+        return this.mismatchedForeignKey(msg, sql, binds, cause);
       case ER_CANNOT_CREATE_TABLE:
         if (msg.includes("errno: 150") || msg.includes("errno 150")) {
-          return this._mismatchedForeignKey(msg, sql, binds, cause);
+          return this.mismatchedForeignKey(msg, sql, binds, cause);
         }
         return new StatementInvalid(msg, { sql, binds, cause });
       case ER_NOT_NULL_VIOLATION:
@@ -1080,6 +1081,68 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   /** @internal */
+  changeColumnForAlter(
+    tableName: string,
+    columnName: string,
+    type: string,
+    options: Record<string, unknown> = {},
+  ): string {
+    const cd = this.buildChangeColumnDefinition(tableName, columnName, type, options);
+    return (
+      this as unknown as { schemaCreation: { accept(o: unknown): string } }
+    ).schemaCreation.accept(cd);
+  }
+
+  /** @internal */
+  renameColumnForAlter(tableName: string, columnName: string, newColumnName: string): string {
+    void tableName;
+    void columnName;
+    void newColumnName;
+    throw new Error("renameColumnForAlter requires driver implementation");
+  }
+
+  /** @internal */
+  addIndexForAlter(
+    tableName: string,
+    columnName: string | string[],
+    options: Record<string, unknown> = {},
+  ): string {
+    void tableName;
+    void columnName;
+    void options;
+    throw new Error("addIndexForAlter requires driver implementation");
+  }
+
+  /** @internal */
+  removeIndexForAlter(
+    tableName: string,
+    columnName?: string | string[],
+    options: Record<string, unknown> = {},
+  ): string {
+    void tableName;
+    void columnName;
+    void options;
+    throw new Error("removeIndexForAlter requires driver implementation");
+  }
+
+  /** @internal */
+  async columnDefinitions(tableName: string): Promise<Record<string, unknown>[]> {
+    void tableName;
+    return [];
+  }
+
+  /** @internal */
+  async createTableInfo(tableName: string): Promise<string | null> {
+    void tableName;
+    return null;
+  }
+
+  /** @internal */
+  buildStatementPool(): StatementPool {
+    return new StatementPool(this.statementLimit);
+  }
+
+  /** @internal */
   protected extractPrecision(sqlType: string): number | null {
     const match = /\((\d+)(?:,\d+)?\)/.exec(sqlType);
     const parsed = match ? parseInt(match[1], 10) : null;
@@ -1125,67 +1188,4 @@ export class StatementPool extends ConnectionStatementPool<MysqlPreparedStatemen
   nextKey(): string {
     return `a${++this._counter}`;
   }
-}
-
-/** @internal */
-function changeColumnForAlter(tableName: any, columnName: any, type: any, options?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#change_column_for_alter is not implemented",
-  );
-}
-
-/** @internal */
-function renameColumnForAlter(tableName: any, columnName: any, newColumnName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#rename_column_for_alter is not implemented",
-  );
-}
-
-/** @internal */
-function addIndexForAlter(tableName: any, columnName: any, options?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#add_index_for_alter is not implemented",
-  );
-}
-
-/** @internal */
-function removeIndexForAlter(tableName: any, columnName?: any, options?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#remove_index_for_alter is not implemented",
-  );
-}
-
-/** @internal */
-function columnDefinitions(tableName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#column_definitions is not implemented",
-  );
-}
-
-/** @internal */
-function createTableInfo(tableName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#create_table_info is not implemented",
-  );
-}
-
-/** @internal */
-function buildStatementPool(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#build_statement_pool is not implemented",
-  );
-}
-
-/** @internal */
-function mismatchedForeignKeyDetails(message?: any, sql?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#mismatched_foreign_key_details is not implemented",
-  );
-}
-
-/** @internal */
-function mismatchedForeignKey(message: any, sql?: any, binds?: any, connectionPool?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter#mismatched_foreign_key is not implemented",
-  );
 }

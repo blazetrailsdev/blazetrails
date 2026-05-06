@@ -431,6 +431,7 @@ export class DatabaseConfigurations {
   /** @internal */
   private buildDbConfigFromString(envName: string, name: string, config: string): DatabaseConfig {
     if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(config)) {
+      // Rails leaks the URL verbatim; we redact credentials to avoid logging secrets.
       const safe = config.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^@/]+@/, "$1***@");
       throw new InvalidConfigurationError(
         `'{ ${envName} => ${safe} }' is not a valid configuration. Expected a URL string or a Hash.`,

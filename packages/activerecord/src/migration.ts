@@ -1,4 +1,5 @@
 import { getFs, getPath, Logger, getEnv } from "@blazetrails/activesupport";
+import type { FsDirent } from "@blazetrails/activesupport";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import type { DatabaseAdapter } from "./adapter.js";
 import {
@@ -101,8 +102,11 @@ export class PendingMigrationError extends MigrationError {
 
   /** @internal */
   detailedMigrationMessage(pendingMigrations: Array<{ filename?: string }>): string {
+    const env = Migration.env();
     let message =
-      "Migrations are pending. To resolve this issue, run:\n\n        bin/rails db:migrate\n\n";
+      "Migrations are pending. To resolve this issue, run:\n\n        bin/rails db:migrate";
+    if (env !== "development" && env !== "test") message += ` RAILS_ENV=${env}`;
+    message += "\n\n";
     message += `You have ${pendingMigrations.length} pending ${pendingMigrations.length > 1 ? "migrations:" : "migration:"}\n\n`;
     for (const m of pendingMigrations) {
       if (m.filename) message += `${m.filename}\n`;
@@ -2142,12 +2146,18 @@ export class Migrator {
     const { readdirSync, existsSync } = getFs();
     const { join } = getPath();
     const files: string[] = [];
-    for (const p of paths) {
-      if (!existsSync(p)) continue;
-      for (const f of readdirSync(p)) {
-        if (/^\d+_.*\.(ts|js)$/.test(String(f))) files.push(join(p, String(f)));
+    const collect = (dir: string) => {
+      if (!existsSync(dir)) return;
+      for (const entry of readdirSync(dir, { withFileTypes: true }) as FsDirent[]) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          collect(full);
+        } else if (/^\d+_.*\.(ts|js)$/.test(entry.name)) {
+          files.push(full);
+        }
       }
-    }
+    };
+    for (const p of paths) collect(p);
     return files.sort();
   }
 
@@ -2186,11 +2196,12 @@ export class Migrator {
       const vb = BigInt(b.version);
       return va < vb ? -1 : va > vb ? 1 : 0;
     });
-    const currentIndex =
-      current === 0 ? -1 : sorted.findIndex((m) => m.version === String(current));
-    const targetIndex = direction === "up" ? currentIndex + steps : currentIndex - steps;
-    const target = sorted[targetIndex];
-    const targetVersion = target ? Number(target.version) : 0;
+    const startIndex = current === 0 ? 0 : sorted.findIndex((m) => m.version === String(current));
+    if (current !== 0 && startIndex === -1) {
+      throw new UnknownMigrationVersionError(String(current));
+    }
+    const finish = sorted[startIndex + steps];
+    const targetVersion = finish ? Number(finish.version) : 0;
     if (direction === "up") {
       await this.up(targetVersion);
     } else {

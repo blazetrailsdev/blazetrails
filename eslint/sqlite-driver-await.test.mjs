@@ -3,6 +3,11 @@ import rule from "./sqlite-driver-await.mjs";
 
 // Use the TypeScript parser — the rule is enforced on *.ts files, and
 // TS-only wrapper forms (driver!, driver as T) must parse to be tested.
+//
+// The rule is name-based (checks for an identifier named "driver"), not
+// scope-based. Fixtures that use `driver` without a declaration test
+// undeclared/global references; the rule flags them the same as declared
+// locals — intentionally, given the tight file scope.
 const tester = new RuleTester({
   languageOptions: {
     ecmaVersion: 2022,
@@ -38,6 +43,8 @@ tester.run("sqlite-driver-await", rule, {
     { code: "(driver.run('SELECT 1')).then((r: unknown) => r);" },
     // return — caller takes responsibility for the Promise
     { code: "function f(driver: any) { return driver.pragma('x'); }" },
+    // arrow implicit return
+    { code: "const f = (driver: any) => driver.pragma('x');" },
   ],
   invalid: [
     // bare identifier call

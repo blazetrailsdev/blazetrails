@@ -1,9 +1,10 @@
 /**
  * ESLint rule: sqlite-driver-await
  *
- * Flags `driver.<method>(...)` call sites — where `driver` is a local
- * identifier (variable or parameter) — that are not wrapped in `await`,
- * chained with `.then()` / `.catch()` / `.finally()`, or returned.
+ * Flags `driver.<method>(...)` call sites — where the callee object is an
+ * identifier named `driver` (name-based; the tight file scope makes false
+ * positives implausible) — unless the call is awaited, chained with
+ * `.then()` / `.catch()` / `.finally()`, or returned.
  * The SqliteDriver interface returns `T | Promise<T>` so that the same
  * surface can back both the current synchronous better-sqlite3 implementation
  * and a future async driver.  A forgotten `await` silently discards the
@@ -72,8 +73,11 @@ function isSafelyConsumed(node) {
   if (!parent) return false;
   // await driver.foo()  /  await (driver.foo())
   if (parent.type === "AwaitExpression") return true;
-  // return driver.foo() — caller takes responsibility for the Promise
+  // return driver.foo() — caller takes responsibility for the Promise.
+  // Also covers arrow implicit return: `(driver) => driver.foo()` where the
+  // call is the ArrowFunctionExpression body (no ReturnStatement node).
   if (parent.type === "ReturnStatement") return true;
+  if (parent.type === "ArrowFunctionExpression" && parent.body === cur) return true;
   // (driver.foo()).then(...) / .catch(...) / .finally(...)
   if (
     parent.type === "MemberExpression" &&

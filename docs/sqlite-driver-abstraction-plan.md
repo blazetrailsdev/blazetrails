@@ -36,9 +36,13 @@ opportunities for a forgotten `await`. With the test suite still migrating to
 reliably.
 
 The `blazetrails/sqlite-driver-await` ESLint rule (`eslint/sqlite-driver-await.mjs`)
-flags any `driver.<method>(...)` call (where `driver` is a local identifier —
-e.g. a helper-function parameter or destructured variable) that is not wrapped
-in `await` or chained with `.then()`/`.catch()`/`.finally()`.
+flags any `driver.<method>(...)` call — where the callee object is an identifier
+named `driver` (name-based, not scope-analysed; the tight file scope makes false
+positives implausible) — unless the call is:
+
+- wrapped in `await`,
+- chained with `.then()`/`.catch()`/`.finally()`, or
+- returned (`return driver.foo()` — caller takes responsibility for the Promise).
 
 No `SqliteDriver` methods are unconditionally synchronous — every callable
 member returns `T | Promise<T>`. Property accesses (`driver.raw`,

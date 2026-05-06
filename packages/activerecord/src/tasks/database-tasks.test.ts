@@ -18,6 +18,7 @@ import { quoteTableName as abstractQuoteTableName } from "../connection-adapters
 import { HashConfig } from "../database-configurations/hash-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { createTestAdapter } from "../test-adapter.js";
+import { NoDatabaseError } from "../errors.js";
 
 describe("DatabaseTasksCheckProtectedEnvironmentsTest", () => {
   it("raises an error when called with protected environment", async () => {
@@ -1417,5 +1418,68 @@ describe("initializeDatabase", () => {
       database: ":memory:",
     });
     await expect(initializeDatabase(config)).rejects.toThrow("unexpected connection error");
+  });
+
+  it("creates the DB and returns true when probe throws NoDatabaseError", async () => {
+    let created = false;
+    vi.spyOn(DatabaseTasks as any, "_connectFor").mockResolvedValue({
+      execute: async () => {
+        throw new NoDatabaseError("no database");
+      },
+      close: async () => {},
+    });
+    vi.spyOn(DatabaseTasks, "create").mockImplementation(async () => {
+      created = true;
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3", database: ":memory:" });
+    const result = await initializeDatabase(config);
+    expect(created).toBe(true);
+    expect(result).toBe(true);
+  });
+
+  it("creates the DB and returns true when probe throws MySQL ER_BAD_DB_ERROR", async () => {
+    let created = false;
+    const mysqlErr = Object.assign(new Error("Unknown database 'mydb'"), {
+      code: "ER_BAD_DB_ERROR",
+    });
+    vi.spyOn(DatabaseTasks as any, "_connectFor").mockResolvedValue({
+      execute: async () => {
+        throw mysqlErr;
+      },
+      close: async () => {},
+    });
+    vi.spyOn(DatabaseTasks, "create").mockImplementation(async () => {
+      created = true;
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3", database: ":memory:" });
+    const result = await initializeDatabase(config);
+    expect(created).toBe(true);
+    expect(result).toBe(true);
+  });
+
+  it("loads schema dump when DB is fresh and dump file exists", async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-initdb-schema-"));
+    const schemaFile = path.join(tmp, "schema.ts");
+    fs.writeFileSync(schemaFile, "export default async () => {};");
+    try {
+      vi.spyOn(DatabaseTasks as any, "_connectFor").mockResolvedValue({
+        execute: async () => {
+          throw new NoDatabaseError("no database");
+        },
+        close: async () => {},
+      });
+      vi.spyOn(DatabaseTasks, "create").mockResolvedValue(undefined);
+      const loadSchemaSpy = vi.spyOn(DatabaseTasks, "loadSchema").mockResolvedValue(undefined);
+      const origPath = DatabaseTasks.schemaDumpPath;
+      vi.spyOn(DatabaseTasks, "schemaDumpPath").mockReturnValue(schemaFile);
+      const config = new HashConfig("test", "primary", {
+        adapter: "sqlite3",
+        database: ":memory:",
+      });
+      await initializeDatabase(config);
+      expect(loadSchemaSpy).toHaveBeenCalled();
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

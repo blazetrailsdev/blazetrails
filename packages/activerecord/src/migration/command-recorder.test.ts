@@ -38,6 +38,17 @@ describe("CommandRecorder", () => {
       expect((args[1] as Record<string, unknown>)["ifNotExists"]).toBeUndefined();
     });
 
+    it("invertCreateTable strips ifNotExists even when fn is last arg", () => {
+      const fn = () => {};
+      const [cmd, args] = new CommandRecorder().invertCreateTable([
+        "users",
+        { ifNotExists: true },
+        fn,
+      ]);
+      expect(cmd).toBe("dropTable");
+      expect((args[1] as Record<string, unknown>)["ifNotExists"]).toBeUndefined();
+    });
+
     it("invertDropTable throws without options/block for single table", () => {
       const recorder = new CommandRecorder();
       expect(() => recorder.invertDropTable(["users"])).toThrow(IrreversibleMigration);

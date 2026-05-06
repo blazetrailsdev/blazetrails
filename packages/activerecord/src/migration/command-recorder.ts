@@ -112,10 +112,19 @@ export class CommandRecorder {
   /** @internal */
   invertCreateTable(args: unknown[]): [string, unknown[]] {
     const a = args.slice();
-    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
-      const opts = { ...(a[a.length - 1] as Record<string, unknown>) };
+    // createTable may be recorded as [name, options, fn] — find the trailing options hash
+    let optsIdx = -1;
+    for (let i = a.length - 1; i >= 0; i--) {
+      const el = a[i];
+      if (typeof el === "object" && el !== null && !Array.isArray(el)) {
+        optsIdx = i;
+        break;
+      }
+    }
+    if (optsIdx !== -1) {
+      const opts = { ...(a[optsIdx] as Record<string, unknown>) };
       delete opts["ifNotExists"];
-      a[a.length - 1] = opts;
+      a[optsIdx] = opts;
     }
     return ["dropTable", a];
   }

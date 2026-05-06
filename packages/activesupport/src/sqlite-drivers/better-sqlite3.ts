@@ -117,7 +117,13 @@ function resolveDatabasePath(database: string): string | null {
 
 /** @internal */
 function openDatabase(config: SqliteOpenConfig): Database.Database {
-  const opts: Database.Options = { readonly: config.readOnly ?? false };
+  // better-sqlite3 specific keys, surfaced via the plan's `driverOptions`
+  // pass-through. Spec keys (readOnly, timeout) win over duplicates in
+  // driverOptions so AR config takes precedence.
+  const opts: Database.Options = {
+    ...(config.driverOptions as Database.Options | undefined),
+    readonly: config.readOnly ?? false,
+  };
   if (config.timeout !== undefined) opts.timeout = config.timeout;
   return new Database(config.database, opts);
 }

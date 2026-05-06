@@ -587,8 +587,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   /**
-   * Get the underlying better-sqlite3 Database instance.
-   * Escape hatch for advanced usage.
+   * Driver-specific escape hatch — returns whatever the registered SqliteDriver
+   * exposes as `connection.raw`. The default better-sqlite3 driver exposes the
+   * `Database` instance, hence the convenience type below; consumers using a
+   * different driver (node:sqlite, sqlite-wasm, expo-sqlite, …) should cast
+   * to whichever raw handle that driver documents.
    */
   get raw(): Database.Database {
     return this.driver.raw as Database.Database;

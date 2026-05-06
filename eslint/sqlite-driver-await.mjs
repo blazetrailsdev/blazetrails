@@ -1,12 +1,17 @@
 /**
  * ESLint rule: sqlite-driver-await
  *
- * Flags `this.driver.<method>(...)` call sites that are not wrapped in
- * `await` or chained with `.then()` / `.catch()`.  The SqliteDriver
- * interface returns `T | Promise<T>` so that the same surface can back both
- * the current synchronous better-sqlite3 implementation and a future async
- * driver.  A forgotten `await` silently discards the Promise when the async
- * path is enabled — this rule turns that into a compile-time error.
+ * Flags `driver.<method>(...)` call sites — where `driver` is a local
+ * identifier (variable or parameter) — that are not wrapped in `await` or
+ * chained with `.then()` / `.catch()`.  The SqliteDriver interface returns
+ * `T | Promise<T>` so that the same surface can back both the current
+ * synchronous better-sqlite3 implementation and a future async driver.  A
+ * forgotten `await` silently discards the Promise when the async path is
+ * enabled — this rule turns that into a compile-time error.
+ *
+ * `this.driver.<method>()` is excluded: those call sites use `this` as the
+ * receiver and are covered by the TypeScript compiler once return types
+ * move to `Promise<T>`.
  *
  * Whitelisted (sync by spec):
  *   - `driver.setReadBigInts(…)` — synchronous configuration setter
@@ -59,8 +64,7 @@ const rule = {
       CallExpression(node) {
         const callee = node.callee;
         // Match driver.<method>(...) where `driver` is an Identifier (local var or param).
-        // Deliberately excludes `this.driver.<method>()` — those are handled by PR 3's
-        // await-sprinkle pass and do not need a lint guard during the transition.
+        // `this.driver.<method>()` has a MemberExpression object, not an Identifier — excluded.
         if (callee.type !== "MemberExpression") return;
         const obj = callee.object;
         if (obj.type !== "Identifier" || obj.name !== "driver") return;

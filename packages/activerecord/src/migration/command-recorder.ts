@@ -4,21 +4,11 @@
  * Mirrors: ActiveRecord::Migration::CommandRecorder
  */
 
-import { NotImplementedError } from "../errors.js";
-export interface StraightReversions {
-  /** @internal */
-  invertCreateTable(args: unknown[]): unknown[];
-  /** @internal */
-  invertDropTable(args: unknown[]): unknown[];
-  invertAddColumn(args: unknown[]): unknown[];
-  /** @internal */
-  invertRemoveColumn(args: unknown[]): unknown[];
-  invertAddIndex(args: unknown[]): unknown[];
-  /** @internal */
-  invertRemoveIndex(args: unknown[]): unknown[];
-  invertAddTimestamps(args: unknown[]): unknown[];
-  invertRemoveTimestamps(args: unknown[]): unknown[];
-}
+import { IrreversibleMigration } from "../migration.js";
+import {
+  findJoinTableName as _findJoinTableName,
+  joinTableName as _joinTableName,
+} from "./join-table.js";
 
 export class CommandRecorder {
   private _commands: Array<{ cmd: string; args: unknown[] }> = [];
@@ -59,10 +49,10 @@ export class CommandRecorder {
     this._commands = [];
     try {
       await fn();
-      const reversed = this._commands.reverse().map(({ cmd, args }) => ({
-        cmd: this._invertCommand(cmd),
-        args: this._invertArgs(cmd, args),
-      }));
+      const reversed = this._commands.reverse().map(({ cmd, args }) => {
+        const [invertedCmd, invertedArgs] = this._dispatchInvert(cmd, args);
+        return { cmd: invertedCmd, args: invertedArgs };
+      });
       this._commands = savedCommands;
       for (const entry of reversed) {
         this._commands.push(entry);
@@ -81,15 +71,12 @@ export class CommandRecorder {
    * Mirrors: ActiveRecord::Migration::CommandRecorder#inverse_of
    */
   inverseOf(cmd: string, args: unknown[]): { cmd: string; args: unknown[] } {
-    return {
-      cmd: this._invertCommand(cmd),
-      args: this._invertArgs(cmd, args),
-    };
+    const [invertedCmd, invertedArgs] = this._dispatchInvert(cmd, args);
+    return { cmd: invertedCmd, args: invertedArgs };
   }
 
   /**
-   * Record a change_table block. In Rails, this captures the operations
-   * performed inside the block for later reversal.
+   * Record a change_table block.
    *
    * Mirrors: ActiveRecord::Migration::CommandRecorder#change_table
    */
@@ -110,227 +97,418 @@ export class CommandRecorder {
     }
   }
 
-  /**
-   * Returns the full inverse command list (all recorded commands reversed
-   * with their operations inverted).
-   */
+  /** Returns the full inverse command list. */
   inverse(): Array<{ cmd: string; args: unknown[] }> {
-    return [...this._commands].reverse().map(({ cmd, args }) => ({
-      cmd: this._invertCommand(cmd),
-      args: this._invertArgs(cmd, args),
-    }));
+    return [...this._commands].reverse().map(({ cmd, args }) => {
+      const [invertedCmd, invertedArgs] = this._dispatchInvert(cmd, args);
+      return { cmd: invertedCmd, args: invertedArgs };
+    });
   }
 
-  private _invertArgs(cmd: string, args: unknown[]): unknown[] {
-    if (cmd === "renameTable") {
-      return [...args].reverse();
-    } else if (cmd === "renameColumn" || cmd === "renameIndex") {
-      if (args.length >= 3) {
-        const [table, from, to, ...rest] = args;
-        return [table, to, from, ...rest];
+  // ---------------------------------------------------------------------------
+  // invert* methods — mirrors Rails private StraightReversions + overrides
+  // ---------------------------------------------------------------------------
+
+  /** @internal */
+  invertCreateTable(args: unknown[]): [string, unknown[]] {
+    const a = args.slice();
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      const opts = { ...(a[a.length - 1] as Record<string, unknown>) };
+      delete opts["ifNotExists"];
+      a[a.length - 1] = opts;
+    }
+    return ["dropTable", a];
+  }
+
+  /** @internal */
+  invertDropTable(args: unknown[]): [string, unknown[]] {
+    const a = args.slice();
+    let options: Record<string, unknown> = {};
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      options = { ...(a.pop() as Record<string, unknown>) };
+    }
+    delete options["ifExists"];
+
+    if (a.length > 1) {
+      throw new IrreversibleMigration(
+        "To avoid mistakes, drop_table is only reversible if given a single table name.",
+      );
+    }
+    if (a.length === 1 && Object.keys(options).length === 0) {
+      throw new IrreversibleMigration(
+        "To avoid mistakes, drop_table is only reversible if given options or a block (can be empty).",
+      );
+    }
+
+    const result = [...a];
+    if (Object.keys(options).length > 0) result.push(options);
+    return ["createTable", result];
+  }
+
+  /** @internal */
+  invertCreateJoinTable(args: unknown[]): [string, unknown[]] {
+    return ["dropJoinTable", args];
+  }
+
+  /** @internal */
+  invertDropJoinTable(args: unknown[]): [string, unknown[]] {
+    return ["createJoinTable", args];
+  }
+
+  /** @internal */
+  invertAddColumn(args: unknown[]): [string, unknown[]] {
+    return ["removeColumn", args];
+  }
+
+  /** @internal */
+  invertRemoveColumn(args: unknown[]): [string, unknown[]] {
+    if (args.length <= 2) {
+      throw new IrreversibleMigration("remove_column is only reversible if given a type.");
+    }
+    return ["addColumn", args];
+  }
+
+  /** @internal */
+  invertAddIndex(args: unknown[]): [string, unknown[]] {
+    return ["removeIndex", args];
+  }
+
+  /** @internal */
+  invertRemoveIndex(args: unknown[]): [string, unknown[]] {
+    const a = args.slice();
+    let options: Record<string, unknown> = {};
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      options = { ...(a.pop() as Record<string, unknown>) };
+    }
+    const table = a[0];
+    let columns = a[1] as unknown;
+    if (columns === undefined) {
+      columns = options["column"];
+      delete options["column"];
+    }
+    if (!columns) {
+      throw new IrreversibleMigration("remove_index is only reversible if given a :column option.");
+    }
+    delete options["ifExists"];
+    const result: unknown[] = [table, columns];
+    if (Object.keys(options).length > 0) result.push(options);
+    return ["addIndex", result];
+  }
+
+  /** @internal */
+  invertAddTimestamps(args: unknown[]): [string, unknown[]] {
+    return ["removeTimestamps", args];
+  }
+
+  /** @internal */
+  invertRemoveTimestamps(args: unknown[]): [string, unknown[]] {
+    return ["addTimestamps", args];
+  }
+
+  /** @internal */
+  invertAddReference(args: unknown[]): [string, unknown[]] {
+    return ["removeReference", args];
+  }
+
+  /** @internal */
+  invertRemoveReference(args: unknown[]): [string, unknown[]] {
+    return ["addReference", args];
+  }
+
+  /** @internal */
+  invertAddForeignKey(args: unknown[]): [string, unknown[]] {
+    const a = args.slice();
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      const opts = { ...(a[a.length - 1] as Record<string, unknown>) };
+      delete opts["validate"];
+      a[a.length - 1] = opts;
+    }
+    return ["removeForeignKey", a];
+  }
+
+  /** @internal */
+  invertRemoveForeignKey(args: unknown[]): [string, unknown[]] {
+    const a = args.slice();
+    let options: Record<string, unknown> = {};
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      options = { ...(a.pop() as Record<string, unknown>) };
+    }
+    const fromTable = a[0];
+    let toTable = a[1] as unknown;
+    if (toTable === undefined) {
+      toTable = options["toTable"];
+      delete options["toTable"];
+    }
+    if (!toTable) {
+      throw new IrreversibleMigration(
+        "remove_foreign_key is only reversible if given a second table",
+      );
+    }
+    const result: unknown[] = [fromTable, toTable];
+    if (Object.keys(options).length > 0) result.push(options);
+    return ["addForeignKey", result];
+  }
+
+  /** @internal */
+  invertAddCheckConstraint(args: unknown[]): [string, unknown[]] {
+    const a = args.slice();
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      const opts = { ...(a[a.length - 1] as Record<string, unknown>) };
+      delete opts["validate"];
+      if ("ifNotExists" in opts) {
+        opts["ifExists"] = opts["ifNotExists"];
+        delete opts["ifNotExists"];
       }
+      a[a.length - 1] = opts;
     }
-    return args;
+    return ["removeCheckConstraint", a];
   }
 
-  private _invertCommand(cmd: string): string {
-    const inversions: Record<string, string> = {
-      createTable: "dropTable",
-      dropTable: "createTable",
-      addColumn: "removeColumn",
-      removeColumn: "addColumn",
-      addIndex: "removeIndex",
-      removeIndex: "addIndex",
-      addTimestamps: "removeTimestamps",
-      removeTimestamps: "addTimestamps",
-      addReference: "removeReference",
-      removeReference: "addReference",
-      addForeignKey: "removeForeignKey",
-      removeForeignKey: "addForeignKey",
-      addCheckConstraint: "removeCheckConstraint",
-      removeCheckConstraint: "addCheckConstraint",
-      enableExtension: "disableExtension",
-      disableExtension: "enableExtension",
-      renameTable: "renameTable",
-      renameColumn: "renameColumn",
-      renameIndex: "renameIndex",
-      changeTable: "changeTable",
-      changeColumnDefault: "changeColumnDefault",
-      changeColumnNull: "changeColumnNull",
-    };
-
-    const inverted = inversions[cmd];
-    if (!inverted) {
-      throw new Error(`${cmd} is not reversible`);
+  /** @internal */
+  invertRemoveCheckConstraint(args: unknown[]): [string, unknown[]] {
+    if (args.length < 2) {
+      throw new IrreversibleMigration(
+        "remove_check_constraint is only reversible if given an expression.",
+      );
     }
-    return inverted;
+    const a = args.slice();
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      const opts = { ...(a[a.length - 1] as Record<string, unknown>) };
+      if ("ifExists" in opts) {
+        opts["ifNotExists"] = opts["ifExists"];
+        delete opts["ifExists"];
+      }
+      a[a.length - 1] = opts;
+    }
+    return ["addCheckConstraint", a];
   }
-}
 
-/** @internal */
-function invertTransaction(args: any, block?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_transaction is not implemented",
-  );
-}
+  /** @internal */
+  invertAddExclusionConstraint(args: unknown[]): [string, unknown[]] {
+    return ["removeExclusionConstraint", args];
+  }
 
-/** @internal */
-function invertCreateTable(args: any, block?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_create_table is not implemented",
-  );
-}
+  /** @internal */
+  invertRemoveExclusionConstraint(args: unknown[]): [string, unknown[]] {
+    if (args.length < 2) {
+      throw new IrreversibleMigration(
+        "remove_exclusion_constraint is only reversible if given an expression.",
+      );
+    }
+    return ["addExclusionConstraint", args];
+  }
 
-/** @internal */
-function invertDropTable(args: any, block?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_drop_table is not implemented",
-  );
-}
+  /** @internal */
+  invertAddUniqueConstraint(args: unknown[]): [string, unknown[]] {
+    const options =
+      args.length > 0 && typeof args[args.length - 1] === "object" && args[args.length - 1] !== null
+        ? (args[args.length - 1] as Record<string, unknown>)
+        : {};
+    if (options["usingIndex"]) {
+      throw new IrreversibleMigration(
+        "add_unique_constraint is not reversible if given an using_index.",
+      );
+    }
+    return ["removeUniqueConstraint", args];
+  }
 
-/** @internal */
-function invertRenameTable(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_rename_table is not implemented",
-  );
-}
+  /** @internal */
+  invertRemoveUniqueConstraint(args: unknown[]): [string, unknown[]] {
+    const a = args.slice();
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      a.pop();
+    }
+    const columns = a[1];
+    if (!columns) {
+      throw new IrreversibleMigration(
+        "remove_unique_constraint is only reversible if given an column_name.",
+      );
+    }
+    return ["addUniqueConstraint", args];
+  }
 
-/** @internal */
-function invertRemoveColumn(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_remove_column is not implemented",
-  );
-}
+  /** @internal */
+  invertRenameTable(args: unknown[]): [string, unknown[]] {
+    const [oldName, newName, ...rest] = args;
+    const result: unknown[] = [newName, oldName];
+    if (rest.length > 0) result.push(...rest);
+    return ["renameTable", result];
+  }
 
-/** @internal */
-function invertRemoveColumns(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_remove_columns is not implemented",
-  );
-}
+  /** @internal */
+  invertRenameColumn(args: unknown[]): [string, unknown[]] {
+    const [table, oldName, newName, ...rest] = args;
+    return ["renameColumn", [table, newName, oldName, ...rest]];
+  }
 
-/** @internal */
-function invertRenameIndex(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_rename_index is not implemented",
-  );
-}
+  /** @internal */
+  invertTransaction(args: unknown[]): [string, unknown[]] {
+    // Cannot invert a transaction block without re-executing it
+    throw new IrreversibleMigration(
+      "invertTransaction requires a block and is not supported in this context.",
+    );
+  }
 
-/** @internal */
-function invertRenameColumn(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_rename_column is not implemented",
-  );
-}
+  /** @internal */
+  invertRemoveColumns(args: unknown[]): [string, unknown[]] {
+    const last = args[args.length - 1];
+    if (
+      !(typeof last === "object" && last !== null && "type" in (last as Record<string, unknown>))
+    ) {
+      throw new IrreversibleMigration("remove_columns is only reversible if given a type.");
+    }
+    return ["addColumns", args];
+  }
 
-/** @internal */
-function invertRemoveIndex(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_remove_index is not implemented",
-  );
-}
+  /** @internal */
+  invertRenameIndex(args: unknown[]): [string, unknown[]] {
+    const [table, oldName, newName] = args;
+    return ["renameIndex", [table, newName, oldName]];
+  }
 
-/** @internal */
-function invertChangeColumnDefault(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_change_column_default is not implemented",
-  );
-}
+  /** @internal */
+  invertChangeColumnDefault(args: unknown[]): [string, unknown[]] {
+    const [table, column, options] = args;
+    if (
+      !(
+        typeof options === "object" &&
+        options !== null &&
+        "from" in (options as Record<string, unknown>) &&
+        "to" in (options as Record<string, unknown>)
+      )
+    ) {
+      throw new IrreversibleMigration(
+        "change_column_default is only reversible if given a :from and :to option.",
+      );
+    }
+    const opts = options as Record<string, unknown>;
+    return ["changeColumnDefault", [table, column, { from: opts["to"], to: opts["from"] }]];
+  }
 
-/** @internal */
-function invertChangeColumnNull(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_change_column_null is not implemented",
-  );
-}
+  /** @internal */
+  invertChangeColumnNull(args: unknown[]): [string, unknown[]] {
+    const a = args.slice() as unknown[];
+    (a as unknown[])[2] = !(a[2] as boolean);
+    return ["changeColumnNull", a];
+  }
 
-/** @internal */
-function invertAddForeignKey(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_add_foreign_key is not implemented",
-  );
-}
+  /** @internal */
+  invertChangeColumnComment(args: unknown[]): [string, unknown[]] {
+    const [table, column, options] = args;
+    if (
+      !(
+        typeof options === "object" &&
+        options !== null &&
+        "from" in (options as Record<string, unknown>) &&
+        "to" in (options as Record<string, unknown>)
+      )
+    ) {
+      throw new IrreversibleMigration(
+        "change_column_comment is only reversible if given a :from and :to option.",
+      );
+    }
+    const opts = options as Record<string, unknown>;
+    return ["changeColumnComment", [table, column, { from: opts["to"], to: opts["from"] }]];
+  }
 
-/** @internal */
-function invertRemoveForeignKey(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_remove_foreign_key is not implemented",
-  );
-}
+  /** @internal */
+  invertChangeTableComment(args: unknown[]): [string, unknown[]] {
+    const [table, options] = args;
+    if (
+      !(
+        typeof options === "object" &&
+        options !== null &&
+        "from" in (options as Record<string, unknown>) &&
+        "to" in (options as Record<string, unknown>)
+      )
+    ) {
+      throw new IrreversibleMigration(
+        "change_table_comment is only reversible if given a :from and :to option.",
+      );
+    }
+    const opts = options as Record<string, unknown>;
+    return ["changeTableComment", [table, { from: opts["to"], to: opts["from"] }]];
+  }
 
-/** @internal */
-function invertChangeColumnComment(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_change_column_comment is not implemented",
-  );
-}
+  /** @internal */
+  invertDropEnum(args: unknown[]): [string, unknown[]] {
+    const a = args.slice();
+    let values: unknown;
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      values = a[a.length - 1];
+    }
+    if (!values) {
+      throw new IrreversibleMigration(
+        "drop_enum is only reversible if given a list of enum values.",
+      );
+    }
+    return ["createEnum", args];
+  }
 
-/** @internal */
-function invertChangeTableComment(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_change_table_comment is not implemented",
-  );
-}
+  /** @internal */
+  invertRenameEnum(args: unknown[]): [string, unknown[]] {
+    const [name, newName] = args;
+    const resolvedNewName =
+      typeof newName === "object" &&
+      newName !== null &&
+      "to" in (newName as Record<string, unknown>)
+        ? (newName as Record<string, unknown>)["to"]
+        : newName;
+    return ["renameEnum", [resolvedNewName, name]];
+  }
 
-/** @internal */
-function invertAddCheckConstraint(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_add_check_constraint is not implemented",
-  );
-}
+  /** @internal */
+  invertRenameEnumValue(args: unknown[]): [string, unknown[]] {
+    const [typeName, options] = args;
+    if (
+      !(
+        typeof options === "object" &&
+        options !== null &&
+        "from" in (options as Record<string, unknown>) &&
+        "to" in (options as Record<string, unknown>)
+      )
+    ) {
+      throw new IrreversibleMigration(
+        "rename_enum_value is only reversible if given a :from and :to option.",
+      );
+    }
+    const opts = options as Record<string, unknown>;
+    return ["renameEnumValue", [typeName, { from: opts["to"], to: opts["from"] }]];
+  }
 
-/** @internal */
-function invertRemoveCheckConstraint(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_remove_check_constraint is not implemented",
-  );
-}
+  /** @internal */
+  invertDropVirtualTable(args: unknown[]): [string, unknown[]] {
+    const a = args.slice();
+    let values: unknown;
+    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
+      values = a[a.length - 1];
+    }
+    if (!values) {
+      throw new IrreversibleMigration("drop_virtual_table is only reversible if given options.");
+    }
+    return ["createVirtualTable", args];
+  }
 
-/** @internal */
-function invertRemoveExclusionConstraint(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_remove_exclusion_constraint is not implemented",
-  );
-}
+  /** @internal */
+  findJoinTableName(table1: string, table2: string, options?: { tableName?: string }): string {
+    return _findJoinTableName(table1, table2, options);
+  }
 
-/** @internal */
-function invertAddUniqueConstraint(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_add_unique_constraint is not implemented",
-  );
-}
+  /** @internal */
+  joinTableName(table1: string, table2: string): string {
+    return _joinTableName(table1, table2);
+  }
 
-/** @internal */
-function invertRemoveUniqueConstraint(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_remove_unique_constraint is not implemented",
-  );
-}
+  // ---------------------------------------------------------------------------
+  // private dispatch
+  // ---------------------------------------------------------------------------
 
-/** @internal */
-function invertDropEnum(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_drop_enum is not implemented",
-  );
-}
-
-/** @internal */
-function invertRenameEnum(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_rename_enum is not implemented",
-  );
-}
-
-/** @internal */
-function invertRenameEnumValue(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_rename_enum_value is not implemented",
-  );
-}
-
-/** @internal */
-function invertDropVirtualTable(args: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Migration::CommandRecorder#invert_drop_virtual_table is not implemented",
-  );
+  private _dispatchInvert(cmd: string, args: unknown[]): [string, unknown[]] {
+    const methodName = `invert${cmd.charAt(0).toUpperCase()}${cmd.slice(1)}` as keyof this;
+    const method = this[methodName];
+    if (typeof method === "function") {
+      return (method as (args: unknown[]) => [string, unknown[]]).call(this, args);
+    }
+    throw new IrreversibleMigration(`${cmd} is not reversible`);
+  }
 }

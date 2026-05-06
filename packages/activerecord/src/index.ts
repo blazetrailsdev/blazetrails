@@ -334,3 +334,5 @@ export { deprecator, gemVersion, version } from "./deprecator.js";
 export { JobRuntime } from "./railties/job-runtime.js";
 export { Resolver as DatabaseSelectorResolver } from "./middleware/database-selector/resolver.js";
 export { Session as DatabaseSelectorSession } from "./middleware/database-selector/resolver/session.js";
+export { DatabaseSelector } from "./middleware/database-selector.js";
+export { ShardSelector } from "./middleware/shard-selector.js";

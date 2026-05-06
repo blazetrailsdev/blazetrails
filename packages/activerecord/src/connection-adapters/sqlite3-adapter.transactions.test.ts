@@ -26,7 +26,7 @@ describe("SQLite3Adapter transaction control", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  describe("BEGIN / COMMIT", () => {
+  describe("BEGIN IMMEDIATE / COMMIT", () => {
     it("commits inserted rows", async () => {
       await adapter.beginDbTransaction();
       await adapter.executeMutation("INSERT INTO items (name) VALUES ('apple')");
@@ -34,6 +34,17 @@ describe("SQLite3Adapter transaction control", () => {
 
       const rows = await adapter.execute("SELECT name FROM items");
       expect(rows.map((r: any) => r.name)).toEqual(["apple"]);
+    });
+  });
+
+  describe("BEGIN DEFERRED / COMMIT", () => {
+    it("commits inserted rows via deferred transaction", async () => {
+      await adapter.beginDeferredTransaction();
+      await adapter.executeMutation("INSERT INTO items (name) VALUES ('deferred')");
+      await adapter.commitDbTransaction();
+
+      const rows = await adapter.execute("SELECT name FROM items");
+      expect(rows.map((r: any) => r.name)).toEqual(["deferred"]);
     });
   });
 
@@ -96,18 +107,19 @@ describe("SQLite3Adapter transaction control", () => {
       ).rejects.toBeInstanceOf(RecordNotUnique);
     });
 
-    it("rolls back savepoint on constraint error and continues outer transaction", async () => {
+    it("rolls back savepoint on UNIQUE constraint error and continues outer transaction", async () => {
+      await adapter.executeMutation("INSERT INTO items (name) VALUES ('dup')");
       await adapter.beginDbTransaction();
       await adapter.executeMutation("INSERT INTO items (name) VALUES ('safe')");
       await adapter.createSavepoint("sp1");
       await expect(
-        adapter.executeMutation("INSERT INTO items (name) VALUES (NULL)"),
-      ).rejects.toThrow();
+        adapter.executeMutation("INSERT INTO items (name) VALUES ('dup')"),
+      ).rejects.toBeInstanceOf(RecordNotUnique);
       await adapter.rollbackToSavepoint("sp1");
       await adapter.commitDbTransaction();
 
-      const rows = await adapter.execute("SELECT name FROM items");
-      expect(rows.map((r: any) => r.name)).toEqual(["safe"]);
+      const rows = await adapter.execute("SELECT name FROM items ORDER BY id");
+      expect(rows.map((r: any) => r.name)).toEqual(["dup", "safe"]);
     });
   });
 

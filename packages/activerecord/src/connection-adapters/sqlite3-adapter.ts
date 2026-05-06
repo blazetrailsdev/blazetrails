@@ -427,8 +427,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   async rollbackDbTransaction(): Promise<void> {
     try {
       this.driver.exec("ROLLBACK TRANSACTION");
-    } catch {
-      // A dropped connection counts as an implicit rollback.
+    } catch (e) {
+      // Mirrors Rails: rescue ConnectionNotEstablished, ConnectionFailed.
+      // A closed/dropped connection is an implicit rollback; re-throw anything else.
+      const translated = this._translateException(e, "ROLLBACK TRANSACTION", []);
+      if (!(translated instanceof ConnectionNotEstablished)) throw translated;
     }
     this._inTransaction = false;
   }

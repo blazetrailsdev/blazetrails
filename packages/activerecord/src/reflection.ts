@@ -903,7 +903,7 @@ export class AssociationReflection extends MacroReflection {
    */
   protected ensureOptionNotGivenAsClassBang(optionName: string): void {
     const val = this.options[optionName];
-    if (typeof val === "function" && (val as any).prototype != null) {
+    if (typeof val === "function" && /^class[\s{]/.test(Function.prototype.toString.call(val))) {
       throw new ArgumentError(
         `A class was passed to \`:${optionName}\` but we are expecting a string.`,
       );
@@ -1074,39 +1074,39 @@ export class ThroughReflection extends AbstractReflection {
   }
 
   get name(): string {
-    return this._delegate.name;
+    return this.delegateReflection.name;
   }
 
   get macro(): MacroType {
-    return this._delegate.macro;
+    return this.delegateReflection.macro;
   }
 
   get options(): Record<string, unknown> {
-    return this._delegate.options;
+    return this.delegateReflection.options;
   }
 
   get activeRecord(): typeof Base {
-    return this._delegate.activeRecord;
+    return this.delegateReflection.activeRecord;
   }
 
   get pluralName(): string {
-    return this._delegate.pluralName;
+    return this.delegateReflection.pluralName;
   }
 
   get foreignKey(): string | string[] {
-    return this.sourceReflection?.foreignKey ?? this._delegate.foreignKey;
+    return this.sourceReflection?.foreignKey ?? this.delegateReflection.foreignKey;
   }
 
   get foreignType(): string | null {
-    return this.sourceReflection?.foreignType ?? this._delegate.foreignType;
+    return this.sourceReflection?.foreignType ?? this.delegateReflection.foreignType;
   }
 
   get scope(): ((...args: any[]) => any) | null {
-    return this._delegate.scope;
+    return this.delegateReflection.scope;
   }
 
   get className(): string {
-    return this._delegate.className;
+    return this.delegateReflection.className;
   }
 
   get klass(): typeof Base {

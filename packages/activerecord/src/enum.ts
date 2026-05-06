@@ -280,7 +280,7 @@ export class EnumMethods {
     scopes: boolean,
     instanceMethods: boolean,
   ): void {
-    const klass = this._klass;
+    const klass = this.klass;
     if (instanceMethods) {
       detectEnumConflictBang.call(klass, name, `${valueMethodName}?`);
       Object.defineProperty(klass.prototype, `${valueMethodName}?`, {
@@ -323,12 +323,54 @@ export class EnumMethods {
  *
  * Mirrors: ActiveRecord::Enum.enum (the ClassMethods macro).
  */
+/**
+ * Public `enum` macro. Validates then delegates to the private `_enum` impl.
+ *
+ * Mirrors: ActiveRecord::Enum.enum (the ClassMethods macro).
+ */
 export function enumMethod(
   this: typeof Base,
   attribute: string,
   mapping: Record<string, number>,
   options?: { prefix?: boolean | string; suffix?: boolean | string },
 ): void {
+  _enum.call(this, attribute, mapping, options);
+}
+
+// Alias the Base.enum implementation under the Rails-idiomatic name so
+// api:compare can match `ActiveRecord::Enum#enum` to this file. The runtime
+// binding wired onto Base uses the real (un-reserved-word) internal name.
+export { enumMethod as enum };
+
+/**
+ * Private implementation backing the `enum` macro.
+ * Validates values/options, registers the type, and defines all enum methods.
+ *
+ * Mirrors: ActiveRecord::Enum#_enum (private)
+ *
+ * @internal
+ */
+export function _enum(
+  this: typeof import("./base.js").Base,
+  name: string,
+  values: string[] | Record<string, string | number>,
+  options?: {
+    prefix?: boolean | string;
+    suffix?: boolean | string;
+    scopes?: boolean;
+    instanceMethods?: boolean;
+    validate?: boolean;
+  },
+): void {
+  if (values == null) throw new ArgumentError(`${String(name)} enum values must not be nil`);
+  assertValidEnumDefinitionValues(values);
+  assertValidEnumOptions(options ?? {});
+
+  const attribute = name;
+  const mapping = Array.isArray(values)
+    ? Object.fromEntries((values as string[]).map((v, i) => [v, i]))
+    : (values as Record<string, number>);
+
   if (!Object.prototype.hasOwnProperty.call(this, "_enums")) {
     this._enums = new Map(this._enums);
   }
@@ -349,8 +391,8 @@ export function enumMethod(
 
   const attrName = attribute;
   const reverseMap: Record<number, string> = {};
-  for (const [name, value] of Object.entries(mapping)) {
-    reverseMap[value] = name;
+  for (const [n, value] of Object.entries(mapping)) {
+    reverseMap[value as number] = n;
   }
 
   // Define getter that returns the symbol name. Use hasOwnProperty checks so
@@ -373,8 +415,8 @@ export function enumMethod(
     configurable: true,
   });
 
-  for (const [name, value] of Object.entries(mapping)) {
-    const methodBase = `${prefix}${name}${suffix}`;
+  for (const [n, value] of Object.entries(mapping)) {
+    const methodBase = `${prefix}${n}${suffix}`;
 
     // Predicate: user.active? → user.isActive()
     Object.defineProperty(
@@ -423,37 +465,6 @@ export function enumMethod(
     },
     configurable: true,
   });
-}
-
-// Alias the Base.enum implementation under the Rails-idiomatic name so
-// api:compare can match `ActiveRecord::Enum#enum` to this file. The runtime
-// binding wired onto Base uses the real (un-reserved-word) internal name.
-export { enumMethod as enum };
-
-/**
- * Private implementation backing the `enum` macro.
- * Validates values/options, registers the type, and calls the methods module.
- *
- * Mirrors: ActiveRecord::Enum#_enum (private)
- *
- * @internal
- */
-export function _enum(
-  this: typeof import("./base.js").Base,
-  name: string,
-  values: string[] | Record<string, string | number>,
-  options?: {
-    prefix?: boolean | string;
-    suffix?: boolean | string;
-    scopes?: boolean;
-    instanceMethods?: boolean;
-    validate?: boolean;
-  },
-): void {
-  if (values == null) throw new ArgumentError(`${String(name)} enum values must not be nil`);
-  assertValidEnumDefinitionValues(values);
-  assertValidEnumOptions(options ?? {});
-  enumMethod.call(this, name, values as Record<string, number>, options);
 }
 
 /** Cache of per-class EnumMethods modules.

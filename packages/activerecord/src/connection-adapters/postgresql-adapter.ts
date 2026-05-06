@@ -4523,13 +4523,6 @@ export class MoneyDecoder {
   }
 }
 
-/**
- * Parse a raw `pg_attrdef` default expression into a literal value or a
- * SQL function expression. Mirrors Rails' PG `extract_value_from_default`
- * / `extract_default_function` split — so schema reflection can carry
- * expression defaults as `defaultFunction` rather than applying them as
- * literal bind values.
- */
 function _pgAdvisoryLockSql(
   fn: string,
   col: string,
@@ -4540,6 +4533,13 @@ function _pgAdvisoryLockSql(
   return [`SELECT ${fn}(hashtext($1)) AS ${col}`, lockId];
 }
 
+/**
+ * Parse a raw `pg_attrdef` default expression into a literal value or a
+ * SQL function expression. Mirrors Rails' PG `extract_value_from_default`
+ * / `extract_default_function` split — so schema reflection can carry
+ * expression defaults as `defaultFunction` rather than applying them as
+ * literal bind values.
+ */
 function splitPgDefault(raw: string | null): { literal: unknown; fn: string | null } {
   if (raw == null) return { literal: null, fn: null };
   // 'value'::type — quoted literal with an optional cast.

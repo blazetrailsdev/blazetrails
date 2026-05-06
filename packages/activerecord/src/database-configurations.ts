@@ -213,28 +213,23 @@ export class DatabaseConfigurations {
    */
   resolve(config: unknown): DatabaseConfig {
     if (config instanceof DatabaseConfig) return config;
-    const defaultEnv = DatabaseConfigurations.defaultEnv;
     if (typeof config === "string") {
       // Mirrors Rails: resolve(symbol) → resolve_symbol_connection → find_db_config
       // Strings with a URI scheme (e.g. "postgres://", "sqlite3:") are treated as URLs.
       // Strings without a scheme are treated as env names (mirrors Ruby symbol lookup).
       const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(config);
       if (!hasScheme) {
-        const found = this.findDbConfig(config);
-        if (found) return found;
-        throw new Error(
-          `The \`${config}\` database is not configured for the \`${defaultEnv}\` environment.`,
-        );
+        return this.resolveSymbolConnection(config);
       }
-      return new UrlConfig(defaultEnv, "primary", config);
+      return new UrlConfig(DatabaseConfigurations.defaultEnv, "primary", config);
     }
     if (typeof config === "object" && config !== null) {
       const opts = config as DatabaseConfigOptions;
       if (opts.url) {
         const { url, ...configWithoutUrl } = opts;
-        return new UrlConfig(defaultEnv, "primary", url, configWithoutUrl);
+        return new UrlConfig(DatabaseConfigurations.defaultEnv, "primary", url, configWithoutUrl);
       }
-      return new HashConfig(defaultEnv, "primary", opts);
+      return new HashConfig(DatabaseConfigurations.defaultEnv, "primary", opts);
     }
     throw new TypeError(
       `Invalid type for configuration. Expected string, hash, or DatabaseConfig. Got ${typeof config}`,

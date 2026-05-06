@@ -66,7 +66,7 @@ export class Connection {
 }
 
 /** @internal */
-function tableName(): never {
+export function tableName(): never {
   throw new NotImplementedError(
     "ActiveRecord::TypeCaster::Connection#table_name is not implemented",
   );

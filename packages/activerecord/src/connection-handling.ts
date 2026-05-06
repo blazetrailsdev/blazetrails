@@ -780,7 +780,7 @@ export const ClassMethods = {
 _setAdapterClassResolver(async (adapterName) => _loadAdapter(adapterName));
 
 /** @internal */
-function resolveConfigForConnection(configOrEnv: any): never {
+export function resolveConfigForConnection(configOrEnv: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionHandling#resolve_config_for_connection is not implemented",
   );

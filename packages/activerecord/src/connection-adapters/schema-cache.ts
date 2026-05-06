@@ -714,35 +714,35 @@ export class FakePool {
 }
 
 /** @internal */
-function emptyCache(): never {
+export function emptyCache(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SchemaReflection#empty_cache is not implemented",
   );
 }
 
 /** @internal */
-function isIgnoredTable(tableName: any): never {
+export function isIgnoredTable(tableName: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SchemaCache#ignored_table? is not implemented",
   );
 }
 
 /** @internal */
-function deriveColumnsHashAndDeduplicateValues(): never {
+export function deriveColumnsHashAndDeduplicateValues(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SchemaCache#derive_columns_hash_and_deduplicate_values is not implemented",
   );
 }
 
 /** @internal */
-function deepDeduplicate(value: any): never {
+export function deepDeduplicate(value: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SchemaCache#deep_deduplicate is not implemented",
   );
 }
 
 /** @internal */
-function open(filename: any): never {
+export function open(filename: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::SchemaCache#open is not implemented",
   );

@@ -7,7 +7,7 @@
  * controller, action, etc.) to help trace queries back to application code.
  */
 
-import { ConfigurationError } from "./errors.js";
+import { ConfigurationError, NotImplementedError } from "./errors.js";
 import { LegacyFormatter, SQLCommenter } from "./query-logs-formatter.js";
 import type { TagValue, QueryLogsFormatter } from "./query-logs-formatter.js";
 
@@ -286,4 +286,14 @@ export class QueryLogs {
 // existing "escaping bad comments" test cases encode that.
 export function escapeComment(content: string): string {
   return String(content).replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
+}
+
+/** @internal */
+export function rebuildHandlers(): never {
+  throw new NotImplementedError("ActiveRecord::QueryLogs#rebuild_handlers is not implemented");
+}
+
+/** @internal */
+export function buildHandler(name: any, handler?: any): never {
+  throw new NotImplementedError("ActiveRecord::QueryLogs#build_handler is not implemented");
 }

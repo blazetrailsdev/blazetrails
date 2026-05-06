@@ -84,14 +84,14 @@ export function normalizeAttribute(record: InstanceType<typeof Model>, name: str
 }
 
 /** @internal */
-function normalize(value: any): never {
+export function normalize(value: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Normalization::NormalizedValueType#normalize is not implemented",
   );
 }
 
 /** @internal */
-function normalizeChangedInPlaceAttributes(): never {
+export function normalizeChangedInPlaceAttributes(): never {
   throw new NotImplementedError(
     "ActiveRecord::Normalization#normalize_changed_in_place_attributes is not implemented",
   );

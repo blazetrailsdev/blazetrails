@@ -186,12 +186,12 @@ export const InstanceMethods = {
 };
 
 /** @internal */
-function initInternals(): never {
+export function initInternals(): never {
   throw new NotImplementedError("ActiveRecord::TouchLater#init_internals is not implemented");
 }
 
 /** @internal */
-function hasDeferTouchAttrs(): never {
+export function hasDeferTouchAttrs(): never {
   throw new NotImplementedError(
     "ActiveRecord::TouchLater#has_defer_touch_attrs? is not implemented",
   );

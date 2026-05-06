@@ -80,7 +80,7 @@ function buildUrlHash(url: string): DatabaseConfigOptions {
 }
 
 /** @internal */
-function toBooleanBang(configurationHash: any, key: any): never {
+export function toBooleanBang(configurationHash: any, key: any): never {
   throw new NotImplementedError(
     "ActiveRecord::DatabaseConfigurations::UrlConfig#to_boolean! is not implemented",
   );

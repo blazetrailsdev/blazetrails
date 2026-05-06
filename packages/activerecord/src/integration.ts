@@ -213,14 +213,14 @@ export function collectionCacheKey(
 }
 
 /** @internal */
-function canUseFastCacheVersion(timestamp: any): never {
+export function canUseFastCacheVersion(timestamp: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Integration#can_use_fast_cache_version? is not implemented",
   );
 }
 
 /** @internal */
-function rawTimestampToCacheVersion(timestamp: any): never {
+export function rawTimestampToCacheVersion(timestamp: any): never {
   throw new NotImplementedError(
     "ActiveRecord::Integration#raw_timestamp_to_cache_version is not implemented",
   );

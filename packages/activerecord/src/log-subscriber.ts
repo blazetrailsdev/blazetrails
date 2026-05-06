@@ -1,4 +1,5 @@
 import { Attribute } from "@blazetrails/activemodel";
+import { NotImplementedError } from "./errors.js";
 import {
   BacktraceCleaner,
   LogSubscriber as BaseLogSubscriber,
@@ -271,3 +272,8 @@ export class LogSubscriber extends BaseLogSubscriber {
 // Register log-level gates matching Rails' class-body `subscribe_log_level` calls.
 LogSubscriber.subscribeLogLevel("sql", "debug");
 LogSubscriber.subscribeLogLevel("strict_loading_violation", "debug");
+
+/** @internal */
+export function debug(progname?: any): never {
+  throw new NotImplementedError("ActiveRecord::LogSubscriber#debug is not implemented");
+}

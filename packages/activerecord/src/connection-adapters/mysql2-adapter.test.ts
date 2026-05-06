@@ -770,12 +770,15 @@ describeIfMysql("Mysql2Adapter", () => {
 
   // -- Connection lifecycle (mirrors mysql2/connection_test.rb) --
   describe("connection lifecycle", () => {
-    it("getFullVersion returns the raw server version string and populates fullVersion", async () => {
+    it("fullVersion returns the real server version string without a prior warm-up call", async () => {
+      const ver = await (adapter as any).fullVersion();
+      expect(typeof ver).toBe("string");
+      expect(ver).toMatch(/\d+\.\d+\.\d+/);
+    });
+
+    it("getFullVersion populates fullVersion cache", async () => {
       const full = await (adapter as any).getFullVersion();
-      expect(typeof full).toBe("string");
-      expect(full).toMatch(/\d+\.\d+\.\d+/);
-      // fullVersion() mirrors Rails' full_version → returns the raw string
-      expect((adapter as any).fullVersion()).toBe(full);
+      expect(await (adapter as any).fullVersion()).toBe(full);
     });
 
     it("isTextType returns true for char/varchar/text, false for int", () => {

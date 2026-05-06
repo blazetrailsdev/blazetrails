@@ -1050,11 +1050,13 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 
   /**
-   * Return the full raw version string from the last getFullVersion call.
-   * Mirrors Rails' full_version → database_version.full_version_string.
+   * Return the full raw version string, lazily fetching it if needed.
+   * Mirrors Rails' full_version → database_version.full_version_string,
+   * which always returns the real server version without a separate warm-up.
    * @internal
    */
-  fullVersion(): string {
+  async fullVersion(): Promise<string> {
+    if (!this._fullVersionString) await this.getFullVersion();
     return this._fullVersionString ?? "0.0.0";
   }
 

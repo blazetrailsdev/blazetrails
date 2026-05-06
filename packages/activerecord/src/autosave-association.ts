@@ -524,6 +524,19 @@ function validateHasOneAssociation(this: any, reflection: any): void {
     this._preloadedAssociations?.get(reflection.name);
   if (!record || typeof record !== "object" || Array.isArray(record)) return;
   if (!(record.changedForAutosave?.() ?? false)) return;
+  // Mirrors Rails: skip if the inverse belongs_to is currently validating or autosaving
+  // to prevent infinite mutual-validation loops.
+  const inverseOf = reflection.inverseOf ?? reflection.inverse_of;
+  if (inverseOf) {
+    const inverseAssoc =
+      record._cachedAssociations?.get(inverseOf.name) !== undefined ? inverseOf : null;
+    if (
+      inverseAssoc &&
+      (record.isValidatingBelongsToFor?.(inverseAssoc) ||
+        record.isAutosavingBelongsToFor?.(inverseAssoc))
+    )
+      return;
+  }
   isAssociationValid(reflection, record, this);
 }
 
@@ -544,10 +557,18 @@ function validateBelongsToAssociation(this: any, reflection: any): void {
 
 /** @internal */
 function validateCollectionAssociation(this: any, reflection: any): void {
-  const records =
-    this._cachedAssociations?.get(reflection.name) ??
-    this._preloadedAssociations?.get(reflection.name);
-  if (!Array.isArray(records)) return;
+  // Mirrors Rails: use associatedRecordsToValidateOrSave to filter by new_record/autosave state.
+  const association = {
+    target:
+      this._cachedAssociations?.get(reflection.name) ??
+      this._preloadedAssociations?.get(reflection.name),
+  };
+  const records = associatedRecordsToValidateOrSave(
+    association,
+    typeof this.isNewRecord === "function" ? this.isNewRecord() : false,
+    !!reflection.options?.autosave,
+  );
+  if (!records) return;
   for (const record of records) {
     isAssociationValid(reflection, record, this);
   }

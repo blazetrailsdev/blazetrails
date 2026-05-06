@@ -1,4 +1,4 @@
-import { Type, ValueType } from "@blazetrails/activemodel";
+import { Type, ValueType, BinaryData } from "@blazetrails/activemodel";
 
 export interface Coder {
   dump(value: unknown): string | null;
@@ -117,7 +117,9 @@ export function encoded(serialized: Serialized, value: unknown): unknown {
     }
   }
   const payload = serialized.coder.dump(value);
-  // Rails: if subtype.binary? wrap in Binary::Data. We return the payload directly
-  // because TS has no Binary::Data equivalent; callers compare raw serialized strings.
+  // Rails: if payload && subtype.binary? → ActiveModel::Type::Binary::Data.new(payload)
+  if (payload && (serialized.subtype as any).binary?.()) {
+    return new BinaryData(payload);
+  }
   return payload;
 }

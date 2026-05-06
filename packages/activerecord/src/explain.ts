@@ -1,6 +1,7 @@
 import { ExplainRegistry } from "./explain-registry.js";
 import type { Base } from "./base.js";
 import type { ExplainOption } from "./adapter.js";
+import { Attribute } from "@blazetrails/activemodel";
 
 /**
  * Explain module — entry points for collecting queries and running EXPLAIN.
@@ -63,17 +64,15 @@ function byteSize(value: unknown): number {
  * @internal
  */
 export function renderBind(connection: any, attr: unknown): [string | null, unknown] {
-  if (attr && typeof attr === "object" && "type" in attr && "value" in attr) {
-    const a = attr as { name?: string; type?: any; value?: unknown; valueForDatabase?: unknown };
-    const isBinary = a.type?.binary?.() ?? a.type?.isBinary?.() ?? false;
-    if (isBinary && a.value != null) {
-      const raw =
-        typeof a.valueForDatabase === "function" ? a.valueForDatabase() : a.valueForDatabase;
+  // Mirrors Rails: `if ActiveModel::Attribute === attr`
+  if (attr instanceof Attribute) {
+    const isBinary = (attr.type as any)?.binary?.() ?? (attr.type as any)?.isBinary?.() ?? false;
+    if (isBinary && attr.value != null) {
+      const raw = attr.valueForDatabase;
       const bytes = byteSize(raw);
-      return [a.name ?? null, `<${bytes} bytes of binary data>`];
+      return [attr.name, `<${bytes} bytes of binary data>`];
     }
-    const typeCasted = connection?.typeCast?.(a.valueForDatabase) ?? a.valueForDatabase ?? a.value;
-    return [a.name ?? null, typeCasted];
+    return [attr.name, connection?.typeCast?.(attr.valueForDatabase) ?? attr.valueForDatabase];
   }
   const value = connection?.typeCast?.(attr) ?? attr;
   return [null, value];

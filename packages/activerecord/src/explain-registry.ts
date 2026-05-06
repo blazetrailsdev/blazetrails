@@ -16,7 +16,6 @@
  * scope has been opened so existing unit-level tests keep working.
  */
 
-import { NotImplementedError } from "./errors.js";
 import { getAsyncContext } from "@blazetrails/activesupport";
 import type { AsyncContext } from "@blazetrails/activesupport";
 
@@ -108,7 +107,15 @@ export class ExplainRegistry {
   }
 }
 
-/** @internal */
-export function instance(): never {
-  throw new NotImplementedError("ActiveRecord::ExplainRegistry#instance is not implemented");
+/**
+ * Returns the per-execution-context ExplainRegistry instance, creating one if
+ * needed. Rails uses IsolatedExecutionState (thread-local); trails uses
+ * AsyncLocalStorage via the async context adapter.
+ *
+ * Mirrors: ActiveRecord::ExplainRegistry.instance (private class method)
+ *
+ * @internal
+ */
+export function instance(): ExplainRegistry {
+  return ctx().getStore() ?? (_fallback as unknown as ExplainRegistry);
 }

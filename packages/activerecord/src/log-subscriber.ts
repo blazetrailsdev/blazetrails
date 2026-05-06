@@ -1,5 +1,4 @@
 import { Attribute } from "@blazetrails/activemodel";
-import { NotImplementedError } from "./errors.js";
 import {
   BacktraceCleaner,
   LogSubscriber as BaseLogSubscriber,
@@ -273,7 +272,22 @@ export class LogSubscriber extends BaseLogSubscriber {
 LogSubscriber.subscribeLogLevel("sql", "debug");
 LogSubscriber.subscribeLogLevel("strict_loading_violation", "debug");
 
-/** @internal */
-export function debug(progname?: any): never {
-  throw new NotImplementedError("ActiveRecord::LogSubscriber#debug is not implemented");
+/**
+ * Override of the parent logger's `debug` that also logs the query source
+ * location when verbose_query_logs is enabled.
+ *
+ * Mirrors: ActiveRecord::LogSubscriber#debug (private)
+ *
+ * @internal
+ */
+export function debug(subscriber: LogSubscriber, message: string): boolean {
+  const logger = subscriber.logger;
+  if (!logger) return false;
+  const result = logger.debug(message);
+  if (!result) return false;
+  if (getVerboseQueryLogs()) {
+    const source = subscriber["querySourceLocation"]?.();
+    if (source) logger.debug(`  ↳ ${source}`);
+  }
+  return true;
 }

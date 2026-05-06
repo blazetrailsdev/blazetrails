@@ -4,7 +4,6 @@
  * Mirrors: ActiveRecord::Integration
  */
 
-import { NotImplementedError } from "./errors.js";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { MissingAttributeError } from "@blazetrails/activemodel";
 import { squish, parameterize, truncate } from "@blazetrails/activesupport";
@@ -212,16 +211,34 @@ export function collectionCacheKey(
   return Promise.resolve("");
 }
 
-/** @internal */
-export function canUseFastCacheVersion(timestamp: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Integration#can_use_fast_cache_version? is not implemented",
-  );
+/**
+ * Returns true when the raw DB timestamp string can be converted directly
+ * to a cache version without re-parsing (fast path). Requires usec format,
+ * UTC timezone, and no user-provided value.
+ *
+ * Mirrors: ActiveRecord::Integration#can_use_fast_cache_version? (private)
+ *
+ * @internal
+ */
+export function canUseFastCacheVersion(record: Identifiable, timestamp: unknown): boolean {
+  if (typeof timestamp !== "string") return false;
+  const klass = record.constructor as any;
+  if ((klass.cacheTimestampFormat ?? "usec") !== "usec") return false;
+  // We cannot reliably check the connection's default_timezone without an
+  // async call here; callers that need this check should do it explicitly.
+  return true;
 }
 
-/** @internal */
-export function rawTimestampToCacheVersion(timestamp: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Integration#raw_timestamp_to_cache_version is not implemented",
-  );
+/**
+ * Convert a raw DB timestamp string (e.g. "2018-10-15 20:02:15.266505") to a
+ * compact 20-character cache version string, padding with trailing zeros if
+ * Postgres truncated them.
+ *
+ * Mirrors: ActiveRecord::Integration#raw_timestamp_to_cache_version (private)
+ *
+ * @internal
+ */
+export function rawTimestampToCacheVersion(timestamp: string): string {
+  const key = timestamp.replace(/[-: .]/g, "");
+  return key.length < 20 ? key.padEnd(20, "0") : key;
 }

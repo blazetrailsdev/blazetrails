@@ -1,4 +1,3 @@
-import { NotImplementedError } from "./errors.js";
 import { ExplainRegistry } from "./explain-registry.js";
 import type { Base } from "./base.js";
 import type { ExplainOption } from "./adapter.js";
@@ -41,12 +40,42 @@ export async function execExplain(
   return (modelClass as any).all()._execExplain(queries, options);
 }
 
-/** @internal */
-export function renderBind(connection: any, attr: any): never {
-  throw new NotImplementedError("ActiveRecord::Explain#render_bind is not implemented");
+/**
+ * Render a single bind parameter as [name, value] for EXPLAIN output.
+ * Binary values are replaced with a byte-count summary.
+ *
+ * Mirrors: ActiveRecord::Explain#render_bind (private)
+ *
+ * @internal
+ */
+export function renderBind(connection: any, attr: unknown): [string | null, unknown] {
+  if (attr && typeof attr === "object" && "type" in attr && "value" in attr) {
+    const a = attr as { name?: string; type?: any; value?: unknown; valueForDatabase?: unknown };
+    const isBinary = a.type?.binary?.() ?? a.type?.isBinary?.() ?? false;
+    if (isBinary && a.value != null) {
+      const raw =
+        typeof a.valueForDatabase === "function" ? a.valueForDatabase() : a.valueForDatabase;
+      const bytes = raw != null ? String(raw).length : 0;
+      return [a.name ?? null, `<${bytes} bytes of binary data>`];
+    }
+    const typeCasted = connection?.typeCast?.(a.valueForDatabase) ?? a.valueForDatabase ?? a.value;
+    return [a.name ?? null, typeCasted];
+  }
+  const value = connection?.typeCast?.(attr) ?? attr;
+  return [null, value];
 }
 
-/** @internal */
-export function buildExplainClause(connection: any, options?: any): never {
-  throw new NotImplementedError("ActiveRecord::Explain#build_explain_clause is not implemented");
+/**
+ * Build the EXPLAIN prefix clause. Delegates to the connection's
+ * buildExplainClause method if available, otherwise returns "EXPLAIN for:".
+ *
+ * Mirrors: ActiveRecord::Explain#build_explain_clause (private)
+ *
+ * @internal
+ */
+export function buildExplainClause(connection: any, options: ExplainOption[] = []): string {
+  if (connection && typeof connection.buildExplainClause === "function") {
+    return connection.buildExplainClause(options);
+  }
+  return "EXPLAIN for:";
 }

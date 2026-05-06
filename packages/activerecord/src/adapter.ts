@@ -361,13 +361,13 @@ export interface DatabaseAdapter {
    * Acquire an advisory lock. Returns true if the lock was obtained.
    * Optional — only implemented by adapters that support advisory locks.
    */
-  getAdvisoryLock?(lockId: number | string): Promise<boolean>;
+  getAdvisoryLock?(lockId: number | bigint | string): Promise<boolean>;
 
   /**
    * Release an advisory lock. Returns true if the lock was released.
    * Optional — only implemented by adapters that support advisory locks.
    */
-  releaseAdvisoryLock?(lockId: number | string): Promise<boolean>;
+  releaseAdvisoryLock?(lockId: number | bigint | string): Promise<boolean>;
 
   /**
    * Quote a raw string for safe inclusion in a SQL literal (escape ' and \).

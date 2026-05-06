@@ -4,6 +4,7 @@ import {
   Migrator,
   CheckPending,
   PendingMigrationError,
+  ConcurrentMigrationError,
   EnvironmentMismatchError,
   NoEnvironmentInSchemaError,
   ProtectedEnvironmentError,
@@ -781,5 +782,32 @@ describe("Migrator advisory lock wrapping", () => {
     const migrator = new Migrator(adapter, [makeMigration("1", "M1")]);
     await migrator.forward(1);
     expect(lockLog).toEqual(["lock", "unlock"]);
+  });
+
+  it("raises ConcurrentMigrationError with RELEASE_LOCK_FAILED_MESSAGE when releaseAdvisoryLock returns false", async () => {
+    const adapter = createTestAdapter();
+    adapter.supportsAdvisoryLocks = () => true;
+    adapter.getAdvisoryLock = async () => true;
+    adapter.releaseAdvisoryLock = async () => false;
+    const migrator = new Migrator(adapter, [makeMigration("1", "M1")]);
+    await expect(migrator.migrate()).rejects.toThrow(
+      ConcurrentMigrationError.RELEASE_LOCK_FAILED_MESSAGE,
+    );
+  });
+
+  it("uses db-scoped lock ID when adapter exposes currentDatabase", async () => {
+    const adapter = createTestAdapter();
+    const lockIds: unknown[] = [];
+    adapter.supportsAdvisoryLocks = () => true;
+    adapter.getAdvisoryLock = async (id) => {
+      lockIds.push(id);
+      return true;
+    };
+    adapter.releaseAdvisoryLock = async () => true;
+    (adapter as unknown as Record<string, unknown>).currentDatabase = async () => "myapp_test";
+    const migrator = new Migrator(adapter, []);
+    await migrator.migrate();
+    expect(typeof lockIds[0]).toBe("bigint");
+    expect(lockIds[0]).not.toBe(BigInt(2053462845));
   });
 });

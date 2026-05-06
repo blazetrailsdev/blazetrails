@@ -40,11 +40,12 @@ export {
 
 import { ActiveRecordError, NotImplementedError } from "./errors.js";
 
-// Mirrors Zlib.crc32 (ISO 3309 / ITU-T V.42 polynomial).
+// Mirrors Zlib.crc32 (ISO 3309 / ITU-T V.42 polynomial) operating on UTF-8 bytes.
 function _crc32(str: string): number {
+  const bytes = new TextEncoder().encode(str);
   let crc = 0xffffffff;
-  for (let i = 0; i < str.length; i++) {
-    crc ^= str.charCodeAt(i);
+  for (const byte of bytes) {
+    crc ^= byte;
     for (let j = 0; j < 8; j++) {
       crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
     }
@@ -128,8 +129,7 @@ export class PendingMigrationError extends MigrationError {
 }
 
 export class ConcurrentMigrationError extends MigrationError {
-  static readonly RELEASE_LOCK_FAILED_MESSAGE =
-    "Failed to release advisory lock, which means the lock file could not be deleted.";
+  static readonly RELEASE_LOCK_FAILED_MESSAGE = "Failed to release advisory lock";
 
   constructor(message = "Cannot run migrations because another migration is currently running.") {
     super(message);
@@ -1043,7 +1043,7 @@ export abstract class Migration {
   static methodMissing(name: string, ...args: unknown[]): unknown {
     const delegate = this.nearestDelegate as Record<string, unknown> | null;
     if (delegate !== null && typeof delegate[name] === "function") {
-      return (delegate[name] as (...a: unknown[]) => unknown)(...args);
+      return (delegate[name] as (...a: unknown[]) => unknown).apply(delegate, args);
     }
     throw new TypeError(`undefined method '${name}' for ${this.name}`);
   }
@@ -1064,7 +1064,7 @@ export abstract class Migration {
     if (typeof conn[name] !== "function") {
       throw new TypeError(`undefined method '${name}' for ${this.adapter.constructor.name}`);
     }
-    return (conn[name] as (...a: unknown[]) => unknown)(...args);
+    return (conn[name] as (...a: unknown[]) => unknown).apply(conn, args);
   }
 
   /** @internal */
@@ -1700,6 +1700,7 @@ export class Migrator {
 
   /** @internal Mirrors: ActiveRecord::Migrator#run_without_lock */
   async runWithoutLock(direction: "up" | "down", targetVersion: string | number): Promise<void> {
+    this._validateTargetVersion(targetVersion);
     await this._ensureSchemaTable();
     const key = String(BigInt(targetVersion));
     const proxy = this._migrations.find((m) => m.version === key);
@@ -1732,8 +1733,12 @@ export class Migrator {
   /** @internal Mirrors: ActiveRecord::Migrator#invalid_target? */
   isInvalidTarget(targetVersion?: string | number | null): boolean {
     if (targetVersion === null || targetVersion === undefined) return false;
-    const key = String(BigInt(targetVersion));
-    return !this._migrations.some((m) => m.version === key);
+    try {
+      const key = String(BigInt(targetVersion));
+      return !this._migrations.some((m) => m.version === key);
+    } catch {
+      return true;
+    }
   }
 
   /** @internal Mirrors: ActiveRecord::Migrator#execute_migration_in_transaction */
@@ -1777,13 +1782,15 @@ export class Migrator {
   }
 
   /** @internal Mirrors: ActiveRecord::Migrator#generate_migrator_advisory_lock_id */
-  async generateMigratorAdvisoryLockId(): Promise<number> {
+  async generateMigratorAdvisoryLockId(): Promise<bigint> {
     const adapter = this._adapter as unknown as { currentDatabase?(): Promise<string> };
     if (typeof adapter.currentDatabase === "function") {
       const dbName = await adapter.currentDatabase();
-      return Migrator._MIGRATOR_SALT * _crc32(dbName);
+      if (dbName) {
+        return BigInt(Migrator._MIGRATOR_SALT) * BigInt(_crc32(dbName));
+      }
     }
-    return Migrator._MIGRATOR_SALT;
+    return BigInt(Migrator._MIGRATOR_SALT);
   }
 
   /**

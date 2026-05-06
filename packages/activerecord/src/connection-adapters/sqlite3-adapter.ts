@@ -745,8 +745,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     super.disconnectBang();
     if (this.driver.isOpen()) {
       // driver.close() returns void | Promise<void>; for inProcessSync drivers
-      // (better-sqlite3) this is sync. Async-driver teardown belongs in pool
-      // infra once it awaits disconnectBang() — callers today are sync.
+      // (better-sqlite3) this is sync. Async-driver teardown needs pool-infra
+      // changes — tracked in #1269.
       this.driver.close();
     }
   }
@@ -785,14 +785,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   private _databaseVersion: Version | null = null;
 
   override getDatabaseVersion(): Version {
-    if (!this._databaseVersion) {
-      // better-sqlite3 prepare/get are sync; the cast is safe for inProcessSync drivers.
-      // Async drivers require an async constructor path (future work).
-      const stmt = this.driver.prepare("SELECT sqlite_version() AS v") as SqliteStatement;
-      const row = stmt.get() as any;
-      this._databaseVersion = new Version(row?.v ?? "0.0.0");
-    }
-    return this._databaseVersion;
+    // Always pre-warmed by connect() — _databaseVersion is non-null after construction.
+    return this._databaseVersion ?? new Version("0.0.0");
   }
 
   override get databaseVersion(): Version {
@@ -2028,10 +2022,12 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
             "Async drivers require an async constructor path (not yet implemented).",
         );
       }
-      this.driver = factory.openSync({
-        database: this._filename,
-        readOnly: this._readonly,
-      }) as SqliteConnection;
+      const syncConn = factory.openSync({ database: this._filename, readOnly: this._readonly });
+      // Pre-warm version cache while the connection is a known-sync handle so
+      // getDatabaseVersion() never needs to touch this.driver directly. (#1269)
+      const vRow = syncConn.prepare("SELECT sqlite_version() AS v").get() as any;
+      this._databaseVersion = new Version(vRow?.v ?? "0.0.0");
+      this.driver = syncConn as SqliteConnection;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new DatabaseConnectionError(`Unable to open database '${this._filename}': ${msg}`, {

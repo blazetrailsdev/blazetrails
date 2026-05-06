@@ -79,6 +79,8 @@ export class InsertAll {
     if (this.inserts.length === 0) {
       this.keys = new Set();
     } else {
+      this.resolveSti();
+      this.resolveAttributeAliases();
       this.keys = new Set(Object.keys(this.inserts[0]));
     }
 
@@ -104,7 +106,7 @@ export class InsertAll {
 
   updatableColumns(): string[] {
     if (this._updatableColumns) return this._updatableColumns;
-    const exclude = new Set([...this.primaryKeys(), ...this.uniqueByColumns()]);
+    const exclude = new Set([...this.readonlyColumns(), ...this.uniqueByColumns()]);
     if (this.recordTimestamps() && !this.updateOnly && !this.updateSql) {
       for (const col of TIMESTAMP_COLUMNS) {
         exclude.add(col);
@@ -128,15 +130,13 @@ export class InsertAll {
   }
 
   mapKeyWithValue<T>(fn: (key: string, value: unknown) => T): T[][] {
-    const now = this.recordTimestamps() ? Temporal.Now.instant() : undefined;
+    const timestamps = this.recordTimestamps() ? this.timestampsForCreate() : undefined;
     const keysList = [...this.keysIncludingTimestamps()];
     return this.inserts.map((row) => {
       const merged = { ...this._scopeAttributes, ...row };
-      if (now) {
-        for (const col of TIMESTAMP_COLUMNS) {
-          if (this.model._attributeDefinitions.has(col) && merged[col] == null) {
-            merged[col] = now;
-          }
+      if (timestamps) {
+        for (const [col, val] of Object.entries(timestamps)) {
+          if (merged[col] == null) merged[col] = val;
         }
       }
       return keysList.map((key) => fn(key, merged[key]));
@@ -181,6 +181,14 @@ export class InsertAll {
         "You can't set :update_only and provide custom update SQL via :on_duplicate at the same time",
       );
     }
+    if (
+      onDuplicate !== undefined &&
+      onDuplicate !== "update" &&
+      !this.isCustomUpdateSqlProvided(onDuplicate) &&
+      this.updateOnly !== undefined
+    ) {
+      throw new Error("Cannot use both onDuplicate and updateOnly");
+    }
 
     if (this.updateOnly !== undefined) {
       this._updatableColumns = Array.isArray(this.updateOnly) ? this.updateOnly : [this.updateOnly];
@@ -196,9 +204,7 @@ export class InsertAll {
   }
 
   /** @internal */
-  private isCustomUpdateSqlProvided(
-    onDuplicate: InsertAllOptions["onDuplicate"] = this.updateSql,
-  ): boolean {
+  private isCustomUpdateSqlProvided(onDuplicate: InsertAllOptions["onDuplicate"]): boolean {
     return onDuplicate instanceof Nodes.SqlLiteral;
   }
 

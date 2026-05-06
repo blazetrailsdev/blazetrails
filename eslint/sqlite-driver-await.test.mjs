@@ -13,6 +13,8 @@ tester.run("sqlite-driver-await", rule, {
     { code: "driver.run('SELECT 1').then(r => r);" },
     // .catch() chain
     { code: "driver.run('SELECT 1').catch(e => e);" },
+    // .finally() chain
+    { code: "driver.run('SELECT 1').finally(() => cleanup());" },
     // property access (no call) — driver.raw
     { code: "const db = driver.raw;" },
     // whitelisted sync: setReadBigInts
@@ -43,6 +45,11 @@ tester.run("sqlite-driver-await", rule, {
     // returned without await
     {
       code: "function f(driver) { return driver.pragma('x'); }",
+      errors: [{ messageId: "missingAwait" }],
+    },
+    // arbitrary chain (not then/catch/finally) is not safe
+    {
+      code: "driver.run('SELECT 1').rows;",
       errors: [{ messageId: "missingAwait" }],
     },
   ],

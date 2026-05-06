@@ -7,7 +7,7 @@
  * `T | Promise<T>` so that the same surface can back both the current
  * synchronous better-sqlite3 implementation and a future async driver.  A
  * forgotten `await` silently discards the Promise when the async path is
- * enabled — this rule turns that into a compile-time error.
+ * enabled — this rule turns that into a lint-time (CI) error.
  *
  * `this.driver.<method>()` is excluded: those call sites use `this` as the
  * receiver and are covered by the TypeScript compiler once return types
@@ -34,10 +34,14 @@ function isSafelyConsumed(node) {
   if (!parent) return false;
   // await driver.foo()
   if (parent.type === "AwaitExpression") return true;
-  // driver.foo().then(...) / .catch(...)
+  // driver.foo().then(...) / .catch(...) / .finally(...)
   if (
     parent.type === "MemberExpression" &&
     parent.object === node &&
+    parent.property.type === "Identifier" &&
+    (parent.property.name === "then" ||
+      parent.property.name === "catch" ||
+      parent.property.name === "finally") &&
     parent.parent?.type === "CallExpression" &&
     parent.parent.callee === parent
   ) {
@@ -56,7 +60,7 @@ const rule = {
     schema: [],
     messages: {
       missingAwait:
-        "sqlite driver call must be awaited (interface returns T | Promise<T>); add 'await' or chain '.then'.",
+        "sqlite driver call must be awaited (interface returns T | Promise<T>); add 'await' or chain '.then'/'.catch'/'.finally'.",
     },
   },
   create(context) {

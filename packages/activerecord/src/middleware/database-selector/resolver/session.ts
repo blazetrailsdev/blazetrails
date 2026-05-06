@@ -32,7 +32,7 @@ export class Session {
 
   lastWriteTimestamp(): Temporal.Instant {
     const raw = this.session.get("lastWrite");
-    // Non-numeric/NaN session value → epoch 0 → treated as "very long ago" → route to primary.
+    // Non-numeric/NaN session value → epoch 0 → "very long ago" → time_since_last_write_ok? is true → route to replica.
     return Session.convertTimestampToTime(Number.isFinite(raw) ? (raw as number) : undefined);
   }
 

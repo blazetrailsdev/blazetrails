@@ -6,6 +6,7 @@
 
 import { Base } from "../base.js";
 import { Notifications } from "@blazetrails/activesupport";
+import { ArgumentError } from "@blazetrails/activemodel";
 
 export interface ShardRequest {
   method: string;
@@ -63,7 +64,7 @@ export class ShardSelector {
       shardKey = shard;
     } else {
       const name = Symbol.keyFor(shard) ?? shard.description;
-      if (!name) throw new Error(`Cannot convert symbol to shard key: ${String(shard)}`);
+      if (!name) throw new ArgumentError(`Cannot convert symbol to shard key: ${String(shard)}`);
       shardKey = name;
     }
     return Base.connectedTo({ shard: shardKey }, () =>

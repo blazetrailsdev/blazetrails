@@ -350,7 +350,7 @@ TS paths use `$TS/` = `packages/activerecord/src/`.
 
 ### Wave 11 — Mid-tier (database_configurations, middleware, tasks, misc)
 
-**PR 48 — `database_configurations.rb` + `connection_url_resolver.rb` (combined)** _(~300 net LOC — at hard ceiling)_
+**PR 48 — `database_configurations.rb` + `connection_url_resolver.rb` (combined)** ✅ #1261
 
 - Rails: `$AR/database_configurations.rb` (309 LOC), `$AR/database_configurations/connection_url_resolver.rb` (107 LOC)
 - TS: `$TS/database-configurations.ts` (50%, 11 missing), `$TS/database-configurations/connection-url-resolver.ts` (14%, 6 missing)

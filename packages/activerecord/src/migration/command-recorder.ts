@@ -432,12 +432,17 @@ export class CommandRecorder {
 
   /** @internal */
   invertDropEnum(args: unknown[]): [string, unknown[]] {
+    // Mirror Rails: extract_options! strips trailing hash, then check second positional arg
     const a = args.slice();
-    let values: unknown;
-    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
-      values = a[a.length - 1];
+    if (
+      a.length > 0 &&
+      typeof a[a.length - 1] === "object" &&
+      a[a.length - 1] !== null &&
+      !Array.isArray(a[a.length - 1])
+    ) {
+      a.pop();
     }
-    if (!values) {
+    if (a[1] === undefined) {
       throw new IrreversibleMigration(
         "drop_enum is only reversible if given a list of enum values.",
       );
@@ -478,12 +483,17 @@ export class CommandRecorder {
 
   /** @internal */
   invertDropVirtualTable(args: unknown[]): [string, unknown[]] {
+    // Mirror Rails: extract_options! strips trailing hash, then check second positional arg
     const a = args.slice();
-    let values: unknown;
-    if (a.length > 0 && typeof a[a.length - 1] === "object" && a[a.length - 1] !== null) {
-      values = a[a.length - 1];
+    if (
+      a.length > 0 &&
+      typeof a[a.length - 1] === "object" &&
+      a[a.length - 1] !== null &&
+      !Array.isArray(a[a.length - 1])
+    ) {
+      a.pop();
     }
-    if (!values) {
+    if (a[1] === undefined) {
       throw new IrreversibleMigration("drop_virtual_table is only reversible if given options.");
     }
     return ["createVirtualTable", args];

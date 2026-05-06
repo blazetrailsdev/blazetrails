@@ -291,6 +291,38 @@ describe("CommandRecorder", () => {
     });
   });
 
+  describe("invertDropEnum", () => {
+    it("throws without values arg", () => {
+      expect(() => new CommandRecorder().invertDropEnum(["my_enum"])).toThrow(
+        IrreversibleMigration,
+      );
+    });
+
+    it("throws when only options hash given (no values)", () => {
+      expect(() => new CommandRecorder().invertDropEnum(["my_enum", { schema: "public" }])).toThrow(
+        IrreversibleMigration,
+      );
+    });
+
+    it("returns createEnum when values array given", () => {
+      const [cmd] = new CommandRecorder().invertDropEnum(["my_enum", ["val1", "val2"]]);
+      expect(cmd).toBe("createEnum");
+    });
+  });
+
+  describe("invertDropVirtualTable", () => {
+    it("throws without type arg", () => {
+      expect(() => new CommandRecorder().invertDropVirtualTable(["my_table"])).toThrow(
+        IrreversibleMigration,
+      );
+    });
+
+    it("returns createVirtualTable when type given", () => {
+      const [cmd] = new CommandRecorder().invertDropVirtualTable(["my_table", "fts5"]);
+      expect(cmd).toBe("createVirtualTable");
+    });
+  });
+
   describe("joinTableName / findJoinTableName", () => {
     it("joinTableName returns sorted joined name", () => {
       expect(new CommandRecorder().joinTableName("cats", "dogs")).toBe("cats_dogs");

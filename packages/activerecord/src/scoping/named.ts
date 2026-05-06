@@ -95,6 +95,4 @@ export const ClassMethods = {
  * class. JS has no equivalent hook; this is a no-op placeholder.
  * @internal
  */
-function singletonMethodAdded(_name: string | symbol): void {
-  // no-op: JS has no singleton_method_added hook equivalent
-}
+function singletonMethodAdded(_name: string | symbol): void {}

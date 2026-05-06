@@ -7,10 +7,12 @@
 import { BinaryData } from "@blazetrails/activemodel";
 import {
   quote as abstractQuote,
+  quotedDate as abstractQuotedDate,
   quotedFalse as abstractQuotedFalse,
   quotedTrue as abstractQuotedTrue,
   typeCast as abstractTypeCast,
 } from "../abstract/quoting.js";
+import { Temporal } from "@blazetrails/activesupport/temporal";
 import { Data as ArrayData } from "./oid/array.js";
 import { Data as BitData } from "./oid/bit.js";
 import { Range } from "./oid/range.js";
@@ -345,17 +347,30 @@ export function checkIntegerRange(value: bigint | number): void {
 
 /**
  * Mirrors: PostgreSQL::Quoting#quoted_date. Appends " BC" for years ≤ 0
- * (where year 0 in JS corresponds to 1 BC in the proleptic Gregorian calendar).
+ * (where year 0 in Temporal corresponds to 1 BC in the proleptic Gregorian
+ * calendar, matching Ruby's Date#year behaviour).
  * @internal
  */
-export function quotedDate(value: Date): string {
-  const year = value.getUTCFullYear();
-  if (year <= 0) {
+export function quotedDate(
+  value:
+    | Temporal.Instant
+    | Temporal.ZonedDateTime
+    | Temporal.PlainDateTime
+    | Temporal.PlainDate
+    | Temporal.PlainTime,
+): string {
+  const year =
+    value instanceof Temporal.PlainDate ||
+    value instanceof Temporal.PlainDateTime ||
+    value instanceof Temporal.ZonedDateTime
+      ? value.year
+      : null;
+  if (year !== null && year <= 0) {
     const bceYear = String(-year + 1).padStart(4, "0");
-    const iso = value.toISOString().replace("T", " ").replace("Z", "");
-    return `'${bceYear}${iso.slice(iso.indexOf("-", 1))} BC'`;
+    const base = abstractQuotedDate(value);
+    return base.replace(/^-?\d+/, bceYear) + " BC";
   }
-  return abstractQuote(value) as string;
+  return abstractQuotedDate(value);
 }
 
 /** @internal */

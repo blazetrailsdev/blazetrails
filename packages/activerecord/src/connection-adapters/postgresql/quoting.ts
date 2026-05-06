@@ -390,17 +390,6 @@ function isSqlLiteral(value: unknown): value is { value: string } {
 }
 
 /**
- * Mirrors: PostgreSQL::Quoting#lookup_cast_type. Queries the DB for the OID of
- * the given SQL type; adapter-level only (requires a live connection). The
- * module-level helper is a no-op placeholder; the real dispatch happens inside
- * PostgreSQLAdapter where a connection is available.
- * @internal
- */
-function lookupCastType(_sqlType: string): null {
-  return null;
-}
-
-/**
  * Mirrors: PostgreSQL::Quoting#encode_array. Recursively type-casts the array
  * values and joins them into a PG literal string: `{v1,v2,...}`.
  * @internal
@@ -415,7 +404,10 @@ function formatArray(values: unknown[]): string {
     if (Array.isArray(v)) return formatArray(v);
     if (v == null) return "NULL";
     const s = String(v);
-    if (/[{},"\\\s]/.test(s)) return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    // Empty strings, NULL-like strings, and strings containing PG array
+    // special chars must be double-quoted to survive round-trip.
+    if (s.length === 0 || /^null$/i.test(s) || /[{},"\\]|\s/.test(s))
+      return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
     return s;
   });
   return `{${items.join(",")}}`;

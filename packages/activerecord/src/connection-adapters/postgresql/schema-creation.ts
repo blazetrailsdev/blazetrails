@@ -229,7 +229,8 @@ export class SchemaCreation extends AbstractSchemaCreation {
 
   /** @internal */
   protected override visitCheckConstraintDefinition(o: CheckConstraintDefinition): string {
-    return super.visitCheckConstraintDefinition(o);
+    const sql = super.visitCheckConstraintDefinition(o);
+    return o.validate ? sql : `${sql} NOT VALID`;
   }
 
   /** @internal */

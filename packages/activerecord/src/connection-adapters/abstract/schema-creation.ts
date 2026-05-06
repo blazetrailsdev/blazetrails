@@ -212,14 +212,7 @@ export class SchemaCreation {
   }
 
   protected visitCheckConstraintDefinition(o: CheckConstraintDefinition): string {
-    let sql = `CONSTRAINT ${this.adapter.quoteIdentifier(o.name)} CHECK (${o.expression})`;
-    if (!o.validate) {
-      if (this.adapterName !== "postgres") {
-        throw new Error("Check constraint validate: false is only supported on PostgreSQL");
-      }
-      sql += " NOT VALID";
-    }
-    return sql;
+    return `CONSTRAINT ${this.adapter.quoteIdentifier(o.name)} CHECK (${o.expression})`;
   }
 
   addColumnOptions(sql: string, options: ColumnOptions): string {

@@ -88,11 +88,3 @@ export const ClassMethods = {
   defaultScoped,
   defaultExtensions,
 };
-
-/**
- * Mirrors: Scoping::Named::ClassMethods#singleton_method_added. In Rails this
- * auto-generates a relation proxy method when a Kernel method is added to the
- * class. JS has no equivalent hook; this is a no-op placeholder.
- * @internal
- */
-function singletonMethodAdded(_name: string | symbol): void {}

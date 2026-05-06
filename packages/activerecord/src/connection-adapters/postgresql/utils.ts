@@ -38,8 +38,8 @@ export class Name {
   }
 
   /** @internal */
-  protected parts(): (string | null)[] {
-    return [this.schema, this.identifier].filter((p) => p != null);
+  protected parts(): string[] {
+    return [this.schema, this.identifier].filter((p): p is string => p != null);
   }
 }
 

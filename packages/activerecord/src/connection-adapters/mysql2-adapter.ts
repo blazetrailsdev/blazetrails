@@ -174,7 +174,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     super();
     if (typeof config === "string") {
       try {
-        this._database = new URL(config).pathname.replace(/^\/+/, "") || undefined;
+        this._database =
+          decodeURIComponent(new URL(config).pathname.replace(/^\/+/, "").replace(/\/+$/, "")) ||
+          undefined;
       } catch {
         // malformed URI — leave _database undefined
       }
@@ -195,7 +197,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       (() => {
         try {
           const uri = (mysqlConfig as { uri?: string }).uri;
-          return uri ? new URL(uri).pathname.replace(/^\/+/, "") || undefined : undefined;
+          return uri
+            ? decodeURIComponent(new URL(uri).pathname.replace(/^\/+/, "").replace(/\/+$/, "")) ||
+                undefined
+            : undefined;
         } catch {
           return undefined;
         }

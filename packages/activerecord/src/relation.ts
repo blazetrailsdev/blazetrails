@@ -4556,23 +4556,31 @@ export class Relation<T extends Base> {
   /** @internal */
   orderBang(
     ...args: Array<
-      string | Record<string, "asc" | "desc"> | Nodes.Node | string[] | [Nodes.Node, ...unknown[]]
+      | string
+      | Record<string, "asc" | "desc" | "ASC" | "DESC">
+      | Nodes.Node
+      | string[]
+      | [Nodes.Node, ...unknown[]]
     >
   ): this {
-    return QueryMethodBangs.orderBang.call(this as any, ...args);
+    return QueryMethodBangs.orderBang.call(this as any, ...(args as any));
   }
 
   /** @internal */
   reorderBang(
     ...args: Array<
-      string | Record<string, "asc" | "desc"> | Nodes.Node | string[] | [Nodes.Node, ...unknown[]]
+      | string
+      | Record<string, "asc" | "desc" | "ASC" | "DESC">
+      | Nodes.Node
+      | string[]
+      | [Nodes.Node, ...unknown[]]
     >
   ): this {
-    return QueryMethodBangs.reorderBang.call(this as any, ...args);
+    return QueryMethodBangs.reorderBang.call(this as any, ...(args as any));
   }
 
   /** @internal */
-  unscopeBang(...types: Array<string | { where: string | string[] }>): this {
+  unscopeBang(...types: Array<UnscopeType | { where: string | string[] }>): this {
     return QueryMethodBangs.unscopeBang.call(this as any, ...types);
   }
 

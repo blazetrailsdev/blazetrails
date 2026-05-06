@@ -631,53 +631,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   // Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer
   // INTEGER in SQLite can store up to 8 bytes; default _limit to 8 when none given.
   private static _buildTypeMap(): TypeMap {
-    const sqlite3Int = (limit?: number) => new IntegerType({ limit: limit ?? 8 });
     const map = new TypeMap();
-    map.registerType("string", new StringType());
-    map.registerType("text", new TextType());
-    map.registerType("integer", sqlite3Int());
-    map.registerType("float", new FloatType());
-    map.registerType(/decimal|numeric/i, undefined, (sqlType) => {
-      const precisionMatch = /\(\s*(\d+)/.exec(sqlType);
-      const precision = precisionMatch ? parseInt(precisionMatch[1], 10) : undefined;
-      const scaleMatch = /\(\s*\d+\s*,\s*(\d+)\s*\)/.exec(sqlType);
-      // Rails: extract_scale returns 0 when no scale specified; use DecimalWithoutScale
-      const scale = scaleMatch
-        ? parseInt(scaleMatch[1], 10)
-        : precision !== undefined
-          ? 0
-          : undefined;
-      if (scale === 0) return new DecimalWithoutScale({ precision });
-      return new DecimalType({ precision, scale });
-    });
-    map.registerType("decimal", new DecimalType());
-    map.registerType("boolean", new BooleanType());
-    // Date/time types: no driver-level type-parser work needed for Temporal.
-    // better-sqlite3 returns datetime columns as TEXT strings (SQLite has no
-    // native datetime type).  SQLiteDateTimeType converts offset-less strings
-    // to Temporal.Instant using the same timezone as formatInstantForSql
-    // (default_timezone: UTC → UTC, local → host tz).  Writes go through
-    // sqlite3/quoting.ts which formats all Temporal types as :db strings.
-    map.registerType("date", new DateType());
-    map.registerType("datetime", new SQLiteDateTimeType());
-    map.registerType("timestamp", new SQLiteDateTimeType());
-    map.registerType("time", new TimeType());
-    map.registerType("blob", new BinaryType());
-    map.registerType("binary", new BinaryType());
-    map.registerType("json", new JsonType());
-    map.registerType("numeric", new DecimalWithoutScale());
-    // SQLite type affinity — regex matches for flexible type names
-    map.registerType(/int/i, undefined, (lookupKey) => {
-      if (/bigint/i.test(lookupKey)) return sqlite3Int(8);
-      return sqlite3Int();
-    });
-    // Explicit "bigint" registered after /int/i so it takes priority (TypeMap
-    // reverses entries; last registered wins on exact matches vs regex).
-    map.registerType("bigint", sqlite3Int(8));
-    map.registerType(/char/i, undefined, () => new StringType());
-    map.registerType(/clob/i, undefined, () => new TextType());
-    map.registerType(/blob/i, undefined, () => new BinaryType());
-    map.registerType(/real|floa|doub/i, undefined, () => new FloatType());
+    SQLite3Adapter.initializeTypeMap(map);
     return map;
   }
 
@@ -2034,7 +1989,14 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   /** @internal */
   private connect(): void {
-    this.db = new Database(this._filename, { readonly: this._readonly });
+    try {
+      this.db = new Database(this._filename, { readonly: this._readonly });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new DatabaseConnectionError(`Unable to open database '${this._filename}': ${msg}`, {
+        cause: e,
+      });
+    }
   }
 
   /** @internal */
@@ -2051,7 +2013,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       | Record<string, unknown>
       | undefined;
     if (pragmas) {
+      // Validate pragma name is a safe SQLite identifier before interpolating.
+      const SAFE_PRAGMA = /^\w+$/;
       for (const [pragma, value] of Object.entries(pragmas)) {
+        if (!SAFE_PRAGMA.test(pragma)) {
+          console.warn(`Skipping invalid SQLite pragma name: ${pragma}`);
+          continue;
+        }
         try {
           this.db.pragma(`${pragma} = ${String(value)}`);
         } catch {
@@ -2068,15 +2036,38 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     m.registerType("text", new TextType());
     m.registerType("integer", sqlite3Int());
     m.registerType("float", new FloatType());
+    m.registerType(/decimal|numeric/i, undefined, (sqlType) => {
+      const precisionMatch = /\(\s*(\d+)/.exec(sqlType);
+      const precision = precisionMatch ? parseInt(precisionMatch[1], 10) : undefined;
+      const scaleMatch = /\(\s*\d+\s*,\s*(\d+)\s*\)/.exec(sqlType);
+      const scale = scaleMatch
+        ? parseInt(scaleMatch[1], 10)
+        : precision !== undefined
+          ? 0
+          : undefined;
+      if (scale === 0) return new DecimalWithoutScale({ precision });
+      return new DecimalType({ precision, scale });
+    });
     m.registerType("decimal", new DecimalType());
     m.registerType("boolean", new BooleanType());
+    // better-sqlite3 returns datetime columns as TEXT; SQLiteDateTimeType converts
+    // offset-less strings to Temporal.Instant using the configured default_timezone.
     m.registerType("date", new DateType());
     m.registerType("datetime", new SQLiteDateTimeType());
+    m.registerType("timestamp", new SQLiteDateTimeType());
     m.registerType("time", new TimeType());
+    m.registerType("blob", new BinaryType());
     m.registerType("binary", new BinaryType());
     m.registerType("json", new JsonType());
+    m.registerType("numeric", new DecimalWithoutScale());
+    // SQLite type affinity — regex matches for flexible type names
     m.registerType(/int/i, undefined, (k) => (/bigint/i.test(k) ? sqlite3Int(8) : sqlite3Int()));
+    // Explicit "bigint" registered after /int/i so it takes priority on exact matches.
     m.registerType("bigint", sqlite3Int(8));
+    m.registerType(/char/i, undefined, () => new StringType());
+    m.registerType(/clob/i, undefined, () => new TextType());
+    m.registerType(/blob/i, undefined, () => new BinaryType());
+    m.registerType(/real|floa|doub/i, undefined, () => new FloatType());
   }
 }
 
@@ -2134,7 +2125,8 @@ function extractDefaultFunction(defaultValue: unknown, default_: string): string
 /** @internal */
 function hasDefaultFunction(defaultValue: unknown, default_: string): boolean {
   return (
-    !defaultValue && /\w+\(.*\)|CURRENT_TIME|CURRENT_DATE|CURRENT_TIMESTAMP|\|\|/.test(default_)
+    defaultValue == null &&
+    /\w+\(.*\)|CURRENT_TIME|CURRENT_DATE|CURRENT_TIMESTAMP|\|\|/.test(default_)
   );
 }
 

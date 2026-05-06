@@ -448,6 +448,9 @@ export function _enum(
     validate?: boolean;
   },
 ): void {
+  if (values == null) throw new ArgumentError(`${String(name)} enum values must not be nil`);
+  assertValidEnumOptions(options ?? {});
+  assertValidEnumDefinitionValues(values);
   enumMethod.call(this, name, values as Record<string, number>, options);
 }
 

@@ -1586,7 +1586,11 @@ export class Migrator {
    */
   private async _withAdvisoryLock<T>(fn: () => Promise<T>): Promise<T> {
     const adapter = this._adapter;
-    if (!adapter.supportsAdvisoryLocks?.() || !adapter.getAdvisoryLock) {
+    if (
+      !adapter.supportsAdvisoryLocks?.() ||
+      !adapter.getAdvisoryLock ||
+      !adapter.releaseAdvisoryLock
+    ) {
       return fn();
     }
     const lockId = await this.generateMigratorAdvisoryLockId();
@@ -1806,7 +1810,7 @@ export class Migrator {
 
   /** @internal Mirrors: ActiveRecord::Migrator#generate_migrator_advisory_lock_id */
   async generateMigratorAdvisoryLockId(): Promise<bigint> {
-    const adapter = this._adapter as unknown as { currentDatabase?(): Promise<string> };
+    const adapter = this._adapter;
     if (typeof adapter.currentDatabase !== "function") {
       // Rails always calls connection.current_database; a missing implementation is a
       // bug in the adapter. Throw here so it surfaces rather than silently sharing a

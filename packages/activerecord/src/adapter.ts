@@ -370,6 +370,15 @@ export interface DatabaseAdapter {
   releaseAdvisoryLock?(lockId: number | bigint | string): Promise<boolean>;
 
   /**
+   * Return the name of the currently connected database.
+   * Required by adapters that support advisory locks (used to derive a
+   * per-database lock ID via MIGRATOR_SALT * crc32(dbName)).
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#current_database
+   */
+  currentDatabase?(): Promise<string>;
+
+  /**
    * Quote a raw string for safe inclusion in a SQL literal (escape ' and \).
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_string

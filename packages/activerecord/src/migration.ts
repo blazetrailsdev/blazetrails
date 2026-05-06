@@ -1800,7 +1800,12 @@ export class Migrator {
 
   /** @internal Mirrors: ActiveRecord::Migrator#use_advisory_lock? */
   isUseAdvisoryLock(): boolean {
-    return !!(this._adapter.supportsAdvisoryLocks?.() && this._adapter.getAdvisoryLock);
+    return !!(
+      this._adapter.supportsAdvisoryLocks?.() &&
+      this._adapter.getAdvisoryLock &&
+      this._adapter.releaseAdvisoryLock &&
+      typeof this._adapter.currentDatabase === "function"
+    );
   }
 
   /** @internal Mirrors: ActiveRecord::Migrator#with_advisory_lock */

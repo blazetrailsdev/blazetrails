@@ -748,7 +748,7 @@ describe("Migrator advisory lock wrapping", () => {
 
   function addAdvisoryLockSupport(adapter: DatabaseAdapter) {
     adapter.supportsAdvisoryLocks = () => true;
-    (adapter as unknown as Record<string, unknown>).currentDatabase = async () => "test_db";
+    adapter.currentDatabase = async () => "test_db";
   }
 
   function lockableAdapter() {
@@ -809,7 +809,7 @@ describe("Migrator advisory lock wrapping", () => {
       return true;
     };
     adapter.releaseAdvisoryLock = async () => true;
-    (adapter as unknown as Record<string, unknown>).currentDatabase = async () => "myapp_test";
+    adapter.currentDatabase = async () => "myapp_test";
     const migrator = new Migrator(adapter, []);
     await migrator.migrate();
     // Ruby: Zlib.crc32("myapp_test") == 601888509
@@ -826,7 +826,7 @@ describe("Migrator advisory lock wrapping", () => {
       return true;
     };
     adapter.releaseAdvisoryLock = async () => true;
-    (adapter as unknown as Record<string, unknown>).currentDatabase = async () => "myapp_test";
+    adapter.currentDatabase = async () => "myapp_test";
     const migrator = new Migrator(adapter, []);
     await migrator.migrate();
     await migrator.migrate();

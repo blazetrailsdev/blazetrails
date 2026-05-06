@@ -173,6 +173,11 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   constructor(config: string | (mysql.PoolOptions & TrailsAdapterOptions)) {
     super();
     if (typeof config === "string") {
+      try {
+        this._database = new URL(config).pathname.replace(/^\/+/, "") || undefined;
+      } catch {
+        // malformed URI — leave _database undefined
+      }
       this._driverPool = Mysql2Adapter.newClient({ uri: config });
       return;
     }

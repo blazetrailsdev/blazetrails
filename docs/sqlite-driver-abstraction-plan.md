@@ -9,8 +9,12 @@ consume a generic `getSqlite()` accessor from `activesupport`, modeled on
 ## Status (2026-05-06)
 
 - ✅ **Original PR 1 merged** — `packages/activerecord/src/connection-adapters/sqlite3/driver.ts`
-  exists with `SqliteConnection` / `SqliteStatement` / `SqliteDriver` interfaces, plus
-  `drivers/better-sqlite3.ts` wrapping the existing `Database`/`Statement` calls.
+  exists with `SqliteDriver` (the open handle), `SqliteStatement`, `DriverFactory`,
+  and `SqliteConfig` interfaces, plus `drivers/better-sqlite3.ts` wrapping the
+  existing `Database`/`Statement` calls. Note: the rename to `SqliteConnection`
+  (handle) / `SqliteDriver` (registered thing) — described in the "Driver
+  interface" section below — has NOT yet shipped. It lands as part of PR M when
+  the abstraction moves to activesupport; today's code uses the as-merged names.
 - ✅ **Original PR 2 merged** — `Sqlite3Adapter` routes all driver calls through
   `this.driver.foo()`. Statement pool typed against `SqliteStatement`.
   `safeIntegers` unified as `setReadBigInts`.

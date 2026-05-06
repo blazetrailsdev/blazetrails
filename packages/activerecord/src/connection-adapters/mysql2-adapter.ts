@@ -1,11 +1,13 @@
 import mysql from "mysql2/promise";
 import { Notifications } from "@blazetrails/activesupport";
+import { StringType } from "@blazetrails/activemodel";
 import type { DatabaseAdapter, ExplainOption, TrailsAdapterOptions } from "../adapter.js";
 import {
   AbstractMysqlAdapter,
   StatementPool as MysqlStatementPool,
   type MysqlPreparedStatement,
 } from "./abstract-mysql-adapter.js";
+import { Version } from "./abstract-adapter.js";
 import { MismatchedForeignKey, NotImplementedError } from "../errors.js";
 import { ForeignKeyDefinition } from "./abstract/schema-definitions.js";
 import { quoteString as mysqlQuoteString } from "./mysql/quoting.js";
@@ -14,6 +16,7 @@ import { SqlTypeMetadata } from "./sql-type-metadata.js";
 import { ExplainPrettyPrinter } from "./mysql/explain-pretty-printer.js";
 import { typeCastedBinds } from "./abstract/database-statements.js";
 import { temporalTypeCast, TEMPORAL_POOL_OPTIONS } from "./mysql/temporal-type-cast.js";
+import { Text as TextType } from "../type/text.js";
 
 /**
  * Mysql2-flavored StatementPool. Evicted entries send COM_STMT_CLOSE
@@ -1003,6 +1006,60 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return results;
   }
 
+  /** @internal */
+  private isTextType(type: string): boolean {
+    const t = this.nativeTypeMap.lookup(type);
+    return t instanceof StringType || t instanceof TextType;
+  }
+
+  /** @internal */
+  private connect(): void {
+    // Pool is the connection in the Node.js mysql2 model; the pool is
+    // created eagerly in the constructor via newClient. Rails' connect
+    // sets @raw_connection — we have no equivalent single-socket handle.
+  }
+
+  /** @internal */
+  private configureConnection(): void {
+    // In Rails this sets @raw_connection.query_options[:as] = :array and
+    // database_timezone. In our pool model these options are applied via
+    // the pool.on("connection") hook inside newClient — no work here.
+  }
+
+  /**
+   * Fetch the raw version string from the server (e.g. "8.0.28").
+   * Populates _databaseVersion and _mariadb as a side effect.
+   * @internal
+   */
+  async getFullVersion(): Promise<string> {
+    const conn = await this.getConn();
+    try {
+      const [[row]] = (await conn.query("SELECT VERSION() AS v")) as [
+        Array<{ v: string }>,
+        unknown,
+      ];
+      const ver = row?.v ?? "0.0.0";
+      this._mariadb = /mariadb/i.test(ver);
+      this._databaseVersion = new Version(this.versionString(ver));
+      return ver;
+    } finally {
+      this.releaseConn(conn);
+    }
+  }
+
+  /**
+   * Return the full version string as stored by the last getFullVersion call.
+   * @internal
+   */
+  fullVersion(): string {
+    return this._databaseVersion?.toString() ?? "0.0.0";
+  }
+
+  /** @internal */
+  private defaultPreparedStatements(): boolean {
+    return false;
+  }
+
   static newClient(config: mysql.PoolOptions): mysql.Pool {
     // With supportBigNumbers:true, mysql2 returns a decimal string for BIGINT
     // values with ≥15 digits (i.e. ≥ 10^14) where parseInt would lose precision,
@@ -1049,20 +1106,6 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
 }
 
 /** @internal */
-function isTextType(type: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::Mysql2Adapter#text_type? is not implemented",
-  );
-}
-
-/** @internal */
-function connect(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::Mysql2Adapter#connect is not implemented",
-  );
-}
-
-/** @internal */
 function reconnect(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::Mysql2Adapter#reconnect is not implemented",
@@ -1070,37 +1113,9 @@ function reconnect(): never {
 }
 
 /** @internal */
-function configureConnection(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::Mysql2Adapter#configure_connection is not implemented",
-  );
-}
-
-/** @internal */
-function fullVersion(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::Mysql2Adapter#full_version is not implemented",
-  );
-}
-
-/** @internal */
-function getFullVersion(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::Mysql2Adapter#get_full_version is not implemented",
-  );
-}
-
-/** @internal */
 function translateException(exception: any, message?: any, sql?: any, binds?: any): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::Mysql2Adapter#translate_exception is not implemented",
-  );
-}
-
-/** @internal */
-function defaultPreparedStatements(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::Mysql2Adapter#default_prepared_statements is not implemented",
   );
 }
 

@@ -767,4 +767,36 @@ describeIfMysql("Mysql2Adapter", () => {
       }
     });
   });
+
+  // -- Connection lifecycle (mirrors mysql2/connection_test.rb) --
+  describe("connection lifecycle", () => {
+    it("getFullVersion returns a semver string and populates fullVersion", async () => {
+      const full = await (adapter as any).getFullVersion();
+      expect(typeof full).toBe("string");
+      expect(full).toMatch(/\d+\.\d+\.\d+/);
+      expect((adapter as any).fullVersion()).toBe(full.match(/\d+\.\d+\.\d+/)?.[0]);
+    });
+
+    it("isTextType returns true for char/varchar/text, false for int", () => {
+      expect((adapter as any).isTextType("varchar(255)")).toBe(true);
+      expect((adapter as any).isTextType("char(10)")).toBe(true);
+      expect((adapter as any).isTextType("text")).toBe(true);
+      expect((adapter as any).isTextType("int")).toBe(false);
+      expect((adapter as any).isTextType("bigint")).toBe(false);
+    });
+
+    it("connect is a no-op and leaves the adapter connected", () => {
+      expect(adapter.isConnected()).toBe(true);
+      (adapter as any).connect();
+      expect(adapter.isConnected()).toBe(true);
+    });
+
+    it("configureConnection is a no-op", () => {
+      expect(() => (adapter as any).configureConnection()).not.toThrow();
+    });
+
+    it("defaultPreparedStatements returns false", () => {
+      expect((adapter as any).defaultPreparedStatements()).toBe(false);
+    });
+  });
 });

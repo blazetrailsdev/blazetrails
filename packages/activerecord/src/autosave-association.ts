@@ -581,8 +581,11 @@ function validateCollectionAssociation(this: any, reflection: any): void {
 function isAssociationValid(reflection: any, record: any, owner: any): boolean {
   if (typeof record.isDestroyed === "function" && record.isDestroyed()) return true;
   if (reflection.options?.autosave && isMarkedForDestruction(record)) return true;
-  // Mirror Rails: read validation_context from the owner when a custom context is active.
-  const context: ValidationContextArg | undefined = owner?._validationContext ?? undefined;
+  // Mirror Rails: only forward a custom (non-:create/:update) validation context.
+  const context: ValidationContextArg | undefined =
+    typeof owner?.customValidationContext === "function" && owner.customValidationContext()
+      ? owner._validationContext
+      : undefined;
   const isChildValid = typeof record.isValid === "function" ? record.isValid(context) : true;
   if (!isChildValid) {
     const parentErrors = owner?.errors;
@@ -599,15 +602,37 @@ function isAssociationValid(reflection: any, record: any, owner: any): boolean {
 }
 
 /** @internal */
-function aroundSaveCollectionAssociation(this: any, fn: () => void): void {
+function aroundSaveCollectionAssociation(
+  this: any,
+  fn: () => void | Promise<any>,
+): void | Promise<any> {
   const prev = this._newRecordBeforeSave ?? false;
   this._newRecordBeforeSave =
     !prev && (typeof this.isNewRecord === "function" ? this.isNewRecord() : false);
-  try {
-    fn();
-  } finally {
+  const restore = () => {
     this._newRecordBeforeSave = prev;
+  };
+  let result: void | Promise<any>;
+  try {
+    result = fn();
+  } catch (e) {
+    restore();
+    throw e;
   }
+  if (result != null && typeof (result as any).then === "function") {
+    return (result as Promise<any>).then(
+      (v) => {
+        restore();
+        return v;
+      },
+      (e) => {
+        restore();
+        throw e;
+      },
+    );
+  }
+  restore();
+  return result;
 }
 
 /** @internal */
@@ -695,7 +720,7 @@ function defineNonCyclicMethod(klass: any, name: string, fn: (this: any) => any)
   if (typeof klass.prototype?.[name] === "function") return;
   if (klass.prototype) {
     klass.prototype[name] = function (this: any) {
-      this._alreadyCalled ??= {};
+      this._alreadyCalled ??= Object.create(null);
       if (this._alreadyCalled[name]) return true;
       this._alreadyCalled[name] = true;
       const clear = () => {

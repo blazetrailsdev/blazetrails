@@ -117,5 +117,9 @@ export class ExplainRegistry {
  * @internal
  */
 export function instance(): ExplainRegistry {
-  return ctx().getStore() ?? (_fallback as unknown as ExplainRegistry);
+  // Rails: IsolatedExecutionState[:active_record_explain_registry] ||= new
+  // The Slot is the async-local state bag, not an ExplainRegistry instance.
+  // Return a real ExplainRegistry; its constructor is a no-op and the static
+  // methods (collect, queries, reset) delegate to the current slot automatically.
+  return new ExplainRegistry();
 }

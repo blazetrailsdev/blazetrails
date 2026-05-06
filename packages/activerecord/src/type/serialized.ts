@@ -104,16 +104,14 @@ export class Serialized extends ValueType {
  * @internal
  */
 export function encoded(serialized: Serialized, value: unknown): unknown {
-  const defaultVal = serialized.coder.load(null);
+  // Use the constructor-cached default to avoid calling coder.load(null) again,
+  // which would produce a fresh object on every call and break reference equality.
+  const s = serialized as any;
+  const defaultVal = s._defaultValue;
   if (value === defaultVal) return undefined;
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    typeof defaultVal === "object" &&
-    defaultVal !== null
-  ) {
+  if (typeof value === "object" && value !== null && s._defaultValueJson !== undefined) {
     try {
-      if (JSON.stringify(value) === JSON.stringify(defaultVal)) return undefined;
+      if (JSON.stringify(value) === s._defaultValueJson) return undefined;
     } catch {
       // non-serializable; treat as non-default
     }

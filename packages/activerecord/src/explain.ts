@@ -40,6 +40,20 @@ export async function execExplain(
   return (modelClass as any).all()._execExplain(queries, options);
 }
 
+function byteSize(value: unknown): number {
+  if (value == null) return 0;
+  if (typeof value === "string") {
+    return typeof Buffer !== "undefined"
+      ? Buffer.byteLength(value)
+      : new TextEncoder().encode(value).length;
+  }
+  if (typeof ArrayBuffer !== "undefined") {
+    if (value instanceof ArrayBuffer) return value.byteLength;
+    if (ArrayBuffer.isView(value)) return value.byteLength;
+  }
+  return byteSize(String(value));
+}
+
 /**
  * Render a single bind parameter as [name, value] for EXPLAIN output.
  * Binary values are replaced with a byte-count summary.
@@ -55,7 +69,7 @@ export function renderBind(connection: any, attr: unknown): [string | null, unkn
     if (isBinary && a.value != null) {
       const raw =
         typeof a.valueForDatabase === "function" ? a.valueForDatabase() : a.valueForDatabase;
-      const bytes = raw != null ? String(raw).length : 0;
+      const bytes = byteSize(raw);
       return [a.name ?? null, `<${bytes} bytes of binary data>`];
     }
     const typeCasted = connection?.typeCast?.(a.valueForDatabase) ?? a.valueForDatabase ?? a.value;

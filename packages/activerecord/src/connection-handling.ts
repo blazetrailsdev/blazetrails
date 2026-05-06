@@ -787,12 +787,12 @@ _setAdapterClassResolver(async (adapterName) => _loadAdapter(adapterName));
  *
  * @internal
  */
-export function resolveConfigForConnection(
-  this: { name?: string; isPrimaryClass?: () => boolean; connectionSpecificationName?: string },
-  configOrEnv: unknown,
-): unknown {
+export function resolveConfigForConnection(this: typeof Base, configOrEnv: unknown): unknown {
   if (!this.name) throw new Error("Anonymous class is not allowed.");
-  return (
-    (globalThis as any).ActiveRecord?.Base?.configurations?.resolve(configOrEnv) ?? configOrEnv
-  );
+  // Rails also sets self.connection_specification_name = connection_name as a side effect.
+  const connectionName = isPrimaryClass.call(this)
+    ? ((this as any)._baseClassName ?? this.name)
+    : this.name;
+  (this as any)._connectionSpecificationName = connectionName;
+  return (this as any).configurations?.resolve(configOrEnv) ?? configOrEnv;
 }

@@ -301,7 +301,11 @@ export function rebuildHandlers(
 ): [string, (ctx: Record<string, TagValue>) => TagValue][] {
   const handlers: [string, (ctx: Record<string, TagValue>) => TagValue][] = [];
   for (const tag of tags) {
-    if (typeof tag === "object" && tag !== null && !Array.isArray(tag)) {
+    if (typeof tag === "function") {
+      // Function tags are invoked directly — mirror tagContent()'s "custom" branch.
+      const fn = tag as TagHandler;
+      handlers.push(["custom", (ctx) => fn(ctx) as TagValue]);
+    } else if (typeof tag === "object" && tag !== null) {
       for (const [k, v] of Object.entries(tag)) {
         handlers.push([k, buildHandler(k, v as TagValue | TagHandler)]);
       }

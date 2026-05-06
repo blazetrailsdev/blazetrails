@@ -102,8 +102,11 @@ export function normalize(normalizedType: NormalizedValueType, value: unknown): 
  * @internal
  */
 export function normalizeChangedInPlaceAttributes(record: any): void {
-  const attrs: Set<string> = record.constructor?.normalizedAttributes ?? new Set<string>();
-  for (const name of attrs) {
+  // Rails: self.class.normalized_attributes (Set from class_attribute).
+  // TS activemodel stores normalizations in Model._normalizations (Map<string, ...>).
+  const normalizations: Map<string, unknown> | undefined = record.constructor?._normalizations;
+  if (!normalizations) return;
+  for (const name of normalizations.keys()) {
     if (
       typeof record.attributeChangedInPlace === "function" &&
       record.attributeChangedInPlace(name)

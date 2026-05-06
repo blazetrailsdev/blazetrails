@@ -7,7 +7,14 @@
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
-import { getFs, getPath, getCryptoAsync, getOs, getEnv } from "@blazetrails/activesupport";
+import {
+  getFs,
+  getPath,
+  getCrypto,
+  getCryptoAsync,
+  getOs,
+  getEnv,
+} from "@blazetrails/activesupport";
 import { coercePort } from "./task-utils.js";
 
 /**
@@ -1153,15 +1160,9 @@ export function isLocalDatabase(dbConfig: DatabaseConfig): boolean {
 /** @internal */
 export function schemaSha1(file: string): string {
   const contents = getFs().readFileSync(file, "utf-8");
-  const nodeCrypto = (
-    globalThis as {
-      require?: (mod: string) => {
-        createHash(a: string): { update(d: string): { digest(e: string): string } };
-      };
-    }
-  ).require?.("node:crypto");
-  if (!nodeCrypto) throw new Error("schemaSha1 requires a Node.js crypto module");
-  return nodeCrypto.createHash("sha1").update(contents).digest("hex");
+  const hash = getCrypto().createHash("sha1");
+  hash.update(contents);
+  return hash.digest("hex");
 }
 
 /** @internal */

@@ -335,7 +335,7 @@ export class MySQLDatabaseTasks {
   }
 
   /** @internal */
-  private connection(): import("../adapter.js").DatabaseAdapter | null {
+  private connection(): DatabaseAdapter | null {
     return DatabaseTasks.migrationConnection();
   }
 
@@ -344,21 +344,26 @@ export class MySQLDatabaseTasks {
     const cfg = config ?? this.dbConfig;
     const { Mysql2Adapter } = await import("../connection-adapters/mysql2-adapter.js");
     const c = cfg.configuration;
-    const socket = this.resolvedField("socket");
-    const adapter = socket
-      ? new Mysql2Adapter({
-          database: cfg.database,
-          user: c.username as string | undefined,
-          password: c.password as string | undefined,
-          socketPath: socket,
-        })
-      : new Mysql2Adapter({
-          host: (c.host as string) ?? "localhost",
-          port: coercePort(c.port, 3306),
-          database: cfg.database,
-          user: c.username as string | undefined,
-          password: c.password as string | undefined,
-        });
+    let adapter: DatabaseAdapter;
+    if (c.url) {
+      adapter = new Mysql2Adapter(String(c.url));
+    } else {
+      const socket = c.socket as string | undefined;
+      adapter = socket
+        ? new Mysql2Adapter({
+            database: cfg.database,
+            user: c.username as string | undefined,
+            password: c.password as string | undefined,
+            socketPath: socket,
+          })
+        : new Mysql2Adapter({
+            host: (c.host as string) ?? "localhost",
+            port: coercePort(c.port, 3306),
+            database: cfg.database,
+            user: c.username as string | undefined,
+            password: c.password as string | undefined,
+          });
+    }
     DatabaseTasks.setAdapter(adapter);
   }
 

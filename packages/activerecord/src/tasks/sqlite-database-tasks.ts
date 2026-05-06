@@ -312,9 +312,9 @@ export class SQLiteDatabaseTasks {
 
   /** @internal */
   private async establishConnection(config?: DatabaseConfig): Promise<void> {
-    const cfg = config ?? this.dbConfig;
+    const tasks = config ? new SQLiteDatabaseTasks(config, this.root) : this;
     const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-    DatabaseTasks.setAdapter(new SQLite3Adapter(cfg.database ?? this.resolveDbPath()));
+    DatabaseTasks.setAdapter(new SQLite3Adapter(tasks.resolveDbPath()));
   }
 
   static register(): void {

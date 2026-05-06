@@ -134,7 +134,6 @@ export async function performQuery(
       throw err;
     }
   } else {
-    // prepare=false with binds: use query() (COM_QUERY), not execute() (COM_STMT_*).
     const [result, resultFields] = (await rawConnection.query(sql, typeCastedBinds as any[])) as [
       mysql.RowDataPacket[] | mysql.ResultSetHeader,
       mysql.FieldPacket[],
@@ -185,10 +184,8 @@ export function affectedRows(this: PerformQueryHost, rawResult: Mysql2RawResult)
 }
 
 /**
- * No-op in TS: node-mysql2 GCs results automatically; there is no `free()`
- * method or stmt-close hook equivalent to Rails' `raw_result.free` +
- * `@_ar_stmt_to_close.close`.
- *
+ * No-op: node-mysql2 GCs results automatically; no equivalent for Rails'
+ * `raw_result.free` + `@_ar_stmt_to_close.close`.
  * Mirrors: ActiveRecord::ConnectionAdapters::Mysql2::DatabaseStatements#free_raw_result
  * @internal
  */

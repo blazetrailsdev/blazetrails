@@ -2732,12 +2732,6 @@ export interface Base extends Included<typeof AutosaveAssociation> {
   initInternals(): void;
   /** @internal */
   _createRecord(): Promise<boolean>;
-  /** @internal */
-  destroyRow(): Promise<number>;
-  /** @internal */
-  _touchRow(touchAttrNames: string[], time?: unknown): Promise<number>;
-  /** @internal */
-  _updateRow(attributeNames: string[], attemptedAction?: string): Promise<number>;
   slice(...keys: string[]): Record<string, unknown>;
   valuesAt(...keys: string[]): unknown[];
   assignAttributes(attrs: Record<string, unknown>): void;
@@ -2816,6 +2810,9 @@ include(Base, {
   update: _Persistence.update,
   updateBang: _Persistence.updateBang,
   delete: _Persistence.deleteRow,
+  destroyRow: _Persistence.destroyRow,
+  _touchRow: _Persistence._touchRow,
+  _updateRow: _Persistence._updateRow,
   reload: _Persistence.reload,
   slice: _Persistence.slice,
   valuesAt: _Persistence.valuesAt,

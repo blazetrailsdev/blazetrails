@@ -120,27 +120,27 @@ export async function performQuery(
   let result: pg.QueryResult;
 
   if (prepare && this.prepareStatement) {
+    // prepareStatement issues SQL PREPARE on the server; omit text so node-pg sends
+    // Bind+Execute only (not Parse+Bind+Execute) — mirrors libpq exec_prepared.
+    // @types/pg requires text in QueryConfig but node-pg accepts {name,values} at runtime.
     const stmtKey = await this.prepareStatement(sql, binds, rawConnection);
     if (notificationPayload) notificationPayload["statement_name"] = stmtKey;
-    try {
-      result = await rawConnection.query({
-        name: stmtKey,
-        text: sql,
+    const execPrepared = (name: string) =>
+      rawConnection.query({
+        name,
         values: typeCastedBinds as unknown[],
         rowMode: "array",
-      });
+      } as unknown as pg.QueryConfig);
+    try {
+      result = await execPrepared(stmtKey);
     } catch (err) {
       if (this.isCachedPlanFailure?.(err)) {
         if (this.inTransaction) {
           throw new PreparedStatementCacheExpired((err as Error).message);
         }
+        // Flush the cache entry; prepareStatement allocates a fresh name and re-PREPAREs.
         this.deleteStatementKey?.(sql);
-        result = await rawConnection.query({
-          name: stmtKey,
-          text: sql,
-          values: typeCastedBinds as unknown[],
-          rowMode: "array",
-        });
+        result = await execPrepared(await this.prepareStatement(sql, binds, rawConnection));
       } else {
         throw err;
       }

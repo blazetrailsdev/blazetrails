@@ -30,7 +30,7 @@ interface PerformQueryHost {
 
 /** @internal */
 interface MultiStatementsHost {
-  _config?: { flags?: string | string[] | number };
+  _config?: { flags?: string[] | number };
 }
 
 // Mysql2::Client::MULTI_STATEMENTS bitmask value from the Ruby gem.

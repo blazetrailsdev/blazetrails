@@ -4,10 +4,12 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements
  */
 
+import pg from "pg";
 import { NotImplementedError } from "../../errors.js";
+import type { Type } from "@blazetrails/activemodel";
 import type { Nodes } from "@blazetrails/arel";
 import type { ExplainOption } from "../../adapter.js";
-import type { Result } from "../../result.js";
+import { Result } from "../../result.js";
 
 // Mirrors: PostgreSQL::DatabaseStatements::READ_QUERY (database_statements.rb:19-21)
 // Mirrors Rails' build_read_query_regexp which combines the default read list
@@ -71,39 +73,142 @@ export interface DatabaseStatements {
 }
 
 /** @internal */
+interface PerformQueryHost {
+  preparedStatements?: boolean;
+  prepareStatement?(sql: string, binds: unknown[], client: pg.PoolClient): Promise<string>;
+  isCachedPlanFailure?(err: unknown): boolean;
+  inTransaction?: boolean;
+  /** @internal */
+  handleWarnings?(result: pg.QueryResult): void;
+  verified?(): void;
+  updateTypemapForDefaultTimezone?(): Promise<void>;
+}
+
+/** @internal */
+interface CastResultHost {
+  getOidType(oid: number, fmod: number, columnName: string, sqlType?: string): Promise<Type>;
+}
+
+/** @internal */
 function cancelAnyRunningQuery(): never {
   throw new NotImplementedError(
     "ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#cancel_any_running_query is not implemented",
   );
 }
 
-/** @internal */
-function performQuery(
-  rawConnection: any,
-  sql: any,
-  binds: any,
-  typeCastedBinds: any,
-  prepare?: any,
-  notificationPayload?: any,
-  batch?: any,
-): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#perform_query is not implemented",
-  );
+/**
+ * Execute `sql` against the raw `pg.PoolClient` and return the raw PG result.
+ *
+ * Three execution paths mirror Rails exactly:
+ * 1. `prepare: true` → prepare a named statement via `this.prepareStatement`,
+ *    then call `client.query({ name, text: sql, values: typeCastedBinds })`.
+ *    On `PG::FeatureNotSupported` (cached-plan failure), flush the cached key
+ *    and retry (if not in a transaction).
+ * 2. No binds → `client.query(sql)` (`async_exec` equivalent).
+ * 3. Binds present → `client.query(sql, typeCastedBinds)` (`exec_params`).
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#perform_query
+ * @internal
+ */
+export async function performQuery(
+  this: PerformQueryHost,
+  rawConnection: pg.PoolClient,
+  sql: string,
+  binds: unknown[],
+  typeCastedBinds: unknown[],
+  options: {
+    prepare?: boolean;
+    notificationPayload?: Record<string, unknown>;
+    batch?: boolean;
+  } = {},
+): Promise<pg.QueryResult> {
+  const { prepare = false, notificationPayload } = options;
+
+  await this.updateTypemapForDefaultTimezone?.();
+
+  let result: pg.QueryResult;
+
+  if (prepare && this.prepareStatement) {
+    const stmtKey = await this.prepareStatement(sql, binds, rawConnection);
+    if (notificationPayload) notificationPayload["statement_name"] = stmtKey;
+    try {
+      result = await rawConnection.query({
+        name: stmtKey,
+        text: sql,
+        values: typeCastedBinds as unknown[],
+      });
+    } catch (err) {
+      if (this.isCachedPlanFailure?.(err)) {
+        if (this.inTransaction) {
+          throw err;
+        }
+        // Outside a transaction: flush the cached plan and retry once.
+        result = await rawConnection.query({
+          name: stmtKey,
+          text: sql,
+          values: typeCastedBinds as unknown[],
+        });
+      } else {
+        throw err;
+      }
+    }
+  } else if (binds == null || binds.length === 0) {
+    result = await rawConnection.query(sql);
+  } else {
+    result = await rawConnection.query(sql, typeCastedBinds as unknown[]);
+  }
+
+  this.verified?.();
+  this.handleWarnings?.(result);
+  if (notificationPayload) notificationPayload["row_count"] = result.rowCount ?? 0;
+
+  return result;
 }
 
-/** @internal */
-function castResult(result: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#cast_result is not implemented",
-  );
+/**
+ * Convert a raw `pg.QueryResult` to an `ActiveRecord::Result`, resolving OID
+ * types for each column via `this.getOidType`. Returns an empty Result for
+ * results with no fields (DDL, DML with no RETURNING).
+ *
+ * `castResult` is `async` in TS (unlike Rails which is synchronous) because
+ * `getOidType` may need to issue a pg_type lookup for unknown OIDs.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#cast_result
+ * @internal
+ */
+export async function castResult(this: CastResultHost, result: pg.QueryResult): Promise<Result> {
+  const fields = result.fields ?? [];
+  if (fields.length === 0) {
+    return Result.empty();
+  }
+
+  const columnNames = fields.map((f) => f.name);
+  const columnTypes: Record<string | number, Type> = {};
+  for (let i = 0; i < fields.length; i++) {
+    const f = fields[i];
+    const type = await this.getOidType(f.dataTypeID, (f as any).dataTypeModifier ?? -1, f.name, "");
+    columnTypes[i] = type;
+    if (!/^\d+$/.test(f.name)) columnTypes[f.name] = type;
+  }
+
+  const rows = (result.rows ?? []) as unknown[][];
+  return new Result(columnNames, rows, columnTypes as Record<string, Type>);
 }
 
-/** @internal */
-function affectedRows(result: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#affected_rows is not implemented",
-  );
+/**
+ * Return the number of rows affected by the last DML statement (`cmd_tuples`
+ * in libpq). Clears the result to free server-side memory.
+ *
+ * In node-pg, `pg.QueryResult#rowCount` is the JS equivalent of libpq's
+ * `PQcmdTuples`. Unlike the Ruby PG gem, node-pg results are JS objects and
+ * are garbage-collected without an explicit `clear` call, so no `.clear()`
+ * equivalent is needed.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#affected_rows
+ * @internal
+ */
+export function affectedRows(result: pg.QueryResult): number {
+  return result.rowCount ?? 0;
 }
 
 /** @internal */

@@ -36,6 +36,12 @@ export interface TrailsAdapterOptions {
  */
 export interface SQLite3AdapterOptions extends TrailsAdapterOptions {
   readonly?: boolean;
+  /**
+   * Selects a registered SQLite driver by name. When omitted, resolution
+   * follows AR_SQLITE_DRIVER, then exactly-one-registered fallback.
+   * Mirrors database.yml `driver:` (e.g. `"better-sqlite3"`, `"node-sqlite"`).
+   */
+  driver?: string;
   // Mirrors: database.yml `pragmas:` — applied via PRAGMA on each connection.
   // Keys must be simple SQLite pragma identifiers (word characters only, e.g. "cache_size").
   // String values must be identifier-like enum words (e.g. "WAL", "NORMAL") — arbitrary

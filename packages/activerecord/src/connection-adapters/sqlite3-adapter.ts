@@ -1,6 +1,11 @@
-import Database from "better-sqlite3";
-import type { SqliteDriver, SqliteStatement } from "./sqlite3/driver.js";
-import { createBetterSqlite3Driver } from "./sqlite3/drivers/better-sqlite3.js";
+import type Database from "better-sqlite3";
+import type {
+  RunResult,
+  SqliteBinds,
+  SqliteConnection,
+  SqliteStatement,
+} from "@blazetrails/activesupport/sqlite-adapter";
+import { getSqlite } from "@blazetrails/activesupport/sqlite-adapter";
 import { Visitors } from "@blazetrails/arel";
 import type {
   AdapterName,
@@ -136,9 +141,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return new Visitors.SQLite(this);
   }
 
-  private driver!: SqliteDriver;
+  private driver!: SqliteConnection;
   override get active(): boolean {
-    return this.driver?.open ?? false;
+    return this.driver?.isOpen() ?? false;
   }
   private _inTransaction = false;
   private _savepointCounter = 0;
@@ -225,7 +230,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return Notifications.instrumentAsync("sql.active_record", payload, async () => {
       try {
         const stmt = this._cachedStatement(sql);
-        const rows = stmt.all(...binds) as Record<string, unknown>[];
+        const rows = stmt.all(binds as SqliteBinds) as Record<string, unknown>[];
         payload.row_count = rows.length;
         return rows;
       } catch (e: any) {
@@ -319,7 +324,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return Notifications.instrumentAsync("sql.active_record", payload, async () => {
       try {
         const stmt = this._cachedStatement(sql);
-        const result = stmt.run(...binds) as import("./sqlite3/driver.js").RunResult;
+        const result = stmt.run(binds as SqliteBinds) as RunResult;
         this.dirtyCurrentTransaction();
         payload.row_count = typeof result.changes === "number" ? result.changes : 0;
 
@@ -448,7 +453,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     _options: ExplainOption[] = [],
   ): Promise<string> {
     const rows = (this.driver.prepare(`EXPLAIN QUERY PLAN ${sql}`) as SqliteStatement).all(
-      ...binds,
+      binds as SqliteBinds,
     ) as Record<string, unknown>[];
     return rows.map((r) => `${r.id}|${r.parent}|${r.notused}|${r.detail}`).join("\n");
   }
@@ -563,7 +568,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    * Check if the database is open.
    */
   get isOpen(): boolean {
-    return this.driver.open;
+    return this.driver.isOpen();
   }
 
   /**
@@ -707,11 +712,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   // --- Connection lifecycle ---
 
   override isConnected(): boolean {
-    return this.driver.open;
+    return this.driver.isOpen();
   }
 
   isActive(): boolean {
-    return this.driver.open;
+    return this.driver.isOpen();
   }
 
   override clearCacheBang(): void {
@@ -721,7 +726,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   override disconnectBang(): void {
     super.disconnectBang();
-    if (this.driver.open) {
+    if (this.driver.isOpen()) {
       this.driver.close();
     }
   }
@@ -1979,9 +1984,18 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   /** @internal */
   private connect(): void {
     try {
-      this.driver = createBetterSqlite3Driver(
-        new Database(this._filename, { readonly: this._readonly }),
-      );
+      const driverName = (this._config as SQLite3AdapterOptions).driver;
+      const factory = getSqlite(driverName);
+      if (!factory.openSync) {
+        // PR 3 lifts connect() onto an awaited factory.open(); for now we
+        // require an inProcessSync driver so the existing sync constructor
+        // contract holds.
+        throw new Error(
+          `SQLite driver "${factory.name}" does not support sync open(). ` +
+            "Async drivers require the PR 3 async-aware adapter.",
+        );
+      }
+      this.driver = factory.openSync({ database: this._filename, readOnly: this._readonly });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new DatabaseConnectionError(`Unable to open database '${this._filename}': ${msg}`, {

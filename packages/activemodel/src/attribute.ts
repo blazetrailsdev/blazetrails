@@ -261,6 +261,12 @@ export class FromDatabase extends Attribute {
     return this.type.deserialize(value);
   }
 
+  override changedInPlace(): boolean {
+    return (
+      this.hasBeenRead() && this.type.isChangedInPlace(this._originalValueForDatabase(), this.value)
+    );
+  }
+
   /** @internal */
   protected override _originalValueForDatabase(): unknown {
     return this.valueBeforeTypeCast;

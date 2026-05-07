@@ -488,4 +488,29 @@ describe("AttributeTest", () => {
       expect(updated.isChanged()).toBe(false);
     });
   });
+
+  describe("FromDatabase#changedInPlace delegates to type.isChangedInPlace", () => {
+    it("returns true when mutable type reports change", () => {
+      const stringType = typeRegistry.lookup("string");
+      const attr = Attribute.fromDatabase("name", "hello", stringType);
+      void attr.value; // materialize so hasBeenRead() is true
+      // Simulate mutation by overriding the cast value while raw stays "hello"
+      attr.overrideCastValue("world");
+      expect(attr.changedInPlace()).toBe(true);
+    });
+
+    it("returns false before value is read (hasBeenRead guard)", () => {
+      const stringType = typeRegistry.lookup("string");
+      const attr = Attribute.fromDatabase("name", "hello", stringType);
+      // Don't access attr.value — hasBeenRead() is false
+      expect(attr.changedInPlace()).toBe(false);
+    });
+
+    it("returns false for immutable type even after value is read", () => {
+      const intType = typeRegistry.lookup("integer");
+      const attr = Attribute.fromDatabase("count", 5, intType);
+      void attr.value; // materialize
+      expect(attr.changedInPlace()).toBe(false);
+    });
+  });
 });

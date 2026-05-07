@@ -277,6 +277,8 @@ export const EXCLUDED_FILES: ExcludedFile[] = [
       "Ruby binary serialization formats have no Node.js equivalent.",
   },
   // --- Per-test exclusions: hstore TS-only inventions ---
+  // NOTE: these names don't exist in Rails' hstore_test.rb, so isTestCaseExcluded has no
+  // effect on test:compare scores. Kept as inventory documentation only.
   {
     testFile: "hstore_test.rb",
     tests: [

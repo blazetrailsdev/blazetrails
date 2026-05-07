@@ -12,7 +12,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { pathToFileURL } from "url";
+import { fileURLToPath } from "url";
 import * as ts from "typescript";
 import type { ApiManifest, ClassInfo } from "./types.js";
 import { OUTPUT_DIR, packageSrcDir } from "./config.js";
@@ -183,8 +183,15 @@ function analyzeTsDepUsage(
 
     // Check each method's signature and body for dependency references.
     const methodMap = new Map<string, boolean>();
-    visitMethodDeclarations(sourceFile, (name, methodNode) => {
-      const uses = methodUsesDepImport(methodNode, importedNames, knownIds, dep, sourceFile);
+    visitMethodDeclarations(sourceFile, (name, methodNode, anchor) => {
+      const uses = methodUsesDepImport(
+        methodNode,
+        importedNames,
+        knownIds,
+        dep,
+        sourceFile,
+        anchor,
+      );
       const existing = methodMap.get(name);
       if (existing === undefined || uses) methodMap.set(name, uses);
     });
@@ -196,27 +203,28 @@ function analyzeTsDepUsage(
 
 function visitMethodDeclarations(
   sourceFile: ts.SourceFile,
-  callback: (name: string, node: ts.Node) => void,
+  // anchor: the node whose leading trivia holds doc comments (e.g. VariableStatement, not its initializer)
+  callback: (name: string, node: ts.Node, anchor: ts.Node) => void,
 ) {
   const visit = (node: ts.Node) => {
     if (ts.isMethodDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
-      callback(node.name.text, node);
+      callback(node.name.text, node, node);
       return;
     }
     if (ts.isGetAccessorDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
-      callback(node.name.text, node);
+      callback(node.name.text, node, node);
       return;
     }
     if (ts.isSetAccessorDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
-      callback(node.name.text, node);
+      callback(node.name.text, node, node);
       return;
     }
     if (ts.isConstructorDeclaration(node)) {
-      callback("constructor", node);
+      callback("constructor", node, node);
       return;
     }
     if (ts.isFunctionDeclaration(node) && node.name) {
-      if (!isNotImplementedStub(node.body)) callback(node.name.text, node);
+      if (!isNotImplementedStub(node.body)) callback(node.name.text, node, node);
       return;
     }
     if (ts.isVariableStatement(node)) {
@@ -224,7 +232,8 @@ function visitMethodDeclarations(
         if (ts.isIdentifier(decl.name) && decl.initializer) {
           if (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer)) {
             if (!isNotImplementedStub(decl.initializer.body)) {
-              callback(decl.name.text, decl.initializer);
+              // anchor = VariableStatement so lint-deps-ignore above `const foo = ...` is found
+              callback(decl.name.text, decl.initializer, node);
             }
           }
         }
@@ -236,7 +245,7 @@ function visitMethodDeclarations(
         node.initializer &&
         (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
       ) {
-        callback(node.name.text, node.initializer);
+        callback(node.name.text, node.initializer, node);
         return;
       }
     }
@@ -273,8 +282,9 @@ export function methodUsesDepImport(
   knownIdentifiers: Set<string>,
   dep: string,
   sourceFile: ts.SourceFile,
+  anchor: ts.Node = node,
 ): boolean {
-  if (hasLintDepsIgnore(node, dep, sourceFile)) return true;
+  if (hasLintDepsIgnore(anchor, dep, sourceFile)) return true;
   let found = false;
   const check = (n: ts.Node) => {
     if (found) return;
@@ -571,6 +581,16 @@ function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+const resolveReal = (p: string): string => {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+};
+if (
+  process.argv[1] &&
+  resolveReal(fileURLToPath(import.meta.url)) === resolveReal(process.argv[1])
+) {
   main();
 }

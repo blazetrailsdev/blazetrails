@@ -21,6 +21,15 @@ function firstMethod(sf: ts.SourceFile): ts.Node {
   return found;
 }
 
+function firstVariableStatement(sf: ts.SourceFile): ts.VariableStatement {
+  let found: ts.VariableStatement | undefined;
+  ts.forEachChild(sf, (n) => {
+    if (!found && ts.isVariableStatement(n)) found = n;
+  });
+  if (!found) throw new Error("no variable statement found");
+  return found;
+}
+
 const DEP = "arel";
 
 describe("methodUsesDepImport — type-position filtering", () => {
@@ -130,5 +139,27 @@ describe("methodUsesDepImport — lint-deps-ignore annotation", () => {
     `);
     const node = firstMethod(sf);
     expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), "arel", sf)).toBe(false);
+  });
+
+  it("opt-out above const arrow function works (anchor = VariableStatement)", () => {
+    const sf = makeSourceFile(`
+      // lint-deps-ignore: arel — uses raw SQL
+      const foo = () => {};
+    `);
+    const node = firstMethod(sf);
+    const anchor = firstVariableStatement(sf);
+    expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), "arel", sf, anchor)).toBe(true);
+  });
+
+  it("opt-out for wrong dep on arrow function does NOT cover", () => {
+    const sf = makeSourceFile(`
+      // lint-deps-ignore: activesupport
+      const foo = () => {};
+    `);
+    const node = firstMethod(sf);
+    const anchor = firstVariableStatement(sf);
+    expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), "arel", sf, anchor)).toBe(
+      false,
+    );
   });
 });

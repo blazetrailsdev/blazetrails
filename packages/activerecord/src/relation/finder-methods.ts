@@ -622,7 +622,11 @@ export function constructRelationForExists(rel: FinderRelation, conditions: unkn
   } else {
     // Scalar → PK lookup (Rails' else branch: `where!(primary_key => conditions)`).
     const pk = (rel as any)._modelClass.primaryKey;
-    relation = relation.where({ [pk as string]: conditions });
+    if (Array.isArray(pk)) {
+      relation = relation.where(buildPkWhere(pk, conditions as unknown[]));
+    } else {
+      relation = relation.where({ [pk as string]: conditions });
+    }
   }
   return relation;
 }
@@ -668,11 +672,12 @@ export async function findWithIds(rel: FinderRelation, ids: unknown[]): Promise<
 
 /** @internal */
 export async function findOne(rel: FinderRelation, id: unknown): Promise<any> {
-  const pk = (rel as any)._modelClass.primaryKey as string;
-  const record = await (rel as any).findBy({ [pk]: id });
+  const pk = (rel as any)._modelClass.primaryKey;
+  const conditions = Array.isArray(pk) ? buildPkWhere(pk, id as unknown[]) : { [pk as string]: id };
+  const record = await (rel as any).findBy(conditions);
   if (!record) {
     const modelName = (rel as any)._modelClass.name as string;
-    throw new RecordNotFound(`Couldn't find ${modelName}`, modelName, pk, id);
+    throw new RecordNotFound(`Couldn't find ${modelName}`, modelName, String(pk), id);
   }
   return record;
 }

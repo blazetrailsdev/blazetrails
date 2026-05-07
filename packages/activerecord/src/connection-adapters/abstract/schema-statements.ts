@@ -154,8 +154,9 @@ export class SchemaStatements {
       throw new ArgumentError("dropTable requires at least one table name");
     }
     const ifExists = options.ifExists ? " IF EXISTS" : "";
+    const cascade = options.force === "cascade" ? " CASCADE" : "";
     for (const name of tableNames) {
-      await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qt(name)}`);
+      await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qt(name)}${cascade}`);
     }
   }
 
@@ -400,10 +401,10 @@ export class SchemaStatements {
     toTable: string,
     options: AddForeignKeyOptions = {},
   ): Promise<void> {
-    // SQLite can't ALTER TABLE ADD CONSTRAINT — delegate to its rebuild-
-    // based implementation. Gate on both addForeignKey and checkConstraints
-    // being adapter-specific overrides (not the SchemaStatements base) to
-    // ensure delegation only reaches adapters that fully implement FK support.
+    // Delegate to adapter-specific FK implementation when the adapter
+    // overrides both addForeignKey and checkConstraints (signals full FK
+    // support, e.g. SQLite's table-rebuild path). The double-gate prevents
+    // self-delegation now that SchemaStatements is mixed into AbstractAdapter.
     const adapter = this.adapter as any;
     if (
       typeof adapter.addForeignKey === "function" &&

@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { instant } from "@blazetrails/activesupport/testing/temporal-helpers";
-import { Base, registerModel } from "./index.js";
+import { Base, MigrationContext, registerModel } from "./index.js";
 import { Associations } from "./associations.js";
 
 import { createTestAdapter } from "./test-adapter.js";
@@ -937,5 +937,53 @@ describe("TimestampTest", () => {
 
     await post.reload();
     expect(post.updated_at).not.toEqual(before);
+  });
+});
+
+describe("TimestampTest — t.timestamps() end-to-end", () => {
+  it("create fills both columns when table has NOT NULL timestamp columns from t.timestamps()", async () => {
+    const adapter = createTestAdapter();
+    const ctx = new MigrationContext(adapter);
+    await ctx.createTable("authors", {}, (t) => {
+      t.string("name");
+      t.timestamps();
+    });
+
+    class Author extends Base {
+      static {
+        this._tableName = "authors";
+        this.attribute("name", "string");
+        this.attribute("created_at", "datetime");
+        this.attribute("updated_at", "datetime");
+        this.adapter = adapter;
+      }
+    }
+
+    const author = await Author.create({ name: "Alice" });
+    expect(author.created_at).toBeInstanceOf(Temporal.Instant);
+    expect(author.updated_at).toBeInstanceOf(Temporal.Instant);
+  });
+
+  it("insert does not fail when recordTimestamps is false and columns are nullable", async () => {
+    const adapter = createTestAdapter();
+    const ctx = new MigrationContext(adapter);
+    await ctx.createTable("authors", {}, (t) => {
+      t.string("name");
+      t.timestamps({ null: true });
+    });
+
+    class Author extends Base {
+      static {
+        this._tableName = "authors";
+        this.attribute("name", "string");
+        this.attribute("created_at", "datetime");
+        this.attribute("updated_at", "datetime");
+        this.adapter = adapter;
+        this.recordTimestamps = false;
+      }
+    }
+
+    const author = await Author.create({ name: "Bob" });
+    expect(author.id).toBeDefined();
   });
 });

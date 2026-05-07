@@ -94,7 +94,7 @@ export abstract class Attribute {
 
   changedInPlace(): boolean {
     return (
-      this.hasBeenRead() && this.type.isChangedInPlace(this._originalValueForDatabase(), this.value)
+      this.hasBeenRead() && this.type.isChangedInPlace(this.originalValueForDatabase(), this.value)
     );
   }
 

@@ -1,5 +1,6 @@
-import { NotImplementedError } from "../errors.js";
 import { Scheme, type SchemeOptions } from "./scheme.js";
+import { getEncryptionContext, withoutEncryption as _withoutEncryption } from "./context.js";
+import { Configuration as ConfigurationError } from "./errors.js";
 import { LengthValidator } from "@blazetrails/activemodel";
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { Configurable } from "./configurable.js";
@@ -8,7 +9,7 @@ import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 
 // Memoized SHA1 key provider: PBKDF2 is expensive (65536 iterations), so
 // reuse the same provider as long as primaryKey and keyDerivationSalt haven't
-// changed. Cleared by the onConfigure hook below so config rotation invalidates it.
+// changed. Keyed on the tuple so config rotation invalidates the cache.
 let _sha1ProviderCache:
   | {
       primaryKey: string | string[];
@@ -16,12 +17,6 @@ let _sha1ProviderCache:
       provider: DerivedSecretKeyProvider;
     }
   | undefined;
-
-// Clear the SHA1 provider cache whenever configure() is called so the new
-// primary key / key derivation salt is picked up on the next encrypt call.
-Configurable.onConfigure(() => {
-  _sha1ProviderCache = undefined;
-});
 
 function getSha1KeyProvider(
   primaryKey: string | string[],
@@ -204,6 +199,155 @@ export class EncryptableRecord {
     }
     return result;
   }
+
+  /** @internal */
+  static encryptAttribute(modelClass: any, name: string, options: SchemeOptions = {}): void {
+    this.encrypts(modelClass, name, options);
+  }
+
+  /** @internal */
+  static preserveOriginalEncrypted(modelClass: any, name: string): void {
+    const originalName = `original_${name}`;
+    this.encrypts(modelClass, originalName);
+    this.overrideAccessorsToPreserveOriginal(modelClass, name, originalName);
+  }
+
+  /** @internal */
+  static overrideAccessorsToPreserveOriginal(
+    _modelClass: any,
+    _name: string,
+    _originalName: string,
+  ): void {
+    // Rails uses Ruby's `include(Module.new { define_method ... })` to dynamically
+    // override attribute accessors. TS has no equivalent; the ignoreCase
+    // read-original behaviour is handled at the EncryptedAttributeType level.
+  }
+
+  /** @internal */
+  static loadSchemaBang(modelClass: any): void {
+    if (Configurable.config.validateColumnSize) {
+      this.addLengthValidationForEncryptedColumns(modelClass);
+    }
+  }
+
+  /** @internal */
+  static addLengthValidationForEncryptedColumns(modelClass: any): void {
+    const attrs: Set<string> = modelClass._encryptedAttributes ?? new Set();
+    for (const name of attrs) {
+      this.validateColumnSize(modelClass, name);
+    }
+  }
+
+  /** @internal */
+  static isEncryptedAttribute(record: any, attributeName: string): boolean {
+    const klass = record.constructor as any;
+    // Resolve attribute aliases before checking encrypted set.
+    const resolvedName = klass._attributeAliases?.[attributeName] ?? attributeName;
+    if (!klass._encryptedAttributes?.has(resolvedName)) return false;
+    const type = getAttributeType(klass, resolvedName);
+    if (!(type instanceof EncryptedAttributeType)) return false;
+    const raw = record.readAttributeBeforeTypeCast?.(resolvedName);
+    return type.isEncrypted(raw);
+  }
+
+  /** @internal */
+  static ciphertextFor(record: any, attributeName: string): unknown {
+    const klass = record.constructor as any;
+    const resolvedName = klass._attributeAliases?.[attributeName] ?? attributeName;
+    return record.readAttributeBeforeTypeCast?.(resolvedName);
+  }
+
+  /** @internal */
+  static async encrypt(record: any): Promise<void> {
+    if (this.hasEncryptedAttributes(record.constructor)) {
+      await this.encryptAttributes(record);
+    }
+  }
+
+  /** @internal */
+  static async decrypt(record: any): Promise<void> {
+    if (this.hasEncryptedAttributes(record.constructor)) {
+      await this.decryptAttributes(record);
+    }
+  }
+
+  /** @internal */
+  static _createRecord(record: any, attributeNames?: string[]): unknown {
+    // Rails prepends this to force encrypted attrs into the INSERT column list.
+    // In our codebase _createRecord is the ORM callback chain entry point and
+    // ignores attributeNames; encrypted columns are included unconditionally via
+    // _performInsert. This helper exists for api:compare parity only.
+    return record._createRecord?.(attributeNames);
+  }
+
+  /** @internal */
+  static async encryptAttributes(record: any): Promise<void> {
+    this.validateEncryptionAllowed(record);
+    const assignments = this.buildEncryptAttributeAssignments(record);
+    await record.updateColumns?.(assignments);
+  }
+
+  /** @internal */
+  static async decryptAttributes(record: any): Promise<void> {
+    this.validateEncryptionAllowed(record);
+    const assignments = this.buildDecryptAttributeAssignments(record);
+    await _withoutEncryption(() => record.updateColumns?.(assignments));
+  }
+
+  /** @internal */
+  static validateEncryptionAllowed(_record: any): void {
+    const ctx = getEncryptionContext();
+    if (ctx.frozenEncryption) {
+      throw new ConfigurationError("can't be modified because it is encrypted");
+    }
+  }
+
+  /** @internal */
+  static buildEncryptAttributeAssignments(record: any): Record<string, unknown> {
+    const klass = record.constructor as any;
+    const result: Record<string, unknown> = {};
+    for (const name of klass._encryptedAttributes ?? new Set<string>()) {
+      const type = getAttributeType(klass, name);
+      const value = record.readAttribute?.(name) ?? record[name];
+      // Pre-serialize so updateColumns stores ciphertext, not plaintext.
+      result[name] = type instanceof EncryptedAttributeType ? type.serialize(value) : value;
+    }
+    return result;
+  }
+
+  /** @internal */
+  static buildDecryptAttributeAssignments(record: any): Record<string, unknown> {
+    const klass = record.constructor as any;
+    const result: Record<string, unknown> = {};
+    for (const name of klass._encryptedAttributes ?? new Set<string>()) {
+      const type = getAttributeType(klass, name);
+      const raw = record.readAttributeBeforeTypeCast?.(name);
+      // Only decrypt if actually encrypted — mirrors Rails' type.deserialize
+      // which returns the raw value when support_unencrypted_data is true.
+      if (type instanceof EncryptedAttributeType && type.isEncrypted(raw)) {
+        result[name] = type.deserialize(raw);
+      } else {
+        // Plaintext — return the cast value so typed columns (date, JSON, etc.)
+        // keep their in-memory representation rather than the raw DB string.
+        result[name] = record.readAttribute?.(name) ?? raw;
+      }
+    }
+    return result;
+  }
+
+  /** @internal */
+  static cantModifyEncryptedAttributesWhenFrozen(record: any): void {
+    const klass = record.constructor as any;
+    // changedAttributes is a string[] in this codebase (from DirtyTracker).
+    const changed: string[] = Array.isArray(record.changedAttributes)
+      ? record.changedAttributes
+      : [];
+    for (const attr of klass._encryptedAttributes ?? new Set<string>()) {
+      if (changed.includes(attr)) {
+        record.errors?.add?.(attr, "can't be modified because it is encrypted");
+      }
+    }
+  }
 }
 
 /**
@@ -212,142 +356,4 @@ export class EncryptableRecord {
 export function getAttributeType(klass: any, name: string): unknown {
   const def = klass._attributeDefinitions?.get?.(name);
   return def?.type;
-}
-
-/** @internal */
-function encryptAttribute(
-  name: any,
-  keyProvider?: any,
-  key?: any,
-  deterministic?: any,
-  supportUnencryptedData?: any,
-  downcase?: any,
-  ignoreCase?: any,
-  previous?: any,
-  compress?: any,
-  compressor?: any,
-  contextProperties?: any,
-): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#encrypt_attribute is not implemented",
-  );
-}
-
-/** @internal */
-function preserveOriginalEncrypted(name: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#preserve_original_encrypted is not implemented",
-  );
-}
-
-/** @internal */
-function overrideAccessorsToPreserveOriginal(name: any, originalAttributeName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#override_accessors_to_preserve_original is not implemented",
-  );
-}
-
-/** @internal */
-function loadSchemaBang(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#load_schema! is not implemented",
-  );
-}
-
-/** @internal */
-function addLengthValidationForEncryptedColumns(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#add_length_validation_for_encrypted_columns is not implemented",
-  );
-}
-
-/** @internal */
-function validateColumnSize(attributeName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#validate_column_size is not implemented",
-  );
-}
-
-/** @internal */
-function isEncryptedAttribute(attributeName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#encrypted_attribute? is not implemented",
-  );
-}
-
-/** @internal */
-function ciphertextFor(attributeName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#ciphertext_for is not implemented",
-  );
-}
-
-/** @internal */
-function encrypt(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#encrypt is not implemented",
-  );
-}
-
-/** @internal */
-function decrypt(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#decrypt is not implemented",
-  );
-}
-
-/** @internal */
-function _createRecord(attributeNames?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#_create_record is not implemented",
-  );
-}
-
-/** @internal */
-function encryptAttributes(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#encrypt_attributes is not implemented",
-  );
-}
-
-/** @internal */
-function decryptAttributes(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#decrypt_attributes is not implemented",
-  );
-}
-
-/** @internal */
-function validateEncryptionAllowed(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#validate_encryption_allowed is not implemented",
-  );
-}
-
-/** @internal */
-function hasEncryptedAttributes(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#has_encrypted_attributes? is not implemented",
-  );
-}
-
-/** @internal */
-function buildEncryptAttributeAssignments(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#build_encrypt_attribute_assignments is not implemented",
-  );
-}
-
-/** @internal */
-function buildDecryptAttributeAssignments(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#build_decrypt_attribute_assignments is not implemented",
-  );
-}
-
-/** @internal */
-function cantModifyEncryptedAttributesWhenFrozen(): never {
-  throw new NotImplementedError(
-    "ActiveRecord::Encryption::EncryptableRecord#cant_modify_encrypted_attributes_when_frozen is not implemented",
-  );
 }

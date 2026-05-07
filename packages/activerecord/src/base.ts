@@ -3108,33 +3108,25 @@ include(Base, {
   // CounterCache privates
   _foreignKeysEqual: CounterCache._foreignKeysEqual,
   // Associations privates
-  // NOTE: associationInstanceGet/Set, computePrimaryKey, withTransactionReturningStatus,
-  // clearTransactionRecordState, _committedAlreadyCalled, _triggerUpdate/DestroyCallback,
-  // and _newRecordBeforeLastCommit take `(record: Base, ...)` as first arg — NOT `this`.
-  // They are wired here FOR API:COMPARE ATTRIBUTION ONLY. Do not call them as instance
-  // methods; they are only ever invoked as module-level functions with an explicit record.
-  // The _committed*/_trigger* entries are additionally shadowed at runtime by the `null`
-  // own-property that initInternals writes during record construction, so the prototype
-  // function is never reached.
   isAssociationCached: _isAssociationCached,
-  associationInstanceGet: _associationInstanceGet, // attribution-only — record-arg shape
-  associationInstanceSet: _associationInstanceSet, // attribution-only — record-arg shape
+  associationInstanceGet: _associationInstanceGet,
+  associationInstanceSet: _associationInstanceSet,
   // AutosaveAssociation privates
-  computePrimaryKey: _computePrimaryKey, // attribution-only — record-arg shape
+  computePrimaryKey: _computePrimaryKey,
   _ensureNoDuplicateErrors: _autosaveEnsureNoDuplicateErrors,
   // Transactions privates
   // committedBang / rolledbackBang intentionally omitted: transaction.ts calls
   // these as record.committedBang({ shouldRunCallbacks }) — the record-arg form
   // would receive the options hash as `record`, breaking that callsite.
-  withTransactionReturningStatus: _withTransactionReturningStatus, // attribution-only — record-arg shape
-  _newRecordBeforeLastCommit: _txNewRecordBeforeLastCommit, // attribution-only — shadowed by own-prop
+  withTransactionReturningStatus: _withTransactionReturningStatus,
+  _newRecordBeforeLastCommit: _txNewRecordBeforeLastCommit,
   // isTriggerTransactionalCallbacks omitted: transaction.ts calls it as
   // record.isTriggerTransactionalCallbacks() with no args; the record-arg
   // form would receive undefined as `record`, throwing at runtime.
-  _committedAlreadyCalled: _txCommittedAlreadyCalled, // attribution-only — shadowed by own-prop
-  _triggerUpdateCallback: _txTriggerUpdateCallback, // attribution-only — shadowed by own-prop
-  _triggerDestroyCallback: _txTriggerDestroyCallback, // attribution-only — shadowed by own-prop
-  clearTransactionRecordState: _clearTransactionRecordState, // attribution-only — record-arg shape
+  _committedAlreadyCalled: _txCommittedAlreadyCalled,
+  _triggerUpdateCallback: _txTriggerUpdateCallback,
+  _triggerDestroyCallback: _txTriggerDestroyCallback,
+  clearTransactionRecordState: _clearTransactionRecordState,
 });
 
 for (const [name, fn] of [

@@ -610,7 +610,9 @@ export async function save<T extends SaveRecord>(
 
   // Mirrors: ActiveRecord::Transactions#save
   try {
-    return await withTransactionReturningStatus(self, () => self.createOrUpdate());
+    return (await withTransactionReturningStatus.call(self, () =>
+      self.createOrUpdate(),
+    )) as boolean;
   } finally {
     self._skipTouch = false;
   }
@@ -640,7 +642,7 @@ export async function destroy<T extends DestroyRecord>(this: T): Promise<T | fal
 
   // Mirrors: ActiveRecord::Transactions#destroy
   const self = this as any;
-  const result = await withTransactionReturningStatus(self, () => self._destroyRow());
+  const result = await withTransactionReturningStatus.call(self, () => self._destroyRow());
   return result ? this : false;
 }
 

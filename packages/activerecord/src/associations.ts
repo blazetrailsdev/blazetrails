@@ -2217,8 +2217,8 @@ function initInternals(record: Base): void {
  *
  * @internal
  */
-export function associationInstanceGet(record: Base, name: string): unknown {
-  return record._associationInstances.get(name) ?? null;
+export function associationInstanceGet(this: Base, name: string): unknown {
+  return this._associationInstances.get(name) ?? null;
 }
 
 /**
@@ -2232,6 +2232,6 @@ export function associationInstanceGet(record: Base, name: string): unknown {
  *
  * @internal
  */
-export function associationInstanceSet(record: Base, name: string, association: unknown): void {
-  record._associationInstances.set(name, association as AssociationInstance);
+export function associationInstanceSet(this: Base, name: string, association: unknown): void {
+  this._associationInstances.set(name, association as AssociationInstance);
 }

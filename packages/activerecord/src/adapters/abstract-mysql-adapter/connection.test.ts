@@ -13,6 +13,7 @@ describeIfMysql("Mysql2Adapter", () => {
     adapter = new Mysql2Adapter(MYSQL_TEST_URL);
   });
   afterEach(async () => {
+    vi.restoreAllMocks();
     await adapter.close();
   });
 

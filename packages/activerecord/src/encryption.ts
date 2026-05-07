@@ -499,7 +499,7 @@ export function encryptedAttributeWasDeclared(klass: any, name: string): void {
 // ─── Delegation to Contexts (included into Encryption in Rails) ──────────────
 
 /** Mirrors: ActiveRecord::Encryption.with_encryption_context */
-export function withEncryptionContext<T>(properties: Partial<EncryptionContext>, fn: () => T): T {
+export function withEncryptionContext<T>(properties: EncryptionContext, fn: () => T): T {
   return Contexts.withEncryptionContext(properties, fn);
 }
 

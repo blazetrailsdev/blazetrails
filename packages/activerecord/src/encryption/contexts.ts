@@ -20,8 +20,8 @@ export class Contexts {
     return getEncryptionContext();
   }
 
-  static withEncryptionContext<T>(properties: Partial<EncryptionContext>, fn: () => T): T {
-    return _withCtx(properties as EncryptionContext, fn);
+  static withEncryptionContext<T>(properties: EncryptionContext, fn: () => T): T {
+    return _withCtx(properties, fn);
   }
 
   static withoutEncryption<T>(fn: () => T): T {

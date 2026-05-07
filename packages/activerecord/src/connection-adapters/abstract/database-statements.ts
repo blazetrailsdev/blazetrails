@@ -1497,39 +1497,82 @@ export function defaultInsertValue(_column: unknown): Nodes.SqlLiteral {
   return arelSql("DEFAULT");
 }
 
-/** @internal */
-function buildFixtureSql(fixtures: any, tableName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::DatabaseStatements#build_fixture_sql is not implemented",
-  );
+/**
+ * Builds an INSERT SQL string for a set of fixture rows.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#build_fixture_sql
+ * @internal
+ */
+export function buildFixtureSql(
+  this: DatabaseStatementsHost & Pick<Quoting, "quote" | "quoteTableName" | "quoteColumnName">,
+  fixtures: Record<string, unknown>[],
+  tableName: string,
+): string {
+  const emptyValue = this.emptyInsertStatementValue?.() ?? emptyInsertStatementValue();
+  if (fixtures.length === 0) return `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
+
+  const allColumns = [...new Set(fixtures.flatMap((f) => Object.keys(f)))];
+  if (allColumns.length === 0) return `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
+
+  const cols = allColumns.map((c) => this.quoteColumnName(c)).join(", ");
+  const rows = fixtures.map((fixture) => {
+    const vals = allColumns.map((col) =>
+      col in fixture ? this.quote(withYamlFallback(fixture[col])) : "DEFAULT",
+    );
+    return `(${vals.join(", ")})`;
+  });
+  return `INSERT INTO ${this.quoteTableName(tableName)} (${cols}) VALUES ${rows.join(", ")}`;
 }
 
-/** @internal */
-function buildFixtureStatements(fixtureSet: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::DatabaseStatements#build_fixture_statements is not implemented",
-  );
+/**
+ * Returns an INSERT SQL string for each non-empty table in the fixture set.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#build_fixture_statements
+ * @internal
+ */
+export function buildFixtureStatements(
+  this: DatabaseStatementsHost & Pick<Quoting, "quote" | "quoteTableName" | "quoteColumnName">,
+  fixtureSet: Record<string, Record<string, unknown>[]>,
+): string[] {
+  return Object.entries(fixtureSet)
+    .filter(([, fixtures]) => fixtures.length > 0)
+    .map(([tableName, fixtures]) => buildFixtureSql.call(this, fixtures, tableName));
 }
 
-/** @internal */
-function buildTruncateStatement(tableName: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::DatabaseStatements#build_truncate_statement is not implemented",
-  );
+/**
+ * Returns a TRUNCATE TABLE statement for the given table.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#build_truncate_statement
+ * @internal
+ */
+export function buildTruncateStatement(
+  this: Pick<Quoting, "quoteTableName">,
+  tableName: string,
+): string {
+  return `TRUNCATE TABLE ${this.quoteTableName(tableName)}`;
 }
 
-/** @internal */
-function buildTruncateStatements(tableNames: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::DatabaseStatements#build_truncate_statements is not implemented",
-  );
+/**
+ * Returns TRUNCATE TABLE statements for each table name.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#build_truncate_statements
+ * @internal
+ */
+export function buildTruncateStatements(
+  this: Pick<Quoting, "quoteTableName">,
+  tableNames: string[],
+): string[] {
+  return tableNames.map((t) => buildTruncateStatement.call(this, t));
 }
 
-/** @internal */
-function combineMultiStatements(totalSql: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::DatabaseStatements#combine_multi_statements is not implemented",
-  );
+/**
+ * Joins an array of SQL statements with ";\n".
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#combine_multi_statements
+ * @internal
+ */
+export function combineMultiStatements(totalSql: string[]): string {
+  return totalSql.join(";\n");
 }
 
 /**

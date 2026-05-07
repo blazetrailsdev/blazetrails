@@ -161,7 +161,7 @@ describe("AdapterPreventWritesTest", () => {
   it.skip("doesnt error when a select query has encoding errors", () => {
     // BLOCKED: relation — preventingWrites guard not wired into all query paths
     // ROOT-CAUSE: relation.ts or abstract-adapter.ts#executeMutation missing preventingWrites check for some query types
-    // SCOPE: ~20 LOC in relation.ts; affects ~5–8 tests in base-prevent-writes.test.ts
+    // SCOPE: ~20 LOC in relation.ts; affects ~5–8 tests in adapter-prevent-writes.test.ts and base-prevent-writes.test.ts
     // PostgreSQL raises StatementInvalid on encoding errors regardless of write-prevention;
     // requires PostgreSQLAdapter — not exercisable with SQLite3Adapter.
   });

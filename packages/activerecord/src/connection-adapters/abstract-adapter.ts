@@ -295,6 +295,45 @@ export interface AbstractAdapter {
     },
     arel: unknown,
   ): [unknown, unknown[]];
+  insert(
+    arel: unknown,
+    name?: string | null,
+    pk?: string | null,
+    idValue?: unknown,
+    sequenceName?: string | null,
+    binds?: unknown[],
+    opts?: { returning?: string[] | null },
+  ): Promise<unknown>;
+  update(arel: unknown, name?: string | null, binds?: unknown[]): Promise<number>;
+  delete(arel: unknown, name?: string | null, binds?: unknown[]): Promise<number>;
+  /** @internal */ /** @internal */
+  rawExecute(
+    sql: string,
+    name?: string | null,
+    binds?: unknown[],
+    prepare?: boolean,
+    async?: boolean,
+    allowRetry?: boolean,
+    materializeTransactions?: boolean,
+    batch?: boolean,
+  ): Promise<unknown>;
+  /** @internal */ /** @internal */
+  internalExecute(
+    sql: string,
+    name?: string,
+    binds?: unknown[],
+    prepare?: boolean,
+    async?: boolean,
+    allowRetry?: boolean,
+    materializeTransactions?: boolean,
+    block?: unknown,
+  ): Promise<unknown>;
+  /** @internal */ /** @internal */
+  executeBatch(
+    statements: string[],
+    name?: string | null,
+    kwargs?: Record<string, unknown>,
+  ): Promise<void>;
 }
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class AbstractAdapter implements Quoting {

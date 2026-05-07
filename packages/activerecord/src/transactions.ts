@@ -556,13 +556,13 @@ export function isTriggerTransactionalCallbacks(record: Base): boolean {
 
 // Mirrors: attr_reader :_committed_already_called
 /** @internal */
-function _committedAlreadyCalled(record: Base): boolean | null {
+export function _committedAlreadyCalled(record: Base): boolean | null {
   return (record as any)._committedAlreadyCalled ?? null;
 }
 
 // Mirrors: attr_reader :_trigger_update_callback
 /** @internal */
-function _triggerUpdateCallback(record: Base): boolean | null {
+export function _triggerUpdateCallback(record: Base): boolean | null {
   return (record as any)._triggerUpdateCallback ?? null;
 }
 

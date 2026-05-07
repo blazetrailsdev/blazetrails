@@ -2217,7 +2217,7 @@ function initInternals(record: Base): void {
  *
  * @internal
  */
-function associationInstanceGet(record: Base, name: string): unknown {
+export function associationInstanceGet(record: Base, name: string): unknown {
   return record._associationInstances.get(name) ?? null;
 }
 
@@ -2232,6 +2232,6 @@ function associationInstanceGet(record: Base, name: string): unknown {
  *
  * @internal
  */
-function associationInstanceSet(record: Base, name: string, association: unknown): void {
+export function associationInstanceSet(record: Base, name: string, association: unknown): void {
   record._associationInstances.set(name, association as AssociationInstance);
 }

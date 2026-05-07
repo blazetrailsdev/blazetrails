@@ -5,7 +5,7 @@
  */
 
 import { getCrypto } from "@blazetrails/activesupport";
-import { ConfigError, DecryptionError } from "../errors.js";
+import { ConfigError, DecryptionError, EncryptedContentIntegrity } from "../errors.js";
 import { Message } from "../message.js";
 
 const KEY_LENGTH = 32;
@@ -81,9 +81,12 @@ export class Aes256Gcm {
     const iv = message.headers.get("iv") as string;
     const authTag = message.headers.get("at") as string;
     if (!iv || !authTag) throw new DecryptionError("Missing IV or auth tag");
+    // Mirrors Rails: OpenSSL bindings don't raise on truncated auth tags, so we check
+    // the length explicitly to prevent auth-tag forgery.
+    const authTagBuf = Buffer.from(authTag, "base64");
+    if (authTagBuf.length !== AUTH_TAG_LENGTH) throw new EncryptedContentIntegrity();
 
     const ivBuf = Buffer.from(iv, "base64");
-    const authTagBuf = Buffer.from(authTag, "base64");
     const encryptedBuf = Buffer.from(message.payload, "base64");
     const keyBuf = Buffer.from(this.secret, "base64").subarray(0, KEY_LENGTH);
 
@@ -100,7 +103,7 @@ export class Aes256Gcm {
         Buffer.from(decipher.final()),
       ]);
     } catch (e) {
-      if (e instanceof ConfigError) throw e;
+      if (e instanceof ConfigError || e instanceof EncryptedContentIntegrity) throw e;
       throw new DecryptionError("The provided key could not decrypt the data");
     }
   }

@@ -13,7 +13,9 @@
 // no corresponding test file in the Rails suite.
 
 export interface ExcludedFile {
-  pattern: string;
+  /** Matches the Ruby source file path; used by api:compare. Omit for test-only exclusions. */
+  pattern?: string;
+  /** Matches the Ruby test file path; used by test:compare. */
   testFile?: string;
   reason: string;
 }
@@ -132,21 +134,18 @@ export const EXCLUDED_FILES: ExcludedFile[] = [
   },
   // --- Permanently not-portable: GVL / thread-model ---
   {
-    pattern: "transaction_isolation",
     testFile: "transaction_isolation_test.rb",
     reason:
       "All tests require concurrent Ruby threads exercising the GVL. " +
       "Node.js is single-threaded; transaction-isolation guarantees verified by the DB engine, not the runtime.",
   },
   {
-    pattern: "schema_loading",
     testFile: "schema_loading_test.rb",
     reason:
       "Tests ActiveSupport.on_load / Zeitwerk autoload hooks triggered from background threads. " +
       "No Node.js equivalent; ES module loading is synchronous and non-concurrent.",
   },
   {
-    pattern: "reload_models",
     testFile: "reload_models_test.rb",
     reason:
       "Tests class reloading via ActiveSupport::Dependencies / Zeitwerk in a forked process. " +
@@ -154,42 +153,36 @@ export const EXCLUDED_FILES: ExcludedFile[] = [
   },
   // --- Permanently not-portable: Rake tasks / dbconsole PTY ---
   {
-    pattern: "databases.rake",
     testFile: "adapters/postgresql/postgresql_rake_test.rb",
     reason:
       "Tests Rake db:create/drop/migrate tasks via shell exec. " +
       "Rake and PTY shell-out have no Node.js equivalent; Trails uses migration scripts instead.",
   },
   {
-    pattern: "databases.rake",
     testFile: "adapters/mysql2/mysql2_rake_test.rb",
     reason:
       "Tests Rake db:create/drop/migrate tasks for MySQL via shell exec. " +
       "Rake and PTY shell-out have no Node.js equivalent.",
   },
   {
-    pattern: "databases.rake",
     testFile: "adapters/sqlite3/sqlite_rake_test.rb",
     reason:
       "Tests Rake db:create/drop/migrate tasks for SQLite via shell exec. " +
       "Rake and PTY shell-out have no Node.js equivalent.",
   },
   {
-    pattern: "dbconsole.rb",
     testFile: "adapters/postgresql/dbconsole_test.rb",
     reason:
       "Tests `rails dbconsole` PTY/exec invocation for PostgreSQL. " +
       "Spawning a PTY-backed interactive subprocess has no Node.js equivalent.",
   },
   {
-    pattern: "dbconsole.rb",
     testFile: "adapters/mysql2/dbconsole_test.rb",
     reason:
       "Tests `rails dbconsole` PTY/exec invocation for MySQL. " +
       "Spawning a PTY-backed interactive subprocess has no Node.js equivalent.",
   },
   {
-    pattern: "dbconsole.rb",
     testFile: "adapters/sqlite3/dbconsole_test.rb",
     reason:
       "Tests `rails dbconsole` PTY/exec invocation for SQLite. " +
@@ -197,14 +190,12 @@ export const EXCLUDED_FILES: ExcludedFile[] = [
   },
   // --- Permanently not-portable: Ruby serialization formats ---
   {
-    pattern: "yaml_serialization",
     testFile: "yaml_serialization_test.rb",
     reason:
       "Tests YAML round-trips of arbitrary Ruby objects (Psych encoding). " +
       "No Node.js equivalent; JSON is the default column serialization format in Trails.",
   },
   {
-    pattern: "binary.rb",
     testFile: "binary_test.rb",
     reason:
       "Tests Marshal/YAML binary encoding of AR records. " +
@@ -213,7 +204,7 @@ export const EXCLUDED_FILES: ExcludedFile[] = [
 ];
 
 export function isExcluded(file: string): boolean {
-  return EXCLUDED_FILES.some((e) => file.includes(e.pattern));
+  return EXCLUDED_FILES.some((e) => e.pattern && file.includes(e.pattern));
 }
 
 export function isTestExcluded(testFile: string): boolean {

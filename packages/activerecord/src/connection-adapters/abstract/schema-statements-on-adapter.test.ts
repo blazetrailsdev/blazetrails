@@ -77,7 +77,7 @@ describe("SchemaStatements mixed into AbstractAdapter", () => {
     // removeForeignKey base path reaches SQL execution (which our stub no-ops) —
     // it resolves without a stack overflow
     await expect(
-      (stub as any).removeForeignKey("products", { name: "fk_products_user_id" }),
+      stub.removeForeignKey("products", { name: "fk_products_user_id" }),
     ).resolves.toBeUndefined();
   });
 });

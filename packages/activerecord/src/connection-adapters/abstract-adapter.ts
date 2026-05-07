@@ -202,6 +202,12 @@ export interface AbstractAdapter {
   indexes(tableName: string): Promise<unknown[]>;
   foreignKeys(tableName: string): Promise<ForeignKeyDefinition[]>;
   addForeignKey(fromTable: string, toTable: string, options?: AddForeignKeyOptions): Promise<void>;
+  removeForeignKey(
+    fromTable: string,
+    toTableOrOptions?:
+      | string
+      | { column?: string; name?: string; toTable?: string; ifExists?: boolean },
+  ): Promise<void>;
   addReference(
     tableName: string,
     refName: string,

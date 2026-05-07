@@ -1524,19 +1524,24 @@ export function buildFixtureSql(
     return `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
   }
 
+  // Pre-quote values through the adapter's quote() so that Temporal types,
+  // MySQL-specific escaping, and the JS Date guard in Quoting#quote() are all
+  // respected — matching Rails, where the visitor calls @conn.quote(value).
+  // The DEFAULT sentinel is an SqlLiteral; identity-check against it to detect
+  // missing columns in the single-row path.
   const DEFAULT_VALUE = arelSql("DEFAULT");
   const table = new Table(tableName);
   const manager = new InsertManager(table);
 
   const valuesList = fixtures.map((fixture) =>
     allColumns.map((col) =>
-      col in fixture ? new Nodes.Quoted(withYamlFallback(fixture[col])) : DEFAULT_VALUE,
+      col in fixture ? arelSql(this.quote(withYamlFallback(fixture[col]))) : DEFAULT_VALUE,
     ),
   );
 
   if (valuesList.length === 1) {
     // Single-row: strip DEFAULT columns so the DB fills them from its own
-    // defaults, matching Rails' behaviour exactly.
+    // defaults, matching Rails' single-row optimisation exactly.
     const row = valuesList[0];
     const filteredValues: Nodes.Node[] = [];
     allColumns.forEach((col, i) => {

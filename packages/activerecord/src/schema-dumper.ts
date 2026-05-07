@@ -468,9 +468,22 @@ export class SchemaDumper {
   dump(): string | Promise<string> {
     const lines: string[] = [];
     this.header(lines);
-    this.schemas(lines);
-    this.extensions(lines);
-    this.types(lines);
+    const schemasResult = this.schemas(lines);
+    const extensionsResult = this.extensions(lines);
+    const typesResult = this.types(lines);
+    const hasAsync =
+      schemasResult instanceof Promise ||
+      extensionsResult instanceof Promise ||
+      typesResult instanceof Promise;
+    if (hasAsync) {
+      return Promise.all([schemasResult, extensionsResult, typesResult]).then(async () => {
+        const result = this.dumpTables(lines);
+        if (result instanceof Promise) await result;
+        await this.virtualTables(lines);
+        this.trailer(lines);
+        return lines.join("\n");
+      });
+    }
     const result = this.dumpTables(lines);
     if (result instanceof Promise) {
       return result.then(async () => {
@@ -491,13 +504,13 @@ export class SchemaDumper {
   }
 
   /** @internal */
-  protected extensions(_lines: string[]): void {}
+  protected extensions(_lines: string[]): void | Promise<void> {}
 
   /** @internal */
-  protected types(_lines: string[]): void {}
+  protected types(_lines: string[]): void | Promise<void> {}
 
   /** @internal */
-  protected schemas(_lines: string[]): void {}
+  protected schemas(_lines: string[]): void | Promise<void> {}
 
   /** @internal */
   protected virtualTables(lines: string[]): void | Promise<void> {

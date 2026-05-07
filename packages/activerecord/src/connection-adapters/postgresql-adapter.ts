@@ -360,15 +360,17 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   private async _maybeConfigureConnection(client: pg.PoolClient): Promise<void> {
     if (this._configuredClients.has(client)) return;
-    // Install a notice listener so PostgreSQL NOTICE/WARNING messages are
-    // captured per-query and dispatched via dbWarningsAction.
-    client.on("notice", (msg: { severity?: string; message?: string; code?: string }) => {
-      this._noticeReceiverSqlWarnings.push({
-        level: msg.severity,
-        message: msg.message,
-        code: msg.code,
+    // Only install the notice receiver when the action is non-ignore.
+    // Mirrors Rails: postgresql_adapter.rb `unless ActiveRecord.db_warnings_action.nil?`.
+    if ((this.constructor as typeof PostgreSQLAdapter).dbWarningsAction !== "ignore") {
+      client.on("notice", (msg: { severity?: string; message?: string; code?: string }) => {
+        this._noticeReceiverSqlWarnings.push({
+          level: msg.severity,
+          message: msg.message,
+          code: msg.code,
+        });
       });
-    });
+    }
     // Mark only after all queries succeed so a partial failure doesn't
     // leave the client flagged as configured on its next checkout.
     // Mirrors: set_standard_conforming_strings — required for correct quoting behaviour.
@@ -590,7 +592,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // pgResult.rows is already positional arrays thanks to rowMode.
     const rowArrays = pgResult.rows as unknown[][];
     const result = new Result(columns, rowArrays, columnTypes as Record<string, Type>);
-    this._flushWarnings();
+    this._flushWarnings(rewritten);
     return result;
   }
 
@@ -897,7 +899,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * (postgresql_adapter.rb:901-906).
    */
   /** @internal Mirrors: PostgreSQL::DatabaseStatements#handle_warnings */
-  private _flushWarnings(): void {
+  private _flushWarnings(sql?: string): void {
     const actionable = new Set(["WARNING", "ERROR", "FATAL", "PANIC"]);
     const ctor = this.constructor as typeof PostgreSQLAdapter;
     const action = ctor.dbWarningsAction;
@@ -907,10 +909,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         if (!actionable.has(w.level ?? "")) continue;
         if (this.isWarningIgnored(w)) continue;
         const sw = new SQLWarning(w.message, w.code ?? null, w.level ?? null);
+        if (sql) sw.sql = sql;
         if (action === "raise") throw sw;
         if (action === "log") {
           const logger = this.logger as { warn?: (msg: string) => void } | null;
-          const msg = `[ActiveRecord::SQLWarning] ${sw.message} (${w.code})`;
+          const codeSuffix = w.code ? ` (${w.code})` : "";
+          const msg = `[ActiveRecord::SQLWarning] ${sw.message}${codeSuffix}`;
           if (logger?.warn) logger.warn(msg);
           else console.warn(msg);
         }
@@ -971,7 +975,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         throw translated;
       }
     });
-    this._flushWarnings();
+    this._flushWarnings(rewritten);
     return m;
   }
 
@@ -1078,7 +1082,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         throw translated;
       }
     });
-    this._flushWarnings();
+    this._flushWarnings(pgSql);
     return m;
   }
 

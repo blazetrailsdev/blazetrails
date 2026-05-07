@@ -31,7 +31,7 @@ function notLoaded(method: string): never {
 }
 
 export const encryptionHooks: EncryptionHooks = {
-  encrypts: () => notLoaded("Base.encrypts()"),
+  encrypts: (klass: any) => notLoaded(`${klass?.name ?? "Model"}.encrypts()`),
   applyPendingEncryptions: () => {},
   encryptedAttributeQ: () => false,
   ciphertextFor: () => undefined,

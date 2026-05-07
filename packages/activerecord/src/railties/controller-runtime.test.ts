@@ -78,13 +78,13 @@ describe("ControllerRuntimeTest", () => {
 
     it("returns 0 when logger.info returns false", () => {
       RuntimeRegistry.record("SELECT", 5.0);
-      const result = cleanupViewRuntime.call({ dbRuntime: null, logger: { info: () => false } });
+      const result = cleanupViewRuntime.call({ dbRuntime: null, logger: { "info?": false } });
       expect(result).toBe(0);
     });
 
     it("accumulates pre-render dbRuntime when logger.info returns true", () => {
       RuntimeRegistry.record("SELECT", 6.0);
-      const host = { dbRuntime: 1.0, logger: { info: () => true } };
+      const host = { dbRuntime: 1.0, logger: { "info?": true } };
 
       cleanupViewRuntime.call(host);
 
@@ -94,7 +94,7 @@ describe("ControllerRuntimeTest", () => {
 
     it("resets the runtime registry when logger.info returns true", () => {
       RuntimeRegistry.record("SELECT", 6.0);
-      const host = { dbRuntime: null, logger: { info: () => true } };
+      const host = { dbRuntime: null, logger: { "info?": true } };
 
       cleanupViewRuntime.call(host);
 
@@ -103,7 +103,7 @@ describe("ControllerRuntimeTest", () => {
 
     it("returns 0 without ActionView (no queries between resets)", () => {
       RuntimeRegistry.record("SELECT", 6.0);
-      const host = { dbRuntime: null, logger: { info: () => true } };
+      const host = { dbRuntime: null, logger: { "info?": true } };
 
       const result = cleanupViewRuntime.call(host);
 

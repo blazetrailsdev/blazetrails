@@ -385,7 +385,8 @@ function categorize(relPath: string, describeName: string, testName: string): An
     const file = path.basename(p, ".test.ts");
     return {
       blocked: `migration — migration runner gap in ${file}`,
-      rootCause: `migration.ts#${describeName || "Migration"} not fully implementing Rails migration semantics`,
+      rootCause:
+        "migration.ts#Migrator or MigrationContext not fully implementing Rails migration semantics",
       scope: `~50–150 LOC fix in migration.ts; affects ~4–30 tests in ${file}.test.ts`,
     };
   }
@@ -447,9 +448,9 @@ function categorize(relPath: string, describeName: string, testName: string): An
       return {
         blocked: "connection-pool — sharding / shard-selector not fully implemented",
         rootCause:
-          "connection-adapters/abstract/connection-handler.ts#connectingToShard not implemented",
+          "connection-handling.ts#connectedTo shard routing + connection-adapters/abstract/connection-handler.ts pool-per-shard not fully implemented",
         scope:
-          "~100 LOC in connection-adapters/abstract/connection-handler.ts; affects ~19–26 tests in sharding files",
+          "~100 LOC in connection-handling.ts + connection-adapters/abstract/connection-handler.ts; affects ~19–26 tests in sharding files",
       };
     }
     if (p.includes("multi-db") || p.includes("multiple")) {
@@ -463,7 +464,7 @@ function categorize(relPath: string, describeName: string, testName: string): An
     }
     return {
       blocked: `connection-pool — connection pool / handler gap in ${file}`,
-      rootCause: `connection-adapters/abstract/connection-pool.ts or abstract/connection-handler.ts missing Rails parity for ${describeName || "pool lifecycle"}`,
+      rootCause: `connection-adapters/abstract/connection-pool.ts or connection-adapters/abstract/connection-handler.ts missing Rails parity for pool lifecycle`,
       scope: `~50–100 LOC fix in connection-adapters/abstract/connection-pool.ts; affects ~10–24 tests in ${file}.test.ts`,
     };
   }
@@ -1153,18 +1154,21 @@ for (const absPath of files) {
 
   if (modified !== null) {
     totalFiles++;
-    // count inserted BLOCKED: occurrences
-    const before = (src.match(/BLOCKED:/g) ?? []).length;
-    const after = (modified.match(/BLOCKED:/g) ?? []).length;
-    const delta = after - before;
+    // Count only newly-inserted BLOCKED: occurrences (not pre-existing ones)
+    const beforeLines = new Set(src.split("\n").filter((l) => /\/\/\s*BLOCKED:/.test(l)));
+    const delta = modified
+      .split("\n")
+      .filter((l) => /\/\/\s*BLOCKED:/.test(l) && !beforeLines.has(l)).length;
     totalSkips += delta;
 
-    // Tally categories
+    // Tally categories for newly-inserted annotations only
     for (const line of modified.split("\n")) {
-      const bm = line.match(/\/\/\s*BLOCKED:\s*(\S+)/);
-      if (bm) {
-        const cat = bm[1].replace(/,$/, "");
-        categoryCount[cat] = (categoryCount[cat] ?? 0) + 1;
+      if (/\/\/\s*BLOCKED:/.test(line) && !beforeLines.has(line)) {
+        const bm = line.match(/\/\/\s*BLOCKED:\s*(\S+)/);
+        if (bm) {
+          const cat = bm[1].replace(/,$/, "");
+          categoryCount[cat] = (categoryCount[cat] ?? 0) + 1;
+        }
       }
     }
 

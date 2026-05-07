@@ -55,5 +55,13 @@ export {
   keyLength,
   ivLength,
   eagerLoadBang,
+  // Module-level delegates (mirrors Rails' include Configurable + include Contexts).
+  // withEncryptionContext/withoutEncryption/protectingEncryptedData/resetDefaultContext
+  // are already re-exported from context.ts above.
+  configure,
+  onEncryptedAttributeDeclared,
+  encryptedAttributeWasDeclared,
+  context,
+  currentCustomContext,
 } from "../encryption.js";
 export type { Encryptor as LegacyEncryptor, EncryptsOptions } from "../encryption.js";

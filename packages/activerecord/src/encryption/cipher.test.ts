@@ -67,8 +67,8 @@ describe("ActiveRecord::Encryption::CipherTest", () => {
   it("keep encoding from the source string", () => {
     const cipher = new Cipher();
     const key = generateKey();
-    const encrypted = cipher.encrypt("some string", key);
-    expect(cipher.decrypt(encrypted, key)).toBe("some string");
+    const encrypted = cipher.encrypt("café résumé naïve", key);
+    expect(cipher.decrypt(encrypted, key)).toBe("café résumé naïve");
   });
 
   it("can encode unicode strings with emojis", () => {

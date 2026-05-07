@@ -3078,8 +3078,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return rows.length > 0;
   }
 
-  // PG addIndex returns the index name as a string; base returns void. Harmonize in a follow-up.
-  // @ts-expect-error TS2416 — return type is Promise<string> not Promise<void>
   async addIndex(
     tableName: string,
     columns: string | string[],
@@ -3095,7 +3093,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       nullsNotDistinct?: boolean;
       include?: string[];
     } = {},
-  ): Promise<string> {
+  ): Promise<void> {
     const cols = Array.isArray(columns) ? columns : [columns];
     const quotedTable = this.quoteTableName(tableName);
 
@@ -3145,7 +3143,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
 
     await this.exec(sql);
-    return sql;
   }
 
   async removeIndex(
@@ -3520,8 +3517,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.createDatabase(name, options);
   }
 
-  // PG rest-arg overload diverges from the abstract base (name, options?) form; harmonize in a follow-up.
-  // @ts-expect-error TS2416
   async dropTable(
     ...args:
       | [...tableNames: string[], options: { ifExists?: boolean; force?: "cascade" }]

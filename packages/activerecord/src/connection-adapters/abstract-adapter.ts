@@ -135,8 +135,9 @@ export class Version {
 export interface AbstractAdapter {
   // --- SchemaStatements (DDL) ---
   // The abstract base signatures are declared here. Concrete adapter subclasses
-  // that override with dialect-specific variants (PG's createTable/dropTable)
-  // carry // @ts-expect-error on those overrides; the runtime behaviour is correct.
+  // that override with dialect-specific variants (PG's createTable callback-first)
+  // carry // @ts-expect-error on those overrides. Callers typed as AbstractAdapter
+  // should use the base call forms; PG-specific forms require a concrete type.
   createTable(
     name: string,
     optionsOrFn?:
@@ -144,7 +145,9 @@ export interface AbstractAdapter {
       | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void>;
-  dropTable(name: string, options?: { ifExists?: boolean }): Promise<void>;
+  dropTable(
+    ...args: string[] | [...string[], { ifExists?: boolean; force?: string }]
+  ): Promise<void>;
   renameTable(oldName: string, newName: string): Promise<void>;
   addColumn(
     tableName: string,
@@ -177,6 +180,7 @@ export interface AbstractAdapter {
   removeColumn(
     tableName: string,
     columnName: string,
+    type?: string,
     options?: { ifExists?: boolean },
   ): Promise<void>;
   removeColumns(tableName: string, ...columns: string[]): Promise<void>;

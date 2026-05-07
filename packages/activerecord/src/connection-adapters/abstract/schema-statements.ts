@@ -136,9 +136,22 @@ export class SchemaStatements {
     }
   }
 
-  async dropTable(name: string, options: { ifExists?: boolean } = {}): Promise<void> {
+  async dropTable(
+    ...args: string[] | [...string[], { ifExists?: boolean; force?: string }]
+  ): Promise<void> {
+    let tableNames: string[];
+    let options: { ifExists?: boolean; force?: string } = {};
+    const last = args[args.length - 1];
+    if (last !== null && last !== undefined && typeof last === "object") {
+      tableNames = args.slice(0, -1) as string[];
+      options = last as { ifExists?: boolean; force?: string };
+    } else {
+      tableNames = args as string[];
+    }
     const ifExists = options.ifExists ? " IF EXISTS" : "";
-    await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qi(name)}`);
+    for (const name of tableNames) {
+      await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qi(name)}`);
+    }
   }
 
   async addColumn(
@@ -160,6 +173,7 @@ export class SchemaStatements {
   async removeColumn(
     tableName: string,
     columnName: string,
+    _type?: string,
     options: { ifExists?: boolean } = {},
   ): Promise<void> {
     if (options.ifExists && !(await this.columnExists(tableName, columnName))) {

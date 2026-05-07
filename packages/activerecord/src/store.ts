@@ -255,7 +255,8 @@ export const storeAccessor = store;
 
 /**
  * Returns the HashAccessor class for a given store attribute column.
- * Raises ConfigurationError if the column is not a declared store.
+ * Raises ConfigurationError if the column is not a declared store and the
+ * attribute type has no accessor.
  *
  * Mirrors: ActiveRecord::Store#store_accessor_for (private)
  *
@@ -265,17 +266,7 @@ export function storeAccessorFor(
   modelClass: typeof Base,
   storeAttribute: string,
 ): typeof HashAccessor {
-  const attrs = storedAttributes(modelClass);
-  if (!attrs || !Object.prototype.hasOwnProperty.call(attrs, storeAttribute)) {
-    throw new ConfigurationError(
-      `the column '${storeAttribute}' has not been configured as a store. ` +
-        `Please make sure the column is declared via store() or use a structured column type.`,
-    );
-  }
-  // Prefer the accessor class configured on the attribute type (e.g. hstore →
-  // StringKeyedHashAccessor). Guard: only use the result if it has read/write
-  // methods (some types implement accessor() but return null).
-  // Mirrors Rails: type_for_attribute(attr).accessor.
+  // Rails dispatches via type_for_attribute(attr).accessor — check the type first.
   const type = (modelClass as any).typeForAttribute?.(storeAttribute);
   if (type && typeof (type as any).accessor === "function") {
     const accessor = (type as any).accessor();
@@ -283,7 +274,27 @@ export function storeAccessorFor(
       return accessor as typeof HashAccessor;
     }
   }
+  // Plain string/JSON columns have no type.accessor; fall back to
+  // IndifferentHashAccessor after confirming the column was declared via store().
+  if (!_hasStoredAttribute(modelClass, storeAttribute)) {
+    throw new ConfigurationError(
+      `the column '${storeAttribute}' has not been configured as a store. ` +
+        `Please make sure the column is declared via store() or use a structured column type.`,
+    );
+  }
   return IndifferentHashAccessor;
+}
+
+// Direct ancestry walk — short-circuits on first hit without building the full
+// merged map that storedAttributes() produces.
+function _hasStoredAttribute(klass: typeof Base, name: string): boolean {
+  let cls: typeof Base | null = klass;
+  while (cls && typeof cls === "function") {
+    const local = _storedAttributes.get(cls);
+    if (local && Object.prototype.hasOwnProperty.call(local, name)) return true;
+    cls = Object.getPrototypeOf(cls) as typeof Base | null;
+  }
+  return false;
 }
 
 /**

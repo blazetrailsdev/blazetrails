@@ -1555,27 +1555,48 @@ export function preprocessQuery(this: DatabaseStatementsHost, sql: string): stri
   return sql;
 }
 
-/** @internal */
+/**
+ * Preprocesses then delegates to rawExecute with the native connection.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#internal_execute
+ * @internal
+ */
 export function internalExecute(
-  sql: any,
-  name?: any,
-  binds?: any,
-  prepare?: any,
-  async?: any,
-  allowRetry?: any,
-  materializeTransactions?: any,
-  block?: any,
-): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::DatabaseStatements#internal_execute is not implemented",
+  this: DatabaseStatementsHost,
+  sql: string,
+  name: string = "SQL",
+  binds: unknown[] = [],
+  prepare = false,
+  _async = false,
+  allowRetry = false,
+  materializeTransactions = true,
+): Promise<unknown> {
+  const processed = preprocessQuery.call(this, sql);
+  return (this as any).rawExecute(
+    processed,
+    name,
+    binds,
+    prepare,
+    false,
+    allowRetry,
+    materializeTransactions,
   );
 }
 
-/** @internal */
-export function executeBatch(statements: any, name?: any, kwargs?: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::DatabaseStatements#execute_batch is not implemented",
-  );
+/**
+ * Executes each statement by calling rawExecute.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#execute_batch
+ * @internal
+ */
+export async function executeBatch(
+  this: DatabaseStatementsHost,
+  statements: string[],
+  name?: string | null,
+): Promise<void> {
+  for (const statement of statements) {
+    await (this as any).rawExecute(statement, name);
+  }
 }
 
 /**

@@ -47,14 +47,17 @@ export function localStoredAttributesMethod(this: typeof Base): Record<string, s
 
 /**
  * Returns stored attributes for this class merged with all ancestors'.
- * Rails clones the parent hash and merges local keys in, so subclass entries
- * shadow parent entries only for the keys the subclass adds.
+ * Each store column's key list is the union of parent and local keys (deduped,
+ * order: parent keys first). Mirrors Rails' merge block: `{ |k, a, b| a | b }`.
  *
  * Mirrors: ActiveRecord::Store::ClassMethods#stored_attributes
  */
 export function storedAttributes(modelClass: typeof Base): Record<string, string[]> {
   const parent = Object.getPrototypeOf(modelClass) as typeof Base | null;
-  const parentAttrs = parent && typeof parent === "function" ? storedAttributes(parent) : {};
+  const parentAttrs =
+    parent && typeof parent === "function" && parent !== Function.prototype
+      ? storedAttributes(parent)
+      : {};
   const local = _storedAttributes.get(modelClass);
   if (!local) return parentAttrs;
   const merged: Record<string, string[]> = { ...parentAttrs };
@@ -286,10 +289,11 @@ export function storeAccessorFor(
 }
 
 // Direct ancestry walk — short-circuits on first hit without building the full
-// merged map that storedAttributes() produces.
+// merged map that storedAttributes() produces. Stops at Function.prototype
+// consistent with other prototype-chain walks in this codebase.
 function _hasStoredAttribute(klass: typeof Base, name: string): boolean {
   let cls: typeof Base | null = klass;
-  while (cls && typeof cls === "function") {
+  while (cls && typeof cls === "function" && cls !== Function.prototype) {
     const local = _storedAttributes.get(cls);
     if (local && Object.prototype.hasOwnProperty.call(local, name)) return true;
     cls = Object.getPrototypeOf(cls) as typeof Base | null;

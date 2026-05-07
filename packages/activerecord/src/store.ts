@@ -65,20 +65,7 @@ export class IndifferentCoder {
   }
 
   dump(obj: unknown): unknown {
-    // Mirror Rails as_regular_hash: obj.to_hash if it responds, else {}.
-    // null/undefined → {} (nil.respond_to?(:to_hash) is false in Ruby).
-    // HWIA responds to toHash(); plain objects (Object/null prototype) spread;
-    // class instances, Arrays, and primitives return {}.
-    let plain: Record<string, unknown>;
-    if (obj == null) {
-      plain = {};
-    } else if (obj instanceof HashWithIndifferentAccess) {
-      plain = obj.toHash();
-    } else {
-      const proto = typeof obj === "object" ? Object.getPrototypeOf(obj) : null;
-      plain =
-        proto === Object.prototype || proto === null ? { ...(obj as Record<string, unknown>) } : {};
-    }
+    const plain = asRegularHash(obj);
     return this.coder ? this.coder.dump(plain) : JSON.stringify(plain);
   }
 
@@ -511,13 +498,16 @@ export function storeAccessorForMethod(this: Base, storeAttribute: string): type
  *
  * @internal
  */
-function asRegularHash(
-  obj: Record<string, unknown> | HashWithIndifferentAccess<unknown>,
-): Record<string, unknown> {
-  // HashWithIndifferentAccess stores entries internally, so object spread
-  // does not produce the stored key/value pairs — use toHash() to get a plain copy.
+function asRegularHash(obj: unknown): Record<string, unknown> {
+  // Mirror Rails as_regular_hash: obj.to_hash if it responds, else {}.
+  // null/undefined → {}; HWIA → toHash(); plain objects (Object/null proto) → spread;
+  // class instances, Arrays, primitives → {} (respond_to?(:to_hash) is false for those).
+  if (obj == null) return {};
   if (obj instanceof HashWithIndifferentAccess) return obj.toHash();
-  return { ...obj };
+  const proto = typeof obj === "object" ? Object.getPrototypeOf(obj) : null;
+  return proto === Object.prototype || proto === null
+    ? { ...(obj as Record<string, unknown>) }
+    : {};
 }
 
 /**

@@ -224,15 +224,17 @@ import * as _AttributeAssignment from "./attribute-assignment.js";
 import * as _NestedAttributes from "./nested-attributes.js";
 import {
   store as _storeFunction,
-  IndifferentCoder,
-  setStoreCoder,
+  storeAccessor as _storeAccessorFunction,
+  registerSerializeFn as _registerSerializeFn,
   localStoredAttributesMethod as _localStoredAttributesMethod,
   readStoreAttributeMethod as _readStoreAttributeMethod,
   writeStoreAttributeMethod as _writeStoreAttributeMethod,
   storeAccessorForMethod as _storeAccessorForMethod,
 } from "./store.js";
-import { buildColumnSerializer } from "./attribute-methods/serialization.js";
 import { serialize as _serializeAttribute } from "./serialize.js";
+
+// Break store→serialize→json→store circular dep by injecting serialize into store at init.
+_registerSerializeFn(_serializeAttribute as any);
 import {
   hasMultiparameterKeys,
   extractMultiparameterCallstack,
@@ -1346,11 +1348,10 @@ export class Base extends Model {
 
   /**
    * Declare a stored attribute backed by a JSON/text column.
-   * Defines accessors for individual keys within the stored hash.
-   * Implicitly calls serialize with IndifferentCoder so the column is
-   * deserialized to HashWithIndifferentAccess on read.
+   * Implicitly wires IndifferentCoder via serialize() so the column
+   * deserializes to HashWithIndifferentAccess on read.
    *
-   * Mirrors: ActiveRecord::Store.store
+   * Mirrors: ActiveRecord::Store::ClassMethods#store
    */
   static store(
     attribute: string,
@@ -1362,18 +1363,27 @@ export class Base extends Model {
       yaml?: Record<string, unknown>;
     },
   ): void {
-    const baseCoder = buildColumnSerializer(attribute, options?.coder, Object, options?.yaml);
-    const indifferentCoder = new IndifferentCoder(attribute, baseCoder as any);
-    setStoreCoder(this, attribute, indifferentCoder);
-    // Structured column types (json/jsonb/hstore) have a type-level accessor and
-    // handle their own serialization. Only wire IndifferentCoder through serialize()
-    // for plain text/string columns that have no type-level accessor.
-    const colType = this.typeForAttribute(attribute);
-    if (!colType || typeof (colType as any).accessor !== "function") {
-      _serializeAttribute(this, attribute, { coder: indifferentCoder as any });
-    }
     _storeFunction(this, attribute, {
-      accessors: options?.accessors ?? [],
+      accessors: options?.accessors,
+      prefix: options?.prefix,
+      suffix: options?.suffix,
+      coder: options?.coder,
+      yaml: options?.yaml,
+    });
+  }
+
+  /**
+   * Add accessors to an already-serialized store column without re-running
+   * the serialize step. Use store() instead when declaring a new store column.
+   *
+   * Mirrors: ActiveRecord::Store::ClassMethods#store_accessor
+   */
+  static storeAccessor(
+    attribute: string,
+    options?: { accessors?: string[]; prefix?: boolean | string; suffix?: boolean | string },
+  ): void {
+    _storeAccessorFunction(this, attribute, {
+      accessors: options?.accessors,
       prefix: options?.prefix,
       suffix: options?.suffix,
     });

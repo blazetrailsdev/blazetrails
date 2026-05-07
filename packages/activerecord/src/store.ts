@@ -1,6 +1,19 @@
 import { ConfigurationError } from "./errors.js";
 import type { Base } from "./base.js";
 import { HashWithIndifferentAccess } from "@blazetrails/activesupport";
+import { buildColumnSerializer } from "./attribute-methods/serialization.js";
+
+// Injected by base.ts to break the store→serialize→json→store circular dep.
+// store() calls this when wiring IndifferentCoder for plain text/string columns.
+let _serializeAttr: ((klass: typeof Base, attr: string, opts: { coder: unknown }) => void) | null =
+  null;
+
+/** @internal Called once by base.ts during module init. */
+export function registerSerializeFn(
+  fn: (klass: typeof Base, attr: string, opts: { coder: unknown }) => void,
+): void {
+  _serializeAttr = fn;
+}
 
 interface CoderLike {
   dump(v: unknown): unknown;
@@ -9,7 +22,9 @@ interface CoderLike {
 
 /**
  * Per-class registry mapping store-attribute name to its IndifferentCoder.
- * Populated by Base.store() to wire implicit serialize semantics.
+ * Populated by store() to wire implicit serialize semantics.
+ *
+ * @internal
  */
 const _storeCoders = new WeakMap<typeof Base, Map<string, IndifferentCoder>>();
 
@@ -50,19 +65,27 @@ export class IndifferentCoder {
   }
 
   dump(obj: unknown): unknown {
-    const plain = asRegularHash(asIndifferentHash(obj));
+    // Mirror Rails: as_regular_hash(obj) — to_hash if it responds, else {}
+    const plain =
+      obj instanceof HashWithIndifferentAccess
+        ? obj.toHash()
+        : obj !== null && typeof obj === "object" && !Array.isArray(obj)
+          ? { ...(obj as Record<string, unknown>) }
+          : {};
     return this.coder ? this.coder.dump(plain) : JSON.stringify(plain);
   }
 
   load(value: unknown): HashWithIndifferentAccess<unknown> {
-    const parsed = this.coder
-      ? this.coder.load(value)
-      : typeof value === "string"
-        ? JSON.parse(value)
-        : value;
-    return asIndifferentHash(parsed);
+    // Mirror Rails: @coder.load(yaml || "") — coerce null to "" for inner coders.
+    // For the default JSON path, null → empty HWIA directly (JSON.parse("") throws).
+    if (this.coder) {
+      return asIndifferentHash(this.coder.load(value ?? ""));
+    }
+    if (value === null || value === undefined) return asIndifferentHash(null);
+    return asIndifferentHash(typeof value === "string" ? JSON.parse(value) : value);
   }
 
+  /** @internal */
   accessor(): typeof IndifferentHashAccessor {
     return IndifferentHashAccessor;
   }
@@ -263,33 +286,27 @@ export class StringKeyedHashAccessor extends HashAccessor {
   }
 }
 
+export interface StoreOptions {
+  accessors?: string[];
+  prefix?: boolean | string;
+  suffix?: boolean | string;
+  coder?: unknown;
+  yaml?: Record<string, unknown>;
+}
+
 /**
- * Store — JSON-backed attribute accessors.
+ * Defines property accessors for the listed keys on a store column.
+ * Does not wire IndifferentCoder — used internally by store() and
+ * as the standalone store_accessor() implementation.
  *
- * Mirrors: ActiveRecord::Store
- *
- * Stores a hash in a single database column (as JSON), but exposes
- * individual keys as virtual attribute accessors.
- *
- * Usage:
- *   store(User, 'settings', { accessors: ['theme', 'language'] })
- *   store(User, 'settings', { accessors: ['theme'], prefix: true })
- *   store(User, 'settings', { accessors: ['theme'], prefix: 'config' })
- *   store(User, 'settings', { accessors: ['theme'], suffix: true })
- *   store(User, 'settings', { accessors: ['theme'], suffix: 'setting' })
- *
- * The column should use the "json" type or a serialized text column.
+ * Mirrors: ActiveRecord::Store::ClassMethods#store_accessor
  */
-export function store(
+export function storeAccessor(
   modelClass: typeof Base,
   attribute: string,
-  options: {
-    accessors: string[];
-    prefix?: boolean | string;
-    suffix?: boolean | string;
-  },
+  options: { accessors?: string[]; prefix?: boolean | string; suffix?: boolean | string },
 ): void {
-  const { accessors, prefix, suffix } = options;
+  const { accessors = [], prefix, suffix } = options;
 
   addLocalStoredAttribute(modelClass, attribute, accessors);
 
@@ -306,8 +323,6 @@ export function store(
 
     // Capture `modelClass` at definition time so subclass instances still resolve
     // the correct accessor even when `record.constructor` differs from the declaring class.
-    // Mirrors Rails: accessor closures delegate through read/write_store_attribute.
-    // Register the accessor name on the _store_accessors_module.
     // Mirrors Rails: _store_accessors_module.module_eval { define_method ... }
     storeAccessorsModule(modelClass).add(accessorName);
 
@@ -325,11 +340,42 @@ export function store(
 }
 
 /**
- * Standalone store_accessor for adding accessors to an existing store column.
+ * Store — JSON-backed attribute accessors.
  *
- * Mirrors: ActiveRecord::Store.store_accessor
+ * Mirrors: ActiveRecord::Store::ClassMethods#store
+ *
+ * Wires IndifferentCoder so the column deserializes to HashWithIndifferentAccess,
+ * then delegates accessor definition to storeAccessor().
+ *
+ * Usage:
+ *   store(User, 'settings', { accessors: ['theme', 'language'] })
+ *   store(User, 'settings', { accessors: ['theme'], prefix: true })
+ *   store(User, 'settings', { accessors: ['theme'], coder: JSON })
  */
-export const storeAccessor = store;
+export function store(modelClass: typeof Base, attribute: string, options: StoreOptions): void {
+  // Mirror Rails three-step: build_column_serializer → IndifferentCoder → serialize
+  const baseCoder = buildColumnSerializer(attribute, options.coder, Object, options.yaml);
+  const indifferentCoder = new IndifferentCoder(attribute, baseCoder as CoderLike | null);
+  setStoreCoder(modelClass, attribute, indifferentCoder);
+  // Structured column types (json/jsonb/hstore) have a type-level accessor and
+  // handle their own cast/serialize. Only patch readAttribute for plain text/string
+  // columns that have no type-level accessor.
+  const colType = (modelClass as any).typeForAttribute?.(attribute);
+  if (!colType || typeof (colType as any).accessor !== "function") {
+    _serializeAttr?.(modelClass, attribute, { coder: indifferentCoder as any });
+  }
+
+  if (options.accessors !== undefined) {
+    storeAccessor(modelClass, attribute, {
+      accessors: options.accessors,
+      prefix: options.prefix,
+      suffix: options.suffix,
+    });
+  } else {
+    // Still register the column in storedAttributes even with no accessors.
+    addLocalStoredAttribute(modelClass, attribute, []);
+  }
+}
 
 /**
  * Returns the HashAccessor class for a given store attribute column.

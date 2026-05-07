@@ -1397,7 +1397,10 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.serialize
    */
-  static serialize(attribute: string, options?: { coder?: unknown }): void {
+  static serialize(
+    attribute: string,
+    options?: { coder?: unknown; type?: "Array" | "Hash" },
+  ): void {
     _serializeAttribute(this, attribute, options as any);
   }
 

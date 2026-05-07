@@ -815,7 +815,6 @@ describe("StoreTest", () => {
 
   afterAll(async () => {
     await dropAllTables(adapter);
-    vi.unstubAllEnvs();
   });
 
   // Rails: test "reading store attributes through accessors"
@@ -1031,7 +1030,6 @@ describe("IndifferentCoder wiring via store() and Base.store()", () => {
 
   afterAll(async () => {
     await dropAllTables(adapter);
-    vi.unstubAllEnvs();
   });
 
   it("Base.store registers an IndifferentCoder for the column", () => {

@@ -4993,8 +4993,8 @@ export class Relation<T extends Base> {
   }
 
   /** @internal */
-  private findNthWithLimit(index: number): Promise<any | null> {
-    return _fm.findNthWithLimit.call(this as any, index);
+  private findNthWithLimit(index: number, limit: number): Promise<any[]> {
+    return _fm.findNthWithLimit.call(this as any, index, limit);
   }
 
   /** @internal */

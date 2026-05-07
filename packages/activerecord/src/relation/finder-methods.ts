@@ -405,46 +405,58 @@ export async function performTakeBang(this: FinderRelation): Promise<any> {
 }
 
 /** @internal */
-export async function findNthWithLimit(this: FinderRelation, index: number): Promise<any | null> {
-  let rel = this._clone();
-  rel._limitValue = 1;
-  rel._offsetValue = (this._offsetValue ?? 0) + index;
-  if (!hasOrder(rel)) {
-    rel = orderByPk(rel, "asc");
+export async function findNthWithLimit(
+  this: FinderRelation,
+  index: number,
+  limit: number,
+): Promise<any[]> {
+  if ((this as any)._loaded) {
+    return (this as any)._records.slice(index, index + limit) ?? [];
   }
-  const records = await rel.toArray();
-  return records[0] ?? null;
+  let relation: any = orderedRelation(this);
+  if ((this as any)._limitValue != null) {
+    limit = Math.min((this as any)._limitValue - index, limit);
+  }
+  if (limit <= 0) return [];
+  if (index > 0) {
+    relation = relation.offset(((this as any)._offsetValue ?? 0) + index);
+  }
+  return relation.limit(limit).toArray();
 }
 
 /** @internal */
 export async function findNthFromLast(this: FinderRelation, index: number): Promise<any | null> {
-  let rel: any;
-  if (!hasReversibleOrder(this)) {
-    rel = orderByPk(this, "desc");
-  } else {
-    rel = this.reverseOrder();
+  if ((this as any)._loaded) return (this as any)._records[-(index + 1)] ?? null;
+  const relation: any = orderedRelation(this);
+  if (
+    (relation as any)._orderValues?.length === 0 ||
+    (relation as any)._limitValue != null ||
+    (relation as any)._offsetValue != null
+  ) {
+    const records = await relation.toArray();
+    return records[records.length - 1 - index] ?? null;
   }
-  return findNthWithLimit.call(rel, index);
+  return relation.reverseOrder().offset(index).first();
 }
 
 export async function performSecond(this: FinderRelation): Promise<any | null> {
-  return findNthWithLimit.call(this, 1);
+  return (await findNthWithLimit.call(this, 1, 1))[0] ?? null;
 }
 
 export async function performThird(this: FinderRelation): Promise<any | null> {
-  return findNthWithLimit.call(this, 2);
+  return (await findNthWithLimit.call(this, 2, 1))[0] ?? null;
 }
 
 export async function performFourth(this: FinderRelation): Promise<any | null> {
-  return findNthWithLimit.call(this, 3);
+  return (await findNthWithLimit.call(this, 3, 1))[0] ?? null;
 }
 
 export async function performFifth(this: FinderRelation): Promise<any | null> {
-  return findNthWithLimit.call(this, 4);
+  return (await findNthWithLimit.call(this, 4, 1))[0] ?? null;
 }
 
 export async function performFortyTwo(this: FinderRelation): Promise<any | null> {
-  return findNthWithLimit.call(this, 41);
+  return (await findNthWithLimit.call(this, 41, 1))[0] ?? null;
 }
 
 export async function performSecondToLast(this: FinderRelation): Promise<any | null> {
@@ -574,15 +586,25 @@ export const FinderMethods = {
 
 /** @internal */
 export function constructRelationForExists(rel: FinderRelation, conditions: unknown): any {
-  if (conditions === false || conditions === null) return rel;
-  if (typeof conditions === "object" && conditions !== null) {
-    return (rel as any).where(conditions);
+  if (conditions === false) return rel;
+  // Rails: except(:select, :distinct, :order)._select!("1 AS one").limit!(1)
+  // (or except(:order).limit!(1) when distinct+offset are both set)
+  let relation: any =
+    (rel as any)._distinctValue && (rel as any)._offsetValue != null
+      ? (rel as any).unscope("order").limit(1)
+      : (rel as any).unscope("select", "order").select("1 AS one").limit(1);
+  if (conditions === null || conditions === undefined || conditions === true) {
+    return relation;
   }
-  if (conditions !== undefined && conditions !== true) {
+  if (Array.isArray(conditions)) {
+    if ((conditions as unknown[]).length > 0) relation = relation.where(conditions);
+  } else if (typeof conditions === "object") {
+    if (Object.keys(conditions as object).length > 0) relation = relation.where(conditions);
+  } else {
     const pk = (rel as any)._modelClass.primaryKey;
-    return (rel as any).where({ [pk as string]: conditions });
+    relation = relation.where({ [pk as string]: conditions });
   }
-  return rel;
+  return relation;
 }
 
 /** @internal */
@@ -678,8 +700,8 @@ export async function findTakeWithLimit(rel: FinderRelation, limit: number): Pro
 }
 
 /** @internal */
-export function findNth(rel: FinderRelation, index: number): Promise<any | null> {
-  return findNthWithLimit.call(rel, index);
+export async function findNth(rel: FinderRelation, index: number): Promise<any | null> {
+  return (await findNthWithLimit.call(rel, index, 1))[0] ?? null;
 }
 
 /** @internal */

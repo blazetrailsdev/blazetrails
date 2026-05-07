@@ -3194,7 +3194,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const qi = (s: string) => this.quoteIdentifier(s);
     const qualifiedFrom = fromSchema ? `${qi(fromSchema)}.${qi(fromTbl)}` : qi(fromTbl);
     const qualifiedTo = toSchema ? `${qi(toSchema)}.${qi(toTbl)}` : qi(toTbl);
-    const sc = this.schemaCreation();
+    const sc = this.schemaCreation;
 
     let sql = `ALTER TABLE ${qualifiedFrom} ADD CONSTRAINT ${qi(name)} FOREIGN KEY (${qi(column)}) REFERENCES ${qualifiedTo} (${qi(pk)})`;
     if (options.onDelete) sql += ` ${sc.actionSql("DELETE", options.onDelete)}`;
@@ -3891,7 +3891,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return { ...options };
   }
 
-  schemaCreation(): PgSchemaCreation {
+  get schemaCreation(): PgSchemaCreation {
     return new PgSchemaCreation(this);
   }
 
@@ -3980,7 +3980,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       type,
       options,
     );
-    const sql = `ADD COLUMN ${this.schemaCreation().accept(col)}`;
+    const sql = `ADD COLUMN ${this.schemaCreation.accept(col)}`;
     return "comment" in options
       ? [
           sql,
@@ -4002,7 +4002,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       type,
       options as Parameters<typeof this.buildChangeColumnDefinition>[3],
     );
-    const sqls: unknown[] = [this.schemaCreation().accept(changeDef)];
+    const sqls: unknown[] = [this.schemaCreation.accept(changeDef)];
     if ("comment" in options)
       sqls.push(() =>
         this.changeColumnComment(tableName, columnName, options.comment as string | null),

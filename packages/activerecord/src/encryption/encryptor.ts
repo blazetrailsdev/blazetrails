@@ -66,11 +66,11 @@ export class Encryptor {
     // has a uniform interface (mirrors Rails' key_provider keyword arg).
     // Use !== undefined so an empty-string key is treated as explicitly provided
     // and let the cipher reject it rather than silently falling back.
-    const keyProvider: KeyProviderLike =
+    const keyProvider: KeyProviderLike | undefined =
       options?.keyProvider ??
       (options?.key !== undefined
         ? { encryptionKey: () => ({ secret: options.key! }), decryptionKeys: () => [] }
-        : (this.defaultKeyProvider() as KeyProviderLike));
+        : this.defaultKeyProvider());
     if (!keyProvider) throw new ConfigError("No encryption key provided");
     return this.serializeMessage(
       this.buildEncryptedMessage(text, keyProvider, { deterministic: options?.deterministic }),
@@ -101,7 +101,7 @@ export class Encryptor {
     } else if (options?.key !== undefined) {
       keys = [options.key];
     } else {
-      const kp = this.defaultKeyProvider() as KeyProviderLike | undefined;
+      const kp = this.defaultKeyProvider();
       if (!kp) throw new DecryptionError("No decryption key provided");
       keys = kp.decryptionKeys(message).map((k) => k.secret);
     }

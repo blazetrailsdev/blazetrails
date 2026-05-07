@@ -213,7 +213,9 @@ export function quoteDefaultExpression(
     serialized = castType?.serialize ? castType.serialize(value) : value;
     // Array types are keyed by OID, not by SQL type name — type map lookup
     // misses. Encode via a passthrough OidArray so quote() gets an ArrayData.
-    if (globalThis.Array.isArray(serialized)) {
+    // Guard on column.array === true so non-array columns with a falsy array
+    // flag don't silently emit an array literal for unexpected Array values.
+    if (column.array === true && globalThis.Array.isArray(serialized)) {
       serialized = new ArrayData(new OidArray(new ValueType()), serialized as unknown[]);
     }
   }

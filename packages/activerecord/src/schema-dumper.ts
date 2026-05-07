@@ -317,7 +317,7 @@ class AdapterSchemaSource implements SchemaSource {
       precision: col.precision ?? undefined,
       scale: col.scale ?? undefined,
       collation: col.collation ?? undefined,
-      array: (col as any).array || undefined,
+      array: (col as any).array === true ? true : undefined,
     }));
   }
 

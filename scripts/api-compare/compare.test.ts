@@ -199,7 +199,7 @@ describe("resolveTsClassForRuby", () => {
     expect(resolveTsClassForRuby("Registry", "type/registry.ts", map)).toBe(renamed);
   });
 
-  it("resolves Railtie → Trailtie via TS_CLASS_RENAMES (trailtie convention applies to all packages)", () => {
+  it("resolves Railtie → Trailtie (global trailtie convention)", () => {
     const trailtie = cls("trailtie.ts", "Trailtie");
     const map = new Map([["trailtie.ts::Trailtie", trailtie]]);
     expect(resolveTsClassForRuby("Railtie", "trailtie.ts", map)).toBe(trailtie);

@@ -86,6 +86,12 @@ export function formatForInspect(this: any, name: string, value: unknown): strin
       ? `"${String(filtered)}"`
       : `"${filtered.toISOString()}"`;
   }
+  if (globalThis.Array.isArray(filtered)) {
+    const items = (filtered as unknown[]).map((v) =>
+      v === null || v === undefined ? "nil" : (JSON.stringify(v) ?? String(v)),
+    );
+    return `[${items.join(", ")}]`;
+  }
   try {
     const stringified = JSON.stringify(filtered);
     return stringified === undefined ? String(filtered) : stringified;

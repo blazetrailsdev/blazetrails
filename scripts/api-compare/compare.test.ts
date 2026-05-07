@@ -12,7 +12,7 @@ import {
   MISPLACED_MIN_HITS,
   buildEntitiesByName,
 } from "./compare.js";
-import type { ClassInfo, MethodInfo, PackageInfo } from "./types.js";
+import type { ApiManifest, ClassInfo, MethodInfo, PackageInfo } from "./types.js";
 
 function cls(file: string, name: string, superclass?: string): ClassInfo {
   return {
@@ -24,6 +24,23 @@ function cls(file: string, name: string, superclass?: string): ClassInfo {
     instanceMethods: [],
     classMethods: [],
   };
+}
+
+function method(name: string): MethodInfo {
+  return { name, visibility: "public", params: [] };
+}
+
+function makeManifest(
+  packages: Record<
+    string,
+    { classes?: Record<string, ClassInfo>; modules?: Record<string, ClassInfo> }
+  >,
+): ApiManifest {
+  const result: ApiManifest = { source: "typescript", generatedAt: "", packages: {} };
+  for (const [pkg, p] of Object.entries(packages)) {
+    result.packages[pkg] = { classes: p.classes ?? {}, modules: p.modules ?? {} };
+  }
+  return result;
 }
 
 describe("nameMatches", () => {
@@ -616,25 +633,6 @@ describe("selectMisplacedFile", () => {
   });
 });
 
-import type { ApiManifest } from "./types.js";
-
-function method(name: string): import("./types.js").MethodInfo {
-  return { name, visibility: "public", params: [] };
-}
-
-function makeManifest(
-  packages: Record<
-    string,
-    { classes?: Record<string, ClassInfo>; modules?: Record<string, ClassInfo> }
-  >,
-): ApiManifest {
-  const result: ApiManifest = { source: "typescript", generatedAt: "", packages: {} };
-  for (const [pkg, p] of Object.entries(packages)) {
-    result.packages[pkg] = { classes: p.classes ?? {}, modules: p.modules ?? {} };
-  }
-  return result;
-}
-
 describe("buildEntitiesByName", () => {
   it("includes entities from the current package", () => {
     const base = cls("packages/activerecord/src/base.ts", "Base");
@@ -673,6 +671,25 @@ describe("buildEntitiesByName", () => {
     const map = buildEntitiesByName("activesupport", ts);
     // activesupport's package.json has no @blazetrails/* deps, so Model must not appear.
     expect(map.has("Model")).toBe(false);
+  });
+
+  it("excludes __fixtures__ and tsc-wrapper stubs so they don't shadow real dep-package entities", () => {
+    // activerecord tsc-wrapper fixtures contain a stub Model with 1 method;
+    // the real Model in activemodel has many methods. Fixtures must be skipped.
+    const stubModel = cls("tsc-wrapper/__fixtures__/base.ts", "Model");
+    stubModel.instanceMethods = [method("stub")];
+    const realModel = cls("model.ts", "Model");
+    realModel.instanceMethods = [method("attributes"), method("readAttribute")];
+
+    const ts = makeManifest({
+      activerecord: { classes: { StubModel: stubModel } },
+      activemodel: { classes: { Model: realModel } },
+    });
+
+    const map = buildEntitiesByName("activerecord", ts);
+    const candidates = map.get("Model") ?? [];
+    expect(candidates).toContain(realModel);
+    expect(candidates).not.toContain(stubModel);
   });
 
   it("current-package entities appear before dep-package entities (same name)", () => {

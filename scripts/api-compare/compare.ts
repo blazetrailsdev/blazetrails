@@ -32,7 +32,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { ApiManifest, ClassInfo, MethodInfo, PackageInfo } from "./types.js";
-import { OUTPUT_DIR, ROOT_DIR, packageSrcDir } from "./config.js";
+import { OUTPUT_DIR, PACKAGE_DIR_OVERRIDES, ROOT_DIR, packageSrcDir } from "./config.js";
 import { rubyFileToTs, rubyMethodToTs } from "./conventions.js";
 import { isExcluded } from "./excluded-files.js";
 
@@ -508,7 +508,8 @@ export function buildEntitiesByName(pkg: string, ts: ApiManifest): Map<string, C
   addPkg(pkg);
 
   // Read @blazetrails/* deps from package.json to discover sibling packages.
-  const pkgJsonPath = path.join(ROOT_DIR, "packages", pkg, "package.json");
+  const dirName = PACKAGE_DIR_OVERRIDES[pkg] ?? pkg;
+  const pkgJsonPath = path.join(ROOT_DIR, "packages", dirName, "package.json");
   if (fs.existsSync(pkgJsonPath)) {
     try {
       const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8")) as Record<

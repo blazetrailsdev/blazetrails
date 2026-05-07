@@ -184,10 +184,6 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect((r as any).tags).toEqual(arr);
     });
 
-    it.skip("contains nils", async () => {
-      /* BLOCKED: null-element array round-trip; serialize→bind path for [tag,null] needs end-to-end check (~10 LOC) */
-    });
-
     it("multi dimensional with integers", async () => {
       await adapter.execute(`INSERT INTO pg_arrays (ratings) VALUES ('{{1,7},{8,10}}')`);
       const rows = await adapter.execute(`SELECT ratings FROM pg_arrays`);

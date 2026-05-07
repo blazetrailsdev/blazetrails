@@ -99,7 +99,7 @@ export function batchCondition(
   for (let i = positions.length - 2; i >= 0; i--) {
     const [col, val, op] = positions[i];
     const attr = table.get(col) as any;
-    const strictOp = op === "lteq" ? "lt" : "gt";
+    const strictOp = op === "lteq" ? "lt" : op === "gteq" ? "gt" : op;
     clause = attr[strictOp](val).or(attr.eq(val).and(clause));
   }
 

@@ -9,7 +9,6 @@ import type { DatabaseAdapter, ExplainOption } from "../adapter.js";
 import { type Nodes, Visitors, Collectors } from "@blazetrails/arel";
 import {
   ReadOnlyError,
-  NotImplementedError,
   ActiveRecordError,
   StatementInvalid,
   ConnectionNotEstablished,
@@ -83,6 +82,21 @@ import type {
   ColumnOptions,
 } from "./abstract/schema-definitions.js";
 import type { Column } from "./column.js";
+import { TypeMap } from "../type/type-map.js";
+import {
+  StringType,
+  IntegerType,
+  FloatType,
+  BooleanType,
+  BinaryType,
+  DecimalType,
+} from "@blazetrails/activemodel";
+import { Text as TextType } from "../type/text.js";
+import { Date as DateType } from "../type/date.js";
+import { Time as TimeType } from "../type/time.js";
+import { DateTime as DateTimeType } from "../type/date-time.js";
+import { Json as JsonType } from "../type/json.js";
+import { DecimalWithoutScale } from "../type/decimal-without-scale.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter::Version
@@ -1216,7 +1230,18 @@ export class AbstractAdapter implements Quoting {
 
   // --- Type registration ---
 
-  static registerClassWithPrecision(_typeMap: unknown, _name: string, _klass: unknown): void {}
+  static registerClassWithPrecision(
+    typeMap: TypeMap,
+    key: string | RegExp,
+    klass: new (options?: { precision?: number }) => object,
+    extraOptions: Record<string, unknown> = {},
+  ): void {
+    typeMap.registerType(key, undefined, (sqlType: string) => {
+      const match = /\((\d+)(,\d+)?\)/.exec(sqlType);
+      const precision = match ? Number.parseInt(match[1], 10) : undefined;
+      return new klass({ precision, ...extraOptions }) as ReturnType<typeof typeMap.lookup>;
+    });
+  }
 
   private _extendedTypeMap?: Map<string, unknown>;
   get extendedTypeMap(): Map<string, unknown> {
@@ -1557,36 +1582,85 @@ const AbstractAdapterPrivates = {
 include(AbstractAdapter, AbstractAdapterPrivates);
 
 /** @internal */
-function initializeTypeMap(m: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractAdapter#initialize_type_map is not implemented",
-  );
+function initializeTypeMap(this: AbstractAdapter, m: TypeMap): void {
+  registerClassWithLimit.call(this, m, /boolean/i, BooleanType);
+  registerClassWithLimit.call(this, m, /char/i, StringType);
+  registerClassWithLimit.call(this, m, /binary/i, BinaryType);
+  registerClassWithLimit.call(this, m, /text/i, TextType);
+  registerClassWithPrecision(m, /date/i, DateType);
+  registerClassWithPrecision(m, /time/i, TimeType);
+  registerClassWithPrecision(m, /datetime/i, DateTimeType);
+  registerClassWithLimit.call(this, m, /float/i, FloatType);
+  registerClassWithLimit.call(this, m, /int/i, IntegerType);
+
+  const aliasTo = (targetKey: string) => (sqlType: string) => {
+    const meta = /\(.*\)/.exec(sqlType)?.[0] ?? "";
+    return m.lookup(`${targetKey}${meta}`);
+  };
+  m.registerType(/blob/i, undefined, aliasTo("binary"));
+  m.registerType(/clob/i, undefined, aliasTo("text"));
+  m.registerType(/timestamp/i, undefined, aliasTo("datetime"));
+  m.registerType(/numeric/i, undefined, aliasTo("decimal"));
+  m.registerType(/number/i, undefined, aliasTo("decimal"));
+  m.registerType(/double/i, undefined, aliasTo("float"));
+
+  m.registerType(/^json/i, new JsonType());
+
+  m.registerType(/decimal/i, undefined, (sqlType: string) => {
+    const scale = extractScale.call(this, sqlType);
+    const precision = extractPrecision.call(this, sqlType);
+    if (scale === 0) return new DecimalWithoutScale({ precision });
+    return new DecimalType({ precision, scale });
+  });
 }
 
 /** @internal */
-function registerClassWithLimit(mapping: any, key: any, klass: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractAdapter#register_class_with_limit is not implemented",
-  );
+function registerClassWithLimit(
+  this: AbstractAdapter,
+  mapping: TypeMap,
+  key: string | RegExp,
+  klass: new (options?: { limit?: number }) => object,
+): void {
+  mapping.registerType(key, undefined, (sqlType: string) => {
+    const limit = extractLimit.call(this, sqlType);
+    return new klass({ limit }) as ReturnType<typeof mapping.lookup>;
+  });
 }
 
 /** @internal */
-function extractScale(sqlType: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractAdapter#extract_scale is not implemented",
-  );
+function registerClassWithPrecision(
+  mapping: TypeMap,
+  key: string | RegExp,
+  klass: new (options?: { precision?: number }) => object,
+  extraOptions: Record<string, unknown> = {},
+): void {
+  mapping.registerType(key, undefined, (sqlType: string) => {
+    const precision = extractPrecisionStandalone(sqlType);
+    return new klass({ precision, ...extraOptions }) as ReturnType<typeof mapping.lookup>;
+  });
 }
 
 /** @internal */
-function extractPrecision(sqlType: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractAdapter#extract_precision is not implemented",
-  );
+function extractScale(this: AbstractAdapter, sqlType: string): number | undefined {
+  if (/\((\d+)\)/.test(sqlType) && !/\((\d+),/.test(sqlType)) return 0;
+  const match = /\((\d+),(\d+)\)/.exec(sqlType);
+  return match ? Number.parseInt(match[2], 10) : undefined;
 }
 
 /** @internal */
-function extractLimit(sqlType: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::AbstractAdapter#extract_limit is not implemented",
-  );
+function extractPrecision(this: AbstractAdapter, sqlType: string): number | undefined {
+  return extractPrecisionStandalone(sqlType);
+}
+
+function extractPrecisionStandalone(sqlType: string): number | undefined {
+  const match = /\((\d+)(,\d+)?\)/.exec(sqlType);
+  return match ? Number.parseInt(match[1], 10) : undefined;
+}
+
+/** @internal */
+function extractLimit(this: AbstractAdapter, sqlType: string): number | undefined {
+  const match = /\((.*)\)/.exec(sqlType);
+  if (!match) return undefined;
+  const n = Number.parseInt(match[1], 10);
+  return Number.isNaN(n) ? 0 : n;
 }

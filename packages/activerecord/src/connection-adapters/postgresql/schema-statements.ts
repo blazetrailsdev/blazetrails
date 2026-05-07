@@ -330,7 +330,7 @@ export interface SchemaStatements {
     tableName: string,
     expression?: string | null,
     options?: Record<string, unknown>,
-  ): ExclusionConstraintDefinition;
+  ): Promise<ExclusionConstraintDefinition>;
   /** @internal */
   uniqueConstraintName(tableName: string, options?: Record<string, unknown>): string;
   /** @internal */
@@ -343,7 +343,7 @@ export interface SchemaStatements {
     tableName: string,
     column?: string | string[] | null,
     options?: Record<string, unknown>,
-  ): UniqueConstraintDefinition;
+  ): Promise<UniqueConstraintDefinition>;
   /** @internal */
   extractSchemaQualifiedName(string: string): [string | null, string];
 }

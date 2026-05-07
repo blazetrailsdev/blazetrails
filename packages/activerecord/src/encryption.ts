@@ -500,7 +500,7 @@ export function encryptedAttributeWasDeclared(klass: any, name: string): void {
 
 /** Mirrors: ActiveRecord::Encryption.with_encryption_context */
 export function withEncryptionContext<T>(properties: Partial<EncryptionContext>, fn: () => T): T {
-  return Contexts.withEncryptionContext(properties as EncryptionContext, fn);
+  return Contexts.withEncryptionContext(properties, fn);
 }
 
 /** Mirrors: ActiveRecord::Encryption.without_encryption */

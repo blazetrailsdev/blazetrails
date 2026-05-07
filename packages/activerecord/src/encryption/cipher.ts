@@ -9,9 +9,6 @@ import { Cipher as AesGcmCipher } from "./cipher/aes256-gcm.js";
 import { ConfigError, DecryptionError } from "./errors.js";
 
 export class Cipher {
-  static readonly keyLength = AesGcmCipher.keyLength;
-  static readonly ivLength = AesGcmCipher.ivLength;
-
   encrypt(clearText: string, key: string, options?: { deterministic?: boolean }): string {
     const aes = this.cipherFor(key, options?.deterministic ?? false);
     const { payload, iv, authTag } = aes.encrypt(clearText, key, options);

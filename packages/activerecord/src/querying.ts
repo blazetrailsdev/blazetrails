@@ -766,7 +766,8 @@ export function having<T extends typeof Base>(
   condition: string | Record<string, unknown> | import("@blazetrails/arel").Nodes.Node,
   ...binds: unknown[]
 ): Relation<InstanceType<T>> {
-  return this.all().having(condition as string, ...binds);
+  if (typeof condition === "string") return this.all().having(condition, ...binds);
+  return this.all().having(condition as Record<string, unknown>);
 }
 
 /** Mirrors: ActiveRecord::Querying#lock */
@@ -872,7 +873,7 @@ export function without<T extends typeof Base>(
   return this.all().without(...records);
 }
 
-/** Mirrors: ActiveRecord::SpawnMethods#except */
+/** Mirrors: ActiveRecord::Relation#except (SQL EXCEPT set-operation) */
 export function except<T extends typeof Base>(
   this: T,
   other?: Relation<InstanceType<T>>,
@@ -900,3 +901,7 @@ export function merge<T extends typeof Base, U extends Base>(
 export function asyncIds<T extends typeof Base>(this: T): Promise<unknown[]> {
   return this.all().asyncIds();
 }
+
+// `with` is a reserved JS keyword and cannot be used as a function declaration name.
+// Re-export under the Rails name so extend(Base, Querying) wires Base.with correctly.
+export { withCte as "with" };

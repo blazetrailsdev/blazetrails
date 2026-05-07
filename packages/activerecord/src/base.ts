@@ -1849,6 +1849,7 @@ export class Base extends Model {
   declare static lock: typeof Querying.lock;
   declare static readonly: typeof Querying.readonly;
   declare static withCte: typeof Querying.withCte;
+  declare static with: typeof Querying.withCte;
   declare static withRecursive: typeof Querying.withRecursive;
   declare static annotate: typeof Querying.annotate;
   declare static excluding: typeof Querying.excluding;

@@ -99,6 +99,22 @@ describe("QueryingTest — static forwarders on Base", () => {
     expect(Post.createWith({ status: "draft" })).toBeInstanceOf(Relation);
   });
 
+  it("excluding() returns a Relation", () => {
+    expect(Post.excluding()).toBeInstanceOf(Relation);
+  });
+
+  it("withCte() returns a Relation", () => {
+    expect(Post.withCte({ recent: "SELECT 1" })).toBeInstanceOf(Relation);
+  });
+
+  it("withRecursive() returns a Relation", () => {
+    expect(Post.withRecursive({ tree: "SELECT 1" })).toBeInstanceOf(Relation);
+  });
+
+  it("asyncIds() returns a Promise", () => {
+    expect(Post.asyncIds()).toBeInstanceOf(Promise);
+  });
+
   it("includes().where() chains and produces valid SQL", () => {
     const rel = Post.includes("author").where({ status: "published" });
     expect(rel).toBeInstanceOf(Relation);

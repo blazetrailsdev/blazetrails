@@ -8,7 +8,7 @@ import { Cipher } from "./cipher/aes256-gcm.js";
 import { Message } from "./message.js";
 import { MessageSerializer } from "./message-serializer.js";
 import { Configurable } from "./configurable.js";
-import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
+import { getOrCreateDefaultKeyProvider } from "./scheme.js";
 import { ConfigError, DecryptionError, ForbiddenClass } from "./errors.js";
 import type { Compressor } from "./config.js";
 import { defaultCompressor } from "./config.js";
@@ -46,15 +46,10 @@ export class Encryptor {
   private _compressor: Compressor;
   private _cipher = new Cipher();
   private _serializer = new MessageSerializer();
-  private _defaultKeyProviderCache?: KeyProviderLike;
 
   constructor(options?: { compress?: boolean; compressor?: Compressor }) {
     this._compress = options?.compress ?? true;
     this._compressor = options?.compressor ?? defaultCompressor;
-    // Invalidate cached key provider when config changes (e.g. key rotation).
-    Configurable.onConfigure(() => {
-      this._defaultKeyProviderCache = undefined;
-    });
   }
 
   encrypt(
@@ -66,9 +61,11 @@ export class Encryptor {
     // Resolve key provider: explicit keyProvider > raw key shortcut > default.
     // Raw key is wrapped in a minimal inline provider so buildEncryptedMessage
     // has a uniform interface (mirrors Rails' key_provider keyword arg).
+    // Use !== undefined so an empty-string key is treated as explicitly provided
+    // and let the cipher reject it rather than silently falling back.
     const keyProvider: KeyProviderLike =
       options?.keyProvider ??
-      (options?.key
+      (options?.key !== undefined
         ? { encryptionKey: () => ({ secret: options.key! }), decryptionKeys: () => [] }
         : (this.defaultKeyProvider() as KeyProviderLike));
     if (!keyProvider) throw new ConfigError("No encryption key provided");
@@ -93,7 +90,7 @@ export class Encryptor {
     if (!iv || !authTag) throw new DecryptionError("Missing IV or auth tag");
 
     let keys: string[];
-    if (options?.key) {
+    if (options?.key !== undefined) {
       keys = [options.key];
     } else if (options?.keyProvider) {
       keys = options.keyProvider.decryptionKeys(message).map((k) => k.secret);
@@ -132,12 +129,16 @@ export class Encryptor {
   private defaultKeyProvider(): KeyProviderLike | undefined {
     const ctxKp = Configurable.keyProvider as KeyProviderLike | undefined;
     if (ctxKp) return ctxKp;
-    const primaryKey = Configurable.config.primaryKey;
+    const { primaryKey, keyDerivationSalt, hashDigestClass } = Configurable.config;
     if (!primaryKey) return undefined;
-    this._defaultKeyProviderCache ??= new DerivedSecretKeyProvider(
+    // Reuse scheme.ts's module-level cache (keyed by primaryKey+salt+digest) so
+    // PBKDF2 runs once per config tuple and invalidation piggybacks on the
+    // single onConfigure hook already registered there.
+    return getOrCreateDefaultKeyProvider(
       primaryKey,
+      keyDerivationSalt,
+      hashDigestClass,
     ) as unknown as KeyProviderLike;
-    return this._defaultKeyProviderCache;
   }
 
   /** @internal */

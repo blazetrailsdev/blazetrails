@@ -35,7 +35,7 @@ function stableKeySignature(
   return JSON.stringify([primaryKey, keyDerivationSalt ?? null, digest]);
 }
 
-function getOrCreateDefaultKeyProvider(
+export function getOrCreateDefaultKeyProvider(
   primaryKey: string | string[],
   keyDerivationSalt: string | undefined,
   hashDigestClass: string,

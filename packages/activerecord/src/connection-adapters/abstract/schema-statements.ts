@@ -150,6 +150,9 @@ export class SchemaStatements {
     } else {
       tableNames = args as string[];
     }
+    if (tableNames.length === 0) {
+      throw new ArgumentError("dropTable requires at least one table name");
+    }
     const ifExists = options.ifExists ? " IF EXISTS" : "";
     for (const name of tableNames) {
       await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qt(name)}`);
@@ -398,9 +401,9 @@ export class SchemaStatements {
     options: AddForeignKeyOptions = {},
   ): Promise<void> {
     // SQLite can't ALTER TABLE ADD CONSTRAINT — delegate to its rebuild-
-    // based implementation. Gate on checkConstraints (which only rebuild-
-    // adapters implement) to avoid routing to adapters like PostgreSQL whose
-    // addForeignKey is a partial override that drops onDelete/onUpdate.
+    // based implementation. Gate on both addForeignKey and checkConstraints
+    // being adapter-specific overrides (not the SchemaStatements base) to
+    // ensure delegation only reaches adapters that fully implement FK support.
     const adapter = this.adapter as any;
     if (
       typeof adapter.addForeignKey === "function" &&

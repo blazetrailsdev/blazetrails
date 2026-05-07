@@ -79,6 +79,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 
   private _driverPool: mysql.Pool | null;
+  private _endingPool: Promise<void> | null = null;
   private _conn: mysql.PoolConnection | null = null;
   private _inTransaction = false;
   // Per-mysql.PoolConnection StatementPool. Mirrors the PG adapter's
@@ -959,7 +960,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     const pool = this._driverPool;
     this._driverPool = null;
     if (pool) {
-      pool.end().catch(() => {
+      this._endingPool = pool.end().catch(() => {
         // swallow — pool already torn down or connection already gone
       });
     }
@@ -986,6 +987,12 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     if (this._driverPool) {
       await this._driverPool.end();
       this._driverPool = null;
+    }
+    // If disconnectBang() was called before close(), await the in-flight
+    // pool.end() so callers (e.g. afterEach) can be sure sockets are drained.
+    if (this._endingPool) {
+      await this._endingPool;
+      this._endingPool = null;
     }
   }
 

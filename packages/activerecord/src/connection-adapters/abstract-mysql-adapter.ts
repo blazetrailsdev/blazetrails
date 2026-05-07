@@ -1080,6 +1080,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
    * strips MariaDB prefix via version_string, returns Version.
    */
   override async getDatabaseVersion(): Promise<Version> {
+    if (this._databaseVersion) return this._databaseVersion;
     const fullVersion = await this.getFullVersion();
     const version = new Version(this.versionString(fullVersion));
     this._databaseVersion = version;

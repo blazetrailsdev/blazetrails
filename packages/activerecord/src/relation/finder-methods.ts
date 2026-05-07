@@ -426,10 +426,13 @@ export async function findNthWithLimit(
 
 /** @internal */
 export async function findNthFromLast(this: FinderRelation, index: number): Promise<any | null> {
-  if ((this as any)._loaded) return (this as any)._records[-(index + 1)] ?? null;
+  if ((this as any)._loaded) {
+    const records: any[] = (this as any)._records;
+    return records[records.length - 1 - index] ?? null;
+  }
   const relation: any = orderedRelation(this);
   if (
-    (relation as any)._orderValues?.length === 0 ||
+    (relation as any)._orderClauses.length === 0 ||
     (relation as any)._limitValue != null ||
     (relation as any)._offsetValue != null
   ) {
@@ -590,7 +593,7 @@ export function constructRelationForExists(rel: FinderRelation, conditions: unkn
   // Rails: except(:select, :distinct, :order)._select!("1 AS one").limit!(1)
   // (or except(:order).limit!(1) when distinct+offset are both set)
   let relation: any =
-    (rel as any)._distinctValue && (rel as any)._offsetValue != null
+    (rel as any)._isDistinct && (rel as any)._offsetValue != null
       ? (rel as any).unscope("order").limit(1)
       : (rel as any).unscope("select", "order").select("1 AS one").limit(1);
   if (conditions === null || conditions === undefined || conditions === true) {

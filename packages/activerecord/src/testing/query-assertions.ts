@@ -60,7 +60,7 @@ export class SQLCounter {
  */
 export async function assertQueriesCount(
   count: number | undefined,
-  includeSchema: boolean,
+  includeSchema = false,
   fn: () => void | Promise<void>,
 ): Promise<void> {
   const counter = new SQLCounter();
@@ -92,7 +92,7 @@ export async function assertQueriesCount(
  * Mirrors: ActiveRecord::Assertions::QueryAssertions#assert_no_queries
  */
 export async function assertNoQueries(
-  includeSchema: boolean,
+  includeSchema = false,
   fn: () => void | Promise<void>,
 ): Promise<void> {
   await assertQueriesCount(0, includeSchema, fn);
@@ -107,7 +107,7 @@ export async function assertNoQueries(
 export async function assertQueriesMatch(
   match: RegExp,
   count: number | undefined,
-  includeSchema: boolean,
+  includeSchema = false,
   fn: () => void | Promise<void>,
 ): Promise<void> {
   const counter = new SQLCounter();
@@ -120,11 +120,12 @@ export async function assertQueriesMatch(
     Notifications.unsubscribe(sub);
   }
   const queries = includeSchema ? counter.logAll : counter.log;
-  // Reset lastIndex before each test to mirror Ruby Regexp#=== (always stateless).
+  // Reset lastIndex before each test (and after) to mirror Ruby Regexp#=== (always stateless).
   const matched = queries.filter((q) => {
     match.lastIndex = 0;
     return match.test(q);
   });
+  match.lastIndex = 0;
 
   if (count !== undefined) {
     if (matched.length !== count) {
@@ -148,7 +149,7 @@ export async function assertQueriesMatch(
  */
 export async function assertNoQueriesMatch(
   match: RegExp,
-  includeSchema: boolean,
+  includeSchema = false,
   fn: () => void | Promise<void>,
 ): Promise<void> {
   await assertQueriesMatch(match, 0, includeSchema, fn);

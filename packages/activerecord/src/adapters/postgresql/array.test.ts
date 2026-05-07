@@ -28,24 +28,20 @@ describeIfPg("PostgreSQLAdapter", () => {
 
   describe("PostgresqlArrayTest", () => {
     it("column", async () => {
-      const { Base } = await import("../../index.js");
-      class PgArrays extends Base {
-        static tableName = "pg_arrays";
-        static {
-          this.adapter = adapter;
-        }
-      }
-      await PgArrays.loadSchema();
-      const cols = (PgArrays as any).columnsHash() as Record<string, any>;
-      const column = cols["tags"];
-      expect(column.type).toBe("string");
+      const columns = await adapter.columns("pg_arrays");
+      const column = columns.find((c) => c.name === "tags")!;
+      // Rails: assert_equal :string, @column.type (semantic type from OID cast)
+      expect((column as any).sqlTypeMetadata?.type).toBe("string");
+      // Rails: assert_equal "character varying(255)", @column.sql_type (stripped, no [])
       expect(column.sqlType).toBe("character varying(255)");
-      expect(column.isArray()).toBe(true);
-      const type = (PgArrays as any).typeForAttribute("tags");
-      expect(type?.isBinary?.()).toBeFalsy();
-      const ratingsColumn = cols["ratings"];
-      expect(ratingsColumn.type).toBe("integer");
-      expect(ratingsColumn.isArray()).toBe(true);
+      expect((column as any).isArray()).toBe(true);
+      // Rails: assert_not_predicate @type, :binary? — OID::Array is not binary
+      expect((column as any).sqlTypeMetadata?.type).not.toBe("binary");
+
+      const ratingsColumn = columns.find((c) => c.name === "ratings")!;
+      // Rails: assert_equal :integer, ratings_column.type
+      expect((ratingsColumn as any).sqlTypeMetadata?.type).toBe("integer");
+      expect((ratingsColumn as any).isArray()).toBe(true);
     });
     it.skip("not compatible with serialize array", async () => {
       // BLOCKED: adapter-pg — serialize decorator gap
@@ -70,10 +66,11 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
     it("schema dump with shorthand", async () => {
       const output = await SchemaDumper.dumpTableSchema(adapter, "pg_arrays");
-      expect(output).toMatch(/t\.string\s+"tags",\s+limit: 255,\s+array: true/);
-      expect(output).toMatch(/t\.integer\s+"ratings",\s+array: true/);
+      // TS migration format: t.type("name", { opts })
+      expect(output).toMatch(/t\.string\("tags",\s+\{\s+limit: 255,\s+array: true\s*\}/);
+      expect(output).toMatch(/t\.integer\("ratings",\s+\{\s+array: true\s*\}/);
       expect(output).toMatch(
-        /t\.decimal\s+"decimals",\s+precision: 10,\s+scale: 2,\s+default: \[\],\s+array: true/,
+        /t\.decimal\("decimals",\s+\{\s+default: \[\],\s+precision: 10,\s+scale: 2,\s+array: true\s*\}/,
       );
     });
     it("change column with array", async () => {

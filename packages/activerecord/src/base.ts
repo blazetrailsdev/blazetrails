@@ -1986,27 +1986,9 @@ export class Base extends Model {
   declare static merge: typeof Querying.merge;
   declare static asyncIds: typeof Querying.asyncIds;
   /** @internal */
-  static _queryBySql(
-    sql: string | [string, ...unknown[]],
-    binds?: unknown[],
-  ): Promise<Record<string, unknown>[]> {
-    return Querying._queryBySql.call(this, sql, binds);
-  }
+  declare static _queryBySql: typeof Querying._queryBySql;
   /** @internal */
-  static _loadFromSql<T extends typeof Base>(
-    this: T,
-    rows: Record<string, unknown>[],
-    block?: (record: InstanceType<T>) => void,
-  ): InstanceType<T>[] {
-    // Cast the imported function to the concrete generic instantiation so call()
-    // propagates the type without needing `block as never` or return-value casts.
-    const fn = Querying._loadFromSql as (
-      this: T,
-      rows: Record<string, unknown>[],
-      block?: (record: InstanceType<T>) => void,
-    ) => InstanceType<T>[];
-    return fn.call(this, rows, block);
-  }
+  declare static _loadFromSql: typeof Querying._loadFromSql;
 
   /**
    * Increment counter columns for a record by primary key.

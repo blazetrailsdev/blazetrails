@@ -82,7 +82,9 @@ export class Encryptor {
     options?: { keyProvider?: KeyProviderLike; key?: string },
   ): string {
     if (typeof encryptedText !== "string") {
-      throw new DecryptionError(`Can only decrypt strings, got ${typeof encryptedText}`);
+      throw new DecryptionError(
+        `The encryptor can only decrypt string values (${typeof encryptedText})`,
+      );
     }
 
     const message = this.deserializeMessage(encryptedText);

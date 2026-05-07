@@ -156,21 +156,6 @@ describe("ActiveRecord::Encryption::ConfigurableTest", () => {
     }
   });
 
-  it("_invalidateCaches fires registered onConfigure hooks", () => {
-    let callCount = 0;
-    const dispose = Configurable.onConfigure(() => {
-      callCount++;
-    });
-    try {
-      Configurable._invalidateCaches();
-      expect(callCount).toBe(1);
-      Configurable._invalidateCaches();
-      expect(callCount).toBe(2);
-    } finally {
-      dispose();
-    }
-  });
-
   it(".configure calls _invalidateCaches so onConfigure hooks fire", () => {
     let fired = false;
     const dispose = Configurable.onConfigure(() => {

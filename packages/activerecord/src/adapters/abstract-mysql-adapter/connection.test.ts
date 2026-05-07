@@ -14,6 +14,7 @@ describeIfMysql("Mysql2Adapter", () => {
   });
   afterEach(async () => {
     vi.restoreAllMocks();
+    Notifications.unsubscribeAll();
     await adapter.close();
   });
 

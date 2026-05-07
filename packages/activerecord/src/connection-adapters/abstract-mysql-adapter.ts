@@ -1078,6 +1078,10 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   override async getDatabaseVersion(): Promise<Version> {
     if (this._databaseVersion) return this._databaseVersion;
     const fullVersion = await this.getFullVersion();
+    // getFullVersion() may have set _databaseVersion as a side effect
+    // (e.g. Mysql2Adapter#getFullVersion populates it while fetching); re-check
+    // to avoid double-parsing the version string in those subclasses.
+    if (this._databaseVersion) return this._databaseVersion;
     const version = new Version(this.versionString(fullVersion));
     this._databaseVersion = version;
     return version;

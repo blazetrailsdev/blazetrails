@@ -107,6 +107,10 @@ describe("QueryingTest — static forwarders on Base", () => {
     expect(Post.withCte({ recent: "SELECT 1" })).toBeInstanceOf(Relation);
   });
 
+  it("Post.with (Rails alias for withCte) is wired and returns a Relation", () => {
+    expect(Post["with"]({ recent: "SELECT 1" })).toBeInstanceOf(Relation);
+  });
+
   it("withRecursive() returns a Relation", () => {
     expect(Post.withRecursive({ tree: "SELECT 1" })).toBeInstanceOf(Relation);
   });

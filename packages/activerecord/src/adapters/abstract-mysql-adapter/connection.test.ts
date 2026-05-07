@@ -125,6 +125,8 @@ describeIfMysql("Mysql2Adapter", () => {
       spy.mockResolvedValueOnce("8.0.35-0ubuntu0.22.04.1");
       expect((await adapter.getDatabaseVersion()).toString()).toBe("8.0.35");
 
+      // Clear the cache so the second stub is not masked by the first result.
+      (adapter as any)._databaseVersion = null;
       spy.mockResolvedValueOnce("5.7.0");
       expect((await adapter.getDatabaseVersion()).toString()).toBe("5.7.0");
     });

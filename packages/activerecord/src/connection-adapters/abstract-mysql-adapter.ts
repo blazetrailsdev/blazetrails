@@ -266,6 +266,21 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return this._mariadb;
   }
 
+  /**
+   * Sync accessor for the cached database version. Mirrors the PostgreSQLAdapter
+   * pattern: throws a clear error when called before `getDatabaseVersion()` has
+   * been awaited. Overrides AbstractAdapter#databaseVersion which throws whenever
+   * it sees a Promise return from getDatabaseVersion().
+   */
+  override get databaseVersion(): Version {
+    if (!this._databaseVersion) {
+      throw new Error(
+        "databaseVersion is not available yet — call await getDatabaseVersion() after connecting",
+      );
+    }
+    return this._databaseVersion;
+  }
+
   supportsBulkAlter(): boolean {
     return true;
   }
@@ -629,8 +644,12 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       const row = rows[0];
       const val = row[Object.keys(row)[0]];
       return val == null ? null : String(val);
-    } catch {
-      return null;
+    } catch (e) {
+      // Mirrors Rails: rescue ActiveRecord::StatementInvalid — unknown variables
+      // throw a SQL error which we translate to StatementInvalid. Re-raise
+      // anything else (connection failures, protocol errors) so callers see outages.
+      if (e instanceof StatementInvalid) return null;
+      throw e;
     }
   }
 
@@ -1054,16 +1073,17 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   /**
    * Parse the server version from the full version string and return it.
+   * Caches the result in `_databaseVersion` so the sync `databaseVersion` getter
+   * works after this method has been awaited once.
    *
    * Mirrors: AbstractMysqlAdapter#get_database_version — calls get_full_version,
    * strips MariaDB prefix via version_string, returns Version.
-   * Note: `getFullVersion()` on Mysql2Adapter caches its result and sets
-   * `_databaseVersion` as a side effect, so the sync `databaseVersion` getter
-   * works after this method has been awaited once.
    */
   override async getDatabaseVersion(): Promise<Version> {
     const fullVersion = await this.getFullVersion();
-    return new Version(this.versionString(fullVersion));
+    const version = new Version(this.versionString(fullVersion));
+    this._databaseVersion = version;
+    return version;
   }
 
   /** @internal */

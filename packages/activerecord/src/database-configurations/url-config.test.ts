@@ -4,23 +4,23 @@ import { UrlConfig } from "./url-config.js";
 describe("DatabaseConfigurations", () => {
   describe("UrlConfigTest", () => {
     it.skip("schema dump parsing", () => {
-      // BLOCKED: unknown — database configuration feature gap in url-config
-      // ROOT-CAUSE: database-configurations.ts or connection-url-resolver.ts missing Rails parity
+      // BLOCKED: connection-pool — database configuration parsing gap in url-config
+      // ROOT-CAUSE: database-configurations.ts or connection-url-resolver.ts missing Rails parity for config resolution
       // SCOPE: ~30–50 LOC fix in database-configurations.ts; affects ~5–34 tests in url-config.test.ts
     });
     it.skip("query cache parsing", () => {
-      // BLOCKED: unknown — database configuration feature gap in url-config
-      // ROOT-CAUSE: database-configurations.ts or connection-url-resolver.ts missing Rails parity
+      // BLOCKED: connection-pool — database configuration parsing gap in url-config
+      // ROOT-CAUSE: database-configurations.ts or connection-url-resolver.ts missing Rails parity for config resolution
       // SCOPE: ~30–50 LOC fix in database-configurations.ts; affects ~5–34 tests in url-config.test.ts
     });
     it.skip("replica parsing", () => {
-      // BLOCKED: unknown — database configuration feature gap in url-config
-      // ROOT-CAUSE: database-configurations.ts or connection-url-resolver.ts missing Rails parity
+      // BLOCKED: connection-pool — database configuration parsing gap in url-config
+      // ROOT-CAUSE: database-configurations.ts or connection-url-resolver.ts missing Rails parity for config resolution
       // SCOPE: ~30–50 LOC fix in database-configurations.ts; affects ~5–34 tests in url-config.test.ts
     });
     it.skip("database tasks parsing", () => {
-      // BLOCKED: unknown — database configuration feature gap in url-config
-      // ROOT-CAUSE: database-configurations.ts or connection-url-resolver.ts missing Rails parity
+      // BLOCKED: connection-pool — database configuration parsing gap in url-config
+      // ROOT-CAUSE: database-configurations.ts or connection-url-resolver.ts missing Rails parity for config resolution
       // SCOPE: ~30–50 LOC fix in database-configurations.ts; affects ~5–34 tests in url-config.test.ts
     });
 

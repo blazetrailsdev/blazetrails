@@ -109,9 +109,9 @@ describe("UnsafeRawSqlTest", () => {
   });
 
   it.skip("order: allows NULLS FIRST and NULLS LAST too", () => {
-    // BLOCKED: unknown — unsafe-raw-sql feature gap; needs human triage
-    // ROOT-CAUSE: unsafe-raw-sql.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in unsafe-raw-sql.ts; affects ~1–10 tests in unsafe-raw-sql.test.ts
+    // BLOCKED: relation — unsafe-raw-sql feature gap
+    // ROOT-CAUSE: relation.ts or abstract-adapter.ts missing Rails parity for unsafe_raw_sql
+    // SCOPE: ~20–50 LOC fix in relation.ts or abstract-adapter.ts; affects ~1–2 tests in unsafe-raw-sql.test.ts
     // PostgreSQL-only (type cast syntax `::text`); skip for in-memory adapter.
   });
 
@@ -168,9 +168,9 @@ describe("UnsafeRawSqlTest", () => {
   });
 
   it.skip("order: allows valid arguments with COLLATE", () => {
-    // BLOCKED: unknown — unsafe-raw-sql feature gap; needs human triage
-    // ROOT-CAUSE: unsafe-raw-sql.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in unsafe-raw-sql.ts; affects ~1–10 tests in unsafe-raw-sql.test.ts
+    // BLOCKED: relation — unsafe-raw-sql feature gap
+    // ROOT-CAUSE: relation.ts or abstract-adapter.ts missing Rails parity for unsafe_raw_sql
+    // SCOPE: ~20–50 LOC fix in relation.ts or abstract-adapter.ts; affects ~1–2 tests in unsafe-raw-sql.test.ts
     // COLLATE syntax is adapter-specific.
   });
 

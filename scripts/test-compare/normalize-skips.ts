@@ -106,7 +106,12 @@ function categorize(relPath: string, describeName: string, testName: string): An
     p === "associations.test.ts" ||
     p === "autosave-association.test.ts" ||
     p === "autosave.test.ts" ||
-    p === "nested-attributes.test.ts"
+    p === "nested-attributes.test.ts" ||
+    p === "nested-attributes-with-callbacks.test.ts" ||
+    p === "habtm-destroy-order.test.ts" ||
+    p === "counter-cache.test.ts" ||
+    p === "touch-later.test.ts" ||
+    p.includes("persistence/reload-association-cache")
   ) {
     const file = path.basename(p, ".test.ts");
     const what = p.includes("has-and-belongs")
@@ -438,9 +443,9 @@ function categorize(relPath: string, describeName: string, testName: string): An
   if (p.startsWith("tasks/")) {
     const file = path.basename(p, ".test.ts");
     return {
-      blocked: `unknown — database task implementation gap in ${file}`,
-      rootCause: `tasks/${file}.ts missing Rails parity for task lifecycle`,
-      scope: `~30–100 LOC fix in tasks/${file}.ts; affects ~26 tests in ${file}.test.ts`,
+      blocked: `migration — DatabaseTasks feature gap in ${file}`,
+      rootCause: `tasks/${file}.ts missing Rails parity for task lifecycle (create/drop/migrate/schema)`,
+      scope: `~50–100 LOC fix in tasks/${file}.ts; affects ~26 tests in ${file}.test.ts`,
     };
   }
 
@@ -448,9 +453,333 @@ function categorize(relPath: string, describeName: string, testName: string): An
   if (p.startsWith("database-configurations/")) {
     const file = path.basename(p, ".test.ts");
     return {
-      blocked: `unknown — database configuration feature gap in ${file}`,
-      rootCause: "database-configurations.ts or connection-url-resolver.ts missing Rails parity",
+      blocked: `connection-pool — database configuration parsing gap in ${file}`,
+      rootCause:
+        "database-configurations.ts or connection-url-resolver.ts missing Rails parity for config resolution",
       scope: `~30–50 LOC fix in database-configurations.ts; affects ~5–34 tests in ${file}.test.ts`,
+    };
+  }
+
+  // --- Database selector ---
+  if (p === "database-selector.test.ts") {
+    return {
+      blocked: "connection-pool — DatabaseSelector middleware not fully implemented",
+      rootCause:
+        "database-selector.ts#DatabaseSelector middleware missing Rails parity for read/write role switching",
+      scope: "~50 LOC fix in database-selector.ts; affects ~16 tests in database-selector.test.ts",
+    };
+  }
+
+  // --- Defaults ---
+  if (p === "defaults.test.ts") {
+    return {
+      blocked: "schema — column default value handling gap",
+      rootCause:
+        "column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics",
+      scope: "~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts",
+    };
+  }
+
+  // --- Forbidden attributes (strong parameters / mass assignment) ---
+  if (p === "forbidden-attributes-protection.test.ts") {
+    return {
+      blocked: "relation — ForbiddenAttributesProtection / strong parameters not implemented",
+      rootCause:
+        "core.ts#assignAttributes missing ForbiddenAttributesError raise for non-permitted params",
+      scope: "~30 LOC fix in core.ts; affects ~16 tests in forbidden-attributes-protection.test.ts",
+    };
+  }
+
+  // --- Counter cache ---
+  if (p === "counter-cache.test.ts") {
+    return {
+      blocked: "associations — counter cache not fully implemented",
+      rootCause: "associations/belongs-to.ts#updateCounters or counter_cache option not wired",
+      scope:
+        "~50 LOC fix in associations/belongs-to.ts + relation.ts; affects ~15 tests in counter-cache.test.ts",
+    };
+  }
+
+  // --- YAML column coder ---
+  if (p.includes("yaml-column") || p.includes("coders/")) {
+    const file = path.basename(p, ".test.ts");
+    return {
+      blocked: "serialization — YAML column coder gap",
+      rootCause: "coders/yaml-column.ts#YamlColumn missing or incomplete Rails parity",
+      scope: "~30 LOC fix in coders/yaml-column.ts; affects ~15 tests in yaml-column.test.ts",
+    };
+  }
+
+  // --- Quoting ---
+  if (p === "quoting.test.ts") {
+    return {
+      blocked: "schema — adapter quoting / type-cast gap",
+      rootCause:
+        "connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity",
+      scope: "~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts",
+    };
+  }
+
+  // --- Enum ---
+  if (p === "enum.test.ts") {
+    return {
+      blocked: "type — enum type feature gap",
+      rootCause: "enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates",
+      scope: "~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts",
+    };
+  }
+
+  // --- Relations (standalone test) ---
+  if (p === "relations.test.ts") {
+    return {
+      blocked: "relation — Relation feature gap (standalone relations test)",
+      rootCause: "relation.ts missing Rails parity for this feature",
+      scope: "~30 LOC fix in relation.ts; affects ~8 tests in relations.test.ts",
+    };
+  }
+
+  // --- Primary class / multi-DB migrator ---
+  if (p === "primary-class.test.ts" || p === "multi-db-migrator.test.ts") {
+    const file = path.basename(p, ".test.ts");
+    return {
+      blocked: "migration — multi-DB migrator / primary-class gap",
+      rootCause:
+        "migration.ts#MigrationContext or connection-handler.ts#primaryClass not fully implemented",
+      scope: `~50 LOC fix in migration.ts; affects ~7 tests in ${file}.test.ts`,
+    };
+  }
+
+  // --- Multiparameter attributes ---
+  if (p === "multiparameter-attributes.test.ts") {
+    return {
+      blocked: "type — multiparameter attribute assignment gap",
+      rootCause:
+        "attribute-assignment.ts#assignMultiparameterAttributes not fully implementing all type edge cases",
+      scope:
+        "~30 LOC fix in attribute-assignment.ts; affects ~6 tests in multiparameter-attributes.test.ts",
+    };
+  }
+
+  // --- Marshal serialization / message pack ---
+  if (p === "marshal-serialization.test.ts" || p === "message-pack.test.ts") {
+    const file = path.basename(p, ".test.ts");
+    return {
+      blocked: "serialization — Ruby Marshal / MessagePack round-trip, no Node.js equivalent",
+      rootCause: "Node.js has no Marshal.dump/load or msgpack Ruby object round-trip",
+      scope: "~0 LOC fix; permanent skip-list.ts candidate",
+    };
+  }
+
+  // --- Instrumentation ---
+  if (p === "instrumentation.test.ts") {
+    return {
+      blocked: "relation — ActiveSupport::Notifications instrumentation gap",
+      rootCause:
+        "relation.ts or abstract-adapter.ts#instrumentQuery not fully publishing AR notification events",
+      scope: "~30 LOC fix in abstract-adapter.ts; affects ~5 tests in instrumentation.test.ts",
+    };
+  }
+
+  // --- Touch later ---
+  if (p === "touch-later.test.ts") {
+    return {
+      blocked: "associations — touch: true / touch_later not implemented",
+      rootCause: "associations/belongs-to.ts#touchRecord or TouchLater not implemented",
+      scope: "~30 LOC fix in associations/belongs-to.ts; affects ~4 tests in touch-later.test.ts",
+    };
+  }
+
+  // --- Store ---
+  if (p === "store.test.ts") {
+    return {
+      blocked: "type — store accessor / serialized column type gap",
+      rootCause:
+        "store.ts#store or StoreType not fully implementing Rails store accessor semantics",
+      scope: "~30 LOC fix in store.ts; affects ~4 tests in store.test.ts",
+    };
+  }
+
+  // --- Sanitize ---
+  if (p === "sanitize.test.ts") {
+    return {
+      blocked: "relation — SQL sanitization gap",
+      rootCause:
+        "relation.ts#sanitizeSql or Sanitization module not fully implementing Rails parity",
+      scope: "~30 LOC fix in relation.ts; affects ~4 tests in sanitize.test.ts",
+    };
+  }
+
+  // --- Numeric data ---
+  if (p === "numeric-data.test.ts") {
+    return {
+      blocked: "type — numeric type cast / database round-trip gap",
+      rootCause:
+        "type/decimal.ts or type/integer.ts#cast not handling all edge cases in numeric-data.test.ts",
+      scope: "~20 LOC fix in type/decimal.ts; affects ~4 tests in numeric-data.test.ts",
+    };
+  }
+
+  // --- Statement cache ---
+  if (p === "statement-cache.test.ts") {
+    return {
+      blocked: "relation — prepared statement cache not implemented",
+      rootCause:
+        "statement-cache.ts#StatementCache#execute or prepared statement infrastructure missing",
+      scope: "~50 LOC fix in statement-cache.ts; affects ~3 tests in statement-cache.test.ts",
+    };
+  }
+
+  // --- Schema loading ---
+  if (p === "schema-loading.test.ts") {
+    return {
+      blocked: "GVL — schema loading via ActiveSupport.on_load / Zeitwerk, no Node.js equivalent",
+      rootCause:
+        "Node.js has no Zeitwerk autoload or ActiveSupport::Dependencies; class reloading tests cannot translate",
+      scope: "~0 LOC fix; permanent skip-list.ts candidate",
+    };
+  }
+
+  // --- Unconnected ---
+  if (p === "unconnected.test.ts") {
+    return {
+      blocked: "connection-pool — unconnected model behavior not fully implemented",
+      rootCause:
+        "core.ts or connection-handler.ts#withoutConnection not implementing unconnected model semantics",
+      scope: "~30 LOC fix in connection-handler.ts; affects ~3 tests in unconnected.test.ts",
+    };
+  }
+
+  // --- Modules ---
+  if (p === "modules.test.ts") {
+    return {
+      blocked: "unknown — Ruby module / singleton_class semantics not translatable",
+      rootCause: "Node.js has no Module#prepend, singleton_class, or Module#ancestors semantics",
+      scope: "~0 LOC fix; likely permanent skip-list.ts candidate",
+    };
+  }
+
+  // --- Signed ID ---
+  if (p === "signed-id.test.ts") {
+    return {
+      blocked: "unknown — SignedId feature gap; needs human triage",
+      rootCause: "signed-id.ts#signedId or find_signed missing Rails parity",
+      scope: "~30 LOC fix in signed-id.ts; affects ~9 tests in signed-id.test.ts",
+    };
+  }
+
+  // --- Migrator ---
+  if (p === "migrator.test.ts") {
+    return {
+      blocked: "migration — Migrator feature gap",
+      rootCause:
+        "migration.ts#Migrator lifecycle (runMigrations/rollback/migrate) not fully implemented",
+      scope: "~50 LOC fix in migration.ts; affects ~5 tests in migrator.test.ts",
+    };
+  }
+
+  // --- Pooled connections ---
+  if (p === "pooled-connections.test.ts") {
+    return {
+      blocked:
+        "connection-pool — pooled connection checkout/checkin semantics not fully implemented",
+      rootCause:
+        "connection-pool.ts#checkout or withConnection not fully implementing pool lifecycle",
+      scope: "~30 LOC fix in connection-pool.ts; affects ~3 tests in pooled-connections.test.ts",
+    };
+  }
+
+  // --- Connection-related singletons ---
+  if (p === "invalid-connection.test.ts" || p === "disconnected.test.ts") {
+    const file = path.basename(p, ".test.ts");
+    return {
+      blocked: "connection-pool — invalid / disconnected connection handling gap",
+      rootCause:
+        "connection-handler.ts or abstract-adapter.ts#checkoutTimeout not raising correct error",
+      scope: `~20 LOC fix in connection-handler.ts; affects ~1 test in ${file}.test.ts`,
+    };
+  }
+
+  // --- Query / relation singletons ---
+  if (
+    p === "unsafe-raw-sql.test.ts" ||
+    p === "statement-invalid.test.ts" ||
+    p === "query-logs.test.ts" ||
+    p === "log-subscriber.test.ts" ||
+    p === "database-statements.test.ts" ||
+    p === "finder-respond-to.test.ts" ||
+    p === "prepared-statement-status.test.ts"
+  ) {
+    const file = path.basename(p, ".test.ts");
+    return {
+      blocked: `relation — ${file} feature gap`,
+      rootCause: `relation.ts or abstract-adapter.ts missing Rails parity for ${file.replace(/-/g, "_")}`,
+      scope: `~20–50 LOC fix in relation.ts or abstract-adapter.ts; affects ~1–2 tests in ${file}.test.ts`,
+    };
+  }
+
+  // --- Transaction instrumentation ---
+  if (p === "transaction-instrumentation.test.ts") {
+    return {
+      blocked: "transactions — transaction instrumentation / notification not fully wired",
+      rootCause:
+        "transactions.ts#instrumentTransaction or Notifications event not published on commit/rollback",
+      scope:
+        "~20 LOC fix in transactions.ts; affects ~2 tests in transaction-instrumentation.test.ts",
+    };
+  }
+
+  // --- Type singletons ---
+  if (
+    p === "types.test.ts" ||
+    p === "type-caster/connection.test.ts" ||
+    p === "timestamp.test.ts" ||
+    p === "attribute-methods/time-zone-converter.test.ts" ||
+    p === "attribute-methods/read.test.ts" ||
+    p === "dirty.test.ts"
+  ) {
+    const file = path.basename(p, ".test.ts");
+    return {
+      blocked: `type — ${file} type/attribute gap`,
+      rootCause: `${file}.ts or attribute-methods/${file}.ts missing Rails parity`,
+      scope: `~20 LOC fix; affects ~1 test in ${file}.test.ts`,
+    };
+  }
+
+  // --- Schema singletons ---
+  if (p === "table-metadata.test.ts") {
+    return {
+      blocked: "schema — TableMetadata feature gap",
+      rootCause: "table-metadata.ts#TableMetadata not fully implementing column/binding metadata",
+      scope: "~20 LOC fix in table-metadata.ts; affects ~1 test in table-metadata.test.ts",
+    };
+  }
+
+  // --- Reload models (Ruby autoload) ---
+  if (p === "reload-models.test.ts") {
+    return {
+      blocked:
+        "GVL — class reloading via ActiveSupport::Dependencies / Zeitwerk, no Node.js equivalent",
+      rootCause: "Node.js has no Zeitwerk autoload or ActiveSupport::Dependencies class reload",
+      scope: "~0 LOC fix; permanent skip-list.ts candidate",
+    };
+  }
+
+  // --- Mixin (Ruby mixin / singleton_class) ---
+  if (p === "mixin.test.ts") {
+    return {
+      blocked: "unknown — Ruby singleton_class / mixin semantics not translatable to TS",
+      rootCause: "Node.js / TypeScript has no singleton_class or Module#prepend equivalent",
+      scope: "~0 LOC fix; likely permanent skip-list.ts candidate",
+    };
+  }
+
+  // --- Secure token ---
+  if (p === "secure-token.test.ts") {
+    return {
+      blocked: "unknown — SecureToken feature gap; needs human triage",
+      rootCause:
+        "secure-token.ts#SecureToken not fully implementing Rails has_secure_token semantics",
+      scope: "~20 LOC fix in secure-token.ts; affects ~1 test",
     };
   }
 

@@ -108,49 +108,49 @@ describe("QuotingTest", () => {
   });
 
   it.skip("quote duration", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("quote table name calls quote column name", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("quoted timestamp local", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("quoted time local", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("quoted datetime utc", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("quoted datetime local", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("quote bigdecimal", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("dates and times", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("quote as mb chars no column", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
 });
 
@@ -177,14 +177,14 @@ describe("TypeCastingTest", () => {
     expect(() => typeCast(new Date())).toThrow(/Temporal/);
   });
   it.skip("type cast time", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("type cast duration should raise error", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
 });
 
@@ -241,13 +241,13 @@ describe("QuoteBooleanTest", () => {
   });
 
   it.skip("quote returns frozen string", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
   it.skip("type cast returns frozen value", () => {
-    // BLOCKED: unknown — quoting feature gap; needs human triage
-    // ROOT-CAUSE: quoting.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in quoting.ts; affects ~1–10 tests in quoting.test.ts
+    // BLOCKED: schema — adapter quoting / type-cast gap
+    // ROOT-CAUSE: connection-adapters/abstract/quoting.ts#quote or quoteColumnName missing Rails parity
+    // SCOPE: ~30 LOC fix in abstract/quoting.ts; affects ~13 tests in quoting.test.ts
   });
 });

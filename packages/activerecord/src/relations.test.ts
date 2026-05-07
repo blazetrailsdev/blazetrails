@@ -1350,9 +1350,9 @@ describe("RelationTest", () => {
   });
 
   it.skip("joins with string sql and string interpolation", () => {
-    // BLOCKED: unknown — relations feature gap; needs human triage
-    // ROOT-CAUSE: relations.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in relations.ts; affects ~1–10 tests in relations.test.ts
+    // BLOCKED: relation — Relation feature gap (standalone relations test)
+    // ROOT-CAUSE: relation.ts missing Rails parity for this feature
+    // SCOPE: ~30 LOC fix in relation.ts; affects ~8 tests in relations.test.ts
     // Rails: Post.joins("INNER JOIN ... WHERE x = ?", value) — parameterized join strings
     // String interpolation in join clauses not yet implemented
   });
@@ -1447,9 +1447,9 @@ describe("RelationTest", () => {
   });
 
   it.skip("joins with select and subquery", () => {
-    // BLOCKED: unknown — relations feature gap; needs human triage
-    // ROOT-CAUSE: relations.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in relations.ts; affects ~1–10 tests in relations.test.ts
+    // BLOCKED: relation — Relation feature gap (standalone relations test)
+    // ROOT-CAUSE: relation.ts missing Rails parity for this feature
+    // SCOPE: ~30 LOC fix in relation.ts; affects ~8 tests in relations.test.ts
     // Requires complex subquery in FROM with joins — not yet supported
   });
 
@@ -1757,9 +1757,9 @@ describe("RelationTest", () => {
   });
 
   it.skip("to sql on eager join", () => {
-    // BLOCKED: unknown — relations feature gap; needs human triage
-    // ROOT-CAUSE: relations.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in relations.ts; affects ~1–10 tests in relations.test.ts
+    // BLOCKED: relation — Relation feature gap (standalone relations test)
+    // ROOT-CAUSE: relation.ts missing Rails parity for this feature
+    // SCOPE: ~30 LOC fix in relation.ts; affects ~8 tests in relations.test.ts
     // Rails: Post.eager_load(:last_comment).order("comments.id DESC").to_sql
     // eagerLoad builds JOIN queries; toSql on that result not yet implemented
   });
@@ -1780,17 +1780,17 @@ describe("RelationTest", () => {
   });
 
   it.skip("where id with delegated ar object", () => {
-    // BLOCKED: unknown — relations feature gap; needs human triage
-    // ROOT-CAUSE: relations.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in relations.ts; affects ~1–10 tests in relations.test.ts
+    // BLOCKED: relation — Relation feature gap (standalone relations test)
+    // ROOT-CAUSE: relation.ts missing Rails parity for this feature
+    // SCOPE: ~30 LOC fix in relation.ts; affects ~8 tests in relations.test.ts
     // Rails: Author.where(id: SimpleDelegator.new(author)) — unwraps delegated objects
     // JS has no SimpleDelegator equivalent; not implementable
   });
 
   it.skip("where relation with delegated ar object", () => {
-    // BLOCKED: unknown — relations feature gap; needs human triage
-    // ROOT-CAUSE: relations.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in relations.ts; affects ~1–10 tests in relations.test.ts
+    // BLOCKED: relation — Relation feature gap (standalone relations test)
+    // ROOT-CAUSE: relation.ts missing Rails parity for this feature
+    // SCOPE: ~30 LOC fix in relation.ts; affects ~8 tests in relations.test.ts
     // Rails: Post.where(author: SimpleDelegator.new(author)) — delegated AR object in assoc where
     // JS has no SimpleDelegator equivalent; not implementable
   });
@@ -1809,9 +1809,9 @@ describe("RelationTest", () => {
   });
 
   it.skip("find all using where with relation and alternate primary key", () => {
-    // BLOCKED: unknown — relations feature gap; needs human triage
-    // ROOT-CAUSE: relations.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in relations.ts; affects ~1–10 tests in relations.test.ts
+    // BLOCKED: relation — Relation feature gap (standalone relations test)
+    // ROOT-CAUSE: relation.ts missing Rails parity for this feature
+    // SCOPE: ~30 LOC fix in relation.ts; affects ~8 tests in relations.test.ts
     // Requires model with non-standard primary key (minivan_id) — not in Item fixture
   });
 
@@ -1875,9 +1875,9 @@ describe("RelationTest", () => {
   });
 
   it.skip("find or create by race condition", () => {
-    // BLOCKED: unknown — relations feature gap; needs human triage
-    // ROOT-CAUSE: relations.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in relations.ts; affects ~1–10 tests in relations.test.ts
+    // BLOCKED: relation — Relation feature gap (standalone relations test)
+    // ROOT-CAUSE: relation.ts missing Rails parity for this feature
+    // SCOPE: ~30 LOC fix in relation.ts; affects ~8 tests in relations.test.ts
     // Requires stub-based mocking of find_by to simulate a race condition retry;
     // tests findOrCreateBy retry logic when a concurrent insert happens between
     // the initial find and create — not directly testable without method stubbing
@@ -7000,9 +7000,9 @@ describe("RelationTest", () => {
   });
 
   it.skip("loading with one association with non preload", () => {
-    // BLOCKED: unknown — relations feature gap; needs human triage
-    // ROOT-CAUSE: relations.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in relations.ts; affects ~1–10 tests in relations.test.ts
+    // BLOCKED: relation — Relation feature gap (standalone relations test)
+    // ROOT-CAUSE: relation.ts missing Rails parity for this feature
+    // SCOPE: ~30 LOC fix in relation.ts; affects ~8 tests in relations.test.ts
     // Rails: eager_load with non-preload strategy (JOIN-based) — requires eagerLoad
     // implementation that builds a JOIN query rather than a separate SELECT
   });

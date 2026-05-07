@@ -402,9 +402,9 @@ describe("EnumTest", () => {
   });
 
   it.skip("enum with string column", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
     /* needs string-based enum mapping support */
   });
 
@@ -500,9 +500,9 @@ describe("EnumTest", () => {
   });
 
   it.skip("overriding enum definition on subclass", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
   });
 
   it("enum changed?", async () => {
@@ -528,9 +528,9 @@ describe("EnumTest", () => {
   });
 
   it.skip("find via negative scope", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
   });
 
   it("find via where with values.to_s", async () => {
@@ -565,27 +565,27 @@ describe("EnumTest", () => {
   });
 
   it.skip("building new objects with enum scopes", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
     /* needs scope.build() support */
   });
   it.skip("creating new objects with enum scopes", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
     /* needs scope.create() support */
   });
   it.skip("reserved enum values", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
     /* needs reserved name validation */
   });
   it.skip("reserved enum values for relation", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
     /* needs reserved name validation */
   });
 
@@ -616,15 +616,15 @@ describe("EnumTest", () => {
   });
 
   it.skip("enum methods with custom suffix defined", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
     /* needs bang setters like draft_status! */
   });
   it.skip("update enum attributes with custom suffix", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
     /* needs bang setters */
   });
 
@@ -641,9 +641,9 @@ describe("EnumTest", () => {
   });
 
   it.skip("scopes are named like methods", () => {
-    // BLOCKED: unknown — enum feature gap; needs human triage
-    // ROOT-CAUSE: enum.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in enum.ts; affects ~1–10 tests in enum.test.ts
+    // BLOCKED: type — enum type feature gap
+    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
+    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
     /* needs method introspection */
   });
 });

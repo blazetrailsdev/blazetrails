@@ -2,18 +2,18 @@ import { describe, it } from "vitest";
 
 describe("PooledConnectionsTest", () => {
   it.skip("pooled connection checkin one", () => {
-    // BLOCKED: unknown — pooled-connections feature gap; needs human triage
-    // ROOT-CAUSE: pooled-connections.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in pooled-connections.ts; affects ~1–10 tests in pooled-connections.test.ts
+    // BLOCKED: connection-pool — pooled connection checkout/checkin semantics not fully implemented
+    // ROOT-CAUSE: connection-pool.ts#checkout or withConnection not fully implementing pool lifecycle
+    // SCOPE: ~30 LOC fix in connection-pool.ts; affects ~3 tests in pooled-connections.test.ts
   });
   it.skip("pooled connection checkin two", () => {
-    // BLOCKED: unknown — pooled-connections feature gap; needs human triage
-    // ROOT-CAUSE: pooled-connections.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in pooled-connections.ts; affects ~1–10 tests in pooled-connections.test.ts
+    // BLOCKED: connection-pool — pooled connection checkout/checkin semantics not fully implemented
+    // ROOT-CAUSE: connection-pool.ts#checkout or withConnection not fully implementing pool lifecycle
+    // SCOPE: ~30 LOC fix in connection-pool.ts; affects ~3 tests in pooled-connections.test.ts
   });
   it.skip("pooled connection remove", () => {
-    // BLOCKED: unknown — pooled-connections feature gap; needs human triage
-    // ROOT-CAUSE: pooled-connections.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in pooled-connections.ts; affects ~1–10 tests in pooled-connections.test.ts
+    // BLOCKED: connection-pool — pooled connection checkout/checkin semantics not fully implemented
+    // ROOT-CAUSE: connection-pool.ts#checkout or withConnection not fully implementing pool lifecycle
+    // SCOPE: ~30 LOC fix in connection-pool.ts; affects ~3 tests in pooled-connections.test.ts
   });
 });

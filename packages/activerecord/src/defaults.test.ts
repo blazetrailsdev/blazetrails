@@ -24,49 +24,49 @@ function freshAdapter(): DatabaseAdapter {
 
 describe("MysqlDefaultExpressionTest", () => {
   it.skip("schema dump includes default expression", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("schema dump includes default expression with single quotes reflected correctly", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("schema dump datetime includes default expression", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("schema dump datetime includes precise default expression", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("schema dump datetime includes precise default expression with on update", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("schema dump timestamp includes default expression", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("schema dump timestamp includes precise default expression", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("schema dump timestamp includes precise default expression with on update", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("schema dump timestamp without default expression", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
 });
 
@@ -178,15 +178,15 @@ describe("DefaultTest", () => {
 
 describe("DefaultsTestWithoutTransactionalFixtures", () => {
   it.skip("mysql not null defaults non strict", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
     /* fixture-dependent */
   });
   it.skip("mysql not null defaults strict", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
     /* fixture-dependent */
   });
 });
@@ -255,17 +255,17 @@ describe("DefaultStringsTest", () => {
 
 describe("PostgresqlDefaultExpressionTest", () => {
   it.skip("schema dump includes default expression", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
 });
 
 describe("Sqlite3DefaultExpressionTest", () => {
   it.skip("schema dump includes default expression", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
 });
 
@@ -273,9 +273,9 @@ describe("DefaultTest", () => {
   const adapter = freshAdapter();
 
   it.skip("default attribute value overrides from database", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
 
   it("default attribute value for integer", () => {
@@ -309,19 +309,19 @@ describe("DefaultTest", () => {
   });
 
   it.skip("default attribute value for datetime", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("default attribute value for date", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
   it.skip("default attribute value for decimal", () => {
-    // BLOCKED: unknown — defaults feature gap; needs human triage
-    // ROOT-CAUSE: defaults.ts missing Rails parity; exact symbol unclear without running the test
-    // SCOPE: ~30–100 LOC fix in defaults.ts; affects ~1–10 tests in defaults.test.ts
+    // BLOCKED: schema — column default value handling gap
+    // ROOT-CAUSE: column.ts#defaultValue or schema-statements.ts#columnDefault not fully implementing Rails default semantics
+    // SCOPE: ~30 LOC fix in column.ts; affects ~17 tests in defaults.test.ts
   });
 
   it("default value for float", () => {

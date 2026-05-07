@@ -329,7 +329,9 @@ export class EncryptableRecord {
   static _createRecord(record: any, attributeNames?: string[]): unknown {
     // Mirrors Rails: force encrypted attrs into the INSERT column list so a
     // column with an encrypted default is always written on first save.
-    const names = attributeNames ?? record.attributeNames ?? [];
+    const names =
+      attributeNames ??
+      (typeof record.attributeNames === "function" ? record.attributeNames() : []);
     const encryptedAttrs: Set<string> =
       record.constructor._encryptedAttributes ?? new Set<string>();
     const merged = [...new Set<string>([...names, ...encryptedAttrs])];

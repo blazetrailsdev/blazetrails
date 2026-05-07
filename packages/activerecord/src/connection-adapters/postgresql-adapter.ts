@@ -43,6 +43,7 @@ import {
   RecordNotUnique,
   StatementInvalid,
   ValueTooLong,
+  SQLWarning,
 } from "../errors.js";
 import { AbstractAdapter } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
@@ -95,6 +96,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   override get adapterName(): AdapterName {
     return "postgres";
   }
+
+  /** Mirrors: ActiveRecord.db_warnings_action */
+  static dbWarningsAction: "ignore" | "log" | "raise" | "report" | ((w: SQLWarning) => void) =
+    "ignore";
+
+  /** Mirrors: AbstractAdapter.db_warnings_ignore */
+  static dbWarningsIgnore: (string | RegExp)[] = [];
 
   static columnNameMatcher(): RegExp {
     return pgColumnNameMatcher();
@@ -218,6 +226,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // `beginTransaction`) drains those orphans. WeakSet so pg.Pool
   // reaping the client GCs the entry.
   private _clientsNeedingDeallocateAll = new WeakSet<pg.PoolClient>();
+  // Accumulates PG NOTICE/WARNING messages fired during the current query.
+  // Cleared before each query; processed by _flushWarnings after.
+  private _noticeReceiverSqlWarnings: Array<{
+    level?: string;
+    message?: string;
+    code?: string;
+  }> = [];
   // Rails' `statement_limit` database.yml key — max prepared
   // statements cached per session before LRU eviction (default 1000).
   private _statementLimit = 1000;
@@ -345,6 +360,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   private async _maybeConfigureConnection(client: pg.PoolClient): Promise<void> {
     if (this._configuredClients.has(client)) return;
+    // Install a notice listener so PostgreSQL NOTICE/WARNING messages are
+    // captured per-query and dispatched via dbWarningsAction.
+    client.on("notice", (msg: { severity?: string; message?: string; code?: string }) => {
+      this._noticeReceiverSqlWarnings.push({
+        level: msg.severity,
+        message: msg.message,
+        code: msg.code,
+      });
+    });
     // Mark only after all queries succeed so a partial failure doesn't
     // leave the client flagged as configured on its next checkout.
     // Mirrors: set_standard_conforming_strings — required for correct quoting behaviour.
@@ -499,6 +523,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // writer which has no Temporal support.
     const bindArray = (binds ?? []).map((v) => temporalToBindString(v, "postgres"));
     const rewritten = this.rewriteBinds(sql, bindArray);
+    this._noticeReceiverSqlWarnings = [];
     const payload: Record<string, unknown> = {
       sql: rewritten,
       name: name ?? "SQL",
@@ -564,7 +589,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
     // pgResult.rows is already positional arrays thanks to rowMode.
     const rowArrays = pgResult.rows as unknown[][];
-    return new Result(columns, rowArrays, columnTypes as Record<string, Type>);
+    const result = new Result(columns, rowArrays, columnTypes as Record<string, Type>);
+    this._flushWarnings();
+    return result;
   }
 
   /**
@@ -869,6 +896,31 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#is_cached_plan_failure?
    * (postgresql_adapter.rb:901-906).
    */
+  /** @internal Mirrors: PostgreSQL::DatabaseStatements#handle_warnings */
+  private _flushWarnings(): void {
+    const actionable = new Set(["WARNING", "ERROR", "FATAL", "PANIC"]);
+    const ctor = this.constructor as typeof PostgreSQLAdapter;
+    const action = ctor.dbWarningsAction;
+    try {
+      if (!action || action === "ignore") return;
+      for (const w of this._noticeReceiverSqlWarnings) {
+        if (!actionable.has(w.level ?? "")) continue;
+        if (this.isWarningIgnored(w)) continue;
+        const sw = new SQLWarning(w.message, w.code ?? null, w.level ?? null);
+        if (action === "raise") throw sw;
+        if (action === "log") {
+          const logger = this.logger as { warn?: (msg: string) => void } | null;
+          const msg = `[ActiveRecord::SQLWarning] ${sw.message} (${w.code})`;
+          if (logger?.warn) logger.warn(msg);
+          else console.warn(msg);
+        }
+        if (typeof action === "function") action(sw);
+      }
+    } finally {
+      this._noticeReceiverSqlWarnings = [];
+    }
+  }
+
   private _isInvalidCachedPlan(e: unknown): boolean {
     const err = e as { code?: string; message?: string } | null;
     if (err?.code !== "0A000") return false;
@@ -904,7 +956,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       connection: this,
       row_count: 0,
     };
-    return Notifications.instrumentAsync("sql.active_record", payload, async () => {
+    this._noticeReceiverSqlWarnings = [];
+    const rows = await Notifications.instrumentAsync("sql.active_record", payload, async () => {
       try {
         return await this.withClient(async (client) => {
           const result = await this._runQuery(client, rewritten, binds);
@@ -918,6 +971,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         throw translated;
       }
     });
+    this._flushWarnings();
+    return rows;
   }
 
   /**
@@ -932,6 +987,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.materializeTransactions();
     binds = binds.map((v) => temporalToBindString(v, "postgres"));
     const pgSql = this.rewriteBinds(sql, binds);
+    this._noticeReceiverSqlWarnings = [];
     // payload.sql records the rewritten SQL — ExplainSubscriber captures
     // something that can be re-EXPLAIN'd without re-running rewriteBinds
     // (and without re-appending RETURNING for bare INSERTs, which isn't
@@ -944,84 +1000,90 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       connection: this,
       row_count: 0,
     };
-    return Notifications.instrumentAsync("sql.active_record", payload, async () => {
-      try {
-        return await this.withClient(async (client) => {
-          this.dirtyCurrentTransaction();
-          const upper = sql.trimStart().toUpperCase();
+    const mutationResult = await Notifications.instrumentAsync(
+      "sql.active_record",
+      payload,
+      async () => {
+        try {
+          return await this.withClient(async (client) => {
+            this.dirtyCurrentTransaction();
+            const upper = sql.trimStart().toUpperCase();
 
-          // For INSERT without RETURNING, append RETURNING id automatically
-          // (only when use_insert_returning? is true — mirrors Rails postgresql_adapter.rb:630)
-          if (
-            this._useInsertReturning &&
-            upper.startsWith("INSERT") &&
-            !upper.includes("RETURNING")
-          ) {
-            const withReturning = `${pgSql} RETURNING id`;
-            const useSavepoint = this._inTransaction;
-            const spName = useSavepoint ? `_bt_ret_${++PostgreSQLAdapter._spCounter}` : "";
-            // Update payload.sql to the exact statement we're about to
-            // run so subscribers (LogSubscriber / ExplainSubscriber /
-            // QueryCache keys) see what actually hit pg. The fallback
-            // branch below resets it to pgSql if the RETURNING attempt
-            // fails and we re-run without it.
-            payload.sql = withReturning;
-            try {
-              if (useSavepoint) await client.query(`SAVEPOINT "${spName}"`);
-              const result = await this._runQuery(client, withReturning, binds);
-              if (useSavepoint) await client.query(`RELEASE SAVEPOINT "${spName}"`);
-              payload.row_count = result.rowCount ?? 0;
-              if (result.rows.length > 1) {
-                return result.rowCount ?? result.rows.length;
+            // For INSERT without RETURNING, append RETURNING id automatically
+            // (only when use_insert_returning? is true — mirrors Rails postgresql_adapter.rb:630)
+            if (
+              this._useInsertReturning &&
+              upper.startsWith("INSERT") &&
+              !upper.includes("RETURNING")
+            ) {
+              const withReturning = `${pgSql} RETURNING id`;
+              const useSavepoint = this._inTransaction;
+              const spName = useSavepoint ? `_bt_ret_${++PostgreSQLAdapter._spCounter}` : "";
+              // Update payload.sql to the exact statement we're about to
+              // run so subscribers (LogSubscriber / ExplainSubscriber /
+              // QueryCache keys) see what actually hit pg. The fallback
+              // branch below resets it to pgSql if the RETURNING attempt
+              // fails and we re-run without it.
+              payload.sql = withReturning;
+              try {
+                if (useSavepoint) await client.query(`SAVEPOINT "${spName}"`);
+                const result = await this._runQuery(client, withReturning, binds);
+                if (useSavepoint) await client.query(`RELEASE SAVEPOINT "${spName}"`);
+                payload.row_count = result.rowCount ?? 0;
+                if (result.rows.length > 1) {
+                  return result.rowCount ?? result.rows.length;
+                }
+                if (result.rows.length > 0) {
+                  const firstCol = Object.keys(result.rows[0])[0];
+                  return Number(result.rows[0][firstCol]);
+                }
+                return result.rowCount ?? 0;
+              } catch (err) {
+                // Cached-plan failures must propagate to the
+                // transaction-retry machinery (Rails raises
+                // PreparedStatementCacheExpired for exactly this
+                // reason — retrying inside an aborted txn would fail
+                // with 25P02). Everything else falls through to the
+                // "retry without RETURNING" path this catch was
+                // originally written for.
+                if (err instanceof PreparedStatementCacheExpired) throw err;
+                if (useSavepoint) {
+                  await client.query(`ROLLBACK TO SAVEPOINT "${spName}"`).catch(() => {});
+                  await client.query(`RELEASE SAVEPOINT "${spName}"`).catch(() => {});
+                }
+                payload.sql = pgSql;
+                const result = await this._runQuery(client, pgSql, binds);
+                payload.row_count = result.rowCount ?? 0;
+                return result.rowCount ?? 0;
               }
+            }
+
+            // For INSERT with explicit RETURNING
+            if (upper.startsWith("INSERT") && upper.includes("RETURNING")) {
+              const result = await this._runQuery(client, pgSql, binds);
+              payload.row_count = result.rowCount ?? 0;
               if (result.rows.length > 0) {
                 const firstCol = Object.keys(result.rows[0])[0];
                 return Number(result.rows[0][firstCol]);
               }
               return result.rowCount ?? 0;
-            } catch (err) {
-              // Cached-plan failures must propagate to the
-              // transaction-retry machinery (Rails raises
-              // PreparedStatementCacheExpired for exactly this
-              // reason — retrying inside an aborted txn would fail
-              // with 25P02). Everything else falls through to the
-              // "retry without RETURNING" path this catch was
-              // originally written for.
-              if (err instanceof PreparedStatementCacheExpired) throw err;
-              if (useSavepoint) {
-                await client.query(`ROLLBACK TO SAVEPOINT "${spName}"`).catch(() => {});
-                await client.query(`RELEASE SAVEPOINT "${spName}"`).catch(() => {});
-              }
-              payload.sql = pgSql;
-              const result = await this._runQuery(client, pgSql, binds);
-              payload.row_count = result.rowCount ?? 0;
-              return result.rowCount ?? 0;
             }
-          }
 
-          // For INSERT with explicit RETURNING
-          if (upper.startsWith("INSERT") && upper.includes("RETURNING")) {
+            // For UPDATE/DELETE, return affected rows
             const result = await this._runQuery(client, pgSql, binds);
             payload.row_count = result.rowCount ?? 0;
-            if (result.rows.length > 0) {
-              const firstCol = Object.keys(result.rows[0])[0];
-              return Number(result.rows[0][firstCol]);
-            }
             return result.rowCount ?? 0;
-          }
-
-          // For UPDATE/DELETE, return affected rows
-          const result = await this._runQuery(client, pgSql, binds);
-          payload.row_count = result.rowCount ?? 0;
-          return result.rowCount ?? 0;
-        });
-      } catch (e: any) {
-        const translated = this._translateException(e, pgSql, binds);
-        payload.exception = translated;
-        payload.exception_object = translated;
-        throw translated;
-      }
-    });
+          });
+        } catch (e: any) {
+          const translated = this._translateException(e, pgSql, binds);
+          payload.exception = translated;
+          payload.exception_object = translated;
+          throw translated;
+        }
+      },
+    );
+    this._flushWarnings();
+    return mutationResult;
   }
 
   /**

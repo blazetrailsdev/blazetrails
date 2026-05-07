@@ -1,5 +1,6 @@
 import { Config } from "./config.js";
 import { Contexts } from "./contexts.js";
+import { Cipher } from "./cipher.js";
 
 let _sharedConfig: Config | null = null;
 const _listeners: Array<(klass: any, name: string) => void> = [];
@@ -22,6 +23,10 @@ export class Configurable {
   // Mirrors Rails' delegation of Context::PROPERTIES to context.
   static get keyProvider(): unknown {
     return Contexts.context.keyProvider;
+  }
+
+  static get cipher(): Cipher {
+    return (Contexts.context.cipher as Cipher | undefined) ?? new Cipher();
   }
 
   static configure(options: {

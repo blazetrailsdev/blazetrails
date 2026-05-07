@@ -148,6 +148,11 @@ export class Encryptor {
     return this.serializer().isBinary();
   }
 
+  /** @internal */
+  private cipher() {
+    return Configurable.cipher;
+  }
+
   get compressor(): Compressor {
     return this._compressor;
   }

@@ -382,7 +382,8 @@ export class EncryptableRecord {
     const klass = record.constructor as any;
     const result: Record<string, unknown> = {};
     for (const name of klass._encryptedAttributes ?? new Set<string>()) {
-      result[name] = record.readAttribute?.(name) ?? record[name];
+      result[name] =
+        typeof record.readAttribute === "function" ? record.readAttribute(name) : record[name];
     }
     return result;
   }

@@ -405,7 +405,7 @@ export async function performTakeBang(this: FinderRelation): Promise<any> {
 }
 
 /** @internal */
-async function findNthWithLimit(this: FinderRelation, index: number): Promise<any | null> {
+export async function findNthWithLimit(this: FinderRelation, index: number): Promise<any | null> {
   let rel = this._clone();
   rel._limitValue = 1;
   rel._offsetValue = (this._offsetValue ?? 0) + index;
@@ -417,7 +417,7 @@ async function findNthWithLimit(this: FinderRelation, index: number): Promise<an
 }
 
 /** @internal */
-async function findNthFromLast(this: FinderRelation, index: number): Promise<any | null> {
+export async function findNthFromLast(this: FinderRelation, index: number): Promise<any | null> {
   let rel: any;
   if (!hasReversibleOrder(this)) {
     rel = orderByPk(this, "desc");
@@ -573,7 +573,7 @@ export const FinderMethods = {
 // ---------------------------------------------------------------------------
 
 /** @internal */
-function constructRelationForExists(rel: FinderRelation, conditions: unknown): any {
+export function constructRelationForExists(rel: FinderRelation, conditions: unknown): any {
   if (conditions === false || conditions === null) return rel;
   if (typeof conditions === "object" && conditions !== null) {
     return (rel as any).where(conditions);
@@ -586,7 +586,7 @@ function constructRelationForExists(rel: FinderRelation, conditions: unknown): a
 }
 
 /** @internal */
-function applyJoinDependency(rel: FinderRelation, eagerLoading: boolean): any {
+export function applyJoinDependency(rel: FinderRelation, eagerLoading: boolean): any {
   if (!eagerLoading) return rel;
   // Rails: when eager loading, apply a LEFT OUTER JOIN via the join dependency.
   // Our preloader handles this via separate queries, but we record the join type.
@@ -605,14 +605,14 @@ function applyJoinDependency(rel: FinderRelation, eagerLoading: boolean): any {
 }
 
 /** @internal */
-function isUsingLimitableReflections(reflections: unknown[]): boolean {
+export function isUsingLimitableReflections(reflections: unknown[]): boolean {
   return (reflections as any[]).every(
     (r) => r.macro !== "hasMany" && r.macro !== "hasAndBelongsToMany",
   );
 }
 
 /** @internal */
-async function findWithIds(rel: FinderRelation, ids: unknown[]): Promise<any> {
+export async function findWithIds(rel: FinderRelation, ids: unknown[]): Promise<any> {
   const normalized = normalizeFindArgs(
     (rel as any)._modelClass.name,
     (rel as any)._modelClass.primaryKey,
@@ -625,7 +625,7 @@ async function findWithIds(rel: FinderRelation, ids: unknown[]): Promise<any> {
 }
 
 /** @internal */
-async function findOne(rel: FinderRelation, id: unknown): Promise<any> {
+export async function findOne(rel: FinderRelation, id: unknown): Promise<any> {
   const pk = (rel as any)._modelClass.primaryKey as string;
   const record = await (rel as any).findBy({ [pk]: id });
   if (!record) {
@@ -636,7 +636,7 @@ async function findOne(rel: FinderRelation, id: unknown): Promise<any> {
 }
 
 /** @internal */
-async function findSome(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
+export async function findSome(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
   const pk = (rel as any)._modelClass.primaryKey as string;
   const records = await (rel as any).where({ [pk]: ids }).toArray();
   if (records.length !== ids.length) {
@@ -655,7 +655,7 @@ async function findSome(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
 }
 
 /** @internal */
-async function findSomeOrdered(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
+export async function findSomeOrdered(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
   const pk = (rel as any)._modelClass.primaryKey;
   const records = await findSome(rel, ids);
   const idIndex = new Map(ids.map((id, i) => [String(id), i]));
@@ -667,33 +667,33 @@ async function findSomeOrdered(rel: FinderRelation, ids: unknown[]): Promise<any
 }
 
 /** @internal */
-async function findTake(rel: FinderRelation): Promise<any | null> {
+export async function findTake(rel: FinderRelation): Promise<any | null> {
   const records = await (rel as any).limit(1).toArray();
   return records[0] ?? null;
 }
 
 /** @internal */
-async function findTakeWithLimit(rel: FinderRelation, limit: number): Promise<any[]> {
+export async function findTakeWithLimit(rel: FinderRelation, limit: number): Promise<any[]> {
   return (rel as any).limit(limit).toArray();
 }
 
 /** @internal */
-function findNth(rel: FinderRelation, index: number): Promise<any | null> {
+export function findNth(rel: FinderRelation, index: number): Promise<any | null> {
   return findNthWithLimit.call(rel, index);
 }
 
 /** @internal */
-async function findLast(rel: FinderRelation, limit?: number): Promise<any> {
+export async function findLast(rel: FinderRelation, limit?: number): Promise<any> {
   return performLast.call(rel, limit);
 }
 
 /** @internal */
-function orderedRelation(rel: FinderRelation): any {
+export function orderedRelation(rel: FinderRelation): any {
   return orderByPk(rel, "asc");
 }
 
 /** @internal */
-function _orderColumns(rel: FinderRelation): string[] {
+export function _orderColumns(rel: FinderRelation): string[] {
   const pk = (rel as any)._modelClass.primaryKey;
   return Array.isArray(pk) ? pk : [pk];
 }

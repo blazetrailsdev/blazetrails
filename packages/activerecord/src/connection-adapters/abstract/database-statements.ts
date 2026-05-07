@@ -484,10 +484,7 @@ export async function insert(
   const [sql, resolvedBinds] = toSqlAndBinds(arel, binds);
   const result = await execInsert.call(this, sql, name, resolvedBinds);
   if (idValue !== undefined && idValue !== null) return idValue;
-  if (!host?.lastInsertedId) {
-    throw new Error("adapter must implement lastInsertedId(result) to use insert()");
-  }
-  return host.lastInsertedId(result);
+  return (host as any).lastInsertedId(result);
 }
 
 /**

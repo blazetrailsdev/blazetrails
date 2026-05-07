@@ -164,6 +164,16 @@ describe("QueryAssertionsTest", () => {
     ).rejects.toThrow(/\d+ instead of 0/);
   });
 
+  it("assert queries match global regex does not alternate due to lastIndex statefulness", async () => {
+    // Ruby Regexp#=== is always stateless; JS RegExp.test with /g advances lastIndex.
+    // assertQueriesMatch must reset lastIndex before each test call.
+    await assertQueriesMatch(/SELECT/gi, 3, false, async () => {
+      instrumentSql("SELECT 1");
+      instrumentSql("SELECT 2");
+      instrumentSql("SELECT 3");
+    });
+  });
+
   it("SQLCounter skips cached queries", () => {
     const counter = new SQLCounter();
     counter.call("sql.active_record", "id1", { sql: "SELECT 1", cached: true });

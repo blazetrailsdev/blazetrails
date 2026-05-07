@@ -120,7 +120,11 @@ export async function assertQueriesMatch(
     Notifications.unsubscribe(sub);
   }
   const queries = includeSchema ? counter.logAll : counter.log;
-  const matched = queries.filter((q) => match.test(q));
+  // Reset lastIndex before each test to mirror Ruby Regexp#=== (always stateless).
+  const matched = queries.filter((q) => {
+    match.lastIndex = 0;
+    return match.test(q);
+  });
 
   if (count !== undefined) {
     if (matched.length !== count) {

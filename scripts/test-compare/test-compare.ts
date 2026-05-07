@@ -27,7 +27,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { TestManifest } from "./types.js";
-import { isTestExcluded } from "../api-compare/excluded-files.js";
+import { isTestCaseExcluded, isTestExcluded } from "../api-compare/excluded-files.js";
 
 const SCRIPT_DIR = __dirname;
 const OUTPUT_DIR = path.join(SCRIPT_DIR, "output");
@@ -263,6 +263,7 @@ function main() {
       const seenPaths = new Set<string>();
       const seenDescs = new Set<string>();
       for (const tc of file.testCases) {
+        if (isTestCaseExcluded(file.file, tc.description)) continue;
         const np = normPath(tc.ancestors, tc.description);
         const nd = normalize(tc.description);
         if (!seenPaths.has(np)) {
@@ -311,6 +312,7 @@ function main() {
       // Pass 1: Path matches (exact ancestor + description match)
       for (let ri = 0; ri < file.testCases.length; ri++) {
         const tc = file.testCases[ri];
+        if (isTestCaseExcluded(file.file, tc.description)) continue;
         const np = normPath(tc.ancestors, tc.description);
         const tsIdx = consumeIndex(pathIndex.get(np), consumedTs);
         if (tsIdx >= 0) {
@@ -333,6 +335,7 @@ function main() {
       for (let ri = 0; ri < file.testCases.length; ri++) {
         if (matchedRuby.has(ri)) continue;
         const tc = file.testCases[ri];
+        if (isTestCaseExcluded(file.file, tc.description)) continue;
         const np = normPath(tc.ancestors, tc.description);
         const nd = normalize(tc.description);
 
@@ -370,6 +373,7 @@ function main() {
       for (let ri = 0; ri < file.testCases.length; ri++) {
         if (matchedRuby.has(ri)) continue;
         const tc = file.testCases[ri];
+        if (isTestCaseExcluded(file.file, tc.description)) continue;
         totalRuby++;
         const np = normPath(tc.ancestors, tc.description);
         const nd = normalize(tc.description);

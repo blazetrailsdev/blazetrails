@@ -200,6 +200,10 @@ import {
   transaction as _transaction,
   currentTransactionPublic as _currentTransactionPublic,
   withTransactionReturningStatus as _withTransactionReturningStatus,
+  committedBang as _committedBang,
+  rolledbackBang as _rolledbackBang,
+  addToTransaction as _addToTransaction,
+  hasTransactionalCallbacks as _hasTransactionalCallbacks,
   _newRecordBeforeLastCommit as _txNewRecordBeforeLastCommit,
   _triggerDestroyCallback as _txTriggerDestroyCallback,
   clearTransactionRecordState as _clearTransactionRecordState,
@@ -3155,15 +3159,13 @@ include(Base, {
   // AutosaveAssociation privates
   computePrimaryKey: _computePrimaryKey,
   _ensureNoDuplicateErrors: _autosaveEnsureNoDuplicateErrors,
-  // Transactions privates
-  // committedBang / rolledbackBang intentionally omitted: transaction.ts calls
-  // these as record.committedBang({ shouldRunCallbacks }) — the record-arg form
-  // would receive the options hash as `record`, breaking that callsite.
+  // Transactions instance methods
+  committedBang: _committedBang,
+  rolledbackBang: _rolledbackBang,
   withTransactionReturningStatus: _withTransactionReturningStatus,
+  addToTransaction: _addToTransaction,
+  hasTransactionalCallbacks: _hasTransactionalCallbacks,
   _newRecordBeforeLastCommit: _txNewRecordBeforeLastCommit,
-  // isTriggerTransactionalCallbacks omitted: transaction.ts calls it as
-  // record.isTriggerTransactionalCallbacks() with no args; the record-arg
-  // form would receive undefined as `record`, throwing at runtime.
   _committedAlreadyCalled: _txCommittedAlreadyCalled,
   _triggerUpdateCallback: _txTriggerUpdateCallback,
   _triggerDestroyCallback: _txTriggerDestroyCallback,

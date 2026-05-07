@@ -372,10 +372,10 @@ export async function beforeCommittedBang(record: Base): Promise<void> {
  *
  * Mirrors: ActiveRecord::Transactions#committed!
  */
-export async function committedBang(record: Base): Promise<void> {
-  if (!isTriggerTransactionalCallbacks(record)) return;
-  const ctor = record.constructor as typeof Base;
-  await (ctor as any)._callbackChain?.runAfter?.("commit", record);
+export async function committedBang(this: Base): Promise<void> {
+  if (!isTriggerTransactionalCallbacks(this)) return;
+  const ctor = this.constructor as typeof Base;
+  await (ctor as any)._callbackChain?.runAfter?.("commit", this);
 }
 
 /**
@@ -383,10 +383,10 @@ export async function committedBang(record: Base): Promise<void> {
  *
  * Mirrors: ActiveRecord::Transactions#rolledback!
  */
-export async function rolledbackBang(record: Base): Promise<void> {
-  if (!isTriggerTransactionalCallbacks(record)) return;
-  const ctor = record.constructor as typeof Base;
-  await (ctor as any)._callbackChain?.runAfter?.("rollback", record);
+export async function rolledbackBang(this: Base): Promise<void> {
+  if (!isTriggerTransactionalCallbacks(this)) return;
+  const ctor = this.constructor as typeof Base;
+  await (ctor as any)._callbackChain?.runAfter?.("rollback", this);
 }
 
 /**
@@ -487,10 +487,22 @@ export async function withTransactionReturningStatus<T>(
   let status: T;
   let rolledBack = false;
 
+  // Capture whether there is an outer transaction before entering transaction().
+  // Mirrors Rails' `ensure_finalize = !connection.transaction_open?`.
+  const hadOuterTransaction = currentTransaction() !== null;
+  const hasTransactionManager =
+    typeof (modelClass.adapter as any).withinNewTransaction === "function";
+
   await transaction(modelClass, async (tx) => {
-    // Mirrors: add_to_transaction — register for state restoration on rollback.
-    // Actual committedBang/rolledbackBang callbacks are scheduled after
-    // the transaction returns, on the outer transaction or fired immediately.
+    // Enroll record with the TransactionManager so it fires committedBang/
+    // rolledbackBang after the transaction commits or rolls back.
+    if (hasTransactionManager) {
+      await addToTransaction.call(
+        this,
+        !hadOuterTransaction || hasTransactionalCallbacks.call(this),
+      );
+    }
+
     tx.afterRollback(async () => {
       restoreTransactionRecordState.call(this, snapshot);
     });
@@ -504,26 +516,27 @@ export async function withTransactionReturningStatus<T>(
     return status;
   });
 
-  // Schedule commit/rollback callbacks. If inside an outer transaction,
-  // defer to it. If the inner transaction rolled back, fire rolledbackBang
-  // immediately (state was already restored by the afterRollback above).
-  if (!rolledBack) {
-    const outerTx = currentTransaction();
-    if (outerTx) {
-      outerTx.afterCommit(async () => await committedBang(this));
-      outerTx.afterRollback(async () => {
-        // Fire callbacks before restoring state — rolledbackBang needs
-        // isPersisted()/isDestroyed() to reflect what happened during the
-        // transaction, not the pre-transaction state. Matches Rails where
-        // rolledback! fires during rollback, restore runs in ensure.
-        await rolledbackBang(this);
-        restoreTransactionRecordState.call(this, snapshot);
-      });
+  // For adapters without a TransactionManager, addToTransaction is a no-op,
+  // so we must schedule callbacks manually.
+  if (!hasTransactionManager) {
+    if (!rolledBack) {
+      const outerTx = currentTransaction();
+      if (outerTx) {
+        outerTx.afterCommit(async () => await committedBang.call(this));
+        outerTx.afterRollback(async () => {
+          // Fire callbacks before restoring state — rolledbackBang needs
+          // isPersisted()/isDestroyed() to reflect what happened during the
+          // transaction, not the pre-transaction state. Matches Rails where
+          // rolledback! fires during rollback, restore runs in ensure.
+          await rolledbackBang.call(this);
+          restoreTransactionRecordState(this, snapshot);
+        });
+      } else {
+        await committedBang.call(this);
+      }
     } else {
-      await committedBang(this);
+      await rolledbackBang.call(this);
     }
-  } else {
-    await rolledbackBang(this);
   }
 
   return status!;
@@ -615,11 +628,9 @@ export function isTransactionIncludeAnyAction(this: Base, actions: string[]): bo
 /** @internal */
 export async function addToTransaction(this: Base, ensureFinalize = true): Promise<void> {
   const ctor = this.constructor as any;
-  if (typeof ctor.withConnection === "function") {
-    await ctor.withConnection(async (connection: any) => {
-      connection.addTransactionRecord?.(this, ensureFinalize);
-    });
-  }
+  // We're always called from within a transaction, so the adapter IS the
+  // current connection — no need to go through withConnection.
+  ctor.adapter?.addTransactionRecord?.(this, ensureFinalize);
 }
 
 // Mirrors: ActiveRecord::Transactions#has_transactional_callbacks?

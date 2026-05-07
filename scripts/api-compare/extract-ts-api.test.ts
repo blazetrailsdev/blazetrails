@@ -495,6 +495,23 @@ describe("extractFromProgram — Object.defineProperty wiring", () => {
     }
   });
 
+  it("skips for-of loop when descriptor has no `value` key (getter/setter descriptors)", () => {
+    const info = extractFromFiles("/p", {
+      "base.ts": `export class Base {}`,
+      "wire.ts": `
+        import { Base } from "./base.js";
+        for (const [name, fn] of [["myGetter", () => 42]] as const) {
+          Object.defineProperty(Base.prototype, name, {
+            get: fn,
+            configurable: true,
+          });
+        }
+      `,
+    });
+    const names = info.classes["base.ts:Base"].instanceMethods.map((m) => m.name);
+    expect(names).not.toContain("myGetter");
+  });
+
   it("does not double-add if the method is already on the class", () => {
     const info = extractFromFiles("/p", {
       "base.ts": `export class Base { createOrUpdate() {} }`,

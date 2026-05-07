@@ -906,8 +906,13 @@ function extractDefinePropertyForOf(
     if (!ts.isIdentifier(pa.expression) || pa.expression.text !== "Object") continue;
     if (!ts.isIdentifier(pa.name) || pa.name.text !== "defineProperty") continue;
     if (expr.arguments.length < 3) continue;
-    const [target, propNameExpr] = expr.arguments;
+    const [target, propNameExpr, descriptor] = expr.arguments;
     if (!ts.isIdentifier(propNameExpr) || propNameExpr.text !== nameVar) continue;
+    if (!ts.isObjectLiteralExpression(descriptor)) continue;
+    const hasValue = descriptor.properties.some(
+      (p) => ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === "value",
+    );
+    if (!hasValue) continue;
     classInfo = classInfoForPrototype(target, info, checker, srcDir);
     break;
   }

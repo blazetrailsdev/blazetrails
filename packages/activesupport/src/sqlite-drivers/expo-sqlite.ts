@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import {
   registerSqliteDriver,
   type ColumnInfo,
@@ -40,11 +41,11 @@ interface ExpoSqliteModule {
 }
 
 // Soft-load: expo-sqlite is only available in Expo/React Native runtimes.
-// Non-Expo environments won't crash on import; open() rejects with a clear error.
+// createRequire is needed because this package uses "type": "module" — bare
+// `require` is not defined in ESM, but createRequire(import.meta.url) works.
 let expoSqlite: ExpoSqliteModule | undefined;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  expoSqlite = require("expo-sqlite") as ExpoSqliteModule;
+  expoSqlite = createRequire(import.meta.url)("expo-sqlite") as ExpoSqliteModule;
 } catch {
   /* not an Expo runtime */
 }

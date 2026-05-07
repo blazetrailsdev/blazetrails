@@ -275,7 +275,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   override get databaseVersion(): Version {
     if (!this._databaseVersion) {
       throw new Error(
-        "databaseVersion is not available yet — call await getDatabaseVersion() after connecting",
+        "databaseVersion is not available yet — await getDatabaseVersion() after connecting",
       );
     }
     return this._databaseVersion;

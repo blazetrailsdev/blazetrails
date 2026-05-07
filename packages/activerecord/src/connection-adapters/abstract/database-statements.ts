@@ -8,7 +8,7 @@
  *   custom types and rejects them with a clear error (per PR 6).
  */
 
-import { sql as arelSql, Nodes, Visitors } from "@blazetrails/arel";
+import { sql as arelSql, Nodes, Visitors, Table, InsertManager } from "@blazetrails/arel";
 import { Attribute as ModelAttribute } from "@blazetrails/activemodel";
 import { Notifications } from "@blazetrails/activesupport";
 import { Temporal } from "@blazetrails/activesupport/temporal";
@@ -1498,7 +1498,9 @@ export function defaultInsertValue(_column: unknown): Nodes.SqlLiteral {
 }
 
 /**
- * Builds an INSERT SQL string for a set of fixture rows.
+ * Builds an INSERT SQL string for a set of fixture rows using an Arel
+ * InsertManager, matching Rails' column-ordering and single-row DEFAULT-strip
+ * behaviour as closely as possible without a schema cache.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#build_fixture_sql
  * @internal
@@ -1508,20 +1510,51 @@ export function buildFixtureSql(
   fixtures: Record<string, unknown>[],
   tableName: string,
 ): string {
-  const emptyValue = this.emptyInsertStatementValue?.() ?? emptyInsertStatementValue();
-  if (fixtures.length === 0) return `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
+  if (fixtures.length === 0) {
+    const emptyValue = this.emptyInsertStatementValue?.() ?? emptyInsertStatementValue();
+    return `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
+  }
 
+  // Collect the union of all column names across fixtures (preserving
+  // insertion order via Set, matching Rails' schema_cache column order
+  // as closely as possible without a schema cache).
   const allColumns = [...new Set(fixtures.flatMap((f) => Object.keys(f)))];
-  if (allColumns.length === 0) return `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
+  if (allColumns.length === 0) {
+    const emptyValue = this.emptyInsertStatementValue?.() ?? emptyInsertStatementValue();
+    return `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
+  }
 
-  const cols = allColumns.map((c) => this.quoteColumnName(c)).join(", ");
-  const rows = fixtures.map((fixture) => {
-    const vals = allColumns.map((col) =>
-      col in fixture ? this.quote(withYamlFallback(fixture[col])) : "DEFAULT",
-    );
-    return `(${vals.join(", ")})`;
-  });
-  return `INSERT INTO ${this.quoteTableName(tableName)} (${cols}) VALUES ${rows.join(", ")}`;
+  const DEFAULT_VALUE = arelSql("DEFAULT");
+  const table = new Table(tableName);
+  const manager = new InsertManager(table);
+
+  const valuesList = fixtures.map((fixture) =>
+    allColumns.map((col) =>
+      col in fixture ? new Nodes.Quoted(withYamlFallback(fixture[col])) : DEFAULT_VALUE,
+    ),
+  );
+
+  if (valuesList.length === 1) {
+    // Single-row: strip DEFAULT columns so the DB fills them from its own
+    // defaults, matching Rails' behaviour exactly.
+    const row = valuesList[0];
+    const filteredValues: Nodes.Node[] = [];
+    allColumns.forEach((col, i) => {
+      if (row[i] !== DEFAULT_VALUE) {
+        filteredValues.push(row[i] as Nodes.Node);
+        manager.columns.push(table.get(col));
+      }
+    });
+    manager.values = manager.createValues(filteredValues);
+  } else {
+    allColumns.forEach((col) => manager.columns.push(table.get(col)));
+    manager.values = manager.createValuesList(valuesList as Nodes.Node[][]);
+  }
+
+  // Compile via the adapter's Arel visitor when available (matches Rails'
+  // `visitor.compile(manager.ast)`), falling back to the manager's own toSql().
+  const visitor = (this as any)?.arelVisitor as Visitors.ToSql | undefined;
+  return visitor ? visitor.compile(manager.ast) : manager.toSql();
 }
 
 /**

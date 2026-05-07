@@ -473,7 +473,7 @@ function truncate(name: string): string {
 }
 
 /** @internal */
-function aggregateColumn(rel: CalculationRelation, columnName: string): unknown {
+export function aggregateColumn(rel: CalculationRelation, columnName: string): unknown {
   const table = rel._modelClass.arelTable;
   if (columnName === "*" || columnName === "1") {
     return (table as any).sql ? (table as any).sql(columnName) : columnName;
@@ -486,17 +486,17 @@ function aggregateColumn(rel: CalculationRelation, columnName: string): unknown 
 }
 
 /** @internal */
-function isAllAttributes(columnNames: string[]): boolean {
+export function isAllAttributes(columnNames: string[]): boolean {
   return columnNames.every((c) => c === "*" || !c.includes("("));
 }
 
 /** @internal */
-function hasInclude(rel: CalculationRelation, columnName: string | null): boolean {
+export function hasInclude(rel: CalculationRelation, columnName: string | null): boolean {
   return (rel as any)._includesValues?.length > 0 || (rel as any)._eagerLoadValues?.length > 0;
 }
 
 /** @internal */
-function performCalculation(
+export function performCalculation(
   rel: CalculationRelation,
   operation: string,
   columnName: string,
@@ -508,12 +508,12 @@ function performCalculation(
 }
 
 /** @internal */
-function isDistinctSelect(rel: CalculationRelation, columnName: string): boolean {
+export function isDistinctSelect(rel: CalculationRelation, columnName: string): boolean {
   return rel._isDistinct || columnName !== "*";
 }
 
 /** @internal */
-function operationOverAggregateColumn(
+export function operationOverAggregateColumn(
   column: unknown,
   operation: string,
   distinct: boolean,
@@ -522,7 +522,7 @@ function operationOverAggregateColumn(
 }
 
 /** @internal */
-async function executeSimpleCalculation(
+export async function executeSimpleCalculation(
   rel: CalculationRelation,
   operation: string,
   columnName: string,
@@ -533,7 +533,7 @@ async function executeSimpleCalculation(
 }
 
 /** @internal */
-async function executeGroupedCalculation(
+export async function executeGroupedCalculation(
   rel: CalculationRelation,
   operation: string,
   columnName: string,
@@ -547,17 +547,20 @@ async function executeGroupedCalculation(
 }
 
 /** @internal */
-function typeFor(rel: CalculationRelation, field: string): unknown {
+export function typeFor(rel: CalculationRelation, field: string): unknown {
   return resolveColType(rel, field);
 }
 
 /** @internal */
-function lookupCastTypeFromJoinDependencies(_rel: CalculationRelation, _name: string): unknown {
+export function lookupCastTypeFromJoinDependencies(
+  _rel: CalculationRelation,
+  _name: string,
+): unknown {
   return null;
 }
 
 /** @internal */
-function typeCastPluckValues(
+export function typeCastPluckValues(
   result: unknown[][],
   columns: string[],
   rel?: CalculationRelation,
@@ -570,7 +573,7 @@ function typeCastPluckValues(
 }
 
 /** @internal */
-function typeCastCalculatedValue(value: unknown, operation: string, type: unknown): unknown {
+export function typeCastCalculatedValue(value: unknown, operation: string, type: unknown): unknown {
   if (operation === "count") return Number(value ?? 0);
   if (operation === "sum") return Number(value ?? 0);
   if (operation === "average") return value === null ? null : Number(value);
@@ -578,19 +581,23 @@ function typeCastCalculatedValue(value: unknown, operation: string, type: unknow
 }
 
 /** @internal */
-function selectForCount(rel: CalculationRelation): string {
+export function selectForCount(rel: CalculationRelation): string {
   const sel = (rel as any)._selectColumns;
   if (!sel || sel.length === 0) return "*";
   return sel.map((s: unknown) => String(s)).join(", ");
 }
 
 /** @internal */
-function isBuildCountSubquery(operation: string, columnName: string, distinct: boolean): boolean {
+export function isBuildCountSubquery(
+  operation: string,
+  columnName: string,
+  distinct: boolean,
+): boolean {
   return operation === "count" && distinct && columnName !== "*";
 }
 
 /** @internal */
-function buildCountSubquery(
+export function buildCountSubquery(
   rel: CalculationRelation,
   columnName: string,
   distinct: boolean,

@@ -13,7 +13,7 @@ export class Batches {
 }
 
 /** @internal */
-function ensureValidOptionsForBatchingBang(
+export function ensureValidOptionsForBatchingBang(
   cursor: string | string[],
   start: unknown,
   finish: unknown,
@@ -41,7 +41,7 @@ function ensureValidOptionsForBatchingBang(
 }
 
 /** @internal */
-function applyLimits(
+export function applyLimits(
   relation: any,
   cursor: string | string[],
   start: unknown,
@@ -58,7 +58,7 @@ function applyLimits(
 }
 
 /** @internal */
-function applyStartLimit(
+export function applyStartLimit(
   relation: any,
   cursor: string | string[],
   start: unknown,
@@ -69,7 +69,7 @@ function applyStartLimit(
 }
 
 /** @internal */
-function applyFinishLimit(
+export function applyFinishLimit(
   relation: any,
   cursor: string | string[],
   finish: unknown,
@@ -80,7 +80,7 @@ function applyFinishLimit(
 }
 
 /** @internal */
-function batchCondition(
+export function batchCondition(
   relation: any,
   cursor: string | string[],
   values: unknown,
@@ -100,7 +100,7 @@ function batchCondition(
 }
 
 /** @internal */
-function buildBatchOrders(
+export function buildBatchOrders(
   cursor: string | string[],
   order: "asc" | "desc" | ("asc" | "desc")[] | undefined,
 ): [string, "asc" | "desc"][] {
@@ -110,14 +110,14 @@ function buildBatchOrders(
 }
 
 /** @internal */
-function actOnIgnoredOrder(errorOnIgnore: boolean | undefined): void {
+export function actOnIgnoredOrder(errorOnIgnore: boolean | undefined): void {
   if (errorOnIgnore) {
     throw new Error(Batches.ORDER_IGNORE_MESSAGE);
   }
 }
 
 /** @internal */
-function batchOnLoadedRelation(opts: {
+export function batchOnLoadedRelation(opts: {
   relation: any;
   start: unknown;
   finish: unknown;
@@ -145,13 +145,13 @@ function batchOnLoadedRelation(opts: {
 }
 
 /** @internal */
-function recordCursorValues(record: any, cursor: string | string[]): unknown[] {
+export function recordCursorValues(record: any, cursor: string | string[]): unknown[] {
   const cols = Array.isArray(cursor) ? cursor : [cursor];
   return cols.map((c) => record.readAttribute?.(c) ?? record[c]);
 }
 
 /** @internal */
-function compareValuesForOrder(
+export function compareValuesForOrder(
   values1: unknown[],
   values2: unknown[],
   order: ("asc" | "desc")[],
@@ -167,7 +167,7 @@ function compareValuesForOrder(
 }
 
 /** @internal */
-async function batchOnUnloadedRelation(opts: {
+export async function batchOnUnloadedRelation(opts: {
   relation: any;
   start: unknown;
   finish: unknown;

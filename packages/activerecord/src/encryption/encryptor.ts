@@ -12,7 +12,7 @@ import {
   getOrCreateDefaultKeyProvider,
   clearDefaultKeyProviderCache,
 } from "./default-key-provider-cache.js";
-import { ConfigError, DecryptionError, ForbiddenClass } from "./errors.js";
+import { Base, ConfigError, DecryptionError, Encoding, ForbiddenClass } from "./errors.js";
 import type { Compressor } from "./config.js";
 import { defaultCompressor } from "./config.js";
 import { normalizeEncoding, replaceUnencodable } from "./encoding-helpers.js";
@@ -82,7 +82,13 @@ export class Encryptor {
 
   decrypt(
     encryptedText: string,
-    options?: { keyProvider?: KeyProviderLike; key?: string },
+    options?: {
+      keyProvider?: KeyProviderLike;
+      key?: string;
+      // cipher_options is accepted for API symmetry with encrypt() but unused today —
+      // deterministic IV is read from message headers rather than cipher_options on decrypt.
+      cipherOptions?: Record<string, unknown>;
+    },
   ): string {
     if (options?.keyProvider && options.key !== undefined) {
       throw new DecryptionError("key and keyProvider can't be used simultaneously");
@@ -112,8 +118,16 @@ export class Encryptor {
       keys = kp.decryptionKeys(message).map((k) => k.secret);
     }
 
-    const decryptedBuf = this.cipher().decrypt(message.payload, keys, iv, authTag);
-    return this.uncompressIfNeeded(decryptedBuf, compressed);
+    // Mirrors Rails: rescue *(ENCODING_ERRORS + DECRYPT_ERRORS) => raise Errors::Decryption.
+    // Cipher errors (wrong key, auth-tag mismatch) are already DecryptionError; this
+    // catch also covers inflate errors on corrupt compressed payloads.
+    try {
+      const decryptedBuf = this.cipher().decrypt(message.payload, keys, iv, authTag);
+      return this.uncompressIfNeeded(decryptedBuf, compressed);
+    } catch (e) {
+      if (e instanceof Base) throw e;
+      throw new DecryptionError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   isEncrypted(text: string): boolean {
@@ -154,9 +168,11 @@ export class Encryptor {
   /** @internal */
   private validatePayloadType(clearText: unknown): void {
     if (typeof clearText !== "string") {
-      throw new ForbiddenClass(
-        `The encryptor can only encrypt string values (${typeof clearText})`,
-      );
+      const typeName =
+        clearText != null && typeof clearText === "object"
+          ? ((clearText as object).constructor?.name ?? "object")
+          : typeof clearText;
+      throw new ForbiddenClass(`The encryptor can only encrypt string values (${typeName})`);
     }
   }
 
@@ -172,7 +188,13 @@ export class Encryptor {
 
   /** @internal */
   private deserializeMessage(encryptedText: string): Message {
-    return this.serializer().load(encryptedText);
+    // Mirrors Rails: rescue ArgumentError, TypeError, Errors::ForbiddenClass => Errors::Encoding
+    try {
+      return this.serializer().load(encryptedText);
+    } catch (e) {
+      if (e instanceof ForbiddenClass || e instanceof TypeError) throw new Encoding();
+      throw e;
+    }
   }
 
   /** @internal */
@@ -211,6 +233,9 @@ export class Encryptor {
       Buffer.byteLength(clearText, "utf-8") > THRESHOLD_TO_JUSTIFY_COMPRESSION
     ) {
       const compressed = this.compress(clearText);
+      // Extra guard: keep uncompressed if deflate doesn't shrink the data (e.g. already-compressed
+      // or high-entropy input). Rails trusts that >140-byte strings are worth compressing. Decrypt
+      // reads the `c` header so the asymmetry is interop-safe.
       if (compressed.length < Buffer.byteLength(clearText, "utf-8")) {
         return [compressed, true];
       }
@@ -221,6 +246,8 @@ export class Encryptor {
   /** @internal */
   private compress(data: string): Buffer {
     const result = this._compressor.deflate(data);
+    // TS Buffer has no encoding tag; Rails calls force_encoding(data.encoding) here.
+    // This is a no-op for the utf-8 round-trip that the cipher/serializer use today.
     return Buffer.isBuffer(result) ? result : Buffer.from(result);
   }
 
@@ -234,6 +261,8 @@ export class Encryptor {
 
   /** @internal */
   private uncompress(data: Buffer | Uint8Array): string {
+    // TS Buffer has no encoding tag; Rails calls force_encoding(data.encoding) here.
+    // Callers decode the result as utf-8 consistently so no encoding is lost in practice.
     return this._compressor.inflate(data);
   }
 

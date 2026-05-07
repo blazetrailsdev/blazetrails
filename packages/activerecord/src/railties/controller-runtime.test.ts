@@ -76,19 +76,40 @@ describe("ControllerRuntimeTest", () => {
       expect(result).toBe(0);
     });
 
-    it("returns 0 when logger.info is falsy", () => {
+    it("returns 0 when logger.info returns false", () => {
       RuntimeRegistry.record("SELECT", 5.0);
-      const result = cleanupViewRuntime.call({ dbRuntime: null, logger: { info: false } });
+      const result = cleanupViewRuntime.call({ dbRuntime: null, logger: { info: () => false } });
       expect(result).toBe(0);
     });
 
-    it("resets runtimes and accumulates dbRuntime when logger.info is true", () => {
+    it("accumulates pre-render dbRuntime when logger.info returns true", () => {
       RuntimeRegistry.record("SELECT", 6.0);
-      const host = { dbRuntime: 1.0, logger: { info: true } };
+      const host = { dbRuntime: 1.0, logger: { info: () => true } };
 
       cleanupViewRuntime.call(host);
 
-      expect(host.dbRuntime).toBeGreaterThanOrEqual(1.0);
+      // pre-render SQL time (6.0) is added to existing dbRuntime (1.0)
+      expect(host.dbRuntime).toBe(7.0);
+    });
+
+    it("resets the runtime registry when logger.info returns true", () => {
+      RuntimeRegistry.record("SELECT", 6.0);
+      const host = { dbRuntime: null, logger: { info: () => true } };
+
+      cleanupViewRuntime.call(host);
+
+      expect(RuntimeRegistry.stats().sqlRuntime).toBe(0.0);
+    });
+
+    it("returns 0 without ActionView (no queries between resets)", () => {
+      RuntimeRegistry.record("SELECT", 6.0);
+      const host = { dbRuntime: null, logger: { info: () => true } };
+
+      const result = cleanupViewRuntime.call(host);
+
+      // Without ActionView super(), no queries run between the two resets so
+      // queriesRt = 0 and the return value is viewRenderTime(0) - queriesRt(0) = 0.
+      expect(result).toBe(0);
     });
   });
 });

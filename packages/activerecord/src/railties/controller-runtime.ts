@@ -17,7 +17,8 @@ import * as RuntimeRegistry from "../runtime-registry.js";
 
 interface ControllerRuntimeHost {
   dbRuntime: number | null;
-  logger?: { info?: boolean } | null;
+  /** Rails `logger.info?` is a method that returns true when the log level is INFO or lower. */
+  logger?: { info?: () => boolean } | null;
 }
 
 /**
@@ -39,20 +40,24 @@ export function processAction(
  * Overrides ActionView's `cleanup_view_runtime` to subtract DB time from the
  * reported view render time. Accumulates `:dbRuntime` on the controller.
  *
- * Requires ActionView integration for the `super` (view render time) value;
- * without it, returns 0 minus the query time.
+ * Rails structure: reset → super (view renders, may run queries) → read queriesRt →
+ * reset again → return (viewRenderTime - queriesRt). Without ActionView, the
+ * view render time is 0 and no queries run between the resets, so queriesRt = 0
+ * and the return value is 0. The two-reset structure is preserved so ActionView
+ * integration can slot `runtime = super` between them without restructuring.
  *
  * Mirrors: ActiveRecord::Railties::ControllerRuntime#cleanup_view_runtime
  * @internal
  */
 export function cleanupViewRuntime(this: ControllerRuntimeHost): number {
-  if (this.logger?.info) {
+  if (this.logger?.info?.()) {
     const dbRtBeforeRender = RuntimeRegistry.stats().resetRuntimes();
     this.dbRuntime = (this.dbRuntime ?? 0) + dbRtBeforeRender;
     const queriesRt = RuntimeRegistry.stats().sqlRuntime - RuntimeRegistry.stats().asyncSqlRuntime;
     const dbRtAfterRender = RuntimeRegistry.stats().resetRuntimes();
     this.dbRuntime += dbRtAfterRender;
-    return -queriesRt;
+    const runtime = 0; // ActionView super() not yet integrated; will be view render time
+    return runtime - queriesRt;
   }
   return 0;
 }

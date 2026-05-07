@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { TypeMap } from "../type/type-map.js";
 import {
   BooleanType,
@@ -13,80 +13,78 @@ import { Time as TimeType } from "../type/time.js";
 import { DateTime as DateTimeType } from "../type/date-time.js";
 import { Json as JsonType } from "../type/json.js";
 import { DecimalWithoutScale } from "../type/decimal-without-scale.js";
-
-// Access the private wired methods via a minimal AbstractAdapter-like host.
-// Since the functions are mixed in via include(), we instantiate a real subclass.
 import { AbstractAdapter } from "./abstract-adapter.js";
 
+// All 5 methods are class-level in Rails (class << self private), so test via a subclass.
 class TestAdapter extends AbstractAdapter {
   static get adapterName() {
     return "TestAdapter";
   }
-  // Minimal overrides to satisfy abstract surface; not called in these tests.
   override get adapterName() {
     return "TestAdapter" as const;
   }
 }
 
-const adapter = new TestAdapter();
-
-describe("AbstractAdapter#extractLimit", () => {
+describe("AbstractAdapter.extractLimit", () => {
   it("parses limit from sql type with parens", () => {
-    expect((adapter as any).extractLimit("varchar(255)")).toBe(255);
+    expect(TestAdapter.extractLimit("varchar(255)")).toBe(255);
   });
 
   it("returns undefined when no parens", () => {
-    expect((adapter as any).extractLimit("text")).toBeUndefined();
+    expect(TestAdapter.extractLimit("text")).toBeUndefined();
   });
 
-  it("parses limit from decimal(10,2) as leading number", () => {
-    expect((adapter as any).extractLimit("decimal(10,2)")).toBe(10);
+  it("parses leading digits from decimal(10,2)", () => {
+    expect(TestAdapter.extractLimit("decimal(10,2)")).toBe(10);
   });
 });
 
-describe("AbstractAdapter#extractPrecision", () => {
+describe("AbstractAdapter.extractPrecision", () => {
   it("returns first number for p,s form", () => {
-    expect((adapter as any).extractPrecision("decimal(10,2)")).toBe(10);
+    expect(TestAdapter.extractPrecision("decimal(10,2)")).toBe(10);
   });
 
   it("returns number for p-only form", () => {
-    expect((adapter as any).extractPrecision("decimal(10)")).toBe(10);
+    expect(TestAdapter.extractPrecision("decimal(10)")).toBe(10);
   });
 
   it("returns undefined when no parens", () => {
-    expect((adapter as any).extractPrecision("decimal")).toBeUndefined();
+    expect(TestAdapter.extractPrecision("decimal")).toBeUndefined();
   });
 });
 
-describe("AbstractAdapter#extractScale", () => {
+describe("AbstractAdapter.extractScale", () => {
   it("returns second number for p,s form", () => {
-    expect((adapter as any).extractScale("decimal(10,2)")).toBe(2);
+    expect(TestAdapter.extractScale("decimal(10,2)")).toBe(2);
   });
 
   it("returns 0 for single-number form", () => {
-    expect((adapter as any).extractScale("decimal(10)")).toBe(0);
+    expect(TestAdapter.extractScale("decimal(10)")).toBe(0);
   });
 
   it("returns undefined when no parens", () => {
-    expect((adapter as any).extractScale("decimal")).toBeUndefined();
+    expect(TestAdapter.extractScale("decimal")).toBeUndefined();
   });
 });
 
-describe("AbstractAdapter#registerClassWithLimit", () => {
-  it("registers a type that uses extractLimit", () => {
+describe("AbstractAdapter.registerClassWithLimit", () => {
+  it("registers a type factory that extracts limit", () => {
     const m = new TypeMap();
-    (adapter as any).registerClassWithLimit(m, /varchar/i, IntegerType);
+    TestAdapter.registerClassWithLimit(m, /varchar/i, IntegerType);
     const type = m.lookup("varchar(64)");
     expect(type).toBeInstanceOf(IntegerType);
   });
 });
 
-describe("AbstractAdapter#initializeTypeMap", () => {
+describe("AbstractAdapter.initializeTypeMap", () => {
   let m: TypeMap;
 
-  it("registers boolean", () => {
+  beforeAll(() => {
     m = new TypeMap();
-    (adapter as any).initializeTypeMap(m);
+    TestAdapter.initializeTypeMap(m);
+  });
+
+  it("registers boolean", () => {
     expect(m.lookup("boolean")).toBeInstanceOf(BooleanType);
   });
 

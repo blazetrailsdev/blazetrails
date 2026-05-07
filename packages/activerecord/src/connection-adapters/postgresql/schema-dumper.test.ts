@@ -281,7 +281,7 @@ describe("PostgreSQL::SchemaDumper", () => {
   });
 
   describe("exclusionConstraintsInCreate", () => {
-    it("emits sorted t.exclusion_constraint lines with options", async () => {
+    it("emits sorted ctx.addExclusionConstraint lines with options", async () => {
       const { ExclusionConstraintDefinition } = await import("./schema-definitions.js");
       const adapter = {
         ...emptySource,
@@ -296,7 +296,7 @@ describe("PostgreSQL::SchemaDumper", () => {
       const dumper = new (SchemaDumper as any)(adapter) as any;
       const lines: string[] = [];
       await dumper.exclusionConstraintsInCreate("rooms", lines);
-      expect(lines[0]).toContain(`t.exclusion_constraint "price WITH ="`);
+      expect(lines[0]).toContain(`await ctx.addExclusionConstraint("rooms", "price WITH ="`);
       expect(lines[0]).toContain(`where: "(price > 0)"`);
       expect(lines[0]).toContain(`using: "gist"`);
       expect(lines[0]).toContain(`name: "excl_rooms_price"`);
@@ -304,7 +304,7 @@ describe("PostgreSQL::SchemaDumper", () => {
   });
 
   describe("uniqueConstraintsInCreate", () => {
-    it("emits sorted t.unique_constraint lines with options", async () => {
+    it("emits sorted ctx.addUniqueConstraint lines with options", async () => {
       const { UniqueConstraintDefinition } = await import("./schema-definitions.js");
       const adapter = {
         ...emptySource,
@@ -318,8 +318,8 @@ describe("PostgreSQL::SchemaDumper", () => {
       const dumper = new (SchemaDumper as any)(adapter) as any;
       const lines: string[] = [];
       await dumper.uniqueConstraintsInCreate("users", lines);
-      expect(lines[0]).toContain(`t.unique_constraint ["email"]`);
-      expect(lines[0]).toContain(`nulls_not_distinct: true`);
+      expect(lines[0]).toContain(`await ctx.addUniqueConstraint("users", ["email"]`);
+      expect(lines[0]).toContain(`nullsNotDistinct: true`);
       expect(lines[0]).toContain(`name: "uniq_users_email"`);
     });
 

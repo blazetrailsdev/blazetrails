@@ -123,13 +123,15 @@ export class SchemaDumper extends AbstractSchemaDumper {
     const constraints: ExclusionConstraintDefinition[] =
       await adapter.exclusionConstraints(tableName);
     if (constraints.length === 0) return;
+    const stripped = this.removePrefixAndSuffix(tableName);
     const stmts = constraints.map((ec) => {
-      const parts: string[] = [`t.exclusion_constraint ${JSON.stringify(ec.expression)}`];
-      if (ec.where) parts.push(`where: ${JSON.stringify(ec.where)}`);
-      if (ec.using) parts.push(`using: ${JSON.stringify(ec.using)}`);
-      if (ec.deferrable !== undefined) parts.push(`deferrable: ${JSON.stringify(ec.deferrable)}`);
-      if (ec.exportNameOnSchemaDump()) parts.push(`name: ${JSON.stringify(ec.name)}`);
-      return `    ${parts.join(", ")}`;
+      const opts: string[] = [];
+      if (ec.where) opts.push(`where: ${JSON.stringify(ec.where)}`);
+      if (ec.using) opts.push(`using: ${JSON.stringify(ec.using)}`);
+      if (ec.deferrable !== undefined) opts.push(`deferrable: ${JSON.stringify(ec.deferrable)}`);
+      if (ec.exportNameOnSchemaDump()) opts.push(`name: ${JSON.stringify(ec.name)}`);
+      const optStr = opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
+      return `  await ctx.addExclusionConstraint(${JSON.stringify(stripped)}, ${JSON.stringify(ec.expression)}${optStr});`;
     });
     lines.push(...stmts.sort());
   }
@@ -140,13 +142,15 @@ export class SchemaDumper extends AbstractSchemaDumper {
     if (!adapter?.uniqueConstraints) return;
     const constraints: UniqueConstraintDefinition[] = await adapter.uniqueConstraints(tableName);
     if (constraints.length === 0) return;
+    const stripped = this.removePrefixAndSuffix(tableName);
     const stmts = constraints.map((uc) => {
-      const parts: string[] = [`t.unique_constraint ${JSON.stringify(uc.column)}`];
+      const opts: string[] = [];
       if (uc.nullsNotDistinct)
-        parts.push(`nulls_not_distinct: ${JSON.stringify(uc.nullsNotDistinct)}`);
-      if (uc.deferrable !== undefined) parts.push(`deferrable: ${JSON.stringify(uc.deferrable)}`);
-      if (uc.exportNameOnSchemaDump()) parts.push(`name: ${JSON.stringify(uc.name)}`);
-      return `    ${parts.join(", ")}`;
+        opts.push(`nullsNotDistinct: ${JSON.stringify(uc.nullsNotDistinct)}`);
+      if (uc.deferrable !== undefined) opts.push(`deferrable: ${JSON.stringify(uc.deferrable)}`);
+      if (uc.exportNameOnSchemaDump()) opts.push(`name: ${JSON.stringify(uc.name)}`);
+      const optStr = opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
+      return `  await ctx.addUniqueConstraint(${JSON.stringify(stripped)}, ${JSON.stringify(uc.column)}${optStr});`;
     });
     lines.push(...stmts.sort());
   }

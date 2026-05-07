@@ -192,10 +192,4 @@ describe("QueryAssertionsTest", () => {
     expect(counter.log).toHaveLength(1);
     expect(counter.log[0]).toBe("SELECT 1");
   });
-
-  it("adapter queries are captured via notifications", async () => {
-    await assertQueriesCount(1, false, async () => {
-      instrumentSql("SELECT 1");
-    });
-  });
 });

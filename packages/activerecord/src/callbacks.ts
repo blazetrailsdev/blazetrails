@@ -10,8 +10,8 @@
 
 import type { Base } from "./base.js";
 import {
+  allTimestampAttributesInModel,
   currentTimeFromProperTimezone,
-  timestampAttributesForCreateInModel,
   timestampAttributesForUpdateInModel,
 } from "./timestamp.js";
 
@@ -247,9 +247,9 @@ export function _createRecord(this: any): Promise<boolean> {
   return ctor._callbackChain.runCallbacks("create", this, async () => {
     if (ctor.recordTimestamps !== false) {
       const time = currentTimeFromProperTimezone();
-      for (const col of timestampAttributesForCreateInModel.call(ctor)) {
+      for (const col of allTimestampAttributesInModel.call(ctor)) {
         if (ctor._attributeDefinitions?.has(col) && this._readAttribute?.(col) == null) {
-          this.writeAttribute?.(col, time);
+          this._writeAttribute?.(col, time);
         }
       }
     }

@@ -47,6 +47,11 @@ export class Configurable {
       }
     }
 
+    this._invalidateCaches();
+  }
+
+  /** @internal */
+  static _invalidateCaches(): void {
     // Mirror Rails: reset_default_context after setting config so context
     // properties derived from config (e.g. key_provider) are re-evaluated.
     Contexts.resetDefaultContext();

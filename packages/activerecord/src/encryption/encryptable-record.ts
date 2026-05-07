@@ -220,15 +220,40 @@ export class EncryptableRecord {
 
   /** @internal */
   static overrideAccessorsToPreserveOriginal(
-    _modelClass: any,
-    _name: string,
-    _originalName: string,
+    modelClass: any,
+    name: string,
+    originalName: string,
   ): void {
-    // The public entry point (Base.encrypts / encryption.ts#encrypts) handles
-    // the ignoreCase accessor override via _preserveOriginalEncrypted, which
-    // uses Object.defineProperty to wire the before-save sync and getter/setter.
-    // This @internal stub exists for api:compare parity only and is not called
-    // on the live path.
+    // Before each save, sync the in-memory value of `name` into `originalName`
+    // when `name` has been written. For new records always sync (changedAttributes
+    // is empty before the first save snapshot). Mirrors Rails'
+    // `name= { self.original_name = value; super(value) }`.
+    if (typeof modelClass.beforeSave === "function") {
+      modelClass.beforeSave((record: any) => {
+        const isNew =
+          typeof record.isNewRecord === "function" ? record.isNewRecord() : !record.isPersisted?.();
+        const changed: string[] = Array.isArray(record.changedAttributes)
+          ? record.changedAttributes
+          : [];
+        if (!isNew && !changed.includes(name)) return;
+        record.writeAttribute(originalName, record.readAttribute(name));
+      });
+    }
+    // Override prototype accessor. Getter returns originalName when present
+    // (case-preserving read), falling back to name for legacy rows. Setter
+    // writes both so in-memory reads see the new value before save.
+    Object.defineProperty(modelClass.prototype, name, {
+      configurable: true,
+      get(this: any) {
+        const originalValue = this.readAttribute(originalName);
+        if (originalValue != null) return originalValue;
+        return this.readAttribute(name);
+      },
+      set(this: any, value: unknown) {
+        this.writeAttribute(name, value);
+        this.writeAttribute(originalName, value);
+      },
+    });
   }
 
   /** @internal */

@@ -9,7 +9,7 @@ import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 
 // Memoized SHA1 key provider: PBKDF2 is expensive (65536 iterations), so
 // reuse the same provider as long as primaryKey and keyDerivationSalt haven't
-// changed. Keyed on the tuple so config rotation invalidates the cache.
+// changed. Cleared by the onConfigure hook below so config rotation invalidates it.
 let _sha1ProviderCache:
   | {
       primaryKey: string | string[];
@@ -17,6 +17,12 @@ let _sha1ProviderCache:
       provider: DerivedSecretKeyProvider;
     }
   | undefined;
+
+// Clear the SHA1 provider cache whenever configure() is called so the new
+// primary key / key derivation salt is picked up on the next encrypt call.
+Configurable.onConfigure(() => {
+  _sha1ProviderCache = undefined;
+});
 
 function getSha1KeyProvider(
   primaryKey: string | string[],
@@ -307,10 +313,7 @@ export class EncryptableRecord {
     const klass = record.constructor as any;
     const result: Record<string, unknown> = {};
     for (const name of klass._encryptedAttributes ?? new Set<string>()) {
-      const type = getAttributeType(klass, name);
-      const value = record.readAttribute?.(name) ?? record[name];
-      // Pre-serialize so updateColumns stores ciphertext, not plaintext.
-      result[name] = type instanceof EncryptedAttributeType ? type.serialize(value) : value;
+      result[name] = record.readAttribute?.(name) ?? record[name];
     }
     return result;
   }

@@ -2889,6 +2889,21 @@ export interface Base extends Included<typeof AutosaveAssociation> {
   /** @internal */
   initInternals(): void;
   /** @internal */
+  committedBang(options?: { shouldRunCallbacks?: boolean }): Promise<void>;
+  /** @internal */
+  rolledbackBang(options?: {
+    forceRestoreState?: boolean;
+    shouldRunCallbacks?: boolean;
+  }): Promise<void>;
+  /** @internal */
+  isTriggerTransactionalCallbacks(): boolean;
+  /** @internal */
+  withTransactionReturningStatus<T>(fn: () => Promise<T>): Promise<T>;
+  /** @internal */
+  addToTransaction(ensureFinalize?: boolean): Promise<void>;
+  /** @internal */
+  hasTransactionalCallbacks(): boolean;
+  /** @internal */
   _createRecord(): Promise<boolean>;
   slice(...keys: string[]): Record<string, unknown>;
   valuesAt(...keys: string[]): unknown[];

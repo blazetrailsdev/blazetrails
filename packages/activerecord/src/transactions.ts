@@ -541,11 +541,17 @@ export async function withTransactionReturningStatus<T>(
   let status: T;
   let rolledBack = false;
 
-  // Capture whether there is an outer transaction before entering transaction().
   // Mirrors Rails' `ensure_finalize = !connection.transaction_open?`.
-  const hadOuterTransaction = currentTransaction() !== null;
+  // inTransaction covers external transactions (e.g. fixtures) that
+  // TransactionManager doesn't track — same condition used in transaction().
+  const adapter = modelClass.adapter;
+  const hadOuterTransaction = currentTransaction() !== null || adapter.inTransaction;
+  // TransactionManager path is only active when withinNewTransaction exists AND
+  // we're not in the external-transaction fallback (adapter.inTransaction &&
+  // currentTransaction() === null causes transaction() to use the fallback).
   const hasTransactionManager =
-    typeof (modelClass.adapter as any).withinNewTransaction === "function";
+    typeof (adapter as any).withinNewTransaction === "function" &&
+    !(currentTransaction() === null && adapter.inTransaction);
 
   await transaction(modelClass, async (tx) => {
     // Enroll record with the TransactionManager so it fires committedBang/

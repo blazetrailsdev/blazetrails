@@ -295,8 +295,30 @@ export class EncryptableRecord {
   /** @internal */
   static async encryptAttributes(record: any): Promise<void> {
     this.validateEncryptionAllowed(record);
-    const assignments = this.buildEncryptAttributeAssignments(record);
+    const klass = record.constructor as any;
+    const encryptedAttrs: Set<string> = klass._encryptedAttributes ?? new Set();
+
+    // Pre-serialize so updateColumns writes ciphertext — updateColumns uses
+    // cast() not serialize(), so plaintext would be written back unchanged.
+    // Mirrors encryption.ts#encryptRecord.
+    const plaintextValues: Record<string, unknown> = {};
+    const assignments: Record<string, unknown> = {};
+    for (const name of encryptedAttrs) {
+      const plaintext = record.readAttribute?.(name) ?? record[name];
+      plaintextValues[name] = plaintext;
+      const type = getAttributeType(klass, name);
+      assignments[name] =
+        type instanceof EncryptedAttributeType ? type.serialize(plaintext) : plaintext;
+    }
+
     await record.updateColumns?.(assignments);
+
+    // Restore plaintext as the in-memory cast value — updateColumns set the
+    // ciphertext as the live value via cast(), but callers expect to read plaintext.
+    for (const [name, plaintext] of Object.entries(plaintextValues)) {
+      record._attributes?.writeCastValue?.(name, plaintext);
+    }
+    record.changesApplied?.();
   }
 
   /** @internal */
@@ -347,12 +369,14 @@ export class EncryptableRecord {
   /** @internal */
   static cantModifyEncryptedAttributesWhenFrozen(record: any): void {
     const klass = record.constructor as any;
+    const encryptedAttrs: Set<string> = klass._encryptedAttributes ?? new Set();
     // changedAttributes is a string[] in this codebase (from DirtyTracker).
+    // Iterate changed once and check Set membership — O(n+m) vs O(n×m).
     const changed: string[] = Array.isArray(record.changedAttributes)
       ? record.changedAttributes
       : [];
-    for (const attr of klass._encryptedAttributes ?? new Set<string>()) {
-      if (changed.includes(attr)) {
+    for (const attr of changed) {
+      if (encryptedAttrs.has(attr)) {
         record.errors?.add?.(attr, "can't be modified because it is encrypted");
       }
     }

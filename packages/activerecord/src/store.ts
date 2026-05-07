@@ -1,7 +1,27 @@
 import { ConfigurationError } from "./errors.js";
 import type { Base } from "./base.js";
 import { HashWithIndifferentAccess } from "@blazetrails/activesupport";
-import { buildColumnSerializer } from "./attribute-methods/serialization.js";
+import { ColumnSerializer as _CodersColumnSerializer } from "./coders/column-serializer.js";
+import { JSON as _CodersJSON } from "./coders/json.js";
+
+// Inlined from attribute-methods/serialization.ts to break the
+// store→serialization→type/json→store circular dependency.
+// buildColumnSerializer only needs coders/, not the Json type.
+function buildColumnSerializer(
+  attrName: string,
+  coder: unknown,
+  type: unknown,
+  _yaml?: Record<string, unknown>,
+): unknown {
+  const resolvedCoder = coder === globalThis.JSON ? _CodersJSON : coder;
+  if (typeof resolvedCoder === "function" && !("load" in resolvedCoder)) {
+    return new (resolvedCoder as any)(attrName, type);
+  }
+  if (type && type !== Object) {
+    return new _CodersColumnSerializer(attrName, resolvedCoder as any, type as any);
+  }
+  return resolvedCoder;
+}
 
 // Injected by base.ts to break the store→serialize→json→store circular dep.
 // store() calls this when wiring IndifferentCoder for plain text/string columns.
@@ -65,11 +85,15 @@ export class IndifferentCoder {
   }
 
   dump(obj: unknown): unknown {
-    // Mirror Rails: as_regular_hash(obj) — to_hash if it responds, else {}
+    // Mirror Rails as_regular_hash: obj.to_hash if it responds, else {}.
+    // HWIA responds to toHash(); plain objects (Object/null prototype) spread;
+    // class instances, Arrays, and primitives return {} — matching Ruby's
+    // respond_to?(:to_hash) which is false for arbitrary class instances.
+    const proto = obj !== null && typeof obj === "object" ? Object.getPrototypeOf(obj) : null;
     const plain =
       obj instanceof HashWithIndifferentAccess
         ? obj.toHash()
-        : obj !== null && typeof obj === "object" && !Array.isArray(obj)
+        : proto === Object.prototype || proto === null
           ? { ...(obj as Record<string, unknown>) }
           : {};
     return this.coder ? this.coder.dump(plain) : JSON.stringify(plain);

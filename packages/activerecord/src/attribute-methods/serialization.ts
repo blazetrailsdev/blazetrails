@@ -60,7 +60,7 @@ export class ColumnSerializer {
 type CoderLike = { dump(v: unknown): string; load(v: unknown): unknown };
 
 /** @internal */
-export function buildColumnSerializer(
+function buildColumnSerializer(
   attrName: string,
   coder: unknown,
   type: unknown,

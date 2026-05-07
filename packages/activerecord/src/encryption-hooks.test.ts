@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 // Intentionally does NOT import encryption.js — tests the unregistered state.
 import { encryptionHooks, registerEncryptionHooks } from "./encryption-hooks.js";
 import { Base } from "./base.js";
@@ -19,20 +19,21 @@ describe("encryptionHooks — unregistered default behavior", () => {
     expect(() => encryptionHooks.applyPendingEncryptions(Base)).not.toThrow();
   });
 
-  it("registerEncryptionHooks replaces the throwing stub", () => {
-    const recorded: string[] = [];
-    registerEncryptionHooks({
-      ...encryptionHooks,
-      encrypts: (_klass: any, name: string) => recorded.push(name),
+  describe("registerEncryptionHooks", () => {
+    const originalEncrypts = encryptionHooks.encrypts;
+
+    afterEach(() => {
+      registerEncryptionHooks({ ...encryptionHooks, encrypts: originalEncrypts });
     });
-    expect(() => encryptionHooks.encrypts(Base, "ssn")).not.toThrow();
-    expect(recorded).toContain("ssn");
-    // Restore original throw so other tests in this suite aren't affected.
-    registerEncryptionHooks({
-      ...encryptionHooks,
-      encrypts: (klass: any) => {
-        throw new Error(`${klass?.name ?? "Model"}.encrypts() — not loaded`);
-      },
+
+    it("replaces the throwing stub and restores it after the test", () => {
+      const recorded: string[] = [];
+      registerEncryptionHooks({
+        ...encryptionHooks,
+        encrypts: (_klass: any, name: string) => recorded.push(name),
+      });
+      expect(() => encryptionHooks.encrypts(Base, "ssn")).not.toThrow();
+      expect(recorded).toContain("ssn");
     });
   });
 });

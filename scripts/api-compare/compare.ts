@@ -230,6 +230,7 @@ const TS_ROOT_INTERMEDIATE = new Map<string, string>([
 // - `Registry` → `TypeRegistry`: same rationale for `ActiveModel::Type::Registry`.
 const TS_CLASS_RENAMES: Record<string, string> = {
   Name: "ModelName",
+  Railtie: "Trailtie",
   Registry: "TypeRegistry",
 };
 

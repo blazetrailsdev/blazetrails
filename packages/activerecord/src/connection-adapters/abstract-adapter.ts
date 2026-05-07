@@ -62,6 +62,16 @@ import {
 } from "./abstract/quoting.js";
 import type { Quoting } from "./abstract/quoting-interface.js";
 import { include } from "@blazetrails/activesupport";
+import { SchemaStatements } from "./abstract/schema-statements.js";
+import type {
+  TableDefinition,
+  Table,
+  ForeignKeyDefinition,
+  AddForeignKeyOptions,
+  ColumnType,
+  ColumnOptions,
+} from "./abstract/schema-definitions.js";
+import type { Column } from "./column.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter::Version
@@ -118,8 +128,107 @@ export class Version {
 // include() below). Using method signatures (not property-typed
 // functions from `Included<>`) lets concrete adapter subclasses
 // override with method syntax without tripping TS2425.
+// SchemaStatements methods mixed in via include() at the bottom of this file.
+// Rails: `AbstractAdapter` includes `SchemaStatements` so `connection.create_table(...)` works.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface AbstractAdapter {
+  // --- SchemaStatements (DDL) ---
+  // The abstract base signatures are declared here. Concrete adapter subclasses
+  // that override with dialect-specific variants (PG's createTable/dropTable)
+  // carry // @ts-ignore on those overrides; the runtime behaviour is correct.
+  createTable(
+    name: string,
+    optionsOrFn?:
+      | { id?: boolean | "uuid"; force?: boolean; ifNotExists?: boolean }
+      | ((t: TableDefinition) => void),
+    fn?: (t: TableDefinition) => void,
+  ): Promise<void>;
+  dropTable(name: string, options?: { ifExists?: boolean }): Promise<void>;
+  renameTable(oldName: string, newName: string): Promise<void>;
+  addColumn(
+    tableName: string,
+    columnName: string,
+    type: ColumnType,
+    options?: ColumnOptions & { ifNotExists?: boolean },
+  ): Promise<void>;
+  renameColumn(tableName: string, oldName: string, newName: string): Promise<void>;
+  changeColumn(
+    tableName: string,
+    columnName: string,
+    type: ColumnType,
+    options?: ColumnOptions,
+  ): Promise<void>;
+  changeColumnDefault(
+    tableName: string,
+    columnName: string,
+    defaultOrChanges: unknown,
+  ): Promise<void>;
+  changeColumnNull(
+    tableName: string,
+    columnName: string,
+    nullable: boolean,
+    defaultValue?: unknown,
+  ): Promise<void>;
+  addColumns(
+    tableName: string,
+    ...columns: Array<{ name: string; type: ColumnType; options?: ColumnOptions }>
+  ): Promise<void>;
+  removeColumns(tableName: string, ...columns: string[]): Promise<void>;
+  removeIndex(
+    tableName: string,
+    options?: { column?: string | string[]; name?: string },
+  ): Promise<void>;
+  renameIndex(tableName: string, oldName: string, newName: string): Promise<void>;
+  indexName(tableName: string, options: { column?: string | string[] }): string;
+  indexExists(
+    tableName: string,
+    columns: string | string[],
+    options?: { name?: string; unique?: boolean },
+  ): Promise<boolean>;
+  tableExists(tableName: string): Promise<boolean>;
+  columnExists(tableName: string, columnName: string): Promise<boolean>;
+  tables(): Promise<string[]>;
+  views(): Promise<string[]>;
+  viewExists(viewName: string): Promise<boolean>;
+  columns(tableName: string): Promise<Column[]>;
+  primaryKey(tableName: string): Promise<string | string[] | null>;
+  indexes(tableName: string): Promise<unknown[]>;
+  foreignKeys(tableName: string): Promise<ForeignKeyDefinition[]>;
+  addForeignKey(fromTable: string, toTable: string, options?: AddForeignKeyOptions): Promise<void>;
+  addReference(
+    tableName: string,
+    refName: string,
+    options?: Record<string, unknown>,
+  ): Promise<void>;
+  removeReference(
+    tableName: string,
+    refName: string,
+    options?: Record<string, unknown>,
+  ): Promise<void>;
+  addTimestamps(tableName: string, options?: ColumnOptions): Promise<void>;
+  removeTimestamps(tableName: string): Promise<void>;
+  addCheckConstraint(
+    tableName: string,
+    expression: string,
+    options?: Record<string, unknown>,
+  ): Promise<void>;
+  isCheckConstraintExists(
+    tableName: string,
+    options: { name?: string; expression?: string },
+  ): Promise<boolean>;
+  removeConstraint(tableName: string, constraintName: string): Promise<void>;
+  createJoinTable(
+    table1: string,
+    table2: string,
+    options?: Record<string, unknown>,
+    fn?: (t: TableDefinition) => void,
+  ): Promise<void>;
+  dropJoinTable(table1: string, table2: string, options?: Record<string, unknown>): Promise<void>;
+  changeTable(tableName: string, fn?: (t: Table) => void | Promise<void>): Promise<void>;
+  tableAliasFor(tableName: string): string;
+  dataSources(): Promise<string[]>;
+  isDataSourceExists(name: string): Promise<boolean>;
+  // --- DatabaseStatements ---
   selectAll(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
   selectOne(
     sql: string,
@@ -410,6 +519,29 @@ export class AbstractAdapter implements Quoting {
 
   get adapterName(): string {
     return "Abstract";
+  }
+
+  /**
+   * Returns `this` typed as `DatabaseAdapter & SchemaQuoter`. SchemaStatements
+   * methods (mixed in via `include()` below) reference `this.adapter` to
+   * call quoting and execution helpers on the adapter — when those methods
+   * run with `this` bound to an adapter instance, `this.adapter` must
+   * resolve to the same object.
+   * @internal
+   */
+  get adapter(): import("./abstract/assert-schema-adapter.js").SchemaQuoter & DatabaseAdapter {
+    return this as unknown as import("./abstract/assert-schema-adapter.js").SchemaQuoter &
+      DatabaseAdapter;
+  }
+
+  /** @internal */
+  protected _qi(name: string): string {
+    return this.quoteIdentifier(name);
+  }
+
+  /** @internal */
+  protected _qt(name: string): string {
+    return this.quoteTableName(name);
   }
 
   // --- Identity & lifecycle ---
@@ -1367,6 +1499,8 @@ export class AbstractAdapter implements Quoting {
 
 // Rails: `include DatabaseStatements` inside the class body.
 include(AbstractAdapter, DatabaseStatements);
+// Rails: `include SchemaStatements` inside the class body.
+include(AbstractAdapter, SchemaStatements);
 
 /** @internal */
 function initializeTypeMap(m: any): never {

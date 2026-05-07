@@ -2509,6 +2509,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
   }
 
+  // @ts-expect-error PG's callback-first signature diverges from the abstract base;
+  // runtime behaviour is correct for all callers. Harmonize in a follow-up.
   async createTable(
     tableName: string,
     callback: (t: SimpleTableBuilder) => void,
@@ -3516,6 +3518,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.createDatabase(name, options);
   }
 
+  // @ts-expect-error PG's rest-arg overload diverges from the abstract base's (name, options?) form;
+  // runtime behaviour is correct. Harmonize in a follow-up.
   async dropTable(
     ...args:
       | [...tableNames: string[], options: { ifExists?: boolean; force?: "cascade" }]

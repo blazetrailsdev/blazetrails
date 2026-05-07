@@ -59,6 +59,9 @@ export class Encryptor {
     clearText: string,
     options?: { keyProvider?: KeyProviderLike; key?: string; deterministic?: boolean },
   ): string {
+    if (options?.keyProvider && options.key !== undefined) {
+      throw new ConfigError("key and keyProvider can't be used simultaneously");
+    }
     this.validatePayloadType(clearText);
     const text = options?.deterministic ? this.forceEncodingIfNeeded(clearText) : clearText;
     // Resolve key provider: explicit keyProvider > raw key shortcut > default.
@@ -81,6 +84,9 @@ export class Encryptor {
     encryptedText: string,
     options?: { keyProvider?: KeyProviderLike; key?: string },
   ): string {
+    if (options?.keyProvider && options.key !== undefined) {
+      throw new DecryptionError("key and keyProvider can't be used simultaneously");
+    }
     if (typeof encryptedText !== "string") {
       throw new DecryptionError(
         `The encryptor can only decrypt string values (${typeof encryptedText})`,

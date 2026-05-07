@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Encryptor } from "./encryptor.js";
 import { Configurable } from "./configurable.js";
 import { Contexts } from "./contexts.js";
@@ -240,8 +240,13 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
   });
 
   describe("default key provider from Configurable.config", () => {
-    const savedPrimaryKey = Configurable.config.primaryKey;
-    const savedSalt = Configurable.config.keyDerivationSalt;
+    let savedPrimaryKey: string | string[] | undefined;
+    let savedSalt: string | undefined;
+
+    beforeEach(() => {
+      savedPrimaryKey = Configurable.config.primaryKey;
+      savedSalt = Configurable.config.keyDerivationSalt;
+    });
 
     afterEach(() => {
       Configurable.config.primaryKey = savedPrimaryKey;

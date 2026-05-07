@@ -2182,9 +2182,11 @@ describe("Base constructor wires initializeInternalsCallback", () => {
       }
     }
 
-    setBaseClass(Dog2);
-    expect((Dog2 as any)._cachedBaseClass).toBe(Animal2);
     setBaseClass(Animal2);
-    expect((Animal2 as any)._cachedBaseClass).toBe(Animal2);
+    setBaseClass(Dog2);
+    // Animal2's superclass is Base (no _computedBaseClass) → Animal2 is its own root
+    expect((Animal2 as any)._computedBaseClass).toBe(Animal2);
+    // Dog2's superclass is Animal2, which has _computedBaseClass set → Dog2 inherits it
+    expect((Dog2 as any)._computedBaseClass).toBe(Animal2);
   });
 });

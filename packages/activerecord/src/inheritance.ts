@@ -100,14 +100,28 @@ export function isBaseClass(modelClass: typeof Base): boolean {
 }
 
 /**
- * Compute and cache the STI base class for this model.
- * Called during class setup to initialise the `base_class` reference.
+ * Compute and cache the base class for this model using the Rails hierarchy
+ * logic: a class is its own base if its immediate superclass is Base or is
+ * abstract; otherwise it inherits the superclass's base class.
  *
  * Mirrors: ActiveRecord::Inheritance::ClassMethods#set_base_class
  * @internal
  */
 export function setBaseClass(modelClass: typeof Base): void {
-  (modelClass as any)._cachedBaseClass = getStiBase(modelClass);
+  const parent = Object.getPrototypeOf(modelClass) as typeof Base | null;
+  if (!parent || parent === Function.prototype || typeof parent.name !== "string") {
+    // modelClass IS Base (or detached) — it is its own base.
+    (modelClass as any)._computedBaseClass = modelClass;
+    return;
+  }
+  // Rails: if superclass == Base || superclass.abstract_class? → self is root
+  const parentIsAbstract = getAbstractClass.call(parent);
+  const parentIsBase = !(parent as any)._computedBaseClass; // parent hasn't been through setBaseClass → it's Base itself
+  if (parentIsAbstract || parentIsBase) {
+    (modelClass as any)._computedBaseClass = modelClass;
+  } else {
+    (modelClass as any)._computedBaseClass = (parent as any)._computedBaseClass ?? parent;
+  }
 }
 
 /**

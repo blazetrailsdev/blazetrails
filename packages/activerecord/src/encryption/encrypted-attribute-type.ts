@@ -214,8 +214,8 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
       return this._encryptor.decrypt(ciphertext, this.decryptionOptions());
     } catch (error) {
       if (!(error instanceof BaseEncryptionError)) throw error;
-      const prev = this.previousTypesWithoutCleanText();
-      if (prev.length === 0) return this.handleDeserializeError(error, value);
+      if (this.scheme.previousSchemes.length === 0)
+        return this.handleDeserializeError(error, value);
       return this.tryToDeserializeWithPreviousEncryptedTypes(value);
     }
   }
@@ -247,7 +247,7 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   /** @internal */
   private isSerializeWithOldest(): boolean {
     this._serializeWithOldestMemo ??=
-      this.scheme.isFixed() && this.previousTypesWithoutCleanText().length > 0;
+      this.scheme.isFixed() && this.scheme.previousSchemes.length > 0;
     return this._serializeWithOldestMemo;
   }
 
@@ -278,8 +278,8 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     return this._encryptor.encrypt(value, this.encryptionOptions());
   }
 
-  private encrypt(value: string): string {
-    return this.textToDatabaseType(this.encryptAsText(value)) as string;
+  private encrypt(value: string): unknown {
+    return this.textToDatabaseType(this.encryptAsText(value));
   }
 
   /** @internal */

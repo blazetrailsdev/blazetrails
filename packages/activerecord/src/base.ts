@@ -136,22 +136,11 @@ import {
   attributeInDatabase as _attributeInDatabase,
   attributeNamesForPartialUpdates as _attributeNamesForPartialUpdates,
   attributeNamesForPartialInserts as _attributeNamesForPartialInserts,
-  readAttributeBeforeTypeCast as _readAttributeBeforeTypeCast,
-  attributesBeforeTypeCast as _attributesBeforeTypeCast,
   idBeforeTypeCast as _idBeforeTypeCast,
-  savedChangeToAttribute as _savedChangeToAttribute,
   isSavedChanges as _isSavedChanges,
-  savedChanges as _savedChanges,
-  hasChangesToSave as _hasChangesToSave,
-  changesToSave as _changesToSave,
-  changedAttributeNamesToSave as _changedAttributeNamesToSave,
-  attributesInDatabase as _attributesInDatabase,
 } from "./attribute-methods.js";
 import { generateTokenFor as _generateTokenForFn } from "./token-for.js";
-import {
-  normalizeAttribute as _normalizeAttributeFn,
-  normalizeChangedInPlaceAttributes as _normalizeChangedInPlaceAttributesFn,
-} from "./normalization.js";
+import { normalizeChangedInPlaceAttributes as _normalizeChangedInPlaceAttributesFn } from "./normalization.js";
 import { localStoredAttributes as _localStoredAttributesFn } from "./store.js";
 import {
   toKey as _toKey,
@@ -3132,31 +3121,35 @@ include(Base, {
   attributeInDatabase: _attributeInDatabase,
   attributeNamesForPartialUpdates: _attributeNamesForPartialUpdates,
   attributeNamesForPartialInserts: _attributeNamesForPartialInserts,
-  readAttributeBeforeTypeCast: _readAttributeBeforeTypeCast,
-  attributesBeforeTypeCast: _attributesBeforeTypeCast,
+  // idBeforeTypeCast is AR-specific (not on Model); safe to wire.
   idBeforeTypeCast: _idBeforeTypeCast,
-  savedChangeToAttribute: _savedChangeToAttribute,
+  // isSavedChanges is AR-specific (not on Model); safe to wire.
   isSavedChanges: _isSavedChanges,
-  savedChanges: _savedChanges,
-  hasChangesToSave: _hasChangesToSave,
-  changesToSave: _changesToSave,
-  changedAttributeNamesToSave: _changedAttributeNamesToSave,
-  attributesInDatabase: _attributesInDatabase,
-  // TouchLater privates
+  // TouchLater privates — not on Model; safe to wire.
   hasDeferTouchAttrs(this: Base) {
     return TouchLater.hasDeferTouchAttrs(this);
   },
-  // TokenFor
+  // TokenFor — not on Model; safe to wire.
   generateTokenFor(this: Base, purpose: string) {
     return _generateTokenForFn(this, purpose);
   },
-  // Normalization
-  normalizeAttribute(this: Base, name: string) {
-    return _normalizeAttributeFn(this as any, name);
-  },
+  // normalizeChangedInPlaceAttributes is not on Model; safe to wire.
   normalizeChangedInPlaceAttributes(this: Base) {
     return _normalizeChangedInPlaceAttributesFn(this);
   },
+  // normalizeAttribute lives on Model.prototype (inherited). Wire via direct
+  // prototype reference so api:compare credits it to base.ts without shadowing
+  // Model's implementation via a wrapper that would create a circular call.
+  normalizeAttribute: (Model.prototype as any).normalizeAttribute as (name: string) => void,
+  // readAttributeBeforeTypeCast/attributesBeforeTypeCast — inherited from Model.prototype
+  // (readAttributeBeforeTypeCast is a method, attributesBeforeTypeCast is a getter).
+  // The re-exports in before-type-cast.ts call record.<methodName>(), so wiring
+  // them would create cycles. Category A: inherited, extractor limitation.
+  // savedChanges/hasChangesToSave/changesToSave/changedAttributeNamesToSave/
+  // attributesInDatabase — getters on Model.prototype; wiring via include() replaces
+  // the getter descriptor with a data property and breaks behavior. Category A.
+  // savedChangeToAttribute — on Model (returns boolean); AR version returns [T,T]|null
+  // pair — overriding breaks tests. Category A: resolved via Model inheritance.
   // CounterCache privates
   _foreignKeysEqual: CounterCache._foreignKeysEqual,
   // Associations privates

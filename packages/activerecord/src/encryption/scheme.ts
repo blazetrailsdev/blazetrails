@@ -16,10 +16,7 @@ import {
   getOrCreateDefaultKeyProvider,
   clearDefaultKeyProviderCache,
 } from "./default-key-provider-cache.js";
-export {
-  getOrCreateDefaultKeyProvider,
-  clearDefaultKeyProviderCache,
-} from "./default-key-provider-cache.js";
+export { clearDefaultKeyProviderCache } from "./default-key-provider-cache.js";
 
 export interface SchemeOptions {
   keyProvider?: unknown;

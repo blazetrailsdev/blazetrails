@@ -8,7 +8,10 @@ import { Cipher } from "./cipher/aes256-gcm.js";
 import { Message } from "./message.js";
 import { MessageSerializer } from "./message-serializer.js";
 import { Configurable } from "./configurable.js";
-import { getOrCreateDefaultKeyProvider } from "./default-key-provider-cache.js";
+import {
+  getOrCreateDefaultKeyProvider,
+  clearDefaultKeyProviderCache,
+} from "./default-key-provider-cache.js";
 import { ConfigError, DecryptionError, ForbiddenClass } from "./errors.js";
 import type { Compressor } from "./config.js";
 import { defaultCompressor } from "./config.js";
@@ -130,7 +133,10 @@ export class Encryptor {
     const ctxKp = Configurable.keyProvider as KeyProviderLike | undefined;
     if (ctxKp) return ctxKp;
     const { primaryKey, keyDerivationSalt, hashDigestClass } = Configurable.config;
-    if (!primaryKey) return undefined;
+    if (primaryKey == null) {
+      clearDefaultKeyProviderCache();
+      return undefined;
+    }
     // Module-level cache keyed by (primaryKey, salt, digest); invalidated by
     // the single onConfigure hook registered in default-key-provider-cache.ts.
     return getOrCreateDefaultKeyProvider(primaryKey, keyDerivationSalt, hashDigestClass);

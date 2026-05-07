@@ -47,7 +47,8 @@ export function delegatedType(
   const foreignType = options.foreignType ?? `${role}_type`;
   const config = { ...options, foreignKey, foreignType };
 
-  // Rails: belongs_to role, scope, **options.merge(polymorphic: true)
+  // Rails: belongs_to role, **options.merge(polymorphic: true)
+  // (Rails also accepts an optional scope proc; we omit it as there's no proc equivalent)
   const { types: _types, ...assocOptions } = options as DelegatedTypeOptions & { types?: unknown };
   (modelClass as any).belongsTo(role, {
     ...assocOptions,

@@ -1506,7 +1506,8 @@ export function defaultInsertValue(_column: unknown): Nodes.SqlLiteral {
  * @internal
  */
 export function buildFixtureSql(
-  this: DatabaseStatementsHost & Pick<Quoting, "quote" | "quoteTableName" | "quoteColumnName">,
+  this: DatabaseStatementsHost &
+    Pick<Quoting, "quote" | "quoteTableName" | "quoteColumnName" | "quoteString">,
   fixtures: Record<string, unknown>[],
   tableName: string,
 ): string {
@@ -1557,9 +1558,13 @@ export function buildFixtureSql(
   }
 
   // Compile via the adapter's Arel visitor when available (matches Rails'
-  // `visitor.compile(manager.ast)`), falling back to the manager's own toSql().
-  const visitor = (this as any)?.arelVisitor as Visitors.ToSql | undefined;
-  return visitor ? visitor.compile(manager.ast) : manager.toSql();
+  // `visitor.compile(manager.ast)`). When arelVisitor is absent (e.g.
+  // SchemaAdapter/TestAdapter), construct one from this adapter so identifier
+  // quoting is dialect-correct rather than using the global default quoter.
+  const visitor =
+    ((this as any)?.arelVisitor as Visitors.ToSql | undefined) ??
+    new Visitors.ToSql(this as unknown as Visitors.ArelQuoter);
+  return visitor.compile(manager.ast);
 }
 
 /**
@@ -1569,7 +1574,8 @@ export function buildFixtureSql(
  * @internal
  */
 export function buildFixtureStatements(
-  this: DatabaseStatementsHost & Pick<Quoting, "quote" | "quoteTableName" | "quoteColumnName">,
+  this: DatabaseStatementsHost &
+    Pick<Quoting, "quote" | "quoteTableName" | "quoteColumnName" | "quoteString">,
   fixtureSet: Record<string, Record<string, unknown>[]>,
 ): string[] {
   return Object.entries(fixtureSet)

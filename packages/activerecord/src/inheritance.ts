@@ -114,13 +114,16 @@ export function setBaseClass(modelClass: typeof Base): void {
     (modelClass as any)._computedBaseClass = modelClass;
     return;
   }
-  // Rails: if superclass == Base || superclass.abstract_class? → self is root
+  // Rails: if superclass == Base || superclass.abstract_class? → self is root.
+  // We detect the AR root via the _isARBase sentinel set on Base.
+  const parentIsARBase = Object.prototype.hasOwnProperty.call(parent, "_isARBase");
   const parentIsAbstract = getAbstractClass.call(parent);
-  const parentIsBase = !(parent as any)._computedBaseClass; // parent hasn't been through setBaseClass → it's Base itself
-  if (parentIsAbstract || parentIsBase) {
+  if (parentIsARBase || parentIsAbstract) {
     (modelClass as any)._computedBaseClass = modelClass;
   } else {
-    (modelClass as any)._computedBaseClass = (parent as any)._computedBaseClass ?? parent;
+    // Ensure parent is computed first (lazy on first call).
+    if (!(parent as any)._computedBaseClass) setBaseClass(parent);
+    (modelClass as any)._computedBaseClass = (parent as any)._computedBaseClass;
   }
 }
 

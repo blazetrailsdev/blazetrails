@@ -452,6 +452,9 @@ function _applyScopeAttributes(
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class Base extends Model {
+  /** @internal Sentinel used by setBaseClass to identify the AR root class. */
+  static readonly _isARBase = true;
+
   // --- Translation mixin (wired via extend() after class) ---
   declare static lookupAncestors: typeof Translation.lookupAncestors;
 
@@ -2861,7 +2864,7 @@ extend(Base, {
 });
 extend(Base, {
   collectingQueriesForExplain: _collectingQueriesForExplain,
-  execExplain: _execExplain,
+  // execExplain is a static wrapper (passes `this`) — not in extend()
   renderBind: _renderBind,
   buildExplainClause: _buildExplainClause,
 });

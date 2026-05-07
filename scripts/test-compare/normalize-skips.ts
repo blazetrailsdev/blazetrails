@@ -473,22 +473,28 @@ function categorize(relPath: string, describeName: string, testName: string): An
     };
   }
 
-  // --- Adapter (abstract) ---
+  // --- Adapter (abstract) — schema introspection + execution ---
+  // Test names: tableExists?, indexes, dataSources, valid column, type_to_sql, exec_query, charset
+  // Dominant theme: schema introspection (~60%) + query execution (~40%)
   if (p === "adapter.test.ts") {
     return {
-      blocked: "unknown — abstract adapter introspection/execution gap",
+      blocked: "schema — abstract adapter schema introspection / query execution gap",
       rootCause:
-        "connection-adapters/abstract/abstract-adapter.ts missing Rails parity for this feature",
-      scope: "~50 LOC in abstract-adapter.ts; affects ~70 tests in adapter.test.ts",
+        "connection-adapters/abstract/schema-statements.ts#tableExists/indexes/dataSources or abstract-adapter.ts#execQuery not fully implemented",
+      scope:
+        "~100 LOC across abstract/schema-statements.ts + abstract-adapter.ts; affects ~70 tests in adapter.test.ts",
     };
   }
 
-  // --- Base test ---
+  // --- Base test — mixed: time-zone (type), marshal (serialization), STI, connections ---
   if (p === "base.test.ts") {
     return {
-      blocked: "unknown — base AR feature gap (fixture / connected_to / STI / other)",
-      rootCause: "base.ts or core.ts missing Rails parity for this test's feature",
-      scope: "~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts",
+      blocked:
+        "type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)",
+      rootCause:
+        "type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps",
+      scope:
+        "~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters",
     };
   }
 

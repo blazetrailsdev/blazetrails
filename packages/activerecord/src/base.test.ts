@@ -831,30 +831,30 @@ describe("BasicsTest", () => {
   });
 
   it.skip("inherited from scoped find", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* not in Rails test suite — fabricated test name; kept as placeholder only */
   });
 
   it.skip("model classes with matching names", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* needs module/namespace support */
   });
 
   it.skip("copy table with id", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* needs SQLite copy_table support */
   });
 
   it.skip("select does not fire after_initialize callbacks on unmatched records", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* not in Rails base_test.rb — fabricated test name */
   });
 
@@ -1393,9 +1393,9 @@ describe("BasicsTest", () => {
     expect(u.name).toBe("alice");
   });
   it.skip("implicit readonly on left joins", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* not in Rails test suite — left_outer_joins does not mark records readonly in Rails */
   });
   it("to param with id", async () => {
@@ -1537,9 +1537,9 @@ describe("BasicsTest", () => {
     expect(unscopedSql).not.toContain("alice");
   });
   it.skip("find applies includes with default scope", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it("find applies scope conditions", () => {
     class User extends Base {
@@ -1787,15 +1787,15 @@ describe("BasicsTest", () => {
     expect(sql).toContain("INNER JOIN");
   });
   it.skip("includes eager loads associations", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* not in Rails base_test.rb — covered by eager_test.rb tests */
   });
   it.skip("incomplete schema loading", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* Rails: stubs schema_cache to raise — relies on internal connection-pool stub infrastructure */
   });
   it("primary key with no id", () => {
@@ -1864,34 +1864,34 @@ describe("BasicsTest", () => {
     expect(() => User.limit("1, 7 ; DROP TABLE users" as any)).toThrow(/invalid limit/i);
   });
   it.skip("preserving time objects", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("preserving time objects with local time conversion to default timezone utc", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("preserving time objects with time with zone conversion to default timezone utc", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("preserving time objects with utc time conversion to default timezone local", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("preserving time objects with time with zone conversion to default timezone local", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("time zone aware attribute with default timezone utc on utc can be created", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it("singular table name guesses with prefixes and suffixes", () => {
     class PrefixedModel extends Base {
@@ -1907,14 +1907,14 @@ describe("BasicsTest", () => {
     expect(Account.tableName).toBe("accounts");
   });
   it.skip("utc as time zone", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("utc as time zone and new", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it("out of range slugs", async () => {
     class Topic extends Base {
@@ -2158,9 +2158,9 @@ describe("BasicsTest", () => {
     await expect(post2.update({ author_id: author2.id })).rejects.toThrow(ReadonlyAttributeError);
   });
   it.skip("respect internal encoding", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* Ruby-specific: tests Encoding.default_internal (EUC-JP) on column names — no JS equivalent */
   });
   it("non valid identifier column name", async () => {
@@ -2175,15 +2175,15 @@ describe("BasicsTest", () => {
     expect(reloaded.readAttribute("a$b")).toBe("value");
   });
   it.skip("attributes on dummy time", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* needs time-string parsing ("5:42:00AM" -> dummy date 2000-01-01) with timezone config */
   });
   it.skip("attributes on dummy time with invalid time", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* needs time-string parsing — invalid time should return null */
   });
   it("previously persisted returns boolean", async () => {
@@ -2261,39 +2261,39 @@ describe("BasicsTest", () => {
     expect(u.name).toBe("");
   });
   it.skip("default in local time", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("default in utc", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("default in utc with time zone", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("switching default time zone", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("mutating time objects", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("connection in local time", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("connection in utc time", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it("column name properly quoted", () => {
     class User extends Base {
@@ -2462,29 +2462,29 @@ describe("BasicsTest", () => {
     expect(after).not.toBe(before);
   });
   it.skip("marshal inspected round trip", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("marshalling with associations 6 1", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("marshalling with associations 7 1", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("marshal between processes", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("marshalling new record round trip with associations", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it("attribute names on abstract class", () => {
     class AbstractModel extends Base {
@@ -2510,24 +2510,24 @@ describe("BasicsTest", () => {
     expect(Concrete.tableName).toBe("concretes");
   });
   it.skip("column types on queries on postgresql", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("connection_handler can be overridden", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("new threads get default the default connection handler", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("changing a connection handler in a main thread does not poison the other threads", () => {
-    // BLOCKED: unknown — base AR feature gap (fixture / connected_to / STI / other)
-    // ROOT-CAUSE: base.ts or core.ts missing Rails parity for this test's feature
-    // SCOPE: ~30–100 LOC fix in base.ts; affects ~36 tests in base.test.ts
+    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
+    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
+    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it("ignored columns are not present in columns_hash", () => {
     class User extends Base {

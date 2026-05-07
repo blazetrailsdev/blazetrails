@@ -42,8 +42,52 @@ interface Annotation {
   scope: string;
 }
 
+function testNameOverride(testName: string, relPath: string): Annotation | null {
+  const n = testName.toLowerCase();
+  const p = relPath.replace(/\\/g, "/");
+
+  // STI keywords in test name override file-dominant-theme category
+  if (
+    /\b(inherit|subclass|single.?table|sti\b|scope inherited|cti\b|polymorphic.*class|class.*polymorphic)/.test(
+      n,
+    ) &&
+    !p.startsWith("associations/") // association polymorphism is different
+  ) {
+    return {
+      blocked: "STI — single-table inheritance routing gap",
+      rootCause: "inheritance.ts#instantiateWithCtiMixin or findSubclass not fully wired",
+      scope: `~50 LOC fix in inheritance.ts; affects this test + others sharing STI root cause`,
+    };
+  }
+
+  // Marshal / Ruby serialization keywords
+  if (/\b(marshal|yaml.round.trip|ruby.*serial|serial.*ruby)/.test(n)) {
+    return {
+      blocked: "serialization — Ruby Marshal round-trip, no Node.js equivalent",
+      rootCause:
+        "Node.js has no Marshal.dump/load; Ruby object serialization tests cannot translate",
+      scope: "~0 LOC fix; permanent skip-list.ts candidate",
+    };
+  }
+
+  // Thread / GVL / concurrency keywords
+  if (/\b(thread|gvl|concurren|process.fork|fork.*connect|new.*thread|thread.*default)/.test(n)) {
+    return {
+      blocked: "GVL — Ruby thread / GVL semantics, no Node.js equivalent",
+      rootCause: "Node.js has no Thread.new / GVL; concurrent connection tests cannot translate",
+      scope: "~0 LOC fix; permanent skip-list.ts candidate",
+    };
+  }
+
+  return null;
+}
+
 function categorize(relPath: string, describeName: string, testName: string): Annotation {
   const p = relPath.replace(/\\/g, "/");
+
+  // Test-name keyword override takes priority for cross-cutting concerns
+  const override = testNameOverride(testName, relPath);
+  if (override) return override;
 
   // --- PostgreSQL adapter ---
   if (p.startsWith("adapters/postgresql/")) {

@@ -830,13 +830,6 @@ describe("BasicsTest", () => {
     expect(u.readAttribute("name")).toBe(null);
   });
 
-  it.skip("inherited from scoped find", () => {
-    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
-    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
-    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
-    /* not in Rails test suite — fabricated test name; kept as placeholder only */
-  });
-
   it.skip("model classes with matching names", () => {
     // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
     // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
@@ -849,13 +842,6 @@ describe("BasicsTest", () => {
     // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
     // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
     /* needs SQLite copy_table support */
-  });
-
-  it.skip("select does not fire after_initialize callbacks on unmatched records", () => {
-    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
-    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
-    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
-    /* not in Rails base_test.rb — fabricated test name */
   });
 
   it("type cast attribute from select to false", async () => {
@@ -2462,29 +2448,29 @@ describe("BasicsTest", () => {
     expect(after).not.toBe(before);
   });
   it.skip("marshal inspected round trip", () => {
-    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
-    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
-    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
+    // BLOCKED: serialization — Ruby Marshal round-trip, no Node.js equivalent
+    // ROOT-CAUSE: Node.js has no Marshal.dump/load; Ruby object serialization tests cannot translate
+    // SCOPE: ~0 LOC fix; permanent skip-list.ts candidate
   });
   it.skip("marshalling with associations 6 1", () => {
-    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
-    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
-    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
+    // BLOCKED: serialization — Ruby Marshal round-trip, no Node.js equivalent
+    // ROOT-CAUSE: Node.js has no Marshal.dump/load; Ruby object serialization tests cannot translate
+    // SCOPE: ~0 LOC fix; permanent skip-list.ts candidate
   });
   it.skip("marshalling with associations 7 1", () => {
-    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
-    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
-    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
+    // BLOCKED: serialization — Ruby Marshal round-trip, no Node.js equivalent
+    // ROOT-CAUSE: Node.js has no Marshal.dump/load; Ruby object serialization tests cannot translate
+    // SCOPE: ~0 LOC fix; permanent skip-list.ts candidate
   });
   it.skip("marshal between processes", () => {
-    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
-    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
-    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
+    // BLOCKED: serialization — Ruby Marshal round-trip, no Node.js equivalent
+    // ROOT-CAUSE: Node.js has no Marshal.dump/load; Ruby object serialization tests cannot translate
+    // SCOPE: ~0 LOC fix; permanent skip-list.ts candidate
   });
   it.skip("marshalling new record round trip with associations", () => {
-    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
-    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
-    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
+    // BLOCKED: serialization — Ruby Marshal round-trip, no Node.js equivalent
+    // ROOT-CAUSE: Node.js has no Marshal.dump/load; Ruby object serialization tests cannot translate
+    // SCOPE: ~0 LOC fix; permanent skip-list.ts candidate
   });
   it("attribute names on abstract class", () => {
     class AbstractModel extends Base {
@@ -2520,14 +2506,14 @@ describe("BasicsTest", () => {
     // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
   });
   it.skip("new threads get default the default connection handler", () => {
-    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
-    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
-    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
+    // BLOCKED: GVL — Ruby thread / GVL semantics, no Node.js equivalent
+    // ROOT-CAUSE: Node.js has no Thread.new / GVL; concurrent connection tests cannot translate
+    // SCOPE: ~0 LOC fix; permanent skip-list.ts candidate
   });
   it.skip("changing a connection handler in a main thread does not poison the other threads", () => {
-    // BLOCKED: type — time-zone aware attribute / timezone conversion gap (dominant theme in base.test.ts)
-    // ROOT-CAUSE: type/date-time.ts#castForDatabase or TimeZoneAwareAttribute not applying timezone on read/write; marshal round-trips are serialization gaps
-    // SCOPE: ~50–100 LOC in type/date-time.ts + connection-handler.ts; affects ~36 tests in base.test.ts across time-zone, marshal, STI, and connection-handler clusters
+    // BLOCKED: GVL — Ruby thread / GVL semantics, no Node.js equivalent
+    // ROOT-CAUSE: Node.js has no Thread.new / GVL; concurrent connection tests cannot translate
+    // SCOPE: ~0 LOC fix; permanent skip-list.ts candidate
   });
   it("ignored columns are not present in columns_hash", () => {
     class User extends Base {

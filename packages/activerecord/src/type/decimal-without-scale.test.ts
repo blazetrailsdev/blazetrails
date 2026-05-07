@@ -28,8 +28,8 @@ describe("DecimalWithoutScale", () => {
 
   it("accepts large values beyond 32-bit range without truncation", () => {
     const type = new DecimalWithoutScale();
-    // Values above 2^31-1 that would be silently truncated by 4-byte IntegerType.
-    // JS number precision is exact up to 2^53; values beyond that lose precision.
+    // Values above 2^31-1 would throw ActiveModelRangeError under 4-byte IntegerType.
+    // BigIntegerType's maxValue=Infinity bypasses that check. JS precision is exact up to 2^53.
     expect(type.cast("2147483648")).toBe(2147483648);
     expect(type.cast("9999999999")).toBe(9999999999);
   });

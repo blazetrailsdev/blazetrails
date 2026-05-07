@@ -156,7 +156,7 @@ describe("ActiveRecord::Encryption::ConfigurableTest", () => {
     }
   });
 
-  it(".configure calls _invalidateCaches so onConfigure hooks fire", () => {
+  it("configure fires onConfigure hooks so cache-clearing callbacks take effect", () => {
     let fired = false;
     const dispose = Configurable.onConfigure(() => {
       fired = true;

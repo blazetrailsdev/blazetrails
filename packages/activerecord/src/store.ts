@@ -1,27 +1,7 @@
 import { ConfigurationError } from "./errors.js";
 import type { Base } from "./base.js";
 import { HashWithIndifferentAccess } from "@blazetrails/activesupport";
-import { ColumnSerializer as _CodersColumnSerializer } from "./coders/column-serializer.js";
-import { JSON as _CodersJSON } from "./coders/json.js";
-
-// Inlined from attribute-methods/serialization.ts to break the
-// store→serialization→type/json→store circular dependency.
-// buildColumnSerializer only needs coders/, not the Json type.
-function buildColumnSerializer(
-  attrName: string,
-  coder: unknown,
-  type: unknown,
-  _yaml?: Record<string, unknown>,
-): unknown {
-  const resolvedCoder = coder === globalThis.JSON ? _CodersJSON : coder;
-  if (typeof resolvedCoder === "function" && !("load" in resolvedCoder)) {
-    return new (resolvedCoder as any)(attrName, type);
-  }
-  if (type && type !== Object) {
-    return new _CodersColumnSerializer(attrName, resolvedCoder as any, type as any);
-  }
-  return resolvedCoder;
-}
+import { buildColumnSerializer } from "./coders/build-column-serializer.js";
 
 // Injected by base.ts to break the store→serialize→json→store circular dep.
 // store() calls this when wiring IndifferentCoder for plain text/string columns.
@@ -425,7 +405,7 @@ export function storeAccessorFor(
       return accessor as typeof HashAccessor;
     }
   }
-  // Check IndifferentCoder registered by Base.store() — returns IndifferentHashAccessor.
+  // Check IndifferentCoder registered by store() (covers both standalone and Base.store()) — returns IndifferentHashAccessor.
   const coder = getStoreCoder(modelClass, storeAttribute);
   if (coder) return coder.accessor();
   // Last resort: confirm the column was declared via store() and use IndifferentHashAccessor.

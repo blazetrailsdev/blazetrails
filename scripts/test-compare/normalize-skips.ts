@@ -1,4 +1,4 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env -S npx tsx
 /**
  * normalize-skips.ts
  *
@@ -144,7 +144,7 @@ function categorize(relPath: string, describeName: string, testName: string): An
     if (p.includes("rake") || p.includes("dbconsole")) {
       return {
         blocked: "rake — Rake/dbconsole shell-out cannot run in Node.js",
-        rootCause: `${file}.ts#exec not translatable to Node.js`,
+        rootCause: `connection-adapters/abstract-adapter.ts#dbconsole not translatable to Node.js (shell-out)`,
         scope: "~0 LOC fix; permanent skip-list.ts candidate",
       };
     }
@@ -165,7 +165,7 @@ function categorize(relPath: string, describeName: string, testName: string): An
     if (p.includes("rake") || p.includes("dbconsole")) {
       return {
         blocked: "rake — Rake/dbconsole shell-out cannot run in Node.js",
-        rootCause: `${file}.ts#exec not translatable to Node.js`,
+        rootCause: `connection-adapters/abstract-adapter.ts#dbconsole not translatable to Node.js (shell-out)`,
         scope: "~0 LOC fix; permanent skip-list.ts candidate",
       };
     }
@@ -182,7 +182,7 @@ function categorize(relPath: string, describeName: string, testName: string): An
     if (p.includes("rake") || p.includes("dbconsole")) {
       return {
         blocked: "rake — Rake/dbconsole shell-out cannot run in Node.js",
-        rootCause: `${file}.ts#exec not translatable to Node.js`,
+        rootCause: `connection-adapters/abstract-adapter.ts#dbconsole not translatable to Node.js (shell-out)`,
         scope: "~0 LOC fix; permanent skip-list.ts candidate",
       };
     }
@@ -530,16 +530,18 @@ function categorize(relPath: string, describeName: string, testName: string): An
   if (p.startsWith("validations/") || p.includes("validation") || p.includes("i18n")) {
     const file = path.basename(p, ".test.ts");
     // Map test filename to actual implementation file (strips -validation suffix; handles irregulars)
-    const implFile =
-      file === "association-validation"
+    const isI18n = file === "i18n-validation" || file === "i18n-generate-message-validation";
+    const implFile = isI18n
+      ? "translation.ts"
+      : file === "association-validation"
         ? "validations/associated.ts"
-        : file === "i18n-validation" || file === "i18n-generate-message-validation"
-          ? "translation.ts"
-          : file === "validations"
-            ? "validations.ts"
-            : `validations/${file.replace(/-validation$/, "")}.ts`;
+        : file === "validations"
+          ? "validations.ts"
+          : `validations/${file.replace(/-validation$/, "")}.ts`;
     return {
-      blocked: `validation — validator behavior gap in ${file}`,
+      blocked: isI18n
+        ? `i18n — translation / message generation gap in ${file}`
+        : `validation — validator behavior gap in ${file}`,
       rootCause: `${implFile} missing Rails parity`,
       scope: `~30–100 LOC fix in ${implFile}; affects ~4–11 tests in ${file}.test.ts`,
     };

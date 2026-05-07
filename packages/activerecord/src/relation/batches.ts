@@ -1,5 +1,3 @@
-import { Nodes } from "@blazetrails/arel";
-
 /**
  * Batch processing methods: findEach, findInBatches, inBatches.
  *
@@ -89,14 +87,23 @@ export function batchCondition(
   const cursorArr = Array.isArray(cursor) ? cursor : [cursor];
   const valArr = Array.isArray(values) ? values : [values];
   const table = relation._modelClass.arelTable;
-  const conditions = cursorArr.map((col, i) => {
-    const attr = table.get(col);
-    const val = valArr[i];
-    const op = operators[i];
-    return (attr as any)[op](val);
-  });
-  if (conditions.length === 1) return relation.where(conditions[0]);
-  return relation.where(new Nodes.Grouping(new Nodes.And(conditions)));
+
+  // Build lexicographic WHERE matching Rails' cursor_positions.reverse_each logic:
+  // Single column: col OP val
+  // Multi-column: (col1 STRICT_OP val1) OR (col1 = val1 AND <rest>)
+  // where STRICT_OP is the strict variant of OP (lteq→lt, gteq→gt).
+  const positions = cursorArr.map((col, i) => [col, valArr[i], operators[i]] as const);
+  const [firstCol, firstVal, firstOp] = positions[positions.length - 1];
+  let clause: any = (table.get(firstCol) as any)[firstOp](firstVal);
+
+  for (let i = positions.length - 2; i >= 0; i--) {
+    const [col, val, op] = positions[i];
+    const attr = table.get(col) as any;
+    const strictOp = op === "lteq" ? "lt" : "gt";
+    clause = attr[strictOp](val).or(attr.eq(val).and(clause));
+  }
+
+  return relation.where(clause);
 }
 
 /** @internal */

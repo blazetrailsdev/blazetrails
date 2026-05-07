@@ -4538,7 +4538,7 @@ export class Relation<T extends Base> {
 
   /** @internal */
   private isAllAttributes(columnNames: string[]): boolean {
-    return _isAllAttributes(columnNames);
+    return _isAllAttributes(this as any, columnNames);
   }
 
   /** @internal */
@@ -4736,7 +4736,7 @@ export class Relation<T extends Base> {
   }
 
   /** @internal */
-  async(): Relation<T> {
+  private async(): Relation<T> {
     return (this.spawn() as any).asyncBang();
   }
 }

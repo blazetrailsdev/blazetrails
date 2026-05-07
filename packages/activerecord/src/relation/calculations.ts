@@ -486,8 +486,13 @@ export function aggregateColumn(rel: CalculationRelation, columnName: string): u
 }
 
 /** @internal */
-export function isAllAttributes(columnNames: string[]): boolean {
-  return columnNames.every((c) => c === "*" || !c.includes("("));
+export function isAllAttributes(rel: CalculationRelation, columnNames: string[]): boolean {
+  const model = rel._modelClass as any;
+  const known = new Set<string>([
+    ...(typeof model.attributeNames === "function" ? (model.attributeNames() as string[]) : []),
+    ...Object.keys(model._attributeAliases ?? {}),
+  ]);
+  return columnNames.map(String).every((c) => known.has(c));
 }
 
 /** @internal */
@@ -508,17 +513,18 @@ export function performCalculation(
 }
 
 /** @internal */
-export function isDistinctSelect(rel: CalculationRelation, columnName: string): boolean {
-  return rel._isDistinct || columnName !== "*";
+export function isDistinctSelect(_rel: CalculationRelation, columnName: string): boolean {
+  return typeof columnName === "string" && /\bDISTINCT[\s(]/i.test(columnName);
 }
 
 /** @internal */
 export function operationOverAggregateColumn(
-  column: unknown,
+  column: any,
   operation: string,
   distinct: boolean,
 ): unknown {
-  return column;
+  if (operation === "count") return column.count(distinct);
+  return typeof column[operation] === "function" ? column[operation]() : column;
 }
 
 /** @internal */

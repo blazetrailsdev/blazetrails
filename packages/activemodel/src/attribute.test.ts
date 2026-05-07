@@ -488,4 +488,33 @@ describe("AttributeTest", () => {
       expect(updated.isChanged()).toBe(false);
     });
   });
+
+  describe("FromDatabase#changedInPlace dispatches to type.isChangedInPlace", () => {
+    it("returns false before value is read", () => {
+      const mutableType = Object.create(typeRegistry.lookup("value"));
+      mutableType.isChangedInPlace = (_raw: unknown, _val: unknown) => true;
+      const attr = Attribute.fromDatabase("data", { a: 1 }, mutableType);
+      expect(attr.changedInPlace()).toBe(false);
+    });
+
+    it("returns true after in-place mutation for a mutable type", () => {
+      const mutableType = Object.create(typeRegistry.lookup("value"));
+      let callCount = 0;
+      mutableType.isChangedInPlace = (_raw: unknown, _val: unknown) => {
+        callCount++;
+        return true;
+      };
+      const attr = Attribute.fromDatabase("data", '{"a":1}', mutableType);
+      void attr.value;
+      expect(attr.changedInPlace()).toBe(true);
+      expect(callCount).toBeGreaterThan(0);
+    });
+
+    it("returns false for an immutable type even after value is read", () => {
+      const immutableType = typeRegistry.lookup("string");
+      const attr = Attribute.fromDatabase("name", "hello", immutableType);
+      void attr.value;
+      expect(attr.changedInPlace()).toBe(false);
+    });
+  });
 });

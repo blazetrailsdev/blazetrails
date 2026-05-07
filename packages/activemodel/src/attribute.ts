@@ -261,6 +261,13 @@ export class FromDatabase extends Attribute {
     return this.type.deserialize(value);
   }
 
+  override changedInPlace(): boolean {
+    // Rails: has_been_read? && type.changed_in_place?(original_value_for_database, value)
+    return (
+      this.hasBeenRead() && this.type.isChangedInPlace(this._originalValueForDatabase(), this.value)
+    );
+  }
+
   /** @internal */
   protected override _originalValueForDatabase(): unknown {
     return this.valueBeforeTypeCast;

@@ -276,22 +276,6 @@ export const EXCLUDED_FILES: ExcludedFile[] = [
       "Tests Marshal/YAML binary encoding of AR records. " +
       "Ruby binary serialization formats have no Node.js equivalent.",
   },
-  // --- Per-test exclusions: hstore TS-only inventions ---
-  // NOTE: these names don't exist in Rails' hstore_test.rb, so isTestCaseExcluded has no
-  // effect on test:compare scores. Kept as inventory documentation only.
-  {
-    testFile: "hstore_test.rb",
-    tests: [
-      "hstore dirty tracking",
-      "hstore duplication",
-      "hstore nested",
-      "hstore populate",
-      "hstore schema dump",
-      "hstore gen random uuid",
-      "hstore gen random uuid default",
-    ],
-    reason: "TS-only inventions; no Rails counterpart in hstore_test.rb.",
-  },
 ];
 
 export function isExcluded(file: string): boolean {

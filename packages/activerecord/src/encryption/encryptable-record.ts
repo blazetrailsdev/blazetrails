@@ -304,28 +304,28 @@ export class EncryptableRecord {
     const plaintextValues: Record<string, unknown> = {};
     const assignments: Record<string, unknown> = {};
     for (const name of encryptedAttrs) {
-      const plaintext = record.readAttribute?.(name) ?? record[name];
+      const plaintext = record.readAttribute(name);
       plaintextValues[name] = plaintext;
       const type = getAttributeType(klass, name);
       assignments[name] =
         type instanceof EncryptedAttributeType ? type.serialize(plaintext) : plaintext;
     }
 
-    await record.updateColumns?.(assignments);
+    await record.updateColumns(assignments);
 
     // Restore plaintext as the in-memory cast value — updateColumns set the
     // ciphertext as the live value via cast(), but callers expect to read plaintext.
     for (const [name, plaintext] of Object.entries(plaintextValues)) {
-      record._attributes?.writeCastValue?.(name, plaintext);
+      record._attributes.writeCastValue(name, plaintext);
     }
-    record.changesApplied?.();
+    record.changesApplied();
   }
 
   /** @internal */
   static async decryptAttributes(record: any): Promise<void> {
     this.validateEncryptionAllowed(record);
     const assignments = this.buildDecryptAttributeAssignments(record);
-    await _withoutEncryption(() => record.updateColumns?.(assignments));
+    await _withoutEncryption(() => record.updateColumns(assignments));
   }
 
   /** @internal */

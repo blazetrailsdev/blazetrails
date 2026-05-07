@@ -6,7 +6,8 @@
  * structured skip annotation into every bare it.skip / xit / test.skip /
  * describe.skip call that does not already have a BLOCKED: comment.
  *
- * Annotation format (from docs/test-compare-100-plan.md):
+ * Annotation format (from docs/test-compare-100-plan.md § "Workflow for unskipping tests",
+ * added in the same PR that ships this script — see PR #1294):
  *
  *   it.skip("rails-test-name", () => {
  *     // BLOCKED: <category> — <reason>
@@ -150,8 +151,8 @@ function categorize(relPath: string, describeName: string, testName: string): An
     }
     return {
       blocked: `adapter-pg — PostgreSQL-specific adapter gap in ${file}`,
-      rootCause: `adapters/postgresql/${file}.ts missing or incomplete Rails parity`,
-      scope: `~50–200 LOC fix in adapters/postgresql/${file}.ts; affects ~10–47 tests in ${file}.test.ts`,
+      rootCause: `connection-adapters/postgresql/${file}.ts missing or incomplete Rails parity`,
+      scope: `~50–200 LOC fix in connection-adapters/postgresql/${file}.ts; affects ~10–47 tests in ${file}.test.ts`,
     };
   }
 

@@ -16,13 +16,13 @@ describeIfPg("PostgreSQLAdapter", () => {
   describe("PreparedStatementsDisabledTest", () => {
     it.skip("prepared statements disabled", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in prepared-statements-disabled
-      // ROOT-CAUSE: adapters/postgresql/prepared-statements-disabled.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/prepared-statements-disabled.ts; affects ~10–47 tests in prepared-statements-disabled.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/prepared-statements-disabled.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/prepared-statements-disabled.ts; affects ~10–47 tests in prepared-statements-disabled.test.ts
     });
     it.skip("select query works even when prepared statements are disabled", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in prepared-statements-disabled
-      // ROOT-CAUSE: adapters/postgresql/prepared-statements-disabled.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/prepared-statements-disabled.ts; affects ~10–47 tests in prepared-statements-disabled.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/prepared-statements-disabled.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/prepared-statements-disabled.ts; affects ~10–47 tests in prepared-statements-disabled.test.ts
     });
   });
 });

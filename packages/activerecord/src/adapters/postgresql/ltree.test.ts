@@ -16,28 +16,28 @@ describeIfPg("PostgreSQLAdapter", () => {
   describe("PostgresqlLtreeTest", () => {
     it.skip("column", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in ltree
-      // ROOT-CAUSE: adapters/postgresql/ltree.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/ltree.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
     });
     it.skip("default", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in ltree
-      // ROOT-CAUSE: adapters/postgresql/ltree.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/ltree.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
     });
     it.skip("ltree query", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in ltree
-      // ROOT-CAUSE: adapters/postgresql/ltree.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/ltree.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
     });
     it.skip("ltree schema dump", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in ltree
-      // ROOT-CAUSE: adapters/postgresql/ltree.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/ltree.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
     });
     it.skip("write", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in ltree
-      // ROOT-CAUSE: adapters/postgresql/ltree.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/ltree.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/ltree.ts; affects ~10–47 tests in ltree.test.ts
     });
   });
 });

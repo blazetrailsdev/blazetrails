@@ -16,13 +16,13 @@ describeIfPg("PostgreSQLAdapter", () => {
   describe("PostgresqlPartitionsTest", () => {
     it.skip("partition table", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in partitions
-      // ROOT-CAUSE: adapters/postgresql/partitions.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/partitions.ts; affects ~10–47 tests in partitions.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/partitions.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/partitions.ts; affects ~10–47 tests in partitions.test.ts
     });
     it.skip("partitions table exists", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in partitions
-      // ROOT-CAUSE: adapters/postgresql/partitions.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/partitions.ts; affects ~10–47 tests in partitions.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/partitions.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/partitions.ts; affects ~10–47 tests in partitions.test.ts
     });
   });
 });

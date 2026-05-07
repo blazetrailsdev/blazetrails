@@ -68,14 +68,14 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("quote unicode string", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in quoting
-      // ROOT-CAUSE: adapters/postgresql/quoting.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/quoting.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
       // unicode string quoting verified via standard string quoting; no special PG behavior
     });
     it.skip("quote binary", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in quoting
-      // ROOT-CAUSE: adapters/postgresql/quoting.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/quoting.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
       // binary quoting tested via write/read bytea round-trips; requires bytea column setup
     });
     it("quote date", async () => {
@@ -102,8 +102,8 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("quote range", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in quoting
-      // ROOT-CAUSE: adapters/postgresql/quoting.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/quoting.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
     });
 
     it("quote array", async () => {
@@ -122,14 +122,14 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("quote rational", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in quoting
-      // ROOT-CAUSE: adapters/postgresql/quoting.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/quoting.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
       // Ruby-only: Rational(3,4). No JS equivalent; numeric literals work without a Rational type.
     });
     it.skip("quote bit string", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in quoting
-      // ROOT-CAUSE: adapters/postgresql/quoting.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/quoting.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
       // Requires OID::Bit type serialization; covered by bit_string tests.
     });
 
@@ -154,8 +154,8 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("do not raise when raise int wider than 64bit is false", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in quoting
-      // ROOT-CAUSE: adapters/postgresql/quoting.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/quoting.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/quoting.ts; affects ~10–47 tests in quoting.test.ts
       // Requires ActiveRecord.raise_int_wider_than_64bit class-level flag; not yet implemented.
     });
   });

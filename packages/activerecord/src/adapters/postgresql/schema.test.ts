@@ -193,8 +193,8 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("habtm table name with schema", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
 
     it("drop schema with nonexisting schema", async () => {
@@ -204,13 +204,13 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("raise wrapped exception on bad prepare", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("schema change with prepared stmt", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
 
     it("data source exists?", async () => {
@@ -278,23 +278,23 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("where with qualified schema name", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("pluck with qualified schema name", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("classes with qualified schema name", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("raise on unquoted schema name", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it("without schema search path", async () => {
       await adapter.setSchemaSearchPath("public");
@@ -440,8 +440,8 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("prepared statements with multiple schemas", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
 
     it("schema exists?", async () => {
@@ -486,8 +486,8 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("dumping schemas", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
   });
 
@@ -503,8 +503,8 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("dump foreign key targeting different schema", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
 
     it("create foreign key same schema", async () => {
@@ -531,31 +531,31 @@ describeIfPg("PostgreSQLAdapter", () => {
   describe("SchemaIndexOpclassTest", () => {
     it.skip("string opclass is dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("non default opclass is dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("opclass class parsing on non reserved and cannot be function or type keyword", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
   });
 
   describe("SchemaIndexNullsOrderTest", () => {
     it.skip("nulls order is dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("non default order with nulls is dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
   });
 
@@ -659,70 +659,70 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("Active Record basics", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
   });
 
   describe("SchemaJoinTablesTest", () => {
     it.skip("create join table", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
   });
 
   describe("SchemaIndexIncludeColumnsTest", () => {
     it.skip("schema dumps index included columns", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
   });
 
   describe("SchemaIndexNullsNotDistinctTest", () => {
     it.skip("nulls not distinct is dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("nulls distinct is dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("nulls not set is dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
   });
 
   describe("SchemaCreateTableOptionsTest", () => {
     it.skip("list partition options is dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("range partition options is dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it.skip("inherited table options is dumped", () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // BLOCKED: STI — single-table inheritance routing gap
+      // ROOT-CAUSE: inheritance.ts#instantiateWithCtiMixin or findSubclass not fully wired
+      // SCOPE: ~50 LOC fix in inheritance.ts; affects this test + others sharing STI root cause
     });
     it.skip("multiple inherited table options is dumped", () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // BLOCKED: STI — single-table inheritance routing gap
+      // ROOT-CAUSE: inheritance.ts#instantiateWithCtiMixin or findSubclass not fully wired
+      // SCOPE: ~50 LOC fix in inheritance.ts; affects this test + others sharing STI root cause
     });
     it.skip("no partition options are dumped", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in schema
-      // ROOT-CAUSE: adapters/postgresql/schema.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/schema.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
   });
 });

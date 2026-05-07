@@ -217,13 +217,13 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("uuid schema dump", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
     it.skip("uuid migration", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
 
     it("uuid gen random uuid", async () => {
@@ -312,8 +312,8 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("uuid association", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
 
     it("uuid foreign key", async () => {
@@ -554,8 +554,8 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("uniqueness validation ignores uuid", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
   });
 
@@ -636,23 +636,23 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("schema dumper for uuid primary key", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
     it.skip("schema dumper for uuid primary key with custom default", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
     it.skip("schema dumper for uuid primary key default", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
     it.skip("schema dumper for uuid primary key default in legacy migration", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
   });
 
@@ -678,39 +678,39 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("schema dumper for uuid primary key with default override via nil", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
     it.skip("schema dumper for uuid primary key with default nil in legacy migration", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
   });
 
   describe("PostgreSQLUUIDTestInverseOf", () => {
     it.skip("collection association with uuid", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
     it.skip("find with uuid", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
     it.skip("find by with uuid", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
   });
 
   describe("PostgreSQLUUIDHasManyThroughDisableJoinsTest", () => {
     it.skip("uuid primary key and disable joins with delegate cache", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in uuid
-      // ROOT-CAUSE: adapters/postgresql/uuid.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/uuid.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/uuid.ts; affects ~10–47 tests in uuid.test.ts
     });
   });
 });

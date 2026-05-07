@@ -16,43 +16,43 @@ describeIfPg("PostgreSQLAdapter", () => {
   describe("PostgresqlDateTest", () => {
     it.skip("date column", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in date
-      // ROOT-CAUSE: adapters/postgresql/date.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/date.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
     });
     it.skip("date default", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in date
-      // ROOT-CAUSE: adapters/postgresql/date.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/date.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
     });
     it.skip("date type cast", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in date
-      // ROOT-CAUSE: adapters/postgresql/date.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/date.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
     });
     it.skip("date infinity", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in date
-      // ROOT-CAUSE: adapters/postgresql/date.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/date.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
     });
     it.skip("date before epoch", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in date
-      // ROOT-CAUSE: adapters/postgresql/date.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/date.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
     });
     it.skip("bc date", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in date
-      // ROOT-CAUSE: adapters/postgresql/date.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/date.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
     });
     it.skip("bc date leap year", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in date
-      // ROOT-CAUSE: adapters/postgresql/date.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/date.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
     });
     it.skip("bc date year zero", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in date
-      // ROOT-CAUSE: adapters/postgresql/date.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/date.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/date.ts; affects ~10–47 tests in date.test.ts
     });
   });
 });

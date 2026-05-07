@@ -158,8 +158,8 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("legacy schema dumping", () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric
-      // ROOT-CAUSE: adapters/postgresql/geometric.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/geometric.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
     });
 
     it("legacy roundtrip", async () => {
@@ -442,18 +442,18 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("geometric schema dump", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric
-      // ROOT-CAUSE: adapters/postgresql/geometric.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/geometric.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
     });
     it.skip("geometric where", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric
-      // ROOT-CAUSE: adapters/postgresql/geometric.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/geometric.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
     });
     it.skip("geometric invalid", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric
-      // ROOT-CAUSE: adapters/postgresql/geometric.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
+      // ROOT-CAUSE: connection-adapters/postgresql/geometric.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
     });
 
     it("geometric nil", async () => {

@@ -179,19 +179,6 @@ export function addLocalStoredAttribute(
 }
 
 /**
- * Sets the local stored attributes for a model class directly. Used internally
- * during store/store_accessor setup.
- *
- * Mirrors: ActiveRecord::Store#local_stored_attributes= (the attr_accessor setter)
- */
-export function setLocalStoredAttributes(
-  modelClass: typeof Base,
-  attrs: Record<string, string[]>,
-): void {
-  _storedAttributes.set(modelClass, attrs);
-}
-
-/**
  * Reads/writes hash keys on a store attribute.
  *
  * Mirrors: ActiveRecord::Store::HashAccessor
@@ -531,41 +518,11 @@ function asRegularHash(obj: unknown): Record<string, unknown> {
   // class instances, Arrays, primitives → {} (respond_to?(:to_hash) is false for those).
   if (obj == null) return {};
   if (obj instanceof HashWithIndifferentAccess) return obj.toHash();
-  const proto = typeof obj === "object" ? Object.getPrototypeOf(obj) : null;
+  if (typeof obj !== "object" || Array.isArray(obj)) return {};
+  const proto = Object.getPrototypeOf(obj);
   return proto === Object.prototype || proto === null
     ? { ...(obj as Record<string, unknown>) }
     : {};
-}
-
-/**
- * Serializes a store value by converting to a plain hash before encoding.
- *
- * Mirrors: ActiveRecord::Store::IndifferentCoder#dump
- *
- * @internal
- */
-export function dump(obj: unknown): unknown {
-  if (obj === null || obj === undefined) return obj;
-  const plain =
-    obj instanceof HashWithIndifferentAccess
-      ? obj.toHash()
-      : typeof obj === "object" && !Array.isArray(obj)
-        ? { ...(obj as Record<string, unknown>) }
-        : obj;
-  return JSON.stringify(plain);
-}
-
-/**
- * Deserializes a store value and wraps in HashWithIndifferentAccess.
- *
- * Mirrors: ActiveRecord::Store::IndifferentCoder#load
- *
- * @internal
- */
-export function load(value: unknown): unknown {
-  if (value === null || value === undefined) return asIndifferentHash(null);
-  const parsed = typeof value === "string" ? JSON.parse(value) : value;
-  return asIndifferentHash(parsed);
 }
 
 /**

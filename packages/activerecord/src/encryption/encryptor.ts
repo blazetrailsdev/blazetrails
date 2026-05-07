@@ -43,6 +43,8 @@ export interface KeyProviderLike {
 export class Encryptor {
   private _compress: boolean;
   private _compressor: Compressor;
+  private _cipher = new Cipher();
+  private _serializer = new MessageSerializer();
   private _defaultKeyProviderCache?: KeyProviderLike;
 
   constructor(options?: { compress?: boolean; compressor?: Compressor }) {
@@ -56,30 +58,18 @@ export class Encryptor {
   ): string {
     this.validatePayloadType(clearText);
     const text = options?.deterministic ? this.forceEncodingIfNeeded(clearText) : clearText;
-    const keyProvider = options?.keyProvider ?? (this.defaultKeyProvider() as KeyProviderLike);
-    const encKeyObj = options?.key
-      ? { secret: options.key, publicTags: undefined }
-      : keyProvider?.encryptionKey();
-    const key = encKeyObj?.secret;
-    if (!key) throw new ConfigError("No encryption key provided");
-
-    const [cipherInput, compressed] = this.compressIfWorthIt(text);
-
-    const cipherObj = this.cipher();
-    const { payload, iv, authTag } = cipherObj.encrypt(cipherInput, key, {
-      deterministic: options?.deterministic,
-    });
-
-    const message = new Message(payload);
-    message.addHeaders({ iv, at: authTag });
-    if (compressed) message.addHeader("c", true);
-    if (encKeyObj?.publicTags) {
-      for (const [k, v] of Object.entries(encKeyObj.publicTags)) {
-        message.addHeader(k, v);
-      }
-    }
-
-    return this.serializeMessage(message);
+    // Resolve key provider: explicit keyProvider > raw key shortcut > default.
+    // Raw key is wrapped in a minimal inline provider so buildEncryptedMessage
+    // has a uniform interface (mirrors Rails' key_provider keyword arg).
+    const keyProvider: KeyProviderLike =
+      options?.keyProvider ??
+      (options?.key
+        ? { encryptionKey: () => ({ secret: options.key! }), decryptionKeys: () => [] }
+        : (this.defaultKeyProvider() as KeyProviderLike));
+    if (!keyProvider) throw new ConfigError("No encryption key provided");
+    return this.serializeMessage(
+      this.buildEncryptedMessage(text, keyProvider, { deterministic: options?.deterministic }),
+    );
   }
 
   decrypt(
@@ -156,7 +146,7 @@ export class Encryptor {
 
   /** @internal */
   private cipher(): Cipher {
-    return new Cipher();
+    return this._cipher;
   }
 
   /** @internal */
@@ -171,7 +161,7 @@ export class Encryptor {
 
   /** @internal */
   private serializer(): MessageSerializer {
-    return new MessageSerializer();
+    return this._serializer;
   }
 
   /** @internal */
@@ -201,10 +191,9 @@ export class Encryptor {
   /** @internal */
   private compressIfWorthIt(string: string): [string | Buffer, boolean] {
     if (this._compress && Buffer.byteLength(string, "utf-8") > THRESHOLD_TO_JUSTIFY_COMPRESSION) {
-      const deflated = this._compressor.deflate(string);
-      const compressedBuf = Buffer.isBuffer(deflated) ? deflated : Buffer.from(deflated);
-      if (compressedBuf.length < Buffer.byteLength(string, "utf-8")) {
-        return [compressedBuf, true];
+      const compressed = this.compress(string);
+      if (compressed.length < Buffer.byteLength(string, "utf-8")) {
+        return [compressed, true];
       }
     }
     return [string, false];

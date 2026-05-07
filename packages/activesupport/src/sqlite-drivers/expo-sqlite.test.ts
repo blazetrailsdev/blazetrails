@@ -104,6 +104,17 @@ describe.skipIf(!isExpoSqliteAvailable)("SqliteDriver — expo-sqlite round-trip
     await expect(insert.run([1, 999])).rejects.toThrow();
   });
 
+  it("columns() returns empty array (expo-sqlite has no column metadata API)", async () => {
+    const stmt = await conn.prepare("SELECT id, name, qty FROM widgets");
+    expect(stmt.columns()).toEqual([]);
+  });
+
+  it("setReadBigInts does not throw (documented no-op on this driver)", async () => {
+    const stmt = await conn.prepare("SELECT qty FROM widgets WHERE name = ?");
+    expect(() => stmt.setReadBigInts(true)).not.toThrow();
+    expect(() => stmt.setReadBigInts(false)).not.toThrow();
+  });
+
   it("capabilities reflect expo-sqlite traits", () => {
     expect(expoSqliteDriver.capabilities.inProcessSync).toBe(false);
     expect(expoSqliteDriver.capabilities.streaming).toBe(true);

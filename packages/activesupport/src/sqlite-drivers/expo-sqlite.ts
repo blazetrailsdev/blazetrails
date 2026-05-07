@@ -14,7 +14,8 @@ import {
 // Kept inline so typecheck passes without installing the optional package.
 /** @internal */
 interface ExpoSQLiteStatement {
-  executeAsync(params?: unknown[]): Promise<ExpoSQLiteExecuteResult>;
+  // expo-sqlite accepts either positional array or named-param object
+  executeAsync(params?: unknown[] | Record<string, unknown>): Promise<ExpoSQLiteExecuteResult>;
   finalizeAsync(): Promise<void>;
 }
 /** @internal */
@@ -52,11 +53,11 @@ try {
 export const isExpoSqliteAvailable = expoSqlite !== undefined;
 
 /** @internal */
-function expandBinds(binds: SqliteBinds | undefined): unknown[] {
+function expandBinds(binds: SqliteBinds | undefined): unknown[] | Record<string, unknown> {
   if (binds === undefined) return [];
   if (Array.isArray(binds)) return binds as unknown[];
-  // Named object: expo-sqlite accepts a plain object for named parameters
-  return [binds];
+  // Named object: expo-sqlite's executeAsync accepts { $name: val } directly
+  return binds as Record<string, unknown>;
 }
 
 /** @internal */
@@ -71,7 +72,6 @@ function isReader(sql: string): boolean {
 /** @internal */
 class ExpoSqliteStatement implements SqliteStatement {
   readonly reader: boolean;
-  private _readBigInts = false;
 
   constructor(
     private readonly stmt: ExpoSQLiteStatement,
@@ -111,10 +111,9 @@ class ExpoSqliteStatement implements SqliteStatement {
     return [];
   }
 
-  setReadBigInts(on: boolean): void {
-    this._readBigInts = on;
-    // TODO: call stmt.enableBigIntAsync(on) if expo-sqlite exposes it in a future SDK
-  }
+  // expo-sqlite has no BigInt toggle API; this is a documented no-op.
+  // Integer columns will return JS number, not bigint, regardless of this flag.
+  setReadBigInts(_on: boolean): void {}
 
   async finalize(): Promise<void> {
     await this.stmt.finalizeAsync();
@@ -182,6 +181,8 @@ export const expoSqliteDriver: SqliteDriver = {
         "expo-sqlite is not available. This driver requires an Expo / React Native runtime.",
       );
     }
+    // readOnly, timeout, noMutex are not exposed by expo-sqlite's openDatabaseAsync;
+    // pass driverOptions through for any driver-specific overrides.
     const db = await expoSqlite.openDatabaseAsync(config.database, {
       ...(config.driverOptions as Parameters<ExpoSqliteModule["openDatabaseAsync"]>[1] | undefined),
     });

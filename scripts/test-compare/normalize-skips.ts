@@ -6,8 +6,7 @@
  * structured skip annotation into every bare it.skip / xit / test.skip /
  * describe.skip call that does not already have a BLOCKED: comment.
  *
- * Annotation format (from docs/test-compare-100-plan.md § "Workflow for unskipping tests",
- * added in the same PR that ships this script — see PR #1294):
+ * Annotation format (from docs/test-compare-100-plan.md § "Workflow for unskipping tests"):
  *
  *   it.skip("rails-test-name", () => {
  *     // BLOCKED: <category> — <reason>

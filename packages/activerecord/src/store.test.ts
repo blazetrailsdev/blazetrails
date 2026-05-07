@@ -1136,6 +1136,25 @@ describe("IndifferentCoder wiring via store() and Base.store()", () => {
       "the column 'data' has not been configured as a store",
     );
   });
+
+  it("store() with coder: JSON uses buildColumnSerializer → IndifferentCoder delegation", async () => {
+    const { HashWithIndifferentAccess: HWIA } = await import("@blazetrails/activesupport");
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("settings", "string");
+        this.adapter = adapter;
+      }
+    }
+    // Pass the global JSON object as the coder — buildColumnSerializer maps it to CodersJSON.
+    User.store("settings", { accessors: ["theme"], coder: JSON });
+    const coder = getStoreCoder(User, "settings");
+    expect(coder).toBeDefined();
+    // IndifferentCoder should delegate dump/load through the inner coder.
+    const u = new User({ name: "Test", settings: JSON.stringify({ theme: "ocean" }) });
+    expect(u.settings).toBeInstanceOf(HWIA);
+    expect((u as any).theme).toBe("ocean");
+  });
 });
 
 // AR_NO_AUTO_SCHEMA is stubbed at module scope for the full file.

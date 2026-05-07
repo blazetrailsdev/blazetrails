@@ -357,6 +357,17 @@ export function storeAccessor(
 export function store(modelClass: typeof Base, attribute: string, options: StoreOptions): void {
   // Mirror Rails three-step: build_column_serializer → IndifferentCoder → serialize
   const baseCoder = buildColumnSerializer(attribute, options.coder, Object, options.yaml);
+  // Validate: if a coder was resolved, it must implement dump/load. Strings, numbers,
+  // and arbitrary objects without these methods would crash silently later.
+  if (
+    baseCoder != null &&
+    (typeof (baseCoder as any).dump !== "function" || typeof (baseCoder as any).load !== "function")
+  ) {
+    throw new ConfigurationError(
+      `store coder for '${attribute}' must implement dump() and load(), ` +
+        `but got ${typeof baseCoder}.`,
+    );
+  }
   const indifferentCoder = new IndifferentCoder(attribute, baseCoder as CoderLike | null);
   setStoreCoder(modelClass, attribute, indifferentCoder);
   // Structured column types (json/jsonb/hstore) have a type-level accessor and
@@ -364,7 +375,13 @@ export function store(modelClass: typeof Base, attribute: string, options: Store
   // columns that have no type-level accessor.
   const colType = (modelClass as any).typeForAttribute?.(attribute);
   if (!colType || typeof (colType as any).accessor !== "function") {
-    _serializeAttr?.(modelClass, attribute, { coder: indifferentCoder as any });
+    if (!_serializeAttr) {
+      throw new ConfigurationError(
+        `store() requires serialize() to be registered before use. ` +
+          `Ensure base.ts (or the activerecord index) is imported before calling store().`,
+      );
+    }
+    _serializeAttr(modelClass, attribute, { coder: indifferentCoder as any });
   }
 
   if (options.accessors !== undefined) {

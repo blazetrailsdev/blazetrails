@@ -12,6 +12,7 @@ import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { ConfigError, DecryptionError, ForbiddenClass } from "./errors.js";
 import type { Compressor } from "./config.js";
 import { defaultCompressor } from "./config.js";
+import { normalizeEncoding, replaceUnencodable } from "./encoding-helpers.js";
 
 // Mirrors: ActiveRecord::Encryption::Encryptor::THRESHOLD_TO_JUSTIFY_COMPRESSION
 const THRESHOLD_TO_JUSTIFY_COMPRESSION = 140;
@@ -50,6 +51,10 @@ export class Encryptor {
   constructor(options?: { compress?: boolean; compressor?: Compressor }) {
     this._compress = options?.compress ?? true;
     this._compressor = options?.compressor ?? defaultCompressor;
+    // Invalidate cached key provider when config changes (e.g. key rotation).
+    Configurable.onConfigure(() => {
+      this._defaultKeyProviderCache = undefined;
+    });
   }
 
   encrypt(
@@ -189,14 +194,17 @@ export class Encryptor {
   }
 
   /** @internal */
-  private compressIfWorthIt(string: string): [string | Buffer, boolean] {
-    if (this._compress && Buffer.byteLength(string, "utf-8") > THRESHOLD_TO_JUSTIFY_COMPRESSION) {
-      const compressed = this.compress(string);
-      if (compressed.length < Buffer.byteLength(string, "utf-8")) {
+  private compressIfWorthIt(clearText: string): [string | Buffer, boolean] {
+    if (
+      this._compress &&
+      Buffer.byteLength(clearText, "utf-8") > THRESHOLD_TO_JUSTIFY_COMPRESSION
+    ) {
+      const compressed = this.compress(clearText);
+      if (compressed.length < Buffer.byteLength(clearText, "utf-8")) {
         return [compressed, true];
       }
     }
-    return [string, false];
+    return [clearText, false];
   }
 
   /** @internal */
@@ -222,32 +230,9 @@ export class Encryptor {
   private forceEncodingIfNeeded(value: string): string {
     const enc = this.forcedEncodingForDeterministicEncryption();
     if (!enc) return value;
-    const key = enc.toLowerCase().replace(/[^a-z0-9]/g, "");
-    let limit: number;
-    switch (key) {
-      case "utf8":
-        return value;
-      case "ascii":
-      case "usascii":
-        limit = 0x7f;
-        break;
-      case "latin1":
-      case "iso88591":
-      case "binary":
-      case "ascii8bit":
-        limit = 0xff;
-        break;
-      default:
-        return value;
-    }
-    // Replace characters outside the encodable range or lone surrogates with "?"
-    // to match Rails' _replaceUnencodable in EncryptedAttributeType.
-    const out: string[] = [];
-    for (const ch of value) {
-      const cp = ch.codePointAt(0) ?? 0;
-      out.push(cp > limit || (cp >= 0xd800 && cp <= 0xdfff) ? "?" : ch);
-    }
-    return out.join("");
+    const normalized = normalizeEncoding(enc);
+    if (!normalized || normalized === "utf8") return value;
+    return replaceUnencodable(value, normalized === "ascii" ? 0x7f : 0xff);
   }
 
   /** @internal */

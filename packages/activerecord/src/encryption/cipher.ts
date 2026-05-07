@@ -31,9 +31,20 @@ export class Cipher {
   private tryToDecryptWithEach(encryptedText: string, { keys }: { keys: string[] }): string {
     let data: { p: string; iv: string; at: string };
     try {
-      data = JSON.parse(encryptedText) as { p: string; iv: string; at: string };
-    } catch {
-      throw new DecryptionError("Failed to parse encrypted text");
+      const parsed = JSON.parse(encryptedText) as unknown;
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        typeof (parsed as any).p !== "string" ||
+        typeof (parsed as any).iv !== "string" ||
+        typeof (parsed as any).at !== "string"
+      ) {
+        throw new DecryptionError("Invalid encrypted text format");
+      }
+      data = parsed as { p: string; iv: string; at: string };
+    } catch (e) {
+      if (e instanceof DecryptionError) throw e;
+      throw new DecryptionError("Invalid encrypted text format");
     }
     if (keys.length === 0) throw new DecryptionError("No decryption keys provided");
     let lastError: unknown;

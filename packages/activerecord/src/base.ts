@@ -136,7 +136,23 @@ import {
   attributeInDatabase as _attributeInDatabase,
   attributeNamesForPartialUpdates as _attributeNamesForPartialUpdates,
   attributeNamesForPartialInserts as _attributeNamesForPartialInserts,
+  readAttributeBeforeTypeCast as _readAttributeBeforeTypeCast,
+  attributesBeforeTypeCast as _attributesBeforeTypeCast,
+  idBeforeTypeCast as _idBeforeTypeCast,
+  savedChangeToAttribute as _savedChangeToAttribute,
+  isSavedChanges as _isSavedChanges,
+  savedChanges as _savedChanges,
+  hasChangesToSave as _hasChangesToSave,
+  changesToSave as _changesToSave,
+  changedAttributeNamesToSave as _changedAttributeNamesToSave,
+  attributesInDatabase as _attributesInDatabase,
 } from "./attribute-methods.js";
+import { generateTokenFor as _generateTokenForFn } from "./token-for.js";
+import {
+  normalizeAttribute as _normalizeAttributeFn,
+  normalizeChangedInPlaceAttributes as _normalizeChangedInPlaceAttributesFn,
+} from "./normalization.js";
+import { localStoredAttributes as _localStoredAttributesFn } from "./store.js";
 import {
   toKey as _toKey,
   getId as _getId,
@@ -2953,6 +2969,17 @@ extend(Base, {
   defineAttribute: _defineAttribute,
   _defaultAttributes: _arDefaultAttributes,
 });
+extend(Base, {
+  // Querying class-level privates
+  _queryBySql: Querying._queryBySql,
+  _loadFromSql: Querying._loadFromSql,
+  // ConnectionHandling
+  resolveConfigForConnection: ConnectionHandling.resolveConfigForConnection,
+  // Store class-level
+  localStoredAttributes(this: typeof Base) {
+    return _localStoredAttributesFn(this);
+  },
+});
 
 include(Base, {
   // ReadonlyAttributes
@@ -3105,6 +3132,31 @@ include(Base, {
   attributeInDatabase: _attributeInDatabase,
   attributeNamesForPartialUpdates: _attributeNamesForPartialUpdates,
   attributeNamesForPartialInserts: _attributeNamesForPartialInserts,
+  readAttributeBeforeTypeCast: _readAttributeBeforeTypeCast,
+  attributesBeforeTypeCast: _attributesBeforeTypeCast,
+  idBeforeTypeCast: _idBeforeTypeCast,
+  savedChangeToAttribute: _savedChangeToAttribute,
+  isSavedChanges: _isSavedChanges,
+  savedChanges: _savedChanges,
+  hasChangesToSave: _hasChangesToSave,
+  changesToSave: _changesToSave,
+  changedAttributeNamesToSave: _changedAttributeNamesToSave,
+  attributesInDatabase: _attributesInDatabase,
+  // TouchLater privates
+  hasDeferTouchAttrs(this: Base) {
+    return TouchLater.hasDeferTouchAttrs(this);
+  },
+  // TokenFor
+  generateTokenFor(this: Base, purpose: string) {
+    return _generateTokenForFn(this, purpose);
+  },
+  // Normalization
+  normalizeAttribute(this: Base, name: string) {
+    return _normalizeAttributeFn(this as any, name);
+  },
+  normalizeChangedInPlaceAttributes(this: Base) {
+    return _normalizeChangedInPlaceAttributesFn(this);
+  },
   // CounterCache privates
   _foreignKeysEqual: CounterCache._foreignKeysEqual,
   // Associations privates

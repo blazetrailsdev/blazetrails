@@ -11,6 +11,7 @@ let adapter: SQLite3Adapter | undefined;
 
 afterEach(async () => {
   await adapter?.close();
+  adapter = undefined;
 });
 
 /**

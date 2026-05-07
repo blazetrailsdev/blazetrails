@@ -146,7 +146,9 @@ export interface AbstractAdapter {
     fn?: (t: TableDefinition) => void,
   ): Promise<void>;
   dropTable(
-    ...args: string[] | [...string[], { ifExists?: boolean; force?: string }]
+    ...args:
+      | [string, ...string[]]
+      | [string, ...string[], { ifExists?: boolean; force?: "cascade" }]
   ): Promise<void>;
   renameTable(oldName: string, newName: string): Promise<void>;
   addColumn(

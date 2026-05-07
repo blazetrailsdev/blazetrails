@@ -137,20 +137,22 @@ export class SchemaStatements {
   }
 
   async dropTable(
-    ...args: string[] | [...string[], { ifExists?: boolean; force?: string }]
+    ...args:
+      | [string, ...string[]]
+      | [string, ...string[], { ifExists?: boolean; force?: "cascade" }]
   ): Promise<void> {
     let tableNames: string[];
-    let options: { ifExists?: boolean; force?: string } = {};
+    let options: { ifExists?: boolean; force?: "cascade" } = {};
     const last = args[args.length - 1];
     if (last !== null && last !== undefined && typeof last === "object") {
       tableNames = args.slice(0, -1) as string[];
-      options = last as { ifExists?: boolean; force?: string };
+      options = last as { ifExists?: boolean; force?: "cascade" };
     } else {
       tableNames = args as string[];
     }
     const ifExists = options.ifExists ? " IF EXISTS" : "";
     for (const name of tableNames) {
-      await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qi(name)}`);
+      await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qt(name)}`);
     }
   }
 

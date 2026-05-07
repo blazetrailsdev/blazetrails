@@ -3078,6 +3078,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return rows.length > 0;
   }
 
+  // PG addIndex returns the generated SQL string for inspection; Rails returns an index object.
+  // @ts-expect-error TS2416 — return type is Promise<string> not Promise<void>
   async addIndex(
     tableName: string,
     columns: string | string[],
@@ -3093,7 +3095,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       nullsNotDistinct?: boolean;
       include?: string[];
     } = {},
-  ): Promise<void> {
+  ): Promise<string> {
     const cols = Array.isArray(columns) ? columns : [columns];
     const quotedTable = this.quoteTableName(tableName);
 
@@ -3143,6 +3145,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
 
     await this.exec(sql);
+    return sql;
   }
 
   async removeIndex(

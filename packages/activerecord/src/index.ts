@@ -282,7 +282,7 @@ export {
 export { composedOf } from "./aggregations.js";
 export { serialize } from "./serialize.js";
 // Encryption is server-only. Import `@blazetrails/activerecord/encryption` BEFORE
-// calling Base.encrypts() — omitting it leaves attributes silently unencrypted.
+// calling Base.encrypts() — omitting it throws at declaration time.
 // Boot-time installer: `@blazetrails/activerecord/encryption/install.js`.
 // generatesTokenFor requires node:crypto — use subpath: @blazetrails/activerecord/generates-token-for
 export { delegatedType, getDelegatedTypeConfig } from "./delegated-type.js";

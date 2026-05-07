@@ -16,18 +16,23 @@ export interface EncryptionHooks {
 
   encryptedAttributeQ(klass: any, name: string): boolean;
 
-  ciphertextFor(instance: any, name: string): unknown;
+  ciphertextFor(record: any, name: string): unknown;
 
-  encryptRecord(instance: any): Promise<void>;
+  encryptRecord(record: any): Promise<void>;
 
-  decryptRecord(instance: any): Promise<void>;
+  decryptRecord(record: any): Promise<void>;
 }
 
-const noop = (): void => {};
+function notLoaded(method: string): never {
+  throw new Error(
+    `ActiveRecord encryption is not loaded. ` +
+      `Import \`@blazetrails/activerecord/encryption\` before calling \`${method}\`.`,
+  );
+}
 
 export const encryptionHooks: EncryptionHooks = {
-  encrypts: noop,
-  applyPendingEncryptions: noop,
+  encrypts: () => notLoaded("Base.encrypts()"),
+  applyPendingEncryptions: () => {},
   encryptedAttributeQ: () => false,
   ciphertextFor: () => undefined,
   encryptRecord: async () => {},

@@ -493,9 +493,9 @@ describe("resolveModuleName", () => {
     ).toEqual(["AR::ConnectionAdapters::Quoting"]);
   });
 
-  it("passes through already-qualified names", () => {
-    const byShort = new Map([["Foo::Bar", ["Foo::Bar"]]]);
-    expect(resolveModuleName("Foo::Bar", "Baz::Qux", byShort)).toEqual(["Foo::Bar"]);
+  it("passes through already-qualified names without consulting the map", () => {
+    // Early return fires on "::" — byShort is irrelevant for pre-qualified names.
+    expect(resolveModuleName("Foo::Bar", "Baz::Qux", new Map())).toEqual(["Foo::Bar"]);
   });
 
   it("returns all candidates when context has no prefix match", () => {

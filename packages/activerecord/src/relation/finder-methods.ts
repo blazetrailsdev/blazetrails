@@ -432,10 +432,10 @@ export async function findNthFromLast(this: FinderRelation, index: number): Prom
   }
   const relation: any = orderedRelation(this);
   // Rails: `if relation.order_values.empty? || relation.has_limit_or_offset?`
-  // After fixing orderedRelation to preserve existing order, checking the result
-  // is equivalent to Rails' post-ordered_relation check.
+  // Use hasOrder() on the result so _rawOrderClauses (e.g. inOrderOf) are also
+  // treated as "has an order" — avoids loading all records for those relations.
   if (
-    (relation as any)._orderClauses.length === 0 ||
+    !hasOrder(relation) ||
     (relation as any)._limitValue != null ||
     (relation as any)._offsetValue != null
   ) {
@@ -609,7 +609,10 @@ export function constructRelationForExists(rel: FinderRelation, conditions: unkn
     return relation;
   }
   if (Array.isArray(conditions)) {
-    if ((conditions as unknown[]).length > 0) relation = relation.where(conditions);
+    // Rails Array form: [sql, bind1, bind2, ...] — spread to avoid triggering
+    // the composite-key overload of where() which requires all-string arrays.
+    const [sql, ...binds] = conditions as unknown[];
+    if (sql !== undefined) relation = relation.where(sql as string, ...binds);
   } else if (typeof conditions === "object") {
     if (Object.keys(conditions as object).length > 0) relation = relation.where(conditions);
   } else {

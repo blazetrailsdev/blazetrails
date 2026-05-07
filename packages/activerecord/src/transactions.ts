@@ -568,7 +568,7 @@ export function _triggerUpdateCallback(record: Base): boolean | null {
 
 // Mirrors: attr_reader :_trigger_destroy_callback
 /** @internal */
-function _triggerDestroyCallback(record: Base): boolean | null {
+export function _triggerDestroyCallback(record: Base): boolean | null {
   return (record as any)._triggerDestroyCallback ?? null;
 }
 
@@ -583,7 +583,7 @@ function initInternals(record: Base): void {
 
 // Mirrors: ActiveRecord::Transactions#clear_transaction_record_state
 /** @internal */
-function clearTransactionRecordState(record: Base): void {
+export function clearTransactionRecordState(record: Base): void {
   const r = record as any;
   if (!r._startTransactionState) return;
   r._startTransactionState.level -= 1;

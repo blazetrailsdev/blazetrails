@@ -206,7 +206,8 @@ import {
   currentTransactionPublic as _currentTransactionPublic,
   withTransactionReturningStatus as _withTransactionReturningStatus,
   _newRecordBeforeLastCommit as _txNewRecordBeforeLastCommit,
-  isTriggerTransactionalCallbacks as _isTriggerTransactionalCallbacks,
+  _triggerDestroyCallback as _txTriggerDestroyCallback,
+  clearTransactionRecordState as _clearTransactionRecordState,
   _committedAlreadyCalled as _txCommittedAlreadyCalled,
   _triggerUpdateCallback as _txTriggerUpdateCallback,
 } from "./transactions.js";
@@ -3121,9 +3122,13 @@ include(Base, {
   // would receive the options hash as `record`, breaking that callsite.
   withTransactionReturningStatus: _withTransactionReturningStatus,
   _newRecordBeforeLastCommit: _txNewRecordBeforeLastCommit,
-  isTriggerTransactionalCallbacks: _isTriggerTransactionalCallbacks,
+  // isTriggerTransactionalCallbacks omitted: transaction.ts calls it as
+  // record.isTriggerTransactionalCallbacks() with no args; the record-arg
+  // form would receive undefined as `record`, throwing at runtime.
   _committedAlreadyCalled: _txCommittedAlreadyCalled,
   _triggerUpdateCallback: _txTriggerUpdateCallback,
+  _triggerDestroyCallback: _txTriggerDestroyCallback,
+  clearTransactionRecordState: _clearTransactionRecordState,
 });
 
 for (const [name, fn] of [

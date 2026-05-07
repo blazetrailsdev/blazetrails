@@ -269,18 +269,13 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
   it("cipher delegates to the configured cipher singleton", () => {
     const enc = new Encryptor();
     expect((enc as any).cipher()).toBeInstanceOf(Cipher);
-    expect(Configurable.cipher).toBeInstanceOf(Cipher);
+    expect((enc as any).cipher()).toBe(Configurable.cipher);
   });
 
   it("cipher reads from the current encryption context", () => {
     const customCipher = new Cipher();
-    const ctx = Contexts.context as any;
-    const saved = ctx.cipher;
-    try {
-      ctx.cipher = customCipher;
+    Contexts.withEncryptionContext({ cipher: customCipher }, () => {
       expect((new Encryptor() as any).cipher()).toBe(customCipher);
-    } finally {
-      ctx.cipher = saved;
-    }
+    });
   });
 });

@@ -94,11 +94,12 @@ export class Encryptor {
 
     if (!iv || !authTag) throw new DecryptionError("Missing IV or auth tag");
 
+    // Precedence mirrors encrypt(): keyProvider > key > default.
     let keys: string[];
-    if (options?.key !== undefined) {
-      keys = [options.key];
-    } else if (options?.keyProvider) {
+    if (options?.keyProvider) {
       keys = options.keyProvider.decryptionKeys(message).map((k) => k.secret);
+    } else if (options?.key !== undefined) {
+      keys = [options.key];
     } else {
       const kp = this.defaultKeyProvider() as KeyProviderLike | undefined;
       if (!kp) throw new DecryptionError("No decryption key provided");

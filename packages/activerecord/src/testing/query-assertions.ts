@@ -25,6 +25,7 @@ export class SQLCounter {
   /** @internal */
   readonly logFull: [string, unknown[]][];
 
+  /** @internal */
   readonly logAll: string[];
 
   constructor() {
@@ -32,11 +33,12 @@ export class SQLCounter {
     this.logAll = [];
   }
 
+  /** @internal */
   get log(): string[] {
     return this.logFull.map(([sql]) => sql);
   }
 
-  /** Notification handler — mirrors Rails' `call(*, payload)`. */
+  /** @internal */
   call(_name: unknown, _id: unknown, payload: SqlPayload): void {
     if (payload.cached) return;
 

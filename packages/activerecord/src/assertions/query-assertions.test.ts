@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
   SQLCounter,
   assertQueriesCount,
@@ -7,8 +7,6 @@ import {
   assertNoQueriesMatch,
 } from "../testing/query-assertions.js";
 import { Notifications } from "@blazetrails/activesupport";
-import { createTestAdapter } from "../test-adapter.js";
-import type { DatabaseAdapter } from "../adapter.js";
 
 /** Instrument an sql.active_record event the way the adapter does. */
 function instrumentSql(sql: string, name?: string, cached = false): void {
@@ -16,14 +14,8 @@ function instrumentSql(sql: string, name?: string, cached = false): void {
 }
 
 describe("QueryAssertionsTest", () => {
-  let adapter: DatabaseAdapter;
-
   afterEach(() => {
     Notifications.unsubscribeAll();
-  });
-
-  beforeEach(() => {
-    adapter = createTestAdapter();
   });
 
   it("assert queries count", async () => {
@@ -191,9 +183,7 @@ describe("QueryAssertionsTest", () => {
     expect(counter.log[0]).toBe("SELECT 1");
   });
 
-  // Kept to ensure adapter instrumentation flows through Notifications
   it("adapter queries are captured via notifications", async () => {
-    void adapter; // adapter available if needed for integration tests
     await assertQueriesCount(1, false, async () => {
       instrumentSql("SELECT 1");
     });

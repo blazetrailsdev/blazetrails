@@ -230,6 +230,13 @@ import {
 import * as _AttributeAssignment from "./attribute-assignment.js";
 import * as _NestedAttributes from "./nested-attributes.js";
 import {
+  addLocalStoredAttribute,
+  localStoredAttributesMethod as _localStoredAttributesMethod,
+  readStoreAttributeMethod as _readStoreAttributeMethod,
+  writeStoreAttributeMethod as _writeStoreAttributeMethod,
+  storeAccessorForMethod as _storeAccessorForMethod,
+} from "./store.js";
+import {
   hasMultiparameterKeys,
   extractMultiparameterCallstack,
   executeMultiparameterAssignment,
@@ -1339,7 +1346,6 @@ export class Base extends Model {
   }
 
   // -- Store --
-  static _storedAttributes: Map<string, { accessors?: string[] }> = new Map();
 
   /**
    * Declare a stored attribute backed by a JSON/text column.
@@ -1348,33 +1354,29 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Store.store
    */
   static store(attribute: string, options?: { accessors?: string[] }): void {
-    if (!Object.prototype.hasOwnProperty.call(this, "_storedAttributes")) {
-      this._storedAttributes = new Map(this._storedAttributes);
-    }
-    this._storedAttributes.set(attribute, options ?? {});
+    const accessors = options?.accessors ?? [];
+    addLocalStoredAttribute(this, attribute, accessors);
 
     // Define accessor methods for each key
-    if (options?.accessors) {
-      for (const accessor of options.accessors) {
-        Object.defineProperty(this.prototype, accessor, {
-          get(this: Base) {
-            const store = this._attributes.get(attribute);
-            if (store && typeof store === "object") {
-              return (store as Record<string, unknown>)[accessor] ?? null;
-            }
-            return null;
-          },
-          set(this: Base, value: unknown) {
-            let store = this._attributes.get(attribute);
-            if (!store || typeof store !== "object") {
-              store = {};
-            }
-            const newStore = { ...(store as Record<string, unknown>), [accessor]: value };
-            this.writeAttribute(attribute, newStore);
-          },
-          configurable: true,
-        });
-      }
+    for (const accessor of accessors) {
+      Object.defineProperty(this.prototype, accessor, {
+        get(this: Base) {
+          const store = this._attributes.get(attribute);
+          if (store && typeof store === "object") {
+            return (store as Record<string, unknown>)[accessor] ?? null;
+          }
+          return null;
+        },
+        set(this: Base, value: unknown) {
+          let store = this._attributes.get(attribute);
+          if (!store || typeof store !== "object") {
+            store = {};
+          }
+          const newStore = { ...(store as Record<string, unknown>), [accessor]: value };
+          this.writeAttribute(attribute, newStore);
+        },
+        configurable: true,
+      });
     }
   }
 
@@ -2963,10 +2965,7 @@ extend(Base, {
   // ConnectionHandling.ClassMethods does not include resolveConfigForConnection
   // (it's a standalone export, not in the ClassMethods object), so wire it here.
   resolveConfigForConnection: ConnectionHandling.resolveConfigForConnection,
-  // localStoredAttributes omitted: Base.store() writes to Base._storedAttributes (a Map),
-  // but store.ts:localStoredAttributes reads from a separate WeakMap populated only by
-  // store.ts:store(). The two registries are disconnected, so the wrapper always returns {}.
-  // Category C: requires unifying the two store implementations before wiring.
+  localStoredAttributes: _localStoredAttributesMethod,
 });
 
 include(Base, {
@@ -3039,6 +3038,10 @@ include(Base, {
   cameFromUser: _isAttributeCameFromUser,
   // PrimaryKey
   toKey: _toKey,
+  // Store (private instance helpers)
+  readStoreAttribute: _readStoreAttributeMethod,
+  writeStoreAttribute: _writeStoreAttributeMethod,
+  storeAccessorFor: _storeAccessorForMethod,
 });
 include(Base, LockingPessimistic.InstanceMethods);
 include(Base, LockingOptimistic.InstanceMethods);

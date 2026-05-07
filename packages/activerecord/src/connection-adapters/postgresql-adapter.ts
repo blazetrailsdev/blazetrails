@@ -360,8 +360,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   private async _maybeConfigureConnection(client: pg.PoolClient): Promise<void> {
     if (this._configuredClients.has(client)) return;
-    // Only install the notice receiver when the action is non-ignore.
     // Mirrors Rails: postgresql_adapter.rb `unless ActiveRecord.db_warnings_action.nil?`.
+    // NOTE: Rails uses a single raw_connection (no pool) so there is no concurrent-accumulation race.
     if ((this.constructor as typeof PostgreSQLAdapter).dbWarningsAction !== "ignore") {
       client.on("notice", (msg: { severity?: string; message?: string; code?: string }) => {
         this._noticeReceiverSqlWarnings.push({
@@ -918,6 +918,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
           if (logger?.warn) logger.warn(msg);
           else console.warn(msg);
         }
+        // TODO(report): Rails calls `Rails.error.report(warning, handled: true)`; deferred until wired.
         if (typeof action === "function") action(sw);
       }
     } finally {
@@ -961,11 +962,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       row_count: 0,
     };
     this._noticeReceiverSqlWarnings = [];
-    const m = await Notifications.instrumentAsync("sql.active_record", payload, async () => {
+    // Flush inside the instrumented callback so a warning raise is captured by
+    // payload.exception — mirrors Rails' handle_warnings inside perform_query (line 166).
+    return await Notifications.instrumentAsync("sql.active_record", payload, async () => {
       try {
         return await this.withClient(async (client) => {
           const result = await this._runQuery(client, rewritten, binds);
           payload.row_count = result.rows.length;
+          this._flushWarnings(rewritten);
           return result.rows;
         });
       } catch (e: any) {
@@ -975,8 +979,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         throw translated;
       }
     });
-    this._flushWarnings(rewritten);
-    return m;
   }
 
   /**

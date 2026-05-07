@@ -661,8 +661,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       await expect(adapter.execute(null as any)).rejects.toBeInstanceOf(TypeError);
     });
     it.skip("translate no connection exception to not established", async () => {
-      // BLOCKED: Requires pg_terminate_backend + raw send_query to force
-      // "no connection to server". pg driver doesn't expose send_query directly.
+      // BLOCKED: pg_terminate_backend + raw PG::Connection#send_query needed; not exposed by pg driver.
     });
     it.skip("reload type map for newly defined types", async () => {
       // BLOCKED: TypeMapInitializer registers enum OIDs as generic types, not OID::Enum.
@@ -793,8 +792,7 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it.skip("date decoding disabled", async () => {
-      // BLOCKED: Adapter always decodes DATE as Temporal.PlainDate; needs a static
-      // PostgreSQLAdapter.decodeDates flag to return raw strings instead.
+      // BLOCKED: Adapter always decodes DATE as Temporal.PlainDate; needs PostgreSQLAdapter.decodeDates flag.
     });
 
     it("disable extension with schema", async () => {

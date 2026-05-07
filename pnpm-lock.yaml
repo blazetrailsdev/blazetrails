@@ -120,10 +120,6 @@ importers:
       '@blazetrails/arel':
         specifier: workspace:*
         version: link:../arel
-      typescript:
-        specifier: '>=5.0.0'
-        version: 5.9.3
-    optionalDependencies:
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
@@ -133,6 +129,9 @@ importers:
       pg:
         specifier: ^8.19.0
         version: 8.20.0
+      typescript:
+        specifier: '>=5.0.0'
+        version: 5.9.3
 
   packages/activesupport:
     dependencies:

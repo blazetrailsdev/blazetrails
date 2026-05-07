@@ -458,6 +458,21 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // typeMap.has(oid)=true, skip loadAdditionalTypes, and never
     // resolve the real type. Return a fresh ValueType on miss and
     // leave miss-loading to getOidType / loadAdditionalTypes.
+    //
+    // OID-miss fallback: the static type map registers types by SQL name
+    // (e.g. "bytea", "timestamp") not by OID. If the OID is not in the
+    // map but we have a sqlType, try the name-keyed lookup so that
+    // known types (bytea=17, timestamp=1114, etc.) resolve correctly
+    // without requiring a pg_type round-trip. Mirrors Rails'
+    // lookup_cast_type chain where get_oid_type falls back to
+    // type_map.fetch(sql_type).
+    if (!this.typeMap.has(oid) && column.sqlType) {
+      return this.typeMap.lookup(
+        normalizeFormatType(column.sqlType),
+        column.fmod ?? -1,
+        column.sqlType,
+      );
+    }
     return this.typeMap.fetch(oid, column.fmod ?? -1, column.sqlType ?? "", () => new ValueType());
   }
 

@@ -635,11 +635,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   async showVariable(name: string): Promise<string | null> {
     if (!/^\w+$/.test(name)) return null;
     try {
-      const rows = await (
-        this as unknown as {
-          execute(sql: string, binds: unknown[], name: string): Promise<Record<string, unknown>[]>;
-        }
-      ).execute(`SELECT @@${name}`, [], "SCHEMA");
+      const rows = await this.schemaQuery(`SELECT @@${name}`);
       if (rows.length === 0) return null;
       const row = rows[0];
       const val = row[Object.keys(row)[0]];

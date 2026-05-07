@@ -22,8 +22,11 @@ describeIfMysql("Mysql2Adapter", () => {
       const u = new URL(MYSQL_TEST_URL);
       u.pathname = "/inexistent_activerecord_unittest";
       const badAdapter = new Mysql2Adapter(u.toString());
-      await expect(badAdapter.execute("SELECT 1")).rejects.toBeInstanceOf(NoDatabaseError);
-      await badAdapter.close();
+      try {
+        await expect(badAdapter.execute("SELECT 1")).rejects.toBeInstanceOf(NoDatabaseError);
+      } finally {
+        await badAdapter.close();
+      }
     });
 
     it.skip("no automatic reconnection after timeout", () => {

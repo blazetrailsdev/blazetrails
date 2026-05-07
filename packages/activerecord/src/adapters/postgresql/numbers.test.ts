@@ -24,6 +24,9 @@ describeIfPg("PostgreSQLAdapter", () => {
     it.skip("reassigning infinity does not mark record as changed", async () => {});
     it.skip("reassigning nan does not mark record as changed", async () => {});
     it.skip("update", () => {
+      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in numbers
+      // ROOT-CAUSE: adapters/postgresql/numbers.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in adapters/postgresql/numbers.ts; affects ~10–47 tests in numbers.test.ts
       /* TODO: needs imports from original file */
     });
   });

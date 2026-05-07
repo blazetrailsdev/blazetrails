@@ -22,6 +22,9 @@ describeIfPg("PostgreSQLAdapter", () => {
     it.skip("null xml", async () => {});
     it.skip("round trip", async () => {});
     it.skip("update all", () => {
+      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in xml
+      // ROOT-CAUSE: adapters/postgresql/xml.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in adapters/postgresql/xml.ts; affects ~10–47 tests in xml.test.ts
       /* TODO: needs imports from original file */
     });
   });

@@ -129,6 +129,9 @@ describe("DirtyTest", () => {
   });
 
   it.skip("aliased attribute changes", () => {
+    // BLOCKED: unknown — dirty feature gap; needs human triage
+    // ROOT-CAUSE: dirty.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in dirty.ts; affects ~1–10 tests in dirty.test.ts
     /* needs aliasAttribute to propagate dirty tracking */
   });
 

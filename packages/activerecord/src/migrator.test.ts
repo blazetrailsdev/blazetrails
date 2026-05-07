@@ -78,6 +78,9 @@ describe("MigratorTest", () => {
   });
 
   it.skip("finds migrations in subdirectories", () => {
+    // BLOCKED: unknown — migrator feature gap; needs human triage
+    // ROOT-CAUSE: migrator.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in migrator.ts; affects ~1–10 tests in migrator.test.ts
     /* needs filesystem discovery */
   });
 
@@ -89,10 +92,16 @@ describe("MigratorTest", () => {
   });
 
   it.skip("finds migrations in numbered directory", () => {
+    // BLOCKED: unknown — migrator feature gap; needs human triage
+    // ROOT-CAUSE: migrator.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in migrator.ts; affects ~1–10 tests in migrator.test.ts
     /* needs filesystem discovery */
   });
 
   it.skip("relative migrations", () => {
+    // BLOCKED: unknown — migrator feature gap; needs human triage
+    // ROOT-CAUSE: migrator.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in migrator.ts; affects ~1–10 tests in migrator.test.ts
     /* needs filesystem discovery */
   });
 
@@ -148,10 +157,16 @@ describe("MigratorTest", () => {
   });
 
   it.skip("migrations status in subdirectories", () => {
+    // BLOCKED: unknown — migrator feature gap; needs human triage
+    // ROOT-CAUSE: migrator.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in migrator.ts; affects ~1–10 tests in migrator.test.ts
     /* needs filesystem discovery */
   });
 
   it.skip("migrations status with schema define in subdirectories", () => {
+    // BLOCKED: unknown — migrator feature gap; needs human triage
+    // ROOT-CAUSE: migrator.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in migrator.ts; affects ~1–10 tests in migrator.test.ts
     /* needs filesystem discovery */
   });
 

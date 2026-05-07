@@ -194,9 +194,21 @@ describe("StatementCacheTest", () => {
     expect(sql).not.toContain("?");
   });
 
-  it.skip("find by does not use statement cache if table name is changed", () => {});
-  it.skip("find does not use statement cache if table name is changed", () => {});
-  it.skip("find association does not use statement cache if table name is changed", () => {});
+  it.skip("find by does not use statement cache if table name is changed", () => {
+    // BLOCKED: unknown — statement-cache feature gap; needs human triage
+    // ROOT-CAUSE: statement-cache.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in statement-cache.ts; affects ~1–10 tests in statement-cache.test.ts
+  });
+  it.skip("find does not use statement cache if table name is changed", () => {
+    // BLOCKED: unknown — statement-cache feature gap; needs human triage
+    // ROOT-CAUSE: statement-cache.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in statement-cache.ts; affects ~1–10 tests in statement-cache.test.ts
+  });
+  it.skip("find association does not use statement cache if table name is changed", () => {
+    // BLOCKED: unknown — statement-cache feature gap; needs human triage
+    // ROOT-CAUSE: statement-cache.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in statement-cache.ts; affects ~1–10 tests in statement-cache.test.ts
+  });
 
   it("StatementCache.create unprepared path uses PartialQuery with Substitute slots", async () => {
     await import("./relation.js");

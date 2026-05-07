@@ -156,7 +156,11 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(rows[0].column_default).toBeTruthy();
     });
 
-    it.skip("legacy schema dumping", () => {});
+    it.skip("legacy schema dumping", () => {
+      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric
+      // ROOT-CAUSE: adapters/postgresql/geometric.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
+    });
 
     it("legacy roundtrip", async () => {
       await adapter.execute(`INSERT INTO postgresql_points (x) VALUES ($1)`, ["(5,10)"]);

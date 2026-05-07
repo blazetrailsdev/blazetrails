@@ -343,26 +343,44 @@ describe("MultiParameterAttributeTest", () => {
   });
 
   it.skip("multiparameter attributes on time with utc", () => {
+    // BLOCKED: unknown — multiparameter-attributes feature gap; needs human triage
+    // ROOT-CAUSE: multiparameter-attributes.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in multiparameter-attributes.ts; affects ~1–10 tests in multiparameter-attributes.test.ts
     // UTC timezone handling requires global timezone configuration.
   });
 
   it.skip("multiparameter attributes on time with time zone aware attributes", () => {
+    // BLOCKED: unknown — multiparameter-attributes feature gap; needs human triage
+    // ROOT-CAUSE: multiparameter-attributes.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in multiparameter-attributes.ts; affects ~1–10 tests in multiparameter-attributes.test.ts
     // Requires time_zone_aware_attributes configuration.
   });
 
   it.skip("multiparameter attributes on time with time zone aware attributes and invalid time params", () => {
+    // BLOCKED: unknown — multiparameter-attributes feature gap; needs human triage
+    // ROOT-CAUSE: multiparameter-attributes.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in multiparameter-attributes.ts; affects ~1–10 tests in multiparameter-attributes.test.ts
     // Requires time_zone_aware_attributes configuration.
   });
 
   it.skip("multiparameter attributes on time with time zone aware attributes false", () => {
+    // BLOCKED: unknown — multiparameter-attributes feature gap; needs human triage
+    // ROOT-CAUSE: multiparameter-attributes.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in multiparameter-attributes.ts; affects ~1–10 tests in multiparameter-attributes.test.ts
     // Requires time_zone_aware_attributes configuration.
   });
 
   it.skip("multiparameter attributes on time with skip time zone conversion for attributes", () => {
+    // BLOCKED: unknown — multiparameter-attributes feature gap; needs human triage
+    // ROOT-CAUSE: multiparameter-attributes.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in multiparameter-attributes.ts; affects ~1–10 tests in multiparameter-attributes.test.ts
     // Requires skip_time_zone_conversion_for_attributes configuration.
   });
 
   it.skip("multiparameter attributes on time only column with time zone aware attributes does not do time zone conversion", () => {
+    // BLOCKED: unknown — multiparameter-attributes feature gap; needs human triage
+    // ROOT-CAUSE: multiparameter-attributes.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in multiparameter-attributes.ts; affects ~1–10 tests in multiparameter-attributes.test.ts
     // Requires time_zone_aware_attributes configuration.
   });
 

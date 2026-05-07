@@ -124,6 +124,9 @@ describe("StoreTest", () => {
   });
 
   it.skip("overriding a read accessor using super", () => {
+    // BLOCKED: unknown — store feature gap; needs human triage
+    // ROOT-CAUSE: store.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in store.ts; affects ~1–10 tests in store.test.ts
     /* needs Ruby-style super in JS property accessor */
   });
 
@@ -292,6 +295,9 @@ describe("StoreTest", () => {
   });
 
   it.skip("overriding a write accessor using super", () => {
+    // BLOCKED: unknown — store feature gap; needs human triage
+    // ROOT-CAUSE: store.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in store.ts; affects ~1–10 tests in store.test.ts
     /* needs Ruby-style super */
   });
 
@@ -321,6 +327,9 @@ describe("StoreTest", () => {
   });
 
   it.skip("convert store attributes from any format other than Hash or HashWithIndifferentAccess losing the data", () => {
+    // BLOCKED: unknown — store feature gap; needs human triage
+    // ROOT-CAUSE: store.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in store.ts; affects ~1–10 tests in store.test.ts
     /* Ruby-specific YAML behavior */
   });
 
@@ -560,6 +569,9 @@ describe("StoreTest", () => {
   });
 
   it.skip("store_accessor raises an exception if the column is not either serializable or a structured type", () => {
+    // BLOCKED: unknown — store feature gap; needs human triage
+    // ROOT-CAUSE: store.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in store.ts; affects ~1–10 tests in store.test.ts
     /* needs type checking */
   });
 

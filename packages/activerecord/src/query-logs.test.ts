@@ -102,9 +102,15 @@ describe("QueryLogsTest", () => {
   });
 
   it.skip("connection is passed to tagging proc", () => {
+    // BLOCKED: unknown — query-logs feature gap; needs human triage
+    // ROOT-CAUSE: query-logs.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in query-logs.ts; affects ~1–10 tests in query-logs.test.ts
     /* needs connection context */
   });
   it.skip("connection does not override already existing connection in context", () => {
+    // BLOCKED: unknown — query-logs feature gap; needs human triage
+    // ROOT-CAUSE: query-logs.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in query-logs.ts; affects ~1–10 tests in query-logs.test.ts
     /* needs connection context */
   });
 

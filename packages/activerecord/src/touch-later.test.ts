@@ -94,6 +94,9 @@ describe("TouchLaterTest", () => {
   });
 
   it.skip("touch later an association dont autosave parent", () => {
+    // BLOCKED: unknown — touch-later feature gap; needs human triage
+    // ROOT-CAUSE: touch-later.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in touch-later.ts; affects ~1–10 tests in touch-later.test.ts
     /* needs association autosave */
   });
 
@@ -122,12 +125,21 @@ describe("TouchLaterTest", () => {
     expect(inv.changed).toBe(false);
   });
   it.skip("touching three deep", () => {
+    // BLOCKED: unknown — touch-later feature gap; needs human triage
+    // ROOT-CAUSE: touch-later.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in touch-later.ts; affects ~1–10 tests in touch-later.test.ts
     /* needs multi-level association touch */
   });
   it.skip("touching through nested attributes without before committed on all records", () => {
+    // BLOCKED: unknown — touch-later feature gap; needs human triage
+    // ROOT-CAUSE: touch-later.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in touch-later.ts; affects ~1–10 tests in touch-later.test.ts
     /* needs nested attributes + touch */
   });
   it.skip("touching through nested attributes with before committed on all records", () => {
+    // BLOCKED: unknown — touch-later feature gap; needs human triage
+    // ROOT-CAUSE: touch-later.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in touch-later.ts; affects ~1–10 tests in touch-later.test.ts
     /* needs nested attributes + touch */
   });
 });

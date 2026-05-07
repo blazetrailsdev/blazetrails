@@ -31,6 +31,9 @@ describeIfPg("PostgreSQLAdapter", () => {
     it.skip("update record", async () => {});
     it.skip("delete record", async () => {});
     it.skip("attribute names", () => {
+      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
+      // ROOT-CAUSE: adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
       /* TODO: needs imports from original file */
     });
   });

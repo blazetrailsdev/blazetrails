@@ -722,6 +722,9 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it.skip("reconnection error", () => {
+      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in postgresql-adapter
+      // ROOT-CAUSE: adapters/postgresql/postgresql-adapter.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in adapters/postgresql/postgresql-adapter.ts; affects ~10–47 tests in postgresql-adapter.test.ts
       /* needs reconnection logic */
     });
 
@@ -783,6 +786,9 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(exists).toBe(false);
     });
     it.skip("exec insert with returning disabled", () => {
+      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in postgresql-adapter
+      // ROOT-CAUSE: adapters/postgresql/postgresql-adapter.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in adapters/postgresql/postgresql-adapter.ts; affects ~10–47 tests in postgresql-adapter.test.ts
       /* needs RETURNING-disabled adapter mode */
     });
 

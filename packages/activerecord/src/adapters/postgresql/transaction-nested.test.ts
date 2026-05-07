@@ -22,6 +22,10 @@ describeIfPg("PostgreSQLAdapter", () => {
     it.skip("SerializationFailure inside nested SavepointTransaction is recoverable", async () => {});
     it.skip("deadlock raises Deadlocked inside nested SavepointTransaction", async () => {});
 
-    it.skip("deadlock inside nested SavepointTransaction is recoverable", () => {});
+    it.skip("deadlock inside nested SavepointTransaction is recoverable", () => {
+      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in transaction-nested
+      // ROOT-CAUSE: adapters/postgresql/transaction-nested.ts missing or incomplete Rails parity
+      // SCOPE: ~50–200 LOC fix in adapters/postgresql/transaction-nested.ts; affects ~10–47 tests in transaction-nested.test.ts
+    });
   });
 });

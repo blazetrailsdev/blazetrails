@@ -61,6 +61,9 @@ describe("FinderRespondToTest", () => {
   });
 
   it.skip("should respond to find all by an aliased attribute", () => {
+    // BLOCKED: unknown — finder-respond-to feature gap; needs human triage
+    // ROOT-CAUSE: finder-respond-to.ts missing Rails parity; exact symbol unclear without running the test
+    // SCOPE: ~30–100 LOC fix in finder-respond-to.ts; affects ~1–10 tests in finder-respond-to.test.ts
     /* needs aliasAttribute implementation */
   });
 

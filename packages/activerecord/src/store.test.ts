@@ -59,7 +59,7 @@ describe("StoreTest", () => {
     const u = await User.create({ name: "Bob", settings: raw });
     expect((u as any).theme).toBe("dark");
     expect((u as any).language).toBe("en");
-    // extra is not exposed, but settings JSON string contains it
+    // extra is not exposed as an accessor, but settings JSON string contains it
     const settingsStr = u.settings as string;
     const settings = JSON.parse(settingsStr);
     expect(settings.extra).toBe("value");
@@ -1017,3 +1017,102 @@ describe("storeAccessorsModule", () => {
     expect(storeAccessorsModule(Child).has("mode")).toBe(true);
   });
 });
+
+describe("IndifferentCoder wiring via Base.store()", () => {
+  let adapter: DatabaseAdapter;
+
+  beforeEach(async () => {
+    adapter = createTestAdapter();
+    await defineSchema(adapter, {
+      users: { name: "string", settings: "string" },
+    });
+  });
+
+  afterAll(async () => {
+    await dropAllTables(adapter);
+    vi.unstubAllEnvs();
+  });
+
+  it("Base.store registers an IndifferentCoder for the column", async () => {
+    const { getStoreCoder } = await import("./store.js");
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("settings", "string");
+        this.adapter = adapter;
+      }
+    }
+    User.store("settings", { accessors: ["theme"] });
+    const coder = getStoreCoder(User, "settings");
+    expect(coder).toBeDefined();
+    expect(typeof coder!.load).toBe("function");
+    expect(typeof coder!.dump).toBe("function");
+    expect(coder!.accessor()).toBe(IndifferentHashAccessor);
+  });
+
+  it("storeAccessorFor returns IndifferentHashAccessor for a store column", async () => {
+    const { storeAccessorFor, IndifferentHashAccessor: IHA } = await import("./store.js");
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("settings", "string");
+        this.adapter = adapter;
+      }
+    }
+    User.store("settings", { accessors: ["theme"] });
+    expect(storeAccessorFor(User, "settings")).toBe(IHA);
+  });
+
+  it("reading a store column returns HashWithIndifferentAccess", async () => {
+    const { HashWithIndifferentAccess: HWIA } = await import("@blazetrails/activesupport");
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("settings", "string");
+        this.adapter = adapter;
+      }
+    }
+    User.store("settings", { accessors: ["theme"] });
+    const u = new User({ name: "Alice", settings: JSON.stringify({ theme: "dark" }) });
+    const settings = u.settings;
+    expect(settings).toBeInstanceOf(HWIA);
+    expect((settings as any).get("theme")).toBe("dark");
+  });
+
+  it("round-trip: save and reload preserves store values via IndifferentCoder", async () => {
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("settings", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(User);
+    User.store("settings", { accessors: ["theme", "language"] });
+
+    const u = await User.create({ name: "Bob" });
+    (u as any).theme = "midnight";
+    (u as any).language = "fr";
+    await u.save();
+
+    const reloaded = await User.find(u.id);
+    expect((reloaded as any).theme).toBe("midnight");
+    expect((reloaded as any).language).toBe("fr");
+  });
+
+  it("IndifferentCoder.load wraps null/missing value in empty HWIA", () => {
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("settings", "string");
+        this.adapter = adapter;
+      }
+    }
+    User.store("settings", { accessors: ["theme"] });
+    const u = new User({ name: "Carol" });
+    expect((u as any).theme).toBeNull();
+  });
+});
+
+// Re-export IndifferentHashAccessor for inline use in the test above
+import { IndifferentHashAccessor } from "./store.js";

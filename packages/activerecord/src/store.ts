@@ -2,6 +2,72 @@ import { ConfigurationError } from "./errors.js";
 import type { Base } from "./base.js";
 import { HashWithIndifferentAccess } from "@blazetrails/activesupport";
 
+interface CoderLike {
+  dump(v: unknown): unknown;
+  load(v: unknown): unknown;
+}
+
+/**
+ * Per-class registry mapping store-attribute name to its IndifferentCoder.
+ * Populated by Base.store() to wire implicit serialize semantics.
+ */
+const _storeCoders = new WeakMap<typeof Base, Map<string, IndifferentCoder>>();
+
+/** @internal */
+export function setStoreCoder(klass: typeof Base, attr: string, coder: IndifferentCoder): void {
+  let map = _storeCoders.get(klass);
+  if (!map) {
+    map = new Map();
+    _storeCoders.set(klass, map);
+  }
+  map.set(attr, coder);
+}
+
+/** @internal */
+export function getStoreCoder(klass: typeof Base, attr: string): IndifferentCoder | undefined {
+  let cls: typeof Base | null = klass;
+  while (cls && typeof cls === "function" && cls !== Function.prototype) {
+    const coder = _storeCoders.get(cls)?.get(attr);
+    if (coder) return coder;
+    cls = Object.getPrototypeOf(cls) as typeof Base | null;
+  }
+  return undefined;
+}
+
+/**
+ * Wraps a column coder to ensure the deserialized value is a
+ * HashWithIndifferentAccess and the serialized form is a plain hash.
+ *
+ * Mirrors: ActiveRecord::Store::IndifferentCoder
+ */
+export class IndifferentCoder {
+  readonly storeAttribute: string;
+  readonly coder: CoderLike | null;
+
+  constructor(storeAttribute: string, coder?: CoderLike | null) {
+    this.storeAttribute = storeAttribute;
+    this.coder = coder ?? null;
+  }
+
+  dump(obj: unknown): unknown {
+    const plain = asRegularHash(asIndifferentHash(obj));
+    return this.coder ? this.coder.dump(plain) : JSON.stringify(plain);
+  }
+
+  load(value: unknown): HashWithIndifferentAccess<unknown> {
+    const parsed = this.coder
+      ? this.coder.load(value)
+      : typeof value === "string"
+        ? JSON.parse(value)
+        : value;
+    return asIndifferentHash(parsed);
+  }
+
+  accessor(): typeof IndifferentHashAccessor {
+    return IndifferentHashAccessor;
+  }
+}
+
 /**
  * Tracks stored attributes per model class.
  * Maps model class -> { storeName -> accessor keys[] }
@@ -118,8 +184,15 @@ export class HashAccessor {
       const raw = object.readAttribute(attribute);
       const obj = this._writeHash(raw);
       obj[key] = value;
-      const isStringColumn = typeof raw === "string" || raw === null || raw === undefined;
-      object.writeAttribute(attribute, isStringColumn ? JSON.stringify(obj) : obj);
+      // Structured types (json/jsonb/hstore) store plain objects; text/string columns
+      // store JSON-encoded strings. Use the column's type name to decide.
+      const typeName = (object.constructor as any).typeForAttribute?.(attribute)?.name;
+      const isStringBacked =
+        !typeName ||
+        typeName === "string" ||
+        typeName === "text" ||
+        typeName === "immutable_string";
+      object.writeAttribute(attribute, isStringBacked ? JSON.stringify(obj) : obj);
     }
   }
 
@@ -139,6 +212,7 @@ export class HashAccessor {
   }
 
   protected static _readHash(data: unknown): Readonly<Record<string, unknown>> {
+    if (data instanceof HashWithIndifferentAccess) return data.toHash();
     if (data === null || data === undefined) return {};
     if (typeof data === "string") return JSON.parse(data);
     if (typeof data === "object" && !Array.isArray(data)) return data as Record<string, unknown>;
@@ -146,6 +220,7 @@ export class HashAccessor {
   }
 
   protected static _writeHash(data: unknown): Record<string, unknown> {
+    if (data instanceof HashWithIndifferentAccess) return data.toHash();
     if (data === null || data === undefined) return {};
     if (typeof data === "string") {
       const parsed = JSON.parse(data);
@@ -277,8 +352,10 @@ export function storeAccessorFor(
       return accessor as typeof HashAccessor;
     }
   }
-  // Plain string/JSON columns have no type.accessor; fall back to
-  // IndifferentHashAccessor after confirming the column was declared via store().
+  // Check IndifferentCoder registered by Base.store() — returns IndifferentHashAccessor.
+  const coder = getStoreCoder(modelClass, storeAttribute);
+  if (coder) return coder.accessor();
+  // Last resort: confirm the column was declared via store() and use IndifferentHashAccessor.
   if (!_hasStoredAttribute(modelClass, storeAttribute)) {
     throw new ConfigurationError(
       `the column '${storeAttribute}' has not been configured as a store. ` +

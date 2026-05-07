@@ -224,11 +224,15 @@ import * as _AttributeAssignment from "./attribute-assignment.js";
 import * as _NestedAttributes from "./nested-attributes.js";
 import {
   store as _storeFunction,
+  IndifferentCoder,
+  setStoreCoder,
   localStoredAttributesMethod as _localStoredAttributesMethod,
   readStoreAttributeMethod as _readStoreAttributeMethod,
   writeStoreAttributeMethod as _writeStoreAttributeMethod,
   storeAccessorForMethod as _storeAccessorForMethod,
 } from "./store.js";
+import { buildColumnSerializer } from "./attribute-methods/serialization.js";
+import { serialize as _serializeAttribute } from "./serialize.js";
 import {
   hasMultiparameterKeys,
   extractMultiparameterCallstack,
@@ -1343,18 +1347,45 @@ export class Base extends Model {
   /**
    * Declare a stored attribute backed by a JSON/text column.
    * Defines accessors for individual keys within the stored hash.
+   * Implicitly calls serialize with IndifferentCoder so the column is
+   * deserialized to HashWithIndifferentAccess on read.
    *
    * Mirrors: ActiveRecord::Store.store
    */
   static store(
     attribute: string,
-    options?: { accessors?: string[]; prefix?: boolean | string; suffix?: boolean | string },
+    options?: {
+      accessors?: string[];
+      prefix?: boolean | string;
+      suffix?: boolean | string;
+      coder?: unknown;
+      yaml?: Record<string, unknown>;
+    },
   ): void {
+    const baseCoder = buildColumnSerializer(attribute, options?.coder, Object, options?.yaml);
+    const indifferentCoder = new IndifferentCoder(attribute, baseCoder as any);
+    setStoreCoder(this, attribute, indifferentCoder);
+    // Structured column types (json/jsonb/hstore) have a type-level accessor and
+    // handle their own serialization. Only wire IndifferentCoder through serialize()
+    // for plain text/string columns that have no type-level accessor.
+    const colType = this.typeForAttribute(attribute);
+    if (!colType || typeof (colType as any).accessor !== "function") {
+      _serializeAttribute(this, attribute, { coder: indifferentCoder as any });
+    }
     _storeFunction(this, attribute, {
       accessors: options?.accessors ?? [],
       prefix: options?.prefix,
       suffix: options?.suffix,
     });
+  }
+
+  /**
+   * Declare that an attribute should be serialized using the given coder.
+   *
+   * Mirrors: ActiveRecord::Base.serialize
+   */
+  static serialize(attribute: string, options?: { coder?: unknown }): void {
+    _serializeAttribute(this, attribute, options as any);
   }
 
   /** Mirrors: ActiveRecord::Store::ClassMethods#local_stored_attributes */

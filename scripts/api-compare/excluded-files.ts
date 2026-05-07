@@ -21,13 +21,13 @@
 // `testFile` because their TS source counterparts either don't exist or
 // are being actively ported.
 
-export type ExcludedFile = {
-  reason: string;
-  // Per-test exclusion: when set, the file itself is NOT whole-file excluded;
-  // only the listed Ruby test descriptions are dropped from test:compare counts.
-  // Use isTestCaseExcluded() to check. Requires testFile to be set.
-  tests?: string[];
-} & ({ pattern: string; testFile?: string } | { pattern?: string; testFile: string });
+export type ExcludedFile = { reason: string } & (
+  | { pattern: string; testFile?: string; tests?: never }
+  | { pattern?: string; testFile: string; tests?: never }
+  // Per-test exclusion: file is not whole-file excluded; only the listed Ruby
+  // test descriptions are dropped. Use isTestCaseExcluded() to check.
+  | { pattern?: string; testFile: string; tests: string[] }
+);
 
 export const EXCLUDED_FILES: ExcludedFile[] = [
   {

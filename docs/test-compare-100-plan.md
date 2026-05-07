@@ -350,7 +350,7 @@ This drops them from both the Ruby denominator and the skipped backlog.
 **PR that added whole-file exclusions: #1304** (chore(test-compare): exclude permanently-not-portable Rails tests).
 Delta: 8097 → 7970 Ruby tests (−127), 2211 → 2085 skipped (−126).
 
-**PR that added per-test exclusion infra + mixed-file entries: TBD** (feat(test-compare): per-test exclusions for mixed GVL/serialization files).
+**PR that added per-test exclusion infra + mixed-file entries: #1305** (feat(test-compare): per-test exclusions for mixed GVL/serialization files).
 Delta: 7970 → 7930 Ruby tests (−40), 2085 → 2048 skipped (−37).
 
 ### YAML / Marshal / Ruby object serialization ✓ excluded

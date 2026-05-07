@@ -1720,11 +1720,14 @@ export function sqlForInsert(
   return [sql, binds];
 }
 
-/** @internal */
-function lastInsertedId(result: any): never {
-  throw new NotImplementedError(
-    "ActiveRecord::ConnectionAdapters::DatabaseStatements#last_inserted_id is not implemented",
-  );
+/**
+ * Returns the id of the last inserted row from a result.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#last_inserted_id
+ * @internal
+ */
+function lastInsertedId(result: Result): unknown {
+  return singleValueFromRows(result.rows as unknown[][]);
 }
 
 /**

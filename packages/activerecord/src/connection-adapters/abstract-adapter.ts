@@ -69,6 +69,7 @@ import { Savepoints as SavepointsMixin } from "./abstract/savepoints.js";
 import {
   maxIdentifierLength,
   tableNameLength,
+  tableAliasLength,
   indexNameLength,
   bindParamsLength,
 } from "./abstract/database-limits.js";
@@ -1540,6 +1541,7 @@ include(AbstractAdapter, SavepointsMixin);
 include(AbstractAdapter, {
   maxIdentifierLength,
   tableNameLength,
+  tableAliasLength,
   indexNameLength,
   bindParamsLength,
 });

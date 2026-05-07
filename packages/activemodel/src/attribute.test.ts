@@ -489,7 +489,7 @@ describe("AttributeTest", () => {
     });
   });
 
-  describe("FromDatabase#changedInPlace delegates to type.isChangedInPlace", () => {
+  describe("Attribute#changedInPlace delegates to type.isChangedInPlace", () => {
     it("returns true when mutable type reports change", () => {
       const stringType = typeRegistry.lookup("string");
       const attr = Attribute.fromDatabase("name", "hello", stringType);

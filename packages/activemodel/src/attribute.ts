@@ -93,7 +93,9 @@ export abstract class Attribute {
   }
 
   changedInPlace(): boolean {
-    return false;
+    return (
+      this.hasBeenRead() && this.type.isChangedInPlace(this._originalValueForDatabase(), this.value)
+    );
   }
 
   withValueFromUser(value: unknown): Attribute {
@@ -259,12 +261,6 @@ export abstract class Attribute {
 export class FromDatabase extends Attribute {
   typeCast(value: unknown): unknown {
     return this.type.deserialize(value);
-  }
-
-  override changedInPlace(): boolean {
-    return (
-      this.hasBeenRead() && this.type.isChangedInPlace(this._originalValueForDatabase(), this.value)
-    );
   }
 
   /** @internal */

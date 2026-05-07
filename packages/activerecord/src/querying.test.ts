@@ -105,4 +105,24 @@ describe("QueryingTest — static forwarders on Base", () => {
     const sql = rel.toSql();
     expect(sql).toContain("post_classes");
   });
+
+  it("invertWhere() returns a Relation", () => {
+    expect(Post.where({ status: "draft" }).invertWhere()).toBeInstanceOf(Relation);
+  });
+
+  it("without() returns a Relation", () => {
+    expect(Post.without()).toBeInstanceOf(Relation);
+  });
+
+  it("except() returns a Relation", () => {
+    expect(Post.except()).toBeInstanceOf(Relation);
+  });
+
+  it("only() returns a Relation", () => {
+    expect(Post.only("where")).toBeInstanceOf(Relation);
+  });
+
+  it("merge() returns a Relation", () => {
+    expect(Post.merge(Post.where({ status: "draft" }))).toBeInstanceOf(Relation);
+  });
 });

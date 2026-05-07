@@ -1857,6 +1857,12 @@ export class Base extends Model {
   declare static inOrderOf: typeof Querying.inOrderOf;
   declare static strictLoading: typeof Querying.strictLoading;
   declare static createWith: typeof Querying.createWith;
+  declare static invertWhere: typeof Querying.invertWhere;
+  declare static without: typeof Querying.without;
+  declare static except: typeof Querying.except;
+  declare static only: typeof Querying.only;
+  declare static merge: typeof Querying.merge;
+  declare static asyncIds: typeof Querying.asyncIds;
 
   /**
    * Increment counter columns for a record by primary key.

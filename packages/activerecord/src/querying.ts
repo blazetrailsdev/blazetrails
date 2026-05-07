@@ -836,3 +836,45 @@ export function createWith<T extends typeof Base>(
 ): Relation<InstanceType<T>> {
   return this.all().createWith(attrs);
 }
+
+/** Mirrors: ActiveRecord::Querying#invert_where */
+export function invertWhere<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
+  return this.all().invertWhere();
+}
+
+/** Mirrors: ActiveRecord::Querying#without — alias for excluding */
+export function without<T extends typeof Base>(
+  this: T,
+  ...records: InstanceType<T>[]
+): Relation<InstanceType<T>> {
+  return this.all().without(...records);
+}
+
+/** Mirrors: ActiveRecord::SpawnMethods#except */
+export function except<T extends typeof Base>(
+  this: T,
+  other?: Relation<InstanceType<T>>,
+): Relation<InstanceType<T>> {
+  return this.all().except(other);
+}
+
+/** Mirrors: ActiveRecord::SpawnMethods#only */
+export function only<T extends typeof Base>(
+  this: T,
+  ...types: Parameters<Relation<InstanceType<T>>["only"]>
+): Relation<InstanceType<T>> {
+  return this.all().only(...types);
+}
+
+/** Mirrors: ActiveRecord::Querying#merge */
+export function merge<T extends typeof Base, U extends Base>(
+  this: T,
+  other: Relation<U>,
+): Relation<InstanceType<T>> {
+  return this.all().merge(other);
+}
+
+/** Mirrors: ActiveRecord::Querying#async_ids */
+export function asyncIds<T extends typeof Base>(this: T): Promise<unknown[]> {
+  return this.all().asyncIds();
+}

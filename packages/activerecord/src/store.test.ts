@@ -1137,3 +1137,9 @@ describe("IndifferentCoder wiring via store() and Base.store()", () => {
     );
   });
 });
+
+// AR_NO_AUTO_SCHEMA is stubbed at module scope for the full file.
+// Restore at file teardown so the stub doesn't persist in the worker.
+afterAll(() => {
+  vi.unstubAllEnvs();
+});

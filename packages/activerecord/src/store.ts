@@ -71,12 +71,20 @@ export class IndifferentCoder {
 
   load(value: unknown): HashWithIndifferentAccess<unknown> {
     // Mirror Rails: @coder.load(yaml || "") — coerce null to "" for inner coders.
-    // For the default JSON path, null → empty HWIA directly (JSON.parse("") throws).
+    // For the default JSON path, blank/null → empty HWIA; invalid JSON → empty HWIA
+    // (mirrors Rails YAMLColumn treating blank input as {}).
     if (this.coder) {
       return asIndifferentHash(this.coder.load(value ?? ""));
     }
-    if (value === null || value === undefined) return asIndifferentHash(null);
-    return asIndifferentHash(typeof value === "string" ? JSON.parse(value) : value);
+    if (value === null || value === undefined || value === "") return asIndifferentHash(null);
+    if (typeof value === "string") {
+      try {
+        return asIndifferentHash(JSON.parse(value));
+      } catch {
+        return asIndifferentHash(null);
+      }
+    }
+    return asIndifferentHash(value);
   }
 
   /** @internal */

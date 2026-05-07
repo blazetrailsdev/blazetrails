@@ -957,6 +957,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       this._conn = null;
     }
     this._inTransaction = false;
+    this._statementPools = new WeakMap<mysql.PoolConnection, Mysql2StatementPool>();
     const pool = this._driverPool;
     this._driverPool = null;
     if (pool) {

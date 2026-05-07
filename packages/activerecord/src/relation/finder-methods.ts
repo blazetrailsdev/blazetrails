@@ -595,7 +595,10 @@ export function constructRelationForExists(rel: FinderRelation, conditions: unkn
   let relation: any =
     (rel as any)._isDistinct && (rel as any)._offsetValue != null
       ? (rel as any).unscope("order").limit(1)
-      : (rel as any).unscope("select", "order").select("1 AS one").limit(1);
+      : (rel as any)
+          .unscope("select", "distinct", "order")
+          .select(new Nodes.SqlLiteral("1 AS one"))
+          .limit(1);
   if (conditions === null || conditions === undefined || conditions === true) {
     return relation;
   }

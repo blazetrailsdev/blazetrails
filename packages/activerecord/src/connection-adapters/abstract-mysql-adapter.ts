@@ -13,6 +13,7 @@ import type { AdapterName, ExplainOption } from "../adapter.js";
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
 import type { Column } from "./column.js";
 import {
+  DatabaseVersionError,
   InvalidForeignKey,
   MismatchedForeignKey,
   NotNullViolation,
@@ -263,11 +264,6 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   isMariadb(): boolean {
     return this._mariadb;
-  }
-
-  getDatabaseVersion(): Version {
-    if (this._databaseVersion) return this._databaseVersion;
-    return new Version("0.0.0");
   }
 
   supportsBulkAlter(): boolean {
@@ -615,9 +611,20 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return {};
   }
 
+  /**
+   * Query a MySQL session variable by name.
+   * Mirrors: AbstractMysqlAdapter#show_variable — executes `SHOW VARIABLES LIKE ?`
+   * with logging name "SCHEMA" so LogSubscriber records it under schema queries.
+   */
   async showVariable(name: string): Promise<string | null> {
-    void name;
-    return null;
+    const rows = await (
+      this as unknown as {
+        execute(sql: string, binds: unknown[], name: string): Promise<Record<string, unknown>[]>;
+      }
+    ).execute("SHOW VARIABLES LIKE ?", [name], "SCHEMA");
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return (row.Value ?? row.value ?? row.VALUE ?? null) as string | null;
   }
 
   async primaryKeys(tableName: string): Promise<string[]> {
@@ -1027,11 +1034,41 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return this._databaseVersion?.gte("8.0.3") === true;
   }
 
+  /**
+   * Fetch the raw version string from the MySQL server (e.g. "8.0.28-ubuntu").
+   * Concrete adapters (Mysql2Adapter, TrilogyAdapter) override this to query
+   * the live connection. Base implementation throws — callers must call
+   * `getDatabaseVersion()` only after a subclass has wired this.
+   * @internal
+   */
+  async getFullVersion(): Promise<string> {
+    throw new Error(`${this.constructor.name} must implement getFullVersion()`);
+  }
+
+  /**
+   * Parse the server version from the full version string and return it.
+   *
+   * Mirrors: AbstractMysqlAdapter#get_database_version — calls get_full_version,
+   * strips MariaDB prefix via version_string, returns Version.
+   */
+  override async getDatabaseVersion(): Promise<Version> {
+    const fullVersion = await this.getFullVersion();
+    return new Version(this.versionString(fullVersion));
+  }
+
   /** @internal */
-  protected versionString(fullVersionString: string): string {
+  protected versionString(fullVersionString: string | null | undefined): string {
+    if (fullVersionString == null) {
+      throw new DatabaseVersionError("Unable to parse MySQL version from nil");
+    }
+    if (fullVersionString.length === 0) {
+      throw new DatabaseVersionError(`Unable to parse MySQL version from ""`);
+    }
     const matches = fullVersionString.match(/^(?:5\.5\.5-)?(\d+\.\d+\.\d+)/);
     if (matches) return matches[1];
-    throw new Error(`Unable to parse MySQL version from ${JSON.stringify(fullVersionString)}`);
+    throw new DatabaseVersionError(
+      `Unable to parse MySQL version from ${JSON.stringify(fullVersionString)}`,
+    );
   }
 
   /** @internal */

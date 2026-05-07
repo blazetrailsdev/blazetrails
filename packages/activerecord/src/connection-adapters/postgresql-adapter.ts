@@ -4567,7 +4567,7 @@ function splitPgDefault(raw: string | null): { literal: unknown; fn: string | nu
   // 'value'::type[] — array literal with a cast; {} is the PG empty-array literal.
   const arrayLiteral = /^'((?:[^']|'')*)'::[\w"\s.(,)]+\[\]$/.exec(raw);
   if (arrayLiteral) {
-    const content = arrayLiteral[1];
+    const content = arrayLiteral[1].replace(/''/g, "'");
     return { literal: content === "{}" ? [] : content, fn: null };
   }
   // 'value'::type — quoted literal with an optional cast.

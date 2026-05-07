@@ -528,10 +528,19 @@ function categorize(relPath: string, describeName: string, testName: string): An
   // --- Validation ---
   if (p.startsWith("validations/") || p.includes("validation") || p.includes("i18n")) {
     const file = path.basename(p, ".test.ts");
+    // Map test filename to actual implementation file (strips -validation suffix; handles irregulars)
+    const implFile =
+      file === "association-validation"
+        ? "validations/associated.ts"
+        : file === "i18n-validation" || file === "i18n-generate-message-validation"
+          ? "translation.ts"
+          : file === "validations"
+            ? "validations.ts"
+            : `validations/${file.replace(/-validation$/, "")}.ts`;
     return {
       blocked: `validation — validator behavior gap in ${file}`,
-      rootCause: `validations/${file}.ts or translation.ts missing Rails parity`,
-      scope: `~30–100 LOC fix in validations/; affects ~4–11 tests in ${file}.test.ts`,
+      rootCause: `${implFile} missing Rails parity`,
+      scope: `~30–100 LOC fix in ${implFile}; affects ~4–11 tests in ${file}.test.ts`,
     };
   }
 

@@ -347,7 +347,7 @@ Permanently not-portable tests are excluded via `EXCLUDED_FILES` in
 `scripts/api-compare/excluded-files.ts` (whole-file entries with `testFile`).
 This drops them from both the Ruby denominator and the skipped backlog.
 
-**PR that added whole-file exclusions: chore(test-compare) permanents skip-list** (this PR).
+**PR that added whole-file exclusions: #1304** (chore(test-compare): exclude permanently-not-portable Rails tests).
 Delta: 8097 → 7970 Ruby tests (−127), 2211 → 2085 skipped (−126).
 
 ### YAML / Marshal / Ruby object serialization ✓ excluded

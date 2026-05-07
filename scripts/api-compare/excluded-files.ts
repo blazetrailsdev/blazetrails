@@ -12,13 +12,9 @@
 // extract-ruby-tests.rb (e.g. "message_pack_test.rb"). Omit when there is
 // no corresponding test file in the Rails suite.
 
-export interface ExcludedFile {
-  /** Matches the Ruby source file path; used by api:compare. Omit for test-only exclusions. */
-  pattern?: string;
-  /** Matches the Ruby test file path; used by test:compare. */
-  testFile?: string;
+export type ExcludedFile = {
   reason: string;
-}
+} & ({ pattern: string; testFile?: string } | { pattern?: string; testFile: string });
 
 export const EXCLUDED_FILES: ExcludedFile[] = [
   {

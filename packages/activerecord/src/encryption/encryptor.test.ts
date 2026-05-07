@@ -271,4 +271,16 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
     expect((enc as any).cipher()).toBeInstanceOf(Cipher);
     expect(Configurable.cipher).toBeInstanceOf(Cipher);
   });
+
+  it("cipher reads from the current encryption context", () => {
+    const customCipher = new Cipher();
+    const ctx = Contexts.context as any;
+    const saved = ctx.cipher;
+    try {
+      ctx.cipher = customCipher;
+      expect((new Encryptor() as any).cipher()).toBe(customCipher);
+    } finally {
+      ctx.cipher = saved;
+    }
+  });
 });

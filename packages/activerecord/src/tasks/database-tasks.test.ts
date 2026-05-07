@@ -1436,6 +1436,23 @@ describe("initializeDatabase", () => {
     }
   });
 
+  it("calls DatabaseTasks.create when probe throws NoDatabaseError", async () => {
+    let created = false;
+    vi.spyOn(DatabaseTasks as any, "_connectFor").mockResolvedValue({
+      execute: async () => {
+        throw new NoDatabaseError("no database");
+      },
+      close: async () => {},
+    });
+    vi.spyOn(DatabaseTasks, "create").mockImplementation(async () => {
+      created = true;
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3", database: ":memory:" });
+    const result = await initializeDatabase(config);
+    expect(created).toBe(true);
+    expect(result).toBe(true);
+  });
+
   it("loads schema dump when DB is fresh and dump file exists", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-initdb-schema-"));
     const schemaFile = path.join(tmp, "schema.ts");

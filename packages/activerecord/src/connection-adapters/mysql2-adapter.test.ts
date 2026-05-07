@@ -841,7 +841,7 @@ describeIfMysql("Mysql2Adapter", () => {
       try {
         await expect(adapter.execute("SELECT 1")).rejects.toBeInstanceOf(NoDatabaseError);
       } finally {
-        await (adapter as any).close?.();
+        await adapter.close();
       }
     });
   });

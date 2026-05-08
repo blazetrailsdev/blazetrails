@@ -1169,10 +1169,10 @@ describe("MigrationTest", () => {
     const override = createTestAdapter();
     (m as any).adapter = baseAdapter;
     expect(m.connection).toBe(baseAdapter);
-    m._connectionOverride = override;
+    (m as any)._connectionOverride = override;
     expect(m.connection).toBe(override);
     expect(m.connectionPool).toBe(override);
-    delete m._connectionOverride;
+    delete (m as any)._connectionOverride;
     expect(m.connection).toBe(baseAdapter);
   });
 

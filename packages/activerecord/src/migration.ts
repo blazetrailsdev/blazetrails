@@ -185,8 +185,8 @@ export class EnvironmentStorageError extends MigrationError {
  */
 export abstract class Migration {
   protected adapter!: DatabaseAdapter;
-  /** Per-migration connection override — mirrors Rails' @connection ivar. */
-  _connectionOverride?: DatabaseAdapter;
+  /** @internal Per-migration connection override — mirrors Rails' @connection ivar. */
+  protected _connectionOverride?: DatabaseAdapter;
   private _recording = false;
   private _recorder = new CommandRecorder();
   private _name?: string;

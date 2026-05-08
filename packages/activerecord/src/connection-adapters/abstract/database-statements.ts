@@ -394,8 +394,15 @@ export function execInsert(
   binds: unknown[] = [],
   pk?: string | null,
   _sequenceName?: string | null,
+  returning?: string[] | null,
 ): Promise<Result> {
-  [sql, binds] = sqlForInsert.call(this as DatabaseStatementsHost, sql, pk, binds, null);
+  [sql, binds] = sqlForInsert.call(
+    this as DatabaseStatementsHost,
+    sql,
+    pk,
+    binds,
+    returning ?? null,
+  );
   return internalExecQuery.call(this as DatabaseStatementsHost, sql, name ?? "SQL", binds);
 }
 

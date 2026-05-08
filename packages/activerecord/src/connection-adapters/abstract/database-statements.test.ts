@@ -460,6 +460,15 @@ describe("execInsert", () => {
     await execInsert.call(host, "INSERT INTO t (x) VALUES (1)", null, [], "id");
     expect(getCapturedSql()).toBe("INSERT INTO t (x) VALUES (1)");
   });
+
+  it("uses explicit returning list when provided", async () => {
+    const { host, getCapturedSql } = makeInsertHost(true);
+    await execInsert.call(host, "INSERT INTO t (x) VALUES (1)", null, [], null, null, [
+      "id",
+      "created_at",
+    ]);
+    expect(getCapturedSql()).toContain('RETURNING "id", "created_at"');
+  });
 });
 
 describe("sqlForInsert", () => {

@@ -304,7 +304,7 @@ function formatDatePrefix(v: { year: number; month: number; day: number }): stri
 }
 
 function padYear(year: number): string {
-  return String(year);
+  return String(year).padStart(4, "0");
 }
 
 function formatZonedComponents(zdt: Temporal.ZonedDateTime): string {

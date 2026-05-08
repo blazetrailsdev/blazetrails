@@ -234,10 +234,11 @@ describeIfPg("PostgreSQLAdapter", () => {
       // SCOPE: ~25 LOC shared with "custom range column" fix; affects 4 custom-range tests
     });
     it.skip("range schema dump", async () => {
-      // BLOCKED: range — schema-dumper range column type mapping absent
-      // ROOT-CAUSE: postgresql/schema-dumper.ts doesn't map range SQL type names (int4range,
-      //   tstzrange, numrange, etc.) to migration method names; range columns fall back to generic dump
-      // SCOPE: ~15 LOC in schema-dumper.ts + ~10 LOC test body; affects 1 test
+      // BLOCKED: range — range SQL types absent from SQL_TYPE_MAP / DSL_HELPER_METHODS
+      // ROOT-CAUSE: schema-dumper.ts SQL_TYPE_MAP has no entries for int4range, int8range, numrange,
+      //   daterange, tsrange, tstzrange; sqlTypeToDsl() falls back to generic string; DSL_HELPER_METHODS
+      //   also needs them so the column method (t.int4range etc.) is emitted rather than t.column
+      // SCOPE: ~15 LOC in schema-dumper.ts (SQL_TYPE_MAP + DSL_HELPER_METHODS) + ~10 LOC test body; affects 1 test
     });
     it.skip("range migration", async () => {
       // BLOCKED: range — test body not yet written; no core infra gap expected

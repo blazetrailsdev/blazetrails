@@ -2005,11 +2005,12 @@ describe("rememberTransactionRecordState / restoreTransactionRecordState (Story 
     });
 
     expect((topic as any)._startTransactionState).toBeNull();
-    // In-TX user edit is preserved as dirty: title rolled back to "original" but
-    // "changed-during-tx" appears as the prior ("was") value. Mirrors Rails'
-    // per-attribute original_attribute chain that survives restore.
+    // In-TX user edit preserved: "changed-during-tx" stays live in memory,
+    // "original" (pre-TX) is the dirty baseline. Mirrors Rails' attribute
+    // reconstruction via attr.with_value_from_user(current_value).
+    expect((topic as any).readAttribute("title")).toBe("changed-during-tx");
     expect((topic as any)._dirty.mutationsFromDatabase).toEqual({
-      title: ["changed-during-tx", "original"],
+      title: ["original", "changed-during-tx"],
     });
   });
 });
@@ -2032,13 +2033,13 @@ describe("DirtyTracker.redetectChanges after rollback (Story K-followup)", () =>
       shouldRunCallbacks: false,
     });
 
-    // Attribute restored to pre-TX value
-    expect((topic as any).readAttribute("title")).toBe("original");
-    // In-TX edit preserved as dirty: was="tx-edit", now="original"
+    // Post-TX value stays live in memory; pre-TX value becomes the dirty baseline.
+    // Mirrors Rails: attr.with_value_from_user keeps current value, pre-TX as original.
+    expect((topic as any).readAttribute("title")).toBe("tx-edit");
     expect((topic as any)._dirty.attributeChanged("title")).toBe(true);
-    expect((topic as any)._dirty.attributeWas("title")).toBe("tx-edit");
+    expect((topic as any)._dirty.attributeWas("title")).toBe("original");
     expect((topic as any)._dirty.mutationsFromDatabase).toEqual({
-      title: ["tx-edit", "original"],
+      title: ["original", "tx-edit"],
     });
   });
 
@@ -2058,40 +2059,5 @@ describe("DirtyTracker.redetectChanges after rollback (Story K-followup)", () =>
 
     expect((topic as any)._dirty.changed).toBe(false);
     expect((topic as any)._dirty.mutationsFromDatabase).toEqual({});
-  });
-});
-
-describe("inner savepoint committedBang (Story K-followup)", () => {
-  it("inner savepoint commit fires committedBang with shouldRunCallbacks=false", async () => {
-    const { Topic, adapter } = makeSQLiteTopic();
-
-    let committedCallCount = 0;
-    const orig = (Topic.prototype as any).committedBang;
-    (Topic.prototype as any).committedBang = async function (
-      this: typeof Topic.prototype,
-      opts?: { shouldRunCallbacks?: boolean },
-    ) {
-      committedCallCount++;
-      return orig?.call(this, opts);
-    };
-
-    const topic = await Topic.create({ title: "outer" });
-    await Topic.transaction(async () => {
-      await (topic as any).update({ title: "inner-saved" });
-      try {
-        await Topic.transaction(
-          async () => {
-            await (topic as any).update({ title: "savepoint" });
-          },
-          { requiresNew: true },
-        );
-      } catch {}
-    });
-
-    // committedBang should have been called at least once (inner savepoint fires it)
-    expect(committedCallCount).toBeGreaterThan(0);
-
-    (Topic.prototype as any).committedBang = orig;
-    adapter.close();
   });
 });

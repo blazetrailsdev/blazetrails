@@ -226,30 +226,32 @@ export class DirtyTracker {
   }
 
   /**
-   * After a transaction rollback restores the attribute set to its pre-TX
-   * baseline, re-populate `_changedAttributes` for any attribute whose
-   * post-TX value differs from the restored (pre-TX) baseline. This preserves
-   * in-transaction user edits as dirty — mirroring Rails' per-attribute
-   * `original_attribute` chain in `restore_state[:attributes].map`.
+   * Walk `currentAttributes` (post-TX) and populate `_changedAttributes` for
+   * any attribute whose current value differs from the pre-TX baseline already
+   * stored in `_originalAttributes` (set by a prior `snapshot(preTxAttrs)` call).
    *
-   * Call this after `snapshot(restoredAttributes)` so `_originalAttributes`
-   * already holds the pre-TX baseline values.
+   * Mirrors the Rails per-attribute `original_attribute` chain built by
+   * `restore_state[:attributes].map { attr.with_value_from_user(current_value) }`:
+   * the current (post-TX) value survives in memory as the "now" side, with the
+   * pre-TX value as the "was" baseline, so `mutationsFromDatabase` reflects
+   * `[preTx, postTx]` for each changed attribute.
+   *
+   * Call after `snapshot(preTxAttrs)` + `clearChangesInformation()`.
    *
    * @internal
    */
   redetectChanges(currentAttributes: AttributeSet): void {
     for (const [name] of currentAttributes) {
       const attr = currentAttributes.getAttribute(name);
-      const preRollbackValue = attr.value;
+      const currentValue = attr.value;
       if (!this._originalHas.has(name)) {
-        // Attribute added during the transaction — mark as reverted to absent
-        this._changedAttributes.set(name, [preRollbackValue, undefined]);
+        // Attribute added during the TX — mark as a new addition
+        this._changedAttributes.set(name, [undefined, currentValue]);
       } else {
-        const restoredValue = resolveValue(this._originalAttributes.get(name));
-        // isChanged: compare restored (pre-TX) vs pre-rollback (post-TX) value.
-        // Entry is [was=preRollback, now=restored] matching Rails' original_attribute semantics.
-        if (attr.type.isChanged(restoredValue, preRollbackValue, preRollbackValue)) {
-          this._changedAttributes.set(name, [preRollbackValue, restoredValue]);
+        const savedValue = resolveValue(this._originalAttributes.get(name));
+        // Entry: [was=savedValue (pre-TX), now=currentValue (post-TX)] — matches [was, now] convention.
+        if (attr.type.isChanged(savedValue, currentValue, currentValue)) {
+          this._changedAttributes.set(name, [savedValue, currentValue]);
         }
       }
     }

@@ -871,10 +871,10 @@ describe("DirtyTracker#redetectChanges", () => {
     dirty.clearChangesInformation();
     dirty.redetectChanges(postTxAttrs);
 
-    // title differed → dirty, with [was=tx-edit, now=original]
+    // title differed → dirty, with [was=original (preTX baseline), now=tx-edit (postTX)]
     expect(dirty.attributeChanged("title")).toBe(true);
-    expect(dirty.attributeWas("title")).toBe("tx-edit");
-    expect(dirty.changes).toEqual({ title: ["tx-edit", "original"] });
+    expect(dirty.attributeWas("title")).toBe("original");
+    expect(dirty.changes).toEqual({ title: ["original", "tx-edit"] });
 
     // score unchanged → not dirty
     expect(dirty.attributeChanged("score")).toBe(false);

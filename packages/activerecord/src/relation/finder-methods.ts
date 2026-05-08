@@ -724,7 +724,7 @@ export async function findSomeOrdered(rel: FinderRelation, ids: unknown[]): Prom
   relation._limitValue = null;
   relation._offsetValue = null;
   if ((rel as any).selectValues.length > 0) {
-    relation = relation.select((rel as any)._modelClass.arelTable[pk]);
+    relation = relation.select((rel as any)._modelClass.arelTable.get(pk));
   }
   const records: any[] = await relation.toArray();
 

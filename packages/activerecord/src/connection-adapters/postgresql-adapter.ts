@@ -4752,7 +4752,7 @@ function splitPgDefault(raw: string | null): { literal: unknown; fn: string | nu
   const arrayLiteral = /^'((?:[^']|'')*)'::[\w"\s.(,)]+\[\]$/.exec(raw);
   if (arrayLiteral) {
     const content = arrayLiteral[1].replace(/''/g, "'");
-    return { literal: `{${content}}`, fn: null };
+    return { literal: content, fn: null };
   }
   // 'value'::type — quoted literal with an optional cast.
   const quoted = /^'((?:[^']|'')*)'::[\w"\s.]+$/.exec(raw);

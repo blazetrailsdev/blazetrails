@@ -392,6 +392,8 @@ export function execInsert(
   sql: string,
   name?: string | null,
   binds: unknown[] = [],
+  _pk?: string | null,
+  _sequenceName?: string | null,
 ): Promise<Result> {
   return internalExecQuery.call(this as DatabaseStatementsHost, sql, name ?? "SQL", binds);
 }
@@ -475,14 +477,14 @@ export async function insert(
   this: DatabaseStatementsHost | void,
   arel: unknown,
   name?: string | null,
-  _pk?: string | null,
+  pk?: string | null,
   idValue?: unknown,
-  _sequenceName?: string | null,
+  sequenceName?: string | null,
   binds: unknown[] = [],
 ): Promise<unknown> {
   const host = this as DatabaseStatementsHost;
   const [sql, resolvedBinds] = toSqlAndBinds(arel, binds);
-  const result = await execInsert.call(this, sql, name, resolvedBinds);
+  const result = await execInsert.call(this, sql, name, resolvedBinds, pk, sequenceName);
   if (idValue !== undefined && idValue !== null) return idValue;
   return host.lastInsertedId!(result);
 }

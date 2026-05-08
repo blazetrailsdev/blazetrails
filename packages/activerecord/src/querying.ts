@@ -7,6 +7,7 @@
 
 import { Notifications } from "@blazetrails/activesupport";
 import type { Base } from "./base.js";
+import { getInheritanceColumn } from "./inheritance.js";
 import type { Relation } from "./relation.js";
 import { argumentError } from "./relation/query-methods.js";
 import type { AssociationSpec } from "./relation/query-methods.js";
@@ -78,11 +79,13 @@ export function asyncCountBySql(
 /**
  * Internal: execute a raw SQL query through the adapter.
  * Mirrors: ActiveRecord::Querying._query_by_sql
+ * @internal
  */
 export async function _queryBySql(
   this: typeof Base,
   sql: string | [string, ...unknown[]],
   binds: unknown[] = [],
+  _opts: { preparable?: boolean | null; async?: boolean; allowRetry?: boolean } = {},
 ): Promise<Record<string, unknown>[]> {
   if (Array.isArray(sql)) {
     // Array form [sql, ...values] — interpolate into the string
@@ -96,6 +99,7 @@ export async function _queryBySql(
 /**
  * Internal: instantiate model objects from a result set.
  * Mirrors: ActiveRecord::Querying._load_from_sql
+ * @internal
  */
 export function _loadFromSql<T extends typeof Base>(
   this: T,
@@ -105,9 +109,23 @@ export function _loadFromSql<T extends typeof Base>(
   if (rows.length === 0) return [];
 
   const payload = { record_count: rows.length, class_name: this.name };
-  const records = Notifications.instrument("instantiation.active_record", payload, () =>
-    rows.map((row) => this._instantiate(row)),
-  );
+  // Rails checks whether the result set includes the inheritance column.
+  // When present, instantiate() dispatches to the correct STI subclass.
+  // When absent, instantiate_instance_of() skips STI lookup for speed.
+  const inheritanceCol = getInheritanceColumn(this);
+  const includesInheritanceColumn =
+    inheritanceCol != null && Object.prototype.hasOwnProperty.call(rows[0], inheritanceCol);
+  const records = Notifications.instrument("instantiation.active_record", payload, () => {
+    if (includesInheritanceColumn) {
+      // Rails: instantiate() dispatches to the correct STI subclass via
+      // discriminate_class_for_record when the inheritance column is present.
+      return rows.map((row) => this._instantiate(row));
+    }
+    // Homogeneous set — Rails uses instantiate_instance_of(self, record) to skip
+    // STI lookup. Our _instantiate already skips dispatch when the column is
+    // absent (undefined is falsy), so the behavior is equivalent.
+    return rows.map((row) => this._instantiate(row));
+  });
   if (block) records.forEach(block);
   return records;
 }

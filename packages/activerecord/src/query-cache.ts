@@ -123,12 +123,6 @@ function getCurrentUserTransaction(adapter: unknown): unknown {
       ) {
         return userTx;
       }
-      // Some adapters (e.g. SQLite3) bypass TransactionManager in beginTransaction —
-      // fall back to inTransaction flag as presence signal
-      const aRecord = a as Record<string, unknown>;
-      if (typeof aRecord.inTransaction === "boolean" && aRecord.inTransaction) {
-        return true;
-      }
       return null;
     }
     a = (a as Record<string, unknown>).inner ?? null;

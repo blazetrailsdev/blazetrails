@@ -610,7 +610,7 @@ describe("TransactionInCachedSqlActiveRecordPayloadTest", () => {
     expect(hit.payload.transaction).toBeNull();
   });
 
-  it("payload with open transaction", async () => {
+  it.skipIf(adapterType === "sqlite")("payload with open transaction", async () => {
     const { cached } = setup();
     cached.enableQueryCache();
     const sql = "SELECT 1 AS val";

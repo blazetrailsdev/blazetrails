@@ -436,17 +436,20 @@ export function withRoleAndShard<T>(
   // Force-load any Relation within the role/shard scope so lazy queries don't
   // escape to a different connection context.
   // Mirrors: return_value.load if return_value.is_a? ActiveRecord::Relation (ensure pops stack)
-  if (isThenable(result)) {
-    // Async fn: resolve first, then check for Relation and call .load() inside scope.
-    const loaded = Promise.resolve(result as unknown).then((v) =>
-      v != null && typeof (v as any).load === "function" ? (v as any).load() : v,
-    );
+  //
+  // Check .load BEFORE isThenable: Relation is thenable (delegates .then to toArray),
+  // so Promise.resolve(relation) would unwrap it to records instead of calling .load().
+  if (result != null && typeof (result as any).load === "function") {
+    // Sync Relation returned: .load() is async, cleanup fires via withCleanup's .finally().
+    const loaded = (result as any).load();
     return withCleanup(loaded as unknown as T, () => removeStackEntry(entry));
   }
 
-  if (result != null && typeof (result as any).load === "function") {
-    // Sync Relation: .load() is async, so cleanup fires via withCleanup's .finally().
-    const loaded = (result as any).load();
+  if (isThenable(result)) {
+    // Async fn: resolve first, then check if the resolved value is a Relation.
+    const loaded = Promise.resolve(result as unknown).then((v) =>
+      v != null && typeof (v as any).load === "function" ? (v as any).load() : v,
+    );
     return withCleanup(loaded as unknown as T, () => removeStackEntry(entry));
   }
 

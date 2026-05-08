@@ -534,12 +534,6 @@ function _restoreTransactionRecordState(this: Base, forceRestoreState = false): 
     // exact pre-transaction state (no pending changes).
     r._attributes = state.attributes.deepDup();
 
-    // Clear mutation tracking caches. Mirrors Rails:
-    //   @mutations_from_database = nil
-    //   @mutations_before_last_save = nil
-    r._dirty.snapshot(r._attributes);
-    r._dirty.clearChangesInformation();
-
     // Restore primary key if it shifted during the transaction.
     const ctor = this.constructor as typeof Base;
     if (Array.isArray(ctor.primaryKey)) {
@@ -555,6 +549,13 @@ function _restoreTransactionRecordState(this: Base, forceRestoreState = false): 
     if (state.frozen && !r._attributes.isFrozen()) {
       r._attributes.freeze();
     }
+
+    // Clear mutation tracking caches AFTER all attribute mutations so the
+    // baseline reflects the fully-restored _attributes. Mirrors Rails:
+    //   @mutations_from_database = nil
+    //   @mutations_before_last_save = nil
+    r._dirty.snapshot(r._attributes);
+    r._dirty.clearChangesInformation();
   }
 }
 

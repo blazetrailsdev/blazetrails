@@ -1020,6 +1020,39 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(def).toBeUndefined();
     });
   });
+
+  describe("addColumn datetime precision", () => {
+    beforeEach(async () => {
+      await adapter.exec('DROP TABLE IF EXISTS "dt_prec_test" CASCADE');
+      await adapter.exec(`CREATE TABLE "dt_prec_test" ("id" SERIAL PRIMARY KEY)`);
+    });
+
+    afterEach(async () => {
+      await adapter.exec('DROP TABLE IF EXISTS "dt_prec_test" CASCADE');
+    });
+
+    it("addColumn datetime defaults to TIMESTAMP(6)", async () => {
+      await adapter.addColumn("dt_prec_test", "happened_at", "datetime");
+      const cols = await adapter.columns("dt_prec_test");
+      const col = cols.find((c) => c.name === "happened_at");
+      expect(col).toBeDefined();
+      expect(col!.precision).toBe(6);
+    });
+
+    it("addColumn datetime respects explicit precision", async () => {
+      await adapter.addColumn("dt_prec_test", "happened_at", "datetime", { precision: 0 });
+      const cols = await adapter.columns("dt_prec_test");
+      const col = cols.find((c) => c.name === "happened_at");
+      expect(col!.precision).toBe(0);
+    });
+
+    it("addColumn datetime null precision omits precision suffix", async () => {
+      await adapter.addColumn("dt_prec_test", "happened_at", "datetime", { precision: null });
+      const cols = await adapter.columns("dt_prec_test");
+      const col = cols.find((c) => c.name === "happened_at");
+      expect(col!.precision).toBeNull();
+    });
+  });
 });
 
 describe("PostgreSQLAdapter supports_* predicates (unit)", () => {
@@ -1110,5 +1143,13 @@ describe("PostgreSQLAdapter supports_* predicates (unit)", () => {
   it("indexAlgorithms returns concurrently", () => {
     const adapter = makeAdapter();
     expect(adapter.indexAlgorithms()).toEqual({ concurrently: "CONCURRENTLY" });
+  });
+
+  it("typeToSql emits TIMESTAMP(n) with explicit precision", () => {
+    const adapter = makeAdapter();
+    expect(adapter.typeToSql("datetime", { precision: 6 })).toBe("timestamp(6)");
+    expect(adapter.typeToSql("datetime", { precision: 0 })).toBe("timestamp(0)");
+    expect(adapter.typeToSql("datetime", { precision: 3 })).toBe("timestamp(3)");
+    expect(adapter.typeToSql("datetime")).toBe("timestamp");
   });
 });

@@ -2650,9 +2650,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   ): Promise<void> {
     const quotedTable = this.quoteTableName(tableName);
     const quotedCol = this.quoteIdentifier(columnName);
+    const isDatetimeType = type === "datetime" || type === "timestamp";
+    const resolvedPrecision =
+      isDatetimeType && options.precision === undefined ? 6 : (options.precision ?? undefined);
     const pgType = this.typeToSql(type, {
       ...options,
-      precision: options.precision ?? undefined,
+      precision: resolvedPrecision,
       limit: options.limit ?? undefined,
       scale: options.scale ?? undefined,
     });

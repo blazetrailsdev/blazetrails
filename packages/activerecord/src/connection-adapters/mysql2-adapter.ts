@@ -1219,6 +1219,15 @@ function buildConfigureConnectionClauses(
     ...(configVars ?? {}),
   };
 
+  // Validate variable names before interpolating into SQL — matches the pattern used
+  // by PostgreSQLAdapter and SQLite3Adapter to catch misconfigured keys early.
+  const SAFE_VAR_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+  for (const k of Object.keys(vars)) {
+    if (!SAFE_VAR_NAME.test(k)) {
+      throw new Error(`Invalid MySQL session variable name: ${JSON.stringify(k)}`);
+    }
+  }
+
   const wt = typeof waitTimeout === "string" ? parseInt(waitTimeout, 10) : waitTimeout;
   vars["wait_timeout"] = Number.isInteger(wt) ? (wt as number) : 2147483;
 

@@ -579,7 +579,7 @@ describe("SchemaDumperAdapterTest", () => {
       (t as any).datetime("happened_at", { precision: null });
     });
     const result = await TopLevelDumper.dump(adapter);
-    expect(result).toMatch(/t\.datetime\("happened_at"[^)]*precision.*null/);
+    expect(result).toMatch(/t\.datetime\("happened_at"[^}]*precision\s*:\s*null/);
   });
 
   it("skips internal tables when dumping from adapter", async () => {

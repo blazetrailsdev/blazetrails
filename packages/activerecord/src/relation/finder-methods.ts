@@ -195,7 +195,7 @@ interface FinderRelation {
     primaryKey: string | string[];
     compositePrimaryKey: boolean;
     implicitOrderColumn?: string | null;
-    queryConstraintsList?(): string[] | null;
+    _queryConstraintsList?: string[] | null;
     createBang(attrs: any): Promise<any>;
     transaction<R>(
       fn: (tx: any) => Promise<R>,
@@ -751,14 +751,16 @@ export function orderedRelation(rel: FinderRelation): any {
   const mc = (rel as any)._modelClass;
   const pk = mc?.primaryKey;
   const implicitOrder: string | null | undefined = mc?.implicitOrderColumn;
-  const constraintsList: string[] | null | undefined = mc?.queryConstraintsList?.();
+  const constraintsList: string[] | null | undefined = mc?._queryConstraintsList;
   if (!hasOrder(rel) && (implicitOrder || constraintsList != null || pk)) {
     const cols = _orderColumns(rel);
     if (cols.length > 0) {
-      const table: any = mc?.arelTable;
-      return (rel as any).order(
-        ...cols.map((col: string) => (table ? table.get(col).asc() : `${col} ASC`)),
-      );
+      // Use hash-form { col: "asc" } so _orderClauses stores ["col", "asc"] tuples.
+      // Tuple form is what reverseOrderBang expects — Arel node form pre-renders to
+      // { raw: '"tbl"."col" ASC' } which the chained-replace in reverseOrderBang
+      // would undo (ASC→DESC→ASC). This matches Rails: table[column].asc nodes are
+      // rendered by the visitor at SQL-build time, not at order-storage time.
+      return (rel as any).order(...cols.map((col: string) => ({ [col]: "asc" as const })));
     }
   }
   return rel;
@@ -769,7 +771,7 @@ export function _orderColumns(rel: FinderRelation): string[] {
   const mc = (rel as any)._modelClass;
   const pk = mc?.primaryKey;
   const implicitOrder: string | null | undefined = mc?.implicitOrderColumn;
-  const constraintsList: string[] | null | undefined = mc?.queryConstraintsList?.();
+  const constraintsList: string[] | null | undefined = mc?._queryConstraintsList;
 
   const oc: string[] = [];
   if (implicitOrder) oc.push(implicitOrder);

@@ -329,7 +329,7 @@ describe("findTakeWithLimit — slices loaded relation without querying", () => 
 function makeRelForOrder(mc: {
   primaryKey?: string | string[];
   implicitOrderColumn?: string | null;
-  queryConstraintsList?: () => string[] | null;
+  _queryConstraintsList?: string[] | null;
 }): any {
   return { _modelClass: mc };
 }
@@ -350,19 +350,16 @@ describe("_orderColumns — Rails _order_columns precedence", () => {
     expect(_orderColumns(rel)).toEqual(["id"]);
   });
 
-  it("uses query_constraints_list instead of pk when set", () => {
-    const rel = makeRelForOrder({
-      primaryKey: "id",
-      queryConstraintsList: () => ["shop_id", "id"],
-    });
+  it("uses _queryConstraintsList instead of pk when set", () => {
+    const rel = makeRelForOrder({ primaryKey: "id", _queryConstraintsList: ["shop_id", "id"] });
     expect(_orderColumns(rel)).toEqual(["shop_id", "id"]);
   });
 
-  it("puts implicit_order_column before query_constraints_list", () => {
+  it("puts implicit_order_column before _queryConstraintsList", () => {
     const rel = makeRelForOrder({
       primaryKey: "id",
       implicitOrderColumn: "created_at",
-      queryConstraintsList: () => ["shop_id", "id"],
+      _queryConstraintsList: ["shop_id", "id"],
     });
     expect(_orderColumns(rel)).toEqual(["created_at", "shop_id", "id"]);
   });

@@ -1883,13 +1883,17 @@ export function buildFrom(this: QueryMethodsHost): unknown {
   let name = fromClause?.name;
   if (opts && typeof (opts as any).toArel === "function") {
     // When the from-value is a Relation that needs eager loading, derive the
-    // from clause via applyJoinDependency first (mirrors Rails build_from).
+    // from clause via applyJoinDependency on a clone first (mirrors Rails
+    // build_from). Clone avoids mutating the caller's relation in-place since
+    // applyJoinDependency modifies _joinClauses.
     let resolved: any = opts;
     if (
       typeof (opts as any)._eagerLoadingForSql === "function" &&
       (opts as any)._eagerLoadingForSql()
     ) {
-      resolved = (opts as any).applyJoinDependency(true);
+      resolved = (opts as any)._clone
+        ? (opts as any)._clone().applyJoinDependency(true)
+        : (opts as any).applyJoinDependency(true);
     }
     name ??= "subquery";
     const alias = String(name);

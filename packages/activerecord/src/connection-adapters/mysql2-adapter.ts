@@ -1,7 +1,7 @@
 import mysql from "mysql2/promise";
 import { Notifications } from "@blazetrails/activesupport";
 import { StringType } from "@blazetrails/activemodel";
-import type { DatabaseAdapter, ExplainOption, TrailsAdapterOptions } from "../adapter.js";
+import type { DatabaseAdapter, ExplainOption, MysqlAdapterOptions } from "../adapter.js";
 import {
   AbstractMysqlAdapter,
   StatementPool as MysqlStatementPool,
@@ -171,17 +171,23 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   private _fullVersionString: string | null = null;
   private _database: string | undefined;
 
-  constructor(config: string | (mysql.PoolOptions & TrailsAdapterOptions)) {
+  constructor(config: string | (mysql.PoolOptions & MysqlAdapterOptions)) {
     super();
     if (typeof config === "string") {
+      let waitTimeout: number | undefined;
       try {
+        const url = new URL(config);
         this._database =
-          decodeURIComponent(new URL(config).pathname.replace(/^\/+/, "").replace(/\/+$/, "")) ||
-          undefined;
+          decodeURIComponent(url.pathname.replace(/^\/+/, "").replace(/\/+$/, "")) || undefined;
+        const wt = url.searchParams.get("wait_timeout");
+        if (wt !== null) {
+          const n = parseInt(wt, 10);
+          if (Number.isInteger(n)) waitTimeout = n;
+        }
       } catch {
         // malformed URI — leave _database undefined
       }
-      this._driverPool = Mysql2Adapter.newClient({ uri: config });
+      this._driverPool = Mysql2Adapter.newClient({ uri: config, waitTimeout });
       return;
     }
     // See PostgreSQLAdapter#constructor: Rails' database.yml merges
@@ -190,7 +196,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // hash. Validate & apply the adapter-level keys FIRST so an
     // invalid value fails before `mysql.createPool` runs — otherwise
     // a throw would leave a live pool with no cleanup path.
-    const { statementLimit, preparedStatements, ...mysqlConfig } = config;
+    const { statementLimit, preparedStatements, strict, waitTimeout, variables, ...mysqlConfig } =
+      config;
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
     this._database =
@@ -206,7 +213,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
           return undefined;
         }
       })();
-    this._driverPool = Mysql2Adapter.newClient(mysqlConfig);
+    this._driverPool = Mysql2Adapter.newClient({ ...mysqlConfig, strict, waitTimeout, variables });
   }
 
   /** Checkout a fresh connection from the pool, translating ER_BAD_DB_ERROR. */
@@ -1135,7 +1142,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return false;
   }
 
-  static newClient(config: mysql.PoolOptions): mysql.Pool {
+  static newClient(config: mysql.PoolOptions & MysqlAdapterOptions): mysql.Pool {
     // With supportBigNumbers:true, mysql2 returns a decimal string for BIGINT
     // values with ≥15 digits (i.e. ≥ 10^14) where parseInt would lose precision,
     // and a JS number for smaller values. Both are handled by BigIntegerType.cast().
@@ -1145,7 +1152,13 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // Compose our Temporal typeCast with any user-supplied typeCast so callers
     // can still intercept non-temporal fields (e.g. custom ENUM handling) without
     // losing Temporal parsing on temporal columns.
-    const userTypeCast = config.typeCast;
+    const {
+      strict,
+      waitTimeout,
+      variables: configVars,
+      typeCast: userTypeCast,
+      ...poolOptions
+    } = config;
     const composedTypeCast =
       typeof userTypeCast === "function"
         ? (field: unknown, next: () => unknown) =>
@@ -1155,11 +1168,19 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
         : TEMPORAL_POOL_OPTIONS.typeCast;
     const pool = mysql.createPool({
       supportBigNumbers: true,
-      ...config,
+      ...poolOptions,
       typeCast: composedTypeCast,
     });
-    // Pin session timezone to UTC so TIMESTAMP wire strings are always in UTC,
-    // allowing parseMysqlInstant to treat them as Temporal.Instant correctly.
+
+    // Build configure_connection SET clauses — mirrors AbstractMysqlAdapter#configure_connection.
+    // time_zone is included here so all session setup is sent as ONE query, queued
+    // synchronously in the 'connection' handler before mysql2 adds the connection to its
+    // free-connection list. A second chained rawConn.query() inside the callback of the
+    // first would race against the caller's query (mysql2 makes the connection available
+    // after emitting 'connection', before our callbacks fire).
+    const sessionClauses = buildConfigureConnectionClauses(strict, waitTimeout, configVars);
+    const initSql = `SET time_zone = '+00:00', ${sessionClauses}`;
+
     // mysql.Pool (promise wrapper) re-emits 'connection' from the underlying pool
     // via inheritEvents — this is the public typed API on mysql.Pool, no internal
     // property access needed. The callback receives the raw PoolConnection (non-
@@ -1169,7 +1190,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
         query: (sql: string, cb: (err: Error | null) => void) => void;
         destroy: () => void;
       };
-      rawConn.query("SET time_zone = '+00:00'", (err) => {
+      rawConn.query(initSql, (err) => {
         if (err) {
           rawConn.destroy();
           pool.emit("error", err);
@@ -1178,6 +1199,58 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     });
     return pool;
   }
+}
+
+// Mirrors AbstractMysqlAdapter#configure_connection.
+// Returns the comma-separated SET clause list (without the SET keyword) for
+// wait_timeout, sql_mode (per strict flag), and arbitrary session variables.
+// The caller prepends additional clauses (e.g. time_zone) so everything is
+// sent as one atomic SET statement.
+function buildConfigureConnectionClauses(
+  strict: boolean | "default" | undefined,
+  waitTimeout: number | string | undefined,
+  configVars: Record<string, string | number | boolean | null | ":default" | "default"> | undefined,
+): string {
+  const vars: Record<string, string | number | boolean | null | ":default" | "default"> = {
+    ...(configVars ?? {}),
+  };
+
+  const wt = typeof waitTimeout === "string" ? parseInt(waitTimeout, 10) : waitTimeout;
+  vars["wait_timeout"] = Number.isInteger(wt) ? (wt as number) : 2147483;
+
+  const DEFAULTS = new Set([":default", "default"]);
+
+  let sqlMode: string | undefined;
+  const varSqlMode = vars["sql_mode"];
+  if (varSqlMode !== undefined) {
+    delete vars["sql_mode"];
+    sqlMode = `'${String(varSqlMode).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+  } else if (!DEFAULTS.has(strict as string)) {
+    if (strict !== false) {
+      sqlMode = "CONCAT(@@sql_mode, ',STRICT_ALL_TABLES')";
+    } else {
+      sqlMode = "REPLACE(@@sql_mode, 'STRICT_TRANS_TABLES', '')";
+      sqlMode = `REPLACE(${sqlMode}, 'STRICT_ALL_TABLES', '')`;
+      sqlMode = `REPLACE(${sqlMode}, 'TRADITIONAL', '')`;
+    }
+    sqlMode = `CONCAT(${sqlMode}, ',NO_AUTO_VALUE_ON_ZERO')`;
+  } else {
+    // strict: "default" — sync session to global, counteracting mysql2 Node.js
+    // CLIENT_IGNORE_SPACE flag which otherwise adds IGNORE_SPACE to session sql_mode.
+    sqlMode = "@@GLOBAL.sql_mode";
+  }
+
+  const sqlModeClause = sqlMode ? `@@SESSION.sql_mode = ${sqlMode}` : "";
+
+  const varClauses = Object.entries(vars)
+    .filter(([, v]) => v !== null && v !== undefined)
+    .map(([k, v]) => {
+      if (DEFAULTS.has(String(v))) return `@@SESSION.${k} = DEFAULT`;
+      if (typeof v === "number") return `@@SESSION.${k} = ${v}`;
+      return `@@SESSION.${k} = '${String(v).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+    });
+
+  return [sqlModeClause, ...varClauses].filter(Boolean).join(", ");
 }
 
 /** @internal */

@@ -433,7 +433,13 @@ export function withRoleAndShard<T>(
     throw error;
   }
 
-  return withCleanup(result, () => removeStackEntry(entry));
+  // Force-load any Relation within the role/shard scope so lazy queries don't
+  // escape to a different connection context.
+  // Mirrors: return_value.load if return_value.is_a? ActiveRecord::Relation
+  const toLoad =
+    result != null && typeof (result as any).load === "function" ? (result as any).load() : result;
+
+  return withCleanup(toLoad as T, () => removeStackEntry(entry));
 }
 
 /** @internal */

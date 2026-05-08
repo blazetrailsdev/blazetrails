@@ -441,12 +441,27 @@ interface TransactionRecordSnapshot {
 /** @internal */
 export function rememberTransactionRecordState(this: Base): TransactionRecordSnapshot {
   const r = this as any;
+  // Initialize state once per outermost transaction, then increment level for
+  // each savepoint. Mirrors Rails' @_start_transaction_state ||= {...}; level += 1.
+  if (!r._startTransactionState) {
+    r._startTransactionState = {
+      newRecord: r._newRecord,
+      destroyed: r._destroyed,
+      frozen: r._attributes.isFrozen(),
+      id: this.id,
+      previouslyNewRecord: r._previouslyNewRecord,
+      attributes: r._attributes.deepDup(),
+      level: 0,
+    };
+  }
+  r._startTransactionState.level += 1;
+
   return {
-    newRecord: r._newRecord,
-    destroyed: r._destroyed,
-    frozen: r._attributes.isFrozen(),
-    id: this.id,
-    previouslyNewRecord: r._previouslyNewRecord,
+    newRecord: r._startTransactionState.newRecord,
+    destroyed: r._startTransactionState.destroyed,
+    frozen: r._startTransactionState.frozen,
+    id: r._startTransactionState.id,
+    previouslyNewRecord: r._startTransactionState.previouslyNewRecord,
   };
 }
 
@@ -488,26 +503,46 @@ export function restoreTransactionRecordState(
   }
 }
 
-// this-typed form used by rolledbackBang ensure block — reads _startTransactionState
-// (populated by remember_transaction_record_state level-tracking; currently always
-// null since our fallback uses captured snapshots, so this is a no-op until the
-// level-tracking state is implemented).
 /** @internal */
-function _restoreTransactionRecordState(this: Base, _forceRestoreState = false): void {
+function _restoreTransactionRecordState(this: Base, forceRestoreState = false): void {
   const r = this as any;
   if (!r._startTransactionState) return;
   const state = r._startTransactionState;
-  if (_forceRestoreState || state.level <= 1) {
+  if (forceRestoreState || state.level <= 1) {
     r._newRecord = state.newRecord;
     r._destroyed = state.destroyed;
     r._previouslyNewRecord = state.previouslyNewRecord;
-    if (r._attributes.isFrozen()) {
-      r._attributes = r._attributes.deepDup();
-    }
+
+    // Restore the full attribute set to pre-transaction state. Mirrors Rails:
+    //   @attributes = restore_state[:attributes].map { |attr|
+    //     value = @attributes.fetch_value(attr.name)
+    //     attr = attr.with_value_from_user(value) if attr.value != value
+    //     attr
+    //   }
+    const currentAttrs = r._attributes;
+    r._attributes = state.attributes.map((attr: any) => {
+      const currentValue = currentAttrs.fetchValue(attr.name);
+      return attr.value !== currentValue ? attr.withValueFromUser(currentValue) : attr;
+    });
+
+    // Clear mutation tracking caches. Mirrors Rails:
+    //   @mutations_from_database = nil
+    //   @mutations_before_last_save = nil
+    r._dirty.snapshot(state.attributes);
+    r._dirty.clearChangesInformation();
+
+    // Restore primary key if it shifted during the transaction.
     const ctor = this.constructor as typeof Base;
-    if (state.newRecord && !Array.isArray(this.id)) {
-      r._attributes.set(ctor.primaryKey as string, state.id);
+    if (Array.isArray(ctor.primaryKey)) {
+      const cols = ctor.primaryKey as string[];
+      const savedId = state.id as unknown[];
+      if (cols.some((col, i) => r._attributes.fetchValue(col) !== savedId[i])) {
+        cols.forEach((col, i) => r._attributes.writeFromUser(col, savedId[i]));
+      }
+    } else if (r._attributes.fetchValue(ctor.primaryKey as string) !== state.id) {
+      r._attributes.writeFromUser(ctor.primaryKey as string, state.id);
     }
+
     if (state.frozen && !r._attributes.isFrozen()) {
       r._attributes.freeze();
     }

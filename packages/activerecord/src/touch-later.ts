@@ -56,7 +56,7 @@ export async function touchLater(this: Base, ...names: string[]): Promise<void> 
   }
 
   self._touchTime = currentTimeFromProperTimezone();
-  surreptitiouslyTouch.call(this, self._deferTouchAttrs as string[], self._touchTime as Date);
+  surreptitiouslyTouch.call(this, self._deferTouchAttrs as string[]);
 
   // Register with the current transaction so beforeCommitted! fires before
   // commit — mirrors Rails' add_to_transaction call in touch_later.
@@ -142,7 +142,8 @@ export async function beforeCommittedBang(this: Base): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /** @internal */
-export function surreptitiouslyTouch(this: Base, attrNames: string[], time: Date): void {
+export function surreptitiouslyTouch(this: Base, attrNames: string[]): void {
+  const time = (this as any)._touchTime;
   for (const attr of attrNames) {
     (this as any).writeAttribute(attr, time);
     // Per-attribute clear so the baseline rebinds to the touched value;
@@ -158,25 +159,13 @@ export function surreptitiouslyTouch(this: Base, attrNames: string[], time: Date
 /** @internal */
 export async function touchDeferredAttributes(this: Base): Promise<void> {
   const self = this as any;
-  const deferredAttrs = self._deferTouchAttrs as string[];
-  const time: Date = self._touchTime ?? currentTimeFromProperTimezone();
-
-  // Build attrs from all deferred columns, preserving the exact timestamp
-  // set at touchLater time — mirrors touch(time: @_touch_time) in Rails.
-  const attrs: Record<string, unknown> = {};
-  for (const attr of deferredAttrs) attrs[attr] = time;
-
-  await this.updateColumns(attrs);
-
-  // Clear state only after successful update — mirrors touch_deferred_attributes
-  // calling touch() which clears @_defer_touch_attrs / @_touch_time on return.
+  const deferredAttrs = (self._deferTouchAttrs as string[]) ?? [];
+  const time = (self._touchTime as Date | null) ?? currentTimeFromProperTimezone();
   self._deferTouchAttrs = null;
   self._touchTime = null;
-
-  // Run after_touch callbacks — mirrors touch() going through Timestamp#touch
-  // which fires the after_touch chain.
-  const ctor = this.constructor as typeof Base;
-  await (ctor as any)._callbackChain?.runAfter?.("touch", this);
+  // Mirrors Rails: touch(time: @_touch_time). Passes the deferred timestamp
+  // through the canonical touch path (type casting, locking, after_touch).
+  await timestampTouch.call(this, { time }, ...deferredAttrs);
 }
 
 export const InstanceMethods = {

@@ -1,11 +1,13 @@
 /**
  * Mirrors: ActiveRecord::AttributeMethods::TimeZoneConversion
  */
-import { Type, ValueType } from "@blazetrails/activemodel";
+import type { Type } from "@blazetrails/activemodel";
+import { ValueType } from "@blazetrails/activemodel";
 
 export interface TimeZoneConversion {
   timeZoneAwareAttributes: boolean;
   skipTimeZoneConversionForAttributes: string[];
+  timeZoneAwareTypes: string[];
 }
 
 /**
@@ -36,12 +38,8 @@ export class TimeZoneConverter extends ValueType<unknown> {
 
   override cast(value: unknown): unknown {
     if (value == null) return null;
-    if (Array.isArray(value)) {
-      // mirrors: map(super) { |v| cast(v) }
-      const casted = this._subtype.cast(value);
-      return Array.isArray(casted) ? casted.map((v) => this.cast(v)) : this.cast(casted);
-    }
-    // TODO: requires TimeWithZone — user_input_in_time_zone(value) for time-like values
+    // TODO: requires TimeWithZone — in_time_zone branch via user_input_in_time_zone(value)
+    // Fallback mirrors: map(super) { |v| cast(v) } — delegate to subtype
     return this._subtype.cast(value);
   }
 
@@ -51,6 +49,10 @@ export class TimeZoneConverter extends ValueType<unknown> {
 
   override serialize(value: unknown): unknown {
     return this._subtype.serialize(value);
+  }
+
+  override serializeCastValue(value: unknown): unknown {
+    return this._subtype.serializeCastValue(value as never);
   }
 
   equals(other: unknown): boolean {

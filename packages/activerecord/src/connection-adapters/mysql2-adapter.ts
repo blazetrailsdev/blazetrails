@@ -1001,6 +1001,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * established lazily on first use, so this method stays synchronous.
    */
   override reconnectBang(): void {
+    if (this._permanentlyClosed) throw new Error("Mysql2Adapter: connection is closed");
     this.disconnectBang();
     this._driverPool = Mysql2Adapter.newClient(this._poolConfig);
     this._activeState = true;

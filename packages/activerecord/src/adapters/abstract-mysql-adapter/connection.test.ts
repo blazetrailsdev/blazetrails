@@ -62,8 +62,8 @@ describeIfMysql("Mysql2Adapter", () => {
         expect(await singleConn.activeAsync()).toBe(true);
         await singleConn.execute("SET SESSION wait_timeout=1");
         await new Promise((r) => setTimeout(r, 2000));
-        await singleConn.activeAsync(); // probe — updates _activeState to false
-        singleConn.verifyBang(); // active is now false → calls reconnectBang()
+        await singleConn.activeAsync(); // probe — may update _activeState to false if pool detects dead socket
+        singleConn.verifyBang(); // reconnects if active is false, otherwise a no-op
         expect(singleConn.active).toBe(true);
         await expect(singleConn.execute("SELECT 1")).resolves.toBeDefined();
       } finally {

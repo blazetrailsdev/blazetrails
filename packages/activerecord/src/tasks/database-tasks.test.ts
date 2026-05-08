@@ -1542,6 +1542,28 @@ describe("initializeDatabase", () => {
     expect(result).toBe(true);
   });
 
+  it("calls DatabaseTasks.create when adapter.isNoDatabaseError returns true for a raw driver error", async () => {
+    let created = false;
+    const rawDriverError = Object.assign(new Error("ER_BAD_DB_ERROR"), {
+      code: "ER_BAD_DB_ERROR",
+      errno: 1049,
+    });
+    vi.spyOn(DatabaseTasks as any, "_connectFor").mockResolvedValue({
+      execute: async () => {
+        throw rawDriverError;
+      },
+      close: async () => {},
+      isNoDatabaseError: (e: unknown) => (e as { code?: unknown }).code === "ER_BAD_DB_ERROR",
+    });
+    vi.spyOn(DatabaseTasks, "create").mockImplementation(async () => {
+      created = true;
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3", database: ":memory:" });
+    const result = await initializeDatabase(config);
+    expect(created).toBe(true);
+    expect(result).toBe(true);
+  });
+
   it("loads schema dump when DB is fresh and dump file exists", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-initdb-schema-"));
     const schemaFile = path.join(tmp, "schema.ts");

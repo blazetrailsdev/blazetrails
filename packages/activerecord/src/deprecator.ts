@@ -74,9 +74,9 @@ export class MigrationProxy {
   }
 
   get disableDdlTransaction(): boolean {
-    // Callers must await migration() before reading this; _migration is
-    // populated by that call and the cached value is accessed synchronously here.
-    return !!(this._migration as { disableDdlTransaction?: boolean } | null)?.disableDdlTransaction;
+    if (!this._migration)
+      throw new Error("MigrationProxy: await migration() before reading disableDdlTransaction");
+    return !!(this._migration as { disableDdlTransaction?: boolean }).disableDdlTransaction;
   }
 
   /** @internal */

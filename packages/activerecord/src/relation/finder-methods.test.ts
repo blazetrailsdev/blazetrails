@@ -250,13 +250,20 @@ function makeFindSomeRel(
   opts: { limit?: number; offset?: number; ordered?: boolean } = {},
 ): any {
   return {
-    _modelClass: { primaryKey: "id", name: "Post" },
+    _modelClass: {
+      primaryKey: "id",
+      name: "Post",
+      typeForAttribute: (_col: string) => ({ cast: (v: unknown) => v }),
+      arelTable: { id: "id" },
+    },
     _limitValue: opts.limit ?? null,
     _offsetValue: opts.offset ?? null,
     // ordered=true simulates a relation with ORDER BY (findSome stays in the accounting path)
     orderValues: opts.ordered !== false ? ["id ASC"] : [],
+    selectValues: [],
     where(_cond: any) {
-      return { toArray: async () => records };
+      const rel: any = { toArray: async () => records, select: () => rel };
+      return rel;
     },
   };
 }
@@ -314,12 +321,18 @@ function makeFindSomeOrderedRel(
   opts: { limit?: number; offset?: number } = {},
 ): any {
   return {
-    _modelClass: { primaryKey: "id", name: "Post" },
+    _modelClass: {
+      primaryKey: "id",
+      name: "Post",
+      typeForAttribute: (_col: string) => ({ cast: (v: unknown) => v }),
+      arelTable: { id: "id" },
+    },
     _limitValue: opts.limit ?? null,
     _offsetValue: opts.offset ?? null,
     orderValues: [],
+    selectValues: [],
     where(_cond: any) {
-      const rel: any = { toArray: async () => records };
+      const rel: any = { toArray: async () => records, select: () => rel };
       return rel;
     },
   };

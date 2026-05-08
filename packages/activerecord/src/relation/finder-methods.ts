@@ -720,9 +720,12 @@ export async function findSomeOrdered(rel: FinderRelation, ids: unknown[]): Prom
   const limitValue: number | null = (rel as any)._limitValue ?? null;
   ids = ids.slice(offsetValue, offsetValue + (limitValue ?? ids.length));
 
-  const relation = (rel as any).where({ [pk]: ids });
+  let relation = (rel as any).where({ [pk]: ids });
   relation._limitValue = null;
   relation._offsetValue = null;
+  if ((rel as any).selectValues.length > 0) {
+    relation = relation.select((rel as any)._modelClass.arelTable[pk]);
+  }
   const records: any[] = await relation.toArray();
 
   if (records.length !== ids.length) {
@@ -736,7 +739,8 @@ export async function findSomeOrdered(rel: FinderRelation, ids: unknown[]): Prom
     throw new RecordNotFound(`Couldn't find all ${modelName}`, modelName, pk, remaining);
   }
 
-  const idIndex = new Map(ids.map((id, i) => [String(id), i]));
+  const pkType = (rel as any)._modelClass.typeForAttribute(pk);
+  const idIndex = new Map(ids.map((id, i) => [String(pkType.cast(id)), i]));
   return records.sort((a: any, b: any) => {
     const ai = idIndex.get(String(a.readAttribute?.(pk) ?? a[pk])) ?? 0;
     const bi = idIndex.get(String(b.readAttribute?.(pk) ?? b[pk])) ?? 0;

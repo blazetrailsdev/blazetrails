@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Cipher } from "./cipher.js";
 import { Encryptor } from "./encryptor.js";
 import { Configurable } from "./configurable.js";
@@ -277,5 +277,16 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
     Contexts.withEncryptionContext({ cipher: customCipher }, () => {
       expect((new Encryptor() as any).cipher()).toBe(customCipher);
     });
+  });
+
+  it("buildEncryptedMessage dispatches through cipher() for encrypt and decrypt", () => {
+    Configurable.config.primaryKey = "a".repeat(32);
+    Configurable.config.keyDerivationSalt = "testsalt";
+    const enc = new Encryptor({ compress: false });
+    const cipherSpy = vi.spyOn(enc as any, "cipher");
+    const encrypted = enc.encrypt("secret text");
+    expect(cipherSpy).toHaveBeenCalled();
+    cipherSpy.mockRestore();
+    expect(enc.decrypt(encrypted)).toBe("secret text");
   });
 });

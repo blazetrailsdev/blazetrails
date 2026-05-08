@@ -1324,9 +1324,12 @@ export class SchemaStatements {
 
   quotedColumnsForIndex(columnNames: string[], options: Record<string, unknown> = {}): string {
     const quotedColumns = new Map(columnNames.map((name) => [name, this._qi(name)]));
-    return Array.from(this.addOptionsForIndexColumns(quotedColumns, options as any).values()).join(
-      ", ",
-    );
+    return Array.from(
+      this.addOptionsForIndexColumns(
+        quotedColumns,
+        options as { order?: string | Record<string, string> },
+      ).values(),
+    ).join(", ");
   }
 
   isOptionsIncludeDefault(options: Record<string, unknown>): boolean {

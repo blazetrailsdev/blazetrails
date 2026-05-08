@@ -57,9 +57,10 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("type cast binary column", async () => {
       // BLOCKED: no test body — Rails checks column.type == :binary and
-      // typeForAttribute returns the Bytea OID subclass. The OID fallback
-      // gap (lookupCastTypeFromColumn returning ValueType on OID miss) was
-      // closed in Story A, so typeForAttribute("payload") now returns Bytea.
+      // typeForAttribute returns the Bytea OID subclass. columns() now
+      // batch-loads all OIDs via loadAdditionalTypes before building Column
+      // objects, so OID 17 is registered as Bytea in the type map and
+      // typeForAttribute("payload") returns Bytea after loadSchema().
       // SCOPE: ~5 LOC to implement the test body; nothing blocking the impl.
     });
 
@@ -97,6 +98,12 @@ describeIfPg("PostgreSQLAdapter", () => {
       const reloaded = await ByteaDataType.find((record as any).id);
       expect((reloaded as any).payload instanceof Uint8Array).toBe(true);
       expect(Buffer.from((reloaded as any).payload as Uint8Array)).toEqual(data);
+
+      // Also exercise the UPDATE path (binary quoting in _performUpdate)
+      const updated = Buffer.from([0xde, 0xad, 0xbe, 0xef]);
+      await (reloaded as any).update({ payload: updated });
+      const reloaded2 = await ByteaDataType.find((record as any).id);
+      expect(Buffer.from((reloaded2 as any).payload as Uint8Array)).toEqual(updated);
     });
 
     it.skip("write and read with url safe base64", async () => {

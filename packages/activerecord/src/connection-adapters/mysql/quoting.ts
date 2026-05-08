@@ -95,10 +95,11 @@ export function quotedBinaryString(value: Buffer): string {
   return `x'${value.toString("hex")}'`;
 }
 
-export function quotedBinary(value: Buffer | string): string {
-  const hex = Buffer.isBuffer(value)
-    ? value.toString("hex")
-    : Buffer.from(value, "binary").toString("hex");
+export function quotedBinary(value: Buffer | Uint8Array | string): string {
+  const hex =
+    Buffer.isBuffer(value) || value instanceof Uint8Array
+      ? Buffer.from(value).toString("hex")
+      : Buffer.from(value, "binary").toString("hex");
   return `x'${hex}'`;
 }
 

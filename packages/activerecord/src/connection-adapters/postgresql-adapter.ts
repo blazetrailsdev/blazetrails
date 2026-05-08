@@ -2418,47 +2418,55 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       binds,
     );
 
-    return await Promise.all(
-      rows.map(async (r) => {
-        const sqlType = r.type as string;
-        const oid = r.oid as number;
-        const fmod = r.fmod as number;
-        // Mirrors Rails' fetch_type_metadata → get_oid_type: load from
-        // pg_type on miss so user-defined types (enums, composites, domains)
-        // are registered in the map before column objects are built.
-        const castType = await this.getOidType(oid, fmod, r.name as string, sqlType);
-        const rawDefault = (r.default as string | null) ?? null;
-        const identity = (r.identity as string | null) || null;
-        const attgenerated = (r.attgenerated as string | null) || null;
-        // Mirrors Rails new_column_from_field: generated columns store the
-        // generation expression as defaultFunction; regular columns split into
-        // literal default vs. default function (nextval, CURRENT_TIMESTAMP, etc.).
-        const splitDefault = attgenerated ? null : splitPgDefault(rawDefault);
-        const defaultFunction = attgenerated ? rawDefault : (splitDefault?.fn ?? null);
-        const literal = attgenerated ? null : (splitDefault?.literal ?? null);
-        const isSerial = typeof rawDefault === "string" && rawDefault.startsWith("nextval(");
+    // Mirrors Rails' load_additional_types batch call: gather all OIDs not
+    // yet in the map and load them in a single pg_type query before building
+    // Column objects. This avoids N concurrent queries for wide tables.
+    const missingOids = [
+      ...new Set(rows.map((r) => r.oid as number).filter((oid) => !this.typeMap.has(oid))),
+    ];
+    if (missingOids.length > 0) {
+      await this.loadAdditionalTypes(missingOids);
+    }
 
-        return new Column(
-          r.name as string,
-          literal,
-          {
-            sqlType,
-            type: castType.type(),
-            oid,
-            fmod,
-          },
-          !(r.notnull as boolean),
-          {
-            defaultFunction: defaultFunction ?? undefined,
-            primaryKey: r.is_primary as boolean,
-            serial: isSerial,
-            array: sqlType.endsWith("[]"),
-            identity,
-            generated: attgenerated,
-          },
-        );
-      }),
-    );
+    return rows.map((r) => {
+      const sqlType = r.type as string;
+      const oid = r.oid as number;
+      const fmod = r.fmod as number;
+      // All OIDs are now registered (or warned as unknown) by the batch
+      // load above. lookupCastTypeFromColumn mirrors Rails' fetch_type_metadata
+      // after get_oid_type has pre-populated the map.
+      const castType = this.lookupCastTypeFromColumn({ oid, fmod, sqlType });
+      const rawDefault = (r.default as string | null) ?? null;
+      const identity = (r.identity as string | null) || null;
+      const attgenerated = (r.attgenerated as string | null) || null;
+      // Mirrors Rails new_column_from_field: generated columns store the
+      // generation expression as defaultFunction; regular columns split into
+      // literal default vs. default function (nextval, CURRENT_TIMESTAMP, etc.).
+      const splitDefault = attgenerated ? null : splitPgDefault(rawDefault);
+      const defaultFunction = attgenerated ? rawDefault : (splitDefault?.fn ?? null);
+      const literal = attgenerated ? null : (splitDefault?.literal ?? null);
+      const isSerial = typeof rawDefault === "string" && rawDefault.startsWith("nextval(");
+
+      return new Column(
+        r.name as string,
+        literal,
+        {
+          sqlType,
+          type: castType.type(),
+          oid,
+          fmod,
+        },
+        !(r.notnull as boolean),
+        {
+          defaultFunction: defaultFunction ?? undefined,
+          primaryKey: r.is_primary as boolean,
+          serial: isSerial,
+          array: sqlType.endsWith("[]"),
+          identity,
+          generated: attgenerated,
+        },
+      );
+    });
   }
 
   async changeColumn(

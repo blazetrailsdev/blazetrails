@@ -14,7 +14,10 @@ export class Cipher {
     return this.cipherFor(options.key, options.deterministic ?? false).encrypt(clearText, options);
   }
 
-  decrypt(encryptedMessage: Message, options: { key: string | string[] }): Buffer {
+  decrypt(
+    encryptedMessage: Message,
+    options: { key: string | string[]; [k: string]: unknown },
+  ): Buffer {
     const keys = Array.isArray(options.key) ? options.key : [options.key];
     return this.tryToDecryptWithEach(encryptedMessage, { keys });
   }

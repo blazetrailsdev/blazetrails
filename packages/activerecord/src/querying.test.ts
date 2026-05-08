@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { Base, Relation } from "./index.js";
 import { registerModel } from "./associations.js";
 import { _queryBySql, _loadFromSql } from "./querying.js";
@@ -151,6 +151,8 @@ describe("QueryingTest — static forwarders on Base", () => {
 
 describe("_queryBySql — kwargs pass-through (Story J gap 1)", () => {
   let Model: typeof Base;
+
+  afterEach(() => vi.restoreAllMocks());
 
   beforeAll(() => {
     const a = createTestAdapter();

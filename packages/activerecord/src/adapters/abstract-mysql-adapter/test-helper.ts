@@ -9,14 +9,16 @@ let mysqlAvailable = false;
 let mariaDb = false;
 
 async function checkMysql(): Promise<{ available: boolean; isMariaDb: boolean }> {
+  let conn: Awaited<ReturnType<typeof mysql.createConnection>> | undefined;
   try {
-    const conn = await mysql.createConnection({ uri: MYSQL_TEST_URL });
+    conn = await mysql.createConnection({ uri: MYSQL_TEST_URL });
     const [rows] = await conn.query("SELECT VERSION() AS v");
     const ver = (rows as Array<{ v: string }>)[0]?.v ?? "";
-    await conn.end();
     return { available: true, isMariaDb: /mariadb/i.test(ver) };
   } catch {
     return { available: false, isMariaDb: false };
+  } finally {
+    await conn?.end();
   }
 }
 

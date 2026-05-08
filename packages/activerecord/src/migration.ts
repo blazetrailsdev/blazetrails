@@ -1134,9 +1134,9 @@ export class MigrationContext {
         primaryKey?: boolean;
         null?: boolean;
         default?: unknown;
-        limit?: number;
-        precision?: number;
-        scale?: number;
+        limit?: number | null;
+        precision?: number | null;
+        scale?: number | null;
       }
     >
   >();
@@ -1194,9 +1194,9 @@ export class MigrationContext {
         primaryKey?: boolean;
         null?: boolean;
         default?: unknown;
-        limit?: number;
-        precision?: number;
-        scale?: number;
+        limit?: number | null;
+        precision?: number | null;
+        scale?: number | null;
       }
     >();
     if (options?.id !== false) {
@@ -1386,11 +1386,11 @@ export class MigrationContext {
       meta.set(column, {
         ...entry,
         type,
-        null: _options?.null ?? entry.null,
-        default: _options?.default ?? entry.default,
-        limit: _options?.limit ?? entry.limit,
-        precision: _options?.precision ?? entry.precision,
-        scale: _options?.scale ?? entry.scale,
+        null: _options?.null !== undefined ? _options.null : entry.null,
+        default: _options?.default !== undefined ? _options.default : entry.default,
+        limit: _options?.limit !== undefined ? _options.limit : entry.limit,
+        precision: _options?.precision !== undefined ? _options.precision : entry.precision,
+        scale: _options?.scale !== undefined ? _options.scale : entry.scale,
       });
     }
   }
@@ -1521,9 +1521,9 @@ export class MigrationContext {
     primaryKey?: boolean;
     null?: boolean;
     default?: unknown;
-    limit?: number;
-    precision?: number;
-    scale?: number;
+    limit?: number | null;
+    precision?: number | null;
+    scale?: number | null;
   }> {
     const meta = this._columnMeta.get(tableName);
     if (meta) {

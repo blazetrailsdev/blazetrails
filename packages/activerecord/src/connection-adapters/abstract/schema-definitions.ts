@@ -219,7 +219,7 @@ export interface ColumnOptions {
   null?: boolean;
   default?: unknown;
   limit?: number;
-  precision?: number;
+  precision?: number | null;
   scale?: number;
   index?: boolean;
   unique?: boolean;

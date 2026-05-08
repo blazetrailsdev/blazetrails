@@ -281,8 +281,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     try {
       return await this._driverPool.getConnection();
     } catch (error) {
-      const e = error as { code?: unknown; errno?: unknown };
-      if (e.code === "ER_BAD_DB_ERROR" || e.errno === 1049) {
+      if (this.isNoDatabaseError(error)) {
         throw NoDatabaseError.dbError(this._database ?? "unknown");
       }
       throw error;

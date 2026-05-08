@@ -1783,7 +1783,7 @@ describe("ArelQuoter / defaultQuoter wiring", () => {
   });
 
   it("Uint8Array in value position is routed through quoter.quote(), not String()", () => {
-    // Guards against the String(Uint8Array) → '1,31,139' corruption path.
+    // Guards against the String(Uint8Array) → '31,139' corruption path.
     // The quoter (e.g. PG adapter) receives the Uint8Array and emits the
     // correct dialect binary literal.
     const received: unknown[] = [];

@@ -99,7 +99,7 @@ export function quotedBinary(value: Buffer | Uint8Array | string): string {
   const hex = Buffer.isBuffer(value)
     ? value.toString("hex")
     : value instanceof Uint8Array
-      ? Buffer.from(value).toString("hex")
+      ? Buffer.from(value.buffer, value.byteOffset, value.byteLength).toString("hex")
       : Buffer.from(value, "binary").toString("hex");
   return `x'${hex}'`;
 }

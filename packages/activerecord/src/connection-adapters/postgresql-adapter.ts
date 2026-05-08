@@ -2430,7 +2430,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       // after the pg_type query so repeated columns() calls don't re-query.
       for (const oid of missingOids) {
         if (!this.typeMap.has(oid)) {
-          console.warn(`unknown OID ${oid}: unrecognized column type, treating as String.`);
+          console.warn(`unknown OID ${oid}: unrecognized column type, treating as generic value.`);
           this.typeMap.registerType(oid, new ValueType());
         }
       }

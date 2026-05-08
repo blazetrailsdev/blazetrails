@@ -403,6 +403,9 @@ function cacheNotificationInfo(
   name: string | null | undefined,
   binds: unknown[],
 ): Record<string, unknown> {
+  const userTx = (this as any).currentTransaction?.()?.userTransaction ?? null;
+  const transaction =
+    userTx !== null && typeof userTx?.isOpen === "function" && userTx.isOpen() ? userTx : null;
   return {
     sql,
     binds,
@@ -410,6 +413,7 @@ function cacheNotificationInfo(
     name: name ?? "SQL",
     connection: this,
     cached: true,
+    transaction,
   };
 }
 

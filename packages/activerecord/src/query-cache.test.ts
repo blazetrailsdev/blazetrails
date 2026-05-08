@@ -567,11 +567,48 @@ describe("QueryCacheExpiryTest", () => {
 });
 
 describe("TransactionInCachedSqlActiveRecordPayloadTest", () => {
-  it.skip("payload without open transaction", () => {
-    // BLOCKED: query-cache — transaction key missing from cacheNotificationInfo payload
+  it("payload without open transaction", async () => {
+    const { cached } = setup();
+    cached.enableQueryCache();
+    const sql = "SELECT 1 AS val";
+    const events: unknown[] = [];
+    const { Notifications } = await import("@blazetrails/activesupport");
+    const sub = Notifications.subscribe("sql.active_record", (e) => events.push(e));
+    try {
+      await cached.execute(sql);
+      await cached.execute(sql); // cache hit
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    const hit = (events as any[]).find(
+      (e) =>
+        e?.payload?.cached === true && e?.payload?.sql === sql && e?.payload?.connection === cached,
+    );
+    expect(hit).toBeDefined();
+    expect(hit.payload.transaction).toBeNull();
   });
-  it.skip("payload with open transaction", () => {
-    // BLOCKED: query-cache — transaction key missing from cacheNotificationInfo payload
+
+  it("payload with open transaction", async () => {
+    const { cached } = setup();
+    cached.enableQueryCache();
+    const sql = "SELECT 1 AS val";
+    const events: unknown[] = [];
+    const { Notifications } = await import("@blazetrails/activesupport");
+    const sub = Notifications.subscribe("sql.active_record", (e) => events.push(e));
+    try {
+      await cached.execute(sql); // cache miss — populates cache before tx clears it
+      await cached.beginTransaction();
+      await cached.execute(sql); // cache hit inside transaction
+      await cached.commit();
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    const hit = (events as any[]).find(
+      (e) =>
+        e?.payload?.cached === true && e?.payload?.sql === sql && e?.payload?.connection === cached,
+    );
+    expect(hit).toBeDefined();
+    expect(hit.payload.transaction).not.toBeNull();
   });
 });
 

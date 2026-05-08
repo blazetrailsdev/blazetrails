@@ -567,7 +567,7 @@ export function lookupCastTypeFromJoinDependencies(
   let found: unknown = null;
   eachJoinDependencies.call(rel as any, joinDependencies as any, (join: any) => {
     if (found) return;
-    const klass = join.baseKlass;
+    const klass = join.modelClass;
     if (!klass) return;
     const rawTypes =
       typeof klass.attributeTypes === "function" ? klass.attributeTypes() : klass.attributeTypes;

@@ -1103,13 +1103,19 @@ function annotateBang(this: QueryMethodsHost, ...comments: string[]): any {
 }
 
 const UNIQ_BANG_FIELDS: Partial<Record<string, keyof QueryMethodsHost>> = {
-  group: "_groupColumns",
+  includes: "_includesAssociations",
+  eager_load: "_eagerLoadAssociations",
+  preload: "_preloadAssociations",
   select: "_selectColumns",
+  group: "_groupColumns",
   order: "_orderClauses",
   joins: "_joinValues",
-  annotate: "_annotations",
-  optimizer_hints: "_optimizerHints",
+  left_outer_joins: "_leftOuterJoinsValues",
   references: "_referencesValues",
+  extending: "_extending",
+  optimizer_hints: "_optimizerHints",
+  annotate: "_annotations",
+  with: "_ctes",
 };
 
 function uniqBang(this: QueryMethodsHost, name?: string): any {

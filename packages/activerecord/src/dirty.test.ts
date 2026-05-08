@@ -976,6 +976,7 @@ describe("MutableAttributeAfterSave", () => {
   let adapter: DatabaseAdapter;
 
   beforeEach(async () => {
+    vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
     adapter = freshAdapter();
     await defineSchema(adapter, {
       json_models: { payload: "string" },
@@ -984,6 +985,7 @@ describe("MutableAttributeAfterSave", () => {
 
   afterAll(async () => {
     await dropAllTables(adapter);
+    vi.unstubAllEnvs();
   });
 
   it("mutable attribute is not dirty after changesApplied resets baseline", async () => {

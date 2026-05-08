@@ -11,10 +11,10 @@ let mariaDb = false;
 async function checkMysql(): Promise<{ available: boolean; isMariaDb: boolean }> {
   try {
     const conn = await mysql.createConnection({ uri: MYSQL_TEST_URL });
-    const [rows] = await conn.query("SELECT @@version_comment AS comment");
-    const comment = (rows as Array<{ comment: string }>)[0]?.comment ?? "";
+    const [rows] = await conn.query("SELECT VERSION() AS v");
+    const ver = (rows as Array<{ v: string }>)[0]?.v ?? "";
     await conn.end();
-    return { available: true, isMariaDb: /MariaDB/i.test(comment) };
+    return { available: true, isMariaDb: /mariadb/i.test(ver) };
   } catch {
     return { available: false, isMariaDb: false };
   }

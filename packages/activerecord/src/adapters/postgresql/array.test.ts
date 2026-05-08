@@ -57,9 +57,6 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
     it("default", async () => {
       await adapter.addColumn("pg_arrays", "score", "integer", { array: true, default: [4, 4, 2] });
-      const columns = await adapter.columns("pg_arrays");
-      const col = columns.find((c) => c.name === "score")!;
-      expect((col as any).default).toEqual(["4", "4", "2"]);
       const { Base } = await import("../../index.js");
       class PgArrays extends Base {
         static tableName = "pg_arrays";
@@ -68,6 +65,9 @@ describeIfPg("PostgreSQLAdapter", () => {
         }
       }
       await PgArrays.loadSchema();
+      // Rails: assert_equal([4, 4, 2], PgArray.column_defaults["score"])
+      expect((PgArrays as any).columnDefaults["score"]).toEqual([4, 4, 2]);
+      // Rails: assert_equal([4, 4, 2], PgArray.new.score)
       expect((new PgArrays() as any).score).toEqual([4, 4, 2]);
     });
     it("default strings", async () => {
@@ -75,9 +75,6 @@ describeIfPg("PostgreSQLAdapter", () => {
         array: true,
         default: ["foo", "bar"],
       });
-      const columns = await adapter.columns("pg_arrays");
-      const col = columns.find((c) => c.name === "names")!;
-      expect((col as any).default).toEqual(["foo", "bar"]);
       const { Base } = await import("../../index.js");
       class PgArrays extends Base {
         static tableName = "pg_arrays";
@@ -86,6 +83,9 @@ describeIfPg("PostgreSQLAdapter", () => {
         }
       }
       await PgArrays.loadSchema();
+      // Rails: assert_equal(["foo", "bar"], PgArray.column_defaults["names"])
+      expect((PgArrays as any).columnDefaults["names"]).toEqual(["foo", "bar"]);
+      // Rails: assert_equal(["foo", "bar"], PgArray.new.names)
       expect((new PgArrays() as any).names).toEqual(["foo", "bar"]);
     });
     it("schema dump with shorthand", async () => {
@@ -463,17 +463,17 @@ describeIfPg("PostgreSQLAdapter", () => {
       await PgArrays.loadSchema();
 
       const tags = ["black", "blue"];
-      const first = await (PgArrays as any).create({ tags });
-      expect((first as any).isPersisted()).toBe(true);
+      // Rails: e1 = klass.create("tags" => ["black", "blue"]); assert_predicate e1, :persisted?
+      const e1 = await (PgArrays as any).create({ tags });
+      expect((e1 as any).isPersisted()).toBe(true);
 
-      const duplicate = new PgArrays({ tags } as any);
-      const saved = await duplicate.save();
-      expect(saved).toBe(false);
-      expect((duplicate as any).errors.fullMessages).toContain("Tags has already been taken");
-
-      const unique = new PgArrays({ tags: ["red", "green"] } as any);
-      const savedUnique = await unique.save();
-      expect(savedUnique).toBe(true);
+      // Rails: e2 = klass.create("tags" => ["black", "blue"]); assert_not e2.persisted?
+      const e2 = await (PgArrays as any).create({ tags });
+      expect((e2 as any).isPersisted()).toBe(false);
+      // Rails: assert_equal ["has already been taken"], e2.errors[:tags]
+      expect((e2 as any).errors.where("tags").map((e: any) => e.message)).toEqual([
+        "has already been taken",
+      ]);
     });
 
     it("encoding arrays of utf8 strings", async () => {

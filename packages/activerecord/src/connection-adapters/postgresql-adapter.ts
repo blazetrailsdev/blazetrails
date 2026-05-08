@@ -458,9 +458,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // typeMap.has(oid)=true, skip loadAdditionalTypes, and never
     // resolve the real type. Return a fresh ValueType on miss and
     // leave miss-loading to getOidType / loadAdditionalTypes.
-    // columns() now calls getOidType directly (Rails-faithful path), so
-    // OIDs for known column types are registered before this is called
-    // for type-casting during attribute reads.
+    // columns() batch-loads missing OIDs via loadAdditionalTypes before
+    // building Column objects, so OIDs are registered by the time this is
+    // called for type-casting during attribute reads.
     return this.typeMap.fetch(oid, column.fmod ?? -1, column.sqlType ?? "", () => new ValueType());
   }
 

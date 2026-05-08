@@ -2434,13 +2434,8 @@ export class Base extends Model {
       const insertValues: [InstanceType<typeof Nodes.Node>, unknown][] = columns.map((c, i) => {
         const def = ctor._attributeDefinitions.get(c);
         const isArray = def?.type?.name === "array";
-        const isBinary = def?.type?.isBinary?.() === true;
         const raw = values[i];
-        const val = isArray
-          ? arelSql(quoteSqlValue(raw, true))
-          : isBinary && raw != null
-            ? arelSql(ctor.adapter.quotedBinary(raw))
-            : raw;
+        const val = isArray ? arelSql(quoteSqlValue(raw, true)) : raw;
         return [table.get(c), val];
       });
       im.insert(insertValues);
@@ -2490,15 +2485,7 @@ export class Base extends Model {
         const val = dbValues[key];
         const def = ctor._attributeDefinitions.get(key);
         const isArray = def?.type?.name === "array";
-        const isBinary = def?.type?.isBinary?.() === true;
-        return [
-          table.get(key),
-          isArray
-            ? arelSql(quoteSqlValue(val, true))
-            : isBinary && val != null
-              ? arelSql(ctor.adapter.quotedBinary(val))
-              : val,
-        ];
+        return [table.get(key), isArray ? arelSql(quoteSqlValue(val, true)) : val];
       },
     );
 

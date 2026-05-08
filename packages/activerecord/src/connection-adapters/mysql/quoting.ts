@@ -96,8 +96,9 @@ export function quotedBinaryString(value: Buffer): string {
 }
 
 export function quotedBinary(value: Buffer | Uint8Array | string): string {
-  const hex =
-    Buffer.isBuffer(value) || value instanceof Uint8Array
+  const hex = Buffer.isBuffer(value)
+    ? value.toString("hex")
+    : value instanceof Uint8Array
       ? Buffer.from(value).toString("hex")
       : Buffer.from(value, "binary").toString("hex");
   return `x'${hex}'`;

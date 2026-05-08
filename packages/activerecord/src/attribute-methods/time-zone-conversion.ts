@@ -59,10 +59,11 @@ export class TimeZoneConverter extends ValueType<unknown> {
   }
 
   override equals(other: Type): boolean {
-    return (
-      other instanceof TimeZoneConverter &&
-      (this._subtype as ValueTypeInstance).equals(other._subtype)
-    );
+    if (!(other instanceof TimeZoneConverter)) return false;
+    const sub = this._subtype as ValueTypeInstance;
+    return typeof sub.equals === "function"
+      ? sub.equals(other._subtype)
+      : this._subtype === other._subtype;
   }
 }
 

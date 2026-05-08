@@ -2748,7 +2748,7 @@ export class Relation<T extends Base> {
     }
 
     const count = await this._modelClass.adapter.execUpdate(
-      um.toSql(),
+      this._arelVisitor().compile(um.ast),
       `${this._modelClass.name} Update All`,
     );
     this.reset();
@@ -2784,7 +2784,7 @@ export class Relation<T extends Base> {
     }
 
     const count = await this._modelClass.adapter.execDelete(
-      dm.toSql(),
+      this._arelVisitor().compile(dm.ast),
       `${this._modelClass.name} Delete All`,
     );
     this.reset();
@@ -2821,7 +2821,7 @@ export class Relation<T extends Base> {
       um.where(node);
     }
 
-    return this._modelClass.adapter.executeMutation(um.toSql());
+    return this._modelClass.adapter.executeMutation(this._arelVisitor().compile(um.ast));
   }
 
   /**

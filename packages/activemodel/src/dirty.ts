@@ -250,7 +250,9 @@ export class DirtyTracker {
       } else {
         const savedValue = resolveValue(this._originalAttributes.get(name));
         // Entry: [was=savedValue (pre-TX), now=currentValue (post-TX)] — matches [was, now] convention.
-        if (attr.type.isChanged(savedValue, currentValue, currentValue)) {
+        // Pass attr.valueBeforeTypeCast as the raw third arg so numeric types can
+        // detect number_to_non_number? changes (e.g. writing `true` to an integer field).
+        if (attr.type.isChanged(savedValue, currentValue, attr.valueBeforeTypeCast)) {
           this._changedAttributes.set(name, [savedValue, currentValue]);
         }
       }

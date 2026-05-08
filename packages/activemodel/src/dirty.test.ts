@@ -895,4 +895,25 @@ describe("DirtyTracker#redetectChanges", () => {
     expect(dirty.changed).toBe(false);
     expect(dirty.changes).toEqual({});
   });
+
+  it("detects number_to_non_number? via valueBeforeTypeCast — score=1 written as `true` is dirty vs numeric baseline", () => {
+    // Numeric type isChanged: isNumberToNonNumber?(oldValue, newValueBeforeTypeCast) fires when
+    // the new raw value is not a number even if the cast value equals the old cast value.
+    const m = new Subject({ title: "t", score: 1 });
+    m.changesApplied(); // baseline: score=1 (cast), raw=1
+
+    // Simulate in-TX write of `true` to score (casts to 1, but raw is non-numeric)
+    const postTxAttrs = (m as any)._attributes.deepDup();
+    (postTxAttrs as AttributeSet).writeFromUser("score", true); // valueBeforeTypeCast=true, value=1
+
+    const restored = (m as any)._attributes; // baseline still score=1
+    const dirty: DirtyTracker = (m as any)._dirty;
+    dirty.snapshot(restored);
+    dirty.clearChangesInformation();
+    dirty.redetectChanges(postTxAttrs);
+
+    // Cast values are both 1, but raw `true` triggers isNumberToNonNumber? → dirty
+    expect(dirty.attributeChanged("score")).toBe(true);
+    expect(dirty.changes).toEqual({ score: [1, 1] });
+  });
 });

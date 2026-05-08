@@ -458,21 +458,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // typeMap.has(oid)=true, skip loadAdditionalTypes, and never
     // resolve the real type. Return a fresh ValueType on miss and
     // leave miss-loading to getOidType / loadAdditionalTypes.
-    //
-    // OID-miss fallback: the static type map registers types by SQL name
-    // (e.g. "bytea", "timestamp") not by OID. If the OID is not in the
-    // map but we have a sqlType, try the name-keyed lookup so that
-    // known types (bytea=17, timestamp=1114, etc.) resolve correctly
-    // without requiring a pg_type round-trip. Mirrors Rails'
-    // lookup_cast_type chain where get_oid_type falls back to
-    // type_map.fetch(sql_type).
-    if (!this.typeMap.has(oid) && column.sqlType) {
-      return this.typeMap.lookup(
-        normalizeFormatType(column.sqlType),
-        column.fmod ?? -1,
-        column.sqlType,
-      );
-    }
+    // columns() now calls getOidType directly (Rails-faithful path), so
+    // OIDs for known column types are registered before this is called
+    // for type-casting during attribute reads.
     return this.typeMap.fetch(oid, column.fmod ?? -1, column.sqlType ?? "", () => new ValueType());
   }
 
@@ -2430,46 +2418,47 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       binds,
     );
 
-    return rows.map((r) => {
-      const sqlType = r.type as string;
-      const oid = r.oid as number;
-      const fmod = r.fmod as number;
-      // Mirrors Rails' fetch_type_metadata: look up the cast type so that
-      // SqlTypeMetadata.type reflects the OID type's semantic name (e.g.
-      // "enum" for user-defined enums, "integer" for int4, etc.) rather
-      // than defaulting to the raw sqlType string.
-      const castType = this.lookupCastTypeFromColumn({ oid, fmod, sqlType });
-      const rawDefault = (r.default as string | null) ?? null;
-      const identity = (r.identity as string | null) || null;
-      const attgenerated = (r.attgenerated as string | null) || null;
-      // Mirrors Rails new_column_from_field: generated columns store the
-      // generation expression as defaultFunction; regular columns split into
-      // literal default vs. default function (nextval, CURRENT_TIMESTAMP, etc.).
-      const splitDefault = attgenerated ? null : splitPgDefault(rawDefault);
-      const defaultFunction = attgenerated ? rawDefault : (splitDefault?.fn ?? null);
-      const literal = attgenerated ? null : (splitDefault?.literal ?? null);
-      const isSerial = typeof rawDefault === "string" && rawDefault.startsWith("nextval(");
+    return await Promise.all(
+      rows.map(async (r) => {
+        const sqlType = r.type as string;
+        const oid = r.oid as number;
+        const fmod = r.fmod as number;
+        // Mirrors Rails' fetch_type_metadata → get_oid_type: load from
+        // pg_type on miss so user-defined types (enums, composites, domains)
+        // are registered in the map before column objects are built.
+        const castType = await this.getOidType(oid, fmod, r.name as string, sqlType);
+        const rawDefault = (r.default as string | null) ?? null;
+        const identity = (r.identity as string | null) || null;
+        const attgenerated = (r.attgenerated as string | null) || null;
+        // Mirrors Rails new_column_from_field: generated columns store the
+        // generation expression as defaultFunction; regular columns split into
+        // literal default vs. default function (nextval, CURRENT_TIMESTAMP, etc.).
+        const splitDefault = attgenerated ? null : splitPgDefault(rawDefault);
+        const defaultFunction = attgenerated ? rawDefault : (splitDefault?.fn ?? null);
+        const literal = attgenerated ? null : (splitDefault?.literal ?? null);
+        const isSerial = typeof rawDefault === "string" && rawDefault.startsWith("nextval(");
 
-      return new Column(
-        r.name as string,
-        literal,
-        {
-          sqlType,
-          type: castType.type(),
-          oid,
-          fmod,
-        },
-        !(r.notnull as boolean),
-        {
-          defaultFunction: defaultFunction ?? undefined,
-          primaryKey: r.is_primary as boolean,
-          serial: isSerial,
-          array: sqlType.endsWith("[]"),
-          identity,
-          generated: attgenerated,
-        },
-      );
-    });
+        return new Column(
+          r.name as string,
+          literal,
+          {
+            sqlType,
+            type: castType.type(),
+            oid,
+            fmod,
+          },
+          !(r.notnull as boolean),
+          {
+            defaultFunction: defaultFunction ?? undefined,
+            primaryKey: r.is_primary as boolean,
+            serial: isSerial,
+            array: sqlType.endsWith("[]"),
+            identity,
+            generated: attgenerated,
+          },
+        );
+      }),
+    );
   }
 
   async changeColumn(

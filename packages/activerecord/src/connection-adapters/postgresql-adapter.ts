@@ -558,6 +558,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     );
 
     const fields = pgResult.fields ?? [];
+    // Flush before loadAdditionalTypes — nested execQuery calls reset the buffer.
+    this._flushWarnings(rewritten);
     if (fields.length === 0) return Result.fromRowHashes([]);
 
     // Batch-load any unknown dataTypeIDs in a single pg_type roundtrip.
@@ -591,9 +593,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
     // pgResult.rows is already positional arrays thanks to rowMode.
     const rowArrays = pgResult.rows as unknown[][];
-    const result = new Result(columns, rowArrays, columnTypes as Record<string, Type>);
-    this._flushWarnings(rewritten);
-    return result;
+    return new Result(columns, rowArrays, columnTypes as Record<string, Type>);
   }
 
   /**
@@ -1007,8 +1007,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       row_count: 0,
     };
     const m = await Notifications.instrumentAsync("sql.active_record", payload, async () => {
+      let rc: number;
       try {
-        return await this.withClient(async (client) => {
+        rc = await this.withClient(async (client) => {
           this.dirtyCurrentTransaction();
           const upper = sql.trimStart().toUpperCase();
 
@@ -1083,8 +1084,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         payload.exception_object = translated;
         throw translated;
       }
+      // Flush inside the instrumented callback so a raised SQLWarning is visible
+      // to instrumentation subscribers — mirrors handle_warnings inside perform_query.
+      this._flushWarnings(pgSql);
+      return rc!;
     });
-    this._flushWarnings(pgSql);
     return m;
   }
 

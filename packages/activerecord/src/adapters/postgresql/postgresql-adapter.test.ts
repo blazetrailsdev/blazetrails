@@ -712,6 +712,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       afterEach(() => {
         PostgreSQLAdapter.dbWarningsAction = savedAction;
         PostgreSQLAdapter.dbWarningsIgnore = savedIgnore;
+        vi.restoreAllMocks();
       });
 
       it("ignores warnings when behaviour ignore", async () => {
@@ -723,12 +724,8 @@ describeIfPg("PostgreSQLAdapter", () => {
       it("logs warnings when behaviour log", async () => {
         PostgreSQLAdapter.dbWarningsAction = "log";
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        try {
-          await adapter.execute("do $$ BEGIN RAISE WARNING 'PostgreSQL SQL warning'; END; $$");
-          expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("PostgreSQL SQL warning"));
-        } finally {
-          warnSpy.mockRestore();
-        }
+        await adapter.execute("do $$ BEGIN RAISE WARNING 'PostgreSQL SQL warning'; END; $$");
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("PostgreSQL SQL warning"));
       });
 
       it("raises warnings when behaviour raise", async () => {

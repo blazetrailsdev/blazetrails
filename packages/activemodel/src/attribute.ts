@@ -270,6 +270,13 @@ export class FromDatabase extends Attribute {
   protected override _originalValueForDatabase(): unknown {
     return this.valueBeforeTypeCast;
   }
+
+  override forgettingAssignment(): Attribute {
+    // Only round-trip if the in-memory value has actually changed in place;
+    // otherwise return self to preserve object identity for unchanged reads.
+    if (!this.changedInPlace()) return this;
+    return super.forgettingAssignment();
+  }
 }
 
 export class FromUser extends Attribute {

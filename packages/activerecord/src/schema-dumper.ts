@@ -697,7 +697,7 @@ export class SchemaDumper {
           if (col.precision === undefined) {
             // not set — omit
           } else if (col.precision === null) {
-            colspec.precision = "nil";
+            colspec.precision = null;
           } else if (col.precision !== SchemaDumper.DEFAULT_DATETIME_PRECISION) {
             colspec.precision = col.precision;
           }

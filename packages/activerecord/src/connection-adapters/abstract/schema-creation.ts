@@ -261,22 +261,22 @@ export class SchemaCreation {
         break;
       case "time": {
         const p = options.precision;
-        if (p != null && p > 6)
+        if (p != null && !(p >= 0 && p <= 6))
           throw new ArgumentError(
             `No TIME type has precision of ${p}. The allowed range of precision is from 0 to 6`,
           );
-        sql = p != null && p >= 0 ? `TIME(${p})` : "TIME";
+        sql = p != null ? `TIME(${p})` : "TIME";
         break;
       }
       case "datetime":
       case "timestamp": {
         const base = this.adapterName === "postgres" ? "TIMESTAMP" : "DATETIME";
         const p = options.precision;
-        if (p != null && p > 6)
+        if (p != null && !(p >= 0 && p <= 6))
           throw new ArgumentError(
             `No ${base} type has precision of ${p}. The allowed range of precision is from 0 to 6`,
           );
-        sql = p != null && p >= 0 && p <= 6 ? `${base}(${p})` : base;
+        sql = p != null ? `${base}(${p})` : base;
         break;
       }
       case "binary":

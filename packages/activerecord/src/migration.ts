@@ -1266,21 +1266,21 @@ export class MigrationContext {
         return "DATE";
       case "time": {
         const p = options?.precision;
-        if (p != null && p > 6)
+        if (p != null && !(p >= 0 && p <= 6))
           throw new ArgumentError(
             `No TIME type has precision of ${p}. The allowed range of precision is from 0 to 6`,
           );
-        return p != null && p >= 0 ? `TIME(${p})` : "TIME";
+        return p != null ? `TIME(${p})` : "TIME";
       }
       case "datetime":
       case "timestamp": {
         const base = an === "postgres" ? "TIMESTAMP" : "DATETIME";
         const p = options?.precision;
-        if (p != null && p > 6)
+        if (p != null && !(p >= 0 && p <= 6))
           throw new ArgumentError(
             `No ${base} type has precision of ${p}. The allowed range of precision is from 0 to 6`,
           );
-        return p != null && p >= 0 && p <= 6 ? `${base}(${p})` : base;
+        return p != null ? `${base}(${p})` : base;
       }
       case "binary":
         return an === "postgres" ? "BYTEA" : "BLOB";

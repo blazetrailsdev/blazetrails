@@ -7,7 +7,13 @@ export class TimeType extends ValueType<Temporal.PlainTime> {
   readonly name = "time";
 
   private _applySecondsPrecision(value: Temporal.PlainTime): Temporal.PlainTime {
-    if (this.precision == null) return value;
+    if (
+      this.precision == null ||
+      !Number.isInteger(this.precision) ||
+      this.precision < 0 ||
+      this.precision > 9
+    )
+      return value;
     const nsec = value.millisecond * 1_000_000 + value.microsecond * 1_000 + value.nanosecond;
     const mod = 10 ** (9 - this.precision);
     const roundedOff = nsec % mod;

@@ -971,22 +971,22 @@ export class TableDefinition {
           break;
         case "time": {
           const tp = col.options.precision;
-          if (tp != null && tp > 6)
+          if (tp != null && !(tp >= 0 && tp <= 6))
             throw new ArgumentError(
               `No TIME type has precision of ${tp}. The allowed range of precision is from 0 to 6`,
             );
-          parts.push(tp != null && tp >= 0 ? `TIME(${tp})` : "TIME");
+          parts.push(tp != null ? `TIME(${tp})` : "TIME");
           break;
         }
         case "datetime":
         case "timestamp": {
           const base = this._adapterName === "postgres" ? "TIMESTAMP" : "DATETIME";
           const tp = col.options.precision;
-          if (tp != null && tp > 6)
+          if (tp != null && !(tp >= 0 && tp <= 6))
             throw new ArgumentError(
               `No ${base} type has precision of ${tp}. The allowed range of precision is from 0 to 6`,
             );
-          parts.push(tp != null && tp >= 0 && tp <= 6 ? `${base}(${tp})` : base);
+          parts.push(tp != null ? `${base}(${tp})` : base);
           break;
         }
         case "binary":

@@ -26,7 +26,13 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
   }
 
   private _applySecondsPrecision(value: Temporal.Instant): Temporal.Instant {
-    if (this.precision == null) return value;
+    if (
+      this.precision == null ||
+      !Number.isInteger(this.precision) ||
+      this.precision < 0 ||
+      this.precision > 9
+    )
+      return value;
     const mod = 10n ** BigInt(9 - this.precision);
     let subsec = value.epochNanoseconds % 1_000_000_000n;
     if (subsec < 0n) subsec += 1_000_000_000n;

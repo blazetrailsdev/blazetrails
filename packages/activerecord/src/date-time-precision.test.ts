@@ -160,8 +160,8 @@ describe("DateTimePrecisionTest", () => {
       (t as any).timestamps({ precision: null });
     });
     const output = SchemaDumper.dump(ctx) as string;
-    expect(output).toMatch(/t\.datetime\("created_at".*precision.*nil/);
-    expect(output).toMatch(/t\.datetime\("updated_at".*precision.*nil/);
+    expect(output).toMatch(/t\.datetime\("created_at".*precision.*null/);
+    expect(output).toMatch(/t\.datetime\("updated_at".*precision.*null/);
   });
 
   it("datetime precision with zero should be dumped", () => {

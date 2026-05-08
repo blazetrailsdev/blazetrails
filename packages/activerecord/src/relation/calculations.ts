@@ -569,9 +569,8 @@ export function lookupCastTypeFromJoinDependencies(
     for (const node of jd) {
       const klass = node.modelClass;
       if (!klass) continue;
-      const attrTypes = klass.attributeTypes;
       const rawTypes: unknown =
-        typeof attrTypes === "function" ? (attrTypes as () => unknown)() : attrTypes;
+        typeof klass.attributeTypes === "function" ? klass.attributeTypes() : klass.attributeTypes;
       if (!rawTypes) continue;
       const type =
         rawTypes instanceof Map ? rawTypes.get(name) : (rawTypes as Record<string, unknown>)[name];

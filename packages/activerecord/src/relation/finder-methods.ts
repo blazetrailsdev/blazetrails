@@ -11,6 +11,7 @@
 import { Nodes } from "@blazetrails/arel";
 import { ActiveModelRangeError } from "@blazetrails/activemodel";
 import { RecordNotFound, RecordNotSaved, RecordNotUnique, SoleRecordExceeded } from "../errors.js";
+import { queryConstraintsList as _queryConstraintsListFn } from "../persistence.js";
 
 // ---------------------------------------------------------------------------
 // Shared id-normalization + not-found helpers.
@@ -195,7 +196,6 @@ interface FinderRelation {
     primaryKey: string | string[];
     compositePrimaryKey: boolean;
     implicitOrderColumn?: string | null;
-    _queryConstraintsList?: string[] | null;
     createBang(attrs: any): Promise<any>;
     transaction<R>(
       fn: (tx: any) => Promise<R>,
@@ -751,7 +751,7 @@ export function orderedRelation(rel: FinderRelation): any {
   const mc = (rel as any)._modelClass;
   const pk = mc?.primaryKey;
   const implicitOrder: string | null | undefined = mc?.implicitOrderColumn;
-  const constraintsList: string[] | null | undefined = mc?._queryConstraintsList;
+  const constraintsList: string[] | null = mc ? _queryConstraintsListFn.call(mc) : null;
   if (!hasOrder(rel) && (implicitOrder || constraintsList != null || pk)) {
     const cols = _orderColumns(rel);
     if (cols.length > 0) {
@@ -771,7 +771,7 @@ export function _orderColumns(rel: FinderRelation): string[] {
   const mc = (rel as any)._modelClass;
   const pk = mc?.primaryKey;
   const implicitOrder: string | null | undefined = mc?.implicitOrderColumn;
-  const constraintsList: string[] | null | undefined = mc?._queryConstraintsList;
+  const constraintsList: string[] | null = mc ? _queryConstraintsListFn.call(mc) : null;
 
   const oc: string[] = [];
   if (implicitOrder) oc.push(implicitOrder);

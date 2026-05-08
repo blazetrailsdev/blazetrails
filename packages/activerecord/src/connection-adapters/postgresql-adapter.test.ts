@@ -1031,26 +1031,30 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.exec('DROP TABLE IF EXISTS "dt_prec_test" CASCADE');
     });
 
+    async function columnSqlType(colName: string): Promise<string> {
+      const rows = await (adapter as any).schemaQuery(
+        `SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS sql_type
+         FROM pg_attribute a
+         JOIN pg_class t ON t.oid = a.attrelid
+         WHERE t.relname = 'dt_prec_test' AND a.attname = $1 AND a.attnum > 0`,
+        [colName],
+      );
+      return rows[0]?.sql_type as string;
+    }
+
     it("addColumn datetime defaults to TIMESTAMP(6)", async () => {
       await adapter.addColumn("dt_prec_test", "happened_at", "datetime");
-      const cols = await adapter.columns("dt_prec_test");
-      const col = cols.find((c) => c.name === "happened_at");
-      expect(col).toBeDefined();
-      expect(col!.precision).toBe(6);
+      expect(await columnSqlType("happened_at")).toBe("timestamp(6) without time zone");
     });
 
     it("addColumn datetime respects explicit precision", async () => {
       await adapter.addColumn("dt_prec_test", "happened_at", "datetime", { precision: 0 });
-      const cols = await adapter.columns("dt_prec_test");
-      const col = cols.find((c) => c.name === "happened_at");
-      expect(col!.precision).toBe(0);
+      expect(await columnSqlType("happened_at")).toBe("timestamp(0) without time zone");
     });
 
     it("addColumn datetime null precision omits precision suffix", async () => {
       await adapter.addColumn("dt_prec_test", "happened_at", "datetime", { precision: null });
-      const cols = await adapter.columns("dt_prec_test");
-      const col = cols.find((c) => c.name === "happened_at");
-      expect(col!.precision).toBeNull();
+      expect(await columnSqlType("happened_at")).toBe("timestamp without time zone");
     });
   });
 });

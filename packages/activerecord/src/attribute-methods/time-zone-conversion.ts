@@ -6,48 +6,73 @@ export interface TimeZoneConversion {
   skipTimeZoneConversionForAttributes: string[];
 }
 
+type Subtype = {
+  cast(value: unknown): unknown;
+  deserialize?(value: unknown): unknown;
+  map?(value: unknown): unknown;
+};
+
 /**
  * Time zone converter type — wraps a time type to apply zone conversion.
  *
  * Mirrors: ActiveRecord::AttributeMethods::TimeZoneConversion::TimeZoneConverter
  */
 export class TimeZoneConverter {
-  private readonly subtype: { cast(value: unknown): unknown };
+  private readonly subtype: Subtype;
 
-  constructor(subtype: { cast(value: unknown): unknown }) {
+  constructor(subtype: Subtype) {
     this.subtype = subtype;
   }
 
+  /** Idempotent factory — mirrors Rails' `self.new` guard. */
+  static wrap(subtype: Subtype): TimeZoneConverter {
+    return subtype instanceof TimeZoneConverter ? subtype : new TimeZoneConverter(subtype);
+  }
+
   cast(value: unknown): unknown {
+    if (value == null) return null;
+    if (Array.isArray(value)) {
+      // mirrors: map(super) { |v| cast(v) }
+      const casted = this.subtype.cast(value);
+      return Array.isArray(casted) ? casted.map((v) => this.cast(v)) : this.cast(casted);
+    }
+    // TODO: requires TimeWithZone — user_input_in_time_zone(value) for time-like values
     return this.subtype.cast(value);
   }
 
   deserialize(value: unknown): unknown {
-    return (this.subtype as any).deserialize
-      ? (this.subtype as any).deserialize(value)
+    const raw = this.subtype.deserialize
+      ? this.subtype.deserialize(value)
       : this.subtype.cast(value);
+    return convertTimeToTimeZone(raw);
+  }
+
+  equals(other: unknown): boolean {
+    return (
+      other instanceof TimeZoneConverter && this.subtype === (other as TimeZoneConverter).subtype
+    );
   }
 }
 
 /** @internal */
 function convertTimeToTimeZone(value: unknown): unknown {
   if (value == null) return value;
-  // boundary: legacy callers may still hand in JS Date for time-zone-aware
-  // attributes; pass through unchanged (the typed cast layer handles Temporal).
-  if (value instanceof Date) {
-    return value;
-  }
   if (Array.isArray(value)) {
     return value.map((v) => convertTimeToTimeZone(v));
   }
+  // TODO: requires TimeWithZone — value.in_time_zone for time-like values
   return value;
 }
 
 /** @internal */
 function setTimeZoneWithoutConversion(value: unknown): unknown {
   if (value == null) return value;
+  // TODO: requires TimeWithZone — Time.zone.local_to_utc(value).try(:in_time_zone)
   return value;
 }
+
+// Silence unused-variable warnings until TimeWithZone is implemented.
+void setTimeZoneWithoutConversion;
 
 interface TimeZoneConversionHost {
   timeZoneAwareAttributes: boolean;
@@ -66,7 +91,7 @@ export function hookAttributeType(
   castType: { type?(): string },
 ): unknown {
   if (isCreateTimeZoneConversionAttribute.call(this, name, castType)) {
-    return new TimeZoneConverter(castType as any);
+    return TimeZoneConverter.wrap(castType as Subtype);
   }
   return castType;
 }

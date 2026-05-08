@@ -247,7 +247,7 @@ describeIfMysql("Mysql2Adapter", () => {
         }
       } finally {
         Notifications.unsubscribe(sub);
-        await adapter.execute("DROP TABLE `bar_baz`");
+        await adapter.execute("DROP TABLE IF EXISTS `bar_baz`");
       }
     });
 

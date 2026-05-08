@@ -1192,7 +1192,10 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       // DEFAULT NULL on NOT NULL columns — mirrors Rails column_for + new_column_definition.
       default: col["Default"] !== null ? col["Default"] : undefined,
       null: (col["Null"] as string) === "YES",
+      collation: (col["Collation"] as string | undefined) || undefined,
       comment: (col["Comment"] as string | undefined) || undefined,
+      // Note: auto_increment (from Extra) is not in ColumnOptions yet — a separate infra
+      // gap tracked outside this PR.
     });
     const cd = new ChangeColumnDefinition(colDef, columnName);
     return new MysqlSchemaCreation().accept(cd);

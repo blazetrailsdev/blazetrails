@@ -262,13 +262,25 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // matched rows (not just changed rows) for UPDATE/DELETE. Rails does:
     //   @config[:flags] ||= 0
     //   if @config[:flags].kind_of?(Array) then flags.push "FOUND_ROWS" else flags |= FOUND_ROWS
-    const inputFlags = mysqlConfig.flags;
-    const resolvedFlags = Array.isArray(inputFlags)
-      ? inputFlags.includes("FOUND_ROWS")
-        ? inputFlags
-        : [...inputFlags, "FOUND_ROWS"]
-      : ["FOUND_ROWS"];
-    this._poolConfig = { ...mysqlConfig, flags: resolvedFlags, strict, waitTimeout, variables };
+    // Numeric flags (bitmask) are supported by the codebase (see mysql2/database-statements.ts);
+    // the FOUND_ROWS bit (Mysql2::Client::FOUND_ROWS = 2) is OR-ed in for that form.
+    const inputFlags = mysqlConfig.flags as string[] | number | undefined;
+    const FOUND_ROWS_BIT = 2; // Mysql2::Client::FOUND_ROWS
+    const resolvedFlags: string[] | number =
+      typeof inputFlags === "number"
+        ? inputFlags | FOUND_ROWS_BIT
+        : Array.isArray(inputFlags)
+          ? inputFlags.includes("FOUND_ROWS")
+            ? inputFlags
+            : [...inputFlags, "FOUND_ROWS"]
+          : ["FOUND_ROWS"];
+    this._poolConfig = {
+      ...mysqlConfig,
+      flags: resolvedFlags as string[],
+      strict,
+      waitTimeout,
+      variables,
+    };
     this._driverPool = Mysql2Adapter.newClient(this._poolConfig);
   }
 
@@ -1104,8 +1116,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * @internal — test-only: returns the flags value from the pool config, mirroring
    * Rails' `connection.raw_connection.query_options[:flags]` for flag-passing assertions.
    */
-  _testOnlyPoolFlags(): Array<string> | undefined {
-    return this._poolConfig.flags as Array<string> | undefined;
+  _testOnlyPoolFlags(): string[] | number | undefined {
+    return this._poolConfig.flags as string[] | number | undefined;
   }
 
   /**

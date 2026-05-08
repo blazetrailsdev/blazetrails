@@ -7,5 +7,5 @@
  * @internal
  */
 export const pgDatetimeConfig = {
-  datetimeType: "timestamp" as string,
+  datetimeType: "timestamp" as "timestamp" | "timestamptz",
 };

@@ -177,7 +177,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // Proxied through pgDatetimeConfig so OID::DateTime.realTypeUnlessAliased can read
   // the current value without creating a circular import.
   static get datetimeType(): "timestamp" | "timestamptz" {
-    return pgDatetimeConfig.datetimeType as "timestamp" | "timestamptz";
+    return pgDatetimeConfig.datetimeType;
   }
   static set datetimeType(v: "timestamp" | "timestamptz") {
     pgDatetimeConfig.datetimeType = v;

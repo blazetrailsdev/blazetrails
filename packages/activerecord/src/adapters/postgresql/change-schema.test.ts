@@ -117,7 +117,8 @@ describeIfPg("Migration", () => {
       });
       const cols = await adapter.columns("strings");
       const col = cols.find((c) => c.name === "somedate");
-      expect(col!.sqlType).toBe("timestamp without time zone[]");
+      expect(col!.sqlType).toBe("timestamp without time zone");
+      expect((col as any).isArray()).toBe(true);
     });
   });
 });

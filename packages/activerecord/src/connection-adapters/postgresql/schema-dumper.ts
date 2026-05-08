@@ -46,7 +46,6 @@ export class SchemaDumper extends AbstractSchemaDumper {
   /** @internal */
   protected override schemaType(column: Column): string {
     if (column.isSerial) return column.isBigint() ? "bigserial" : "serial";
-    // bigint: return directly — super reads column.type which includes "[]" for bigint arrays
     if (column.isBigint()) return "bigint";
     const semantic = column.type ?? undefined;
     // BigIntegerType.name is "big_integer" — normalize to "bigint" for schema output

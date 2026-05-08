@@ -575,10 +575,11 @@ export function toTime(date: Date): Temporal.Instant {
  */
 export function instantToS(instant: Temporal.Instant): string {
   const zdt = instant.toZonedDateTimeISO("UTC");
-  const pad = (n: number) => String(n).padStart(2, "0");
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const year = String(zdt.year).padStart(4, "0");
   return (
-    `${zdt.year}-${pad(zdt.month)}-${pad(zdt.day)} ` +
-    `${pad(zdt.hour)}:${pad(zdt.minute)}:${pad(zdt.second)} UTC`
+    `${year}-${pad2(zdt.month)}-${pad2(zdt.day)} ` +
+    `${pad2(zdt.hour)}:${pad2(zdt.minute)}:${pad2(zdt.second)} UTC`
   );
 }
 

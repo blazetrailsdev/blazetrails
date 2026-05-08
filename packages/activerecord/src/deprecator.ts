@@ -47,6 +47,7 @@ export class MigrationProxy {
   scope: string;
 
   private _migration: object | null = null;
+  private _migrationPromise: Promise<object> | null = null;
 
   constructor(name: string, version: string, filename: string, scope: string) {
     this.name = name;
@@ -80,9 +81,9 @@ export class MigrationProxy {
   }
 
   /** @internal */
-  async migration(): Promise<object> {
-    this._migration ??= await this.loadMigrationAsync();
-    return this._migration;
+  migration(): Promise<object> {
+    this._migrationPromise ??= this.loadMigrationAsync().then((m) => (this._migration = m));
+    return this._migrationPromise;
   }
 
   /** @internal */

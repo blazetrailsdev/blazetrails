@@ -571,6 +571,20 @@ describe("QueryCacheExpiryTest", () => {
     // BLOCKED: connection-pool — per-thread query-cache architecture not wired (>300 LOC prereq)
   });
 
+  it("store checkVersion clears cache on version increment", async () => {
+    const version = { value: 0 };
+    const store = new Store(10, version);
+    store.enabled = true;
+    await store.computeIfAbsent("key1", async () => [{ val: 1 }]);
+    expect(store.size).toBe(1);
+    version.value++;
+    // lazy: cache clears on next access
+    expect(store.size).toBe(0);
+    expect(store.get("key1")).toBeUndefined();
+    await store.computeIfAbsent("key1", async () => [{ val: 2 }]);
+    expect(store.size).toBe(1);
+  });
+
   it("query cache lru eviction", async () => {
     const store = new Store(3);
     store.enabled = true;

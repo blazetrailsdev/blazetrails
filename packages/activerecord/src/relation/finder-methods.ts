@@ -686,7 +686,7 @@ export async function findOne(rel: FinderRelation, id: unknown): Promise<any> {
 
 /** @internal */
 export async function findSome(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
-  if ((rel as any).orderValues.length === 0) return findSomeOrdered(rel, ids);
+  if (!hasOrder(rel)) return findSomeOrdered(rel, ids);
 
   const pk = (rel as any)._modelClass.primaryKey as string;
   const records = await (rel as any).where({ [pk]: ids }).toArray();
@@ -728,22 +728,19 @@ export async function findSomeOrdered(rel: FinderRelation, ids: unknown[]): Prom
   }
   const records: any[] = await relation.toArray();
 
+  const pkType = (rel as any)._modelClass.typeForAttribute(pk);
+  const castKey = (v: unknown) => String(pkType.cast(v));
+
   if (records.length !== ids.length) {
     const modelName = (rel as any)._modelClass.name as string;
-    const foundIds = records.map((r: any) => r.readAttribute?.(pk) ?? r[pk]);
-    const remaining = [...ids];
-    for (const foundId of foundIds) {
-      const idx = remaining.findIndex((id) => id === foundId);
-      if (idx >= 0) remaining.splice(idx, 1);
-    }
+    const foundKeys = new Set(records.map((r: any) => castKey(r.readAttribute?.(pk) ?? r[pk])));
+    const remaining = ids.filter((id) => !foundKeys.has(castKey(id)));
     throw new RecordNotFound(`Couldn't find all ${modelName}`, modelName, pk, remaining);
   }
-
-  const pkType = (rel as any)._modelClass.typeForAttribute(pk);
-  const idIndex = new Map(ids.map((id, i) => [String(pkType.cast(id)), i]));
+  const idIndex = new Map(ids.map((id, i) => [castKey(id), i]));
   return records.sort((a: any, b: any) => {
-    const ai = idIndex.get(String(a.readAttribute?.(pk) ?? a[pk])) ?? 0;
-    const bi = idIndex.get(String(b.readAttribute?.(pk) ?? b[pk])) ?? 0;
+    const ai = idIndex.get(castKey(a.readAttribute?.(pk) ?? a[pk])) ?? 0;
+    const bi = idIndex.get(castKey(b.readAttribute?.(pk) ?? b[pk])) ?? 0;
     return ai - bi;
   });
 }

@@ -259,7 +259,8 @@ function makeFindSomeRel(
     _limitValue: opts.limit ?? null,
     _offsetValue: opts.offset ?? null,
     // ordered=true simulates a relation with ORDER BY (findSome stays in the accounting path)
-    orderValues: opts.ordered !== false ? ["id ASC"] : [],
+    _orderClauses: opts.ordered !== false ? ["id ASC"] : [],
+    _rawOrderClauses: [],
     selectValues: [],
     where(_cond: any) {
       const rel: any = { toArray: async () => records, select: () => rel };
@@ -303,7 +304,6 @@ describe("findSome — expected_size respects limit and offset", () => {
 
 describe("findSome — dispatches to findSomeOrdered when relation has no order values", () => {
   it("returns records in requested id order for an unordered relation", async () => {
-    const rows = [{ id: 1 }, { id: 3 }, { id: 5 }];
     // DB returns them in arbitrary order; we expect [5, 1, 3] back
     const dbRows = [{ id: 3 }, { id: 5 }, { id: 1 }];
     const rel = makeFindSomeRel(dbRows, { ordered: false });
@@ -329,7 +329,8 @@ function makeFindSomeOrderedRel(
     },
     _limitValue: opts.limit ?? null,
     _offsetValue: opts.offset ?? null,
-    orderValues: [],
+    _orderClauses: [],
+    _rawOrderClauses: [],
     selectValues: [],
     where(_cond: any) {
       const rel: any = { toArray: async () => records, select: () => rel };

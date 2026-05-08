@@ -262,13 +262,12 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // matched rows (not just changed rows) for UPDATE/DELETE. Rails does:
     //   @config[:flags] ||= 0
     //   if @config[:flags].kind_of?(Array) then flags.push "FOUND_ROWS" else flags |= FOUND_ROWS
-    const inputFlags = mysqlConfig.flags as Array<string> | undefined;
-    const resolvedFlags =
-      inputFlags == null
-        ? ["FOUND_ROWS"]
-        : inputFlags.includes("FOUND_ROWS")
-          ? inputFlags
-          : [...inputFlags, "FOUND_ROWS"];
+    const inputFlags = mysqlConfig.flags;
+    const resolvedFlags = Array.isArray(inputFlags)
+      ? inputFlags.includes("FOUND_ROWS")
+        ? inputFlags
+        : [...inputFlags, "FOUND_ROWS"]
+      : ["FOUND_ROWS"];
     this._poolConfig = { ...mysqlConfig, flags: resolvedFlags, strict, waitTimeout, variables };
     this._driverPool = Mysql2Adapter.newClient(this._poolConfig);
   }

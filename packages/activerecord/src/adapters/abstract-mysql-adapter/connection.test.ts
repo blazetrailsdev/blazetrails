@@ -232,6 +232,7 @@ describeIfMysql("Mysql2Adapter", () => {
     });
 
     it("logs name rename column for alter", async () => {
+      await adapter.execute("DROP TABLE IF EXISTS `bar_baz`");
       await adapter.execute("CREATE TABLE `bar_baz` (`foo` varchar(255))");
       const names: string[] = [];
       const sub = Notifications.subscribe("sql.active_record", (event: NotificationEvent) => {

@@ -1172,22 +1172,27 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     columnName: string,
     newColumnName: string,
   ): Promise<string> {
+    // Ensure version is cached before branching — supportsRenameColumn() returns false when
+    // _databaseVersion is unset, so we'd always fall through to the CHANGE path on uninitialized
+    // connections. getDatabaseVersion() memoizes after the first DB round-trip.
+    await this.getDatabaseVersion();
     if (this.supportsRenameColumn()) {
       return `RENAME COLUMN ${this.quoteIdentifier(columnName)} TO ${this.quoteIdentifier(newColumnName)}`;
     }
     // Fallback for MySQL <8.0.3 / MariaDB <10.5.2: mirrors Rails' rename_column_for_alter fallback.
-    // SHOW COLUMNS fires a "SCHEMA" sql.active_record notification (via schemaQuery → execute(..., "SCHEMA")).
-    const rows = await this.schemaQuery(
-      `SHOW COLUMNS FROM ${this.quoteTableName(tableName)} LIKE ${this.quote(columnName)}`,
-    );
-    if (rows.length === 0) throw new Error(`Column not found: ${columnName} in ${tableName}`);
-    const row = rows[0];
-    const colDef = new ColumnDefinition(newColumnName, row["Type"] as string, {
-      // SHOW COLUMNS returns NULL for Default both when there is no default and when DEFAULT NULL.
-      // Treat null as "no explicit default" (undefined) to avoid emitting DEFAULT NULL on
-      // NOT NULL columns. Mirrors Rails column_for + new_column_definition behaviour.
-      default: row["Default"] !== null ? (row["Default"] as string) : undefined,
-      null: (row["Null"] as string) === "YES",
+    // columnDefinitions (SHOW FULL FIELDS) fires a "SCHEMA" notification and returns the full
+    // column definition including Collation, Extra (auto_increment), and Comment — more complete
+    // than SHOW COLUMNS which omits those fields.
+    const cols = await this.columnDefinitions(tableName);
+    const col = cols.find((c) => (c["Field"] as string) === columnName);
+    if (!col) throw new Error(`Column not found: ${columnName} in ${tableName}`);
+    const colDef = new ColumnDefinition(newColumnName, col["Type"] as string, {
+      // SHOW FULL FIELDS returns NULL for Default both when there is no default and when
+      // DEFAULT NULL. Treat null as "no explicit default" (undefined) to avoid emitting
+      // DEFAULT NULL on NOT NULL columns — mirrors Rails column_for + new_column_definition.
+      default: col["Default"] !== null ? col["Default"] : undefined,
+      null: (col["Null"] as string) === "YES",
+      comment: (col["Comment"] as string | undefined) || undefined,
     });
     const cd = new ChangeColumnDefinition(colDef, columnName);
     return new MysqlSchemaCreation().accept(cd);

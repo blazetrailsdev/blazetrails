@@ -513,4 +513,29 @@ describe("AttributeTest", () => {
       expect(attr.changedInPlace()).toBe(false);
     });
   });
+
+  describe("valueForDatabase cache invalidation uses type.isChangedInPlace", () => {
+    it("stays memoized when isChangedInPlace returns false (immutable type)", () => {
+      const stringType = typeRegistry.lookup("string");
+      let serializeCount = 0;
+      const spyType = Object.create(stringType);
+      spyType.serialize = (v: unknown) => {
+        serializeCount++;
+        return stringType.serialize(v);
+      };
+      const attr = Attribute.fromDatabase("name", "hello", spyType);
+      void attr.valueForDatabase;
+      void attr.valueForDatabase;
+      expect(serializeCount).toBe(1);
+    });
+
+    it("recomputes when isChangedInPlace returns true after in-place mutation", () => {
+      const stringType = typeRegistry.lookup("string");
+      const attr = Attribute.fromDatabase("name", "hello", stringType);
+      void attr.valueForDatabase; // prime cache: "hello"
+      attr.overrideCastValue("world"); // mutate cast value, keep raw "hello"
+      // StringType.isChangedInPlace("hello" cached, "world") → true → recompute
+      expect(attr.valueForDatabase).toBe("world");
+    });
+  });
 });

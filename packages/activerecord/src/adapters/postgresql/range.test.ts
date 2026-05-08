@@ -264,21 +264,24 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
     it("range migration", async () => {
       await adapter.exec(`DROP TABLE IF EXISTS range_migration_test`);
-      await adapter.createTable("range_migration_test", (t: any) => {
-        t.column("i4", "int4range");
-        t.column("i8", "int8range");
-        t.column("num", "numrange");
-        t.column("dr", "daterange");
-        t.column("tsr", "tsrange");
-        t.column("tstzr", "tstzrange");
-        t.column("fr", "floatrange");
-      });
-      const cols = await adapter.columns("range_migration_test");
-      const names = cols.map((c: any) => c.name);
-      expect(names).toContain("i4");
-      expect(names).toContain("i8");
-      expect(names).toContain("fr");
-      await adapter.exec(`DROP TABLE IF EXISTS range_migration_test`);
+      try {
+        await adapter.createTable("range_migration_test", (t: any) => {
+          t.column("i4", "int4range");
+          t.column("i8", "int8range");
+          t.column("num", "numrange");
+          t.column("dr", "daterange");
+          t.column("tsr", "tsrange");
+          t.column("tstzr", "tstzrange");
+          t.column("fr", "floatrange");
+        });
+        const cols = await adapter.columns("range_migration_test");
+        const names = cols.map((c: any) => c.name);
+        expect(names).toContain("i4");
+        expect(names).toContain("i8");
+        expect(names).toContain("fr");
+      } finally {
+        await adapter.exec(`DROP TABLE IF EXISTS range_migration_test`);
+      }
     });
     it.skip("multirange int4", async () => {
       // BLOCKED: range — multirange types not registered (PG 14+ / Rails 7+)

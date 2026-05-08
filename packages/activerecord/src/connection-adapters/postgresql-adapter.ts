@@ -3461,9 +3461,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const qualifiedName = schema
       ? `${this.quoteIdentifier(schema)}.${this.quoteIdentifier(rangeName)}`
       : this.quoteIdentifier(rangeName);
-    const parts = [`SUBTYPE = ${this.quoteIdentifier(options.subtype)}`];
-    if (options.subtypeDiff)
-      parts.push(`SUBTYPE_DIFF = ${this.quoteIdentifier(options.subtypeDiff)}`);
+    const quoteTypeName = (typeName: string) => {
+      const { schema: s, table: t } = this.parseSchemaQualifiedName(typeName);
+      return s ? `${this.quoteIdentifier(s)}.${this.quoteIdentifier(t)}` : this.quoteIdentifier(t);
+    };
+    const parts = [`SUBTYPE = ${quoteTypeName(options.subtype)}`];
+    if (options.subtypeDiff) parts.push(`SUBTYPE_DIFF = ${quoteTypeName(options.subtypeDiff)}`);
     await this.exec(`CREATE TYPE ${qualifiedName} AS RANGE (${parts.join(", ")})`);
   }
 

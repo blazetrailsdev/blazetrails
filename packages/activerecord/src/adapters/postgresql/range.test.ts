@@ -384,10 +384,11 @@ describeIfPg("PostgreSQLAdapter", () => {
       // SCOPE: ~25 LOC shared with "custom range column" fix; affects 4 custom-range tests
     });
     it.skip("timezone awareness tzrange", () => {
-      // BLOCKED: range — time_zone_aware_types infrastructure not implemented
-      // ROOT-CAUSE: AttributeMethods::TimeZoneConversion not ported; RangeType has no time-zone callback
-      //   for tstzrange bounds; self.time_zone_aware_types += [:tsrange, :tstzrange] is a no-op
-      // SCOPE: Large (~200+ LOC) — TimeZoneConversion module + range-subtype timezone wrapper; separate story; affects 9 tests
+      // BLOCKED: range — tsrange/tstzrange not wired into TimeZoneConversion
+      // ROOT-CAUSE: attribute-methods/time-zone-conversion.ts IS ported but timeZoneAwareTypes defaults to
+      //   ["datetime","time"]; RangeType bounds bypass time-zone conversion; Rails adds [:tsrange,:tstzrange]
+      //   via self.time_zone_aware_types += [...] — no equivalent hook exists on RangeType subtype
+      // SCOPE: ~50 LOC — register tsrange/tstzrange in timeZoneAwareTypes + RangeType bound conversion; separate story; affects 9 tests
     });
     it.skip("timezone awareness endless tzrange", () => {
       // BLOCKED: range — time_zone_aware_types infrastructure not implemented
@@ -415,10 +416,10 @@ describeIfPg("PostgreSQLAdapter", () => {
       // SCOPE: ~14 LOC; run after "create tstzrange" is confirmed passing in CI
     });
     it.skip("escaped tstzrange", () => {
-      // BLOCKED: range — BC-era timestamp round-trip through RangeType not tested
-      // ROOT-CAUSE: DateTime.serialize emits "YYYY-MM-DD HH:MM:SS BC" for year<=0 but
-      //   parsePostgresInstant may not handle BC-era timestamps in tstzrange bound strings
-      // SCOPE: ~10 LOC test body; verify parsePostgresInstant handles BC pattern in range bounds
+      // BLOCKED: range — BC-era tstzrange round-trip test body not written
+      // ROOT-CAUSE: no infra gap; parsePostgresInstant handles BC via extractBcSuffix (temporal-wire.ts);
+      //   DateTime.serialize emits "YYYY-MM-DD HH:MM:SS BC" for year<=0; full round-trip untested
+      // SCOPE: ~10 LOC test body; run after "create tstzrange" is confirmed passing
     });
     it.skip("unbounded tstzrange", async () => {
       // BLOCKED: range — unbounded (endless/beginless) tstzrange round-trip untested
@@ -439,10 +440,10 @@ describeIfPg("PostgreSQLAdapter", () => {
       // SCOPE: ~12 LOC; run after "create tsrange" is confirmed passing in CI
     });
     it.skip("escaped tsrange", () => {
-      // BLOCKED: range — BC-era timestamp round-trip through RangeType not tested
-      // ROOT-CAUSE: DateTime.serialize emits "YYYY-MM-DD HH:MM:SS BC" for year<=0 but
-      //   parsePostgresTimestampAsInstant may not handle BC-era timestamps in tsrange bound strings
-      // SCOPE: ~10 LOC test body; verify BC timestamp parse in range bounds
+      // BLOCKED: range — BC-era tsrange round-trip test body not written
+      // ROOT-CAUSE: no infra gap; parsePostgresTimestampAsInstant handles BC via extractBcSuffix (temporal-wire.ts);
+      //   DateTime.serialize emits "YYYY-MM-DD HH:MM:SS BC" for year<=0; full round-trip untested
+      // SCOPE: ~10 LOC test body; run after "create tsrange" is confirmed passing
     });
     it.skip("unbounded tsrange", async () => {
       // BLOCKED: range — unbounded (endless/beginless) tsrange round-trip untested

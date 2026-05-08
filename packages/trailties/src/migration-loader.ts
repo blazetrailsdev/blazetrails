@@ -56,12 +56,12 @@ export async function discoverMigrations(migrationsDir: string): Promise<Migrati
       filename: filePath,
       migration: () => {
         const loader = {
-          async up(adapter: import("@blazetrails/activerecord").DatabaseAdapter): Promise<void> {
+          async up(adapter?: import("@blazetrails/activerecord").DatabaseAdapter): Promise<void> {
             const MigrationClass = await loadMigrationClass(filePath);
             const instance = new MigrationClass();
             await instance.run(adapter, "up");
           },
-          async down(adapter: import("@blazetrails/activerecord").DatabaseAdapter): Promise<void> {
+          async down(adapter?: import("@blazetrails/activerecord").DatabaseAdapter): Promise<void> {
             const MigrationClass = await loadMigrationClass(filePath);
             const instance = new MigrationClass();
             await instance.run(adapter, "down");

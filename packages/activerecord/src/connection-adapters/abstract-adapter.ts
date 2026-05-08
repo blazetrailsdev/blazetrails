@@ -747,7 +747,7 @@ export class AbstractAdapter implements Quoting {
   }
 
   /** @internal */
-  returnValueAfterInsert(column: { isAutoPopulated(): boolean }): boolean {
+  returnValueAfterInsert(column: Column): boolean {
     return column.isAutoPopulated();
   }
 

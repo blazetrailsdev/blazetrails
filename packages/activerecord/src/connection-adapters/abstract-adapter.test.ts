@@ -14,6 +14,8 @@ import { DateTime as DateTimeType } from "../type/date-time.js";
 import { Json as JsonType } from "../type/json.js";
 import { DecimalWithoutScale } from "../type/decimal-without-scale.js";
 import { AbstractAdapter } from "./abstract-adapter.js";
+import { Column } from "./column.js";
+import { SqlTypeMetadata } from "./sql-type-metadata.js";
 import { Result } from "../result.js";
 
 // All 5 methods are class-level in Rails (class << self private), so test via a subclass.
@@ -27,14 +29,18 @@ class TestAdapter extends AbstractAdapter {
 }
 
 describe("AbstractAdapter#returnValueAfterInsert", () => {
-  it("returns true when column isAutoPopulated", () => {
+  it("returns true when column isAutoPopulated (has default function)", () => {
     const adapter = new TestAdapter();
-    expect(adapter.returnValueAfterInsert({ isAutoPopulated: () => true })).toBe(true);
+    const col = new Column("id", null, new SqlTypeMetadata({ sqlType: "uuid" }), false, {
+      defaultFunction: "gen_random_uuid()",
+    });
+    expect(adapter.returnValueAfterInsert(col)).toBe(true);
   });
 
   it("returns false when column is not auto-populated", () => {
     const adapter = new TestAdapter();
-    expect(adapter.returnValueAfterInsert({ isAutoPopulated: () => false })).toBe(false);
+    const col = new Column("name", null, new SqlTypeMetadata({ sqlType: "varchar" }));
+    expect(adapter.returnValueAfterInsert(col)).toBe(false);
   });
 });
 

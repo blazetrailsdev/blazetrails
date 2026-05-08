@@ -110,6 +110,16 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return "sqlite";
   }
 
+  /** Returns true for raw better-sqlite3 errors that indicate a missing database file (SQLITE_CANTOPEN). */
+  isNoDatabaseError(error: unknown): boolean {
+    if (!error || typeof error !== "object") return false;
+    const e = error as { code?: unknown; message?: unknown };
+    return (
+      e.code === "SQLITE_CANTOPEN" ||
+      (typeof e.message === "string" && /unable to open database file/i.test(e.message))
+    );
+  }
+
   static columnNameMatcher(): RegExp {
     // Mirrors Rails SQLite3 column_name_matcher. Uses "..." quoted identifiers
     // (SQLite double-quote escaping: "" inside quotes). Strict 0-or-1 function

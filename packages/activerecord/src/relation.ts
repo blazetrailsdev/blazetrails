@@ -2738,6 +2738,7 @@ export class Relation<T extends Base> {
         // ISO Z format which MySQL/MariaDB DATETIME rejects in strict mode.
         const dbVal =
           val instanceof Temporal.Instant ||
+          val instanceof Temporal.PlainDateTime ||
           val instanceof Temporal.PlainDate ||
           val instanceof Temporal.PlainTime ||
           val instanceof Temporal.ZonedDateTime

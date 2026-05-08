@@ -77,7 +77,9 @@ export class DateTime extends DateTimeType {
       const dashIdx = formatted.indexOf("-", year < 0 ? 1 : 0);
       return bcYear + formatted.slice(dashIdx) + " BC";
     }
-    return super.serialize(value);
+    // AD dates: delegate to activemodel for precision, then reformat to SQL space-separated.
+    const iso = super.serialize(value);
+    return iso === null ? null : iso.replace("T", " ").replace(/Z$/, "");
   }
 
   override typeCastForSchema(value: unknown): string {

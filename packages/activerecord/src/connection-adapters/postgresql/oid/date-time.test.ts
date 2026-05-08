@@ -53,7 +53,7 @@ describe("PostgreSQL::OID::DateTime", () => {
 
   it("serialize leaves AD dates unchanged", () => {
     const instant = Temporal.Instant.from("2023-06-15T12:00:00Z");
-    expect(type.serialize(instant)).toBe("2023-06-15T12:00:00.000000Z");
+    expect(type.serialize(instant)).toBe("2023-06-15 12:00:00.000000");
   });
 
   it("serialize returns 'infinity' / '-infinity' for sentinels", () => {

@@ -139,6 +139,15 @@ export async function defineSchema(
           if (spec.default !== undefined) options["default"] = spec.default;
           if (spec.primary) options["primaryKey"] = true;
         }
+        // MySQL DATETIME without precision = DATETIME(0), which rejects fractional
+        // seconds. Default to DATETIME(6) so test schemas accept microseconds.
+        if (
+          adapter.adapterName === "mysql" &&
+          primitive === "datetime" &&
+          options["precision"] == null
+        ) {
+          options["precision"] = 6;
+        }
         t.column(colName, arType, options);
       }
     });

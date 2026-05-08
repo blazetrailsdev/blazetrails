@@ -3468,6 +3468,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
             `(e.g. "float8", "myschema.mytype"). Use the single-word alias instead of "${identifier}".`,
         );
       }
+      const parts = splitQuotedIdentifier(identifier);
+      if (parts.length === 0 || parts.length > 2) {
+        throw new Error(
+          `PostgreSQLAdapter#createRange: ${param} must have 1 or 2 dot-separated parts, got ${parts.length}: "${identifier}".`,
+        );
+      }
       const { schema: s, table: t } = this.parseSchemaQualifiedName(identifier);
       return s ? `${this.quoteIdentifier(s)}.${this.quoteIdentifier(t)}` : this.quoteIdentifier(t);
     };

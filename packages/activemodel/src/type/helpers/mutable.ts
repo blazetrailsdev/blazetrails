@@ -24,7 +24,10 @@ export const MutableModule = {
   },
 
   isChangedInPlace(this: Type, rawOldValue: unknown, newValue: unknown): boolean {
-    return rawOldValue !== this.serialize(newValue);
+    // Normalize rawOldValue through deserialize/serialize so pre-parsed values
+    // (e.g. pg returns jsonb as a JS object) compare on the same basis as the
+    // serialized new value. Equivalent to Rails when rawOldValue is a string.
+    return this.serialize(this.deserialize(rawOldValue)) !== this.serialize(newValue);
   },
 
   isMutable(this: Type): boolean {

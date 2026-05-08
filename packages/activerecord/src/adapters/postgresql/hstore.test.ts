@@ -188,6 +188,9 @@ describeIfPg("PostgreSQLAdapter", () => {
       const hstore = await HstoreModel.createBang({ settings: { one: "two" } });
       (hstore as any).settings.three = "four";
       await (hstore as any).saveBang();
+      // Post-save baseline must be reset: changedInPlace() should be false
+      // without a reload, meaning a second save won't fire a spurious UPDATE.
+      expect((hstore as any)._attributes.getAttribute("settings").changedInPlace()).toBe(false);
       await (hstore as any).reload();
       expect((hstore as any).settings.three).toBe("four");
       expect((hstore as any).changed).toBe(false);

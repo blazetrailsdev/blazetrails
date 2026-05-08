@@ -30,20 +30,34 @@ describeIfMysql("Mysql2Adapter", () => {
       }
     });
 
-    it.skip("no automatic reconnection after timeout", () => {
-      // BLOCKED: Mysql2Adapter#active checks `_driverPool != null`, not socket liveness.
-      // SCOPE: wire socket ping into Mysql2Adapter#active (connection-adapters/mysql2-adapter.ts).
-    });
-    it.skip("successful reconnection after timeout with manual reconnect", () => {
-      // BLOCKED: reconnectBang() not implemented on Mysql2Adapter (no pool teardown + recreate).
-      // SCOPE: store config in constructor; override reconnectBang() in mysql2-adapter.ts.
-    });
-    it.skip("successful reconnection after timeout with verify", () => {
-      // BLOCKED: verifyBang() doesn't reconnect on Mysql2Adapter — same gap as reconnectBang().
-    });
-    it.skip("execute after disconnect reconnects", () => {
-      // BLOCKED: _checkoutConn() throws when _driverPool is null; no lazy reconnect.
-      // SCOPE: store config in constructor; recreate _driverPool in _checkoutConn() after disconnect.
+    it("no automatic reconnection after timeout", async () => {
+      expect(await adapter.activeAsync()).toBe(true);
+      await adapter.execute("SET SESSION wait_timeout=1");
+      await new Promise((r) => setTimeout(r, 2000));
+      expect(await adapter.activeAsync()).toBe(false);
+      expect(adapter.active).toBe(false);
+    }, 10_000);
+    it("successful reconnection after timeout with manual reconnect", async () => {
+      expect(await adapter.activeAsync()).toBe(true);
+      await adapter.execute("SET SESSION wait_timeout=1");
+      await new Promise((r) => setTimeout(r, 2000));
+      adapter.reconnectBang();
+      expect(adapter.active).toBe(true);
+      await expect(adapter.execute("SELECT 1")).resolves.toBeDefined();
+    }, 10_000);
+    it("successful reconnection after timeout with verify", async () => {
+      expect(await adapter.activeAsync()).toBe(true);
+      await adapter.execute("SET SESSION wait_timeout=1");
+      await new Promise((r) => setTimeout(r, 2000));
+      await adapter.activeAsync(); // probe — updates _activeState to false
+      adapter.verifyBang(); // active is now false → calls reconnectBang()
+      expect(adapter.active).toBe(true);
+      await expect(adapter.execute("SELECT 1")).resolves.toBeDefined();
+    }, 10_000);
+    it("execute after disconnect reconnects", async () => {
+      adapter.disconnectBang();
+      const rows = await adapter.execute("SELECT 1+2 AS v");
+      expect(rows[0].v).toBe(3);
     });
 
     it("quote after disconnect reconnects", () => {

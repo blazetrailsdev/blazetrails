@@ -66,8 +66,38 @@ class Mysql2StatementPool extends MysqlStatementPool {
  * Uses a connection pool internally for concurrent access.
  */
 export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapter {
+  // Cached liveness state — updated by activeAsync() pings and reset by
+  // disconnectBang()/reconnectBang(). The sync `active` getter can't issue a
+  // real network ping, so we track the last known result here.
+  private _activeState = true;
+
   override get active(): boolean {
-    return this._driverPool != null;
+    return this._driverPool != null && this._activeState;
+  }
+
+  /**
+   * Async liveness probe — checks socket health via a real `ping` call on a
+   * pool connection. Updates the cached `_activeState` so the sync `active`
+   * getter reflects the result. Mirrors Rails' `active?` which calls
+   * `mysql_ping` on the raw connection.
+   */
+  async activeAsync(): Promise<boolean> {
+    if (!this._driverPool) {
+      this._activeState = false;
+      return false;
+    }
+    let conn: mysql.PoolConnection | undefined;
+    try {
+      conn = await this._driverPool.getConnection();
+      await conn.ping();
+      this._activeState = true;
+      return true;
+    } catch {
+      this._activeState = false;
+      return false;
+    } finally {
+      conn?.release();
+    }
   }
 
   // Mirrors Rails' Mysql2Adapter#connected? — null raw connection means
@@ -80,6 +110,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
 
   private _driverPool: mysql.Pool | null;
   private _endingPool: Promise<void> | null = null;
+  // Normalized config passed to newClient — stored for reconnect.
+  private _poolConfig: mysql.PoolOptions & MysqlAdapterOptions;
   private _conn: mysql.PoolConnection | null = null;
   private _inTransaction = false;
   // Per-mysql.PoolConnection StatementPool. Mirrors the PG adapter's
@@ -191,7 +223,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       } catch {
         // malformed URI — leave _database undefined
       }
-      this._driverPool = Mysql2Adapter.newClient({ uri, waitTimeout });
+      this._poolConfig = { uri, waitTimeout };
+      this._driverPool = Mysql2Adapter.newClient(this._poolConfig);
       return;
     }
     // See PostgreSQLAdapter#constructor: Rails' database.yml merges
@@ -217,12 +250,18 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
           return undefined;
         }
       })();
-    this._driverPool = Mysql2Adapter.newClient({ ...mysqlConfig, strict, waitTimeout, variables });
+    this._poolConfig = { ...mysqlConfig, strict, waitTimeout, variables };
+    this._driverPool = Mysql2Adapter.newClient(this._poolConfig);
   }
 
   /** Checkout a fresh connection from the pool, translating ER_BAD_DB_ERROR. */
   private async _checkoutConn(): Promise<mysql.PoolConnection> {
-    if (!this._driverPool) throw new Error("Mysql2Adapter: connection is closed");
+    // Lazy reconnect after disconnectBang() — mirrors Rails' reconnect on next
+    // execute after disconnect! (abstract_adapter.rb #with_raw_connection).
+    if (!this._driverPool) {
+      this._driverPool = Mysql2Adapter.newClient(this._poolConfig);
+      this._activeState = true;
+    }
     try {
       return await this._driverPool.getConnection();
     } catch (error) {
@@ -952,11 +991,26 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
 
   /**
    * Sever the connection immediately (synchronous contract from AbstractAdapter).
+  /**
+   * Close and reopen the connection pool from the stored config.
+   * Mirrors Rails' Mysql2Adapter#reconnect! (disconnect! + connect).
+   * Pool creation via newClient is synchronous; fresh connections are
+   * established lazily on first use, so this method stays synchronous.
+   */
+  override reconnectBang(): void {
+    super.reconnectBang();
+    this.disconnectBang();
+    this._driverPool = Mysql2Adapter.newClient(this._poolConfig);
+    this._activeState = true;
+  }
+
+  /**
    * Releases advisory-lock and transaction connections, nulls `_driverPool` so
    * `active` returns false right away, then schedules pool.end() asynchronously.
    * Mirrors Rails' Mysql2Adapter#disconnect! (super + raw_connection.close + nil).
    */
   override disconnectBang(): void {
+    this._activeState = false;
     super.disconnectBang();
     if (this._advisoryLockConn) {
       this._advisoryLockConn.release();

@@ -288,13 +288,16 @@ describeIfPg("PostgreSQLAdapter", () => {
       await withPostgresqlDatetimeType("timestamptz", async () => {
         await adapter.exec(`DROP TABLE IF EXISTS postgresql_timestamp_with_zones CASCADE`);
         await adapter.exec(`CREATE TABLE postgresql_timestamp_with_zones (id serial primary key)`);
-        await adapter.addColumn("postgresql_timestamp_with_zones", "times", "datetime");
-        const rows = await adapter.execute(
-          `SELECT data_type FROM information_schema.columns
-           WHERE table_name = 'postgresql_timestamp_with_zones' AND column_name = 'times'`,
-        );
-        expect(rows[0]?.data_type).toBe("timestamp with time zone");
-        await adapter.exec(`DROP TABLE IF EXISTS postgresql_timestamp_with_zones CASCADE`);
+        try {
+          await adapter.addColumn("postgresql_timestamp_with_zones", "times", "datetime");
+          const rows = await adapter.execute(
+            `SELECT data_type FROM information_schema.columns
+             WHERE table_name = 'postgresql_timestamp_with_zones' AND column_name = 'times'`,
+          );
+          expect(rows[0]?.data_type).toBe("timestamp with time zone");
+        } finally {
+          await adapter.exec(`DROP TABLE IF EXISTS postgresql_timestamp_with_zones CASCADE`);
+        }
       });
     });
 

@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe("SQLite3JSONTest", () => {
   it("json string cast round-trip", async () => {
-    adapter.exec(
+    await adapter.exec(
       `CREATE TABLE "json_string_cast" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "data" JSON)`,
     );
     class JsonStringCast extends Base {

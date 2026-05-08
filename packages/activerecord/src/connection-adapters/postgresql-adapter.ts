@@ -3449,6 +3449,33 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.exec(`DROP TYPE${ifExists} ${qualifiedName}`);
   }
 
+  // ---------------------------------------------------------------------------
+  // Range types
+  // ---------------------------------------------------------------------------
+
+  async createRange(
+    name: string,
+    options: { subtype: string; subtypeDiff?: string },
+  ): Promise<void> {
+    const { schema, table: rangeName } = this.parseSchemaQualifiedName(name);
+    const qualifiedName = schema
+      ? `${this.quoteIdentifier(schema)}.${this.quoteIdentifier(rangeName)}`
+      : this.quoteIdentifier(rangeName);
+    const parts = [`SUBTYPE = ${this.quoteIdentifier(options.subtype)}`];
+    if (options.subtypeDiff)
+      parts.push(`SUBTYPE_DIFF = ${this.quoteIdentifier(options.subtypeDiff)}`);
+    await this.exec(`CREATE TYPE ${qualifiedName} AS RANGE (${parts.join(", ")})`);
+  }
+
+  async dropRange(name: string, options: { ifExists?: boolean } = {}): Promise<void> {
+    const { schema, table: rangeName } = this.parseSchemaQualifiedName(name);
+    const qualifiedName = schema
+      ? `${this.quoteIdentifier(schema)}.${this.quoteIdentifier(rangeName)}`
+      : this.quoteIdentifier(rangeName);
+    const ifExists = options.ifExists ? " IF EXISTS" : "";
+    await this.exec(`DROP TYPE${ifExists} ${qualifiedName}`);
+  }
+
   async renameEnum(name: string, newNameOrOptions: string | { to: string }): Promise<void> {
     const newName = typeof newNameOrOptions === "string" ? newNameOrOptions : newNameOrOptions.to;
     const { schema: newSchema } = this.parseSchemaQualifiedName(newName);

@@ -38,7 +38,7 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
     if (subsec < 0n) subsec += 1_000_000_000n;
     const roundedOff = subsec % mod;
     if (roundedOff === 0n) return value;
-    return new Temporal.Instant(value.epochNanoseconds - roundedOff);
+    return Temporal.Instant.fromEpochNanoseconds(value.epochNanoseconds - roundedOff);
   }
 
   private parseString(str: string): DateTimeCastResult | null {

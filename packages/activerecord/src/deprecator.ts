@@ -59,25 +59,29 @@ export class MigrationProxy {
     return getPath().basename(this.filename);
   }
 
-  migrate(direction: "up" | "down"): Promise<void> {
-    return (this.migration() as { migrate(d: "up" | "down"): Promise<void> }).migrate(direction);
+  async migrate(direction: "up" | "down"): Promise<void> {
+    return ((await this.migration()) as { migrate(d: "up" | "down"): Promise<void> }).migrate(
+      direction,
+    );
   }
 
-  announce(message: string): void {
-    (this.migration() as { announce(msg: string): void }).announce(message);
+  async announce(message: string): Promise<void> {
+    ((await this.migration()) as { announce(msg: string): void }).announce(message);
   }
 
-  write(text = ""): void {
-    (this.migration() as { write(t: string): void }).write(text);
+  async write(text = ""): Promise<void> {
+    ((await this.migration()) as { write(t: string): void }).write(text);
   }
 
   get disableDdlTransaction(): boolean {
-    return !!(this.migration() as { disableDdlTransaction?: boolean }).disableDdlTransaction;
+    // _migration is populated by migration() before this is called in
+    // _runMigration; accessing the cached value synchronously is safe.
+    return !!(this._migration as { disableDdlTransaction?: boolean } | null)?.disableDdlTransaction;
   }
 
   /** @internal */
-  migration(): object {
-    this._migration ??= this.loadMigration();
+  async migration(): Promise<object> {
+    this._migration ??= await this.loadMigrationAsync();
     return this._migration;
   }
 

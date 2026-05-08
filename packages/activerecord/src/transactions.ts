@@ -463,12 +463,18 @@ export function rememberTransactionRecordState(this: Base): TransactionRecordSna
     r._newRecordBeforeLastCommit = r._startTransactionState.newRecord;
   }
 
+  // Return CURRENT identity state at this savepoint level — not the outermost
+  // _startTransactionState snapshot. The returned snapshot is captured by
+  // withTransactionReturningStatus's afterRollback hook and passed to
+  // restoreTransactionRecordState. For nested savepoints, the record may have
+  // already been modified (e.g. _newRecord flipped after an outer insert), so
+  // restoring to the outermost state would be wrong.
   return {
-    newRecord: r._startTransactionState.newRecord,
-    destroyed: r._startTransactionState.destroyed,
-    frozen: r._startTransactionState.frozen,
-    id: r._startTransactionState.id,
-    previouslyNewRecord: r._startTransactionState.previouslyNewRecord,
+    newRecord: r._newRecord,
+    destroyed: r._destroyed,
+    frozen: r._attributes.isFrozen(),
+    id: this.id,
+    previouslyNewRecord: r._previouslyNewRecord,
   };
 }
 

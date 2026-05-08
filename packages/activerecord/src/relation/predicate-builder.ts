@@ -410,9 +410,11 @@ export class PredicateBuilder {
     for (const lookup of lookups) {
       const t = lookup();
       if (t?.isForceEquality?.(value)) {
-        const literal = t.encodeLiteral ? t.encodeLiteral(value) : null;
-        if (literal !== null) return attribute.eq(new Nodes.Quoted(literal));
-        return attribute.eq(this.buildBindAttribute(attribute.name, value));
+        // Only emit equality when the type can produce a safe inline literal.
+        // A type without encodeLiteral would fall through to the BindParam path
+        // which fails under manager.toSql()'s defaultQuoter for non-scalar
+        // objects — so we skip the equality shortcut and let the handler run.
+        if (t.encodeLiteral) return attribute.eq(new Nodes.Quoted(t.encodeLiteral(value)));
       }
     }
     return null;

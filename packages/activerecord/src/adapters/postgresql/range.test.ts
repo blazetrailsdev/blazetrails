@@ -623,7 +623,9 @@ describeIfPg("PostgreSQLAdapter", () => {
       const first = await PostgresqlRanges.first();
       expect(first!.int8_range).toBeInstanceOf(Range);
       expect((first!.int8_range as Range).begin).toBe(BigInt(1));
+      // PG normalises [1,100] → [1,101) for discrete int8range (Rails: 1...101)
       expect((first!.int8_range as Range).end).toBe(BigInt(101));
+      expect((first!.int8_range as Range).excludeEnd).toBe(true);
     });
     it("ranges correctly escape input", async () => {
       const range = new Range("-1,2]'\"; DROP TABLE postgresql_ranges; --", "a", false);

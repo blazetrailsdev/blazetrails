@@ -54,7 +54,7 @@ export class TimeZoneConverter extends ValueType<unknown> {
   }
 
   override serializeCastValue(value: unknown): unknown {
-    return this._subtype.serializeCastValue(value as never);
+    return this._subtype.serializeCastValue(value as any);
   }
 
   equals(other: unknown): boolean {

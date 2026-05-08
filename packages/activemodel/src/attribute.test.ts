@@ -529,13 +529,24 @@ describe("AttributeTest", () => {
       expect(serializeCount).toBe(1);
     });
 
-    it("recomputes when isChangedInPlace returns true after in-place mutation", () => {
-      const stringType = typeRegistry.lookup("string");
-      const attr = Attribute.fromDatabase("name", "hello", stringType);
-      void attr.valueForDatabase; // prime cache: "hello"
-      attr.overrideCastValue("world"); // mutate cast value, keep raw "hello"
-      // StringType.isChangedInPlace("hello" cached, "world") → true → recompute
-      expect(attr.valueForDatabase).toBe("world");
+    it("recomputes when in-place object mutation is detected via isChangedInPlace", () => {
+      // Custom mutable type: deserializes JSON strings, detects in-place mutations
+      const Types = typeRegistry;
+      const baseType = Types.lookup("value");
+      const mutableType = Object.create(baseType);
+      mutableType.deserialize = (v: unknown) =>
+        typeof v === "string" ? JSON.parse(v) : (v ?? null);
+      mutableType.serialize = (v: unknown) => (v == null ? null : JSON.stringify(v));
+      mutableType.isChangedInPlace = (rawOld: unknown, newVal: unknown) =>
+        JSON.stringify(typeof rawOld === "string" ? JSON.parse(rawOld) : rawOld) !==
+        JSON.stringify(newVal);
+
+      const attr = Attribute.fromDatabase("data", '{"x":1}', mutableType);
+      void attr.valueForDatabase; // prime cache — _hasValueForDatabase=true
+      // Mutate the memoized value object in place (no setter, _hasValueForDatabase stays true)
+      (attr.value as Record<string, number>).x = 99;
+      // isChangedInPlace('{"x":1}', {x:99}) → true → recompute
+      expect(attr.valueForDatabase).toBe('{"x":99}');
     });
   });
 });

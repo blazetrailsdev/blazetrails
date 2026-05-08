@@ -30,15 +30,16 @@ describeIfMysql("Mysql2Adapter", () => {
       }
     });
 
-    it.skip("no automatic reconnection after timeout", () => {
-      // BLOCKED: pool model limitation — with connectionLimit > 1, mysql2 Pool
-      // can transparently create a new connection when getConnection() is called
-      // after a server-side wait_timeout, so activeAsync() may ping a fresh
-      // socket and return true. Rails pings a single raw connection (mysql_ping)
-      // and can directly observe the dead socket. The timeout-without-reconnect
-      // path is only testable with connectionLimit:1 (see the reconnect tests
-      // below) and is covered there via the positive reconnect assertions.
-    });
+    it("no automatic reconnection after timeout", async () => {
+      const singleConn = new Mysql2Adapter({ uri: MYSQL_TEST_URL, connectionLimit: 1 });
+      try {
+        await singleConn.execute("SET SESSION wait_timeout = 1");
+        await new Promise((r) => setTimeout(r, 2000));
+        expect(await singleConn.activeAsync()).toBe(false);
+      } finally {
+        await singleConn.close();
+      }
+    }, 10_000);
     it("successful reconnection after timeout with manual reconnect", async () => {
       // Use connectionLimit: 1 so SET SESSION wait_timeout and the sleep share
       // the same physical connection — otherwise a second pool connection with

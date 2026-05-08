@@ -456,6 +456,13 @@ export function rememberTransactionRecordState(this: Base): TransactionRecordSna
   }
   r._startTransactionState.level += 1;
 
+  // Mirrors Rails' _committed_already_called guard inside remember_transaction_record_state.
+  if (r._committedAlreadyCalled) {
+    r._newRecordBeforeLastCommit = false;
+  } else {
+    r._newRecordBeforeLastCommit = r._startTransactionState.newRecord;
+  }
+
   return {
     newRecord: r._startTransactionState.newRecord,
     destroyed: r._startTransactionState.destroyed,
@@ -513,22 +520,18 @@ function _restoreTransactionRecordState(this: Base, forceRestoreState = false): 
     r._destroyed = state.destroyed;
     r._previouslyNewRecord = state.previouslyNewRecord;
 
-    // Restore the full attribute set to pre-transaction state. Mirrors Rails:
-    //   @attributes = restore_state[:attributes].map { |attr|
-    //     value = @attributes.fetch_value(attr.name)
-    //     attr = attr.with_value_from_user(value) if attr.value != value
-    //     attr
-    //   }
-    const currentAttrs = r._attributes;
-    r._attributes = state.attributes.map((attr: any) => {
-      const currentValue = currentAttrs.fetchValue(attr.name);
-      return attr.value !== currentValue ? attr.withValueFromUser(currentValue) : attr;
-    });
+    // Restore the full attribute set to pre-transaction state. Rails preserves
+    // in-transaction user edits as dirty on top of the pre-TX baseline via a
+    // per-attribute original_attribute mechanism (restore_state[:attributes].map).
+    // Our DirtyTracker is external and can't reconstruct that per-attribute
+    // original cheaply, so we take the clean restore: the record returns to the
+    // exact pre-transaction state (no pending changes).
+    r._attributes = state.attributes.deepDup();
 
     // Clear mutation tracking caches. Mirrors Rails:
     //   @mutations_from_database = nil
     //   @mutations_before_last_save = nil
-    r._dirty.snapshot(state.attributes);
+    r._dirty.snapshot(r._attributes);
     r._dirty.clearChangesInformation();
 
     // Restore primary key if it shifted during the transaction.
@@ -563,15 +566,13 @@ export async function withTransactionReturningStatus<T>(
 ): Promise<T> {
   const modelClass = this.constructor as typeof Base;
 
-  // Mirrors: remember_transaction_record_state — snapshot before transaction
+  // rememberTransactionRecordState also sets _newRecordBeforeLastCommit.
   const snapshot = rememberTransactionRecordState.call(this);
 
-  // Mirrors: remember_transaction_record_state — set _newRecordBeforeLastCommit.
   // _triggerUpdateCallback/_triggerDestroyCallback are NOT reset here; Rails resets
   // those only in committed!/rolledback! ensure blocks.
   const r = this as any;
   r._transactionAction = undefined;
-  r._newRecordBeforeLastCommit = r._newRecord ?? this.isNewRecord?.() ?? false;
 
   let status: T;
   let rolledBack = false;

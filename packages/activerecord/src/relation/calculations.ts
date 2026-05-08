@@ -11,6 +11,7 @@
 import { Nodes, Table } from "@blazetrails/arel";
 import { BigIntegerType } from "@blazetrails/activemodel";
 import type { AdapterName } from "../adapter.js";
+import { eachJoinDependencies } from "./query-methods.js";
 
 /**
  * Qualify a GROUP BY column string as an Arel attribute node when it is a
@@ -559,10 +560,22 @@ export function typeFor(rel: CalculationRelation, field: string): unknown {
 
 /** @internal */
 export function lookupCastTypeFromJoinDependencies(
-  _rel: CalculationRelation,
-  _name: string,
+  rel: CalculationRelation,
+  name: string,
+  joinDependencies?: unknown[],
 ): unknown {
-  return null;
+  let found: unknown = null;
+  eachJoinDependencies.call(rel as any, joinDependencies as any, (join: any) => {
+    if (found) return;
+    const klass = join.baseKlass;
+    if (!klass) return;
+    const rawTypes =
+      typeof klass.attributeTypes === "function" ? klass.attributeTypes() : klass.attributeTypes;
+    if (!rawTypes) return;
+    const type = rawTypes instanceof Map ? rawTypes.get(name) : rawTypes[name];
+    if (type) found = type;
+  });
+  return found;
 }
 
 /** @internal */

@@ -981,7 +981,8 @@ export class TableDefinition {
         case "datetime":
         case "timestamp": {
           const base = this._adapterName === "postgres" ? "TIMESTAMP" : "DATETIME";
-          const tp = col.options.precision;
+          // precision: undefined → Rails default of 6; precision: null → no precision suffix
+          const tp = col.options.precision === undefined ? 6 : col.options.precision;
           if (tp != null && !(tp >= 0 && tp <= 6))
             throw new ArgumentError(
               `No ${base} type has precision of ${tp}. The allowed range of precision is from 0 to 6`,

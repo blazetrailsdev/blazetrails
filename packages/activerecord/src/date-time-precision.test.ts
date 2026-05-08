@@ -163,7 +163,7 @@ describe("DateTimePrecisionTest", () => {
 
   it("schema dump with without precision has precision as nil", async () => {
     await ctx.createTable("foos", { force: true }, (t) => {
-      (t as any).timestamps({ precision: null });
+      t.timestamps({ precision: null });
     });
     const output = SchemaDumper.dump(ctx) as string;
     expect(output).toMatch(/t\.datetime\("created_at".*precision.*null/);

@@ -576,7 +576,7 @@ describe("SchemaDumperAdapterTest", () => {
   it("adapter-backed dump emits precision: null for datetime column without precision", async () => {
     const { SchemaDumper: TopLevelDumper } = await import("./schema-dumper.js");
     await ctx.createTable("events", {}, (t) => {
-      (t as any).datetime("happened_at", { precision: null });
+      t.datetime("happened_at", { precision: null });
     });
     const result = await TopLevelDumper.dump(adapter);
     expect(result).toMatch(/t\.datetime\("happened_at"[^}]*precision\s*:\s*null/);

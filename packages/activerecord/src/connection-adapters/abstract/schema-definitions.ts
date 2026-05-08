@@ -828,7 +828,7 @@ export class TableDefinition {
   }
 
   decimal(name: string, options: ColumnOptions = {}): this {
-    if (options.scale !== undefined && options.precision === undefined) {
+    if (options.scale !== undefined && typeof options.precision !== "number") {
       throw new Error("Error adding decimal column: precision is required if scale is specified");
     }
     return this.column(name, "decimal", options);

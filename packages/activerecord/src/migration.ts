@@ -1389,7 +1389,12 @@ export class MigrationContext {
         null: _options?.null !== undefined ? _options.null : entry.null,
         default: _options?.default !== undefined ? _options.default : entry.default,
         limit: _options?.limit !== undefined ? _options.limit : entry.limit,
-        precision: _options?.precision !== undefined ? _options.precision : entry.precision,
+        precision:
+          _options?.precision !== undefined
+            ? _options.precision
+            : type === "datetime" || type === "timestamp"
+              ? 6
+              : entry.precision,
         scale: _options?.scale !== undefined ? _options.scale : entry.scale,
       });
     }

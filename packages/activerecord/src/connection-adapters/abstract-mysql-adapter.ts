@@ -1175,12 +1175,17 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     if (this.supportsRenameColumn()) {
       return `RENAME COLUMN ${this.quoteIdentifier(columnName)} TO ${this.quoteIdentifier(newColumnName)}`;
     }
-    // Fallback for MySQL <8.0.3 / MariaDB <10.5.2: fetch column definition via SHOW FULL FIELDS
-    // (fires "SCHEMA" sql.active_record notification) then emit a CHANGE clause.
-    const cols = await this.columnDefinitions(tableName);
-    const col = cols.find((c) => (c["Field"] as string) === columnName);
-    if (!col) throw new Error(`Column not found: ${columnName} in ${tableName}`);
-    const colDef = new ColumnDefinition(newColumnName, col["Type"] as string);
+    // Fallback for MySQL <8.0.3 / MariaDB <10.5.2: mirrors Rails' rename_column_for_alter fallback.
+    // SHOW COLUMNS fires a "SCHEMA" sql.active_record notification (via schemaQuery → execute(..., "SCHEMA")).
+    const rows = await this.schemaQuery(
+      `SHOW COLUMNS FROM ${this.quoteTableName(tableName)} LIKE ${this.quote(columnName)}`,
+    );
+    if (rows.length === 0) throw new Error(`Column not found: ${columnName} in ${tableName}`);
+    const row = rows[0];
+    const colDef = new ColumnDefinition(newColumnName, row["Type"] as string, {
+      default: row["Default"] as string | null | undefined,
+      null: (row["Null"] as string) === "YES",
+    });
     const cd = new ChangeColumnDefinition(colDef, columnName);
     return new MysqlSchemaCreation().accept(cd);
   }

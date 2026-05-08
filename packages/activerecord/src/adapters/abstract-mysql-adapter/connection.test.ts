@@ -171,20 +171,18 @@ describeIfMysql("Mysql2Adapter", () => {
       }
     });
     it("passing arbitrary flags to adapter", async () => {
-      const testAdapter = new Mysql2Adapter({ uri: MYSQL_TEST_URL, flags: ["MULTI_RESULTS"] });
+      const testAdapter = new Mysql2Adapter({ uri: MYSQL_TEST_URL, flags: ["COMPRESS"] });
       try {
-        expect(testAdapter._testOnlyPoolFlags()).toEqual(["MULTI_RESULTS"]);
+        // mirrors Rails: flags.push "FOUND_ROWS" so adapter always reports changed rows
+        expect(testAdapter._testOnlyPoolFlags()).toEqual(["COMPRESS", "FOUND_ROWS"]);
       } finally {
         await testAdapter.close();
       }
     });
     it("passing flags by array to adapter", async () => {
-      const testAdapter = new Mysql2Adapter({
-        uri: MYSQL_TEST_URL,
-        flags: ["MULTI_RESULTS", "LONG_FLAG"],
-      });
+      const testAdapter = new Mysql2Adapter({ uri: MYSQL_TEST_URL, flags: ["COMPRESS"] });
       try {
-        expect(testAdapter._testOnlyPoolFlags()).toEqual(["MULTI_RESULTS", "LONG_FLAG"]);
+        expect(testAdapter._testOnlyPoolFlags()).toEqual(["COMPRESS", "FOUND_ROWS"]);
       } finally {
         await testAdapter.close();
       }
@@ -230,20 +228,21 @@ describeIfMysql("Mysql2Adapter", () => {
     });
 
     it("logs name rename column for alter", async () => {
-      await adapter.execute(
-        "CREATE TEMPORARY TABLE _test_rename_log (old_col INT NOT NULL DEFAULT 0)",
-      );
+      await adapter.execute("CREATE TABLE `bar_baz` (`foo` varchar(255))");
       const names: string[] = [];
       const sub = Notifications.subscribe("sql.active_record", (event: NotificationEvent) => {
         names.push(event.payload.name as string);
       });
       try {
-        vi.spyOn(adapter, "supportsRenameColumn").mockReturnValue(false);
-        await adapter.renameColumnForAlter("_test_rename_log", "old_col", "new_col");
-        expect(names).toContain("SCHEMA");
+        await adapter.renameColumnForAlter("bar_baz", "foo", "foo2");
+        if (adapter.supportsRenameColumn()) {
+          expect(names).not.toContain("SCHEMA");
+        } else {
+          expect(names).toContain("SCHEMA");
+        }
       } finally {
         Notifications.unsubscribe(sub);
-        await adapter.execute("DROP TEMPORARY TABLE IF EXISTS _test_rename_log");
+        await adapter.execute("DROP TABLE `bar_baz`");
       }
     });
 

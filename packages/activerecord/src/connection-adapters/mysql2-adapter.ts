@@ -257,7 +257,18 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
           return undefined;
         }
       })();
-    this._poolConfig = { ...mysqlConfig, strict, waitTimeout, variables };
+    // Mirrors Rails Mysql2Adapter#initialize: ensure FOUND_ROWS is always set so UPDATE/DELETE
+    // return the number of rows actually changed (not matched). Rails does:
+    //   @config[:flags] ||= 0
+    //   if @config[:flags].kind_of?(Array) then flags.push "FOUND_ROWS" else flags |= FOUND_ROWS
+    const inputFlags = mysqlConfig.flags as Array<string> | undefined;
+    const resolvedFlags =
+      inputFlags == null
+        ? ["FOUND_ROWS"]
+        : inputFlags.includes("FOUND_ROWS")
+          ? inputFlags
+          : [...inputFlags, "FOUND_ROWS"];
+    this._poolConfig = { ...mysqlConfig, flags: resolvedFlags, strict, waitTimeout, variables };
     this._driverPool = Mysql2Adapter.newClient(this._poolConfig);
   }
 

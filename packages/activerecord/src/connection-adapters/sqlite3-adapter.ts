@@ -110,7 +110,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return "sqlite";
   }
 
-  /** Returns true for raw better-sqlite3 errors that indicate a missing database file (SQLITE_CANTOPEN). */
+  /** Returns true for raw SQLite driver errors that indicate a missing or unopenable database file (SQLITE_CANTOPEN). */
   isNoDatabaseError(error: unknown): boolean {
     if (!error || typeof error !== "object") return false;
     const e = error as { code?: unknown; message?: unknown };

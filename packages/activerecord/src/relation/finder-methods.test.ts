@@ -370,6 +370,28 @@ describe("findSomeOrdered — slices ids by offset and limit before querying", (
     const rel = makeFindSomeOrderedRel([{ id: 1 }], { limit: 3 });
     await expect(findSomeOrdered(rel, [1, 2, 3])).rejects.toBeInstanceOf(RecordNotFound);
   });
+
+  it("adds PK to select when selectValues are present", async () => {
+    const dbRows = [{ id: 2 }, { id: 1 }];
+    let selectArg: unknown;
+    const rel = {
+      ...makeFindSomeOrderedRel(dbRows),
+      selectValues: ["name"],
+      where(_cond: any) {
+        const inner: any = {
+          toArray: async () => dbRows,
+          select(col: unknown) {
+            selectArg = col;
+            return inner;
+          },
+        };
+        return inner;
+      },
+    };
+    const result = await findSomeOrdered(rel, [1, 2]);
+    expect(selectArg).toBe("id"); // arelTable.get("id") returns "id" in the mock
+    expect(result.map((r: any) => r.id)).toEqual([1, 2]);
+  });
 });
 
 // ---------------------------------------------------------------------------

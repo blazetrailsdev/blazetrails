@@ -14,8 +14,10 @@ export interface TimeZoneConversion {
  * Time zone converter type — wraps a time type to apply zone conversion.
  *
  * Mirrors: ActiveRecord::AttributeMethods::TimeZoneConversion::TimeZoneConverter
- * Rails uses `DelegateClass(Type::Value)` to auto-delegate; we extend ValueType
- * and forward all unoverridden methods to the wrapped subtype.
+ * Rails uses `DelegateClass(Type::Value)` to auto-delegate all methods; we extend
+ * ValueType and explicitly delegate type/cast/deserialize/serialize/serializeCastValue
+ * to the wrapped subtype. Other Type methods (isChanged, isSerializable, etc.) fall
+ * back to ValueType defaults, matching the base type's behavior for time values.
  */
 export class TimeZoneConverter extends ValueType<unknown> {
   private readonly _subtype: Type;

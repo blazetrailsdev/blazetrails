@@ -55,14 +55,38 @@ describeIfPg("PostgreSQLAdapter", () => {
       //   lifecycle around the OID::Array serialize/deserialize chain is not implemented.
       // SCOPE: ~50 LOC in base.ts serialize decorator + integration with attribute-set lifecycle
     });
-    it.skip("default", async () => {
-      /* BLOCKED: addColumn integer-array default DDL; same root as "default strings" (~20 LOC) */
+    it("default", async () => {
+      await adapter.addColumn("pg_arrays", "score", "integer", { array: true, default: [4, 4, 2] });
+      const columns = await adapter.columns("pg_arrays");
+      const col = columns.find((c) => c.name === "score")!;
+      expect((col as any).default).toEqual(["4", "4", "2"]);
+      const { Base } = await import("../../index.js");
+      class PgArrays extends Base {
+        static tableName = "pg_arrays";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      await PgArrays.loadSchema();
+      expect((new PgArrays() as any).score).toEqual([4, 4, 2]);
     });
-    it.skip("default strings", async () => {
-      // BLOCKED: adapter-pg — addColumn array default DDL gap
-      // ROOT-CAUSE: postgresql/schema-statements.ts addColumn does not serialize array defaults
-      //   (e.g. ["foo","bar"]) into PG literal form (e.g. ARRAY['foo','bar']) for the DEFAULT clause.
-      // SCOPE: ~20 LOC in connection-adapters/postgresql/schema-statements.ts
+    it("default strings", async () => {
+      await adapter.addColumn("pg_arrays", "names", "string", {
+        array: true,
+        default: ["foo", "bar"],
+      });
+      const columns = await adapter.columns("pg_arrays");
+      const col = columns.find((c) => c.name === "names")!;
+      expect((col as any).default).toEqual(["foo", "bar"]);
+      const { Base } = await import("../../index.js");
+      class PgArrays extends Base {
+        static tableName = "pg_arrays";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      await PgArrays.loadSchema();
+      expect((new PgArrays() as any).names).toEqual(["foo", "bar"]);
     });
     it("schema dump with shorthand", async () => {
       const output = await SchemaDumper.dumpTableSchema(adapter, "pg_arrays");
@@ -427,13 +451,29 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(rows[0].tags).toEqual(tags);
     });
 
-    it.skip("uniqueness validation", async () => {
-      // BLOCKED: adapter-pg — validates_uniqueness_of array serialization gap
-      // ROOT-CAUSE: uniqueness validator builds a WHERE clause by serializing the attribute value;
-      //   OID::Array#serialize returns a Data object whose toString() is the PG literal, but the
-      //   WHERE-clause quoting path in quoting.ts does not handle ArrayData in the bind-param
-      //   position for uniqueness checks (separate from the INSERT path).
-      // SCOPE: ~10 LOC — verify quoting.ts bindToSql handles ArrayData for WHERE params
+    it("uniqueness validation", async () => {
+      const { Base } = await import("../../index.js");
+      class PgArrays extends Base {
+        static tableName = "pg_arrays";
+        static {
+          this.adapter = adapter;
+          this.validatesUniqueness("tags");
+        }
+      }
+      await PgArrays.loadSchema();
+
+      const tags = ["black", "blue"];
+      const first = await (PgArrays as any).create({ tags });
+      expect((first as any).isPersisted()).toBe(true);
+
+      const duplicate = new PgArrays({ tags } as any);
+      const saved = await duplicate.save();
+      expect(saved).toBe(false);
+      expect((duplicate as any).errors.fullMessages).toContain("Tags has already been taken");
+
+      const unique = new PgArrays({ tags: ["red", "green"] } as any);
+      const savedUnique = await unique.save();
+      expect(savedUnique).toBe(true);
     });
 
     it("encoding arrays of utf8 strings", async () => {

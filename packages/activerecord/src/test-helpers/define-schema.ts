@@ -87,7 +87,7 @@ const COLUMN_TYPE_MAP_PG: Record<PrimitiveColumnSpec, string> = {
 
 // MySQL/MariaDB accepts native DATETIME columns with "YYYY-MM-DD HH:MM:SS" format
 // (no T/Z suffix). AR DateTime.serialize now emits this format, so datetime can
-// use the native column type. date/binary/json still need TEXT workaround.
+// use the native column type. date/binary/json still use "string" (VARCHAR).
 /** @internal */
 const COLUMN_TYPE_MAP_MYSQL: Record<PrimitiveColumnSpec, string> = {
   ...COLUMN_TYPE_MAP_PG,

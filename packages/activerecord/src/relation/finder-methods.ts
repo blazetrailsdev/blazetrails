@@ -686,6 +686,8 @@ export async function findOne(rel: FinderRelation, id: unknown): Promise<any> {
 
 /** @internal */
 export async function findSome(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
+  if ((rel as any).orderValues.length === 0) return findSomeOrdered(rel, ids);
+
   const pk = (rel as any)._modelClass.primaryKey as string;
   const records = await (rel as any).where({ [pk]: ids }).toArray();
 
@@ -713,12 +715,31 @@ export async function findSome(rel: FinderRelation, ids: unknown[]): Promise<any
 
 /** @internal */
 export async function findSomeOrdered(rel: FinderRelation, ids: unknown[]): Promise<any[]> {
-  const pk = (rel as any)._modelClass.primaryKey;
-  const records = await findSome(rel, ids);
+  const pk = (rel as any)._modelClass.primaryKey as string;
+  const offsetValue: number = (rel as any)._offsetValue ?? 0;
+  const limitValue: number | null = (rel as any)._limitValue ?? null;
+  ids = ids.slice(offsetValue, offsetValue + (limitValue ?? ids.length));
+
+  const relation = (rel as any).where({ [pk]: ids });
+  relation._limitValue = null;
+  relation._offsetValue = null;
+  const records: any[] = await relation.toArray();
+
+  if (records.length !== ids.length) {
+    const modelName = (rel as any)._modelClass.name as string;
+    const foundIds = records.map((r: any) => r.readAttribute?.(pk) ?? r[pk]);
+    const remaining = [...ids];
+    for (const foundId of foundIds) {
+      const idx = remaining.findIndex((id) => id === foundId);
+      if (idx >= 0) remaining.splice(idx, 1);
+    }
+    throw new RecordNotFound(`Couldn't find all ${modelName}`, modelName, pk, remaining);
+  }
+
   const idIndex = new Map(ids.map((id, i) => [String(id), i]));
   return records.sort((a: any, b: any) => {
-    const ai = idIndex.get(String(a.readAttribute?.(pk as string) ?? a[pk as string])) ?? 0;
-    const bi = idIndex.get(String(b.readAttribute?.(pk as string) ?? b[pk as string])) ?? 0;
+    const ai = idIndex.get(String(a.readAttribute?.(pk) ?? a[pk])) ?? 0;
+    const bi = idIndex.get(String(b.readAttribute?.(pk) ?? b[pk])) ?? 0;
     return ai - bi;
   });
 }

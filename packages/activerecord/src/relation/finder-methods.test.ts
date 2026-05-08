@@ -13,6 +13,7 @@ import {
   raiseNotFoundAll,
   raiseNotFoundSingle,
   findSome,
+  findSomeOrdered,
   findTake,
   findTakeWithLimit,
   _orderColumns,
@@ -244,11 +245,16 @@ describe("raiseNotFoundSingle", () => {
 // findSome — expected_size accounting (Gap 1)
 // ---------------------------------------------------------------------------
 
-function makeFindSomeRel(records: any[], opts: { limit?: number; offset?: number } = {}): any {
+function makeFindSomeRel(
+  records: any[],
+  opts: { limit?: number; offset?: number; ordered?: boolean } = {},
+): any {
   return {
     _modelClass: { primaryKey: "id", name: "Post" },
     _limitValue: opts.limit ?? null,
     _offsetValue: opts.offset ?? null,
+    // ordered=true simulates a relation with ORDER BY (findSome stays in the accounting path)
+    orderValues: opts.ordered !== false ? ["id ASC"] : [],
     where(_cond: any) {
       return { toArray: async () => records };
     },
@@ -281,6 +287,74 @@ describe("findSome — expected_size respects limit and offset", () => {
   it("throws when result count mismatches expected_size", async () => {
     const rel = makeFindSomeRel([{ id: 1 }]);
     await expect(findSome(rel, [1, 2])).rejects.toBeInstanceOf(RecordNotFound);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findSome → findSomeOrdered dispatch (Story I-followup gap 1)
+// ---------------------------------------------------------------------------
+
+describe("findSome — dispatches to findSomeOrdered when relation has no order values", () => {
+  it("returns records in requested id order for an unordered relation", async () => {
+    const rows = [{ id: 1 }, { id: 3 }, { id: 5 }];
+    // DB returns them in arbitrary order; we expect [5, 1, 3] back
+    const dbRows = [{ id: 3 }, { id: 5 }, { id: 1 }];
+    const rel = makeFindSomeRel(dbRows, { ordered: false });
+    const result = await findSome(rel, [5, 1, 3]);
+    expect(result.map((r: any) => r.id)).toEqual([5, 1, 3]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findSomeOrdered — id slicing by offset/limit + result ordering (Story I-followup gap 2)
+// ---------------------------------------------------------------------------
+
+function makeFindSomeOrderedRel(
+  records: any[],
+  opts: { limit?: number; offset?: number } = {},
+): any {
+  return {
+    _modelClass: { primaryKey: "id", name: "Post" },
+    _limitValue: opts.limit ?? null,
+    _offsetValue: opts.offset ?? null,
+    orderValues: [],
+    where(_cond: any) {
+      const rel: any = { toArray: async () => records };
+      return rel;
+    },
+  };
+}
+
+describe("findSomeOrdered — slices ids by offset and limit before querying", () => {
+  it("returns records in requested id order with no limit/offset", async () => {
+    const dbRows = [{ id: 3 }, { id: 1 }, { id: 5 }];
+    const rel = makeFindSomeOrderedRel(dbRows);
+    const result = await findSomeOrdered(rel, [5, 1, 3]);
+    expect(result.map((r: any) => r.id)).toEqual([5, 1, 3]);
+  });
+
+  it("slices to first limit ids when limit is set", async () => {
+    // 50 ids requested but limit 10 → only first 10 ids are queried
+    const ids = Array.from({ length: 50 }, (_, i) => i + 1);
+    const dbRows = ids.slice(0, 10).map((id) => ({ id }));
+    const rel = makeFindSomeOrderedRel(dbRows, { limit: 10 });
+    const result = await findSomeOrdered(rel, ids);
+    expect(result).toHaveLength(10);
+    expect(result[0].id).toBe(1);
+  });
+
+  it("slices ids by offset and limit (11 ids, limit 3, offset 9 → 2 records)", async () => {
+    const ids = Array.from({ length: 11 }, (_, i) => i + 1);
+    // ids.slice(9, 9+3) = [10, 11]
+    const dbRows = [{ id: 11 }, { id: 10 }];
+    const rel = makeFindSomeOrderedRel(dbRows, { limit: 3, offset: 9 });
+    const result = await findSomeOrdered(rel, ids);
+    expect(result.map((r: any) => r.id)).toEqual([10, 11]);
+  });
+
+  it("throws when DB returns fewer records than sliced ids", async () => {
+    const rel = makeFindSomeOrderedRel([{ id: 1 }], { limit: 3 });
+    await expect(findSomeOrdered(rel, [1, 2, 3])).rejects.toBeInstanceOf(RecordNotFound);
   });
 });
 

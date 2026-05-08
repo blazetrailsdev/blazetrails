@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Notifications } from "@blazetrails/activesupport";
 import type { NotificationEvent } from "@blazetrails/activesupport";
-import { describeIfMysql, isMariaDb, Mysql2Adapter, MYSQL_TEST_URL, MYSQL_TEST_URL2 } from "./test-helper.js";
+import { describeIfMysql, isMariaDb, Mysql2Adapter, MYSQL_TEST_URL } from "./test-helper.js";
 import { NoDatabaseError, DatabaseVersionError } from "../../errors.js";
 
 describeIfMysql("Mysql2Adapter", () => {
@@ -124,16 +124,9 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(rows[0].Value).toBeDefined();
     });
 
-    it.skipIf(!MYSQL_TEST_URL2)("collation connection is configured", async () => {
-      const adapter2 = new Mysql2Adapter(MYSQL_TEST_URL2!);
-      try {
-        const v1 = await adapter.showVariable("collation_connection");
-        const v2 = await adapter2.showVariable("collation_connection");
-        expect(v1).not.toBeNull();
-        expect(v2).not.toBeNull();
-      } finally {
-        await adapter2.close();
-      }
+    it("collation connection is configured", async () => {
+      const v = await adapter.showVariable("collation_connection");
+      expect(v).not.toBeNull();
     });
     it("mysql default in strict mode", async () => {
       const rows = await adapter.execute("SELECT @@SESSION.sql_mode AS v");

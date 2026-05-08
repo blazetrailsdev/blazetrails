@@ -31,12 +31,13 @@ describeIfMysql("Mysql2Adapter", () => {
     });
 
     it.skip("no automatic reconnection after timeout", () => {
-      // BLOCKED: pool model limitation — mysql2 Pool replaces dead connections
-      // transparently on getConnection(), so activeAsync() pings a fresh socket
-      // and returns true even after server-side wait_timeout. Rails pings a
-      // single raw connection (mysql_ping) and can observe the dead socket
-      // directly; the pool abstraction hides this. No pool-compatible signal
-      // exists to detect server-side disconnect without attempting a real query.
+      // BLOCKED: pool model limitation — with connectionLimit > 1, mysql2 Pool
+      // can transparently create a new connection when getConnection() is called
+      // after a server-side wait_timeout, so activeAsync() may ping a fresh
+      // socket and return true. Rails pings a single raw connection (mysql_ping)
+      // and can directly observe the dead socket. The timeout-without-reconnect
+      // path is only testable with connectionLimit:1 (see the reconnect tests
+      // below) and is covered there via the positive reconnect assertions.
     });
     it("successful reconnection after timeout with manual reconnect", async () => {
       // Use connectionLimit: 1 so SET SESSION wait_timeout and the sleep share
@@ -62,8 +63,11 @@ describeIfMysql("Mysql2Adapter", () => {
         expect(await singleConn.activeAsync()).toBe(true);
         await singleConn.execute("SET SESSION wait_timeout=1");
         await new Promise((r) => setTimeout(r, 2000));
-        await singleConn.activeAsync(); // probe — may update _activeState to false if pool detects dead socket
-        singleConn.verifyBang(); // reconnects if active is false, otherwise a no-op
+        // With connectionLimit:1 the pool has no spare slot to create a fresh
+        // connection, so getConnection() returns the dead socket and ping() fails.
+        // activeAsync() sets _activeState = false, making active return false.
+        await singleConn.activeAsync();
+        singleConn.verifyBang(); // active is false → calls reconnectBang()
         expect(singleConn.active).toBe(true);
         await expect(singleConn.execute("SELECT 1")).resolves.toBeDefined();
       } finally {

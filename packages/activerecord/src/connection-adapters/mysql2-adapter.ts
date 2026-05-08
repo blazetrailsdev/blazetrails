@@ -88,7 +88,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     }
     let conn: mysql.PoolConnection | undefined;
     try {
-      conn = await this._driverPool.getConnection();
+      // Reuse the held transaction connection when available — probes the same
+      // session and avoids blocking on pool exhaustion (e.g. connectionLimit: 1
+      // with an active transaction holds the only slot).
+      conn = this._conn ?? (await this._driverPool.getConnection());
       await conn.ping();
       this._activeState = true;
       return true;
@@ -96,7 +99,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       this._activeState = false;
       return false;
     } finally {
-      conn?.release();
+      // Only release if we checked out a fresh connection, not the transaction one.
+      if (conn && conn !== this._conn) conn.release();
     }
   }
 

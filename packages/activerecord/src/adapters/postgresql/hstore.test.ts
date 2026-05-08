@@ -185,11 +185,14 @@ describeIfPg("PostgreSQLAdapter", () => {
       // SCOPE: Permanent skip-list candidate.
     });
     it.skip("hstore mutate", async () => {
-      // BLOCKED: dirty-tracking — Attribute.changedInPlace() does not delegate to type.isChangedInPlace()
-      // ROOT-CAUSE: activemodel/src/attribute.ts FromDatabase.changedInPlace() returns false
-      //   unconditionally; it must call this.type.isChangedInPlace(originalValueForDatabase, value)
-      //   for mutable types (those with isMutable()=true) so in-place hash mutations are detected.
-      // SCOPE: ~5 LOC in activemodel/src/attribute.ts; unblocks all "changes in place" / mutate tests.
+      // BLOCKED: attribute chain not reset post-save — changesApplied() doesn't call
+      //   forgettingAssignment() on mutable attributes (unlike Rails changes_applied +
+      //   forget_attribute_assignments). FromUser attributes still reference a null-valued
+      //   originalAttribute after save, so changedInPlace() compares against null on next
+      //   save, causing spurious UPDATEs. Fix: reset mutable attrs to FromDatabase baseline
+      //   in changesApplied() / _updateRecord, then re-enable this test.
+      // SCOPE: ~10-20 LOC in dirty.ts changesApplied() or attribute-methods/dirty.ts
+      //   _updateRecord to call forgettingAssignment() on mutable attributes post-persist.
     });
     it.skip("hstore nested", async () => {
       // BLOCKED: test-name mismatch — no Rails test named "hstore nested" in hstore_test.rb

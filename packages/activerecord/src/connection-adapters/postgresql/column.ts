@@ -23,6 +23,7 @@ export class Column extends BaseColumn {
       type?: string;
       oid?: number;
       fmod?: number;
+      limit?: number | null;
       precision?: number | null;
       scale?: number | null;
     } = {},
@@ -40,6 +41,7 @@ export class Column extends BaseColumn {
     const meta = new SqlTypeMetadata({
       sqlType: sqlTypeMetadata.sqlType ?? undefined,
       type: sqlTypeMetadata.type,
+      limit: sqlTypeMetadata.limit ?? undefined,
       precision: sqlTypeMetadata.precision ?? undefined,
       scale: sqlTypeMetadata.scale ?? undefined,
     });

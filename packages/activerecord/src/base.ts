@@ -2468,7 +2468,7 @@ export class Base extends Model {
 
     const changedAttrs = { ...this.changes };
     this._attributes.forEach((attr, name) => {
-      if (!(name in changedAttrs) && attr.changedInPlace()) {
+      if (!(name in changedAttrs) && attr.type.isMutable() && attr.changedInPlace()) {
         changedAttrs[name] = [attr.originalValue, attr.value];
       }
     });

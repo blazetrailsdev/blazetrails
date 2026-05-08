@@ -102,7 +102,8 @@ function castBinds(binds: unknown[]): unknown[] {
 
 /**
  * Walk the adapter chain to find currentTransaction().userTransaction.
- * Returns null when no real transaction is open (NULL_TRANSACTION has parent===null).
+ * Returns null when no real transaction is open (userTransaction.isOpen() === false,
+ * i.e. it is Transaction.NULL_TRANSACTION or a finalized transaction).
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::QueryCache#cache_notification_info
  * `transaction: current_transaction.user_transaction.presence`

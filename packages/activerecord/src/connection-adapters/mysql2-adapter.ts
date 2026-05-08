@@ -1226,9 +1226,11 @@ function buildConfigureConnectionClauses(
 
   let sqlMode: string | undefined;
   const varSqlMode = vars["sql_mode"];
-  if (varSqlMode !== undefined) {
+  if (varSqlMode !== undefined && varSqlMode !== null) {
+    // Mirrors Rails: `if sql_mode = variables.delete("sql_mode")` — nil is falsy in Ruby,
+    // so null falls through to the strict-mode branch below.
     delete vars["sql_mode"];
-    sqlMode = `'${String(varSqlMode).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+    sqlMode = mysqlQuoteString(String(varSqlMode));
   } else if (!DEFAULTS.has(strict as string)) {
     if (strict !== false) {
       sqlMode = "CONCAT(@@sql_mode, ',STRICT_ALL_TABLES')";
@@ -1251,9 +1253,8 @@ function buildConfigureConnectionClauses(
     .map(([k, v]) => {
       if (DEFAULTS.has(String(v))) return `@@SESSION.${k} = DEFAULT`;
       if (typeof v === "number") return `@@SESSION.${k} = ${v}`;
-      // Mirrors Rails quote(true) → '1', quote(false) → '0'
       if (typeof v === "boolean") return `@@SESSION.${k} = '${v ? 1 : 0}'`;
-      return `@@SESSION.${k} = '${String(v).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+      return `@@SESSION.${k} = ${mysqlQuoteString(String(v))}`;
     });
 
   return [sqlModeClause, ...varClauses].filter(Boolean).join(", ");

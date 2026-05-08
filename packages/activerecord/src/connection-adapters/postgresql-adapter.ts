@@ -2426,6 +2426,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     ];
     if (missingOids.length > 0) {
       await this.loadAdditionalTypes(missingOids);
+      // Mirrors Rails' get_oid_type fallback: register any OIDs still absent
+      // after the pg_type query so repeated columns() calls don't re-query.
+      for (const oid of missingOids) {
+        if (!this.typeMap.has(oid)) {
+          console.warn(`unknown OID ${oid}: unrecognized column type, treating as String.`);
+          this.typeMap.registerType(oid, new ValueType());
+        }
+      }
     }
 
     return rows.map((r) => {

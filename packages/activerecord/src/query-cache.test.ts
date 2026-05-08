@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Base } from "./index.js";
-import { createTestAdapter } from "./test-adapter.js";
+import { adapterType, createTestAdapter } from "./test-adapter.js";
 import { QueryCache, QueryCacheAdapter, QueryCacheStore as Store } from "./query-cache.js";
 import { QueryCacheStore as RootQueryCacheStore } from "./index.js";
 import { Store as AbstractStore } from "./connection-adapters/abstract/query-cache.js";
@@ -523,8 +523,30 @@ describe("QuerySerializedParamTest", () => {
 });
 
 describe("QueryCacheExpiryTest", () => {
-  it.skip("cache gets cleared after migration", () => {
-    // BLOCKED: query-cache — changeColumn migration cache clear missing
+  it.skipIf(adapterType === "sqlite")("cache gets cleared after migration", async () => {
+    const inner = createTestAdapter();
+    const cached = new QueryCacheAdapter(inner);
+    const { Migration } = await import("./migration.js");
+    class SetupMig extends Migration {
+      async up() {
+        await this.createTable("qc_mig_tasks", (t) => {
+          t.string("title");
+        });
+      }
+      async down() {}
+    }
+    await new SetupMig().run(cached, "up");
+    cached.enableQueryCache();
+    await cached.execute('SELECT * FROM "qc_mig_tasks"');
+    expect(cached.cache.size).toBeGreaterThan(0);
+    class ChangeMig extends Migration {
+      async up() {
+        await this.changeColumn("qc_mig_tasks", "title", "text");
+      }
+      async down() {}
+    }
+    await new ChangeMig().run(cached, "up");
+    expect(cached.cache.empty).toBe(true);
   });
 
   it("enable disable", async () => {

@@ -1558,7 +1558,9 @@ describe("initializeDatabase", () => {
     vi.spyOn(DatabaseTasks, "create").mockImplementation(async () => {
       created = true;
     });
-    const config = new HashConfig("test", "primary", { adapter: "sqlite3", database: ":memory:" });
+    // adapter is "mysql2" to match the MySQL-flavored raw error; _connectFor is
+    // mocked so no real connection is made — the test validates delegation only.
+    const config = new HashConfig("test", "primary", { adapter: "mysql2", database: "mydb" });
     const result = await initializeDatabase(config);
     expect(created).toBe(true);
     expect(result).toBe(true);

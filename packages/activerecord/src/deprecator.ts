@@ -112,6 +112,10 @@ export class MigrationProxy {
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "ERR_REQUIRE_ESM") throw err;
       // ESM migration file — use dynamic import() via file URL.
+      // Note: unlike the require() path above, import() is module-cached by the
+      // Node.js ESM loader and will not reload the file if it changes during the
+      // same process. Cache-busting (e.g. appending ?t=Date.now()) is unstable
+      // across runtimes; in practice, ESM migrations run once per process.
       const { pathToFileURL } = await import("node:url");
       const mod = (await import(/* @vite-ignore */ pathToFileURL(this.filename).href)) as Record<
         string,

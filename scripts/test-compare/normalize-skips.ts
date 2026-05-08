@@ -111,11 +111,11 @@ function testNameOverride(testName: string, relPath: string): Annotation | null 
   }
 
   // Ruby module namespace (not STI — Ruby constant lookup semantics)
-  if (/\bmodel.*classes.*matching\b/.test(n)) {
+  if (/\bmodel.*classes.*matching\b|\bnamespace\b/.test(n)) {
     return {
       blocked: "unknown — Ruby module namespace / constant lookup semantics not translatable",
       rootCause: "Node.js has no Ruby Module namespace for matching class names by constant path",
-      scope: "~0 LOC fix; likely permanent skip-list.ts candidate",
+      scope: "~0 LOC fix; permanent skip-list.ts candidate",
     };
   }
 
@@ -125,15 +125,6 @@ function testNameOverride(testName: string, relPath: string): Annotation | null 
       blocked: "schema — schema loading / cache invalidation gap",
       rootCause: "schema-cache.ts#clear or connection-handler.ts#clearCache not fully wired",
       scope: "~20 LOC fix in schema-cache.ts; affects ~1 test",
-    };
-  }
-
-  // Ruby module namespace wrapping (e.g. `module Foo; class Bar; end; end`)
-  if (/\bnamespace\b/.test(n)) {
-    return {
-      blocked: "unknown — Ruby module namespace / constant lookup semantics not translatable",
-      rootCause: "Node.js has no Ruby Module namespace for matching class names by constant path",
-      scope: "~0 LOC fix; permanent skip-list.ts candidate",
     };
   }
 

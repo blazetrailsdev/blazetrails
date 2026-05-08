@@ -272,8 +272,12 @@ export class FromDatabase extends Attribute {
   }
 
   override forgettingAssignment(): Attribute {
-    // Only round-trip if the in-memory value has actually changed in place;
-    // otherwise return self to preserve object identity for unchanged reads.
+    // Rails condition: `!defined?(@value_for_database) && !changed_in_place?`
+    // → fast-path creates a new FromDatabase using the existing value_before_type_cast.
+    // We simplify: if nothing changed in place, `this` is already a correct baseline
+    // (valueBeforeTypeCast is the serialized DB value), so return self.
+    // If changed in place, delegate to base which serializes the current value into
+    // a new FromDatabase, resetting the baseline to the post-mutation state.
     if (!this.changedInPlace()) return this;
     return super.forgettingAssignment();
   }

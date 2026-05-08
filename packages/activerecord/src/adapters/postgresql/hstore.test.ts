@@ -190,7 +190,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       await (hstore as any).saveBang();
       await (hstore as any).reload();
       expect((hstore as any).settings.three).toBe("four");
-      expect((hstore as any).changed()).toBe(false);
+      expect((hstore as any).changed).toBe(false);
     });
     it.skip("hstore nested", async () => {
       // BLOCKED: test-name mismatch — no Rails test named "hstore nested" in hstore_test.rb

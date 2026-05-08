@@ -990,15 +990,12 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 
   /**
-   * Sever the connection immediately (synchronous contract from AbstractAdapter).
-  /**
    * Close and reopen the connection pool from the stored config.
    * Mirrors Rails' Mysql2Adapter#reconnect! (disconnect! + connect).
    * Pool creation via newClient is synchronous; fresh connections are
    * established lazily on first use, so this method stays synchronous.
    */
   override reconnectBang(): void {
-    super.reconnectBang();
     this.disconnectBang();
     this._driverPool = Mysql2Adapter.newClient(this._poolConfig);
     this._activeState = true;

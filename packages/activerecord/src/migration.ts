@@ -1279,9 +1279,9 @@ export class MigrationContext {
       case "datetime":
       case "timestamp": {
         const base = an === "postgres" ? "TIMESTAMP" : "DATETIME";
-        // Rails only defaults precision=6 for "datetime", not "timestamp" — addColumn passes
-        // options through to the real adapter (which has its own precision defaults), while
-        // this fallback _mapType is only used when the adapter doesn't handle the type directly.
+        // MigrationContext is a lightweight SQL builder used in tests; _mapType always runs here
+        // (unlike real adapter addColumn which calls typeToSql directly). The precision=6 default
+        // for datetime matches Rails' behavior, but applies to timestamp too in this simplified path.
         // precision: undefined → Rails default of 6; precision: null → no precision suffix
         const p = options?.precision === undefined ? 6 : options.precision;
         if (p != null && !(p >= 0 && p <= 6))

@@ -128,6 +128,24 @@ function testNameOverride(testName: string, relPath: string): Annotation | null 
     };
   }
 
+  // Ruby module namespace wrapping (e.g. `module Foo; class Bar; end; end`)
+  if (/\bnamespace\b/.test(n)) {
+    return {
+      blocked: "unknown — Ruby module namespace / constant lookup semantics not translatable",
+      rootCause: "Node.js has no Ruby Module namespace for matching class names by constant path",
+      scope: "~0 LOC fix; permanent skip-list.ts candidate",
+    };
+  }
+
+  // Default scope interactions
+  if (/\bdefault.?scope\b/.test(n)) {
+    return {
+      blocked: "relation — default scope application gap",
+      rootCause: "Relation#defaultScope or scope chain not fully applied in all query paths",
+      scope: "~20 LOC fix in relation.ts; affects ~1 test",
+    };
+  }
+
   return null;
 }
 

@@ -2731,9 +2731,6 @@ export class Relation<T extends Base> {
         const def = this._modelClass._attributeDefinitions.get(key);
         const isArray = def?.type?.name === "array";
         if (isArray) return [table.get(key), def!.type!.serialize(val)];
-        // Pre-serialize Temporal values so the Arel visitor receives a string
-        // instead of a raw object — the generic quote() fallback would emit
-        // ISO Z format which MySQL/MariaDB DATETIME rejects in strict mode.
         const dbVal =
           val instanceof Temporal.Instant ||
           val instanceof Temporal.PlainDateTime ||

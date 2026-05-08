@@ -39,21 +39,36 @@ describeIfMysql("Mysql2Adapter", () => {
       // exists to detect server-side disconnect without attempting a real query.
     });
     it("successful reconnection after timeout with manual reconnect", async () => {
-      expect(await adapter.activeAsync()).toBe(true);
-      await adapter.execute("SET SESSION wait_timeout=1");
-      await new Promise((r) => setTimeout(r, 2000));
-      adapter.reconnectBang();
-      expect(adapter.active).toBe(true);
-      await expect(adapter.execute("SELECT 1")).resolves.toBeDefined();
+      // Use connectionLimit: 1 so SET SESSION wait_timeout and the sleep share
+      // the same physical connection — otherwise a second pool connection with
+      // the default wait_timeout could be used for the later execute().
+      const singleConn = new Mysql2Adapter({ uri: MYSQL_TEST_URL, connectionLimit: 1 });
+      try {
+        expect(await singleConn.activeAsync()).toBe(true);
+        await singleConn.execute("SET SESSION wait_timeout=1");
+        await new Promise((r) => setTimeout(r, 2000));
+        singleConn.reconnectBang();
+        expect(singleConn.active).toBe(true);
+        await expect(singleConn.execute("SELECT 1")).resolves.toBeDefined();
+      } finally {
+        await singleConn.close();
+      }
     }, 10_000);
     it("successful reconnection after timeout with verify", async () => {
-      expect(await adapter.activeAsync()).toBe(true);
-      await adapter.execute("SET SESSION wait_timeout=1");
-      await new Promise((r) => setTimeout(r, 2000));
-      await adapter.activeAsync(); // probe — updates _activeState to false
-      adapter.verifyBang(); // active is now false → calls reconnectBang()
-      expect(adapter.active).toBe(true);
-      await expect(adapter.execute("SELECT 1")).resolves.toBeDefined();
+      // Use connectionLimit: 1 so the session wait_timeout applies to the same
+      // connection that activeAsync() and verifyBang() will use.
+      const singleConn = new Mysql2Adapter({ uri: MYSQL_TEST_URL, connectionLimit: 1 });
+      try {
+        expect(await singleConn.activeAsync()).toBe(true);
+        await singleConn.execute("SET SESSION wait_timeout=1");
+        await new Promise((r) => setTimeout(r, 2000));
+        await singleConn.activeAsync(); // probe — updates _activeState to false
+        singleConn.verifyBang(); // active is now false → calls reconnectBang()
+        expect(singleConn.active).toBe(true);
+        await expect(singleConn.execute("SELECT 1")).resolves.toBeDefined();
+      } finally {
+        await singleConn.close();
+      }
     }, 10_000);
     it("execute after disconnect reconnects", async () => {
       adapter.disconnectBang();

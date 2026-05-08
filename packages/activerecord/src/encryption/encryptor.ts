@@ -115,7 +115,7 @@ export class Encryptor {
 
     let decrypted: Buffer;
     try {
-      decrypted = this.cipher().decrypt(message, { key: keys, ...options?.cipherOptions });
+      decrypted = this.cipher().decrypt(message, { ...options?.cipherOptions, key: keys });
     } catch (e) {
       if (e instanceof Base) throw e;
       throw new DecryptionError(e instanceof Error ? e.message : String(e));

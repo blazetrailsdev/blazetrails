@@ -280,13 +280,23 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
   });
 
   it("buildEncryptedMessage dispatches through cipher() for encrypt and decrypt", () => {
-    Configurable.config.primaryKey = "a".repeat(32);
-    Configurable.config.keyDerivationSalt = "testsalt";
-    const enc = new Encryptor({ compress: false });
-    const cipherSpy = vi.spyOn(enc as any, "cipher");
-    const encrypted = enc.encrypt("secret text");
-    expect(cipherSpy).toHaveBeenCalled();
-    cipherSpy.mockRestore();
-    expect(enc.decrypt(encrypted)).toBe("secret text");
+    const savedKey = Configurable.config.primaryKey;
+    const savedSalt = Configurable.config.keyDerivationSalt;
+    try {
+      Configurable.config.primaryKey = "a".repeat(32);
+      Configurable.config.keyDerivationSalt = "testsalt";
+      clearDefaultKeyProviderCache();
+      const enc = new Encryptor({ compress: false });
+      const cipherSpy = vi.spyOn(enc as any, "cipher");
+      const encrypted = enc.encrypt("secret text");
+      const decrypted = enc.decrypt(encrypted);
+      expect(cipherSpy).toHaveBeenCalledTimes(2); // once for encrypt, once for decrypt
+      expect(decrypted).toBe("secret text");
+      cipherSpy.mockRestore();
+    } finally {
+      Configurable.config.primaryKey = savedKey;
+      Configurable.config.keyDerivationSalt = savedSalt;
+      clearDefaultKeyProviderCache();
+    }
   });
 });

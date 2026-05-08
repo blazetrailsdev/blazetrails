@@ -6,7 +6,7 @@
  */
 
 import { Aes256Gcm as AesGcmCipher } from "./cipher/aes256-gcm.js";
-import { ConfigError, DecryptionError } from "./errors.js";
+import { DecryptionError } from "./errors.js";
 import { Message } from "./message.js";
 
 export class Cipher {
@@ -38,9 +38,8 @@ export class Cipher {
       try {
         return this.cipherFor(keys[i]).decrypt(encryptedMessage);
       } catch (e) {
-        if (e instanceof ConfigError) throw e;
+        if (!(e instanceof DecryptionError)) throw e; // integrity/config errors propagate immediately
         lastError = e;
-        if (i < keys.length - 1) continue;
       }
     }
     const msg = lastError instanceof Error ? lastError.message : String(lastError);

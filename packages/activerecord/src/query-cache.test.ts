@@ -537,7 +537,7 @@ describe("QueryCacheExpiryTest", () => {
     }
     await new SetupMig().run(cached, "up");
     cached.enableQueryCache();
-    await cached.execute('SELECT * FROM "qc_mig_tasks"');
+    await cached.execute(`SELECT * FROM ${cached.quoteTableName("qc_mig_tasks")}`);
     expect(cached.cache.size).toBeGreaterThan(0);
     class ChangeMig extends Migration {
       async up() {

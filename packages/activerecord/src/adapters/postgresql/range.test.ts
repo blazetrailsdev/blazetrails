@@ -236,8 +236,8 @@ describeIfPg("PostgreSQLAdapter", () => {
     it.skip("range schema dump", async () => {
       // BLOCKED: range — range SQL types absent from SQL_TYPE_MAP / DSL_HELPER_METHODS
       // ROOT-CAUSE: schema-dumper.ts SQL_TYPE_MAP has no entries for int4range, int8range, numrange,
-      //   daterange, tsrange, tstzrange; sqlTypeToDsl() falls back to generic string; DSL_HELPER_METHODS
-      //   also needs them so the column method (t.int4range etc.) is emitted rather than t.column
+      //   daterange, tsrange, tstzrange; sqlTypeToDsl() hits the enum fallback → t.column(name,"int4range")
+      //   instead of the dedicated DSL helper; DSL_HELPER_METHODS also needs them to emit t.int4range(...)
       // SCOPE: ~15 LOC in schema-dumper.ts (SQL_TYPE_MAP + DSL_HELPER_METHODS) + ~10 LOC test body; affects 1 test
     });
     it.skip("range migration", async () => {
@@ -385,11 +385,12 @@ describeIfPg("PostgreSQLAdapter", () => {
       // SCOPE: ~25 LOC shared with "custom range column" fix; affects 4 custom-range tests
     });
     it.skip("timezone awareness tzrange", () => {
-      // BLOCKED: range — tsrange/tstzrange not wired into TimeZoneConversion
-      // ROOT-CAUSE: attribute-methods/time-zone-conversion.ts IS ported but timeZoneAwareTypes defaults to
-      //   ["datetime","time"]; RangeType bounds bypass time-zone conversion; Rails adds [:tsrange,:tstzrange]
-      //   via self.time_zone_aware_types += [...] — no equivalent hook exists on RangeType subtype
-      // SCOPE: ~50 LOC — register tsrange/tstzrange in timeZoneAwareTypes + RangeType bound conversion; separate story; affects 9 tests
+      // BLOCKED: range — TimeZoneConversion not wired and predicate broken for range types
+      // ROOT-CAUSE: (1) time-zone-conversion.ts is never imported/used — not wired into Model;
+      //   (2) isCreateTimeZoneConversionAttribute checks castType.type (a property) but Type exposes
+      //   type() as a method — predicate always returns false even if wired; (3) timeZoneAwareTypes
+      //   defaults to ["datetime","time"] — tsrange/tstzrange would also need to be added
+      // SCOPE: ~100 LOC — wire module into Model + fix castType.type() call + add tsrange/tstzrange; separate story; affects 9 tests
     });
     it.skip("timezone awareness endless tzrange", () => {
       // BLOCKED: range — time_zone_aware_types infrastructure not implemented
@@ -603,10 +604,11 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(() => parseRange("(2012-01-02,2012-01-04]")).toThrow();
     });
     it.skip("where by attribute with range", () => {
-      // BLOCKED: range — PredicateBuilder doesn't serialize Range for range-typed columns
-      // ROOT-CAUSE: WhereClause/PredicateBuilder doesn't call type.serialize(range) before binding;
-      //   Model.where(int4_range: 1..100) generates a plain value bind instead of a range literal
-      // SCOPE: ~60 LOC — Range handling in predicate-builder.ts + Arel range quoting; affects 4 where/updateAll tests
+      // BLOCKED: range — PredicateBuilder routes Range through RangeHandler (interval semantics) not range-column equality
+      // ROOT-CAUSE: predicate-builder.ts dispatches Range values to RangeHandler which builds BETWEEN/>=/<
+      //   predicates; for range-typed columns Rails builds attribute.eq(type.serialize(range)) instead;
+      //   needs a RangeType column guard before the RangeHandler path to emit an Arel equality node
+      // SCOPE: ~60 LOC — RangeType column guard in predicate-builder.ts + serialize-to-literal path; affects 4 where/updateAll tests
     });
     it.skip("where by attribute with range in array", () => {
       // BLOCKED: range — PredicateBuilder doesn't serialize Range for range-typed columns

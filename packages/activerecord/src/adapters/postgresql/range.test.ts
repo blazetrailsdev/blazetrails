@@ -221,7 +221,7 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it.skip("custom range column", async () => {
       // BLOCKED: range — custom range type setup missing from beforeEach
-      // ROOT-CAUSE: beforeEach doesn't CREATE TYPE floatrange AS RANGE or add float_range column;
+      // ROOT-CAUSE: beforeEach doesn't CREATE TYPE floatrange/stringrange AS RANGE or add float_range/string_range columns;
       //   TypeMapInitializer already handles typtype='r' rows so no core OID gap exists
       // SCOPE: ~25 LOC — extend beforeEach + write assertion body; affects 4 custom-range tests
     });
@@ -240,10 +240,10 @@ describeIfPg("PostgreSQLAdapter", () => {
       // SCOPE: ~15 LOC in schema-dumper.ts + ~10 LOC test body; affects 1 test
     });
     it.skip("range migration", async () => {
-      // BLOCKED: range — createRange() migration helper not implemented
-      // ROOT-CAUSE: schema-statements.ts has no createRange()/dropRange() for CREATE/DROP TYPE ... AS RANGE;
-      //   per-column helpers (int4range(), tstzrange(), etc.) DO exist in schema-definitions.ts
-      // SCOPE: ~30 LOC createRange() + dropRange() in schema-statements.ts + ~15 LOC test body; affects 1 test
+      // BLOCKED: range — test body not yet written; no core infra gap expected
+      // ROOT-CAUSE: per-column helpers (int4range(), tstzrange(), daterange(), etc.) exist in schema-definitions.ts;
+      //   test should exercise create_table with range columns; createRange() is only needed for custom range types
+      // SCOPE: ~15 LOC test body; createRange()/dropRange() (~30 LOC) is a separate gap (see custom-range tests)
     });
     it.skip("multirange int4", async () => {
       // BLOCKED: range — multirange types not registered (PG 14+ / Rails 7+)
@@ -618,7 +618,8 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
     it.skip("ranges correctly escape input", () => {
       // BLOCKED: range — updateAll Range serialization (same as "update all with ranges")
-      //   quoteRangeBound — needs updateAll Range serialize path working first
+      // ROOT-CAUSE: same gap as "update all with ranges"; test also verifies quoteRangeBound
+      //   prevents SQL injection — only testable once Range values flow through updateAll
       // SCOPE: ~60 LOC shared with "update all with ranges" fix; affects 4 where/updateAll tests
     });
     it("ranges correctly unescape output", () => {

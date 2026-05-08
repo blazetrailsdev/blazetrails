@@ -3461,12 +3461,19 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const qualifiedName = schema
       ? `${this.quoteIdentifier(schema)}.${this.quoteIdentifier(rangeName)}`
       : this.quoteIdentifier(rangeName);
-    const quoteTypeName = (typeName: string) => {
+    const quoteTypeName = (typeName: string, param: string) => {
+      if (/[\s()]/.test(typeName)) {
+        throw new Error(
+          `PostgreSQLAdapter#createRange: ${param} must be a simple or schema-qualified identifier ` +
+            `(e.g. "float8", "myschema.mytype"). Use the single-word alias instead of "${typeName}".`,
+        );
+      }
       const { schema: s, table: t } = this.parseSchemaQualifiedName(typeName);
       return s ? `${this.quoteIdentifier(s)}.${this.quoteIdentifier(t)}` : this.quoteIdentifier(t);
     };
-    const parts = [`SUBTYPE = ${quoteTypeName(options.subtype)}`];
-    if (options.subtypeDiff) parts.push(`SUBTYPE_DIFF = ${quoteTypeName(options.subtypeDiff)}`);
+    const parts = [`SUBTYPE = ${quoteTypeName(options.subtype, "subtype")}`];
+    if (options.subtypeDiff)
+      parts.push(`SUBTYPE_DIFF = ${quoteTypeName(options.subtypeDiff, "subtypeDiff")}`);
     await this.exec(`CREATE TYPE ${qualifiedName} AS RANGE (${parts.join(", ")})`);
   }
 

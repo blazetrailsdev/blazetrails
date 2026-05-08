@@ -74,8 +74,8 @@ export class MigrationProxy {
   }
 
   get disableDdlTransaction(): boolean {
-    // _migration is populated by migration() before this is called in
-    // _runMigration; accessing the cached value synchronously is safe.
+    // Callers must await migration() before reading this; _migration is
+    // populated by that call and the cached value is accessed synchronously here.
     return !!(this._migration as { disableDdlTransaction?: boolean } | null)?.disableDdlTransaction;
   }
 

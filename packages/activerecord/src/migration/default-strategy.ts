@@ -31,8 +31,7 @@ export class DefaultStrategy extends ExecutionStrategy {
   /** @internal */
   connection(): DatabaseAdapter {
     // Mirrors Rails: DefaultStrategy#connection → migration.connection.
-    // Migration#connection in Rails returns @connection || DatabaseTasks.migration_connection,
-    // so the global fallback lives on the migration, not here.
+    // _adapter is our exec()-time fallback; per-migration connection wins.
     const conn = (this.migration as MigrationLike | null)?.connection ?? this._adapter;
     if (!conn)
       throw new Error("DefaultStrategy: no adapter available (exec() has not been called)");

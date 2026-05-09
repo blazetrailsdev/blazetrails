@@ -1630,7 +1630,7 @@ export class Model {
    * Mirrors: ActiveModel::Dirty#will_save_change_to_attribute?
    */
   willSaveChangeToAttribute(name: string, options?: { from?: unknown; to?: unknown }): boolean {
-    return this.attributeChanged(resolveAliasName(this.constructor as typeof Model, name), options);
+    return this.attributeChanged(name, options);
   }
 
   attributeWas(name: string): unknown {
@@ -1752,10 +1752,7 @@ export class Model {
    * Mirrors: ActiveModel::Dirty#attribute_previously_changed?
    */
   attributePreviouslyChanged(name: string, options?: { from?: unknown; to?: unknown }): boolean {
-    return this.savedChangeToAttribute(
-      resolveAliasName(this.constructor as typeof Model, name),
-      options,
-    );
+    return this.savedChangeToAttribute(name, options);
   }
 
   /**
@@ -1765,7 +1762,7 @@ export class Model {
    * Mirrors: ActiveModel::Dirty#attribute_previously_was
    */
   attributePreviouslyWas(name: string): unknown {
-    return this.attributeBeforeLastSave(resolveAliasName(this.constructor as typeof Model, name));
+    return this.attributeBeforeLastSave(name);
   }
 
   restoreAttributes(): void {

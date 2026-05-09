@@ -91,4 +91,27 @@ describe("TimeZoneConverterTest", () => {
     // 14:00 UTC = 10:00 EDT
     expect(twz.hour).toBe(10);
   });
+
+  it("serialize extracts UTC from TimeWithZone before delegating to subtype", () => {
+    setZone("Eastern Time (US & Canada)");
+    const converter = new TimeZoneConverter(new DateTime());
+    const instant = Temporal.Instant.from("2024-06-15T14:00:00Z");
+    const eastern = TimeZone.find("Eastern Time (US & Canada)");
+    const twz = new TimeWithZone(instant, eastern);
+    // 14:00 UTC displayed as 10:00 EDT; serialize must produce the UTC SQL string
+    const result = converter.serialize(twz);
+    expect(typeof result).toBe("string");
+    expect(result).toContain("2024-06-15");
+    expect(result).toContain("14:00:00");
+  });
+
+  it("serialize round-trips: deserialize then serialize returns UTC SQL string", () => {
+    setZone("Eastern Time (US & Canada)");
+    const converter = new TimeZoneConverter(new DateTime());
+    const deserialized = converter.deserialize("2024-06-15 14:00:00");
+    expect(deserialized).toBeInstanceOf(TimeWithZone);
+    const serialized = converter.serialize(deserialized);
+    // UTC, space-separated SQL format (default precision 6 adds .000000)
+    expect(serialized).toMatch(/^2024-06-15 14:00:00/);
+  });
 });

@@ -52,8 +52,14 @@ export class TimeZoneConverter extends ValueType<unknown> {
     if (value instanceof TimeWithZone) {
       return convertTimeToTimeZone(value);
     }
-    // String, Temporal.Instant, Date, etc.: cast via subtype then wrap in zone.
-    return convertTimeToTimeZone(this._subtype.cast(value));
+    // String, Temporal.Instant, etc.: cast via subtype then wrap in zone.
+    // For array-like results (e.g. Range types), recurse cast() on each element
+    // to mirror Rails' `map(super) { |v| cast(v) }`.
+    const casted = this._subtype.cast(value);
+    if (Array.isArray(casted)) {
+      return casted.map((v) => this.cast(v));
+    }
+    return convertTimeToTimeZone(casted);
   }
 
   override deserialize(value: unknown): unknown {
@@ -61,17 +67,23 @@ export class TimeZoneConverter extends ValueType<unknown> {
   }
 
   override serialize(value: unknown): unknown {
-    return this._subtype.serialize(value);
+    // Rails' DelegateClass forwards serialize to the subtype, which calls
+    // cast_value on it. In Ruby, TimeWithZone acts_like?(:time) so AR's
+    // DateTime type can handle it. In TS, DateTime.castValue() can't parse
+    // a TimeWithZone — extract the UTC Temporal.Instant first.
+    const resolved = value instanceof TimeWithZone ? value.utc() : value;
+    return this._subtype.serialize(resolved);
   }
 
   override serializeCastValue(value: unknown): unknown {
+    const resolved = value instanceof TimeWithZone ? value.utc() : value;
     const sub = this._subtype as ValueTypeInstance;
     if (typeof sub.itselfIfSerializeCastValueCompatible === "function") {
       return sub.itselfIfSerializeCastValueCompatible()
-        ? sub.serializeCastValue(value as any)
-        : this._subtype.serialize(value);
+        ? sub.serializeCastValue(resolved as any)
+        : this._subtype.serialize(resolved);
     }
-    return this._subtype.serialize(value);
+    return this._subtype.serialize(resolved);
   }
 
   override equals(other: Type): boolean {

@@ -3,6 +3,12 @@ import { looseDateParse } from "./helpers/loose-date-parse.js";
 import { AcceptsMultiparameterTime } from "./helpers/accepts-multiparameter-time.js";
 import { ValueType } from "./value.js";
 
+function isNumericKeyHash(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const keys = Object.keys(value as Record<string, unknown>);
+  return keys.length > 0 && keys.every((k) => /^\d+$/.test(k));
+}
+
 export class TimeType extends ValueType<Temporal.PlainTime> {
   readonly name = "time";
 
@@ -34,6 +40,7 @@ export class TimeType extends ValueType<Temporal.PlainTime> {
     // Accept PlainDateTime from multiparameter assignment — extract the time part.
     if (value instanceof Temporal.PlainDateTime)
       return this._applySecondsPrecision(value.toPlainTime());
+    if (isNumericKeyHash(value)) return this.valueFromMultiparameterAssignment(value);
     const str = String(value).trim();
     if (str === "") return null;
     const parts = looseDateParse(str);

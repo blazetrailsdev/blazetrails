@@ -102,7 +102,7 @@ export function defineEnum(
   // Collect method names upfront so all conflicts are validated before any
   // method is defined — mirrors Rails: detect_enum_conflict! is called for
   // every value before any method is registered, preventing partial state.
-  type ValueEntry = {
+  const valueEntries = [] as Array<{
     name: string;
     value: string | number;
     fullName: string;
@@ -111,8 +111,7 @@ export function defineEnum(
     scopeName: string;
     notScopeName: string;
     friendlyName: string;
-  };
-  const valueEntries: ValueEntry[] = [];
+  }>;
 
   for (const [name, value] of mapping) {
     const fullName = toCamel(methodName(name));
@@ -137,6 +136,15 @@ export function defineEnum(
     }
     if (notScopeName in (modelClass as object)) {
       raiseConflictError.call(modelClass, attribute, notScopeName, { type: "class" });
+    }
+    if (friendlyName !== scopeName) {
+      if (friendlyName in (modelClass as object)) {
+        raiseConflictError.call(modelClass, attribute, friendlyName, { type: "class" });
+      }
+      const notFriendlyName = `not${friendlyName.charAt(0).toUpperCase()}${friendlyName.slice(1)}`;
+      if (notFriendlyName in (modelClass as object)) {
+        raiseConflictError.call(modelClass, attribute, notFriendlyName, { type: "class" });
+      }
     }
 
     valueEntries.push({
@@ -179,7 +187,7 @@ export function defineEnum(
     });
 
     // Setter: record.draft() or record.statusDraft() — sets the value in memory
-    if (!Object.hasOwn(modelClass.prototype, fullName)) {
+    if (!(fullName in (modelClass.prototype as object))) {
       Object.defineProperty(modelClass.prototype, fullName, {
         value: function (this: Base) {
           this.writeAttribute(attribute, value);
@@ -609,8 +617,8 @@ export function readEnumValue(record: Base, attribute: string): string | null {
 }
 
 /**
- * Cast an enum value (string name or number) to its integer storage value.
- * Delegates to EnumType.serialize for the mapping lookup.
+ * Cast an enum value (string name or number) to its storage value (integer or string,
+ * depending on the attribute subtype). Delegates to EnumType.serialize for the mapping lookup.
  */
 export function castEnumValue(
   modelClass: typeof Base,

@@ -1107,7 +1107,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Begin a transaction. Acquires a dedicated client from the pool.
    */
   async beginTransaction(): Promise<void> {
-    await this._transactionManager.beginTransaction();
+    // Force materialization (_lazy: false) so _client is acquired and
+    // _inTransaction is set immediately. createSavepoint() uses withClient()
+    // which falls back to a fresh pool connection when _client is null,
+    // causing "SAVEPOINT can only be used in transaction blocks".
+    await this._transactionManager.beginTransaction({ _lazy: false });
   }
 
   async beginDbTransaction(): Promise<void> {

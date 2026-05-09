@@ -98,7 +98,6 @@ export function defineEnum(
   // Camel-case a method name: "status_draft" -> "statusDraft"
   const toCamel = (s: string) => camelize(s, false);
 
-  // Pass 1: validate all conflicts before defining any method.
   for (const [name] of mapping) {
     const fullName = toCamel(methodName(name));
     const capitalizedFullName = camelize(methodName(name));
@@ -129,10 +128,8 @@ export function defineEnum(
     }
   }
 
-  // Register only after all conflicts are validated.
   defs.set(attribute, def);
 
-  // Pass 2: define all methods.
   for (const [name, value] of mapping) {
     const fullName = toCamel(methodName(name));
     const capitalizedFullName = camelize(methodName(name));

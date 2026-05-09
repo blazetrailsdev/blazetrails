@@ -98,8 +98,7 @@ export function defineEnum(
   // Camel-case a method name: "status_draft" -> "statusDraft"
   const toCamel = (s: string) => camelize(s, false);
 
-  // Pass 1: validate all conflicts before defining any method (mirrors Rails:
-  // detect_enum_conflict! is called for all values before registration).
+  // Pass 1: validate all conflicts before defining any method.
   for (const [name] of mapping) {
     const fullName = toCamel(methodName(name));
     const capitalizedFullName = camelize(methodName(name));
@@ -117,6 +116,11 @@ export function defineEnum(
     if (notScopeName in (modelClass as object))
       raiseConflictError.call(modelClass, attribute, notScopeName, { type: "class" });
     if (friendlyName !== fullName) {
+      const fp = `is${friendlyName.charAt(0).toUpperCase()}${friendlyName.slice(1)}`;
+      if (fp in (modelClass.prototype as object))
+        raiseConflictError.call(modelClass, attribute, fp);
+      if (`${friendlyName}Bang` in (modelClass.prototype as object))
+        raiseConflictError.call(modelClass, attribute, `${friendlyName}Bang`);
       if (friendlyName in (modelClass as object))
         raiseConflictError.call(modelClass, attribute, friendlyName, { type: "class" });
       const notFriendlyName = `not${friendlyName.charAt(0).toUpperCase()}${friendlyName.slice(1)}`;
@@ -143,6 +147,24 @@ export function defineEnum(
       modelClass.scope(friendlyName, (rel: any) => rel.where({ [attribute]: value }));
       const notFriendlyName = `not${friendlyName.charAt(0).toUpperCase()}${friendlyName.slice(1)}`;
       modelClass.scope(notFriendlyName, (rel: any) => rel.whereNot({ [attribute]: value }));
+      const fp = `is${friendlyName.charAt(0).toUpperCase()}${friendlyName.slice(1)}`;
+      Object.defineProperty(modelClass.prototype, fp, {
+        value: function (this: Base) {
+          return this.readAttribute(attribute) === value;
+        },
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(modelClass.prototype, `${friendlyName}Bang`, {
+        value: async function (this: any) {
+          this.writeAttribute(attribute, value);
+          if (this.isPersisted()) {
+            await this.updateColumn(attribute, value);
+          }
+        },
+        writable: true,
+        configurable: true,
+      });
     }
 
     // Predicate: record.isDraft() or record.isStatusDraft()

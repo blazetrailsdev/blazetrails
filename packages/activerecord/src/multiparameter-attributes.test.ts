@@ -363,20 +363,15 @@ describe("MultiParameterAttributeTest", () => {
       });
       const instant = (topic as any).written_on as Temporal.Instant;
       expect(instant).toBeInstanceOf(Temporal.Instant);
-      const z = instant.toZonedDateTimeISO("UTC");
-      expect(z.hour).toBe(16);
-      expect(z.minute).toBe(24);
+      expect(instant.toZonedDateTimeISO("UTC").hour).toBe(16);
+      expect(instant.toZonedDateTimeISO("UTC").minute).toBe(24);
     });
   });
 
   it("multiparameter attributes on time with time zone aware attributes", async () => {
-    // zone: -28800 → "Pacific Time (US & Canada)"; June is PDT (UTC-7) so local 16:24 → UTC 23:24.
+    // zone: -28800 → Pacific Time; June is PDT (UTC-7) so local 16:24 → UTC 23:24.
     await withTimezoneConfig(
-      {
-        default: "utc",
-        awareAttributes: true,
-        zone: "Pacific Time (US & Canada)",
-      },
+      { default: "utc", awareAttributes: true, zone: "Pacific Time (US & Canada)" },
       () => {
         class Topic extends Base {
           static {

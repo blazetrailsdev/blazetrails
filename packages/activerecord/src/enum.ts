@@ -66,7 +66,7 @@ export function defineEnum(
   let subtype: string;
   try {
     const t = modelClass.typeForAttribute(attribute).type();
-    subtype = t === "value" ? "integer" : t;
+    subtype = t === "value" || t === "big_integer" ? "integer" : t;
   } catch {
     subtype = "integer";
   }

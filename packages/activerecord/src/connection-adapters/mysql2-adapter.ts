@@ -514,13 +514,16 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * Begin a transaction. Acquires a dedicated connection from the pool.
    */
   async beginTransaction(): Promise<void> {
-    this._conn = await this._checkoutConn();
-    await this._conn.query("BEGIN");
-    this._inTransaction = true;
+    // Force materialization (_lazy: false) so _inTransaction is set immediately.
+    // The _transactionFallback path in transactions.ts checks adapter.inTransaction
+    // to decide savepoint-vs-begin; lazy BEGIN causes it to double-BEGIN.
+    await this._transactionManager.beginTransaction({ _lazy: false });
   }
 
   async beginDbTransaction(): Promise<void> {
-    return this.beginTransaction();
+    this._conn = await this._checkoutConn();
+    await this._conn.query("BEGIN");
+    this._inTransaction = true;
   }
 
   async beginDeferredTransaction(): Promise<void> {
@@ -531,6 +534,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * Commit the current transaction and release the connection.
    */
   async commit(): Promise<void> {
+    return this._transactionManager.commitTransaction();
+  }
+
+  async commitDbTransaction(): Promise<void> {
     if (!this._conn) throw new Error("No active transaction");
     await this._conn.query("COMMIT");
     this._conn.release();
@@ -538,23 +545,19 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     this._inTransaction = false;
   }
 
-  async commitDbTransaction(): Promise<void> {
-    return this.commit();
-  }
-
   /**
    * Rollback the current transaction and release the connection.
    */
   async rollback(): Promise<void> {
+    return this._transactionManager.rollbackTransaction();
+  }
+
+  async rollbackDbTransaction(): Promise<void> {
     if (!this._conn) throw new Error("No active transaction");
     await this._conn.query("ROLLBACK");
     this._conn.release();
     this._conn = null;
     this._inTransaction = false;
-  }
-
-  async rollbackDbTransaction(): Promise<void> {
-    return this.rollback();
   }
 
   /**

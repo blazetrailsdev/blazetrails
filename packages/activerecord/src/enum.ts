@@ -73,7 +73,6 @@ export function defineEnum(
   }
   const enumType = new EnumType(attribute, mapping, subtype);
   const def: EnumDefinition = { attribute, mapping, type: enumType };
-  defs.set(attribute, def);
 
   // Compute prefix/suffix for method names
   const prefixStr =
@@ -158,6 +157,9 @@ export function defineEnum(
       friendlyName,
     });
   }
+
+  // Register only after conflict validation succeeds — keeps enumRegistry atomic.
+  defs.set(attribute, def);
 
   // Define all scopes and instance methods only after all conflicts are validated.
   for (const {

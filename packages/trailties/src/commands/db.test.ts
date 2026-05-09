@@ -1327,10 +1327,12 @@ export class CreatePosts extends Migration {
           name: "CreateWidgets",
           migration: () => ({
             up: async (a?: import("@blazetrails/activerecord").DatabaseAdapter) => {
-              await a!.executeMutation(`CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT)`);
+              if (!a) throw new Error("adapter required");
+              await a.executeMutation(`CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT)`);
             },
             down: async (a?: import("@blazetrails/activerecord").DatabaseAdapter) => {
-              await a!.executeMutation(`DROP TABLE widgets`);
+              if (!a) throw new Error("adapter required");
+              await a.executeMutation(`DROP TABLE widgets`);
             },
           }),
         },

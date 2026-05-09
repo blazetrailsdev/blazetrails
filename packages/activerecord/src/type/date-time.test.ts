@@ -25,9 +25,11 @@ describe("DateTimeTest", () => {
   it("datetime seconds precision applied to timestamp", async () => {
     class Task extends Base {
       static override tableName = "tasks";
+      static {
+        this.attribute("starting", "datetime");
+        this.adapter = adapter;
+      }
     }
-    Task.adapter = adapter;
-    await Task.loadSchema();
 
     const starting = Temporal.Now.instant().round({ smallestUnit: "microsecond" });
     const p = await (Task as any).create({ starting });

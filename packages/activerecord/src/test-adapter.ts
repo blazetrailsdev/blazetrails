@@ -18,6 +18,7 @@
 
 import { inspectExplainOption } from "./adapter.js";
 import type { AdapterName, DatabaseAdapter, ExplainOption } from "./adapter.js";
+import type { SchemaCache } from "./connection-adapters/schema-cache.js";
 import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import { Visitors } from "@blazetrails/arel";
 import { DatabaseStatements } from "./connection-adapters/abstract/database-statements.js";
@@ -556,11 +557,11 @@ class SchemaAdapter implements DatabaseAdapter {
     this.inner = inner;
   }
 
-  get schemaCache() {
+  get schemaCache(): SchemaCache | undefined {
     return this.inner?.schemaCache;
   }
 
-  get pool() {
+  get pool(): unknown {
     return this.inner?.pool ?? this.inner;
   }
 

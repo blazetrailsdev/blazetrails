@@ -276,26 +276,45 @@ export class MultiRangeType extends ValueType<MultiRange> {
   override serialize(value: unknown): unknown {
     if (!(value instanceof MultiRange)) return value;
     const rangeType = new RangeType(this.subtype, this.name);
-    const parts = value.ranges.map((r) => {
-      const serialized = rangeType.serialize(r) as Range;
-      return rangeType.encodeLiteral(serialized);
-    });
+    const parts = value.ranges.map((r) => rangeType.encodeLiteral(r));
     return `{${parts.join(",")}}`;
   }
 }
 
 function parseMultirangeLiteral(value: string, subtype: RangeSubtype): Range[] {
-  // PG format: {[1,5),[10,20)} or {} for empty
+  // PG format: {[1,5),[10,20)} or {} for empty. Bounds may be double-quoted.
   const inner = value.slice(1, -1).trim();
   if (!inner) return [];
   const ranges: Range[] = [];
   let i = 0;
   while (i < inner.length) {
-    const start = inner[i];
-    if (start !== "[" && start !== "(") break;
-    const end = inner.indexOf("]", i);
-    const end2 = inner.indexOf(")", i);
-    const closingIdx = end === -1 ? end2 : end2 === -1 ? end : Math.min(end, end2);
+    const openChar = inner[i];
+    if (openChar !== "[" && openChar !== "(") break;
+    // Scan forward to find the matching close bracket, respecting quoted bounds.
+    // PG quotes bound values with "" (doubled-quote escaping inside quotes).
+    let j = i + 1;
+    let inQuotes = false;
+    let closingIdx = -1;
+    while (j < inner.length) {
+      const ch = inner[j];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (inner[j + 1] === '"') {
+            j += 2; // escaped quote inside quoted bound
+            continue;
+          }
+          inQuotes = false;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === "]" || ch === ")") {
+          closingIdx = j;
+          break;
+        }
+      }
+      j++;
+    }
     if (closingIdx === -1) break;
     const literal = inner.slice(i, closingIdx + 1);
     const rangeType = new RangeType(subtype);

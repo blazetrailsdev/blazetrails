@@ -79,3 +79,21 @@ describe("AbstractMysqlAdapter#renameColumnForAlter fallback", () => {
     );
   });
 });
+
+describe("MysqlSchemaCreation addColumn autoIncrement DDL", () => {
+  it("emits AUTO_INCREMENT in column DDL when autoIncrement: true", async () => {
+    const { SchemaCreation } = await import("./mysql/schema-creation.js");
+    const { ColumnDefinition, AddColumnDefinition } =
+      await import("./abstract/schema-definitions.js");
+    const creation = new SchemaCreation();
+    (creation as any).adapter = {
+      quoteIdentifier: (s: string) => `\`${s}\``,
+      quoteTableName: (s: string) => `\`${s}\``,
+      quoteDefaultExpression: (_v: unknown) => "",
+    };
+    const col = new ColumnDefinition("id", "integer", { autoIncrement: true, null: false });
+    const addCol = new AddColumnDefinition(col);
+    const sql = creation.accept(addCol);
+    expect(sql).toMatch(/AUTO_INCREMENT/);
+  });
+});

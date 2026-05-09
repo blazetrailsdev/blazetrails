@@ -6,6 +6,7 @@ import { createTestAdapter } from "../test-adapter.js";
 describe("IntegerTest", () => {
   it("casting ActiveRecord models", () => {
     const type = new IntegerType();
+    // AR model stringifies to "[object Object]" → parseInt → NaN → null
     const model = new Base();
     expect(type.cast(model)).toBeNull();
   });

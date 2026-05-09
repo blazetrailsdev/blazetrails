@@ -29,6 +29,8 @@ describe("StringTypeTest", () => {
     const author = await Author.create({ name: "Sean" });
     expect(author.changed).toBe(false);
 
+    // JS strings are immutable; "+=" assigns through the setter rather than mutating in place.
+    // nameChanged() fires via dirty-tracker change detection, not isChangedInPlace.
     (author.name as string) += " Griffin";
     expect((author as any).nameChanged()).toBe(true);
 

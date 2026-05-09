@@ -153,7 +153,7 @@ export function attribute(
  * per-attribute form pick up the change automatically. Skips any method
  * that already exists on the prototype (e.g. user-defined).
  */
-function defineDirtyAttributeMethods(prototype: object, attrName: string): void {
+export function defineDirtyAttributeMethods(prototype: object, attrName: string): void {
   const cap = attrName.charAt(0).toUpperCase() + attrName.slice(1);
   const binding: Array<[string, string]> = [
     [`${attrName}Changed`, "attributeChanged"],

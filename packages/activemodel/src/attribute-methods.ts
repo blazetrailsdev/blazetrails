@@ -7,6 +7,7 @@
  * In TS, the exported functions use `this: AttributeMethodHost` so they can
  * be assigned directly to Model's static side — no delegation wrappers needed.
  */
+import { defineDirtyAttributeMethods } from "./attributes.js";
 export interface AttributeMethods {
   hasAttribute(name: string): boolean;
   attributePresent(name: string): boolean;
@@ -209,6 +210,11 @@ export function aliasAttribute(this: AttributeMethodHost, newName: string, oldNa
 
   // Generate pattern-based alias methods (e.g., clear_fullName if clear_ prefix exists)
   eagerlyGenerateAliasAttributeMethods(this, newName, oldName);
+  // Generate dirty predicates (nameChanged, nameWas, etc.) for the alias name.
+  // Rails generates these via attribute_method_suffix/affix declarations; we do
+  // it explicitly so titleChanged? delegates to attributeChanged("title") which
+  // resolves the alias at runtime.
+  defineDirtyAttributeMethods(this.prototype, newName);
 }
 
 export function undefineAttributeMethods(this: AttributeMethodHost): void {

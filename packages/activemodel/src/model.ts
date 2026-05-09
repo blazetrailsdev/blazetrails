@@ -1613,6 +1613,7 @@ export class Model {
   }
 
   attributeChanged(name: string, options?: { from?: unknown; to?: unknown }): boolean {
+    name = resolveAliasName(this.constructor as typeof Model, name);
     if (!this._dirty.attributeChanged(name)) return false;
     if (!options) return true;
     const change = this._dirty.attributeChange(name);
@@ -1633,12 +1634,12 @@ export class Model {
   }
 
   attributeWas(name: string): unknown {
-    return this._dirty.attributeWas(name);
+    return this._dirty.attributeWas(resolveAliasName(this.constructor as typeof Model, name));
   }
 
   /** @internal */
   attributeChange(name: string): [unknown, unknown] | undefined {
-    return this._dirty.attributeChange(name);
+    return this._dirty.attributeChange(resolveAliasName(this.constructor as typeof Model, name));
   }
 
   /**

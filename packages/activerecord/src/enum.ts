@@ -66,7 +66,6 @@ export function defineEnum(
   let subtype: string;
   try {
     const t = modelClass.typeForAttribute(attribute).type();
-    // "value" is the fallback for unregistered attributes — treat as integer
     subtype = t === "value" ? "integer" : t;
   } catch {
     subtype = "integer";
@@ -163,7 +162,6 @@ export function defineEnum(
       });
     }
 
-    // Predicate: record.isDraft() or record.isStatusDraft()
     Object.defineProperty(modelClass.prototype, predicateName, {
       value: function (this: Base) {
         return this.readAttribute(attribute) === value;

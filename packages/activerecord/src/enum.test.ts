@@ -576,17 +576,33 @@ describe("EnumTest", () => {
     expect(changes.status[1]).toBe(2); // to: published (2)
   });
 
-  it.skip("building new objects with enum scopes", () => {
-    // BLOCKED: type — enum type feature gap
-    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
-    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
-    /* needs scope.build() support */
+  it("building new objects with enum scopes", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("status", "integer");
+        this.adapter = adp;
+      }
+    }
+    defineEnum(Post, "status", { draft: 0, written: 1, published: 2 });
+    const p = (Post as any).written().build();
+    expect((p as any).isWritten()).toBe(true);
+    expect((p as any).isDraft()).toBe(false);
   });
-  it.skip("creating new objects with enum scopes", () => {
-    // BLOCKED: type — enum type feature gap
-    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
-    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
-    /* needs scope.create() support */
+  it("creating new objects with enum scopes", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("status", "integer");
+        this.adapter = adp;
+      }
+    }
+    defineEnum(Post, "status", { draft: 0, written: 1, published: 2 });
+    const p = await (Post as any).written().create();
+    expect((p as any).isWritten()).toBe(true);
+    expect((p as any).isDraft()).toBe(false);
   });
   it.skip("reserved enum values", () => {
     // BLOCKED: type — enum type feature gap

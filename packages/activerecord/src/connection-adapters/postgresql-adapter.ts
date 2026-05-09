@@ -1134,8 +1134,17 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   /**
    * Commit the current transaction and release the client.
+   *
+   * Routes through TransactionManager when the TM has an open transaction
+   * (e.g. started by beginTransaction()) so the stack stays in sync.
+   * Falls through to the direct DB path when openTransactions == 0, which
+   * covers: (a) TM calling commitDbTransaction() after already popping the
+   * stack, and (b) beginDbTransaction() + commit() direct pairs in tests.
    */
   async commit(): Promise<void> {
+    if (this._transactionManager.openTransactions > 0) {
+      return this._transactionManager.commitTransaction();
+    }
     if (!this._client) throw new Error("No active transaction");
     await this._client.query("COMMIT");
     // Keep the per-client StatementPool attached through the pg.Pool
@@ -1156,9 +1165,28 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   /**
    * Rollback the current transaction and release the client.
+   *
+   * Routes through TransactionManager when the TM has an open transaction.
+   * Falls through to execRollbackDbTransaction() when openTransactions == 0,
+   * covering: (a) the TM calling rollbackDbTransaction() (which calls
+   * execRollbackDbTransaction() directly — no recursion), and (b) direct
+   * beginDbTransaction() + rollback() pairs in tests.
    */
   async rollback(): Promise<void> {
-    if (!this._client) throw new Error("No active transaction");
+    if (this._transactionManager.openTransactions > 0) {
+      return this._transactionManager.rollbackTransaction();
+    }
+    return this.execRollbackDbTransaction();
+  }
+
+  async rollbackDbTransaction(): Promise<void> {
+    return this.execRollbackDbTransaction();
+  }
+
+  // Mirrors: DatabaseStatements#exec_rollback_db_transaction (database_statements.rb:78)
+  async execRollbackDbTransaction(): Promise<void> {
+    this._cancelAnyRunningQuery();
+    if (!this._client) return; // no materialized transaction — nothing to roll back on the DB
     const releasedClient = this._client;
     let rollbackError: unknown;
     try {
@@ -1197,16 +1225,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this._lastReleasedTxnClient = releasedClient;
     }
     if (rollbackError !== undefined) throw rollbackError;
-  }
-
-  async rollbackDbTransaction(): Promise<void> {
-    return this.execRollbackDbTransaction();
-  }
-
-  // Mirrors: DatabaseStatements#exec_rollback_db_transaction (database_statements.rb:78)
-  async execRollbackDbTransaction(): Promise<void> {
-    this._cancelAnyRunningQuery();
-    return this.rollback();
   }
 
   // Mirrors: DatabaseStatements#exec_restart_db_transaction (database_statements.rb:83)

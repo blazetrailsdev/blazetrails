@@ -534,10 +534,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * Commit the current transaction and release the connection.
    */
   async commit(): Promise<void> {
-    return this._transactionManager.commitTransaction();
-  }
-
-  async commitDbTransaction(): Promise<void> {
+    if (this._transactionManager.openTransactions > 0) {
+      return this._transactionManager.commitTransaction();
+    }
     if (!this._conn) throw new Error("No active transaction");
     await this._conn.query("COMMIT");
     this._conn.release();
@@ -545,15 +544,22 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     this._inTransaction = false;
   }
 
+  async commitDbTransaction(): Promise<void> {
+    return this.commit();
+  }
+
   /**
    * Rollback the current transaction and release the connection.
    */
   async rollback(): Promise<void> {
-    return this._transactionManager.rollbackTransaction();
+    if (this._transactionManager.openTransactions > 0) {
+      return this._transactionManager.rollbackTransaction();
+    }
+    return this.rollbackDbTransaction();
   }
 
   async rollbackDbTransaction(): Promise<void> {
-    if (!this._conn) throw new Error("No active transaction");
+    if (!this._conn) return; // no materialized transaction — nothing to roll back
     await this._conn.query("ROLLBACK");
     this._conn.release();
     this._conn = null;

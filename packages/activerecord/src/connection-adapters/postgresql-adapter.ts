@@ -1167,16 +1167,37 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Rollback the current transaction and release the client.
    *
    * Routes through TransactionManager when the TM has an open transaction.
-   * Falls through to execRollbackDbTransaction() when openTransactions == 0,
-   * covering: (a) the TM calling rollbackDbTransaction() (which calls
-   * execRollbackDbTransaction() directly — no recursion), and (b) direct
-   * beginDbTransaction() + rollback() pairs in tests.
+   * Falls through to the direct DB path when openTransactions == 0 (e.g.
+   * beginDbTransaction() + rollback() direct pairs). Does NOT call
+   * _cancelAnyRunningQuery() in the direct path — that cancel step is only
+   * safe in the TM path (via execRollbackDbTransaction()) where no
+   * fire-and-forget adapter work is in flight. Calling cancel when statement
+   * pool deallocs are in-flight causes "unexpected commandComplete" errors.
    */
   async rollback(): Promise<void> {
     if (this._transactionManager.openTransactions > 0) {
       return this._transactionManager.rollbackTransaction();
     }
-    return this.execRollbackDbTransaction();
+    if (!this._client) throw new Error("No active transaction");
+    const releasedClient = this._client;
+    let rollbackError: unknown;
+    try {
+      await this._client.query("ROLLBACK");
+    } catch (e) {
+      rollbackError = e;
+    } finally {
+      this._client = null;
+      this._inTransaction = false;
+      releasedClient.release(
+        rollbackError === undefined
+          ? undefined
+          : rollbackError instanceof Error
+            ? rollbackError
+            : new Error(String(rollbackError)),
+      );
+      this._lastReleasedTxnClient = releasedClient;
+    }
+    if (rollbackError !== undefined) throw rollbackError;
   }
 
   async rollbackDbTransaction(): Promise<void> {

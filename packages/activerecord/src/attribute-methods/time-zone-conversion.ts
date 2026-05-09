@@ -131,7 +131,9 @@ function setTimeZoneWithoutConversion(value: unknown): unknown {
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return v !== null && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype;
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return false;
+  const proto = Object.getPrototypeOf(v);
+  return proto === Object.prototype || proto === null;
 }
 
 interface TimeZoneConversionHost {

@@ -1648,7 +1648,7 @@ export class Model {
    * Mirrors: ActiveModel::Dirty#will_save_change_to_attribute
    */
   willSaveChangeToAttributeValues(name: string): [unknown, unknown] | undefined {
-    return this._dirty.attributeChange(name);
+    return this.attributeChange(name);
   }
 
   get previousChanges(): Record<string, [unknown, unknown]> {

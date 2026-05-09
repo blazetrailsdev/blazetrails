@@ -170,9 +170,13 @@ describe("PostgreSQL::OID::MultiRange", () => {
       deserialize: (v: unknown) => String(v ?? ""),
     };
     const strType = new MultiRangeType(stringSubtype, "stringmultirange");
-    const result = strType.deserialize('{"[foo]bar","baz"}') as MultiRange;
-    // The parser should not be tripped by the ] inside the outer braces
-    // — this is a malformed range literal; just ensure it doesn't throw
+    // PG-style quoted bound: "[foo]bar" is a valid bound value for a string range.
+    // The quote-aware scanner must not stop at the ] inside the quoted bound.
+    const result = strType.deserialize('{["[foo]bar","baz")}') as MultiRange;
     expect(result).toBeInstanceOf(MultiRange);
+    expect(result.ranges).toHaveLength(1);
+    expect(result.ranges[0].begin).toBe("[foo]bar");
+    expect(result.ranges[0].end).toBe("baz");
+    expect(result.ranges[0].excludeEnd).toBe(true);
   });
 });

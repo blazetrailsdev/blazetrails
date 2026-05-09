@@ -63,11 +63,13 @@ export function defineEnum(
   }
 
   const defs = getEnumDefinitions(modelClass);
-  let subtype = "integer";
+  let subtype: string;
   try {
-    subtype = modelClass.typeForAttribute(attribute).type();
+    const t = modelClass.typeForAttribute(attribute).type();
+    // "value" is the fallback for unregistered attributes — treat as integer
+    subtype = t === "value" ? "integer" : t;
   } catch {
-    // attribute not registered; default to integer
+    subtype = "integer";
   }
   const enumType = new EnumType(attribute, mapping, subtype);
   const def: EnumDefinition = { attribute, mapping, type: enumType };
@@ -97,7 +99,21 @@ export function defineEnum(
   // Camel-case a method name: "status_draft" -> "statusDraft"
   const toCamel = (s: string) => camelize(s, false);
 
-  // Define scopes and instance methods for each enum value
+  // Collect method names upfront so all conflicts are validated before any
+  // method is defined — mirrors Rails: detect_enum_conflict! is called for
+  // every value before any method is registered, preventing partial state.
+  type ValueEntry = {
+    name: string;
+    value: string | number;
+    fullName: string;
+    predicateName: string;
+    bangName: string;
+    scopeName: string;
+    notScopeName: string;
+    friendlyName: string;
+  };
+  const valueEntries: ValueEntry[] = [];
+
   for (const [name, value] of mapping) {
     const fullName = toCamel(methodName(name));
     const capitalizedFullName = camelize(methodName(name));
@@ -105,6 +121,9 @@ export function defineEnum(
     const bangName = `${fullName}Bang`;
     const scopeName = fullName;
     const notScopeName = `not${capitalizedFullName}`;
+    // Method-friendly alias: replace non-word ASCII chars with _, then camelize.
+    // Mirrors Rails: label.gsub(/[\W&&[:ascii:]]+/, "_")
+    const friendlyName = toCamel(methodName(name).replace(/[^\w-￿]+/g, "_"));
 
     // Conflict detection (mirrors Rails' detect_enum_conflict!)
     if (predicateName in (modelClass.prototype as object)) {
@@ -120,11 +139,30 @@ export function defineEnum(
       raiseConflictError.call(modelClass, attribute, notScopeName, { type: "class" });
     }
 
+    valueEntries.push({
+      name,
+      value,
+      fullName,
+      predicateName,
+      bangName,
+      scopeName,
+      notScopeName,
+      friendlyName,
+    });
+  }
+
+  // Define all scopes and instance methods only after all conflicts are validated.
+  for (const {
+    value,
+    fullName,
+    predicateName,
+    bangName,
+    scopeName,
+    notScopeName,
+    friendlyName,
+  } of valueEntries) {
     modelClass.scope(scopeName, (rel: any) => rel.where({ [attribute]: value }));
 
-    // Method-friendly alias: replace non-word ASCII chars with _, then camelize
-    // Mirrors Rails: label.gsub(/[\W&&[:ascii:]]+/, "_")
-    const friendlyName = toCamel(methodName(name).replace(/[^\w-￿]+/g, "_"));
     if (friendlyName !== scopeName) {
       modelClass.scope(friendlyName, (rel: any) => rel.where({ [attribute]: value }));
       const notFriendlyName = `not${friendlyName.charAt(0).toUpperCase()}${friendlyName.slice(1)}`;

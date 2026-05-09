@@ -521,7 +521,7 @@ describe("DirtyTest", () => {
         }
       }
       const pirate = await Pirate.create({ catchphrase: "yo ho" });
-      const currentCreatedOn = pirate.created_on; // setting to itself should not mark as changed
+      const currentCreatedOn = pirate.created_on;
       pirate.created_on = currentCreatedOn;
       expect(pirate.attributeChanged("created_on")).toBe(false);
     });

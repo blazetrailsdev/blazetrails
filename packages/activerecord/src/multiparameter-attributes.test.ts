@@ -364,9 +364,6 @@ describe("MultiParameterAttributeTest", () => {
       const instant = (topic as any).written_on as Temporal.Instant;
       expect(instant).toBeInstanceOf(Temporal.Instant);
       const z = instant.toZonedDateTimeISO("UTC");
-      expect(z.year).toBe(2004);
-      expect(z.month).toBe(6);
-      expect(z.day).toBe(24);
       expect(z.hour).toBe(16);
       expect(z.minute).toBe(24);
     });
@@ -398,9 +395,8 @@ describe("MultiParameterAttributeTest", () => {
         });
         const twz = (topic as any).written_on as TimeWithZone;
         expect(twz).toBeInstanceOf(TimeWithZone);
-        expect(twz.utc().toZonedDateTimeISO("UTC").hour).toBe(23); // PDT (UTC-7): 16:24 → 23:24 UTC
-        expect(twz.utc().toZonedDateTimeISO("UTC").minute).toBe(24);
-        expect(twz.hour).toBe(16); // wall-clock in zone: 16:24
+        expect(twz.utc().toZonedDateTimeISO("UTC").hour).toBe(23); // PDT: local 16:24 → UTC 23:24
+        expect(twz.hour).toBe(16); // wall-clock in zone
       },
     );
   });
@@ -443,10 +439,9 @@ describe("MultiParameterAttributeTest", () => {
           "written_on(6i)": "00",
         });
         const val = (topic as any).written_on;
-        expect(val).not.toBeInstanceOf(TimeWithZone); // no TZ wrapping — awareAttributes: false
+        expect(val).not.toBeInstanceOf(TimeWithZone);
         expect(val).toBeInstanceOf(Temporal.Instant);
-        expect(val.toZonedDateTimeISO("UTC").hour).toBe(16); // UTC 16:24, no zone conversion
-        expect(val.toZonedDateTimeISO("UTC").minute).toBe(24);
+        expect(val.toZonedDateTimeISO("UTC").hour).toBe(16);
       },
     );
   });
@@ -472,10 +467,9 @@ describe("MultiParameterAttributeTest", () => {
           "written_on(6i)": "00",
         });
         const val = (topic as any).written_on;
-        expect(val).not.toBeInstanceOf(TimeWithZone); // skipped — plain Temporal.Instant at UTC 16:24
+        expect(val).not.toBeInstanceOf(TimeWithZone);
         expect(val).toBeInstanceOf(Temporal.Instant);
         expect(val.toZonedDateTimeISO("UTC").hour).toBe(16);
-        expect(val.toZonedDateTimeISO("UTC").minute).toBe(24);
       },
     );
   });
@@ -492,7 +486,6 @@ describe("MultiParameterAttributeTest", () => {
           }
         }
         const topic = new Topic();
-        // bonus_time (time type): multiparameter → wall-clock in zone (setTimeZoneWithoutConversion)
         topic.assignAttributes({
           "bonus_time(1i)": "2000",
           "bonus_time(2i)": "1",

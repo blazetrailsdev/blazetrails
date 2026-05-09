@@ -1186,13 +1186,14 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     const cols = await this.columnDefinitions(tableName);
     const col = cols.find((c) => (c["Field"] as string) === columnName);
     if (!col) throw new Error(`Column not found: ${columnName} in ${tableName}`);
-    // Guard against silently dropping Extra attributes (AUTO_INCREMENT, ON UPDATE, generated
-    // columns) that ColumnOptions cannot express. Rails preserves these via column_for's
-    // auto_increment?/comment; our ColumnDefinition lacks that field. Throw explicitly so
-    // callers know to upgrade MySQL rather than receive a lossy CHANGE clause.
+    // Guard against silently dropping Extra attributes we cannot reconstruct (e.g. generated
+    // columns). AUTO_INCREMENT is preserved via ColumnOptions.autoIncrement; ON UPDATE <expr>
+    // (including MySQL 8 compound form "DEFAULT_GENERATED on update CURRENT_TIMESTAMP") is
+    // preserved via ColumnOptions.onUpdate. Anything else triggers an explicit throw so callers
+    // know to upgrade MySQL rather than receive a lossy CHANGE clause.
     const extraRaw = ((col["Extra"] as string | undefined) ?? "").trim();
     const extra = extraRaw.toLowerCase();
-    const onUpdateMatch = extraRaw.match(/^on update (.+)$/i);
+    const onUpdateMatch = extraRaw.match(/on update (.+)$/i);
     if (extra && extra !== "auto_increment" && !onUpdateMatch) {
       throw new Error(
         `renameColumnForAlter fallback: cannot safely CHANGE column "${columnName}" in table "${tableName}" ` +

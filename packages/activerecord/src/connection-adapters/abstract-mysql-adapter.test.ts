@@ -72,6 +72,16 @@ describe("AbstractMysqlAdapter#renameColumnForAlter fallback", () => {
     expect(sql).toContain("CURRENT_TIMESTAMP");
   });
 
+  it("preserves MySQL 8 compound DEFAULT_GENERATED on update Extra", async () => {
+    const adapter = await makeAdapter(
+      "updated_at",
+      "DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)",
+    );
+    const sql: string = await adapter.renameColumnForAlter("users", "updated_at", "ts");
+    expect(sql).toContain("ON UPDATE");
+    expect(sql).toContain("CURRENT_TIMESTAMP(6)");
+  });
+
   it("throws for unrecognised Extra values", async () => {
     const adapter = await makeAdapter("gen_col", "VIRTUAL GENERATED");
     await expect(adapter.renameColumnForAlter("users", "gen_col", "gen_col2")).rejects.toThrow(

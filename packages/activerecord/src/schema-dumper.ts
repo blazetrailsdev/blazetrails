@@ -144,6 +144,13 @@ const SQL_TYPE_MAP: Record<string, DslMapping> = {
   bigserial: { dslType: "bigserial" },
   character: { dslType: "char" },
   bpchar: { dslType: "char" },
+  // PostgreSQL range types
+  int4range: { dslType: "int4range" },
+  int8range: { dslType: "int8range" },
+  numrange: { dslType: "numrange" },
+  daterange: { dslType: "daterange" },
+  tsrange: { dslType: "tsrange" },
+  tstzrange: { dslType: "tstzrange" },
   // SQLite types
   blob: { dslType: "binary" },
   "integer primary key autoincrement": { dslType: "integer" },
@@ -186,6 +193,12 @@ const DSL_HELPER_METHODS = new Set([
   "binary",
   "json",
   "jsonb",
+  "int4range",
+  "int8range",
+  "numrange",
+  "daterange",
+  "tsrange",
+  "tstzrange",
 ]);
 
 function sqlTypeToDsl(sqlType: string): DslMapping {

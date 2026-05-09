@@ -95,7 +95,6 @@ export function defineEnum(
     return name;
   };
 
-  // Camel-case a method name: "status_draft" -> "statusDraft"
   const toCamel = (s: string) => camelize(s, false);
 
   for (const [name] of mapping) {

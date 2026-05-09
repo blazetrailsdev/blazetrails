@@ -321,6 +321,7 @@ export {
   findZoneBang,
   current,
   dateInTimeZone,
+  ArgumentError,
 } from "./time-zone-config.js";
 
 export { Notifications } from "./notifications.js";

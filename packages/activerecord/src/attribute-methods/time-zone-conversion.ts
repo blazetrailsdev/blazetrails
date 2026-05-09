@@ -3,7 +3,7 @@
  */
 import type { Type } from "@blazetrails/activemodel";
 import { ValueType, configuredTimezone } from "@blazetrails/activemodel";
-import { TimeWithZone, getZone } from "@blazetrails/activesupport";
+import { TimeWithZone, TimeZone, getZone } from "@blazetrails/activesupport";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 type ValueTypeInstance = InstanceType<typeof ValueType>;
 
@@ -48,7 +48,7 @@ export class TimeZoneConverter extends ValueType<unknown> {
     if (isPlainObject(value)) {
       return setTimeZoneWithoutConversion(this._subtype.cast(value));
     }
-    // TimeWithZone or any value with in_time_zone: move to current zone.
+    // TimeWithZone: move to current zone.
     if (value instanceof TimeWithZone) {
       return convertTimeToTimeZone(value);
     }
@@ -57,14 +57,11 @@ export class TimeZoneConverter extends ValueType<unknown> {
     // Time.zone (user_input_in_time_zone = value.in_time_zone = zone.parse(value)).
     // Without this, subtype would interpret the string in default_timezone and
     // convertTimeToTimeZone would only shift display — wrong underlying instant.
+    // Parse inline (not via zone.parse()) to preserve full nanosecond precision.
     if (typeof value === "string") {
       const zone = getZone();
       if (zone) {
-        try {
-          return zone.parse(value);
-        } catch {
-          return null;
-        }
+        return parseStringInZone(value, zone);
       }
     }
     // Temporal.Instant, etc.: cast via subtype then wrap in zone.
@@ -138,13 +135,66 @@ function setTimeZoneWithoutConversion(value: unknown): unknown {
     // when :local). Extract wall-clock components using the SAME timezone so
     // we get the original component values, then re-interpret them as local
     // time in the current zone (mirrors Time.zone.local_to_utc(t).in_time_zone).
-    const dt = value.toZonedDateTimeISO(configuredTimezone()).toPlainDateTime();
-    return zone.local(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.millisecond);
+    const zoned = value.toZonedDateTimeISO(configuredTimezone());
+    const pdt = zoned.toPlainDateTime();
+    // zone.local() takes milliseconds; get the ms-level result with correct DST
+    // disambiguation, then add back sub-millisecond precision from the original.
+    const base = zone.local(
+      pdt.year,
+      pdt.month,
+      pdt.day,
+      pdt.hour,
+      pdt.minute,
+      pdt.second,
+      pdt.millisecond,
+    );
+    const subMs = zoned.microsecond * 1000 + zoned.nanosecond;
+    if (subMs === 0) return base;
+    return new TimeWithZone(
+      Temporal.Instant.fromEpochNanoseconds(base.utc().epochNanoseconds + BigInt(subMs)),
+      zone,
+    );
   }
   if (value instanceof TimeWithZone) {
     return value.inTimeZone(zone);
   }
   return value;
+}
+
+/** @internal */
+function parseStringInZone(value: string, zone: TimeZone): TimeWithZone | null {
+  try {
+    const trimmed = value.trim();
+    if (trimmed === "") return null;
+    // Strings with explicit offset/Z → absolute instant → wrap in zone.
+    if (/[Zz]|[+-]\d{2}:?\d{2}$/.test(trimmed)) {
+      // Normalize short offsets (±HH → ±HH:MM) for Temporal.Instant.from
+      const normalized = trimmed.replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?)([-+]\d{2})$/, "$1$2:00");
+      return new TimeWithZone(Temporal.Instant.from(normalized), zone);
+    }
+    // No offset → wall-clock components local to the current zone.
+    // Use Temporal.PlainDateTime for full nanosecond precision; zone.local()
+    // for correct DST disambiguation; add back sub-ms nanoseconds.
+    const normalized = trimmed.replace(" ", "T");
+    const pdt = Temporal.PlainDateTime.from(normalized, { overflow: "reject" });
+    const base = zone.local(
+      pdt.year,
+      pdt.month,
+      pdt.day,
+      pdt.hour,
+      pdt.minute,
+      pdt.second,
+      pdt.millisecond,
+    );
+    const subMs = pdt.microsecond * 1000 + pdt.nanosecond;
+    if (subMs === 0) return base;
+    return new TimeWithZone(
+      Temporal.Instant.fromEpochNanoseconds(base.utc().epochNanoseconds + BigInt(subMs)),
+      zone,
+    );
+  } catch {
+    return null;
+  }
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {

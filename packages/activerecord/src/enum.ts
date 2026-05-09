@@ -122,6 +122,15 @@ export function defineEnum(
 
     modelClass.scope(scopeName, (rel: any) => rel.where({ [attribute]: value }));
 
+    // Method-friendly alias: replace non-word ASCII chars with _, then camelize
+    // Mirrors Rails: label.gsub(/[\W&&[:ascii:]]+/, "_")
+    const friendlyName = toCamel(methodName(name).replace(/[^\w-￿]+/g, "_"));
+    if (friendlyName !== scopeName) {
+      modelClass.scope(friendlyName, (rel: any) => rel.where({ [attribute]: value }));
+      const notFriendlyName = `not${friendlyName.charAt(0).toUpperCase()}${friendlyName.slice(1)}`;
+      modelClass.scope(notFriendlyName, (rel: any) => rel.whereNot({ [attribute]: value }));
+    }
+
     // Predicate: record.isDraft() or record.isStatusDraft()
     Object.defineProperty(modelClass.prototype, predicateName, {
       value: function (this: Base) {

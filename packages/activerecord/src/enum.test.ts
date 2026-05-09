@@ -511,10 +511,25 @@ describe("EnumTest", () => {
     expect(readEnumValue(b, "status")).toBe("active");
   });
 
-  it.skip("overriding enum definition on subclass", () => {
-    // BLOCKED: type — enum type feature gap
-    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
-    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
+  it("overriding enum definition on subclass", () => {
+    const adp = freshAdapter();
+    class Book extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("status", "integer");
+        this.adapter = adp;
+      }
+    }
+    defineEnum(Book, "status", { proposed: 0, written: 1, published: 2 });
+
+    class SpecialBook extends Book {}
+    defineEnum(SpecialBook, "status", { available: 0, soldOut: 1 });
+
+    const sb = new SpecialBook({ status: 0 });
+    expect(readEnumValue(sb, "status")).toBe("available");
+
+    const b = new Book({ status: 0 });
+    expect(readEnumValue(b, "status")).toBe("proposed");
   });
 
   it("enum changed?", async () => {
@@ -539,10 +554,19 @@ describe("EnumTest", () => {
     expect(readEnumValue(found[0], "status")).toBe("published");
   });
 
-  it.skip("find via negative scope", () => {
-    // BLOCKED: type — enum type feature gap
-    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
-    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
+  it("find via negative scope", async () => {
+    const Book = makeBook();
+    const pub = await Book.create({
+      status: castEnumValue(Book, "status", "published"),
+      name: "Pub",
+    });
+    await Book.create({ status: castEnumValue(Book, "status", "proposed"), name: "Pro" });
+
+    const notPublished = await (Book as any).notPublished().toArray();
+    expect(notPublished.some((b: any) => (b as any).id === (pub as any).id)).toBe(false);
+
+    const notProposed = await (Book as any).notProposed().toArray();
+    expect(notProposed.some((b: any) => readEnumValue(b, "status") === "published")).toBe(true);
   });
 
   it("find via where with values.to_s", async () => {
@@ -665,17 +689,41 @@ describe("EnumTest", () => {
     expect((p as any).isPublishedStatus()).toBe(true);
   });
 
-  it.skip("enum methods with custom suffix defined", () => {
-    // BLOCKED: type — enum type feature gap
-    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
-    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
-    /* needs bang setters like draft_status! */
+  it("enum methods with custom suffix defined", () => {
+    class Post extends Base {
+      static _tableName = "posts";
+    }
+    Post.attribute("id", "integer");
+    Post.attribute("difficulty", "integer");
+    Post.adapter = freshAdapter();
+    defineEnum(Post, "difficulty", { easy: 0, medium: 1, hard: 2 }, { suffix: "to_read" });
+    const p = new Post({ difficulty: 0 });
+    expect(typeof (Post as any).easyToRead).toBe("function");
+    expect(typeof (Post as any).mediumToRead).toBe("function");
+    expect(typeof (Post as any).hardToRead).toBe("function");
+    expect(typeof (p as any).isEasyToRead).toBe("function");
+    expect(typeof (p as any).isMediumToRead).toBe("function");
+    expect(typeof (p as any).isHardToRead).toBe("function");
+    expect(typeof (p as any).easyToReadBang).toBe("function");
+    expect(typeof (p as any).mediumToReadBang).toBe("function");
+    expect(typeof (p as any).hardToReadBang).toBe("function");
   });
-  it.skip("update enum attributes with custom suffix", () => {
-    // BLOCKED: type — enum type feature gap
-    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
-    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
-    /* needs bang setters */
+  it("update enum attributes with custom suffix", async () => {
+    class Post extends Base {
+      static _tableName = "posts";
+    }
+    Post.attribute("id", "integer");
+    Post.attribute("difficulty", "integer");
+    Post.adapter = freshAdapter();
+    defineEnum(Post, "difficulty", { easy: 0, medium: 1, hard: 2 }, { suffix: "to_read" });
+    const p = new Post({ difficulty: 1 }); // medium
+    expect((p as any).isMediumToRead()).toBe(true);
+    await (p as any).easyToReadBang();
+    expect((p as any).isEasyToRead()).toBe(true);
+    expect((p as any).isMediumToRead()).toBe(false);
+    await (p as any).hardToReadBang();
+    expect((p as any).isHardToRead()).toBe(true);
+    expect((p as any).isEasyToRead()).toBe(false);
   });
 
   it("enum on custom attribute with default", () => {
@@ -690,11 +738,20 @@ describe("EnumTest", () => {
     expect(readEnumValue(p, "status")).toBe("draft");
   });
 
-  it.skip("scopes are named like methods", () => {
-    // BLOCKED: type — enum type feature gap
-    // ROOT-CAUSE: enum.ts#defineEnum or EnumType missing Rails parity for enum scopes / predicates
-    // SCOPE: ~50 LOC fix in enum.ts; affects ~10 tests in enum.test.ts
-    /* needs method introspection */
+  it("scopes are named like methods", () => {
+    class Cat extends Base {
+      static _tableName = "cats";
+    }
+    Cat.attribute("id", "integer");
+    Cat.attribute("breed", "string");
+    Cat.adapter = freshAdapter();
+    defineEnum(Cat, "breed", {
+      "American Bobtail": "american_bobtail",
+      "Balinese-Javanese": "balinese_javanese",
+    });
+    // Method-friendly aliases replace non-word ASCII chars with _ then camelize
+    expect(typeof (Cat as any).americanBobtail).toBe("function");
+    expect(typeof (Cat as any).balineseJavanese).toBe("function");
   });
 });
 

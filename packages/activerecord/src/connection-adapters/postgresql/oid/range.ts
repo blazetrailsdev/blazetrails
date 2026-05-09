@@ -230,6 +230,83 @@ function inspect(value: unknown): string {
   return String(value);
 }
 
+/**
+ * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Multirange.
+ *
+ * A multirange is an ordered collection of non-overlapping ranges.
+ * PG serializes them as `{[1,5),[10,20)}`.
+ */
+export class MultiRange {
+  readonly ranges: Range[];
+
+  constructor(ranges: Range[]) {
+    this.ranges = ranges;
+  }
+}
+
+export class MultiRangeType extends ValueType<MultiRange> {
+  readonly name: string;
+  readonly subtype: RangeSubtype;
+
+  constructor(subtype: RangeSubtype, typeName: string = "multirange") {
+    super();
+    this.subtype = subtype;
+    this.name = typeName;
+  }
+
+  override type(): string {
+    return this.name;
+  }
+
+  castValue(value: unknown): MultiRange | null {
+    if (value == null || value === "{}") return null;
+    if (value instanceof MultiRange) return value;
+    if (typeof value !== "string") return value as MultiRange | null;
+    return new MultiRange(parseMultirangeLiteral(value, this.subtype));
+  }
+
+  cast(value: unknown): MultiRange | null {
+    return this.castValue(value);
+  }
+
+  override deserialize(value: unknown): MultiRange | null {
+    return this.castValue(value);
+  }
+
+  override serialize(value: unknown): unknown {
+    if (!(value instanceof MultiRange)) return value;
+    const rangeType = new RangeType(this.subtype, this.name);
+    const parts = value.ranges.map((r) => {
+      const serialized = rangeType.serialize(r) as Range;
+      return rangeType.encodeLiteral(serialized);
+    });
+    return `{${parts.join(",")}}`;
+  }
+}
+
+function parseMultirangeLiteral(value: string, subtype: RangeSubtype): Range[] {
+  // PG format: {[1,5),[10,20)} or {} for empty
+  const inner = value.slice(1, -1).trim();
+  if (!inner) return [];
+  const ranges: Range[] = [];
+  let i = 0;
+  while (i < inner.length) {
+    const start = inner[i];
+    if (start !== "[" && start !== "(") break;
+    const end = inner.indexOf("]", i);
+    const end2 = inner.indexOf(")", i);
+    const closingIdx = end === -1 ? end2 : end2 === -1 ? end : Math.min(end, end2);
+    if (closingIdx === -1) break;
+    const literal = inner.slice(i, closingIdx + 1);
+    const rangeType = new RangeType(subtype);
+    const r = rangeType.castValue(literal);
+    if (r) ranges.push(r);
+    i = closingIdx + 1;
+    if (i < inner.length && inner[i] === ",") i++;
+  }
+  return ranges;
+}
+
 /** @internal */
 function unquote(value: string): string {
   return unquoteRangeBound(value);

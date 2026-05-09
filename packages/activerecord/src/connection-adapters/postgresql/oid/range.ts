@@ -288,6 +288,7 @@ function parseMultirangeLiteral(value: string, subtype: RangeSubtype): Range[] {
   const inner = value.slice(1, -1).trim();
   if (!inner) return [];
   const ranges: Range[] = [];
+  const rangeType = new RangeType(subtype);
   let i = 0;
   while (i < inner.length) {
     const openChar = inner[i];
@@ -319,7 +320,6 @@ function parseMultirangeLiteral(value: string, subtype: RangeSubtype): Range[] {
     }
     if (closingIdx === -1) break;
     const literal = inner.slice(i, closingIdx + 1);
-    const rangeType = new RangeType(subtype);
     const r = rangeType.castValue(literal);
     if (r) ranges.push(r);
     i = closingIdx + 1;

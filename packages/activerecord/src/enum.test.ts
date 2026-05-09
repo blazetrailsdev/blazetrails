@@ -637,8 +637,6 @@ describe("EnumTest", () => {
     Post.adapter = freshAdapter();
     defineEnum(Post, "status", { draft: 0, published: 1 });
 
-    // :valid → isValid conflicts with AR instance method
-    // :save  → saveBang conflicts with AR instance method
     const conflicts = ["valid", "save"];
     conflicts.forEach((value, i) => {
       const enumName = `status_${i}`;
@@ -654,7 +652,6 @@ describe("EnumTest", () => {
     Post.attribute("status", "integer");
     Post.adapter = freshAdapter();
 
-    // Scope names that conflict with existing static model class methods
     const conflicts = ["all", "where"];
     conflicts.forEach((value, i) => {
       const enumName = `category_${i}`;

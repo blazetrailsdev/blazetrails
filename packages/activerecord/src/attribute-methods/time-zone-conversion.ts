@@ -61,7 +61,13 @@ export class TimeZoneConverter extends ValueType<unknown> {
     if (typeof value === "string") {
       const zone = getZone();
       if (zone) {
-        return parseStringInZone(value, zone);
+        // Mirrors Rails' `super(user_input_in_time_zone(value)) || super`:
+        // parse in the current zone; fall back to subtype cast if the format
+        // isn't recognized (preserves support for formats parseStringInZone
+        // doesn't handle, e.g. non-standard strings the subtype accepts).
+        const parsed = parseStringInZone(value, zone);
+        if (parsed !== null) return parsed;
+        return convertTimeToTimeZone(this._subtype.cast(value));
       }
     }
     // Temporal.Instant, etc.: cast via subtype then wrap in zone.
@@ -166,17 +172,21 @@ function parseStringInZone(value: string, zone: TimeZone): TimeWithZone | null {
   try {
     const trimmed = value.trim();
     if (trimmed === "") return null;
-    // Strings with explicit offset/Z → absolute instant → wrap in zone.
-    if (/[Zz]|[+-]\d{2}:?\d{2}$/.test(trimmed)) {
-      // Normalize short offsets (±HH → ±HH:MM) for Temporal.Instant.from
-      const normalized = trimmed.replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?)([-+]\d{2})$/, "$1$2:00");
+    // Normalize space separator → T first (e.g. "2024-06-15 10:30:00-04:00").
+    const withT = trimmed.replace(" ", "T");
+    // Detect offset: Z/z, ±HH:MM, ±HHMM, or short ±HH (without minutes).
+    if (/[Zz]$|[+-]\d{2}(?::?\d{2})?$/.test(withT)) {
+      // Normalize short offsets ±HH → ±HH:00 so Temporal.Instant.from() accepts them.
+      const normalized = withT.replace(/([-+]\d{2})$/, "$1:00");
       return new TimeWithZone(Temporal.Instant.from(normalized), zone);
     }
     // No offset → wall-clock components local to the current zone.
-    // Use Temporal.PlainDateTime for full nanosecond precision; zone.local()
-    // for correct DST disambiguation; add back sub-ms nanoseconds.
-    const normalized = trimmed.replace(" ", "T");
-    const pdt = Temporal.PlainDateTime.from(normalized, { overflow: "reject" });
+    // Date-only strings ("YYYY-MM-DD") → midnight, matching Rails' in_time_zone behavior.
+    const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(withT);
+    const datetimeStr = isDateOnly ? `${withT}T00:00:00` : withT;
+    const pdt = Temporal.PlainDateTime.from(datetimeStr, { overflow: "reject" });
+    // zone.local() gives correct DST disambiguation at millisecond precision;
+    // add back sub-millisecond precision (microseconds + nanoseconds) separately.
     const base = zone.local(
       pdt.year,
       pdt.month,

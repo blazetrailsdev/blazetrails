@@ -63,7 +63,7 @@ describe("TimeZoneConverterTest", () => {
     expect(twz.hour).toBe(10);
     expect(twz.min).toBe(30);
     expect(twz.timeZone.name).toBe("Eastern Time (US & Canada)");
-    // UTC instant should be 14:30 (10:30 EDT = UTC+4 in summer)
+    // UTC instant should be 14:30 (10:30 EDT = UTC-4, so UTC = 10:30 + 4h)
     expect(twz.utc().epochMilliseconds).toBe(
       Temporal.Instant.from("2024-06-15T14:30:00Z").epochMilliseconds,
     );

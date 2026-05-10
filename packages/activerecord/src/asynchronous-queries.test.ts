@@ -4,7 +4,7 @@ import { describe, it } from "vitest";
 // excluded — see scripts/api-compare/excluded-files.ts, entry for
 // "asynchronous_queries_tracker.rb". Per-thread async session barriers
 // (Concurrent::AtomicBoolean, ReadWriteLock) have no JS equivalent.
-// These stubs exist only so test:compare doesn't flag the TS file as empty.
+// These stubs are kept as visible placeholders for the excluded test classes.
 
 describe("AsynchronousQueriesTest", () => {
   it.skip("async select all", () => {

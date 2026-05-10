@@ -72,6 +72,14 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
     }
   }
 
+  override isChanged(oldValue: unknown, newValue: unknown, _raw?: unknown): boolean {
+    if (oldValue instanceof Temporal.Instant && newValue instanceof Temporal.Instant) {
+      // Compare at microsecond precision — serialization truncates to 6 decimal places.
+      return oldValue.epochNanoseconds / 1000n !== newValue.epochNanoseconds / 1000n;
+    }
+    return oldValue !== newValue;
+  }
+
   serialize(value: unknown): string | null {
     const cast = this.cast(value);
     // Sentinels are Postgres-specific; base type returns null. The Postgres

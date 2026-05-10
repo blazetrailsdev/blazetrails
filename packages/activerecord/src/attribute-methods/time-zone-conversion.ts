@@ -115,6 +115,26 @@ export class TimeZoneConverter extends ValueType<unknown> {
     return this._subtype.serialize(resolved);
   }
 
+  override isChanged(oldValue: unknown, newValue: unknown, _raw?: unknown): boolean {
+    const oldInstant =
+      oldValue instanceof TimeWithZone
+        ? oldValue.utc()
+        : oldValue instanceof Temporal.Instant
+          ? oldValue
+          : null;
+    const newInstant =
+      newValue instanceof TimeWithZone
+        ? newValue.utc()
+        : newValue instanceof Temporal.Instant
+          ? newValue
+          : null;
+    if (oldInstant !== null && newInstant !== null) {
+      // Compare at microsecond precision — serialization truncates to 6 decimal places.
+      return oldInstant.epochNanoseconds / 1000n !== newInstant.epochNanoseconds / 1000n;
+    }
+    return oldValue !== newValue;
+  }
+
   override equals(other: Type): boolean {
     if (!(other instanceof TimeZoneConverter)) return false;
     const sub = this._subtype as ValueTypeInstance;

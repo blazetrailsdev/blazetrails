@@ -547,7 +547,7 @@ describe("AssociationScope", () => {
     ).toSql();
     expect(sql).toMatch(/INNER JOIN\s+"?cc_memberships"?/i);
     expect(sql).toMatch(/"cc_memberships"\."cc_author_id"\s*=\s*1/);
-    expect(sql).toMatch(/"cc_memberships"\."active"\s*=\s*1/);
+    expect(sql).toMatch(/"cc_memberships"\."active"\s*=\s*(1|TRUE)/i);
   });
 
   it("loadHasMany through with sourceType filters by polymorphic source type (PR 3c)", async () => {

@@ -3483,7 +3483,8 @@ export class Relation<T extends Base> {
       } else {
         fromExpr = raw;
       }
-      sql = sql.replace(/FROM\s+"[^"]+"/, `FROM ${fromExpr}`);
+      // Match both ANSI double-quoted ("table") and MySQL backtick-quoted (`table`) names.
+      sql = sql.replace(/FROM\s+(?:"[^"]+"|[`][^`]+[`])/, `FROM ${fromExpr}`);
     }
 
     // Append SQL comments from annotate()

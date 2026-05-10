@@ -660,8 +660,10 @@ describe("ReflectionTest", () => {
     const authorsTable = new Table("authors");
     const scope = ref.joinScope(booksTable, authorsTable, Author);
     const sql = scope.toSql();
-    // has_many: books.author_id = authors.id
-    expect(sql).toMatch(/"books"\."author_id" = "authors"\."id"/);
+    // has_many: books.author_id = authors.id (quoting varies: double-quotes ANSI/PG/SQLite, backticks MySQL)
+    expect(sql).toMatch(
+      /(?:"books"|`books`)\.(?:"author_id"|`author_id`) = (?:"authors"|`authors`)\.(?:"id"|`id`)/,
+    );
   });
   it("join scope builds arel predicate for belongs to", () => {
     const { Book, Author } = makeModels();

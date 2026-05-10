@@ -880,8 +880,8 @@ export class DatabaseTasks {
 
   static async migrationConnectionPool(): Promise<ConnectionPool | null> {
     const { Base } = await import("../base.js");
-    const pool = (Base as unknown as { connectionPool?: ConnectionPool }).connectionPool;
-    return pool ?? null;
+    const fn = (Base as unknown as { connectionPool?: () => ConnectionPool }).connectionPool;
+    return fn ? fn.call(Base) : null;
   }
 
   static async schemaUpToDate(

@@ -497,6 +497,7 @@ export async function resetTestAdapterState(): Promise<void> {
   try {
     if (_sharedAdapter) {
       await dropAllTables(_sharedAdapter);
+      _sharedAdapter.schemaCache?.clear();
     }
     _createdTables.clear();
     _createdColumns.clear();

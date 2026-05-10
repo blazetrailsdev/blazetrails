@@ -653,6 +653,13 @@ class SchemaAdapter implements DatabaseAdapter {
     return sql;
   }
 
+  // Override execQuery to delegate to the inner adapter so adapter-specific
+  // behavior (e.g. PG's castResult populating columnTypes) is preserved.
+  async execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result> {
+    await this.setup();
+    return this.inner.execQuery(sql, name, binds);
+  }
+
   async execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]> {
     await this.setup();
     sql = this.fixSqliteCompat(sql);

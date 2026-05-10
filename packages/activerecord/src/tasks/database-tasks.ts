@@ -7,6 +7,7 @@
 import { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
+import type { ConnectionPool } from "../connection-adapters/abstract/connection-pool.js";
 import { getFs, getPath, getCryptoAsync, getOs, getEnv } from "@blazetrails/activesupport";
 import { coercePort } from "./task-utils.js";
 
@@ -877,9 +878,9 @@ export class DatabaseTasks {
     return this._adapterInstance;
   }
 
-  static async migrationConnectionPool(): Promise<unknown> {
+  static async migrationConnectionPool(): Promise<ConnectionPool | null> {
     const { Base } = await import("../base.js");
-    const pool = (Base as unknown as { connectionPool?: unknown }).connectionPool;
+    const pool = (Base as unknown as { connectionPool?: ConnectionPool }).connectionPool;
     return pool ?? null;
   }
 

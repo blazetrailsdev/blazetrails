@@ -3,6 +3,7 @@ import { ArgumentError } from "@blazetrails/activemodel";
 import type { FsDirent } from "@blazetrails/activesupport";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import type { DatabaseAdapter } from "./adapter.js";
+import type { ConnectionPool } from "./connection-adapters/abstract/connection-pool.js";
 import {
   TableDefinition,
   Table,
@@ -188,7 +189,7 @@ export abstract class Migration {
   /** @internal Per-migration connection override — mirrors Rails' @connection ivar. */
   protected _connectionOverride?: DatabaseAdapter;
   /** @internal Per-migration pool override — mirrors Rails' @pool ivar. */
-  protected _poolOverride?: DatabaseAdapter;
+  protected _poolOverride?: ConnectionPool;
   private _recording = false;
   private _recorder = new CommandRecorder();
   private _name?: string;
@@ -935,8 +936,11 @@ export abstract class Migration {
     return this._connectionOverride ?? this.adapter;
   }
 
-  get connectionPool(): DatabaseAdapter {
-    return this._poolOverride ?? this.adapter;
+  get connectionPool(): ConnectionPool {
+    // Mirrors Rails: @pool || DatabaseTasks.migration_connection_pool.
+    // _poolOverride is a real ConnectionPool when set by the migration
+    // runner; the adapter fallback covers test / direct-construction paths.
+    return (this._poolOverride ?? this.adapter) as unknown as ConnectionPool;
   }
 
   // --- Execution (Rails: Migration#exec_migration, #execution_strategy, etc.) ---

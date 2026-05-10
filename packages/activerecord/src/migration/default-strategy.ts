@@ -22,9 +22,9 @@ export class DefaultStrategy extends ExecutionStrategy {
     this.migration = migration;
     this._adapter = adapter;
     if (direction === "up") {
-      await migration.up();
+      await migration.up(adapter);
     } else {
-      await migration.down();
+      await migration.down(adapter);
     }
   }
 

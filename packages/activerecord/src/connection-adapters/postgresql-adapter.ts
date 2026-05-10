@@ -623,6 +623,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       const rows = (await this.schemaQuery(query)) as unknown as PgTypeRow[];
       initializer.run(rows);
     }
+    if (initializer.deferredMultirangeOids.length > 0) {
+      await this.loadAdditionalTypes(initializer.deferredMultirangeOids);
+      initializer.retryDeferredMultiranges();
+    }
   }
 
   /**

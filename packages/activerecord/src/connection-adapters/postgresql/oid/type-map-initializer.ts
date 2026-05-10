@@ -41,9 +41,21 @@ export interface PgTypeRow {
 
 export class TypeMapInitializer {
   private store: TypeMap;
+  /** Multirange rows whose range OID was not yet in the store during run(). */
+  readonly deferredMultirangeOids: number[] = [];
+  private deferredMultirangeRows: PgTypeRow[] = [];
 
   constructor(store: TypeMap) {
     this.store = store;
+  }
+
+  /** Re-attempt registration for any multirange rows deferred during run(). */
+  retryDeferredMultiranges(): void {
+    if (this.deferredMultirangeRows.length === 0) return;
+    const rows = this.deferredMultirangeRows;
+    this.deferredMultirangeRows = [];
+    this.deferredMultirangeOids.length = 0;
+    rows.forEach((row) => this.registerMultirangeType(row));
   }
 
   run(records: PgTypeRow[]): void {
@@ -124,6 +136,10 @@ export class TypeMapInitializer {
             : (rangeType as unknown as RangeSubtype);
         return new MultiRangeType(subtype, row.typname);
       });
+    } else {
+      // Range OID not yet registered — defer so the adapter can load it first.
+      this.deferredMultirangeOids.push(rangeOid);
+      this.deferredMultirangeRows.push(row);
     }
   }
 

@@ -679,6 +679,13 @@ export class RestartParentTransaction extends Transaction {
     // materializeBang() delegates to parent, so _instrumenter is never started.
   }
 
+  /** @internal */
+  override async restoreBang(): Promise<void> {
+    // No-op: RestartParentTransaction delegates materializeBang() to the parent,
+    // so calling the base restoreBang() would fire _instrumenter on an unstarted
+    // instrumenter, raising InstrumentationAlreadyStartedError during retry-on-deadlock.
+  }
+
   override isFullRollback(): boolean {
     return false;
   }

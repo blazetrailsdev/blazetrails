@@ -15,7 +15,7 @@ import {
 import { SubclassNotFound, NameError } from "./errors.js";
 import { quoteSqlValue } from "./base.js";
 
-import { createTestAdapter } from "./test-adapter.js";
+import { createTestAdapter, adapterType } from "./test-adapter.js";
 import { registerModel } from "./associations.js";
 import { connectedToStack } from "./core.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -24,7 +24,6 @@ import { Notifications, Logger, TimeWithZone } from "@blazetrails/activesupport"
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import { withTimezoneConfig } from "./test-helper.js";
-import { adapterType } from "./test-adapter.js";
 import { IntegerType } from "@blazetrails/activemodel";
 
 vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");

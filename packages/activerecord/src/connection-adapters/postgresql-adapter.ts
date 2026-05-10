@@ -1123,7 +1123,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       const client = this._client;
       this._client = null;
       this._inTransaction = false;
-      client?.release(error instanceof Error ? error : undefined);
+      client?.release(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -1289,7 +1289,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       const client = this._client;
       this._client = null;
       this._inTransaction = false;
-      client?.release(error instanceof Error ? error : undefined);
+      client?.release(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }

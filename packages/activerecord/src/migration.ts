@@ -431,7 +431,7 @@ export abstract class Migration {
   async createTable(
     name: string,
     optionsOrFn?:
-      | { id?: boolean | "uuid"; force?: boolean; ifNotExists?: boolean }
+      | { id?: boolean | "uuid"; force?: boolean | "cascade"; ifNotExists?: boolean }
       | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
@@ -1173,7 +1173,7 @@ export class MigrationContext {
     name: string,
     options?: {
       primaryKey?: string | false;
-      force?: boolean;
+      force?: boolean | "cascade";
       ifNotExists?: boolean;
       id?: boolean | "uuid";
     },

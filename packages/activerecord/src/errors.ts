@@ -287,6 +287,17 @@ export class LockWaitTimeout extends StatementInvalid {
   }
 }
 
+/** Mirrors `ActiveRecord::QueryCanceled`. */
+export class QueryCanceled extends QueryAborted {
+  constructor(
+    message?: string,
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = "QueryCanceled";
+  }
+}
+
 export class WrappedDatabaseException extends StatementInvalid {
   constructor(
     message?: string,

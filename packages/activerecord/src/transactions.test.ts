@@ -911,11 +911,7 @@ describe("TransactionTest", () => {
   });
 
   it("raising exception in callback rollbacks in save", async () => {
-    const adapter = new SQLite3Adapter(":memory:");
-    openAdapters.push(adapter);
-    adapter.exec(
-      "CREATE TABLE topics (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, approved INTEGER DEFAULT 0)",
-    );
+    const { adapter } = makeSQLiteTopic();
     let shouldRaise = false;
     class Topic extends Base {
       static {

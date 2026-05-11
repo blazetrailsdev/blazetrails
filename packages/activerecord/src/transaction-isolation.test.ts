@@ -38,8 +38,10 @@ describe("TransactionIsolationUnsupportedTest", () => {
   });
 });
 
-// Runs when the adapter supports transaction isolation (PG, MySQL — not SQLite3).
-// Rails: TransactionIsolationTest
+// Rails: TransactionIsolationTest — guarded by supports_transaction_isolation? && !SQLite3.
+// The skipped tests require PG/MySQL + a second connection (Slot D).
+// The un-skipped test below (isolation-when-joining) is adapter-agnostic: the
+// framework-level check fires before any DB call, so SQLite is a valid harness.
 describe("TransactionIsolationTest", () => {
   it.skip("read uncommitted", () => {
     // BLOCKED: transactions — needs secondConnection wiring

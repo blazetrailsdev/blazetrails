@@ -1213,7 +1213,7 @@ export class AbstractAdapter implements Quoting {
   }
 
   /** @internal */
-  canPerformCaseInsensitiveComparisonFor(_column: unknown): boolean {
+  canPerformCaseInsensitiveComparisonFor(_column: unknown): boolean | Promise<boolean> {
     return false;
   }
 

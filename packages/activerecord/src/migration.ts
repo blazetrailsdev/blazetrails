@@ -1186,19 +1186,9 @@ export class MigrationContext {
       throw new Error("Options `:force` and `:if_not_exists` cannot be used simultaneously.");
     }
     if (options?.force) {
-      if (options.force === "cascade" && typeof (this.adapter as any).dropTable === "function") {
-        try {
-          await (this.adapter as any).dropTable(name, { ifExists: true, force: "cascade" });
-          this._tables.delete(name);
-          this._columns.delete(name);
-          this._columnMeta.delete(name);
-          this._indexes.delete(name);
-        } catch {
-          // table didn't exist or drop failed — proceed to create
-        }
-      } else {
-        await this.dropTable(name).catch(() => {});
-      }
+      await this.dropTable(name, {
+        force: options.force === "cascade" ? "cascade" : undefined,
+      }).catch(() => {});
     }
     if (options?.ifNotExists && this.tableExists(name)) {
       return;
@@ -1261,8 +1251,10 @@ export class MigrationContext {
     }
   }
 
-  async dropTable(name: string): Promise<void> {
-    await this.adapter.executeMutation(`DROP TABLE IF EXISTS "${name}"`);
+  async dropTable(name: string, options?: { force?: "cascade" }): Promise<void> {
+    const cascade =
+      options?.force === "cascade" && this._adapterName === "postgres" ? " CASCADE" : "";
+    await this.adapter.executeMutation(`DROP TABLE IF EXISTS "${name}"${cascade}`);
     this._tables.delete(name);
     this._columns.delete(name);
     this._columnMeta.delete(name);

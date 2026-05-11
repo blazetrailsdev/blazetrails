@@ -1205,11 +1205,13 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       );
     }
     const rawDefault = col["Default"] !== null ? (col["Default"] as string) : undefined;
-    // SHOW FULL FIELDS returns function defaults as plain strings (e.g. "CURRENT_TIMESTAMP").
+    // SHOW FULL FIELDS returns function defaults as plain strings (e.g. "CURRENT_TIMESTAMP", "NOW()").
     // Rails' column.default is nil for function defaults; pass as a lambda so
-    // quoteDefaultExpression emits it unquoted: DEFAULT CURRENT_TIMESTAMP, not DEFAULT 'CURRENT_TIMESTAMP'.
+    // quoteDefaultExpression emits it unquoted: DEFAULT NOW(), not DEFAULT 'NOW()'.
+    const FUNC_DEFAULT_RE =
+      /^(CURRENT_TIMESTAMP(\([0-6]?\))?|NOW\(\)|CURRENT_DATE|CURRENT_TIME|UUID\(\))$/i;
     const colDefault =
-      typeof rawDefault === "string" && /^CURRENT_TIMESTAMP(\([0-6]?\))?$/i.test(rawDefault)
+      typeof rawDefault === "string" && FUNC_DEFAULT_RE.test(rawDefault)
         ? () => rawDefault
         : rawDefault;
     const colOpts: MysqlAddColumnOptions = {

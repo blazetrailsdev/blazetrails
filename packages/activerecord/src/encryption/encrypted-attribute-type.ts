@@ -82,7 +82,14 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     if (isEncryptionDisabled()) return value;
     if (isProtectedMode()) return value;
     const decrypted = this.decrypt(value);
-    return this.castType.deserialize?.(decrypted) ?? decrypted;
+    // Rails: cast_type.serialized? ? cast_type.subtype : cast_type
+    // For Serialized types, the coder already ran before encryption, so we only
+    // need the subtype's deserialize — not a second coder.load pass.
+    const deserializer =
+      (this.castType as any).isSerialized?.() && (this.castType as any).subtype
+        ? (this.castType as any).subtype
+        : this.castType;
+    return deserializer.deserialize?.(decrypted) ?? decrypted;
   }
 
   serialize(value: unknown): unknown {

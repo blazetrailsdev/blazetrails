@@ -3474,10 +3474,13 @@ export class Relation<T extends Base> {
         // for names that would produce invalid SQL or risk injection.
         fromExpr = `(${subSql}) ${_safeAlias(name)}`;
       } else if (raw instanceof Nodes.Node) {
-        // Arel node (e.g. SelectManager#as → Nodes.TableAlias) — compile via
-        // the same registry visitor used by _compileSelectSql so quoting is
-        // consistent with the surrounding SELECT SQL.
-        fromExpr = raw.toSql();
+        // Compile via the same visitor _compileSelectSql uses: adapter visitor
+        // when one is defined (real PG/SQLite/MySQL), registry otherwise, so
+        // identifier quoting stays dialect-consistent across the whole SELECT.
+        const adapterVisitor = (this._modelClass as any)._adapter?.arelVisitor as
+          | Visitors.ToSql
+          | undefined;
+        fromExpr = adapterVisitor ? adapterVisitor.compile(raw) : raw.toSql();
       } else if (alias) {
         fromExpr = `${raw} ${_safeAlias(alias)}`;
       } else {

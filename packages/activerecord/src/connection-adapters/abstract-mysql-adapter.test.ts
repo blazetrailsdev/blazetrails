@@ -134,7 +134,7 @@ describe("AbstractMysqlAdapter#renameColumnForAlter fallback", () => {
   );
 
   it("wraps arbitrary DEFAULT_GENERATED expression in parens, not as a quoted string", async () => {
-    // e.g. MySQL 8 expression defaults like `json_array()` that aren't in FUNC_DEFAULT_RE.
+    // e.g. MySQL 8 expression defaults like `json_array()` that aren't in RENAME_FUNC_DEFAULT_RE.
     // newColumnFromField wraps these in () and sets defaultFunction — we must match.
     const adapter = await makeAdapter("col", "DEFAULT_GENERATED");
     adapter.columnDefinitions = async () => [

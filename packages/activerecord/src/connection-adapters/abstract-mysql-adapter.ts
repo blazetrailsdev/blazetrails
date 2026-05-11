@@ -106,7 +106,7 @@ const ER_TABLE_EXISTS = 1050;
 // Function defaults emitted without DEFAULT_GENERATED in Extra (e.g. CURRENT_TIMESTAMP on
 // datetime columns). Used by renameColumnForAlter to emit them unquoted in the CHANGE clause.
 const RENAME_FUNC_DEFAULT_RE =
-  /^(CURRENT_TIMESTAMP(\([0-6]?\))?|NOW\(\)|CURRENT_DATE|CURRENT_TIME|UUID\(\))$/i;
+  /^(CURRENT_TIMESTAMP(\([0-6]?\))?|NOW(\([0-6]?\))?|CURRENT_DATE|CURRENT_TIME(\([0-6]?\))?|UUID\(\))$/i;
 
 // Hot-path constants for the escape-only `quoteString` override below.
 // Match `MYSQL_ESCAPE_RE` / `MYSQL_ESCAPE_MAP` in `mysql/quoting.ts`

@@ -160,9 +160,8 @@ export class SchemaCreation extends AbstractSchemaCreation {
       sql += ` AS (${mo.as})`;
       if (mo.stored) sql += this._mariadb ? " PERSISTENT" : " STORED";
     }
-    const withBase = super.addColumnOptions(sql, options);
-    const withUpdate = mo.onUpdate ? `${withBase} ON UPDATE ${mo.onUpdate}` : withBase;
-    return this.addSqlCommentBang(withUpdate, mo.comment);
+    if (mo.onUpdate) sql += ` ON UPDATE ${mo.onUpdate}`;
+    return this.addSqlCommentBang(super.addColumnOptions(sql, options), mo.comment);
   }
 
   /** @internal */

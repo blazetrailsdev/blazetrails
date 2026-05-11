@@ -285,6 +285,15 @@ export function none<T extends typeof Base>(this: T): Relation<InstanceType<T>> 
 // matching `delegate(*QUERYING_METHODS, to: :all)`.
 // ---------------------------------------------------------------------------
 
+/** Mirrors: ActiveRecord::Querying#insert */
+export function insert<T extends typeof Base>(
+  this: T,
+  record: Record<string, unknown>,
+  options?: Parameters<Relation<InstanceType<T>>["insertAll"]>[1],
+): Promise<number> {
+  return this.all().insertAll([record], options);
+}
+
 /** Mirrors: ActiveRecord::Querying#insert_all */
 export function insertAll<T extends typeof Base>(
   this: T,

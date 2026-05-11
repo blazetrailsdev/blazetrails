@@ -1928,8 +1928,10 @@ describe("BasicsTest", () => {
     });
   });
   it("preserving time objects with utc time conversion to default timezone local", async () => {
-    // Rails: with_env_tz(EST) + default: :local. We replace with_env_tz via setZone("America/New_York")
-    // and use timeZoneAwareAttributes to get back a zone-aware value in that timezone.
+    // Rails uses with_env_tz(EST) + default: :local (DB strings interpreted as process-local TZ).
+    // Our impl always stores UTC, so default: :local is not testable here. Instead we verify the
+    // equivalent invariant: a UTC time round-trips correctly and is represented in America/New_York
+    // (the stand-in for the EST process TZ) via timeZoneAwareAttributes + zone.
     await withTimezoneConfig({ awareAttributes: true, zone: "America/New_York" }, async () => {
       class Topic extends Base {
         static {
@@ -1948,7 +1950,10 @@ describe("BasicsTest", () => {
     });
   });
   it("preserving time objects with time with zone conversion to default timezone local", async () => {
-    // Rails: with_env_tz(EST) + CST zone + default: :local. We replace with_env_tz via setZone("America/New_York").
+    // Rails uses with_env_tz(EST) + Time.use_zone("CST") + default: :local.
+    // Our impl always stores UTC, so default: :local is not testable here. Instead we verify the
+    // equivalent invariant: a CST-zone time round-trips correctly and is represented in America/New_York
+    // (the stand-in for the EST process TZ) via timeZoneAwareAttributes + zone.
     await withTimezoneConfig({ awareAttributes: true, zone: "America/New_York" }, async () => {
       class Topic extends Base {
         static {

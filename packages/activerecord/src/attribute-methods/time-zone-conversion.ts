@@ -89,9 +89,11 @@ export class TimeZoneConverter extends ValueType<unknown> {
       // Elements may themselves be Range-like (tsrange[] columns): apply TZ
       // conversion to each bound. Bounds may be strings (when the user assigns
       // Range objects with string bounds) or Instants (when cast by the subtype).
-      return casted.map((v) =>
-        isRangeLike(v) ? mapRange(v, (b) => castBoundInZone(b)) : this.cast(v),
-      );
+      // Scalar elements (datetime[] columns) arrive here as Temporal.Instants
+      // after ArrayType pre-casts them through the DateTime subtype; this.cast(v)
+      // reaches convertTimeToTimeZone via the fallback path rather than through
+      // ArrayType.cast again (which would be a no-op second pass).
+      return casted.map((v) => (isRangeLike(v) ? mapRange(v, castBoundInZone) : this.cast(v)));
     }
     if (isRangeLike(casted)) {
       // Range-typed columns (tsrange/tstzrange): cast each bound through the
@@ -118,44 +120,11 @@ export class TimeZoneConverter extends ValueType<unknown> {
     // cast_value on it. In Ruby, TimeWithZone acts_like?(:time) so AR's
     // DateTime type can handle it. In TS, DateTime.castValue() can't parse
     // a TimeWithZone — extract the UTC Temporal.Instant first.
-    if (Array.isArray(value)) {
-      return this._subtype.serialize(
-        value.map((v) =>
-          isRangeLike(v)
-            ? mapRange(v, (b) => (b instanceof TimeWithZone ? b.utc() : b))
-            : v instanceof TimeWithZone
-              ? v.utc()
-              : v,
-        ),
-      );
-    }
-    if (isRangeLike(value)) {
-      return this._subtype.serialize(
-        mapRange(value, (v) => (v instanceof TimeWithZone ? v.utc() : v)),
-      );
-    }
-    const resolved = value instanceof TimeWithZone ? value.utc() : value;
-    return this._subtype.serialize(resolved);
+    return this._subtype.serialize(this._resolveForSerialize(value));
   }
 
   override serializeCastValue(value: unknown): unknown {
-    if (Array.isArray(value)) {
-      return this._subtype.serialize(
-        value.map((v) =>
-          isRangeLike(v)
-            ? mapRange(v, (b) => (b instanceof TimeWithZone ? b.utc() : b))
-            : v instanceof TimeWithZone
-              ? v.utc()
-              : v,
-        ),
-      );
-    }
-    if (isRangeLike(value)) {
-      return this._subtype.serialize(
-        mapRange(value, (v) => (v instanceof TimeWithZone ? v.utc() : v)),
-      );
-    }
-    const resolved = value instanceof TimeWithZone ? value.utc() : value;
+    const resolved = this._resolveForSerialize(value);
     const sub = this._subtype as ValueTypeInstance;
     if (typeof sub.itselfIfSerializeCastValueCompatible === "function") {
       return sub.itselfIfSerializeCastValueCompatible()
@@ -198,6 +167,20 @@ export class TimeZoneConverter extends ValueType<unknown> {
     const roundedOff = subsec % mod;
     return ns - roundedOff;
   }
+
+  // Strips TimeWithZone from any value before DB serialization. Extracts UTC
+  // Temporal.Instant from TimeWithZone bounds in Range/Array values so the
+  // subtype's serialize (which doesn't understand TimeWithZone) receives plain
+  // Instants or timestamps.
+  private _resolveForSerialize(value: unknown): unknown {
+    const extractUtc = (v: unknown): unknown => (v instanceof TimeWithZone ? v.utc() : v);
+    if (Array.isArray(value)) {
+      return value.map((v) => (isRangeLike(v) ? mapRange(v, extractUtc) : extractUtc(v)));
+    }
+    if (isRangeLike(value)) return mapRange(value, extractUtc);
+    return extractUtc(value);
+  }
+
 
   override equals(other: Type): boolean {
     if (!(other instanceof TimeZoneConverter)) return false;
@@ -332,7 +315,7 @@ interface RangeLike {
   readonly begin: unknown;
   readonly end: unknown;
   readonly excludeEnd: boolean;
-  constructor: new (begin: unknown, end: unknown, excludeEnd: boolean) => object;
+  constructor: new (begin: unknown, end: unknown, excludeEnd: boolean) => RangeLike;
 }
 
 /** @internal */

@@ -3484,7 +3484,8 @@ export class Relation<T extends Base> {
         fromExpr = raw;
       }
       // Match both ANSI double-quoted ("table") and MySQL backtick-quoted (`table`) names.
-      sql = sql.replace(/FROM\s+(?:"[^"]+"|[`][^`]+[`])/, `FROM ${fromExpr}`);
+      // Use function-form replacement so $ in fromExpr (e.g. schema names) is not mangled.
+      sql = sql.replace(/FROM\s+(?:"[^"]+"|[`][^`]+[`])/, () => `FROM ${fromExpr}`);
     }
 
     // Append SQL comments from annotate()
@@ -3528,7 +3529,6 @@ export class Relation<T extends Base> {
     return adapter?.arelVisitor ?? new Visitors.ToSql(adapter ?? undefined);
   }
 
-  /**
   /**
    * Returns the adapter's SELECT visitor when one is defined, or null.
    *

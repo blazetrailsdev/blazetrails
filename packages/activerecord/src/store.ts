@@ -276,10 +276,12 @@ export class HashAccessor {
 
 /**
  * Ensures the store attribute value is a HashWithIndifferentAccess before
- * reading or writing a key. Non-HWIA values (plain objects, strings, null)
- * are coerced to an empty HWIA — matching Rails' behavior for structured
- * column types (json/jsonb/hstore) where the type deserializer may return
- * a plain hash or nil rather than a HWIA.
+ * reading or writing a key. The `prepare` override coerces non-HWIA values
+ * via `asIndifferentHash`: hash-like objects (plain `{}`) are promoted to
+ * HWIA preserving their keys; non-object values (strings, numbers, null)
+ * become an empty HWIA. Matches Rails' behavior for structured column types
+ * (json/jsonb/hstore) where the type deserializer may return a plain hash
+ * or nil rather than a HWIA.
  *
  * Mirrors: ActiveRecord::Store::IndifferentHashAccessor
  */

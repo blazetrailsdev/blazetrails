@@ -219,7 +219,7 @@ export function initInternals(this: any): void {
 
 /** @internal */
 export async function _createRecord(this: any): Promise<unknown> {
-  if ((this.constructor as any).recordTimestamps !== false) {
+  if ((this.constructor as any).recordTimestamps) {
     const time = currentTimeFromProperTimezone();
     for (const col of allTimestampAttributesInModel.call(this.constructor as TimestampHost)) {
       if (this._readAttribute?.(col) == null) {

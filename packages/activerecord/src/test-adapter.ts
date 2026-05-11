@@ -24,7 +24,7 @@ import { Visitors } from "@blazetrails/arel";
 import { DatabaseStatements } from "./connection-adapters/abstract/database-statements.js";
 import { include } from "@blazetrails/activesupport";
 import { isWriteQuerySql } from "./connection-adapters/sql-classification.js";
-import type { Result } from "./result.js";
+import { Result } from "./result.js";
 import { _setOnAdapterSetHook } from "./base.js";
 
 // process.env.PG_TEST_URL / MYSQL_TEST_URL are already worker-scoped by
@@ -653,11 +653,17 @@ class SchemaAdapter implements DatabaseAdapter {
     return sql;
   }
 
-  // Override execQuery to delegate to the inner adapter so adapter-specific
-  // behavior (e.g. PG's castResult populating columnTypes) is preserved.
+  // Override execQuery so PG/MySQL's adapter-specific castResult (which populates
+  // columnTypes) is preserved. SQLite falls through to the default DatabaseStatements
+  // execQuery path (via execute()) to keep fixSqliteCompat + retry logic intact.
   async execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result> {
-    await this.setup();
-    return this.inner.execQuery(sql, name, binds);
+    if (isPg() || isMysql()) {
+      await this.setup();
+      return this.inner.execQuery(sql, name, binds);
+    }
+    // SQLite: use execute() so fixSqliteCompat + missing-schema retry apply.
+    const rows = await this.execute(sql, binds ?? [], name ?? undefined);
+    return Result.fromRowHashes(rows);
   }
 
   async execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]> {

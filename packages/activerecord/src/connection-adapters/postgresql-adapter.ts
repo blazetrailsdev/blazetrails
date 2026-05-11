@@ -35,6 +35,7 @@ import type {
 } from "../adapter.js";
 import {
   ConnectionNotEstablished,
+  DatabaseAlreadyExists,
   DatabaseConnectionError,
   Deadlocked,
   InvalidForeignKey,
@@ -43,6 +44,7 @@ import {
   NotNullViolation,
   PreparedStatementCacheExpired,
   QueryCanceled,
+  RangeError as ARRangeError,
   RecordNotUnique,
   SerializationFailure,
   StatementInvalid,
@@ -3708,10 +3710,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         return new NotNullViolation(msg, { sql, binds, cause });
       case "22001": // string_data_right_truncation
         return new ValueTooLong(msg, { sql, binds, cause });
+      case "22003": // numeric_value_out_of_range
+        return new ARRangeError(msg, { sql, binds, cause });
       case "40001": // serialization_failure
         return new SerializationFailure(msg, { sql, binds, cause });
       case "40P01": // deadlock_detected
         return new Deadlocked(msg, { sql, binds, cause });
+      case "42P04": // duplicate_database
+        return new DatabaseAlreadyExists(msg, { sql, binds, cause });
       case "55P03": // lock_not_available
         return new LockWaitTimeout(msg, { sql, binds, cause });
       case "57014": // query_canceled

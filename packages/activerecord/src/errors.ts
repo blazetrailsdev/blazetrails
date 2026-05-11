@@ -505,6 +505,17 @@ export class DatabaseVersionError extends ActiveRecordError {
   }
 }
 
+/** Mirrors `ActiveRecord::RangeError`. */
+export class RangeError extends StatementInvalid {
+  constructor(
+    message?: string,
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = "RangeError";
+  }
+}
+
 export class DatabaseAlreadyExists extends StatementInvalid {
   constructor(
     message?: string,

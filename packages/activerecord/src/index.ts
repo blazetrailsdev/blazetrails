@@ -229,6 +229,7 @@ export {
   Deadlocked,
   LockWaitTimeout,
   QueryCanceled,
+  RangeError,
 } from "./errors.js";
 export {
   ReadonlyAttributeError,

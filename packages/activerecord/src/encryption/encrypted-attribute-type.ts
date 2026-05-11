@@ -102,7 +102,7 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
 
   isEncrypted(value: unknown): boolean {
     if (typeof value !== "string") return false;
-    return this._encryptor.isEncrypted(value);
+    return this.scheme.withContext(() => this._encryptor.isEncrypted(value));
   }
 
   get deterministic(): boolean {
@@ -171,33 +171,33 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
 
   /** @internal */
   private decryptAsText(value: unknown): unknown {
-    return this.scheme.withContext(() => {
-      if (value === null || value === undefined) return value;
-      if (this._default !== undefined && this._default === value) return value;
+    try {
+      return this.scheme.withContext(() => {
+        if (value === null || value === undefined) return value;
+        if (this._default !== undefined && this._default === value) return value;
 
-      // Adapters that use JSON/JSONB columns (e.g. PostgreSQL) return the stored value
-      // as a parsed JS object rather than a raw string. Re-stringify so the encryptor
-      // always receives the JSON string that was originally stored.
-      let ciphertext: string;
-      if (typeof value === "string") {
-        ciphertext = value;
-      } else {
-        try {
-          ciphertext = JSON.stringify(value) ?? String(value);
-        } catch {
-          ciphertext = String(value);
+        // Adapters that use JSON/JSONB columns (e.g. PostgreSQL) return the stored value
+        // as a parsed JS object rather than a raw string. Re-stringify so the encryptor
+        // always receives the JSON string that was originally stored.
+        let ciphertext: string;
+        if (typeof value === "string") {
+          ciphertext = value;
+        } else {
+          try {
+            ciphertext = JSON.stringify(value) ?? String(value);
+          } catch {
+            ciphertext = String(value);
+          }
         }
-      }
 
-      try {
         return this._encryptor.decrypt(ciphertext, this.decryptionOptions());
-      } catch (error) {
-        if (!(error instanceof BaseEncryptionError)) throw error;
-        if (this.scheme.previousSchemes.length === 0)
-          return this.handleDeserializeError(error, value);
-        return this.tryToDeserializeWithPreviousEncryptedTypes(value);
-      }
-    });
+      });
+    } catch (error) {
+      if (!(error instanceof BaseEncryptionError)) throw error;
+      if (this.scheme.previousSchemes.length === 0)
+        return this.handleDeserializeError(error, value);
+      return this.tryToDeserializeWithPreviousEncryptedTypes(value);
+    }
   }
 
   private decrypt(value: unknown): unknown {

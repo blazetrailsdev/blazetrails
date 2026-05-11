@@ -450,13 +450,14 @@ describe("TimestampTest", () => {
     }
 
     const post = await Post.create({ title: "Hello" });
-    const afterCreate = (post.updated_on as Temporal.Instant).epochMilliseconds;
 
     post.title = "Updated";
+    const beforeSave = Temporal.Now.instant();
     await post.save();
 
-    const afterSave = (post.updated_on as Temporal.Instant).epochMilliseconds;
-    expect(afterSave).toBeGreaterThanOrEqual(afterCreate);
+    const afterSave = post.updated_on as Temporal.Instant;
+    expect(afterSave).toBeInstanceOf(Temporal.Instant);
+    expect(afterSave.epochMilliseconds).toBeGreaterThanOrEqual(beforeSave.epochMilliseconds);
   });
 
   it("does not set updated_on when recordTimestamps is false", async () => {
@@ -476,9 +477,11 @@ describe("TimestampTest", () => {
 
     const post = await Post.create({ title: "Hello" });
     expect(post.updated_on).toBeNull();
+    expect(post.updated_at).toBeNull();
     post.title = "Updated";
     await post.save();
     expect(post.updated_on).toBeNull();
+    expect(post.updated_at).toBeNull();
   });
 
   it("does not touch timestamps when model has no timestamp attributes", async () => {

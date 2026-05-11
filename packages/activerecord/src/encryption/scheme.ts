@@ -9,7 +9,7 @@ import { ConfigError } from "./errors.js";
 import type { Compressor } from "./config.js";
 import type { MessageSerializerLike } from "./message-serializer.js";
 import { Configurable } from "./configurable.js";
-import { withEncryptionContext } from "./context.js";
+import { withEncryptionContext, type EncryptionContext } from "./context.js";
 import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { DeterministicKeyProvider } from "./deterministic-key-provider.js";
 import {
@@ -105,9 +105,9 @@ export class Scheme {
     const hasEncryptorOverride =
       encryptor !== undefined || compress === false || compressor !== undefined;
     if (hasEncryptorOverride || messageSerializer !== undefined) {
-      const ctx: Record<string, unknown> = {};
-      if (hasEncryptorOverride) ctx["encryptor"] = this._encryptor;
-      if (messageSerializer !== undefined) ctx["messageSerializer"] = messageSerializer;
+      const ctx: EncryptionContext = {};
+      if (hasEncryptorOverride) ctx.encryptor = this._encryptor;
+      if (messageSerializer !== undefined) ctx.messageSerializer = messageSerializer;
       return withEncryptionContext(ctx, fn);
     }
     return fn();

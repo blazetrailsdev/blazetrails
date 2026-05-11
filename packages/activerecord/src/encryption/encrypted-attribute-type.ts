@@ -82,14 +82,7 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     if (isEncryptionDisabled()) return value;
     if (isProtectedMode()) return value;
     const decrypted = this.decrypt(value);
-    // Rails: cast_type.serialized? ? cast_type.subtype : cast_type
-    // For Serialized types, the coder already ran before encryption, so we only
-    // need the subtype's deserialize — not a second coder.load pass.
-    const deserializer =
-      (this.castType as any).isSerialized?.() && (this.castType as any).subtype
-        ? (this.castType as any).subtype
-        : this.castType;
-    return deserializer.deserialize?.(decrypted) ?? decrypted;
+    return this.castType.deserialize?.(decrypted) ?? decrypted;
   }
 
   serialize(value: unknown): unknown {
@@ -329,7 +322,14 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   /** @internal */
   private databaseTypeToText(value: unknown): unknown {
     if (value != null && this.castType.isBinary()) {
-      const raw = this.castType.deserialize?.(value) ?? value;
+      // Rails: binary_cast_type = cast_type.serialized? ? cast_type.subtype : cast_type
+      // For Serialized binary types, deserialize through the subtype only — the coder
+      // (YAML/JSON) should not run on the raw binary ciphertext.
+      const binaryCastType =
+        (this.castType as any).isSerialized?.() && (this.castType as any).subtype
+          ? (this.castType as any).subtype
+          : this.castType;
+      const raw = binaryCastType.deserialize?.(value) ?? value;
       // Use Latin-1 (not UTF-8) so bytes 128–255 survive the round-trip. The
       // ciphertext is always ASCII so Latin-1 == UTF-8 for that path; for
       // supportUnencryptedData rows the plaintext bytes must also be Latin-1

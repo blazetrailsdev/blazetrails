@@ -74,12 +74,26 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
 
   override isChanged(oldValue: unknown, newValue: unknown, _raw?: unknown): boolean {
     if (oldValue instanceof Temporal.Instant && newValue instanceof Temporal.Instant) {
-      // Compare at microsecond precision — serialization truncates to 6 decimal places.
-      // Use roundingMode:"trunc" to match Temporal.toString() truncation semantics.
-      const opts = { smallestUnit: "microsecond" as const, roundingMode: "trunc" as const };
-      return oldValue.round(opts).epochNanoseconds !== newValue.round(opts).epochNanoseconds;
+      return (
+        this._nsAtPrecision(oldValue.epochNanoseconds) !==
+        this._nsAtPrecision(newValue.epochNanoseconds)
+      );
     }
     return oldValue !== newValue;
+  }
+
+  // Truncate epoch nanoseconds to column precision, matching _applySecondsPrecision /
+  // Temporal.toString() floor-style sub-second truncation. Used by isChanged so that
+  // sub-precision nanosecond noise from Temporal.Now (when precision=null) doesn't
+  // produce spurious dirty marks after serialize → cast round-trips.
+  private _nsAtPrecision(ns: bigint): bigint {
+    const p = this.precision ?? 6;
+    if (!Number.isInteger(p) || p < 0 || p > 9) return ns;
+    const mod = 10n ** BigInt(9 - p);
+    let subsec = ns % 1_000_000_000n;
+    if (subsec < 0n) subsec += 1_000_000_000n;
+    const roundedOff = subsec % mod;
+    return ns - roundedOff;
   }
 
   serialize(value: unknown): string | null {

@@ -19,8 +19,8 @@ export interface TimeZoneConversion {
  * Mirrors: ActiveRecord::AttributeMethods::TimeZoneConversion::TimeZoneConverter
  * Rails uses `DelegateClass(Type::Value)` to auto-delegate all methods; we extend
  * ValueType and explicitly delegate type/cast/deserialize/serialize/serializeCastValue
- * to the wrapped subtype. Other Type methods (isChanged, isSerializable, etc.) fall
- * back to ValueType defaults, matching the base type's behavior for time values.
+ * to the wrapped subtype. `isChanged` is also overridden to compare instants by value
+ * at the subtype's column precision (matching Rails' `TimeWithZone#==` semantics).
  */
 export class TimeZoneConverter extends ValueType<unknown> {
   private readonly _subtype: Type;
@@ -129,12 +129,24 @@ export class TimeZoneConverter extends ValueType<unknown> {
           ? newValue
           : null;
     if (oldInstant !== null && newInstant !== null) {
-      // Compare at microsecond precision — serialization truncates to 6 decimal places.
-      // Use roundingMode:"trunc" to match Temporal.toString() truncation semantics.
-      const opts = { smallestUnit: "microsecond" as const, roundingMode: "trunc" as const };
-      return oldInstant.round(opts).epochNanoseconds !== newInstant.round(opts).epochNanoseconds;
+      return (
+        this._nsAtPrecision(oldInstant.epochNanoseconds) !==
+        this._nsAtPrecision(newInstant.epochNanoseconds)
+      );
     }
     return oldValue !== newValue;
+  }
+
+  // Same floor-style truncation as DateTimeType._nsAtPrecision / _applySecondsPrecision.
+  // Uses the wrapped subtype's precision so behavior matches the column's serialize output.
+  private _nsAtPrecision(ns: bigint): bigint {
+    const p = this._subtype.precision ?? 6;
+    if (!Number.isInteger(p) || p < 0 || p > 9) return ns;
+    const mod = 10n ** BigInt(9 - p);
+    let subsec = ns % 1_000_000_000n;
+    if (subsec < 0n) subsec += 1_000_000_000n;
+    const roundedOff = subsec % mod;
+    return ns - roundedOff;
   }
 
   override equals(other: Type): boolean {

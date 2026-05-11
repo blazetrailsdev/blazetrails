@@ -23,6 +23,7 @@ describe("I18nGenerateMessageValidationTest", () => {
   });
   afterAll(async () => {
     await dropAllTables(adapter);
+    vi.unstubAllEnvs();
   });
 
   function makeTopic() {

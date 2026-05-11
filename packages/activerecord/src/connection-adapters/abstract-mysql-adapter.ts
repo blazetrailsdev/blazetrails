@@ -1211,17 +1211,21 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     // quoteDefaultExpression emits it unquoted: DEFAULT NOW(), not DEFAULT 'NOW()'.
     // Mirrors newColumnFromField: CURRENT_TIMESTAMP datetime cols and DEFAULT_GENERATED cols
     // always go through the function-default path; everything else only when FUNC_DEFAULT_RE matches.
+    // FUNC_DEFAULT_RE only applies to the non-DEFAULT_GENERATED path (e.g. CURRENT_TIMESTAMP on
+    // datetime columns, which MySQL emits without DEFAULT_GENERATED in Extra).
     const FUNC_DEFAULT_RE =
       /^(CURRENT_TIMESTAMP(\([0-6]?\))?|NOW\(\)|CURRENT_DATE|CURRENT_TIME|UUID\(\))$/i;
     let colDefault: (() => string) | string | undefined;
     if (typeof rawDefault === "string") {
-      if (FUNC_DEFAULT_RE.test(rawDefault)) {
-        // Well-known function: emit as-is, unquoted.
-        colDefault = () => rawDefault;
-      } else if (extra === "default_generated") {
-        // DEFAULT_GENERATED with an arbitrary expression: wrap in parens (matches newColumnFromField).
+      if (extra === "default_generated") {
+        // Mirrors newColumnFromField (mysql/schema-statements.ts): DEFAULT_GENERATED expressions
+        // must be wrapped in parens so MySQL accepts them in ALTER TABLE … CHANGE.
         const expr = rawDefault.startsWith("(") ? rawDefault : `(${rawDefault})`;
         colDefault = () => expr;
+      } else if (FUNC_DEFAULT_RE.test(rawDefault)) {
+        // Well-known keyword defaults on non-DEFAULT_GENERATED columns (e.g. CURRENT_TIMESTAMP
+        // on datetime): emit as-is, no parens.
+        colDefault = () => rawDefault;
       } else {
         colDefault = rawDefault;
       }

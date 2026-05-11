@@ -108,12 +108,12 @@ describe("AbstractMysqlAdapter#renameColumnForAlter fallback", () => {
   });
 
   it.each([
-    ["NOW()", "NOW()"],
-    ["CURRENT_DATE", "CURRENT_DATE"],
-    ["CURRENT_TIME", "CURRENT_TIME"],
-    ["uuid()", "uuid()"],
+    ["NOW()", "(NOW())"],
+    ["CURRENT_DATE", "(CURRENT_DATE)"],
+    ["CURRENT_TIME", "(CURRENT_TIME)"],
+    ["uuid()", "(uuid())"],
   ])(
-    "emits DEFAULT %s unquoted for non-CURRENT_TIMESTAMP function defaults",
+    "wraps DEFAULT_GENERATED default %s in parens (mirrors newColumnFromField)",
     async (defaultVal, expectedFragment) => {
       const adapter = await makeAdapter("col", "DEFAULT_GENERATED");
       adapter.columnDefinitions = async () => [
@@ -129,7 +129,7 @@ describe("AbstractMysqlAdapter#renameColumnForAlter fallback", () => {
       ];
       const sql: string = await adapter.renameColumnForAlter("users", "col", "col2");
       expect(sql).toContain(`DEFAULT ${expectedFragment}`);
-      expect(sql).not.toContain(`DEFAULT '${expectedFragment}'`);
+      expect(sql).not.toContain(`DEFAULT '`);
     },
   );
 

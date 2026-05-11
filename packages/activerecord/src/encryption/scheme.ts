@@ -7,6 +7,7 @@
 import { Encryptor, type EncryptorLike } from "./encryptor.js";
 import { ConfigError } from "./errors.js";
 import type { Compressor } from "./config.js";
+import type { MessageSerializerLike } from "./message-serializer.js";
 import { Configurable } from "./configurable.js";
 import { withEncryptionContext } from "./context.js";
 import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
@@ -29,7 +30,7 @@ export interface SchemeOptions {
   compress?: boolean;
   compressor?: Compressor;
   encryptor?: EncryptorLike;
-  messageSerializer?: unknown;
+  messageSerializer?: MessageSerializerLike;
 }
 
 export class Scheme {

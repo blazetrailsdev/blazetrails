@@ -42,6 +42,16 @@ export {
 
 import { ActiveRecordError } from "./errors.js";
 
+// Mirrors Rails AbstractAdapter#extract_new_comment_value (alias of extract_new_default_value).
+function _extractNewCommentValue(
+  v: string | null | { from?: unknown; to?: unknown },
+): string | null {
+  if (v !== null && typeof v === "object" && "to" in v) {
+    return (v as { to: unknown }).to as string | null;
+  }
+  return v as string | null;
+}
+
 // Mirrors Zlib.crc32 (ISO 3309 / ITU-T V.42 polynomial) operating on UTF-8 bytes.
 function _crc32(str: string): number {
   const bytes = new TextEncoder().encode(str);
@@ -448,16 +458,24 @@ export abstract class Migration {
         break;
       }
       case "createEnum": {
-        const [enumName, enumValues] = args as [string, string[]];
-        await this.dropEnum(enumName, enumValues);
+        const [enumName, enumValues, enumOpts] = args as [
+          string,
+          string[],
+          Record<string, unknown>?,
+        ];
+        await this.dropEnum(enumName, enumValues, enumOpts);
         break;
       }
       case "dropEnum": {
-        const [deEnumName, deValues] = args as [string, string[] | undefined];
+        const [deEnumName, deValues, deOpts] = args as [
+          string,
+          string[] | undefined,
+          Record<string, unknown>?,
+        ];
         if (!deValues) {
           throw new IrreversibleMigration("Cannot reverse dropEnum without a list of enum values");
         }
-        await this.createEnum(deEnumName, deValues);
+        await this.createEnum(deEnumName, deValues, deOpts);
         break;
       }
       case "renameEnumValue": {
@@ -729,8 +747,12 @@ export abstract class Migration {
     await (this.connection as any).validateCheckConstraint(tableName, options);
   }
 
-  async validateForeignKey(fromTable: string, toTable: string): Promise<void> {
-    await (this.connection as any).validateForeignKey(fromTable, toTable);
+  async validateForeignKey(
+    fromTable: string,
+    toTable: string,
+    options?: { name?: string },
+  ): Promise<void> {
+    await (this.connection as any).validateForeignKey(fromTable, toTable, options);
   }
 
   async changeColumnComment(
@@ -742,7 +764,8 @@ export abstract class Migration {
       this._recorder.record("changeColumnComment", [tableName, columnName, commentOrChanges]);
       return;
     }
-    await this.schema.changeColumnComment(tableName, columnName, commentOrChanges as string | null);
+    const resolved = _extractNewCommentValue(commentOrChanges);
+    await (this.connection as any).changeColumnComment(tableName, columnName, resolved);
   }
 
   async changeTableComment(
@@ -753,7 +776,8 @@ export abstract class Migration {
       this._recorder.record("changeTableComment", [tableName, commentOrChanges]);
       return;
     }
-    await this.schema.changeTableComment(tableName, commentOrChanges as string | null);
+    const resolved = _extractNewCommentValue(commentOrChanges);
+    await (this.connection as any).changeTableComment(tableName, resolved);
   }
 
   async enableExtension(name: string, options?: Record<string, unknown>): Promise<void> {
@@ -793,7 +817,9 @@ export abstract class Migration {
       this._recorder.record("dropEnum", [name, values, options]);
       return;
     }
-    await (this.connection as any).dropEnum(name, values, options);
+    // values is only captured for recording (so dropEnum can be inverted to createEnum);
+    // the adapter's dropEnum(name, options?) doesn't need values for SQL execution.
+    await (this.connection as any).dropEnum(name, options ?? {});
   }
 
   async renameEnumValue(name: string, options: { from: string; to: string }): Promise<void> {

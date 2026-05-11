@@ -2843,6 +2843,33 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.exec(`COMMENT ON TABLE ${this.quoteTableName(tableName)} IS ${this.quote(comment)}`);
   }
 
+  /** @internal */
+  async validateConstraint(tableName: string, constraintName: string): Promise<void> {
+    await this.exec(
+      `ALTER TABLE ${this.quoteTableName(tableName)} VALIDATE CONSTRAINT ${this.quoteIdentifier(constraintName)}`,
+    );
+  }
+
+  async validateCheckConstraint(tableName: string, options: { name: string }): Promise<void> {
+    await this.validateConstraint(tableName, options.name);
+  }
+
+  async validateForeignKey(
+    fromTable: string,
+    toTable: string,
+    options?: { name?: string },
+  ): Promise<void> {
+    if (options?.name) {
+      await this.validateConstraint(fromTable, options.name);
+      return;
+    }
+    const fks = await this.foreignKeys(fromTable);
+    const { table: toTbl } = this.parseSchemaQualifiedName(toTable);
+    const fk = (fks as any[]).find((f) => f.toTable === toTbl || f.toTable === toTable);
+    if (!fk) throw new Error(`No foreign key found from ${fromTable} to ${toTable}`);
+    await this.validateConstraint(fromTable, fk.name);
+  }
+
   typeToSql(
     type: string,
     options: {

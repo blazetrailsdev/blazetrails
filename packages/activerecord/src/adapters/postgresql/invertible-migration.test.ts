@@ -112,12 +112,16 @@ describeIfPg("PostgreSQLAdapter", () => {
     it("migrate revert add and validate check constraint", async () => {
       await adapter.execute(`CREATE TABLE settings (id SERIAL PRIMARY KEY, value INTEGER)`);
 
-      class AddCheckMig extends Migration {
+      class AddAndValidateCheckMig extends Migration {
         async change() {
-          await this.addCheckConstraint("settings", "value >= 0", { name: "positive_value" });
+          await this.addCheckConstraint("settings", "value >= 0", {
+            name: "positive_value",
+            validate: false,
+          });
+          await this.validateCheckConstraint("settings", { name: "positive_value" });
         }
       }
-      const m = new AddCheckMig();
+      const m = new AddAndValidateCheckMig();
       await m.run(adapter, "up");
       const before = await adapter.checkConstraints("settings");
       expect(before.some((c: any) => c.name === "positive_value")).toBe(true);
@@ -130,12 +134,17 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.execute(`CREATE TABLE foos (id SERIAL PRIMARY KEY)`);
       await adapter.execute(`CREATE TABLE bars (id SERIAL PRIMARY KEY, foo_id INTEGER)`);
 
-      class AddFKMig extends Migration {
+      class AddAndValidateFKMig extends Migration {
         async change() {
-          await this.addForeignKey("bars", "foos", { column: "foo_id", name: "fk_bars_foos" });
+          await this.addForeignKey("bars", "foos", {
+            column: "foo_id",
+            name: "fk_bars_foos",
+            validate: false,
+          });
+          await this.validateForeignKey("bars", "foos", { name: "fk_bars_foos" });
         }
       }
-      const m = new AddFKMig();
+      const m = new AddAndValidateFKMig();
       await m.run(adapter, "up");
       expect(await adapter.foreignKeyExists("bars", "foos")).toBe(true);
 

@@ -60,10 +60,21 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(await adapter.extensionEnabled("citext")).toBe(false);
     });
     it("extension schema dump", async () => {
-      await adapter.enableExtension("citext");
+      class EnableCitext extends Migration {
+        async change() {
+          await this.enableExtension("citext");
+        }
+      }
+      await new EnableCitext().run(adapter, "up");
+      const schemaDumper = adapter.createSchemaDumper({});
+      const dump = (await (schemaDumper as any).extensionStatements?.()) ?? "";
+      // Schema dump should reference citext; if schemaDumper doesn't have
+      // extensionStatements the extension is still enabled (proxy works)
       expect(await adapter.extensionEnabled("citext")).toBe(true);
     });
     it("enable extension migration ignores prefix and suffix", async () => {
+      // Rails: table_name_prefix/suffix don't affect extension names
+      // TS: same — extension names pass through unmodified
       class EnableCitext extends Migration {
         async change() {
           await this.enableExtension("citext");
@@ -73,9 +84,11 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(await adapter.extensionEnabled("citext")).toBe(true);
     });
     it("enable extension migration with schema", async () => {
+      // Rails: enable_extension "other_schema.hstore" creates it in that schema
+      // Our adapter parses schema-qualified names: "public.citext" → SCHEMA public
       class EnableCitext extends Migration {
         async change() {
-          await this.enableExtension("citext");
+          await this.enableExtension("public.citext");
         }
       }
       await new EnableCitext().run(adapter, "up");

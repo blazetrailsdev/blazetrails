@@ -1930,10 +1930,10 @@ describe("BasicsTest", () => {
     });
   });
   it("preserving time objects with utc time conversion to default timezone local", async () => {
-    // Rails uses with_env_tz(EST) + default: :local (DB strings interpreted as process-local TZ).
-    // Our impl always stores UTC, so default: :local is not testable here. Instead we verify the
-    // equivalent invariant: a UTC time round-trips correctly and is represented in America/New_York
-    // (the stand-in for the EST process TZ) via timeZoneAwareAttributes + zone.
+    // Rails uses with_env_tz(EST) + default: :local. Our defaultSqlTimezone() implements
+    // default: :local via Temporal.Now.timeZoneId() (the host process TZ), which is not
+    // controllable in tests — that requires with_env_tz infrastructure. Instead we verify
+    // the equivalent round-trip + zone-representation invariant via timeZoneAwareAttributes + zone.
     await withTimezoneConfig({ awareAttributes: true, zone: "America/New_York" }, async () => {
       class Topic extends Base {
         static {
@@ -1957,10 +1957,10 @@ describe("BasicsTest", () => {
     });
   });
   it("preserving time objects with time with zone conversion to default timezone local", async () => {
-    // Rails uses with_env_tz(EST) + Time.use_zone("CST") + default: :local.
-    // Our impl always stores UTC, so default: :local is not testable here. Instead we verify the
-    // equivalent invariant: a CST-zone time round-trips correctly and is represented in America/New_York
-    // (the stand-in for the EST process TZ) via timeZoneAwareAttributes + zone.
+    // Rails uses with_env_tz(EST) + Time.use_zone("CST") + default: :local. Our
+    // defaultSqlTimezone() implements default: :local via Temporal.Now.timeZoneId() (host process
+    // TZ), which is not controllable without with_env_tz infrastructure. Instead we verify the
+    // equivalent round-trip + zone-representation invariant via timeZoneAwareAttributes + zone.
     await withTimezoneConfig({ awareAttributes: true, zone: "America/New_York" }, async () => {
       class Topic extends Base {
         static {

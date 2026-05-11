@@ -55,15 +55,6 @@ import {
 import { getTypeParser as getTemporalTypeParser } from "./postgresql/temporal-type-parsers.js";
 
 const TEMPORAL_OIDS = new Set([1082, 1083, 1114, 1184, 1266]);
-
-function toError(value: unknown): Error {
-  if (value instanceof Error) return value;
-  try {
-    return new Error(String(value));
-  } catch {
-    return new Error(Object.prototype.toString.call(value));
-  }
-}
 import { READ_QUERY } from "./postgresql/database-statements.js";
 import type { CreateDatabaseOptions, PgIndexDefinition } from "./postgresql/schema-statements.js";
 import {
@@ -89,6 +80,15 @@ import {
 import { SchemaCreation as PgSchemaCreation } from "./postgresql/schema-creation.js";
 import { SchemaDumper as PgSchemaDumper } from "./postgresql/schema-dumper.js";
 import { pgDatetimeConfig } from "./postgresql/pg-datetime-config.js";
+
+function toError(value: unknown): Error {
+  if (value instanceof Error) return value;
+  try {
+    return new Error(String(value));
+  } catch {
+    return new Error(Object.prototype.toString.call(value));
+  }
+}
 
 /**
  * PostgreSQL adapter — connects ActiveRecord to a real PostgreSQL database.

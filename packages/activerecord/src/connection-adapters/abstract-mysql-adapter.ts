@@ -1192,8 +1192,8 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     // Guard against silently dropping Extra attributes we cannot reconstruct (e.g. generated
     // columns). AUTO_INCREMENT is preserved via ColumnOptions.autoIncrement; ON UPDATE <expr>
     // (including MySQL 8 compound form "DEFAULT_GENERATED on update CURRENT_TIMESTAMP") is
-    // preserved via ColumnOptions.onUpdate. Anything else triggers an explicit throw so callers
-    // know to upgrade MySQL rather than receive a lossy CHANGE clause.
+    // preserved via MysqlAddColumnOptions.onUpdate. Anything else triggers an explicit throw so
+    // callers know to upgrade MySQL rather than receive a lossy CHANGE clause.
     const extraRaw = ((col["Extra"] as string | undefined) ?? "").trim();
     const extra = extraRaw.toLowerCase();
     const onUpdateMatch = extraRaw.match(/on update (.+)$/i);

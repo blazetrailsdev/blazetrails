@@ -843,7 +843,12 @@ export class SchemaDumper {
       deferrable?: boolean | string;
       validate?: boolean;
     };
-    const fkIgnorePattern = (this.constructor as typeof SchemaDumper).fkIgnorePattern;
+    const rawFkPattern = (this.constructor as typeof SchemaDumper).fkIgnorePattern;
+    // Strip g/y flags to avoid mutating shared lastIndex state across iterations.
+    const fkIgnorePattern =
+      rawFkPattern.global || rawFkPattern.sticky
+        ? new RegExp(rawFkPattern.source, rawFkPattern.flags.replace(/[gy]/g, ""))
+        : rawFkPattern;
     for (const fk of fks as Fk[]) {
       const fromExpr = JSON.stringify(this.removePrefixAndSuffix(fk.fromTable ?? tableName));
       const toExpr = JSON.stringify(this.removePrefixAndSuffix(fk.toTable));
@@ -851,7 +856,6 @@ export class SchemaDumper {
       if (fk.column) opts.push(`column: ${JSON.stringify(fk.column)}`);
       if (fk.primaryKey) opts.push(`primaryKey: ${JSON.stringify(fk.primaryKey)}`);
       // Mirrors Rails' export_name_on_schema_dump? — omit name when it matches the ignore pattern
-      fkIgnorePattern.lastIndex = 0;
       if (fk.name && !fkIgnorePattern.test(fk.name)) opts.push(`name: ${JSON.stringify(fk.name)}`);
       if (fk.onUpdate) opts.push(`onUpdate: ${JSON.stringify(fk.onUpdate)}`);
       if (fk.onDelete) opts.push(`onDelete: ${JSON.stringify(fk.onDelete)}`);

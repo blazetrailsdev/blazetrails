@@ -1190,10 +1190,11 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     const col = cols.find((c) => (c["Field"] as string) === columnName);
     if (!col) throw new Error(`Column not found: ${columnName} in ${tableName}`);
     // Guard against silently dropping Extra attributes we cannot reconstruct (e.g. generated
-    // columns). AUTO_INCREMENT is preserved via ColumnOptions.autoIncrement; ON UPDATE <expr>
-    // (including MySQL 8 compound form "DEFAULT_GENERATED on update CURRENT_TIMESTAMP") is
-    // preserved via MysqlAddColumnOptions.onUpdate. Anything else triggers an explicit throw so
-    // callers know to upgrade MySQL rather than receive a lossy CHANGE clause.
+    // columns). Allowed values: AUTO_INCREMENT (via ColumnOptions.autoIncrement), ON UPDATE <expr>
+    // (via MysqlAddColumnOptions.onUpdate, including the MySQL 8 compound form
+    // "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"), and DEFAULT_GENERATED alone (function
+    // default — reconstructed via the FUNC_DEFAULT_RE lambda in colDefault below).
+    // Anything else triggers an explicit throw so callers know to upgrade MySQL.
     const extraRaw = ((col["Extra"] as string | undefined) ?? "").trim();
     const extra = extraRaw.toLowerCase();
     const onUpdateMatch = extraRaw.match(/on update (.+)$/i);

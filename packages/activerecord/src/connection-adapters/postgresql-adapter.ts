@@ -2218,7 +2218,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return Number(rows[0].count) > 0;
   }
 
-  async enableExtension(name: string): Promise<void> {
+  async enableExtension(name: string, _options?: Record<string, unknown>): Promise<void> {
     const parts = String(name).split(".");
     const extName = parts[parts.length - 1];
     const schema = parts.length > 1 ? parts[parts.length - 2] : null;
@@ -2860,13 +2860,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   async validateForeignKey(
     fromTable: string,
-    toTable: string,
+    toTable?: string,
     options?: { name?: string },
   ): Promise<void> {
     if (options?.name) {
       await this.validateConstraint(fromTable, options.name);
       return;
     }
+    if (!toTable) throw new ArgumentError("validateForeignKey requires toTable or options.name");
     const fks = await this.foreignKeys(fromTable);
     const { schema: toSchema, table: toTbl } = this.parseSchemaQualifiedName(toTable);
     const fk = (fks as any[]).find((f) => {
@@ -2874,7 +2875,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       if (toSchema) return fSchema === toSchema && fTbl === toTbl;
       return fTbl === toTbl;
     });
-    if (!fk) throw new Error(`No foreign key found from ${fromTable} to ${toTable}`);
+    if (!fk) throw new ArgumentError(`No foreign key found from ${fromTable} to ${toTable}`);
     await this.validateConstraint(fromTable, fk.name);
   }
 

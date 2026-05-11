@@ -771,10 +771,12 @@ export abstract class Migration {
 
   async validateForeignKey(
     fromTable: string,
-    toTable: string,
+    toTableOrOptions?: string | { name?: string },
     options?: { name?: string },
   ): Promise<void> {
-    await (this.connection as any).validateForeignKey(fromTable, toTable, options);
+    const toTable = typeof toTableOrOptions === "string" ? toTableOrOptions : undefined;
+    const opts = typeof toTableOrOptions === "object" ? toTableOrOptions : (options ?? undefined);
+    await (this.connection as any).validateForeignKey(fromTable, toTable, opts);
   }
 
   async changeColumnComment(
@@ -866,14 +868,14 @@ export abstract class Migration {
 
   async removeUniqueConstraint(
     tableName: string,
-    columnName?: string | string[],
+    columnNameOrOptions?: string | string[] | Record<string, unknown>,
     options?: Record<string, unknown>,
   ): Promise<void> {
     if (this._recording) {
-      this._recorder.record("removeUniqueConstraint", [tableName, columnName, options]);
+      this._recorder.record("removeUniqueConstraint", [tableName, columnNameOrOptions, options]);
       return;
     }
-    await (this.connection as any).removeUniqueConstraint(tableName, columnName, options);
+    await (this.connection as any).removeUniqueConstraint(tableName, columnNameOrOptions, options);
   }
 
   async addTimestamps(tableName: string, options: ColumnOptions = {}): Promise<void> {

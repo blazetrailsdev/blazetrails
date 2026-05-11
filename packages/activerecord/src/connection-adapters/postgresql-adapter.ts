@@ -306,7 +306,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         types: {
           getTypeParser: (oid: number, format?: string) =>
             oid === 1082 && !PostgreSQLAdapter.decodeDates
-              ? (v: unknown) => v
+              ? format === "binary"
+                ? pg.types.getTypeParser(oid, "binary")
+                : (v: unknown) => v
               : getTemporalTypeParser(oid, format),
         },
       };
@@ -374,7 +376,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
           // When decodeDates is false, skip the date parser (OID 1082) so
           // pg returns the raw string — mirrors Rails' decode_dates flag.
           if (oid === 1082 && !PostgreSQLAdapter.decodeDates) {
-            return userGetTypeParser?.(oid, format) ?? ((v: unknown) => v);
+            const fallback =
+              format === "binary" ? pg.types.getTypeParser(oid, "binary") : (v: unknown) => v;
+            return userGetTypeParser?.(oid, format) ?? fallback;
           }
           // For all other OIDs, respect any user-supplied parser first, then
           // delegate to getTemporalTypeParser which falls back to pg built-ins.

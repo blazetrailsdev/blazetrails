@@ -726,7 +726,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       await this._maybeConfigureConnection(client);
       await this._maybeDrainOrphanedPreparedStatements(client);
     } catch (error) {
-      client.release(error instanceof Error ? error : new Error(String(error)));
+      client.release(toError(error));
       throw error;
     }
     return client;

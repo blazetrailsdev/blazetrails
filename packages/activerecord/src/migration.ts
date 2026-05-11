@@ -840,16 +840,24 @@ export abstract class Migration {
 
   async dropEnum(
     name: string,
-    values?: string[],
+    valuesOrOptions?: string[] | Record<string, unknown>,
     options?: Record<string, unknown>,
   ): Promise<void> {
+    // Normalize: if second arg is a plain object it is the options hash (no values).
+    // Mirrors Rails drop_enum(name, values = nil, **options) which allows options-only calls.
+    const isOptsObj =
+      valuesOrOptions !== null &&
+      typeof valuesOrOptions === "object" &&
+      !Array.isArray(valuesOrOptions);
+    const values = isOptsObj ? undefined : (valuesOrOptions as string[] | undefined);
+    const opts = isOptsObj ? (valuesOrOptions as Record<string, unknown>) : (options ?? undefined);
     if (this._recording) {
-      this._recorder.record("dropEnum", [name, values, options]);
+      this._recorder.record("dropEnum", [name, values, opts]);
       return;
     }
     // values is only captured for recording (so dropEnum can be inverted to createEnum);
     // the adapter's dropEnum(name, options?) doesn't need values for SQL execution.
-    await (this.connection as any).dropEnum(name, options ?? {});
+    await (this.connection as any).dropEnum(name, opts ?? {});
   }
 
   async renameEnumValue(name: string, options: { from: string; to: string }): Promise<void> {

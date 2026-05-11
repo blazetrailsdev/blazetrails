@@ -9,7 +9,7 @@ describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
   beforeEach(async () => {
     adapter = new PostgreSQLAdapter(PG_TEST_URL);
-    await adapter.disableExtension("citext", { force: "cascade" }).catch(() => {});
+    await adapter.disableExtension("citext", { force: "cascade" });
   });
   afterEach(async () => {
     await adapter.execute("DROP TABLE IF EXISTS test_citext_tbl").catch(() => {});

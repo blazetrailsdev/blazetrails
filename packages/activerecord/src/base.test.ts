@@ -1866,14 +1866,16 @@ describe("BasicsTest", () => {
     const inst1 = Temporal.Instant.from("2003-07-16T14:28:11.223300Z");
     const inst2 = Temporal.Instant.from("2003-07-16T14:28:11.009900Z");
     const inst3 = Temporal.Instant.from("2003-07-16T14:28:11.129346Z");
-    const t1 = await Topic.create({
-      written_on: inst1,
-      bonus_time: Temporal.PlainTime.from("11:30:00"),
-    });
+    const bonusTime = Temporal.PlainTime.from("11:30:45");
+    const t1 = await Topic.create({ written_on: inst1, bonus_time: bonusTime });
     const t2 = await Topic.create({ written_on: inst2 });
     const t3 = await Topic.create({ written_on: inst3 });
     const topic1 = await Topic.find(t1.id);
-    expect(topic1.readAttribute("bonus_time")).toBeInstanceOf(Temporal.PlainTime);
+    const reloadedBonusTime = topic1.readAttribute("bonus_time") as Temporal.PlainTime;
+    expect(reloadedBonusTime).toBeInstanceOf(Temporal.PlainTime);
+    expect(reloadedBonusTime.hour).toBe(bonusTime.hour);
+    expect(reloadedBonusTime.minute).toBe(bonusTime.minute);
+    expect(reloadedBonusTime.second).toBe(bonusTime.second);
     const wo1 = topic1.readAttribute("written_on") as Temporal.Instant;
     expect(wo1).toBeInstanceOf(Temporal.Instant);
     expect(wo1.epochNanoseconds).toBe(inst1.epochNanoseconds);
@@ -1901,12 +1903,13 @@ describe("BasicsTest", () => {
         }
       }
       await defineSchema(adapter, { pres_tz_topics: { written_on: "datetime" } });
-      // Rails: Time.local(2000) in EST process TZ = 2000-01-01 00:00:00 EST = 05:00 UTC
-      const estMidnight = Temporal.Instant.from("2000-01-01T05:00:00Z");
-      const topic = await Topic.create({ written_on: estMidnight });
+      // Rails: Time.local(2000) in EST = 2000-01-01 00:00:00-05:00 = 05:00 UTC.
+      // Pass an offset-bearing string to exercise the cast/serialize conversion path.
+      const expectedUtc = Temporal.Instant.from("2000-01-01T05:00:00Z");
+      const topic = await Topic.create({ written_on: "2000-01-01 00:00:00-05:00" });
       const saved = await Topic.find(topic.id);
       const savedTime = saved.readAttribute("written_on") as Temporal.Instant;
-      expect(savedTime.epochNanoseconds).toBe(estMidnight.epochNanoseconds);
+      expect(savedTime.epochNanoseconds).toBe(expectedUtc.epochNanoseconds);
       expect(savedTime.toZonedDateTimeISO("UTC").hour).toBe(5);
     });
   });
@@ -1920,12 +1923,13 @@ describe("BasicsTest", () => {
         }
       }
       await defineSchema(adapter, { pres_tz_topics: { written_on: "datetime" } });
-      // Rails: Time.zone.local(2000) in CST = 2000-01-01 00:00:00 CST (UTC-6) = 06:00 UTC
-      const cstMidnight = Temporal.Instant.from("2000-01-01T06:00:00Z");
-      const topic = await Topic.create({ written_on: cstMidnight });
+      // Rails: Time.zone.local(2000) in CST = 2000-01-01 00:00:00-06:00 = 06:00 UTC.
+      // Pass an offset-bearing string to exercise the cast/serialize conversion path.
+      const expectedUtc = Temporal.Instant.from("2000-01-01T06:00:00Z");
+      const topic = await Topic.create({ written_on: "2000-01-01 00:00:00-06:00" });
       const saved = await Topic.find(topic.id);
       const savedTime = saved.readAttribute("written_on") as Temporal.Instant;
-      expect(savedTime.epochNanoseconds).toBe(cstMidnight.epochNanoseconds);
+      expect(savedTime.epochNanoseconds).toBe(expectedUtc.epochNanoseconds);
       expect(savedTime.toZonedDateTimeISO("UTC").hour).toBe(6);
     });
   });

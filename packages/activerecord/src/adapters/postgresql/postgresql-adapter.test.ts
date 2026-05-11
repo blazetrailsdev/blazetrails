@@ -13,6 +13,7 @@ import {
   LockWaitTimeout,
   NotNullViolation,
   QueryCanceled,
+  RangeError as ActiveRecordRangeError,
   RecordNotUnique,
   SerializationFailure,
   SQLWarning,
@@ -251,7 +252,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.exec(`CREATE TABLE "ex_num" ("id" SERIAL PRIMARY KEY, "val" SMALLINT)`);
       await expect(
         adapter.executeMutation(`INSERT INTO "ex_num" ("val") VALUES (99999)`),
-      ).rejects.toThrow(/out of range/i);
+      ).rejects.toBeInstanceOf(ActiveRecordRangeError);
     });
 
     it("translate exception invalid text representation", async () => {

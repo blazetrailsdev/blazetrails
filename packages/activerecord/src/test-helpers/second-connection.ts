@@ -21,6 +21,6 @@ export async function withSecondAdapter<T>(
   try {
     return await fn(adapter);
   } finally {
-    await adapter.close();
+    await adapter.close().catch(() => {});
   }
 }

@@ -44,7 +44,7 @@ import {
   NotNullViolation,
   PreparedStatementCacheExpired,
   QueryCanceled,
-  RangeError as ARRangeError,
+  RangeError as ActiveRecordRangeError,
   RecordNotUnique,
   SerializationFailure,
   StatementInvalid,
@@ -3711,7 +3711,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       case "22001": // string_data_right_truncation
         return new ValueTooLong(msg, { sql, binds, cause });
       case "22003": // numeric_value_out_of_range
-        return new ARRangeError(msg, { sql, binds, cause });
+        return new ActiveRecordRangeError(msg, { sql, binds, cause });
       case "40001": // serialization_failure
         return new SerializationFailure(msg, { sql, binds, cause });
       case "40P01": // deadlock_detected

@@ -203,6 +203,41 @@ export const UNPORTED_FILES: UnportedFile[] = [
       "Tests `rails dbconsole` PTY/exec invocation for SQLite. " +
       "Spawning a PTY-backed interactive subprocess has no Node.js equivalent.",
   },
+  // --- Permanently not-portable: single-process SQLite driver limits ---
+  {
+    testFile: "adapters/sqlite3/sqlite3_adapter_test.rb",
+    tests: ["supports extensions"],
+    reason:
+      "better-sqlite3 does not expose a loadExtension API. " +
+      "Runtime SQLite extension loading has no Node.js equivalent in this driver.",
+  },
+  {
+    testFile: "adapters/sqlite3/transaction_test.rb",
+    tests: ["opens a `read_uncommitted` transaction"],
+    reason:
+      "Cross-connection read_uncommitted visibility requires shared-cache mode across separate connections. " +
+      "better-sqlite3 is single-process and cannot open a second independent connection.",
+  },
+  // --- Permanently not-portable: Ruby Module namespace / constant-path semantics ---
+  {
+    testFile: "modules_test.rb",
+    tests: [
+      "module spanning associations",
+      "module spanning has and belongs to many associations",
+      "associations spanning cross modules",
+      "find account and include company",
+      "eager loading in modules",
+    ],
+    reason:
+      "Ruby Module#ancestors / constant-path lookup for cross-module association resolution. " +
+      "No JS equivalent for namespace-scoped class discovery.",
+  },
+  {
+    testFile: "mixin_test.rb",
+    tests: ["many updates", "create turned off"],
+    reason:
+      "Ruby singleton_class / Module#prepend mixin semantics — no JS equivalent for per-instance class mutation.",
+  },
   // --- Permanently not-portable: per-test GVL / serialization in mixed files ---
   {
     testFile: "connection_pool_test.rb",

@@ -834,10 +834,7 @@ describe("BasicsTest", () => {
   });
 
   it.skip("model classes with matching names", () => {
-    // BLOCKED: unknown — Ruby module namespace / constant lookup semantics not translatable
-    // ROOT-CAUSE: Node.js has no Ruby Module namespace for matching class names by constant path
-    // SCOPE: ~0 LOC fix; likely permanent skip-list.ts candidate
-    /* needs module/namespace support */
+    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — ruby-module-semantics
   });
 
   it.skip("copy table with id", () => {

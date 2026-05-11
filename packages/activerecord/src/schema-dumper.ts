@@ -359,6 +359,8 @@ class AdapterSchemaSource implements SchemaSource {
 export class SchemaDumper {
   static readonly DEFAULT_DATETIME_PRECISION = 6;
   static ignoreTables: (string | RegExp)[] = [];
+  /** @internal Mirrors Rails' `SchemaDumper.fk_ignore_pattern`. */
+  static fkIgnorePattern: RegExp = /^fk_rails_[0-9a-f]{10}$/;
 
   private _source: SchemaSource;
   protected _options: Record<string, unknown>;
@@ -841,7 +843,9 @@ export class SchemaDumper {
       deferrable?: boolean | string;
       validate?: boolean;
     };
+    const fkIgnorePattern = (this.constructor as typeof SchemaDumper).fkIgnorePattern;
     for (const fk of fks as Fk[]) {
+      if (fk.name && fkIgnorePattern.test(fk.name)) continue;
       const fromExpr = JSON.stringify(this.removePrefixAndSuffix(fk.fromTable ?? tableName));
       const toExpr = JSON.stringify(this.removePrefixAndSuffix(fk.toTable));
       const opts: string[] = [];

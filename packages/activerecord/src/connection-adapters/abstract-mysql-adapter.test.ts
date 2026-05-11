@@ -132,4 +132,24 @@ describe("AbstractMysqlAdapter#renameColumnForAlter fallback", () => {
       expect(sql).not.toContain(`DEFAULT '${expectedFragment}'`);
     },
   );
+
+  it("wraps arbitrary DEFAULT_GENERATED expression in parens, not as a quoted string", async () => {
+    // e.g. MySQL 8 expression defaults like `json_array()` that aren't in FUNC_DEFAULT_RE.
+    // newColumnFromField wraps these in () and sets defaultFunction — we must match.
+    const adapter = await makeAdapter("col", "DEFAULT_GENERATED");
+    adapter.columnDefinitions = async () => [
+      {
+        Field: "col",
+        Type: "json",
+        Null: "YES",
+        Default: "json_array()",
+        Extra: "DEFAULT_GENERATED",
+        Collation: null,
+        Comment: "",
+      },
+    ];
+    const sql: string = await adapter.renameColumnForAlter("users", "col", "col2");
+    expect(sql).toContain("DEFAULT (json_array())");
+    expect(sql).not.toContain("DEFAULT 'json_array()'");
+  });
 });

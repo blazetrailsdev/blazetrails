@@ -1209,12 +1209,25 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     // SHOW FULL FIELDS returns function defaults as plain strings (e.g. "CURRENT_TIMESTAMP", "NOW()").
     // Rails' column.default is nil for function defaults; pass as a lambda so
     // quoteDefaultExpression emits it unquoted: DEFAULT NOW(), not DEFAULT 'NOW()'.
+    // Mirrors newColumnFromField: CURRENT_TIMESTAMP datetime cols and DEFAULT_GENERATED cols
+    // always go through the function-default path; everything else only when FUNC_DEFAULT_RE matches.
     const FUNC_DEFAULT_RE =
       /^(CURRENT_TIMESTAMP(\([0-6]?\))?|NOW\(\)|CURRENT_DATE|CURRENT_TIME|UUID\(\))$/i;
-    const colDefault =
-      typeof rawDefault === "string" && FUNC_DEFAULT_RE.test(rawDefault)
-        ? () => rawDefault
-        : rawDefault;
+    let colDefault: (() => string) | string | undefined;
+    if (typeof rawDefault === "string") {
+      if (FUNC_DEFAULT_RE.test(rawDefault)) {
+        // Well-known function: emit as-is, unquoted.
+        colDefault = () => rawDefault;
+      } else if (extra === "default_generated") {
+        // DEFAULT_GENERATED with an arbitrary expression: wrap in parens (matches newColumnFromField).
+        const expr = rawDefault.startsWith("(") ? rawDefault : `(${rawDefault})`;
+        colDefault = () => expr;
+      } else {
+        colDefault = rawDefault;
+      }
+    } else {
+      colDefault = rawDefault;
+    }
     const colOpts: MysqlAddColumnOptions = {
       // SHOW FULL FIELDS returns NULL for Default both when there is no default and when
       // DEFAULT NULL. Treat null as "no explicit default" (undefined) to avoid emitting

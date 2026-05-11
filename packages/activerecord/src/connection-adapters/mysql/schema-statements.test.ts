@@ -114,6 +114,39 @@ describe("MySQL::SchemaStatements", () => {
     expect(col.defaultFunction).toBe("CURRENT_TIMESTAMP");
   });
 
+  it("newColumnFromField: NOW() default becomes defaultFunction (broadened regex)", () => {
+    const noInfo = () => null;
+    const col = newColumnFromField(
+      "events",
+      { Field: "created_at", Type: "datetime", Null: "NO", Default: "NOW()", Extra: "" },
+      noInfo,
+    );
+    expect(col.default).toBeNull();
+    expect(col.defaultFunction).toBe("NOW()");
+  });
+
+  it("newColumnFromField: UUID() default becomes defaultFunction on char column", () => {
+    const noInfo = () => null;
+    const col = newColumnFromField(
+      "items",
+      { Field: "uid", Type: "char(36)", Null: "NO", Default: "UUID()", Extra: "" },
+      noInfo,
+    );
+    expect(col.default).toBeNull();
+    expect(col.defaultFunction).toBe("UUID()");
+  });
+
+  it("newColumnFromField: CURRENT_DATE default becomes defaultFunction on date column", () => {
+    const noInfo = () => null;
+    const col = newColumnFromField(
+      "items",
+      { Field: "due_on", Type: "date", Null: "YES", Default: "CURRENT_DATE", Extra: "" },
+      noInfo,
+    );
+    expect(col.default).toBeNull();
+    expect(col.defaultFunction).toBe("CURRENT_DATE");
+  });
+
   it("newColumnFromField: DEFAULT_GENERATED extra becomes defaultFunction", () => {
     const noInfo = () => null;
     const col = newColumnFromField(

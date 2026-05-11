@@ -111,4 +111,16 @@ describe("MySQL::SchemaCreation", () => {
     const sql = sc.accept(new AddColumnDefinition(col));
     expect(sql).toMatch(/ADD .+ AUTO_INCREMENT/);
   });
+
+  it("addColumnOptionsBang emits ON UPDATE when onUpdate is set (MySQL-specific)", () => {
+    const opts = { onUpdate: "CURRENT_TIMESTAMP" };
+    const result = (sc as any).addColumnOptionsBang("`updated_at` datetime", opts);
+    expect(result).toContain("ON UPDATE CURRENT_TIMESTAMP");
+  });
+
+  it("addColumnOptionsBang does not emit ON UPDATE when onUpdate is absent", () => {
+    const col = new ColumnDefinition("updated_at", "datetime", {});
+    const result = (sc as any).addColumnOptionsBang("`updated_at` datetime", col.options);
+    expect(result).not.toContain("ON UPDATE");
+  });
 });

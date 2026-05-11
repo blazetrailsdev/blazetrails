@@ -24,7 +24,10 @@ import {
 } from "../errors.js";
 import { sql as arelSql, type Nodes, Visitors } from "@blazetrails/arel";
 import { StatementPool as ConnectionStatementPool } from "./statement-pool.js";
-import { SchemaCreation as MysqlSchemaCreation } from "./mysql/schema-creation.js";
+import {
+  SchemaCreation as MysqlSchemaCreation,
+  type MysqlAddColumnOptions,
+} from "./mysql/schema-creation.js";
 import {
   quoteString as mysqlQuoteString,
   quote as mysqlQuote,
@@ -1206,10 +1209,11 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     // Rails' column.default is nil for function defaults; pass as a lambda so
     // quoteDefaultExpression emits it unquoted: DEFAULT CURRENT_TIMESTAMP, not DEFAULT 'CURRENT_TIMESTAMP'.
     const colDefault =
-      typeof rawDefault === "string" && /^CURRENT_TIMESTAMP(\([0-6]?\))?$/i.test(rawDefault)
+      typeof rawDefault === "string" &&
+      /^(?:CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NOW|UUID)(?:\([0-6]?\))?$/i.test(rawDefault)
         ? () => rawDefault
         : rawDefault;
-    const colDef = new ColumnDefinition(newColumnName, col["Type"] as string, {
+    const colOpts: MysqlAddColumnOptions = {
       // SHOW FULL FIELDS returns NULL for Default both when there is no default and when
       // DEFAULT NULL. Treat null as "no explicit default" (undefined) to avoid emitting
       // DEFAULT NULL on NOT NULL columns — mirrors Rails column_for + new_column_definition.
@@ -1219,7 +1223,8 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       comment: (col["Comment"] as string | undefined) || undefined,
       autoIncrement: extra === "auto_increment" || undefined,
       onUpdate: onUpdateMatch ? onUpdateMatch[1] : undefined,
-    });
+    };
+    const colDef = new ColumnDefinition(newColumnName, col["Type"] as string, colOpts);
     const cd = new ChangeColumnDefinition(colDef, columnName);
     return new MysqlSchemaCreation().accept(cd);
   }

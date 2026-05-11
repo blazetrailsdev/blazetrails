@@ -148,7 +148,9 @@ export function newColumnFromField(
   let def: string | null = field["Default"] ?? null;
   let defFn: string | null = null;
 
-  if (meta.type === "datetime" && /^CURRENT_TIMESTAMP(\([0-6]?\))?$/i.test(def ?? "")) {
+  if (
+    /^(?:CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NOW|UUID)(?:\([0-6]?\))?$/i.test(def ?? "")
+  ) {
     if (/on update CURRENT_TIMESTAMP/i.test(field["Extra"] ?? "")) def = `${def} ON UPDATE ${def}`;
     [def, defFn] = [null, def];
   } else if (meta.extra === "DEFAULT_GENERATED") {

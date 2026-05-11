@@ -2459,7 +2459,7 @@ export class Base extends Model {
 
     // Auto-populate timestamps (unless touch: false or recordTimestamps disabled)
     if (!this._skipTouch && ctor.recordTimestamps !== false) {
-      const now = Temporal.Now.instant();
+      const now = Timestamp.currentTimeFromProperTimezone();
       for (const col of Timestamp.allTimestampAttributesInModel.call(ctor)) {
         if (ctor._attributeDefinitions.has(col) && this._readAttribute(col) == null) {
           this._writeAttribute(col, now);
@@ -2513,7 +2513,7 @@ export class Base extends Model {
 
     // Auto-populate update timestamps (unless touch: false or recordTimestamps disabled)
     if (!this._skipTouch && ctor.recordTimestamps !== false) {
-      const now = Temporal.Now.instant();
+      const now = Timestamp.currentTimeFromProperTimezone();
       for (const col of Timestamp.timestampAttributesForUpdateInModel.call(ctor)) {
         if (ctor._attributeDefinitions.has(col) && !this.willSaveChangeToAttribute(col)) {
           this._writeAttribute(col, now);

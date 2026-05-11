@@ -450,10 +450,13 @@ describe("TimestampTest", () => {
     }
 
     const post = await Post.create({ title: "Hello" });
+    const afterCreate = (post.updated_on as Temporal.Instant).epochMilliseconds;
+
     post.title = "Updated";
     await post.save();
 
-    expect(post.updated_on).toBeInstanceOf(Temporal.Instant);
+    const afterSave = (post.updated_on as Temporal.Instant).epochMilliseconds;
+    expect(afterSave).toBeGreaterThanOrEqual(afterCreate);
   });
 
   it("does not set updated_on when recordTimestamps is false", async () => {

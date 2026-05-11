@@ -323,9 +323,11 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   private databaseTypeToText(value: unknown): unknown {
     if (value != null && this.castType.isBinary()) {
       const raw = this.castType.deserialize?.(value) ?? value;
-      // BinaryType.deserialize returns Uint8Array; decode back to the ciphertext string
-      // so decryptAsText always receives a plain string.
-      return raw instanceof Uint8Array ? new TextDecoder().decode(raw) : raw;
+      // Use Latin-1 (not UTF-8) so bytes 128–255 survive the round-trip. The
+      // ciphertext is always ASCII so Latin-1 == UTF-8 for that path; for
+      // supportUnencryptedData rows the plaintext bytes must also be Latin-1
+      // decoded or they'll be corrupted before textToDatabaseType re-wraps them.
+      return raw instanceof Uint8Array ? Buffer.from(raw).toString("latin1") : raw;
     }
     return value;
   }

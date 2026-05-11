@@ -368,7 +368,6 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
 
   it("encrypts store attributes with accessors", async () => {
     const TrafficLight = makeEncryptedTrafficLightWithStoreState(freshAdapter());
-    new TrafficLight();
     const light = new (TrafficLight as any)();
     // Set via JS property assignment so the storeAccessor setter fires.
     light.color = "red";

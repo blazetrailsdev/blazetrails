@@ -289,9 +289,9 @@ export function none<T extends typeof Base>(this: T): Relation<InstanceType<T>> 
 export function insert<T extends typeof Base>(
   this: T,
   record: Record<string, unknown>,
-  options?: Parameters<Relation<InstanceType<T>>["insertAll"]>[1],
+  options?: Parameters<Relation<InstanceType<T>>["insert"]>[1],
 ): Promise<number> {
-  return this.all().insertAll([record], options);
+  return this.all().insert(record, options);
 }
 
 /** Mirrors: ActiveRecord::Querying#insert_all */

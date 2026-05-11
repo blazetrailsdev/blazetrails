@@ -103,6 +103,11 @@ const ER_QUERY_INTERRUPTED = 1317;
 const ER_QUERY_TIMEOUT = 3024;
 const ER_TABLE_EXISTS = 1050;
 
+// Function defaults emitted without DEFAULT_GENERATED in Extra (e.g. CURRENT_TIMESTAMP on
+// datetime columns). Used by renameColumnForAlter to emit them unquoted in the CHANGE clause.
+const RENAME_FUNC_DEFAULT_RE =
+  /^(CURRENT_TIMESTAMP(\([0-6]?\))?|NOW\(\)|CURRENT_DATE|CURRENT_TIME|UUID\(\))$/i;
+
 // Hot-path constants for the escape-only `quoteString` override below.
 // Match `MYSQL_ESCAPE_RE` / `MYSQL_ESCAPE_MAP` in `mysql/quoting.ts`
 // (those are module-private). Hoisted here so each call avoids
@@ -1193,7 +1198,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     // columns). Allowed values: AUTO_INCREMENT (via ColumnOptions.autoIncrement), ON UPDATE <expr>
     // (via MysqlAddColumnOptions.onUpdate, including the MySQL 8 compound form
     // "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"), and DEFAULT_GENERATED alone (function
-    // default — reconstructed via the FUNC_DEFAULT_RE lambda in colDefault below).
+    // default — reconstructed via RENAME_FUNC_DEFAULT_RE / paren-wrap lambda in colDefault below).
     // Anything else triggers an explicit throw so callers know to upgrade MySQL.
     const extraRaw = ((col["Extra"] as string | undefined) ?? "").trim();
     const extra = extraRaw.toLowerCase();
@@ -1210,11 +1215,9 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     // Rails' column.default is nil for function defaults; pass as a lambda so
     // quoteDefaultExpression emits it unquoted: DEFAULT NOW(), not DEFAULT 'NOW()'.
     // Mirrors newColumnFromField: CURRENT_TIMESTAMP datetime cols and DEFAULT_GENERATED cols
-    // always go through the function-default path; everything else only when FUNC_DEFAULT_RE matches.
-    // FUNC_DEFAULT_RE only applies to the non-DEFAULT_GENERATED path (e.g. CURRENT_TIMESTAMP on
-    // datetime columns, which MySQL emits without DEFAULT_GENERATED in Extra).
-    const FUNC_DEFAULT_RE =
-      /^(CURRENT_TIMESTAMP(\([0-6]?\))?|NOW\(\)|CURRENT_DATE|CURRENT_TIME|UUID\(\))$/i;
+    // always go through the function-default path; everything else only when RENAME_FUNC_DEFAULT_RE matches.
+    // RENAME_FUNC_DEFAULT_RE only applies to the non-DEFAULT_GENERATED path (e.g. CURRENT_TIMESTAMP
+    // on datetime columns, which MySQL emits without DEFAULT_GENERATED in Extra).
     let colDefault: (() => string) | string | undefined;
     if (typeof rawDefault === "string") {
       if (extra === "default_generated") {
@@ -1222,7 +1225,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
         // must be wrapped in parens so MySQL accepts them in ALTER TABLE … CHANGE.
         const expr = rawDefault.startsWith("(") ? rawDefault : `(${rawDefault})`;
         colDefault = () => expr;
-      } else if (FUNC_DEFAULT_RE.test(rawDefault)) {
+      } else if (RENAME_FUNC_DEFAULT_RE.test(rawDefault)) {
         // Well-known keyword defaults on non-DEFAULT_GENERATED columns (e.g. CURRENT_TIMESTAMP
         // on datetime): emit as-is, no parens.
         colDefault = () => rawDefault;

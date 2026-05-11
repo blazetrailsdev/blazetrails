@@ -466,23 +466,11 @@ describe("SchemaDumperTest", () => {
     expect(output).not.toContain('"books"');
   });
   it("do not dump foreign keys when bypassed by config", async () => {
-    SchemaDumper.fkIgnorePattern = /^bypass_/;
+    // Mirrors Rails' foreign_keys: false connection option (supports_foreign_keys? == false).
     const source = {
       tables: async () => ["authors", "books"],
       columns: async (_t: string) => [{ name: "id", type: "integer", primaryKey: true }],
       indexes: async () => [],
-      foreignKeys: async (t: string) =>
-        t === "books"
-          ? [
-              {
-                fromTable: "books",
-                toTable: "authors",
-                column: "author_id",
-                primaryKey: "id",
-                name: "bypass_books_author_id",
-              },
-            ]
-          : [],
     };
     const output = await SchemaDumper.dump(source as any);
     expect(output).not.toContain("addForeignKey");

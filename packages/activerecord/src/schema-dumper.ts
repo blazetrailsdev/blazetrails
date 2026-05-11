@@ -845,13 +845,13 @@ export class SchemaDumper {
     };
     const fkIgnorePattern = (this.constructor as typeof SchemaDumper).fkIgnorePattern;
     for (const fk of fks as Fk[]) {
-      if (fk.name && fkIgnorePattern.test(fk.name)) continue;
       const fromExpr = JSON.stringify(this.removePrefixAndSuffix(fk.fromTable ?? tableName));
       const toExpr = JSON.stringify(this.removePrefixAndSuffix(fk.toTable));
       const opts: string[] = [];
       if (fk.column) opts.push(`column: ${JSON.stringify(fk.column)}`);
       if (fk.primaryKey) opts.push(`primaryKey: ${JSON.stringify(fk.primaryKey)}`);
-      if (fk.name) opts.push(`name: ${JSON.stringify(fk.name)}`);
+      // Mirrors Rails' export_name_on_schema_dump? — omit name when it matches the ignore pattern
+      if (fk.name && !fkIgnorePattern.test(fk.name)) opts.push(`name: ${JSON.stringify(fk.name)}`);
       if (fk.onUpdate) opts.push(`onUpdate: ${JSON.stringify(fk.onUpdate)}`);
       if (fk.onDelete) opts.push(`onDelete: ${JSON.stringify(fk.onDelete)}`);
       if (fk.deferrable !== undefined && fk.deferrable !== false)

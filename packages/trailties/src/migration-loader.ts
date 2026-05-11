@@ -59,14 +59,20 @@ export async function discoverMigrations(migrationsDir: string): Promise<Migrati
           connection: undefined,
           async up(): Promise<void> {
             const adapter = loader.connection;
-            if (!adapter) throw new Error("migration-loader: adapter is required for up()");
+            if (!adapter)
+              throw new Error(
+                "migration-loader: migration.connection must be set before calling up()",
+              );
             const MigrationClass = await loadMigrationClass(filePath);
             const instance = new MigrationClass();
             await instance.run(adapter, "up");
           },
           async down(): Promise<void> {
             const adapter = loader.connection;
-            if (!adapter) throw new Error("migration-loader: adapter is required for down()");
+            if (!adapter)
+              throw new Error(
+                "migration-loader: migration.connection must be set before calling down()",
+              );
             const MigrationClass = await loadMigrationClass(filePath);
             const instance = new MigrationClass();
             await instance.run(adapter, "down");

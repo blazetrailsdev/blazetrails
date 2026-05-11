@@ -6,6 +6,7 @@
 
 import { Message } from "./message.js";
 import { MessageSerializer } from "./message-serializer.js";
+import { getEncryptionContext } from "./context.js";
 import { Configurable } from "./configurable.js";
 import {
   getOrCreateDefaultKeyProvider,
@@ -198,6 +199,8 @@ export class Encryptor {
 
   /** @internal */
   private serializer(): MessageSerializer {
+    const ctxSerializer = getEncryptionContext().messageSerializer;
+    if (ctxSerializer != null) return ctxSerializer as MessageSerializer;
     return this._serializer;
   }
 

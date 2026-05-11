@@ -30,7 +30,7 @@ export class MessagePackMessageSerializer {
   }
 
   isBinary(): boolean {
-    return false;
+    return true;
   }
 
   /** @internal */

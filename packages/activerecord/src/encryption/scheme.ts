@@ -29,6 +29,7 @@ export interface SchemeOptions {
   compress?: boolean;
   compressor?: Compressor;
   encryptor?: EncryptorLike;
+  messageSerializer?: unknown;
 }
 
 export class Scheme {
@@ -99,9 +100,14 @@ export class Scheme {
   }
 
   withContext<T>(fn: () => T): T {
-    const { encryptor, compress, compressor } = this._opts;
-    if (encryptor !== undefined || compress === false || compressor !== undefined) {
-      return withEncryptionContext({ encryptor: this._encryptor }, fn);
+    const { encryptor, compress, compressor, messageSerializer } = this._opts;
+    const hasEncryptorOverride =
+      encryptor !== undefined || compress === false || compressor !== undefined;
+    if (hasEncryptorOverride || messageSerializer !== undefined) {
+      const ctx: Record<string, unknown> = {};
+      if (hasEncryptorOverride) ctx["encryptor"] = this._encryptor;
+      if (messageSerializer !== undefined) ctx["messageSerializer"] = messageSerializer;
+      return withEncryptionContext(ctx, fn);
     }
     return fn();
   }
@@ -125,6 +131,7 @@ export class Scheme {
     if (o.compress !== undefined) opts.compress = o.compress;
     if (o.compressor !== undefined) opts.compressor = o.compressor;
     if (o.encryptor !== undefined) opts.encryptor = o.encryptor;
+    if (o.messageSerializer !== undefined) opts.messageSerializer = o.messageSerializer;
     return opts;
   }
 

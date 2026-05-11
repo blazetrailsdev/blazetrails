@@ -171,31 +171,33 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
 
   /** @internal */
   private decryptAsText(value: unknown): unknown {
-    if (value === null || value === undefined) return value;
-    if (this._default !== undefined && this._default === value) return value;
+    return this.scheme.withContext(() => {
+      if (value === null || value === undefined) return value;
+      if (this._default !== undefined && this._default === value) return value;
 
-    // Adapters that use JSON/JSONB columns (e.g. PostgreSQL) return the stored value
-    // as a parsed JS object rather than a raw string. Re-stringify so the encryptor
-    // always receives the JSON string that was originally stored.
-    let ciphertext: string;
-    if (typeof value === "string") {
-      ciphertext = value;
-    } else {
-      try {
-        ciphertext = JSON.stringify(value) ?? String(value);
-      } catch {
-        ciphertext = String(value);
+      // Adapters that use JSON/JSONB columns (e.g. PostgreSQL) return the stored value
+      // as a parsed JS object rather than a raw string. Re-stringify so the encryptor
+      // always receives the JSON string that was originally stored.
+      let ciphertext: string;
+      if (typeof value === "string") {
+        ciphertext = value;
+      } else {
+        try {
+          ciphertext = JSON.stringify(value) ?? String(value);
+        } catch {
+          ciphertext = String(value);
+        }
       }
-    }
 
-    try {
-      return this._encryptor.decrypt(ciphertext, this.decryptionOptions());
-    } catch (error) {
-      if (!(error instanceof BaseEncryptionError)) throw error;
-      if (this.scheme.previousSchemes.length === 0)
-        return this.handleDeserializeError(error, value);
-      return this.tryToDeserializeWithPreviousEncryptedTypes(value);
-    }
+      try {
+        return this._encryptor.decrypt(ciphertext, this.decryptionOptions());
+      } catch (error) {
+        if (!(error instanceof BaseEncryptionError)) throw error;
+        if (this.scheme.previousSchemes.length === 0)
+          return this.handleDeserializeError(error, value);
+        return this.tryToDeserializeWithPreviousEncryptedTypes(value);
+      }
+    });
   }
 
   private decrypt(value: unknown): unknown {
@@ -257,10 +259,12 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
 
   /** @internal */
   private encryptAsText(value: string): string {
-    if (this._encryptor.isBinary() && !this.castType.isBinary()) {
-      throw new EncodingError("Binary encoded data can only be stored in binary columns");
-    }
-    return this._encryptor.encrypt(value, this.encryptionOptions());
+    return this.scheme.withContext(() => {
+      if (this._encryptor.isBinary() && !this.castType.isBinary()) {
+        throw new EncodingError("Binary encoded data can only be stored in binary columns");
+      }
+      return this._encryptor.encrypt(value, this.encryptionOptions());
+    });
   }
 
   private encrypt(value: string): unknown {

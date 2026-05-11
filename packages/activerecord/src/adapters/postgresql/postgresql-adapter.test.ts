@@ -266,14 +266,24 @@ describeIfPg("PostgreSQLAdapter", () => {
       // Use a transaction so that pg_backend_pid() and pg_sleep() share the same
       // pooled connection — otherwise two execute() calls get different PG backends.
       await adapter.beginTransaction();
-      let pid: number;
       try {
         const pidRows = await adapter.execute(`SELECT pg_backend_pid() AS pid`);
-        pid = (pidRows[0] as { pid: number }).pid;
-        const sleepPromise = adapter.execute(`SELECT pg_sleep(2)`);
-        // Give pg_sleep a moment to begin executing before we cancel it.
-        await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        const pid = (pidRows[0] as { pid: number }).pid;
+        const sleepPromise = adapter.execute(`SELECT pg_sleep(10)`);
+        // Attach a no-op handler synchronously so Node never flags this as an
+        // unhandled rejection during the gap before the expect() runs.
+        sleepPromise.catch(() => {});
+        // Poll pg_stat_activity until the pg_sleep query is observed as active on
+        // this backend, so the cancel always arrives after execution has started.
         await withSecondAdapter(PG_TEST_URL, async (adapter2) => {
+          const deadline = Date.now() + 2000;
+          while (Date.now() < deadline) {
+            const rows = await adapter2.execute(
+              `SELECT 1 FROM pg_stat_activity WHERE pid = ${pid} AND query LIKE '%pg_sleep%' AND state = 'active'`,
+            );
+            if (rows.length > 0) break;
+            await new Promise<void>((r) => setTimeout(r, 10));
+          }
           await adapter2.execute(`SELECT pg_cancel_backend(${pid})`);
         });
         await expect(sleepPromise).rejects.toBeInstanceOf(QueryCanceled);

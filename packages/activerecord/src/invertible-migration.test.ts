@@ -4,6 +4,8 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Migration } from "./index.js";
+import { IrreversibleMigration } from "./migration.js";
+import { CommandRecorder } from "./migration/command-recorder.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -198,13 +200,32 @@ describe("InvertibleMigrationTest", () => {
     expect(tableExists("horses")).toBe(true);
   });
   it("migrate revert change column comment", () => {
-    /* changeColumnComment proxy is wired; full test needs PG */
+    const recorder = new CommandRecorder();
+    recorder.record("changeColumnComment", ["horses", "name", { from: "Old", to: "New" }]);
+    const inv = recorder.inverseOf("changeColumnComment", [
+      "horses",
+      "name",
+      { from: "Old", to: "New" },
+    ]);
+    expect(inv.cmd).toBe("changeColumnComment");
+    expect(inv.args).toEqual(["horses", "name", { from: "New", to: "Old" }]);
   });
   it("migrate revert change table comment", () => {
-    /* changeTableComment proxy is wired; full test needs PG */
+    const recorder = new CommandRecorder();
+    recorder.record("changeTableComment", ["horses", { from: "Old", to: "New" }]);
+    const inv = recorder.inverseOf("changeTableComment", ["horses", { from: "Old", to: "New" }]);
+    expect(inv.cmd).toBe("changeTableComment");
+    expect(inv.args).toEqual(["horses", { from: "New", to: "Old" }]);
   });
   it("migrate enable and disable extension", () => {
-    /* enableExtension/disableExtension proxies are wired; full test needs PG */
+    const recorder = new CommandRecorder();
+    const enableInv = recorder.inverseOf("enableExtension", ["hstore"]);
+    expect(enableInv.cmd).toBe("disableExtension");
+    expect(enableInv.args[0]).toBe("hstore");
+
+    const disableInv = recorder.inverseOf("disableExtension", ["hstore"]);
+    expect(disableInv.cmd).toBe("enableExtension");
+    expect(disableInv.args[0]).toBe("hstore");
   });
 
   it("migrate revert drop table", async () => {
@@ -371,10 +392,31 @@ describe("InvertibleMigrationTest", () => {
   });
 
   it("migrate revert add unique constraint with invalid option", () => {
-    /* addUniqueConstraint proxy is wired; full test needs PG (supports_unique_constraints?) */
+    const recorder = new CommandRecorder();
+    // Unknown options pass through without breaking inversion
+    const inv = recorder.inverseOf("addUniqueConstraint", [
+      "horses",
+      "place_id",
+      { unknownOption: true },
+    ]);
+    expect(inv.cmd).toBe("removeUniqueConstraint");
+    expect(inv.args[0]).toBe("horses");
+    // usingIndex makes it irreversible
+    expect(() =>
+      recorder.inverseOf("addUniqueConstraint", ["horses", "place_id", { usingIndex: "my_idx" }]),
+    ).toThrow(IrreversibleMigration);
   });
-  it("migrate revert add foreign key with invalid option", () => {
-    /* addForeignKey proxy was already wired; full test needs PG */
+  it("migrate revert add foreign key with invalid option", async () => {
+    // addForeignKey is reversible even with unknown options (they're forwarded, not validated)
+    const recorder = new CommandRecorder();
+    recorder.record("addForeignKey", [
+      "horses",
+      "horses",
+      { column: "parent_id", unknownOption: true },
+    ]);
+    const inv = recorder.inverseOf("addForeignKey", ["horses", "horses", { column: "parent_id" }]);
+    expect(inv.cmd).toBe("removeForeignKey");
+    expect(inv.args[0]).toBe("horses");
   });
   it.skip("migrate revert add check constraint with invalid option", () => {
     // BLOCKED: migration — migration runner gap in invertible-migration

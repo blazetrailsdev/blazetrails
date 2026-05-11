@@ -725,6 +725,14 @@ export abstract class Migration {
     }
     await this.schema.removeCheckConstraint(tableName, expressionOrOptions);
   }
+  async validateCheckConstraint(tableName: string, options: { name: string }): Promise<void> {
+    await (this.connection as any).validateCheckConstraint(tableName, options);
+  }
+
+  async validateForeignKey(fromTable: string, toTable: string): Promise<void> {
+    await (this.connection as any).validateForeignKey(fromTable, toTable);
+  }
+
   async changeColumnComment(
     tableName: string,
     columnName: string,

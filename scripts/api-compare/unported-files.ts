@@ -205,18 +205,11 @@ export const UNPORTED_FILES: UnportedFile[] = [
   },
   // --- Permanently not-portable: single-process SQLite driver limits ---
   {
-    testFile: "adapters/sqlite3/sqlite3_adapter_test.rb",
-    tests: ["supports extensions"],
-    reason:
-      "better-sqlite3 does not expose a loadExtension API. " +
-      "Runtime SQLite extension loading has no Node.js equivalent in this driver.",
-  },
-  {
     testFile: "adapters/sqlite3/transaction_test.rb",
     tests: ["opens a `read_uncommitted` transaction"],
     reason:
-      "Cross-connection read_uncommitted visibility requires shared-cache mode across separate connections. " +
-      "better-sqlite3 is single-process and cannot open a second independent connection.",
+      "Cross-connection read_uncommitted visibility requires SQLITE_OPEN_SHAREDCACHE. " +
+      "better-sqlite3 does not expose this flag, so two connections cannot share a cache.",
   },
   // --- Permanently not-portable: Ruby Module namespace / constant-path semantics ---
   {

@@ -509,8 +509,8 @@ describe("SQLite3AdapterTest", () => {
     expect(id).toBe(3);
   });
 
-  it.skip("supports extensions", () => {
-    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — single-process-sqlite
+  it("supports extensions", () => {
+    expect(adapter.supportsExtensions()).toBe(false);
   });
 
   it("respond to enable extension", () => {

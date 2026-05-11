@@ -3414,7 +3414,7 @@ export class Relation<T extends Base> {
 
     const manager = this._buildEagerJoinManager(jd, basePk);
 
-    let sql = this._arelVisitor().compile(manager.ast);
+    let sql = this._compileSelectSql(manager);
     if (this._annotations.length > 0) {
       const comments = this._annotations.map((c) => `/* ${c} */`).join(" ");
       sql = `${sql} ${comments}`;
@@ -3459,7 +3459,7 @@ export class Relation<T extends Base> {
       manager.optimizerHints(...this._optimizerHints);
     }
 
-    let sql = this._arelVisitor().compile(manager.ast);
+    let sql = this._compileSelectSql(manager);
 
     // Replace FROM clause if from() was used
     if (!this._fromClause.isEmpty()) {
@@ -3475,8 +3475,9 @@ export class Relation<T extends Base> {
         fromExpr = `(${subSql}) ${_safeAlias(name)}`;
       } else if (raw instanceof Nodes.Node) {
         // Arel node (e.g. SelectManager#as → Nodes.TableAlias) — compile via
-        // the adapter visitor so quoting is consistent with the rest of the SQL.
-        fromExpr = this._arelVisitor().compile(raw);
+        // the same registry visitor used by _compileSelectSql so quoting is
+        // consistent with the surrounding SELECT SQL.
+        fromExpr = raw.toSql();
       } else if (alias) {
         fromExpr = `${raw} ${_safeAlias(alias)}`;
       } else {
@@ -3524,11 +3525,22 @@ export class Relation<T extends Base> {
     const adapter = (this._modelClass as any)._adapter as
       | (Visitors.ArelQuoter & { arelVisitor?: Visitors.ToSql })
       | null;
-    // When arelVisitor is undefined (e.g. test SchemaAdapter), fall back to a
-    // default-quoter visitor rather than passing the adapter as connection —
-    // the adapter's quoting methods may delegate to an inner adapter (MySQL →
-    // backticks) that doesn't match the global registry visitor class in use.
-    return adapter?.arelVisitor ?? new Visitors.ToSql();
+    return adapter?.arelVisitor ?? new Visitors.ToSql(adapter ?? undefined);
+  }
+
+  /**
+   * Compile a SelectManager's AST using the adapter-specific visitor when one
+   * is defined (real PG/SQLite/MySQL adapter), or manager.toSql() otherwise.
+   *
+   * manager.toSql() uses the global registry visitor which for SchemaAdapter
+   * (test adapter) produces correct double-quoted ANSI SQL without delegating
+   * to the inner adapter's quoter (which would produce MySQL backticks that
+   * break toSql() assertions and fail in MariaDB's non-ANSI mode).
+   * Real adapters expose arelVisitor and get dialect-correct SQL from it.
+   */
+  private _compileSelectSql(manager: { ast: Nodes.Node; toSql(): string }): string {
+    const visitor = (this._modelClass as any)._adapter?.arelVisitor as Visitors.ToSql | undefined;
+    return visitor ? visitor.compile(manager.ast) : manager.toSql();
   }
 
   private _compileArelNode(node: Nodes.Node): string {

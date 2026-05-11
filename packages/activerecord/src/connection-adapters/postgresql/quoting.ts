@@ -177,7 +177,7 @@ export function quote(value: unknown): string {
     return quoteString(value.toString());
   }
   if (value instanceof Range) {
-    return quoteString(encodeRange(value));
+    return quoteString(value.toString());
   }
   if (value instanceof MultiRange) {
     return quoteString(encodeMultirange(value));
@@ -237,7 +237,7 @@ export function typeCast(value: unknown): unknown {
     return value.toString();
   }
   if (value instanceof Range) {
-    return encodeRange(value);
+    return value.toString();
   }
   if (value instanceof MultiRange) {
     return encodeMultirange(value);
@@ -386,13 +386,6 @@ export function quotedDate(
     return base.replace(/^-?\d+/, bceYear) + " BC";
   }
   return abstractQuotedDate(value);
-}
-
-/** @internal */
-function encodeRange(value: Range): string {
-  const lower = value.begin == null || value.begin === -Infinity ? "" : String(value.begin);
-  const upper = value.end == null || value.end === Infinity ? "" : String(value.end);
-  return `[${lower},${upper}${value.excludeEnd ? ")" : "]"}`;
 }
 
 /** @internal */

@@ -94,9 +94,11 @@ export class TimeZoneConverter extends ValueType<unknown> {
       );
     }
     if (isRangeLike(casted)) {
-      // Range-typed columns (tsrange/tstzrange): recurse cast() on each bound so
-      // strings are parsed in the current zone and Instants are zone-wrapped.
-      return mapRange(casted, (bound) => this.cast(bound));
+      // Range-typed columns (tsrange/tstzrange): cast each bound through the
+      // dedicated bound helper so string bounds are parsed in the current zone
+      // and Instants are zone-wrapped — without routing through _subtype.cast
+      // (which is RangeType and would misparse a timestamp string as a range literal).
+      return mapRange(casted, castBoundInZone);
     }
     return convertTimeToTimeZone(casted);
   }
@@ -311,6 +313,11 @@ function castBoundInZone(value: unknown): unknown {
   if (value == null) return null;
   if (value instanceof TimeWithZone) return convertTimeToTimeZone(value);
   if (value instanceof Temporal.Instant) return convertTimeToTimeZone(value);
+  if (value instanceof Temporal.ZonedDateTime) return convertTimeToTimeZone(value.toInstant());
+  if (value instanceof Temporal.PlainDateTime) {
+    const instant = value.toZonedDateTime(configuredTimezone()).toInstant();
+    return setTimeZoneWithoutConversion(instant);
+  }
   if (typeof value === "string") {
     const zone = getZone();
     if (zone) {

@@ -2511,11 +2511,11 @@ export class Base extends Model {
 
     const table = ctor.arelTable;
 
-    // Auto-populate update timestamps (unless touch: false)
-    if (!this._skipTouch) {
+    // Auto-populate update timestamps (unless touch: false or recordTimestamps disabled)
+    if (!this._skipTouch && ctor.recordTimestamps !== false) {
       const now = Temporal.Now.instant();
       for (const col of Timestamp.timestampAttributesForUpdateInModel.call(ctor)) {
-        if (!this.willSaveChangeToAttribute(col)) {
+        if (ctor._attributeDefinitions.has(col) && !this.willSaveChangeToAttribute(col)) {
           this._writeAttribute(col, now);
         }
       }

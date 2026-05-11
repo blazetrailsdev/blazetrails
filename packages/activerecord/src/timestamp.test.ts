@@ -436,6 +436,48 @@ describe("TimestampTest", () => {
     expect((post.created_at as Temporal.Instant).epochMilliseconds).toBe(originalCreatedAt);
   });
 
+  it("sets updated_on on update when column exists", async () => {
+    const adapter = freshAdapter();
+    await defineSchema(adapter, {
+      posts: { title: "string", updated_on: "string" },
+    });
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("updated_on", "datetime");
+        this.adapter = adapter;
+      }
+    }
+
+    const post = await Post.create({ title: "Hello" });
+    post.title = "Updated";
+    await post.save();
+
+    expect(post.updated_on).toBeInstanceOf(Temporal.Instant);
+  });
+
+  it("does not set updated_on when recordTimestamps is false", async () => {
+    const adapter = freshAdapter();
+    await defineSchema(adapter, {
+      posts: { title: "string", updated_on: "string", updated_at: "string" },
+    });
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("updated_on", "datetime");
+        this.attribute("updated_at", "datetime");
+        this.adapter = adapter;
+        this.recordTimestamps = false;
+      }
+    }
+
+    const post = await Post.create({ title: "Hello" });
+    expect(post.updated_on).toBeNull();
+    post.title = "Updated";
+    await post.save();
+    expect(post.updated_on).toBeNull();
+  });
+
   it("does not touch timestamps when model has no timestamp attributes", async () => {
     const adapter = freshAdapter();
     await defineSchema(adapter, { simples: { name: "string" } });

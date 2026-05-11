@@ -18,7 +18,7 @@ import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { clearDefaultKeyProviderCache } from "./scheme.js";
 import { withEncryptionContext, withoutEncryption } from "./context.js";
 import { DecryptionError, EncryptionError } from "./errors.js";
-import { ValueType } from "@blazetrails/activemodel";
+import { ValueType, BinaryData } from "@blazetrails/activemodel";
 // Side-effect: registers encryptionHooks so Base.encrypts() is wired up.
 import "../encryption.js";
 import type { Encryptor } from "../encryption.js";
@@ -409,7 +409,29 @@ function _assertEncryptedAttributeOnModel(
         ? (type as any).castType.serialize(expectedValue)
         : null;
     const serializedPlaintext = rawSerialized != null ? String(rawSerialized) : null;
+
+    // For binary attributes the DB value is BinaryData (bytes); compare underlying
+    // bytes against the serialized plaintext bytes so we catch unencrypted storage.
+    const dbBytes =
+      dbValue instanceof BinaryData
+        ? dbValue.bytes
+        : dbValue instanceof Uint8Array
+          ? dbValue
+          : null;
+    const plaintextBytes =
+      rawSerialized instanceof BinaryData
+        ? rawSerialized.bytes
+        : rawSerialized instanceof Uint8Array
+          ? rawSerialized
+          : null;
+    const binaryPlaintextMatch =
+      dbBytes !== null &&
+      plaintextBytes !== null &&
+      dbBytes.length === plaintextBytes.length &&
+      dbBytes.every((b, i) => b === (plaintextBytes as Uint8Array)[i]);
+
     if (
+      binaryPlaintextMatch ||
       dbValue === expectedValue ||
       (serializedPlaintext != null && dbValue === serializedPlaintext)
     ) {

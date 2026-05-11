@@ -311,7 +311,10 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
         // UTF-8 (TextEncoder) would expand bytes 128–255 to two-byte sequences.
         return new BinaryData(new Uint8Array(Buffer.from(value, "latin1")));
       }
-      return new BinaryData(value as string);
+      if (value instanceof Uint8Array) return new BinaryData(value);
+      // Already a BinaryData wrapper (e.g. supportUnencryptedData pass-through).
+      if (value instanceof BinaryData) return value;
+      return new BinaryData(String(value));
     }
     return value;
   }

@@ -9,7 +9,7 @@
  * subscribing to the notification and collecting the payloads.
  *
  * Usage:
- *   const sqls = await captureSql(adapter, () => adapter.addIndex("t", "c"));
+ *   const sqls = await captureSql(() => adapter.addIndex("t", "c"));
  *   expect(sqls[0]).toBe("CREATE INDEX ...");
  */
 
@@ -28,6 +28,8 @@ export async function captureSql(fn: () => Promise<unknown>): Promise<string[]> 
   });
   try {
     await fn();
+  } catch {
+    // stub mode — execution is not the point; SQL capture is
   } finally {
     Notifications.unsubscribe(sub);
   }

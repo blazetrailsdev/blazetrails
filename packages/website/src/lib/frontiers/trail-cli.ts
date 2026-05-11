@@ -66,6 +66,10 @@ function discoverMigrations(
               connection: undefined,
               async up() {
                 const adapter = m.connection;
+                if (!adapter)
+                  throw new Error(
+                    "trail-cli: migration.connection must be set before calling up()",
+                  );
                 const content = vfs.read(file.path)?.content;
                 if (!content) throw new Error(`File not found: ${file.path}`);
                 await executeCode(content);
@@ -81,6 +85,10 @@ function discoverMigrations(
               },
               async down() {
                 const adapter = m.connection;
+                if (!adapter)
+                  throw new Error(
+                    "trail-cli: migration.connection must be set before calling down()",
+                  );
                 const content = vfs.read(file.path)?.content;
                 if (!content) throw new Error(`File not found: ${file.path}`);
                 await executeCode(content);

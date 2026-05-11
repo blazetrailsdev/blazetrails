@@ -43,11 +43,14 @@ export {
 import { ActiveRecordError } from "./errors.js";
 
 // Mirrors Rails AbstractAdapter#extract_new_comment_value (alias of extract_new_default_value).
+// Returns the `to` value for {from,to} hashes; passes through string|null directly.
+// Objects without a `to` key are not a valid comment value — return null rather than
+// forwarding a plain object to adapter SQL methods.
 function _extractNewCommentValue(
   v: string | null | { from?: unknown; to?: unknown },
 ): string | null {
-  if (v !== null && typeof v === "object" && "to" in v) {
-    return (v as { to: unknown }).to as string | null;
+  if (v !== null && typeof v === "object") {
+    return "to" in v ? ((v as { to: unknown }).to as string | null) : null;
   }
   return v as string | null;
 }
@@ -428,20 +431,20 @@ export abstract class Migration {
         break;
       }
       case "changeColumnComment": {
-        const [ccTable, ccCol, ccOpts] = args as [string, string, { from?: unknown; to: unknown }];
-        if (!ccOpts || typeof ccOpts !== "object" || !("from" in ccOpts)) {
+        const [ccTable, ccCol, ccOpts] = args as [string, string, { from?: unknown; to?: unknown }];
+        if (!ccOpts || typeof ccOpts !== "object" || !("from" in ccOpts) || !("to" in ccOpts)) {
           throw new IrreversibleMigration(
-            "Cannot reverse changeColumnComment without from/to options",
+            "change_column_comment is only reversible if given a :from and :to option.",
           );
         }
         await this.changeColumnComment(ccTable, ccCol, { from: ccOpts.to, to: ccOpts.from });
         break;
       }
       case "changeTableComment": {
-        const [ctTable, ctOpts] = args as [string, { from?: unknown; to: unknown }];
-        if (!ctOpts || typeof ctOpts !== "object" || !("from" in ctOpts)) {
+        const [ctTable, ctOpts] = args as [string, { from?: unknown; to?: unknown }];
+        if (!ctOpts || typeof ctOpts !== "object" || !("from" in ctOpts) || !("to" in ctOpts)) {
           throw new IrreversibleMigration(
-            "Cannot reverse changeTableComment without from/to options",
+            "change_table_comment is only reversible if given a :from and :to option.",
           );
         }
         await this.changeTableComment(ctTable, { from: ctOpts.to, to: ctOpts.from });
@@ -743,8 +746,11 @@ export abstract class Migration {
     }
     await this.schema.removeCheckConstraint(tableName, expressionOrOptions);
   }
-  async validateCheckConstraint(tableName: string, options: { name: string }): Promise<void> {
-    await (this.connection as any).validateCheckConstraint(tableName, options);
+  async validateCheckConstraint(
+    tableName: string,
+    nameOrOptions: string | { name: string },
+  ): Promise<void> {
+    await (this.connection as any).validateCheckConstraint(tableName, nameOrOptions);
   }
 
   async validateForeignKey(

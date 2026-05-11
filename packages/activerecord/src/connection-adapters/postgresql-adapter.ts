@@ -2850,8 +2850,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     );
   }
 
-  async validateCheckConstraint(tableName: string, options: { name: string }): Promise<void> {
-    await this.validateConstraint(tableName, options.name);
+  async validateCheckConstraint(
+    tableName: string,
+    nameOrOptions: string | { name: string },
+  ): Promise<void> {
+    const name = typeof nameOrOptions === "string" ? nameOrOptions : nameOrOptions.name;
+    await this.validateConstraint(tableName, name);
   }
 
   async validateForeignKey(

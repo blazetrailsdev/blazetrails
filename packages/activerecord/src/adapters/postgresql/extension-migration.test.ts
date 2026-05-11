@@ -66,10 +66,6 @@ describeIfPg("PostgreSQLAdapter", () => {
         }
       }
       await new EnableCitext().run(adapter, "up");
-      const schemaDumper = adapter.createSchemaDumper({});
-      const dump = (await (schemaDumper as any).extensionStatements?.()) ?? "";
-      // Schema dump should reference citext; if schemaDumper doesn't have
-      // extensionStatements the extension is still enabled (proxy works)
       expect(await adapter.extensionEnabled("citext")).toBe(true);
     });
     it("enable extension migration ignores prefix and suffix", async () => {

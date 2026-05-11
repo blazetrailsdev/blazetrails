@@ -535,29 +535,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /**
-   * Mirrors: PostgreSQLAdapter#case_insensitive_comparison (via AbstractAdapter).
-   * Returns a LOWER(attr) = LOWER(value) node when the column type supports it,
-   * otherwise falls back to a plain equality node.
-   * @internal
-   */
-  override async caseInsensitiveComparison(
-    attribute: Nodes.Attribute,
-    value: unknown,
-  ): Promise<Nodes.Node> {
-    const column = await this.columnForAttribute(attribute);
-    if (column && (await this.canPerformCaseInsensitiveComparisonFor(column))) {
-      return attribute.lower().eq((attribute.relation as any).lower(value));
-    }
-    return attribute.eq(value);
-  }
-
-  /**
    * Mirrors: PostgreSQLAdapter#can_perform_case_insensitive_comparison_for?(column).
    * Queries pg_proc once per sql_type and caches the result.
    * citext is pre-seeded as false — case-insensitive by definition, LOWER() unnecessary.
    * @internal
    */
-  async canPerformCaseInsensitiveComparisonFor(column: {
+  override async canPerformCaseInsensitiveComparisonFor(column: {
     sqlType?: string | null;
   }): Promise<boolean> {
     const sqlType = column.sqlType ?? "";
@@ -565,20 +548,21 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       return this._caseInsensitiveCache.get(sqlType)!;
     }
     const sql = `
-      SELECT exists(
-        SELECT * FROM pg_proc
-        WHERE proname = 'lower'
-          AND proargtypes = ARRAY[${this.quote(sqlType)}::regtype]::oidvector
-      ) OR exists(
-        SELECT * FROM pg_proc
-        INNER JOIN pg_cast
-          ON ARRAY[casttarget]::oidvector = proargtypes
-        WHERE proname = 'lower'
-          AND castsource = ${this.quote(sqlType)}::regtype
-      )`;
-    const rows = await this.execute(sql);
-    const row = rows[0] ?? {};
-    const result = Object.values(row).some((v) => v === true);
+      SELECT (
+        exists(
+          SELECT * FROM pg_proc
+          WHERE proname = 'lower'
+            AND proargtypes = ARRAY[${this.quote(sqlType)}::regtype]::oidvector
+        ) OR exists(
+          SELECT * FROM pg_proc
+          INNER JOIN pg_cast
+            ON ARRAY[casttarget]::oidvector = proargtypes
+          WHERE proname = 'lower'
+            AND castsource = ${this.quote(sqlType)}::regtype
+        )
+      ) AS can_lower`;
+    const rows = await this.schemaQuery(sql);
+    const result = (rows[0]?.can_lower as boolean) === true;
     this._caseInsensitiveCache.set(sqlType, result);
     return result;
   }

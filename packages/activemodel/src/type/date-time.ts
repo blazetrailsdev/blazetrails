@@ -171,7 +171,7 @@ export class DateTimeType extends ValueType<DateTimeCastResult> {
    * @internal Rails-private helper.
    */
   protected valueFromMultiparameterAssignment(
-    values: Record<number, unknown>,
+    values: Record<string, unknown>,
   ): DateTimeCastResult | null {
     const missing = [1, 2, 3].filter((k) => !Object.hasOwn(values, k));
     if (missing.length > 0) {

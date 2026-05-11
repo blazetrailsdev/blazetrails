@@ -476,6 +476,32 @@ describe("SchemaDumperTest", () => {
     expect(output).not.toContain("addForeignKey");
   });
 
+  it("fkIgnorePattern suppresses name for matching FK names, includes name for non-matching", async () => {
+    const mkSource = (fkName: string) => ({
+      tables: async () => ["books"],
+      columns: async (_t: string) => [{ name: "id", type: "integer", primaryKey: true }],
+      indexes: async () => [],
+      foreignKeys: async () => [
+        {
+          fromTable: "books",
+          toTable: "authors",
+          column: "author_id",
+          primaryKey: "id",
+          name: fkName,
+        },
+      ],
+    });
+    // auto-generated Rails name → name: omitted (export_name_on_schema_dump? == false)
+    const autoName = "fk_rails_abc123def4";
+    const autoOutput = await SchemaDumper.dump(mkSource(autoName) as any);
+    expect(autoOutput).toContain("addForeignKey");
+    expect(autoOutput).not.toContain(`"${autoName}"`);
+    // custom name → name: included
+    const customName = "fk_books_author_id";
+    const customOutput = await SchemaDumper.dump(mkSource(customName) as any);
+    expect(customOutput).toContain(`name: "${customName}"`);
+  });
+
   it("schema dump with table name prefix and suffix", async () => {
     await ctx.createTable("myapp_users_v1", {}, (t) => {
       t.string("name");

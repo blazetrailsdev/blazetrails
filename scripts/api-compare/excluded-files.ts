@@ -33,8 +33,7 @@ export type ExcludedFile = { reason: string } & (
 
 export const EXCLUDED_FILES: ExcludedFile[] = [
   {
-    pattern: "migration/compatibility",
-    testFile: "migration/compatibility_test.rb",
+    pattern: "migration/compatibility", // test excluded by extract-ruby-tests.rb SKIP_PATTERNS (/\/migration\//)
     reason: "Pre-1.0: legacy Rails version migration compatibility shims.",
   },
   {

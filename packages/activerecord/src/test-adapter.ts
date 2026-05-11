@@ -654,16 +654,36 @@ class SchemaAdapter implements DatabaseAdapter {
   }
 
   // Override execQuery so PG/MySQL's adapter-specific castResult (which populates
-  // columnTypes) is preserved. SQLite falls through to the default DatabaseStatements
-  // execQuery path (via execute()) to keep fixSqliteCompat + retry logic intact.
+  // columnTypes) is preserved, while keeping the same setup/retry/savepoint recovery
+  // that execute() provides. SQLite falls through to execute() + fromRowHashes.
   async execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result> {
-    if (isPg() || isMysql()) {
-      await this.setup();
-      return this.inner.execQuery(sql, name, binds);
+    if (!isPg() && !isMysql()) {
+      const rows = await this.execute(sql, binds ?? [], name ?? undefined);
+      return Result.fromRowHashes(rows);
     }
-    // SQLite: use execute() so fixSqliteCompat + missing-schema retry apply.
-    const rows = await this.execute(sql, binds ?? [], name ?? undefined);
-    return Result.fromRowHashes(rows);
+    await this.setup();
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const useSp = isPg() && (this.openTransactions > 0 || this.inTransaction);
+      const sp = useSp ? `_sr_${attempt}` : "";
+      try {
+        if (useSp) await this.inner.createSavepoint(sp);
+        const result = await this.inner.execQuery(sql, name, binds);
+        if (useSp) await this.inner.releaseSavepoint(sp);
+        return result;
+      } catch (e: any) {
+        lastError = e;
+        if (useSp) {
+          try {
+            await this.inner.rollbackToSavepoint(sp);
+            await this.inner.releaseSavepoint(sp);
+          } catch {}
+        }
+        if (await this.handleMissingSchemaError(e, sql)) continue;
+        throw e;
+      }
+    }
+    throw lastError;
   }
 
   async execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]> {

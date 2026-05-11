@@ -119,15 +119,30 @@ export class TypeMapInitializer {
   }
 
   private registerMultirangeType(row: PgTypeRow): void {
-    // For multirange types, typelem is the corresponding range type's OID.
-    // We look up that range type and extract its subtype for MultiRangeType.
+    // PG stores typelem=0 for multirange types in pg_type (unlike arrays).
+    // The range OID is only available via pg_range.rngtypid WHERE
+    // rngmultitypid = t.oid (PG 14+), which we don't currently SELECT.
+    // Fall back: iterate the type map for a RangeType whose typname matches
+    // the naming convention (e.g. "int4multirange" → "int4range").
     if (!this.store.lookup) {
       throw new Error(
         `TypeMap store must implement lookup() to register subtype-based OID ${row.oid}`,
       );
     }
-    const rangeOid = toInt(row.typelem ?? 0);
-    if (this.storeHas(rangeOid)) {
+    let rangeOid = toInt(row.typelem ?? 0);
+    if (rangeOid === 0) {
+      const rangeName = row.typname.replace("multirange", "range");
+      for (const key of this.storeKeys()) {
+        if (typeof key === "number") {
+          const candidate = this.storeLookup(key);
+          if (candidate instanceof RangeType && candidate.name === rangeName) {
+            rangeOid = key;
+            break;
+          }
+        }
+      }
+    }
+    if (rangeOid !== 0 && this.storeHas(rangeOid)) {
       this.register(row.oid, (_oid: number | string, ...args: unknown[]) => {
         const rangeType = this.storeLookup(rangeOid, ...args);
         const subtype =
@@ -136,11 +151,13 @@ export class TypeMapInitializer {
             : (rangeType as unknown as RangeSubtype);
         return new MultiRangeType(subtype, row.typname);
       });
-    } else {
-      // Range OID not yet registered — defer so the adapter can load it first.
+    } else if (rangeOid !== 0) {
+      // Range OID found but not yet registered — defer so adapter can load it.
       this.deferredMultirangeOids.push(rangeOid);
       this.deferredMultirangeRows.push(row);
     }
+    // rangeOid still 0 means range type not in store yet; skip silently.
+    // The adapter's loadAdditionalTypes will retry via columns() batch-load.
   }
 
   private registerEnumType(row: PgTypeRow): void {

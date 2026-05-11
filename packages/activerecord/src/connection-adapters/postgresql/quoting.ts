@@ -397,7 +397,17 @@ function encodeRange(value: Range): string {
 
 /** @internal */
 function encodeMultirange(value: MultiRange): string {
-  return `{${value.ranges.map(encodeRange).join(",")}}`;
+  return `{${value.ranges.map(encodeRangeLiteral).join(",")}}`;
+}
+
+/** @internal */
+function encodeRangeLiteral(value: Range): string {
+  const encode = (v: unknown): string => {
+    if (v === null || v === undefined || v === -Infinity || v === Infinity) return "";
+    const s = String(v);
+    return /[",\\\s[\]()]/.test(s) ? `"${s.replace(/\\/g, "\\\\").replace(/"/g, '""')}"` : s;
+  };
+  return `[${encode(value.begin)},${encode(value.end)}${value.excludeEnd ? ")" : "]"}`;
 }
 
 function isSqlLiteral(value: unknown): value is { value: string } {

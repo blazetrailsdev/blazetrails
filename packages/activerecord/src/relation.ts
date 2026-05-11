@@ -3483,9 +3483,13 @@ export class Relation<T extends Base> {
       } else {
         fromExpr = raw;
       }
-      // Match both ANSI double-quoted ("table") and MySQL backtick-quoted (`table`) names.
-      // Use function-form replacement so $ in fromExpr (e.g. schema names) is not mangled.
-      sql = sql.replace(/FROM\s+(?:"[^"]+"|[`][^`]+[`])/, () => `FROM ${fromExpr}`);
+      // Match ANSI double-quoted or MySQL backtick-quoted identifiers, including
+      // schema-qualified chains ("schema"."table" or `schema`.`table`). The
+      // function-form replacement avoids $ mangling from special replacement sequences.
+      sql = sql.replace(
+        /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
+        () => `FROM ${fromExpr}`,
+      );
     }
 
     // Append SQL comments from annotate()

@@ -2232,6 +2232,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     name: string,
     options: { force?: "cascade"; schema?: string } = {},
   ): Promise<void> {
+    // Mirrors Rails: _schema, name = name.to_s.split(".").values_at(-2, -1)
+    // Extensions are global in PG — DROP uses only extname, not schema.
+    const parts = String(name).split(".");
+    const extName = parts[parts.length - 1];
     const cascade = options.force === "cascade" ? " CASCADE" : "";
     if (options.schema) {
       await this.withClient(async (client) => {
@@ -2239,7 +2243,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         const originalSearchPath = rows[0]?.search_path as string;
         await client.query(`SELECT set_config('search_path', $1, false)`, [options.schema]);
         try {
-          await client.query(`DROP EXTENSION IF EXISTS ${this.quoteIdentifier(name)}${cascade}`);
+          await client.query(`DROP EXTENSION IF EXISTS ${this.quoteIdentifier(extName)}${cascade}`);
         } finally {
           await client.query(`SELECT set_config('search_path', $1, false)`, [
             originalSearchPath ?? "public",
@@ -2247,7 +2251,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         }
       });
     } else {
-      await this.exec(`DROP EXTENSION IF EXISTS ${this.quoteIdentifier(name)}${cascade}`);
+      await this.exec(`DROP EXTENSION IF EXISTS ${this.quoteIdentifier(extName)}${cascade}`);
     }
   }
 

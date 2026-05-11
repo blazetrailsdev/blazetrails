@@ -677,8 +677,9 @@ export class SchemaDumper {
     const hasId = pkColumn?.name === "id";
     const stripped = this.removePrefixAndSuffix(tableName);
 
-    const tableOpts: Record<string, unknown> = { force: "cascade" };
+    const tableOpts: Record<string, unknown> = {};
     if (!hasId) tableOpts.id = false;
+    tableOpts.force = "cascade";
     const optStr = `{ ${this.formatOptions(tableOpts)} }`;
 
     lines.push(`  await ctx.createTable(${JSON.stringify(stripped)}, ${optStr}, (t) => {`);

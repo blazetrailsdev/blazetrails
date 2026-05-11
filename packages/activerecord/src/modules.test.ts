@@ -143,9 +143,9 @@ describe("ModulesTest", () => {
   });
 
   it.skip("table name in mixins", () => {
-    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — ruby-module-semantics
+    // BLOCKED: unknown — no matching test in Rails modules_test.rb; likely a phantom from a prior merge
   });
   it.skip("inheritance in mixins", () => {
-    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — ruby-module-semantics
+    // BLOCKED: unknown — no matching test in Rails modules_test.rb; likely a phantom from a prior merge
   });
 });

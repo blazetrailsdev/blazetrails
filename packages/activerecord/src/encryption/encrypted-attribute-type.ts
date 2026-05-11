@@ -245,7 +245,7 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     // the encryptor receives a valid string rather than "0,1,2,..." (Array#toString).
     const str =
       casted instanceof Uint8Array
-        ? Array.from(casted, (b) => String.fromCharCode(b)).join("")
+        ? Buffer.from(casted).toString("latin1")
         : typeof casted === "string"
           ? casted
           : String(casted);
@@ -307,10 +307,9 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   private textToDatabaseType(value: unknown): unknown {
     if (value != null && this.castType.isBinary()) {
       if (typeof value === "string") {
-        // Use Latin-1 mapping (charCodeAt) so binary payload bytes > 127 round-trip
-        // correctly. UTF-8 encoding (TextEncoder) would expand bytes 128–255 to
-        // two-byte sequences and corrupt the data on decrypt.
-        return new BinaryData(Uint8Array.from(value, (c) => c.charCodeAt(0)));
+        // Use Latin-1 so binary payload bytes > 127 round-trip correctly.
+        // UTF-8 (TextEncoder) would expand bytes 128–255 to two-byte sequences.
+        return new BinaryData(new Uint8Array(Buffer.from(value, "latin1")));
       }
       return new BinaryData(value as string);
     }

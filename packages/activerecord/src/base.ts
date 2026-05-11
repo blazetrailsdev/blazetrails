@@ -2457,8 +2457,8 @@ export class Base extends Model {
 
     const table = ctor.arelTable;
 
-    // Auto-populate timestamps (unless touch: false)
-    if (!this._skipTouch) {
+    // Auto-populate timestamps (unless touch: false or recordTimestamps disabled)
+    if (!this._skipTouch && ctor.recordTimestamps !== false) {
       const now = Temporal.Now.instant();
       for (const col of Timestamp.allTimestampAttributesInModel.call(ctor)) {
         if (ctor._attributeDefinitions.has(col) && this._readAttribute(col) == null) {
@@ -2511,9 +2511,14 @@ export class Base extends Model {
 
     const table = ctor.arelTable;
 
-    // Auto-populate updated_at timestamp (unless touch: false)
-    if (!this._skipTouch && ctor._attributeDefinitions.has("updated_at")) {
-      this._writeAttribute("updated_at", Temporal.Now.instant());
+    // Auto-populate update timestamps (unless touch: false)
+    if (!this._skipTouch) {
+      const now = Temporal.Now.instant();
+      for (const col of Timestamp.timestampAttributesForUpdateInModel.call(ctor)) {
+        if (!this.willSaveChangeToAttribute(col)) {
+          this._writeAttribute(col, now);
+        }
+      }
     }
 
     const changedAttrs = { ...this.changes };

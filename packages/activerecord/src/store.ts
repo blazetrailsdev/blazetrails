@@ -275,14 +275,22 @@ export class HashAccessor {
 }
 
 /**
- * In Rails, IndifferentHashAccessor ensures the store value is a
- * HashWithIndifferentAccess. In TypeScript, JS objects already use
- * string keys natively, so no additional behavior is needed beyond
- * HashAccessor. Kept as a distinct class for Rails API parity.
+ * Ensures the store attribute value is a HashWithIndifferentAccess before
+ * reading or writing a key. Non-HWIA values (plain objects, strings, null)
+ * are coerced to an empty HWIA — matching Rails' behavior for structured
+ * column types (json/jsonb/hstore) where the type deserializer may return
+ * a plain hash or nil rather than a HWIA.
  *
  * Mirrors: ActiveRecord::Store::IndifferentHashAccessor
  */
-export class IndifferentHashAccessor extends HashAccessor {}
+export class IndifferentHashAccessor extends HashAccessor {
+  static override prepare(object: Base, attribute: string): void {
+    const val = object.readAttribute(attribute);
+    if (!(val instanceof HashWithIndifferentAccess)) {
+      object.writeAttribute(attribute, asIndifferentHash(val));
+    }
+  }
+}
 
 /**
  * Mirrors: ActiveRecord::Store::StringKeyedHashAccessor.
@@ -436,7 +444,8 @@ export function storeAccessorFor(
   if (coder) return coder.accessor();
   throw new ConfigurationError(
     `the column '${storeAttribute}' has not been configured as a store. ` +
-      `Please make sure the column is declared via store() or use a structured column type.`,
+      `Please make sure the column is declared serializable via 'ActiveRecord.store' or, ` +
+      `if your database supports it, use a structured column type like hstore or json.`,
   );
 }
 

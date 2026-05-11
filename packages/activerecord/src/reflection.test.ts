@@ -660,10 +660,8 @@ describe("ReflectionTest", () => {
     const authorsTable = new Table("authors");
     const scope = ref.joinScope(booksTable, authorsTable, Author);
     const sql = scope.toSql();
-    // has_many: books.author_id = authors.id (quoting varies: double-quotes ANSI/PG/SQLite, backticks MySQL)
-    expect(sql).toMatch(
-      /(?:"books"|`books`)\.(?:"author_id"|`author_id`) = (?:"authors"|`authors`)\.(?:"id"|`id`)/,
-    );
+    // has_many: books.author_id = authors.id
+    expect(sql).toMatch(/"books"\."author_id" = "authors"\."id"/);
   });
   it("join scope builds arel predicate for belongs to", () => {
     const { Book, Author } = makeModels();
@@ -672,10 +670,8 @@ describe("ReflectionTest", () => {
     const booksTable = new Table("books");
     const scope = ref.joinScope(authorsTable, booksTable, Book);
     const sql = scope.toSql();
-    // belongs_to: authors.id = books.author_id (quoting varies by adapter)
-    expect(sql).toMatch(
-      /(?:"authors"|`authors`)\.(?:"id"|`id`) = (?:"books"|`books`)\.(?:"author_id"|`author_id`)/,
-    );
+    // belongs_to: authors.id = books.author_id
+    expect(sql).toMatch(/"authors"\."id" = "books"\."author_id"/);
   });
   it.skip("scope chain", () => {
     // BLOCKED: associations — reflection feature gap (macros / options inspection)

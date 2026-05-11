@@ -2288,7 +2288,7 @@ describe("BasicsTest", () => {
       }
     }
     const sql = User.where({ name: "test" }).toSql();
-    expect(sql).toMatch(/["` ]name["` ]/);
+    expect(sql).toContain('"name"');
   });
   it("quoting arrays", async () => {
     class Reply extends Base {

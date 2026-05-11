@@ -3474,10 +3474,9 @@ export class Relation<T extends Base> {
         // for names that would produce invalid SQL or risk injection.
         fromExpr = `(${subSql}) ${_safeAlias(name)}`;
       } else if (raw instanceof Nodes.Node) {
-        // Arel node (e.g. SelectManager#as → Nodes.TableAlias) — call toSql()
-        // so the visitor emits correct SQL (e.g. "(SELECT ...) ranked").
-        // Rails accepts Arel::Nodes::As from relation.arel.as("alias") here.
-        fromExpr = raw.toSql();
+        // Arel node (e.g. SelectManager#as → Nodes.TableAlias) — compile via
+        // the adapter visitor so quoting is consistent with the rest of the SQL.
+        fromExpr = this._arelVisitor().compile(raw);
       } else if (alias) {
         fromExpr = `${raw} ${_safeAlias(alias)}`;
       } else {
@@ -3525,7 +3524,11 @@ export class Relation<T extends Base> {
     const adapter = (this._modelClass as any)._adapter as
       | (Visitors.ArelQuoter & { arelVisitor?: Visitors.ToSql })
       | null;
-    return adapter?.arelVisitor ?? new Visitors.ToSql(adapter ?? undefined);
+    // When arelVisitor is undefined (e.g. test SchemaAdapter), fall back to a
+    // default-quoter visitor rather than passing the adapter as connection —
+    // the adapter's quoting methods may delegate to an inner adapter (MySQL →
+    // backticks) that doesn't match the global registry visitor class in use.
+    return adapter?.arelVisitor ?? new Visitors.ToSql();
   }
 
   private _compileArelNode(node: Nodes.Node): string {

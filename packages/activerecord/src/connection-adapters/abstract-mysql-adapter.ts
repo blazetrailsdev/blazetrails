@@ -1209,8 +1209,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     // Rails' column.default is nil for function defaults; pass as a lambda so
     // quoteDefaultExpression emits it unquoted: DEFAULT CURRENT_TIMESTAMP, not DEFAULT 'CURRENT_TIMESTAMP'.
     const colDefault =
-      typeof rawDefault === "string" &&
-      /^(?:CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NOW|UUID)(?:\([0-6]?\))?$/i.test(rawDefault)
+      typeof rawDefault === "string" && /^CURRENT_TIMESTAMP(\([0-6]?\))?$/i.test(rawDefault)
         ? () => rawDefault
         : rawDefault;
     const colOpts: MysqlAddColumnOptions = {

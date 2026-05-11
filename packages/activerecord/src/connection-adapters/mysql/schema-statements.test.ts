@@ -114,37 +114,49 @@ describe("MySQL::SchemaStatements", () => {
     expect(col.defaultFunction).toBe("CURRENT_TIMESTAMP");
   });
 
-  it("newColumnFromField: NOW() default becomes defaultFunction (broadened regex)", () => {
+  it("newColumnFromField: NOW() via DEFAULT_GENERATED becomes defaultFunction (MySQL 8)", () => {
     const noInfo = () => null;
     const col = newColumnFromField(
       "events",
-      { Field: "created_at", Type: "datetime", Null: "NO", Default: "NOW()", Extra: "" },
+      {
+        Field: "created_at",
+        Type: "datetime",
+        Null: "NO",
+        Default: "now()",
+        Extra: "DEFAULT_GENERATED",
+      },
       noInfo,
     );
     expect(col.default).toBeNull();
-    expect(col.defaultFunction).toBe("NOW()");
+    expect(col.defaultFunction).toBe("(now())");
   });
 
-  it("newColumnFromField: UUID() default becomes defaultFunction on char column", () => {
+  it("newColumnFromField: UUID() via DEFAULT_GENERATED becomes defaultFunction (MySQL 8)", () => {
     const noInfo = () => null;
     const col = newColumnFromField(
       "items",
-      { Field: "uid", Type: "char(36)", Null: "NO", Default: "UUID()", Extra: "" },
+      { Field: "uid", Type: "char(36)", Null: "NO", Default: "uuid()", Extra: "DEFAULT_GENERATED" },
       noInfo,
     );
     expect(col.default).toBeNull();
-    expect(col.defaultFunction).toBe("UUID()");
+    expect(col.defaultFunction).toBe("(uuid())");
   });
 
-  it("newColumnFromField: CURRENT_DATE default becomes defaultFunction on date column", () => {
+  it("newColumnFromField: CURRENT_DATE via DEFAULT_GENERATED becomes defaultFunction (MySQL 8)", () => {
     const noInfo = () => null;
     const col = newColumnFromField(
       "items",
-      { Field: "due_on", Type: "date", Null: "YES", Default: "CURRENT_DATE", Extra: "" },
+      {
+        Field: "due_on",
+        Type: "date",
+        Null: "YES",
+        Default: "CURRENT_DATE",
+        Extra: "DEFAULT_GENERATED",
+      },
       noInfo,
     );
     expect(col.default).toBeNull();
-    expect(col.defaultFunction).toBe("CURRENT_DATE");
+    expect(col.defaultFunction).toBe("(CURRENT_DATE)");
   });
 
   it("newColumnFromField: DEFAULT_GENERATED extra becomes defaultFunction", () => {

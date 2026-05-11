@@ -181,7 +181,6 @@ export class TimeZoneConverter extends ValueType<unknown> {
     return extractUtc(value);
   }
 
-
   override equals(other: Type): boolean {
     if (!(other instanceof TimeZoneConverter)) return false;
     const sub = this._subtype as ValueTypeInstance;

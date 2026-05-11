@@ -162,8 +162,8 @@ describe("RelationTest", () => {
     expect(Post.order(sql("avg_rating DESC")).toSql()).toContain("ORDER BY avg_rating DESC");
     expect(Post.order(sql("avg_rating DESC")).toSql()).not.toContain('"posts"."avg_rating"');
     // Chained: plain col comes before raw literal, both in call order
-    expect(Post.order({ id: "asc" }).order(sql("score DESC")).toSql()).toContain(
-      'ORDER BY "posts"."id" ASC, score DESC',
+    expect(Post.order({ id: "asc" }).order(sql("score DESC")).toSql()).toMatch(
+      /ORDER BY (?:"posts"\."id"|`posts`\.`id`) ASC, score DESC/,
     );
     // Raw SQL expressions pass through verbatim
     expect(Post.order(sql("RANDOM()")).toSql()).toContain("ORDER BY RANDOM()");
@@ -178,7 +178,7 @@ describe("RelationTest", () => {
         this.adapter = adapter;
       }
     }
-    expect(Post.order({ id: "desc" }).toSql()).toContain('"posts"."id" DESC');
+    expect(Post.order({ id: "desc" }).toSql()).toMatch(/(?:"posts"\."id"|`posts`\.`id`) DESC/);
   });
 
   it("order by unknown column (subquery alias) uses bare quoted name", () => {

@@ -672,8 +672,10 @@ describe("ReflectionTest", () => {
     const booksTable = new Table("books");
     const scope = ref.joinScope(authorsTable, booksTable, Book);
     const sql = scope.toSql();
-    // belongs_to: authors.id = books.author_id
-    expect(sql).toMatch(/"authors"\."id" = "books"\."author_id"/);
+    // belongs_to: authors.id = books.author_id (quoting varies by adapter)
+    expect(sql).toMatch(
+      /(?:"authors"|`authors`)\.(?:"id"|`id`) = (?:"books"|`books`)\.(?:"author_id"|`author_id`)/,
+    );
   });
   it.skip("scope chain", () => {
     // BLOCKED: associations — reflection feature gap (macros / options inspection)

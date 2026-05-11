@@ -241,7 +241,14 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   private serializeWithCurrent(value: unknown): unknown {
     const casted = this.castType.serialize?.(value) ?? value;
     if (casted === null || casted === undefined) return null;
-    const str = typeof casted === "string" ? casted : String(casted);
+    // Binary columns: convert each byte to the matching Latin-1 code point so
+    // the encryptor receives a valid string rather than "0,1,2,..." (Array#toString).
+    const str =
+      casted instanceof Uint8Array
+        ? Array.from(casted, (b) => String.fromCharCode(b)).join("")
+        : typeof casted === "string"
+          ? casted
+          : String(casted);
     const normalized = this.deterministic ? this._applyForcedEncoding(str) : str;
     const toEncrypt =
       this.scheme.downcase || this.scheme.ignoreCase ? normalized.toLowerCase() : normalized;
@@ -298,7 +305,15 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
 
   /** @internal */
   private textToDatabaseType(value: unknown): unknown {
-    if (value != null && this.castType.isBinary()) return new BinaryData(value as string);
+    if (value != null && this.castType.isBinary()) {
+      if (typeof value === "string") {
+        // Use Latin-1 mapping (charCodeAt) so binary payload bytes > 127 round-trip
+        // correctly. UTF-8 encoding (TextEncoder) would expand bytes 128–255 to
+        // two-byte sequences and corrupt the data on decrypt.
+        return new BinaryData(Uint8Array.from(value, (c) => c.charCodeAt(0)));
+      }
+      return new BinaryData(value as string);
+    }
     return value;
   }
 

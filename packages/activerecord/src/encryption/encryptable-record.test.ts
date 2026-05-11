@@ -11,6 +11,9 @@ import {
   makeEncryptedBookIgnoreCase,
   makeEncryptedAuthor,
   makeBookThatWillFailToEncryptName,
+  makeEncryptedBookWithBinary,
+  makeEncryptedBookWithSerializedFirstBinary,
+  makeEncryptedBookWithSerializedSecondBinary,
   makeEncryptedBookWithCustomCompressor,
   makeFreshModel,
   makeKeyProvider,
@@ -558,20 +561,26 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     const overridingInstance = found!.becomes(OverridingBook);
     expect(overridingInstance.name).toBe("Dune-overridden");
   });
-  it.skip("binary data can be encrypted", () => {
-    // BLOCKED: encryption — encryption subsystem gap in encryptable-record
-    // ROOT-CAUSE: encryption/encryptable-record.ts missing Rails parity
-    // SCOPE: ~50–200 LOC fix in encryption/encryptable-record.ts; affects ~6–28 tests in encryptable-record.test.ts
+  it("binary data can be encrypted", async () => {
+    const Book = makeEncryptedBookWithBinary(freshAdapter());
+    const allBytes = Uint8Array.from({ length: 256 }, (_, i) => i);
+    expect((await Book.create({ logo: allBytes })).logo).toEqual(allBytes);
+    expect((await Book.create({ logo: null })).logo).toBeNull();
+    expect((await Book.create({ logo: new Uint8Array(0) })).logo).toEqual(new Uint8Array(0));
   });
-  it.skip("binary data can be encrypted uncompressed", () => {
-    // BLOCKED: encryption — encryption subsystem gap in encryptable-record
-    // ROOT-CAUSE: encryption/encryptable-record.ts missing Rails parity
-    // SCOPE: ~50–200 LOC fix in encryption/encryptable-record.ts; affects ~6–28 tests in encryptable-record.test.ts
+  it("binary data can be encrypted uncompressed", async () => {
+    const Book = makeEncryptedBookWithBinary(freshAdapter());
+    const lowBytes = Uint8Array.from({ length: 128 }, (_, i) => i);
+    const highBytes = Uint8Array.from({ length: 128 }, (_, i) => i + 128);
+    assertEncryptedAttribute(await Book.create({ logo: lowBytes }), "logo", lowBytes);
+    assertEncryptedAttribute(await Book.create({ logo: highBytes }), "logo", highBytes);
   });
-  it.skip("serialized binary data can be encrypted", () => {
-    // BLOCKED: encryption — encryption subsystem gap in encryptable-record
-    // ROOT-CAUSE: encryption/encryptable-record.ts missing Rails parity
-    // SCOPE: ~50–200 LOC fix in encryption/encryptable-record.ts; affects ~6–28 tests in encryptable-record.test.ts
+  it("serialized binary data can be encrypted", async () => {
+    const jsonBytes = Array.from({ length: 96 }, (_, i) => String.fromCharCode(i + 32));
+    const Book1 = makeEncryptedBookWithSerializedFirstBinary(freshAdapter());
+    assertEncryptedAttribute(await Book1.create({ logo: jsonBytes }), "logo", jsonBytes);
+    const Book2 = makeEncryptedBookWithSerializedSecondBinary(freshAdapter());
+    assertEncryptedAttribute(await Book2.create({ logo: jsonBytes }), "logo", jsonBytes);
   });
   it.skip("deterministic ciphertexts remain constant", () => {
     // BLOCKED: encryption — encryption subsystem gap in encryptable-record

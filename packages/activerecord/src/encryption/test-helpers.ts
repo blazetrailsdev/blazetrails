@@ -18,9 +18,46 @@ import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { clearDefaultKeyProviderCache } from "./scheme.js";
 import { withEncryptionContext, withoutEncryption } from "./context.js";
 import { DecryptionError, EncryptionError } from "./errors.js";
+import { ValueType } from "@blazetrails/activemodel";
 // Side-effect: registers encryptionHooks so Base.encrypts() is wired up.
 import "../encryption.js";
 import type { Encryptor } from "../encryption.js";
+
+// JSON array type: cast/serialize produce a JSON string; deserialize parses it back.
+// Used as the castType for EncryptedBookWithSerialized*Binary factories.
+class _JsonArrayType extends ValueType<unknown> {
+  readonly name = "string";
+  cast(value: unknown): unknown {
+    if (value === null || value === undefined) return null;
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+  serialize(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    return JSON.stringify(value);
+  }
+  deserialize(value: unknown): unknown {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string") {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+  type(): string {
+    return "string";
+  }
+}
 
 export { withEncryptionContext, withoutEncryption, DecryptionError, EncryptionError };
 
@@ -238,6 +275,59 @@ export function makeBookThatWillFailToEncryptName(adapter: DatabaseAdapter) {
   } as any;
 }
 
+/**
+ * EncryptedBookWithBinary: logo is a binary attribute, encrypted.
+ * Mirrors Rails' EncryptedBookWithBinary fixture (book_encrypted.rb).
+ */
+export function makeEncryptedBookWithBinary(adapter: DatabaseAdapter) {
+  return class EncryptedBookWithBinary extends Base {
+    static {
+      this.attribute("id", "integer");
+      this.attribute("logo", "binary");
+      this.adapter = adapter;
+      this.encrypts("logo");
+    }
+  } as any;
+}
+
+/**
+ * EncryptedBookWithSerializedFirstBinary: logo stores an Array via JSON serialization,
+ * then encrypted. Mirrors Rails' EncryptedBookWithSerializedFirstBinary fixture.
+ */
+export function makeEncryptedBookWithSerializedFirstBinary(adapter: DatabaseAdapter) {
+  const jsonArrayType = new _JsonArrayType();
+  return class EncryptedBookWithSerializedFirstBinary extends Base {
+    static {
+      this.attribute("id", "integer");
+      this.attribute("logo", "string");
+      // Replace string type with JSON-array type via the pending queue so
+      // _defaultAttributes() uses _JsonArrayType as the castType when encrypts wraps it.
+      this.decorateAttributes(["logo"], () => jsonArrayType);
+      this.adapter = adapter;
+      this.encrypts("logo");
+    }
+  } as any;
+}
+
+/**
+ * EncryptedBookWithSerializedSecondBinary: logo stores an Array, encrypted.
+ * Mirrors Rails' EncryptedBookWithSerializedSecondBinary fixture.
+ * Uses JSON array serialization (YAML is not available in TS; both produce
+ * equivalent results for the ASCII-only test data).
+ */
+export function makeEncryptedBookWithSerializedSecondBinary(adapter: DatabaseAdapter) {
+  const jsonArrayType = new _JsonArrayType();
+  return class EncryptedBookWithSerializedSecondBinary extends Base {
+    static {
+      this.attribute("id", "integer");
+      this.attribute("logo", "string");
+      this.decorateAttributes(["logo"], () => jsonArrayType);
+      this.adapter = adapter;
+      this.encrypts("logo");
+    }
+  } as any;
+}
+
 // ─── Assertion helpers ────────────────────────────────────────────────────────
 
 /**
@@ -266,7 +356,16 @@ export function assertEncryptedAttribute(
     (readValue instanceof Temporal.PlainDateTime &&
       expectedValue instanceof Temporal.PlainDateTime &&
       Temporal.PlainDateTime.compare(readValue, expectedValue) === 0);
-  const valuesEqual = readValue === expectedValue || temporalEqual;
+  const uint8Equal =
+    readValue instanceof Uint8Array &&
+    expectedValue instanceof Uint8Array &&
+    readValue.length === expectedValue.length &&
+    readValue.every((b, i) => b === (expectedValue as Uint8Array)[i]);
+  const arrayEqual =
+    Array.isArray(readValue) &&
+    Array.isArray(expectedValue) &&
+    JSON.stringify(readValue) === JSON.stringify(expectedValue);
+  const valuesEqual = readValue === expectedValue || temporalEqual || uint8Equal || arrayEqual;
   if (!valuesEqual) {
     throw new Error(
       `assertEncryptedAttribute: expected ${attrName} to equal ` +

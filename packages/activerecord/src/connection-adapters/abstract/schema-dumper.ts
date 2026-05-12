@@ -121,9 +121,7 @@ export class SchemaDumper extends BaseSchemaDumper {
       const type = adapter.lookupCastTypeFromColumn(column);
       const deserialized = type.deserialize(column.default);
       if (deserialized == null) return this.schemaExpression(column);
-      if (typeof type.typeCastForSchema === "function") {
-        return type.typeCastForSchema(deserialized);
-      }
+      return type.typeCastForSchema(deserialized);
     }
     if (typeof column.default === "string") return JSON.stringify(column.default);
     return String(column.default);

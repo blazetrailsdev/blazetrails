@@ -14,13 +14,11 @@ Closed slots are pruned as PRs merge — `git log --grep "audit Slot"` is the cl
 
 ---
 
-## Encryption cluster (closed)
+## Encryption cluster (~250 LOC, Slot C remaining)
 
-All three slots shipped:
+Slot A closed in #1405, Slot B closed in #1409. Remaining:
 
-- Slot A — Binary-column encryption fixtures (#1405)
-- Slot B — `messageSerializer` per-encrypts() option pass-through + msgpack fixture (#1409)
-- Slot C — Lazy `previousSchemes` + `store_accessor` + insert/defaults (#1420). One residual: deterministic ciphertext byte-parity with MRI Rails (blocked on `MessageSerializer` double-base64 bug — in post-merge fidelity followups).
+- **Slot C — Lazy previousSchemes + store_accessor + insert/defaults + ciphertext constancy** (~250 LOC). Lazy `previousSchemes` getter invalidated by `Configurable.onConfigure`; `EncryptedTrafficLightWithStoreState` fixture; single-row `Base.insert` wrapper; un-skip 4 tests.
 
 ## Serialization cluster (~70 LOC, Slot B remaining)
 
@@ -179,9 +177,9 @@ Re-categorization of all 89 `BLOCKED: unknown` annotations. **Single foundationa
 
 audit-STI found **no STI implementation gap**. All 6 `BLOCKED: STI` tests are mis-labeled — real causes are missing fixture scopes, UUID PK + touch on polymorphic delegated_type, and PG `CREATE TABLE … INHERITS` schema-dump (closed by pg-schema Slot B above). Single tests-only PR re-annotates the 6 tests under correct categories.
 
-## Schema cluster (~1390 LOC across 7 remaining slots + annotation sweep, from audit-schema)
+## Schema cluster (~1540 LOC across 8 remaining slots + annotation sweep, from audit-schema)
 
-Slot A closed in #1407; Slot B closed in #1418; Slot G superseded by MySQL active-schema cluster.
+Slot A closed in #1407; Slot B in flight as #1418; Slot G superseded by MySQL active-schema cluster.
 
 3. **Slot C** (~80–120 LOC, sized down per #1407) — Index dump metadata (partial `where:`, `order:`, `nulls_not_distinct`, expression indices). ~7 un-skips.
 4. **Slot D** (~220 LOC) — Check / exclusion / unique constraints in dumper. 5 un-skips.
@@ -202,7 +200,7 @@ Slot B closed in #1414; Slot D closed in #1411 (as `withSecondAdapter` + SQLSTAT
 
 ## Transactions cluster (~350 LOC across 3 remaining slots + 1 deferred, from audit-transactions)
 
-Slot A closed in #1417 (2 followup-LOC bugs surfaced: dirty-tracking clobber + isolation-error-type; both in post-merge fidelity followups).
+Slot A in flight as #1417.
 
 2. **Slot B** (~120 LOC) — Fixture-model gaps: `Topic+Reply`, `Movie` (custom PK), `Cpk::Book` (composite PK). 4 un-skips.
 3. **Slot C** (~80 LOC) — Test helpers: `open_transactions` probe + callback-raises listener. 2–3 un-skips.

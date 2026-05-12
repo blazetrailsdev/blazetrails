@@ -12,25 +12,19 @@ Closed work lives in `git log` — `git log --grep "audit Slot\|fidelity\|un-ski
 
 ## In flight
 
-_(none — all queued work shipped as of this snapshot)_
-
 `gh pr list --state open` is the live picture. Cluster details for in-flight slots live in [`activerecord-100-clusters.md`](activerecord-100-clusters.md).
+
+| PR    | Story                                                                                  |
+| ----- | -------------------------------------------------------------------------------------- |
+| #1417 | Transactions Slot A — fixture/annotation cleanup (~120 LOC)                            |
+| #1418 | Schema Slot B — FK section + ignored-tables + prefix/suffix (~150 LOC)                 |
+| %227  | Encryption Slot C — lazy previousSchemes + store_accessor + insert/defaults (~250 LOC) |
+
+Other panes from this session have either delivered audit reports (triaged into clusters above) or moved their work into the PRs listed.
 
 ---
 
-<<<<<<< Updated upstream
-
 ## Post-merge fidelity followups (~225 LOC, 10 items)
-
-||||||| Stash base
-
-## Post-merge fidelity followups (~270 LOC, 16 items)
-
-=======
-
-## Post-merge fidelity followups (~434 LOC, 28 items)
-
-> > > > > > > Stashed changes
 
 > Triage hygiene: two items removed from earlier session triage as stale (Copilot #1419 review caught them): `addUniqueConstraint`/`removeUniqueConstraint` are already implemented in PG with passing tests (#1410 post-pr was outdated); `caseInsensitiveComparison` async runtime-bug is hypothetical — sync-base + no PG override means the call site at `uniqueness.ts:300` safely gets `null` today. Both will be addressed by PG-adapter cluster Slot C's actual scope.
 
@@ -46,11 +40,6 @@ Small Rails-fidelity polish surfaced via PR reviews + post-merge findings:
 - **~30 LOC** — Wire `tableOptions()` into `schema-dumper.ts:emitTable` so MySQL charset/collation/engine + PG schema options land in the dump. May overlap pg-schema Slot B / Schema Slot E. (#1407 followup)
 - **~10 LOC** — `compressIfWorthIt` in `encryptor.ts` uses UTF-8 byte count; for Latin-1 binary payloads, compression threshold fires earlier than Rails. Round-trip correct but threshold drift. (#1409 followup)
 - **~10 LOC** — `reconnect after bad connection on check version` test residual: needs proxy returning malformed server_version response. (#1411 followup)
-- **~5 LOC** — `restoreTransactionRecordState` clobbers dirty baseline by writing PK after `_restoreTransactionRecordState` already ran `redetectChanges`. Add a no-op guard or re-call `redetectChanges` after the PK write. Unblocks `rollback dirty changes then retry save on new record` + `restore previously new record after double save`. (#1417 followup)
-- **~2 LOC** — `SavepointTransaction` / `RestartParentTransaction` constructors throw plain `Error` instead of `TransactionIsolationError` when isolation set on nested. Unblocks `setting isolation when starting a nested transaction raises error`. (#1417 followup)
-- **~5 LOC** — Wire `ForeignKeyDefinition#isExportNameOnSchemaDump` into `SchemaDumper.foreignKeys()` so FK-object decisions are respected (matches Rails delegation). (#1418 followup)
-- **~2 LOC** — Fix `Post-merge fidelity followups` header in this file (~270 LOC, 16 items → ~404 LOC, 27 items) + matching story-count row. Stash@{0} on main has the prepared fix. (#1419 followup — caught by Copilot review #2 but missed the merge window)
-- **~30 LOC** — Fix `MessageSerializer.encodeIfNeeded` / `decodeIfNeeded` double-base64 bug: it `Buffer.from(value, "utf-8").toString("base64")` on already-encoded strings; Rails uses `Base64.strict_encode64(binary_string)` on raw bytes once. Cross-runtime ciphertext byte-parity blocked by this. Would unblock "deterministic ciphertexts remain constant" test. Key derivation already compatible (PBKDF2 SHA1, 65536). (#1420 followup)
 
 **Closed via #1408:** `_performInsert` block, `_storeAccessorsModules` WeakMap, MySQL non-CT function defaults, `databaseTypeToText` serialized branch + `Serialized.isBinary` delegation, `assertEncryptedAttribute` round-trip.
 
@@ -101,45 +90,37 @@ Small Rails-fidelity polish surfaced via PR reviews + post-merge findings:
 
 Cluster details in [`activerecord-100-clusters.md`](activerecord-100-clusters.md).
 
-| Group                                     | Open | LOC est. |
-| ----------------------------------------- | ---- | -------- |
-| In flight                                 | 0    | —        |
-| Encryption cluster (all 3 slots closed)   | 0    | —        |
-| Serialization cluster                     | 1    | ~70      |
-| Relation cluster                          | 7    | ~1660    |
-| Associations-core cluster                 | 5    | ~910     |
-| Associations-HABTM cluster                | 9    | ~1690    |
-| Associations has-many-through cluster     | 5    | ~1280    |
-| Associations has-one cluster              | 4    | ~480     |
-| Migration cluster                         | 6    | ~1210    |
-| Connection-pool cluster                   | 3    | ~640     |
-| MySQL active-schema cluster               | 3    | ~680     |
-| MySQL mysql2-adapter cluster              | 3    | ~700     |
-| SQLite adapter cluster                    | 2    | ~120     |
-| PG infinity cluster                       | 1    | ~250     |
-| PG foreign-table cluster                  | 1    | ~230     |
-| PG virtual-column cluster                 | 2    | ~400     |
-| PG-schema audit cluster                   | 3    | ~530     |
-| Unknown-triage cluster                    | 4    | ~640     |
-| STI annotation-drift                      | 1    | ~20      |
-| Schema cluster (A+B closed)               | 7    | ~1390    |
-| PG-adapter cluster                        | 3    | ~620     |
-| Transactions cluster (A in flight)        | 3    | ~350     |
-| MySQL onUpdate followups                  | 2    | ~30      |
-| NotImplementedError elimination (Phase 2) | 7    | ~610     |
-
-<<<<<<< Updated upstream
-| Post-merge fidelity followups | 10 | ~225 |
-||||||| Stash base
-| Post-merge fidelity followups | 16 | ~270 |
-=======
-| Post-merge fidelity followups | 28 | ~434 |
-
-> > > > > > > Stashed changes
-> > > > > > > | Doc-hygiene + infra followups | 3 | ~30 |
-> > > > > > > | Test:compare audits queued | 12 | n/a (read-only) |
-> > > > > > > | Architectural deferred | 3 | ~410 |
-> > > > > > > | Infra-blocked | 6 | n/a |
+| Group                                     | Open | LOC est.        |
+| ----------------------------------------- | ---- | --------------- |
+| In flight (#1417, #1418, %227)            | 3    | —               |
+| Encryption cluster (C in flight as %227)  | 0    | —               |
+| Serialization cluster                     | 1    | ~70             |
+| Relation cluster                          | 7    | ~1660           |
+| Associations-core cluster                 | 5    | ~910            |
+| Associations-HABTM cluster                | 9    | ~1690           |
+| Associations has-many-through cluster     | 5    | ~1280           |
+| Associations has-one cluster              | 4    | ~480            |
+| Migration cluster                         | 6    | ~1210           |
+| Connection-pool cluster                   | 3    | ~640            |
+| MySQL active-schema cluster               | 3    | ~680            |
+| MySQL mysql2-adapter cluster              | 3    | ~700            |
+| SQLite adapter cluster                    | 2    | ~120            |
+| PG infinity cluster                       | 1    | ~250            |
+| PG foreign-table cluster                  | 1    | ~230            |
+| PG virtual-column cluster                 | 2    | ~400            |
+| PG-schema audit cluster                   | 3    | ~530            |
+| Unknown-triage cluster                    | 4    | ~640            |
+| STI annotation-drift                      | 1    | ~20             |
+| Schema cluster (A closed; B in flight)    | 8    | ~1540           |
+| PG-adapter cluster                        | 3    | ~620            |
+| Transactions cluster (A in flight)        | 3    | ~350            |
+| MySQL onUpdate followups                  | 2    | ~30             |
+| NotImplementedError elimination (Phase 2) | 7    | ~610            |
+| Post-merge fidelity followups             | 10   | ~225            |
+| Doc-hygiene + infra followups             | 3    | ~30             |
+| Test:compare audits queued                | 12   | n/a (read-only) |
+| Architectural deferred                    | 3    | ~410            |
+| Infra-blocked                             | 6    | n/a             |
 
 **90 actionable work-PR slots + 12 queued audits**, ~14.7k LOC of open Rails-fidelity work. (Associations clusters overlap — real net is ~12k LOC after dedup.)
 

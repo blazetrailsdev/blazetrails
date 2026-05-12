@@ -29,12 +29,20 @@ function _guardKey(association: unknown): string {
 /**
  * Returns the loaded Association instance for `name` (its `.target` may
  * still be null in the negative-cache / preloaded-nil case — what matters
- * here is that `isLoaded()` is true), or `null` when no instance is loaded
- * or it can't be built. Mirrors Rails' `association_instance_get(name)`
- * read path used throughout autosave — `_cachedAssociations` /
- * `_preloadedAssociations` are the storage backing, but lookups must go
- * through the Association object so that subclass methods (`isUpdated`,
- * `isStaleTarget`, `setInverseInstance`, `loadedBang`, etc.) are reachable.
+ * here is that `isLoaded()` is true), or `null` when no cached data exists
+ * or the association name is unknown. Mirrors Rails'
+ * `association_instance_get(name)` read path used throughout autosave —
+ * `_cachedAssociations` / `_preloadedAssociations` are the storage backing,
+ * but lookups must go through the Association object so that subclass
+ * methods (`isUpdated`, `isStaleTarget`, `setInverseInstance`,
+ * `loadedBang`, etc.) are reachable.
+ *
+ * Configuration errors (`validateThroughReflection`, `resolveModel` for an
+ * unregistered target class, inverse-of validity, etc.) intentionally
+ * propagate to surface misconfiguration loudly, matching Rails'
+ * `Reflection#check_validity!` semantics. Only `AssociationNotFoundError`
+ * is caught — that is the case Rails' `association_instance_get` answers
+ * with a nil return.
  *
  * @internal
  */

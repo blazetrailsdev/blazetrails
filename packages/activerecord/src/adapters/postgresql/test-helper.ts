@@ -3,7 +3,7 @@ import pg from "pg";
 import { PostgreSQLAdapter } from "../../connection-adapters/postgresql-adapter.js";
 import { pgDatetimeConfig } from "../../connection-adapters/postgresql/pg-datetime-config.js";
 import { Notifications, squish } from "@blazetrails/activesupport";
-import type { NotificationSubscriber } from "@blazetrails/activesupport";
+import type { NotificationSubscriber, NotificationEvent } from "@blazetrails/activesupport";
 
 export const PG_TEST_URL = process.env.PG_TEST_URL ?? "postgres://localhost:5432/rails_js_test";
 
@@ -64,9 +64,9 @@ export class SQLSubscriber {
   readonly payloads: Array<Record<string, unknown>> = [];
   private _sub: NotificationSubscriber | null = null;
 
-  subscribe(): void {
-    this.unsubscribe();
-    this._sub = Notifications.subscribe("sql.active_record", (event) => {
+  start(): void {
+    this.stop();
+    this._sub = Notifications.subscribe("sql.active_record", (event: NotificationEvent) => {
       const p = event.payload as Record<string, unknown>;
       this.payloads.push(p);
       this.logged.push([
@@ -77,7 +77,7 @@ export class SQLSubscriber {
     });
   }
 
-  unsubscribe(): void {
+  stop(): void {
     if (this._sub) {
       Notifications.unsubscribe(this._sub);
       this._sub = null;

@@ -84,9 +84,11 @@ describe("TransactionIsolationTest", () => {
   it("setting isolation when starting a nested transaction raises error", async () => {
     const { Tag } = makeSQLiteTag();
     await Tag.transaction(async () => {
-      await expect(Tag.transaction(async () => {}, { isolation: "serializable" })).rejects.toThrow(
-        TransactionIsolationError,
-      );
+      // requiresNew: true forces a SavepointTransaction (or RestartParentTransaction),
+      // exercising the constructor-level isolation check distinct from the join-path check.
+      await expect(
+        Tag.transaction(async () => {}, { requiresNew: true, isolation: "serializable" }),
+      ).rejects.toThrow(TransactionIsolationError);
     });
   });
 });

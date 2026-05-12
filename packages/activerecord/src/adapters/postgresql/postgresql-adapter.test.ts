@@ -610,9 +610,13 @@ describeIfPg("PostgreSQLAdapter", () => {
         waitingCount: 0,
       };
       const a = new PostgreSQLAdapter(PG_TEST_URL);
-      await a.execute("SELECT 1"); // establish pool
-      (a as any)._driverPool = fakePool;
-      await expect(a.execute("SELECT 1")).rejects.toThrow(ConnectionNotEstablished);
+      try {
+        await a.execute("SELECT 1"); // establish pool
+        (a as any)._driverPool = fakePool;
+        await expect(a.execute("SELECT 1")).rejects.toThrow(ConnectionNotEstablished);
+      } finally {
+        await a.close().catch(() => {});
+      }
     });
 
     it.skip("reconnect after bad connection on check version", async () => {

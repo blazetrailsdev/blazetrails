@@ -3840,7 +3840,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       case "57014": // query_canceled
         return new QueryCanceled(msg, { sql, binds, cause });
       case "57P01": // admin_shutdown (pg_terminate_backend or server restart)
-        return new ConnectionNotEstablished(msg);
+        return new ConnectionNotEstablished(msg, { cause });
       default:
         // Only wrap node-postgres `DatabaseError`s. The SQLSTATE
         // 5-char shape alone isn't enough — Node system errors like

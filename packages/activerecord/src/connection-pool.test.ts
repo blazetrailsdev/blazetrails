@@ -1161,8 +1161,8 @@ describe("adapterNameFromConfig", () => {
   });
 });
 
-describe("query-cache Phase 1", () => {
-  describe("Change A — context-keyed cache registry", () => {
+describe("ConnectionPoolConfiguration query cache", () => {
+  describe("context-keyed cache registry", () => {
     it("two concurrent execution contexts each get their own Store", async () => {
       const pool = makePool(2);
 
@@ -1214,7 +1214,7 @@ describe("query-cache Phase 1", () => {
     });
   });
 
-  describe("Change B — pin wiring", () => {
+  describe("pin wiring", () => {
     it("pinConnectionBang sets _pinnedConnection on _cacheConfig, unpinConnectionBang clears it", async () => {
       const pool = makeTransactionAwarePool(1);
 
@@ -1228,6 +1228,32 @@ describe("query-cache Phase 1", () => {
         expect(getCacheConfig()._pinnedConnection).not.toBeNull();
         await pool.unpinConnectionBang();
         expect(getCacheConfig()._pinnedConnection).toBeNull();
+      });
+    });
+  });
+
+  describe("checkout/checkin cache attachment", () => {
+    it("checkout attaches a Store; checkin clears it", () => {
+      const pool = makePool(1);
+      const conn = pool.checkout();
+      const qc = (conn as unknown as { _queryCache: Store | null })._queryCache;
+      expect(qc).toBeInstanceOf(Store);
+      pool.checkin(conn);
+      expect((conn as unknown as { _queryCache: Store | null })._queryCache).toBeNull();
+    });
+
+    it("checkoutAsync attaches a Store on the fast (idle) path", async () => {
+      const pool = makePool(1);
+      // Seed one idle connection so _tryAcquire fires.
+      const seed = pool.checkout();
+      pool.checkin(seed);
+
+      await withExecutionContext(async () => {
+        const conn = await pool.checkoutAsync();
+        expect((conn as unknown as { _queryCache: Store | null })._queryCache).toBeInstanceOf(
+          Store,
+        );
+        pool.checkin(conn);
       });
     });
   });

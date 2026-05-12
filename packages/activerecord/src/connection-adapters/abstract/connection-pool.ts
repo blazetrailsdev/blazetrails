@@ -523,10 +523,14 @@ export class ConnectionPool implements ReapablePool {
       if (this._connections && !this._connections.includes(pin.connection)) {
         this._connections.push(pin.connection);
       }
+      (pin.connection as unknown as QueryCacheHost)._queryCache = this._cacheConfig.queryCache;
       return pin.connection;
     }
     const conn = this._tryAcquire();
-    if (conn) return conn;
+    if (conn) {
+      (conn as unknown as QueryCacheHost)._queryCache = this._cacheConfig.queryCache;
+      return conn;
+    }
 
     const t = timeout ?? this.checkoutTimeout;
     if (!this._available) {

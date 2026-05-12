@@ -465,6 +465,14 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(JSON.parse(rows[0].val as string)).toEqual({ b: 2 });
     });
 
+    it("backslash string round-trip", async () => {
+      await adapter.exec(`CREATE TABLE "ex_backslash" ("id" SERIAL PRIMARY KEY, "val" TEXT)`);
+      const value = "a\\b";
+      await adapter.executeMutation(`INSERT INTO "ex_backslash" ("val") VALUES (?)`, [value]);
+      const rows = await adapter.execute(`SELECT "val" FROM "ex_backslash"`);
+      expect(rows[0].val).toBe(value);
+    });
+
     it("hstore decoding", async () => {
       await adapter.enableExtension("hstore");
       await adapter.exec(`CREATE TABLE "ex_hs" ("id" SERIAL PRIMARY KEY, "val" HSTORE)`);

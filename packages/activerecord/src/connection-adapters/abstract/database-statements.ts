@@ -1113,9 +1113,13 @@ export function highPrecisionCurrentTimestamp(): Nodes.SqlLiteral {
  */
 export function typeCastedBinds(binds: unknown[] | undefined): unknown[] {
   return (binds ?? []).map((b: any) => {
+    // Rails: `ActiveModel::Attribute === value ? type_cast(value.value_for_database) : type_cast(value)`
+    // valueForDatabase is a getter on real Attribute instances; handle both getter and
+    // function-style mocks by checking presence with "in" then calling if it's a function.
     let v: unknown;
-    if (b && typeof b === "object" && typeof b.valueForDatabase === "function") {
-      v = b.valueForDatabase();
+    if (b && typeof b === "object" && "valueForDatabase" in b) {
+      const vfd = b.valueForDatabase;
+      v = typeof vfd === "function" ? vfd() : vfd;
     } else {
       v = b && typeof b === "object" && "value" in b ? b.value : b;
     }

@@ -4645,10 +4645,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * @internal
    */
   hasDefaultFunction(defaultValue: unknown, defaultExpr: string): boolean {
-    return (
-      defaultValue == null &&
-      /\w+\(.*\)|\(.*\)::\w+|CURRENT_DATE|CURRENT_TIMESTAMP/.test(defaultExpr)
-    );
+    return defaultValue == null && DEFAULT_FUNCTION_RE.test(defaultExpr);
   }
 
   /**
@@ -5053,11 +5050,19 @@ function splitPgDefault(raw: string | null): { literal: unknown; fn: string | nu
   // expression defaults like `(((4 + 4) * 2) / 4)` match none of these and
   // Rails reflects them with both `default` and `default_function` as nil
   // (the DB still applies the default on INSERT).
-  if (/\w+\(.*\)|\(.*\)::\w+|CURRENT_DATE|CURRENT_TIMESTAMP/.test(raw)) {
+  if (DEFAULT_FUNCTION_RE.test(raw)) {
     return { literal: null, fn: raw };
   }
   return { literal: null, fn: null };
 }
+
+/**
+ * Mirrors: PostgreSQLAdapter#has_default_function? regex
+ * (postgresql_adapter.rb:786). A function call, parenthesized cast, or
+ * CURRENT_DATE/CURRENT_TIMESTAMP — anything else is a literal default or
+ * unrecognized expression and does not populate Column#default_function.
+ */
+const DEFAULT_FUNCTION_RE = /\w+\(.*\)|\(.*\)::\w+|CURRENT_DATE|CURRENT_TIMESTAMP/;
 
 /**
  * Normalize a `pg_catalog.format_type(...)` string to the typname the

@@ -820,9 +820,9 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
     it("unparsed defaults are at least set when saving", async () => {
       await adapter.exec(
-        `CREATE TABLE "ex" (id SERIAL PRIMARY KEY, number INTEGER NOT NULL DEFAULT (4 + 4) * 2 / 4)`,
+        `CREATE TABLE "ex_unparsed_defaults" (id SERIAL PRIMARY KEY, number INTEGER NOT NULL DEFAULT (4 + 4) * 2 / 4)`,
       );
-      const cols = await adapter.columns("ex");
+      const cols = await adapter.columns("ex_unparsed_defaults");
       const numberCol = cols.find((c) => c.name === "number")!;
       // Rails: arithmetic-expression defaults — extract_value_from_default and
       // extract_default_function both return nil; the column carries neither a
@@ -830,8 +830,8 @@ describeIfPg("PostgreSQLAdapter", () => {
       // on INSERT, so save! must NOT emit `number = NULL`.
       expect(numberCol.default).toBeNull();
       expect(numberCol.defaultFunction == null).toBe(true);
-      await adapter.exec(`INSERT INTO "ex" DEFAULT VALUES`);
-      const rows = await adapter.execute(`SELECT number FROM "ex"`);
+      await adapter.exec(`INSERT INTO "ex_unparsed_defaults" DEFAULT VALUES`);
+      const rows = await adapter.execute(`SELECT number FROM "ex_unparsed_defaults"`);
       expect(Number(rows[0].number)).toBe(4);
     });
     it("only check for insensitive comparison capability once", async () => {

@@ -436,7 +436,7 @@ export class ConnectionPool implements ReapablePool {
     if (!pin) {
       pin = { connection, depth: 0 };
       this._pinnedConnections.set(ctxId, pin);
-      this._cacheConfig.setPinnedConnection(connection as unknown as QueryCacheHost);
+      this._cacheConfig.incrementPinnedCount();
     }
     pin.depth++;
 
@@ -456,7 +456,7 @@ export class ConnectionPool implements ReapablePool {
       pin.depth--;
       if (pin.depth === 0) {
         this._pinnedConnections.delete(ctxId);
-        this._cacheConfig.setPinnedConnection(null);
+        this._cacheConfig.decrementPinnedCount();
         if (newlyCheckedOut) {
           this.checkin(connection);
         }
@@ -488,7 +488,7 @@ export class ConnectionPool implements ReapablePool {
       pin.depth--;
       if (pin.depth === 0) {
         this._pinnedConnections.delete(ctxId);
-        this._cacheConfig.setPinnedConnection(null);
+        this._cacheConfig.decrementPinnedCount();
         this.checkin(connection);
       }
     }

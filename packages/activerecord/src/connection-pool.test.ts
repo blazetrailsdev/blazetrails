@@ -1215,23 +1215,44 @@ describe("ConnectionPoolConfiguration query cache", () => {
   });
 
   describe("pin wiring", () => {
-    it("pinConnectionBang sets _pinnedConnection on _cacheConfig, unpinConnectionBang clears it", async () => {
+    it("pinConnectionBang increments _pinnedCount; unpinConnectionBang decrements it", async () => {
       const pool = makeTransactionAwarePool(1);
 
-      const getCacheConfig = () =>
-        (pool as unknown as { _cacheConfig: { _pinnedConnection: unknown } })._cacheConfig;
+      const pinnedCount = () =>
+        (pool as unknown as { _cacheConfig: { _pinnedCount: number } })._cacheConfig._pinnedCount;
 
-      expect(getCacheConfig()._pinnedConnection).toBeNull();
+      expect(pinnedCount()).toBe(0);
 
       await withExecutionContext(async () => {
         await pool.pinConnectionBang();
-        expect(getCacheConfig()._pinnedConnection).not.toBeNull();
+        expect(pinnedCount()).toBe(1);
         await pool.unpinConnectionBang();
-        expect(getCacheConfig()._pinnedConnection).toBeNull();
+        expect(pinnedCount()).toBe(0);
       });
     });
 
-    it("clears _pinnedConnection on _cacheConfig when beginTransaction throws", async () => {
+    it("two concurrent contexts each contribute to _pinnedCount independently", async () => {
+      const pool = makeTransactionAwarePool(2);
+      const pinnedCount = () =>
+        (pool as unknown as { _cacheConfig: { _pinnedCount: number } })._cacheConfig._pinnedCount;
+
+      await Promise.all([
+        withExecutionContext(async () => {
+          await pool.pinConnectionBang();
+          expect(pinnedCount()).toBeGreaterThanOrEqual(1);
+          await pool.unpinConnectionBang();
+        }),
+        withExecutionContext(async () => {
+          await pool.pinConnectionBang();
+          expect(pinnedCount()).toBeGreaterThanOrEqual(1);
+          await pool.unpinConnectionBang();
+        }),
+      ]);
+
+      expect(pinnedCount()).toBe(0);
+    });
+
+    it("decrements _pinnedCount when beginTransaction throws", async () => {
       const pool = makeTransactionAwarePool(1);
       // Prime the pool with one idle connection so pinConnectionBang acquires it.
       const seed = pool.checkout();
@@ -1246,12 +1267,12 @@ describe("ConnectionPoolConfiguration query cache", () => {
         },
       };
 
-      const getCacheConfig = () =>
-        (pool as unknown as { _cacheConfig: { _pinnedConnection: unknown } })._cacheConfig;
+      const pinnedCount = () =>
+        (pool as unknown as { _cacheConfig: { _pinnedCount: number } })._cacheConfig._pinnedCount;
 
       await withExecutionContext(async () => {
         await expect(pool.pinConnectionBang()).rejects.toThrow("begin failed");
-        expect(getCacheConfig()._pinnedConnection).toBeNull();
+        expect(pinnedCount()).toBe(0);
       });
     });
   });

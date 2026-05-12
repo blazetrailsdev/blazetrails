@@ -141,7 +141,7 @@ export class ConnectionPoolConfiguration {
   private _threadQueryCaches = new QueryCacheRegistry();
   private _queryCacheMaxSize: number | null;
   private _queryCacheVersion = { value: 0 };
-  private _pinnedConnection: QueryCacheHost | null = null;
+  private _pinnedCount = 0;
 
   constructor(queryCacheConfig?: number | false | null) {
     if (queryCacheConfig === 0 || queryCacheConfig === false) {
@@ -211,7 +211,7 @@ export class ConnectionPoolConfiguration {
   }
 
   clearQueryCache(): void {
-    if (this._pinnedConnection) {
+    if (this._pinnedCount > 0) {
       this._queryCacheVersion.value++;
     }
     this.queryCache.clear();
@@ -224,8 +224,13 @@ export class ConnectionPoolConfiguration {
   }
 
   /** @internal */
-  setPinnedConnection(conn: QueryCacheHost | null): void {
-    this._pinnedConnection = conn;
+  incrementPinnedCount(): void {
+    this._pinnedCount++;
+  }
+
+  /** @internal */
+  decrementPinnedCount(): void {
+    this._pinnedCount--;
   }
 }
 

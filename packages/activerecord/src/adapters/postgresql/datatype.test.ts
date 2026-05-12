@@ -88,7 +88,8 @@ describeIfPg("PostgreSQLAdapter", () => {
       const first = await (M as any).find(1);
       expect((first as any).time_interval).toBe("P-1Y-2D");
       const { Duration } = await import("@blazetrails/activesupport");
-      expect((first as any).scaled_time_interval).toEqual(Duration.days(-21));
+      // Rails' assert_equal on Duration compares total seconds, not parts.
+      expect((first as any).scaled_time_interval.eql(Duration.days(-21))).toBe(true);
     });
 
     it("update large time in seconds", async () => {

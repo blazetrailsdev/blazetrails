@@ -181,9 +181,16 @@ describe("AbstractMysqlAdapter quoting consistency — quote vs quoteString", ()
     // Must start and end with surrounding single quotes
     expect(quoted.startsWith("'")).toBe(true);
     expect(quoted.endsWith("'")).toBe(true);
-    // Must not contain an unescaped bare single quote inside (other than surrounding)
     const inner = quoted.slice(1, -1);
+    // Single quote must be escaped (no unescaped bare single quote)
     expect(inner).not.toMatch(/(?<!')'(?!')/);
+    // Backslash must be doubled
+    expect(inner).toContain("\\\\");
+    // Control chars must be escaped — no raw bytes
+    expect(inner).not.toContain("\0");
+    expect(inner).not.toContain("\n");
+    expect(inner).not.toContain("\r");
+    expect(inner).not.toContain("\x1a");
   });
 
   it("adapter.quote is consistent with standalone quote for strings containing single quotes and backslashes", async () => {

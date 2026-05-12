@@ -131,9 +131,15 @@ export class InsertAll {
       }
     }
     this._updatableColumns = [...this.keys].filter((k) => !exclude.has(k));
-    // Deferred from configureOnDuplicateUpdateLogic: when onDuplicate==="update" was set
-    // without knowing the updatableColumns count (async index lookup not yet done).
-    if (this.onDuplicate === "update" && this._updatableColumns.length === 0) {
+    // Mirrors Rails' elsif branch: only coerce "update"→"skip" on the auto-generated
+    // update path. Custom SQL (updateSql) and explicit updateOnly are handled earlier
+    // in configureOnDuplicateUpdateLogic and must not be overridden here.
+    if (
+      this.onDuplicate === "update" &&
+      !this.updateSql &&
+      !this.updateOnly &&
+      this._updatableColumns.length === 0
+    ) {
       this.onDuplicate = "skip";
     }
   }

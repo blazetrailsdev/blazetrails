@@ -608,7 +608,7 @@ export class TableDefinition {
 
     if (this._id !== false) {
       const pkType = (typeof this._id === "string" ? this._id : "primary_key") as ColumnType;
-      const pkOpts: Record<string, unknown> = { primaryKey: true };
+      const pkOpts: ColumnOptions = { primaryKey: true };
       if (tdOptions.default !== undefined) pkOpts.default = tdOptions.default;
       this.columns.push(this.newColumnDefinition("id", pkType, pkOpts));
     }

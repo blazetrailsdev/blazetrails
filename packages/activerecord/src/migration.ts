@@ -1413,6 +1413,7 @@ export class MigrationContext {
         primaryKey?: boolean;
         null?: boolean;
         default?: unknown;
+        defaultFunction?: string | null;
         limit?: number | null;
         precision?: number | null;
         scale?: number | null;
@@ -1477,6 +1478,7 @@ export class MigrationContext {
         primaryKey?: boolean;
         null?: boolean;
         default?: unknown;
+        defaultFunction?: string | null;
         limit?: number | null;
         precision?: number | null;
         scale?: number | null;
@@ -1484,7 +1486,18 @@ export class MigrationContext {
     >();
     if (options?.id !== false) {
       const idType = typeof options?.id === "string" ? options.id : "integer";
-      meta.set("id", { type: idType, primaryKey: true });
+      const idMeta: {
+        type: string;
+        primaryKey: boolean;
+        default?: unknown;
+        defaultFunction?: string | null;
+      } = { type: idType, primaryKey: true };
+      if (typeof options?.default === "function") {
+        idMeta.defaultFunction = String((options.default as () => unknown)());
+      } else if (options?.default !== undefined) {
+        idMeta.default = options.default;
+      }
+      meta.set("id", idMeta);
     }
     for (const col of td.columns) {
       if (col.name === "id" && meta.has("id")) continue;
@@ -1814,6 +1827,7 @@ export class MigrationContext {
     primaryKey?: boolean;
     null?: boolean;
     default?: unknown;
+    defaultFunction?: string | null;
     limit?: number | null;
     precision?: number | null;
     scale?: number | null;

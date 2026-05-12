@@ -16,7 +16,6 @@ import {
   SchemaStatements,
   assertSchemaAdapter,
 } from "./connection-adapters/abstract/schema-statements.js";
-import { PostgreSQLSchemaStatements } from "./connection-adapters/postgresql/schema-statements-class.js";
 import { CommandRecorder } from "./migration/command-recorder.js";
 import { SchemaMigration } from "./schema-migration.js";
 import { InternalMetadata } from "./internal-metadata.js";
@@ -238,10 +237,7 @@ export abstract class Migration {
     const conn = this.connection;
     if (!this._schema || this._schemaConn !== conn) {
       assertSchemaAdapter(conn);
-      this._schema =
-        conn.adapterName === "postgres"
-          ? new PostgreSQLSchemaStatements(conn)
-          : new SchemaStatements(conn);
+      this._schema = conn.schemaStatements ? conn.schemaStatements() : new SchemaStatements(conn);
       this._schemaConn = conn;
     }
     return this._schema;

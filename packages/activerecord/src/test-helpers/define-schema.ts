@@ -1,6 +1,5 @@
 import type { DatabaseAdapter } from "../adapter.js";
 import { SchemaStatements } from "../connection-adapters/abstract/schema-statements.js";
-import { PostgreSQLSchemaStatements } from "../connection-adapters/postgresql/schema-statements-class.js";
 
 export type PrimitiveColumnSpec =
   | "string"
@@ -116,10 +115,7 @@ export async function defineSchema(
   schema: Schema,
   opts?: DefineSchemaOpts,
 ): Promise<void> {
-  const ss =
-    adapter.adapterName === "postgres"
-      ? new PostgreSQLSchemaStatements(adapter)
-      : new SchemaStatements(adapter);
+  const ss = adapter.schemaStatements ? adapter.schemaStatements() : new SchemaStatements(adapter);
   const order = resolveReferences(schema);
   const typeMap =
     adapter.adapterName === "postgres"

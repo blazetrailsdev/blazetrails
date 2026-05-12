@@ -262,6 +262,17 @@ export interface DatabaseAdapter {
   readonly schemaCache?: SchemaCache;
 
   /**
+   * Returns the SchemaStatements wrapper that pairs with this adapter.
+   * Adapter subclasses override this to return a dialect-specific subclass
+   * (e.g. PostgreSQLSchemaStatements). Used by Migration.schema and
+   * defineSchema to dispatch DDL through the right override set.
+   *
+   * Mirrors: the include-pattern in Rails where each adapter mixes in its
+   * own SchemaStatements module.
+   */
+  schemaStatements?(): import("./connection-adapters/abstract/schema-statements.js").SchemaStatements;
+
+  /**
    * The underlying connection pool that owns this adapter checkout.
    * Passed to SchemaCache methods that need a pool handle for lazy loading.
    *

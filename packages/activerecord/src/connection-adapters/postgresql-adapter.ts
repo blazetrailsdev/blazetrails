@@ -52,6 +52,8 @@ import {
   SQLWarning,
 } from "../errors.js";
 import { AbstractAdapter } from "./abstract-adapter.js";
+import { PostgreSQLSchemaStatements } from "./postgresql/schema-statements-class.js";
+import type { SchemaStatements } from "./abstract/schema-statements.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
 import {
   transactionIsolationLevels,
@@ -3862,6 +3864,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async recreateDatabase(name: string, options: CreateDatabaseOptions = {}): Promise<void> {
     await this.dropDatabase(name);
     await this.createDatabase(name, options);
+  }
+
+  override schemaStatements(): SchemaStatements {
+    return new PostgreSQLSchemaStatements(this as unknown as DatabaseAdapter);
   }
 
   async dropTable(

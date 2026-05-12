@@ -1,3 +1,4 @@
+import { ArgumentError } from "@blazetrails/activemodel";
 import { SchemaStatements } from "../abstract/schema-statements.js";
 
 export class PostgreSQLSchemaStatements extends SchemaStatements {
@@ -10,6 +11,9 @@ export class PostgreSQLSchemaStatements extends SchemaStatements {
       options = last as { ifExists?: boolean; force?: "cascade" };
     } else {
       tableNames = args as string[];
+    }
+    if (tableNames.length === 0) {
+      throw new ArgumentError("dropTable requires at least one table name");
     }
     const ifExists = options.ifExists ? " IF EXISTS" : "";
     const cascade = options.force === "cascade" ? " CASCADE" : "";

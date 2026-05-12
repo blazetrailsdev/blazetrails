@@ -2,7 +2,7 @@
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/connection_test.rb
  */
 import { it, expect, describe, beforeEach, afterEach } from "vitest";
-import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
+import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL, SQLSubscriber } from "./test-helper.js";
 
 describeIfPg("PostgresqlConnectionTest", () => {
   let adapter: PostgreSQLAdapter;
@@ -56,53 +56,84 @@ describeIfPg("PostgresqlConnectionTest", () => {
     // Requires reset!() with an open transaction
   });
 
-  it.skip("tables logs name", async () => {
-    // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in connection
-    // ROOT-CAUSE: connection-adapters/postgresql/connection.ts missing or incomplete Rails parity
-    // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/connection.ts; affects ~10–47 tests in connection.test.ts
-    // Requires SQLSubscriber / ActiveSupport::Notifications query tagging
+  it("tables logs name", async () => {
+    const subscriber = new SQLSubscriber();
+    subscriber.subscribe();
+    try {
+      await adapter.tables();
+      expect(subscriber.logged[0][1]).toBe("SCHEMA");
+    } finally {
+      subscriber.unsubscribe();
+    }
   });
 
-  it.skip("indexes logs name", async () => {
-    // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in connection
-    // ROOT-CAUSE: connection-adapters/postgresql/connection.ts missing or incomplete Rails parity
-    // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/connection.ts; affects ~10–47 tests in connection.test.ts
-    // Requires SQLSubscriber / ActiveSupport::Notifications query tagging
+  it("indexes logs name", async () => {
+    const subscriber = new SQLSubscriber();
+    subscriber.subscribe();
+    try {
+      await adapter.indexes("items");
+      expect(subscriber.logged[0][1]).toBe("SCHEMA");
+    } finally {
+      subscriber.unsubscribe();
+    }
   });
 
-  it.skip("table exists logs name", async () => {
-    // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in connection
-    // ROOT-CAUSE: connection-adapters/postgresql/connection.ts missing or incomplete Rails parity
-    // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/connection.ts; affects ~10–47 tests in connection.test.ts
-    // Requires SQLSubscriber / ActiveSupport::Notifications query tagging
+  it("table exists logs name", async () => {
+    const subscriber = new SQLSubscriber();
+    subscriber.subscribe();
+    try {
+      await adapter.tableExists("items");
+      expect(subscriber.logged[0][1]).toBe("SCHEMA");
+    } finally {
+      subscriber.unsubscribe();
+    }
   });
 
-  it.skip("table alias length logs name", async () => {
-    // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in connection
-    // ROOT-CAUSE: connection-adapters/postgresql/connection.ts missing or incomplete Rails parity
-    // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/connection.ts; affects ~10–47 tests in connection.test.ts
-    // Requires SQLSubscriber / ActiveSupport::Notifications query tagging
+  it("table alias length logs name", async () => {
+    // Rails resets @max_identifier_length to force a query via table_alias_length.
+    // Our PG adapter exposes this as maxIdentifierLength() — reset the cache and call it.
+    (adapter as unknown as { _maxIdentifierLength: number | null })._maxIdentifierLength = null;
+    const subscriber = new SQLSubscriber();
+    subscriber.subscribe();
+    try {
+      await adapter.maxIdentifierLength();
+      expect(subscriber.logged[0][1]).toBe("SCHEMA");
+    } finally {
+      subscriber.unsubscribe();
+    }
   });
 
-  it.skip("current database logs name", async () => {
-    // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in connection
-    // ROOT-CAUSE: connection-adapters/postgresql/connection.ts missing or incomplete Rails parity
-    // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/connection.ts; affects ~10–47 tests in connection.test.ts
-    // Requires SQLSubscriber / ActiveSupport::Notifications query tagging
+  it("current database logs name", async () => {
+    const subscriber = new SQLSubscriber();
+    subscriber.subscribe();
+    try {
+      await adapter.currentDatabase();
+      expect(subscriber.logged[0][1]).toBe("SCHEMA");
+    } finally {
+      subscriber.unsubscribe();
+    }
   });
 
-  it.skip("encoding logs name", async () => {
-    // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in connection
-    // ROOT-CAUSE: connection-adapters/postgresql/connection.ts missing or incomplete Rails parity
-    // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/connection.ts; affects ~10–47 tests in connection.test.ts
-    // Requires SQLSubscriber / ActiveSupport::Notifications query tagging
+  it("encoding logs name", async () => {
+    const subscriber = new SQLSubscriber();
+    subscriber.subscribe();
+    try {
+      await adapter.encoding();
+      expect(subscriber.logged[0][1]).toBe("SCHEMA");
+    } finally {
+      subscriber.unsubscribe();
+    }
   });
 
-  it.skip("schema names logs name", async () => {
-    // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in connection
-    // ROOT-CAUSE: connection-adapters/postgresql/connection.ts missing or incomplete Rails parity
-    // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/connection.ts; affects ~10–47 tests in connection.test.ts
-    // Requires SQLSubscriber / ActiveSupport::Notifications query tagging
+  it("schema names logs name", async () => {
+    const subscriber = new SQLSubscriber();
+    subscriber.subscribe();
+    try {
+      await adapter.schemaNames();
+      expect(subscriber.logged[0][1]).toBe("SCHEMA");
+    } finally {
+      subscriber.unsubscribe();
+    }
   });
 
   it.skip("statement key is logged", async () => {

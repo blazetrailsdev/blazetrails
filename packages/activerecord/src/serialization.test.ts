@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel, serialize } from "./index.js";
-import { Associations, modelRegistry } from "./associations.js";
+import { modelRegistry } from "./associations.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
@@ -103,6 +103,7 @@ describe("SerializationTest", () => {
         this.attribute("id", "integer");
         this.attribute("name", "string");
         this.adapter = joinAdapter;
+        this.hasMany("serializedPosts", { className: "SerializedPost", foreignKey: "author_id" });
       }
     }
 
@@ -113,16 +114,13 @@ describe("SerializationTest", () => {
         this.attribute("author_id", "integer");
         this.attribute("title", "string");
         this.adapter = joinAdapter;
+        this.belongsTo("author", { className: "Author" });
+        serialize(this, "title");
       }
     }
-    serialize(SerializedPost, "title");
 
+    registerModel("Author", Author);
     registerModel("SerializedPost", SerializedPost);
-    Associations.hasMany.call(Author, "serializedPosts", {
-      className: "SerializedPost",
-      foreignKey: "author_id",
-    });
-    Associations.belongsTo.call(SerializedPost, "author", { className: "Author" });
 
     try {
       const author = await Author.create({ name: "David" });
@@ -133,6 +131,7 @@ describe("SerializationTest", () => {
         .toArray();
       expect(results.length).toBe(1);
     } finally {
+      modelRegistry.delete("Author");
       modelRegistry.delete("SerializedPost");
     }
   });

@@ -348,7 +348,7 @@ export class Duration {
     }
 
     const sign = match[1] === "-" ? -1 : 1;
-    const parse = (s: string | undefined) => (s ? parseFloat(s.replace(",", ".")) * sign : 0);
+    const parse = (s: string | undefined) => (s ? parseFloat(s) * sign : 0);
 
     return new Duration({
       years: parse(match[2]),

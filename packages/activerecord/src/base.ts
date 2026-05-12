@@ -2441,14 +2441,13 @@ export class Base extends Model {
 
       await flushPendingReplaces(this);
 
-      // Mirrors Rails' `around_save_collection_association`: capture
-      // pre-save new-record state so `save_collection_association` can
-      // dispatch insert_record vs save({validate:false}) per
-      // autosave_association.rb:442-457. Restore the prior value on
-      // exit (not unconditionally false) so re-entrant / nested saves
-      // don't clobber an outer scope's flag.
-      const _prevNewRecordBeforeSave = (this as any)._newRecordBeforeSave;
-      (this as any)._newRecordBeforeSave = wasNewRecord;
+      // Mirrors Rails' `around_save_collection_association` (autosave_
+      // association.rb:402-409): `@new_record_before_save = !prev &&
+      // new_record?`. Once an outer scope set it true, nested re-entrant
+      // saves on the same record must NOT clobber to false. Restore prev
+      // in `finally`.
+      const _prevNewRecordBeforeSave = (this as any)._newRecordBeforeSave ?? false;
+      (this as any)._newRecordBeforeSave = !_prevNewRecordBeforeSave && wasNewRecord;
       try {
         const autosaveOk = await autosaveChildren(this);
         if (!autosaveOk) return false;

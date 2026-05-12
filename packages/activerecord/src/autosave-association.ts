@@ -79,24 +79,33 @@ function _loadedAssociation(record: any, name: string): any | null {
     | { loaded?: boolean; target?: unknown[] }
     | undefined;
   const proxyHasBuiltRecords = Array.isArray(proxy?.target) && proxy.target.length > 0;
+  const existingHasBuiltRecords =
+    Array.isArray(existing?.target) && (existing.target as unknown[]).length > 0;
   const hasCachedData =
     record._cachedAssociations?.has(name) ||
     record._preloadedAssociations?.has(name) ||
     !!proxy?.loaded ||
     proxyHasBuiltRecords ||
+    existingHasBuiltRecords ||
     !!existing?.isLoaded?.();
   if (!hasCachedData) return null;
   try {
     const inst = record.association(name);
     if (inst?.isLoaded?.()) return inst;
-    // Proxy-built records (no preload, no DB load) — surface them on the
-    // Association instance's `target` so the autosave loop sees them.
-    // Direct assignment (not `setTarget` which flips `loadedBang`) so the
-    // Association stays unloaded — matches Rails' `@_was_loaded` ephemeral
-    // flag semantics and keeps `_hydrateFromPreload` viable for later
-    // preload-after-build orderings.
+    // In-memory built records (no preload, no DB load). Surface them on
+    // the Association instance's `target` via direct assignment (not
+    // `setTarget` which flips `loadedBang`) so the Association stays
+    // unloaded — matches Rails' `@_was_loaded` ephemeral flag semantics
+    // (collection_association.rb:457-490) and keeps `_hydrateFromPreload`
+    // viable for later preload-after-build orderings.
     if (proxyHasBuiltRecords && inst && Array.isArray(inst.target)) {
       inst.target = proxy!.target as any;
+      return inst;
+    }
+    // Association-side build (e.g. `record.association(name).build(...)`)
+    // populates `existing.target` directly while `loaded` stays false —
+    // our `replaceOnTarget` doesn't `loadedBang`. Treat that as cached.
+    if (existingHasBuiltRecords && inst && inst === existing) {
       return inst;
     }
     return null;

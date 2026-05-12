@@ -604,23 +604,29 @@ describe("SQLite3AdapterTest", () => {
   it("strict strings by default and true in database yml", async () => {
     // Explicit strict: true in options always enables strict mode.
     const conn = new SQLite3Adapter(":memory:", { strict: true });
-    expect(conn.strictStrings).toBe(true);
-    await conn.exec(`CREATE TABLE "testings" ("id" INTEGER PRIMARY KEY)`);
-    await expect(
-      conn.exec(`CREATE INDEX "idx_non_existent" ON "testings" ("non_existent")`),
-    ).rejects.toThrow(/no such column/i);
-    await conn.close();
+    try {
+      expect(conn.strictStrings).toBe(true);
+      await conn.exec(`CREATE TABLE "testings" ("id" INTEGER PRIMARY KEY)`);
+      await expect(
+        conn.exec(`CREATE INDEX "idx_non_existent" ON "testings" ("non_existent")`),
+      ).rejects.toThrow(/no such column/i);
+    } finally {
+      await conn.close();
+    }
 
     // Explicit strict: true also overrides the class config (still strict).
     SQLite3Adapter.strictStringsByDefault = true;
     try {
       const strict = new SQLite3Adapter(":memory:", { strict: true });
-      expect(strict.strictStrings).toBe(true);
-      await strict.exec(`CREATE TABLE "testings" ("id" INTEGER PRIMARY KEY)`);
-      await expect(
-        strict.exec(`CREATE INDEX "idx_non_existent2" ON "testings" ("non_existent2")`),
-      ).rejects.toThrow(/no such column/i);
-      await strict.close();
+      try {
+        expect(strict.strictStrings).toBe(true);
+        await strict.exec(`CREATE TABLE "testings" ("id" INTEGER PRIMARY KEY)`);
+        await expect(
+          strict.exec(`CREATE INDEX "idx_non_existent2" ON "testings" ("non_existent2")`),
+        ).rejects.toThrow(/no such column/i);
+      } finally {
+        await strict.close();
+      }
     } finally {
       SQLite3Adapter.strictStringsByDefault = false;
     }
@@ -629,18 +635,24 @@ describe("SQLite3AdapterTest", () => {
   it("strict strings by default and false in database yml", async () => {
     // Explicit strict: false in options disables strict mode.
     const conn = new SQLite3Adapter(":memory:", { strict: false });
-    expect(conn.strictStrings).toBe(false);
-    // Rails: assert_nothing_raised { conn.add_index :testings, :non_existent }
-    // — strict: false keeps DQS enabled so the index creation succeeds silently.
-    // Omitted here for the same reason as test 1 (better-sqlite3 SQLITE_DQS=0).
-    await conn.close();
+    try {
+      expect(conn.strictStrings).toBe(false);
+      // Rails: assert_nothing_raised { conn.add_index :testings, :non_existent }
+      // — strict: false keeps DQS enabled so the index creation succeeds silently.
+      // Omitted here for the same reason as test 1 (better-sqlite3 SQLITE_DQS=0).
+    } finally {
+      await conn.close();
+    }
 
     // Explicit strict: false overrides strictStringsByDefault = true.
     SQLite3Adapter.strictStringsByDefault = true;
     try {
       const strict = new SQLite3Adapter(":memory:", { strict: false });
-      expect(strict.strictStrings).toBe(false);
-      await strict.close();
+      try {
+        expect(strict.strictStrings).toBe(false);
+      } finally {
+        await strict.close();
+      }
     } finally {
       SQLite3Adapter.strictStringsByDefault = false;
     }

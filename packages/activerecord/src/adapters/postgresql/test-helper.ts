@@ -2,7 +2,7 @@ import { describe } from "vitest";
 import pg from "pg";
 import { PostgreSQLAdapter } from "../../connection-adapters/postgresql-adapter.js";
 import { pgDatetimeConfig } from "../../connection-adapters/postgresql/pg-datetime-config.js";
-import { Notifications } from "@blazetrails/activesupport";
+import { Notifications, squish } from "@blazetrails/activesupport";
 import type { NotificationSubscriber, NotificationEvent } from "@blazetrails/activesupport";
 
 export const PG_TEST_URL = process.env.PG_TEST_URL ?? "postgres://localhost:5432/rails_js_test";
@@ -68,7 +68,7 @@ export class SQLSubscriber {
     this._sub = Notifications.subscribe("sql.active_record", (event: NotificationEvent) => {
       const p = event.payload as Record<string, unknown>;
       this.payloads.push(p);
-      const sql = typeof p["sql"] === "string" ? p["sql"].replace(/\s+/g, " ").trim() : "";
+      const sql = typeof p["sql"] === "string" ? squish(p["sql"]) : "";
       const name = typeof p["name"] === "string" ? p["name"] : "";
       const binds = Array.isArray(p["binds"]) ? p["binds"] : [];
       this.logged.push([sql, name, binds]);

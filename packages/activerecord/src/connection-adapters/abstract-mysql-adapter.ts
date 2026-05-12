@@ -109,20 +109,6 @@ const ER_TABLE_EXISTS = 1050;
 const RENAME_FUNC_DEFAULT_RE =
   /^(CURRENT_TIMESTAMP(\([0-6]?\))?|NOW(\([0-6]?\))?|CURRENT_DATE|CURRENT_TIME(\([0-6]?\))?|UUID\(\))$/i;
 
-// Hot-path constants for the escape-only `quoteString` override below.
-// Match `MYSQL_ESCAPE_RE` / `MYSQL_ESCAPE_MAP` in `mysql/quoting.ts`
-// (those are module-private). Hoisted here so each call avoids
-// re-allocating the regex and lookup table.
-// eslint-disable-next-line no-control-regex
-const MYSQL_ADAPTER_ESCAPE_RE = /[\\\x00\n\r\x1a]/g;
-const MYSQL_ADAPTER_ESCAPE_MAP: Record<string, string> = {
-  "\\": "\\\\",
-  "\0": "\\0",
-  "\n": "\\n",
-  "\r": "\\r",
-  "\x1a": "\\Z",
-};
-
 export class AbstractMysqlAdapter extends AbstractAdapter {
   static readonly Version = Version;
 
@@ -617,6 +603,14 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return mysqlColumnNameWithOrderMatcher();
   }
 
+  static quoteColumnName(name: string): string {
+    return mysqlQuoteColumnName(name);
+  }
+
+  static quoteTableName(name: string): string {
+    return mysqlQuoteTableName(name);
+  }
+
   async foreignKeys(tableName: string): Promise<ForeignKeyDefinition[]> {
     void tableName;
     return [];
@@ -722,8 +716,12 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
    */
   override quoteString(s: string): string {
     return s
-      .replace(/'/g, "''")
-      .replace(MYSQL_ADAPTER_ESCAPE_RE, (ch) => MYSQL_ADAPTER_ESCAPE_MAP[ch] ?? ch);
+      .replace(/\\/g, "\\\\")
+      .replace(/'/g, "\\'")
+      .replace(/\x00/g, "\\0") // eslint-disable-line no-control-regex
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\x1a/g, "\\Z"); // eslint-disable-line no-control-regex
   }
 
   static dbconsole(

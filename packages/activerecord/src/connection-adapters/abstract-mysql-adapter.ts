@@ -230,37 +230,17 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
    * `quote()` returns `"1"`, breaking call sites that switch between
    * the two through the Quoting interface.
    */
-  override quoteIdentifier(name: string): string {
-    return mysqlQuoteIdentifier(name);
-  }
-
-  override quoteTableName(name: string): string {
-    return mysqlQuoteTableName(name);
-  }
-
-  override quoteColumnName(name: string): string {
-    return mysqlQuoteColumnName(name);
-  }
+  override quoteIdentifier = mysqlQuoteIdentifier;
+  override quoteTableName = mysqlQuoteTableName;
+  override quoteColumnName = mysqlQuoteColumnName;
+  override quotedTrue = mysqlQuotedTrue;
+  override quotedFalse = mysqlQuotedFalse;
+  override unquotedTrue = mysqlUnquotedTrue;
+  override unquotedFalse = mysqlUnquotedFalse;
 
   /** @internal */
   override get arelVisitor(): Visitors.ToSql {
     return new Visitors.MySQL(this);
-  }
-
-  override quotedTrue(): string {
-    return mysqlQuotedTrue();
-  }
-
-  override quotedFalse(): string {
-    return mysqlQuotedFalse();
-  }
-
-  override unquotedTrue(): number {
-    return mysqlUnquotedTrue();
-  }
-
-  override unquotedFalse(): number {
-    return mysqlUnquotedFalse();
   }
 
   /**

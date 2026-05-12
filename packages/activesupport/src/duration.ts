@@ -307,7 +307,15 @@ export class Duration {
 
   // ISO 8601 parsing
   static parse(iso: string): Duration {
-    if (!iso || iso === "P" || iso === "PT" || iso === "T" || /^[~.]/.test(iso)) {
+    if (
+      !iso ||
+      iso === "P" ||
+      iso === "PT" ||
+      iso === "-P" ||
+      iso === "-PT" ||
+      iso === "T" ||
+      /^[~.]/.test(iso)
+    ) {
       throw new Error(`Invalid ISO 8601 duration: "${iso}"`);
     }
 

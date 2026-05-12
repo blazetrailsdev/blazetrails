@@ -3875,22 +3875,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       | [...tableNames: string[], options: { ifExists?: boolean; force?: "cascade" }]
       | string[]
   ): Promise<void> {
-    let tableNames: string[];
-    let options: { ifExists?: boolean; force?: "cascade" } = {};
-    const last = args[args.length - 1];
-    if (last !== null && last !== undefined && typeof last === "object") {
-      tableNames = args.slice(0, -1) as string[];
-      options = last as { ifExists?: boolean; force?: "cascade" };
-    } else {
-      tableNames = args as string[];
-    }
-    if (tableNames.length === 0) {
-      throw new Error("dropTable requires at least one table name");
-    }
-    const ifExists = options.ifExists ? " IF EXISTS" : "";
-    const cascade = options.force === "cascade" ? " CASCADE" : "";
-    const quoted = tableNames.map((t) => this.quoteTableName(t)).join(", ");
-    await this.exec(`DROP TABLE${ifExists} ${quoted}${cascade}`);
+    // Rails: PostgreSQLAdapter has no separate `drop_table` — the method comes
+    // solely from the included `PostgreSQL::SchemaStatements` module. Delegate
+    // here so schema-cache eviction + single-statement CASCADE behavior lives
+    // in one place (PostgreSQLSchemaStatements#dropTable).
+    await this.schemaStatements().dropTable(...(args as Parameters<SchemaStatements["dropTable"]>));
   }
 
   async currentDatabase(): Promise<string> {

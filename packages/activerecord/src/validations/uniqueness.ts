@@ -19,7 +19,7 @@ function validateScopeOption(scope: unknown): void {
   if (!scopes.every((s) => typeof s === "string")) {
     let scopeRepr: string;
     try {
-      scopeRepr = JSON.stringify(scope);
+      scopeRepr = JSON.stringify(scope) ?? String(scope);
     } catch {
       scopeRepr = String(scope);
     }

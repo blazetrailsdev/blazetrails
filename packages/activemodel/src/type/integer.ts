@@ -1,3 +1,4 @@
+import { isBlank } from "@blazetrails/activesupport";
 import { ValueType } from "./value.js";
 import { ActiveModelRangeError } from "../errors.js";
 import { applyNumericMixin } from "./helpers/numeric.js";
@@ -23,6 +24,18 @@ export class IntegerType extends NumericValueType {
     if (typeof value === "bigint") return Number(value);
     const parsed = parseInt(String(value), 10);
     return isNaN(parsed) ? null : parsed;
+  }
+
+  /**
+   * Mirrors: ActiveModel::Type::Integer#deserialize (integer.rb:60-63).
+   *   def deserialize(value)
+   *     return if value.blank?
+   *     value.to_i
+   *   end
+   */
+  deserialize(value: unknown): number | null {
+    if (isBlank(value)) return null;
+    return this.castValue(value);
   }
 
   serialize(value: unknown): unknown {

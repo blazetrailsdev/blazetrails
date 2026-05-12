@@ -1,104 +1,231 @@
 /**
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/foreign_table_test.rb
+ *
+ * Loopback FDW: foreign_server points back at the same database, and
+ * foreign_professors is mapped to a local professors table.
  */
-import { describe, it, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
+
+const url = new URL(PG_TEST_URL);
+const fdwHost = url.hostname || "localhost";
+const fdwPort = url.port || "5432";
+const fdwDb = url.pathname.replace(/^\//, "") || "postgres";
+const fdwUser = decodeURIComponent(url.username || "postgres");
+const fdwPassword = decodeURIComponent(url.password || "");
+
+async function probeFdwAvailable(): Promise<boolean> {
+  const probe = new PostgreSQLAdapter(PG_TEST_URL);
+  try {
+    await probe.exec("CREATE EXTENSION IF NOT EXISTS postgres_fdw");
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await probe.close().catch(() => {});
+  }
+}
+
+const fdwAvailable = await probeFdwAvailable();
+const describeIfFdw = fdwAvailable ? describe : describe.skip;
+
+function quoteLit(s: string): string {
+  return `'${s.replace(/'/g, "''")}'`;
+}
 
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
+
+  beforeAll(async () => {
+    if (!fdwAvailable) return;
+    const a = new PostgreSQLAdapter(PG_TEST_URL);
+    try {
+      await a.exec("DROP FOREIGN TABLE IF EXISTS foreign_professors");
+      await a.exec("DROP SERVER IF EXISTS foreign_server CASCADE");
+      await a.exec("DROP TABLE IF EXISTS professors");
+      await a.exec("CREATE EXTENSION IF NOT EXISTS postgres_fdw");
+    } finally {
+      await a.close();
+    }
+  });
+
+  afterAll(async () => {
+    if (!fdwAvailable) return;
+    const a = new PostgreSQLAdapter(PG_TEST_URL);
+    try {
+      await a.exec("DROP FOREIGN TABLE IF EXISTS foreign_professors").catch(() => {});
+      await a.exec("DROP SERVER IF EXISTS foreign_server CASCADE").catch(() => {});
+      await a.exec("DROP TABLE IF EXISTS professors").catch(() => {});
+      await a.exec("DROP EXTENSION IF EXISTS postgres_fdw").catch(() => {});
+    } finally {
+      await a.close();
+    }
+  });
+
   beforeEach(async () => {
     adapter = new PostgreSQLAdapter(PG_TEST_URL);
+    if (!fdwAvailable) return;
+
+    await adapter.exec("DROP FOREIGN TABLE IF EXISTS foreign_professors");
+    await adapter.exec("DROP SERVER IF EXISTS foreign_server CASCADE");
+    await adapter.exec("DROP TABLE IF EXISTS professors");
+    await adapter.exec(
+      `CREATE TABLE professors (id serial primary key, name character varying NOT NULL)`,
+    );
+    await adapter.exec(
+      `CREATE SERVER foreign_server FOREIGN DATA WRAPPER postgres_fdw ` +
+        `OPTIONS (host ${quoteLit(fdwHost)}, port ${quoteLit(fdwPort)}, dbname ${quoteLit(fdwDb)})`,
+    );
+    const userMappingOpts = fdwPassword
+      ? `OPTIONS (user ${quoteLit(fdwUser)}, password ${quoteLit(fdwPassword)})`
+      : `OPTIONS (user ${quoteLit(fdwUser)})`;
+    await adapter.exec(
+      `CREATE USER MAPPING FOR CURRENT_USER SERVER foreign_server ${userMappingOpts}`,
+    );
+    await adapter.exec(
+      `CREATE FOREIGN TABLE foreign_professors (
+        id    int,
+        name  character varying NOT NULL
+      ) SERVER foreign_server OPTIONS (table_name 'professors')`,
+    );
   });
+
   afterEach(async () => {
+    if (fdwAvailable) {
+      await adapter.exec("DROP FOREIGN TABLE IF EXISTS foreign_professors").catch(() => {});
+      await adapter.exec("DROP SERVER IF EXISTS foreign_server CASCADE").catch(() => {});
+      await adapter.exec("DROP TABLE IF EXISTS professors").catch(() => {});
+    }
     await adapter.close();
   });
 
-  describe("ForeignTableTest", () => {
-    it.skip("create foreign table", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
+  describeIfFdw("ForeignTableTest", () => {
+    it("table exists", async () => {
+      expect(await adapter.tableExists("foreign_professors")).toBe(false);
     });
-    it.skip("drop foreign table", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
+
+    it("foreign tables are valid data sources", async () => {
+      expect(await adapter.dataSourceExists("foreign_professors")).toBe(true);
     });
-    it.skip("foreign table exists", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
+
+    it("foreign tables", async () => {
+      expect(await adapter.foreignTables()).toEqual(["foreign_professors"]);
     });
-    it.skip("foreign table columns", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
+
+    it("foreign table exists", async () => {
+      expect(await adapter.foreignTableExists("foreign_professors")).toBe(true);
+      expect(await adapter.foreignTableExists("nonexistingtable")).toBe(false);
+      expect(await adapter.foreignTableExists("'")).toBe(false);
+      expect(await adapter.foreignTableExists(null as unknown as string)).toBe(false);
     });
-    it.skip("foreign table options", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
+
+    it("attribute names", async () => {
+      const { Base } = await import("../../index.js");
+      class ForeignProfessor extends Base {
+        static tableName = "foreign_professors";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      await ForeignProfessor.loadSchema();
+      expect(ForeignProfessor.attributeNames()).toEqual(["id", "name"]);
     });
-    it.skip("foreign table schema dump", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
+
+    it("does not have a primary key", async () => {
+      const { Base } = await import("../../index.js");
+      class ForeignProfessor extends Base {
+        static tableName = "foreign_professors";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      await ForeignProfessor.loadSchema();
+      expect(ForeignProfessor.primaryKey).toBeNull();
     });
-    it.skip("foreign table insert", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
+
+    it("attributes", async () => {
+      const { Base } = await import("../../index.js");
+      class Professor extends Base {
+        static tableName = "professors";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      class ForeignProfessorWithPk extends Base {
+        static tableName = "foreign_professors";
+        static primaryKey = "id";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      const created = await Professor.create({ name: "Nicola" });
+      const found = await ForeignProfessorWithPk.find(created.readAttribute("id"));
+      expect(found.readAttribute("name")).toBe("Nicola");
+      expect(found.readAttribute("id")).toBe(created.readAttribute("id"));
     });
-    it.skip("foreign table select", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
+
+    it("insert record", async () => {
+      const { Base } = await import("../../index.js");
+      class ForeignProfessorWithPk extends Base {
+        static tableName = "foreign_professors";
+        static primaryKey = "id";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      await ForeignProfessorWithPk.createBang({ id: 100, name: "Leonardo" });
+      const last = await ForeignProfessorWithPk.last();
+      expect(last?.readAttribute("name")).toBe("Leonardo");
     });
-    it.skip("foreign table update", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
+
+    it("update record", async () => {
+      const { Base } = await import("../../index.js");
+      class Professor extends Base {
+        static tableName = "professors";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      class ForeignProfessorWithPk extends Base {
+        static tableName = "foreign_professors";
+        static primaryKey = "id";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      const created = await Professor.create({ name: "Nicola" });
+      const prof = await ForeignProfessorWithPk.find(created.readAttribute("id"));
+      prof.writeAttribute("name", "Albert");
+      await prof.saveBang();
+      await prof.reload();
+      expect(prof.readAttribute("name")).toBe("Albert");
     });
-    it.skip("foreign table delete", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
-    });
-    it.skip("foreign tables are valid data sources", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
-    });
-    it.skip("foreign tables", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
-    });
-    it.skip("does not have a primary key", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
-    });
-    it.skip("insert record", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
-    });
-    it.skip("update record", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
-    });
-    it.skip("delete record", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
-    });
-    it.skip("attribute names", () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in foreign-table
-      // ROOT-CAUSE: connection-adapters/postgresql/foreign-table.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/foreign-table.ts; affects ~10–47 tests in foreign-table.test.ts
-      /* TODO: needs imports from original file */
+
+    it("delete record", async () => {
+      const { Base } = await import("../../index.js");
+      class Professor extends Base {
+        static tableName = "professors";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      class ForeignProfessorWithPk extends Base {
+        static tableName = "foreign_professors";
+        static primaryKey = "id";
+        static {
+          this.adapter = adapter;
+        }
+      }
+      const created = await Professor.create({ name: "Nicola" });
+      const prof = await ForeignProfessorWithPk.find(created.readAttribute("id"));
+      const countAll = async (): Promise<number> => {
+        const rows = await adapter.execute("SELECT COUNT(*) AS c FROM foreign_professors");
+        return Number((rows[0] as { c: string | number }).c);
+      };
+      const before = await countAll();
+      await prof.destroy();
+      const after = await countAll();
+      expect(after).toBe(before - 1);
     });
   });
 });

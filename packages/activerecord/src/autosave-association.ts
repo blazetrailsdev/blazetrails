@@ -400,7 +400,6 @@ async function autosaveHasMany(record: Base, assoc: AssociationDefinition): Prom
       }
     }
   }
-  if (inst && typeof inst.loadedBang === "function") inst.loadedBang();
   return true;
 }
 
@@ -464,7 +463,6 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
     return true;
   }
   if (childRecord.isNewRecord() || childRecord.changed) {
-    inst?.setInverseInstance?.(childRecord);
     const ctor = record.constructor as typeof Base;
     const foreignKey = assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
     const primaryKey = assoc.options.primaryKey ?? ctor.primaryKey;
@@ -488,13 +486,18 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
         assoc.name,
       );
     }
+    // Mirrors Rails save_has_one_association:496: set_inverse_instance fires
+    // after FK assignment, before save (autosave_association.rb:497).
+    inst?.setInverseInstance?.(childRecord);
 
-    const saved = await childRecord.save();
+    // Rails: record.save(validate: !autosave). autosaveHasOne only runs
+    // for autosave-enabled reflections (gated in autosaveAssociation), so
+    // !autosave is always false → validate: false.
+    const saved = await childRecord.save({ validate: false } as any);
     if (!saved) {
       propagateErrors(record, childRecord, assoc.name);
       return false;
     }
-    inst?.loadedBang?.();
   }
   return true;
 }
@@ -512,7 +515,9 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
   if (assocRecord.isNewRecord() || assocRecord.changed) {
     _setAutosavingBelongsToFor(record, assoc, true);
     try {
-      const saved = await assocRecord.save();
+      // Rails save_belongs_to_association:553: `record.save(validate: !autosave)`.
+      // autosave is always true on this code path (gated in autosaveAssociation).
+      const saved = await assocRecord.save({ validate: false } as any);
       if (!saved) {
         propagateErrors(record, assocRecord, assoc.name);
         return false;
@@ -544,7 +549,9 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
         assoc.name,
       );
     }
-    inst?.loadedBang?.();
+    // Rails save_belongs_to_association:559-568: `association.loaded!` only
+    // fires inside the `if association.updated?` branch — after the FK write.
+    if (inst?.isUpdated?.()) inst.loadedBang?.();
   }
   return true;
 }
@@ -566,7 +573,6 @@ async function autosaveHabtm(record: Base, assoc: AssociationDefinition): Promis
       }
     }
   }
-  if (inst && typeof inst.loadedBang === "function") inst.loadedBang();
   return true;
 }
 

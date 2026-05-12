@@ -193,6 +193,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    * Whether this connection was opened with strict-strings mode (DQS disabled).
    * Reflects the resolved value of the `strict` constructor option, which
    * defaults to `SQLite3Adapter.strictStringsByDefault`.
+   * @internal
    */
   get strictStrings(): boolean {
     return this._strict;
@@ -225,6 +226,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     this._memoryDatabase = SQLite3Adapter._isMemoryFilename(filename);
     this._readonly = options.readonly ?? false;
     this._strict = options.strict ?? SQLite3Adapter.strictStringsByDefault;
+    (this._config as SQLite3AdapterOptions).strict = this._strict;
     // Rails: `SQLite3Adapter#default_prepared_statements` inherits the
     // abstract adapter's `true`. Mirror that default and let options
     // override per connection.
@@ -2111,12 +2113,10 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         }
       }
     }
-    // Mirror Rails strict_strings_by_default: when strict, disable the DQS
-    // fallback so unknown double-quoted identifiers raise "no such column"
-    // instead of being silently treated as string literals. When non-strict,
-    // explicitly enable DQS because better-sqlite3 compiles SQLite with
-    // SQLITE_DQS=0 (off by default), so we must opt back in to match Rails'
-    // non-strict behavior where double-quoted string literals are permitted.
+    // Best-effort: set DQS for drivers that support it (e.g. node:sqlite with a
+    // build that exposes SQLITE_DBCONFIG_DQS_*). better-sqlite3 compiles SQLite
+    // with SQLITE_DQS=0 and does not recognise these pragmas, so DQS is always
+    // off in that driver regardless of the strict setting.
     const dqsValue = this._strict ? "OFF" : "ON";
     this.driver.pragma(`dqs_ddl = ${dqsValue}`);
     this.driver.pragma(`dqs_dml = ${dqsValue}`);

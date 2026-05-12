@@ -579,6 +579,11 @@ describe("SQLite3AdapterTest", () => {
     expect(SQLite3Adapter.strictStringsByDefault).toBe(false);
     const conn = new SQLite3Adapter(":memory:");
     expect(conn.strictStrings).toBe(false);
+    // Rails: assert_nothing_raised { conn.add_index :testings, :non_existent }
+    // — non-strict connections allow DQS fallback so unknown double-quoted
+    //   identifiers are treated as string literals and the index is created
+    //   silently. better-sqlite3 compiles SQLite with SQLITE_DQS=0 (always off),
+    //   so this assertion is omitted — DQS cannot be re-enabled via PRAGMA here.
     await conn.close();
 
     // Setting the class config propagates to new connections.
@@ -625,6 +630,9 @@ describe("SQLite3AdapterTest", () => {
     // Explicit strict: false in options disables strict mode.
     const conn = new SQLite3Adapter(":memory:", { strict: false });
     expect(conn.strictStrings).toBe(false);
+    // Rails: assert_nothing_raised { conn.add_index :testings, :non_existent }
+    // — strict: false keeps DQS enabled so the index creation succeeds silently.
+    // Omitted here for the same reason as test 1 (better-sqlite3 SQLITE_DQS=0).
     await conn.close();
 
     // Explicit strict: false overrides strictStringsByDefault = true.

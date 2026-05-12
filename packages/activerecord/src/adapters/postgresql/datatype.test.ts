@@ -11,88 +11,110 @@ describeIfPg("PostgreSQLAdapter", () => {
   });
   afterEach(async () => {
     await adapter.exec(`DROP TABLE IF EXISTS ex CASCADE`);
+    await adapter.exec(`DROP TABLE IF EXISTS postgresql_times CASCADE`);
+    await adapter.exec(`DROP TABLE IF EXISTS postgresql_oids CASCADE`);
     await adapter.close();
   });
 
+  async function setupTimesTable() {
+    await adapter.exec(`DROP TABLE IF EXISTS postgresql_times`);
+    await adapter.exec(`
+      CREATE TABLE postgresql_times (
+        id serial primary key,
+        time_interval interval,
+        scaled_time_interval interval
+      )
+    `);
+    const { Base } = await import("../../index.js");
+    const a = adapter;
+    class PostgresqlTime extends Base {
+      static tableName = "postgresql_times";
+      static {
+        this.adapter = a;
+        // Rails declares `attribute :time_interval, :string` and
+        // `attribute :scaled_time_interval, :interval` on the model.
+        // The :interval override is redundant with column reflection;
+        // the :string override is only exercised by `time values` /
+        // `update large time in seconds`, which are blocked on the
+        // IntervalStyle = iso_8601 connection setting (see those skips).
+      }
+    }
+    await PostgresqlTime.loadSchema();
+    return PostgresqlTime;
+  }
+
+  async function setupOidsTable() {
+    await adapter.exec(`DROP TABLE IF EXISTS postgresql_oids`);
+    await adapter.exec(`
+      CREATE TABLE postgresql_oids (
+        id serial primary key,
+        obj_id oid
+      )
+    `);
+    const { Base } = await import("../../index.js");
+    const a = adapter;
+    class PostgresqlOid extends Base {
+      static tableName = "postgresql_oids";
+      static {
+        this.adapter = a;
+      }
+    }
+    await PostgresqlOid.loadSchema();
+    return PostgresqlOid;
+  }
+
   describe("PostgreSQLDatatypeTest", () => {
-    it.skip("money column", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
+    it("data type of time types", async () => {
+      const M = await setupTimesTable();
+      await adapter.exec(
+        `INSERT INTO postgresql_times (id, time_interval, scaled_time_interval) VALUES (1, '1 year 2 days ago', '3 weeks ago')`,
+      );
+      const first = await (M as any).find(1);
+      expect((M as any).columnForAttribute("time_interval").type).toBe("interval");
+      expect((M as any).columnForAttribute("scaled_time_interval").type).toBe("interval");
+      // Touch the loaded record so the find is exercised end-to-end.
+      expect(first).toBeDefined();
     });
-    it.skip("number column", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
+
+    it("data type of oid types", async () => {
+      const M = await setupOidsTable();
+      await adapter.exec(`INSERT INTO postgresql_oids (id, obj_id) VALUES (1, 1234)`);
+      const first = await (M as any).find(1);
+      expect((M as any).columnForAttribute("obj_id").type).toBe("oid");
+      expect(first).toBeDefined();
     });
-    it.skip("time column", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-    });
-    it.skip("date column", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-    });
-    it.skip("timestamp column", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-    });
-    it.skip("boolean column", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-    });
-    it.skip("text column", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-    });
-    it.skip("binary column", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-    });
-    it.skip("oid column", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-    });
-    it.skip("data type of time types", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-      // Requires AR model with interval column; no adapter-level equivalent
-    });
-    it.skip("data type of oid types", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-      // Requires AR model with oid column; no adapter-level equivalent
-    });
+
     it.skip("time values", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-      // Requires AR model (PostgresqlTime); no adapter-level equivalent
+      // BLOCKED: pg-interval-style — driver returns intervals in 'postgres' format ("-1 years -2 days"),
+      // not ISO 8601 ("P-1Y-2D"). Rails sets `IntervalStyle = iso_8601` per connection.
+      // ROOT-CAUSE: postgresql-adapter does not set `IntervalStyle = iso_8601` on connect.
+      // SCOPE: ~5 LOC in postgresql-adapter.ts configureConnection; un-blocks this test and
+      // update_large_time_in_seconds.
     });
+
     it.skip("update large time in seconds", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
+      // BLOCKED: pg-interval-style — same root cause as `time values`. Round-trip of a numeric
+      // seconds count (70.years.to_f) into an interval column requires the driver to return the
+      // value as an ISO8601 string for Duration.parse on read-back.
+      // SCOPE: ~5 LOC in postgresql-adapter.ts configureConnection (IntervalStyle = iso_8601).
     });
-    it.skip("oid values", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
-      // Requires AR model (PostgresqlOid); no adapter-level equivalent
+
+    it("oid values", async () => {
+      const M = await setupOidsTable();
+      await adapter.exec(`INSERT INTO postgresql_oids (id, obj_id) VALUES (1, 1234)`);
+      const first = await (M as any).find(1);
+      expect(Number((first as any).obj_id)).toBe(1234);
     });
-    it.skip("update oid", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in datatype
-      // ROOT-CAUSE: connection-adapters/postgresql/datatype.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/datatype.ts; affects ~10–47 tests in datatype.test.ts
+
+    it("update oid", async () => {
+      const M = await setupOidsTable();
+      await adapter.exec(`INSERT INTO postgresql_oids (id, obj_id) VALUES (1, 1234)`);
+      const first = await (M as any).find(1);
+      const newValue = 2147483648;
+      (first as any).obj_id = newValue;
+      expect(await (first as any).save()).toBeTruthy();
+      await (first as any).reload();
+      expect(Number((first as any).obj_id)).toBe(newValue);
     });
 
     it("text columns are limitless the upper limit is one GB", async () => {

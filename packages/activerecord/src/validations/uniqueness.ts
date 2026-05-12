@@ -23,6 +23,17 @@ export function validatesUniqueness(
     caseSensitive?: boolean;
   } = {},
 ): void {
+  // Validate options eagerly to match Rails' ArgumentError at declaration time.
+  const scope = (options as any).scope;
+  if (scope != null) {
+    const scopes = Array.isArray(scope) ? scope : [scope];
+    if (!scopes.every((s: unknown) => typeof s === "string")) {
+      throw new Error(
+        `${JSON.stringify(scope)} is not a supported format for :scope option. ` +
+          "Pass a string or an array of strings instead.",
+      );
+    }
+  }
   const klass = this as { _asyncValidations?: Array<unknown> };
   if (!Object.prototype.hasOwnProperty.call(klass, "_asyncValidations")) {
     klass._asyncValidations = [...(klass._asyncValidations ?? [])];

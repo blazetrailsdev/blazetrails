@@ -3,6 +3,7 @@ import {
   ConnectionPool,
   withExecutionContext,
 } from "./connection-adapters/abstract/connection-pool.js";
+import { Store } from "./connection-adapters/abstract/query-cache.js";
 import { ConnectionDescriptor } from "./connection-adapters/abstract/connection-descriptor.js";
 import { PoolConfig } from "./connection-adapters/pool-config.js";
 import { SchemaReflection, BoundSchemaReflection } from "./connection-adapters/schema-cache.js";
@@ -1157,5 +1158,77 @@ describe("adapterNameFromConfig", () => {
   it("defaults unknown to sqlite", () => {
     expect(adapterNameFromConfig(undefined)).toBe("sqlite");
     expect(adapterNameFromConfig("unknown")).toBe("sqlite");
+  });
+});
+
+describe("query-cache Phase 1", () => {
+  describe("Change A — context-keyed cache registry", () => {
+    it("two concurrent execution contexts each get their own Store", async () => {
+      const pool = makePool(2);
+
+      let cacheA: Store | null = null;
+      let cacheB: Store | null = null;
+
+      await Promise.all([
+        withExecutionContext(async () => {
+          const conn = pool.checkout();
+          cacheA = (conn as unknown as { _queryCache: Store | null })._queryCache;
+          pool.checkin(conn);
+        }),
+        withExecutionContext(async () => {
+          const conn = pool.checkout();
+          cacheB = (conn as unknown as { _queryCache: Store | null })._queryCache;
+          pool.checkin(conn);
+        }),
+      ]);
+
+      expect(cacheA).toBeInstanceOf(Store);
+      expect(cacheB).toBeInstanceOf(Store);
+      expect(cacheA).not.toBe(cacheB);
+    });
+
+    it("writing to the cache in context X is not visible in context Y", async () => {
+      const pool = makePool(2);
+      const KEY = "SELECT 1";
+
+      let cacheA: Store | null = null;
+      let cacheB: Store | null = null;
+
+      await withExecutionContext(async () => {
+        const conn = pool.checkout();
+        cacheA = (conn as unknown as { _queryCache: Store | null })._queryCache;
+        cacheA!.enabled = true;
+        await cacheA!.computeIfAbsent(KEY, async () => [{ x: 1 }]);
+        pool.checkin(conn);
+      });
+
+      await withExecutionContext(async () => {
+        const conn = pool.checkout();
+        cacheB = (conn as unknown as { _queryCache: Store | null })._queryCache;
+        pool.checkin(conn);
+      });
+
+      expect(cacheA).not.toBe(cacheB);
+      expect(cacheA!.get(KEY)).toBeDefined();
+      expect(cacheB!.get(KEY)).toBeUndefined();
+    });
+  });
+
+  describe("Change B — pin wiring", () => {
+    it("pinConnectionBang sets _pinnedConnection on _cacheConfig, unpinConnectionBang clears it", async () => {
+      const pool = makeTransactionAwarePool(1);
+
+      const getCacheConfig = () =>
+        (pool as unknown as { _cacheConfig: { _pinnedConnection: unknown } })._cacheConfig;
+
+      expect(getCacheConfig()._pinnedConnection).toBeNull();
+
+      await withExecutionContext(async () => {
+        await pool.pinConnectionBang();
+        expect(getCacheConfig()._pinnedConnection).not.toBeNull();
+        await pool.unpinConnectionBang();
+        expect(getCacheConfig()._pinnedConnection).toBeNull();
+      });
+    });
   });
 });

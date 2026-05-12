@@ -1,5 +1,6 @@
 import { Notifications } from "@blazetrails/activesupport";
 import { typeCastedBinds, type DatabaseStatementsHost } from "./database-statements.js";
+import { executionContextId } from "./connection-pool/execution-context.js";
 
 const DEFAULT_MAX_SIZE = 100;
 
@@ -217,9 +218,14 @@ export class ConnectionPoolConfiguration {
   }
 
   get queryCache(): Store {
-    return this._threadQueryCaches.computeIfAbsent("default", () => {
+    return this._threadQueryCaches.computeIfAbsent(String(executionContextId()), () => {
       return new Store(this._queryCacheVersion, this._queryCacheMaxSize ?? 0);
     });
+  }
+
+  /** @internal */
+  setPinnedConnection(conn: QueryCacheHost | null): void {
+    this._pinnedConnection = conn;
   }
 }
 

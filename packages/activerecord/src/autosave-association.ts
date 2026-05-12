@@ -366,8 +366,8 @@ export async function autosaveAssociations(record: Base): Promise<boolean> {
 // ---------------------------------------------------------------------------
 
 async function autosaveAssociation(record: Base, assoc: AssociationDefinition): Promise<boolean> {
-  if (!_loadedAssociation(record, assoc.name)) return true;
-
+  // Each type-specific handler does its own `_loadedAssociation` lookup and
+  // short-circuits on a null target — no need for a dispatch-level gate.
   if (assoc.type === "hasMany") return autosaveHasMany(record, assoc);
   if (assoc.type === "hasOne") return autosaveHasOne(record, assoc);
   if (assoc.type === "belongsTo") return _autosaveBelongsTo(record, assoc);

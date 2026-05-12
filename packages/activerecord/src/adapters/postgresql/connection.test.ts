@@ -66,11 +66,13 @@ describeIfPg("PostgresqlConnectionTest", () => {
   });
 
   it("indexes logs name", async () => {
+    // "pg_class" substituted for Rails' "items" — no fixture tables at adapter test level
     await adapter.indexes("pg_class");
     expect(subscriber.logged[0][1]).toBe("SCHEMA");
   });
 
   it("table exists logs name", async () => {
+    // "pg_class" substituted for Rails' "items" — no fixture tables at adapter test level
     await adapter.tableExists("pg_class");
     expect(subscriber.logged[0][1]).toBe("SCHEMA");
   });

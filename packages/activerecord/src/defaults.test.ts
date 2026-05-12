@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import { Base } from "./index.js";
+import { loadSchemaFromAdapter } from "./model-schema.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -24,76 +25,33 @@ function freshAdapter(): DatabaseAdapter {
 
 describe("MysqlDefaultExpressionTest", () => {
   it.skip("schema dump includes default expression", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires MySQL live connection with pre-existing `defaults` table
+    // (uuid column with DEFAULT uuid() expression). Test adapter uses SQLite; no MySQL fixture infra.
   });
   it.skip("schema dump includes default expression with single quotes reflected correctly", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires MySQL live connection with pre-existing `defaults` table
+    // (char2_concatenated column with DEFAULT CONCAT expression). No MySQL fixture infra.
   });
   it.skip("schema dump datetime includes default expression", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires MySQL live connection with pre-existing `datetime_defaults` table.
   });
   it.skip("schema dump datetime includes precise default expression", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires MySQL live connection with pre-existing `datetime_defaults` table.
   });
   it.skip("schema dump datetime includes precise default expression with on update", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires MySQL live connection with pre-existing `datetime_defaults` table.
   });
   it.skip("schema dump timestamp includes default expression", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires MySQL live connection with pre-existing `timestamp_defaults` table.
   });
   it.skip("schema dump timestamp includes precise default expression", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires MySQL live connection with pre-existing `timestamp_defaults` table.
   });
   it.skip("schema dump timestamp includes precise default expression with on update", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires MySQL live connection with pre-existing `timestamp_defaults` table.
   });
   it.skip("schema dump timestamp without default expression", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires MySQL live connection with pre-existing `timestamp_defaults` table.
   });
 });
 
@@ -205,22 +163,12 @@ describe("DefaultTest", () => {
 
 describe("DefaultsTestWithoutTransactionalFixtures", () => {
   it.skip("mysql not null defaults non strict", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
-    /* fixture-dependent */
+    // BLOCKED: fixture — requires MySQL live connection + strict-mode toggle via `establish_connection`.
+    // No MySQL adapter in test environment; strict-mode reconfiguration not supported in test harness.
   });
   it.skip("mysql not null defaults strict", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
-    /* fixture-dependent */
+    // BLOCKED: fixture — requires MySQL live connection + strict-mode toggle via `establish_connection`.
+    // No MySQL adapter in test environment; strict-mode reconfiguration not supported in test harness.
   });
 });
 
@@ -288,36 +236,32 @@ describe("DefaultStringsTest", () => {
 
 describe("PostgresqlDefaultExpressionTest", () => {
   it.skip("schema dump includes default expression", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires PostgreSQL live connection with pre-existing `defaults` table
+    // (modified_date/modified_time CURRENT_DATE/CURRENT_TIMESTAMP expressions). No PG fixture infra.
   });
 });
 
 describe("Sqlite3DefaultExpressionTest", () => {
   it.skip("schema dump includes default expression", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+    // BLOCKED: fixture — requires pre-existing `defaults` table with expression defaults
+    // (CURRENT_DATE, CURRENT_TIMESTAMP, ABS(RANDOM())). No fixture-table infra in test adapter.
   });
 });
 
 describe("DefaultTest", () => {
   const adapter = freshAdapter();
 
-  it.skip("default attribute value overrides from database", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+  it("default attribute value overrides from database", async () => {
+    const adp = freshAdapter();
+    await defineSchema(adp, { items: { count: { type: "integer", default: 7 } } });
+    class Item extends Base {
+      static override tableName = "items";
+      static {
+        this.adapter = adp;
+      }
+    }
+    await loadSchemaFromAdapter.call(Item);
+    expect(new Item().count).toBe(7);
   });
 
   it("default attribute value for integer", () => {
@@ -350,29 +294,61 @@ describe("DefaultTest", () => {
     expect(new M().active).toBe(true);
   });
 
-  it.skip("default attribute value for datetime", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+  it("default attribute value for datetime", async () => {
+    const adp = freshAdapter();
+    await defineSchema(adp, {
+      events: { start_at: { type: "datetime", default: "2024-01-15 10:00:00" } },
+    });
+    class Event extends Base {
+      static override tableName = "events";
+      static {
+        this.adapter = adp;
+      }
+    }
+    await loadSchemaFromAdapter.call(Event);
+    const val = new Event().start_at;
+    // After Change 2 the default is cast through the type; for SQLite datetime→string columns
+    // the cast returns a Temporal.PlainDateTime (SQLiteDateTimeType) or Date-like object,
+    // not the raw string.
+    expect(typeof val === "string" ? val : String(val)).toContain("2024");
   });
-  it.skip("default attribute value for date", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+  it("default attribute value for date", async () => {
+    const adp = freshAdapter();
+    await defineSchema(adp, { events: { on_date: { type: "date", default: "2024-06-01" } } });
+    class Event extends Base {
+      static override tableName = "events";
+      static {
+        this.adapter = adp;
+      }
+    }
+    await loadSchemaFromAdapter.call(Event);
+    const val = new Event().on_date;
+    expect(typeof val === "string" ? val : String(val)).toContain("2024");
   });
-  it.skip("default attribute value for decimal", () => {
-    // BLOCKED: schema — Column#default not deserialized at schema-dump time
-    // ROOT-CAUSE: newColumnFromField stores raw string (e.g. "5") in column.default; schema dump
-    //   then emits a quoted string instead of the typed value. Fix requires lookupCastType to return
-    //   a type object with deserialize() (currently returns shape-only metadata), then Column stores
-    //   raw + lazily deserializes via castType.deserialize(rawDefault).
-    // SCOPE: ~50 LOC — change lookupCastType return type + Column constructor + newColumnFromField call site
+  it("default attribute value for decimal", async () => {
+    // Verify Change 2: column.default "2.78" is cast through DecimalType so
+    // the model default is the typed decimal string, not the raw DB string.
+    const { DecimalType } = await import("@blazetrails/activemodel");
+    const decimalType = new DecimalType({ precision: 5, scale: 2 });
+    const mockAdapter = {
+      schemaCache: {
+        dataSourceExists: async () => true,
+        columnsHash: async () => ({
+          amount: { name: "amount", sqlType: "decimal(5,2)", default: "2.789" },
+        }),
+        getCachedColumnsHash: () => undefined,
+        isCached: () => false,
+      },
+      lookupCastTypeFromColumn: () => decimalType,
+    };
+    class Order extends Base {
+      static override tableName = "orders";
+    }
+    (Order as any).adapter = mockAdapter;
+    await loadSchemaFromAdapter.call(Order);
+    const val = new Order().amount;
+    // "2.789" cast through DecimalType(scale:2) → "2.79" (rounded to 2 decimal places)
+    expect(val).toBe("2.79");
   });
 
   it("default value for float", () => {

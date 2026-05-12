@@ -116,9 +116,23 @@ export class SchemaDumper extends BaseSchemaDumper {
   protected schemaDefault(column: Column): string | undefined {
     if (!column.hasDefault && column.default === undefined) return undefined;
     if (column.default == null) return this.schemaExpression(column);
-    // Represent the default as its schema literal
+    const adapter = this._adapter();
+    if (adapter?.lookupCastTypeFromColumn) {
+      const type = adapter.lookupCastTypeFromColumn(column);
+      const deserialized = type.deserialize(column.default);
+      if (deserialized == null) return this.schemaExpression(column);
+      if (typeof type.typeCastForSchema === "function") {
+        return type.typeCastForSchema(deserialized);
+      }
+    }
     if (typeof column.default === "string") return JSON.stringify(column.default);
     return String(column.default);
+  }
+
+  /** @internal */
+  protected _adapter(): any {
+    const src = (this as any)._source;
+    return src?.adapter ?? src;
   }
 
   /** @internal */

@@ -708,7 +708,11 @@ function applyColumnsHash(
       type = existingType.withInnerType(type);
     }
 
-    const defaultValue = (column as { default?: unknown }).default ?? null;
+    const rawDefault = (column as { default?: unknown }).default ?? null;
+    const defaultValue =
+      rawDefault != null && typeof (type as any).cast === "function"
+        ? (type as any).cast(rawDefault)
+        : rawDefault;
     const colLimit = (column as { limit?: number | null }).limit ?? null;
 
     host._attributeDefinitions.set(name, {

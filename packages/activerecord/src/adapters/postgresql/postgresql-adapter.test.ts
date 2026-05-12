@@ -610,12 +610,14 @@ describeIfPg("PostgreSQLAdapter", () => {
         waitingCount: 0,
       };
       const a = new PostgreSQLAdapter(PG_TEST_URL);
+      // Save original pool so it can be closed after injection — the constructor
+      // creates a real pg.Pool immediately and close() would call end() on the fake.
+      const originalPool = (a as any)._driverPool as pg.Pool | null;
+      (a as any)._driverPool = fakePool;
       try {
-        await a.execute("SELECT 1"); // establish pool
-        (a as any)._driverPool = fakePool;
         await expect(a.execute("SELECT 1")).rejects.toThrow(ConnectionNotEstablished);
       } finally {
-        await a.close().catch(() => {});
+        await originalPool?.end().catch(() => {});
       }
     });
 

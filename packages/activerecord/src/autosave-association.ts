@@ -428,13 +428,7 @@ async function autosaveHasMany(record: Base, assoc: AssociationDefinition): Prom
     // 373-381): when the owner was new before save, every target record
     // gets processed — not just new/changed ones. The dispatch inside
     // _insertCollectionRecord still picks insert vs update per Rails:442-457.
-    // Gated off for through/HABTM until HasManyThroughAssociation#insertRecord
-    // lands (Slot in audit-has-many-through cluster). Without that override
-    // setOwnerAttributes no-ops for through (collection-association.ts:457)
-    // and no join row gets created — re-saving unchanged target records
-    // would only add churn. Pre-Slot-B gate (isNewRecord || changed)
-    // preserves current behavior until the override exists.
-    const newRecordBeforeSave = !!(record as any)._newRecordBeforeSave && !assoc.options.through;
+    const newRecordBeforeSave = !!(record as any)._newRecordBeforeSave;
     if (newRecordBeforeSave || child.isNewRecord() || child.changed) {
       const saved = await _insertCollectionRecord(record, inst, assoc, child);
       if (!saved) {
@@ -469,16 +463,6 @@ async function _insertCollectionRecord(
   assoc: AssociationDefinition,
   child: Base,
 ): Promise<boolean> {
-  // Through/HABTM has no HasManyThroughAssociation#insertRecord override yet
-  // (audit-has-many-through cluster). Inherited HasMany#insertRecord no-ops
-  // setOwnerAttributes for through (collection-association.ts:457) — saves
-  // the target but never creates the join row, and can spuriously apply
-  // counter-cache mutations via updateCounterIfSuccess. Route every through
-  // record (insert or update) through plain save({validate:false}) until
-  // the override lands.
-  if (assoc.options.through) {
-    return !!(await child.save({ validate: false }));
-  }
   const newRecordBeforeSave = !!(record as any)._newRecordBeforeSave;
   const isInsert = child.isNewRecord() || newRecordBeforeSave;
   if (!isInsert) {
@@ -633,13 +617,7 @@ async function autosaveHabtm(record: Base, assoc: AssociationDefinition): Promis
     // 373-381): when the owner was new before save, every target record
     // gets processed — not just new/changed ones. The dispatch inside
     // _insertCollectionRecord still picks insert vs update per Rails:442-457.
-    // Gated off for through/HABTM until HasManyThroughAssociation#insertRecord
-    // lands (Slot in audit-has-many-through cluster). Without that override
-    // setOwnerAttributes no-ops for through (collection-association.ts:457)
-    // and no join row gets created — re-saving unchanged target records
-    // would only add churn. Pre-Slot-B gate (isNewRecord || changed)
-    // preserves current behavior until the override exists.
-    const newRecordBeforeSave = !!(record as any)._newRecordBeforeSave && !assoc.options.through;
+    const newRecordBeforeSave = !!(record as any)._newRecordBeforeSave;
     if (newRecordBeforeSave || child.isNewRecord() || child.changed) {
       const saved = await _insertCollectionRecord(record, inst, assoc, child);
       if (!saved) {

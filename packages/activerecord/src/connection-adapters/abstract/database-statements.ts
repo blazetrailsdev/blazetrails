@@ -1291,7 +1291,12 @@ export { deleteStatement as remove };
 interface DatabaseStatementsDefaultsHost {
   execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]>;
   executeMutation(sql: string, binds?: unknown[], name?: string): Promise<number>;
-  execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
+  execQuery(
+    sql: string,
+    name?: string | null,
+    binds?: unknown[],
+    options?: { prepare?: boolean },
+  ): Promise<Result>;
 }
 
 export const DatabaseStatements = {
@@ -1361,6 +1366,7 @@ export const DatabaseStatements = {
     sql: string,
     name?: string | null,
     binds?: unknown[],
+    _options?: { prepare?: boolean },
   ): Promise<Result> {
     const rows = await this.execute(sql, binds, name ?? "SQL");
     return Result.fromRowHashes(rows);

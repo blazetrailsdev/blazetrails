@@ -125,6 +125,12 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return _isSqliteMissingDbError(error);
   }
 
+  /**
+   * When true, new connections inherit `strict: true` unless the caller
+   * explicitly passes `strict: false`. Mirrors Rails' class_attribute.
+   */
+  static strictStringsByDefault: boolean = false;
+
   static columnNameMatcher(): RegExp {
     // Mirrors Rails SQLite3 column_name_matcher. Uses "..." quoted identifiers
     // (SQLite double-quote escaping: "" inside quotes). Strict 0-or-1 function
@@ -162,6 +168,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   private _inTransaction = false;
   private _savepointCounter = 0;
   private _readonly: boolean;
+  private _strict: boolean;
   private _preventWrites = false;
   private _nativeTypeMap: TypeMap;
   private _memoryDatabase: boolean;
@@ -180,6 +187,15 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     const q = filename.indexOf("?");
     if (q === -1) return false;
     return new URLSearchParams(filename.slice(q + 1)).get("mode") === "memory";
+  }
+
+  /**
+   * Whether this connection was opened with strict-strings mode (DQS disabled).
+   * Reflects the resolved value of the `strict` constructor option, which
+   * defaults to `SQLite3Adapter.strictStringsByDefault`.
+   */
+  get strictStrings(): boolean {
+    return this._strict;
   }
 
   /**
@@ -208,6 +224,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     this._filename = filename;
     this._memoryDatabase = SQLite3Adapter._isMemoryFilename(filename);
     this._readonly = options.readonly ?? false;
+    this._strict = options.strict ?? SQLite3Adapter.strictStringsByDefault;
     // Rails: `SQLite3Adapter#default_prepared_statements` inherits the
     // abstract adapter's `true`. Mirror that default and let options
     // override per connection.
@@ -2094,6 +2111,15 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         }
       }
     }
+    // Mirror Rails strict_strings_by_default: when strict, disable the DQS
+    // fallback so unknown double-quoted identifiers raise "no such column"
+    // instead of being silently treated as string literals. When non-strict,
+    // explicitly enable DQS because better-sqlite3 compiles SQLite with
+    // SQLITE_DQS=0 (off by default), so we must opt back in to match Rails'
+    // non-strict behavior where double-quoted string literals are permitted.
+    const dqsValue = this._strict ? "OFF" : "ON";
+    this.driver.pragma(`dqs_ddl = ${dqsValue}`);
+    this.driver.pragma(`dqs_dml = ${dqsValue}`);
     const pragmas = (this._config as SQLite3AdapterOptions).pragmas;
     if (pragmas) {
       // Validate pragma name is a safe SQLite identifier before interpolating.

@@ -322,11 +322,11 @@ export class Duration {
     }
 
     const moreInvalidPatterns = [
-      /^P-?\d+YT$/,
-      /^PW$/,
-      /^P-?\d+Y-?\d+W/,
-      /^P-?\d+\.\d+Y-?\d+\.\d+M/,
-      /^P-?\d+\.\d+MT-?\d+\.\d+S/,
+      /^[+-]?P-?\d+YT$/,
+      /^[+-]?PW$/,
+      /^[+-]?P-?\d+Y-?\d+W/,
+      /^[+-]?P-?\d+\.\d+Y-?\d+\.\d+M/,
+      /^[+-]?P-?\d+\.\d+MT-?\d+\.\d+S/,
     ];
     for (const p of moreInvalidPatterns) {
       if (p.test(iso)) throw new Error(`Invalid ISO 8601 duration: "${iso}"`);

@@ -24,8 +24,10 @@ function _guardKey(association: unknown): string {
 }
 
 /**
- * Returns the loaded Association instance for `name`, or `null` if no
- * loaded target exists. Mirrors Rails' `association_instance_get(name)`
+ * Returns the loaded Association instance for `name` (its `.target` may
+ * still be null in the negative-cache / preloaded-nil case — what matters
+ * here is that `isLoaded()` is true), or `null` when no instance is loaded
+ * or it can't be built. Mirrors Rails' `association_instance_get(name)`
  * read path used throughout autosave — `_cachedAssociations` /
  * `_preloadedAssociations` are the storage backing, but lookups must go
  * through the Association object so that subclass methods (`isUpdated`,
@@ -46,15 +48,14 @@ function _loadedAssociation(record: any, name: string): any | null {
   // Rails' helper never throws (only reads `@association_cache[name]`);
   // ours can if the name is unknown or the class can't be resolved. Mirror
   // the nil-means-skip semantics by returning null on any throw.
+  const existing = record.associationInstanceGet?.(name);
   if (typeof record.association !== "function") {
-    return record.associationInstanceGet?.(name)?.isLoaded?.()
-      ? record.associationInstanceGet(name)
-      : null;
+    return existing?.isLoaded?.() ? existing : null;
   }
   const hasCachedData =
     record._cachedAssociations?.has(name) ||
     record._preloadedAssociations?.has(name) ||
-    !!record.associationInstanceGet?.(name)?.isLoaded?.();
+    !!existing?.isLoaded?.();
   if (!hasCachedData) return null;
   try {
     const inst = record.association(name);

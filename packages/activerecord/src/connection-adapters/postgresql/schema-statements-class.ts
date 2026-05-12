@@ -3,15 +3,7 @@ import { SchemaStatements } from "../abstract/schema-statements.js";
 
 export class PostgreSQLSchemaStatements extends SchemaStatements {
   override async dropTable(...args: Parameters<SchemaStatements["dropTable"]>): Promise<void> {
-    let tableNames: string[];
-    let options: { ifExists?: boolean; force?: "cascade" } = {};
-    const last = args[args.length - 1];
-    if (last !== null && last !== undefined && typeof last === "object") {
-      tableNames = args.slice(0, -1) as string[];
-      options = last as { ifExists?: boolean; force?: "cascade" };
-    } else {
-      tableNames = args as string[];
-    }
+    const [tableNames, options] = this._splitTableNamesAndOptions(args);
     if (tableNames.length === 0) {
       throw new ArgumentError("dropTable requires at least one table name");
     }

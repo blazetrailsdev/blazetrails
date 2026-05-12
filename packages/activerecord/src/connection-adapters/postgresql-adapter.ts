@@ -655,7 +655,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const payload: Record<string, unknown> = {
       sql: rewritten,
       name: name ?? "SQL",
-      binds: bindArray,
+      binds: binds ?? [],
       type_casted_binds: bindArray,
       connection: this,
       row_count: 0,

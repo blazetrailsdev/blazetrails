@@ -1230,6 +1230,30 @@ describe("ConnectionPoolConfiguration query cache", () => {
         expect(getCacheConfig()._pinnedConnection).toBeNull();
       });
     });
+
+    it("clears _pinnedConnection on _cacheConfig when beginTransaction throws", async () => {
+      const pool = makeTransactionAwarePool(1);
+      // Prime the pool with one idle connection so pinConnectionBang acquires it.
+      const seed = pool.checkout();
+      pool.checkin(seed);
+      // Swap its transactionManager with one that throws on beginTransaction.
+      (seed as unknown as { _transactionManager: unknown })._transactionManager = {
+        beginTransaction: async () => {
+          throw new Error("begin failed");
+        },
+        get currentTransaction() {
+          return { open: false };
+        },
+      };
+
+      const getCacheConfig = () =>
+        (pool as unknown as { _cacheConfig: { _pinnedConnection: unknown } })._cacheConfig;
+
+      await withExecutionContext(async () => {
+        await expect(pool.pinConnectionBang()).rejects.toThrow("begin failed");
+        expect(getCacheConfig()._pinnedConnection).toBeNull();
+      });
+    });
   });
 
   describe("checkout/checkin cache attachment", () => {

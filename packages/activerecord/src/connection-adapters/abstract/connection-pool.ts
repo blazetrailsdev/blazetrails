@@ -456,6 +456,7 @@ export class ConnectionPool implements ReapablePool {
       pin.depth--;
       if (pin.depth === 0) {
         this._pinnedConnections.delete(ctxId);
+        this._cacheConfig.setPinnedConnection(null);
         if (newlyCheckedOut) {
           this.checkin(connection);
         }

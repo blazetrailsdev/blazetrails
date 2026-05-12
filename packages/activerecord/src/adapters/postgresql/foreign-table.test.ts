@@ -1,10 +1,12 @@
 /**
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/foreign_table_test.rb
  *
- * Loopback FDW: foreign_server points back at the same database, and
- * foreign_professors is mapped to a local professors table.
+ * Loopback FDW: foreign_server points back at the same database and
+ * foreign_professors is mapped to a local professors table. Rails wires
+ * foreign_server at the secondary "arunit2" database; loopback keeps the
+ * test infra single-database.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
 
 const url = new URL(PG_TEST_URL);
@@ -14,21 +16,6 @@ const fdwDb = url.pathname.replace(/^\//, "") || "postgres";
 const fdwUser = decodeURIComponent(url.username || "postgres");
 const fdwPassword = decodeURIComponent(url.password || "");
 
-async function probeFdwAvailable(): Promise<boolean> {
-  const probe = new PostgreSQLAdapter(PG_TEST_URL);
-  try {
-    await probe.exec("CREATE EXTENSION IF NOT EXISTS postgres_fdw");
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await probe.close().catch(() => {});
-  }
-}
-
-const fdwAvailable = await probeFdwAvailable();
-const describeIfFdw = fdwAvailable ? describe : describe.skip;
-
 function quoteLit(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
 }
@@ -36,39 +23,13 @@ function quoteLit(s: string): string {
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
 
-  beforeAll(async () => {
-    if (!fdwAvailable) return;
-    const a = new PostgreSQLAdapter(PG_TEST_URL);
-    try {
-      await a.exec("DROP FOREIGN TABLE IF EXISTS foreign_professors");
-      await a.exec("DROP SERVER IF EXISTS foreign_server CASCADE");
-      await a.exec("DROP TABLE IF EXISTS professors");
-      await a.exec("CREATE EXTENSION IF NOT EXISTS postgres_fdw");
-    } finally {
-      await a.close();
-    }
-  });
-
-  afterAll(async () => {
-    if (!fdwAvailable) return;
-    const a = new PostgreSQLAdapter(PG_TEST_URL);
-    try {
-      await a.exec("DROP FOREIGN TABLE IF EXISTS foreign_professors").catch(() => {});
-      await a.exec("DROP SERVER IF EXISTS foreign_server CASCADE").catch(() => {});
-      await a.exec("DROP TABLE IF EXISTS professors").catch(() => {});
-      await a.exec("DROP EXTENSION IF EXISTS postgres_fdw").catch(() => {});
-    } finally {
-      await a.close();
-    }
-  });
-
   beforeEach(async () => {
     adapter = new PostgreSQLAdapter(PG_TEST_URL);
-    if (!fdwAvailable) return;
 
     await adapter.exec("DROP FOREIGN TABLE IF EXISTS foreign_professors");
     await adapter.exec("DROP SERVER IF EXISTS foreign_server CASCADE");
     await adapter.exec("DROP TABLE IF EXISTS professors");
+    await adapter.enableExtension("postgres_fdw");
     await adapter.exec(
       `CREATE TABLE professors (id serial primary key, name character varying NOT NULL)`,
     );
@@ -91,15 +52,14 @@ describeIfPg("PostgreSQLAdapter", () => {
   });
 
   afterEach(async () => {
-    if (fdwAvailable) {
-      await adapter.exec("DROP FOREIGN TABLE IF EXISTS foreign_professors").catch(() => {});
-      await adapter.exec("DROP SERVER IF EXISTS foreign_server CASCADE").catch(() => {});
-      await adapter.exec("DROP TABLE IF EXISTS professors").catch(() => {});
-    }
+    await adapter.exec("DROP FOREIGN TABLE IF EXISTS foreign_professors").catch(() => {});
+    await adapter.exec("DROP SERVER IF EXISTS foreign_server CASCADE").catch(() => {});
+    await adapter.exec("DROP TABLE IF EXISTS professors").catch(() => {});
+    await adapter.disableExtension("postgres_fdw", { force: "cascade" }).catch(() => {});
     await adapter.close();
   });
 
-  describeIfFdw("ForeignTableTest", () => {
+  describe("ForeignTableTest", () => {
     it("table exists", async () => {
       expect(await adapter.tableExists("foreign_professors")).toBe(false);
     });

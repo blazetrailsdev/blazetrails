@@ -3,7 +3,8 @@
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base } from "./index.js";
+import { Base, registerModel, serialize } from "./index.js";
+import { Associations, modelRegistry } from "./associations.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
@@ -89,11 +90,51 @@ describe("SerializationTest", () => {
     expect(hash.name).toBe("David");
   });
 
-  it.skip("find records by serialized attributes through join", () => {
-    // BLOCKED: serialization — serialized attribute / YAML gap in serialization
-    // ROOT-CAUSE: serialized-attribute.ts#castForDatabase or YAMLCodec not fully implementing Rails parity
-    // SCOPE: ~30 LOC fix in serialized-attribute.ts; affects ~16 tests in serialization.test.ts
-    /* needs associations + serialized columns */
+  it("find records by serialized attributes through join", async () => {
+    const joinAdapter = freshAdapter();
+    await defineSchema(joinAdapter, {
+      authors: { name: "string" },
+      serialized_posts: { author_id: "integer", title: "string" },
+    });
+
+    class Author extends Base {
+      static {
+        this._tableName = "authors";
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        this.adapter = joinAdapter;
+      }
+    }
+
+    class SerializedPost extends Base {
+      static {
+        this._tableName = "serialized_posts";
+        this.attribute("id", "integer");
+        this.attribute("author_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = joinAdapter;
+      }
+    }
+    serialize(SerializedPost, "title");
+
+    registerModel("SerializedPost", SerializedPost);
+    Associations.hasMany.call(Author, "serializedPosts", {
+      className: "SerializedPost",
+      foreignKey: "author_id",
+    });
+    Associations.belongsTo.call(SerializedPost, "author", { className: "Author" });
+
+    try {
+      const author = await Author.create({ name: "David" });
+      await SerializedPost.create({ author_id: author.id, title: "Hello" });
+
+      const results = await Author.joins("serializedPosts")
+        .where({ name: "David", serialized_posts: { title: "Hello" } })
+        .toArray();
+      expect(results.length).toBe(1);
+    } finally {
+      modelRegistry.delete("SerializedPost");
+    }
   });
 
   // Mirrors ActiveRecord::Serialization#serializable_hash — when a model

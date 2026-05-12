@@ -103,7 +103,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       const M = await setupOidsTable();
       await adapter.exec(`INSERT INTO postgresql_oids (id, obj_id) VALUES (1, 1234)`);
       const first = await (M as any).find(1);
-      expect(Number((first as any).obj_id)).toBe(1234);
+      expect((first as any).obj_id).toBe(1234);
     });
 
     it("update oid", async () => {
@@ -114,7 +114,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       (first as any).obj_id = newValue;
       expect(await (first as any).save()).toBeTruthy();
       await (first as any).reload();
-      expect(Number((first as any).obj_id)).toBe(newValue);
+      expect((first as any).obj_id).toBe(newValue);
     });
 
     it("text columns are limitless the upper limit is one GB", async () => {

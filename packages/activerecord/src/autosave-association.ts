@@ -34,20 +34,34 @@ function _guardKey(association: unknown): string {
  * @internal
  */
 function _loadedAssociation(record: any, name: string): any | null {
-  // Mirrors Rails' `association_instance_get(name)`. Returns the cached
-  // Association instance if one exists and is loaded; otherwise lazily
-  // materializes via `record.association(name)` so trails' map-direct
-  // preloader writes (`_cachedAssociations.set` / `_preloadedAssociations.set`,
-  // see preloader/association.ts and relation.ts) still surface to autosave —
-  // Rails has no such map shortcut, every preloader write lands in
-  // `@association_cache` via `association_instance_set`.
-  const existing = record._associationInstanceGet?.(name);
-  if (existing?.isLoaded?.()) return existing;
+  // Mirrors Rails' `association_instance_get(name)`. Always routes through
+  // `record.association(name)` so `syncAssociationInstance` re-pulls fresh
+  // target data from `_cachedAssociations` / `_preloadedAssociations` (our
+  // map-direct preloader writes in preloader/association.ts, relation.ts —
+  // Rails has no equivalent map shortcut; every preloader write lands in
+  // `@association_cache` via `association_instance_set`). Without the
+  // re-sync, an Association instance constructed before a later map write
+  // would surface stale target data here.
+  //
+  // Rails' helper never throws (only reads `@association_cache[name]`);
+  // ours can if the name is unknown or the class can't be resolved. Mirror
+  // the nil-means-skip semantics by returning null on any throw.
+  if (typeof record.association !== "function") {
+    return record.associationInstanceGet?.(name)?.isLoaded?.()
+      ? record.associationInstanceGet(name)
+      : null;
+  }
   const hasCachedData =
-    record._cachedAssociations?.has(name) || record._preloadedAssociations?.has(name);
-  if (!hasCachedData || typeof record.association !== "function") return null;
-  const inst = record.association(name);
-  return inst?.isLoaded?.() ? inst : null;
+    record._cachedAssociations?.has(name) ||
+    record._preloadedAssociations?.has(name) ||
+    !!record.associationInstanceGet?.(name)?.isLoaded?.();
+  if (!hasCachedData) return null;
+  try {
+    const inst = record.association(name);
+    return inst?.isLoaded?.() ? inst : null;
+  } catch {
+    return null;
+  }
 }
 
 const _nestedCheckInProgress = new WeakSet<object>();

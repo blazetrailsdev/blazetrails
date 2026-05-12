@@ -7,9 +7,11 @@
  */
 import type { Base } from "./base.js";
 import type { ValidationContextArg } from "./validations.js";
-import { CompositePrimaryKeyMismatchError } from "./associations/errors.js";
+import {
+  AssociationNotFoundError,
+  CompositePrimaryKeyMismatchError,
+} from "./associations/errors.js";
 import type { AssociationDefinition } from "./associations.js";
-import { AssociationNotFoundError } from "./associations/errors.js";
 import { underscore } from "@blazetrails/activesupport";
 import { included } from "@blazetrails/activesupport";
 
@@ -61,6 +63,7 @@ function _loadedAssociation(record: any, name: string): any | null {
   const hasCachedData =
     record._cachedAssociations?.has(name) ||
     record._preloadedAssociations?.has(name) ||
+    !!record._collectionProxies?.get?.(name)?.loaded ||
     !!existing?.isLoaded?.();
   if (!hasCachedData) return null;
   try {

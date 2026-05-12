@@ -313,6 +313,8 @@ export class Duration {
       iso === "PT" ||
       iso === "-P" ||
       iso === "-PT" ||
+      iso === "+P" ||
+      iso === "+PT" ||
       iso === "T" ||
       /^[~.]/.test(iso)
     ) {

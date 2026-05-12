@@ -16,6 +16,8 @@ interface Column extends ColumnInfo {
   hasDefault?: boolean;
   defaultFunction?: string | null;
   comment?: string | null;
+  /** Raw SQL type string (e.g. "integer", "varchar(255)") — present on all schema-reflected columns. */
+  sqlType?: string | null;
 }
 
 export class SchemaDumper extends BaseSchemaDumper {

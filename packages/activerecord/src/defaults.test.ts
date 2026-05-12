@@ -295,9 +295,10 @@ describe("DefaultTest", () => {
   });
 
   it("default attribute value for datetime", async () => {
-    // Verify Change 2: raw datetime string default is deserialized through DateTimeType
-    // so the model default is a Temporal.PlainDateTime, not the raw DB string.
+    // Attribute.fromDatabase passes the raw column default through type.deserialize,
+    // so a datetime string default becomes a Temporal.Instant on the model instance.
     const { DateTimeType } = await import("@blazetrails/activemodel");
+    const { Temporal } = await import("@blazetrails/activesupport/temporal");
     const dtType = new DateTimeType();
     const mockAdapter = {
       schemaCache: {
@@ -316,14 +317,14 @@ describe("DefaultTest", () => {
     (Event as any).adapter = mockAdapter;
     await loadSchemaFromAdapter.call(Event);
     const val = new Event().start_at;
-    // DateTimeType.deserialize("2024-01-15 10:00:00") → Temporal.PlainDateTime
-    expect(val).not.toBeNull();
-    expect(String(val)).toContain("2024");
+    // DateTimeType.deserialize("2024-01-15 10:00:00") → Temporal.Instant
+    expect(val).toBeInstanceOf(Temporal.Instant);
   });
   it("default attribute value for date", async () => {
-    // Verify Change 2: raw date string default is deserialized through DateType
-    // so the model default is a Temporal.PlainDate, not the raw DB string.
+    // Attribute.fromDatabase passes the raw column default through type.deserialize,
+    // so a date string default becomes a Temporal.PlainDate on the model instance.
     const { DateType } = await import("@blazetrails/activemodel");
+    const { Temporal } = await import("@blazetrails/activesupport/temporal");
     const dateType = new DateType();
     const mockAdapter = {
       schemaCache: {
@@ -343,12 +344,11 @@ describe("DefaultTest", () => {
     await loadSchemaFromAdapter.call(Event);
     const val = new Event().on_date;
     // DateType.deserialize("2024-06-01") → Temporal.PlainDate
-    expect(val).not.toBeNull();
-    expect(String(val)).toContain("2024");
+    expect(val).toBeInstanceOf(Temporal.PlainDate);
   });
   it("default attribute value for decimal", async () => {
-    // Verify Change 2: column.default "2.789" is deserialized through DecimalType so
-    // the model default is the typed decimal string, not the raw DB string.
+    // Attribute.fromDatabase passes raw column default "2.789" through type.deserialize,
+    // so the model default is the rounded decimal "2.79", not the raw DB string.
     const { DecimalType } = await import("@blazetrails/activemodel");
     const decimalType = new DecimalType({ precision: 5, scale: 2 });
     const mockAdapter = {

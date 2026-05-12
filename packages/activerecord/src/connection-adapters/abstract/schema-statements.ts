@@ -159,6 +159,7 @@ export class SchemaStatements {
     }
     const ifExists = options.ifExists ? " IF EXISTS" : "";
     for (const name of tableNames) {
+      this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, name);
       await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qt(name)}`);
     }
   }

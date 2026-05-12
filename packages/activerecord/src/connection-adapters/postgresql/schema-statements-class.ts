@@ -14,7 +14,9 @@ export class PostgreSQLSchemaStatements extends SchemaStatements {
     const ifExists = options.ifExists ? " IF EXISTS" : "";
     const cascade = options.force === "cascade" ? " CASCADE" : "";
     for (const name of tableNames) {
-      await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qt(name)}${cascade}`);
+      this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, name);
     }
+    const quoted = tableNames.map((n) => this._qt(n)).join(", ");
+    await this.adapter.executeMutation(`DROP TABLE${ifExists} ${quoted}${cascade}`);
   }
 }

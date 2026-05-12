@@ -1278,6 +1278,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return false;
   }
 
+  /** @internal */
   static newClient(config: mysql.PoolOptions & MysqlAdapterOptions, initSql: string): mysql.Pool {
     // With supportBigNumbers:true, mysql2 returns a decimal string for BIGINT
     // values with ≥15 digits (i.e. ≥ 10^14) where parseInt would lose precision,
@@ -1399,10 +1400,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 
   // Mirrors AbstractMysqlAdapter#configure_connection.
-  // Returns the comma-separated SET clause list (without the SET keyword) for
-  // wait_timeout, sql_mode (per strict flag), and arbitrary session variables.
-  // The caller prepends additional clauses (e.g. time_zone) so everything is
-  // sent as one atomic SET statement.
+  // Builds and returns the full SET statement (including the SET keyword and time_zone)
+  // for wait_timeout, sql_mode (per strict flag), and arbitrary session variables.
+  // Called before createPool so a validation throw doesn't leak a live pool.
   /** @internal */
   private _buildConfigureConnectionClauses(): string {
     const { strict, waitTimeout, variables: configVars } = this._poolConfig;

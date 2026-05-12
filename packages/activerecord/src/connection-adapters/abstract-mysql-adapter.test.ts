@@ -174,7 +174,7 @@ describe("AbstractMysqlAdapter quoting consistency — quote vs quoteString", ()
     expect(result).toBe("hello");
   });
 
-  it("adapter.quote strips injection attempt — single quote, backslash, control chars", async () => {
+  it("adapter.quote escapes injection attempt — single quote, backslash, control chars", async () => {
     const adapter = await makeAdapter();
     const injection = "'; DROP TABLE users; --";
     const quoted = adapter.quote(injection);

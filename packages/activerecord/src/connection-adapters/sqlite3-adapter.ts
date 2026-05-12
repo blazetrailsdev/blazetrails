@@ -2115,11 +2115,15 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     }
     // Best-effort: set DQS for drivers that support it (e.g. node:sqlite with a
     // build that exposes SQLITE_DBCONFIG_DQS_*). better-sqlite3 compiles SQLite
-    // with SQLITE_DQS=0 and does not recognise these pragmas, so DQS is always
-    // off in that driver regardless of the strict setting.
+    // with SQLITE_DQS=0 and silently ignores these pragmas (returns []); other
+    // drivers may throw on unrecognised pragmas, so we guard with try/catch.
     const dqsValue = this._strict ? "OFF" : "ON";
-    this.driver.pragma(`dqs_ddl = ${dqsValue}`);
-    this.driver.pragma(`dqs_dml = ${dqsValue}`);
+    try {
+      this.driver.pragma(`dqs_ddl = ${dqsValue}`);
+      this.driver.pragma(`dqs_dml = ${dqsValue}`);
+    } catch {
+      // Pragma unsupported by this driver build — DQS state is driver-defined.
+    }
     const pragmas = (this._config as SQLite3AdapterOptions).pragmas;
     if (pragmas) {
       // Validate pragma name is a safe SQLite identifier before interpolating.

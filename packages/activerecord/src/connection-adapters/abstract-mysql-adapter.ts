@@ -214,7 +214,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
    * MySQL dialect overrides — backtick identifiers and integer bool
    * coercion. Matches Rails:
    *
-   * - `quote_column_name` / `quote_table_name` — backticks
+   * - `quote_column_name` / `quote_table_name` / `quote_identifier` — backticks
    *   (`mysql/quoting.rb:48-53`).
    * - `unquoted_true` / `unquoted_false` → `1` / `0`
    *   (`mysql/quoting.rb:72-77`).
@@ -223,10 +223,9 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
    * these — it inherits `"TRUE"`/`"FALSE"` from `abstract/quoting.rb:166`.
    * Trails MySQL's per-module standalone returns `"1"`/`"0"` (a
    * pre-existing trails-vs-Rails divergence; not addressed here). We
-   * override on the adapter so `quote(true)` and `quotedTrue()` agree
-   * (both `"1"` via the per-module standalone). Without the override
-   * the adapter
-   * would inherit AbstractAdapter#quotedTrue (`"TRUE"`) while
+   * assign them here so `quote(true)` and `quotedTrue()` agree (both
+   * `"1"` via the per-module standalone). Without the assignment the
+   * adapter would inherit AbstractAdapter#quotedTrue (`"TRUE"`) while
    * `quote()` returns `"1"`, breaking call sites that switch between
    * the two through the Quoting interface.
    */

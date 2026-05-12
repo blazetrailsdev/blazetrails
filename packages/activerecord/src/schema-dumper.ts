@@ -41,6 +41,7 @@ export interface ColumnInfo {
   primaryKey?: boolean;
   null?: boolean;
   default?: unknown;
+  defaultFunction?: string | null;
   limit?: number | null;
   precision?: number | null;
   scale?: number | null;
@@ -328,6 +329,7 @@ class AdapterSchemaSource implements SchemaSource {
       primaryKey: col.primaryKey,
       null: col.null,
       default: col.default,
+      defaultFunction: (col as any).defaultFunction ?? null,
       limit: col.limit ?? undefined,
       precision: col.precision === undefined ? undefined : col.precision,
       scale: col.scale ?? undefined,
@@ -680,7 +682,13 @@ export class SchemaDumper {
     const stripped = this.removePrefixAndSuffix(tableName);
 
     const tableOpts: Record<string, unknown> = {};
-    if (!hasId) tableOpts.id = false;
+    if (!hasId) {
+      tableOpts.id = false;
+    } else if (pkColumn && pkColumn.type === "uuid") {
+      tableOpts.id = "uuid";
+      const pkDefault = pkColumn.defaultFunction ?? cleanDefault(pkColumn.default);
+      tableOpts.default = pkDefault == null ? null : pkDefault;
+    }
     tableOpts.force = "cascade";
     const optStr = `{ ${this.formatOptions(tableOpts)} }`;
 

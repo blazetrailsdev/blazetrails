@@ -393,7 +393,7 @@ async function autosaveHasMany(record: Base, assoc: AssociationDefinition): Prom
       continue;
     }
     if (child.isNewRecord() || child.changed) {
-      const saved = await saveCollectionChild(record, inst, assoc, child);
+      const saved = await _insertCollectionRecord(record, inst, assoc, child);
       if (!saved) {
         propagateErrors(record, child, assoc.name);
         return false;
@@ -414,7 +414,7 @@ async function autosaveHasMany(record: Base, assoc: AssociationDefinition): Prom
  *
  * @internal
  */
-async function saveCollectionChild(
+async function _insertCollectionRecord(
   record: Base,
   inst: any,
   assoc: AssociationDefinition,
@@ -424,10 +424,10 @@ async function saveCollectionChild(
     inst.setInverseInstance?.(child);
     return !!(await inst.insertRecord(child, false, false));
   }
-  return saveCollectionChildFallback(record, assoc, child);
+  return _insertCollectionRecordFallback(record, assoc, child);
 }
 
-async function saveCollectionChildFallback(
+async function _insertCollectionRecordFallback(
   record: Base,
   assoc: AssociationDefinition,
   child: Base,
@@ -566,7 +566,7 @@ async function autosaveHabtm(record: Base, assoc: AssociationDefinition): Promis
       continue;
     }
     if (child.isNewRecord() || child.changed) {
-      const saved = await saveCollectionChild(record, inst, assoc, child);
+      const saved = await _insertCollectionRecord(record, inst, assoc, child);
       if (!saved) {
         propagateErrors(record, child, assoc.name);
         return false;

@@ -427,13 +427,19 @@ async function autosaveHasMany(record: Base, assoc: AssociationDefinition): Prom
 }
 
 /**
- * Mirrors Rails' `save_collection_association` per-record path:
- * `association.insert_record(record, false)` — the validate:false escape
- * hatch the autosave pre-validation pass already covered. When the
- * Association exposes Rails' `insertRecord`, delegate so subclass-level
- * machinery (`setOwnerAttributes`, counter-cache, `setInverseInstance`)
- * fires; otherwise fall back to the inline FK-write + save path used
- * before #1426 landed Association-object indirection.
+ * Mirrors Rails' `save_collection_association` per-record save dispatch
+ * (autosave_association.rb:442-457):
+ *
+ *   if autosave != false && (new_record_before_save || record.new_record?)
+ *     association.set_inverse_instance(record)
+ *     saved = association.insert_record(record, false)   # NEW INSERT
+ *   elsif autosave
+ *     saved = record.save(validate: false)               # UPDATE
+ *
+ * Only genuine inserts route through `insertRecord` (which fires
+ * `setOwnerAttributes`/counter-cache); already-persisted changed records
+ * use plain `save({validate:false})` so the counter cache isn't
+ * incremented on every update.
  *
  * @internal
  */
@@ -443,6 +449,11 @@ async function _insertCollectionRecord(
   assoc: AssociationDefinition,
   child: Base,
 ): Promise<boolean> {
+  const newRecordBeforeSave = !!(record as any)._newRecordBeforeSave;
+  const isInsert = child.isNewRecord() || newRecordBeforeSave;
+  if (!isInsert) {
+    return !!(await child.save({ validate: false }));
+  }
   if (inst && typeof inst.insertRecord === "function") {
     inst.setInverseInstance?.(child);
     return !!(await inst.insertRecord(child, false, false));

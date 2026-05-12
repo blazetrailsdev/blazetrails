@@ -2441,8 +2441,17 @@ export class Base extends Model {
 
       await flushPendingReplaces(this);
 
-      const autosaveOk = await autosaveChildren(this);
-      if (!autosaveOk) return false;
+      // Mirrors Rails' `around_save_collection_association`: capture
+      // pre-save new-record state so `save_collection_association` can
+      // dispatch insert_record vs save({validate:false}) per
+      // autosave_association.rb:442-457.
+      (this as any)._newRecordBeforeSave = wasNewRecord;
+      try {
+        const autosaveOk = await autosaveChildren(this);
+        if (!autosaveOk) return false;
+      } finally {
+        (this as any)._newRecordBeforeSave = false;
+      }
     }
 
     return saved;

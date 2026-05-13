@@ -1813,6 +1813,38 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /**
+   * Mirrors Rails' `PostgreSQLAdapter#active?` + `AbstractAdapter#verify!`.
+   * Pings the server with a lightweight query; on PG::Error (server-side
+   * disconnect, timeout, pg_terminate_backend) tears down the pool and
+   * reconnects so the next checkout gets a fresh connection.
+   *
+   * @internal
+   */
+  override async verifyBang(): Promise<void> {
+    if (!this._driverPool) {
+      this.reconnect();
+      this.verifiedBang();
+      return;
+    }
+    let client: pg.PoolClient | null = null;
+    try {
+      client = await this._driverPool.connect();
+      await client.query(";");
+      client.release();
+    } catch {
+      if (client) {
+        try {
+          client.release(new Error("verify failed"));
+        } catch {
+          /* ignore */
+        }
+      }
+      this.reconnect();
+    }
+    this.verifiedBang();
+  }
+
+  /**
    * Mirrors Rails' `PostgreSQLAdapter#reset!`. Rails issues ROLLBACK (if in
    * a transaction), DISCARD ALL, then re-runs configure_connection on the
    * single raw connection. pg doesn't expose PQreset; the pool equivalent is

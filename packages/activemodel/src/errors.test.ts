@@ -1178,11 +1178,6 @@ describe("Errors<TBase> type parameter", () => {
     });
   });
 
-  it("default Errors (= object) still compiles", () => {
-    const e = new Errors<object>({} as object);
-    expectTypeOf(e.base).toEqualTypeOf<object | null>();
-  });
-
   it("unparameterized Errors annotation compiles (default = object)", () => {
     // Proves the `= object` default is in effect: the type annotation `Errors`
     // (no type arg) is accepted and `base` resolves to `object | null`.

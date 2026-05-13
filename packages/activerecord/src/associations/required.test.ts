@@ -145,7 +145,9 @@ describe("RequiredAssociationsTest", () => {
     user.isValid();
     const messages = (user as any).errors.fullMessages as string[];
     expect(messages.length).toBeGreaterThan(0);
-    expect(messages.some((m) => m.toLowerCase().includes("profile"))).toBe(true);
+    // Rails translates :required → "must exist"; message includes the association name
+    expect(messages.some((m) => /must exist/i.test(m))).toBe(true);
+    expect(messages.some((m) => /profile/i.test(m))).toBe(true);
   });
 
   it("required belongs_to associations have a correct error message", async () => {

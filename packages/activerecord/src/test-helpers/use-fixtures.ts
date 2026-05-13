@@ -3,6 +3,8 @@ import { defineFixtures } from "./define-fixtures.js";
 import type { DatabaseAdapter } from "../adapter.js";
 import type { Base } from "../base.js";
 
+export { FixtureSet } from "./fixture-set.js";
+
 type BaseClass = typeof Base;
 type FixtureAttrs = Record<string, unknown>;
 
@@ -13,7 +15,7 @@ type FixtureAccessor<T extends BaseClass, K extends string> = {
   all(): InstanceType<T>[];
 };
 
-type UseFixturesResult<M extends FixtureMap> = {
+export type UseFixturesResult<M extends FixtureMap> = {
   [K in keyof M]: M[K] extends [
     infer T extends BaseClass,
     Record<infer N extends string, FixtureAttrs>,
@@ -21,6 +23,16 @@ type UseFixturesResult<M extends FixtureMap> = {
     ? FixtureAccessor<T, N>
     : never;
 };
+
+/** Returns true for "table does not exist" errors from any adapter. */
+function isTableMissingError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return (
+    msg.includes("no such table") || // SQLite
+    msg.includes("doesn't exist") || // MySQL
+    msg.includes("does not exist") // PostgreSQL
+  );
+}
 
 /**
  * Vitest helper that inserts fixture rows in a `beforeEach` and cleans them up in `afterEach`.
@@ -58,8 +70,8 @@ export function useFixtures<M extends FixtureMap>(
         await adapter.executeMutation(
           `DELETE FROM ${adapter.quoteTableName(ModelClass.tableName)}`,
         );
-      } catch {
-        // Best-effort cleanup; if the table is gone, ignore.
+      } catch (e) {
+        if (!isTableMissingError(e)) throw e;
       }
     }
     for (const key of Object.keys(store)) {
@@ -86,19 +98,4 @@ export function useFixtures<M extends FixtureMap>(
     (result as Record<string, unknown>)[key] = accessor;
   }
   return result;
-}
-
-/**
- * A thin class wrapper around `defineFixtures` that satisfies the static
- * `FixtureSet.createFixtures(adapter, ModelClass, data)` call shape expected by
- * the virtual-column test (and mirrors the Rails FixtureSet API surface).
- */
-export class FixtureSet {
-  static async createFixtures<T extends BaseClass, K extends string>(
-    adapter: DatabaseAdapter,
-    ModelClass: T,
-    fixtures: Record<K, FixtureAttrs>,
-  ): Promise<{ [P in K]: InstanceType<T> }> {
-    return defineFixtures(adapter, ModelClass, fixtures);
-  }
 }

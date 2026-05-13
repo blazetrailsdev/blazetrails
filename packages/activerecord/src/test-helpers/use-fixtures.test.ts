@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { useFixtures, FixtureSet } from "./use-fixtures.js";
+import { describe, it, expect, expectTypeOf, vi } from "vitest";
+import { useFixtures } from "./use-fixtures.js";
+import { FixtureSet } from "./fixture-set.js";
+import { Base } from "../base.js";
 import { fixtureId } from "./define-fixtures.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
@@ -71,6 +73,50 @@ describe("useFixtures multi-set", () => {
   it("both sets are accessible", () => {
     expect(topics("rails")).toMatchObject({ id: topicId });
     expect(posts("hello")).toMatchObject({ id: postId });
+  });
+});
+
+// --- useFixtures type contract ---
+
+describe("useFixtures type contract", () => {
+  class Topic extends Base {
+    declare title: string;
+    static {
+      this.tableName = "topics";
+      // Stub findBy so the beforeEach registered by useFixtures doesn't require
+      // the full Relation infrastructure during type-assertion tests.
+      this.findBy = vi.fn(async () => new Topic()) as any;
+    }
+  }
+  class Post extends Base {
+    declare body: string;
+    static {
+      this.tableName = "posts";
+      this.findBy = vi.fn(async () => new Post()) as any;
+    }
+  }
+
+  const { topics, posts } = useFixtures(
+    {
+      topics: [Topic, { first: { title: "First" }, second: { title: "Second" } }],
+      posts: [Post, { welcome: { body: "Hi" } }],
+    },
+    () => makeAdapter() as any,
+  );
+
+  it("accessor return type is narrowed to the model instance type", () => {
+    expectTypeOf<ReturnType<typeof topics>>().toEqualTypeOf<Topic>();
+    expectTypeOf<ReturnType<typeof posts>>().toEqualTypeOf<Post>();
+  });
+
+  it(".all() return type is an array of the model instance type", () => {
+    expectTypeOf<ReturnType<typeof topics.all>>().toEqualTypeOf<Topic[]>();
+    expectTypeOf<ReturnType<typeof posts.all>>().toEqualTypeOf<Post[]>();
+  });
+
+  it("label arg is narrowed to declared fixture names only", () => {
+    expectTypeOf<Parameters<typeof topics>[0]>().toEqualTypeOf<"first" | "second">();
+    expectTypeOf<Parameters<typeof posts>[0]>().toEqualTypeOf<"welcome">();
   });
 });
 

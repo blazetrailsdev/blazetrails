@@ -117,7 +117,7 @@ describe("RequiredAssociationsTest", () => {
     registerModel("RHProfile", RHProfile);
     const user = new RHUser({ name: "test" });
     expect(user.isValid()).toBe(false);
-    expect((user as any).errors.on("rHProfile")).toBeTruthy();
+    expect((user as any).errors.on("rHProfile").length).toBeGreaterThan(0);
   });
   it("required has_one associations have a correct error message", () => {
     const adapter = freshAdapter();

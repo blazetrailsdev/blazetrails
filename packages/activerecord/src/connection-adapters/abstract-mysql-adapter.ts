@@ -467,9 +467,22 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
         "renameIndex requires MySQL >= 5.7.6 or MariaDB >= 10.5.2; upgrade your server to use this feature",
       );
     }
-    await (this as unknown as { executeMutation(sql: string): Promise<number> }).executeMutation(
+    await this._execMutation(
       `ALTER TABLE ${this.quoteTableName(tableName)} RENAME INDEX ` +
         `${this.quoteIdentifier(oldName)} TO ${this.quoteIdentifier(newName)}`,
+    );
+  }
+
+  /**
+   * Execute a DDL/DML statement on the concrete adapter.
+   * AbstractMysqlAdapter itself does not hold a connection; this delegates to
+   * the concrete subclass (Mysql2Adapter, TrilogyAdapter) which implements
+   * executeMutation on DatabaseAdapter.
+   * @internal
+   */
+  protected async _execMutation(sql: string): Promise<void> {
+    await (this as unknown as { executeMutation(sql: string): Promise<number> }).executeMutation(
+      sql,
     );
   }
 
@@ -552,32 +565,13 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     columnName: string | string[],
     options: Record<string, unknown> = {},
   ): Promise<void> {
-    const cols = Array.isArray(columnName) ? columnName : [columnName];
-    const indexName =
-      (options.name as string | undefined) ?? `index_${tableName}_on_${cols.join("_and_")}`;
-    this.schemaStatements().validateIndexLengthBang(tableName, indexName);
-    if (
-      options.ifNotExists &&
-      (await this.schemaStatements().indexExists(tableName, cols, { name: indexName }))
-    ) {
+    const ss = this.schemaStatements();
+    const [idx, algorithmClause, ifNotExists] = ss.addIndexOptions(tableName, columnName, options);
+    if (ifNotExists && (await ss.indexExists(tableName, idx.columns, { name: idx.name }))) {
       return;
     }
-    const idx = new IndexDefinition(tableName, indexName, !!options.unique, cols, {
-      where: options.where as string | undefined,
-      using: options.using as string | undefined,
-      type: options.type as string | undefined,
-      lengths: (options.length ?? {}) as Record<string, number>,
-      orders: (options.order ?? {}) as Record<string, string>,
-      comment: options.comment as string | undefined,
-      include: options.include as string[] | undefined,
-    });
-    const algorithmClause = this.schemaStatements().indexAlgorithm(
-      options.algorithm as string | undefined,
-    );
     const createDef = new CreateIndexDefinition(idx, false, algorithmClause);
-    await (this as unknown as { executeMutation(sql: string): Promise<number> }).executeMutation(
-      new MysqlSchemaCreation().accept(createDef),
-    );
+    await this._execMutation(new MysqlSchemaCreation().accept(createDef));
   }
 
   buildCreateIndexDefinition(

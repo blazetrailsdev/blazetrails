@@ -1,0 +1,15 @@
+// activerecord/test/fixtures/author_addresses.yml
+export const authorAddressFixtureData = {
+  david_address: {
+    id: 1,
+  },
+  david_address_extra: {
+    id: 2,
+  },
+  mary_address: {
+    id: 3,
+  },
+  bob_address: {
+    id: 4,
+  },
+};

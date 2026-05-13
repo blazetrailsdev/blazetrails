@@ -1519,7 +1519,10 @@ export class MigrationContext {
         `CREATE ${unique}INDEX "${indexName}" ON "${name}" (${colsList})`,
       );
       if (!this._indexes.has(name)) this._indexes.set(name, []);
-      const orders = typeof idx.orders === "string" ? { [idx.columns[0]]: idx.orders } : idx.orders;
+      const orders =
+        typeof idx.orders === "string"
+          ? Object.fromEntries(idx.columns.map((c) => [c, idx.orders as string]))
+          : idx.orders;
       this._indexes.get(name)!.push({ ...idx, name: indexName, orders });
     }
   }
@@ -1729,6 +1732,7 @@ export class MigrationContext {
       })
       .join(", ");
     let sql = `CREATE ${uniqueStr}INDEX ${ifNotExistsStr}${this.adapter.quoteIdentifier(indexName)} ON ${this.adapter.quoteTableName(table)} (${colsStr})`;
+    if (an === "postgres" && options?.nullsNotDistinct) sql += " NULLS NOT DISTINCT";
     if (an !== "mysql" && options?.where) sql += ` WHERE ${options.where}`;
     await this.adapter.executeMutation(sql);
     if (!this._indexes.has(table)) this._indexes.set(table, []);

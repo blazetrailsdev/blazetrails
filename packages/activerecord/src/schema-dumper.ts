@@ -357,7 +357,7 @@ class AdapterSchemaSource implements SchemaSource {
       unique: idx.unique,
       name: idx.name,
       where: idx.where,
-      orders: typeof idx.orders === "string" ? undefined : idx.orders,
+      orders: idx.orders,
       nullsNotDistinct: idx.nullsNotDistinct,
     }));
   }

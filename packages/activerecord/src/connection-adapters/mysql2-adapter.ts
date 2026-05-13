@@ -1,6 +1,6 @@
 import mysql from "mysql2/promise";
 import { Notifications } from "@blazetrails/activesupport";
-import { StringType } from "@blazetrails/activemodel";
+import { ArgumentError, StringType } from "@blazetrails/activemodel";
 import type { DatabaseAdapter, ExplainOption, MysqlAdapterOptions } from "../adapter.js";
 import {
   AbstractMysqlAdapter,
@@ -672,6 +672,35 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     }
   }
 
+  // ── Schema DDL ──
+
+  /**
+   * Mirrors Rails' MySQL `drop_table` which emits `DROP TEMPORARY TABLE`
+   * when `temporary: true` is passed. The abstract base omits this keyword.
+   */
+  override async dropTable(
+    ...args:
+      | [string, ...string[]]
+      | [string, ...string[], { ifExists?: boolean; force?: "cascade"; temporary?: boolean }]
+  ): Promise<void> {
+    const ss = this.schemaStatements();
+    const [tableNames, options] = (ss as any)._splitTableNamesAndOptions(args) as [
+      string[],
+      { ifExists?: boolean; force?: "cascade"; temporary?: boolean },
+    ];
+    if (tableNames.length === 0) {
+      throw new ArgumentError("dropTable requires at least one table name");
+    }
+    const temporary = (options as { temporary?: boolean }).temporary ? " TEMPORARY" : "";
+    const ifExists = options.ifExists ? " IF EXISTS" : "";
+    const cascade = options.force === "cascade" ? " CASCADE" : "";
+    const quoted = tableNames.map((n) => this.quoteTableName(n)).join(", ");
+    for (const name of tableNames) {
+      this.schemaCache?.clearDataSourceCacheBang(this.pool, name);
+    }
+    await this.executeMutation(`DROP${temporary} TABLE${ifExists} ${quoted}${cascade}`);
+  }
+
   // ── Schema introspection ──
   // Mirrors Rails' MySQL SchemaStatements (connection_adapters/mysql/
   // schema_statements.rb + abstract_mysql_adapter.rb). All queries
@@ -829,27 +858,18 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 
   /**
-   * Return user-defined indexes for the given table. Trails uses
-   * `information_schema.statistics` (Rails' PG/SQLite parallel shape)
-   * rather than Rails-MySQL's `SHOW KEYS` because the information_schema
-   * query is cross-schema-capable without needing a qualified
-   * `SHOW KEYS FROM schema.table` dance, and the output shape is all
-   * SchemaCache needs (name/columns/unique).
-   *
-   * Functional-index expressions ARE surfaced: on MySQL 8.0.13+
-   * (detected via statisticsHasExpressionColumn) a row with
-   * `column_name IS NULL` carries its expression in `expression`, and
-   * we wrap it in parens in the output column list (matching Rails'
-   * IndexDefinition display). Prefix lengths, per-column orders, and
-   * fulltext/spatial `type` — which Rails' MySQL `indexes` preserves
-   * via IndexDefinition — are intentionally omitted here: SchemaCache
-   * stores indexes as `unknown[]` and nothing in trails reads those
-   * fields yet. When a caller needs the full Rails shape we'll layer
-   * it on.
+   * Return user-defined indexes for the given table. Uses
+   * `information_schema.statistics` (cross-schema-capable) and surfaces
+   * `using` / `type` fields the way Rails' MySQL `indexes` does via
+   * `Index_type`: btree/hash map to `using`, fulltext/spatial map to `type`.
+   * Functional-index expressions are surfaced on MySQL 8.0.13+ (detected
+   * via statisticsHasExpressionColumn).
    */
   async indexes(
     tableName: string,
-  ): Promise<Array<{ name: string; columns: string[]; unique: boolean }>> {
+  ): Promise<
+    Array<{ name: string; columns: string[]; unique: boolean; using?: string; type?: string }>
+  > {
     const { schema, table } = this.parseMysqlName(tableName);
     const hasExpr = await this.statisticsHasExpressionColumn();
     const exprSelect = hasExpr ? "expression AS expr" : "NULL AS expr";
@@ -857,7 +877,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       `SELECT index_name AS name,
               column_name AS col,
               ${exprSelect},
-              non_unique AS non_unique
+              non_unique AS non_unique,
+              index_type AS idx_type
          FROM information_schema.statistics
          WHERE table_schema = COALESCE(?, database())
          AND table_name = ?
@@ -866,7 +887,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       [schema ?? null, table],
     )) as Array<Record<string, unknown>>;
 
-    const byIndex = new Map<string, { columns: string[]; unique: boolean }>();
+    const byIndex = new Map<
+      string,
+      { columns: string[]; unique: boolean; using?: string; type?: string }
+    >();
     for (const r of rows) {
       const name = String((r.name ?? r.NAME ?? r.INDEX_NAME) as string);
       // MySQL 8+ functional indexes store NULL in column_name and the
@@ -887,14 +911,25 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       }
       if (column == null) continue;
       const nonUnique = Number(r.non_unique ?? r.NON_UNIQUE ?? 0);
-      const entry = byIndex.get(name) ?? { columns: [], unique: nonUnique === 0 };
-      entry.columns.push(column);
-      byIndex.set(name, entry);
+      if (!byIndex.has(name)) {
+        const idxType = String(r.idx_type ?? r.IDX_TYPE ?? r.INDEX_TYPE ?? "BTREE").toUpperCase();
+        let using: string | undefined;
+        let type: string | undefined;
+        if (idxType === "FULLTEXT" || idxType === "SPATIAL") {
+          type = idxType.toLowerCase();
+        } else {
+          using = idxType.toLowerCase();
+        }
+        byIndex.set(name, { columns: [], unique: nonUnique === 0, using, type });
+      }
+      byIndex.get(name)!.columns.push(column);
     }
-    return Array.from(byIndex.entries()).map(([name, { columns, unique }]) => ({
+    return Array.from(byIndex.entries()).map(([name, { columns, unique, using, type }]) => ({
       name,
       columns,
       unique,
+      ...(using !== undefined ? { using } : {}),
+      ...(type !== undefined ? { type } : {}),
     }));
   }
 

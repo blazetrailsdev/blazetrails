@@ -1131,8 +1131,8 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     m.registerType(/mediumblob/i, undefined, () => new BinaryType());
     m.registerType(/longtext/i, undefined, () => new TextType());
     m.registerType(/longblob/i, undefined, () => new BinaryType());
-    m.registerType(/^float/i, undefined, () => new FloatType());
-    m.registerType(/^double/i, undefined, () => new FloatType());
+    m.registerType(/^float/i, undefined, () => new FloatType({ limit: 24 }));
+    m.registerType(/^double/i, undefined, () => new FloatType({ limit: 53 }));
     this.registerIntegerType(m, /^bigint/i, { limit: 8 });
     this.registerIntegerType(m, /^int/i, { limit: 4 });
     this.registerIntegerType(m, /^mediumint/i, { limit: 3 });

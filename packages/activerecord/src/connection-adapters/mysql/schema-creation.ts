@@ -8,6 +8,7 @@ import { SchemaCreation as AbstractSchemaCreation } from "../abstract/schema-cre
 import type {
   ReferentialAction,
   ColumnOptions,
+  ColumnType,
   AddColumnDefinition,
 } from "../abstract/schema-definitions.js";
 import {
@@ -119,6 +120,14 @@ export class SchemaCreation extends AbstractSchemaCreation {
       sql += `SET${this.adapter.quoteDefaultExpression(o.default)}`;
     }
     return sql;
+  }
+
+  override typeToSql(type: ColumnType, options: ColumnOptions = {}): string {
+    if (type === "float") {
+      const limit = options.limit as number | undefined;
+      return limit != null ? `float(${limit})` : "float";
+    }
+    return super.typeToSql(type, options);
   }
 
   /** @internal */

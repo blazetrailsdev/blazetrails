@@ -438,6 +438,7 @@ describe("HasOneThroughAssociationsTest", () => {
     const clubs = await EsClub.all().includes("sponsoredMember").toArray();
     expect(clubs).toHaveLength(1);
     const preloaded = (clubs[0] as any)._preloadedAssociations?.get("sponsoredMember");
+    expect(preloaded).toBeDefined();
     expect(preloaded).not.toBeNull();
     expect((preloaded as any).name).toBe("Groucho");
   });

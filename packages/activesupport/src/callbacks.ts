@@ -14,7 +14,7 @@ export interface DefineCallbacksOptions {
    * to halt) or `false` to disable halting entirely. Defaults to halting when a before callback
    * returns `false`.
    */
-  terminator?: ((target: object, fn: () => unknown) => boolean) | false;
+  terminator?: ((target: any, fn: () => unknown) => boolean) | false;
   skipAfterCallbacksIfTerminated?: boolean;
   scope?: string[];
 }

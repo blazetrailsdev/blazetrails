@@ -190,7 +190,7 @@ export class AbstractReflection {
     if (!this.isPolymorphic() && this.hasInverse()) {
       const inverse = this.inverseOf();
       if (inverse == null) {
-        const inverseOf = (this as any).inverseName?.() as string;
+        const inverseOf = this.inverseName() as string;
         throw new InverseOfAssociationNotFoundError((this as any).name, inverseOf);
       }
       if (
@@ -270,6 +270,11 @@ export class AbstractReflection {
   }
 
   inverseOf(): AbstractReflection | null {
+    return null;
+  }
+
+  /** @internal */
+  protected inverseName(): string | null {
     return null;
   }
 
@@ -594,7 +599,7 @@ export class AssociationReflection extends MacroReflection {
   private _inverseNameCache: string | null | undefined = undefined;
   private _inverseOfCache: AssociationReflection | ThroughReflection | null | undefined = undefined;
 
-  private inverseName(): string | null {
+  protected override inverseName(): string | null {
     if (this._inverseNameCache !== undefined) return this._inverseNameCache;
     const explicit = this.options.inverseOf;
     if (explicit !== undefined) {

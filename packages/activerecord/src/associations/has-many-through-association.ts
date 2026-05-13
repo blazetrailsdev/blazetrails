@@ -55,7 +55,9 @@ export class HasManyThroughAssociation extends HasManyAssociation {
     // wrong direction for the build-and-save path.
     const joinRecord = buildThroughRecord(this, record);
     if (joinRecord && (joinRecord as any).changed) {
-      const saved = await (joinRecord as any).save();
+      const saved = raise
+        ? await (joinRecord as any).saveBang({ validate })
+        : await (joinRecord as any).save({ validate });
       if (!saved) return false;
     }
     return true;

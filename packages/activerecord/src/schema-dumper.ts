@@ -611,14 +611,17 @@ export class SchemaDumper {
       if (this.isIgnored(tableName)) continue;
       const columns = this._source.columns(tableName);
       const indexes = this._source.indexes(tableName);
-      const adapterTableOpts = this.fetchTableOptions(tableName);
-      if (
-        columns instanceof Promise ||
-        indexes instanceof Promise ||
-        adapterTableOpts instanceof Promise
-      ) {
+      if (columns instanceof Promise || indexes instanceof Promise) {
         throw new TypeError(
           "SchemaSource.columns()/indexes() returned a Promise while tables() was synchronous. " +
+            "Use the async schema dumper path (make tables() return a Promise) or ensure all schema methods are synchronous.",
+        );
+      }
+      const adapterTableOpts = this.fetchTableOptions(tableName);
+      if (adapterTableOpts instanceof Promise) {
+        void adapterTableOpts.catch(() => {});
+        throw new TypeError(
+          "fetchTableOptions() returned a Promise while tables() was synchronous. " +
             "Use the async schema dumper path (make tables() return a Promise) or ensure all schema methods are synchronous.",
         );
       }

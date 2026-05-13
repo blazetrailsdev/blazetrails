@@ -62,7 +62,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("should property quote string primary keys", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: habtm join query does not quote string PKs in the IN clause
-    // SCOPE: has-and-belongs-to-many-associations.ts — string PK quoting in join SELECT
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — string PK quoting in join SELECT
   });
 
   it("proper usage of primary keys and join table", async () => {
@@ -133,7 +133,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("adding from the project fixed timestamp", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: habtm join records do not write created_at/updated_at; needs timestamp support on join inserts
-    // SCOPE: has-and-belongs-to-many-associations.ts — timestamp columns on join table insert
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — timestamp columns on join table insert
   });
 
   it("adding multiple", async () => {
@@ -482,7 +482,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("associations with conditions", () => {
     // BLOCKED: associations — scope chain composition
     // ROOT-CAUSE: habtm declaration does not propagate a default scope/condition onto the collection relation
-    // SCOPE: has-and-belongs-to-many-associations.ts — scope: lambda option wiring
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — scope: lambda option wiring
   });
 
   it("find in association", async () => {
@@ -584,7 +584,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("association with extend option", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: extend: option on hasAndBelongsToMany is not implemented; module methods not mixed into CollectionProxy
-    // SCOPE: has-and-belongs-to-many-associations.ts — extend option wiring
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — extend option wiring
   });
 
   it("replace with less", async () => {
@@ -704,7 +704,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("habtm respects select", () => {
     // BLOCKED: associations — scope chain composition
     // ROOT-CAUSE: select: option declared on hasAndBelongsToMany is not forwarded to the SELECT clause
-    // SCOPE: has-and-belongs-to-many-associations.ts / association-scope.ts — select option forwarding
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts / association-scope.ts — select option forwarding
   });
 
   it("habtm selects all columns by default", async () => {
@@ -732,13 +732,13 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("join middle table alias", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: habtm join query does not alias the intermediate join table when needed for disambiguation
-    // SCOPE: has-and-belongs-to-many-associations.ts — join alias in SELECT/JOIN generation
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — join alias in SELECT/JOIN generation
   });
 
   it.skip("join table alias", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: join table is not aliased in the generated SQL; conflicts with same-named tables in self-joins
-    // SCOPE: has-and-belongs-to-many-associations.ts — alias_for join table in Arel join node
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — alias_for join table in Arel join node
   });
 
   it.skip("join with group", () => {
@@ -805,25 +805,25 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("get ids for unloaded associations does not load them", () => {
     // BLOCKED: associations — *_ids reader/writer
     // ROOT-CAUSE: no SELECT-id-only path exists; *_ids reader not implemented on habtm collection
-    // SCOPE: has-and-belongs-to-many-associations.ts — *_ids lazy SELECT-id path
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — *_ids lazy SELECT-id path
   });
 
   it.skip("assign ids", () => {
     // BLOCKED: associations — *_ids reader/writer
     // ROOT-CAUSE: projectIds= writer (replace-all via join table diff) is not implemented
-    // SCOPE: has-and-belongs-to-many-associations.ts — *_ids= replace-all path
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — *_ids= replace-all path
   });
 
   it.skip("assign ids ignoring blanks", () => {
     // BLOCKED: associations — *_ids reader/writer
     // ROOT-CAUSE: projectIds= does not filter blank/"" entries before deriving the id set
-    // SCOPE: has-and-belongs-to-many-associations.ts — blank-reject in *_ids= path
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — blank-reject in *_ids= path
   });
 
   it.skip("singular ids are reloaded after collection concat", () => {
     // BLOCKED: associations — *_ids reader/writer
     // ROOT-CAUSE: projectIds cache is not invalidated when records are appended via << / push
-    // SCOPE: has-and-belongs-to-many-associations.ts — ids cache reset on collection mutation
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — ids cache reset on collection mutation
   });
 
   it.skip("scoped find on through association doesnt return read only records", () => {
@@ -974,19 +974,19 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("has and belongs to many in a namespaced model pointing to a namespaced model", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: className resolution for namespaced models (e.g. "MyModule::Project") not handled in habtm lookup
-    // SCOPE: has-and-belongs-to-many-associations.ts — namespace-aware className resolution
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — namespace-aware className resolution
   });
 
   it.skip("has and belongs to many in a namespaced model pointing to a non namespaced model", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: cross-namespace className resolution (namespaced owner → top-level target) not handled
-    // SCOPE: has-and-belongs-to-many-associations.ts — cross-namespace className resolution
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — cross-namespace className resolution
   });
 
   it.skip("redefine habtm", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: calling hasAndBelongsToMany twice for the same name does not replace the prior declaration
-    // SCOPE: has-and-belongs-to-many-associations.ts — redefinition/overwrite semantics
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — redefinition/overwrite semantics
   });
 
   it.skip("habtm with reflection using class name and fixtures", () => {
@@ -998,7 +998,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("with symbol class name", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: Ruby allows class_name: :Project (symbol); TS port only accepts string — symbol coercion not handled
-    // SCOPE: has-and-belongs-to-many-associations.ts — className coercion from symbol-like value
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — className coercion from symbol-like value
   });
 
   it.skip("alternate database", () => {
@@ -1022,7 +1022,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("has and belongs to many is usable with belongs to required by default", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: belongs_to_required_by_default config not consulted when habtm creates its implicit belongs_to side
-    // SCOPE: has-and-belongs-to-many-associations.ts — config awareness for required-by-default belongs_to
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — config awareness for required-by-default belongs_to
   });
 
   it("association name is the same as join table name", async () => {
@@ -1065,7 +1065,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
   it.skip("has and belongs to many while partial inserts false", () => {
     // BLOCKED: associations — habtm
     // ROOT-CAUSE: habtm join insert does not respect partial_inserts: false config (should INSERT all columns)
-    // SCOPE: has-and-belongs-to-many-associations.ts — partial_inserts config on join table INSERT
+    // SCOPE: associations/builder/has-and-belongs-to-many.ts — partial_inserts config on join table INSERT
   });
 
   it("has and belongs to many with belongs to", async () => {

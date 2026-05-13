@@ -75,6 +75,11 @@ import {
 } from "./attribute-registration.js";
 import { _toPartialPath } from "./conversion.js";
 
+/** Args accepted by `Model.normalizes` — attributes, transform fn, and optional options. */
+export type NormalizesArgs =
+  | [...string[], (value: unknown) => unknown]
+  | [...string[], (value: unknown) => unknown, { applyToNil?: boolean }];
+
 /**
  * Anything `validates_with` accepts: a full `Validator`/`EachValidator`
  * subclass, or any class that just implements `validate(record)`. Used by
@@ -195,11 +200,7 @@ export class Model {
    * Example:
    *   User.normalizes("email", (v) => typeof v === "string" ? v.trim().toLowerCase() : v);
    */
-  static normalizes(...args: [...string[], (value: unknown) => unknown]): void;
-  static normalizes(
-    ...args: [...string[], (value: unknown) => unknown, { applyToNil?: boolean }]
-  ): void;
-  static normalizes(...args: unknown[]): void {
+  static normalizes(...args: NormalizesArgs): void {
     if (!Object.prototype.hasOwnProperty.call(this, "_normalizations")) {
       // Deep copy parent normalizations for stacking
       this._normalizations = new Map();

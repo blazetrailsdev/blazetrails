@@ -611,7 +611,12 @@ export class SchemaDumper {
       if (this.isIgnored(tableName)) continue;
       const columns = this._source.columns(tableName);
       const indexes = this._source.indexes(tableName);
-      if (columns instanceof Promise || indexes instanceof Promise) {
+      const adapterTableOpts = this.fetchTableOptions(tableName);
+      if (
+        columns instanceof Promise ||
+        indexes instanceof Promise ||
+        adapterTableOpts instanceof Promise
+      ) {
         throw new TypeError(
           "SchemaSource.columns()/indexes() returned a Promise while tables() was synchronous. " +
             "Use the async schema dumper path (make tables() return a Promise) or ensure all schema methods are synchronous.",
@@ -619,7 +624,13 @@ export class SchemaDumper {
       }
       this.tableName = tableName;
       try {
-        this.emitTable(lines, tableName, columns as ColumnInfo[], indexes as IndexInfo[]);
+        this.emitTable(
+          lines,
+          tableName,
+          columns as ColumnInfo[],
+          indexes as IndexInfo[],
+          adapterTableOpts,
+        );
         lines.push("");
       } finally {
         this.tableName = undefined;
@@ -673,7 +684,9 @@ export class SchemaDumper {
   }
 
   /** @internal */
-  protected async fetchTableOptions(_tableName: string): Promise<Record<string, unknown>> {
+  protected fetchTableOptions(
+    _tableName: string,
+  ): Record<string, unknown> | Promise<Record<string, unknown>> {
     return {};
   }
 

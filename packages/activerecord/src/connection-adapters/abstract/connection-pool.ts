@@ -675,7 +675,7 @@ export class ConnectionPool implements ReapablePool {
       lease.connection = this.checkout();
       return runWithConn();
     } catch (err) {
-      if (err instanceof ConnectionTimeoutError && "checkoutTimeout" in options) {
+      if (err instanceof ConnectionTimeoutError && options.checkoutTimeout !== undefined) {
         // Pool saturated and caller explicitly opted in — wait for a free connection.
         return this.checkoutAsync(options.checkoutTimeout).then(
           (conn) => {

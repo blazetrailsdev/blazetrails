@@ -1832,7 +1832,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this._client = null;
       client.query("ROLLBACK").then(
         () => client.release(),
-        (err) => client.release(err instanceof Error ? err : new Error(String(err))),
+        (err) => client.release(toError(err)),
       );
     }
     this.reconnect();

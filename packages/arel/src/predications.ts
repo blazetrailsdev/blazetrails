@@ -189,9 +189,12 @@ export const Predications = {
     const range = parseRange(beginOrRange, end, excludeEnd);
     return betweenFromRange(this, range);
   } as {
-    (this: PredicationHost, range: readonly [unknown, unknown]): Node;
-    (this: PredicationHost, range: { begin: unknown; end: unknown; excludeEnd?: boolean }): Node;
-    (this: PredicationHost, begin: unknown, end: unknown, excludeEnd?: boolean): Node;
+    (this: Node & PredicationHost, range: readonly [unknown, unknown]): Node;
+    (
+      this: Node & PredicationHost,
+      range: { begin: unknown; end: unknown; excludeEnd?: boolean },
+    ): Node;
+    (this: Node & PredicationHost, begin: unknown, end: unknown, excludeEnd?: boolean): Node;
   },
 
   notBetween: function (
@@ -203,9 +206,12 @@ export const Predications = {
     const range = parseRange(beginOrRange, end, excludeEnd);
     return notBetweenFromRange(this, range);
   } as {
-    (this: PredicationHost, range: readonly [unknown, unknown]): Node;
-    (this: PredicationHost, range: { begin: unknown; end: unknown; excludeEnd?: boolean }): Node;
-    (this: PredicationHost, begin: unknown, end: unknown, excludeEnd?: boolean): Node;
+    (this: Node & PredicationHost, range: readonly [unknown, unknown]): Node;
+    (
+      this: Node & PredicationHost,
+      range: { begin: unknown; end: unknown; excludeEnd?: boolean },
+    ): Node;
+    (this: Node & PredicationHost, begin: unknown, end: unknown, excludeEnd?: boolean): Node;
   },
 
   isNull(this: Node & PredicationHost): Equality {

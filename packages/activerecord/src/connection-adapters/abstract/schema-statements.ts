@@ -39,6 +39,19 @@ import { SchemaDumper } from "./schema-dumper.js";
 
 export { assertSchemaAdapter } from "./assert-schema-adapter.js";
 
+/** Options accepted by `createJoinTable`. Extends the `createTable` option set with join-specific keys. */
+export type JoinTableOptions = {
+  tableName?: string;
+  columnOptions?: Record<string, unknown>;
+  id?: boolean | "uuid";
+  force?: boolean | "cascade";
+  ifNotExists?: boolean;
+  options?: string;
+  comment?: string;
+  temporary?: boolean;
+  as?: string;
+};
+
 /** @internal */
 function expandIndexOption<T>(opt: Record<string, T> | T, columns: string[]): Record<string, T> {
   if (typeof opt === "object" && opt !== null) return opt as Record<string, T>;
@@ -580,16 +593,10 @@ export class SchemaStatements {
   async createJoinTable(
     table1: string,
     table2: string,
-    options?:
-      | { tableName?: string; columnOptions?: Record<string, unknown>; [key: string]: unknown }
-      | ((t: TableDefinition) => void),
+    options?: JoinTableOptions | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
-    let opts: {
-      tableName?: string;
-      columnOptions?: Record<string, unknown>;
-      [key: string]: unknown;
-    } = {};
+    let opts: JoinTableOptions = {};
     let definer: ((t: TableDefinition) => void) | undefined;
     if (typeof options === "function") {
       definer = options;
@@ -598,35 +605,16 @@ export class SchemaStatements {
       definer = fn;
     }
     const tableName = this.findJoinTableName(table1, table2, opts);
-    const {
-      columnOptions = {},
-      tableName: _t,
-      force,
-      ifNotExists,
-      options: tableOptions,
-      comment,
-      temporary,
-    } = opts;
+    const { columnOptions = {}, tableName: _t, ...tableOpts } = opts;
     const mergedColOpts = { null: false, index: false, ...columnOptions };
     const t1Ref = this.referenceNameForTable(table1);
     const t2Ref = this.referenceNameForTable(table2);
 
-    await this.createTable(
-      tableName,
-      {
-        id: false,
-        ...(force !== undefined && { force: force as boolean | "cascade" }),
-        ...(ifNotExists !== undefined && { ifNotExists: ifNotExists as boolean }),
-        ...(tableOptions !== undefined && { options: tableOptions as string }),
-        ...(comment !== undefined && { comment: comment as string }),
-        ...(temporary !== undefined && { temporary: temporary as boolean }),
-      },
-      (t) => {
-        t.references(t1Ref, mergedColOpts);
-        t.references(t2Ref, mergedColOpts);
-        if (definer) definer(t);
-      },
-    );
+    await this.createTable(tableName, { ...tableOpts, id: false }, (t) => {
+      t.references(t1Ref, mergedColOpts);
+      t.references(t2Ref, mergedColOpts);
+      if (definer) definer(t);
+    });
   }
 
   async dropJoinTable(

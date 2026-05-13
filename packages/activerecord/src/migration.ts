@@ -15,6 +15,7 @@ import {
 import {
   SchemaStatements,
   assertSchemaAdapter,
+  type JoinTableOptions,
 } from "./connection-adapters/abstract/schema-statements.js";
 import { CommandRecorder } from "./migration/command-recorder.js";
 import { SchemaMigration } from "./schema-migration.js";
@@ -928,9 +929,7 @@ export abstract class Migration {
   async createJoinTable(
     table1: string,
     table2: string,
-    options?:
-      | { tableName?: string; columnOptions?: Record<string, unknown>; [key: string]: unknown }
-      | ((t: TableDefinition) => void),
+    options?: JoinTableOptions | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
     if (this._recording) {
@@ -1478,6 +1477,20 @@ export class MigrationContext {
     });
     if (fn) fn(td);
     await this.adapter.executeMutation(td.toSql());
+    if (options?.comment != null) {
+      const adapterWithComments = this.adapter as {
+        supportsComments?: () => boolean;
+        supportsCommentsInCreate?: () => boolean;
+        changeTableComment?: (name: string, comment: string | null) => Promise<void>;
+      };
+      if (
+        adapterWithComments.supportsComments?.() &&
+        !adapterWithComments.supportsCommentsInCreate?.() &&
+        typeof adapterWithComments.changeTableComment === "function"
+      ) {
+        await adapterWithComments.changeTableComment(name, options.comment);
+      }
+    }
     this._tables.add(name);
     const cols = new Set<string>();
     for (const col of td.columns) {

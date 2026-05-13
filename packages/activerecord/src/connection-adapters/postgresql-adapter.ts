@@ -59,7 +59,7 @@ import {
 } from "../errors.js";
 import { AbstractAdapter } from "./abstract-adapter.js";
 import { PostgreSQLSchemaStatements } from "./postgresql/schema-statements-class.js";
-import type { SchemaStatements } from "./abstract/schema-statements.js";
+import type { SchemaStatements, JoinTableOptions } from "./abstract/schema-statements.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
 import {
   transactionIsolationLevels,
@@ -2882,16 +2882,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async createJoinTable(
     table1: string,
     table2: string,
-    options?:
-      | { tableName?: string; columnOptions?: Record<string, unknown>; [key: string]: unknown }
-      | ((t: AbstractTableDefinition) => void),
+    options?: JoinTableOptions | ((t: AbstractTableDefinition) => void),
     fn?: (t: AbstractTableDefinition) => void,
   ): Promise<void> {
-    let opts: {
-      tableName?: string;
-      columnOptions?: Record<string, unknown>;
-      [key: string]: unknown;
-    } = {};
+    let opts: JoinTableOptions = {};
     let definer: ((t: AbstractTableDefinition) => void) | undefined;
     if (typeof options === "function") {
       definer = options;
@@ -2900,35 +2894,16 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       definer = fn;
     }
     const joinName = opts.tableName ?? deriveJoinTableName(table1, table2);
-    const {
-      columnOptions = {},
-      tableName: _t,
-      force,
-      ifNotExists,
-      options: tableOptions,
-      comment,
-      temporary,
-    } = opts;
+    const { columnOptions = {}, tableName: _t, ...tableOpts } = opts;
     const mergedColOpts = { null: false, index: false, ...columnOptions };
     const ss = this.schemaStatements(this as unknown as DatabaseAdapter);
     const t1Ref = ss.referenceNameForTable(table1);
     const t2Ref = ss.referenceNameForTable(table2);
-    await ss.createTable(
-      joinName,
-      {
-        id: false,
-        ...(force !== undefined && { force: force as boolean | "cascade" }),
-        ...(ifNotExists !== undefined && { ifNotExists: ifNotExists as boolean }),
-        ...(tableOptions !== undefined && { options: tableOptions as string }),
-        ...(comment !== undefined && { comment: comment as string }),
-        ...(temporary !== undefined && { temporary: temporary as boolean }),
-      },
-      (td) => {
-        td.references(t1Ref, mergedColOpts);
-        td.references(t2Ref, mergedColOpts);
-        if (definer) definer(td as unknown as AbstractTableDefinition);
-      },
-    );
+    await ss.createTable(joinName, { ...tableOpts, id: false }, (td) => {
+      td.references(t1Ref, mergedColOpts);
+      td.references(t2Ref, mergedColOpts);
+      if (definer) definer(td as unknown as AbstractTableDefinition);
+    });
   }
 
   // PG callback-first signature diverges from the abstract base; harmonize in a follow-up.

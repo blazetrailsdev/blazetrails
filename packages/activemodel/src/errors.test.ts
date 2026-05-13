@@ -1171,4 +1171,48 @@ describe("Errors<TBase> type parameter", () => {
     const e = new Errors<object>({} as object);
     expectTypeOf(e.base).toEqualTypeOf<object | null>();
   });
+
+  it("unparameterized Errors annotation compiles (default = object)", () => {
+    // Proves the `= object` default is in effect: the type annotation `Errors`
+    // (no type arg) is accepted and `base` resolves to `object | null`.
+    const e: Errors = new Errors({} as object);
+    expectTypeOf(e.base).toEqualTypeOf<object | null>();
+  });
+
+  it("where() type callback receives TBase | null", () => {
+    const e = new Errors<User>({ name: "Alice", age: 30 });
+    e.where("name", (record, _opts) => {
+      expectTypeOf(record).toEqualTypeOf<User | null>();
+      return "invalid";
+    });
+  });
+
+  it("copyBang accepts Errors<U> for a different U", () => {
+    interface Post {
+      title: string;
+    }
+    const userErrors = new Errors<User>({ name: "Alice", age: 30 });
+    const postErrors = new Errors<Post>({ title: "Hello" });
+    // Must compile: cross-model copy is valid (Rails copy! just rebinds base).
+    expectTypeOf(userErrors.copyBang<Post>).toBeFunction();
+    userErrors.copyBang(postErrors);
+  });
+
+  it("mergeBang accepts Errors<U> for a different U", () => {
+    interface Post {
+      title: string;
+    }
+    const userErrors = new Errors<User>({ name: "Alice", age: 30 });
+    const postErrors = new Errors<Post>({ title: "Hello" });
+    expectTypeOf(userErrors.mergeBang<Post>).toBeFunction();
+    userErrors.mergeBang(postErrors);
+  });
+
+  it("normalizeArguments() type callback receives TBase | null", () => {
+    const e = new Errors<User>({ name: "Alice", age: 30 });
+    e.normalizeArguments("name", (record, _opts) => {
+      expectTypeOf(record).toEqualTypeOf<User | null>();
+      return "invalid";
+    });
+  });
 });

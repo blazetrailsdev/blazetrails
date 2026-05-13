@@ -1449,6 +1449,8 @@ export class MigrationContext {
       ifNotExists?: boolean;
       id?: boolean | "uuid";
       default?: unknown;
+      options?: string;
+      comment?: string;
     },
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
@@ -1469,6 +1471,8 @@ export class MigrationContext {
     const td = new TableDefinition(name, {
       id: options?.id,
       default: options?.default,
+      options: options?.options,
+      comment: options?.comment,
       adapterName: this._adapterName,
       adapter: this.adapter,
     });

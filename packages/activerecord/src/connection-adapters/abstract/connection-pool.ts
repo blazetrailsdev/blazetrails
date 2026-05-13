@@ -619,28 +619,37 @@ export class ConnectionPool implements ReapablePool {
     // Track whether we acquired the connection here (vs it being pre-leased).
     const wasPreLeased = !!lease.connection;
 
+    const cleanup = () => {
+      restoreSticky();
+      if (!wasPreLeased && !lease.sticky) this.releaseConnection();
+    };
+
     // Wrap fn execution + cleanup into one place to avoid duplication across paths.
     const runFn = (): Promise<T> => {
       let result: T | Promise<T>;
       try {
         result = fn(lease.connection!);
       } catch (err) {
-        restoreSticky();
-        if (!wasPreLeased && !lease.sticky) this.releaseConnection();
+        cleanup();
         return Promise.reject(err) as Promise<T>;
       }
-      return Promise.resolve(result).then(
-        (v) => {
-          restoreSticky();
-          if (!wasPreLeased && !lease.sticky) this.releaseConnection();
-          return v;
-        },
-        (e) => {
-          restoreSticky();
-          if (!wasPreLeased && !lease.sticky) this.releaseConnection();
-          throw e;
-        },
-      );
+      // For async callbacks, defer cleanup until the returned Promise settles.
+      // For sync callbacks, run cleanup immediately to match the pre-change behaviour
+      // and avoid creating an extra Promise on the common path.
+      if (result !== null && result !== undefined && typeof (result as any).then === "function") {
+        return Promise.resolve(result).then(
+          (v) => {
+            cleanup();
+            return v;
+          },
+          (e) => {
+            cleanup();
+            throw e;
+          },
+        );
+      }
+      cleanup();
+      return Promise.resolve(result as T);
     };
 
     if (lease.connection) {

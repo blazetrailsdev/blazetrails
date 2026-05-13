@@ -360,7 +360,10 @@ class AdapterSchemaSource implements SchemaSource {
       unique: idx.unique,
       name: idx.name,
       where: idx.where,
-      orders: idx.orders,
+      orders:
+        typeof idx.orders === "string"
+          ? Object.fromEntries(idx.columns.map((c) => [c, idx.orders as string]))
+          : idx.orders,
       nullsNotDistinct: idx.nullsNotDistinct,
       using: idx.using,
       lengths: idx.lengths,
@@ -839,7 +842,7 @@ export class SchemaDumper {
     if (index.opclasses !== undefined)
       parts.push(`opclass: ${this.formatIndexParts(index.opclasses)}`);
     if (index.where) parts.push(`where: ${JSON.stringify(index.where)}`);
-    if (index.using) parts.push(`using: ${JSON.stringify(index.using)}`);
+    if (index.using && index.using !== "btree") parts.push(`using: ${JSON.stringify(index.using)}`);
     if (index.nullsNotDistinct) parts.push("nullsNotDistinct: true");
     return parts;
   }

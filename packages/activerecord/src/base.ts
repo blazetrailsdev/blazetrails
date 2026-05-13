@@ -1,5 +1,12 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import { Model, type Type, typeRegistry, pushPendingDecorator } from "@blazetrails/activemodel";
+import {
+  Model,
+  type Type,
+  typeRegistry,
+  pushPendingDecorator,
+  ArgumentError,
+  type CallbackConditions,
+} from "@blazetrails/activemodel";
 import "./type.js"; // Register AR type overrides into AM's type registry
 import {
   Table,
@@ -2934,6 +2941,68 @@ export class Base extends Model {
    */
   static currentTransaction() {
     return _currentTransactionPublic();
+  }
+
+  /**
+   * Mirrors: ActiveRecord::Transactions::ClassMethods#set_callback
+   *
+   * Intercepts `on:` before it reaches the activemodel chain, synthesizing it
+   * into an `if:` predicate that closes over `isTransactionIncludeAnyAction`.
+   * Rails does the same in transactions.rb#set_callback (lines 304–319).
+   */
+  static override afterCommit<T extends typeof Model>(
+    this: T,
+    fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | object,
+    conditions?: CallbackConditions<InstanceType<T>>,
+  ): void {
+    if (conditions?.on !== undefined) {
+      const fireOn = (Array.isArray(conditions.on) ? conditions.on : [conditions.on]) as string[];
+      const invalid = fireOn.filter((a) => a !== "create" && a !== "update" && a !== "destroy");
+      if (invalid.length > 0) {
+        throw new ArgumentError(
+          `:on conditions for after_commit and after_rollback callbacks have to be one of [:create, :destroy, :update]`,
+        );
+      }
+      const { on: _on, if: existingIf, ...rest } = conditions;
+      const synthIf = (record: InstanceType<T>): boolean =>
+        _isTransactionIncludeAnyAction.call(record as any, fireOn);
+      const combinedIf = existingIf
+        ? (record: InstanceType<T>) => synthIf(record) && existingIf(record)
+        : synthIf;
+      super.afterCommit(fn, { ...rest, if: combinedIf } as CallbackConditions<InstanceType<T>>);
+    } else {
+      super.afterCommit(fn, conditions);
+    }
+  }
+
+  /**
+   * Mirrors: ActiveRecord::Transactions::ClassMethods#set_callback (rollback variant)
+   *
+   * Same `on:` synthesis as afterCommit.
+   */
+  static override afterRollback<T extends typeof Model>(
+    this: T,
+    fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | object,
+    conditions?: CallbackConditions<InstanceType<T>>,
+  ): void {
+    if (conditions?.on !== undefined) {
+      const fireOn = (Array.isArray(conditions.on) ? conditions.on : [conditions.on]) as string[];
+      const invalid = fireOn.filter((a) => a !== "create" && a !== "update" && a !== "destroy");
+      if (invalid.length > 0) {
+        throw new ArgumentError(
+          `:on conditions for after_commit and after_rollback callbacks have to be one of [:create, :destroy, :update]`,
+        );
+      }
+      const { on: _on, if: existingIf, ...rest } = conditions;
+      const synthIf = (record: InstanceType<T>): boolean =>
+        _isTransactionIncludeAnyAction.call(record as any, fireOn);
+      const combinedIf = existingIf
+        ? (record: InstanceType<T>) => synthIf(record) && existingIf(record)
+        : synthIf;
+      super.afterRollback(fn, { ...rest, if: combinedIf } as CallbackConditions<InstanceType<T>>);
+    } else {
+      super.afterRollback(fn, conditions);
+    }
   }
 
   /**

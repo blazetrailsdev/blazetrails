@@ -747,11 +747,13 @@ export function isTransactionIncludeAnyAction(this: Base, actions: string[]): bo
   return actions.some((action) => {
     switch (action) {
       case "create":
-        return this.isPersisted() && !!r._newRecordBeforeLastCommit;
+        return this.isPersisted() && r._newRecordBeforeLastCommit === true;
       case "update":
-        return !(r._newRecordBeforeLastCommit || this.isDestroyed()) && !!r._triggerUpdateCallback;
+        return (
+          !(r._newRecordBeforeLastCommit || this.isDestroyed()) && r._triggerUpdateCallback === true
+        );
       case "destroy":
-        return !!r._triggerDestroyCallback;
+        return r._triggerDestroyCallback === true;
       default:
         return false;
     }

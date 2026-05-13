@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { FixtureSet } from "./use-fixtures.js";
+import { useFixtures, FixtureSet } from "./use-fixtures.js";
 import { fixtureId } from "./define-fixtures.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
@@ -28,6 +28,53 @@ function makeModel(tableName: string, rows: Map<unknown, Record<string, unknown>
     findBy: vi.fn(async (attrs: Record<string, unknown>) => rows.get(attrs[pk]) ?? null),
   } as any;
 }
+
+// --- useFixtures ---
+
+describe("useFixtures", () => {
+  const adapter = makeAdapter();
+  const topicId = fixtureId("rails");
+  const rows = new Map([[topicId, { id: topicId, title: "Rails" }]]);
+  const Topic = makeModel("topics", rows);
+
+  const { topics } = useFixtures({ topics: [Topic, { rails: { title: "Rails" } }] }, () => adapter);
+
+  it("accessor returns the instance by label after beforeEach runs", () => {
+    const t = topics("rails");
+    expect(t).toMatchObject({ id: topicId });
+  });
+
+  it(".all() returns all instances in the set", () => {
+    const all = topics.all();
+    expect(all.length).toBe(1);
+    expect(all[0]).toMatchObject({ id: topicId });
+  });
+});
+
+describe("useFixtures multi-set", () => {
+  const adapter = makeAdapter();
+  const topicId = fixtureId("rails");
+  const postId = fixtureId("hello");
+  const topicRows = new Map([[topicId, { id: topicId, title: "Rails" }]]);
+  const postRows = new Map([[postId, { id: postId, title: "Hello" }]]);
+  const Topic = makeModel("topics", topicRows);
+  const Post = makeModel("posts", postRows);
+
+  const { topics, posts } = useFixtures(
+    {
+      topics: [Topic, { rails: { title: "Rails" } }],
+      posts: [Post, { hello: { title: "Hello" } }],
+    },
+    () => adapter,
+  );
+
+  it("both sets are accessible", () => {
+    expect(topics("rails")).toMatchObject({ id: topicId });
+    expect(posts("hello")).toMatchObject({ id: postId });
+  });
+});
+
+// --- FixtureSet.createFixtures ---
 
 describe("FixtureSet.createFixtures", () => {
   it("returns keyed instances by label", async () => {
@@ -66,10 +113,8 @@ describe("FixtureSet.createFixtures", () => {
     const adapter = makeAdapter();
     const topicId = fixtureId("rails");
     const postId = fixtureId("hello");
-
     const topicRows = new Map([[topicId, { id: topicId, title: "Rails" }]]);
     const postRows = new Map([[postId, { id: postId, title: "Hello" }]]);
-
     const Topic = makeModel("topics", topicRows);
     const Post = makeModel("posts", postRows);
 
@@ -80,7 +125,7 @@ describe("FixtureSet.createFixtures", () => {
     expect(posts.hello).toMatchObject({ id: postId });
   });
 
-  it("emits a DELETE before INSERT so rows are replaced (cross-test isolation)", async () => {
+  it("emits DELETE before INSERT so rows are replaced (cross-test isolation)", async () => {
     const adapter = makeAdapter();
     const id = fixtureId("rails");
     const rows = new Map([[id, { id, title: "Rails" }]]);

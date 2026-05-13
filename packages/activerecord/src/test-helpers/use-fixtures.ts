@@ -52,8 +52,8 @@ export function useFixtures<M extends FixtureMap>(
 
   afterEach(async () => {
     const adapter = getAdapter();
-    // Delete inserted rows for each declared table.
-    for (const [, [ModelClass]] of Object.entries(fixtures)) {
+    // Delete in reverse insertion order to respect FK constraints.
+    for (const [, [ModelClass]] of Object.entries(fixtures).reverse()) {
       try {
         await adapter.execute(`DELETE FROM ${adapter.quoteTableName(ModelClass.tableName)}`, []);
       } catch {
@@ -88,7 +88,7 @@ export function useFixtures<M extends FixtureMap>(
 
 /**
  * A thin class wrapper around `defineFixtures` that satisfies the static
- * `FixtureSet.createFixtures(adapter, name, data)` call shape expected by
+ * `FixtureSet.createFixtures(adapter, ModelClass, data)` call shape expected by
  * the virtual-column test (and mirrors the Rails FixtureSet API surface).
  */
 export class FixtureSet {

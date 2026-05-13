@@ -200,16 +200,15 @@ function constructJoinAttributes(
     sourceRefl.primaryKey ??
     "id";
   const pkArr: string[] = Array.isArray(assocPk) ? assocPk : [assocPk];
-  // compositeQueryConstraintsList falls back to the PK for simple models, which would
-  // incorrectly trigger the "pass object" branch. Only use explicit query_constraints.
-  const explicitConstraints: string[] | null = reflKlass
-    ? queryConstraintsList.call(reflKlass)
-    : null;
-  const compositeConstraints: string[] = explicitConstraints ?? [];
+  // compositeQueryConstraintsList falls back to the PK for simple string PKs, which would
+  // incorrectly trigger the "pass object" branch. queryConstraintsList returns null for
+  // simple single-PK models (avoiding that branch) and the composite PK for CPK models.
+  const queryConstraints: string[] | null = reflKlass ? queryConstraintsList.call(reflKlass) : null;
+  const compositeConstraints: string[] = queryConstraints ?? [];
 
   let joinAttributes: Record<string, unknown>;
   if (
-    explicitConstraints &&
+    queryConstraints &&
     pkArr.length === compositeConstraints.length &&
     pkArr.every((k: string, i: number) => k === compositeConstraints[i]) &&
     !refl.options?.sourceType

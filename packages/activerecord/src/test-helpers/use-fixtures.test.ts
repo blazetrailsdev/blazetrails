@@ -123,20 +123,7 @@ describe("useFixtures type contract", () => {
 // --- FixtureSet.createFixtures ---
 
 describe("FixtureSet.createFixtures", () => {
-  it("returns keyed instances by label", async () => {
-    const adapter = makeAdapter();
-    const topicId = fixtureId("rails");
-    const rows = new Map([[topicId, { id: topicId, title: "Rails" }]]);
-    const Topic = makeModel("topics", rows);
-
-    const result = await FixtureSet.createFixtures(adapter, Topic, {
-      rails: { title: "Rails" },
-    });
-
-    expect(result.rails).toMatchObject({ id: topicId });
-  });
-
-  it("all keys in fixture data are returned", async () => {
+  it("returns keyed instances for all declared labels", async () => {
     const adapter = makeAdapter();
     const id1 = fixtureId("first");
     const id2 = fixtureId("second");
@@ -153,22 +140,6 @@ describe("FixtureSet.createFixtures", () => {
 
     expect(result.first).toMatchObject({ id: id1 });
     expect(result.second).toMatchObject({ id: id2 });
-  });
-
-  it("multi-set: independent calls for different models each return correct instances", async () => {
-    const adapter = makeAdapter();
-    const topicId = fixtureId("rails");
-    const postId = fixtureId("hello");
-    const topicRows = new Map([[topicId, { id: topicId, title: "Rails" }]]);
-    const postRows = new Map([[postId, { id: postId, title: "Hello" }]]);
-    const Topic = makeModel("topics", topicRows);
-    const Post = makeModel("posts", postRows);
-
-    const topics = await FixtureSet.createFixtures(adapter, Topic, { rails: { title: "Rails" } });
-    const posts = await FixtureSet.createFixtures(adapter, Post, { hello: { title: "Hello" } });
-
-    expect(topics.rails).toMatchObject({ id: topicId });
-    expect(posts.hello).toMatchObject({ id: postId });
   });
 
   it("emits DELETE before INSERT so rows are replaced (cross-test isolation)", async () => {

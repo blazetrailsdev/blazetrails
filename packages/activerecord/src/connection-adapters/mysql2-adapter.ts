@@ -841,10 +841,15 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       const charLen = r.char_len ?? r.CHAR_LEN ?? r.CHARACTER_MAXIMUM_LENGTH;
       const numPrec = r.num_precision ?? r.NUM_PRECISION ?? r.NUMERIC_PRECISION;
       const numScale = r.num_scale ?? r.NUM_SCALE ?? r.NUMERIC_SCALE;
+      // character_maximum_length covers string types; for numeric types (float, int, etc.)
+      // it is NULL, so fall back to the type-map limit (e.g. float→24, double→53).
+      const charLimitVal = charLen != null ? Number(charLen) : null;
+      const typeMapLimit =
+        charLimitVal == null ? (this.lookupCastType(sqlType)?.limit ?? null) : null;
       const meta = new SqlTypeMetadata({
         sqlType,
         type: baseType,
-        limit: charLen != null ? Number(charLen) : null,
+        limit: charLimitVal ?? typeMapLimit,
         precision: numPrec != null ? Number(numPrec) : null,
         scale: numScale != null ? Number(numScale) : null,
       });

@@ -103,10 +103,11 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it.skip("build fixture sql", () => {
-      // BLOCKED: adapter-pg — insertFixturesSet calls executeBatch which is not yet implemented
-      // for PostgreSQLAdapter (throws NotImplementedError at database-statements.ts:1627).
-      // ROOT-CAUSE: PostgreSQLAdapter.executeBatch stub needs implementation; unblocks this test.
-      // SCOPE: implement executeBatch for PG (~20 LOC); then wire FixtureSet.createFixtures here.
+      // BLOCKED: adapter-pg — insertFixturesSet dispatches through executeBatch, which falls through
+      // to AbstractAdapter's rawExecute stub (NotImplementedError) because the PG-specific
+      // executeBatch (postgresql/database-statements.ts) is not yet assigned on PostgreSQLAdapter.
+      // ROOT-CAUSE: postgresql-adapter.ts missing `executeBatch = pgExecuteBatch` assignment.
+      // SCOPE: one-line wiring in postgresql-adapter.ts; then wire FixtureSet.createFixtures here.
     });
   });
 });

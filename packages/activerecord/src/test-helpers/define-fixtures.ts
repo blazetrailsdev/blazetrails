@@ -93,18 +93,13 @@ function detectHabtmParts(tableName: string): [string, string] | null {
 interface PolymorphicBelongsTo {
   typeColumn: string;
   idColumn: string;
-  modelClass: BaseClass;
 }
 
 function findPolymorphicRef(modelClass: BaseClass, colName: string): PolymorphicBelongsTo | null {
   const reflections: Record<string, any> = (modelClass as any)._reflections ?? {};
   const refl = reflections[colName];
   if (!refl || refl.macro !== "belongsTo" || !refl.isPolymorphic?.()) return null;
-  return {
-    typeColumn: `${colName}_type`,
-    idColumn: `${colName}_id`,
-    modelClass,
-  };
+  return { typeColumn: `${colName}_type`, idColumn: `${colName}_id` };
 }
 
 type BaseClass = typeof Base;
@@ -123,8 +118,8 @@ type InsertHost = DatabaseStatementsHost &
  *   when the table name matches the `a_b` pattern and both `a` and `b` are registered.
  * - Polymorphic refs: `{ taggable: postInstance }` expands to `taggable_type`/`taggable_id`
  *   when a polymorphic `belongsTo :taggable` reflection exists on the model.
- * - `ref(tableName, label)` works without re-passing the ModelClass once any defineFixtures
- *   call for that table has registered it.
+ * - Each call registers `ModelClass` by `tableName` in an internal registry, available via
+ *   `resolveModelForTable` for use by HABTM detection and future Phase 2 tooling.
  */
 export async function defineFixtures<T extends BaseClass, K extends string>(
   adapter: DatabaseAdapter,
@@ -166,16 +161,16 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
       const poly = findPolymorphicRef(ModelClass, col);
       if (poly && val !== null && typeof val === "object") {
         const instance = val as FixtureAttrs;
-        const instancePk = (instance.constructor as any)?.primaryKey ?? pkCol;
         const instanceClass = (instance as any).constructor as BaseClass | undefined;
+        const instancePk = (instanceClass as any)?.primaryKey ?? pkCol;
         row[poly.idColumn] = instance[typeof instancePk === "string" ? instancePk : pkCol];
-        row[poly.typeColumn] = instanceClass?.name ?? String((instance as any).constructor);
+        row[poly.typeColumn] = instanceClass?.name;
         continue;
       }
 
       // HABTM auto-resolution: string label values for `a_id`/`b_id` columns auto-resolve.
       // "developers_projects" → left="developers", right="projects"; FK cols are
-      // "developer_id" and "project_id" (naive singularize: strip trailing "s").
+      // "developer_id" and "project_id" (singularized via activesupport).
       if (habtmParts && typeof val === "string") {
         const [left, right] = habtmParts;
         const leftSingular = singularize(left);

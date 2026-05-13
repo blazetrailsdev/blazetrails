@@ -219,6 +219,7 @@ export function createFixtures(existingAdapter?: DatabaseAdapter): TestFixtures 
       this.attribute("type", "string");
       this.attribute("firm_id", "integer");
       this.attribute("client_of", "integer");
+      this.attribute("firm_name", "string");
       this.adapter = adapter;
     }
   }

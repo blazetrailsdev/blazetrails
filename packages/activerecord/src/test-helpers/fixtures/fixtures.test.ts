@@ -236,12 +236,16 @@ describe("companyFixtureData", () => {
     expect(companyFixtureData.first_firm.name).toBe("37signals");
   });
 
-  it("first_client is a Client with firm_id cross-ref to first_firm", () => {
+  it("first_client is a Client with firm_id cross-ref to first_firm and self-ref client_of", () => {
     expect(companyFixtureData.first_client.type).toBe("Client");
     const firmRef = companyFixtureData.first_client.firm_id as FixtureRef;
     expect(isFixtureRef(firmRef)).toBe(true);
     expect(firmRef.tableName).toBe("companies");
     expect(firmRef.fixtureName).toBe("first_firm");
+    // client_of: 2 in Rails YAML — first_client's own ID (self-ref; ref() is just ID math)
+    const clientOfRef = companyFixtureData.first_client.client_of as FixtureRef;
+    expect(isFixtureRef(clientOfRef)).toBe(true);
+    expect(clientOfRef.fixtureName).toBe("first_client");
   });
 
   it("rails_core is a DependentFirm", () => {

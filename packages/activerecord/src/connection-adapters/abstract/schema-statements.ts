@@ -581,11 +581,13 @@ export class SchemaStatements {
       definer = fn;
     }
     const tableName = this.findJoinTableName(table1, table2, opts);
+    const { columnOptions = {} } = opts;
     const t1Col = `${this.referenceNameForTable(table1)}_id`;
     const t2Col = `${this.referenceNameForTable(table2)}_id`;
+    const colOpts = { null: false, ...columnOptions } as ColumnOptions;
     await this.createTable(tableName, { id: false }, (t) => {
-      t.integer(t1Col);
-      t.integer(t2Col);
+      t.integer(t1Col, colOpts);
+      t.integer(t2Col, colOpts);
       if (definer) definer(t);
     });
   }

@@ -92,6 +92,7 @@ import {
   type ColumnType,
   type ReferentialAction,
 } from "./abstract/schema-definitions.js";
+import { joinTableName as deriveJoinTableName } from "../migration/join-table.js";
 import { SchemaCreation as PgSchemaCreation } from "./postgresql/schema-creation.js";
 import { SchemaDumper as PgSchemaDumper } from "./postgresql/schema-dumper.js";
 import { pgDatetimeConfig } from "./postgresql/pg-datetime-config.js";
@@ -2889,13 +2890,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       tableName = options.tableName;
       definer = fn;
     }
-    const joinName =
-      tableName ??
-      [table1, table2]
-        .sort()
-        .join("\0")
-        .replace(/^(.*[_.])(.+)\0\1(.+)/, "$1$2_$3")
-        .replaceAll("\0", "_");
+    const joinName = tableName ?? deriveJoinTableName(table1, table2);
     const t1Col = `${singularize(table1.split(".").at(-1) ?? table1)}_id`;
     const t2Col = `${singularize(table2.split(".").at(-1) ?? table2)}_id`;
     await this.createTable(

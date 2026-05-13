@@ -1829,6 +1829,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (this._client) {
       this._cancelAnyRunningQuery();
       const client = this._client;
+      this._releaseStatementPool(client);
       this._client = null;
       client.query("ROLLBACK").then(
         () => client.release(),

@@ -42,13 +42,8 @@ describeIfPg("PostgresqlConnectionTest", () => {
   });
 
   it("connection options", async () => {
-    const url = new URL(PG_TEST_URL);
     const optionsAdapter = new PostgreSQLAdapter({
-      host: url.hostname,
-      port: url.port ? Number(url.port) : 5432,
-      database: url.pathname.slice(1),
-      user: url.username || undefined,
-      password: url.password || undefined,
+      connectionString: PG_TEST_URL,
       options: "-c geqo=off",
     });
     try {

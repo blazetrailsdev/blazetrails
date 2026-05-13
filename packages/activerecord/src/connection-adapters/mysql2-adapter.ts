@@ -44,9 +44,10 @@ class MysqlSchemaStatements extends SchemaStatements {
     const hasOpts = last !== null && last !== undefined && typeof last === "object";
     const opts = (hasOpts ? last : {}) as { temporary?: boolean };
     if (opts.temporary) {
-      return (this.adapter as Mysql2Adapter).dropTable(...(args as [string]));
+      return (this.adapter as Mysql2Adapter).dropTable(...(args as any));
     }
-    return super.dropTable(...(args as [string]));
+
+    return super.dropTable(...(args as any));
   }
 }
 
@@ -706,8 +707,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return dumper;
   }
 
-  override schemaStatements(host?: import("../adapter.js").DatabaseAdapter): MysqlSchemaStatements {
-    return new MysqlSchemaStatements((host ?? this) as import("../adapter.js").DatabaseAdapter);
+  override schemaStatements(host?: DatabaseAdapter): MysqlSchemaStatements {
+    return new MysqlSchemaStatements((host ?? this) as DatabaseAdapter);
   }
 
   // ── Schema DDL ──

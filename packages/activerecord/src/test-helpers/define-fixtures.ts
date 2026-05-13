@@ -156,6 +156,10 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
   registry.set(tableName, ModelClass);
 
   const habtmParts = detectHabtmParts(registry, tableName);
+  // Compute once per defineFixtures call; used for every row and column in the inner loop.
+  const habtmFkCols = habtmParts
+    ? new Set([`${singularize(habtmParts[0])}_id`, `${singularize(habtmParts[1])}_id`])
+    : null;
 
   const labels = Object.keys(fixtures) as K[];
 
@@ -175,47 +179,43 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
       }
 
       // Polymorphic belongs_to expansion: { taggable: instance } → taggable_type + taggable_id.
-      // Skipped when the caller already provided explicit type/id columns (explicit wins).
-      // Only fires for actual model instances — constructor must be a non-Object function so
-      // plain JSON objects and null-prototype objects fall through to the PK-extraction path.
+      // When the caller already provided explicit type/id columns, skip the association key
+      // entirely (don't write it as a spurious column) — explicit values win.
+      // When neither explicit column is present, expand only actual model instances
+      // (constructor must be a non-Object function; plain/null-proto objects fall through).
       const poly = findPolymorphicRef(ModelClass, col);
-      if (
-        poly &&
-        val !== null &&
-        typeof val === "object" &&
-        !(poly.typeColumn in attrs) &&
-        !(poly.idColumn in attrs) &&
-        typeof (val as any).constructor === "function" &&
-        (val as any).constructor !== Object
-      ) {
-        const instance = val as FixtureAttrs;
-        const instanceClass = (instance as any).constructor as BaseClass | undefined;
-        const instancePk = (instanceClass as any)?.primaryKey;
-        if (Array.isArray(instancePk)) {
-          throw new Error(
-            `defineFixtures: polymorphic target "${col}" has a composite primary key — pass explicit ${poly.idColumn} instead`,
-          );
+      if (poly) {
+        const hasExplicit = poly.typeColumn in attrs || poly.idColumn in attrs;
+        if (hasExplicit) continue; // association key omitted; explicit columns handle it
+        if (
+          val !== null &&
+          typeof val === "object" &&
+          typeof (val as any).constructor === "function" &&
+          (val as any).constructor !== Object
+        ) {
+          const instance = val as FixtureAttrs;
+          const instanceClass = (instance as any).constructor as BaseClass | undefined;
+          const instancePk = (instanceClass as any)?.primaryKey;
+          if (Array.isArray(instancePk)) {
+            throw new Error(
+              `defineFixtures: polymorphic target "${col}" has a composite primary key — pass explicit ${poly.idColumn} instead`,
+            );
+          }
+          const instancePkCol = typeof instancePk === "string" ? instancePk : "id";
+          // Mirror Rails' polymorphicName: use static polymorphicName() if defined, else class name.
+          const typeName: string =
+            (instanceClass as any)?.polymorphicName?.() ?? instanceClass?.name ?? "Unknown";
+          row[poly.idColumn] = instance[instancePkCol];
+          row[poly.typeColumn] = typeName;
+          continue;
         }
-        const instancePkCol = typeof instancePk === "string" ? instancePk : "id";
-        // Mirror Rails' polymorphicName: use static polymorphicName() if defined, else class name.
-        const typeName: string =
-          (instanceClass as any)?.polymorphicName?.() ?? instanceClass?.name ?? "Unknown";
-        row[poly.idColumn] = instance[instancePkCol];
-        row[poly.typeColumn] = typeName;
-        continue;
       }
 
       // HABTM auto-resolution: string label values for `a_id`/`b_id` columns auto-resolve.
-      // "developers_projects" → left="developers", right="projects"; FK cols are
-      // "developer_id" and "project_id" (singularized via activesupport).
-      if (habtmParts && typeof val === "string") {
-        const [left, right] = habtmParts;
-        const leftSingular = singularize(left);
-        const rightSingular = singularize(right);
-        if (col === `${leftSingular}_id` || col === `${rightSingular}_id`) {
-          row[col] = fixtureId(val);
-          continue;
-        }
+      // FK column names are pre-computed outside the loop (habtmFkCols).
+      if (habtmFkCols && typeof val === "string" && habtmFkCols.has(col)) {
+        row[col] = fixtureId(val);
+        continue;
       }
 
       if (val !== null && typeof val === "object" && pkCol in val) {

@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
+import { FixtureSet } from "../../test-helpers/fixture-set.js";
 
 const CREATE_TABLE_SQL = `
   CREATE TABLE virtual_columns (
@@ -102,12 +103,12 @@ describeIfPg("PostgreSQLAdapter", () => {
       // prepareColumnOptions for virtual columns. Affects schema_dumping mirror.
     });
 
-    it.skip("build fixture sql", () => {
-      // BLOCKED: adapter-pg — insertFixturesSet dispatches through executeBatch, which falls through
-      // to AbstractAdapter's rawExecute stub (NotImplementedError) because the PG-specific
-      // executeBatch (postgresql/database-statements.ts) is not yet assigned on PostgreSQLAdapter.
-      // ROOT-CAUSE: postgresql-adapter.ts missing `executeBatch = pgExecuteBatch` assignment.
-      // SCOPE: one-line wiring in postgresql-adapter.ts; then wire FixtureSet.createFixtures here.
+    it("build fixture sql", async () => {
+      const fixtures = await FixtureSet.createFixtures(adapter, VirtualColumn, {
+        one: { name: "hello" },
+        two: { name: "world" },
+      });
+      expect(Object.keys(fixtures).length).toBe(2);
     });
   });
 });

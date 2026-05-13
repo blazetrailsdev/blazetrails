@@ -1283,6 +1283,10 @@ export class ThroughReflection extends AbstractReflection {
     return this._delegate.inverseOf();
   }
 
+  protected override inverseName(): string | null {
+    return (this._delegate as any).inverseName();
+  }
+
   sourceReflectionNames(): string[] {
     if (this.options.source) return [this.options.source as string];
     const singular = singularize(this.name);

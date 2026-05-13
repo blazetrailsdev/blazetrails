@@ -756,7 +756,7 @@ describe("HasOneThroughAssociationsTest", () => {
     const membership = await Membership.create({ member_id: member.id, club_id: club1.id });
     // Destroy the membership so it's marked destroyed in memory
     await membership.destroy();
-    expect((membership as any)._destroyed).toBe(true);
+    expect(membership.isDestroyed()).toBe(true);
     // Now create a new through association — should not try to reuse the destroyed record
     const newClub = await createThroughAssociation(member, "club", { name: "New Club" });
     expect(newClub.isPersisted()).toBe(true);

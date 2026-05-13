@@ -581,13 +581,14 @@ export class SchemaStatements {
       definer = fn;
     }
     const tableName = this.findJoinTableName(table1, table2, opts);
-    const { columnOptions = {} } = opts;
-    const t1Col = `${this.referenceNameForTable(table1)}_id`;
-    const t2Col = `${this.referenceNameForTable(table2)}_id`;
-    const colOpts = { null: false, ...columnOptions } as ColumnOptions;
-    await this.createTable(tableName, { id: false }, (t) => {
-      t.integer(t1Col, colOpts);
-      t.integer(t2Col, colOpts);
+    const { columnOptions = {}, tableName: _t, ...rest } = opts;
+    const mergedColOpts = { null: false, index: false, ...columnOptions };
+    const t1Ref = this.referenceNameForTable(table1);
+    const t2Ref = this.referenceNameForTable(table2);
+
+    await this.createTable(tableName, { ...rest, id: false } as any, (t) => {
+      t.references(t1Ref, mergedColOpts);
+      t.references(t2Ref, mergedColOpts);
       if (definer) definer(t);
     });
   }

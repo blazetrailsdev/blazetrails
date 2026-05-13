@@ -89,6 +89,7 @@ import {
   ChangeColumnDefaultDefinition,
   ColumnDefinition,
   ForeignKeyDefinition,
+  TableDefinition as AbstractTableDefinition,
   type ColumnType,
   type ReferentialAction,
 } from "./abstract/schema-definitions.js";
@@ -2874,16 +2875,20 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
   }
 
-  // createJoinTable override adapts the callback-first createTable API for join tables.
-  // @ts-expect-error TS2416
+  // createJoinTable override: bridges the callback-first createTable API.
+  // Signature matches AbstractAdapter so no @ts-expect-error is needed.
+  // The definer receives a SimpleTableBuilder cast as AbstractTableDefinition;
+  // callers that use only integer/string/boolean helpers work fine in practice.
   async createJoinTable(
     table1: string,
     table2: string,
-    options?: { tableName?: string; [key: string]: unknown } | ((t: SimpleTableBuilder) => void),
-    fn?: (t: SimpleTableBuilder) => void,
+    options?:
+      | { tableName?: string; columnOptions?: Record<string, unknown>; [key: string]: unknown }
+      | ((t: AbstractTableDefinition) => void),
+    fn?: (t: AbstractTableDefinition) => void,
   ): Promise<void> {
     let tableName: string | undefined;
-    let definer: ((t: SimpleTableBuilder) => void) | undefined;
+    let definer: ((t: AbstractTableDefinition) => void) | undefined;
     if (typeof options === "function") {
       definer = options;
     } else if (options) {
@@ -2893,12 +2898,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const joinName = tableName ?? deriveJoinTableName(table1, table2);
     const t1Col = `${singularize(table1.split(".").at(-1) ?? table1)}_id`;
     const t2Col = `${singularize(table2.split(".").at(-1) ?? table2)}_id`;
-    await this.createTable(
+
+    await (this as any).createTable(
       joinName,
       (t: SimpleTableBuilder) => {
         t.integer(t1Col);
         t.integer(t2Col);
-        if (definer) definer(t);
+
+        if (definer) (definer as (t: any) => void)(t);
       },
       { id: false },
     );

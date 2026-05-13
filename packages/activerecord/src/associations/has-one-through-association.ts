@@ -33,9 +33,6 @@ export class HasOneThroughAssociation extends HasOneAssociation {
     if (record) (this as any).raiseOnTypeMismatchBang?.(record);
     const assigningAnother = this.target !== record;
     if (assigningAnother || (record as any)?.hasChangesToSave?.()) {
-      if (record) {
-        this.setInverseInstance(record);
-      }
       if (save) {
         // Store pending regardless of owner.isPersisted() — for new owners,
         // persistReplace runs after owner.save() when owner is now persisted.

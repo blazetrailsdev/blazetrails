@@ -31,14 +31,8 @@ import {
 } from "./callbacks.js";
 import { serializableHash, SerializeOptions, coerceForJson } from "./serialization.js";
 import { BlockValidator, EachValidator, Validator as ValidatorBase } from "./validator.js";
-
-/**
- * Anything `validates_with` accepts: a full `Validator`/`EachValidator`
- * subclass, or any class that just implements `validate(record)`. Used by
- * `_validators` / `validators()` / `validatorsOn()` so the stored value
- * type matches what we actually accept at registration.
- */
-type ValidatorLike = ValidatorBase | EachValidator | { validate(record: AnyRecord): void };
+import type { ConditionalOptions, ConditionFn } from "./validator.js";
+import { evaluateCondition } from "./validator.js";
 import {
   AttributeMethodPattern,
   attributeMethodPrefix,
@@ -55,8 +49,6 @@ import {
   attributeWriterMissing as defaultAttributeWriterMissing,
   ArgumentError,
 } from "./attribute-assignment.js";
-import type { ConditionalOptions, ConditionFn, AnyRecord } from "./validator.js";
-import { evaluateCondition } from "./validator.js";
 import { PresenceValidator } from "./validations/presence.js";
 import { AbsenceValidator } from "./validations/absence.js";
 import { LengthValidator } from "./validations/length.js";
@@ -78,8 +70,20 @@ import {
   resolveAttributeName as _resolveAttributeNameHelper,
   resolveTypeName as _resolveTypeNameHelper,
   hookAttributeType as _hookAttributeTypeHelper,
+  type AttributeHostInternals,
 } from "./attribute-registration.js";
 import { _toPartialPath } from "./conversion.js";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRecord = any;
+
+/**
+ * Anything `validates_with` accepts: a full `Validator`/`EachValidator`
+ * subclass, or any class that just implements `validate(record)`. Used by
+ * `_validators` / `validators()` / `validatorsOn()` so the stored value
+ * type matches what we actually accept at registration.
+ */
+type ValidatorLike = ValidatorBase | EachValidator | { validate(record: AnyRecord): void };
 
 /**
  * Model — the base class that bundles Attributes, Validations, Callbacks,
@@ -132,17 +136,17 @@ export class Model {
 
   /** @internal Rails-private helper. */
   static pendingAttributeModifications(): ReturnType<typeof _pendingAttributeModificationsHelper> {
-    return _pendingAttributeModificationsHelper.call(this);
+    return _pendingAttributeModificationsHelper.call(this as unknown as AttributeHostInternals);
   }
 
   /** @internal Rails-private helper. */
   static resetDefaultAttributesBang(): void {
-    _resetDefaultAttributesBangHelper.call(this);
+    _resetDefaultAttributesBangHelper.call(this as unknown as AttributeHostInternals);
   }
 
   /** @internal Rails-private helper. */
   static resolveAttributeName(name: string): string {
-    return _resolveAttributeNameHelper.call(this, name);
+    return _resolveAttributeNameHelper.call(this as unknown as AttributeHostInternals, name);
   }
 
   /** @internal Rails-private helper. */
@@ -150,7 +154,7 @@ export class Model {
     name: string,
     options?: Record<string, unknown>,
   ): import("./type/value.js").Type {
-    return _resolveTypeNameHelper.call(this, name, options);
+    return _resolveTypeNameHelper.call(this as unknown as AttributeHostInternals, name, options);
   }
 
   /** @internal Rails-private helper. */
@@ -158,7 +162,11 @@ export class Model {
     attribute: string,
     type: import("./type/value.js").Type,
   ): import("./type/value.js").Type {
-    return _hookAttributeTypeHelper.call(this, attribute, type);
+    return _hookAttributeTypeHelper.call(
+      this as unknown as AttributeHostInternals,
+      attribute,
+      type,
+    );
   }
 
   static attributeNames(): string[] {

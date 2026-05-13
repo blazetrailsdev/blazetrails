@@ -73,7 +73,7 @@ const NATIVE_DATABASE_TYPES: Record<string, { name: string; limit?: number }> = 
   text: { name: "text" },
   integer: { name: "int" },
   bigint: { name: "bigint" },
-  float: { name: "float" },
+  float: { name: "float", limit: 24 },
   decimal: { name: "decimal" },
   datetime: { name: "datetime" },
   timestamp: { name: "timestamp" },

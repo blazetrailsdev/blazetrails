@@ -124,7 +124,7 @@ export class SchemaCreation extends AbstractSchemaCreation {
 
   override typeToSql(type: ColumnType, options: ColumnOptions = {}): string {
     if (type === "float") {
-      return options.limit != null ? `float(${options.limit})` : "float";
+      return options.limit != null ? `FLOAT(${options.limit})` : "FLOAT";
     }
     return super.typeToSql(type, options);
   }

@@ -55,7 +55,9 @@ export function useFixtures<M extends FixtureMap>(
     // Delete in reverse insertion order to respect FK constraints.
     for (const [, [ModelClass]] of Object.entries(fixtures).reverse()) {
       try {
-        await adapter.execute(`DELETE FROM ${adapter.quoteTableName(ModelClass.tableName)}`, []);
+        await adapter.executeMutation(
+          `DELETE FROM ${adapter.quoteTableName(ModelClass.tableName)}`,
+        );
       } catch {
         // Best-effort cleanup; if the table is gone, ignore.
       }

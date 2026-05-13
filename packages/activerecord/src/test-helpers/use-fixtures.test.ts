@@ -136,7 +136,10 @@ describe("FixtureSet.createFixtures", () => {
     const sqls = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls.map(
       (c: unknown[]) => c[0] as string,
     );
-    expect(sqls.some((s) => s.includes("DELETE FROM"))).toBe(true);
-    expect(sqls.some((s) => s.includes("INSERT INTO"))).toBe(true);
+    const deleteIdx = sqls.findIndex((s) => s.includes("DELETE FROM"));
+    const insertIdx = sqls.findIndex((s) => s.includes("INSERT INTO"));
+    expect(deleteIdx).toBeGreaterThanOrEqual(0);
+    expect(insertIdx).toBeGreaterThanOrEqual(0);
+    expect(deleteIdx).toBeLessThan(insertIdx);
   });
 });

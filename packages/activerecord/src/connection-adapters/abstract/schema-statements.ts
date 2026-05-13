@@ -135,6 +135,23 @@ export class SchemaStatements {
 
     await this.adapter.executeMutation(td.toSql());
 
+    // Rails: if supports_comments? && !supports_comments_in_create?
+    //   change_table_comment(table_name, comment) if options[:comment].present?
+    if (options.comment != null) {
+      const adapterWithComments = this.adapter as {
+        supportsComments?: () => boolean;
+        supportsCommentsInCreate?: () => boolean;
+        changeTableComment?: (name: string, comment: string | null) => Promise<void>;
+      };
+      if (
+        adapterWithComments.supportsComments?.() &&
+        !adapterWithComments.supportsCommentsInCreate?.() &&
+        typeof adapterWithComments.changeTableComment === "function"
+      ) {
+        await adapterWithComments.changeTableComment(name, options.comment);
+      }
+    }
+
     for (const idx of td.indexes) {
       await this.addIndex(name, idx.columns, {
         unique: idx.unique,

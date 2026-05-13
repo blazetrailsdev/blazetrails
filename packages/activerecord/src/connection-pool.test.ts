@@ -210,13 +210,16 @@ it("withConnection waits for a released connection when pool is saturated", asyn
 it("withConnection rejects with ConnectionTimeoutError when pool stays saturated past timeout", async () => {
   const { ConnectionTimeoutError } = await import("./errors.js");
   vi.useFakeTimers();
-  const pool = makePool(1);
-  pool.checkout();
+  try {
+    const pool = makePool(1);
+    pool.checkout();
 
-  const waiter = pool.withConnection(() => {}, { checkoutTimeout: 0.05 });
-  await vi.runAllTimersAsync();
-  await expect(waiter).rejects.toThrow(ConnectionTimeoutError);
-  vi.useRealTimers();
+    const waiter = pool.withConnection(() => {}, { checkoutTimeout: 0.05 });
+    await vi.runAllTimersAsync();
+    await expect(waiter).rejects.toThrow(ConnectionTimeoutError);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it.skip("new connection no query", () => {

@@ -66,7 +66,7 @@ function resolveCallbackObject<T extends object>(
   name: string,
 ): AnyCallback<T> {
   const camelName = name.charAt(0).toUpperCase() + name.slice(1);
-  const methodName = `${kind}${camelName}`; // e.g., beforeSave
+  const methodName = `${kind}${camelName}`;
   const method = obj[methodName] as ((...args: any[]) => unknown) | undefined;
   if (typeof method !== "function") {
     throw new Error(

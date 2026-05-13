@@ -1711,4 +1711,30 @@ describe("CallbackObject dispatch", () => {
     (inst as any).runCallbacks("save");
     expect(log).toEqual(["mixin-obj"]);
   });
+
+  it("CallbacksMixin.afterCallback accepts object form", () => {
+    class Model extends CallbacksMixin() {}
+    Model.defineCallbacks("save");
+    const log: string[] = [];
+    Model.afterCallback("save", { afterSave: () => log.push("after-mixin") });
+    const inst = new Model();
+    (inst as any).runCallbacks("save");
+    expect(log).toEqual(["after-mixin"]);
+  });
+
+  it("CallbacksMixin.aroundCallback accepts object form", () => {
+    class Model extends CallbacksMixin() {}
+    Model.defineCallbacks("save");
+    const log: string[] = [];
+    Model.aroundCallback("save", {
+      aroundSave: (_: unknown, next: () => void) => {
+        log.push("pre");
+        next();
+        log.push("post");
+      },
+    });
+    const inst = new Model();
+    (inst as any).runCallbacks("save", () => log.push("body"));
+    expect(log).toEqual(["pre", "body", "post"]);
+  });
 });

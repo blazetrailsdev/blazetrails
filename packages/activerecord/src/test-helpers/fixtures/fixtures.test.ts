@@ -1,12 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DatabaseAdapter } from "../../adapter.js";
-import {
-  defineFixtures,
-  fixtureId,
-  isFixtureRef,
-  ref,
-  type FixtureRef,
-} from "../define-fixtures.js";
+import { defineFixtures, fixtureId, isFixtureRef, type FixtureRef } from "../define-fixtures.js";
 import { topicFixtureData } from "./topics.js";
 import { postFixtureData } from "./posts.js";
 import { commentFixtureData } from "./comments.js";
@@ -356,7 +350,8 @@ describe("developerFixtureData", () => {
     expect(developerFixtureData.david.salary).toBe(80000);
   });
 
-  it("poor_jamis has low salary", () => {
+  it("jamis has high salary, poor_jamis has low salary", () => {
+    expect(developerFixtureData.jamis.salary).toBe(150000);
     expect(developerFixtureData.poor_jamis.salary).toBe(9000);
   });
 
@@ -390,30 +385,14 @@ describe("developersProjectsFixtureData", () => {
   });
 
   it("david_active_record refs david in developers and active_record in projects", () => {
-    const devRef = developersProjectsFixtureData.david_active_record.developer_id as ReturnType<
-      typeof ref
-    >;
-    const projRef = developersProjectsFixtureData.david_active_record.project_id as ReturnType<
-      typeof ref
-    >;
+    const devRef = developersProjectsFixtureData.david_active_record.developer_id as FixtureRef;
+    const projRef = developersProjectsFixtureData.david_active_record.project_id as FixtureRef;
     expect(isFixtureRef(devRef)).toBe(true);
     expect(devRef.tableName).toBe("developers");
     expect(devRef.fixtureName).toBe("david");
     expect(isFixtureRef(projRef)).toBe(true);
     expect(projRef.tableName).toBe("projects");
     expect(projRef.fixtureName).toBe("active_record");
-  });
-
-  it("ref values resolve to fixtureId of their target fixture", () => {
-    const devRef = developersProjectsFixtureData.david_active_record.developer_id as ReturnType<
-      typeof ref
-    >;
-    const projRef = developersProjectsFixtureData.david_active_record.project_id as ReturnType<
-      typeof ref
-    >;
-    // fixtureId resolution is the contract: ref carries table + label, consumer resolves via fixtureId
-    expect(fixtureId(devRef.fixtureName)).toBe(fixtureId("david"));
-    expect(fixtureId(projRef.fixtureName)).toBe(fixtureId("active_record"));
   });
 });
 

@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MigrationContext } from "./migration.js";
 import { SchemaDumper } from "./connection-adapters/abstract/schema-dumper.js";
 import { createTestAdapter, adapterType } from "./test-adapter.js";
+import type { TestDatabaseAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 
-function freshCtx(): { adapter: DatabaseAdapter; ctx: MigrationContext } {
+function freshCtx(): { adapter: TestDatabaseAdapter; ctx: MigrationContext } {
   const adapter = createTestAdapter();
   const ctx = new MigrationContext(adapter);
   return { adapter, ctx };
@@ -223,11 +224,11 @@ describe("SchemaDumperTest", () => {
       t.decimal("price");
       t.decimal("discounted_price");
     });
-    const ss = new SchemaStatements(testAdapter as any);
+    const ss = new SchemaStatements(testAdapter.innerAdapter as any);
     await ss.addCheckConstraint("products", "price > discounted_price", {
       name: "products_price_check",
     });
-    const output = await SchemaDumper.dump(testAdapter);
+    const output = await SchemaDumper.dump(testAdapter.innerAdapter);
     expect(output).toContain("products_price_check");
     expect(output).toContain("addCheckConstraint");
   });
@@ -239,12 +240,12 @@ describe("SchemaDumperTest", () => {
       t.date("start_date");
       t.date("end_date");
     });
-    await (testAdapter as any).addExclusionConstraint(
+    await (testAdapter.innerAdapter as any).addExclusionConstraint(
       "test_schema_exclusion",
       "daterange(start_date, end_date) WITH &&",
       { using: "gist", name: "test_schema_exclusion_date_overlap" },
     );
-    const output = await PgSchemaDumper.dump(testAdapter);
+    const output = await PgSchemaDumper.dump(testAdapter.innerAdapter);
     expect(output).toContain("addExclusionConstraint");
     expect(output).toContain("test_schema_exclusion_date_overlap");
     expect(output).toContain("daterange(start_date, end_date) WITH &&");
@@ -257,14 +258,17 @@ describe("SchemaDumperTest", () => {
       t.integer("position_1");
       t.integer("position_2");
     });
-    await (testAdapter as any).addUniqueConstraint("test_schema_unique", ["position_1"], {
-      name: "test_schema_unique_position_1",
-    });
-    await (testAdapter as any).addUniqueConstraint("test_schema_unique", ["position_2"], {
-      nullsNotDistinct: true,
-      name: "test_schema_unique_position_2_nnd",
-    });
-    const output = await PgSchemaDumper.dump(testAdapter);
+    await (testAdapter.innerAdapter as any).addUniqueConstraint(
+      "test_schema_unique",
+      ["position_1"],
+      { name: "test_schema_unique_position_1" },
+    );
+    await (testAdapter.innerAdapter as any).addUniqueConstraint(
+      "test_schema_unique",
+      ["position_2"],
+      { nullsNotDistinct: true, name: "test_schema_unique_position_2_nnd" },
+    );
+    const output = await PgSchemaDumper.dump(testAdapter.innerAdapter);
     expect(output).toContain("addUniqueConstraint");
     expect(output).toContain("test_schema_unique_position_1");
     expect(output).toContain("test_schema_unique_position_2_nnd");
@@ -279,10 +283,10 @@ describe("SchemaDumperTest", () => {
       await testCtx.createTable("test_uc_no_idx", {}, (t) => {
         t.integer("position");
       });
-      await (testAdapter as any).addUniqueConstraint("test_uc_no_idx", ["position"], {
+      await (testAdapter.innerAdapter as any).addUniqueConstraint("test_uc_no_idx", ["position"], {
         name: "test_uc_no_idx_position",
       });
-      const output = await PgSchemaDumper.dump(testAdapter);
+      const output = await PgSchemaDumper.dump(testAdapter.innerAdapter);
       expect(output).toContain("addUniqueConstraint");
       // The backing index must not also appear as an addIndex call.
       expect(output).not.toMatch(/addIndex.*test_uc_no_idx.*test_uc_no_idx_position/);

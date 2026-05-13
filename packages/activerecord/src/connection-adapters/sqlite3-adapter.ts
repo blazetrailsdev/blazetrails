@@ -1325,9 +1325,6 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    * matches Rails' SQLite3::SchemaStatements#tables filter.
    */
   async tables(): Promise<string[]> {
-    // Uses pragma_table_list (SQLite 3.37+) to match Rails' data_source_sql.
-    // type='table' excludes shadow tables (FTS5 etc.) and virtual tables.
-    // Falls back to sqlite_master for older SQLite versions.
     const rows = (await this.execute(
       "SELECT name FROM pragma_table_list WHERE schema <> 'temp' AND name NOT IN ('sqlite_sequence', 'sqlite_schema') AND type IN ('table')",
       [],

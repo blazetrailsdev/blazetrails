@@ -6,10 +6,6 @@ import { SQLite3Adapter } from "../../connection-adapters/sqlite3-adapter.js";
 import { Notifications, squish } from "@blazetrails/activesupport";
 import type { NotificationEvent } from "@blazetrails/activesupport";
 
-/**
- * Mirrors Rails' assert_logged from sqlite3_adapter_test.rb.
- * Subscribes to sql.active_record, runs fn, then asserts logged === expected.
- */
 async function assertLogged(
   expected: Array<[string, string, unknown[]]>,
   fn: () => unknown | Promise<unknown>,
@@ -732,6 +728,8 @@ describe("SQLite3AdapterTest", () => {
     adapter.exec(`CREATE TABLE "ex" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "number" INTEGER)`);
     const sql =
       "SELECT name FROM pragma_table_list WHERE schema <> 'temp' AND name NOT IN ('sqlite_sequence', 'sqlite_schema') AND name = 'ex' AND type IN ('table')";
-    await assertLogged([[sql, "SCHEMA", []]], () => adapter.tableExists("ex"));
+    await assertLogged([[sql, "SCHEMA", []]], async () => {
+      expect(await adapter.tableExists("ex")).toBe(true);
+    });
   });
 });

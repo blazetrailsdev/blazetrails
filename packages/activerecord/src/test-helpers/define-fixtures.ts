@@ -93,10 +93,8 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
         const refId = fixtureId(val.fixtureName);
         row[col] = refId;
       } else if (val !== null && typeof val === "object" && pkCol in val) {
-        // Heuristic: plain object or model instance carrying the PK — extract it.
-        // Limitation: a JSON column value shaped like { id: ... } will also match.
-        // Avoid ambiguity by using ref() for cross-batch FKs and direct instances only
-        // for same-batch model objects returned by a prior defineFixtures call.
+        // Model instance (or any object with the PK): extract the PK value.
+        // Use ref() if a plain JSON column could be confused for an instance.
         row[col] = (val as FixtureAttrs)[pkCol];
       } else {
         row[col] = val;
@@ -105,8 +103,7 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
     rows.push(row);
   }
 
-  // Mirrors Rails: insert_fixtures_set(table_rows, table_rows.keys) — tables are cleared before insert
-  // so repeated defineFixtures calls for the same table replace rather than append rows.
+  // Mirrors Rails: pass tableName as tablesToDelete so rows are replaced, not appended.
   await insertFixturesSet.call(adapter as unknown as InsertHost, { [tableName]: rows }, [
     tableName,
   ]);

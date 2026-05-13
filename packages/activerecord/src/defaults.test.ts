@@ -65,9 +65,9 @@ describe("MysqlDefaultExpressionTest", () => {
     // SCOPE: mysql2_specific_schema.rb `timestamp_defaults` table.
   });
   it.skip("schema dump timestamp without default expression", () => {
-    // BLOCKED: schema — schema dumper does not reflect MySQL timestamp columns without expression defaults.
-    // ROOT-CAUSE: dump_table_schema / schemaCreation path does not preserve expression-default lambdas for MySQL.
-    // SCOPE: mysql2_specific_schema.rb `timestamp_defaults` table (nullable_timestamp column).
+    // BLOCKED: schema — schema dumper requires MySQL live connection to dump `timestamp_defaults` table.
+    // ROOT-CAUSE: dump_table_schema not wired through Mysql2Adapter; no schema-dump path for MySQL in test suite.
+    // SCOPE: mysql2_specific_schema.rb `timestamp_defaults` table (nullable_timestamp column, no default).
   });
 });
 

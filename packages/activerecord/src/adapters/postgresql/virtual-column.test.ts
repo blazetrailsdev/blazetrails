@@ -102,7 +102,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       // prepareColumnOptions for virtual columns. Affects schema_dumping mirror.
     });
 
-    it.skip("build fixture sql", async () => {
+    it.skip("build fixture sql", () => {
       // BLOCKED: adapter-pg — insertFixturesSet calls executeBatch which is not yet implemented
       // for PostgreSQLAdapter (throws NotImplementedError at database-statements.ts:1627).
       // ROOT-CAUSE: PostgreSQLAdapter.executeBatch stub needs implementation; unblocks this test.

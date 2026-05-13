@@ -1446,7 +1446,19 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       });
 
     const sessionClauses = [sqlModeClause, ...varClauses].filter(Boolean).join(", ");
-    return `SET time_zone = '+00:00', ${sessionClauses}`;
+
+    // Mirrors Rails: `if @config[:encoding]` → `SET NAMES encoding [COLLATE collation], ...`
+    // mysql2's `charset` pool option corresponds to Rails' database.yml `encoding:`.
+    const charset = this._poolConfig.charset as string | undefined;
+    const charsetCollation = (this._poolConfig as { collation?: string }).collation;
+    let namesPart = "";
+    if (charset) {
+      namesPart = `NAMES ${charset}`;
+      if (charsetCollation) namesPart += ` COLLATE ${charsetCollation}`;
+      namesPart += ", ";
+    }
+
+    return `SET ${namesPart}time_zone = '+00:00', ${sessionClauses}`;
   }
 }
 

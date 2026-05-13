@@ -459,9 +459,17 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   async renameIndex(tableName: string, oldName: string, newName: string): Promise<void> {
-    void tableName;
-    void oldName;
-    void newName;
+    await this.getDatabaseVersion();
+    this.schemaStatements().validateIndexLengthBang(tableName, newName);
+    if (!this.supportsRenameIndex()) {
+      throw new Error(
+        "renameIndex requires MySQL >= 5.7.6 or MariaDB >= 10.5.2; upgrade your server to use this feature",
+      );
+    }
+    await (this as unknown as { executeMutation(sql: string): Promise<number> }).executeMutation(
+      `ALTER TABLE ${this.quoteTableName(tableName)} RENAME INDEX ` +
+        `${this.quoteTableName(oldName)} TO ${this.quoteTableName(newName)}`,
+    );
   }
 
   async changeColumnDefault(
@@ -543,9 +551,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     columnName: string | string[],
     options: Record<string, unknown> = {},
   ): Promise<void> {
-    void tableName;
-    void columnName;
-    void options;
+    await this.schemaStatements().addIndex(tableName, columnName, options);
   }
 
   buildCreateIndexDefinition(

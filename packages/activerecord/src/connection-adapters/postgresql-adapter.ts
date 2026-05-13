@@ -2875,10 +2875,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
   }
 
-  // createJoinTable override: bridges the callback-first createTable API.
-  // Signature matches AbstractAdapter so no @ts-expect-error is needed.
-  // The definer receives a SimpleTableBuilder cast as AbstractTableDefinition;
-  // callers that use only integer/string/boolean helpers work fine in practice.
+  // createJoinTable override: bypasses the callback-first createTable API by
+  // routing through schemaStatements().createTable, which uses the abstract
+  // options-first form and builds a real TableDefinition with correct column
+  // options (null: false) and full DSL support for the definer callback.
   async createJoinTable(
     table1: string,
     table2: string,
@@ -2887,28 +2887,29 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       | ((t: AbstractTableDefinition) => void),
     fn?: (t: AbstractTableDefinition) => void,
   ): Promise<void> {
-    let tableName: string | undefined;
+    let opts: {
+      tableName?: string;
+      columnOptions?: Record<string, unknown>;
+      [key: string]: unknown;
+    } = {};
     let definer: ((t: AbstractTableDefinition) => void) | undefined;
     if (typeof options === "function") {
       definer = options;
     } else if (options) {
-      tableName = options.tableName;
+      opts = options;
       definer = fn;
     }
-    const joinName = tableName ?? deriveJoinTableName(table1, table2);
-    const t1Col = `${singularize(table1.split(".").at(-1) ?? table1)}_id`;
-    const t2Col = `${singularize(table2.split(".").at(-1) ?? table2)}_id`;
-
-    await (this as any).createTable(
-      joinName,
-      (t: SimpleTableBuilder) => {
-        t.integer(t1Col);
-        t.integer(t2Col);
-
-        if (definer) (definer as (t: any) => void)(t);
-      },
-      { id: false },
-    );
+    const joinName = opts.tableName ?? deriveJoinTableName(table1, table2);
+    const { columnOptions = {}, tableName: _t, ...rest } = opts;
+    const mergedColOpts = { null: false, index: false, ...columnOptions };
+    const t1Ref = singularize(table1.split(".").at(-1) ?? table1);
+    const t2Ref = singularize(table2.split(".").at(-1) ?? table2);
+    const ss = this.schemaStatements(this as unknown as DatabaseAdapter);
+    await ss.createTable(joinName, { ...rest, id: false } as any, (td) => {
+      td.references(t1Ref, mergedColOpts as any);
+      td.references(t2Ref, mergedColOpts as any);
+      if (definer) definer(td as unknown as AbstractTableDefinition);
+    });
   }
 
   // PG callback-first signature diverges from the abstract base; harmonize in a follow-up.

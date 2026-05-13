@@ -598,7 +598,7 @@ export class SchemaStatements {
     table2: string,
     options?: { tableName?: string },
   ): Promise<void> {
-    const tableName = options?.tableName ?? [table1, table2].sort().join("_");
+    const tableName = this.findJoinTableName(table1, table2, options ?? {});
     await this.dropTable(tableName);
   }
 

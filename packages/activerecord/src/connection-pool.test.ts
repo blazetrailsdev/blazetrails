@@ -221,8 +221,11 @@ it("withConnection rejects with ConnectionTimeoutError when pool stays saturated
     pool.checkout();
 
     const waiter = pool.withConnection(() => {}, { checkoutTimeout: 0.05 });
+    // Attach the rejection handler before advancing timers to avoid an
+    // unhandled-rejection window during IPC serialization.
+    const assertion = expect(waiter).rejects.toThrow(ConnectionTimeoutError);
     await vi.runAllTimersAsync();
-    await expect(waiter).rejects.toThrow(ConnectionTimeoutError);
+    await assertion;
   } finally {
     vi.useRealTimers();
   }

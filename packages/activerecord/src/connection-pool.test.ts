@@ -202,7 +202,9 @@ it("withConnection waits for a released connection when pool is saturated", asyn
   pool.checkin(held);
   const resolved = await waiter;
   expect(resolved).toBe(held);
-  pool.checkin(resolved);
+  // withConnection releases the connection after fn returns — pool should be idle
+  expect(pool.stat().busy).toBe(0);
+  expect(pool.stat().idle).toBe(1);
 });
 
 it("withConnection rejects with ConnectionTimeoutError when pool stays saturated past timeout", async () => {

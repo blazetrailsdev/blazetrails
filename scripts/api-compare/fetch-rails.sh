@@ -6,7 +6,16 @@ RAILS_DIR="$SCRIPT_DIR/.rails-source"
 RAILS_TAG="v8.0.2"
 
 if [ -d "$RAILS_DIR/.git" ]; then
-  echo "Rails source already cloned at $RAILS_DIR — skipping."
+  # If the existing mirror was created with sparse-checkout (pre-PR-1483),
+  # disable it so the full working tree is present. One-time migration;
+  # subsequent runs see sparseCheckout=false and skip cleanly.
+  if [ "$(git -C "$RAILS_DIR" config --bool core.sparseCheckout 2>/dev/null || echo false)" = "true" ]; then
+    echo "Existing mirror at $RAILS_DIR is sparse — disabling to populate full tree..."
+    git -C "$RAILS_DIR" sparse-checkout disable
+    echo "Rails source ready at $RAILS_DIR (sparse-checkout disabled)"
+  else
+    echo "Rails source already cloned at $RAILS_DIR — skipping."
+  fi
   exit 0
 fi
 

@@ -481,9 +481,14 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
    * @internal
    */
   protected async _execMutation(sql: string): Promise<void> {
-    await (this as unknown as { executeMutation(sql: string): Promise<number> }).executeMutation(
-      sql,
-    );
+    const exec = (this as unknown as { executeMutation?: (sql: string) => Promise<number> })
+      .executeMutation;
+    if (typeof exec !== "function") {
+      throw new Error(
+        `${this.constructor.name} must implement executeMutation() to use DDL helpers`,
+      );
+    }
+    await exec.call(this, sql);
   }
 
   async changeColumnDefault(

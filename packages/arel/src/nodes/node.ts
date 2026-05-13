@@ -78,9 +78,9 @@ export interface NodeVisitor<T> {
 }
 
 // ArelConnection lives in visitors/to-sql.ts which imports Node — a direct
-// import would create a cycle. `never` satisfies the contravariant bound:
-// every concrete connection type is a subtype of never (bottom type), so
-// any `new (connection?: ConcreteConnection)` ctor is assignable here.
+// import would create a cycle. `never` satisfies the contravariant param
+// check: TS requires `never extends ConcreteConnection`, which holds because
+// never is a subtype of everything (bottom type).
 type ToSqlCtor = new (connection?: never) => { compile(node: Node): string };
 
 interface NodeRegistry {

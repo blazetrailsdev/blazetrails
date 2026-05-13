@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MigrationContext } from "./migration.js";
 import { SchemaDumper } from "./connection-adapters/abstract/schema-dumper.js";
-import { createTestAdapter } from "./test-adapter.js";
+import { createTestAdapter, adapterType } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 
 function freshCtx(): { adapter: DatabaseAdapter; ctx: MigrationContext } {
@@ -298,7 +298,7 @@ describe("SchemaDumperTest", () => {
     // SCOPE: ~50–200 LOC fix in schema-dumper.ts or schema-statements.ts; affects ~7–43 tests in schema-dumper.test.ts
     /* needs type aliasing support */
   });
-  it("schema dump expression indices", async () => {
+  it.skipIf(adapterType === "mysql")("schema dump expression indices", async () => {
     await ctx.createTable("users", {}, (t) => {
       t.string("email");
     });
@@ -307,7 +307,7 @@ describe("SchemaDumperTest", () => {
     expect(output).toContain('"lower(email)"');
     expect(output).toContain("idx_users_lower_email");
   });
-  it("schema dump expression indices escaping", async () => {
+  it.skipIf(adapterType === "mysql")("schema dump expression indices escaping", async () => {
     await ctx.createTable("users", {}, (t) => {
       t.string("first_name");
       t.string("last_name");

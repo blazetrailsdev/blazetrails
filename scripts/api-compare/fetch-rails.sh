@@ -26,6 +26,9 @@ cd "$RAILS_DIR"
 git sparse-checkout set \
   activerecord/lib/active_record \
   activerecord/lib/arel \
+  activerecord/test/fixtures \
+  activerecord/test/models \
+  activerecord/test/schema \
   activemodel/lib/active_model \
   activesupport/lib/active_support \
   actionpack/lib/action_dispatch \

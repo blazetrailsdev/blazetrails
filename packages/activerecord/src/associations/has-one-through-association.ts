@@ -30,7 +30,7 @@ export class HasOneThroughAssociation extends HasOneAssociation {
    * DB work is deferred via _pendingReplace and flushed by persistReplace.
    */
   protected override replace(record: Base | null, save = true): void {
-    if (record) (this as any).raiseOnTypeMismatchBang?.(record);
+    if (record) (this as any).raiseOnTypeMismatchBang(record);
     const assigningAnother = this.target !== record;
     if (assigningAnother || (record as any)?.hasChangesToSave?.()) {
       if (save) {

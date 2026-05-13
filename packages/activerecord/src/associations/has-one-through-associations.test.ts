@@ -649,14 +649,18 @@ describe("HasOneThroughAssociationsTest", () => {
 
   it("has one through relationship cannot have a counter cache", () => {
     expect(() => {
-      class Thing extends Base {}
-      Associations.hasOne.call(Thing, "other_thing", { className: "OtherThing" });
+      class Thing extends Base {
+        static {
+          this.adapter = adapter;
+        }
+      }
+      registerModel(Thing);
       Associations.hasOne.call(Thing, "club_thing", {
         className: "Club",
-        through: "other_thing",
+        through: "membership",
         counterCache: true,
       });
-    }).toThrow(Error);
+    }).toThrow(/counter_cache/);
   });
 
   it.skip("has one through do not cache association reader if the though method has default scopes", () => {

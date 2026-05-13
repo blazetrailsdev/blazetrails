@@ -332,6 +332,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         },
       };
       this._driverPool = new pg.Pool(this._pgPoolOptions);
+      this._driverPool.on("error", () => {});
       return;
     }
     // Rails' database.yml merges driver connection params + adapter

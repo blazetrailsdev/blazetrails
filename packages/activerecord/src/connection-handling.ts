@@ -605,7 +605,9 @@ async function autoConnect(modelClass: typeof Base): Promise<void> {
     configs = DatabaseConfigurations.fromEnv(inMemory);
   } else {
     const raw = await loadConfigFile(modelClass);
-    configs = DatabaseConfigurations.fromEnv(raw);
+    configs = DatabaseConfigurations.fromEnv(
+      raw as Parameters<typeof DatabaseConfigurations.fromEnv>[0],
+    );
   }
   const env = getEnv("TRAILS_ENV") ?? getEnv("NODE_ENV") ?? DatabaseConfigurations.defaultEnv;
   const primaryConfigs = configs.configsFor({ envName: env, name: "primary" });
@@ -681,7 +683,7 @@ function resolveConfig(
   return { adapterName, url, config: fullConfig };
 }
 
-async function loadConfigFile(modelClass: typeof Base): Promise<Record<string, any>> {
+async function loadConfigFile(modelClass: typeof Base): Promise<Record<string, unknown>> {
   if ((modelClass as any)._configPath) {
     return loadJsonConfig((modelClass as any)._configPath);
   }
@@ -714,7 +716,7 @@ async function loadConfigFile(modelClass: typeof Base): Promise<Record<string, a
   return loadJsonConfig(pathAdapter.resolve(cwd, "config", "database.json"));
 }
 
-async function loadJsonConfig(configPath: string): Promise<Record<string, any>> {
+async function loadJsonConfig(configPath: string): Promise<Record<string, unknown>> {
   try {
     const fsAdapter = await getFsAsync();
     return JSON.parse(fsAdapter.readFileSync(configPath, "utf-8"));

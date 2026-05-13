@@ -30,7 +30,11 @@ export class CollectionAssociation extends Association {
     }
   }
 
-  static override defineExtensions(model: any, name: string, block?: Function): any {
+  static override defineExtensions(
+    model: any,
+    name: string,
+    block?: (...args: unknown[]) => unknown,
+  ): any {
     if (block) {
       const extensionModuleName = `${name.charAt(0).toUpperCase()}${name.slice(1)}AssociationExtension`;
       const extension = { name: extensionModuleName, block };

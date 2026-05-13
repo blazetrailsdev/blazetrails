@@ -491,6 +491,7 @@ export class Callback {
         unless: [...existingUnless, ...ifOption],
       },
       chain.config,
+      this.originalObject,
     );
   }
 
@@ -998,7 +999,9 @@ export function __updateCallbacks(
     const chain = target.getCallbacks(name);
     const dup = new CallbackChain(chain.name, chain.config);
     chain.entries.forEach((e) =>
-      dup.append(new Callback(e.name, e.filter, e.kind, { ...e.options }, dup.config)),
+      dup.append(
+        new Callback(e.name, e.filter, e.kind, { ...e.options }, dup.config, e.originalObject),
+      ),
     );
     fn(target, dup);
     target.setCallbacks(name, dup);
@@ -1068,7 +1071,14 @@ function getCallbackChains(target: object): Map<string, CallbackChain> {
         const newChain = new CallbackChain(chain.name, chain.config);
         for (const entry of chain.entries) {
           newChain.append(
-            new Callback(entry.name, entry.filter, entry.kind, entry.options, newChain.config),
+            new Callback(
+              entry.name,
+              entry.filter,
+              entry.kind,
+              entry.options,
+              newChain.config,
+              entry.originalObject,
+            ),
           );
         }
         own.set(name, newChain);

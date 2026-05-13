@@ -1733,6 +1733,19 @@ describe("CallbackObject dispatch", () => {
     expect(target.log).toEqual(["fn"]);
   });
 
+  it("skipCallback matches object by reference after chain inheritance clone", () => {
+    const parent = { log: [] as string[] };
+    defineCallbacks(parent, "save");
+    const obj = { beforeSave: (t: typeof parent) => t.log.push("obj") };
+    setCallback(parent, "save", "before", obj);
+
+    // simulate inheritance: getCallbackChains copies the chain when a child prototype is used
+    const child = Object.create(parent) as typeof parent;
+    skipCallback(child, "save", "before", obj);
+    runCallbacks(child, "save");
+    expect(child.log).toEqual([]);
+  });
+
   it("CallbacksMixin.aroundCallback accepts object form", () => {
     class Model extends CallbacksMixin() {}
     Model.defineCallbacks("save");

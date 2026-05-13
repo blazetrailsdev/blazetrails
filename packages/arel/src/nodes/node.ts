@@ -76,9 +76,9 @@ export interface NodeVisitor<T> {
   visit(node: Node): T;
 }
 
-import type { ArelConnection } from "../visitors/connection.js";
-
-type ToSqlCtor = new (connection?: ArelConnection) => { compile(node: Node): string };
+type ToSqlCtor = new (connection?: import("../visitors/connection.js").ArelConnection) => {
+  compile(node: Node): string;
+};
 
 interface NodeRegistry {
   Not?: new (expr: Node) => Node;

@@ -150,7 +150,7 @@ export class SchemaStatements {
 
     // Rails: if supports_comments? && !supports_comments_in_create?
     //   change_table_comment(table_name, comment) if options[:comment].present?
-    if (options.comment != null) {
+    if (options.comment != null && options.comment.length > 0) {
       const adapterWithComments = this.adapter as {
         supportsComments?: () => boolean;
         supportsCommentsInCreate?: () => boolean;

@@ -1477,7 +1477,7 @@ export class MigrationContext {
     });
     if (fn) fn(td);
     await this.adapter.executeMutation(td.toSql());
-    if (options?.comment != null) {
+    if (options?.comment != null && options.comment.length > 0) {
       const adapterWithComments = this.adapter as {
         supportsComments?: () => boolean;
         supportsCommentsInCreate?: () => boolean;

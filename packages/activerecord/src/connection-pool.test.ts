@@ -198,10 +198,13 @@ it("withConnection waits for a released connection when pool is saturated", asyn
   const pool = makePool(1);
   const held = pool.checkout();
 
-  const waiter = pool.withConnection((conn) => conn);
+  let connSeen: DatabaseAdapter | undefined;
+  const waiter = pool.withConnection((conn) => {
+    connSeen = conn;
+  });
   pool.checkin(held);
-  const resolved = await waiter;
-  expect(resolved).toBe(held);
+  await waiter;
+  expect(connSeen).toBe(held);
   // withConnection releases the connection after fn returns — pool should be idle
   expect(pool.stat().busy).toBe(0);
   expect(pool.stat().idle).toBe(1);
@@ -471,7 +474,7 @@ it("automatic reconnect can be disabled", async () => {
   pool.automaticReconnect = false;
 
   expect(() => pool.leaseConnection()).toThrow(/automatic_reconnect is disabled/);
-  await expect(pool.withConnection(() => {})).rejects.toThrow(/automatic_reconnect is disabled/);
+  expect(() => pool.withConnection(() => {})).toThrow(/automatic_reconnect is disabled/);
 });
 
 it("disconnect calls disconnectBang on each pooled connection", () => {

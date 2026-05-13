@@ -606,7 +606,7 @@ export class ConnectionPool implements ReapablePool {
   withConnection<T>(
     fn: (conn: DatabaseAdapter) => T | Promise<T>,
     options: { preventPermanentCheckout?: boolean; checkoutTimeout?: number } = {},
-  ): Promise<T> {
+  ): T | Promise<T> {
     const preventPermanent = options.preventPermanentCheckout ?? false;
     const lease = this._connectionLease();
     const stickyWas = lease.sticky;
@@ -616,7 +616,6 @@ export class ConnectionPool implements ReapablePool {
       if (preventPermanent && !stickyWas) lease.sticky = stickyWas;
     };
 
-    // Track whether we acquired the connection here (vs it being pre-leased).
     const wasPreLeased = !!lease.connection;
 
     const cleanup = () => {
@@ -624,18 +623,15 @@ export class ConnectionPool implements ReapablePool {
       if (!wasPreLeased && !lease.sticky) this.releaseConnection();
     };
 
-    // Wrap fn execution + cleanup into one place to avoid duplication across paths.
-    const runFn = (): Promise<T> => {
+    // Run fn and manage cleanup. Returns T when fn is sync, Promise<T> when async.
+    const runFn = (): T | Promise<T> => {
       let result: T | Promise<T>;
       try {
         result = fn(lease.connection!);
       } catch (err) {
         cleanup();
-        return Promise.reject(err) as Promise<T>;
+        throw err;
       }
-      // For async callbacks, defer cleanup until the returned Promise settles.
-      // For sync callbacks, run cleanup immediately to match the pre-change behaviour
-      // and avoid creating an extra Promise on the common path.
       if (result !== null && result !== undefined && typeof (result as any).then === "function") {
         return Promise.resolve(result).then(
           (v) => {
@@ -649,14 +645,14 @@ export class ConnectionPool implements ReapablePool {
         );
       }
       cleanup();
-      return Promise.resolve(result as T);
+      return result;
     };
 
     if (lease.connection) {
       return runFn();
     }
 
-    // Fast path: connection immediately available — stay synchronous.
+    // Fast path: connection immediately available.
     try {
       lease.connection = this.checkout();
       return runFn();
@@ -675,7 +671,7 @@ export class ConnectionPool implements ReapablePool {
         );
       }
       restoreSticky();
-      return Promise.reject(err) as Promise<T>;
+      throw err;
     }
   }
 

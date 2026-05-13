@@ -216,10 +216,16 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
             );
           }
           const instancePkCol = typeof instancePk === "string" ? instancePk : "id";
+          const pkValue = instance[instancePkCol];
+          if (pkValue === undefined) {
+            throw new Error(
+              `defineFixtures: polymorphic target "${col}" has no value for PK column "${instancePkCol}" — ensure the instance exposes its primary key`,
+            );
+          }
           // Mirror Rails' polymorphicName: use static polymorphicName() if defined, else class name.
           const typeName: string =
             (instanceClass as any)?.polymorphicName?.() ?? instanceClass?.name ?? "Unknown";
-          row[poly.idColumn] = instance[instancePkCol];
+          row[poly.idColumn] = pkValue;
           row[poly.typeColumn] = typeName;
           continue;
         }

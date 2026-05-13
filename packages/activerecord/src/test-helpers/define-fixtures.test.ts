@@ -273,6 +273,43 @@ describe("defineFixtures", () => {
     expect(insertSql).toContain("999");
   });
 
+  it("polymorphic ref: null value sets both type and id columns to null", async () => {
+    const adapter = makeAdapter();
+    const rows = new Map([[fixtureId("untagged"), { id: fixtureId("untagged") }]]);
+    const Tagging = makeModel("taggings", rows) as any;
+    Tagging._reflections = {
+      taggable: { macro: "belongsTo", isPolymorphic: () => true },
+    };
+
+    await defineFixtures(adapter, Tagging, {
+      untagged: { taggable: null },
+    });
+
+    const insertSql = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
+      .map((c: unknown[]) => c[0] as string)
+      .find((s) => s.includes("INSERT INTO") && s.includes("taggings"));
+    expect(insertSql).toContain("taggable_type");
+    expect(insertSql).toContain("taggable_id");
+    // Both columns appear and their values are null (test adapter serialises null as "null")
+    expect(insertSql).toContain("taggable_type");
+    expect(insertSql).toContain("taggable_id");
+    const nullCount = (insertSql!.match(/\bnull\b/g) ?? []).length;
+    expect(nullCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it("polymorphic ref: non-instance non-null value throws a clear error", async () => {
+    const adapter = makeAdapter();
+    const rows = new Map([[fixtureId("bad"), { id: fixtureId("bad") }]]);
+    const Tagging = makeModel("taggings", rows) as any;
+    Tagging._reflections = {
+      taggable: { macro: "belongsTo", isPolymorphic: () => true },
+    };
+
+    await expect(
+      defineFixtures(adapter, Tagging, { bad: { taggable: 42 as any } }),
+    ).rejects.toThrow("polymorphic association");
+  });
+
   it("STI: type column passed explicitly is preserved in INSERT", async () => {
     const adapter = makeAdapter();
     const rows = new Map([

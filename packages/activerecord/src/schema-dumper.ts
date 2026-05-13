@@ -58,6 +58,8 @@ export interface IndexInfo {
   where?: string;
   using?: string;
   nullsNotDistinct?: boolean;
+  /** PG covering index INCLUDE columns. */
+  include?: string[];
 }
 
 /**
@@ -475,7 +477,16 @@ export class SchemaDumper {
 
   static async dumpTableSchema(source: SchemaSource, tableName: string): Promise<string> {
     const wrappedSource = isDatabaseAdapter(source) ? new AdapterSchemaSource(source) : source;
-    const dumper = this.create(wrappedSource);
+    // Instantiate the adapter-specific subclass (via createSchemaDumper) so
+    // PG/MySQL/SQLite overrides fire. Fall back to base when unavailable.
+    let dumper: SchemaDumper;
+    if (isDatabaseAdapter(source) && typeof (source as any).createSchemaDumper === "function") {
+      dumper = (source as any).createSchemaDumper({}) as SchemaDumper;
+      // Swap to the wrapped source so column normalization applies.
+      (dumper as any)._source = wrappedSource;
+    } else {
+      dumper = this.create(wrappedSource);
+    }
     const lines: string[] = [];
     await dumper.dumpTable(lines, tableName);
     return lines.join("\n");
@@ -697,11 +708,30 @@ export class SchemaDumper {
       const rawIndexes = await this._source.indexes(tableName);
       const indexes = await this.filterIndexesForDump(tableName, rawIndexes);
       const adapterTableOpts = await this.fetchTableOptions(tableName);
-      this.emitTable(lines, tableName, columns, indexes, adapterTableOpts);
-      await this.checkConstraintsInCreate(tableName, lines);
+      const inlineLines: string[] = [];
+      await this.gatherInlineConstraints(tableName, inlineLines);
+      this.emitTable(lines, tableName, columns, indexes, adapterTableOpts, inlineLines);
       lines.push("");
     } finally {
       this.tableName = undefined;
+    }
+  }
+
+  /**
+   * Collect inline constraint lines (check / exclusion / unique) to emit
+   * inside the createTable block. Subclasses override to add adapter-specific
+   * constraints. Base implementation handles check constraints.
+   * @internal
+   */
+  protected async gatherInlineConstraints(tableName: string, lines: string[]): Promise<void> {
+    const host = this._hookHost("checkConstraints");
+    if (!host) return;
+    const fn = (host as { checkConstraints: (t: string) => Promise<unknown[]> }).checkConstraints;
+    const constraints = (await fn.call(host, tableName)) ?? [];
+    for (const chk of constraints as { expression: string; name?: string; validate?: boolean }[]) {
+      const [expr, ...opts] = this.checkParts(chk);
+      const optStr = opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
+      lines.push(`    t.checkConstraint(${expr}${optStr});`);
     }
   }
 
@@ -760,6 +790,7 @@ export class SchemaDumper {
     columns: ColumnInfo[],
     indexes: IndexInfo[],
     adapterTableOpts: Record<string, unknown> = {},
+    inlineConstraints: string[] = [],
   ): void {
     const pkColumn = columns.find((c) => c.primaryKey);
     const hasId = pkColumn?.name === "id";
@@ -786,9 +817,14 @@ export class SchemaDumper {
       const colspec: Record<string, unknown> = {};
 
       if (col.null === false) colspec.null = false;
-      const cleanedDefault = cleanDefault(col.default);
-      if (cleanedDefault !== undefined && cleanedDefault !== null) {
-        colspec.default = cleanedDefault;
+      if (col.defaultFunction) {
+        const fn = col.defaultFunction;
+        colspec.default = () => fn;
+      } else {
+        const cleanedDefault = cleanDefault(col.default);
+        if (cleanedDefault !== undefined && cleanedDefault !== null) {
+          colspec.default = cleanedDefault;
+        }
       }
       if (extraOpts) {
         for (const [key, value] of Object.entries(extraOpts)) {
@@ -839,6 +875,7 @@ export class SchemaDumper {
       }
     }
 
+    for (const line of inlineConstraints) lines.push(line);
     lines.push("  });");
 
     this.indexesInCreate(tableName, lines, indexes);
@@ -860,6 +897,8 @@ export class SchemaDumper {
     if (index.where) parts.push(`where: ${JSON.stringify(index.where)}`);
     if (index.using && index.using !== "btree") parts.push(`using: ${JSON.stringify(index.using)}`);
     if (index.nullsNotDistinct) parts.push("nullsNotDistinct: true");
+    if (index.include && index.include.length > 0)
+      parts.push(`include: ${JSON.stringify(index.include)}`);
     return parts;
   }
 
@@ -896,20 +935,6 @@ export class SchemaDumper {
   /** @internal */
   private _fkHookHost(): unknown {
     return this._hookHost("foreignKeys");
-  }
-
-  /** @internal */
-  async checkConstraintsInCreate(tableName: string, lines: string[]): Promise<void> {
-    const host = this._hookHost("checkConstraints");
-    if (!host) return;
-    const fn = (host as { checkConstraints: (t: string) => Promise<unknown[]> }).checkConstraints;
-    const constraints = (await fn.call(host, tableName)) ?? [];
-    const stripped = this.removePrefixAndSuffix(tableName);
-    for (const chk of constraints as { expression: string; name?: string; validate?: boolean }[]) {
-      const [expr, ...opts] = this.checkParts(chk);
-      const optStr = opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
-      lines.push(`  await ctx.addCheckConstraint(${JSON.stringify(stripped)}, ${expr}${optStr});`);
-    }
   }
 
   /** @internal */

@@ -230,7 +230,7 @@ describe("SchemaDumperTest", () => {
     });
     const output = await SchemaDumper.dump(testAdapter.innerAdapter);
     expect(output).toContain("products_price_check");
-    expect(output).toContain("addCheckConstraint");
+    expect(output).toContain("t.checkConstraint");
   });
   it.skipIf(adapterType !== "postgres")("schema dumps exclusion constraints", async () => {
     const { SchemaDumper: PgSchemaDumper } =
@@ -246,7 +246,7 @@ describe("SchemaDumperTest", () => {
       { using: "gist", name: "test_schema_exclusion_date_overlap" },
     );
     const output = await PgSchemaDumper.dump(testAdapter.innerAdapter);
-    expect(output).toContain("addExclusionConstraint");
+    expect(output).toContain("t.exclusionConstraint");
     expect(output).toContain("test_schema_exclusion_date_overlap");
     expect(output).toContain("daterange(start_date, end_date) WITH &&");
   });
@@ -269,7 +269,7 @@ describe("SchemaDumperTest", () => {
       { nullsNotDistinct: true, name: "test_schema_unique_position_2_nnd" },
     );
     const output = await PgSchemaDumper.dump(testAdapter.innerAdapter);
-    expect(output).toContain("addUniqueConstraint");
+    expect(output).toContain("t.uniqueConstraint");
     expect(output).toContain("test_schema_unique_position_1");
     expect(output).toContain("test_schema_unique_position_2_nnd");
     expect(output).toContain("nullsNotDistinct: true");

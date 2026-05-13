@@ -145,55 +145,42 @@ export class SchemaDumper extends AbstractSchemaDumper {
   }
 
   /** @internal */
-  protected async exclusionConstraintsInCreate(tableName: string, lines: string[]): Promise<void> {
+  protected override async gatherInlineConstraints(
+    tableName: string,
+    lines: string[],
+  ): Promise<void> {
+    await super.gatherInlineConstraints(tableName, lines);
     const adapter = this.pgAdapter();
-    if (!adapter?.exclusionConstraints) return;
-    const constraints: ExclusionConstraintDefinition[] =
-      this._cachedExclConstraints ?? (await adapter.exclusionConstraints(tableName));
+
+    const excl: ExclusionConstraintDefinition[] =
+      this._cachedExclConstraints ??
+      (adapter?.exclusionConstraints ? await adapter.exclusionConstraints(tableName) : []);
     this._cachedExclConstraints = undefined;
-    if (constraints.length === 0) return;
-    const stripped = this.removePrefixAndSuffix(tableName);
-    const stmts = constraints.map((ec) => {
+    const exclLines = excl.map((ec) => {
       const opts: string[] = [];
       if (ec.where) opts.push(`where: ${JSON.stringify(ec.where)}`);
       if (ec.using) opts.push(`using: ${JSON.stringify(ec.using)}`);
       if (ec.deferrable !== undefined) opts.push(`deferrable: ${JSON.stringify(ec.deferrable)}`);
       if (ec.exportNameOnSchemaDump()) opts.push(`name: ${JSON.stringify(ec.name)}`);
       const optStr = opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
-      return `  await ctx.addExclusionConstraint(${JSON.stringify(stripped)}, ${JSON.stringify(ec.expression)}${optStr});`;
+      return `    t.exclusionConstraint(${JSON.stringify(ec.expression)}${optStr});`;
     });
-    lines.push(...stmts.sort());
-  }
+    lines.push(...exclLines.sort());
 
-  /** @internal */
-  protected async uniqueConstraintsInCreate(tableName: string, lines: string[]): Promise<void> {
-    const adapter = this.pgAdapter();
-    if (!adapter?.uniqueConstraints) return;
-    const constraints: UniqueConstraintDefinition[] =
-      this._cachedUniqConstraints ?? (await adapter.uniqueConstraints(tableName));
+    const uniq: UniqueConstraintDefinition[] =
+      this._cachedUniqConstraints ??
+      (adapter?.uniqueConstraints ? await adapter.uniqueConstraints(tableName) : []);
     this._cachedUniqConstraints = undefined;
-    if (constraints.length === 0) return;
-    const stripped = this.removePrefixAndSuffix(tableName);
-    const stmts = constraints.map((uc) => {
+    const uniqLines = uniq.map((uc) => {
       const opts: string[] = [];
       if (uc.nullsNotDistinct)
         opts.push(`nullsNotDistinct: ${JSON.stringify(uc.nullsNotDistinct)}`);
       if (uc.deferrable !== undefined) opts.push(`deferrable: ${JSON.stringify(uc.deferrable)}`);
       if (uc.exportNameOnSchemaDump()) opts.push(`name: ${JSON.stringify(uc.name)}`);
       const optStr = opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
-      return `  await ctx.addUniqueConstraint(${JSON.stringify(stripped)}, ${JSON.stringify(uc.column)}${optStr});`;
+      return `    t.uniqueConstraint(${JSON.stringify(uc.column)}${optStr});`;
     });
-    lines.push(...stmts.sort());
-  }
-
-  /** @internal */
-  override async table(tableName: string, lines: string[]): Promise<void> {
-    await super.table(tableName, lines);
-    // Remove the trailing empty line pushed by super.table so we can append constraints first.
-    if (lines[lines.length - 1] === "") lines.pop();
-    await this.exclusionConstraintsInCreate(tableName, lines);
-    await this.uniqueConstraintsInCreate(tableName, lines);
-    lines.push("");
+    lines.push(...uniqLines.sort());
   }
 
   /** @internal */

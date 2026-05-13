@@ -1532,17 +1532,23 @@ export class MigrationContext {
     // Create indexes from table definition
     for (const idx of td.indexes) {
       const indexName = idx.name ?? `index_${name}_on_${idx.columns.join("_and_")}`;
-      const unique = idx.unique ? "UNIQUE " : "";
-      const colsList = idx.columns.map((c) => `"${c}"`).join(", ");
-      await this.adapter.executeMutation(
-        `CREATE ${unique}INDEX "${indexName}" ON "${name}" (${colsList})`,
-      );
-      if (!this._indexes.has(name)) this._indexes.set(name, []);
-      const orders =
+      const ordersMap: Record<string, string> =
         typeof idx.orders === "string"
           ? Object.fromEntries(idx.columns.map((c) => [c, idx.orders as string]))
-          : idx.orders;
-      this._indexes.get(name)!.push({ ...idx, name: indexName, orders });
+          : (idx.orders ?? {});
+      const unique = idx.unique ? "UNIQUE " : "";
+      const using = idx.using && idx.using !== "btree" ? ` USING ${idx.using}` : "";
+      const colsList = idx.columns
+        .map((c) => {
+          const order = ordersMap[c];
+          return `"${c}"${order ? ` ${order.toUpperCase()}` : ""}`;
+        })
+        .join(", ");
+      let sql = `CREATE ${unique}INDEX "${indexName}" ON "${name}"${using} (${colsList})`;
+      if (idx.where) sql += ` WHERE ${idx.where}`;
+      await this.adapter.executeMutation(sql);
+      if (!this._indexes.has(name)) this._indexes.set(name, []);
+      this._indexes.get(name)!.push({ ...idx, name: indexName, orders: ordersMap });
     }
   }
 

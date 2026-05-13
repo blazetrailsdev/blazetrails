@@ -1167,6 +1167,17 @@ describe("Errors<TBase> type parameter", () => {
     });
   });
 
+  it("add() message callback receives TBase | null and options (two-arg form)", () => {
+    const e = new Errors<User>({ name: "Alice", age: 30 });
+    e.add("name", "invalid", {
+      message: (record, opts) => {
+        expectTypeOf(record).toEqualTypeOf<User | null>();
+        expectTypeOf(opts).toEqualTypeOf<Record<string, unknown>>();
+        return "bad";
+      },
+    });
+  });
+
   it("default Errors (= object) still compiles", () => {
     const e = new Errors<object>({} as object);
     expectTypeOf(e.base).toEqualTypeOf<object | null>();
@@ -1198,6 +1209,16 @@ describe("Errors<TBase> type parameter", () => {
     userErrors.copyBang(postErrors);
   });
 
+  it("copy alias accepts Errors<U> for a different U", () => {
+    interface Post {
+      title: string;
+    }
+    const userErrors = new Errors<User>({ name: "Alice", age: 30 });
+    const postErrors = new Errors<Post>({ title: "Hello" });
+    expectTypeOf(userErrors.copy<Post>).toBeFunction();
+    userErrors.copy(postErrors);
+  });
+
   it("mergeBang accepts Errors<U> for a different U", () => {
     interface Post {
       title: string;
@@ -1206,6 +1227,16 @@ describe("Errors<TBase> type parameter", () => {
     const postErrors = new Errors<Post>({ title: "Hello" });
     expectTypeOf(userErrors.mergeBang<Post>).toBeFunction();
     userErrors.mergeBang(postErrors);
+  });
+
+  it("merge alias accepts Errors<U> for a different U", () => {
+    interface Post {
+      title: string;
+    }
+    const userErrors = new Errors<User>({ name: "Alice", age: 30 });
+    const postErrors = new Errors<Post>({ title: "Hello" });
+    expectTypeOf(userErrors.merge<Post>).toBeFunction();
+    userErrors.merge(postErrors);
   });
 
   it("normalizeArguments() type callback receives TBase | null", () => {

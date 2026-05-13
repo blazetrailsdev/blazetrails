@@ -57,7 +57,7 @@ export class Errors<TBase extends object = object> {
     attribute: string,
     type: string | ((record: TBase | null, options: Record<string, unknown>) => string) = "invalid",
     options?: {
-      message?: string | ((record: TBase | null) => string);
+      message?: string | ((record: TBase | null, options: Record<string, unknown>) => string);
     } & Record<string, unknown>,
   ): ActiveModelError {
     const [normAttr, normType, normOpts] = this.normalizeArguments(attribute, type, options);

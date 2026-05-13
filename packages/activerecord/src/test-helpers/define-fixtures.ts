@@ -71,7 +71,10 @@ function getRegistry(adapter: object): Map<string, BaseClass> {
 }
 
 /** @internal */
-export function resolveModelForTable(adapter: object, tableName: string): BaseClass | undefined {
+export function resolveModelForTable(
+  adapter: DatabaseAdapter,
+  tableName: string,
+): BaseClass | undefined {
   return getRegistry(adapter).get(tableName);
 }
 
@@ -172,15 +175,33 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
       }
 
       // Polymorphic belongs_to expansion: { taggable: instance } → taggable_type + taggable_id.
-      // Only fires for actual model instances (constructor !== Object); plain JSON objects fall
-      // through to the normal object-with-PK handling below.
+      // Skipped when the caller already provided explicit type/id columns (explicit wins).
+      // Only fires for actual model instances — constructor must be a non-Object function so
+      // plain JSON objects and null-prototype objects fall through to the PK-extraction path.
       const poly = findPolymorphicRef(ModelClass, col);
-      if (poly && val !== null && typeof val === "object" && (val as any).constructor !== Object) {
+      if (
+        poly &&
+        val !== null &&
+        typeof val === "object" &&
+        !(poly.typeColumn in attrs) &&
+        !(poly.idColumn in attrs) &&
+        typeof (val as any).constructor === "function" &&
+        (val as any).constructor !== Object
+      ) {
         const instance = val as FixtureAttrs;
         const instanceClass = (instance as any).constructor as BaseClass | undefined;
-        const instancePk = (instanceClass as any)?.primaryKey ?? pkCol;
-        row[poly.idColumn] = instance[typeof instancePk === "string" ? instancePk : pkCol];
-        row[poly.typeColumn] = instanceClass?.name;
+        const instancePk = (instanceClass as any)?.primaryKey;
+        if (Array.isArray(instancePk)) {
+          throw new Error(
+            `defineFixtures: polymorphic target "${col}" has a composite primary key — pass explicit ${poly.idColumn} instead`,
+          );
+        }
+        const instancePkCol = typeof instancePk === "string" ? instancePk : "id";
+        // Mirror Rails' polymorphicName: use static polymorphicName() if defined, else class name.
+        const typeName: string =
+          (instanceClass as any)?.polymorphicName?.() ?? instanceClass?.name ?? "Unknown";
+        row[poly.idColumn] = instance[instancePkCol];
+        row[poly.typeColumn] = typeName;
         continue;
       }
 

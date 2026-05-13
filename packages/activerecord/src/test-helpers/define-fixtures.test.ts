@@ -252,6 +252,27 @@ describe("defineFixtures", () => {
     expect(insertSql).toContain(String(postId));
   });
 
+  it("polymorphic ref: explicit taggable_type/taggable_id pass through without expansion", async () => {
+    // When the caller already provides the concrete type/id columns directly (no association key),
+    // they should pass through unchanged — no expansion is triggered.
+    const adapter = makeAdapter();
+    const rows = new Map([[fixtureId("welcome_tag"), { id: fixtureId("welcome_tag") }]]);
+    const Tagging = makeModel("taggings", rows) as any;
+    Tagging._reflections = {
+      taggable: { macro: "belongsTo", isPolymorphic: () => true },
+    };
+
+    await defineFixtures(adapter, Tagging, {
+      welcome_tag: { taggable_type: "CustomPost", taggable_id: 999 },
+    });
+
+    const insertSql = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
+      .map((c: unknown[]) => c[0] as string)
+      .find((s) => s.includes("INSERT INTO") && s.includes("taggings"));
+    expect(insertSql).toContain("CustomPost");
+    expect(insertSql).toContain("999");
+  });
+
   it("STI: type column passed explicitly is preserved in INSERT", async () => {
     const adapter = makeAdapter();
     const rows = new Map([

@@ -18,7 +18,7 @@ import { Delegation as ASDelegation } from "@blazetrails/activesupport";
  * Mirrors: ActiveRecord::Delegation
  */
 type AnyClass = abstract new (...args: any[]) => any;
-type AnyCallable = (...args: unknown[]) => unknown;
+type AnyCallable = (...args: any[]) => any;
 
 export interface Delegation {
   delegatedClasses: Set<AnyClass>;

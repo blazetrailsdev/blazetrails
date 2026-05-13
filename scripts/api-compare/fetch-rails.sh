@@ -5,45 +5,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RAILS_DIR="$SCRIPT_DIR/.rails-source"
 RAILS_TAG="v8.0.2"
 
-# Single source of truth for sparse-checkout paths. Used for both fresh clones
-# and to re-sync existing mirrors when this script is re-run.
-SPARSE_PATHS=(
-  activerecord/lib/active_record
-  activerecord/lib/arel
-  activerecord/test/fixtures
-  activerecord/test/models
-  activerecord/test/schema
-  activemodel/lib/active_model
-  activesupport/lib/active_support
-  actionpack/lib/action_dispatch
-  actionpack/lib/action_controller
-  actionview/lib/action_view
-  railties/lib/rails
-)
-
 if [ -d "$RAILS_DIR/.git" ]; then
-  # Existing mirror: re-apply sparse-checkout so paths added since the
-  # original clone (e.g. test/fixtures, test/models) get populated without
-  # a full re-clone. Idempotent when the patterns already match.
-  echo "Rails source already cloned at $RAILS_DIR — syncing sparse-checkout."
-  (cd "$RAILS_DIR" && git sparse-checkout set "${SPARSE_PATHS[@]}")
-  echo "Rails source ready at $RAILS_DIR"
+  echo "Rails source already cloned at $RAILS_DIR — skipping."
   exit 0
 fi
 
-echo "Cloning Rails $RAILS_TAG (sparse checkout)..."
+echo "Cloning Rails $RAILS_TAG (full, depth=1)..."
 rm -rf "$RAILS_DIR"
 
+# Full shallow clone (~53 MiB unpacked) — we previously sparse-checkout'd
+# a subset of paths to save ~30 MiB. The savings weren't worth the
+# maintenance burden: every new fidelity-checking use case (test/fixtures,
+# test/models, activestorage, etc.) required extending the sparse list,
+# and a mistake silently dropped paths from existing mirrors. A full clone
+# is fixed-size, future-proof, and lets any agent read any Rails file
+# without "is this path in sparse?" being a question.
 git clone \
-  --filter=blob:none \
-  --sparse \
   --depth=1 \
   --branch "$RAILS_TAG" \
   https://github.com/rails/rails.git \
   "$RAILS_DIR"
-
-cd "$RAILS_DIR"
-
-git sparse-checkout set "${SPARSE_PATHS[@]}"
 
 echo "Rails source ready at $RAILS_DIR"

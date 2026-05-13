@@ -4,7 +4,6 @@ import {
   type Type,
   typeRegistry,
   pushPendingDecorator,
-  ArgumentError,
   type CallbackConditions,
 } from "@blazetrails/activemodel";
 import "./type.js"; // Register AR type overrides into AM's type registry
@@ -222,6 +221,7 @@ import {
   rememberTransactionRecordState as _rememberTransactionRecordState,
   restoreTransactionRecordState as _restoreTransactionRecordState,
   isTransactionIncludeAnyAction as _isTransactionIncludeAnyAction,
+  synthOnCondition as _synthOnCondition,
 } from "./transactions.js";
 
 import {
@@ -2955,24 +2955,12 @@ export class Base extends Model {
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | object,
     conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
-    if (conditions?.on !== undefined) {
-      const fireOn = (Array.isArray(conditions.on) ? conditions.on : [conditions.on]) as string[];
-      const invalid = fireOn.filter((a) => a !== "create" && a !== "update" && a !== "destroy");
-      if (invalid.length > 0) {
-        throw new ArgumentError(
-          `:on conditions for after_commit and after_rollback callbacks have to be one of [:create, :destroy, :update]`,
-        );
-      }
-      const { on: _on, if: existingIf, ...rest } = conditions;
-      const synthIf = (record: InstanceType<T>): boolean =>
-        _isTransactionIncludeAnyAction.call(record as any, fireOn);
-      const combinedIf = existingIf
-        ? (record: InstanceType<T>) => synthIf(record) && existingIf(record)
-        : synthIf;
-      super.afterCommit(fn, { ...rest, if: combinedIf } as CallbackConditions<InstanceType<T>>);
-    } else {
-      super.afterCommit(fn, conditions);
-    }
+    super.afterCommit(
+      fn,
+      _synthOnCondition(conditions as Record<string, unknown>) as CallbackConditions<
+        InstanceType<T>
+      >,
+    );
   }
 
   /**
@@ -2985,24 +2973,12 @@ export class Base extends Model {
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | object,
     conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
-    if (conditions?.on !== undefined) {
-      const fireOn = (Array.isArray(conditions.on) ? conditions.on : [conditions.on]) as string[];
-      const invalid = fireOn.filter((a) => a !== "create" && a !== "update" && a !== "destroy");
-      if (invalid.length > 0) {
-        throw new ArgumentError(
-          `:on conditions for after_commit and after_rollback callbacks have to be one of [:create, :destroy, :update]`,
-        );
-      }
-      const { on: _on, if: existingIf, ...rest } = conditions;
-      const synthIf = (record: InstanceType<T>): boolean =>
-        _isTransactionIncludeAnyAction.call(record as any, fireOn);
-      const combinedIf = existingIf
-        ? (record: InstanceType<T>) => synthIf(record) && existingIf(record)
-        : synthIf;
-      super.afterRollback(fn, { ...rest, if: combinedIf } as CallbackConditions<InstanceType<T>>);
-    } else {
-      super.afterRollback(fn, conditions);
-    }
+    super.afterRollback(
+      fn,
+      _synthOnCondition(conditions as Record<string, unknown>) as CallbackConditions<
+        InstanceType<T>
+      >,
+    );
   }
 
   /**

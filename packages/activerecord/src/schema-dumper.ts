@@ -344,6 +344,7 @@ class AdapterSchemaSource implements SchemaSource {
       using?: string;
       lengths?: number | Record<string, number>;
       opclasses?: string | Record<string, string>;
+      include?: string[];
     };
     let raw: RichIdx[];
     const adapterAny = this._adapter as unknown as { indexes?(t: string): Promise<unknown[]> };
@@ -370,6 +371,7 @@ class AdapterSchemaSource implements SchemaSource {
       using: idx.using,
       lengths: idx.lengths,
       opclasses: idx.opclasses,
+      include: idx.include,
     }));
   }
 }

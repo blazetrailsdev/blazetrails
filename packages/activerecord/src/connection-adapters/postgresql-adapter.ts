@@ -2506,8 +2506,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       const def = row.definition as string;
 
       let orders: Record<string, string> | string | undefined;
-      // Match the column list inside the index definition's first paren group.
-      // Use a non-greedy match to stop before any WHERE or INCLUDE clause.
       const descMatch = def.match(/\(([^)]+)\)/);
       if (descMatch) {
         const colDefs = descMatch[1].split(",").map((s) => s.trim());

@@ -125,8 +125,8 @@ export class SchemaDumper extends AbstractSchemaDumper {
     indexes: IndexInfo[],
   ): Promise<IndexInfo[]> {
     const adapter = this.pgAdapter();
-    // Fetch and cache both constraint lists so exclusionConstraintsInCreate /
-    // uniqueConstraintsInCreate can reuse them without a second DB round-trip.
+    // Fetch and cache both constraint lists so gatherInlineConstraints can
+    // reuse them without a second DB round-trip.
     const excl: ExclusionConstraintDefinition[] = adapter?.exclusionConstraints
       ? await adapter.exclusionConstraints(tableName)
       : [];

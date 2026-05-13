@@ -671,26 +671,32 @@ export class ConnectionPool implements ReapablePool {
       return result;
     };
 
+    let checkoutErr: unknown;
     try {
       lease.connection = this.checkout();
-      return runWithConn();
     } catch (err) {
-      if (err instanceof ConnectionTimeoutError && options.checkoutTimeout !== undefined) {
-        // Pool saturated and caller explicitly opted in — wait for a free connection.
-        return this.checkoutAsync(options.checkoutTimeout).then(
-          (conn) => {
-            lease.connection = conn;
-            return runWithConn();
-          },
-          (checkoutErr) => {
-            restoreSticky();
-            throw checkoutErr;
-          },
-        );
-      }
-      restoreSticky();
-      throw err;
+      checkoutErr = err;
     }
+
+    if (checkoutErr === undefined) {
+      return runWithConn();
+    }
+
+    if (checkoutErr instanceof ConnectionTimeoutError && options.checkoutTimeout !== undefined) {
+      // Pool saturated and caller explicitly opted in — wait for a free connection.
+      return this.checkoutAsync(options.checkoutTimeout).then(
+        (conn) => {
+          lease.connection = conn;
+          return runWithConn();
+        },
+        (asyncErr) => {
+          restoreSticky();
+          throw asyncErr;
+        },
+      );
+    }
+    restoreSticky();
+    throw checkoutErr;
   }
 
   // --- Pool statistics ---

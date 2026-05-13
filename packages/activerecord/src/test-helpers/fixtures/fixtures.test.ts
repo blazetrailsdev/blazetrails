@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DatabaseAdapter } from "../../adapter.js";
-import { defineFixtures, fixtureId, isFixtureRef, type FixtureRef } from "../define-fixtures.js";
+import {
+  defineFixtures,
+  fixtureId,
+  isFixtureRef,
+  ref,
+  type FixtureRef,
+} from "../define-fixtures.js";
 import { topicFixtureData } from "./topics.js";
 import { postFixtureData } from "./posts.js";
 import { commentFixtureData } from "./comments.js";
@@ -9,6 +15,9 @@ import { bookFixtureData } from "./books.js";
 import { authorAddressFixtureData } from "./author-addresses.js";
 import { companyFixtureData } from "./companies.js";
 import { accountFixtureData } from "./accounts.js";
+import { developerFixtureData } from "./developers.js";
+import { projectFixtureData } from "./projects.js";
+import { developersProjectsFixtureData } from "./developers-projects.js";
 
 function makeAdapter(): DatabaseAdapter {
   return {
@@ -213,6 +222,7 @@ describe("bookFixtureData", () => {
   });
 });
 
+<<<<<<< HEAD
 describe("companyFixtureData", () => {
   it("exports all 12 Rails companies fixtures", () => {
     expect(Object.keys(companyFixtureData)).toEqual([
@@ -330,6 +340,84 @@ describe("accountFixtureData", () => {
   });
 });
 
+||||||| parent of 28fa2ba99 (feat(activerecord) fixture replacement Phase 3c — developers + projects + developers_projects HABTM fixture data)
+=======
+describe("developerFixtureData", () => {
+  it("exports david, jamis, dev_3..dev_10, poor_jamis", () => {
+    const keys = Object.keys(developerFixtureData);
+    expect(keys).toContain("david");
+    expect(keys).toContain("jamis");
+    expect(keys).toContain("poor_jamis");
+    expect(keys.filter((k) => k.startsWith("dev_"))).toHaveLength(8);
+  });
+
+  it("david has correct name and salary", () => {
+    expect(developerFixtureData.david.name).toBe("David");
+    expect(developerFixtureData.david.salary).toBe(80000);
+  });
+
+  it("poor_jamis has low salary", () => {
+    expect(developerFixtureData.poor_jamis.salary).toBe(9000);
+  });
+
+  it("defineFixtures inserts david", async () => {
+    const adapter = makeAdapter();
+    const Developer = makeModel("developers");
+    for (const k of Object.keys(developerFixtureData) as Array<keyof typeof developerFixtureData>) {
+      seedRows(Developer, k, { name: developerFixtureData[k].name });
+    }
+    await defineFixtures(adapter, Developer, developerFixtureData);
+    const insertSqls = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
+      .map((c: unknown[]) => c[0] as string)
+      .filter((s) => s.includes("INSERT INTO") && s.includes("developers"));
+    expect(insertSqls.some((s) => s.includes(String(fixtureId("david"))))).toBe(true);
+  });
+});
+
+describe("projectFixtureData", () => {
+  it("exports active_record and action_controller", () => {
+    expect(Object.keys(projectFixtureData)).toEqual(["active_record", "action_controller"]);
+  });
+
+  it("active_record has correct name", () => {
+    expect(projectFixtureData.active_record.name).toBe("Active Record");
+  });
+});
+
+describe("developersProjectsFixtureData", () => {
+  it("exports four join rows", () => {
+    expect(Object.keys(developersProjectsFixtureData)).toHaveLength(4);
+  });
+
+  it("david_active_record refs david in developers and active_record in projects", () => {
+    const devRef = developersProjectsFixtureData.david_active_record.developer_id as ReturnType<
+      typeof ref
+    >;
+    const projRef = developersProjectsFixtureData.david_active_record.project_id as ReturnType<
+      typeof ref
+    >;
+    expect(isFixtureRef(devRef)).toBe(true);
+    expect(devRef.tableName).toBe("developers");
+    expect(devRef.fixtureName).toBe("david");
+    expect(isFixtureRef(projRef)).toBe(true);
+    expect(projRef.tableName).toBe("projects");
+    expect(projRef.fixtureName).toBe("active_record");
+  });
+
+  it("ref values resolve to fixtureId of their target fixture", () => {
+    const devRef = developersProjectsFixtureData.david_active_record.developer_id as ReturnType<
+      typeof ref
+    >;
+    const projRef = developersProjectsFixtureData.david_active_record.project_id as ReturnType<
+      typeof ref
+    >;
+    // fixtureId resolution is the contract: ref carries table + label, consumer resolves via fixtureId
+    expect(fixtureId(devRef.fixtureName)).toBe(fixtureId("david"));
+    expect(fixtureId(projRef.fixtureName)).toBe(fixtureId("active_record"));
+  });
+});
+
+>>>>>>> 28fa2ba99 (feat(activerecord) fixture replacement Phase 3c — developers + projects + developers_projects HABTM fixture data)
 describe("authorAddressFixtureData", () => {
   it("exports david_address, david_address_extra, mary_address, bob_address", () => {
     expect(Object.keys(authorAddressFixtureData)).toEqual([

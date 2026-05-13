@@ -603,10 +603,10 @@ export class ConnectionPool implements ReapablePool {
     }
   }
 
-  withConnection<T>(
-    fn: (conn: DatabaseAdapter) => T,
-    options: { preventPermanentCheckout?: boolean } = {},
-  ): T {
+  async withConnection<T>(
+    fn: (conn: DatabaseAdapter) => T | Promise<T>,
+    options: { preventPermanentCheckout?: boolean; checkoutTimeout?: number } = {},
+  ): Promise<T> {
     const preventPermanent = options.preventPermanentCheckout ?? false;
     const lease = this._connectionLease();
     const stickyWas = lease.sticky;
@@ -618,21 +618,15 @@ export class ConnectionPool implements ReapablePool {
 
     if (lease.connection) {
       try {
-        return fn(lease.connection);
+        return await fn(lease.connection);
       } finally {
         restoreSticky();
       }
     }
 
-    lease.connection = this.checkout();
+    lease.connection = await this.checkoutAsync(options.checkoutTimeout);
     try {
-      const result = fn(lease.connection);
-      if (result && typeof (result as any).then === "function") {
-        return Promise.resolve(result).finally(() => {
-          restoreSticky();
-          if (!lease.sticky) this.releaseConnection();
-        }) as T;
-      }
+      const result = await fn(lease.connection);
       restoreSticky();
       if (!lease.sticky) this.releaseConnection();
       return result;

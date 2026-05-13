@@ -281,9 +281,9 @@ export function releaseConnection(this: typeof Base): boolean {
 
 export function withConnection<T>(
   this: typeof Base,
-  fn: (conn: DatabaseAdapter) => T,
-  options?: { preventPermanentCheckout?: boolean },
-): T {
+  fn: (conn: DatabaseAdapter) => T | Promise<T>,
+  options?: { preventPermanentCheckout?: boolean; checkoutTimeout?: number },
+): Promise<T> {
   return connectionPool.call(this).withConnection(fn, options);
 }
 

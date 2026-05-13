@@ -1,15 +1,6 @@
 import { ref } from "../define-fixtures.js";
 
 // activerecord/test/fixtures/books.yml
-// Enum integer mappings from activerecord/test/models/book.rb:
-//   status: proposed=0, written=1, published=2
-//   last_read: unread=0, reading=2, read=3, forgotten=nil
-//   language: english=0, spanish=1, french=2
-//   author_visibility / illustrator_visibility: visible=0, invisible=1
-//   font_size: small=0, medium=1, large=2
-//   difficulty: easy=0, medium=1, hard=2
-//   boolean_status: { enabled: true(1), disabled: false(0) }
-//   cover: string enum { hard: "hard", soft: "soft" }
 export const bookFixtureData = {
   awdr: {
     author_id: ref("authors", "david"),

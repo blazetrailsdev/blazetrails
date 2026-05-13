@@ -5,6 +5,7 @@ import {
 import type { DatabaseAdapter } from "../adapter.js";
 import type { Base } from "../base.js";
 import type { Quoting } from "../connection-adapters/abstract/quoting-interface.js";
+import { singularize } from "@blazetrails/activesupport";
 
 const FIXTURE_MAX_ID = 2 ** 30 - 1;
 
@@ -54,6 +55,58 @@ export function isFixtureRef(v: unknown): v is FixtureRef {
   return typeof v === "object" && v !== null && REF_TAG in v;
 }
 
+// --- Phase 1b: tableName → ModelClass registry ---
+
+const tableRegistry = new Map<string, BaseClass>();
+
+/** @internal Exposed for testing. */
+export function resolveModelForTable(tableName: string): BaseClass | undefined {
+  return tableRegistry.get(tableName);
+}
+
+/** @internal */
+export function clearTableRegistry(): void {
+  tableRegistry.clear();
+}
+
+// --- Phase 1b: HABTM join-table detection ---
+
+/**
+ * Given a join-table name like "developers_projects", returns [singularA, singularB] if both
+ * corresponding plural table names are registered, otherwise null.
+ * @internal
+ */
+function detectHabtmParts(tableName: string): [string, string] | null {
+  const parts = tableName.split("_");
+  for (let i = 1; i < parts.length; i++) {
+    const left = parts.slice(0, i).join("_");
+    const right = parts.slice(i).join("_");
+    if (tableRegistry.has(left) && tableRegistry.has(right)) {
+      return [left, right];
+    }
+  }
+  return null;
+}
+
+// --- Phase 1b: polymorphic belongs_to detection ---
+
+interface PolymorphicBelongsTo {
+  typeColumn: string;
+  idColumn: string;
+  modelClass: BaseClass;
+}
+
+function findPolymorphicRef(modelClass: BaseClass, colName: string): PolymorphicBelongsTo | null {
+  const reflections: Record<string, any> = (modelClass as any)._reflections ?? {};
+  const refl = reflections[colName];
+  if (!refl || refl.macro !== "belongsTo" || !refl.isPolymorphic?.()) return null;
+  return {
+    typeColumn: `${colName}_type`,
+    idColumn: `${colName}_id`,
+    modelClass,
+  };
+}
+
 type BaseClass = typeof Base;
 type FixtureAttrs = Record<string, unknown>;
 type InsertHost = DatabaseStatementsHost &
@@ -64,6 +117,14 @@ type InsertHost = DatabaseStatementsHost &
  *
  * IDs are deterministic: same label → same ID across test runs, enabling cross-batch
  * FK references via `ref(tableName, label)` without insertion-order coupling.
+ *
+ * Phase 1b ergonomics (convention-over-config, additive):
+ * - HABTM join tables: string values for `a_id`/`b_id` columns auto-resolve via fixtureId()
+ *   when the table name matches the `a_b` pattern and both `a` and `b` are registered.
+ * - Polymorphic refs: `{ taggable: postInstance }` expands to `taggable_type`/`taggable_id`
+ *   when a polymorphic `belongsTo :taggable` reflection exists on the model.
+ * - `ref(tableName, label)` works without re-passing the ModelClass once any defineFixtures
+ *   call for that table has registered it.
  */
 export async function defineFixtures<T extends BaseClass, K extends string>(
   adapter: DatabaseAdapter,
@@ -79,6 +140,11 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
   }
   const pkCol = pk;
 
+  // Register this model in the tableName registry (Phase 1b).
+  tableRegistry.set(tableName, ModelClass);
+
+  const habtmParts = detectHabtmParts(tableName);
+
   const labels = Object.keys(fixtures) as K[];
 
   // Build rows with deterministic IDs and resolved references
@@ -90,12 +156,38 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
 
     for (const [col, val] of Object.entries(attrs)) {
       if (col === pkCol) continue; // deterministic ID wins; caller must not override it
+
       if (isFixtureRef(val)) {
-        const refId = fixtureId(val.fixtureName);
-        row[col] = refId;
-      } else if (val !== null && typeof val === "object" && pkCol in val) {
+        row[col] = fixtureId(val.fixtureName);
+        continue;
+      }
+
+      // Polymorphic belongs_to expansion: { taggable: instance } → taggable_type + taggable_id
+      const poly = findPolymorphicRef(ModelClass, col);
+      if (poly && val !== null && typeof val === "object") {
+        const instance = val as FixtureAttrs;
+        const instancePk = (instance.constructor as any)?.primaryKey ?? pkCol;
+        const instanceClass = (instance as any).constructor as BaseClass | undefined;
+        row[poly.idColumn] = instance[typeof instancePk === "string" ? instancePk : pkCol];
+        row[poly.typeColumn] = instanceClass?.name ?? String((instance as any).constructor);
+        continue;
+      }
+
+      // HABTM auto-resolution: string label values for `a_id`/`b_id` columns auto-resolve.
+      // "developers_projects" → left="developers", right="projects"; FK cols are
+      // "developer_id" and "project_id" (naive singularize: strip trailing "s").
+      if (habtmParts && typeof val === "string") {
+        const [left, right] = habtmParts;
+        const leftSingular = singularize(left);
+        const rightSingular = singularize(right);
+        if (col === `${leftSingular}_id` || col === `${rightSingular}_id`) {
+          row[col] = fixtureId(val);
+          continue;
+        }
+      }
+
+      if (val !== null && typeof val === "object" && pkCol in val) {
         // Model instance (or any object with the PK): extract the PK value.
-        // Use ref() if a plain JSON column could be confused for an instance.
         row[col] = (val as FixtureAttrs)[pkCol];
       } else {
         row[col] = val;

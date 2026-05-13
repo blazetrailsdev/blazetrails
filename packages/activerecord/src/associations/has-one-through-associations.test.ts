@@ -369,9 +369,16 @@ describe("HasOneThroughAssociationsTest", () => {
         this.adapter = adapter;
       }
     }
+    class StOrg extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
     registerModel(StClub);
     registerModel(StSponsor);
     registerModel(StMember);
+    registerModel(StOrg);
     Associations.hasOne.call(StClub, "sponsor", { className: "StSponsor", foreignKey: "club_id" });
     Associations.hasOne.call(StClub, "sponsoredMember", {
       className: "StMember",
@@ -381,17 +388,29 @@ describe("HasOneThroughAssociationsTest", () => {
     });
     Associations.belongsTo.call(StSponsor, "sponsorable", { polymorphic: true });
 
-    const club = await StClub.create({ name: "Moustache Club" });
+    const memberClub = await StClub.create({ name: "Moustache Club" });
     const member = await StMember.create({ name: "Groucho" });
     await StSponsor.create({
-      club_id: club.id,
+      club_id: memberClub.id,
       sponsorable_id: member.id,
       sponsorable_type: "StMember",
     });
 
-    const sponsoredMember = await club.loadHasOne("sponsoredMember");
+    // A club whose sponsor is an Organization — sourceType filter must exclude it
+    const orgClub = await StClub.create({ name: "Boring Club" });
+    const org = await StOrg.create({ name: "NSA" });
+    await StSponsor.create({
+      club_id: orgClub.id,
+      sponsorable_id: org.id,
+      sponsorable_type: "StOrg",
+    });
+
+    const sponsoredMember = await memberClub.loadHasOne("sponsoredMember");
     expect(sponsoredMember).not.toBeNull();
     expect((sponsoredMember as any).name).toBe("Groucho");
+
+    const noMember = await orgClub.loadHasOne("sponsoredMember");
+    expect(noMember).toBeNull();
   });
 
   it("eager has one through polymorphic with source type", async () => {
@@ -415,9 +434,16 @@ describe("HasOneThroughAssociationsTest", () => {
         this.adapter = adapter;
       }
     }
+    class EsOrg extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
     registerModel(EsClub);
     registerModel(EsSponsor);
     registerModel(EsMember);
+    registerModel(EsOrg);
     Associations.hasOne.call(EsClub, "sponsor", { className: "EsSponsor", foreignKey: "club_id" });
     Associations.hasOne.call(EsClub, "sponsoredMember", {
       className: "EsMember",
@@ -427,20 +453,38 @@ describe("HasOneThroughAssociationsTest", () => {
     });
     Associations.belongsTo.call(EsSponsor, "sponsorable", { polymorphic: true });
 
-    const club = await EsClub.create({ name: "Moustache Club" });
+    const memberClub = await EsClub.create({ name: "Moustache Club" });
     const member = await EsMember.create({ name: "Groucho" });
     await EsSponsor.create({
-      club_id: club.id,
+      club_id: memberClub.id,
       sponsorable_id: member.id,
       sponsorable_type: "EsMember",
     });
 
+    // A club whose sponsor is an Organization — sourceType filter must exclude it
+    const orgClub = await EsClub.create({ name: "Boring Club" });
+    const org = await EsOrg.create({ name: "NSA" });
+    await EsSponsor.create({
+      club_id: orgClub.id,
+      sponsorable_id: org.id,
+      sponsorable_type: "EsOrg",
+    });
+
     const clubs = await EsClub.all().includes("sponsoredMember").toArray();
-    expect(clubs).toHaveLength(1);
-    const preloaded = (clubs[0] as any)._preloadedAssociations?.get("sponsoredMember");
+    expect(clubs).toHaveLength(2);
+
+    const byId = new Map(clubs.map((c: any) => [c.id, c]));
+    const memberClubLoaded = byId.get(memberClub.id) as any;
+    const orgClubLoaded = byId.get(orgClub.id) as any;
+
+    const preloaded = memberClubLoaded._preloadedAssociations?.get("sponsoredMember");
     expect(preloaded).toBeDefined();
     expect(preloaded).not.toBeNull();
     expect((preloaded as any).name).toBe("Groucho");
+
+    // org-sponsored club must have a nil preloaded entry (key present, value null)
+    expect(orgClubLoaded._preloadedAssociations?.has("sponsoredMember")).toBe(true);
+    expect(orgClubLoaded._preloadedAssociations?.get("sponsoredMember")).toBeNull();
   });
 
   it.skip("has one through nonpreload eagerloading", () => {

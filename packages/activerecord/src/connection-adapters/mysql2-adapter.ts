@@ -683,15 +683,18 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       | [string, ...string[]]
       | [string, ...string[], { ifExists?: boolean; force?: "cascade"; temporary?: boolean }]
   ): Promise<void> {
-    const ss = this.schemaStatements();
-    const [tableNames, options] = (ss as any)._splitTableNamesAndOptions(args) as [
-      string[],
-      { ifExists?: boolean; force?: "cascade"; temporary?: boolean },
-    ];
+    const last = args[args.length - 1];
+    const hasOpts = last !== null && last !== undefined && typeof last === "object";
+    const tableNames = (hasOpts ? args.slice(0, -1) : args) as string[];
+    const options = (hasOpts ? last : {}) as {
+      ifExists?: boolean;
+      force?: "cascade";
+      temporary?: boolean;
+    };
     if (tableNames.length === 0) {
       throw new ArgumentError("dropTable requires at least one table name");
     }
-    const temporary = (options as { temporary?: boolean }).temporary ? " TEMPORARY" : "";
+    const temporary = options.temporary ? " TEMPORARY" : "";
     const ifExists = options.ifExists ? " IF EXISTS" : "";
     const cascade = options.force === "cascade" ? " CASCADE" : "";
     const quoted = tableNames.map((n) => this.quoteTableName(n)).join(", ");

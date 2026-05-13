@@ -90,12 +90,12 @@ describeIfMysql("Mysql2Adapter", () => {
   });
 
   describe("MySQLAnsiQuotesTest", () => {
-    it("primary key method with ansi quotes", async () => {
+    it.skip("primary key method with ansi quotes", () => {
       // BLOCKED: ansi-quotes — requires SET SESSION sql_mode='ANSI_QUOTES' which
       // needs adapter-level session-variable setter not yet wired for test setup
     });
 
-    it("foreign keys method with ansi quotes", async () => {
+    it.skip("foreign keys method with ansi quotes", () => {
       // BLOCKED: ansi-quotes — same session-variable setup gap as above
     });
   });

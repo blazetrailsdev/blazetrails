@@ -114,8 +114,12 @@ function findPolymorphicRef(modelClass: BaseClass, colName: string): Polymorphic
   // Prefer the reflection's own foreignType/foreignKey to honour custom column overrides.
   const typeColumn: string = refl.foreignType ?? `${colName}_type`;
   const rawFk: string | string[] = refl.foreignKey ?? `${colName}_id`;
-  const idColumn = typeof rawFk === "string" ? rawFk : rawFk[0]!;
-  return { typeColumn, idColumn };
+  if (Array.isArray(rawFk)) {
+    throw new Error(
+      `defineFixtures: polymorphic association "${colName}" has a composite foreignKey — pass explicit ${rawFk.join(", ")} instead`,
+    );
+  }
+  return { typeColumn, idColumn: rawFk };
 }
 
 type BaseClass = typeof Base;

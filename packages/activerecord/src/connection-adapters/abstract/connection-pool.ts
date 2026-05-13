@@ -675,7 +675,7 @@ export class ConnectionPool implements ReapablePool {
         );
       }
       restoreSticky();
-      throw err;
+      return Promise.reject(err) as Promise<T>;
     }
   }
 

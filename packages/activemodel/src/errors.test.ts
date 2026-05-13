@@ -1271,6 +1271,11 @@ describe("ValidatableRecord<TBase> type tests", () => {
     expectTypeOf<Errors<Post>>().not.toMatchTypeOf<Errors<User>>();
   });
 
+  it("ValidatableRecord<User> and ValidatableRecord<Post> are not mutually assignable", () => {
+    expectTypeOf<ValidatableRecord<User>>().not.toMatchTypeOf<ValidatableRecord<Post>>();
+    expectTypeOf<ValidatableRecord<Post>>().not.toMatchTypeOf<ValidatableRecord<User>>();
+  });
+
   it("Validator<User>.validate receives ValidatableRecord<User>", () => {
     abstract class UserValidator extends Validator<User> {}
     expectTypeOf<Parameters<UserValidator["validate"]>[0]>().toEqualTypeOf<
@@ -1290,5 +1295,15 @@ describe("ValidatableRecord<TBase> type tests", () => {
   it("BlockValidator<User> callback receives ValidatableRecord<User>", () => {
     type BlockFn = ConstructorParameters<typeof BlockValidator<User>>[1];
     expectTypeOf<Parameters<BlockFn>[0]>().toEqualTypeOf<ValidatableRecord<User>>();
+  });
+
+  it("Model subclass .errors resolves to Errors<ConcreteModel>", () => {
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+    }
+    const p = new Person();
+    expectTypeOf(p.errors).toEqualTypeOf<Errors<Person>>();
   });
 });

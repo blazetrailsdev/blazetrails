@@ -290,9 +290,7 @@ describe("defineFixtures", () => {
       .find((s) => s.includes("INSERT INTO") && s.includes("taggings"));
     expect(insertSql).toContain("taggable_type");
     expect(insertSql).toContain("taggable_id");
-    // Both columns appear and their values are null (test adapter serialises null as "null")
-    expect(insertSql).toContain("taggable_type");
-    expect(insertSql).toContain("taggable_id");
+    // Both FK columns appear with null values (test adapter serialises null as "null")
     const nullCount = (insertSql!.match(/\bnull\b/g) ?? []).length;
     expect(nullCount).toBeGreaterThanOrEqual(2);
   });

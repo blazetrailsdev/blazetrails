@@ -116,7 +116,7 @@ function findPolymorphicRef(modelClass: BaseClass, colName: string): Polymorphic
   const rawFk: string | string[] = refl.foreignKey ?? `${colName}_id`;
   if (Array.isArray(rawFk)) {
     throw new Error(
-      `defineFixtures: polymorphic association "${colName}" has a composite foreignKey — pass explicit ${rawFk.join(", ")} instead`,
+      `defineFixtures: polymorphic association "${colName}" has a composite foreignKey — pass explicit ${typeColumn}, ${rawFk.join(", ")} instead`,
     );
   }
   return { typeColumn, idColumn: rawFk };
@@ -218,7 +218,7 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
           const instancePk = (instanceClass as any)?.primaryKey;
           if (Array.isArray(instancePk)) {
             throw new Error(
-              `defineFixtures: polymorphic target "${col}" has a composite primary key — pass explicit ${poly.idColumn} instead`,
+              `defineFixtures: polymorphic target "${col}" has a composite primary key — pass explicit ${poly.typeColumn} and ${poly.idColumn} instead`,
             );
           }
           const instancePkCol = typeof instancePk === "string" ? instancePk : "id";

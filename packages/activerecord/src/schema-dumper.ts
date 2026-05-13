@@ -16,10 +16,6 @@
  */
 
 import type { DatabaseAdapter } from "./adapter.js";
-// Type-only import: SchemaStatements -> SchemaDumper (abstract inner
-// extends this file's base) -> schema-dumper.ts would be a runtime
-// cycle that `ReferenceError`s on evaluation order. We lazy-import
-// the implementation inside `AdapterSchemaSource.indexes()` below.
 import type { SchemaStatements } from "./connection-adapters/abstract/schema-statements.js";
 import { assertSchemaAdapter } from "./connection-adapters/abstract/assert-schema-adapter.js";
 import type * as SchemaIntrospectionModule from "./schema-introspection.js";
@@ -303,11 +299,6 @@ class AdapterSchemaSource implements SchemaSource {
   get adapter(): DatabaseAdapter {
     return this._adapter;
   }
-  // Lazily constructed on first `indexes()` call so the static import
-  // cycle (schema-dumper -> schema-statements -> abstract/schema-dumper
-  // -> schema-dumper) doesn't fire at module init. Type-only import
-  // above keeps the compile-time reference; runtime construction
-  // happens inside `indexes()` via dynamic import.
   private _schema?: SchemaStatements;
 
   /** @internal */
@@ -341,19 +332,33 @@ class AdapterSchemaSource implements SchemaSource {
 
   /** @internal */
   async indexes(tableName: string): Promise<IndexInfo[]> {
-    if (!this._schema) {
-      const mod = await import("./connection-adapters/abstract/schema-statements.js");
-      assertSchemaAdapter(this._adapter);
-      this._schema = new mod.SchemaStatements(this._adapter);
+    type RichIdx = {
+      columns: string[];
+      unique: boolean;
+      name?: string;
+      where?: string;
+      orders?: Record<string, string> | string;
+      nullsNotDistinct?: boolean;
+    };
+    let raw: RichIdx[];
+    const adapterAny = this._adapter as unknown as { indexes?(t: string): Promise<unknown[]> };
+    if (typeof adapterAny.indexes === "function") {
+      raw = (await adapterAny.indexes(tableName)) as RichIdx[];
+    } else {
+      if (!this._schema) {
+        const mod = await import("./connection-adapters/abstract/schema-statements.js");
+        assertSchemaAdapter(this._adapter);
+        this._schema = new mod.SchemaStatements(this._adapter);
+      }
+      raw = (await this._schema.indexes(tableName)) as RichIdx[];
     }
-    const idxs = await this._schema.indexes(tableName);
-    return idxs.map((idx) => ({
+    return raw.map((idx) => ({
       columns: idx.columns,
       unique: idx.unique,
       name: idx.name,
-      where: (idx as { where?: string }).where,
-      orders: (idx as { orders?: Record<string, string> }).orders,
-      nullsNotDistinct: (idx as { nullsNotDistinct?: boolean }).nullsNotDistinct,
+      where: idx.where,
+      orders: typeof idx.orders === "string" ? undefined : idx.orders,
+      nullsNotDistinct: idx.nullsNotDistinct,
     }));
   }
 }

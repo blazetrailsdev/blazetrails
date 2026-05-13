@@ -207,8 +207,7 @@ describe("SchemaDumperTest", () => {
       order: { name: "desc" },
     });
     const output = SchemaDumper.dump(ctx);
-    expect(output).toContain("order:");
-    expect(output).toContain("desc");
+    expect(output).toContain('order: { name: "desc" }');
   });
   it.skip("schema dumps index length", () => {
     // BLOCKED: schema — schema introspection / dumper gap in schema-dumper

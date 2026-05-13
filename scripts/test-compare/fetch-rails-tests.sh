@@ -10,21 +10,12 @@ if [ ! -d "$RAILS_DIR/.git" ]; then
   exit 1
 fi
 
-echo "Expanding sparse checkout to include test directories..."
-
+# Rails source is now a full clone (see fetch-rails.sh). Test directories
+# are already present — no sparse-checkout expansion needed. Historically
+# this script ran `git sparse-checkout add ...` to fetch test/cases etc.
+# on demand; that's a no-op now.
+echo "Verifying Rails test directories are present..."
 cd "$RAILS_DIR"
-
-git sparse-checkout add \
-  activerecord/test/cases/arel \
-  activemodel/test/cases \
-  activerecord/test/cases \
-  activesupport/test \
-  actionpack/test/dispatch \
-  actionpack/test/controller \
-  actionview/test \
-  railties/test
-
-echo "Rails test source ready at $RAILS_DIR"
 
 # Quick check that test dirs exist
 for dir in "activerecord/test/cases/arel" "activemodel/test/cases" "activerecord/test/cases" "activesupport/test" "actionview/test" "railties/test"; do

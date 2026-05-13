@@ -221,7 +221,8 @@ describe("authorAddressFixtureData", () => {
     ]);
   });
 
-  it("david_address has id 1", () => {
-    expect(authorAddressFixtureData.david_address.id).toBe(1);
+  it("address fixtures are empty objects (PK-only rows)", () => {
+    expect(authorAddressFixtureData.david_address).toEqual({});
+    expect(authorAddressFixtureData.mary_address).toEqual({});
   });
 });

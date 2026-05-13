@@ -2,10 +2,10 @@ import { ref } from "../define-fixtures.js";
 
 // activerecord/test/fixtures/companies.yml
 // STI hierarchy: Company (base) / Firm / Client / DependentFirm / ExclusivelyDependentFirm
-// Schema gap: Rails schema also carries rating (bigint), description, account_id, status (integer
-// enum) — omitted; test-fixtures.ts Company declares name/type/firm_id/client_of/firm_name.
-// first_firm.firm_id is a self-ref in Rails YAML (points to its own row); ref() resolves IDs
-// deterministically so there is no insertion-ordering issue.
+// Schema gap: Rails schema also carries rating (bigint), description, account_id, and status
+// (integer enum) — omitted; test-fixtures.ts Company declares name/type/firm_id/client_of/firm_name.
+// first_firm.firm_id and first_client.client_of are self-refs in the Rails YAML; ref() resolves
+// IDs deterministically so there is no insertion-ordering issue.
 export const companyFixtureData = {
   first_firm: {
     type: "Firm",

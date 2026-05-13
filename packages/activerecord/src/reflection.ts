@@ -190,7 +190,7 @@ export class AbstractReflection {
     if (!this.isPolymorphic() && this.hasInverse()) {
       const inverse = this.inverseOf();
       if (inverse == null) {
-        const inverseOf = this.inverseName() as string;
+        const inverseOf = this.inverseName()!;
         throw new InverseOfAssociationNotFoundError((this as any).name, inverseOf);
       }
       if (

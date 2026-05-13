@@ -2902,9 +2902,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const joinName = opts.tableName ?? deriveJoinTableName(table1, table2);
     const { columnOptions = {}, tableName: _t, ...rest } = opts;
     const mergedColOpts = { null: false, index: false, ...columnOptions };
-    const t1Ref = singularize(table1.split(".").at(-1) ?? table1);
-    const t2Ref = singularize(table2.split(".").at(-1) ?? table2);
     const ss = this.schemaStatements(this as unknown as DatabaseAdapter);
+    const t1Ref = ss.referenceNameForTable(table1);
+    const t2Ref = ss.referenceNameForTable(table2);
     await ss.createTable(joinName, { ...rest, id: false } as any, (td) => {
       td.references(t1Ref, mergedColOpts as any);
       td.references(t2Ref, mergedColOpts as any);

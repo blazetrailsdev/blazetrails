@@ -710,25 +710,27 @@ describeIfPg("PostgreSQLAdapter", () => {
       // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/schema.ts; affects ~10–47 tests in schema.test.ts
     });
     it("inherited table options is dumped", async () => {
-      await adapter.exec(`CREATE TABLE transportation_modes (name varchar(50), kind varchar(50))`);
-      await adapter.exec(`CREATE TABLE trains () INHERITS (transportation_modes)`);
       try {
+        await adapter.exec(
+          `CREATE TABLE transportation_modes (name varchar(50), kind varchar(50))`,
+        );
+        await adapter.exec(`CREATE TABLE trains () INHERITS (transportation_modes)`);
         const lines: string[] = [];
         await adapter.createSchemaDumper({}).dumpTable(lines, "trains");
-        expect(lines.join("\n")).toMatch(`options: "INHERITS (transportation_modes)"`);
+        expect(lines.join("\n")).toContain(`options: "INHERITS (transportation_modes)"`);
       } finally {
         await adapter.exec(`DROP TABLE IF EXISTS trains`);
         await adapter.exec(`DROP TABLE IF EXISTS transportation_modes`);
       }
     });
     it("multiple inherited table options is dumped", async () => {
-      await adapter.exec(`CREATE TABLE vehicles (name varchar(50))`);
-      await adapter.exec(`CREATE TABLE transportation_modes (kind varchar(50))`);
-      await adapter.exec(`CREATE TABLE trains () INHERITS (transportation_modes, vehicles)`);
       try {
+        await adapter.exec(`CREATE TABLE vehicles (name varchar(50))`);
+        await adapter.exec(`CREATE TABLE transportation_modes (kind varchar(50))`);
+        await adapter.exec(`CREATE TABLE trains () INHERITS (transportation_modes, vehicles)`);
         const lines: string[] = [];
         await adapter.createSchemaDumper({}).dumpTable(lines, "trains");
-        expect(lines.join("\n")).toMatch(`options: "INHERITS (transportation_modes, vehicles)"`);
+        expect(lines.join("\n")).toContain(`options: "INHERITS (transportation_modes, vehicles)"`);
       } finally {
         await adapter.exec(`DROP TABLE IF EXISTS trains`);
         await adapter.exec(`DROP TABLE IF EXISTS transportation_modes`);

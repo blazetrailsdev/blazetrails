@@ -61,6 +61,7 @@ export interface IndexInfo {
   opclasses?: string | Record<string, string>;
   where?: string;
   using?: string;
+  nullsNotDistinct?: boolean;
 }
 
 /**
@@ -350,6 +351,9 @@ class AdapterSchemaSource implements SchemaSource {
       columns: idx.columns,
       unique: idx.unique,
       name: idx.name,
+      where: (idx as { where?: string }).where,
+      orders: (idx as { orders?: Record<string, string> }).orders,
+      nullsNotDistinct: (idx as { nullsNotDistinct?: boolean }).nullsNotDistinct,
     }));
   }
 }
@@ -825,6 +829,7 @@ export class SchemaDumper {
       parts.push(`opclass: ${this.formatIndexParts(index.opclasses)}`);
     if (index.where) parts.push(`where: ${JSON.stringify(index.where)}`);
     if (index.using) parts.push(`using: ${JSON.stringify(index.using)}`);
+    if (index.nullsNotDistinct) parts.push("nulls_not_distinct: true");
     return parts;
   }
 

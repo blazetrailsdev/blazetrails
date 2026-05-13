@@ -35,8 +35,6 @@ _(none — all queued work shipped as of this snapshot)_
 - **#1436** pg-adapter Slot C — Enum OID + defaultFunction + ErrorReporter ✅ (A + E-optional still open)
 - **#1437** api:compare → 100% restoration — 4 regressions from #1421/#1423 fixed ✅
 
-**Currently in flight:** _(none)_
-
 **P0 wave 3 + adjacent (just merged):**
 
 - **#1434** Autosave Slot B — collection mutation via `Association.insertRecord` ✅
@@ -44,7 +42,7 @@ _(none — all queued work shipped as of this snapshot)_
 - **#1439** PG connection Slot A — `SQLSubscriber` test helper + 7 logs_name unskips ✅
 - **#1440** chore(test) — cap vitest worker count to 4 (prevent local saturation) ✅
 - **#1443** SQLite Slot A — `strict_strings_by_default` class config + 3 unskips ✅
-- **#1442** MySQL quoting Slot A — instance `quoteString` backslash + static `quoteColumnName`/`quoteTableName` ✅ (standalone-function divergence: see fidelity followup; full consolidation now a 4-phase cluster — Phase 1 + 2 in flight as %281/%282)
+- **#1442** MySQL quoting Slot A — instance `quoteString` backslash + static `quoteColumnName`/`quoteTableName` ✅ (standalone-function divergence: see fidelity followup; full 4-phase consolidation shipped — #1447/#1448/#1450/#1451)
 - **#1444** PG UUID Slot C — UniquenessValidator UUID-aware case-insensitive bypass ✅ (deviates from Rails — adapter-layer in Rails, validator-layer here; ~30 LOC async-bridge followup)
 - **#1445** Serialization Slot B — serialized-column join fixture ✅ (cluster done)
 - **#1446** PG connection Slot B — `execQuery prepare:` kwarg + `statement_name` payload ✅
@@ -64,25 +62,25 @@ The rest of the inventory is FIFO-by-audit-delivery. P0 items below get spawned 
 
 - ✅ **Autosave Slot A** — Association-object indirection (#1426). Autosave B–F now spawnable.
 
-### P0b — Audit-verified "impl complete, only test work"
+### P0b — Audit-verified "impl complete, only test work" (all closed)
 
-| Slot                    | LOC  | Status                                                       |
-| ----------------------- | ---- | ------------------------------------------------------------ |
-| pg-foreign-table A      | ~230 | ✅ #1429 (16 un-skips)                                       |
-| pg-infinity A           | ~250 | ✅ #1427 (6 un-skips, 3 followups)                           |
-| reflection B            | ~120 | ✅ #1428 (5 un-skips, audit oversized)                       |
-| **pg-virtual-column A** | ~150 | %260 in flight                                               |
-| **pg-interval A**       | ~220 | %261 in flight                                               |
-| **pg-datatype A**       | ~220 | open — delete 9 stale + 6 fixture-backed un-skips            |
-| **pg-uuid-residual A**  | ~230 | open — SchemaDumper UUID-PK test bodies + annotation cleanup |
+| Slot                | LOC  | Status                                                          |
+| ------------------- | ---- | --------------------------------------------------------------- |
+| pg-foreign-table A  | ~230 | ✅ #1429 (16 un-skips)                                          |
+| pg-infinity A       | ~250 | ✅ #1427 (6 un-skips, 3 followups)                              |
+| reflection B        | ~120 | ✅ #1428 (5 un-skips, audit oversized)                          |
+| pg-virtual-column A | ~150 | ✅ #1430 (rewrite + XML relocation)                             |
+| pg-interval A       | ~220 | ✅ #1431 (Rails-aligned test names; Slot B ~180 LOC still open) |
+| pg-datatype A       | ~220 | ✅ #1432 (6 fixture-backed un-skips + 9 stale deletions)        |
+| pg-uuid-residual A  | ~230 | ✅ #1433 (SchemaDumper UUID-PK test bodies + 5 un-skips)        |
 
-**Remaining P0b**: 2 in flight + 2 open. Wave-1 yield: **27 un-skips** across 4 PRs.
+P0b yield: **~50 un-skips** across 7 PRs. Spawn-next priority now moves to the open clusters in [`activerecord-100-clusters.md`](activerecord-100-clusters.md) (associations-autosave C–F, associations-reflection, mysql-schema, mysql-table-options, mysql-charset-collation, pg-long-tail, schema C–J, pg-adapter A/E, transactions B/C, sqlite B).
 
 ---
 
-## Post-merge fidelity followups (~700 LOC, 26 items)
+## Post-merge fidelity followups (~1675 LOC, 78 actionable items)
 
-Small Rails-fidelity polish from PR reviews + post-merge findings. Items closed by recent sweeps are summarized at the end.
+Small Rails-fidelity polish from PR reviews + post-merge findings. Each subsection groups items by source PR. Items closed by recent sweeps are summarized at the end (process notes / architectural observations are not counted in the 78).
 
 ### Deferred from sweep B (#1422)
 
@@ -344,7 +342,7 @@ Cluster details in [`activerecord-100-clusters.md`](activerecord-100-clusters.md
 | Architectural deferred                                  | 3    | ~410                |
 | Infra-blocked                                           | 6    | n/a                 |
 
-**~109 actionable work-PR slots + 0 queued audits**, ~19.7k LOC. P0 fully shipped (#1426–#1437; ~60 un-skips); audit-encryption / pg-foreign-table / pg-infinity / pg-virtual-column / pg-datatype / pg-uuid-residual / mysql-warnings clusters all closed or in-flight on Slot A. Headline P0 yield: **27 un-skips wave 1 + 33 more wave 2** plus autosave A's foundational unblock for autosave B–F.
+**~109 actionable work-PR slots + 0 queued audits**, ~19.7k LOC. P0 fully shipped (#1426–#1453; ~60 un-skips across 28 PRs); encryption, mysql-warnings, mysql-quoting consolidation, pg-datatype, serialization, pg-infinity, pg-foreign-table clusters fully closed; autosave A/B, schema A/B, pg-adapter B/C/D, pg-connection A/B, pg-uuid A/C, pg-virtual-column A, pg-interval A, sqlite A, transactions A, reflection B all shipped. Headline P0 yield: **27 un-skips wave 1 + 33 wave 2** plus autosave A's foundational unblock for autosave C–F.
 
 The two `as any` audits (delivered 2026-05-12) found **zero new critical bugs** post-#1423 — the optional-chain audit returned `0 bug-suspected` and the method-call audit returned `2 bug-suspected` (folded into post-merge fidelity followups above for surgical verification). The high-leverage opportunity is **Sweep B from audit-as-any-method-calls**: ~250 LOC mechanical removal of 52 legacy-cast-removable instance-method casts on `Base` (`(record as any)._readAttribute`, `.save`, `.destroy`, etc. — TS types already declare these). The optional-chain audit's ~110 `legacy-removable` sites are dependent on the same `Base` host-interface tightening; can be folded into the same sweep or land second.
 

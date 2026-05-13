@@ -231,23 +231,13 @@ Slot A closed in #1443 (`strict_strings_by_default` class-config knob + 3 unskip
 
 2. **Slot B — `assertLogged` SCHEMA-event parity** (~50 LOC). 2 test-infra gap tests.
 
-## PG infinity cluster (closed — #1427 shipped 6 unskips; 3 deferred to fidelity followups, ~135 LOC residual)
+## PG infinity cluster — **closed via #1427** ✅
 
-Original: ~250 LOC, from audit-pg-infinity)
+Slot A shipped: sentinel unification (`Symbol` → `Number.POSITIVE_INFINITY`/`NEGATIVE_INFINITY` for date/datetime), 6 un-skips, fabricated tests pruned. 3 residuals tracked in fidelity followups (~135 LOC: range-bound serialization, `InTimeZone` helper, MySQL `quote()` non-finite guard).
 
-**Audit finding: feature is already implemented.** The 18-test file is fabricated; Rails' `infinity_test.rb` has only 9 tests. The 9 extra positive/negative splits + "infinity where clause" name are TS-only inventions.
+## PG foreign-table cluster — **closed via #1429** ✅
 
-**Real gap:** date/datetime infinity is stored as `Symbol` sentinels (`DateInfinity`, `DateNegativeInfinity`) while Rails uses `Float::INFINITY` itself. `assert_equal Float::INFINITY, record.date_field` fails value-equality.
-
-**Slot A** (~250 LOC) — Sentinel unification (replace `Symbol` sentinels with `Number.POSITIVE_INFINITY`/`Number.NEGATIVE_INFINITY` for date/datetime types) + prune the 9 fabricated tests + add `PostgresqlInfinity` fixture + `InTimeZone` test helper.
-
-## PG foreign-table cluster (closed — #1429 shipped 16 unskips; 1 deferred to fidelity followups)
-
-Original: ~230 LOC, from audit-pg-foreign-table)
-
-**Audit finding: feature is already complete** (`foreignTables`/`foreignTableExists` + `dataSourceSql(..., type: "FOREIGN TABLE")` branch). 17 BLOCKED tests are empty stubs; their BLOCKED annotation points at `connection-adapters/postgresql/foreign-table.ts` which **does not exist and need not exist**. Rails creates foreign tables via raw `execute("CREATE FOREIGN TABLE ...")` after `postgres_fdw` setup — no schema-statement methods.
-
-**Slot A** (~200–260 LOC) — Port `foreign_table_test.rb` bodies. Pure test work; zero adapter changes.
+Slot A shipped: 16/17 `foreign_table_test.rb` bodies ported (pure test work; zero adapter changes — the BLOCKED annotation pointing at a non-existent `postgresql/foreign-table.ts` was fabricated). 1 deferred test (`Base.primaryKey` → `adapter.primaryKey(tableName)` for tables without explicit PK) tracked in fidelity followups.
 
 ## PG virtual-column cluster (~250 LOC, Slot B remaining)
 

@@ -1719,7 +1719,7 @@ export class MigrationContext {
     const ifNotExistsStr = options?.ifNotExists ? "IF NOT EXISTS " : "";
     const colsStr = cols
       .map((c) => {
-        const isExpr = /[()\s]/.test(c);
+        const isExpr = /\W/.test(c);
         let col = isExpr ? c : this.adapter.quoteIdentifier(c);
         if (an !== "mysql") {
           const ord = options?.order?.[c];

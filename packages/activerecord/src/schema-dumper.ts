@@ -339,6 +339,9 @@ class AdapterSchemaSource implements SchemaSource {
       where?: string;
       orders?: Record<string, string> | string;
       nullsNotDistinct?: boolean;
+      using?: string;
+      lengths?: number | Record<string, number>;
+      opclasses?: string | Record<string, string>;
     };
     let raw: RichIdx[];
     const adapterAny = this._adapter as unknown as { indexes?(t: string): Promise<unknown[]> };
@@ -359,6 +362,9 @@ class AdapterSchemaSource implements SchemaSource {
       where: idx.where,
       orders: idx.orders,
       nullsNotDistinct: idx.nullsNotDistinct,
+      using: idx.using,
+      lengths: idx.lengths,
+      opclasses: idx.opclasses,
     }));
   }
 }
@@ -834,7 +840,7 @@ export class SchemaDumper {
       parts.push(`opclass: ${this.formatIndexParts(index.opclasses)}`);
     if (index.where) parts.push(`where: ${JSON.stringify(index.where)}`);
     if (index.using) parts.push(`using: ${JSON.stringify(index.using)}`);
-    if (index.nullsNotDistinct) parts.push("nulls_not_distinct: true");
+    if (index.nullsNotDistinct) parts.push("nullsNotDistinct: true");
     return parts;
   }
 

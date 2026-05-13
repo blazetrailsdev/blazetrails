@@ -196,7 +196,7 @@ describe("SchemaDumperTest", () => {
       nullsNotDistinct: true,
     });
     const output = SchemaDumper.dump(ctx);
-    expect(output).toContain("nulls_not_distinct: true");
+    expect(output).toContain("nullsNotDistinct: true");
   });
   it("schema dumps index sort order", async () => {
     await ctx.createTable("users", {}, (t) => {

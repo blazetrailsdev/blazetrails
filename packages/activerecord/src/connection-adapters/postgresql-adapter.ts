@@ -1813,24 +1813,18 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /**
-   * Mirrors Rails' `PostgreSQLAdapter#reset!`. Issues `DISCARD ALL` on the
-   * current connection to clear session state (temp tables, prepared
-   * statements, `SET` variables), rolls back any open transaction first,
-   * then re-runs `configure_connection`. The pg npm driver does not expose
-   * PQreset; the equivalent is to roll back any open transaction, then tear
-   * down the pool so all physical connections (and their session state) are
-   * discarded. The new pool's connections are configured on first checkout
-   * via `_maybeConfigureConnection`, matching Rails' `super` call.
+   * Mirrors Rails' `PostgreSQLAdapter#reset!`. Rails issues ROLLBACK (if in
+   * a transaction), DISCARD ALL, then re-runs configure_connection on the
+   * single raw connection. pg doesn't expose PQreset; the pool equivalent is
+   * to ROLLBACK any open transaction on the held client, then tear down the
+   * entire pool — discarding all physical connections and their session state.
+   * New checkouts are configured on first use via `_maybeConfigureConnection`,
+   * matching Rails' `super` call.
    *
    * @internal
    */
   override async resetBang(): Promise<void> {
-    if (!this._driverPool) {
-      this.reconnect();
-      super.resetBang();
-      return;
-    }
-    if (this._client && this._inTransaction) {
+    if (this._client) {
       await this._client.query("ROLLBACK");
     }
     this.reconnect();

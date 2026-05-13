@@ -102,10 +102,11 @@ describeIfPg("PostgreSQLAdapter", () => {
       // prepareColumnOptions for virtual columns. Affects schema_dumping mirror.
     });
 
-    it.skip("build fixture sql", () => {
-      // BLOCKED: fixtures — FixtureSet.createFixtures not ported
-      // ROOT-CAUSE: ActiveRecord::FixtureSet not implemented in @blazetrails/activerecord
-      // SCOPE: cross-cutting fixtures port; affects many tests
+    it.skip("build fixture sql", async () => {
+      // BLOCKED: adapter-pg — insertFixturesSet calls executeBatch which is not yet implemented
+      // for PostgreSQLAdapter (throws NotImplementedError at database-statements.ts:1627).
+      // ROOT-CAUSE: PostgreSQLAdapter.executeBatch stub needs implementation; unblocks this test.
+      // SCOPE: implement executeBatch for PG (~20 LOC); then wire FixtureSet.createFixtures here.
     });
   });
 });

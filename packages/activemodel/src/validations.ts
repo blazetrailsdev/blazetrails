@@ -134,16 +134,16 @@ export interface ValidationsClassMethods {
   inherited(subclass: unknown): void;
 }
 
-/**
- * Raised by validateBang when validation fails.
- *
- * Mirrors: ActiveModel::ValidationError
- */
 /** Minimum shape required by ValidationError. */
 export interface ModelWithErrors {
   errors: { fullMessages: string[] };
 }
 
+/**
+ * Raised by validateBang when validation fails.
+ *
+ * Mirrors: ActiveModel::ValidationError
+ */
 export class ValidationError<TModel extends ModelWithErrors = ModelWithErrors>
   extends globalThis.Error
 {

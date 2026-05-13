@@ -885,12 +885,12 @@ export function computePrimaryKey(
   reflection: any,
 ): string | string[] {
   if (reflection.options?.primaryKey) return reflection.options.primaryKey;
-  const ctor = this?.constructor as any;
-  if (Array.isArray(ctor?.primaryKey)) {
+  const ctor = this.constructor;
+  if (Array.isArray(ctor.primaryKey)) {
     const pk: string[] = ctor.primaryKey;
     return pk.includes("id") ? "id" : pk;
   }
-  return ctor?.primaryKey ?? "id";
+  return ctor.primaryKey ?? "id";
 }
 
 /** @internal */

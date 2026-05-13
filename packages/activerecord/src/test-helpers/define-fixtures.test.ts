@@ -35,18 +35,11 @@ describe("fixtureId", () => {
     expect(id).toBeLessThan(2 ** 30 - 1);
   });
 
-  it("is deterministic: same label always yields same ID", () => {
-    expect(fixtureId("david")).toBe(fixtureId("david"));
-    expect(fixtureId("mary")).toBe(fixtureId("mary"));
-  });
-
-  it("different labels produce different IDs", () => {
-    expect(fixtureId("david")).not.toBe(fixtureId("mary"));
-  });
-
-  it("produces a stable known value for 'david' (CRC32 polynomial 0xedb88320)", () => {
+  it("is deterministic and stable: same label always yields the same known value", () => {
     // For ASCII labels this matches Ruby's Zlib.crc32(label) % (2**30 - 1) exactly.
     expect(fixtureId("david")).toBe(127326141);
+    expect(fixtureId("david")).toBe(fixtureId("david"));
+    expect(fixtureId("david")).not.toBe(fixtureId("mary"));
   });
 });
 
@@ -80,6 +73,11 @@ describe("defineFixtures", () => {
 
     expect(users.david).toEqual({ id: fixtureId("david"), name: "David" });
     expect(users.mary).toEqual({ id: fixtureId("mary"), name: "Mary" });
+    // Mirrors Rails: table is cleared before insert so repeated calls replace rows
+    const deleteSql = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
+      .map((c: unknown[]) => c[0] as string)
+      .find((s) => s.includes("DELETE FROM"));
+    expect(deleteSql).toContain('"users"');
   });
 
   it("ref() resolves to the referenced fixture's deterministic ID", async () => {
@@ -130,6 +128,13 @@ describe("defineFixtures", () => {
 
     expect(first.david.id).toBe(davidId);
     expect(second.david.id).toBe(davidId);
+  });
+
+  it("throws for composite primary keys", async () => {
+    const Model = { tableName: "orders", primaryKey: ["shop_id", "id"], findBy: vi.fn() } as any;
+    await expect(defineFixtures(makeAdapter(), Model, { order1: {} })).rejects.toThrow(
+      "composite primary keys are not supported",
+    );
   });
 
   it("HABTM join-table: two ref()s in one row both resolve", async () => {

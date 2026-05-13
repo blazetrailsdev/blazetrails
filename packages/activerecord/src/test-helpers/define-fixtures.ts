@@ -41,7 +41,10 @@ export interface FixtureRef {
   readonly fixtureName: string;
 }
 
-/** Cross-batch cross-reference sentinel. Resolves to the fixture's deterministic ID at insert time. */
+/**
+ * Cross-batch cross-reference sentinel. Resolves to the fixture's deterministic ID at insert time.
+ * `tableName` is stored for readability and future validation; resolution uses only `fixtureName`.
+ */
 export function ref(tableName: string, fixtureName: string): FixtureRef {
   return { [REF_TAG]: true, tableName, fixtureName };
 }
@@ -69,7 +72,12 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
 ): Promise<{ [P in K]: InstanceType<T> }> {
   const tableName = ModelClass.tableName;
   const pk = ModelClass.primaryKey;
-  const pkCol = Array.isArray(pk) ? pk[0]! : pk;
+  if (Array.isArray(pk)) {
+    throw new Error(
+      `defineFixtures: composite primary keys are not supported (model: ${ModelClass.name}, pk: [${pk.join(", ")}])`,
+    );
+  }
+  const pkCol = pk;
 
   const labels = Object.keys(fixtures) as K[];
 
@@ -97,10 +105,11 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
     rows.push(row);
   }
 
-  // Insert via existing adapter infrastructure (wrapped in transaction, honours disableReferentialIntegrity)
-  await insertFixturesSet.call(adapter as unknown as InsertHost, {
-    [tableName]: rows,
-  });
+  // Mirrors Rails: insert_fixtures_set(table_rows, table_rows.keys) — tables are cleared before insert
+  // so repeated defineFixtures calls for the same table replace rather than append rows.
+  await insertFixturesSet.call(adapter as unknown as InsertHost, { [tableName]: rows }, [
+    tableName,
+  ]);
 
   // Reload persisted instances so AR attribute casting is applied
   const result = {} as { [P in K]: InstanceType<T> };

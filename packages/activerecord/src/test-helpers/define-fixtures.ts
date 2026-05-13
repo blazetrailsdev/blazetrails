@@ -89,6 +89,7 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
     const row: FixtureAttrs = { [pkCol]: id };
 
     for (const [col, val] of Object.entries(attrs)) {
+      if (col === pkCol) continue; // deterministic ID wins; caller must not override it
       if (isFixtureRef(val)) {
         const refId = fixtureId(val.fixtureName);
         row[col] = refId;

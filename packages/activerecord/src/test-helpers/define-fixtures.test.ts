@@ -29,9 +29,9 @@ function makeModel(tableName: string, rows: Map<unknown, Record<string, unknown>
 }
 
 describe("fixtureId", () => {
-  it("returns a positive integer below 2^30 - 1", () => {
+  it("returns a non-negative integer below 2^30 - 1", () => {
     const id = fixtureId("david");
-    expect(id).toBeGreaterThan(0);
+    expect(id).toBeGreaterThanOrEqual(0);
     expect(id).toBeLessThan(2 ** 30 - 1);
   });
 

@@ -16,8 +16,8 @@ describeIfMysql("Mysql2Adapter", () => {
   });
 
   describe("SchemaMigrationsTest", () => {
-    // Fixture tables for the renameIndex test — mirrors Rails' engines/cars fixtures
-    beforeEach(async () => {
+    it("renaming index on foreign key", async () => {
+      // Fixture tables — mirrors Rails' engines/cars fixtures
       await adapter.executeMutation("DROP TABLE IF EXISTS `engines`");
       await adapter.executeMutation("DROP TABLE IF EXISTS `cars`");
       await adapter.executeMutation(
@@ -26,22 +26,20 @@ describeIfMysql("Mysql2Adapter", () => {
       await adapter.executeMutation(
         "CREATE TABLE `engines` (`id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, `car_id` BIGINT) ENGINE=InnoDB",
       );
-    });
-    afterEach(async () => {
-      await adapter.executeMutation("DROP TABLE IF EXISTS `engines`");
-      await adapter.executeMutation("DROP TABLE IF EXISTS `cars`");
-    });
+      try {
+        await adapter.addIndex("engines", "car_id");
+        await adapter.addForeignKey("engines", "cars", { name: "fk_engines_cars" });
 
-    it("renaming index on foreign key", async () => {
-      await adapter.addIndex("engines", "car_id");
-      await adapter.addForeignKey("engines", "cars", { name: "fk_engines_cars" });
+        await adapter.renameIndex("engines", "index_engines_on_car_id", "idx_renamed");
+        const idxNames = (await adapter.indexes("engines")).map((i: { name: string }) => i.name);
+        expect(idxNames).toContain("idx_renamed");
+        expect(idxNames).not.toContain("index_engines_on_car_id");
 
-      await adapter.renameIndex("engines", "index_engines_on_car_id", "idx_renamed");
-      const idxNames = (await adapter.indexes("engines")).map((i: { name: string }) => i.name);
-      expect(idxNames).toContain("idx_renamed");
-      expect(idxNames).not.toContain("index_engines_on_car_id");
-
-      await adapter.removeForeignKey("engines", { name: "fk_engines_cars" });
+        await adapter.removeForeignKey("engines", { name: "fk_engines_cars" });
+      } finally {
+        await adapter.executeMutation("DROP TABLE IF EXISTS `engines`");
+        await adapter.executeMutation("DROP TABLE IF EXISTS `cars`");
+      }
     });
 
     it("initializes schema migrations for encoding utf8mb4", async () => {
@@ -77,8 +75,9 @@ async function withEncodingUtf8mb4(adapter: Mysql2Adapter, fn: () => Promise<voi
     "SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME " +
       "FROM information_schema.schemata WHERE schema_name = DATABASE()",
   )) as Array<Record<string, string>>;
-  const originalCharset = rows[0]?.DEFAULT_CHARACTER_SET_NAME ?? "utf8mb4";
-  const originalCollation = rows[0]?.DEFAULT_COLLATION_NAME ?? "utf8mb4_unicode_ci";
+  if (!rows[0]) throw new Error("Could not read database charset from information_schema.schemata");
+  const originalCharset = rows[0].DEFAULT_CHARACTER_SET_NAME;
+  const originalCollation = rows[0].DEFAULT_COLLATION_NAME;
 
   await adapter.executeMutation("ALTER DATABASE DEFAULT CHARACTER SET utf8mb4");
   try {

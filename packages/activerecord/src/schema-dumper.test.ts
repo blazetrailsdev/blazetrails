@@ -246,7 +246,7 @@ describe("SchemaDumperTest", () => {
       { using: "gist", name: "test_schema_exclusion_date_overlap" },
     );
     const output = await PgSchemaDumper.dump(testAdapter.innerAdapter);
-    expect(output).toContain("t.exclusionConstraint");
+    expect(output).toContain("addExclusionConstraint");
     expect(output).toContain("test_schema_exclusion_date_overlap");
     expect(output).toContain("daterange(start_date, end_date) WITH &&");
   });
@@ -269,7 +269,7 @@ describe("SchemaDumperTest", () => {
       { nullsNotDistinct: true, name: "test_schema_unique_position_2_nnd" },
     );
     const output = await PgSchemaDumper.dump(testAdapter.innerAdapter);
-    expect(output).toContain("t.uniqueConstraint");
+    expect(output).toContain("addUniqueConstraint");
     expect(output).toContain("test_schema_unique_position_1");
     expect(output).toContain("test_schema_unique_position_2_nnd");
     expect(output).toContain("nullsNotDistinct: true");
@@ -287,7 +287,7 @@ describe("SchemaDumperTest", () => {
         name: "test_uc_no_idx_position",
       });
       const output = await PgSchemaDumper.dump(testAdapter.innerAdapter);
-      expect(output).toContain("t.uniqueConstraint");
+      expect(output).toContain("addUniqueConstraint");
       // The backing index must not also appear as an addIndex call.
       expect(output).not.toMatch(/addIndex.*test_uc_no_idx.*test_uc_no_idx_position/);
     },

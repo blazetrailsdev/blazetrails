@@ -280,8 +280,8 @@ describe("PostgreSQL::SchemaDumper", () => {
     });
   });
 
-  describe("gatherInlineConstraints — exclusion", () => {
-    it("emits sorted t.exclusionConstraint lines with options inside the block", async () => {
+  describe("_emitExclusionConstraints", () => {
+    it("emits sorted ctx.addExclusionConstraint lines with options", async () => {
       const { ExclusionConstraintDefinition } = await import("./schema-definitions.js");
       const adapter = {
         ...emptySource,
@@ -295,16 +295,16 @@ describe("PostgreSQL::SchemaDumper", () => {
       };
       const dumper = new (SchemaDumper as any)(adapter) as any;
       const lines: string[] = [];
-      await dumper.gatherInlineConstraints("rooms", lines);
-      expect(lines[0]).toContain(`t.exclusionConstraint("price WITH ="`);
+      await dumper._emitExclusionConstraints("rooms", lines);
+      expect(lines[0]).toContain(`await ctx.addExclusionConstraint("rooms", "price WITH ="`);
       expect(lines[0]).toContain(`where: "(price > 0)"`);
       expect(lines[0]).toContain(`using: "gist"`);
       expect(lines[0]).toContain(`name: "excl_rooms_price"`);
     });
   });
 
-  describe("gatherInlineConstraints — unique", () => {
-    it("emits sorted t.uniqueConstraint lines with options inside the block", async () => {
+  describe("_emitUniqueConstraints", () => {
+    it("emits sorted ctx.addUniqueConstraint lines with options", async () => {
       const { UniqueConstraintDefinition } = await import("./schema-definitions.js");
       const adapter = {
         ...emptySource,
@@ -317,8 +317,8 @@ describe("PostgreSQL::SchemaDumper", () => {
       };
       const dumper = new (SchemaDumper as any)(adapter) as any;
       const lines: string[] = [];
-      await dumper.gatherInlineConstraints("users", lines);
-      expect(lines[0]).toContain(`t.uniqueConstraint(["email"]`);
+      await dumper._emitUniqueConstraints("users", lines);
+      expect(lines[0]).toContain(`await ctx.addUniqueConstraint("users", ["email"]`);
       expect(lines[0]).toContain(`nullsNotDistinct: true`);
       expect(lines[0]).toContain(`name: "uniq_users_email"`);
     });
@@ -327,7 +327,7 @@ describe("PostgreSQL::SchemaDumper", () => {
       const adapter = { ...emptySource, uniqueConstraints: async () => [] };
       const dumper = new (SchemaDumper as any)(adapter) as any;
       const lines: string[] = [];
-      await dumper.gatherInlineConstraints("users", lines);
+      await dumper._emitUniqueConstraints("users", lines);
       expect(lines).toHaveLength(0);
     });
   });

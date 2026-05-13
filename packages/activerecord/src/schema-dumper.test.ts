@@ -215,25 +215,22 @@ describe("SchemaDumperTest", () => {
     // SCOPE: ~50–200 LOC fix in schema-dumper.ts or schema-statements.ts; affects ~7–43 tests in schema-dumper.test.ts
     /* needs index length tracking (MySQL) */
   });
-  it.skipIf(adapterType !== "postgres" && adapterType !== "mysql")(
-    "schema dumps check constraints",
-    async () => {
-      const { SchemaStatements } =
-        await import("./connection-adapters/abstract/schema-statements.js");
-      const { adapter: testAdapter, ctx: testCtx } = freshCtx();
-      await testCtx.createTable("products", {}, (t) => {
-        t.decimal("price");
-        t.decimal("discounted_price");
-      });
-      const ss = new SchemaStatements(testAdapter as any);
-      await ss.addCheckConstraint("products", "price > discounted_price", {
-        name: "products_price_check",
-      });
-      const output = await SchemaDumper.dump(testAdapter);
-      expect(output).toContain("products_price_check");
-      expect(output).toContain("addCheckConstraint");
-    },
-  );
+  it.skipIf(adapterType !== "postgres")("schema dumps check constraints", async () => {
+    const { SchemaStatements } =
+      await import("./connection-adapters/abstract/schema-statements.js");
+    const { adapter: testAdapter, ctx: testCtx } = freshCtx();
+    await testCtx.createTable("products", {}, (t) => {
+      t.decimal("price");
+      t.decimal("discounted_price");
+    });
+    const ss = new SchemaStatements(testAdapter as any);
+    await ss.addCheckConstraint("products", "price > discounted_price", {
+      name: "products_price_check",
+    });
+    const output = await SchemaDumper.dump(testAdapter);
+    expect(output).toContain("products_price_check");
+    expect(output).toContain("addCheckConstraint");
+  });
   it.skipIf(adapterType !== "postgres")("schema dumps exclusion constraints", async () => {
     const { SchemaDumper: PgSchemaDumper } =
       await import("./connection-adapters/postgresql/schema-dumper.js");

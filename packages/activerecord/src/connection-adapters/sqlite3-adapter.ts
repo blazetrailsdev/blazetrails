@@ -1364,6 +1364,16 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   async tableExists(name: string): Promise<boolean> {
+    if (name.includes(".")) {
+      // Schema-qualified name (e.g. "aux.widgets") — query the attached schema's catalog.
+      const { sqliteMaster, bare } = this._sqliteMasterFor(name);
+      const rows = (await this.execute(
+        `SELECT 1 AS one FROM ${sqliteMaster} WHERE type='table' AND name=${sqliteQuoteStringLiteral(bare)}`,
+        [],
+        "SCHEMA",
+      )) as Array<{ one: number }>;
+      return rows.length > 0;
+    }
     const rows = (await this.execute(
       `SELECT name FROM pragma_table_list WHERE schema <> 'temp' AND name NOT IN ('sqlite_sequence', 'sqlite_schema') AND name = ${sqliteQuoteStringLiteral(name)} AND type IN ('table')`,
       [],

@@ -240,6 +240,16 @@ describe("AbstractMysqlAdapter#buildChangeColumnDefinition", () => {
     const cd = await adapter.buildChangeColumnDefinition("users", "body", "");
     expect(cd.column.type).toBe("varchar(255)");
   });
+
+  it("function default renders as unquoted SQL expression in the CHANGE clause", async () => {
+    const { SchemaCreation } = await import("./mysql/schema-creation.js");
+    const col = makeTextColumn({ defaultFunction: "uuid()" });
+    const adapter = await makeAdapter(col);
+    const cd = await adapter.buildChangeColumnDefinition("users", "uid", "string");
+    const sql = new SchemaCreation().accept(cd);
+    expect(sql).toContain("DEFAULT uuid()");
+    expect(sql).not.toContain("DEFAULT 'uuid()'");
+  });
 });
 
 describe("AbstractMysqlAdapter quoting consistency — quote vs quoteString", () => {

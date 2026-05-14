@@ -47,6 +47,7 @@ import {
 } from "./mysql/quoting.js";
 import {
   ChangeColumnDefinition,
+  ChangeColumnDefaultDefinition,
   ColumnDefinition,
   CreateIndexDefinition,
   ForeignKeyDefinition,
@@ -501,53 +502,82 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   /**
-   * Mirrors AbstractMysqlAdapter#change_column_default.
-   * Emits `ALTER TABLE ... ALTER COLUMN col SET DEFAULT val` (or DROP DEFAULT).
-   * MySQL's ALTER COLUMN syntax accepts a default change without re-stating
-   * the column type, unlike CHANGE COLUMN which requires a full redefinition.
+   * Mirrors: AbstractMysqlAdapter#change_column_default
+   *   execute "ALTER TABLE #{quote_table_name(table_name)}
+   *            #{change_column_default_for_alter(table_name, column_name, default_or_changes)}"
    */
   async changeColumnDefault(
     tableName: string,
     columnName: string,
     defaultOrChanges: unknown,
   ): Promise<void> {
-    const newDefault = (
-      this as unknown as {
-        extractNewDefaultValue(v: unknown): unknown;
-      }
-    ).extractNewDefaultValue(defaultOrChanges);
-    const colId = this.quoteIdentifier(columnName);
-    const tbl = this.quoteTableName(tableName);
-    const sql =
-      newDefault == null
-        ? `ALTER TABLE ${tbl} ALTER COLUMN ${colId} DROP DEFAULT`
-        : `ALTER TABLE ${tbl} ALTER COLUMN ${colId} SET DEFAULT ${this.quote(newDefault)}`;
-    await this._execMutation(sql);
+    const fragment = await this.changeColumnDefaultForAlter(
+      tableName,
+      columnName,
+      defaultOrChanges,
+    );
+    await this._execMutation(`ALTER TABLE ${this.quoteTableName(tableName)} ${fragment}`);
   }
 
   /**
-   * Mirrors AbstractMysqlAdapter#build_change_column_default_definition.
-   * Returns a ChangeColumnDefaultDefinition the schema-creation visitor
-   * can render. Returns null when the column does not exist (matches Rails
-   * `return unless column`).
+   * MySQL routes the abstract base's `change_column_default_for_alter` through
+   * `build_change_column_default_definition` + schema_creation, so the
+   * dumper-friendly visitor handles `DROP DEFAULT` vs `SET DEFAULT <expr>`.
+   *
+   *   def change_column_default_for_alter(table_name, column_name, default_or_changes)
+   *     cd = build_change_column_default_definition(table_name, column_name, default_or_changes)
+   *     schema_creation.accept(cd)
+   *   end
+   *
+   * @internal
+   */
+  async changeColumnDefaultForAlter(
+    tableName: string,
+    columnName: string,
+    defaultOrChanges: unknown,
+  ): Promise<string> {
+    const cd = await this.buildChangeColumnDefaultDefinition(
+      tableName,
+      columnName,
+      defaultOrChanges,
+    );
+    return new MysqlSchemaCreation().accept(cd);
+  }
+
+  /**
+   * Mirrors: AbstractMysqlAdapter#build_change_column_default_definition.
+   *
+   *   column = column_for(table_name, column_name)
+   *   return unless column
+   *   default = extract_new_default_value(default_or_changes)
+   *   ChangeColumnDefaultDefinition.new(column, default)
+   *
+   * Rails' `column_for` itself raises ActiveRecordError when the column is
+   * missing (the `return unless column` guard is defensive against an
+   * unreachable nil branch), so we let columnFor's throw propagate the
+   * same way rather than silently returning null.
    */
   async buildChangeColumnDefaultDefinition(
     tableName: string,
     columnName: string,
     defaultOrChanges: unknown,
-  ): Promise<{ column: unknown; default: unknown } | null> {
-    let column;
-    try {
-      column = await this.columnFor(tableName, columnName);
-    } catch {
-      return null;
-    }
+  ): Promise<ChangeColumnDefaultDefinition> {
+    const column = await this.columnFor(tableName, columnName);
     const newDefault = (
-      this as unknown as {
-        extractNewDefaultValue(v: unknown): unknown;
-      }
+      this as unknown as { extractNewDefaultValue(v: unknown): unknown }
     ).extractNewDefaultValue(defaultOrChanges);
-    return { column, default: newDefault };
+    // ChangeColumnDefaultDefinition takes a ColumnDefinition; lift the
+    // queried Column up via the same TableDefinition channel
+    // buildChangeColumnDefinition uses for column-rebuild round-trips.
+    const td = new MysqlTableDefinition(tableName, { id: false });
+    const colDef = td.newColumnDefinition(
+      column.name,
+      (column.sqlType ?? "") as never,
+      {
+        null: column.null,
+      } as never,
+    );
+    return new ChangeColumnDefaultDefinition(colDef, newDefault);
   }
 
   /**

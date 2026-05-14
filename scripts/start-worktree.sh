@@ -149,6 +149,13 @@ link_source() {
   echo "    linked $rel -> $src"
 }
 
+echo "==> Linking .claude config from main worktree (skills + per-machine permissions)"
+link_source ".claude/skills"
+link_source ".claude/settings.local.json" optional
+
+echo "==> Running pnpm install"
+( cd "$TARGET" && pnpm install )
+
 echo "==> Linking upstream Ruby sources from main worktree"
 # vendor/<name>/ entries are populated by `pnpm vendor:fetch` on the main
 # worktree. Each new worktree symlinks them to avoid re-cloning ~53 MiB
@@ -156,21 +163,14 @@ echo "==> Linking upstream Ruby sources from main worktree"
 #
 # Source the list from the NEW worktree's vendor/sources.ts (it was just
 # checked out at origin/main, which may be ahead of the local main checkout
-# that drives the symlink targets). Reading from main would silently omit
-# a source that origin/main adds. Capture first — set -e doesn't propagate
-# through process substitution.
+# that drives the symlink targets). Must run AFTER `pnpm install` since
+# tsx lives in node_modules/.bin. Capture into a variable first — set -e
+# doesn't propagate through process substitution.
 VENDOR_PATHS="$(cd "$TARGET" && pnpm -s tsx vendor/fetch.ts --print-paths)"
 while IFS= read -r src; do
   rel="vendor/$(basename "$src")"
   link_source "$rel"
 done <<< "$VENDOR_PATHS"
-
-echo "==> Linking .claude config from main worktree (skills + per-machine permissions)"
-link_source ".claude/skills"
-link_source ".claude/settings.local.json" optional
-
-echo "==> Running pnpm install"
-( cd "$TARGET" && pnpm install )
 
 WORKTREE_CREATED=0  # success — disable EXIT-trap cleanup
 

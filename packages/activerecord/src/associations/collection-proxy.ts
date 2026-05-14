@@ -1377,8 +1377,11 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#none?
    */
-  isNone(): boolean {
-    return this.scope().isNone();
+  // @ts-expect-error Rails Relation#none? fires a query (Enumerable#none?
+  //   via each); our Relation#isNone only checks the NullRelation flag.
+  //   CP must fire a count query to check actual emptiness. Permanent.
+  async isNone(): Promise<boolean> {
+    return (await this.count()) === 0;
   }
 
   /**

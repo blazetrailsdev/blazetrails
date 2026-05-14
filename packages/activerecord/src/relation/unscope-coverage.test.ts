@@ -1,3 +1,4 @@
+// REVIEW(audit 2026-05-14): pre-defineSchema magic-table tests; needs migration to defineSchema. See audit pass for context.
 /**
  * Unscope coverage for keys that were missing from UnscopeType:
  * `:create_with`, `:preload`, `:eager_load`. Mirrors Rails'

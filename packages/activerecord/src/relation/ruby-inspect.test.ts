@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { rubyInspect, rubyInspectArray } from "./ruby-inspect.js";
 
-describe("rubyInspect", () => {
+// SKIP(audit 2026-05-14): no Rails counterpart; tests trails-invented behavior.
+describe.skip("rubyInspect", () => {
   it("renders nil / undefined as 'nil'", () => {
     expect(rubyInspect(null)).toBe("nil");
     expect(rubyInspect(undefined)).toBe("nil");

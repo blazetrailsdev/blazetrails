@@ -1,3 +1,4 @@
+// REVIEW(audit 2026-05-14): pre-defineSchema magic-table tests; needs migration to defineSchema. See audit pass for context.
 /**
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.

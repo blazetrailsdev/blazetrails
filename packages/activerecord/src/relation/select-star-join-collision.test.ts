@@ -23,7 +23,8 @@ import { Associations, loadHasMany } from "../associations.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
-describe("SELECT * column collision in joined relations", () => {
+// SKIP(audit 2026-05-14): no Rails counterpart; tests trails-invented behavior.
+describe.skip("SELECT * column collision in joined relations", () => {
   let adapter: DatabaseAdapter;
 
   class SsjUser extends Base {

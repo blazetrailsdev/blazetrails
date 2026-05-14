@@ -1,3 +1,4 @@
+// REVIEW(audit 2026-05-14): pre-defineSchema magic-table tests; needs migration to defineSchema. See audit pass for context.
 import { describe, it, expect } from "vitest";
 import { Base } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";

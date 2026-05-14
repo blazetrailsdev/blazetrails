@@ -1,3 +1,4 @@
+// REVIEW(audit 2026-05-14): pre-defineSchema magic-table tests; needs migration to defineSchema. See audit pass for context.
 /**
  * Rails-mirrored private helpers on Relation: assert_modifiable!,
  * check_if_method_has_arguments!, table_name_matches?, arel_column,

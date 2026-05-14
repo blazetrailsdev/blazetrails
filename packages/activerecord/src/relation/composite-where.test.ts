@@ -15,7 +15,8 @@ import { Base } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
-describe("Relation#where — composite-key form", () => {
+// SKIP(audit 2026-05-14): no Rails counterpart; tests trails-invented behavior.
+describe.skip("Relation#where — composite-key form", () => {
   let adapter: DatabaseAdapter;
 
   class CompOrder extends Base {

@@ -1,3 +1,4 @@
+// REVIEW(audit 2026-05-14): pre-defineSchema magic-table tests; needs migration to defineSchema. See audit pass for context.
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { Base, Relation, association, registerModel } from "../index.js";
 import { Associations } from "../associations.js";

@@ -15,7 +15,6 @@ import {
   type CallbackKind,
   type CallbackObject as ASCallbackObject,
   type RunCallbacksOptions as ASRunCallbacksOptions,
-  defineCallbacks as asDefineCallbacks,
 } from "@blazetrails/activesupport";
 
 type AnyCallback = BeforeCallback | AfterCallback | AroundCallback;
@@ -115,7 +114,6 @@ export function defineModelCallbacks(this: object, ...args: unknown[]): void {
   }
 
   const timings: CallbackTiming[] = options.only ?? ["before", "after", "around"];
-  const klass = this as { prototype?: object } & Record<string, unknown>;
 
   // NB: each `_defineXxxModelCallback` passes `fnOrObject` directly to
   // `register`; `register` handles object dispatch internally AND stores
@@ -124,9 +122,6 @@ export function defineModelCallbacks(this: object, ...args: unknown[]): void {
   // `Model.skipCallback(event, timing, originalObject)` for entries registered
   // through the generated `beforeX`/`afterX`/`aroundX` helpers.
   for (const event of eventNames) {
-    // Register the chain on the prototype for activesupport API surface parity.
-    // Mirrors: ActiveModel::Callbacks → define_callbacks (activesupport)
-    if (klass.prototype) asDefineCallbacks(klass.prototype, event);
     if (timings.includes("before")) _defineBeforeModelCallback(this, event);
     if (timings.includes("after")) _defineAfterModelCallback(this, event);
     if (timings.includes("around")) _defineAroundModelCallback(this, event);
@@ -314,8 +309,8 @@ export class CallbackChain {
             e.name,
             e.filter as AnyCallback,
             e.kind,
-            e.options,
-            ch.config,
+            { ...e.options },
+            dup.config,
             e.originalObject,
           ),
         );
@@ -391,8 +386,12 @@ export class CallbackChain {
     const chain = this._chains.get(event);
     if (!chain) {
       const r = block?.();
-      if (isThenable(r)) return Promise.resolve(r).then(() => true);
-      return true;
+      if (!isThenable(r)) return true;
+      if (opts?.strict === "sync") {
+        void Promise.resolve(r).catch(() => {});
+        throw new Error(`Async block on event "${event}" with no registered callbacks`);
+      }
+      return Promise.resolve(r).then(() => true);
     }
     return chain.compile().invoke(record, block, opts as ASRunCallbacksOptions);
   }

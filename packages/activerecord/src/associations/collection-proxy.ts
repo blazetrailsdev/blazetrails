@@ -1174,7 +1174,6 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     this._removeFromTarget(removed);
   }
 
-  /** @internal */
   private async _deleteThroughAllSql(): Promise<number> {
     const ctor = this._record.constructor as typeof Base;
     const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
@@ -1378,8 +1377,6 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#none?
    */
-  // Mirrors: ActiveRecord::CollectionProxy#none? → delegates to scope.none?
-  // Relation's isNone is also sync (flag check). No divergence.
   isNone(): boolean {
     return this.scope().isNone();
   }

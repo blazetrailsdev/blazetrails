@@ -59,12 +59,18 @@ describe("SignedGlobalID", () => {
     expect(SignedGlobalID.parse(token, { verifier, purpose: "login" })).not.toBeNull();
   });
 
-  it("returns null for expired token (expiresIn)", () => {
+  it("returns null for expired token (expiresAt in the past)", () => {
     const verifier = makeVerifier();
     const past = Temporal.Now.instant().add({ milliseconds: -1000 });
     const sgid = SignedGlobalID.create(fakeModel, { verifier, expiresAt: past });
-    const token = sgid.toString();
-    expect(SignedGlobalID.parse(token, { verifier })).toBeNull();
+    expect(SignedGlobalID.parse(sgid.toString(), { verifier })).toBeNull();
+  });
+
+  it("returns null for token expired via expiresIn", () => {
+    const verifier = makeVerifier();
+    // expiresIn of 0 seconds resolves to now, which is immediately expired
+    const sgid = SignedGlobalID.create(fakeModel, { verifier, expiresIn: 0 });
+    expect(SignedGlobalID.parse(sgid.toString(), { verifier })).toBeNull();
   });
 
   it("encodes expiresAt in the token and round-trips it", () => {

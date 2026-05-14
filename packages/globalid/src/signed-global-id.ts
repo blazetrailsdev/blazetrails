@@ -113,6 +113,7 @@ function verifyToken(
   try {
     const raw = verifier.verified(sgid, { purpose }) as SgidPayload | null;
     if (!raw || typeof raw !== "object" || typeof raw.gid !== "string") return null;
+    if (!raw.gid.startsWith("gid://")) return null;
     if (raw.purpose !== purpose) return null;
     let expiresAt: Temporal.Instant | undefined;
     if (raw.expires_at) {

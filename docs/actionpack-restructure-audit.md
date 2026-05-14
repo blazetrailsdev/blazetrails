@@ -248,8 +248,11 @@ Selected larger files that mash multiple Rails files together:
 
 ## Recommended re-org sequence
 
-All waves are documentation/move PRs — no behavior changes. Target
-~250 LOC, ceiling 300 per `CLAUDE.md`. Each wave is **mechanical
+All waves are documentation/move PRs — no behavior changes. **LOC
+ceiling waived** (2026-05-14): for mechanical file moves and Rails
+ports, the CLAUDE.md 300-LOC ceiling does not apply — size by logical
+cluster instead. Splitting a cluster just to satisfy the ceiling
+produces churn without review-cost savings. Each wave is **mechanical
 file moves + index.ts re-exports**; method bodies untouched.
 
 ### Wave 1 — set up Rails-mirroring directory skeleton (1 PR, ~50 LOC)

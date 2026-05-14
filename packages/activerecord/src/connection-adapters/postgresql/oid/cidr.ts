@@ -49,8 +49,9 @@ export class Cidr extends ValueType<IpAddr> {
   /**
    * Rails Cidr#serialize:
    *   if IPAddr === value then "#{value}/#{value.prefix}" else value
-   * Accepts IpAddr instances and emits canonical "addr/prefix" form;
-   * passes non-IpAddr values (e.g. raw strings) through unchanged.
+   * Accepts IpAddr instances and emits canonical "addr/prefix" form.
+   * Non-IpAddr values are coerced to string via String() (Rails returns them
+   * as-is, but our return type is string | null so coercion is required).
    */
   override serialize(value: unknown): string | null {
     if (value instanceof IpAddr) return `${value.address}/${value.prefixLength}`;

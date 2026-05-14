@@ -20,6 +20,14 @@ import {
 
 type AnyCallback = BeforeCallback | AfterCallback | AroundCallback;
 
+function isThenable(v: unknown): v is PromiseLike<unknown> {
+  return (
+    v !== null &&
+    (typeof v === "object" || typeof v === "function") &&
+    typeof (v as { then?: unknown }).then === "function"
+  );
+}
+
 /** Minimum shape required of a record object threaded through a callback chain. */
 export type CallbackRecord = object;
 
@@ -109,6 +117,12 @@ export function defineModelCallbacks(this: object, ...args: unknown[]): void {
   const timings: CallbackTiming[] = options.only ?? ["before", "after", "around"];
   const klass = this as { prototype?: object } & Record<string, unknown>;
 
+  // NB: each `_defineXxxModelCallback` passes `fnOrObject` directly to
+  // `register`; `register` handles object dispatch internally AND stores
+  // the original filter for identity-based removal via `skip()`. Pre-resolving
+  // here would make the stored filter the wrapper function, breaking
+  // `Model.skipCallback(event, timing, originalObject)` for entries registered
+  // through the generated `beforeX`/`afterX`/`aroundX` helpers.
   for (const event of eventNames) {
     // Register the chain on the prototype for activesupport API surface parity.
     // Mirrors: ActiveModel::Callbacks → define_callbacks (activesupport)
@@ -122,6 +136,7 @@ export function defineModelCallbacks(this: object, ...args: unknown[]): void {
 type CallbackHost = object;
 
 /**
+ * Mirrors: ActiveModel::Callbacks#_define_before_model_callback
  * @internal Rails-private helper.
  */
 export function _defineBeforeModelCallback(klass: CallbackHost, event: string): void {
@@ -139,6 +154,7 @@ export function _defineBeforeModelCallback(klass: CallbackHost, event: string): 
 }
 
 /**
+ * Mirrors: ActiveModel::Callbacks#_define_around_model_callback
  * @internal Rails-private helper.
  */
 export function _defineAroundModelCallback(klass: CallbackHost, event: string): void {
@@ -159,6 +175,7 @@ export function _defineAroundModelCallback(klass: CallbackHost, event: string): 
 }
 
 /**
+ * Mirrors: ActiveModel::Callbacks#_define_after_model_callback
  * @internal Rails-private helper.
  */
 export function _defineAfterModelCallback(klass: CallbackHost, event: string): void {
@@ -350,7 +367,7 @@ export class CallbackChain {
       if (e.kind === "after") tmp.append(e);
     }
     const result = tmp.compile().invoke(record, undefined, opts as ASRunCallbacksOptions);
-    if (result instanceof Promise) return result.then(() => undefined);
+    if (isThenable(result)) return Promise.resolve(result).then(() => undefined);
   }
 
   runCallbacks(
@@ -374,7 +391,7 @@ export class CallbackChain {
     const chain = this._chains.get(event);
     if (!chain) {
       const r = block?.();
-      if (r instanceof Promise) return r.then(() => true);
+      if (isThenable(r)) return Promise.resolve(r).then(() => true);
       return true;
     }
     return chain.compile().invoke(record, block, opts as ASRunCallbacksOptions);

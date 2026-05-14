@@ -563,7 +563,12 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     defaultOrChanges: unknown,
   ): Promise<ChangeColumnDefaultDefinition> {
     const column = await this.columnFor(tableName, columnName);
-    const newDefault = this.schemaStatements().extractNewDefaultValue(defaultOrChanges);
+    const extracted = this.schemaStatements().extractNewDefaultValue(defaultOrChanges);
+    // Normalize JS-only `undefined` → `null` so the schema-creation
+    // visitor's SET branch produces `SET DEFAULT NULL` rather than the
+    // bare `SET` that quoteDefaultExpression(undefined) → "" would emit.
+    // Rails has no nil/undefined split, so this is TS-specific defense.
+    const newDefault = extracted === undefined ? null : extracted;
     // Match the PG adapter's shape: build ColumnDefinition with the
     // semantic type and set sqlType separately so dumper/visitor paths
     // see both. visitChangeColumnDefaultDefinition reads name +
@@ -608,7 +613,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   async changeColumnComment(
     tableName: string,
     columnName: string,
-    commentOrChanges: string | Record<string, string | null>,
+    commentOrChanges: string | null | { from?: unknown; to?: unknown },
   ): Promise<void> {
     const comment = this.schemaStatements().extractNewCommentValue(commentOrChanges);
     await this.changeColumn(tableName, columnName, "", { comment });

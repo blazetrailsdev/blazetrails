@@ -105,27 +105,38 @@ function castAggValue(val: unknown, fn: AggFn, colType: unknown, coerceNumeric: 
     return Number(val ?? 0);
   }
 
-  // For average over non-numeric column types (e.g. PG interval), route the
-  // raw aggregate value through the column type's deserialize so callers
-  // get a domain object (Duration) rather than a stringified driver value.
-  if (fn === "average" && colType != null && !isNumericLikeType(colType)) {
-    const ct = colType as { deserialize?(v: unknown): unknown };
-    if (typeof ct.deserialize === "function") return ct.deserialize(val);
+  // Mirrors Rails ActiveRecord::Calculations#type_cast_calculated_value:
+  //   when "average"
+  //     case type.type
+  //     when :integer, :decimal then value&.to_d   # Rails: BigDecimal
+  //     else                          type.deserialize(value)
+  //     end
+  // We coerce integer/decimal averages to a JS number (documented Rails-→JS
+  // limitation). For other types — interval, time, money — route through
+  // the column type's deserialize so callers get a domain object (Duration,
+  // Time, …) rather than the raw driver string.
+  if (fn === "average" && colType != null) {
+    const typeName = (colType as { type?(): string }).type?.();
+    if (!isCoerceNumericTypeName(typeName)) {
+      const ct = colType as { deserialize?(v: unknown): unknown };
+      if (typeof ct.deserialize === "function") return ct.deserialize(val);
+    }
   }
   // count / average over numeric columns: JS number.
   return Number(val);
 }
 
-function isNumericLikeType(colType: unknown): boolean {
-  if (colType == null || typeof colType !== "object") return true;
-  const name = (colType as { type?(): string }).type?.();
+function isCoerceNumericTypeName(name: string | undefined): boolean {
   if (!name) return true;
+  // Rails maps :integer + :decimal to value&.to_d. BigInteger inherits
+  // Integer.type → :integer in Rails; our BigIntegerType.name === "big_integer"
+  // so list it explicitly. UnsignedInteger / Float are also numeric-coerce.
   return (
     name === "integer" ||
-    name === "bigint" ||
-    name === "float" ||
+    name === "big_integer" ||
     name === "decimal" ||
-    name === "numeric" ||
+    name === "float" ||
+    name === "unsigned_integer" ||
     name === "boolean"
   );
 }

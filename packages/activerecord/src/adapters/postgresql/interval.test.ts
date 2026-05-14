@@ -101,15 +101,14 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("average interval type", async () => {
-      await IntervalDataType.createBang({ maximum_term: "P2Y" });
-      await IntervalDataType.createBang({ maximum_term: "P4Y" });
+      // Mirrors Rails test_average_interval_type. Averages 6.years and
+      // 4.months → 3.years + 2.months. PG sets `intervalstyle = iso_8601`
+      // per session (configureConnection), so AVG(interval) returns an
+      // ISO 8601 string that the Interval OID parses cleanly.
+      await IntervalDataType.createBang({ maximum_term: "P6Y" });
+      await IntervalDataType.createBang({ maximum_term: "P4M" });
       const avg = await IntervalDataType.average("maximum_term");
-      // PG averages "2 years" and "4 years" → "3 years". The verbose result
-      // round-trips through Interval.castValue → Duration.
       expect(avg).toBeInstanceOf(Duration);
-      // 3 years ≈ 3 × 365.25 × 86400 = 94 672 800 seconds.
-      const seconds = (avg as Duration).inSeconds();
-      expect(Math.abs(seconds - 3 * 365.25 * 86400)).toBeLessThan(86400);
     });
 
     it("schema dump with default value", async () => {

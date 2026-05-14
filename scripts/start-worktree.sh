@@ -158,18 +158,29 @@ echo "==> Running pnpm install"
 
 echo "==> Linking upstream Ruby sources from main worktree"
 # vendor/<name>/ entries are populated by `pnpm vendor:fetch` on the main
-# worktree. Each new worktree symlinks them to avoid re-cloning ~53 MiB
+# worktree; each new worktree symlinks them to avoid re-cloning ~53 MiB
 # per worktree.
 #
 # Source the list from the NEW worktree's vendor/sources.ts (it was just
 # checked out at origin/main, which may be ahead of the local main checkout
 # that drives the symlink targets). Must run AFTER `pnpm install` since
-# tsx lives in node_modules/.bin. Capture into a variable first — set -e
-# doesn't propagate through process substitution.
+# tsx lives in node_modules/.bin.
+#
+# Per-source fallback: when origin/main adds a new source that local main
+# hasn't fetched yet, the symlink target doesn't exist in $MAIN_REPO. Fall
+# back to fetching that source directly in the new worktree (slower; only
+# this worktree, not future ones). When local main catches up, future
+# worktrees will symlink as usual.
 VENDOR_PATHS="$(cd "$TARGET" && pnpm -s tsx vendor/fetch.ts --print-paths)"
 while IFS= read -r src; do
-  rel="vendor/$(basename "$src")"
-  link_source "$rel"
+  name="$(basename "$src")"
+  rel="vendor/$name"
+  if [[ -e "$MAIN_REPO/$rel" ]]; then
+    link_source "$rel"
+  else
+    echo "    $rel missing from main worktree — fetching into $TARGET (local main is behind)"
+    ( cd "$TARGET" && pnpm -s vendor:fetch --source "$name" )
+  fi
 done <<< "$VENDOR_PATHS"
 
 WORKTREE_CREATED=0  # success — disable EXIT-trap cleanup

@@ -5,7 +5,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { Base, RecordNotFound } from "./index.js";
-import { setSignedIdVerifierSecret } from "./signed-id.js";
+import { setSignedIdVerifierSecret, signedIdVerifier } from "./signed-id.js";
+import { SignedGlobalID } from "@blazetrails/globalid/signed-global-id";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -390,9 +391,13 @@ describe("signedId / findSigned / findSignedBang", () => {
     const sgid = await u.toSgid({ purpose: "test" });
     expect(sgid.purpose).toBe("test");
     expect(sgid.uri).toContain(`/${u.id}`);
-    const token = sgid.toParam();
-    expect(typeof token).toBe("string");
-    expect(token.length).toBeGreaterThan(0);
+    const parsed = SignedGlobalID.parse(sgid.toParam(), {
+      purpose: "test",
+      verifier: signedIdVerifier(User),
+    });
+    expect(parsed).not.toBeNull();
+    expect(parsed!.uri).toBe(sgid.uri);
+    expect(parsed!.purpose).toBe(sgid.purpose);
   });
 
   it("toSgidParam returns a string token identical to toSgid().toParam()", async () => {

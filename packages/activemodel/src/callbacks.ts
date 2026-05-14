@@ -239,6 +239,9 @@ function _registerCallbackOnProto(
       );
     }
   }
+  // Two-step: defineCallbacks creates the chain with the right config (COW if
+  // needed); getCallbackChains re-reads the now-own Map (cheap: hasOwnProperty
+  // true on second call).
   asDefineCallbacks(proto, event, { skipAfterCallbacksIfTerminated: true });
   const chains = asGetCallbackChains(proto);
   const chain = chains.get(event)!;
@@ -262,21 +265,9 @@ function _registerCallbackOnProto(
   else chain.append(entry);
 }
 
-/**
- * Get the activesupport chain for `event` on `proto`. Triggers COW via
- * `asGetCallbackChains` (acceptable for prototype-level lookups; COW happens
- * once per class, never per instance). Used in the run paths.
- */
+/** Triggers COW on `proto` (once per class, never per instance). Used in run paths. */
 function _getChain(proto: object, event: string): ASCallbackChain | null {
   return asGetCallbackChains(proto).get(event) ?? null;
-}
-
-/**
- * Read-only lookup — no COW. Used by `has()` so a skipCallback miss never
- * isolates a subclass from future parent registrations.
- */
-function _peekChain(proto: object, event: string): ASCallbackChain | undefined {
-  return asPeekCallbackChain(proto, event);
 }
 
 /**
@@ -307,7 +298,7 @@ export class CallbackChain {
     filter: CallbackFn | AroundCallbackFn | CallbackObject,
   ): boolean {
     // Peek first (no COW) to avoid isolating a subclass on a miss.
-    const chain = _peekChain(this._proto, event);
+    const chain = asPeekCallbackChain(this._proto, event);
     if (!chain) return false;
     const asFilter = filter as unknown as AnyCallback | ASCallbackObject;
     const found = chain.entries.some((e) => e.matches(timing as CallbackKind, asFilter));
@@ -323,7 +314,7 @@ export class CallbackChain {
     filter: CallbackFn | AroundCallbackFn | CallbackObject,
   ): boolean {
     // Peek without COW — a miss must not isolate this proto from future parent registrations.
-    const chain = _peekChain(this._proto, event);
+    const chain = asPeekCallbackChain(this._proto, event);
     if (!chain) return false;
     const asFilter = filter as unknown as AnyCallback | ASCallbackObject;
     return chain.entries.some((e) => e.matches(timing as CallbackKind, asFilter));

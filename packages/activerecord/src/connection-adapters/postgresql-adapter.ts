@@ -2946,18 +2946,21 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       default?: unknown;
       null?: boolean;
       array?: boolean;
+      limit?: number;
+      precision?: number;
+      scale?: number;
     } = {},
   ): Promise<void> {
+    this.clearCacheBang();
     const quotedTable = this.quoteTableName(tableName);
-    let pgType = this.nativeType(type);
-    if (options.array) pgType += "[]";
+    const pgType = this.typeToSql(type, options);
 
     const quotedCol = this.quoteIdentifier(columnName);
     let usingClause = "";
     if (options.using) {
       usingClause = ` USING ${options.using}`;
     } else if (options.castAs) {
-      const castType = this.nativeType(options.castAs);
+      const castType = this.typeToSql(options.castAs, {});
       if (options.array) {
         usingClause = ` USING ARRAY[CAST(${quotedCol} AS ${castType})]`;
       } else {

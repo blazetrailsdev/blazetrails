@@ -500,47 +500,97 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     await exec.call(this, sql);
   }
 
+  /**
+   * Mirrors AbstractMysqlAdapter#change_column_default.
+   * Emits `ALTER TABLE ... ALTER COLUMN col SET DEFAULT val` (or DROP DEFAULT).
+   * MySQL's ALTER COLUMN syntax accepts a default change without re-stating
+   * the column type, unlike CHANGE COLUMN which requires a full redefinition.
+   */
   async changeColumnDefault(
     tableName: string,
     columnName: string,
     defaultOrChanges: unknown,
   ): Promise<void> {
-    void tableName;
-    void columnName;
-    void defaultOrChanges;
+    const newDefault = (
+      this as unknown as {
+        extractNewDefaultValue(v: unknown): unknown;
+      }
+    ).extractNewDefaultValue(defaultOrChanges);
+    const colId = this.quoteIdentifier(columnName);
+    const tbl = this.quoteTableName(tableName);
+    const sql =
+      newDefault == null
+        ? `ALTER TABLE ${tbl} ALTER COLUMN ${colId} DROP DEFAULT`
+        : `ALTER TABLE ${tbl} ALTER COLUMN ${colId} SET DEFAULT ${this.quote(newDefault)}`;
+    await this._execMutation(sql);
   }
 
-  buildChangeColumnDefaultDefinition(
+  /**
+   * Mirrors AbstractMysqlAdapter#build_change_column_default_definition.
+   * Returns a ChangeColumnDefaultDefinition the schema-creation visitor
+   * can render. Returns null when the column does not exist (matches Rails
+   * `return unless column`).
+   */
+  async buildChangeColumnDefaultDefinition(
     tableName: string,
     columnName: string,
     defaultOrChanges: unknown,
-  ): Record<string, unknown> {
-    void tableName;
-    void columnName;
-    void defaultOrChanges;
-    return {};
+  ): Promise<{ column: unknown; default: unknown } | null> {
+    let column;
+    try {
+      column = await this.columnFor(tableName, columnName);
+    } catch {
+      return null;
+    }
+    const newDefault = (
+      this as unknown as {
+        extractNewDefaultValue(v: unknown): unknown;
+      }
+    ).extractNewDefaultValue(defaultOrChanges);
+    return { column, default: newDefault };
   }
 
+  /**
+   * Mirrors AbstractMysqlAdapter#change_column_null.
+   * Validates `null_`, backfills NULLs from `default_` when flipping to
+   * NOT NULL, then routes through change_column with `null:` set.
+   */
   async changeColumnNull(
     tableName: string,
     columnName: string,
     null_: boolean,
     default_?: unknown,
   ): Promise<void> {
-    void tableName;
-    void columnName;
-    void null_;
-    void default_;
+    (
+      this as unknown as {
+        validateChangeColumnNullArgumentBang(v: unknown): void;
+      }
+    ).validateChangeColumnNullArgumentBang(null_);
+    if (!null_ && default_ != null) {
+      const colId = this.quoteIdentifier(columnName);
+      await this._execMutation(
+        `UPDATE ${this.quoteTableName(tableName)} SET ${colId}=${this.quote(default_)} WHERE ${colId} IS NULL`,
+      );
+    }
+    await this.changeColumn(tableName, columnName, "", { null: null_ });
   }
 
+  /**
+   * Mirrors AbstractMysqlAdapter#change_column_comment.
+   * MySQL has no dedicated ALTER COMMENT syntax; mirrors Rails by routing
+   * through change_column with the resolved comment.
+   */
   async changeColumnComment(
     tableName: string,
     columnName: string,
     commentOrChanges: string | Record<string, string | null>,
   ): Promise<void> {
-    void tableName;
-    void columnName;
-    void commentOrChanges;
+    const comment = (
+      this as unknown as {
+        extractNewCommentValue(v: unknown): unknown;
+      }
+    ).extractNewCommentValue(commentOrChanges);
+    await this.changeColumn(tableName, columnName, "", { comment });
   }
 
   async changeColumn(

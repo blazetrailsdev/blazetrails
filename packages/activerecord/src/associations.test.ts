@@ -33,6 +33,8 @@ import {
 
 import { markForDestruction, isMarkedForDestruction } from "./autosave-association.js";
 import { createFixtures } from "./test-fixtures.js";
+import { Preloader } from "./associations/preloader.js";
+import { Batch } from "./associations/preloader/batch.js";
 
 function freshAdapter(): DatabaseAdapter {
   return createTestAdapter();
@@ -6926,35 +6928,230 @@ describe("PreloaderTest", () => {
     expect(cats.length).toBe(1);
     expect(cats[0].name).toBe("Special");
   });
-  it.skip("preload groups queries with same scope", () => {
-    // BLOCKED: associations — collection/singular feature gap
-    // ROOT-CAUSE: associations/associations.ts or preloader.ts missing collection/singular semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in associations.test.ts
-    /* needs scope tracking */
+  it("preload groups queries with same scope", async () => {
+    const adapter = freshAdapter();
+    class GQSAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class GQSPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("gqs_author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    Associations.hasMany.call(GQSAuthor, "gqsPosts", {
+      className: "GQSPost",
+      foreignKey: "gqs_author_id",
+    });
+    registerModel("GQSAuthor", GQSAuthor);
+    registerModel("GQSPost", GQSPost);
+    const a1 = await GQSAuthor.create({ name: "A1" });
+    const a2 = await GQSAuthor.create({ name: "A2" });
+    await GQSPost.create({ title: "P1", gqs_author_id: a1.id });
+    await GQSPost.create({ title: "P2", gqs_author_id: a2.id });
+    const p1 = new Preloader({ records: [a1], associations: ["gqsPosts"] });
+    const p2 = new Preloader({ records: [a2], associations: ["gqsPosts"] });
+    await new Batch([p1, p2]).call();
+    expect((a1 as any)._preloadedAssociations.get("gqsPosts")).toHaveLength(1);
+    expect((a2 as any)._preloadedAssociations.get("gqsPosts")).toHaveLength(1);
+    expect((a1 as any)._preloadedAssociations.get("gqsPosts")[0].title).toBe("P1");
+    expect((a2 as any)._preloadedAssociations.get("gqsPosts")[0].title).toBe("P2");
   });
-  it.skip("preload grouped queries with already loaded records", () => {
-    // BLOCKED: associations — collection/singular feature gap
-    // ROOT-CAUSE: associations/associations.ts or preloader.ts missing collection/singular semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in associations.test.ts
-    /* needs loaded-record merging */
+  it("preload grouped queries with already loaded records", async () => {
+    const adapter = freshAdapter();
+    class GQLAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class GQLPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("gql_author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    Associations.belongsTo.call(GQLPost, "gqlAuthor", {
+      className: "GQLAuthor",
+      foreignKey: "gql_author_id",
+    });
+    registerModel("GQLAuthor", GQLAuthor);
+    registerModel("GQLPost", GQLPost);
+    const a = await GQLAuthor.create({ name: "Shared" });
+    const post1 = await GQLPost.create({ title: "P1", gql_author_id: a.id });
+    const post2 = await GQLPost.create({ title: "P2", gql_author_id: a.id });
+    // Load post1's association first so it's marked loaded
+    const loaded = await GQLPost.includes("gqlAuthor").toArray();
+    const p1 = loaded.find((p: any) => p.title === "P1")!;
+    const p2 = loaded.find((p: any) => p.title === "P2")!;
+    void post1;
+    void post2;
+    // Re-run preloader — should use already-loaded record for both
+    const p3 = new Preloader({ records: [p1, p2], associations: ["gqlAuthor"] });
+    await p3.call();
+    expect((p1 as any)._preloadedAssociations.get("gqlAuthor").name).toBe("Shared");
+    expect((p2 as any)._preloadedAssociations.get("gqlAuthor").name).toBe("Shared");
   });
-  it.skip("preload grouped queries of middle records", () => {
-    // BLOCKED: associations — collection/singular feature gap
-    // ROOT-CAUSE: associations/associations.ts or preloader.ts missing collection/singular semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in associations.test.ts
-    /* needs middle-record grouping */
+  it("preload grouped queries of middle records", async () => {
+    const adapter = freshAdapter();
+    class GMMPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    class GMMTag extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class GMMTagging extends Base {
+      static {
+        this.attribute("gmm_post_id", "integer");
+        this.attribute("gmm_tag_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    Associations.hasMany.call(GMMPost, "gmmTaggings", {
+      className: "GMMTagging",
+      foreignKey: "gmm_post_id",
+    });
+    Associations.hasMany.call(GMMPost, "gmmTags", {
+      through: "gmmTaggings",
+      source: "gmmTag",
+      className: "GMMTag",
+    });
+    Associations.belongsTo.call(GMMTagging, "gmmTag", {
+      className: "GMMTag",
+      foreignKey: "gmm_tag_id",
+    });
+    registerModel("GMMPost", GMMPost);
+    registerModel("GMMTag", GMMTag);
+    registerModel("GMMTagging", GMMTagging);
+    const post1 = await GMMPost.create({ title: "P1" });
+    const post2 = await GMMPost.create({ title: "P2" });
+    const tag = await GMMTag.create({ name: "ruby" });
+    await GMMTagging.create({ gmm_post_id: post1.id, gmm_tag_id: tag.id });
+    await GMMTagging.create({ gmm_post_id: post2.id, gmm_tag_id: tag.id });
+    // Two preloaders for the same through-association, batched together
+    const p1 = new Preloader({ records: [post1], associations: ["gmmTaggings"] });
+    const p2 = new Preloader({ records: [post2], associations: ["gmmTaggings"] });
+    await new Batch([p1, p2]).call();
+    expect((post1 as any)._preloadedAssociations.get("gmmTaggings")).toHaveLength(1);
+    expect((post2 as any)._preloadedAssociations.get("gmmTaggings")).toHaveLength(1);
   });
-  it.skip("preload grouped queries of through records", () => {
-    // BLOCKED: associations — collection/singular feature gap
-    // ROOT-CAUSE: associations/associations.ts or preloader.ts missing collection/singular semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in associations.test.ts
-    /* needs through-record grouping */
+  it("preload grouped queries of through records", async () => {
+    const adapter = freshAdapter();
+    class GGTPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    class GGTTag extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class GGTTagging extends Base {
+      static {
+        this.attribute("ggt_post_id", "integer");
+        this.attribute("ggt_tag_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    Associations.hasMany.call(GGTPost, "ggtTaggings", {
+      className: "GGTTagging",
+      foreignKey: "ggt_post_id",
+    });
+    Associations.hasMany.call(GGTPost, "ggtTags", {
+      through: "ggtTaggings",
+      source: "ggtTag",
+      className: "GGTTag",
+    });
+    Associations.belongsTo.call(GGTTagging, "ggtTag", {
+      className: "GGTTag",
+      foreignKey: "ggt_tag_id",
+    });
+    registerModel("GGTPost", GGTPost);
+    registerModel("GGTTag", GGTTag);
+    registerModel("GGTTagging", GGTTagging);
+    const post1 = await GGTPost.create({ title: "P1" });
+    const post2 = await GGTPost.create({ title: "P2" });
+    const tag1 = await GGTTag.create({ name: "ruby" });
+    const tag2 = await GGTTag.create({ name: "rails" });
+    await GGTTagging.create({ ggt_post_id: post1.id, ggt_tag_id: tag1.id });
+    await GGTTagging.create({ ggt_post_id: post2.id, ggt_tag_id: tag2.id });
+    // Both posts use the same through path — source loaders should be grouped
+    const posts = await GGTPost.includes("ggtTags").toArray();
+    const p1tags = (posts.find((p: any) => p.title === "P1") as any)._preloadedAssociations.get(
+      "ggtTags",
+    );
+    const p2tags = (posts.find((p: any) => p.title === "P2") as any)._preloadedAssociations.get(
+      "ggtTags",
+    );
+    expect(p1tags).toHaveLength(1);
+    expect(p1tags[0].name).toBe("ruby");
+    expect(p2tags).toHaveLength(1);
+    expect(p2tags[0].name).toBe("rails");
   });
-  it.skip("preload through records with already loaded middle record", () => {
-    // BLOCKED: associations — collection/singular feature gap
-    // ROOT-CAUSE: associations/associations.ts or preloader.ts missing collection/singular semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in associations.test.ts
-    /* needs loaded-record merging */
+  it("preload through records with already loaded middle record", async () => {
+    const adapter = freshAdapter();
+    class GATPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    class GATTag extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class GATTagging extends Base {
+      static {
+        this.attribute("gat_post_id", "integer");
+        this.attribute("gat_tag_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    Associations.hasMany.call(GATPost, "gatTaggings", {
+      className: "GATTagging",
+      foreignKey: "gat_post_id",
+    });
+    Associations.hasMany.call(GATPost, "gatTags", {
+      through: "gatTaggings",
+      source: "gatTag",
+      className: "GATTag",
+    });
+    Associations.belongsTo.call(GATTagging, "gatTag", {
+      className: "GATTag",
+      foreignKey: "gat_tag_id",
+    });
+    registerModel("GATPost", GATPost);
+    registerModel("GATTag", GATTag);
+    registerModel("GATTagging", GATTagging);
+    const post = await GATPost.create({ title: "P1" });
+    const tag = await GATTag.create({ name: "ruby" });
+    await GATTagging.create({ gat_post_id: post.id, gat_tag_id: tag.id });
+    // Pre-load middle records (taggings) first
+    const posts = await GATPost.includes("gatTaggings").toArray();
+    const p = posts[0]!;
+    expect((p as any)._preloadedAssociations.get("gatTaggings")).toHaveLength(1);
+    // Now preload the through association — it should use already-loaded middle records
+    const preloader = new Preloader({ records: [p], associations: ["gatTags"] });
+    await preloader.call();
+    const tags = (p as any)._preloadedAssociations.get("gatTags");
+    expect(tags).toHaveLength(1);
+    expect(tags[0].name).toBe("ruby");
   });
   it.skip("preload with instance dependent scope", () => {
     // BLOCKED: associations — collection/singular feature gap

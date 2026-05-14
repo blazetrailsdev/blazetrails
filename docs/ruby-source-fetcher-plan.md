@@ -252,7 +252,77 @@ Each wave ≤300 LOC. Order chosen so each wave is independently shippable and r
 
 Waves 4 and 5 can land in either order; they are independent.
 
-## 7. Risks and open questions
+## 7. CI restructure — minimize Ruby jobs, reuse outputs
+
+Today (`.github/workflows/ci.yml`):
+
+- **`rails-comparison`** (line 372): installs ruby 3.3, runs `fetch-rails.sh` + `fetch-rails-tests.sh`, runs both Ruby extractors, then runs TS diff. ~6 min, one job, Ruby gated end-to-end.
+- **`schema-parity-rails`** (line 413): installs ruby 3.3, separate `bundle install` against `scripts/parity/schema/ruby/Gemfile`, runs `parity/run.ts --side=rails`, uploads dumps. Sibling `schema-parity-trails` + `schema-parity-diff` jobs consume the dumps — no Ruby needed there.
+- Other jobs (build-and-typecheck, lint, prettier, dx-type-tests, unit-tests, sqlite-tests, postgres-tests, mariadb-tests, website, guides-typecheck, virtualized-dx-type-tests) — already Ruby-free.
+
+So 2 of ~13 jobs touch Ruby. Goal: collapse to **one Ruby job** whose outputs every other Ruby-dependent step consumes via `actions/upload-artifact` + `download-artifact`.
+
+### 7.1 Target shape
+
+```
+        ┌─────────────────────────────────────┐
+        │ ruby-extract  (only job with ruby)  │
+        │   - tsx vendor/fetch.ts             │
+        │   - ruby extract-ruby-api.rb        │
+        │   - ruby extract-ruby-tests.rb      │
+        │   - (gen) parity/schema/ruby Gemfile│
+        │   - bundle install                  │
+        │   - tsx parity/run.ts --side=rails  │
+        │ upload artifacts:                   │
+        │   - rails-api.json                  │
+        │   - rails-tests.json                │
+        │   - parity-rails-dumps/             │
+        │   - vendor/sources.lock.json        │
+        └─────────────────────────────────────┘
+              │           │            │
+              ▼           ▼            ▼
+        api-compare   test-compare   schema-parity-diff
+        (no ruby)     (no ruby)      (no ruby; trails-side also feeds it)
+```
+
+Every consumer is pure-TS. Ruby exists in exactly one workflow node.
+
+### 7.2 Cache strategy
+
+Three caches, keyed independently so a Rails-tag bump or globalid-version bump invalidates only what changed:
+
+| Cache                 | Key                                                                      | Stored                                                                                      |
+| --------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `vendor-sources`      | `hashFiles('vendor/sources.ts', 'vendor/sources.lock.json')`             | `vendor/**` (all fetched clones + gems)                                                     |
+| `ruby-extract-output` | `<vendor-sources key>` + `hashFiles('scripts/{api,test}-compare/*.rb')`  | `scripts/api-compare/output/rails-api.json`, `scripts/test-compare/output/rails-tests.json` |
+| `parity-rails-bundle` | `<vendor-sources key>` + `hashFiles('scripts/parity/schema/ruby/**.rb')` | `scripts/parity/schema/ruby/vendor/bundle/`                                                 |
+
+Wave 7's generated parity Gemfile uses the resolved Rails ref from `vendor/sources.lock.json`, so the parity bundle cache key is also gated by it (no manual sync).
+
+If all three caches hit, the `ruby-extract` job becomes a pure download step (~30s) and Ruby never executes. If only `vendor-sources` misses, the fetcher runs (~1 min for Rails depth=1 clone) and downstream extracts/bundle re-run.
+
+### 7.3 Per-PR vs scheduled
+
+- **Push / PR**: the artifact-producing job runs; downstream diff jobs consume artifacts. ~30s cold-cache penalty vs today's ~6 min, since the parity bundle + extractor outputs are shared across runs that haven't bumped any pinned version.
+- **Scheduled / labelled parity runs**: same job, same caches. The parity output (`parity-rails-dumps/`) is what the schema-parity-diff job consumes — already the current shape; this plan keeps it.
+
+### 7.4 Local-dev parity
+
+`pnpm vendor:fetch` populates `vendor/` once; subsequent `pnpm api:compare` / `pnpm test:compare` / `pnpm parity:schema` all read from there. A TS-only contributor without Ruby installed can still run every TS-side check by downloading the latest `ruby-extract-output` artifact from a recent main build (`pnpm fetch-ci-extracts` is a tiny helper to add in wave 4). Ruby remains optional for non-extractor work.
+
+### 7.5 Wave alignment
+
+- **Wave 2** adds the `ruby-extract` job skeleton (just the fetcher; api-compare still runs its own extractor in-job for now).
+- **Wave 4** moves api-compare's extractor invocation into `ruby-extract` and makes the api-compare diff job download the artifact. Old `rails-comparison` job split into `ruby-extract` (ruby) + `api-compare-diff` (TS only).
+- **Wave 5** same for test-compare — extractor moves into `ruby-extract`, diff job becomes pure TS.
+- **Wave 7** folds the parity Gemfile generation and `bundle install` into `ruby-extract`; the parity-rails job becomes a pure-TS dump runner that reads `vendor/rails/` + bundled gems via downloaded artifacts. At this point: **one job, one Ruby toolchain, one cache key tree.**
+
+### 7.6 Out-of-scope for this plan
+
+- Splitting `ruby-extract` into parallel matrix jobs (api vs test vs parity). Worth doing if total runtime exceeds ~3 min; not needed at current scale.
+- Self-hosted runners for the Rails clone cache. The depth=1 clone is small enough that GitHub-hosted is fine.
+
+## 8. Risks and open questions
 
 - **CI cache invalidation**: cache key must be `hash(vendor/sources.ts)`, not a dir hash — otherwise a pinned-ref bump won't invalidate.
 - **Bundler in CI**: globalid (and any future rubygems-origin source) requires `ruby` + `bundler` on the CI image. `api:compare` and `test:compare` already use Ruby for the extractors, so no new dep — but it does mean a TS-only contributor cannot run `pnpm vendor:fetch` without Ruby installed. Mitigation: `fetch.ts` should print an actionable error ("install ruby + bundler") rather than letting `bundle install` fail.
@@ -262,7 +332,7 @@ Waves 4 and 5 can land in either order; they are independent.
 - **`parity/schema/ruby/Gemfile` drift**: resolved per §2.3 — wave 7 generates the Gemfile from `SOURCES` at parity-run time.
 - **Symlink semantics for rubygems origin**: the `vendor/globalid/lib → vendor/globalid/vendor/bundle/.../lib` symlink approach assumes POSIX. Windows is unsupported by the repo today (Ruby + pnpm + symlinks), so this is acceptable but worth flagging.
 
-## 8. Out of scope
+## 9. Out of scope
 
 - Implementing the waves (each is its own PR).
 - Mirroring non-Ruby upstream sources (Postgres grammar, MySQL grammar, etc.).
@@ -271,7 +341,7 @@ Waves 4 and 5 can land in either order; they are independent.
 - `@blazetrails/arel` origin decision — explicitly out of scope per kickoff.
 - Per-test exclusions or skip-management — orthogonal to fetching.
 
-## 9. Cross-references
+## 10. Cross-references
 
 - `docs/rails-file-structure-mirror-plan.md` — parallel plan; must consume the same `vendor/sources.ts`.
 - `scripts/api-compare/conventions.ts` — naming-exception registry; unaffected by this work but consulted by downstream tools that _do_ change.

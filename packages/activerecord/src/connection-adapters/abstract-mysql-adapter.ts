@@ -692,8 +692,11 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   async tableOptions(tableName: string): Promise<Record<string, string>> {
-    void tableName;
-    return {};
+    const createInfo = await this.createTableInfo(tableName);
+    if (!createInfo) return {};
+    const hasComment = /COMMENT='/.test(createInfo);
+    const comment = hasComment ? await this.tableComment(tableName) : null;
+    return parseTableOptions(createInfo, comment);
   }
 
   /**
@@ -1408,6 +1411,49 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     }
     return parsed;
   }
+}
+
+/**
+ * Parse the trailing table-options string from `SHOW CREATE TABLE` output.
+ * Exported for unit testing. Mirrors Rails AbstractMysqlAdapter#table_options.
+ *
+ * @param createInfo - Raw output of `SHOW CREATE TABLE`
+ * @param tableComment - Pre-fetched table comment (pass null if no COMMENT= in createInfo)
+ * @internal
+ */
+export function parseTableOptions(
+  createInfo: string,
+  tableComment: string | null,
+): Record<string, string> {
+  // Strip column definitions — everything up to and including the closing `)`.
+  // Also strip MySQL partition hints (`/*!50100 ... */` appended after options).
+  let raw = createInfo
+    .replace(/^[\s\S]*\n\) ?/m, "")
+    .replace(/\n\/\*![\s\S]*\*\/\n?$/m, "")
+    .trim();
+  if (!raw) return {};
+
+  const opts: Record<string, string> = {};
+
+  // Extract DEFAULT CHARSET and optional COLLATE, then remove from raw.
+  const charsetMatch = / DEFAULT CHARSET=(?<charset>\w+)(?: COLLATE=(?<collation>\w+))?/.exec(raw);
+  if (charsetMatch) {
+    raw = raw.slice(0, charsetMatch.index) + raw.slice(charsetMatch.index + charsetMatch[0].length);
+    opts["charset"] = charsetMatch.groups!["charset"]!;
+    if (charsetMatch.groups!["collation"]) opts["collation"] = charsetMatch.groups!["collation"]!;
+  }
+
+  // Strip AUTO_INCREMENT — mirrors Rails: sub!(/(ENGINE=\w+)(?: AUTO_INCREMENT=\d+)/, '\1')
+  raw = raw.replace(/(ENGINE=\w+)(?: AUTO_INCREMENT=\d+)/, "$1");
+
+  // Strip COMMENT= and use the pre-fetched comment value for accuracy.
+  if (/ COMMENT='/.test(raw)) {
+    raw = raw.replace(/ COMMENT='.+'/, "");
+    if (tableComment != null) opts["comment"] = tableComment;
+  }
+
+  if (raw !== "ENGINE=InnoDB") opts["options"] = raw;
+  return opts;
 }
 
 /**

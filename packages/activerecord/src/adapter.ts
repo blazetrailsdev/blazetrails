@@ -410,7 +410,7 @@ export interface DatabaseAdapter {
     binds?: unknown[],
     pk?: string | null,
     sequenceName?: string | null,
-  ): Promise<Result | number>;
+  ): Promise<number>;
   execDelete(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
   execUpdate(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
   isWriteQuery(sql: string): boolean;

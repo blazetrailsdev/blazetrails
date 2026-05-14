@@ -128,9 +128,12 @@ export function defineModelCallbacks(this: object, ...args: unknown[]): void {
   // `Model.skipCallback(event, timing, originalObject)` for entries registered
   // through the generated `beforeX`/`afterX`/`aroundX` helpers.
   for (const event of eventNames) {
-    // Register the chain on the prototype for activesupport API surface parity.
+    // Register the chain on the prototype with the same config used by
+    // _registerCallbackOnProto so skipAfterCallbacksIfTerminated is consistent
+    // regardless of which call runs first.
     // Mirrors: ActiveModel::Callbacks → define_callbacks (activesupport)
-    if (klass.prototype) asDefineCallbacks(klass.prototype, event);
+    if (klass.prototype)
+      asDefineCallbacks(klass.prototype, event, { skipAfterCallbacksIfTerminated: true });
     if (timings.includes("before")) _defineBeforeModelCallback(this, event);
     if (timings.includes("after")) _defineAfterModelCallback(this, event);
     if (timings.includes("around")) _defineAroundModelCallback(this, event);
@@ -265,9 +268,15 @@ function _registerCallbackOnProto(
   else chain.append(entry);
 }
 
-/** Triggers COW on `proto` (once per class, never per instance). Used in run paths. */
+/**
+ * Read-only chain lookup for run paths — no COW. The chain may live on an
+ * ancestor prototype; `invoke(record, ...)` still receives the instance as its
+ * target, so callbacks fire correctly without requiring a local copy.
+ * Avoiding COW here means a subclass that never registers its own callbacks
+ * stays transparent to future parent registrations even after its first run.
+ */
 function _getChain(proto: object, event: string): ASCallbackChain | null {
-  return asGetCallbackChains(proto).get(event) ?? null;
+  return asPeekCallbackChain(proto, event) ?? null;
 }
 
 /**

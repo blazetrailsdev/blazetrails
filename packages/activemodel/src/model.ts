@@ -134,6 +134,12 @@ export class Model {
     // no-op: subclass isolation is handled automatically by activesupport's
     // copy-on-write in getCallbackChains when register/setCallback is first called.
   }
+  /**
+   * @internal Compat shim for AR call sites (transactions.ts) that have not yet
+   * been migrated to the direct activesupport API (PR 6). COW is now automatic;
+   * this is a no-op.
+   */
+  static _ensureOwnCallbacks(): void {}
   private static _modelName: ModelName | null = null;
 
   // -- Attributes (Phase 1000) --

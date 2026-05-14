@@ -734,6 +734,29 @@ describeIfPg("PostgreSQLAdapter", () => {
       }
     });
 
+    it("exec insert with pk=false opt-out skips RETURNING and currval fallback", async () => {
+      // Mirrors Rails: `if use_insert_returning? || pk == false then super`.
+      // pk === false routes to the abstract path which, with sqlForInsert's
+      // pk-false branch, does NOT auto-resolve a RETURNING column or run
+      // SELECT currval(...). Result is the INSERT's bare row count.
+      await adapter.exec(`CREATE TABLE "ex_insert_pkfalse" ("id" SERIAL PRIMARY KEY, "n" INT)`);
+      try {
+        const result = await adapter.execInsert(
+          `INSERT INTO "ex_insert_pkfalse" ("n") VALUES (42)`,
+          null,
+          [],
+          false,
+        );
+        // Abstract execInsert returns a Result without RETURNING — its
+        // toArray() should be empty (no rows projected back).
+        expect((result as any).rows ?? (result as any).toArray?.()).toEqual([]);
+        const rows = await adapter.execute(`SELECT n FROM "ex_insert_pkfalse"`);
+        expect(rows[0].n).toBe(42);
+      } finally {
+        await adapter.exec(`DROP TABLE IF EXISTS "ex_insert_pkfalse"`);
+      }
+    });
+
     it("serial sequence", async () => {
       await adapter.exec(`CREATE TABLE "ex_serial_seq" ("id" SERIAL PRIMARY KEY)`);
       const result = await adapter.pkAndSequenceFor("ex_serial_seq");

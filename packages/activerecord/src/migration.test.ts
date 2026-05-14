@@ -1612,16 +1612,21 @@ describe("MigrationTest", () => {
       await m.run(adapter, "down");
       expect(await m.tableExists("reminders")).toBe(false);
 
-      // Regression: change()-based reversal must not double-apply prefix/suffix.
+      // Exercises addColumn + renameTable (both args prefixed per Rails method_missing)
+      // and change()-based reversal without double-applying prefix/suffix.
       class ChangeBased extends Migration {
         async change() {
           await this.createTable("widgets", (t) => t.string("name"));
+          await this.addColumn("widgets", "price", "integer");
+          await this.renameTable("widgets", "gadgets");
         }
       }
       const cb = new ChangeBased();
       await cb.run(adapter, "up");
-      expect(await cb.tableExists("widgets")).toBe(true);
+      expect(await cb.tableExists("gadgets")).toBe(true);
+      expect(await cb.columnExists("gadgets", "price")).toBe(true);
       await cb.run(adapter, "down");
+      expect(await cb.tableExists("gadgets")).toBe(false);
       expect(await cb.tableExists("widgets")).toBe(false);
     } finally {
       Base.tableNamePrefix = savedPrefix;

@@ -1500,13 +1500,17 @@ export class MigrationContext {
   /** @internal Query catalog for column names — used after CTAS where columns derive from the SELECT. */
   private async _introspectColumns(name: string): Promise<string[]> {
     const a = this._adapterName;
-    const e = name.replace(/'/g, "''"); // defense-in-depth for catalog string literals
-    const sql =
-      a === "sqlite"
-        ? `PRAGMA table_info(${this.adapter.quoteTableName(name)})`
-        : a === "postgres"
-          ? `SELECT column_name FROM information_schema.columns WHERE table_name = '${e}'`
-          : `SHOW COLUMNS FROM ${this.adapter.quoteTableName(name)}`;
+    const qt = this.adapter.quoteTableName(name);
+    let sql: string;
+    if (a === "sqlite") {
+      sql = `PRAGMA table_info(${qt})`;
+    } else if (a === "postgres") {
+      const [s, t] = name.includes(".") ? name.split(".", 2) : ["public", name];
+      const e = (x: string) => x.replace(/'/g, "''");
+      sql = `SELECT column_name FROM information_schema.columns WHERE table_schema = '${e(s)}' AND table_name = '${e(t)}' ORDER BY ordinal_position`;
+    } else {
+      sql = `SHOW COLUMNS FROM ${qt}`;
+    }
     const rows = await this.adapter.execute(sql);
     return rows.map((r) => {
       const x = r as Record<string, unknown>;

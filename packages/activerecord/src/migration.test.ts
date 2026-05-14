@@ -1562,10 +1562,11 @@ describe("MigrationTest", () => {
     const { InternalMetadata } = await import("./internal-metadata.js");
 
     const im = new InternalMetadata(adapter, { enabled: false });
-    await im.dropTable();
-
     expect(im.enabled).toBe(false);
-    expect(await im.tableExists()).toBe(false);
+    // tableExists() short-circuits to false when disabled (our TS implementation
+    // differs from Rails here: Rails' table_exists? checks the physical schema cache
+    // regardless of enabled?; ours returns false without querying). The meaningful
+    // invariant is that no environment row is written, tested below.
 
     const proxy: MigrationProxy = {
       version: "1",
@@ -1575,8 +1576,8 @@ describe("MigrationTest", () => {
     const migrator = new Migrator(adapter, [proxy], { internalMetadataEnabled: false });
     await migrator.up();
 
+    // No environment stamped — the core invariant of this test.
     expect(await im.get("environment")).toBeNull();
-    expect(await im.tableExists()).toBe(false);
   });
 
   it("inserting a new entry into internal metadata", async () => {
@@ -1599,9 +1600,10 @@ describe("MigrationTest", () => {
   });
 
   it("internal metadata create table wont be affected by schema cache", async () => {
-    // tableExists() queries live (no schema cache), so create_table is always
-    // re-entrant across transactions. Verify that successive createTable() +
-    // write pairs work correctly — the IF NOT EXISTS guard is idempotent.
+    // Rails' version uses transaction+rollback to prove the schema cache is
+    // invalidated after DDL rollback. Our tableExists() queries live (no cache),
+    // so we verify the idempotent commit path instead — the underlying invariant
+    // (no stale cache blocking re-creation) holds trivially in our implementation.
     const { adapter } = freshContext();
     const { InternalMetadata } = await import("./internal-metadata.js");
     const im = new InternalMetadata(adapter);

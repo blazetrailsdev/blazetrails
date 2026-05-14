@@ -17,11 +17,11 @@ require "time"
 SCRIPT_DIR = File.dirname(__FILE__)
 RAILS_DIR = ENV.fetch("RAILS_DIR") do
   abort "extract-ruby-tests.rb: RAILS_DIR env var not set. Caller must export " \
-        "it via `RAILS_DIR=$(pnpm vendor:fetch --print-paths rails)`."
+        "it via `RAILS_DIR=$(pnpm -s vendor:fetch --print-paths rails)`."
 end
 RACK_DIR = ENV.fetch("RACK_DIR") do
   abort "extract-ruby-tests.rb: RACK_DIR env var not set. Caller must export " \
-        "it via `RACK_DIR=$(pnpm vendor:fetch --print-paths rack)`."
+        "it via `RACK_DIR=$(pnpm -s vendor:fetch --print-paths rack)`."
 end
 OUTPUT_DIR = File.join(SCRIPT_DIR, "output")
 
@@ -523,6 +523,9 @@ end
 def run
   unless File.directory?(RAILS_DIR)
     abort "Rails source not found at #{RAILS_DIR}. Run `pnpm vendor:fetch` first."
+  end
+  unless File.directory?(RACK_DIR)
+    abort "Rack source not found at #{RACK_DIR}. Run `pnpm vendor:fetch` first."
   end
 
   Dir.mkdir(OUTPUT_DIR) unless File.directory?(OUTPUT_DIR)

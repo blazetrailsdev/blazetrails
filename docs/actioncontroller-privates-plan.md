@@ -31,10 +31,7 @@ $EDITOR packages/actionpack/src/actioncontroller/<ts-file>.test.ts
 pnpm test packages/actionpack/src/actioncontroller/<ts-file>.test.ts
 
 # 5. Refresh and confirm api:compare row hits 100%
-pnpm vendor:fetch --source rails
-ruby scripts/api-compare/extract-ruby-api.rb
-pnpm tsx scripts/api-compare/extract-ts-api.ts
-pnpm tsx scripts/api-compare/compare.ts --package actioncontroller --privates | grep <rails-file>
+pnpm api:compare --package actioncontroller --privates | grep <rails-file>
 
 # 6. Build clean, prettier clean
 pnpm build

@@ -13,7 +13,7 @@ require "set"
 SCRIPT_DIR = File.dirname(__FILE__)
 RAILS_DIR = ENV.fetch("RAILS_DIR") do
   abort "extract-ruby-api.rb: RAILS_DIR env var not set. Caller (run.sh) " \
-        "must export it via `RAILS_DIR=$(pnpm vendor:fetch --print-paths rails)`."
+        "must export it via `RAILS_DIR=$(pnpm -s vendor:fetch --print-paths rails)`."
 end
 OUTPUT_DIR = File.join(SCRIPT_DIR, "output")
 

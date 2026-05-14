@@ -895,7 +895,7 @@ describe("SchemaDumperAdapterTest", () => {
     const lines: string[] = [];
     await (dumper as any).table("t", lines);
     expect(lines[0]).toContain(`primaryKey: ["id","account_id"]`);
-    expect(lines[0]).not.toContain(`id: false`);
+    expect(lines[0]).toContain(`id: false`);
   });
 });
 

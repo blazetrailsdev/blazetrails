@@ -862,6 +862,7 @@ export class SchemaDumper {
     const tableOpts: Record<string, unknown> = {};
     if (hasCompositePk) {
       tableOpts.primaryKey = pkColumns.map((c) => c.name);
+      tableOpts.id = false;
     } else if (!hasId) {
       tableOpts.id = false;
     } else if (pkColumn) {

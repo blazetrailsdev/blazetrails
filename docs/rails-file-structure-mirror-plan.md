@@ -29,13 +29,19 @@ This is the _within-file_ analog of the actionpack restructure audit.
 ".rails-source")` pattern, and wave PR 7 of #1552 sweeps the new
 >   extractor into the env-var contract alongside the others.
 >
-> Either way, the dev-package list in §2 of this plan must match
-> `SOURCES.flatMap(s => s.packages.map(p => p.name))` from #1552 once both
-> land — both plans cover the same 7 Rails subpackages (activerecord,
-> activemodel, activesupport, actionpack, actionview, actionmailer,
-> railties) plus globalid and rack. Path references below (`active_record/...`,
-> `scripts/api-compare/.rails-source/...`) will be rewritten to `vendor/rails/...`
-> in the first wave that touches them after #1552 merges.
+> The dev-package set today, per `extract-ruby-api.rb:32–41` `PACKAGE_DIRS`,
+> is **`arel`, `activemodel`, `activerecord`, `activesupport`,
+> `actiondispatch`, `actioncontroller`, `actionview`, `trailties`** — note
+> the actionpack split (actiondispatch + actioncontroller) and the inclusion
+> of arel, which lives under `activerecord/lib/arel/` in Rails. The
+> structure rule covers exactly this set on day one. `globalid`, `rack`,
+> and `actionmailer` are **future expansion owned by PR #1552**: they're
+> fetched by the new vendor system but not yet in api:compare's
+> `PACKAGE_DIRS`. The structure rule picks them up only after #1552's
+> wave that adds them to the comparison surface.
+> Path references below (`scripts/api-compare/.rails-source/...`) will be
+> rewritten to `vendor/rails/...` in the first wave that touches them
+> after #1552 merges.
 
 ## 1. Headline numbers
 
@@ -229,19 +235,22 @@ on both sides.
   `API_COMPARE_FORCE=1`. Regeneration runs whenever the extractor is
   invoked, locally via `pnpm api:compare` or in CI via the explicit
   workflow step (next bullet).
-- **CI integration**: verified against `.github/workflows/ci.yml:392–409`,
-  CI does **not** run `pnpm api:compare`; it invokes the pieces directly:
-  `fetch-rails.sh` → `ruby extract-ruby-api.rb` → `tsx
-build-rails-privates-manifest.ts && eslint`. The structure rule plugs
-  into the same workflow with two new steps inserted after
-  `extract-ruby-api.rb`: (1) `ruby extract-rails-structure.rb` →
-  `output/rails-structure.json`, (2) `tsx build-rails-structure-manifest.ts`
-  → `eslint/rails-structure.cache.json` (the form the rule actually reads,
-  matching `rails-private-methods.json`'s build pattern). The dedicated
-  Rails-mirror lint job at line 409 picks up the new manifest. Standalone
-  lint jobs that don't have Ruby remain Ruby-free: the rule degrades to
-  no-op when the manifest is absent, exactly like `rails-private-jsdoc`
-  does today.
+- **CI integration**: verified against `.github/workflows/ci.yml`. The
+  default `lint` job (line 130) runs `pnpm lint` only — no Rails fetch,
+  no Ruby — so the structure rule is a no-op there, exactly like
+  `blazetrails/rails-private-jsdoc` is today. The job that actually
+  enforces Rails-derived rules is **`rails-comparison`** (line 372),
+  which already runs `fetch-rails.sh` → `ruby extract-ruby-api.rb` →
+  `tsx build-rails-privates-manifest.ts && pnpm exec eslint packages/arel/src`
+  at lines 392–409. The structure rule plugs in with two new steps
+  inserted after `extract-ruby-api.rb`: (1) `ruby
+extract-rails-structure.rb` → `output/rails-structure.json`, (2) `tsx
+build-rails-structure-manifest.ts` → `eslint/rails-structure.cache.json`.
+  The existing line-409 `eslint` invocation expands to cover all
+  Rails-mirroring packages (not just `packages/arel/src`), picking up the
+  new manifest. The structure rule's real gate is the `rails-comparison`
+  job; this asymmetry with the default `lint` job is explicit and matches
+  the existing precedent for `rails-private-jsdoc`.
 - **Local dev**: extend `prelint` (`package.json:13`) to also run
   `tsx build-rails-structure-manifest.ts`. On a fresh clone before
   `pnpm api:compare` ever runs, the underlying `output/rails-api.json`

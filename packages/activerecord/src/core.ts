@@ -289,7 +289,7 @@ export function configurations(this: CoreHost, config?: any): any {
 export function isApplicationRecordClass(this: CoreHost): boolean {
   const explicit = getApplicationRecordClass();
   if (explicit) return (this as unknown) === explicit;
-  return this.name === "ApplicationRecord";
+  return (this as unknown) === (globalThis as Record<string, unknown>)["ApplicationRecord"];
 }
 
 // Rails uses ActiveSupport::IsolatedExecutionState for per-fiber/thread

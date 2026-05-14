@@ -678,8 +678,9 @@ export class Base extends Model {
   }
 
   /**
-   * Returns true when this class's connection class resolves to Base —
-   * i.e. no ancestor between this class and Base has connectionClass set.
+   * Returns true if this class is `Base` itself or the designated
+   * application-record class (set via `primaryAbstractClass()` or implicitly
+   * via a `globalThis.ApplicationRecord` constant).
    *
    * Mirrors: ActiveRecord::Base.primary_class?
    */

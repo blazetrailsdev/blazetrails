@@ -307,28 +307,28 @@ export function afterCommit(
  * Mirrors: ActiveRecord::Transactions::ClassMethods#after_save_commit
  */
 export function afterSaveCommit(modelClass: typeof Base, fn: CallbackFn): void {
-  (modelClass as any).afterSaveCommit(fn);
+  afterCommit(modelClass, fn, { on: ["create", "update"] });
 }
 
 /**
  * Mirrors: ActiveRecord::Transactions::ClassMethods#after_create_commit
  */
 export function afterCreateCommit(modelClass: typeof Base, fn: CallbackFn): void {
-  (modelClass as any).afterCreateCommit(fn);
+  afterCommit(modelClass, fn, { on: "create" });
 }
 
 /**
  * Mirrors: ActiveRecord::Transactions::ClassMethods#after_update_commit
  */
 export function afterUpdateCommit(modelClass: typeof Base, fn: CallbackFn): void {
-  (modelClass as any).afterUpdateCommit(fn);
+  afterCommit(modelClass, fn, { on: "update" });
 }
 
 /**
  * Mirrors: ActiveRecord::Transactions::ClassMethods#after_destroy_commit
  */
 export function afterDestroyCommit(modelClass: typeof Base, fn: CallbackFn): void {
-  (modelClass as any).afterDestroyCommit(fn);
+  afterCommit(modelClass, fn, { on: "destroy" });
 }
 
 /**

@@ -442,11 +442,6 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(rows[0].a_circle).toBeTruthy();
     });
 
-    it.skip("geometric schema dump", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric
-      // ROOT-CAUSE: connection-adapters/postgresql/geometric.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
-    });
     it.skip("geometric where", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric
       // ROOT-CAUSE: connection-adapters/postgresql/geometric.ts missing or incomplete Rails parity
@@ -663,11 +658,8 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("schema dumping for line type", async () => {
-      const rows = await adapter.execute(`
-        SELECT udt_name FROM information_schema.columns
-        WHERE table_name = 'postgresql_lines' AND column_name = 'a_line'
-      `);
-      expect(rows[0].udt_name).toBe("line");
+      const output = await SchemaDumper.dumpTableSchema(adapter, "postgresql_lines");
+      expect(output).toMatch(/t\.line\("a_line"\)/);
     });
   });
 });

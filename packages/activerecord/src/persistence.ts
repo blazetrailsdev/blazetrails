@@ -567,6 +567,8 @@ interface SaveRecord {
   _attributes: { set(key: string, val: unknown): void };
   readAttribute(name: string): unknown;
   _readAttribute(name: string): unknown;
+  errors: { any: boolean };
+  isValid(context?: unknown): boolean;
   constructor: {
     name: string;
     _attributeDefinitions: Map<string, unknown>;
@@ -1088,6 +1090,12 @@ interface PersistencePrivateHost {
   isNewRecord(): boolean;
   isDestroyed(): boolean;
   id: unknown;
+  idInDatabase?(): unknown;
+  attributeInDatabase?(col: string): unknown;
+  _associationInstances?: Map<
+    string,
+    { owner?: { _strictLoading?: boolean; isStrictLoadingNPlusOneOnly?(): boolean } } | null
+  >;
   constructor: {
     name: string;
     primaryKey: string | string[];
@@ -1100,6 +1108,24 @@ interface PersistencePrivateHost {
   };
 }
 
+/** Host surface for private creation/update helpers in persistence.ts. */
+type PersistenceInternalHost = PersistencePrivateHost & {
+  _readAttribute(name: string): unknown;
+  _writeAttribute(name: string, val: unknown): void;
+  _triggerUpdateCallback?: boolean | null;
+  idInDatabase?(): unknown;
+  attributeInDatabase?(col: string): unknown;
+  _associationInstances?: Map<
+    string,
+    { owner?: { _strictLoading?: boolean; isStrictLoadingNPlusOneOnly?(): boolean } } | null
+  >;
+  _attributes?: { keys?(): Iterable<string> };
+  constructor: PersistencePrivateHost["constructor"] & {
+    columnNames?(): string[];
+    _counterCacheColumns?: Set<string>;
+  };
+};
+
 /** @internal */
 function initInternals(this: PersistencePrivateHost): void {
   this._newRecord = true;
@@ -1111,8 +1137,8 @@ function initInternals(this: PersistencePrivateHost): void {
 }
 
 /** @internal */
-export function strictLoadedAssociations(this: any): string[] {
-  const cache: Map<string, any> = this._associationInstances;
+export function strictLoadedAssociations(this: PersistencePrivateHost): string[] {
+  const cache = this._associationInstances;
   if (!cache) return [];
   const result: string[] = [];
   for (const [name, assoc] of cache) {
@@ -1164,7 +1190,7 @@ export function isApplyScoping(
 }
 
 /** @internal */
-function _queryConstraintsHash(this: any): Record<string, unknown> {
+function _queryConstraintsHash(this: PersistencePrivateHost): Record<string, unknown> {
   const constraintsList = queryConstraintsList.call(this.constructor as any);
   if (!constraintsList) {
     const pk = this.constructor.primaryKey as string;
@@ -1193,7 +1219,7 @@ export function _deleteRow(this: PersistencePrivateHost): Promise<number> {
 
 /** @internal */
 export function _touchRow(
-  this: any,
+  this: PersistenceInternalHost,
   attributeNames: string[],
   time?: Temporal.Instant | null,
 ): Promise<number> {
@@ -1218,7 +1244,7 @@ export function _updateRow(
 }
 
 /** @internal */
-function createOrUpdate(this: any): Promise<boolean> {
+function createOrUpdate(this: PersistenceInternalHost): Promise<boolean> {
   if (this._readonly) _raiseReadonlyRecordError.call(this);
   if (this._destroyed) return Promise.resolve(false);
   if (this._newRecord) {
@@ -1247,7 +1273,7 @@ function createOrUpdate(this: any): Promise<boolean> {
 }
 
 /** @internal */
-async function _createRecord(this: any): Promise<unknown> {
+async function _createRecord(this: PersistenceInternalHost): Promise<unknown> {
   const ctor = this.constructor as any;
   const allNames: string[] = Array.from(this._attributes?.keys?.() ?? []);
   const colNames: string[] = ctor.columnNames?.() ?? allNames;

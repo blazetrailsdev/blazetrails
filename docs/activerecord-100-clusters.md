@@ -296,12 +296,6 @@ One gap tracked in [`scripts/parity/canonical/query-known-gaps.json`](../scripts
 
 ---
 
-## Closed clusters
-
-- **PG connection** — Slots A (#1439), B (#1446), C (#1462), D (#1464), E (#1463).
-- **Associations has-one** — Slots A (#1457), B (#1461), C+D (#1478). 16 remaining skipped tests have accurate annotations pointing at general associations gaps; see fidelity followups in the plan doc.
-- **SQLite adapter** — Slot A (#1443), Slot B (#1459).
-
 ## See also
 
 - [`activerecord-100-plan.md`](activerecord-100-plan.md) — live tracker: in-flight PRs, post-merge fidelity followups, doc-hygiene, story count, guardrails.

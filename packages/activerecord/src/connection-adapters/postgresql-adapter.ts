@@ -65,12 +65,18 @@ import {
   transactionIsolationLevels,
   typeCastedBinds,
   temporalToBindString,
+  extractTableRefFromInsertSql,
 } from "./abstract/database-statements.js";
 import { getTypeParser as getTemporalTypeParser } from "./postgresql/temporal-type-parsers.js";
 
 const TEMPORAL_OIDS = new Set([1082, 1083, 1114, 1184, 1266]);
 const OID_INTERVAL = 1186;
-import { READ_QUERY, executeBatch as pgExecuteBatch } from "./postgresql/database-statements.js";
+import {
+  READ_QUERY,
+  executeBatch as pgExecuteBatch,
+  lastInsertIdResult,
+  suppressCompositePrimaryKey,
+} from "./postgresql/database-statements.js";
 import type { CreateDatabaseOptions, PgIndexDefinition } from "./postgresql/schema-statements.js";
 import {
   ExclusionConstraintDefinition,
@@ -1698,6 +1704,34 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // Mirrors: PostgreSQLAdapter#use_insert_returning? (postgresql_adapter.rb:630)
   isUseInsertReturning(): boolean {
     return this._useInsertReturning;
+  }
+
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#exec_insert
+   * @internal
+   */
+  override async execInsert(
+    sql: string,
+    name?: string | null,
+    binds: unknown[] = [],
+    pk?: string | null,
+    sequenceName?: string | null,
+    returning?: string[] | null,
+  ): Promise<Result | number> {
+    if (this._useInsertReturning) {
+      return super.execInsert(sql, name, binds, pk as string | null, sequenceName, returning);
+    }
+    const result = await this.execQuery(sql, name ?? "SQL", binds);
+    if (!sequenceName) {
+      const tableRef = extractTableRefFromInsertSql.call(this as never, sql);
+      if (tableRef) {
+        if (pk == null) pk = (await this.primaryKey(tableRef)) as string | null;
+        const resolvedPk = suppressCompositePrimaryKey(pk ?? undefined);
+        sequenceName = resolvedPk ? await this.defaultSequenceName(tableRef, resolvedPk) : null;
+      }
+      if (!sequenceName) return result;
+    }
+    return lastInsertIdResult.call(this, sequenceName);
   }
 
   /** Returns true for raw pg errors that indicate the database doesn't exist (SQLSTATE 3D000). */

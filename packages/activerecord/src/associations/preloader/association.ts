@@ -17,7 +17,8 @@ export class Association {
   readonly owners: Base[];
   /** @internal */
   readonly reflection: AssociationLikeReflection;
-  private _preloadScope: any;
+  /** @internal */
+  protected _preloadScope: any;
   /** @internal */
   protected _reflectionScope: any;
   private _associate: boolean;

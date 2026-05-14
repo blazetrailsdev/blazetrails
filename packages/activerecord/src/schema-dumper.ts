@@ -136,9 +136,11 @@ const SQL_TYPE_MAP: Record<string, DslMapping> = {
   circle: { dslType: "circle" },
   interval: { dslType: "interval" },
   bit: { dslType: "bit" },
-  "bit varying": { dslType: "bit" },
+  "bit varying": { dslType: "bitVarying" },
+  varbit: { dslType: "bitVarying" },
   citext: { dslType: "citext" },
   ltree: { dslType: "ltree" },
+  tsvector: { dslType: "tsvector" },
   oid: { dslType: "oid" },
   int4range: { dslType: "int4range" },
   int8range: { dslType: "int8range" },
@@ -195,6 +197,10 @@ const DSL_HELPER_METHODS = new Set([
   "json",
   "jsonb",
   "citext",
+  "ltree",
+  "tsvector",
+  "bit",
+  "bitVarying",
   "money",
   "int4range",
   "int8range",
@@ -244,6 +250,10 @@ function sqlTypeToDsl(sqlType: string): DslMapping {
             : { dslType: "datetime" };
       } else if (timeMatch) {
         result = { dslType: "time" };
+      } else if (/^bit\(\d+\)$/.test(baseType)) {
+        result = { dslType: "bit" };
+      } else if (/^(?:bit varying|varbit)\(\d+\)$/.test(baseType)) {
+        result = { dslType: "bitVarying" };
       } else if (KNOWN_DSL_TYPES.has(baseType)) {
         result = { dslType: baseType };
       } else {

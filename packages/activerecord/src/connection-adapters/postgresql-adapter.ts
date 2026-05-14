@@ -74,8 +74,8 @@ const OID_INTERVAL = 1186;
 import {
   READ_QUERY,
   executeBatch as pgExecuteBatch,
-  lastInsertIdResult,
   suppressCompositePrimaryKey,
+  castResult,
 } from "./postgresql/database-statements.js";
 import type { CreateDatabaseOptions, PgIndexDefinition } from "./postgresql/schema-statements.js";
 import {
@@ -1721,7 +1721,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (this._useInsertReturning) {
       return super.execInsert(sql, name, binds, pk as string | null, sequenceName, returning);
     }
-    const result = await this.execQuery(sql, name ?? "SQL", binds);
+    // Resolve sequence name before acquiring the INSERT client so the
+    // metadata queries (primaryKey, defaultSequenceName) don't consume
+    // an extra connection while the INSERT client is held.
     if (!sequenceName) {
       const tableRef = extractTableRefFromInsertSql.call(this as never, sql);
       if (tableRef) {
@@ -1729,9 +1731,21 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         const resolvedPk = suppressCompositePrimaryKey(pk ?? undefined);
         sequenceName = resolvedPk ? await this.defaultSequenceName(tableRef, resolvedPk) : null;
       }
-      if (!sequenceName) return result;
     }
-    return lastInsertIdResult.call(this, sequenceName);
+    // currval() is session-scoped: INSERT and SELECT currval(...) must
+    // run on the same connection. withClient() pins both to one client.
+    return this.withClient(async (client) => {
+      const castBinds = typeCastedBinds(binds);
+      const bindArray = castBinds.map((v) => temporalToBindString(v, "postgres"));
+      const rewritten = this.rewriteBinds(sql, bindArray);
+      const insertResult = await this._runQuery(client, rewritten, bindArray, { rowMode: "array" });
+      if (!sequenceName) {
+        return castResult.call(this, insertResult as pg.QueryResult);
+      }
+      const currvalSql = `SELECT currval(${this.quote(sequenceName)})`;
+      const pgResult = await this._runQuery(client, currvalSql, [], { rowMode: "array" });
+      return castResult.call(this, pgResult as pg.QueryResult);
+    });
   }
 
   /** Returns true for raw pg errors that indicate the database doesn't exist (SQLSTATE 3D000). */

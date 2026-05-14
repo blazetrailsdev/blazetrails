@@ -91,6 +91,7 @@ import {
   BinaryType,
   DecimalType,
 } from "@blazetrails/activemodel";
+import { connectedToStack } from "../core.js";
 import { Text as TextType } from "../type/text.js";
 import { Date as DateType } from "../type/date.js";
 import { Time as TimeType } from "../type/time.js";
@@ -711,6 +712,11 @@ export class AbstractAdapter implements Quoting {
     if (pool?.preventWrites === true) return true;
     if (pool?.dbConfig?.preventWrites === true) return true;
     if (this._config.preventWrites === true) return true;
+    // Mirror Rails: connection_descriptor.current_preventing_writes — read from stack
+    const stack = connectedToStack();
+    for (let i = stack.length - 1; i >= 0; i--) {
+      if (stack[i].preventWrites !== undefined) return stack[i].preventWrites!;
+    }
     return false;
   }
 

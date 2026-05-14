@@ -217,21 +217,38 @@ on both sides.
     consults `eslint/rails-private-methods.json` when present, otherwise
     treats the allowlist as empty rather than firing on every file.
   - First-run developers will see the structure rule as a no-op until
-    they run `pnpm api:compare`. CI runs `api:compare` already, so CI
-    enforces the real rule. The rule prints a one-time "cache missing —
-    run `pnpm api:compare`" diagnostic at startup.
+    they run `pnpm api:compare` (or the underlying
+    `ruby scripts/api-compare/extract-ruby-api.rb` +
+    `ruby scripts/rails-structure/extract-rails-structure.rb`). The rule
+    prints a one-time "cache missing — run `pnpm api:compare`" diagnostic
+    at startup.
   - Ruby remains a dev/CI dependency only, same as today.
 - **Refresh trigger**: same gate as
   [`extract-ruby-api.rb`](../scripts/api-compare/extract-ruby-api.rb) lines
   16–28 — compare cache mtime to `.rails-source/.git/HEAD`, honour
-  `API_COMPARE_FORCE=1`. Regeneration runs in `pnpm api:compare`'s existing
-  Ruby step, so no new CI surface.
-- **CI verification**: none needed against a committed artifact —
-  there is no committed artifact. CI runs `pnpm api:compare` (which
-  invokes the extractor) before lint, matching today's
-  `prelint` → `scripts/build-rails-privates-manifest.ts` pattern for
-  `eslint/rails-private-methods.json`. The structure cache lands in the
-  same generated-then-consumed flow.
+  `API_COMPARE_FORCE=1`. Regeneration runs whenever the extractor is
+  invoked, locally via `pnpm api:compare` or in CI via the explicit
+  workflow step (next bullet).
+- **CI integration**: verified against `.github/workflows/ci.yml:392–409`,
+  CI does **not** run `pnpm api:compare`; it invokes the pieces directly:
+  `fetch-rails.sh` → `ruby extract-ruby-api.rb` → `tsx
+build-rails-privates-manifest.ts && eslint`. The structure rule plugs
+  into the same workflow with two new steps inserted after
+  `extract-ruby-api.rb`: (1) `ruby extract-rails-structure.rb` →
+  `output/rails-structure.json`, (2) `tsx build-rails-structure-manifest.ts`
+  → `eslint/rails-structure.cache.json` (the form the rule actually reads,
+  matching `rails-private-methods.json`'s build pattern). The dedicated
+  Rails-mirror lint job at line 409 picks up the new manifest. Standalone
+  lint jobs that don't have Ruby remain Ruby-free: the rule degrades to
+  no-op when the manifest is absent, exactly like `rails-private-jsdoc`
+  does today.
+- **Local dev**: extend `prelint` (`package.json:13`) to also run
+  `tsx build-rails-structure-manifest.ts`. On a fresh clone before
+  `pnpm api:compare` ever runs, the underlying `output/rails-api.json`
+  and `output/rails-structure.json` won't exist; both manifest builders
+  already handle that case (lines 56–62 of
+  `build-rails-privates-manifest.ts` emit an empty manifest with a
+  console warning). The new builder mirrors that handling.
 
 ### 2.4 Index for O(1) ESLint lookup
 
@@ -488,17 +505,17 @@ need to swap, the fix is one range covering both.
 Each PR sized to ≤300 LOC per [CLAUDE.md](../CLAUDE.md). Estimates are
 implementation LOC excluding generated JSON.
 
-| wave      | scope                                                                                                    |  est. LOC | notes                                                                                                                               |
-| --------- | -------------------------------------------------------------------------------------------------------- | --------: | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **PR 1**  | Ruby extractor + JSON cache + commit baseline JSON                                                       |      ~250 | adds `scripts/rails-structure/extract-rails-structure.rb` + `output/rails-structure.json`; CI gate verifies regeneration is a no-op |
-| **PR 2**  | Index generator + path-mapping reuse + plumb cache into `pnpm api:compare`                               |      ~150 | reads from `conventions.ts`; emits `rails-structure.index.json`; no rule yet                                                        |
-| **PR 3**  | ESLint rule skeleton (loads cache, registers plugin, supports `@rails-structure-skip`); no checks active |      ~150 | establishes plumbing + RuleTester scaffold                                                                                          |
-| **PR 4**  | `include-position` check (smallest surface, lowest false-positive rate)                                  |      ~200 | likely <20 violations across repo; cleanups fold into PR 8+                                                                         |
-| **PR 5**  | `method-order` check, **warn-only**; emit per-file violation counts to a report file for triage          |      ~200 | the report drives subsequent cleanup waves                                                                                          |
-| **PR 6**  | `visibility-grouping` check, **warn-only**, with `@internal` JSDoc as the visibility signal              |      ~150 |                                                                                                                                     |
-| **PR 7**  | `module-nesting` check (option B/C from §3.3) — warn-only                                                |      ~150 |                                                                                                                                     |
-| **PR 8+** | Cleanup waves — auto-sort + manual cleanups, one Rails source file (or small cluster) per PR             | ~250 each | tracked against the §1 estimate of ~75% of files needing some sort                                                                  |
-| **Final** | Flip `method-order` and `visibility-grouping` to error; close the rule out                               |       ~50 |                                                                                                                                     |
+| wave      | scope                                                                                                    |  est. LOC | notes                                                                                                                                                                                                                           |
+| --------- | -------------------------------------------------------------------------------------------------------- | --------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **PR 1**  | Ruby extractor + JSON cache (generated, not committed) + CI workflow step                                |      ~250 | adds `scripts/rails-structure/extract-rails-structure.rb` + generated `output/rails-structure.json`; CI step runs the extractor directly (mirrors `.github/workflows/ci.yml:396` for `extract-ruby-api.rb`); no baseline commit |
+| **PR 2**  | Index generator + path-mapping reuse + plumb cache into `pnpm api:compare`                               |      ~150 | reads from `conventions.ts`; emits `rails-structure.index.json`; no rule yet                                                                                                                                                    |
+| **PR 3**  | ESLint rule skeleton (loads cache, registers plugin, supports `@rails-structure-skip`); no checks active |      ~150 | establishes plumbing + RuleTester scaffold                                                                                                                                                                                      |
+| **PR 4**  | `include-position` check (smallest surface, lowest false-positive rate)                                  |      ~200 | likely <20 violations across repo; cleanups fold into PR 8+                                                                                                                                                                     |
+| **PR 5**  | `method-order` check, **warn-only**; emit per-file violation counts to a report file for triage          |      ~200 | the report drives subsequent cleanup waves                                                                                                                                                                                      |
+| **PR 6**  | `visibility-grouping` check, **warn-only**, with `@internal` JSDoc as the visibility signal              |      ~150 |                                                                                                                                                                                                                                 |
+| **PR 7**  | `module-nesting` check (option B/C from §3.3) — warn-only                                                |      ~150 |                                                                                                                                                                                                                                 |
+| **PR 8+** | Cleanup waves — auto-sort + manual cleanups, one Rails source file (or small cluster) per PR             | ~250 each | tracked against the §1 estimate of ~75% of files needing some sort                                                                                                                                                              |
+| **Final** | Flip `method-order` and `visibility-grouping` to error; close the rule out                               |       ~50 |                                                                                                                                                                                                                                 |
 
 Total infra: ~1.1k LOC across 7 PRs. Cleanup waves: bounded by violation
 count from PR 5's report — estimate 15–30 PRs across all packages, parallelizable.

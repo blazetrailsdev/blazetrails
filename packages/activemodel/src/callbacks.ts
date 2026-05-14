@@ -313,7 +313,7 @@ export class CallbackChain {
     const found = chain.entries.some((e) => e.matches(timing as CallbackKind, asFilter));
     if (!found) return false;
     // Found — now trigger COW (via asGetCallbackChains) to get the mutable own chain.
-    asSkipCallback(this._proto, event, timing as CallbackKind, asFilter as AnyCallback);
+    asSkipCallback(this._proto, event, timing as CallbackKind, asFilter);
     return true;
   }
 

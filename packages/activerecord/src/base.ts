@@ -29,6 +29,7 @@ import {
   descendants as inheritanceDescendants,
   isFinderNeedsTypeCondition,
   primaryAbstractClass,
+  applicationRecordClassQ as _applicationRecordClassQ,
   stiClassFor,
   polymorphicClassFor,
   initializeInternalsCallback as inheritanceInitializeInternalsCallback,
@@ -683,7 +684,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base.primary_class?
    */
   static primaryClassQ(): boolean {
-    return this.connectionClassForSelf() === Base;
+    return this === Base || this.applicationRecordClassQ();
   }
 
   static currentPreventingWrites(): boolean {
@@ -1122,6 +1123,14 @@ export class Base extends Model {
 
   static primaryAbstractClass(): void {
     primaryAbstractClass(this);
+  }
+
+  /**
+   * @internal
+   * Mirrors: ActiveRecord::Core::ClassMethods#application_record_class?
+   */
+  static applicationRecordClassQ(): boolean {
+    return _applicationRecordClassQ(this);
   }
 
   static stiClassFor(typeName: string): typeof Base {

@@ -360,6 +360,22 @@ export function __resetPrimaryAbstractClass(): void {
 }
 
 /**
+ * Returns true if this class is the designated application-record base class.
+ * When a primary abstract class has been explicitly set via `primaryAbstractClass`,
+ * this compares against that class. Otherwise it falls back to checking whether
+ * the class is registered on `globalThis` as `"ApplicationRecord"`.
+ *
+ * @internal
+ * Mirrors: ActiveRecord::Core::ClassMethods#application_record_class?
+ */
+export function applicationRecordClassQ(modelClass: typeof Base): boolean {
+  if (_applicationRecordClass) {
+    return modelClass === _applicationRecordClass;
+  }
+  return modelClass === (globalThis as Record<string, unknown>)["ApplicationRecord"];
+}
+
+/**
  * Declare this class as the top-level application record base class and mark
  * it abstract.  Only one class per application may be designated as the
  * primary abstract class.

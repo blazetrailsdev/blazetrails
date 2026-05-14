@@ -1,0 +1,431 @@
+# Rails file-structure mirror — plan
+
+Status: planning only. No code in this PR.
+
+`scripts/api-compare/` validates that **methods exist** at the right
+Rails-mirroring file paths. It does **not** validate **structure within a file**
+— definition order, module nesting, public/private grouping, position of
+`include` / `extend` / constants, or section comments. This plan designs a
+data-driven ESLint rule (`blazetrails/rails-file-structure`) backed by a
+cached Ruby analysis of `scripts/api-compare/.rails-source/`.
+
+Style match: [activerecord-type-audit.md](activerecord-type-audit.md) +
+[actionpack-restructure-audit.md](actionpack-restructure-audit.md).
+This is the _within-file_ analog of the actionpack restructure audit.
+
+## 1. Headline numbers
+
+Source TS files in Rails-mirroring packages (excluding `*.test.ts`,
+`*.test-d.ts`, `*.d.ts`):
+
+| package       |   files | notes                                  |
+| ------------- | ------: | -------------------------------------- |
+| activerecord  |     430 | dominant; biggest files 1.7k–5.4k LOC  |
+| activesupport |      97 |                                        |
+| arel          |      89 |                                        |
+| actionpack    |      89 | restructure in progress (`*-audit.md`) |
+| activemodel   |      72 |                                        |
+| **total**     | **777** |                                        |
+
+Largest TS files (LOC, source-only):
+
+| file                                                         |  LOC |
+| ------------------------------------------------------------ | ---: |
+| `activerecord/src/connection-adapters/postgresql-adapter.ts` | 5373 |
+| `activerecord/src/relation.ts`                               | 5154 |
+| `activerecord/src/base.ts`                                   | 3464 |
+| `activerecord/src/migration.ts`                              | 2976 |
+| `activerecord/src/connection-adapters/sqlite3-adapter.ts`    | 2330 |
+| `activemodel/src/model.ts`                                   | 2316 |
+| `activerecord/src/relation/query-methods.ts`                 | 2292 |
+| `activerecord/src/associations.ts`                           | 2256 |
+| `activerecord/src/associations/collection-proxy.ts`          | 2243 |
+| `arel/src/visitors/to-sql.ts`                                | 1902 |
+
+Eyeball survey (10 files spot-checked against Rails source):
+
+| file                      |                       method-order                       | nesting | visibility groups |
+| ------------------------- | :------------------------------------------------------: | :-----: | :---------------: |
+| `persistence.ts`          |                         ~partial                         |  flat   |   not preserved   |
+| `relation.ts`             |                        divergent                         |  flat   |   not preserved   |
+| `base.ts`                 | partly, lots of mixin re-export ordering by import block |  flat   |   not preserved   |
+| `validations.ts`          |                          close                           |  flat   |   not preserved   |
+| `callbacks.ts`            |                          close                           |  flat   |      partial      |
+| `migration.ts`            |                        divergent                         |  mixed  |   not preserved   |
+| `arel/visitors/to-sql.ts` |                          close                           |   n/a   |   not preserved   |
+| `model.ts` (activemodel)  |                          close                           |  flat   |   not preserved   |
+| `query-methods.ts`        |                        divergent                         |   n/a   |   not preserved   |
+| `enum.ts`                 |                          close                           |  flat   |      partial      |
+
+**Rough estimate**: ~25% of files already close (≤5 reorder moves to match
+Rails); ~50% partially aligned (5–20 moves); ~25% diverged enough that
+re-sorting is mechanical-but-large. Visibility groupings are essentially
+never preserved — Rails uses `private` keyword blocks; we use `@internal`
+JSDoc plus underscore-prefix convention, with no contiguous block.
+
+These are rough — the Ruby analysis pipeline in §2 produces the ground-truth
+numbers and is what the wave plan is sized against.
+
+## 2. The Ruby analysis pipeline
+
+### 2.1 Extractor
+
+Reuse the Ripper-based machinery already in
+[`scripts/api-compare/extract-ruby-api.rb`](../scripts/api-compare/extract-ruby-api.rb).
+The current extractor already captures namespaces, visibility, methods,
+parameters, and dependency references; **structure data is mostly there,
+just not emitted**. The new script adds:
+
+- Per-method `line` (start) and `endLine`.
+- Per-method `order` index _within its enclosing module_ (1-based).
+- Module/class tree with start/end lines (not just dotted paths).
+- `include` / `extend` / `prepend` directives — name, line, order.
+- Constants — name, line, literal value when present.
+- Section comments — runs of pure `#` lines preceded and followed by blank
+  lines or method definitions. Captured as `{ line, text, followedBy: <next
+method/include/const name> }` so the rule can locate "the comment that
+  introduces section X" without doing fuzzy match.
+- `attr_reader` / `attr_writer` / `attr_accessor` declarations — name, line,
+  order (these are Ruby's analog of TS class fields).
+
+Implementation sketch:
+
+```ruby
+# new file: scripts/rails-structure/extract-rails-structure.rb
+# 1. Reuse PACKAGE_DIRS + walk() from extract-ruby-api.rb.
+# 2. Hook process_def to record { name, visibility, line, endLine,
+#    order_within_module }.
+# 3. Hook on_module / on_class to record start_line, end_line, parent path.
+# 4. Add on_command / on_command_call detection for `include X`,
+#    `extend X`, `prepend X`, and `attr_*` (already partially handled).
+# 5. Pre-pass over raw source for comment-block detection (Ripper's
+#    on_comment fires per-line; group adjacent comment lines).
+```
+
+### 2.2 JSON cache shape
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-14T…",
+  "railsSha": "<git rev of .rails-source>",
+  "files": {
+    "active_record/persistence.rb": {
+      "modules": [
+        {
+          "path": "ActiveRecord::Persistence",
+          "kind": "module",
+          "startLine": 5,
+          "endLine": 920,
+          "parent": null,
+          "includes": [],
+          "extends": [],
+          "constants": [],
+          "members": [
+            {
+              "kind": "method",
+              "name": "save",
+              "visibility": "public",
+              "scope": "instance",
+              "line": 250,
+              "endLine": 270,
+              "order": 1,
+            },
+            {
+              "kind": "method",
+              "name": "save!",
+              "visibility": "public",
+              "scope": "instance",
+              "line": 272,
+              "endLine": 290,
+              "order": 2,
+            },
+            {
+              "kind": "section",
+              "text": "Internal callbacks",
+              "line": 299,
+              "followedBy": "destroy_associations",
+            },
+            {
+              "kind": "method",
+              "name": "destroy_associations",
+              "visibility": "private",
+              "scope": "instance",
+              "line": 301,
+              "endLine": 305,
+              "order": 3,
+            },
+          ],
+          "children": [{ "path": "ActiveRecord::Persistence::ClassMethods", "…": "…" }],
+        },
+      ],
+    },
+  },
+}
+```
+
+Flat `members` array with `order` is the central design decision: it lets
+the ESLint rule produce O(n) diffs by walking members in declaration order
+on both sides.
+
+### 2.3 Cache location, regeneration, CI
+
+- **Location**: `scripts/rails-structure/output/rails-structure.json`.
+- **Committed**: yes. Same rationale as `output/rails-api.json` —
+  `.rails-source/` is pinned to a Rails tag by
+  `scripts/api-compare/fetch-rails.sh`, and we want lint to work without
+  Ruby on every dev box. The file is ~1–3 MB compressed.
+- **Refresh trigger**: same gate as
+  [`extract-ruby-api.rb`](../scripts/api-compare/extract-ruby-api.rb) lines
+  16–28 — compare cache mtime to `.rails-source/.git/HEAD`, honour
+  `API_COMPARE_FORCE=1`. Regeneration runs in `pnpm api:compare`'s existing
+  Ruby step, so no new CI surface.
+- **CI verification**: a check ensures the committed JSON matches a
+  fresh regeneration (mirrors `eslint/rails-private-methods.json` which is
+  regenerated by `pnpm api:compare`).
+
+### 2.4 Index for O(1) ESLint lookup
+
+The rule asks: "for TS file X, what's the Rails member order?" To avoid
+JSON.parse on every lint invocation, ship a derived index:
+
+`scripts/rails-structure/output/rails-structure.index.json`
+
+```jsonc
+{
+  // keyed by TS-relative path, value is the entry to load lazily.
+  "packages/activerecord/src/persistence.ts": "active_record/persistence.rb",
+}
+```
+
+The ESLint rule loads the big file once on first violation, caches in
+module scope, then keys by TS path.
+
+## 3. TypeScript-side analysis
+
+### 3.1 Path & symbol mapping
+
+Reuse [`scripts/api-compare/conventions.ts`](../scripts/api-compare/conventions.ts).
+That module already encodes:
+
+- TS↔Ruby filename mapping (kebab→snake, `trailtie`↔`railtie`, package-root
+  conventions).
+- Method renames (`saveBang` ↔ `save!`, etc.).
+- Symbol normalization for the api:compare matcher.
+
+The rule imports the _same_ normalization functions so a single source of
+truth governs both "does this method exist" and "is it in the right
+position". When `conventions.ts` learns about a new rename, the structure
+rule benefits automatically.
+
+### 3.2 TS AST walk
+
+`@typescript-eslint/parser` is already wired in. Per-file the rule
+collects, in source order:
+
+- Top-level `import` statements.
+- Top-level `export const`, `export function`, `export class`, `export
+type`, `export interface`.
+- For each class: method definitions, `static` blocks, field declarations.
+- `include(Base, …)` calls from `@blazetrails/activesupport` (recognized
+  by callee identifier — they are the Ruby-`include` analog).
+- `this`-typed top-level `function` exports (the
+  [CLAUDE.md mixin pattern](../CLAUDE.md)) — these mirror Ruby instance
+  methods, not file-scope functions.
+- JSDoc `@internal` markers (visibility analog).
+
+The output is a TS-side `members` array with the same shape as the Ruby
+side — `{ kind, name, visibility, order }` — which is then diffed against
+the cached Ruby `members`.
+
+### 3.3 Module-nesting strategy — decide once
+
+Ruby files often look like `module ActiveRecord; module Persistence; module
+ClassMethods; …; end; end; end`. We need to pick exactly one TS mapping
+pattern and enforce it:
+
+| option                                                                                                          | what it looks like                                                                              | pros                                                 | cons                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| A. TS namespaces                                                                                                | `export namespace Persistence { export namespace ClassMethods { … } }`                          | structural 1:1                                       | non-idiomatic; namespaces are deprecated in modern TS; breaks tree-shaking; clashes with our current file-per-module convention |
+| B. File-per-module, sibling files for nested modules                                                            | `persistence.ts` exports module-level; `persistence/class-methods.ts` exports the nested module | already what we do mostly; tree-shakable             | doesn't mirror within-file nesting at all                                                                                       |
+| C. Hybrid — file is the outermost module; nested modules become **adjacent named exports** with a comment fence | `persistence.ts` has `// === ClassMethods ===` sections grouping exports                        | gives us a _positional_ mirror without TS namespaces | order-only mirror; not a true nesting check                                                                                     |
+
+**Recommendation: B + C.** Adopt B as the structural convention (matches
+current practice and `api-compare`'s file-path expectations), then layer C
+on within files that contain multiple Ruby submodules. The ESLint rule
+checks **within-file order** and treats sibling-file nesting as already
+correct so long as the file path matches `conventions.ts`. Option A is
+rejected — it would require a sweeping rewrite for no behavioural win.
+
+## 4. Divergence catalogue
+
+Inventoried from spot-checks against current code. Each divergence has a
+**conformance rule** — where the TS-only content lives so the linter can
+ignore it without false positives.
+
+| #   | divergence                                                                                                                        | conformance rule                                                                                                                                                   |
+| --- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `import` block at file top (no Ruby counterpart — Rails `require`s are inline).                                                   | Imports MUST be at the very top, before any other top-level node. Linter ignores their position; only checks they precede everything else.                         |
+| 2   | `interface X` / `type Y` / generic-only declarations (no Ruby counterpart).                                                       | Pinned **directly above** the first symbol they describe; if file-scope, pinned at top after imports. Treated as zero-cost insertions in the diff.                 |
+| 3   | `this`-typed `export function` (CLAUDE.md mixin pattern — Ruby instance method analog).                                           | Counted as instance method of the host class declared in the same package's `*.ts` file that wires it up. Position-checked against the Ruby instance-method order. |
+| 4   | `include(Base, MixinMod)` from activesupport.                                                                                     | Equivalent to Ruby's `include Mod`. Position-checked against Ruby `include` order.                                                                                 |
+| 5   | `_underscored` helpers.                                                                                                           | Treated as `private` visibility regardless of `@internal` JSDoc presence. (`@internal` is required by `blazetrails/rails-private-jsdoc` — orthogonal.)             |
+| 6   | `defineAttributes()` / `defineSchema()` blocks in test files.                                                                     | Test files are out of scope (§8).                                                                                                                                  |
+| 7   | `constructor` (TS) ↔ `initialize` (Ruby).                                                                                         | Linter aliases them in the order diff.                                                                                                                             |
+| 8   | TS getter/setter pairs (`get foo()` + `set foo()`) often emitted for Ruby `attr_accessor`.                                        | Treated as a single position-anchored member named after the property.                                                                                             |
+| 9   | `class Foo extends include(Base, Mod)` pattern.                                                                                   | The `include(…)` argument list contributes module-level `include` directives in source-order.                                                                      |
+| 10  | `// removed comments for Ruby methods we deleted` — CLAUDE.md forbids this; not a divergence the linter needs to model.           | n/a                                                                                                                                                                |
+| 11  | Files that exist in TS but not in Rails (e.g., trails-only infra).                                                                | Excluded — no Rails counterpart → no structure check.                                                                                                              |
+| 12  | Multiple Ruby files merged into one TS file (rare; documented in `moves.ts`).                                                     | Linter consults `moves.ts` and checks the union, keeping each source file's relative order intact.                                                                 |
+| 13  | `@internal` JSDoc on methods that are `public` in Ruby — usually means the method is Rails-private-but-our-public, or vice versa. | Visibility check uses the Ruby visibility as ground truth; conflict reported.                                                                                      |
+
+## 5. ESLint rule design
+
+### 5.1 Rule
+
+- **Name**: `blazetrails/rails-file-structure`.
+- **Family**: data-driven, like `blazetrails/rails-private-jsdoc` and
+  `blazetrails/nie-requires-annotation`. Reuses their plumbing in
+  `eslint.config.mjs`.
+- **Config schema**: `{ checks: ["method-order", "visibility-grouping",
+"include-position", "module-nesting"], suppressFile?: boolean }`.
+- **Severity**: per-check. `method-order` → warn-during-rollout, then
+  error. `visibility-grouping` → warn permanently (high false-positive
+  risk; see §7). `include-position` → error from day one (small surface).
+  `module-nesting` → warn-only.
+- **File-level suppression**: `/* eslint-disable
+blazetrails/rails-file-structure */` works as usual. Also support a
+  positive opt-out: a top-of-file
+  `/** @rails-structure-skip reason="…" */` JSDoc, indexed by the rule for
+  reporting (we want to see which files have escapes).
+
+### 5.2 Autofix scope
+
+| check               |                                                         autofix?                                                         | notes                                                                                                       |
+| ------------------- | :----------------------------------------------------------------------------------------------------------------------: | ----------------------------------------------------------------------------------------------------------- |
+| method-order        | **yes**, but **opt-in** via `--fix` only when no `// @rails-order-skip-next` comment is present near the affected member | safe for pure method moves; never moves across an `include()` because of prototype-chain order risk (§7)    |
+| include-position    |                                                           yes                                                            | safe — `include()` calls have no positional side effect on type emit, but order matters for prototype chain |
+| visibility-grouping |                                                            no                                                            | grouping is semantic; require manual edits                                                                  |
+| module-nesting      |                                                            no                                                            | requires structural decision                                                                                |
+
+The autofix uses ESLint's `fixer.replaceTextRange` over whole-statement
+ranges; it cannot interleave or split statements. If two adjacent members
+need to swap, the fix is one range covering both.
+
+### 5.3 Performance
+
+- Cache load: one JSON.parse on first violation, kept in module scope.
+- Per-file: O(n) walk through the TS AST + O(n) diff against the cached
+  Ruby `members` array. n is typically <200 per file.
+- The index in §2.4 ensures path lookup is a single hash hit.
+
+### 5.4 Integration
+
+- `eslint.config.mjs` — add the rule to the same plugin object that
+  registers `rails-private-jsdoc`, gated by glob to Rails-mirroring
+  packages.
+- The cache file is read at rule-construction time; if absent, the rule
+  reports a single "cache missing — run pnpm api:compare" diagnostic
+  rather than failing all files.
+- Tests in `eslint/rails-file-structure.test.mjs` follow the
+  `RuleTester` pattern used by sibling rules.
+
+## 6. Wave-based rollout
+
+Each PR sized to ≤300 LOC per [CLAUDE.md](../CLAUDE.md). Estimates are
+implementation LOC excluding generated JSON.
+
+| wave      | scope                                                                                                    |             est. LOC | notes                                                                                                                               |
+| --------- | -------------------------------------------------------------------------------------------------------- | -------------------: | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **PR 1**  | Ruby extractor + JSON cache + commit baseline JSON                                                       |                 ~250 | adds `scripts/rails-structure/extract-rails-structure.rb` + `output/rails-structure.json`; CI gate verifies regeneration is a no-op |
+| **PR 2**  | Index generator + path-mapping reuse + plumb cache into `pnpm api:compare`                               |                 ~150 | reads from `conventions.ts`; emits `rails-structure.index.json`; no rule yet                                                        |
+| **PR 3**  | ESLint rule skeleton (loads cache, registers plugin, supports `@rails-structure-skip`); no checks active |                 ~150 | establishes plumbing + RuleTester scaffold                                                                                          |
+| **PR 4**  | `include-position` check (smallest surface, lowest false-positive rate)                                  | ~200 incl. fixup PRs | likely <20 violations across repo                                                                                                   |
+| **PR 5**  | `method-order` check, **warn-only**; emit per-file violation counts to a report file for triage          |                 ~200 | the report drives subsequent cleanup waves                                                                                          |
+| **PR 6**  | `visibility-grouping` check, **warn-only**, with `@internal` JSDoc as the visibility signal              |                 ~150 |                                                                                                                                     |
+| **PR 7**  | `module-nesting` check (option B/C from §3.3) — warn-only                                                |                 ~150 |                                                                                                                                     |
+| **PR 8+** | Cleanup waves — auto-sort + manual cleanups, one Rails source file (or small cluster) per PR             |            ~250 each | tracked against the §1 estimate of ~75% of files needing some sort                                                                  |
+| **Final** | Flip `method-order` and `visibility-grouping` to error; close the rule out                               |                  ~50 |                                                                                                                                     |
+
+Total infra: ~1.1k LOC across 7 PRs. Cleanup waves: bounded by violation
+count from PR 5's report — estimate 15–30 PRs across all packages, parallelizable.
+
+## 7. Risks + open questions
+
+- **Hoisting / TDZ.** Auto-resort can move a `class Foo extends Bar`
+  before `class Bar` is declared, or move a `const x = …` past a use
+  site. The autofix MUST do a topological check (use TS's
+  `findReferences`/scope analysis) before emitting a swap. Open question:
+  do we accept the perf cost in-rule, or pre-compute a "safe to swap"
+  bit in the cache by analyzing the Ruby side? Recommendation: skip
+  swaps that cross any `class`/`function` declaration the AST flags as
+  used before the proposed new position.
+- **`include()` order matters at runtime.** Activesupport's `include()`
+  manipulates the prototype chain in argument order. Reordering
+  `include()` calls or moving them across method definitions can change
+  behavior. PR 4's autofix is conservative here — it moves `include()`
+  toward the Rails position only when no method definitions sit between
+  source and target positions.
+- **trails-tsc include() bridge ([PR #1150](https://github.com/blazetrailsdev/trails/pull/1150)).**
+  The plugin emits interface-merges in source order. Method-order
+  changes that re-sort `include()` callees can change the emitted
+  interface declaration order. Behavior is identical (interface merges
+  are commutative), but generated `.d.ts` snapshots drift — add a
+  regen-snapshots step to the cleanup waves.
+- **`@internal` markers** must be preserved across method moves. ESLint's
+  fixer operates on text ranges, so as long as we include the leading
+  JSDoc in the swap range, the markers stay attached. Add a unit test.
+- **Rails source itself is inconsistent.** Some Rails files have methods
+  in arbitrary order (e.g., `migration.rb` history). When the Ruby
+  ground truth is non-canonical, the rule still reports diffs against
+  it — by design. Suppression via `@rails-structure-skip
+reason="rails-source-is-itself-disordered"` is the escape hatch and
+  produces a tracked report.
+- **Test files.** Out of scope (§8). They have no Ruby counterpart
+  in a structure-preserving way (Minitest's structure ≠ Vitest's).
+- **Cross-package symbols.** Methods that live in a different package
+  than their Rails counterpart (e.g., the `Errors<T>` arc, certain Arel
+  helpers) are caught by the path-map in `conventions.ts`. If the path
+  map has no entry for a TS file, the rule skips it silently — that's
+  the same behaviour as `api:compare` and is the right default.
+- **Merged files.** Some TS files combine multiple Ruby files
+  (`moves.ts`). The rule consults `moves.ts` and validates each chunk's
+  internal order, but does not enforce inter-chunk ordering — chunk
+  groupings stay as authors place them.
+- **Ripper limitations.** Ruby's `private def foo …` one-liner sets
+  visibility differently from a `private` block; the current
+  `extract-ruby-api.rb` handles the block form. PR 1 must verify the
+  one-liner is handled or document the gap.
+
+## 8. Out of scope
+
+- Actual file re-sorting cleanups (handled in PR 8+ cleanup waves).
+- Test files (`**/*.test.ts`, `**/*.test-d.ts`).
+- Type-only files (`**/*.d.ts`).
+- Generated files (`packages/*/dist/**`, fixture outputs).
+- Files explicitly listed in
+  [`scripts/api-compare/unported-files.ts`](../scripts/api-compare/unported-files.ts).
+- Restructuring across files — the
+  [actionpack restructure audit](actionpack-restructure-audit.md) covers
+  inter-file moves; this plan is strictly within-file.
+- Comment-content equality — only _positions_ of section comments are
+  checked, never their text.
+
+## 9. Cross-references
+
+- [docs/activerecord-type-audit.md](activerecord-type-audit.md) — audit →
+  wave-plan style precedent.
+- [docs/actionpack-restructure-audit.md](actionpack-restructure-audit.md) —
+  the directory-level analog to this within-file plan.
+- [scripts/api-compare/conventions.ts](../scripts/api-compare/conventions.ts) —
+  TS↔Ruby naming/path mapping registry; reused by the new rule.
+- [scripts/api-compare/extract-ruby-api.rb](../scripts/api-compare/extract-ruby-api.rb) —
+  precedent extractor; new structure extractor copies its caching gate
+  and PACKAGE_DIRS map.
+- [scripts/api-compare/moves.ts](../scripts/api-compare/moves.ts) —
+  multi-source-file merges; consulted by the rule.
+- [eslint/nie-requires-annotation.mjs](../eslint/nie-requires-annotation.mjs)
+  and [eslint/rails-private-jsdoc.mjs](../eslint/rails-private-jsdoc.mjs) —
+  data-driven rule precedents; same plugin object, same RuleTester pattern.
+- [CLAUDE.md](../CLAUDE.md) — `this`-typed mixin convention; PR-size limit
+  driving the wave plan.

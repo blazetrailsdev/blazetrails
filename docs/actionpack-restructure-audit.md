@@ -248,7 +248,10 @@ Selected larger files that mash multiple Rails files together:
 
 ## Recommended re-org sequence
 
-All waves are documentation/move PRs — no behavior changes. **LOC
+Waves 1–6 are documentation/move PRs — no behavior changes. **Wave 7
+is a Rails port** (behavior-changing): it adds the journey routing
+engine and PR 10 switches `routing/route-set.ts` to the journey-backed
+router. Wave 8+ is open-ended fill-in (mixed). **LOC
 ceiling waived** (2026-05-14): for mechanical file moves and Rails
 ports, the CLAUDE.md 300-LOC ceiling does not apply — size by logical
 cluster instead. Splitting a cluster just to satisfy the ceiling
@@ -438,8 +441,9 @@ Ruby × 1.3. Test LOC ports inline alongside the source PR.
 | 9   | R₃      | `router.rb`                                                        | ~200    | ~500     | ~700  | 7, 8 |
 | 10  | wire-up | `actiondispatch/routing/route-set.ts` swap                         | ~200    | included | ~200  | 9    |
 
-**Total: 10 PRs, ~4670 TS LOC.** PRs 4 + 5 + 6 can ship in parallel
-once PR 3 lands.
+**Total: 10 PRs, ~4670 TS LOC.** PRs 4 and 6 can ship in parallel once
+PR 3 lands; PR 5 follows PR 4 (Path/Pattern subclasses
+`Visitors::Visitor`).
 
 Per-PR notes:
 
@@ -589,12 +593,12 @@ sibling means teaching the tooling about a new logical package:
   `"abstractcontroller" => File.join(RAILS_DIR, "actionpack", "test")`
   with include rules pointing at Rails' `actionpack/test/abstract/`.
 
-These script edits should ship in PR 3a alongside the directory
-creation, so the very first commit that moves files into
-`abstractcontroller/` is also the one that teaches the matchers to
-look there. ~20 LOC total — folds into Wave 3a's ~250 LOC budget.
+These script edits ship in the single Wave 3 PR alongside the
+directory creation, so the same commit that moves files into
+`abstractcontroller/` teaches the matchers to look there. ~20 LOC
+total — folds into Wave 3's ~450 LOC budget.
 
-### Waves 1, 2c, 6, 7+ — no tooling changes
+### Waves 1, 2, 6, 7, 8+ — no tooling changes
 
 Skeleton creation, CSP/PP moves, infrastructure-file additions, and
 selective fill-ins all stay within already-configured subtrees.

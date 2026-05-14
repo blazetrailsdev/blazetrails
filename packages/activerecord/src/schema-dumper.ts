@@ -296,7 +296,9 @@ export function cleanDefault(raw: unknown): unknown {
 
   if (str === "true") return true;
   if (str === "false") return false;
-  if (/^-?\d+(\.\d+)?$/.test(str)) return Number(str);
+  // Only coerce to number when there are no leading zeros — leading zeros mean
+  // the string is a bit-string pattern ("00000011") or similar, not a decimal.
+  if (/^-?\d+(\.\d+)?$/.test(str) && !/^-?0\d/.test(str)) return Number(str);
 
   return raw;
 }

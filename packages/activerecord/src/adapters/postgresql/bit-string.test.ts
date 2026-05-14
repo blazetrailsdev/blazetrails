@@ -26,13 +26,12 @@ describeIfPg("PostgreSQLAdapter", () => {
 
   describe("PostgresqlBitStringTest", () => {
     it("bit string", async () => {
-      // Roundtrip: write and read back bit strings.
-      await adapter.exec(
-        `INSERT INTO postgresql_bit_strings (a_bit, a_bit_varying) VALUES (B'00001010', B'0101')`,
+      const { SchemaDumper } = await import("../../schema-dumper.js");
+      const output = await SchemaDumper.dumpTableSchema(adapter, "postgresql_bit_strings");
+      expect(output).toMatch(/t\.bit\("a_bit",\s*\{[^}]*default:\s*"00000011"[^}]*limit:\s*8/);
+      expect(output).toMatch(
+        /t\.bitVarying\("a_bit_varying",\s*\{[^}]*default:\s*"0011"[^}]*limit:\s*4/,
       );
-      const rows = await adapter.execute(`SELECT a_bit, a_bit_varying FROM postgresql_bit_strings`);
-      expect(rows[0].a_bit).toBe("00001010");
-      expect(rows[0].a_bit_varying).toBe("0101");
     });
 
     it("bit string default", async () => {
@@ -52,7 +51,6 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("bit string invalid", async () => {
-      // Inserting a value that doesn't fit the bit length constraint should fail.
       await expect(
         adapter.exec(`INSERT INTO postgresql_bit_strings (a_bit) VALUES (B'0000000011')`),
       ).rejects.toThrow();

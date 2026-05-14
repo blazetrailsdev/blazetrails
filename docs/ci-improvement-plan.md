@@ -3,6 +3,15 @@
 Focus: separate the actionpack test footprint from activerecord at the
 CI level, ahead of the actionpack restructure waves
 ([actionpack-restructure-audit.md](actionpack-restructure-audit.md)).
+
+> **Scope note.** A prior version of this doc covered a broader CI
+> roadmap (composite setup action, shared build artifact, DB-per-worker
+> parallelism, rails-comparison pipelining, parity diff slimming). That
+> content was descoped on 2026-05-14 in favor of this narrower,
+> actionable plan. Recover it from git history if needed
+> (`git log -p -- docs/ci-improvement-plan.md`); a future broader-CI
+> doc can revive any sections still relevant once this split lands.
+
 Wave 7 (journey port) alone adds 1500–2000 LOC of routing engine, and
 Wave 3 promotes `abstractcontroller/` to a logical top-level package
 — the test surface will roughly double on the actionpack side. Today
@@ -39,9 +48,21 @@ Baseline counts (2026-05-14):
   test files (37 under `actioncontroller/`, 27 under `actiondispatch/`).
 - `packages/actionpack` has **no DB driver dependency** — tests are
   pure unit tests over the Rack stack.
-- Cross-package tests that exercise actionpack + AR together do
-  exist (controller/integration test helpers reach into AR fixtures),
-  but they're a minority and live under `packages/actionpack` today.
+- **Zero AR coupling today.**
+  `grep -rln "@blazetrails/activerecord" packages/actionpack/src`
+  → 0 matches (verified 2026-05-14). actionpack/src has no
+  `activerecord` or `ActiveRecord` references at all. The split is
+  therefore drop-in: no test relocations, no env-var gating, no
+  cross-package integration tests to re-home.
+
+> **Wall-time baseline: not yet measured.** This plan asserts that
+> splitting reduces feedback latency on actionpack regressions, but
+> the `unit-tests` and `sqlite-tests` job durations haven't been
+> captured. Wave 1.5 PR should attach a "before" timing report
+> (one full CI run before the split) so the "after" improvement is
+> quantifiable. The `ci` aggregate already emits a per-job timing
+> table to `$GITHUB_STEP_SUMMARY` (`ci.yml` lines 727–761) — easy
+> to harvest.
 
 ## Recommended separation
 
@@ -68,6 +89,19 @@ actionpack-tests:
     - run: pnpm install --frozen-lockfile
     - run: pnpm vitest run packages/actionpack
 ```
+
+The sample above duplicates the checkout/pnpm/node/install
+boilerplate already present in every other job — intentional for
+clarity in this doc. A composite setup action
+(`.github/actions/setup`) would dedup this and the 20+ other
+identical blocks in `ci.yml`; that's a separate cleanup not blocked
+by this split. The new job should adopt the composite as soon as
+it exists.
+
+The `unit-tests` invocation today also runs `scripts/guides-typecheck`
+alongside the no-DB packages. That stays in `unit-tests` — it's
+a typecheck pass, not actionpack-related; only the
+`packages/actionpack` line moves out.
 
 Justification:
 
@@ -128,11 +162,13 @@ clean:
 
 Recommendation: prefer (1) — path-based is consistent with how
 the rest of the workflow segregates work, and avoids per-test
-environment branching. A quick
-`grep -rln "@blazetrails/activerecord" packages/actionpack/src`
-during the Wave 1.5 PR confirms whether any such tests exist
-today; if non-empty, those tests need a home decision before
-the split.
+environment branching.
+
+**As of 2026-05-14 this is hypothetical:** there are zero AR
+imports under `packages/actionpack/src` (see "Current state"),
+so the split is drop-in today. The guidance above applies if/when
+cross-package tests are introduced later — re-run the grep at
+Wave 1.5 PR time as a sanity check.
 
 ## Rough LOC sizing
 
@@ -173,10 +209,11 @@ Estimated total: **~50 LOC** of workflow YAML, well under the
    to `packages/actionpack/**` from day one? (Default: every PR;
    gating can follow later, paired with a nightly full-matrix
    run so we don't ship regressions through path-filter holes.)
-2. Where do cross-package integration tests actually live today —
-   any under `packages/actionpack` that depend on AR fixtures?
-   Confirmed by `grep -rln "@blazetrails/activerecord"
-packages/actionpack/src` during the Wave 1.5 PR.
+2. ~~Where do cross-package integration tests live?~~ **Answered**
+   (2026-05-14): zero AR references under `packages/actionpack/src`.
+   Re-run the grep at Wave 1.5 PR time to confirm nothing landed
+   in the interim; if non-zero, decide per the
+   "Cross-package integration tests" section above.
 3. Does Wave 7's journey port want its own sub-job
    (`actiondispatch-tests`) up-front, or is one `actionpack-tests`
    job enough until measured wall-time says otherwise?

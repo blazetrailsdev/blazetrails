@@ -227,7 +227,7 @@ function exceptPredicates(
       // Also register as qualified "table.column" so cross-model merges work
       // even when two Table instances for the same table have different klass/
       // typeCaster (and thus different stableSerialize outputs, breaking eql).
-      colStrings.add(`${(c as any).relation.name}.${(c as any).name}`);
+      colStrings.add(`${c.relation.name}.${c.name}`);
     }
   }
   return predicates.filter((node) => {

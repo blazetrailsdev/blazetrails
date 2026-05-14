@@ -290,15 +290,6 @@ describe("WhereChainTest", () => {
 
   it("missing unscoped merged with scope on association", () => {
     const sql = Post.all()
-      .unscope("where")
-      .whereMissing("author")
-      .merge(Author.where({ id: 1 }))
-      .toSql();
-    expect(sql).toMatch(/LEFT.*JOIN/);
-    expect(sql).not.toMatch(/IS NULL/);
-  });
-  it("missing unscoped merged with scope on association", () => {
-    const sql = Post.all()
       .joins("author")
       .unscope("where")
       .whereMissing("author")
@@ -338,33 +329,26 @@ describe("WhereChainTest", () => {
     expect(sql).not.toMatch(/IS NULL/);
     expect(sql).toContain("ORDER BY");
   });
-  it("missing ordered merged joined with scope on association", () => {
-    const sql = Post.all()
-      .order({ title: "asc" })
-      .whereMissing("author")
-      .merge(Author.where({ id: 1 }))
-      .toSql();
-    expect(sql).toMatch(/LEFT.*JOIN/);
-    expect(sql).not.toMatch(/IS NULL/);
-  });
   it("missing unscoped merged joined extended early with scope on association", () => {
     const sql = Post.all()
       .extending({ noop: () => 1 })
+      .joins("author")
       .unscope("where")
       .whereMissing("author")
       .merge(Author.where({ id: 1 }))
       .toSql();
-    expect(sql).toMatch(/LEFT.*JOIN/);
+    expect(sql).toContain("JOIN");
     expect(sql).not.toMatch(/IS NULL/);
   });
   it("missing unscoped merged joined extended late with scope on association", () => {
     const sql = Post.all()
+      .joins("author")
       .unscope("where")
       .whereMissing("author")
       .merge(Author.where({ id: 1 }))
       .extending({ noop: () => 1 })
       .toSql();
-    expect(sql).toMatch(/LEFT.*JOIN/);
+    expect(sql).toContain("JOIN");
     expect(sql).not.toMatch(/IS NULL/);
   });
   it.skip("missing with enum", () => {

@@ -11,7 +11,7 @@ describe("PostgreSQL::OID::Cidr", () => {
     expect(type.typeCastForSchema(new IpAddr("192.168.1.0", 24))).toBe('"192.168.1.0/24"');
     expect(type.typeCastForSchema(new IpAddr("192.168.1.1", 32))).toBe('"192.168.1.1"');
     expect(type.typeCastForSchema(new IpAddr("::1", 128))).toBe('"::1/128"');
-    // Non-host prefixes are preserved.
+    // Rails checks prefix == 32 for any IP version, so IPv6 /32 is also elided.
     expect(type.typeCastForSchema(new IpAddr("2001:db8::", 32))).toBe('"2001:db8::"');
   });
 

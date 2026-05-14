@@ -20,6 +20,11 @@ export class IpAddr {
     readonly prefixLength: number,
   ) {}
 
+  /** Alias for prefixLength — matches Ruby IPAddr#prefix. */
+  get prefix(): number {
+    return this.prefixLength;
+  }
+
   /** Returns just the address portion, like Ruby IPAddr#to_s. */
   toString(): string {
     return this.address;
@@ -91,7 +96,8 @@ export class Cidr extends ValueType<IpAddr> {
    * Rails Cidr#type_cast_for_schema:
    *   if value.prefix == 32 then "\"#{value}\"" else "\"#{value}/#{value.prefix}\""
    *
-   * Rails checks only prefix == 32 (IPv4 host) and omits the suffix.
+   * Rails omits the prefix for any IpAddr with prefix == 32, regardless of
+   * IP version (this means IPv6 /32 is also elided — Rails does not special-case it).
    * "#{value}" calls IPAddr#to_s which returns just the address string.
    */
   override typeCastForSchema(value: unknown): string {

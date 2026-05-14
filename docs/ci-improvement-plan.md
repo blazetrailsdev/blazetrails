@@ -39,8 +39,9 @@ pnpm vitest run
 This single job batches all packages that don't require a database.
 `packages/activerecord` runs in three separate adapter jobs
 (`sqlite-tests`, `postgres-tests`, `mariadb-tests`) — each does a
-full `pnpm install` and `pnpm vitest run packages/activerecord`,
-gated on DB services.
+full `pnpm install` and `pnpm vitest run packages/activerecord`.
+`postgres-tests` and `mariadb-tests` provision a DB via Actions
+`services:`; `sqlite-tests` needs no service container (file/memory).
 
 Baseline counts (2026-05-14):
 
@@ -156,9 +157,10 @@ clean:
    `packages/activerecord/**` (or a dedicated
    `packages/integration-tests/`), so the package-level glob
    sorts them correctly.
-2. **Tag-based.** Use vitest tags / `test.skipIf(!process.env.DB_URL)`
-   so a file under `packages/actionpack/` skips when run from
-   the no-DB job and runs in the adapter jobs.
+2. **Tag-based.** Use vitest tags / `test.skipIf(...)` keyed on one
+   of the adapter env vars used today (`PG_TEST_URL`,
+   `MYSQL_TEST_URL`) so a file under `packages/actionpack/` skips
+   when run from the no-DB job and runs in the adapter jobs.
 
 Recommendation: prefer (1) — path-based is consistent with how
 the rest of the workflow segregates work, and avoids per-test

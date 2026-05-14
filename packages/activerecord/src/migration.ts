@@ -1653,6 +1653,22 @@ export class MigrationContext {
   }
 
   // Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter#create_virtual_table
+  async enableExtension(name: string, options?: Record<string, unknown>): Promise<void> {
+    await (this.adapter as any).enableExtension?.(name, options);
+  }
+
+  async createEnum(
+    name: string,
+    values: string[],
+    options?: Record<string, unknown>,
+  ): Promise<void> {
+    await (this.adapter as any).createEnum?.(name, values, options);
+  }
+
+  async createSchema(name: string, options?: Record<string, unknown>): Promise<void> {
+    await (this.adapter as any).createSchema?.(name, options);
+  }
+
   async createVirtualTable(name: string, moduleName: string, args: string[]): Promise<void> {
     if (typeof (this.adapter as any).createVirtualTable === "function") {
       await (this.adapter as any).createVirtualTable(name, moduleName, args);

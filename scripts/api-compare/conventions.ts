@@ -33,7 +33,7 @@ const FILE_OVERRIDES: Record<string, string> = {
 };
 
 /**
- * Directory-level path prefix overrides. Applied before FILE_OVERRIDES.
+ * Directory-level path prefix overrides. Applied after FILE_OVERRIDES (file-level wins).
  * Keyed by `pkg:rubyDirPrefix` — matched if the ruby file path starts with the prefix.
  */
 const DIR_PREFIX_OVERRIDES: Record<string, string> = {

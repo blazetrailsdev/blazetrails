@@ -123,15 +123,18 @@ describeIfMysql("Mysql2Adapter", () => {
     });
 
     it("legacy migrations contain default ENGINE=InnoDB option", async () => {
-      // Rails 5.1 migration format adds ENGINE=InnoDB explicitly.
-      // We simulate by creating with explicit options string.
+      // Rails 5.1 migrations add ENGINE=InnoDB explicitly to CREATE TABLE.
+      // The schema dump should show charset: but strip bare ENGINE=InnoDB (the default),
+      // matching Rails expected: /charset: "utf8mb4"(..., options: "ENGINE=InnoDB ROW_FORMAT=DYNAMIC")?, force: :cascade/
+      // We simulate a legacy migration result by creating a table with explicit ENGINE=InnoDB.
       await adapter.createTable("mysql_table_options", {
         force: true,
-        options: "ENGINE=InnoDB ROW_FORMAT=COMPACT",
+        options: "ENGINE=InnoDB",
       });
       const output = await dumpTable(adapter, "mysql_table_options");
       expect(output).toMatch(/createTable\("mysql_table_options",\s*\{[^}]*charset:\s*"utf8mb4"/);
-      expect(output).toMatch(/options:\s*"ENGINE=InnoDB ROW_FORMAT=COMPACT"/);
+      // Bare ENGINE=InnoDB is stripped by parseTableOptions — it must not appear in options:
+      expect(output).not.toMatch(/options:\s*"ENGINE=InnoDB"(?!\s*ROW_FORMAT)/);
     });
   });
 });

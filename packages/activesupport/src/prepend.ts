@@ -22,7 +22,7 @@
  *   import { prepend } from "@blazetrails/activesupport";
  *
  *   prepend(Relation.prototype, {
- *     where(super_: Function, ...args: unknown[]) {
+ *     where(super_: (...args: unknown[]) => unknown, ...args: unknown[]) {
  *       return super_.call(this, ...processed(args));
  *     },
  *   });

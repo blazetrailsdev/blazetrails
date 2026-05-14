@@ -1,4 +1,4 @@
-type AnyClass = abstract new (...args: unknown[]) => unknown;
+export type AnyClass = abstract new (...args: unknown[]) => unknown;
 
 const _subclassMap = new globalThis.WeakMap<AnyClass, DescendantsTracker.WeakSet<AnyClass>>();
 const _excludedDescendants = new globalThis.WeakSet<AnyClass>();

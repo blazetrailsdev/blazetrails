@@ -1,8 +1,4 @@
-import { DescendantsTracker } from "./descendants-tracker.js";
-
-// Alias for a JavaScript class constructor (abstract or concrete).
-// Used wherever Rails Ruby APIs receive a `Module`/`Class` argument.
-type AnyClass = abstract new (...args: unknown[]) => unknown;
+import { DescendantsTracker, type AnyClass } from "./descendants-tracker.js";
 
 /**
  * Module extensions mirroring Rails ActiveSupport module/class extensions.

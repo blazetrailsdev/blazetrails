@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { moduleParentName } from "../../module-ext.js";
+import type { AnyClass } from "../../descendants-tracker.js";
 
 describe("IntrospectionTest", () => {
   // Helper to create a function with a specific name property
-  function namedFn(name: string): abstract new (...args: unknown[]) => unknown {
+  function namedFn(name: string): AnyClass {
     const f = function () {};
     Object.defineProperty(f, "name", { value: name, configurable: true });
-    return f as unknown as abstract new (...args: unknown[]) => unknown;
+    return f as unknown as AnyClass;
   }
 
   it("module parent name", () => {

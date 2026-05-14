@@ -736,9 +736,11 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it("exec insert with pk=false opt-out skips RETURNING and currval fallback", async () => {
       // Mirrors Rails: `if use_insert_returning? || pk == false then super`.
-      // pk === false routes to the abstract path which, with sqlForInsert's
-      // pk-false branch, does NOT auto-resolve a RETURNING column or run
-      // SELECT currval(...). Result is the INSERT's bare row count.
+      // With pk === false the PG override delegates to the abstract
+      // execInsert (DatabaseStatements default), which runs the INSERT via
+      // executeMutation and returns the row count — no SELECT currval(...)
+      // sequence fallback runs (which would require a non-null sequenceName)
+      // and no pk-derived RETURNING is appended.
       await adapter.exec(`CREATE TABLE "ex_insert_pkfalse" ("id" SERIAL PRIMARY KEY, "n" INT)`);
       try {
         const result = await adapter.execInsert(
@@ -747,9 +749,10 @@ describeIfPg("PostgreSQLAdapter", () => {
           [],
           false,
         );
-        // Abstract execInsert returns a Result without RETURNING — its
-        // toArray() should be empty (no rows projected back).
-        expect((result as any).rows ?? (result as any).toArray?.()).toEqual([]);
+        // Abstract execInsert returns the row count (number), proving the
+        // PG-specific currval/RETURNING path was bypassed entirely.
+        expect(typeof result).toBe("number");
+        expect(result).toBe(1);
         const rows = await adapter.execute(`SELECT n FROM "ex_insert_pkfalse"`);
         expect(rows[0].n).toBe(42);
       } finally {

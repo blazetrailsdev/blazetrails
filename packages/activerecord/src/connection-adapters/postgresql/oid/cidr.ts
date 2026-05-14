@@ -113,9 +113,9 @@ function toComparable(value: unknown): { address: string; prefix: number } | nul
   if (value === null || value === undefined) return null;
   if (value instanceof IpAddr) return { address: value.address, prefix: value.prefixLength };
   if (typeof value === "string") {
-    const slash = value.indexOf("/");
-    if (slash === -1) return { address: value, prefix: isIpv6(value) ? 128 : 32 };
-    return { address: value.slice(0, slash), prefix: Number(value.slice(slash + 1)) };
+    const ip = parseIpAddr(value);
+    if (ip === null) return null;
+    return { address: ip.address, prefix: ip.prefixLength };
   }
   return null;
 }

@@ -333,9 +333,15 @@ export class CallbackChain {
     asResetCallbacks(this._proto, event);
   }
 
-  /** COW is automatic via activesupport's `getCallbackChains`. Returns a new
-   * bridge pointing to the same proto; callers that assign the clone trigger
-   * the automatic COW on their own proto when they first register. */
+  /**
+   * Returns a new bridge that points at the same underlying `_proto` — it is
+   * NOT a deep copy of the callback entries. Independence between a class and
+   * its parent is guaranteed by activesupport's copy-on-write in
+   * `getCallbackChains`: the first call to `register` on a subclass proto
+   * creates its own Map by copying the parent's. Callers (e.g. AR's
+   * `_callbackChain = _callbackChain.clone()`) rely on this automatic COW
+   * rather than on the clone itself carrying a fresh snapshot.
+   */
   clone(): CallbackChain {
     return new CallbackChain(this._proto);
   }

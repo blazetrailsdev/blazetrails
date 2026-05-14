@@ -1062,9 +1062,14 @@ export interface ClassMethods<T extends object = object> {
 const CALLBACKS = Symbol("callbacks");
 
 /**
- * Read-only lookup of a single CallbackChain for `name` on `target` (or its
- * prototype chain). Does NOT trigger copy-on-write — returns `undefined` if
- * no chain is found rather than allocating a new Map on `target`.
+ * Read-only lookup of a single CallbackChain for `name`. Walks the prototype
+ * chain of `target` looking for the **first** object that owns a CALLBACKS
+ * map, then returns `map.get(name)` — which may be `undefined` if that map
+ * does not contain `name`. The walk stops at the first own CALLBACKS map; it
+ * does not continue up to find `name` in a higher ancestor. This is
+ * intentional COW semantics: once a class owns its CALLBACKS map (because it
+ * registered at least one callback), all chains it knows about are inside that
+ * map. Does NOT trigger copy-on-write.
  *
  * @internal
  */

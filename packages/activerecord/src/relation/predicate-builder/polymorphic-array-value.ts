@@ -71,6 +71,7 @@ export class PolymorphicArrayValue {
     return value;
   }
 
+  /** @internal */
   private polymorphicName(klass: unknown): string | null {
     const base = (klass as any).baseClass;
     if (base?.name) return base.name;

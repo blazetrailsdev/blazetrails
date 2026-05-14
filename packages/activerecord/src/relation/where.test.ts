@@ -1167,8 +1167,8 @@ describe("WhereTest", () => {
     expect(await Essay.where({ writer: [author] }).first()).not.toBeNull();
   });
   it("where on association with custom primary key with array of ids", async () => {
-    const { Author: _, Essay } = makeWoaModels(adapter, "ai");
-    await _.create({ name: "David" });
+    const { Author, Essay } = makeWoaModels(adapter, "ai");
+    await Author.create({ name: "David" });
     await Essay.create({ writer_id: "David" });
     const essay = await Essay.where({ writer: ["David"] }).first();
     expect(essay!.writer_id).toBe("David");

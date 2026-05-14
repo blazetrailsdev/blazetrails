@@ -357,8 +357,13 @@ export function beforeSave(…)
    `base.ts` (`beforeValidation(this, …)`), not position-checked here.
 
 Net: `callbacks.ts` produces zero position violations. The cross-file
-resolution is the load-bearing piece, and it falls out of reusing
-`conventions.ts` rather than designing anything new.
+resolution is the load-bearing piece. Mechanism: PR 2 emits a
+**package-wide symbol → file** index (built by walking the cached TS
+manifest), so when a Ruby method has no same-file TS counterpart the rule
+asks the index "where does `destroy` live in package `activerecord`?" and
+shifts the position check to that file. `moves.ts` is consulted only when
+the host file itself is a documented merge or split — it does not need to
+be touched for cross-file finds.
 
 ## 5. ESLint rule design
 

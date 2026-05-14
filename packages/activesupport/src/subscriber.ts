@@ -1,6 +1,7 @@
 import { Notifications } from "./notifications.js";
 import type { NotificationSubscriber } from "./notifications.js";
 import type { Event } from "./notifications/instrumenter.js";
+import type { AnyClass } from "./descendants-tracker.js";
 
 function snakeCase(str: string): string {
   return str.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
@@ -21,8 +22,6 @@ interface ClassState {
   subscriber?: Subscriber;
   notifier?: typeof Notifications;
 }
-
-type AnyClass = abstract new (...args: unknown[]) => unknown;
 
 const _classState = new WeakMap<AnyClass, ClassState>();
 

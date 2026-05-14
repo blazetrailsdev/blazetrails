@@ -102,7 +102,8 @@ export function include(klass: AnyClass, mod: Module | AnyClass): void {
     for (const key of Object.keys(mod as Module)) {
       const value = (mod as Module)[key];
       // Ruby's include copies only instance methods — skip non-function values
-      if (typeof value !== "function") continue;
+      // and Ruby-style constants (uppercase first char mirrors Ruby constant naming).
+      if (typeof value !== "function" || /^[A-Z]/.test(key)) continue;
       // Ruby's include doesn't replace methods already defined on the class
       if (Object.prototype.hasOwnProperty.call(klass.prototype, key)) continue;
       descriptors[key] = {
@@ -149,8 +150,11 @@ export type Extended<M extends object> = CallableMethods<M>;
  */
 export function extend(klass: AnyClass | object, mod: Module): void {
   for (const key of Object.keys(mod)) {
+    const value = mod[key];
+    // Ruby's extend copies only methods — skip non-functions and constants.
+    if (typeof value !== "function" || /^[A-Z]/.test(key)) continue;
     Object.defineProperty(klass, key, {
-      value: mod[key],
+      value,
       writable: true,
       configurable: true,
       enumerable: false,

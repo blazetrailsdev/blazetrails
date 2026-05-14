@@ -358,33 +358,159 @@ Do **not** add empty stubs for `system_testing/` — it's intentionally
 not ported (see Known divergences). `journey/` gets its own wave; do
 not stub here.
 
-### Wave 7 — journey/ routing engine port
+### Wave 7 — journey/ routing engine port (10 PRs)
 
-**Decision (2026-05-14): port now. Sizing pass needed before slots are
-spawned.** 14 Rails files under
-`scripts/api-compare/.rails-source/actionpack/lib/action_dispatch/journey/`:
-
-```
-formatter.rb
-gtg/{builder,simulator,transition_table}.rb           (3 files)
-nfa/dot.rb                                            (1 file — visualization helper)
-nodes/node.rb
-parser.rb
-path/pattern.rb
-route.rb
-router.rb
-router/utils.rb
-routes.rb
-scanner.rb
-visitors.rb
-```
-
+**Decision (2026-05-14): port now.** Sizing audit done inline below.
 The routing engine is tightly coupled (parser → nodes → path/pattern →
-gtg automaton → router). Sizing audit landed:
-**[actionpack-journey-port-plan.md](actionpack-journey-port-plan.md)**.
-10 PRs total (9 cluster + 1 wire-up): L → S₁ → S₂ → V → P → G → R₁ →
-R₂ → R₃ → wire-up. PRs 4, 5, 6 can ship in parallel once PR 3 lands.
-LOC ceiling waived per this wave's plan.
+gtg automaton → router); slicing must follow the import graph.
+
+#### Headline numbers
+
+| Metric                                                                           | Value                                 |
+| -------------------------------------------------------------------------------- | ------------------------------------- |
+| Rails `.rb` files under `action_dispatch/journey/`                               | **14**                                |
+| Total Ruby LOC                                                                   | **2062**                              |
+| Estimated TS LOC after porting (≈ Ruby × 1.3)                                    | **~2680**                             |
+| Existing TS counterparts under `packages/actionpack/src/actiondispatch/journey/` | **0** (subtree absent)                |
+| Rails journey test LOC (`test/journey/`)                                         | **1603** across 11 files              |
+| PR count (LOC ceiling waived; sized by logical cluster)                          | **9 port PRs + 1 wire-up = 10 total** |
+
+Per-file LOC (Ruby, `wc -l`):
+
+| File               | LOC | File                      | LOC      |
+| ------------------ | --- | ------------------------- | -------- |
+| `nfa/dot.rb`       | 27  | `router.rb`               | 151      |
+| `gtg/simulator.rb` | 50  | `route.rb`                | 189      |
+| `scanner.rb`       | 74  | `nodes/node.rb`           | 208      |
+| `routes.rb`        | 82  | `path/pattern.rb`         | 209      |
+| `parser.rb`        | 103 | `gtg/transition_table.rb` | 217      |
+| `router/utils.rb`  | 105 | `formatter.rb`            | 231      |
+| `gtg/builder.rb`   | 149 | `visitors.rb`             | 267      |
+|                    |     | **Total**                 | **2062** |
+
+#### Import graph + coupling clusters
+
+Outgoing deps (`require`/`require_relative` + class-level
+`Journey::*` references):
+
+| File                      | Internal deps                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `router/utils.rb`         | —                                                                             |
+| `scanner.rb`              | — (uses `strscan`)                                                            |
+| `nfa/dot.rb`              | —                                                                             |
+| `gtg/simulator.rb`        | duck-types `TransitionTable` (uses `strscan`)                                 |
+| `gtg/transition_table.rb` | `nfa/dot` (mixin)                                                             |
+| `gtg/builder.rb`          | `gtg/transition_table`; consumes parser AST                                   |
+| `nodes/node.rb`           | `visitors` (only for `accept` dispatch — can use a stub interface)            |
+| `parser.rb`               | `scanner`, `nodes/node`                                                       |
+| `visitors.rb`             | `router/utils` (escape lambdas); defines `Journey::Format`                    |
+| `path/pattern.rb`         | `visitors`, `parser`, `nodes/node`                                            |
+| `route.rb`                | `path/pattern`; `gtg/transition_table` via `Routes#simulator`                 |
+| `routes.rb`               | `route`, `gtg/{builder, simulator, transition_table}`                         |
+| `formatter.rb`            | `routes`, `visitors`, `route`; external: `action_controller/metal/exceptions` |
+| `router.rb`               | `router/utils`, `routes`, `formatter`, `parser`, `route`, `path/pattern`      |
+
+Clusters (topological order **L → S → V → P → G → R**; G and P can
+ship in parallel once L+S+V are in):
+
+1. **L — Leaf utilities.** `router/utils.rb`, `nfa/dot.rb`, `gtg/simulator.rb`.
+2. **S — Scanner+parser+nodes.** `scanner.rb`, `nodes/node.rb`, `parser.rb`.
+3. **V — Visitors + Format.** `visitors.rb`.
+4. **P — Path/pattern.** `path/pattern.rb` (subclasses `Visitors::Visitor`).
+5. **G — GTG automaton.** `gtg/transition_table.rb`, `gtg/builder.rb`.
+6. **R — Routing API.** `route.rb`, `routes.rb`, `formatter.rb`, `router.rb`.
+
+#### PR slicing (10 PRs)
+
+LOC ceiling waived per Wave 7's mechanical-port nature. TS LOC ≈
+Ruby × 1.3. Test LOC ports inline alongside the source PR.
+
+| PR  | Cluster | Files                                                              | Src LOC | Test LOC | Total | Deps |
+| --- | ------- | ------------------------------------------------------------------ | ------- | -------- | ----- | ---- |
+| 1   | L       | `router/utils.rb`, `nfa/dot.rb`, `gtg/simulator.rb` + index barrel | ~240    | ~80      | ~320  | —    |
+| 2   | S₁      | `scanner.rb`                                                       | ~100    | ~100     | ~200  | 1    |
+| 3   | S₂      | `nodes/node.rb` + `parser.rb`                                      | ~400    | ~260     | ~660  | 2    |
+| 4   | V       | `visitors.rb`                                                      | ~350    | —        | ~350  | 3, 1 |
+| 5   | P       | `path/pattern.rb`                                                  | ~270    | ~280     | ~550  | 3, 4 |
+| 6   | G       | `gtg/transition_table.rb` + `gtg/builder.rb`                       | ~480    | ~220     | ~700  | 3    |
+| 7   | R₁      | `route.rb` + `routes.rb`                                           | ~350    | ~190     | ~540  | 5, 6 |
+| 8   | R₂      | `formatter.rb`                                                     | ~300    | ~150     | ~450  | 4, 7 |
+| 9   | R₃      | `router.rb`                                                        | ~200    | ~500     | ~700  | 7, 8 |
+| 10  | wire-up | `actiondispatch/routing/route-set.ts` swap                         | ~200    | included | ~200  | 9    |
+
+**Total: 10 PRs, ~4670 TS LOC.** PRs 4 + 5 + 6 can ship in parallel
+once PR 3 lands.
+
+Per-PR notes:
+
+- **PR 1** ports `nfa/dot` (debug graphviz helper) for path-parity with
+  `api:compare`; skip its test (Rails has none).
+- **PR 2** ports Ruby `StringScanner` as a small TS class (mirrors what
+  `arel` did for similar token-stream needs).
+- **PR 3** ports `parser.rb` as a **hand-written recursive-descent
+  parser**. Rails' parser is generated from a Racc grammar; the
+  grammar is tiny (path segments, optionals, groups, slashes, dots,
+  stars). Do **not** port the Racc output table verbatim. Audit the
+  generated parser's accept states against
+  `route/definition/parser_test.rb` to verify no uncovered edge cases.
+- **PR 4** wires `Journey::Format` + Parameter struct + the
+  `FormatBuilder`/`Each`/`String`/`Dot`/`FunctionalVisitor` visitor
+  classes. No direct visitor tests in Rails — covered transitively by
+  pattern_test (PR 5).
+- **PR 5** ports `AnchoredRegexp` / `UnanchoredRegexp` (both inline
+  `Visitor` subclasses in pattern.rb). See Risks for regex semantics.
+- **PR 9** has the largest test surface (`router_test.rb` 538 LOC) —
+  if the port overshoots, split test fixtures into PR 9b.
+- **PR 10** is the only PR that touches code outside
+  `actiondispatch/journey/`. Open question: does the current
+  `routing/route-set.ts` already expose a router-swap seam? Audit
+  before opening PR 10; if absent, prepend a small seam-creation PR.
+
+#### Tooling impact
+
+Zero changes to `scripts/api-compare/conventions.ts` or `config.ts`:
+`actiondispatch/journey/` lives under the already-configured
+`actionpack` package, and journey's filenames (`gtg`, `nfa`, etc.)
+need no `FILE_OVERRIDES` entries. Test-compare picks up
+`**/*.test.ts` siblings automatically; Rails' `test/journey/` is
+already under `actionpack/test/`. This wave behaves like Wave 2
+(`http/`, `middleware/` moves), not Wave 3 (abstractcontroller — new
+package).
+
+#### Risks + open questions
+
+- **Regex semantics — Ruby Regexp vs JS RegExp.** `path/pattern.rb`
+  builds anchored/unanchored regexes from the AST. Named captures
+  (`(?<name>...)`), named backrefs (`\k<name>`), and absent default
+  multiline-dot are all OK in modern Node. Ruby's `\A`/`\z` anchors
+  need careful translation to `^`/`$` with `m`-flag awareness. Use the
+  `/d` flag everywhere journey compiles a regex (for `.indices`
+  parity with Ruby's `MatchData` offsets) and assert the Node floor
+  in `package.json#engines`.
+- **String performance — UTF-16 indexing.** `Simulator#simulate` is
+  the per-request hot path; Ruby strings are byte-arrays, JS strings
+  are UTF-16 code units. ASCII paths (the common case) are a wash;
+  non-BMP characters (e.g. emoji in URLs) differ. Risk: low — document
+  the divergence, don't chase.
+- **Routing perf.** Worth porting one or two Rails journey benchmarks
+  (look under `actionpack/test/dispatch/routing/` for `bench_*`
+  fixtures) so PR 10 can demonstrate no regression. Defer benchmark
+  fixtures to PR 10 unless an earlier PR exposes a hotspot.
+- **Memoization patterns.** `@x ||= compute` is pervasive in journey
+  (every accessor in `path/pattern.rb`, `routes.rb`, `route.rb`).
+  Standardize on the **private nullable field + getter** pattern used
+  in `relation.ts`: `get x(): T { return this._x ??= this.compute(); }`.
+- **`route-set.ts` seam.** Audit before opening PR 10.
+
+#### Out of scope (journey-specific)
+
+- test-compare BLOCKED vocabulary alignment for journey tests (see
+  [test-compare-100-plan.md](test-compare-100-plan.md)).
+- `actiondispatch/routing/mapper.rb` integration (constraints, scopes,
+  format DSLs) — tracked in
+  [actiondispatch-100-percent.md](actiondispatch-100-percent.md).
+- Custom router monkey-patch surfaces — trails won't expose them.
+- Benchmark parity against Rails routing as a hard requirement.
 
 ### Wave 8+ — selective fill-in (open-ended)
 
@@ -395,8 +521,7 @@ Drives independently of this audit.
 **Total restructure work: 5 mechanical PRs (Waves 1–6: skeleton +
 dispatch moves + abstractcontroller split + testing relocation +
 conventions/infra; Wave 5 is bundled into Wave 6 as a ~10 LOC edit) +
-Wave 7 journey port (10 PRs per
-[actionpack-journey-port-plan.md](actionpack-journey-port-plan.md)) +
+Wave 7 journey port (10 PRs per the inline section above) +
 open-ended fill-in (Wave 8+).**
 
 ## Known divergences from Rails

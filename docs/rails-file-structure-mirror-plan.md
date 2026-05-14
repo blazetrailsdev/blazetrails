@@ -13,7 +13,7 @@ Style match: [activerecord-type-audit.md](activerecord-type-audit.md) +
 [actionpack-restructure-audit.md](actionpack-restructure-audit.md).
 This is the _within-file_ analog of the actionpack restructure audit.
 
-> **Convergence with PR #1552** ([ruby-source-fetcher-plan.md](ruby-source-fetcher-plan.md)).
+> **Convergence with [PR #1552](https://github.com/blazetrailsdev/trails/pull/1552)** (ruby-source-fetcher-plan).
 > The sibling plan unifies Ruby source fetching under `vendor/sources.ts`
 > and moves the Rails clone from `scripts/api-compare/.rails-source/` to
 > `vendor/rails/`, exposing a `resolvePath(pkg, "lib"|"test")` helper that
@@ -29,16 +29,24 @@ This is the _within-file_ analog of the actionpack restructure audit.
 ".rails-source")` pattern, and wave PR 7 of #1552 sweeps the new
 >   extractor into the env-var contract alongside the others.
 >
-> The dev-package set today, per `extract-ruby-api.rb:32–41` `PACKAGE_DIRS`,
-> is **`arel`, `activemodel`, `activerecord`, `activesupport`,
-> `actiondispatch`, `actioncontroller`, `actionview`, `trailties`** — note
-> the actionpack split (actiondispatch + actioncontroller) and the inclusion
-> of arel, which lives under `activerecord/lib/arel/` in Rails. The
-> structure rule covers exactly this set on day one. `globalid`, `rack`,
-> and `actionmailer` are **future expansion owned by PR #1552**: they're
+> The dev-package set today is the union of two registries that must stay
+> in sync: `extract-ruby-api.rb:32–41` `PACKAGE_DIRS` (Ruby side) and
+> `scripts/api-compare/config.ts:7–17` `PACKAGES` (TS side). The TS side is
+> the superset and contains **`arel`, `activemodel`, `activerecord`,
+> `activesupport`, `actiondispatch`, `actioncontroller`,
+> `abstractcontroller`, `actionview`, `trailties`** — note the actionpack
+> three-way split (actiondispatch + actioncontroller + abstractcontroller,
+> mapped to the `actionpack` directory via `PACKAGE_DIR_OVERRIDES` at
+> `config.ts:21–25`) and the inclusion of arel. The Ruby side omits
+> `abstractcontroller` because Rails ships it inside actionpack without a
+> dedicated `lib/abstract_controller/` directory worth a separate
+> PACKAGE_DIRS entry; the structure rule mirrors that — it covers the 9
+> TS-side keys, with `abstractcontroller` treated as a virtual subset of
+> the actionpack source on the Ruby side. `globalid`, `rack`, and
+> `actionmailer` are **future expansion owned by PR #1552**: they're
 > fetched by the new vendor system but not yet in api:compare's
-> `PACKAGE_DIRS`. The structure rule picks them up only after #1552's
-> wave that adds them to the comparison surface.
+> registries. The structure rule picks them up only after #1552's wave
+> that adds them to the comparison surface.
 > Path references below (`scripts/api-compare/.rails-source/...`) will be
 > rewritten to `vendor/rails/...` in the first wave that touches them
 > after #1552 merges.
@@ -240,9 +248,13 @@ on both sides.
   no Ruby — so the structure rule is a no-op there, exactly like
   `blazetrails/rails-private-jsdoc` is today. The job that actually
   enforces Rails-derived rules is **`rails-comparison`** (line 372),
-  which already runs `fetch-rails.sh` → `ruby extract-ruby-api.rb` →
-  `tsx build-rails-privates-manifest.ts && pnpm exec eslint packages/arel/src`
-  at lines 392–409. The structure rule plugs in with two new steps
+  whose full step sequence at ci.yml:388–412 is: (1) fetch-rails.sh,
+  (2) fetch-rails-tests.sh, (3) `ruby extract-ruby-api.rb`,
+  (4) `ruby extract-ruby-tests.rb`, (5) `tsx extract-ts-api.ts && tsx
+  compare.ts`, (6) `tsx compare.ts --privates`, (7) `tsx lint-deps.ts`,
+  (8) `tsx build-rails-privates-manifest.ts && eslint packages/arel/src`,
+  (9) test-compare. The Rails-derived ESLint gate is step 8; steps 5–7
+  validate api:compare itself. The structure rule plugs in with two new steps
   inserted after `extract-ruby-api.rb`: (1) `ruby
 extract-rails-structure.rb` → `output/rails-structure.json`, (2) `tsx
 build-rails-structure-manifest.ts` → `eslint/rails-structure.cache.json`.
@@ -601,7 +613,7 @@ reason="rails-source-is-itself-disordered"` is the escape hatch and
   the directory-level analog to this within-file plan.
 - [scripts/api-compare/conventions.ts](../scripts/api-compare/conventions.ts) —
   TS↔Ruby naming/path mapping registry; reused by the new rule.
-- [docs/ruby-source-fetcher-plan.md](ruby-source-fetcher-plan.md) — sibling
+- [PR #1552](https://github.com/blazetrailsdev/trails/pull/1552) (ruby-source-fetcher-plan, not yet merged on `main`) — sibling
   plan (PR #1552); `vendor/sources.ts` becomes the source of truth for
   fetched Ruby source locations and replaces hardcoded `.rails-source`
   paths consumed here.

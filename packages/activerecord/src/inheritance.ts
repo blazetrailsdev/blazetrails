@@ -359,6 +359,11 @@ export function __resetPrimaryAbstractClass(): void {
   _applicationRecordClass = null;
 }
 
+/** @internal */
+export function getApplicationRecordClass(): typeof Base | null {
+  return _applicationRecordClass;
+}
+
 /**
  * Returns true if this class is the designated application-record base class.
  * When a primary abstract class has been explicitly set via `primaryAbstractClass`,

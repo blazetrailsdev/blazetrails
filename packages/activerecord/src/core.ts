@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::Core
  */
 
+import { getApplicationRecordClass } from "./inheritance.js";
 import { RecordNotFound } from "./errors.js";
 import { WRITING_ROLE } from "./roles.js";
 import { Notifications, getAsyncContext, ParameterFilter } from "@blazetrails/activesupport";
@@ -286,6 +287,8 @@ export function configurations(this: CoreHost, config?: any): any {
 }
 
 export function isApplicationRecordClass(this: CoreHost): boolean {
+  const explicit = getApplicationRecordClass();
+  if (explicit) return (this as unknown) === explicit;
   return this.name === "ApplicationRecord";
 }
 

@@ -1970,7 +1970,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   async calculate(
     operation: "average",
     column: string,
-  ): Promise<number | null | Record<string, number>>;
+  ): Promise<unknown | null | Record<string, unknown>>;
   async calculate(
     operation: "minimum" | "maximum",
     column: string,

@@ -5,7 +5,6 @@ import {
   type Type,
   typeRegistry,
   pushPendingDecorator,
-  type CallbackConditions,
   type TransactionalCallbackConditions,
 } from "@blazetrails/activemodel";
 import "./type.js"; // Register AR type overrides into AM's type registry
@@ -230,6 +229,10 @@ import {
   restoreTransactionRecordState as _restoreTransactionRecordState,
   isTransactionIncludeAnyAction as _isTransactionIncludeAnyAction,
   synthOnCondition as _synthOnCondition,
+  afterSaveCommitMethod as _afterSaveCommitMethod,
+  afterCreateCommitMethod as _afterCreateCommitMethod,
+  afterUpdateCommitMethod as _afterUpdateCommitMethod,
+  afterDestroyCommitMethod as _afterDestroyCommitMethod,
 } from "./transactions.js";
 
 import {
@@ -3011,61 +3014,10 @@ export class Base extends Model {
     );
   }
 
-  /**
-   * Mirrors: ActiveRecord::Transactions::ClassMethods#after_save_commit
-   */
-  static afterSaveCommit<T extends typeof Model>(
-    this: T,
-    fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | object,
-    conditions?: CallbackConditions<InstanceType<T>>,
-  ): void {
-    this.afterCommit(fn, {
-      ...conditions,
-      on: ["create", "update"],
-    } as TransactionalCallbackConditions<InstanceType<T>>);
-  }
-
-  /**
-   * Mirrors: ActiveRecord::Transactions::ClassMethods#after_create_commit
-   */
-  static afterCreateCommit<T extends typeof Model>(
-    this: T,
-    fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | object,
-    conditions?: CallbackConditions<InstanceType<T>>,
-  ): void {
-    this.afterCommit(fn, {
-      ...conditions,
-      on: "create",
-    } as TransactionalCallbackConditions<InstanceType<T>>);
-  }
-
-  /**
-   * Mirrors: ActiveRecord::Transactions::ClassMethods#after_update_commit
-   */
-  static afterUpdateCommit<T extends typeof Model>(
-    this: T,
-    fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | object,
-    conditions?: CallbackConditions<InstanceType<T>>,
-  ): void {
-    this.afterCommit(fn, {
-      ...conditions,
-      on: "update",
-    } as TransactionalCallbackConditions<InstanceType<T>>);
-  }
-
-  /**
-   * Mirrors: ActiveRecord::Transactions::ClassMethods#after_destroy_commit
-   */
-  static afterDestroyCommit<T extends typeof Model>(
-    this: T,
-    fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | object,
-    conditions?: CallbackConditions<InstanceType<T>>,
-  ): void {
-    this.afterCommit(fn, {
-      ...conditions,
-      on: "destroy",
-    } as TransactionalCallbackConditions<InstanceType<T>>);
-  }
+  static afterSaveCommit = _afterSaveCommitMethod;
+  static afterCreateCommit = _afterCreateCommitMethod;
+  static afterUpdateCommit = _afterUpdateCommitMethod;
+  static afterDestroyCommit = _afterDestroyCommitMethod;
 
   /**
    * Run validations and return self.

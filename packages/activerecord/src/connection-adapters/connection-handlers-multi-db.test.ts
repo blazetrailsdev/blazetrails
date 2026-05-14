@@ -114,6 +114,9 @@ describe("ConnectionHandlersMultiDbTest", () => {
       expect(Base.connectionHandler).toBe(Base.connectionHandler);
       expect(currentRole.call(Base as any)).toBe("writing");
       expect(Base.connectedToQ({ role: "writing" })).toBe(true);
+      // database: arg → @shard_keys = [] (shards.keys before default injection)
+      expect(Base.shardKeys()).toEqual([]);
+      expect(Base.isSharded()).toBe(false);
     });
   });
 

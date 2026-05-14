@@ -75,26 +75,16 @@ export function connectsTo(
   }
 
   const connections: ConnectionPool[] = [];
+  // Mirrors: @shard_keys = shards.keys (before injecting :default for database: usage)
+  (this as any)._shardKeys = Object.keys(shards);
   const shardEntries = Object.keys(shards).length > 0 ? shards : { default: database };
-
-  (this as any)._shardKeys = Object.keys(shardEntries);
   (this as any).connectionClass = true;
 
   const rawConfigs = (this as any).configurations;
-  let configs: DatabaseConfigurations;
-  if (rawConfigs instanceof DatabaseConfigurations) {
-    configs = rawConfigs;
-  } else if (rawConfigs && typeof (rawConfigs as any).toH === "function") {
-    configs = DatabaseConfigurations.fromEnv((rawConfigs as any).toH());
-  } else if (
-    rawConfigs &&
-    typeof rawConfigs === "object" &&
-    Object.keys(rawConfigs as object).length > 0
-  ) {
-    configs = DatabaseConfigurations.fromEnv(rawConfigs);
-  } else {
-    configs = new DatabaseConfigurations([]);
-  }
+  const configs =
+    rawConfigs instanceof DatabaseConfigurations
+      ? rawConfigs
+      : DatabaseConfigurations.fromEnv(rawConfigs?.toH?.() ?? rawConfigs ?? {});
 
   for (const [shard, dbKeys] of Object.entries(shardEntries)) {
     for (const [role, dbKey] of Object.entries(dbKeys)) {

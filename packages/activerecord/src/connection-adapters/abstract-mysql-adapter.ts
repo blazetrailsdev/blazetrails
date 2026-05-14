@@ -52,6 +52,7 @@ import {
   ForeignKeyDefinition,
   IndexDefinition,
 } from "./abstract/schema-definitions.js";
+import { TableDefinition as MysqlTableDefinition } from "./mysql/schema-definitions.js";
 import { TypeMap } from "../type/type-map.js";
 import {
   StringType,
@@ -555,21 +556,18 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     options: Record<string, unknown> = {},
   ): Promise<ChangeColumnDefinition> {
     const column = await this.columnFor(tableName, columnName);
-    const resolvedType =
-      type || (column as any).sqlType || (column as any).sqlTypeMetadata?.sqlType || "";
+    const resolvedType = type || column.sqlType || "";
 
     const opts = { ...options };
 
     if (!Object.prototype.hasOwnProperty.call(opts, "default")) {
-      opts["default"] = (column as any).defaultFunction
-        ? () => (column as any).defaultFunction
-        : column.default;
+      opts["default"] = column.defaultFunction ? () => column.defaultFunction : column.default;
     }
     if (!Object.prototype.hasOwnProperty.call(opts, "null")) {
       opts["null"] = column.null;
     }
     if (!Object.prototype.hasOwnProperty.call(opts, "comment")) {
-      opts["comment"] = (column as any).comment ?? undefined;
+      opts["comment"] = column.comment ?? undefined;
     }
 
     if (opts["collation"] === null) {
@@ -578,14 +576,15 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       !Object.prototype.hasOwnProperty.call(opts, "collation") &&
       isTextType(resolvedType)
     ) {
-      opts["collation"] = (column as any).collation ?? undefined;
+      opts["collation"] = column.collation ?? undefined;
     }
 
     if (!Object.prototype.hasOwnProperty.call(opts, "autoIncrement")) {
       opts["autoIncrement"] = (column as any).autoIncrement ?? false;
     }
 
-    const colDef = new ColumnDefinition(column.name, resolvedType as any, opts as any);
+    const td = new MysqlTableDefinition(tableName);
+    const colDef = td.newColumnDefinition(column.name, resolvedType as any, opts as any);
     return new ChangeColumnDefinition(colDef, column.name);
   }
 

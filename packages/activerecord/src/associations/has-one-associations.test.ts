@@ -1,3 +1,4 @@
+// REVIEW(audit 2026-05-14): pre-defineSchema magic-table tests; needs migration to defineSchema. See audit pass for context.
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { instant } from "@blazetrails/activesupport/testing/temporal-helpers";
 

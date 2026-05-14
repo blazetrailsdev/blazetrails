@@ -1,3 +1,4 @@
+// REVIEW(audit 2026-05-14): pre-defineSchema magic-table tests; needs migration to defineSchema. See audit pass for context.
 /**
  * Mirrors Rails activerecord/test/cases/associations/has_many_through_disable_joins_associations_test.rb
  */

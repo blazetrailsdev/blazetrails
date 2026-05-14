@@ -1563,10 +1563,6 @@ describe("MigrationTest", () => {
 
     const im = new InternalMetadata(adapter, { enabled: false });
     expect(im.enabled).toBe(false);
-    // tableExists() short-circuits to false when disabled (our TS implementation
-    // differs from Rails here: Rails' table_exists? checks the physical schema cache
-    // regardless of enabled?; ours returns false without querying). The meaningful
-    // invariant is that no environment row is written, tested below.
 
     const proxy: MigrationProxy = {
       version: "1",
@@ -1576,8 +1572,15 @@ describe("MigrationTest", () => {
     const migrator = new Migrator(adapter, [proxy], { internalMetadataEnabled: false });
     await migrator.up();
 
-    // No environment stamped — the core invariant of this test.
-    expect(await im.get("environment")).toBeNull();
+    // im.get() short-circuits to null when disabled, so use a catalog query to
+    // verify the table was physically not created (catalog tables always exist,
+    // so this doesn't trigger the test-adapter's auto-schema).
+    const catalogSql =
+      adapterType === "sqlite"
+        ? `SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type='table' AND name='ar_internal_metadata'`
+        : `SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_name='ar_internal_metadata'`;
+    const rows = await adapter.execute(catalogSql);
+    expect(Number(rows[0]?.cnt ?? 0)).toBe(0);
   });
 
   it("inserting a new entry into internal metadata", async () => {

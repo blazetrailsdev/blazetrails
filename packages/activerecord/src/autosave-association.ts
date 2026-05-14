@@ -337,13 +337,12 @@ export function validateAssociations(record: Base, context?: ValidationContextAr
         if (isMarkedForDestruction(child)) continue;
         if (!child.isNewRecord() && !child.changed) continue;
 
-        // Mirrors Rails `association_valid?`: only pass custom contexts to the child.
-        // Standard :create/:update contexts do not propagate — each record uses its own default.
+        // Mirrors Rails `association_valid?` + `custom_validation_context?`:
+        // only pass the context to the child if it is truly custom (not :create/:update).
+        // _validationContext is already restored by this point, so we check the context
+        // parameter directly rather than calling customValidationContext().
         const childContext: ValidationContextArg | undefined =
-          typeof (record as any).customValidationContext === "function" &&
-          (record as any).customValidationContext()
-            ? context
-            : undefined;
+          context != null && context !== "create" && context !== "update" ? context : undefined;
         let isChildValid: boolean;
         if (assoc.type === "belongsTo") {
           _setValidatingBelongsToFor(record, assoc, true);

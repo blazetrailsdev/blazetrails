@@ -1610,19 +1610,29 @@ describe("MigrationTest", () => {
 
     // First transaction: create + write + commit
     await adapter.beginTransaction();
-    await im.createTable();
-    expect(await im.tableExists()).toBe(true);
-    await im.set("environment", "foo");
-    expect(await im.get("environment")).toBe("foo");
-    await adapter.commit();
+    try {
+      await im.createTable();
+      expect(await im.tableExists()).toBe(true);
+      await im.set("environment", "foo");
+      expect(await im.get("environment")).toBe("foo");
+      await adapter.commit();
+    } catch (e) {
+      await adapter.rollback();
+      throw e;
+    }
 
     // Second transaction: createTable is idempotent (IF NOT EXISTS), write again
     await adapter.beginTransaction();
-    await im.createTable();
-    expect(await im.tableExists()).toBe(true);
-    await im.set("environment", "bar");
-    expect(await im.get("environment")).toBe("bar");
-    await adapter.commit();
+    try {
+      await im.createTable();
+      expect(await im.tableExists()).toBe(true);
+      await im.set("environment", "bar");
+      expect(await im.get("environment")).toBe("bar");
+      await adapter.commit();
+    } catch (e) {
+      await adapter.rollback();
+      throw e;
+    }
   });
 
   it("schema migration create table wont be affected by schema cache", async () => {
@@ -1634,20 +1644,30 @@ describe("MigrationTest", () => {
 
     // First transaction: create + write + commit
     await adapter.beginTransaction();
-    await sm.createTable();
-    expect(await sm.tableExists()).toBe(true);
-    await sm.createVersion("foo");
-    await adapter.commit();
+    try {
+      await sm.createTable();
+      expect(await sm.tableExists()).toBe(true);
+      await sm.createVersion("foo");
+      await adapter.commit();
+    } catch (e) {
+      await adapter.rollback();
+      throw e;
+    }
 
     const versionsAfterFirst = await sm.allVersions();
     expect(versionsAfterFirst).toContain("foo");
 
     // Second transaction: createTable is idempotent (IF NOT EXISTS), write again
     await adapter.beginTransaction();
-    await sm.createTable();
-    expect(await sm.tableExists()).toBe(true);
-    await sm.createVersion("bar");
-    await adapter.commit();
+    try {
+      await sm.createTable();
+      expect(await sm.tableExists()).toBe(true);
+      await sm.createVersion("bar");
+      await adapter.commit();
+    } catch (e) {
+      await adapter.rollback();
+      throw e;
+    }
 
     const versionsAfterSecond = await sm.allVersions();
     expect(versionsAfterSecond).toContain("foo");

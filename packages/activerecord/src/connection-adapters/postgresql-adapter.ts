@@ -1672,7 +1672,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return rows.map((row) => {
       const schema = row.schema === currentSchema ? null : row.schema;
       const fullName = [schema, row.name].filter(Boolean).join(".");
-      return [fullName, row.value] as [string, string[]];
+      const values: string[] = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
+      return [fullName, values] as [string, string[]];
     });
   }
 

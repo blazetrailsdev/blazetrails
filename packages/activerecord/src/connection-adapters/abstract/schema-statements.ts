@@ -1475,7 +1475,16 @@ export class SchemaStatements {
   }
 
   validTableDefinitionOptions(): string[] {
-    return ["temporary", "ifNotExists", "options", "as", "comment", "charset", "collation"];
+    return [
+      "temporary",
+      "ifNotExists",
+      "options",
+      "as",
+      "comment",
+      "charset",
+      "collation",
+      "primaryKey",
+    ];
   }
 
   validColumnDefinitionOptions(): string[] {

@@ -992,12 +992,12 @@ export class BelongsToReflection extends AssociationReflection {
   }
 
   associationPrimaryKeyFor(klass?: typeof Base): string | string[] {
-    const targetKlass = klass || this.klass;
     const pk = this.options.primaryKey;
     if (pk !== undefined) {
       return Array.isArray(pk) ? pk.map(String) : String(pk);
     }
 
+    const targetKlass = klass || this.klass;
     if (hasQueryConstraints.call(targetKlass as any) || this.options.queryConstraints) {
       return compositeQueryConstraintsList.call(targetKlass as any);
     }
@@ -1260,7 +1260,8 @@ export class ThroughReflection extends AbstractReflection {
   isNested(): boolean {
     return (
       !!(this.sourceReflection as any)?.isThroughReflection?.() ||
-      !!(this.throughReflection as any)?.isThroughReflection?.()
+      !!(this.throughReflection as any)?.isThroughReflection?.() ||
+      this.throughReflection?.macro === "hasAndBelongsToMany"
     );
   }
 

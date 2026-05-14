@@ -18,13 +18,8 @@ import { AssociationNotFoundError } from "./errors.js";
 import {
   loadBelongsTo as _loadBelongsToOnce,
   loadHasOne as _loadHasOneOnce,
+  type AssociationDefinition as AssocDef,
 } from "../associations.js";
-
-interface AssocDef {
-  name: string;
-  type: "belongsTo" | "hasOne" | "hasMany" | "hasAndBelongsToMany";
-  options?: Record<string, unknown>;
-}
 
 function buildAssociationInstance(this: Base, assocDef: AssocDef): AssociationInstance {
   const opts = (assocDef.options ?? {}) as Record<string, unknown>;
@@ -51,10 +46,9 @@ function syncAssociationInstance(this: Base, name: string, instance: Association
     instance.setTarget(proxy.target as any);
     return;
   }
-  const cached = (this as unknown as { _cachedAssociations?: Map<string, unknown> })
-    ._cachedAssociations;
+  const cached = this._cachedAssociations;
   if (cached && cached.has(name)) {
-    instance.setTarget(cached.get(name) as any);
+    instance.setTarget(cached.get(name) ?? null);
     return;
   }
   // Use `has()` so an eagerly-preloaded "nil association" (the preloader

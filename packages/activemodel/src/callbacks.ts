@@ -61,6 +61,12 @@ export interface CallbackConditions<TRecord = CallbackRecord> {
   if?(record: TRecord): boolean;
   unless?(record: TRecord): boolean;
   prepend?: boolean;
+}
+
+/** Extends CallbackConditions with the `on:` option available on commit/rollback callbacks. */
+export interface TransactionalCallbackConditions<
+  TRecord = CallbackRecord,
+> extends CallbackConditions<TRecord> {
   on?: string | string[];
 }
 
@@ -196,10 +202,9 @@ function _resolveCallbackObject(
 ): AnyCallback {
   const rec = obj as Record<string, unknown>;
   const camelMethod = `${timing}${event.charAt(0).toUpperCase()}${event.slice(1)}`;
-  const snakeMethod = `${timing}_${event}`;
-  const method = rec[camelMethod] ?? rec[snakeMethod];
+  const method = rec[camelMethod];
   if (typeof method !== "function") {
-    throw new ArgumentError(`Callback object must implement ${camelMethod} or ${snakeMethod}`);
+    throw new ArgumentError(`Callback object must implement ${camelMethod}`);
   }
   if (timing === "around") {
     return ((record: CallbackRecord, proceed: () => void | Promise<void>) =>
@@ -229,18 +234,31 @@ function _resolveCallbackObject(
  *
  * @internal
  */
+
+const VALID_ON_VALUES = new Set(["create", "update", "destroy"]);
+
 export function _registerCallbackOnProto(
   proto: object,
   timing: CallbackTiming,
   event: string,
   fn: CallbackFn | AroundCallbackFn | CallbackObject,
-  conditions?: CallbackConditions,
+  conditions?: CallbackConditions | TransactionalCallbackConditions,
 ): void {
   if (conditions && "on" in conditions) {
     if (event !== "commit" && event !== "rollback") {
       throw new ArgumentError(
         `Unknown key: :on. The :on option is only supported for :commit and :rollback callbacks (got :${event})`,
       );
+    }
+    const onValue = (conditions as TransactionalCallbackConditions).on;
+    if (onValue !== undefined) {
+      const values = Array.isArray(onValue) ? onValue : [onValue];
+      const invalid = values.filter((v) => !VALID_ON_VALUES.has(v));
+      if (invalid.length > 0) {
+        throw new ArgumentError(
+          `:on conditions for after_commit and after_rollback callbacks have to be one of [:create, :destroy, :update]`,
+        );
+      }
     }
   }
   // Two-step: defineCallbacks creates the chain with the right config (COW if

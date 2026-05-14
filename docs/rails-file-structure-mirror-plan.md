@@ -13,6 +13,30 @@ Style match: [activerecord-type-audit.md](activerecord-type-audit.md) +
 [actionpack-restructure-audit.md](actionpack-restructure-audit.md).
 This is the _within-file_ analog of the actionpack restructure audit.
 
+> **Convergence with PR #1552** ([ruby-source-fetcher-plan.md](ruby-source-fetcher-plan.md)).
+> The sibling plan unifies Ruby source fetching under `vendor/sources.ts`
+> and moves the Rails clone from `scripts/api-compare/.rails-source/` to
+> `vendor/rails/`, exposing a `resolvePath(pkg, "lib"|"test")` helper that
+> replaces hardcoded paths in `extract-ruby-api.rb` and friends. This plan
+> assumes both PRs land but does **not** block on order:
+>
+> - If #1552 ships first: the structure extractor consumes
+>   `resolvePath("activerecord", "lib")` etc. via the same env-var contract
+>   §4 of #1552 defines for `extract-ruby-api.rb`. Wave PR 1 here references
+>   `vendor/rails/...` directly.
+> - If this plan ships first: the structure extractor copies
+>   `extract-ruby-api.rb`'s current `RAILS_DIR = File.join(SCRIPT_DIR,
+".rails-source")` pattern, and wave PR 7 of #1552 sweeps the new
+>   extractor into the env-var contract alongside the others.
+>
+> Either way, the dev-package list in §2 of this plan must match
+> `SOURCES.flatMap(s => s.packages.map(p => p.name))` from #1552 once both
+> land — both plans cover the same 7 Rails subpackages (activerecord,
+> activemodel, activesupport, actionpack, actionview, actionmailer,
+> railties) plus globalid and rack. Path references below (`active_record/...`,
+> `scripts/api-compare/.rails-source/...`) will be rewritten to `vendor/rails/...`
+> in the first wave that touches them after #1552 merges.
+
 ## 1. Headline numbers
 
 Source TS files in Rails-mirroring packages (excluding `*.test.ts`,
@@ -548,6 +572,10 @@ reason="rails-source-is-itself-disordered"` is the escape hatch and
   the directory-level analog to this within-file plan.
 - [scripts/api-compare/conventions.ts](../scripts/api-compare/conventions.ts) —
   TS↔Ruby naming/path mapping registry; reused by the new rule.
+- [docs/ruby-source-fetcher-plan.md](ruby-source-fetcher-plan.md) — sibling
+  plan (PR #1552); `vendor/sources.ts` becomes the source of truth for
+  fetched Ruby source locations and replaces hardcoded `.rails-source`
+  paths consumed here.
 - [scripts/api-compare/extract-ruby-api.rb](../scripts/api-compare/extract-ruby-api.rb) —
   precedent Ruby extractor; new structure extractor copies its caching gate
   and PACKAGE_DIRS map.

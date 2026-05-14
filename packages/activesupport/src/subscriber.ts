@@ -22,14 +22,16 @@ interface ClassState {
   notifier?: typeof Notifications;
 }
 
-const _classState = new WeakMap<Function, ClassState>();
+type AnyClass = abstract new (...args: unknown[]) => unknown;
+
+const _classState = new WeakMap<AnyClass, ClassState>();
 
 /** @internal Exposed for LogSubscriber to read per-class namespace. */
-export function getClassState(cls: Function): ClassState {
+export function getClassState(cls: AnyClass): ClassState {
   return getState(cls);
 }
 
-function getState(cls: Function): ClassState {
+function getState(cls: AnyClass): ClassState {
   let state = _classState.get(cls);
   if (!state) {
     state = {};

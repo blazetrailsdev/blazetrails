@@ -3,10 +3,10 @@ import { moduleParentName } from "../../module-ext.js";
 
 describe("IntrospectionTest", () => {
   // Helper to create a function with a specific name property
-  function namedFn(name: string): Function {
+  function namedFn(name: string): abstract new (...args: unknown[]) => unknown {
     const f = function () {};
     Object.defineProperty(f, "name", { value: name, configurable: true });
-    return f;
+    return f as unknown as abstract new (...args: unknown[]) => unknown;
   }
 
   it("module parent name", () => {

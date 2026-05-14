@@ -20,7 +20,7 @@
  */
 
 type AnyClass = new (...args: any[]) => any;
-type Module = Record<string, Function>;
+type Module = Record<string, any>;
 
 /**
  * Symbol keys for Ruby's Module#included and Module#extended callbacks.

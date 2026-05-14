@@ -1,5 +1,9 @@
 import { DescendantsTracker } from "./descendants-tracker.js";
 
+// Alias for a JavaScript class constructor (abstract or concrete).
+// Used wherever Rails Ruby APIs receive a `Module`/`Class` argument.
+type AnyClass = abstract new (...args: unknown[]) => unknown;
+
 /**
  * Module extensions mirroring Rails ActiveSupport module/class extensions.
  * Covers delegate, mattr_accessor, cattr_accessor, attr_internal, and helpers.
@@ -275,16 +279,17 @@ export function attrInternal(target: object, ...names: string[]): void {
  * isAnonymous — returns true if a class/function has no name.
  * Mirrors Ruby's Module#anonymous?.
  */
-export function isAnonymous(klass: Function): boolean {
-  return !klass.name || klass.name === "";
+export function isAnonymous(klass: AnyClass): boolean {
+  const name = (klass as { name?: string }).name;
+  return !name || name === "";
 }
 
 /**
  * moduleParentName — returns the parent namespace name of a class (best-effort in JS).
  * In Ruby this would parse the constant path. In JS/TS we can only go by convention.
  */
-export function moduleParentName(klass: Function): string | null {
-  const name = klass.name ?? "";
+export function moduleParentName(klass: AnyClass): string | null {
+  const name = (klass as { name?: string }).name ?? "";
   const parts = name.split("::");
   if (parts.length <= 1) return null;
   return parts.slice(0, -1).join("::");
@@ -308,15 +313,15 @@ export function suppress<T>(
 
 // ── Descendants tracking ──────────────────────────────────────────────────────
 
-export function registerSubclass(parent: Function, child: Function): void {
+export function registerSubclass(parent: AnyClass, child: AnyClass): void {
   DescendantsTracker.registerSubclass(parent, child);
 }
 
-export function subclasses(klass: Function): Function[] {
+export function subclasses(klass: AnyClass): AnyClass[] {
   return DescendantsTracker.subclasses(klass);
 }
 
-export function descendants(klass: Function): Function[] {
+export function descendants(klass: AnyClass): AnyClass[] {
   return DescendantsTracker.descendants(klass);
 }
 

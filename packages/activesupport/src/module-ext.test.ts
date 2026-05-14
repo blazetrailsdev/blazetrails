@@ -141,7 +141,9 @@ describe("ModuleTest", () => {
 
   it("moduleParentName — returns parent namespace for namespaced class", () => {
     // We simulate a namespaced class by naming it "Outer::Inner"
-    const Inner = { name: "Outer::Inner" } as unknown as Function;
+    const Inner = { name: "Outer::Inner" } as unknown as abstract new (
+      ...args: unknown[]
+    ) => unknown;
     expect(moduleParentName(Inner)).toBe("Outer");
   });
 });

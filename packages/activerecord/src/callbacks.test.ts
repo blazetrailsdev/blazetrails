@@ -1952,7 +1952,7 @@ describe("CallbacksTest", () => {
         this.attribute("id", "integer");
         this.attribute("name", "string");
         this.adapter = adapter;
-        this.aroundSave(async (r: any, proceed: () => Promise<void>) => {
+        this.aroundSave(async (_r: any, proceed: () => Promise<void>) => {
           const countBefore = await Widget.count();
           events.push(`[BEFORE_INSERT:count=${countBefore}]`);
           await proceed();

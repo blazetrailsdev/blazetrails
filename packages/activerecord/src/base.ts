@@ -2410,13 +2410,18 @@ export class Base extends Model {
     let saved = false;
     let wasNewRecord = false;
 
+    // autosaveBelongsTo is an explicit pre-save check (not a registered callback); keep it
+    // outside the save block so that after_save does not fire when it fails.
+    const belongsToOk = await autosaveBelongsTo(this);
+    if (!belongsToOk) {
+      this._skipTouch = false;
+      return false;
+    }
+
     // Rails: Callbacks#create_or_update wraps super in run_callbacks(:save) { ... }.
     // Unifying before/after into a single runCallbacks so that around_save callbacks
     // correctly wrap the DB write (the old split runBefore+runAfter was a no-op for around).
     const saveOk = await ctor._callbackChain.runCallbacks("save", this, async () => {
-      const belongsToOk = await autosaveBelongsTo(this);
-      if (!belongsToOk) return;
-
       wasNewRecord = this._newRecord;
       if (wasNewRecord) {
         const createOk = await ctor._callbackChain.runCallbacks("create", this, async () => {

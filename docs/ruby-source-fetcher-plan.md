@@ -135,7 +135,12 @@ export const SOURCES: UpstreamSource[] = [
 ];
 ```
 
-A separate `parity/` Gemfile still needs the `activerecord 8.0.2` pin to match `rails.origin.ref` — wave 7 plumbs it through.
+### 2.3 Resolved decisions (post-design Q&A)
+
+- **Vendored sources are gitignored; a lockfile is committed.** `vendor/sources.lock.json` records the resolved git SHA per git origin and the gem-checksum per rubygems origin. The fetcher writes this file after every successful fetch and refuses to fetch when the tag-or-version in `sources.ts` doesn't resolve to the lock SHA (unless `--refresh` is passed). This gives reproducibility without bloating the repo and lets CI verify "we built against what we said we did" even when GitHub re-tags.
+- **`vendor/sources.ts` is the only source of truth for the Rails tag.** `scripts/parity/schema/ruby/Gemfile` is generated at parity-run time from `SOURCES.find(s => s.name === "rails").origin.ref`. Wave 7 implements the generator; until then the comment-pinned version remains.
+- **`--refresh` does a hard reset.** `rm -rf <dest> && fetch`. Users with in-flight edits to a vendored source are expected to copy them out first; the fetcher prints a warning if `<dest>` has uncommitted changes (per `git -C <dest> status --porcelain`).
+- **No compat symlink during wave 2.** Wave 2 moves `scripts/api-compare/.rails-source` → `vendor/rails` via `git mv`, deletes the old fetch script, and updates every hardcoder in the same PR. In-flight agents must re-link on next `start-worktree.sh`. Wave 2 should be merged during a spawn pause.
 
 ## 3. Unified fetcher
 
@@ -225,10 +230,10 @@ Waves 4 and 5 can land in either order; they are independent.
 
 - **CI cache invalidation**: cache key must be `hash(vendor/sources.ts)`, not a dir hash — otherwise a pinned-ref bump won't invalidate.
 - **Bundler in CI**: globalid (and any future rubygems-origin source) requires `ruby` + `bundler` on the CI image. `api:compare` and `test:compare` already use Ruby for the extractors, so no new dep — but it does mean a TS-only contributor cannot run `pnpm vendor:fetch` without Ruby installed. Mitigation: `fetch.ts` should print an actionable error ("install ruby + bundler") rather than letting `bundle install` fail.
-- **In-flight worktrees during migration**: agents currently symlinked to `scripts/api-compare/.rails-source` will see broken symlinks the moment wave 2 lands. Mitigation: wave 2 leaves a deprecation symlink at `scripts/api-compare/.rails-source` → `../../vendor/rails/` (and same for rack). The compat symlink stays until wave 7 deletes it. Wave 2 should also reuse the existing master clone via `git mv scripts/api-compare/.rails-source vendor/rails` rather than re-cloning — saves ~53 MiB and a slow clone on every active agent's machine.
+- **In-flight worktrees during migration**: per §2.3, wave 2 lands the path move in one PR with no compat symlink. Active agents must be paused at merge time and re-linked on next `start-worktree.sh` run. The master clone is moved with `git mv scripts/api-compare/.rails-source vendor/rails` (and same for rack), avoiding a ~53 MiB re-clone.
 - **Extractor cache gate**: `scripts/api-compare/extract-ruby-api.rb:17` already caches extraction output keyed by Rails tag. Once the tag moves into `vendor/sources.ts`, the extractor must read it from the manifest (env var passed by `compare.ts`) or the cache key drifts silently. Wave 4 owns this.
 - **Cross-doc coordination**: the parallel `docs/rails-file-structure-mirror-plan.md` (in progress on agent %396) is designing a Ruby-aware mirror tool that **must** consume the same `SOURCES` list. Both plans should converge on `vendor/sources.ts` as the single registry. Action item: cross-link this doc from the mirror plan when it lands.
-- **`parity/schema/ruby/Gemfile` drift**: today the version is in a comment. Wave 7 should either (a) generate the Gemfile from `vendor/sources.ts` at parity-run time, or (b) make the parity script assert `rails.origin.ref === activerecord Gemfile version` on startup.
+- **`parity/schema/ruby/Gemfile` drift**: resolved per §2.3 — wave 7 generates the Gemfile from `SOURCES` at parity-run time.
 - **Symlink semantics for rubygems origin**: the `vendor/globalid/lib → vendor/globalid/vendor/bundle/.../lib` symlink approach assumes POSIX. Windows is unsupported by the repo today (Ruby + pnpm + symlinks), so this is acceptable but worth flagging.
 
 ## 8. Out of scope

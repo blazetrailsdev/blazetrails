@@ -100,12 +100,13 @@ export const SOURCES: readonly UpstreamSource[] = [
 ];
 
 /**
- * Validate SOURCES at load time. Catches schema mistakes (duplicate names,
+ * Validate a SOURCES-shaped list. Catches schema mistakes (duplicate names,
  * missing fields) before any consumer reads from the list. Throws on
- * violation. Called from the module's top level so wave-1 contributors
- * get errors at import, not at fetch time.
+ * violation. Called from the module's top level so contributors get errors
+ * at import, not at fetch time. Exported so wave 2's lockfile/fetcher
+ * tooling can reuse the same invariant when reading a manifest.
  */
-function validate(sources: readonly UpstreamSource[]): void {
+export function validateSources(sources: readonly UpstreamSource[]): void {
   const sourceNames = new Set<string>();
   const packageNames = new Set<string>();
   for (const source of sources) {
@@ -128,4 +129,4 @@ function validate(sources: readonly UpstreamSource[]): void {
   }
 }
 
-validate(SOURCES);
+validateSources(SOURCES);

@@ -129,6 +129,36 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
       sourceType: "DjMember",
       disableJoins: true,
     });
+    // Custom FK (explicit foreignKey matching the default — mirrors Rails' foreign_key: :post_id)
+    Associations.hasMany.call(DjAuthor, "djCommentsWithForeignKey", {
+      className: "DjComment",
+      through: "djPosts",
+      source: "djComments",
+      foreignKey: "dj_author_id",
+    });
+    Associations.hasMany.call(DjAuthor, "noJoinsDjCommentsWithForeignKey", {
+      className: "DjComment",
+      through: "djPosts",
+      source: "djComments",
+      foreignKey: "dj_author_id",
+      disableJoins: true,
+    });
+
+    // Scoped ratings (mirrors Rails' good_ratings / no_joins_good_ratings)
+    Associations.hasMany.call(DjAuthor, "djGoodRatings", {
+      className: "DjRating",
+      through: "djComments",
+      source: "djRatings",
+      scope: (rel: any) => rel.where("value > 5").order("id"),
+    });
+    Associations.hasMany.call(DjAuthor, "noJoinsDjGoodRatings", {
+      className: "DjRating",
+      through: "djComments",
+      source: "djRatings",
+      scope: (rel: any) => rel.where("value > 5").order("id"),
+      disableJoins: true,
+    });
+
     Associations.belongsTo.call(DjPost, "djAuthor", {
       className: "DjAuthor",
       foreignKey: "dj_author_id",
@@ -206,10 +236,12 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
     expect(normalCount).toBe(2);
   });
 
-  it.skip("counting on disable joins through using custom foreign key", () => {
-    // BLOCKED: associations — has-many-through feature gap
-    // ROOT-CAUSE: associations/has-many-through-disable-joins-associations.ts or preloader.ts missing has-many-through semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in has-many-through-disable-joins-associations.test.ts
+  it("counting on disable joins through using custom foreign key", async () => {
+    const { author } = await setupData();
+    const normalCount = await association(author, "djCommentsWithForeignKey").count();
+    const noJoinsCount = await association(author, "noJoinsDjCommentsWithForeignKey").count();
+    expect(noJoinsCount).toBe(normalCount);
+    expect(normalCount).toBe(2);
   });
 
   it("pluck on disable joins through", async () => {
@@ -223,10 +255,15 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
     expect(noJoinsIds).toEqual(normalIds);
   });
 
-  it.skip("pluck on disable joins through using custom foreign key", () => {
-    // BLOCKED: associations — has-many-through feature gap
-    // ROOT-CAUSE: associations/has-many-through-disable-joins-associations.ts or preloader.ts missing has-many-through semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in has-many-through-disable-joins-associations.test.ts
+  it("pluck on disable joins through using custom foreign key", async () => {
+    const { author } = await setupData();
+    const normalIds = (await association(author, "djCommentsWithForeignKey").pluck("id")).sort(
+      (a: any, b: any) => a - b,
+    );
+    const noJoinsIds = (
+      await association(author, "noJoinsDjCommentsWithForeignKey").pluck("id")
+    ).sort((a: any, b: any) => a - b);
+    expect(noJoinsIds).toEqual(normalIds);
   });
 
   it("fetching on disable joins through", async () => {
@@ -237,10 +274,12 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
     expect(noJoinsFirst!.id).toBe(normalFirst!.id);
   });
 
-  it.skip("fetching on disable joins through using custom foreign key", () => {
-    // BLOCKED: associations — has-many-through feature gap
-    // ROOT-CAUSE: associations/has-many-through-disable-joins-associations.ts or preloader.ts missing has-many-through semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in has-many-through-disable-joins-associations.test.ts
+  it("fetching on disable joins through using custom foreign key", async () => {
+    const { author } = await setupData();
+    const normalFirst = await association(author, "djCommentsWithForeignKey").first();
+    const noJoinsFirst = await association(author, "noJoinsDjCommentsWithForeignKey").first();
+    expect(noJoinsFirst).not.toBeNull();
+    expect(noJoinsFirst!.id).toBe(normalFirst!.id);
   });
 
   it("to a on disable joins through", async () => {
@@ -260,10 +299,12 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
     expect(after).toBe(before + 1);
   });
 
-  it.skip("appending on disable joins through using custom foreign key", () => {
-    // BLOCKED: associations — has-many-through feature gap
-    // ROOT-CAUSE: associations/has-many-through-disable-joins-associations.ts or preloader.ts missing has-many-through semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in has-many-through-disable-joins-associations.test.ts
+  it("appending on disable joins through using custom foreign key", async () => {
+    const { author, post } = await setupData();
+    const before = await association(author, "noJoinsDjCommentsWithForeignKey").count();
+    await DjComment.create({ dj_post_id: post.id, body: "new" });
+    const after = await association(author, "noJoinsDjCommentsWithForeignKey").count();
+    expect(after).toBe(before + 1);
   });
 
   it("empty on disable joins through", async () => {
@@ -277,10 +318,16 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
     expect(noJoinsComments).toEqual([]);
   });
 
-  it.skip("empty on disable joins through using custom foreign key", () => {
-    // BLOCKED: associations — has-many-through feature gap
-    // ROOT-CAUSE: associations/has-many-through-disable-joins-associations.ts or preloader.ts missing has-many-through semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in has-many-through-disable-joins-associations.test.ts
+  it("empty on disable joins through using custom foreign key", async () => {
+    const emptyAuthor = await DjAuthor.create({ name: "Bob" });
+    const noJoinsComments = await loadHasMany(emptyAuthor, "noJoinsDjCommentsWithForeignKey", {
+      className: "DjComment",
+      through: "djPosts",
+      source: "djComments",
+      foreignKey: "dj_author_id",
+      disableJoins: true,
+    });
+    expect(noJoinsComments).toEqual([]);
   });
 
   it("pluck on disable joins through a through", async () => {
@@ -303,20 +350,40 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
     expect(normalCount).toBe(2);
   });
 
-  it.skip("count on disable joins using relation with scope", () => {
-    // BLOCKED: associations — has-many-through feature gap
-    // ROOT-CAUSE: associations/has-many-through-disable-joins-associations.ts or preloader.ts missing has-many-through semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in has-many-through-disable-joins-associations.test.ts
+  it("count on disable joins using relation with scope", async () => {
+    const { author } = await setupData();
+    const normalCount = await association(author, "djGoodRatings").count();
+    const noJoinsCount = await association(author, "noJoinsDjGoodRatings").count();
+    expect(normalCount).toBe(2);
+    expect(noJoinsCount).toBe(normalCount);
   });
-  it.skip("to a on disable joins with multiple scopes", () => {
-    // BLOCKED: associations — has-many-through feature gap
-    // ROOT-CAUSE: associations/has-many-through-disable-joins-associations.ts or preloader.ts missing has-many-through semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in has-many-through-disable-joins-associations.test.ts
+  it("to a on disable joins with multiple scopes", async () => {
+    const { author, rating1, rating2 } = await setupData();
+    const normalRatings = await association(author, "djGoodRatings").toArray();
+    const noJoinsRatings = await association(author, "noJoinsDjGoodRatings").toArray();
+    const normalIds = normalRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b);
+    const noJoinsIds = noJoinsRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b);
+    const expectedIds = [rating1.id, rating2.id].sort((a: any, b: any) => a - b);
+    expect(normalIds).toEqual(expectedIds);
+    expect(noJoinsIds).toEqual(expectedIds);
   });
-  it.skip("preloading has many through disable joins", () => {
-    // BLOCKED: associations — has-many-through feature gap
-    // ROOT-CAUSE: associations/has-many-through-disable-joins-associations.ts or preloader.ts missing has-many-through semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in has-many-through-disable-joins-associations.test.ts
+  it("preloading has many through disable joins", async () => {
+    const { author, rating1, rating2 } = await setupData();
+    const authors = await DjAuthor.all().preload("djGoodRatings").toArray();
+    const goodRatings = (authors[0] as any)._preloadedAssociations.get("djGoodRatings") as any[];
+    expect(goodRatings).toBeDefined();
+    expect(goodRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b)).toEqual(
+      [rating1.id, rating2.id].sort((a: any, b: any) => a - b),
+    );
+
+    const authors2 = await DjAuthor.all().preload("noJoinsDjGoodRatings").toArray();
+    const noJoinsGoodRatings = (authors2[0] as any)._preloadedAssociations.get(
+      "noJoinsDjGoodRatings",
+    ) as any[];
+    expect(noJoinsGoodRatings).toBeDefined();
+    expect(noJoinsGoodRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b)).toEqual(
+      [rating1.id, rating2.id].sort((a: any, b: any) => a - b),
+    );
   });
 
   it("polymophic disable joins through counting", async () => {

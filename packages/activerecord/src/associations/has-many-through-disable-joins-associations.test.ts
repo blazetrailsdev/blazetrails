@@ -359,30 +359,31 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
   });
   it("to a on disable joins with multiple scopes", async () => {
     const { author, rating1, rating2 } = await setupData();
+    // scope includes order(:id) — assert ordered equality, not just set equality
     const normalRatings = await association(author, "djGoodRatings").toArray();
     const noJoinsRatings = await association(author, "noJoinsDjGoodRatings").toArray();
-    const normalIds = normalRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b);
-    const noJoinsIds = noJoinsRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b);
     const expectedIds = [rating1.id, rating2.id].sort((a: any, b: any) => a - b);
-    expect(normalIds).toEqual(expectedIds);
-    expect(noJoinsIds).toEqual(expectedIds);
+    expect(normalRatings.map((r: any) => r.id)).toEqual(expectedIds);
+    expect(noJoinsRatings.map((r: any) => r.id)).toEqual(expectedIds);
   });
   it("preloading has many through disable joins", async () => {
     const { author, rating1, rating2 } = await setupData();
+    const expectedIds = [rating1.id, rating2.id].sort((a: any, b: any) => a - b);
+
     const authors = await DjAuthor.all().preload("djGoodRatings").toArray();
-    const goodRatings = (authors[0] as any)._preloadedAssociations.get("djGoodRatings") as any[];
+    const preloadedAuthor = authors.find((a: any) => a.id === author.id) as any;
+    const goodRatings = preloadedAuthor._preloadedAssociations.get("djGoodRatings") as any[];
     expect(goodRatings).toBeDefined();
-    expect(goodRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b)).toEqual(
-      [rating1.id, rating2.id].sort((a: any, b: any) => a - b),
-    );
+    expect(goodRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b)).toEqual(expectedIds);
 
     const authors2 = await DjAuthor.all().preload("noJoinsDjGoodRatings").toArray();
-    const noJoinsGoodRatings = (authors2[0] as any)._preloadedAssociations.get(
+    const preloadedAuthor2 = authors2.find((a: any) => a.id === author.id) as any;
+    const noJoinsGoodRatings = preloadedAuthor2._preloadedAssociations.get(
       "noJoinsDjGoodRatings",
     ) as any[];
     expect(noJoinsGoodRatings).toBeDefined();
     expect(noJoinsGoodRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b)).toEqual(
-      [rating1.id, rating2.id].sort((a: any, b: any) => a - b),
+      expectedIds,
     );
   });
 

@@ -1,4 +1,4 @@
-# CI Improvement Plan
+# ActionPack CI split plan
 
 Focus: separate the actionpack test footprint from activerecord at the
 CI level, ahead of the actionpack restructure waves

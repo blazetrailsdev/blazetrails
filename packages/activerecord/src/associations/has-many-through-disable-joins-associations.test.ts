@@ -129,7 +129,8 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
       sourceType: "DjMember",
       disableJoins: true,
     });
-    // Custom FK (explicit foreignKey matching the default — mirrors Rails' foreign_key: :post_id)
+    // Custom FK: explicit foreignKey: "dj_author_id" (same as default) — mirrors Rails'
+    // foreign_key: :post_id on Author#comments_with_foreign_key, which is also the default FK
     Associations.hasMany.call(DjAuthor, "djCommentsWithForeignKey", {
       className: "DjComment",
       through: "djPosts",
@@ -372,12 +373,14 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
 
     const authors = await DjAuthor.all().preload("djGoodRatings").toArray();
     const preloadedAuthor = authors.find((a: any) => a.id === author.id) as any;
+    expect(preloadedAuthor).toBeDefined();
     const goodRatings = preloadedAuthor._preloadedAssociations.get("djGoodRatings") as any[];
     expect(goodRatings).toBeDefined();
     expect(goodRatings.map((r: any) => r.id).sort((a: any, b: any) => a - b)).toEqual(expectedIds);
 
     const authors2 = await DjAuthor.all().preload("noJoinsDjGoodRatings").toArray();
     const preloadedAuthor2 = authors2.find((a: any) => a.id === author.id) as any;
+    expect(preloadedAuthor2).toBeDefined();
     const noJoinsGoodRatings = preloadedAuthor2._preloadedAssociations.get(
       "noJoinsDjGoodRatings",
     ) as any[];

@@ -9,14 +9,14 @@ from the slicing below once it lands.
 
 ## Headline numbers
 
-| Metric                                                                           | Value                                |
-| -------------------------------------------------------------------------------- | ------------------------------------ |
-| Rails `.rb` files under `action_dispatch/journey/`                               | **14**                               |
-| Total Ruby LOC                                                                   | **2062**                             |
-| Estimated TS LOC after porting (≈ Ruby × 1.3)                                    | **~2680**                            |
-| Existing TS counterparts under `packages/actionpack/src/actiondispatch/journey/` | **0** (subtree absent)               |
-| Rails journey test LOC (`test/journey/`)                                         | **1603** across 11 files             |
-| Expected PR count (≤300 LOC ceiling per `CLAUDE.md`)                             | **8 port PRs + 1 wire-up = 9 total** |
+| Metric                                                                           | Value                                 |
+| -------------------------------------------------------------------------------- | ------------------------------------- |
+| Rails `.rb` files under `action_dispatch/journey/`                               | **14**                                |
+| Total Ruby LOC                                                                   | **2062**                              |
+| Estimated TS LOC after porting (≈ Ruby × 1.3)                                    | **~2680**                             |
+| Existing TS counterparts under `packages/actionpack/src/actiondispatch/journey/` | **0** (subtree absent)                |
+| Rails journey test LOC (`test/journey/`)                                         | **1603** across 11 files              |
+| Expected PR count (LOC ceiling waived for ports; sized by cluster)               | **9 port PRs + 1 wire-up = 10 total** |
 
 Per-file LOC (Ruby, `wc -l`):
 
@@ -99,10 +99,12 @@ G doesn't depend on V or P (only on S + L); P doesn't depend on G. So
 
 ## PR slicing
 
-All PRs ≤300 LOC (CLAUDE.md ceiling; lockfiles/snapshots excluded).
-TS LOC ≈ Ruby × 1.3. PR-7 (router.rb) is just under the ceiling;
-PR-8 (formatter.rb) sits at the ceiling — if either exceeds in
-practice, split via `<base>` / `<base>b` per CLAUDE.md.
+**LOC ceiling waived for this wave** (decision 2026-05-14, recorded in
+[[feedback-loc-limit-code-moves]]): for mechanical Rails ports the
+300-LOC CLAUDE.md ceiling does not apply — size by logical cluster
+instead. Splitting `nodes.rb` + `parser.rb` just to satisfy the ceiling
+would produce churn without review-cost savings. Below: **9 PRs total
+(8 cluster + 1 wire-up)**, at ~250–550 LOC each.
 
 ### PR 1 — Journey leaf utilities (L cluster)
 
@@ -129,13 +131,10 @@ practice, split via `<base>` / `<base>b` per CLAUDE.md.
 ### PR 3 — Nodes + Parser (S₂)
 
 - **Files:** `nodes/node.rb` (208) + `parser.rb` (103).
-- **Estimated TS LOC:** ~400 src + ... → **SPLIT REQUIRED**.
-  - **PR 3 (~270 LOC):** `nodes/node.ts` (the ~12 node subclasses
-    - Visitor interface stub).
-  - **PR 3b (~250 LOC):** `parser.ts` + parser tests
-    (`route/definition/parser_test.rb` 112; `nodes/ast_test.rb` 91).
+- **Estimated TS LOC:** ~400 src + ~260 tests = **~660 total**.
 - **Dependencies:** PR 2.
-- **Tests:** parser_test, ast_test in PR 3b.
+- **Tests:** `route/definition/parser_test.rb` (112) +
+  `nodes/ast_test.rb` (91), both inline with the source PR.
 - **Wire-up:** none. **Note:** Rails' `parser.rb` is generated from a
   Racc grammar (the `racc` gem). Port as a **hand-written recursive
   descent parser** — the grammar is tiny (path segments, optionals,
@@ -145,11 +144,7 @@ practice, split via `<base>` / `<base>b` per CLAUDE.md.
 ### PR 4 — Visitors + Format (V)
 
 - **Files:** `visitors.rb` (267).
-- **Estimated TS LOC:** ~350 src → **SPLIT REQUIRED**.
-  - **PR 4 (~250 LOC):** core `Visitor` base + `FormatBuilder` +
-    `Each`/`String`/`Dot` simple visitors.
-  - **PR 4b (~200 LOC):** `Journey::Format` class + Parameter struct
-    - `FunctionalVisitor`.
+- **Estimated TS LOC:** ~350 src.
 - **Dependencies:** PR 3 (Nodes), PR 1 (Router::Utils escape).
 - **Tests:** no direct visitor tests in Rails — covered transitively
   by pattern_test (PR 5).
@@ -158,64 +153,50 @@ practice, split via `<base>` / `<base>b` per CLAUDE.md.
 ### PR 5 — Path/Pattern (P)
 
 - **Files:** `path/pattern.rb` (209).
-- **Estimated TS LOC:** ~270 src + ~300 tests → **SPLIT REQUIRED**.
-  - **PR 5 (~280 LOC):** `path/pattern.ts` + `AnchoredRegexp` /
-    `UnanchoredRegexp` (both are `Visitor` subclasses defined inline
-    in pattern.rb).
-  - **PR 5b (~280 LOC):** port `test/journey/path/pattern_test.rb`
-    (313 Ruby LOC → ~280 TS).
+- **Estimated TS LOC:** ~270 src + ~280 tests = **~550 total**.
 - **Dependencies:** PR 3 (Nodes), PR 4 (Visitor base).
+- **Tests:** `test/journey/path/pattern_test.rb` (313).
 - **Wire-up:** none. **Risk:** regex semantics (see Risks §).
 
 ### PR 6 — GTG automaton (G)
 
 - **Files:** `gtg/transition_table.rb` (217) + `gtg/builder.rb` (149).
-- **Estimated TS LOC:** ~480 src → **SPLIT REQUIRED**.
-  - **PR 6 (~270 LOC):** `gtg/transition-table.ts` + Dot mixin
-    integration + `gtg/transition_table_test.rb` port (125).
-  - **PR 6b (~250 LOC):** `gtg/builder.ts` + `gtg/builder_test.rb`
-    port (98).
+- **Estimated TS LOC:** ~480 src + ~220 tests = **~700 total**.
 - **Dependencies:** PR 3 (Nodes — Builder walks the AST), PR 1
   (Simulator/Dot already landed).
+- **Tests:** `gtg/transition_table_test.rb` (125) + `gtg/builder_test.rb` (98).
 - **Can ship in parallel with PR 4 + PR 5** once PR 3 is in.
 
 ### PR 7 — Route + Routes (R₁)
 
 - **Files:** `route.rb` (189) + `routes.rb` (82).
-- **Estimated TS LOC:** ~350 src → **SPLIT REQUIRED**.
-  - **PR 7 (~280 LOC):** `route.ts` (Route class + VerbMatchers).
-    Port `test/journey/route_test.rb` (115) into PR 7b.
-  - **PR 7b (~210 LOC):** `routes.ts` + `routes_test.rb` (74) +
-    `route_test.rb` (115).
+- **Estimated TS LOC:** ~350 src + ~190 tests = **~540 total**.
 - **Dependencies:** PR 5 (Pattern), PR 6 (Simulator memoization).
+- **Tests:** `route_test.rb` (115) + `routes_test.rb` (74).
 - **Wire-up:** none yet.
 
 ### PR 8 — Formatter (R₂)
 
 - **Files:** `formatter.rb` (231).
-- **Estimated TS LOC:** ~300 src → **SPLIT REQUIRED**.
-  - **PR 8 (~280 LOC):** `formatter.ts` (Formatter, RouteWithParams,
-    MissingRoute reuse from `actioncontroller/metal/exceptions.ts`).
-  - **PR 8b (~150 LOC):** edge tests + match-route fixture tests.
+- **Estimated TS LOC:** ~300 src + ~150 tests = **~450 total**.
 - **Dependencies:** PR 4 (FormatBuilder + Format), PR 7 (Routes).
 - **Wire-up:** none yet.
 
 ### PR 9 — Router (R₃) — top of stack
 
 - **Files:** `router.rb` (151).
-- **Estimated TS LOC:** ~200 src + chunky test = **SPLIT REQUIRED**.
-  - **PR 9 (~230 LOC):** `router.ts` + minimal smoke test.
-  - **PR 9b (~280 LOC):** port `router_test.rb` (538 → ~280 LOC slice 1
-    of 2). **PR 9c (~280 LOC):** slice 2 of router_test.
+- **Estimated TS LOC:** ~200 src + ~500 tests = **~700 total**.
 - **Dependencies:** PR 7, PR 8.
+- **Tests:** `router_test.rb` (538) — largest single test file in the wave.
 
 ### PR 10 — Wire-up: `actiondispatch/routing/route-set.ts` switches to journey Router
 
 - **Files in scope:** `packages/actionpack/src/actiondispatch/routing/route-set.ts`
   - any internal pattern compiler that the journey port replaces.
-- **Estimated LOC:** ~200 (assumes current `route-set.ts` already has a
-  router seam; verify in PR-10's audit pass). If the seam is missing,
-  this becomes **PR 10 (seam) + PR 10b (switch)**.
+- **Estimated LOC:** ~200, depending on whether the current `route-set.ts`
+  already exposes a router seam. **Open question** (see end of doc):
+  audit `route-set.ts` before opening PR 10 to confirm seam presence;
+  if absent, prepend a small seam-creation PR.
 - **Dependencies:** PR 9 (full journey stack landed).
 - **Tests:** existing routing integration tests must continue to pass.
   Add a focused test that exercises the journey router end-to-end via
@@ -225,33 +206,21 @@ practice, split via `<base>` / `<base>b` per CLAUDE.md.
 
 ### Summary table
 
-| PR    | Cluster | Src LOC | Test LOC | Deps | Wire-up? |
-| ----- | ------- | ------- | -------- | ---- | -------- |
-| 1     | L       | ~240    | ~80      | —    | no       |
-| 2     | S₁      | ~100    | ~100     | 1    | no       |
-| 3     | S₂      | ~270    | —        | 2    | no       |
-| 3b    | S₂      | ~120    | ~130     | 3    | no       |
-| 4     | V       | ~250    | —        | 3, 1 | no       |
-| 4b    | V       | ~150    | ~50      | 4    | no       |
-| 5     | P       | ~280    | —        | 3, 4 | no       |
-| 5b    | P       | —       | ~280     | 5    | no       |
-| 6     | G₁      | ~150    | ~120     | 3    | no       |
-| 6b    | G₂      | ~150    | ~100     | 6    | no       |
-| 7     | R₁      | ~250    | —        | 5, 6 | no       |
-| 7b    | R₁      | ~100    | ~210     | 7    | no       |
-| 8     | R₂      | ~280    | —        | 4, 7 | no       |
-| 8b    | R₂      | —       | ~150     | 8    | no       |
-| 9     | R₃      | ~200    | ~30      | 7, 8 | no       |
-| 9b/9c | R₃      | —       | ~560     | 9    | no       |
-| 10    | wire-up | ~200    | included | 9    | **yes**  |
+| PR  | Cluster | Src LOC | Test LOC | Total | Deps | Wire-up? |
+| --- | ------- | ------- | -------- | ----- | ---- | -------- |
+| 1   | L       | ~240    | ~80      | ~320  | —    | no       |
+| 2   | S₁      | ~100    | ~100     | ~200  | 1    | no       |
+| 3   | S₂      | ~400    | ~260     | ~660  | 2    | no       |
+| 4   | V       | ~350    | —        | ~350  | 3, 1 | no       |
+| 5   | P       | ~270    | ~280     | ~550  | 3, 4 | no       |
+| 6   | G       | ~480    | ~220     | ~700  | 3    | no       |
+| 7   | R₁      | ~350    | ~190     | ~540  | 5, 6 | no       |
+| 8   | R₂      | ~300    | ~150     | ~450  | 4, 7 | no       |
+| 9   | R₃      | ~200    | ~500     | ~700  | 7, 8 | no       |
+| 10  | wire-up | ~200    | included | ~200  | 9    | **yes**  |
 
-**Total: ~17 PRs** (vs the actionpack audit's rough estimate of "6–8
-PRs"). The delta comes from CLAUDE.md's 300-LOC ceiling: clusters S, V,
-P, G, R₁, R₂, R₃ each need a `<base>` + `<base>b` split. If the parent
-session prefers fewer PRs and is willing to relax the ceiling for this
-wave specifically, the cluster count is **8 logical units (L, S, V, P,
-G, R₁, R₂, R₃) + 1 wire-up = 9 PRs at ~400 LOC each** — matches the
-audit's original estimate.
+**Total: 10 PRs, ~4670 TS LOC.** Matches the parent audit's "6–8 PRs"
+rough estimate. PRs 4 + 5 + 6 can ship in parallel once PR 3 lands.
 
 ## api:compare / test:compare impact
 

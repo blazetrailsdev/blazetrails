@@ -35,9 +35,7 @@ export class SignedGlobalID {
   readonly purpose: string;
   readonly expiresAt: Temporal.Instant | undefined;
 
-  /** @internal */
   private readonly verifier: MessageVerifier;
-  /** @internal */
   private _cached: string | undefined;
 
   private constructor(
@@ -101,7 +99,7 @@ export class SignedGlobalID {
   }
 
   /** @internal */
-  [Symbol.toPrimitive](): string {
+  [Symbol.toPrimitive](_hint: string): string {
     return this.toString();
   }
 }

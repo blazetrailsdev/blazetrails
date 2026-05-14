@@ -67,14 +67,15 @@ describe("SignedGlobalID", () => {
     expect(SignedGlobalID.parse(token, { verifier })).toBeNull();
   });
 
-  it("encodes expiresAt in the token", () => {
+  it("encodes expiresAt in the token and round-trips it", () => {
     const verifier = makeVerifier();
     const future = Temporal.Now.instant().add({ seconds: 3600 });
     const sgid = SignedGlobalID.create(fakeModel, { verifier, expiresAt: future });
     expect(sgid.expiresAt).toBeDefined();
-    const token = sgid.toString();
-    const parsed = SignedGlobalID.parse(token, { verifier });
+    const parsed = SignedGlobalID.parse(sgid.toString(), { verifier });
     expect(parsed).not.toBeNull();
+    expect(parsed!.expiresAt).toBeDefined();
+    expect(Temporal.Instant.compare(parsed!.expiresAt!, Temporal.Now.instant())).toBeGreaterThan(0);
   });
 
   it("respects expiresIn (seconds)", () => {
@@ -94,7 +95,6 @@ describe("SignedGlobalID", () => {
   it("uses getApp() when no app option", () => {
     const verifier = makeVerifier();
     const sgid = SignedGlobalID.create(fakeModel, { verifier });
-    // no app configured — fallback URI
     expect(sgid.uri).toContain("User/42");
   });
 });

@@ -1,5 +1,9 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import { getApp as _getGlobalIdApp, SignedGlobalID } from "@blazetrails/globalid";
+import {
+  getApp as _getGlobalIdApp,
+  SignedGlobalID,
+  type GlobalIDModel,
+} from "@blazetrails/globalid";
 import {
   Model,
   type Type,
@@ -2798,13 +2802,7 @@ export class Base extends Model {
   }): Promise<string> {
     const SignedIdModule = await loadSignedId();
     const verifier = SignedIdModule.signedIdVerifier(this.constructor as typeof Base);
-    return SignedGlobalID.create(
-      this as unknown as { id: unknown; constructor: { name: string } },
-      {
-        ...options,
-        verifier,
-      },
-    ).toString();
+    return SignedGlobalID.create(this as GlobalIDModel, { ...options, verifier }).toString();
   }
 
   // valuesAt / assignAttributes extracted to persistence.ts.

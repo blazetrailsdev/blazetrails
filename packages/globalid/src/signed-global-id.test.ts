@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { SignedGlobalID } from "./signed-global-id.js";
+import { setApp } from "./config.js";
 
 function makeVerifier(secret = "test-secret"): MessageVerifier {
   return new MessageVerifier(secret, { digest: "sha256", url_safe: true });
@@ -98,9 +99,14 @@ describe("SignedGlobalID", () => {
     expect(sgid.uri).toBe("gid://MyApp/User/42");
   });
 
-  it("uses getApp() when no app option", () => {
-    const verifier = makeVerifier();
-    const sgid = SignedGlobalID.create(fakeModel, { verifier });
-    expect(sgid.uri).toContain("User/42");
+  describe("getApp() integration", () => {
+    afterEach(() => setApp("placeholder"));
+
+    it("uses getApp() when no app option", () => {
+      setApp("ConfiguredApp");
+      const verifier = makeVerifier();
+      const sgid = SignedGlobalID.create(fakeModel, { verifier });
+      expect(sgid.uri).toBe("gid://ConfiguredApp/User/42");
+    });
   });
 });

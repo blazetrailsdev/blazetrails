@@ -2789,7 +2789,7 @@ export class Base extends Model {
   }
 
   /**
-   * Return a cryptographically signed GlobalID for this record.
+   * Return a SignedGlobalID for this record.
    * Uses the model's `signedIdVerifier` (same secret as signed IDs).
    *
    * Mirrors: ActiveRecord::Base#to_sgid
@@ -2799,10 +2799,24 @@ export class Base extends Model {
     purpose?: string;
     expiresIn?: number;
     expiresAt?: Temporal.Instant;
-  }): Promise<string> {
+  }): Promise<SignedGlobalID> {
     const SignedIdModule = await loadSignedId();
     const verifier = SignedIdModule.signedIdVerifier(this.constructor as typeof Base);
-    return SignedGlobalID.create(this as GlobalIDModel, { ...options, verifier }).toString();
+    return SignedGlobalID.create(this as GlobalIDModel, { ...options, verifier });
+  }
+
+  /**
+   * Return the signed GlobalID token string for this record.
+   *
+   * Mirrors: ActiveRecord::Base#to_sgid_param
+   */
+  async toSgidParam(options?: {
+    app?: string;
+    purpose?: string;
+    expiresIn?: number;
+    expiresAt?: Temporal.Instant;
+  }): Promise<string> {
+    return (await this.toSgid(options)).toParam();
   }
 
   // valuesAt / assignAttributes extracted to persistence.ts.

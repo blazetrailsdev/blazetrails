@@ -1603,10 +1603,11 @@ describe("MigrationTest", () => {
 
       const m = new WeNeedReminders();
       await m.run(adapter, "up");
-      await adapter.executeMutation(
-        `INSERT INTO "prefix_reminders_suffix" ("content") VALUES ('hello')`,
-      );
-      const rows = await adapter.execute(`SELECT * FROM "prefix_reminders_suffix"`);
+      // Use adapter quoting so MySQL (no ANSI_QUOTES) works alongside PG/SQLite.
+      const qt = adapter.quoteTableName("prefix_reminders_suffix");
+      const qc = adapter.quoteIdentifier("content");
+      await adapter.executeMutation(`INSERT INTO ${qt} (${qc}) VALUES ('hello')`);
+      const rows = await adapter.execute(`SELECT * FROM ${qt}`);
       expect(rows).toHaveLength(1);
 
       await m.run(adapter, "down");

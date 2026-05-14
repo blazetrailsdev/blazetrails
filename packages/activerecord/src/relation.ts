@@ -3126,45 +3126,42 @@ export class Relation<T extends Base> {
     start,
     finish,
     order,
+    cursor,
+    errorOnIgnore,
   }: {
     batchSize?: number;
     start?: unknown;
     finish?: unknown;
-    order?: "asc" | "desc";
+    order?: "asc" | "desc" | ("asc" | "desc")[];
+    cursor?: string | string[];
+    errorOnIgnore?: boolean;
   } = {}): AsyncGenerator<T[]> {
-    let currentOffset = this._offsetValue ?? 0;
     const pk = this._modelClass.primaryKey;
-    if (Array.isArray(pk)) {
-      throw new Error("findInBatches does not support composite primary keys");
+    const effectiveCursor = cursor ?? pk;
+    const cursorArr = Array.isArray(effectiveCursor) ? effectiveCursor : [effectiveCursor];
+
+    if (this._orderClauses.length > 0) {
+      this.actOnIgnoredOrder(errorOnIgnore);
     }
 
-    while (true) {
-      const rel = this._clone();
-      rel._limitValue = batchSize;
-      rel._offsetValue = currentOffset;
-      rel._loaded = false;
+    const batchOrders = _buildBatchOrders(cursorArr, order as any);
+    const rel = this._clone();
+    rel._orderClauses = batchOrders.map(([col, dir]) => [col, dir] as [string, "asc" | "desc"]);
 
-      // Ensure deterministic ordering; support custom order direction (Rails 7.1)
-      if (rel._orderClauses.length === 0) {
-        rel._orderClauses.push(order ? [pk, order] : pk);
-      }
+    const batches = await _batchOnUnloadedRelation({
+      relation: rel,
+      start,
+      finish,
+      load: true,
+      cursor: cursorArr,
+      order: (order ?? "asc") as any,
+      useRanges: undefined,
+      remaining: this._limitValue ?? Infinity,
+      batchLimit: batchSize,
+    });
 
-      // Apply start/finish range constraints
-      const pkAttr = this._modelClass.arelTable.get(pk);
-      if (start !== undefined) {
-        rel._whereClause.predicates.push(pkAttr.gteq(start));
-      }
-      if (finish !== undefined) {
-        rel._whereClause.predicates.push(pkAttr.lteq(finish));
-      }
-
-      const batch = await rel.toArray();
-      if (batch.length === 0) break;
-
-      yield batch;
-
-      if (batch.length < batchSize) break;
-      currentOffset += batchSize;
+    for (const batch of batches) {
+      yield batch as T[];
     }
   }
 
@@ -3178,13 +3175,24 @@ export class Relation<T extends Base> {
     start,
     finish,
     order,
+    cursor,
+    errorOnIgnore,
   }: {
     batchSize?: number;
     start?: unknown;
     finish?: unknown;
-    order?: "asc" | "desc";
+    order?: "asc" | "desc" | ("asc" | "desc")[];
+    cursor?: string | string[];
+    errorOnIgnore?: boolean;
   } = {}): AsyncGenerator<T> {
-    for await (const batch of this.findInBatches({ batchSize, start, finish, order })) {
+    for await (const batch of this.findInBatches({
+      batchSize,
+      start,
+      finish,
+      order,
+      cursor,
+      errorOnIgnore,
+    })) {
       for (const record of batch) {
         yield record;
       }
@@ -3201,37 +3209,70 @@ export class Relation<T extends Base> {
    */
   inBatches({
     batchSize = Batches.DEFAULT_BATCH_SIZE,
-  }: { batchSize?: number } = {}): BatchEnumerator<LoadedRelation<Relation<T>>> {
+    start,
+    finish,
+    order,
+    cursor,
+    errorOnIgnore,
+    load = false,
+    useRanges,
+  }: {
+    batchSize?: number;
+    start?: unknown;
+    finish?: unknown;
+    order?: "asc" | "desc" | ("asc" | "desc")[];
+    cursor?: string | string[];
+    errorOnIgnore?: boolean;
+    load?: boolean;
+    useRanges?: boolean;
+  } = {}): BatchEnumerator<LoadedRelation<Relation<T>>> {
     const self = this;
     const pk = this._modelClass.primaryKey;
-    if (Array.isArray(pk)) {
-      throw new Error("inBatches does not support composite primary keys");
+    const effectiveCursor = cursor ?? pk;
+    const cursorArr = Array.isArray(effectiveCursor) ? effectiveCursor : [effectiveCursor];
+
+    if (this._orderClauses.length > 0) {
+      this.actOnIgnoredOrder(errorOnIgnore);
     }
+
+    const batchOrders = _buildBatchOrders(cursorArr, order as any);
+
     return new BatchEnumerator(
       async function* () {
-        let lastId: unknown = null;
+        const rel = self._clone();
+        rel._orderClauses = batchOrders.map(([col, dir]) => [col, dir] as [string, "asc" | "desc"]);
 
-        while (true) {
-          const rel = self._clone();
-          if (lastId !== null) {
-            rel._whereClause.predicates.push(self._modelClass.arelTable.get(pk).gt(lastId));
-          }
-          rel._orderClauses = [pk];
-          rel._limitValue = batchSize;
-          rel._selectColumns = [pk];
+        const batches = await _batchOnUnloadedRelation({
+          relation: rel,
+          start,
+          finish,
+          load,
+          cursor: cursorArr,
+          order: (order ?? "asc") as any,
+          useRanges,
+          remaining: self._limitValue ?? Infinity,
+          batchLimit: batchSize,
+        });
 
-          const records = await rel.toArray();
-          if (records.length === 0) break;
-
-          const ids = records.map((r) => (r as any).readAttribute(pk));
+        for (const batchRows of batches) {
           const batchRel = self._clone();
-          batchRel._whereClause.predicates.push(
-            ...self.predicateBuilder.buildFromHash({ [pk]: ids }),
+          const tuples = (batchRows as any[]).map((r) =>
+            cursorArr.map((c) => (r as any).readAttribute(c)),
           );
+          if (cursorArr.length === 1) {
+            const ids = tuples.map((t) => t[0]);
+            batchRel._whereClause.predicates.push(
+              ...self.predicateBuilder.buildFromHash({ [cursorArr[0]]: ids }),
+            );
+          } else {
+            const node = self.predicateBuilder.buildComposite(cursorArr, tuples);
+            if (node) batchRel._whereClause.predicates.push(node);
+          }
+          if (load) {
+            (batchRel as any)._records = batchRows;
+            (batchRel as any)._loaded = true;
+          }
           yield stripThenable(batchRel);
-
-          if (records.length < batchSize) break;
-          lastId = (records[records.length - 1] as any).readAttribute(pk);
         }
       } as () => AsyncGenerator<LoadedRelation<Relation<T>>>,
       batchSize,

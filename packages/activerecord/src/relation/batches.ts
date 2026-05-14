@@ -118,10 +118,16 @@ export function buildBatchOrders(
 
 /** @internal */
 export function actOnIgnoredOrder(errorOnIgnore: boolean | undefined): void {
-  if (errorOnIgnore) {
+  const raise =
+    errorOnIgnore !== undefined ? errorOnIgnore : activeRecordConfig.errorOnIgnoredOrder;
+  if (raise) {
     throw new Error(Batches.ORDER_IGNORE_MESSAGE);
   }
 }
+
+export const activeRecordConfig = {
+  errorOnIgnoredOrder: false,
+};
 
 /** @internal */
 export function batchOnLoadedRelation(opts: {

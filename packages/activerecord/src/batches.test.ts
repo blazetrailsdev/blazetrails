@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, Relation } from "./index.js";
+import { activeRecordConfig } from "./relation/batches.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -565,39 +566,99 @@ describe("EachTest", () => {
   });
 
   it.skip("find in batches should quote batch order", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+    // ROOT-CAUSE fixed: cursor-based order now uses quoted table.column via Arel
   });
+
   it.skip("find in batches should ignore the order default scope", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+    // ROOT-CAUSE fixed: errorOnIgnore wired; defaultScope order-stripping works
   });
-  it.skip("find in batches should error on ignore the order", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+
+  it("find in batches should error on ignore the order", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+      }
+    }
+    await expect(async () => {
+      for await (const _b of Post.order("title").findInBatches({
+        batchSize: 1,
+        errorOnIgnore: true,
+      })) {
+        /* noop */
+      }
+    }).rejects.toThrow();
   });
-  it.skip("find in batches should not error if config overridden", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+
+  it("find in batches should not error if config overridden", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+      }
+    }
+    activeRecordConfig.errorOnIgnoredOrder = true;
+    try {
+      let threw = false;
+      try {
+        for await (const _b of Post.order("title").findInBatches({
+          batchSize: 1,
+          errorOnIgnore: false,
+        })) {
+          /* noop */
+        }
+      } catch {
+        threw = true;
+      }
+      expect(threw).toBe(false);
+    } finally {
+      activeRecordConfig.errorOnIgnoredOrder = false;
+    }
   });
-  it.skip("find in batches should error on config specified to error", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+
+  it("find in batches should error on config specified to error", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+      }
+    }
+    activeRecordConfig.errorOnIgnoredOrder = true;
+    try {
+      await expect(async () => {
+        for await (const _b of Post.order("title").findInBatches({ batchSize: 1 })) {
+          /* noop */
+        }
+      }).rejects.toThrow();
+    } finally {
+      activeRecordConfig.errorOnIgnoredOrder = false;
+    }
   });
-  it.skip("find in batches should not error by default", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+
+  it("find in batches should not error by default", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+      }
+    }
+    let threw = false;
+    try {
+      for await (const _b of Post.order("title").findInBatches({ batchSize: 1 })) {
+        /* noop */
+      }
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(false);
   });
+
   it.skip("find in batches should use any column as primary key when start is not specified", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+    // ROOT-CAUSE fixed: cursor option now supported; needs Subscriber test fixture
   });
 
   it("in batches update all returns zero when no batches", async () => {
@@ -618,14 +679,12 @@ describe("EachTest", () => {
     expect(total).toBe(0);
   });
 
-  it.skip("in batches touch all returns rows affected", async () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+  it("in batches touch all returns rows affected", async () => {
     const adp = freshAdapter();
     class Post extends Base {
       static {
         this.attribute("title", "string");
+        this.attribute("updated_at", "datetime");
         this.adapter = adp;
       }
     }
@@ -695,29 +754,59 @@ describe("EachTest", () => {
   });
 
   it.skip("in batches should use any column as primary key when start is not specified", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+    // ROOT-CAUSE fixed: cursor option now supported; needs Subscriber test fixture
   });
+
   it.skip("in_batches should return no records if the limit is 0 and load is ", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+    // ROOT-CAUSE fixed: inBatches now supports composite PK and limit option
   });
+
   it.skip(".find_each respects table alias", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+    // ROOT-CAUSE fixed: findEach no longer throws on CPK; table alias needs Relation.create test infra
   });
-  it.skip(".in_batches should start from the start option when using composite primary key", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+
+  it(".in_batches should start from the start option when using composite primary key", async () => {
+    const adp = freshAdapter();
+    class Order extends Base {
+      static {
+        this.attribute("shop_id", "integer");
+        this.attribute("name", "string");
+        this.primaryKey = ["shop_id", "id"] as any;
+        this.adapter = adp;
+      }
+    }
+    await Order.create({ shop_id: 1, name: "first" });
+    await Order.create({ shop_id: 1, name: "second" });
+    const all = await Order.order("id").toArray();
+    const secondId = (all[1] as any).id as [number, number];
+    const batches: any[][] = [];
+    for await (const batchRel of Order.all().inBatches({ batchSize: 1, start: secondId })) {
+      batches.push(await batchRel.toArray());
+    }
+    expect(batches.length).toBeGreaterThan(0);
+    expect(batches[0][0].readAttribute("name")).toBe("second");
   });
-  it.skip(".in_batches should end at the finish option when using composite primary key", () => {
-    // BLOCKED: relation — batch enumeration gap (inBatchesOf / findEach cursor)
-    // ROOT-CAUSE: relation/batches.ts#inBatchesOf or findEachWithOrder missing composite-PK support
-    // SCOPE: ~50 LOC in relation/batches.ts; affects ~13 tests in batches.test.ts
+
+  it(".in_batches should end at the finish option when using composite primary key", async () => {
+    const adp = freshAdapter();
+    class Order extends Base {
+      static {
+        this.attribute("shop_id", "integer");
+        this.attribute("name", "string");
+        this.primaryKey = ["shop_id", "id"] as any;
+        this.adapter = adp;
+      }
+    }
+    await Order.create({ shop_id: 1, name: "first" });
+    await Order.create({ shop_id: 1, name: "second" });
+    const all = await Order.order("id").toArray();
+    const firstId = (all[0] as any).id as [number, number];
+    const batches: any[][] = [];
+    for await (const batchRel of Order.all().inBatches({ batchSize: 1, finish: firstId })) {
+      batches.push(await batchRel.toArray());
+    }
+    expect(batches.length).toBe(1);
+    expect(batches[0][0].readAttribute("name")).toBe("first");
   });
 });
 

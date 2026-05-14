@@ -53,6 +53,7 @@ import {
   ForeignKeyDefinition,
   IndexDefinition,
 } from "./abstract/schema-definitions.js";
+import type { ColumnType, ColumnOptions } from "./abstract/schema-definitions.js";
 import { TableDefinition as MysqlTableDefinition } from "./mysql/schema-definitions.js";
 import { TypeMap } from "../type/type-map.js";
 import {
@@ -575,10 +576,8 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     // options.null, but preserve type metadata for any downstream visitor.
     const colDef = new ColumnDefinition(
       column.name,
-      (column.type ?? "string") as never,
-      {
-        null: column.null,
-      } as never,
+      (column.type ?? "string") as ColumnType,
+      { null: column.null } as ColumnOptions,
     );
     colDef.sqlType = column.sqlType ?? undefined;
     return new ChangeColumnDefaultDefinition(colDef, newDefault);
@@ -613,7 +612,11 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   async changeColumnComment(
     tableName: string,
     columnName: string,
-    commentOrChanges: string | null | { from?: unknown; to?: unknown },
+    // Mirrors Rails: comment is either a plain value (string|nil) or the
+    // { from:, to: } change-descriptor hash. Both keys are required for
+    // the unwrap branch — `{ to: "x" }` alone falls through as-is in
+    // Rails too, so the type explicitly requires both.
+    commentOrChanges: string | null | { from: unknown; to: unknown },
   ): Promise<void> {
     const comment = this.schemaStatements().extractNewCommentValue(commentOrChanges);
     await this.changeColumn(tableName, columnName, "", { comment });

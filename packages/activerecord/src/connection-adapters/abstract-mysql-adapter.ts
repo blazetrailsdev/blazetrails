@@ -563,20 +563,19 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     defaultOrChanges: unknown,
   ): Promise<ChangeColumnDefaultDefinition> {
     const column = await this.columnFor(tableName, columnName);
-    const newDefault = (
-      this as unknown as { extractNewDefaultValue(v: unknown): unknown }
-    ).extractNewDefaultValue(defaultOrChanges);
-    // ChangeColumnDefaultDefinition takes a ColumnDefinition; lift the
-    // queried Column up via the same TableDefinition channel
-    // buildChangeColumnDefinition uses for column-rebuild round-trips.
-    const td = new MysqlTableDefinition(tableName, { id: false });
-    const colDef = td.newColumnDefinition(
+    const newDefault = this.schemaStatements().extractNewDefaultValue(defaultOrChanges);
+    // Match the PG adapter's shape: build ColumnDefinition with the
+    // semantic type and set sqlType separately so dumper/visitor paths
+    // see both. visitChangeColumnDefaultDefinition reads name +
+    // options.null, but preserve type metadata for any downstream visitor.
+    const colDef = new ColumnDefinition(
       column.name,
-      (column.sqlType ?? "") as never,
+      (column.type ?? "string") as never,
       {
         null: column.null,
       } as never,
     );
+    colDef.sqlType = column.sqlType ?? undefined;
     return new ChangeColumnDefaultDefinition(colDef, newDefault);
   }
 
@@ -591,11 +590,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     null_: boolean,
     default_?: unknown,
   ): Promise<void> {
-    (
-      this as unknown as {
-        validateChangeColumnNullArgumentBang(v: unknown): void;
-      }
-    ).validateChangeColumnNullArgumentBang(null_);
+    this.schemaStatements().validateChangeColumnNullArgumentBang(null_);
     if (!null_ && default_ != null) {
       const colId = this.quoteIdentifier(columnName);
       await this._execMutation(
@@ -615,11 +610,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     columnName: string,
     commentOrChanges: string | Record<string, string | null>,
   ): Promise<void> {
-    const comment = (
-      this as unknown as {
-        extractNewCommentValue(v: unknown): unknown;
-      }
-    ).extractNewCommentValue(commentOrChanges);
+    const comment = this.schemaStatements().extractNewCommentValue(commentOrChanges);
     await this.changeColumn(tableName, columnName, "", { comment });
   }
 

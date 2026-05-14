@@ -218,14 +218,16 @@ function _resolveCallbackObject(
     (method as (r: CallbackRecord) => unknown).call(obj, record)) as AnyCallback;
 }
 
+const VALID_ON_VALUES = new Set(["create", "update", "destroy"]);
+
 /**
  * Register a callback directly in activesupport's Symbol-keyed chain storage
  * on `proto`. Called by the generated `beforeX`/`afterX`/`aroundX` methods
  * from `defineModelCallbacks` and by Model's callback registration helpers.
  *
- * Resolves `CallbackObject` instances using our own resolver (which supports
- * both camelCase and snake_case method names) before inserting into the chain,
- * while still storing the original object as `originalObject` so
+ * Resolves `CallbackObject` instances using our own resolver (which looks up
+ * the camelCase method name, e.g. `beforeSave`) before inserting into the
+ * chain, while still storing the original object as `originalObject` so
  * `skip`-by-reference works.
  *
  * After callbacks are stored with `prepend: true` so activesupport's LIFO
@@ -234,9 +236,6 @@ function _resolveCallbackObject(
  *
  * @internal
  */
-
-const VALID_ON_VALUES = new Set(["create", "update", "destroy"]);
-
 export function _registerCallbackOnProto(
   proto: object,
   timing: CallbackTiming,

@@ -6,6 +6,7 @@ import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
 import { isValidUuid, normalizeUuid } from "../../connection-adapters/postgresql/oid/uuid.js";
 import { SchemaDumper } from "../../schema-dumper.js";
 import { SchemaStatements } from "../../connection-adapters/abstract/schema-statements.js";
+import { RecordNotFound } from "../../errors.js";
 
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
@@ -917,7 +918,7 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it("find with uuid", async () => {
       await UuidPost.createBang({});
-      await expect(UuidPost.find(123456)).rejects.toThrow(/Couldn't find/);
+      await expect(UuidPost.find(123456)).rejects.toBeInstanceOf(RecordNotFound);
     });
 
     it("find by with uuid", async () => {

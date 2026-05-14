@@ -153,10 +153,15 @@ echo "==> Linking upstream Ruby sources from main worktree"
 # vendor/<name>/ entries are populated by `pnpm vendor:fetch` on the main
 # worktree. Each new worktree symlinks them to avoid re-cloning ~53 MiB
 # per worktree. Source names come from vendor/sources.ts via --print-paths.
+#
+# Capture into a variable first — set -e doesn't propagate through process
+# substitution, so a failing `--print-paths` (e.g. sources.ts syntax error)
+# would otherwise produce empty output and skip vendoring silently.
+VENDOR_PATHS="$(cd "$MAIN_REPO" && pnpm -s tsx vendor/fetch.ts --print-paths)"
 while IFS= read -r src; do
   rel="vendor/$(basename "$src")"
   link_source "$rel"
-done < <(cd "$MAIN_REPO" && pnpm -s tsx vendor/fetch.ts --print-paths)
+done <<< "$VENDOR_PATHS"
 
 echo "==> Linking .claude config from main worktree (skills + per-machine permissions)"
 link_source ".claude/skills"

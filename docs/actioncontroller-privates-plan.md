@@ -19,7 +19,7 @@ cd .claude/worktrees/<slug>
 pnpm install
 
 # 2. Read Rails source first (the entire file, not just the missing methods)
-less scripts/api-compare/.rails-source/actionpack/lib/<rails-file>.rb
+less vendor/rails/actionpack/lib/<rails-file>.rb
 
 # 3. Implement in the TS file the api:compare row points to.
 #    Do NOT relocate methods to a helper file or the row stops counting.
@@ -31,7 +31,7 @@ $EDITOR packages/actionpack/src/actioncontroller/<ts-file>.test.ts
 pnpm test packages/actionpack/src/actioncontroller/<ts-file>.test.ts
 
 # 5. Refresh and confirm api:compare row hits 100%
-bash scripts/api-compare/fetch-rails.sh
+pnpm vendor:fetch --source rails
 ruby scripts/api-compare/extract-ruby-api.rb
 pnpm tsx scripts/api-compare/extract-ts-api.ts
 pnpm tsx scripts/api-compare/compare.ts --package actioncontroller --privates | grep <rails-file>

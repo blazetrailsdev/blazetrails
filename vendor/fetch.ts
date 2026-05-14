@@ -75,6 +75,7 @@ function fetchSource(source: UpstreamSource, opts: { refresh: boolean; migrate: 
         console.log(`[${source.name}] migrating ${legacyRel} → vendor/${source.name}/`);
         mkdirSync(VENDOR_DIR, { recursive: true });
         renameSync(legacyAbs, dest);
+        disableSparseCheckout(dest);
       } else {
         console.log(`[${source.name}] --migrate: no legacy clone at ${legacyRel}; will clone`);
       }
@@ -99,6 +100,7 @@ function fetchSource(source: UpstreamSource, opts: { refresh: boolean; migrate: 
       writeLockfile(lock);
     }
     console.log(`[${source.name}] up to date at ${headSha.slice(0, 12)}`);
+    verifyPackages(source);
     return;
   }
 
@@ -122,6 +124,50 @@ function fetchSource(source: UpstreamSource, opts: { refresh: boolean; migrate: 
   lock.sources[source.name] = { ref: source.origin.ref, sha };
   writeLockfile(lock);
   console.log(`[${source.name}] cloned at ${sha.slice(0, 12)}`);
+  verifyPackages(source);
+}
+
+/**
+ * Assert every declared lib/test path exists under the source's vendored root.
+ * Catches incomplete/sparse/corrupt clones before downstream extractors silently
+ * skip missing directories and produce undercounted output. Runs after every
+ * fetch, including when an existing clone is reused.
+ */
+function verifyPackages(source: UpstreamSource): void {
+  const root = destFor(source);
+  const missing: string[] = [];
+  for (const pkg of source.packages) {
+    if (!existsSync(join(root, pkg.libPath))) missing.push(`${pkg.name}: ${pkg.libPath}`);
+    if (pkg.testPath && !existsSync(join(root, pkg.testPath))) {
+      missing.push(`${pkg.name}: ${pkg.testPath}`);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `[${source.name}] vendored tree is missing declared paths:\n  ` +
+        missing.join("\n  ") +
+        `\nRe-run with --refresh to discard the clone and re-fetch.`,
+    );
+  }
+}
+
+/**
+ * Defensive: pre-PR-#1483 mirrors of rails were created with sparse-checkout
+ * enabled. The old fetch-rails.sh auto-disabled it on first run; --migrate
+ * inherits that contract so a sparse legacy clone doesn't get moved into
+ * vendor/ with paths silently absent.
+ */
+function disableSparseCheckout(dest: string): void {
+  try {
+    const isSparse = git(["config", "--bool", "core.sparseCheckout"], dest);
+    if (isSparse === "true") {
+      console.log(`  disabling sparse-checkout in ${dest}`);
+      execFileSync("git", ["-C", dest, "sparse-checkout", "disable"], { stdio: "inherit" });
+    }
+  } catch {
+    // `git config --bool core.sparseCheckout` exits non-zero when the key is
+    // unset (the modern default). That's the happy path — nothing to do.
+  }
 }
 
 function printPaths(filter: string | undefined): void {

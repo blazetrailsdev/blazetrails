@@ -395,8 +395,11 @@ jobs:
           # Invalidates when sources.ts (declared refs) or sources.lock.json
           # (resolved SHAs) change. fetch.ts checksum keeps the cache fresh
           # if the fetcher logic itself changes.
+          # Exact-match only — no restore-keys. A partial restore of an older
+          # cache would produce a vendor/<source>/.git/HEAD that doesn't match
+          # the current sources.lock.json, and vendor/fetch.ts would abort
+          # rather than silently re-fetch.
           key: vendor-sources-${{ hashFiles('vendor/sources.ts', 'vendor/sources.lock.json', 'vendor/fetch.ts') }}
-          restore-keys: vendor-sources-
       - name: Fetch upstream Ruby sources
         run: pnpm vendor:fetch
       - name: Extract Ruby API

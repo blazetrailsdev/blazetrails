@@ -26,7 +26,8 @@ export class Default {
   /**
    * Build the default scope for a model class, applying all accumulated
    * default_scope declarations in order. Skips scopes that don't match
-   * the all_queries flag.
+   * the all_queries flag. Returns undefined when inside an evaluate_default_scope
+   * call (recursion guard), matching Rails' nil return from build_default_scope.
    *
    * Mirrors: ActiveRecord::Scoping::Default::ClassMethods#build_default_scope
    * @internal
@@ -36,16 +37,12 @@ export class Default {
     buildRelation: () => any,
     allQueries?: boolean | null,
   ): any {
-    if (modelClass.isAbstractClass) return buildRelation();
+    if (modelClass.isAbstractClass) return undefined;
 
     const scopes: DefaultScope[] = modelClass.defaultScopes ?? [];
+    if (scopes.length === 0) return undefined;
 
-    if (scopes.length === 0) return buildRelation();
-
-    if (isIgnoreDefaultScope(modelClass)) return buildRelation();
-
-    try {
-      setIgnoreDefaultScope(modelClass, true);
+    return evaluateDefaultScope(modelClass, () => {
       let rel = buildRelation();
       for (const scopeObj of scopes) {
         if (isExecuteScope(allQueries, scopeObj)) {
@@ -54,9 +51,7 @@ export class Default {
         }
       }
       return rel;
-    } finally {
-      setIgnoreDefaultScope(modelClass, false);
-    }
+    });
   }
 
   /** @internal */
@@ -94,10 +89,6 @@ export function defaultScope<T extends typeof Base>(
   const scopeObj = new DefaultScope(fn as (rel: any) => any, allQueries);
   const existing: DefaultScope[] = (this as any).defaultScopes ?? [];
   (this as any).defaultScopes = [...existing, scopeObj];
-
-  // Keep _defaultScope in sync so named.ts / persistence.ts can use it
-  // as a quick "has any default scope" flag.
-  (this as any)._defaultScope = true;
 }
 
 /**
@@ -166,7 +157,8 @@ function setIgnoreDefaultScope(modelClass: any, value: boolean): void {
 /**
  * Mirrors: Scoping::Default#evaluate_default_scope. Temporarily sets
  * ignore_default_scope to true while yielding so nested calls don't re-apply
- * the default scope recursively.
+ * the default scope recursively. Returns undefined when already ignoring
+ * (matches Rails' nil return from evaluate_default_scope).
  * @internal
  */
 function evaluateDefaultScope(modelClass: any, fn: () => unknown): unknown {

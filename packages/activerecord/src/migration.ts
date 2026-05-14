@@ -64,9 +64,7 @@ function _extractNewCommentValue(
   return v as string | null;
 }
 
-// Registry for AR config injected by Base to avoid circular imports.
-// Mirrors Rails' Base.table_name_prefix / table_name_suffix accessors that
-// Migration.table_name_options reads from at runtime.
+// Registry for AR config injected by Base — breaks the migration ↔ base import cycle.
 /** @internal */
 export interface MigrationArConfig {
   tableNamePrefix: string;
@@ -140,18 +138,14 @@ export class IllegalMigrationNameError extends MigrationError {
 
 export class InvalidMigrationTimestampError extends MigrationError {
   constructor(version?: string | number, name?: string) {
-    const tomorrow = Temporal.Now.plainDateTimeISO("UTC").add({ days: 1 });
-    const pad = (n: number, w = 2) => String(n).padStart(w, "0");
-    const limit = `${tomorrow.year}${pad(tomorrow.month)}${pad(tomorrow.day)}${pad(tomorrow.hour)}${pad(tomorrow.minute)}${pad(tomorrow.second)}`;
-    if (version != null && name != null) {
-      super(
-        `Invalid timestamp ${version} for migration file: ${name}.\nTimestamp must be in form YYYYMMDDHHMMSS, and less than ${limit}.`,
-      );
-    } else {
-      super(
-        `Invalid timestamp for migration.\nTimestamp must be in form YYYYMMDDHHMMSS, and less than ${limit}.`,
-      );
-    }
+    const t = Temporal.Now.plainDateTimeISO("UTC").add({ days: 1 });
+    const p = (n: number) => String(n).padStart(2, "0");
+    const limit = `${t.year}${p(t.month)}${p(t.day)}${p(t.hour)}${p(t.minute)}${p(t.second)}`;
+    const prefix =
+      version != null && name != null
+        ? `Invalid timestamp ${version} for migration file: ${name}.`
+        : "Invalid timestamp for migration.";
+    super(`${prefix}\nTimestamp must be in form YYYYMMDDHHMMSS, and less than ${limit}.`);
     this.name = "InvalidMigrationTimestampError";
   }
 }
@@ -591,20 +585,20 @@ export abstract class Migration {
       | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
-    const tname = this._pt(name);
     if (this._recording) {
-      this._recorder.record("createTable", [tname, optionsOrFn, fn]);
+      this._recorder.record("createTable", [name, optionsOrFn, fn]);
       return;
     }
+    const tname = this._pt(name);
     await this.schema.createTable(tname, optionsOrFn, fn);
   }
 
   async dropTable(name: string, options?: { ifExists?: boolean }): Promise<void> {
-    const tname = this._pt(name);
     if (this._recording) {
-      this._recorder.record("dropTable", [tname]);
+      this._recorder.record("dropTable", [name]);
       return;
     }
+    const tname = this._pt(name);
     if (options) {
       await this.schema.dropTable(tname, options);
     } else {
@@ -618,11 +612,11 @@ export abstract class Migration {
     type: ColumnType,
     options: ColumnOptions & { ifNotExists?: boolean } = {},
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("addColumn", [tableName, columnName, type, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.addColumn(tableName, columnName, type, options);
   }
 
@@ -632,22 +626,22 @@ export abstract class Migration {
     typeOrOptions?: ColumnType | { ifExists?: boolean },
     options?: { ifExists?: boolean },
   ): Promise<void> {
-    tableName = this._pt(tableName);
     const type = typeof typeOrOptions === "string" ? typeOrOptions : undefined;
     const opts = typeof typeOrOptions === "object" ? typeOrOptions : (options ?? {});
     if (this._recording) {
       this._recorder.record("removeColumn", [tableName, columnName, type, opts]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.removeColumn(tableName, columnName, type, opts);
   }
 
   async renameColumn(tableName: string, oldName: string, newName: string): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("renameColumn", [tableName, oldName, newName]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.renameColumn(tableName, oldName, newName);
   }
 
@@ -662,11 +656,11 @@ export abstract class Migration {
       ifNotExists?: boolean;
     } = {},
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("addIndex", [tableName, columns, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.addIndex(tableName, columns, options);
   }
 
@@ -674,11 +668,11 @@ export abstract class Migration {
     tableName: string,
     options: { column?: string | string[]; name?: string } = {},
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("removeIndex", [tableName, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.removeIndex(tableName, options);
   }
 
@@ -688,21 +682,21 @@ export abstract class Migration {
     type: ColumnType,
     options: ColumnOptions = {},
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("changeColumn", [tableName, columnName, type, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.changeColumn(tableName, columnName, type, options);
   }
 
   async renameTable(oldName: string, newName: string): Promise<void> {
-    oldName = this._pt(oldName);
-    newName = this._pt(newName);
     if (this._recording) {
       this._recorder.record("renameTable", [oldName, newName]);
       return;
     }
+    oldName = this._pt(oldName);
+    newName = this._pt(newName);
     await this.schema.renameTable(oldName, newName);
   }
 
@@ -719,11 +713,11 @@ export abstract class Migration {
     columnName: string,
     options: { from?: unknown; to: unknown } | unknown,
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("changeColumnDefault", [tableName, columnName, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.changeColumnDefault(tableName, columnName, options);
   }
 
@@ -733,11 +727,11 @@ export abstract class Migration {
     allowNull: boolean,
     defaultValue?: unknown,
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("changeColumnNull", [tableName, columnName, allowNull, defaultValue]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.changeColumnNull(tableName, columnName, allowNull, defaultValue);
   }
 
@@ -751,11 +745,11 @@ export abstract class Migration {
       index?: boolean;
     } = {},
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("addReference", [tableName, refName, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.addReference(tableName, refName, options);
   }
 
@@ -764,11 +758,11 @@ export abstract class Migration {
     refName: string,
     options: { polymorphic?: boolean } = {},
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("removeReference", [tableName, refName, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.removeReference(tableName, refName, options);
   }
 
@@ -777,11 +771,11 @@ export abstract class Migration {
     toTable: string,
     options: AddForeignKeyOptions = {},
   ): Promise<void> {
-    fromTable = this._pt(fromTable);
     if (this._recording) {
       this._recorder.record("addForeignKey", [fromTable, toTable, options]);
       return;
     }
+    fromTable = this._pt(fromTable);
     await this.schema.addForeignKey(fromTable, toTable, options);
   }
 
@@ -791,12 +785,12 @@ export abstract class Migration {
       | string
       | { column?: string; name?: string; toTable?: string; ifExists?: boolean },
   ): Promise<void> {
-    fromTable = this._pt(fromTable);
-    if (typeof toTableOrOptions === "string") toTableOrOptions = this._pt(toTableOrOptions);
     if (this._recording) {
       this._recorder.record("removeForeignKey", [fromTable, toTableOrOptions]);
       return;
     }
+    fromTable = this._pt(fromTable);
+    if (typeof toTableOrOptions === "string") toTableOrOptions = this._pt(toTableOrOptions);
     await this.schema.removeForeignKey(fromTable, toTableOrOptions);
   }
 
@@ -805,11 +799,11 @@ export abstract class Migration {
     expression: string,
     options: { name?: string; validate?: boolean } = {},
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("addCheckConstraint", [tableName, expression, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.addCheckConstraint(tableName, expression, options);
   }
 
@@ -817,18 +811,18 @@ export abstract class Migration {
     tableName: string,
     expressionOrOptions?: string | { name?: string; ifExists?: boolean },
   ): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("removeCheckConstraint", [tableName, expressionOrOptions]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.removeCheckConstraint(tableName, expressionOrOptions);
   }
   async validateCheckConstraint(
     tableName: string,
     nameOrOptions: string | { name: string },
   ): Promise<void> {
-    await (this.connection as any).validateCheckConstraint(tableName, nameOrOptions);
+    await (this.connection as any).validateCheckConstraint(this._pt(tableName), nameOrOptions);
   }
 
   async validateForeignKey(
@@ -838,7 +832,7 @@ export abstract class Migration {
   ): Promise<void> {
     const toTable = typeof toTableOrOptions === "string" ? toTableOrOptions : undefined;
     const opts = typeof toTableOrOptions === "object" ? toTableOrOptions : (options ?? undefined);
-    await (this.connection as any).validateForeignKey(fromTable, toTable, opts);
+    await (this.connection as any).validateForeignKey(this._pt(fromTable), toTable, opts);
   }
 
   async changeColumnComment(
@@ -850,6 +844,7 @@ export abstract class Migration {
       this._recorder.record("changeColumnComment", [tableName, columnName, commentOrChanges]);
       return;
     }
+    tableName = this._pt(tableName);
     const resolved = _extractNewCommentValue(commentOrChanges);
     await (this.connection as any).changeColumnComment(tableName, columnName, resolved);
   }
@@ -862,6 +857,7 @@ export abstract class Migration {
       this._recorder.record("changeTableComment", [tableName, commentOrChanges]);
       return;
     }
+    tableName = this._pt(tableName);
     const resolved = _extractNewCommentValue(commentOrChanges);
     await (this.connection as any).changeTableComment(tableName, resolved);
   }
@@ -933,6 +929,7 @@ export abstract class Migration {
       this._recorder.record("addUniqueConstraint", [tableName, columnName, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await (this.connection as any).addUniqueConstraint(tableName, columnName, options);
   }
 
@@ -957,24 +954,25 @@ export abstract class Migration {
       this._recorder.record("removeUniqueConstraint", [tableName, columnName, opts]);
       return;
     }
+    tableName = this._pt(tableName);
     await (this.connection as any).removeUniqueConstraint(tableName, columnName, opts);
   }
 
   async addTimestamps(tableName: string, options: ColumnOptions = {}): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("addTimestamps", [tableName, options]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.addTimestamps(tableName, options);
   }
 
   async removeTimestamps(tableName: string): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("removeTimestamps", [tableName]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.removeTimestamps(tableName);
   }
 
@@ -984,11 +982,11 @@ export abstract class Migration {
     options?: JoinTableOptions | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
-    table1 = this._pt(table1);
     if (this._recording) {
       this._recorder.record("createJoinTable", [table1, table2, options, fn]);
       return;
     }
+    table1 = this._pt(table1);
     await this.schema.createJoinTable(table1, table2, options, fn);
   }
 
@@ -997,11 +995,11 @@ export abstract class Migration {
     table2: string,
     options?: { tableName?: string },
   ): Promise<void> {
-    table1 = this._pt(table1);
     if (this._recording) {
       this._recorder.record("dropJoinTable", [table1, table2, options]);
       return;
     }
+    table1 = this._pt(table1);
     await this.schema.dropJoinTable(table1, table2, options);
   }
 
@@ -1013,11 +1011,11 @@ export abstract class Migration {
   }
 
   async renameIndex(tableName: string, oldName: string, newName: string): Promise<void> {
-    tableName = this._pt(tableName);
     if (this._recording) {
       this._recorder.record("renameIndex", [tableName, oldName, newName]);
       return;
     }
+    tableName = this._pt(tableName);
     await this.schema.renameIndex(tableName, oldName, newName);
   }
 
@@ -1041,21 +1039,21 @@ export abstract class Migration {
   }
 
   async columns(tableName: string): Promise<import("./connection-adapters/column.js").Column[]> {
-    return this.schema.columns(tableName);
+    return this.schema.columns(this._pt(tableName));
   }
 
   async indexes(
     tableName: string,
   ): Promise<Array<{ name: string; columns: string[]; unique: boolean }>> {
-    return this.schema.indexes(tableName);
+    return this.schema.indexes(this._pt(tableName));
   }
 
   async primaryKey(tableName: string): Promise<string | null> {
-    return this.schema.primaryKey(tableName);
+    return this.schema.primaryKey(this._pt(tableName));
   }
 
   async foreignKeys(tableName: string): Promise<ForeignKeyDefinition[]> {
-    return this.schema.foreignKeys(tableName);
+    return this.schema.foreignKeys(this._pt(tableName));
   }
 
   async tables(): Promise<string[]> {
@@ -1175,7 +1173,7 @@ export abstract class Migration {
     columnName: string | string[],
     options?: { unique?: boolean; name?: string },
   ): Promise<boolean> {
-    return this.schema.indexExists(tableName, columnName, options);
+    return this.schema.indexExists(this._pt(tableName), columnName, options);
   }
 
   /**
@@ -1499,6 +1497,22 @@ export class MigrationContext {
     return this.adapter.adapterName;
   }
 
+  /** @internal Query catalog for column names — used after CTAS where columns derive from the SELECT. */
+  private async _introspectColumns(name: string): Promise<string[]> {
+    const a = this._adapterName;
+    const sql =
+      a === "sqlite"
+        ? `PRAGMA table_info(${this.adapter.quoteTableName(name)})`
+        : a === "postgres"
+          ? `SELECT column_name FROM information_schema.columns WHERE table_name = '${name}'`
+          : `SHOW COLUMNS FROM ${this.adapter.quoteTableName(name)}`;
+    const rows = await this.adapter.execute(sql);
+    return rows.map((r) => {
+      const x = r as Record<string, unknown>;
+      return (x.name ?? x.column_name ?? x.Field) as string;
+    });
+  }
+
   async createTable(
     name: string,
     options?: {
@@ -1557,8 +1571,6 @@ export class MigrationContext {
     for (const col of td.columns) {
       cols.add(col.name);
     }
-    this._columns.set(name, cols);
-
     // Store column metadata
     const meta = new Map<
       string,
@@ -1588,6 +1600,14 @@ export class MigrationContext {
         scale: col.options.scale,
       });
     }
+    // CTAS columns come from the SELECT list — introspect from the DB.
+    if (options?.as != null) {
+      for (const c of await this._introspectColumns(name)) {
+        cols.add(c);
+        if (!meta.has(c)) meta.set(c, { type: "string" });
+      }
+    }
+    this._columns.set(name, cols);
     this._columnMeta.set(name, meta);
 
     // Create indexes from table definition

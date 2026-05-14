@@ -995,7 +995,8 @@ export class TableDefinition {
           parts.push(`CHAR(${col.options.limit ?? 1})`);
           break;
         default:
-          parts.push(col.type.toUpperCase());
+          // Pass arbitrary type strings through verbatim (case matters for PG enums).
+          parts.push(col.type);
           break;
       }
 

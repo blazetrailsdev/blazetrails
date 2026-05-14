@@ -1603,7 +1603,6 @@ describe("MigrationTest", () => {
 
       const m = new WeNeedReminders();
       await m.run(adapter, "up");
-      // Direct INSERT proves the actual table name (with prefix/suffix applied) was created.
       await adapter.executeMutation(
         `INSERT INTO "prefix_reminders_suffix" ("content") VALUES ('hello')`,
       );
@@ -1611,8 +1610,19 @@ describe("MigrationTest", () => {
       expect(rows).toHaveLength(1);
 
       await m.run(adapter, "down");
-      // m.tableExists("reminders") flows through this._pt() so it queries the prefixed name.
       expect(await m.tableExists("reminders")).toBe(false);
+
+      // Regression: change()-based reversal must not double-apply prefix/suffix.
+      class ChangeBased extends Migration {
+        async change() {
+          await this.createTable("widgets", (t) => t.string("name"));
+        }
+      }
+      const cb = new ChangeBased();
+      await cb.run(adapter, "up");
+      expect(await cb.tableExists("widgets")).toBe(true);
+      await cb.run(adapter, "down");
+      expect(await cb.tableExists("widgets")).toBe(false);
     } finally {
       Base.tableNamePrefix = savedPrefix;
       Base.tableNameSuffix = savedSuffix;
@@ -1632,6 +1642,7 @@ describe("MigrationTest", () => {
     });
     const rows = await adapter.execute(`SELECT * FROM "table_from_query_testings"`);
     expect(rows).toHaveLength(1);
+    expect(ctx.columnExists("table_from_query_testings", "person_id")).toBe(true);
 
     await ctx.dropTable("table_from_query_testings");
     await ctx.dropTable("people_src");

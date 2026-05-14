@@ -187,7 +187,9 @@ while IFS= read -r src; do
     # When local main lags origin/main on a ref bump, the clone exists but
     # at the old SHA; symlinking it would just defer the failure to fetch.ts.
     main_sha="$(git -C "$main_clone" rev-parse HEAD)"
-    want_sha="$(node -e "console.log(JSON.parse(require('fs').readFileSync('$LOCK_JSON','utf8')).sources['$name']?.sha ?? '')")"
+    # Read lockfile via env vars, not shell interpolation — worktree names
+    # can contain characters that would break a single-quoted JS literal.
+    want_sha="$(LOCKFILE="$LOCK_JSON" SOURCE_NAME="$name" node -e 'const fs=require("fs"); const lock=JSON.parse(fs.readFileSync(process.env.LOCKFILE,"utf8")); process.stdout.write(lock.sources[process.env.SOURCE_NAME]?.sha ?? "")')"
     if [[ -n "$want_sha" && "$main_sha" != "$want_sha" ]]; then
       echo "    $rel: main's clone HEAD ($main_sha) differs from target lockfile ($want_sha) — fetching into $TARGET"
       ( cd "$TARGET" && pnpm -s vendor:fetch --source "$name" )

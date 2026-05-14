@@ -17,6 +17,7 @@ git fetch origin main
 git worktree add .claude/worktrees/<slug> -b <branch> origin/main
 cd .claude/worktrees/<slug>
 pnpm install
+pnpm vendor:fetch --source rails   # populate vendor/rails (or use scripts/start-worktree.sh which symlinks from main)
 
 # 2. Read Rails source first (the entire file, not just the missing methods)
 less vendor/rails/actionpack/lib/<rails-file>.rb

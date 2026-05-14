@@ -354,15 +354,19 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
   });
 
   it("count on disable joins using relation with scope", async () => {
-    const { author } = await setupData();
+    const { author, comment } = await setupData();
+    // Add a low-value rating that should be excluded by the scope (value > 5)
+    await DjRating.create({ dj_comment_id: comment.id, value: 3 });
     const normalCount = await association(author, "djGoodRatings").count();
     const noJoinsCount = await association(author, "noJoinsDjGoodRatings").count();
     expect(normalCount).toBe(2);
     expect(noJoinsCount).toBe(normalCount);
   });
   it("to a on disable joins with multiple scopes", async () => {
-    const { author, rating1, rating2 } = await setupData();
+    const { author, comment, rating1, rating2 } = await setupData();
     // scope includes order(:id) — assert ordered equality, not just set equality
+    // Add a low-value rating to prove scope filter is applied (value > 5 excludes it)
+    await DjRating.create({ dj_comment_id: comment.id, value: 2 });
     const normalRatings = await association(author, "djGoodRatings").toArray();
     const noJoinsRatings = await association(author, "noJoinsDjGoodRatings").toArray();
     const expectedIds = [rating1.id, rating2.id].sort((a: any, b: any) => a - b);
@@ -370,7 +374,9 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
     expect(noJoinsRatings.map((r: any) => r.id)).toEqual(expectedIds);
   });
   it("preloading has many through disable joins", async () => {
-    const { author, rating1, rating2 } = await setupData();
+    const { author, comment, rating1, rating2 } = await setupData();
+    // Add a low-value rating to prove preload also applies the scope (value > 5 excludes it)
+    await DjRating.create({ dj_comment_id: comment.id, value: 1 });
     const expectedIds = [rating1.id, rating2.id].sort((a: any, b: any) => a - b);
 
     const authors = await DjAuthor.all().preload("djGoodRatings").toArray();

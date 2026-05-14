@@ -1210,7 +1210,6 @@ export function extractClass(
 
   for (const member of node.members) {
     const memberName = getMemberName(member);
-
     const visibility = memberVisibility(member);
     const internal = visibility !== "public";
     const isStatic = hasModifier(member, ts.SyntaxKind.StaticKeyword);

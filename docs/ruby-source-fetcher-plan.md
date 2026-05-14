@@ -27,10 +27,10 @@ The fix is one source list, one fetcher, one layout. This doc designs it; implem
 ### 1.2 `scripts/test-compare/fetch-rails-tests.sh` (70 LOC)
 
 - Two origins handled in one script:
-  - **Rails**: verifies `../api-compare/.rails-source/` exists; does NOT clone (delegates to `fetch-rails.sh`). Asserts 8 required test directories are present and reports file counts.
+  - **Rails**: verifies `../api-compare/.rails-source/` exists; exits with an error pointing at `fetch-rails.sh` if not — it does _not_ invoke the rails fetcher itself. Asserts 8 required test directories are present and reports file counts.
   - **Rack**: clones `https://github.com/rack/rack.git @ v3.1.14` into `../api-compare/.rack-source/`. The path lives under `api-compare/` so `start-worktree.sh:154-155` can symlink both Ruby sources from one parent dir; nothing in `api-compare/` actually reads `.rack-source/`.
 - Idempotency: per-origin skip.
-- Consumers: `extract-ruby-tests.rb`.
+- Consumers: `extract-ruby-tests.rb` (rails + rack tests), `start-worktree.sh` (symlinks `.rack-source` into new worktrees).
 - Smell: the verification half overlaps `fetch-rails.sh`; the rack half is a hidden second fetcher.
 
 ### 1.3 `scripts/globalid-source/fetch-globalid.sh` (17 LOC)
@@ -171,10 +171,14 @@ export const SOURCES: UpstreamSource[] = [
 `vendor/fetch.ts` (tsx-runnable, single entrypoint):
 
 ```ts
-// CLI: tsx vendor/fetch.ts [--source <name>] [--refresh] [--print-paths [<name>]]
+// CLI: tsx vendor/fetch.ts [--source <name>] [--refresh] [--migrate] [--print-paths [<name>]]
 // Default: fetches all sources, idempotent.
 // --source <name>:       limit to one entry by name.
 // --refresh:             rm -rf the dest, re-fetch (hard reset; see §2.3).
+// --migrate:             one-time wave-2 helper. For any source whose old pre-vendor/
+//                        path exists (e.g. scripts/api-compare/.rails-source) and whose
+//                        new vendor/<name>/ does not, fs-mv the old dir into place.
+//                        Falls back to a normal fetch when the old dir is absent.
 // --print-paths:         no fetch; print absolute path of every source, one per line.
 // --print-paths <name>:  no fetch; print just that source's absolute path on stdout.
 ```
@@ -182,7 +186,7 @@ export const SOURCES: UpstreamSource[] = [
 Internals:
 
 - `loadSources()` — imports `vendor/sources.ts`, validates with a tiny zod-free runtime check.
-- `gitFetcher({ url, ref, dest })` — `git clone --depth=1 --branch <ref> <url> <dest>` if `<dest>/.git` missing; tags refs as pinned, no `git pull`. Only fetcher type — see §2.1 for the git-only decision.
+- `gitFetcher({ url, ref, dest })` — if `<dest>/.git` is missing, `git clone --depth=1 --branch <ref> <url> <dest>` and record the resolved SHA in `vendor/sources.lock.json`. If `<dest>/.git` exists, read `git -C <dest> rev-parse HEAD` and compare against the lockfile entry: match = skip; mismatch = abort with an actionable error unless `--refresh` is passed (then `rm -rf` and re-clone). Never `git pull` — refs are pinned. Only fetcher type — see §2.1 for the git-only decision.
 - `verifyPackages(source)` — for each declared `package`, asserts `libPath` and (if set) `testPath` exist under the resolved root; counts test files for the human-readable summary.
 
 Normalized layout after fetch:
@@ -201,7 +205,7 @@ vendor/
     test/...
 ```
 
-**CI policy**: fetcher runs on every CI job that needs Ruby sources (`api:compare`, `test:compare`); cache key = hash of `vendor/sources.ts`. No periodic refresh — refs are pinned; bumping a `ref` invalidates the cache deterministically. Local dev: `pnpm vendor:fetch` (alias to `tsx vendor/fetch.ts`).
+**CI policy**: fetcher runs on every CI job that needs Ruby sources (`api:compare`, `test:compare`); cache key includes both `vendor/sources.ts` _and_ `vendor/sources.lock.json` (matches §7.2). No periodic refresh — refs are pinned and the lockfile makes the resolved SHA part of the key, so bumping either invalidates deterministically. Local dev: `pnpm vendor:fetch` (alias to `tsx vendor/fetch.ts`).
 
 ## 4. Downstream integration
 
@@ -322,7 +326,7 @@ If all three caches hit, the `ruby-extract` job becomes a pure download step (~3
 
 ## 8. Risks and open questions
 
-- **CI cache invalidation**: cache key must be `hash(vendor/sources.ts)`, not a dir hash — otherwise a pinned-ref bump won't invalidate.
+- **CI cache invalidation**: cache key must hash both `vendor/sources.ts` and `vendor/sources.lock.json` (see §3 CI policy and §7.2). Hashing the dir alone wouldn't invalidate on a pinned-ref bump; hashing `sources.ts` alone wouldn't catch a re-tag that the lockfile resolves to a new SHA.
 - **Bundler in CI**: not needed for the unified fetcher (git-only origins). The parity-rails job (§7.5 wave 7) still uses bundler against a generated Gemfile, but that's localized to the schema-parity ruby workload and uses the bundle cache already set up at `.github/workflows/ci.yml:432-437`. TS-only contributors can run `pnpm vendor:fetch` with just `git`.
 - **In-flight worktrees during migration**: per §2.3, wave 2 lands the path move in one PR with no compat symlink. Active agents must be paused at merge time and re-linked on next `start-worktree.sh` run. The master clone is relocated by a plain filesystem `mv` (the dir is gitignored, so this is _not_ a tracked rename); `fetch.ts` re-clones if the old path is absent. Avoids a ~53 MiB re-clone when the existing dir is present.
 - **Extractor cache gate**: `scripts/api-compare/extract-ruby-api.rb:25-28` caches by comparing `output_path` mtime against `<RAILS_DIR>/.git/HEAD` mtime — not the tag string. After wave 4 moves `RAILS_DIR` to `vendor/rails/`, the gate still works (the path moves but the `.git/HEAD` mtime semantics are identical). Since all origins are git (per §2.1), every vendored source has a `.git/HEAD` and the existing mechanism applies uniformly.

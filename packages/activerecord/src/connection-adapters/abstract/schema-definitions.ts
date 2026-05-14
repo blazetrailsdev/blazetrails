@@ -994,6 +994,9 @@ export class TableDefinition {
         case "char":
           parts.push(`CHAR(${col.options.limit ?? 1})`);
           break;
+        default:
+          parts.push(col.type.toUpperCase());
+          break;
       }
 
       // For types that don't handle PRIMARY KEY internally, append it if requested

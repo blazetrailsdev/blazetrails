@@ -64,6 +64,19 @@ function _extractNewCommentValue(
   return v as string | null;
 }
 
+// Registry for AR config injected by Base to avoid circular imports.
+/** @internal */
+export interface MigrationArConfig {
+  tableNamePrefix: string;
+  tableNameSuffix: string;
+  validateMigrationTimestamps: boolean;
+}
+let _arConfig: MigrationArConfig | null = null;
+/** @internal */
+export function registerMigrationArConfig(config: MigrationArConfig): void {
+  _arConfig = config;
+}
+
 // Mirrors Zlib.crc32 (ISO 3309 / ITU-T V.42 polynomial) operating on UTF-8 bytes.
 function _crc32(str: string): number {
   const bytes = new TextEncoder().encode(str);
@@ -125,8 +138,19 @@ export class IllegalMigrationNameError extends MigrationError {
 }
 
 export class InvalidMigrationTimestampError extends MigrationError {
-  constructor(version: string | number) {
-    super(`Invalid timestamp ${version} in migration file name.`);
+  constructor(version?: string | number, name?: string) {
+    const tomorrow = Temporal.Now.plainDateTimeISO("UTC").add({ days: 1 });
+    const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+    const limit = `${tomorrow.year}${pad(tomorrow.month)}${pad(tomorrow.day)}${pad(tomorrow.hour)}${pad(tomorrow.minute)}${pad(tomorrow.second)}`;
+    if (version != null && name != null) {
+      super(
+        `Invalid timestamp ${version} for migration file: ${name}.\nTimestamp must be in form YYYYMMDDHHMMSS, and less than ${limit}.`,
+      );
+    } else {
+      super(
+        `Invalid timestamp for migration.\nTimestamp must be in form YYYYMMDDHHMMSS, and less than ${limit}.`,
+      );
+    }
     this.name = "InvalidMigrationTimestampError";
   }
 }
@@ -556,26 +580,29 @@ export abstract class Migration {
           force?: boolean | "cascade";
           ifNotExists?: boolean;
           default?: unknown;
+          as?: string;
         }
       | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
+    const tname = Migration.properTableName(name, Migration.tableNameOptions());
     if (this._recording) {
-      this._recorder.record("createTable", [name, optionsOrFn, fn]);
+      this._recorder.record("createTable", [tname, optionsOrFn, fn]);
       return;
     }
-    await this.schema.createTable(name, optionsOrFn, fn);
+    await this.schema.createTable(tname, optionsOrFn, fn);
   }
 
   async dropTable(name: string, options?: { ifExists?: boolean }): Promise<void> {
+    const tname = Migration.properTableName(name, Migration.tableNameOptions());
     if (this._recording) {
-      this._recorder.record("dropTable", [name]);
+      this._recorder.record("dropTable", [tname]);
       return;
     }
     if (options) {
-      await this.schema.dropTable(name, options);
+      await this.schema.dropTable(tname, options);
     } else {
-      await this.schema.dropTable(name);
+      await this.schema.dropTable(tname);
     }
   }
 
@@ -1266,7 +1293,10 @@ export abstract class Migration {
   }
 
   static tableNameOptions(): { tableNamePrefix: string; tableNameSuffix: string } {
-    return { tableNamePrefix: "", tableNameSuffix: "" };
+    return {
+      tableNamePrefix: _arConfig?.tableNamePrefix ?? "",
+      tableNameSuffix: _arConfig?.tableNameSuffix ?? "",
+    };
   }
 
   static async copy(
@@ -1451,6 +1481,7 @@ export class MigrationContext {
       default?: unknown;
       options?: string;
       comment?: string;
+      as?: string;
     },
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
@@ -1469,10 +1500,11 @@ export class MigrationContext {
       return;
     }
     const td = new TableDefinition(name, {
-      id: options?.id,
+      id: options?.as != null ? false : options?.id,
       default: options?.default,
       options: options?.options,
       comment: options?.comment,
+      as: options?.as,
       adapterName: this._adapterName,
       adapter: this.adapter,
     });
@@ -1512,7 +1544,7 @@ export class MigrationContext {
         scale?: number | null;
       }
     >();
-    if (options?.id !== false) {
+    if (options?.id !== false && options?.as == null) {
       const idType = typeof options?.id === "string" ? options.id : "integer";
       meta.set("id", { type: idType, primaryKey: true });
     }
@@ -1907,6 +1939,8 @@ export interface MigrationProxy {
 }
 
 export class Migrator {
+  static validateMigrationTimestamps = false;
+
   private _adapter: DatabaseAdapter;
   private _migrations: MigrationProxy[];
   private _schemaMigration: SchemaMigration;
@@ -2356,12 +2390,16 @@ export class Migrator {
   private validate(migrations: MigrationProxy[]): void {
     const versions = new Set<string>();
     const names = new Set<string>();
+    const validateTs = this.isValidateTimestamp();
 
     for (const m of migrations) {
       if (!m.version || !/^\d+$/.test(m.version)) {
         throw new MigrationError(
           `Invalid migration version: ${m.version}. Version must be a numeric string.`,
         );
+      }
+      if (validateTs && !this.isValidMigrationTimestamp(m.version)) {
+        throw new InvalidMigrationTimestampError(m.version, m.name);
       }
       const normalized = String(BigInt(m.version));
       if (versions.has(normalized)) {
@@ -2717,9 +2755,9 @@ export class Migrator {
   // Rails: MigrationContext#validate_timestamp?
   /** @internal */
   isValidateTimestamp(): boolean {
-    // Rails: ActiveRecord.timestamped_migrations (default true) && ActiveRecord.validate_migration_timestamps (default false)
-    // true && false = false, so false is the correct default until these config flags are wired.
-    return false;
+    return (
+      (_arConfig?.validateMigrationTimestamps ?? false) || Migrator.validateMigrationTimestamps
+    );
   }
 
   // Rails: MigrationContext#valid_migration_timestamp?

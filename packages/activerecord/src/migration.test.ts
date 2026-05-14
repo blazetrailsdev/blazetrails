@@ -1710,8 +1710,15 @@ describe("MigrationTest", () => {
     const realAdapter = testAdapter.innerAdapter;
     const migrator = new Migrator(realAdapter, []);
     const lockId = await migrator.generateMigratorAdvisoryLockId();
-    expect(await (realAdapter as any).getAdvisoryLock(lockId)).toBe(true);
-    expect(await (realAdapter as any).releaseAdvisoryLock(lockId)).toBe(true);
+    const acquired = await (realAdapter as any).getAdvisoryLock(lockId);
+    try {
+      expect(acquired).toBe(true);
+    } finally {
+      if (acquired) {
+        const released = await (realAdapter as any).releaseAdvisoryLock(lockId);
+        expect(released).toBe(true);
+      }
+    }
   });
 
   it.skipIf(adapterType === "sqlite")("generate migrator advisory lock id", async () => {

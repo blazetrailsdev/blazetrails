@@ -1108,8 +1108,17 @@ export class TableDefinition {
     }
 
     if (this._adapterName === "mysql") {
-      if (this.charset) sql += ` DEFAULT CHARSET=${this.charset}`;
-      if (this.collation) sql += ` COLLATE=${this.collation}`;
+      const safeIdentRe = /^[A-Za-z0-9_]+$/;
+      if (this.charset) {
+        if (!safeIdentRe.test(this.charset))
+          throw new ArgumentError(`Invalid MySQL charset: ${JSON.stringify(this.charset)}`);
+        sql += ` DEFAULT CHARSET=${this.charset}`;
+      }
+      if (this.collation) {
+        if (!safeIdentRe.test(this.collation))
+          throw new ArgumentError(`Invalid MySQL collation: ${JSON.stringify(this.collation)}`);
+        sql += ` COLLATE=${this.collation}`;
+      }
     }
     if (this.options) sql += ` ${this.options}`;
     if (this.comment && this._adapterName === "mysql") {

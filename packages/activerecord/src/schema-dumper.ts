@@ -208,6 +208,14 @@ const DSL_HELPER_METHODS = new Set([
   "daterange",
   "tsrange",
   "tstzrange",
+  // PG geometric types — TableDefinition exposes a helper method for each.
+  "point",
+  "line",
+  "lseg",
+  "box",
+  "path",
+  "polygon",
+  "circle",
 ]);
 
 function sqlTypeToDsl(sqlType: string): DslMapping {
@@ -272,6 +280,16 @@ function sqlTypeToDsl(sqlType: string): DslMapping {
 /**
  * Clean up a PG default expression to a human-readable literal value.
  * E.g. "'happy'::mood" -> "happy", "'192.168.1.1'::inet" -> "192.168.1.1"
+ *
+ * Two distinct inputs flow through here:
+ *  1. Raw PG catalog expressions (e.g. `'(12.2,13.3)'::point`) — these are
+ *     SQL strings from `column_default` in information_schema/pg_attrdef.
+ *     The cast-stripping branches below handle this path.
+ *  2. Already-deserialized ORM values that were stored as the column default
+ *     (e.g. `"(12.2,13.3)"` — already a plain string with no cast suffix).
+ *     These fall through the cast branches and reach the leading-zero guard
+ *     at the bottom. The `/^-?0\d/` guard was added in #1515 to prevent
+ *     bit-strings like "00000011" from being coerced to the number 0.
  */
 export function cleanDefault(raw: unknown): unknown {
   if (raw === null || raw === undefined) return raw;

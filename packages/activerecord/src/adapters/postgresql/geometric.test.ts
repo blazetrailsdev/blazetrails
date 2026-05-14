@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
 import { PgPoint, parsePoint, castPoint } from "./geometric.js";
+import { SchemaDumper } from "../../schema-dumper.js";
 
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
@@ -156,10 +157,11 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(rows[0].column_default).toBeTruthy();
     });
 
-    it.skip("legacy schema dumping", () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric
-      // ROOT-CAUSE: connection-adapters/postgresql/geometric.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
+    it("legacy schema dumping", async () => {
+      const output = await SchemaDumper.dumpTableSchema(adapter as any, "postgresql_points");
+      expect(output).toMatch(/t\.point\("x"\)/);
+      expect(output).toMatch(/t\.point\("y"/);
+      expect(output).toMatch(/t\.point\("z"/);
     });
 
     it("legacy roundtrip", async () => {
@@ -440,10 +442,28 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(rows[0].a_circle).toBeTruthy();
     });
 
-    it.skip("geometric schema dump", async () => {
-      // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric
-      // ROOT-CAUSE: connection-adapters/postgresql/geometric.ts missing or incomplete Rails parity
-      // SCOPE: ~50–200 LOC fix in connection-adapters/postgresql/geometric.ts; affects ~10–47 tests in geometric.test.ts
+    it("geometric schema dump", async () => {
+      await adapter.exec(`DROP TABLE IF EXISTS postgresql_geometrics`);
+      await adapter.exec(`
+        CREATE TABLE postgresql_geometrics (
+          id serial primary key,
+          a_line_segment lseg,
+          a_box box,
+          a_path path,
+          a_polygon polygon,
+          a_circle circle
+        )
+      `);
+      try {
+        const output = await SchemaDumper.dumpTableSchema(adapter as any, "postgresql_geometrics");
+        expect(output).toMatch(/t\.lseg\("a_line_segment"\)/);
+        expect(output).toMatch(/t\.box\("a_box"\)/);
+        expect(output).toMatch(/t\.path\("a_path"\)/);
+        expect(output).toMatch(/t\.polygon\("a_polygon"\)/);
+        expect(output).toMatch(/t\.circle\("a_circle"\)/);
+      } finally {
+        await adapter.exec(`DROP TABLE IF EXISTS postgresql_geometrics`);
+      }
     });
     it.skip("geometric where", async () => {
       // BLOCKED: adapter-pg — PostgreSQL-specific adapter gap in geometric

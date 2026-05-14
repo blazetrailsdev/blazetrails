@@ -1261,6 +1261,8 @@ export class ThroughReflection extends AbstractReflection {
     return (
       !!(this.sourceReflection as any)?.isThroughReflection?.() ||
       !!(this.throughReflection as any)?.isThroughReflection?.() ||
+      // Rails registers a ThroughReflection for the HABTM name (via has_many :through internally);
+      // our builder registers HasAndBelongsToManyReflection instead, so check macro directly.
       this.throughReflection?.macro === "hasAndBelongsToMany"
     );
   }

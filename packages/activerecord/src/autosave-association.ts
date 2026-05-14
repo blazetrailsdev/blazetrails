@@ -544,12 +544,12 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
     const ctor = record.constructor as typeof Base;
     const foreignKey = assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
     let primaryKey: string | string[] = assoc.options.primaryKey ?? ctor.primaryKey;
-    // Mirrors Rails compute_primary_key: CPK parent with single-column FK
-    // picks the "id" component of the composite key (autosave_association.rb:576-587).
+    // Mirrors Rails compute_primary_key composite branch (autosave_association.rb:582-585):
+    // when CPK includes "id", collapse to "id" so the scalar FK can be assigned.
+    // When CPK has no "id" column, leave it as an array — the composite/scalar mismatch
+    // branch below will throw CompositePrimaryKeyMismatchError, matching Rails' behavior.
     if (Array.isArray(primaryKey) && !Array.isArray(foreignKey)) {
-      primaryKey = (primaryKey as string[]).includes("id")
-        ? "id"
-        : (primaryKey as string[])[(primaryKey as string[]).length - 1];
+      if ((primaryKey as string[]).includes("id")) primaryKey = "id";
     }
     if (Array.isArray(primaryKey) && Array.isArray(foreignKey)) {
       if (primaryKey.length !== foreignKey.length) {

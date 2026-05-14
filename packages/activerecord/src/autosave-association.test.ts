@@ -1345,11 +1345,17 @@ describe("TestAutosaveAssociationOnAHasOneAssociation", () => {
 
     const saved = await pirate.save({ validate: false });
     expect(saved).toBe(true);
-    // Reload and verify all empty strings were persisted (validations bypassed)
+    // Reload and verify all empty strings were persisted (validations bypassed at every depth)
     const reloadedPirate = await DeepPirate.find(pirate.id as number);
     expect(reloadedPirate.catchphrase).toBe("");
     const reloadedShip = await DeepShip.find(ship.id as number);
     expect(reloadedShip.name).toBe("");
+    // Parts must also be saved with blank names — a regression where has_many autosave
+    // doesn't propagate validate:false would leave them with their original names.
+    const reloadedPart1 = await DeepPart.find(part1.id as number);
+    const reloadedPart2 = await DeepPart.find(part2.id as number);
+    expect(reloadedPart1.name).toBe("");
+    expect(reloadedPart2.name).toBe("");
   });
   it("should still raise an ActiveRecordRecord Invalid exception if we want that", async () => {
     const { Pirate, Ship } = makeModels();

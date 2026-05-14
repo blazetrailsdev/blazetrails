@@ -694,8 +694,10 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   async tableOptions(tableName: string): Promise<Record<string, string>> {
     const createInfo = await this.createTableInfo(tableName);
     if (!createInfo) return {};
-    const hasComment = /COMMENT='/.test(createInfo);
-    const comment = hasComment ? await this.tableComment(tableName) : null;
+    // Check only the options tail (after column defs) so per-column COMMENT clauses
+    // don't trigger an extra tableComment() round-trip.
+    const tail = createInfo.replace(/[\s\S]*\n\) ?/, "");
+    const comment = /COMMENT='/.test(tail) ? await this.tableComment(tableName) : null;
     return parseTableOptions(createInfo, comment);
   }
 
@@ -1427,9 +1429,10 @@ export function parseTableOptions(
 ): Record<string, string> {
   // Strip column definitions — everything up to and including the closing `)`.
   // Also strip MySQL partition hints (`/*!50100 ... */` appended after options).
+  // Mirrors Rails: .sub(/\A.*\n\) ?/m, "").sub(/\n\/\*!.*\*\/\n\z/m, "").strip
   let raw = createInfo
-    .replace(/^[\s\S]*\n\) ?/m, "")
-    .replace(/\n\/\*![\s\S]*\*\/\n?$/m, "")
+    .replace(/[\s\S]*\n\) ?/, "")
+    .replace(/\n\/\*![\s\S]*\*\/\n?$/, "")
     .trim();
   if (!raw) return {};
 

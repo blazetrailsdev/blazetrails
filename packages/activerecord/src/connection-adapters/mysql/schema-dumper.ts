@@ -52,13 +52,10 @@ export class SchemaDumper extends AbstractSchemaDumper {
   protected override async fetchTableOptions(tableName: string): Promise<Record<string, unknown>> {
     if (!this.connection) return {};
     const opts = await this.connection.tableOptions(tableName);
-    // Populate tableCollationCache from the parsed collation so schemaCollation
-    // can suppress column-level collation when it matches the table default.
+    // Populate tableCollationCache when the table has an explicit COLLATE clause so
+    // schemaCollation can suppress per-column collation that matches the table default.
     if (Object.hasOwn(opts, "collation")) {
       this.tableCollationCache[tableName] = opts["collation"];
-    } else if (Object.hasOwn(opts, "charset")) {
-      // No COLLATE clause — mark table as having no explicit collation override.
-      this.tableCollationCache[tableName] = undefined;
     }
     return opts;
   }

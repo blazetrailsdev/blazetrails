@@ -1066,7 +1066,9 @@ class SchemaAdapter implements DatabaseAdapter {
   async currentDatabase(): Promise<string> {
     const inner = this.inner as { currentDatabase?: () => Promise<string> };
     if (typeof inner.currentDatabase === "function") return inner.currentDatabase();
-    return "";
+    throw new Error(
+      `${this.inner.adapterName} adapter must implement currentDatabase() to support advisory-locked migrations`,
+    );
   }
 
   supportsAdvisoryLocks(): boolean {

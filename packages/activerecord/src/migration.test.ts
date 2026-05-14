@@ -1766,28 +1766,23 @@ describe("MigrationTest", () => {
     // lock calls happen symmetrically via spies on the real adapter.
     const testAdapter = createTestAdapter();
     const inner = testAdapter.innerAdapter as any;
-    const acquired: bigint[] = [];
-    const released: bigint[] = [];
-    const origGet = inner.getAdvisoryLock.bind(inner);
-    const origRelease = inner.releaseAdvisoryLock.bind(inner);
-    inner.getAdvisoryLock = async (id: bigint) => {
-      acquired.push(id);
-      return origGet(id);
-    };
-    inner.releaseAdvisoryLock = async (id: bigint) => {
-      released.push(id);
-      return origRelease(id);
-    };
-    const proxy: MigrationProxy = {
-      version: "200",
-      name: "NoOp",
-      migration: () => ({ up: async () => {}, down: async () => {} }),
-    };
-    const migrator = new Migrator(testAdapter, [proxy]);
-    await migrator.migrate();
-    expect(acquired).toHaveLength(1);
-    expect(released).toEqual(acquired);
-    expect(await migrator.getAllVersions()).toContain("200");
+    const getSpy = vi.spyOn(inner, "getAdvisoryLock");
+    const releaseSpy = vi.spyOn(inner, "releaseAdvisoryLock");
+    try {
+      const proxy: MigrationProxy = {
+        version: "200",
+        name: "NoOp",
+        migration: () => ({ up: async () => {}, down: async () => {} }),
+      };
+      const migrator = new Migrator(testAdapter, [proxy]);
+      await migrator.migrate();
+      expect(getSpy).toHaveBeenCalledTimes(1);
+      expect(releaseSpy).toHaveBeenCalledWith(getSpy.mock.calls[0][0]);
+      expect(await migrator.getAllVersions()).toContain("200");
+    } finally {
+      getSpy.mockRestore();
+      releaseSpy.mockRestore();
+    }
   });
 
   it("with advisory lock raises the right error when it fails to release lock", async () => {

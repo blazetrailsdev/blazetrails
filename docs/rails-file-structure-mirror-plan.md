@@ -37,12 +37,16 @@ This is the _within-file_ analog of the actionpack restructure audit.
 > `abstractcontroller`, `actionview`, `trailties`** — note the actionpack
 > three-way split (actiondispatch + actioncontroller + abstractcontroller,
 > mapped to the `actionpack` directory via `PACKAGE_DIR_OVERRIDES` at
-> `config.ts:21–25`) and the inclusion of arel. The Ruby side omits
-> `abstractcontroller` because Rails ships it inside actionpack without a
-> dedicated `lib/abstract_controller/` directory worth a separate
-> PACKAGE_DIRS entry; the structure rule mirrors that — it covers the 9
-> TS-side keys, with `abstractcontroller` treated as a virtual subset of
-> the actionpack source on the Ruby side. `globalid`, `rack`, and
+> `config.ts:21–25`) and the inclusion of arel. The Ruby side at
+> `extract-ruby-api.rb:32–41` currently omits `abstractcontroller`, but
+> Rails source does have a dedicated `actionpack/lib/abstract_controller/`
+> directory (verified: `base.rb`, `callbacks.rb`, `caching.rb`, …) and
+> the trails side has `packages/actionpack/src/abstractcontroller/`. PR 1
+> of the wave plan adds `PACKAGE_DIRS["abstractcontroller"]` pointing at
+> `actionpack/lib/abstract_controller` — a 1-line registry addition that
+> brings the Ruby side into parity with the TS side before the structure
+> extractor runs. The day-one scope is therefore exactly the 9 TS-side
+> keys. `globalid`, `rack`, and
 > `actionmailer` are **future expansion owned by PR #1552**: they're
 > fetched by the new vendor system but not yet in api:compare's
 > registries. The structure rule picks them up only after #1552's wave
@@ -273,10 +277,23 @@ build-rails-structure-manifest.ts` → `eslint/rails-structure.cache.json`.
 
 ### 2.4 Index for O(1) ESLint lookup
 
-The rule asks: "for TS file X, what's the Rails member order?" To avoid
-JSON.parse on every lint invocation, ship a derived index:
+Two-layer file layout, with a clear boundary between **tooling artifacts**
+(under `scripts/rails-structure/output/`, raw Ruby JSON for downstream
+tools) and **runtime ESLint inputs** (under `eslint/`, the only files the
+rule reads at lint time):
 
-`scripts/rails-structure/output/rails-structure.index.json`
+| file                                                  | producer                            | consumer                            | role                     |
+| ----------------------------------------------------- | ----------------------------------- | ----------------------------------- | ------------------------ |
+| `scripts/rails-structure/output/rails-structure.json` | `extract-rails-structure.rb`        | `build-rails-structure-manifest.ts` | tooling-only             |
+| `eslint/rails-structure.cache.json`                   | `build-rails-structure-manifest.ts` | **ESLint rule (runtime)**           | per-file member lists    |
+| `eslint/rails-structure.index.json`                   | `build-rails-structure-manifest.ts` | **ESLint rule (runtime)**           | TS-path → Rails-path map |
+
+The ESLint rule never reads `scripts/rails-structure/output/` directly.
+That keeps the rule's dependency surface to two stable JSON files,
+co-located in `eslint/` alongside `rails-private-methods.json` so they
+can't drift apart.
+
+The index file:
 
 ```jsonc
 {
@@ -285,8 +302,10 @@ JSON.parse on every lint invocation, ship a derived index:
 }
 ```
 
-The ESLint rule loads the big file once on first violation, caches in
-module scope, then keys by TS path.
+The ESLint rule loads `eslint/rails-structure.index.json` at construction
+time and `eslint/rails-structure.cache.json` lazily on first violation,
+both kept in module scope. It never touches the tooling JSON under
+`scripts/rails-structure/output/`.
 
 ## 3. TypeScript-side analysis
 
@@ -482,12 +501,12 @@ blazetrails/rails-file-structure */` works as usual. Also support a
 
 ### 5.2 Autofix scope
 
-| check               |                                                         autofix?                                                         | notes                                                                                                       |
-| ------------------- | :----------------------------------------------------------------------------------------------------------------------: | ----------------------------------------------------------------------------------------------------------- |
-| method-order        | **yes**, but **opt-in** via `--fix` only when no `// @rails-order-skip-next` comment is present near the affected member | safe for pure method moves; never moves across an `include()` because of prototype-chain order risk (§7)    |
-| include-position    |                                                           yes                                                            | safe — `include()` calls have no positional side effect on type emit, but order matters for prototype chain |
-| visibility-grouping |                                                            no                                                            | grouping is semantic; require manual edits                                                                  |
-| module-nesting      |                                                            no                                                            | requires structural decision                                                                                |
+| check               |                                                         autofix?                                                         | notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------- | :----------------------------------------------------------------------------------------------------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| method-order        | **yes**, but **opt-in** via `--fix` only when no `// @rails-order-skip-next` comment is present near the affected member | safe for pure method moves; never moves across an `include()` because of prototype-chain order risk (§7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| include-position    |                                                 yes, with snapshot regen                                                 | **Runtime-safe but emit-changing**: `findIncludeCalls()` in `packages/activerecord/src/type-virtualization/virtualize.ts:144–196` walks `include()` calls in source order, then emits `interface Foo extends Included<typeof A>, Included<typeof B> {}` heritage clauses in that same encounter order. Reordering includes changes the emitted text (and `.d.ts` snapshots) even though declaration-merge resolution is order-agnostic. Autofix must regenerate snapshots in the same commit; PR 4's CI step runs `pnpm build` after the lint fix. Prototype-chain order at runtime is preserved because the autofix moves whole `include()` statements as units, never re-orders multiple modules inside one call. |
+| visibility-grouping |                                                            no                                                            | grouping is semantic; require manual edits                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| module-nesting      |                                                            no                                                            | requires structural decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 The autofix uses ESLint's `fixer.replaceTextRange` over whole-statement
 ranges; it cannot interleave or split statements. If two adjacent members

@@ -138,8 +138,13 @@ link_source() {
       # otherwise fail to overwrite the dangling link with a directory.
       echo "      rm -rf $(printf %q "$src") && cp -r $(printf %q "$donor") $(printf %q "$src")" >&2
     else
-      echo "      No sibling worktree has $rel either. Re-run \`pnpm vendor:fetch\`" >&2
-      echo "      from the main worktree or copy from a backup." >&2
+      echo "      No sibling worktree has $rel either." >&2
+      if [[ "$rel" == vendor/* ]]; then
+        echo "      Re-run \`pnpm vendor:fetch\` from the main worktree." >&2
+      else
+        echo "      Restore $rel in the main worktree (from git, a backup, or" >&2
+        echo "      whatever process originally produced it) and re-run." >&2
+      fi
     fi
     exit 1
   fi
@@ -172,11 +177,23 @@ echo "==> Linking upstream Ruby sources from main worktree"
 # this worktree, not future ones). When local main catches up, future
 # worktrees will symlink as usual.
 VENDOR_PATHS="$(cd "$TARGET" && pnpm -s tsx vendor/fetch.ts --print-paths)"
+LOCK_JSON="$TARGET/vendor/sources.lock.json"
 while IFS= read -r src; do
   name="$(basename "$src")"
   rel="vendor/$name"
-  if [[ -e "$MAIN_REPO/$rel" ]]; then
-    link_source "$rel"
+  main_clone="$MAIN_REPO/$rel"
+  if [[ -e "$main_clone/.git" ]]; then
+    # Validate main's clone HEAD against the new worktree's lockfile.
+    # When local main lags origin/main on a ref bump, the clone exists but
+    # at the old SHA; symlinking it would just defer the failure to fetch.ts.
+    main_sha="$(git -C "$main_clone" rev-parse HEAD)"
+    want_sha="$(node -e "console.log(JSON.parse(require('fs').readFileSync('$LOCK_JSON','utf8')).sources['$name']?.sha ?? '')")"
+    if [[ -n "$want_sha" && "$main_sha" != "$want_sha" ]]; then
+      echo "    $rel: main's clone HEAD ($main_sha) differs from target lockfile ($want_sha) — fetching into $TARGET"
+      ( cd "$TARGET" && pnpm -s vendor:fetch --source "$name" )
+    else
+      link_source "$rel"
+    fi
   else
     echo "    $rel missing from main worktree — fetching into $TARGET (local main is behind)"
     ( cd "$TARGET" && pnpm -s vendor:fetch --source "$name" )

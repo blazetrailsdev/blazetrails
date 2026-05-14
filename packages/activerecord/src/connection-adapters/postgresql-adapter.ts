@@ -1757,22 +1757,18 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     sql: string,
     name?: string | null,
     binds: unknown[] = [],
-    pk?: string | boolean | null,
+    pk?: string | false | null,
     sequenceName?: string | null,
     returning?: string[] | null,
   ): Promise<Result | number> {
     // Mirrors Rails: `if use_insert_returning? || pk == false`. `pk === false`
     // is the explicit caller opt-out for "this table has no PK / don't fetch
     // the inserted id" (Rails passes false from InsertAll for skip-rows).
+    // Pass `false` (not null) through to super so the abstract sqlForInsert
+    // takes the false-opt-out branch and does NOT auto-resolve a RETURNING
+    // column from the table's primary key.
     if (this._useInsertReturning || pk === false) {
-      return super.execInsert(
-        sql,
-        name,
-        binds,
-        pk === false ? null : ((pk as string | null | undefined) ?? null),
-        sequenceName,
-        returning,
-      );
+      return super.execInsert(sql, name, binds, pk, sequenceName, returning);
     }
     // Resolve sequence name before acquiring the INSERT client so the
     // metadata queries (primaryKey, defaultSequenceName) don't consume

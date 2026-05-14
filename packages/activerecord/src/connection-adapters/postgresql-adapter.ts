@@ -97,6 +97,7 @@ import {
   ColumnDefinition,
   ForeignKeyDefinition,
   TableDefinition as AbstractTableDefinition,
+  type ColumnOptions,
   type ColumnType,
   type ReferentialAction,
 } from "./abstract/schema-definitions.js";
@@ -2940,27 +2941,25 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     tableName: string,
     columnName: string,
     type: string,
-    options: {
-      using?: string;
-      castAs?: string;
-      default?: unknown;
-      null?: boolean;
-      array?: boolean;
-      limit?: number;
-      precision?: number;
-      scale?: number;
-    } = {},
+    options: ColumnOptions & { using?: string; castAs?: string } = {},
   ): Promise<void> {
     this.clearCacheBang();
     const quotedTable = this.quoteTableName(tableName);
-    const pgType = this.typeToSql(type, options);
+    const pgType = this.typeToSql(type, {
+      ...options,
+      precision: options.precision ?? undefined,
+    });
 
     const quotedCol = this.quoteIdentifier(columnName);
     let usingClause = "";
     if (options.using) {
       usingClause = ` USING ${options.using}`;
     } else if (options.castAs) {
-      const castType = this.typeToSql(options.castAs, {});
+      const castType = this.typeToSql(options.castAs, {
+        limit: options.limit,
+        precision: options.precision ?? undefined,
+        scale: options.scale,
+      });
       if (options.array) {
         usingClause = ` USING ARRAY[CAST(${quotedCol} AS ${castType})]`;
       } else {

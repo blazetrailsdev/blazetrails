@@ -35,7 +35,7 @@ export const extended = Symbol.for("@blazetrails/activesupport:extended");
  * each signature.
  *
  * Implementation note: `M` is constrained to `object` rather than the
- * runtime `Module = Record<string, Function>`. The runtime shape forces
+ * runtime `Module = Record<string, any>`. The runtime shape forces
  * a string index signature into every result, which propagates into
  * any merging class — and every subclass — and demands every property
  * be assignable to `(...args: unknown[]) => unknown`. That breaks

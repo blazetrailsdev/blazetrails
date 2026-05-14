@@ -666,7 +666,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         );
         const rows = await noReturn.execute(`SELECT max(id) AS max_id FROM "ex_insert_ret"`);
         const maxId = Number(rows[0]["max_id"]);
-        expect((result as any).rows[0][0]).toBe(maxId);
+        expect(Number((result as any).rows[0][0])).toBe(maxId);
       } finally {
         await noReturn.close();
       }
@@ -688,7 +688,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         );
         const rows = await noReturn.execute(`SELECT max(id) AS max_id FROM "ex_insert_ret2"`);
         const maxId = Number(rows[0]["max_id"]);
-        expect((result as any).rows[0][0]).toBe(maxId);
+        expect(Number((result as any).rows[0][0])).toBe(maxId);
       } finally {
         await noReturn.close();
       }
@@ -710,7 +710,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         );
         const rows = await noReturn.execute(`SELECT max(id) AS max_id FROM "ex_insert_ret3"`);
         const maxId = Number(rows[0]["max_id"]);
-        expect((result as any).rows[0][0]).toBe(maxId);
+        expect(Number((result as any).rows[0][0])).toBe(maxId);
       } finally {
         await noReturn.close();
       }
@@ -728,7 +728,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         );
         const rows = await noReturn.execute(`SELECT max(id) AS max_id FROM "ex_insert_ret5"`);
         const maxId = Number(rows[0]["max_id"]);
-        expect((result as any).rows[0][0]).toBe(maxId);
+        expect(Number((result as any).rows[0][0])).toBe(maxId);
       } finally {
         await noReturn.close();
       }
@@ -1194,7 +1194,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         );
         const rows = await noReturn.execute(`SELECT max(id) AS max_id FROM "ex_insert_ret4"`);
         const maxId = Number(rows[0]["max_id"]);
-        expect((result as any).rows[0][0]).toBe(maxId);
+        expect(Number((result as any).rows[0][0])).toBe(maxId);
       } finally {
         await noReturn.close();
       }

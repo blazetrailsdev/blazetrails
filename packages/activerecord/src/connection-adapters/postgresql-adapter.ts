@@ -1732,9 +1732,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         sequenceName = resolvedPk ? await this.defaultSequenceName(tableRef, resolvedPk) : null;
       }
     }
+    this.checkIfWriteQuery(sql);
+    await this.materializeTransactions();
     // currval() is session-scoped: INSERT and SELECT currval(...) must
     // run on the same connection. withClient() pins both to one client.
     return this.withClient(async (client) => {
+      this.dirtyCurrentTransaction();
       const castBinds = typeCastedBinds(binds);
       const bindArray = castBinds.map((v) => temporalToBindString(v, "postgres"));
       const rewritten = this.rewriteBinds(sql, bindArray);

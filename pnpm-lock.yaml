@@ -276,6 +276,9 @@ importers:
       '@blazetrails/arel':
         specifier: workspace:*
         version: link:../../packages/arel
+      '@blazetrails/globalid':
+        specifier: workspace:*
+        version: link:../../packages/globalid
       '@blazetrails/rack':
         specifier: workspace:*
         version: link:../../packages/rack

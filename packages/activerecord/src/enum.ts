@@ -36,7 +36,7 @@ interface EnumInstanceHost {
   isPersisted(): boolean;
   updateColumn(name: string, val: unknown): Promise<void>;
   updateBang(attrs: Record<string, unknown>): Promise<true>;
-  readAttributeForDatabase?(name: string): unknown;
+  readAttributeForDatabase(name: string): unknown;
 }
 
 /**
@@ -390,7 +390,7 @@ export class EnumMethods {
       detectEnumConflictBang.call(klass, name, `${valueMethodName}?`);
       Object.defineProperty(klass.prototype, `${valueMethodName}?`, {
         value: function (this: EnumInstanceHost) {
-          return this.readAttributeForDatabase?.(name) === value;
+          return this.readAttributeForDatabase(name) === value;
         },
         writable: true,
         configurable: true,

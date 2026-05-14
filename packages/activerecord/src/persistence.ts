@@ -31,7 +31,11 @@ import {
 import { clearAutosaveState } from "./autosave-association.js";
 import { getStiBase, getInheritanceColumn, isStiSubclass } from "./inheritance.js";
 import { withTransactionReturningStatus } from "./transactions.js";
-import { performValidations, raiseValidationError } from "./validations.js";
+import {
+  performValidations,
+  raiseValidationError,
+  type ValidationContextArg,
+} from "./validations.js";
 import { ReadonlyAttributeError } from "./readonly-attributes.js";
 
 interface PersistenceHost {
@@ -568,7 +572,7 @@ interface SaveRecord {
   readAttribute(name: string): unknown;
   _readAttribute(name: string): unknown;
   errors: { any: boolean };
-  isValid(context?: unknown): boolean;
+  isValid(context?: ValidationContextArg): boolean;
   constructor: {
     name: string;
     _attributeDefinitions: Map<string, unknown>;

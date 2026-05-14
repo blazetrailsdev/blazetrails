@@ -233,7 +233,7 @@ export function initInternals(this: TimestampInstanceHost): void {
 
 /** @internal */
 export async function _createRecord(this: TimestampInstanceHost): Promise<unknown> {
-  if (this.constructor.recordTimestamps) {
+  if (this.constructor.recordTimestamps !== false) {
     const time = currentTimeFromProperTimezone();
     for (const col of allTimestampAttributesInModel.call(this.constructor)) {
       if (this._readAttribute?.(col) == null) {

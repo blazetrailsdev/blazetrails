@@ -126,7 +126,9 @@ export interface AssociationDefinition {
 
 /**
  * Structural view of the reflection fields consumed within associations.ts.
- * Keeps the dep arrow one-way — no concrete Reflection import needed here.
+ * Avoids importing the concrete `AssociationReflection`/`ThroughReflection`
+ * types so the dep arrow stays one-way (this file already imports the
+ * Reflection namespace for HABTM registration, but that's value-side only).
  * @internal
  */
 interface ReflectionLike {
@@ -439,22 +441,6 @@ function _canRouteThroughViaDisableJoinsAssociationScope(
 }
 
 /**
- * Build (or return cached) base AssociationScope. When the owner has
- * a registered `Association` instance for this name, route through
- * its `associationScope()` so calls hit Rails' `@association_scope`-
- * style memoization (cleared on `reload()`). Without an instance,
- * fall back to a fresh `AssociationScope.scope(...)` build — matches
- * test paths that exercise loaders without going through
- * `record.association(name)`.
- *
- * Disable-joins associations bypass the cache (Rails' `Association#scope`
- * creates a fresh `DisableJoinsAssociationScope` per call,
- * association.rb:107-117). The disableJoins routing is already
- * handled above this call site, so falling through to the fresh
- * `AssociationScope.scope(...)` here only matters if a future caller
- * stretches the contract.
- */
-/**
  * Rails' `klass.scope_for_association` — returns the association-aware base
  * relation for the target model, merging any current scope.
  * `scopeForAssociation` is wired onto Base via `extend()` but its `this:
@@ -470,6 +456,22 @@ function _scopeForAssociation(model: typeof Base): Relation<Base> {
   );
 }
 
+/**
+ * Build (or return cached) base AssociationScope. When the owner has
+ * a registered `Association` instance for this name, route through
+ * its `associationScope()` so calls hit Rails' `@association_scope`-
+ * style memoization (cleared on `reload()`). Without an instance,
+ * fall back to a fresh `AssociationScope.scope(...)` build — matches
+ * test paths that exercise loaders without going through
+ * `record.association(name)`.
+ *
+ * Disable-joins associations bypass the cache (Rails' `Association#scope`
+ * creates a fresh `DisableJoinsAssociationScope` per call,
+ * association.rb:107-117). The disableJoins routing is already
+ * handled above this call site, so falling through to the fresh
+ * `AssociationScope.scope(...)` here only matters if a future caller
+ * stretches the contract.
+ */
 function _builtAssociationScope(
   record: Base,
   assocName: string,

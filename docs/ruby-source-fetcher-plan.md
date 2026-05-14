@@ -328,7 +328,7 @@ If all three caches hit, the `ruby-extract` job becomes a pure download step (~3
 - **Bundler in CI**: globalid (and any future rubygems-origin source) requires `ruby` + `bundler` on the CI image. `api:compare` and `test:compare` already use Ruby for the extractors, so no new dep — but it does mean a TS-only contributor cannot run `pnpm vendor:fetch` without Ruby installed. Mitigation: `fetch.ts` should print an actionable error ("install ruby + bundler") rather than letting `bundle install` fail.
 - **In-flight worktrees during migration**: per §2.3, wave 2 lands the path move in one PR with no compat symlink. Active agents must be paused at merge time and re-linked on next `start-worktree.sh` run. The master clone is relocated by a plain filesystem `mv` (the dir is gitignored, so this is _not_ a tracked rename); `fetch.ts` re-clones if the old path is absent. Avoids a ~53 MiB re-clone when the existing dir is present.
 - **Extractor cache gate**: `scripts/api-compare/extract-ruby-api.rb:25-28` caches by comparing `output_path` mtime against `<RAILS_DIR>/.git/HEAD` mtime — not the tag string. After wave 4 moves `RAILS_DIR` to `vendor/rails/`, the gate still works (the path moves but the `.git/HEAD` mtime semantics are identical). The risk to plan for is rubygems-origin sources, which have no `.git/HEAD`: when wave 3 adds bundler origins, the gate needs a fallback signal (e.g., mtime of `vendor/sources.lock.json` for those packages).
-- **Cross-doc coordination**: the parallel `docs/rails-file-structure-mirror-plan.md` (in progress on agent %396) is designing a Ruby-aware mirror tool that **must** consume the same `SOURCES` list. Both plans should converge on `vendor/sources.ts` as the single registry. Action item: cross-link this doc from the mirror plan when it lands.
+- **Cross-doc coordination**: the parallel `docs/rails-file-structure-mirror-plan.md` (planned, not yet in repo) (in progress on agent %396) is designing a Ruby-aware mirror tool that **must** consume the same `SOURCES` list. Both plans should converge on `vendor/sources.ts` as the single registry. Action item: cross-link this doc from the mirror plan when it lands.
 - **`parity/schema/ruby/Gemfile` drift**: resolved per §2.3 — wave 7 generates the Gemfile from `SOURCES` at parity-run time.
 - **Symlink semantics for rubygems origin**: the `vendor/globalid/lib → vendor/globalid/vendor/bundle/.../lib` symlink approach assumes POSIX. Windows is unsupported by the repo today (Ruby + pnpm + symlinks), so this is acceptable but worth flagging.
 
@@ -343,7 +343,7 @@ If all three caches hit, the `ruby-extract` job becomes a pure download step (~3
 
 ## 10. Cross-references
 
-- `docs/rails-file-structure-mirror-plan.md` — parallel plan; must consume the same `vendor/sources.ts`.
+- `docs/rails-file-structure-mirror-plan.md` (planned, not yet in repo) — parallel plan; must consume the same `vendor/sources.ts`.
 - `scripts/api-compare/conventions.ts` — naming-exception registry; unaffected by this work but consulted by downstream tools that _do_ change.
 - PR #1483 — full clone replaced sparse-checkout in `fetch-rails.sh`; the new fetcher inherits the same full-clone policy.
 - Memory: `reference_rails_source_path.md` — must be updated in wave 7.

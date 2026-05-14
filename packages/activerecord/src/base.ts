@@ -1,9 +1,9 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import {
-  getApp as _getGlobalIdApp,
-  SignedGlobalID,
-  type GlobalIDModel,
-} from "@blazetrails/globalid";
+import { getApp as _getGlobalIdApp } from "@blazetrails/globalid";
+import type {
+  GlobalIDModel,
+  SignedGlobalID as SignedGlobalIDType,
+} from "@blazetrails/globalid/signed-global-id";
 import {
   Model,
   type Type,
@@ -93,6 +93,24 @@ import {
   runAfterCallbacksOnProto as cbRunAfter,
 } from "@blazetrails/activemodel";
 // Lazy-loaded to avoid pulling node:crypto into browser bundles
+let _sgidModule: typeof import("@blazetrails/globalid/signed-global-id") | null = null;
+let _sgidModulePromise: Promise<typeof import("@blazetrails/globalid/signed-global-id")> | null =
+  null;
+const loadSgid = async () => {
+  if (_sgidModule) return _sgidModule;
+  if (!_sgidModulePromise) {
+    _sgidModulePromise = import("@blazetrails/globalid/signed-global-id")
+      .then((mod) => {
+        _sgidModule = mod;
+        return mod;
+      })
+      .catch((error) => {
+        _sgidModulePromise = null;
+        throw error;
+      });
+  }
+  return _sgidModulePromise;
+};
 let _signedIdModule: typeof import("./signed-id.js") | null = null;
 let _signedIdModulePromise: Promise<typeof import("./signed-id.js")> | null = null;
 const loadSignedId = async () => {
@@ -2799,10 +2817,10 @@ export class Base extends Model {
     purpose?: string;
     expiresIn?: number;
     expiresAt?: Temporal.Instant;
-  }): Promise<SignedGlobalID> {
-    const SignedIdModule = await loadSignedId();
+  }): Promise<SignedGlobalIDType> {
+    const [SgidMod, SignedIdModule] = await Promise.all([loadSgid(), loadSignedId()]);
     const verifier = SignedIdModule.signedIdVerifier(this.constructor as typeof Base);
-    return SignedGlobalID.create(this as GlobalIDModel, { ...options, verifier });
+    return SgidMod.SignedGlobalID.create(this as GlobalIDModel, { ...options, verifier });
   }
 
   /**

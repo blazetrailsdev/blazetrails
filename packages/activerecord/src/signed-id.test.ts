@@ -377,4 +377,35 @@ describe("signedId / findSigned / findSignedBang", () => {
     }
     await expect(User.findSignedBang("invalid")).rejects.toThrow();
   });
+
+  it("toSgid returns SignedGlobalID whose toParam round-trips to same instance", async () => {
+    const adapter = freshAdapter();
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    const u = await User.create({ name: "Dave" });
+    const sgid = await u.toSgid({ purpose: "test" });
+    expect(sgid.purpose).toBe("test");
+    expect(sgid.uri).toContain(`/${u.id}`);
+    const token = sgid.toParam();
+    expect(typeof token).toBe("string");
+    expect(token.length).toBeGreaterThan(0);
+  });
+
+  it("toSgidParam returns a string token identical to toSgid().toParam()", async () => {
+    const adapter = freshAdapter();
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    const u = await User.create({ name: "Eve" });
+    const token = await u.toSgidParam();
+    expect(typeof token).toBe("string");
+    expect(token).toBe((await u.toSgid()).toParam());
+  });
 });

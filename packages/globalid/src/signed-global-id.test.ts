@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { SignedGlobalID } from "./signed-global-id.js";
-import { setApp } from "./config.js";
+import { setApp, _resetApp } from "./config.js";
 
 function makeVerifier(secret = "test-secret"): MessageVerifier {
   return new MessageVerifier(secret, { digest: "sha256", url_safe: true });
@@ -100,7 +100,7 @@ describe("SignedGlobalID", () => {
   });
 
   describe("getApp() integration", () => {
-    afterEach(() => setApp("placeholder"));
+    afterEach(() => _resetApp());
 
     it("uses getApp() when no app option", () => {
       setApp("ConfiguredApp");

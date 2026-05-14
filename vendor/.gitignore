@@ -6,3 +6,4 @@
 !README.md
 !sources.ts
 !sources.lock.json
+!*.test.ts

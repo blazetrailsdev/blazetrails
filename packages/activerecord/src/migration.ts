@@ -1602,7 +1602,7 @@ export class MigrationContext {
         scale?: number | null;
       }
     >();
-    if (options?.id !== false && options?.as == null) {
+    if (options?.id !== false && !Array.isArray(options?.primaryKey) && options?.as == null) {
       const idType = typeof options?.id === "string" ? options.id : "integer";
       meta.set("id", { type: idType, primaryKey: true });
     }

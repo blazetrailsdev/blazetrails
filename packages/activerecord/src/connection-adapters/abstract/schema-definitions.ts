@@ -589,7 +589,10 @@ export class TableDefinition {
       quoteTableName: abstractQuoteTableName,
       quoteDefaultExpression: abstractQuoteDefaultExpression,
     };
-    this._id = tdOptions.id ?? true;
+    // Composite primaryKey implies id: false — Rails requires this and emitting both
+    // an auto-id column AND a composite PK constraint is invalid DDL.
+    const hasCompositePk = Array.isArray(tdOptions.primaryKey);
+    this._id = hasCompositePk ? false : (tdOptions.id ?? true);
     this.temporary = tdOptions.temporary ?? false;
     this.ifNotExists = tdOptions.ifNotExists ?? false;
     this.as = tdOptions.as;
@@ -597,8 +600,8 @@ export class TableDefinition {
     this.comment = tdOptions.comment;
     this.charset = tdOptions.charset;
     this.collation = tdOptions.collation;
-    if (Array.isArray(tdOptions.primaryKey)) {
-      this.compositePrimaryKey = tdOptions.primaryKey;
+    if (hasCompositePk) {
+      this.compositePrimaryKey = tdOptions.primaryKey as string[];
     }
 
     if (this._id !== false) {

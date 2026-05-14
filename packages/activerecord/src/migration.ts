@@ -1555,9 +1555,12 @@ export class MigrationContext {
     }
     const td = new TableDefinition(name, {
       id: options?.as != null ? false : options?.id,
+      primaryKey: options?.primaryKey,
       default: options?.default,
       options: options?.options,
       comment: options?.comment,
+      charset: options?.charset,
+      collation: options?.collation,
       as: options?.as,
       adapterName: this._adapterName,
       adapter: this.adapter,

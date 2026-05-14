@@ -3436,5 +3436,4 @@ registerMigrationArConfig({
   get tableNameSuffix() {
     return Base._tableNameSuffix;
   },
-  validateMigrationTimestamps: false,
 });

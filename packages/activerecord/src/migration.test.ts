@@ -1601,22 +1601,9 @@ describe("MigrationTest", () => {
         }
       }
 
-      const checkExists = async () =>
-        adapterType === "sqlite"
-          ? (
-              (await adapter.execute(
-                `SELECT name FROM sqlite_master WHERE type='table' AND name='prefix_reminders_suffix'`,
-              )) as unknown[]
-            ).length
-          : (
-              (await adapter.execute(
-                `SELECT table_name FROM information_schema.tables WHERE table_name='prefix_reminders_suffix'`,
-              )) as unknown[]
-            ).length;
-
       const m = new WeNeedReminders();
       await m.run(adapter, "up");
-      expect(await checkExists()).toBe(1);
+      // Direct INSERT proves the actual table name (with prefix/suffix applied) was created.
       await adapter.executeMutation(
         `INSERT INTO "prefix_reminders_suffix" ("content") VALUES ('hello')`,
       );
@@ -1624,7 +1611,8 @@ describe("MigrationTest", () => {
       expect(rows).toHaveLength(1);
 
       await m.run(adapter, "down");
-      expect(await checkExists()).toBe(0);
+      // m.tableExists("reminders") flows through this._pt() so it queries the prefixed name.
+      expect(await m.tableExists("reminders")).toBe(false);
     } finally {
       Base.tableNamePrefix = savedPrefix;
       Base.tableNameSuffix = savedSuffix;
@@ -1694,8 +1682,11 @@ describe("MigrationTest", () => {
   });
 
   it.skipIf(adapterType === "sqlite")("generate migrator advisory lock id", async () => {
-    const adapter = createTestAdapter();
-    const migrator = new Migrator(adapter, []);
+    // Bypass the SchemaAdapter wrapper — generateMigratorAdvisoryLockId needs
+    // currentDatabase(), which lives on the real adapter (pg/mysql), not the wrapper.
+    const testAdapter = createTestAdapter();
+    const realAdapter = testAdapter.innerAdapter;
+    const migrator = new Migrator(realAdapter, []);
     const lockId = await migrator.generateMigratorAdvisoryLockId();
     // Must fit in a signed 63-bit integer
     expect(lockId).toBeGreaterThanOrEqual(0n);

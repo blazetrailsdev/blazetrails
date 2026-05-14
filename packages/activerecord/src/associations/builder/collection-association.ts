@@ -1,6 +1,5 @@
 import { singularize } from "@blazetrails/activesupport";
-import { Association } from "./association.js";
-import type { AssociationInstanceHost } from "./association.js";
+import { Association, type AssociationInstanceHost } from "./association.js";
 import { association } from "../../associations.js";
 
 const CALLBACKS = ["beforeAdd", "afterAdd", "beforeRemove", "afterRemove"] as const;

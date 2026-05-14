@@ -1,5 +1,4 @@
-import { Association } from "./association.js";
-import type { AssociationInstanceHost } from "./association.js";
+import { Association, type AssociationInstanceHost } from "./association.js";
 
 function defineMethod(mixin: any, methodName: string, fn: (...args: any[]) => any): void {
   if (!mixin || typeof mixin !== "object") return;

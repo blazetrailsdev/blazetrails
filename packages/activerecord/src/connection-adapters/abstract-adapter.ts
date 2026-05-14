@@ -295,7 +295,7 @@ export interface AbstractAdapter {
     binds?: unknown[],
     options?: { prepare?: boolean },
   ): Promise<Result>;
-  execInsert(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
+  execInsert(sql: string, name?: string | null, binds?: unknown[]): Promise<Result | number>;
   execDelete(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
   execUpdate(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
   isWriteQuery(sql: string): boolean;

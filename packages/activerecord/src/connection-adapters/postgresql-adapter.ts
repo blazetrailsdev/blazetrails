@@ -747,6 +747,28 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /**
+   * Returns a Result so that insert() can extract the inserted id via
+   * lastInsertedId() — including non-integer PKs like UUIDs.
+   *
+   * Mirrors: PostgreSQLAdapter — PG supports RETURNING so execInsert goes
+   * through the query path, not executeMutation.
+   * @internal
+   */
+  override async execInsert(sql: string, name?: string | null, binds?: unknown[]): Promise<Result> {
+    await this.materializeTransactions();
+    return this.execQuery(sql, name, binds);
+  }
+
+  /**
+   * Extracts the first column of the first RETURNING row as the inserted id.
+   * @internal
+   */
+  lastInsertedId(result: Result): unknown {
+    const row = (result.rows as unknown[][])[0];
+    return row ? row[0] : undefined;
+  }
+
+  /**
    * Mirrors: PostgreSQLAdapter#load_additional_types(oids = nil). Queries
    * pg_type for user-defined types (enums, domains, arrays, ranges,
    * composites) and registers them via OID::TypeMapInitializer.run.
@@ -1210,7 +1232,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
                 return result.rowCount ?? result.rows.length;
               }
               if (result.rows.length > 0) {
-                return result.rows[0][Object.keys(result.rows[0])[0]] as number;
+                const firstCol = Object.keys(result.rows[0])[0];
+                return Number(result.rows[0][firstCol]);
               }
               return result.rowCount ?? 0;
             } catch (err) {
@@ -1238,7 +1261,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
             const result = await this._runQuery(client, pgSql, binds);
             payload.row_count = result.rowCount ?? 0;
             if (result.rows.length > 0) {
-              return result.rows[0][Object.keys(result.rows[0])[0]] as number;
+              const firstCol = Object.keys(result.rows[0])[0];
+              return Number(result.rows[0][firstCol]);
             }
             return result.rowCount ?? 0;
           }

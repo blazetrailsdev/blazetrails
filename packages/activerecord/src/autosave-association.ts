@@ -753,42 +753,34 @@ export function isAssociationValid(
   reflection: any,
   record: any,
   owner: any,
-  association?: any,
+  association: any,
 ): boolean {
+  // Mirrors Rails `association_valid?` (autosave_association.rb:371-398).
   if (typeof record.isDestroyed === "function" && record.isDestroyed()) return true;
   if (reflection.options?.autosave && isMarkedForDestruction(record)) return true;
-  // Mirror Rails: only forward a custom (non-:create/:update) validation context.
   const context: ValidationContextArg | undefined =
     typeof owner?.customValidationContext === "function" && owner.customValidationContext()
       ? owner._validationContext
       : undefined;
   const isChildValid = typeof record.isValid === "function" ? record.isValid(context) : true;
-  if (!isChildValid) {
-    const parentErrors = owner?.errors;
-    if (parentErrors && reflection.options?.autosave) {
-      // Determine which child errors to propagate: Rails skips re-propagating
-      // already-wrapped NestedErrors on unchanged existing records, but for
-      // new/changed records all errors bubble up.
-      const childErrors: any[] = record.errors?.objects ?? [];
-      const associatedErrors =
-        record.isNewRecord?.() || record.changed?.() || context
-          ? childErrors
-          : childErrors.filter((e: any) => e instanceof AssociationsNestedError);
+  if (isChildValid) return true;
 
-      if (association) {
-        for (const error of associatedErrors) {
-          parentErrors.objects.push(new AssociationsNestedError(association, error));
-        }
-      } else {
-        // No association object available (singular path without loaded assoc);
-        // fall back to message copy.
-        for (const error of associatedErrors) {
-          parentErrors.add("base", "invalid", { message: error.message });
-        }
-      }
-    } else if (parentErrors) {
-      parentErrors.add(reflection.name ?? "base", "invalid");
+  const childErrors: any[] = record.errors?.objects ?? [];
+  const associatedErrors =
+    record.isNewRecord?.() || record.changed?.() || context
+      ? childErrors
+      : childErrors.filter((e: any) => e instanceof AssociationsNestedError);
+
+  const parentErrors = owner?.errors;
+  if (!parentErrors) return isChildValid;
+
+  if (reflection.options?.autosave) {
+    if (owner === record) return isChildValid; // Rails: `return if equal?(record)`
+    for (const error of associatedErrors) {
+      parentErrors.objects.push(new AssociationsNestedError(association, error));
     }
+  } else if (associatedErrors.length > 0) {
+    parentErrors.add(reflection.name);
   }
   return isChildValid;
 }

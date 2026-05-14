@@ -2834,7 +2834,7 @@ describe("AssociationsTest", () => {
     });
     const refl = reflectOnAssociation(QcSingleBlogPost, "qcSingleComments")!;
     expect(() => refl.foreignKey).toThrow(ConfigurationError);
-    expect(() => refl.foreignKey).toThrow("not include the primary key");
+    expect(() => refl.foreignKey).toThrow("does not include the primary key");
   });
   it("query constraints that dont include the primary key raise with multiple columns", () => {
     const adapter = freshAdapter();
@@ -2861,7 +2861,7 @@ describe("AssociationsTest", () => {
     });
     const refl = reflectOnAssociation(QcMultiBlogPost, "qcMultiComments")!;
     expect(() => refl.foreignKey).toThrow(ConfigurationError);
-    expect(() => refl.foreignKey).toThrow("not include the primary key");
+    expect(() => refl.foreignKey).toThrow("does not include the primary key");
   });
   it("assign belongs to cpk model by id attribute", async () => {
     const adapter = freshAdapter();

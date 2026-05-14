@@ -743,6 +743,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         await adapter.exec(
           `CREATE TABLE trains (id serial primary key, firm_id integer, type varchar(50), name varchar(50), account_id integer)`,
         );
+        await adapter.getDatabaseVersion();
         if (adapter.supportsIndexInclude()) {
           await adapter.exec(
             `CREATE INDEX company_include_index ON trains USING btree(firm_id, type) INCLUDE (name, account_id)`,
@@ -759,6 +760,7 @@ describeIfPg("PostgreSQLAdapter", () => {
           .split("\n")
           .find((l) => l.includes("company_include_index"))
           ?.trim();
+        expect(indexLine).toBeDefined();
         if (adapter.supportsIndexInclude()) {
           expect(indexLine).toContain(`include: ["name","account_id"]`);
         } else {
@@ -774,6 +776,7 @@ describeIfPg("PostgreSQLAdapter", () => {
     it("nulls not distinct is dumped", async () => {
       try {
         await adapter.exec(`CREATE TABLE trains (id serial primary key, name varchar(50))`);
+        await adapter.getDatabaseVersion();
         if (!adapter.supportsNullsNotDistinct()) return;
         await adapter.exec(
           `CREATE INDEX trains_name ON trains USING btree(name) NULLS NOT DISTINCT`,
@@ -788,6 +791,7 @@ describeIfPg("PostgreSQLAdapter", () => {
     it("nulls distinct is dumped", async () => {
       try {
         await adapter.exec(`CREATE TABLE trains (id serial primary key, name varchar(50))`);
+        await adapter.getDatabaseVersion();
         if (!adapter.supportsNullsNotDistinct()) return;
         await adapter.exec(`CREATE INDEX trains_name ON trains USING btree(name) NULLS DISTINCT`);
         const lines: string[] = [];

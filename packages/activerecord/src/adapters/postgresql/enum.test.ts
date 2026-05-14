@@ -272,7 +272,7 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("schema dump renamed enum with to option", async () => {
-      await adapter.renameEnum("mood", "feeling");
+      await adapter.renameEnum("mood", { to: "feeling" });
       const output = await SchemaDumper.dumpTableSchema(adapter, "postgresql_enums");
       expect(output).toContain('create_enum "feeling", ["sad","ok","happy"]');
       expect(output).toContain('enum_type: "feeling"');

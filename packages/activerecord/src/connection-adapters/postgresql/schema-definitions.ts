@@ -515,6 +515,12 @@ export class TableDefinition extends AbstractTableDefinition {
     return this.pgColumn(name, "string" as ColumnType, enumName, options);
   }
 
+  /** Mirrors PostgreSQL TableDefinition#enum (schema_definitions.rb via define_column_methods). */
+  enum(name: string, options: ColumnOptions & { enum_type: string }): this {
+    const { enum_type: enumName, ...rest } = options;
+    return this.pgColumn(name, "string" as ColumnType, enumName, rest);
+  }
+
   private pgColumn(name: string, type: ColumnType, sqlType: string, options: ColumnOptions): this {
     const col = new ColumnDefinition(name, type, options);
     col.sqlType = sqlType;

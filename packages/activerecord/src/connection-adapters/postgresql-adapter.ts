@@ -1768,13 +1768,21 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       // default routes through executeMutation, which auto-appends
       // `RETURNING id` for bare INSERTs when use_insert_returning is on
       // (postgresql-adapter.ts:1238-1243). That would defeat the opt-out.
-      // Instead: honour an explicit `returning:` arg ourselves, then
-      // run via execQuery which executes the SQL as-is.
+      // Cannot use execQuery either — it intentionally skips
+      // materializeTransactions / dirtyCurrentTransaction (read-path
+      // optimisation), so an INSERT inside a lazy transaction would
+      // escape rollback. Use the same write-path scaffolding the
+      // pk-non-false branch below uses, just without the currval probe.
       if (returning && returning.length > 0) {
         const cols = returning.map((c) => this.quoteColumnName(c)).join(", ");
         sql = `${sql} RETURNING ${cols}`;
       }
-      return this.execQuery(sql, name, binds);
+      this.checkIfWriteQuery(sql);
+      await this.materializeTransactions();
+      return this.withClient(async (client) => {
+        this.dirtyCurrentTransaction();
+        return this._instrumentedQueryOnClient(client, sql, name ?? "SQL", binds);
+      });
     }
     if (this._useInsertReturning) {
       return super.execInsert(sql, name, binds, pk, sequenceName, returning);

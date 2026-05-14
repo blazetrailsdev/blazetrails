@@ -561,7 +561,7 @@ export class Base extends Model {
   /** @internal */
   declare static _associations: AssociationDefinition[];
   /** @internal */
-  static _registryKeys: string[] = [];
+  declare static _registryKeys: string[];
 
   /** Mirrors: ActiveRecord.writing_role */
   static writingRole = WRITING_ROLE;

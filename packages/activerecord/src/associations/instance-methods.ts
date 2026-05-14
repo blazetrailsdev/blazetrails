@@ -66,7 +66,7 @@ function assertSingularAssociation(
   name: string,
   expected: "belongsTo" | "hasOne",
 ): AssocDef {
-  const ctor = this.constructor as typeof Base & { _associations?: AssocDef[] };
+  const ctor = this.constructor as typeof Base;
   const assocDef = ctor._associations?.find((a) => a.name === name);
   if (!assocDef) {
     throw new AssociationNotFoundError(this, name);
@@ -111,7 +111,7 @@ export function association(this: Base, name: string): AssociationInstance {
     return existing;
   }
 
-  const ctor = this.constructor as typeof Base & { _associations?: AssocDef[] };
+  const ctor = this.constructor as typeof Base;
   const assocDef = ctor._associations?.find((a) => a.name === name);
   if (!assocDef) {
     throw new AssociationNotFoundError(this, name);

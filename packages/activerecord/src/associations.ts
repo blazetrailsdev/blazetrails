@@ -543,10 +543,7 @@ async function _loadThroughViaDisableJoinsScope(
  * Sync loaded result to the association instance if one exists.
  */
 function syncToAssociationInstance(record: Base, assocName: string, result: unknown): void {
-  const instances = record._associationInstances as Map<string, any> | undefined;
-  if (instances?.has(assocName)) {
-    instances.get(assocName)!.setTarget(result);
-  }
+  record._associationInstances.get(assocName)?.setTarget(result as Base | Base[] | null);
 }
 
 /**

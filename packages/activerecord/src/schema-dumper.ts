@@ -534,6 +534,9 @@ export class SchemaDumper {
       dumper = this.create(wrappedSource);
     }
     const lines: string[] = [];
+    await dumper.schemas(lines);
+    await dumper.extensions(lines);
+    await dumper.types(lines);
     await dumper.dumpTable(lines, tableName);
     return lines.join("\n");
   }
@@ -915,17 +918,14 @@ export class SchemaDumper {
 
       if (DSL_HELPER_METHODS.has(dslType)) {
         lines.push(`    t.${dslType}(${JSON.stringify(col.name)}${optionsStr});`);
+      } else if (dslType === "enum" && typeof extraOpts?.enum_type === "string") {
+        // PG enum columns: emit t.enum("col", { enum_type: "typename", ... })
+        const enumSpec = { ...colspec, enum_type: extraOpts.enum_type };
+        const enumOptsStr = `, { ${this.formatColspec(enumSpec)} }`;
+        lines.push(`    t.enum(${JSON.stringify(col.name)}${enumOptsStr});`);
       } else {
-        // No helper on TableDefinition for this type — emit the
-        // generic `column(name, type, options)` form so the dumped
-        // schema loads cleanly. `enum_type` carries the user-defined
-        // PG enum name; use it as the column type when set.
-        const columnType =
-          dslType === "enum" && typeof extraOpts?.enum_type === "string"
-            ? extraOpts.enum_type
-            : dslType;
         lines.push(
-          `    t.column(${JSON.stringify(col.name)}, ${JSON.stringify(columnType)}${optionsStr});`,
+          `    t.column(${JSON.stringify(col.name)}, ${JSON.stringify(dslType)}${optionsStr});`,
         );
       }
     }

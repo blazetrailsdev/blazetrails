@@ -767,7 +767,7 @@ export function isAssociationValid(
 
   const childErrors: any[] = record.errors?.objects ?? [];
   const associatedErrors =
-    record.isNewRecord?.() || record.changed?.() || context
+    record.isNewRecord?.() || record.changed || context
       ? childErrors
       : childErrors.filter((e: any) => e instanceof AssociationsNestedError);
 

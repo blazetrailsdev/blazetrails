@@ -151,7 +151,7 @@ interface TimestampInstanceHost {
   clearAttributeChange?(name: string): void;
   hasChangesToSave?: boolean;
   id?: unknown;
-  constructor: TimestampHost & { recordTimestamps?: boolean; partialUpdates?: boolean };
+  constructor: TimestampHost & { recordTimestamps: boolean; partialUpdates?: boolean };
 }
 
 export function touchAttributesWithTime(

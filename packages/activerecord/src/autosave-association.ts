@@ -13,6 +13,7 @@ import {
 } from "./associations/errors.js";
 import { NestedError as AssociationsNestedError } from "./associations/nested-error.js";
 import type { AssociationDefinition } from "./associations.js";
+import { hasQueryConstraints, queryConstraintsList } from "./persistence.js";
 import { underscore } from "@blazetrails/activesupport";
 import { included } from "@blazetrails/activesupport";
 
@@ -336,16 +337,23 @@ export function validateAssociations(record: Base, context?: ValidationContextAr
         if (isMarkedForDestruction(child)) continue;
         if (!child.isNewRecord() && !child.changed) continue;
 
+        // Mirrors Rails `association_valid?`: only pass custom contexts to the child.
+        // Standard :create/:update contexts do not propagate — each record uses its own default.
+        const childContext: ValidationContextArg | undefined =
+          typeof (record as any).customValidationContext === "function" &&
+          (record as any).customValidationContext()
+            ? context
+            : undefined;
         let isChildValid: boolean;
         if (assoc.type === "belongsTo") {
           _setValidatingBelongsToFor(record, assoc, true);
           try {
-            isChildValid = typeof child.isValid === "function" ? child.isValid(context) : true;
+            isChildValid = typeof child.isValid === "function" ? child.isValid(childContext) : true;
           } finally {
             _setValidatingBelongsToFor(record, assoc, false);
           }
         } else {
-          isChildValid = typeof child.isValid === "function" ? child.isValid(context) : true;
+          isChildValid = typeof child.isValid === "function" ? child.isValid(childContext) : true;
         }
 
         if (!isChildValid) {
@@ -536,7 +544,14 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
   if (childRecord.isNewRecord() || childRecord.changed) {
     const ctor = record.constructor as typeof Base;
     const foreignKey = assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
-    const primaryKey = assoc.options.primaryKey ?? ctor.primaryKey;
+    let primaryKey: string | string[] = assoc.options.primaryKey ?? ctor.primaryKey;
+    // Mirrors Rails compute_primary_key: CPK parent with single-column FK
+    // picks the "id" component of the composite key (autosave_association.rb:576-587).
+    if (Array.isArray(primaryKey) && !Array.isArray(foreignKey)) {
+      primaryKey = (primaryKey as string[]).includes("id")
+        ? "id"
+        : (primaryKey as string[])[(primaryKey as string[]).length - 1];
+    }
     if (Array.isArray(primaryKey) && Array.isArray(foreignKey)) {
       if (primaryKey.length !== foreignKey.length) {
         throw new CompositePrimaryKeyMismatchError(
@@ -898,7 +913,20 @@ export function computePrimaryKey(
   reflection: any,
 ): string | string[] {
   if (reflection.options?.primaryKey) return reflection.options.primaryKey;
-  const ctor = this.constructor;
+  const ctor = this.constructor as typeof Base & {
+    primaryKey?: string | string[];
+    _hasQueryConstraints?: boolean;
+    _queryConstraintsList?: string[] | null;
+  };
+  // Mirrors Rails autosave_association.rb:579-587
+  if (reflection.options?.queryConstraints) {
+    const qcl = queryConstraintsList.call(ctor as any);
+    if (qcl) return qcl;
+  }
+  if (hasQueryConstraints.call(ctor as any) && !reflection.options?.foreignKey) {
+    const qcl = queryConstraintsList.call(ctor as any);
+    if (qcl) return qcl;
+  }
   if (Array.isArray(ctor.primaryKey)) {
     const pk: string[] = ctor.primaryKey;
     return pk.includes("id") ? "id" : pk;

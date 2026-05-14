@@ -596,11 +596,43 @@ describe("TestDefaultAutosaveAssociationOnAHasManyAssociation", () => {
     // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
     /* cpk not fully supported */
   });
-  it.skip("has one cpk has one autosave with id", () => {
-    // BLOCKED: associations — autosave feature gap
-    // ROOT-CAUSE: associations/autosave-association.ts or preloader.ts missing autosave semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
-    /* cpk not fully supported */
+  it("has one cpk has one autosave with id", async () => {
+    // Rails: test "has_one cpk has_one autosave with id" — when the parent has a CPK
+    // and the has_one uses a non-composite single-column FK, autosave should propagate
+    // the "id" component of the composite PK into the child's FK column.
+    class CpkOrderPk extends Base {
+      static {
+        this.attribute("shop_id", "integer");
+        this.attribute("id", "integer");
+        this.attribute("status", "string");
+        this.primaryKey = ["shop_id", "id"];
+        this.adapter = adapter;
+      }
+    }
+    class CpkBookFk extends Base {
+      static {
+        this.attribute("order_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("CpkOrderPk", CpkOrderPk);
+    registerModel("CpkBookFk", CpkBookFk);
+    // has_one with single-column FK on CPK parent (like OrderWithPrimaryKeyAssociatedBook)
+    Associations.hasOne.call(CpkOrderPk, "cpkBookFk", {
+      className: "CpkBookFk",
+      foreignKey: "order_id",
+      autosave: true,
+    });
+    const order = new CpkOrderPk({ shop_id: 5, id: 7, status: "open" });
+    const book = new CpkBookFk({ title: "My Book" });
+    cacheAssoc(order, "cpkBookFk", book);
+    const saved = await order.save();
+    expect(saved).toBe(true);
+    expect(order.isNewRecord()).toBe(false);
+    expect(book.isNewRecord()).toBe(false);
+    // autosave propagates the "id" component of the composite PK into book.order_id
+    expect(book.order_id).toBe(7);
   });
   it("assign ids for through a belongs to", async () => {
     class AidFirm extends Base {
@@ -1213,11 +1245,39 @@ describe("TestAutosaveAssociationOnAHasOneAssociation", () => {
     expect(errors).toBeDefined();
   });
 
-  it.skip("should not ignore different error messages on the same attribute", () => {
-    // BLOCKED: associations — autosave feature gap
-    // ROOT-CAUSE: associations/autosave-association.ts or preloader.ts missing autosave semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
-    /* error merging details */
+  it("should not ignore different error messages on the same attribute", async () => {
+    // Rails: test "should not ignore different error messages on the same attribute"
+    // When multiple validators fire on the same child attribute, all messages
+    // should be merged onto the parent under the dotted attribute key.
+    const innerAdapter = freshAdapter();
+    class DualValidShip extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("pirate_id", "integer");
+        this.adapter = innerAdapter;
+        this.validates("name", { presence: true });
+        this.validates("name", { format: { with: /\w/ } });
+      }
+    }
+    class DualPirate extends Base {
+      static {
+        this.attribute("catchphrase", "string");
+        this.adapter = innerAdapter;
+      }
+    }
+    registerModel("DualPirate", DualPirate);
+    registerModel("DualValidShip", DualValidShip);
+    Associations.hasOne.call(DualPirate, "dualValidShip", { autosave: true });
+    const pirate = await DualPirate.create({ catchphrase: "Yarr" });
+    const ship = new DualValidShip({ name: "" });
+    cacheAssoc(pirate, "dualValidShip", ship);
+    const valid = await pirate.isValid();
+    expect(valid).toBe(false);
+    const errMap = (pirate as any).errors.messages;
+    const msgs: string[] =
+      errMap.get("dualValidShip.name") ?? errMap.get("dual_valid_ship.name") ?? [];
+    expect(msgs).toContain("can't be blank");
+    expect(msgs).toContain("is invalid");
   });
 
   it("should still allow to bypass validations on the associated model", async () => {
@@ -1238,11 +1298,58 @@ describe("TestAutosaveAssociationOnAHasOneAssociation", () => {
     expect(saved).toBe(true);
   });
 
-  it.skip("should allow to bypass validations on associated models at any depth", () => {
-    // BLOCKED: associations — autosave feature gap
-    // ROOT-CAUSE: associations/autosave-association.ts or preloader.ts missing autosave semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
-    /* deep nesting not tested */
+  it("should allow to bypass validations on associated models at any depth", async () => {
+    // Rails: test "should allow to bypass validations on associated models at any depth"
+    // save(validate: false) should skip validation on the parent and all nested records.
+    const innerAdapter = freshAdapter();
+    class DeepPart extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("ship_id", "integer");
+        this.adapter = innerAdapter;
+        this.validates("name", { presence: true });
+      }
+    }
+    class DeepShip extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("pirate_id", "integer");
+        this.adapter = innerAdapter;
+        this.validates("name", { presence: true });
+      }
+    }
+    class DeepPirate extends Base {
+      static {
+        this.attribute("catchphrase", "string");
+        this.adapter = innerAdapter;
+        this.validates("catchphrase", { presence: true });
+      }
+    }
+    registerModel("DeepPirate", DeepPirate);
+    registerModel("DeepShip", DeepShip);
+    registerModel("DeepPart", DeepPart);
+    Associations.hasOne.call(DeepPirate, "deepShip", { autosave: true });
+    Associations.hasMany.call(DeepShip, "deepParts", { autosave: true });
+
+    const pirate = await DeepPirate.create({ catchphrase: "Yarr" });
+    const ship = await DeepShip.create({ name: "Pearl", pirate_id: pirate.id });
+    const part1 = await DeepPart.create({ name: "part 0", ship_id: ship.id });
+    const part2 = await DeepPart.create({ name: "part 1", ship_id: ship.id });
+
+    pirate.catchphrase = "";
+    ship.name = "";
+    part1.name = "";
+    part2.name = "";
+    cacheAssoc(pirate, "deepShip", ship);
+    cacheAssoc(ship, "deepParts", [part1, part2]);
+
+    const saved = await pirate.save({ validate: false });
+    expect(saved).toBe(true);
+    // Reload and verify all empty strings were persisted (validations bypassed)
+    const reloadedPirate = await DeepPirate.find(pirate.id as number);
+    expect(reloadedPirate.catchphrase).toBe("");
+    const reloadedShip = await DeepShip.find(ship.id as number);
+    expect(reloadedShip.name).toBe("");
   });
   it("should still raise an ActiveRecordRecord Invalid exception if we want that", async () => {
     const { Pirate, Ship } = makeModels();
@@ -1937,11 +2044,52 @@ describe("TestAutosaveAssociationsInGeneral", () => {
     expect(ship.pirate_id).toBe(pirate.id);
   });
 
-  it.skip("autosave does not pass through non custom validation contexts", () => {
-    // BLOCKED: associations — autosave feature gap
-    // ROOT-CAUSE: associations/autosave-association.ts or preloader.ts missing autosave semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
-    /* needs custom validation contexts on autosave */
+  it("autosave does not pass through non custom validation contexts", async () => {
+    // Rails: test "autosave does not pass through non custom validation contexts"
+    // When autosave validates an associated record, it should NOT pass the owner's
+    // standard (:create/:update) validation context — only custom contexts propagate.
+    const innerAdapter = freshAdapter();
+    class Person extends Base {
+      static {
+        this.attribute("first_name", "string");
+        this.adapter = innerAdapter;
+        // :create-only validation — should not fire when context is :update
+        this.validate(
+          function (record: any) {
+            if (record.first_name !== "cool") {
+              record.errors.add("first_name", "not cool");
+            }
+          },
+          { on: "create" },
+        );
+      }
+    }
+    class Reference extends Base {
+      static {
+        this.attribute("person_id", "integer");
+        this.adapter = innerAdapter;
+      }
+    }
+    registerModel("Person", Person);
+    registerModel("Reference", Reference);
+    Associations.belongsTo.call(Reference, "person", {
+      autosave: true,
+      className: "Person",
+      foreignKey: "person_id",
+    });
+
+    const person = await Person.create({ first_name: "cool" });
+    // Change to "nah" — still valid because on:create validator doesn't run in :update context
+    person.first_name = "nah";
+    expect(await person.isValid()).toBe(true);
+
+    // autosave through reference should also be valid —
+    // autosave uses the owner's _validationContext (nil → not custom) so person is validated
+    // in its default :update context, where the :create-only validator is skipped.
+    const ref = new Reference({ person });
+    cacheAssoc(ref, "person", person);
+    const valid = await ref.isValid();
+    expect(valid).toBe(true);
   });
 
   it("autosave collection association callbacks get called once", async () => {

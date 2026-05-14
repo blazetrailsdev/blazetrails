@@ -264,12 +264,10 @@ packages/actionpack/src/actiondispatch/request/
 packages/actionpack/src/actiondispatch/middleware/session/
 ```
 
-Decision needed before Wave 1: do we use `abstractcontroller/` (mirrors
-Rails namespace exactly) or keep AbstractController under
-`actioncontroller/abstract-controller.ts` and accept the
-api:compare path divergence? Recommend **separate top-level
-directory** — `api:compare` is the primary signal and Rails splits
-the namespace.
+**Decision (2026-05-14): use `abstractcontroller/` as a separate
+top-level directory.** api:compare path matching is the primary signal;
+Rails splits the namespace; this PR sequence accepts the import-path
+churn across the monorepo as one-time cost.
 
 ### Wave 2 — action_dispatch mechanical moves (P1) (3 PRs)
 
@@ -300,12 +298,8 @@ the namespace.
   `actiondispatch/http/content-security-policy.ts`
 - `actiondispatch/permissions-policy.ts` →
   `actiondispatch/http/permissions-policy.ts`
-- `actiondispatch/request-forgery-protection.ts` → confirm Rails
-  location (it is split across actioncontroller and not under
-  actiondispatch — drop the file if duplicate, else clarify).
-- `actiondispatch/http-authentication.ts` → confirm placement
-  (Rails puts this in `action_controller/metal/http_authentication.rb`
-  only; our actiondispatch copy may be dead).
+- `actiondispatch/request-forgery-protection.ts` — **import-graph audit + delete if dead** (decision 2026-05-14). Rails has this only under `action_controller/metal/`. The actiondispatch copy is a duplicate; if no in-repo importer references it, delete. If it has importers, those importers should switch to the `actioncontroller/metal/` version.
+- `actiondispatch/http-authentication.ts` — same treatment: import-graph audit, delete if dead, else redirect importers to `actioncontroller/metal/http-authentication.ts`.
 - `actiondispatch/dispatch/request/session.ts` →
   `actiondispatch/request/session.ts`
 
@@ -342,12 +336,21 @@ the namespace.
   `actiondispatch/testing/assertions/{response,routing}.ts`.
 - Add `actiondispatch/testing/assertions.ts` aggregator + index.
 
-### Wave 5 — rename subdirectories (P4) (1 PR, ~80 LOC)
+### Wave 5 — DROPPED
 
-- `actioncontroller/trailties/` → `actioncontroller/railties/`
-  (path inside actioncontroller mirrors Rails source layout; the
-  package name `trailties` is unaffected).
-- Verify api:compare path matching after the move.
+The original audit prescribed renaming `actioncontroller/trailties/` →
+`actioncontroller/railties/`. **This was a mistake.** `trailties` is a
+deliberate project-wide naming convention: trails railties are not
+`Rails::Railtie` subclasses (different lifecycle, different surface),
+and `scripts/api-compare/conventions.ts` already encodes the precedent
+(`activerecord:railtie.rb` → `trailtie.ts`). Extend conventions.ts
+with a directory-level entry for `actioncontroller/trailties/` rather
+than renaming.
+
+Action: add an entry to `scripts/api-compare/conventions.ts` so that
+Rails' `action_controller/railties/...` paths map to our
+`actioncontroller/trailties/...`. ~10 LOC mechanical edit; bundle into
+Wave 6 or open standalone.
 
 ### Wave 6 — new infra stubs (P3) (1 PR, ~150 LOC)
 
@@ -359,28 +362,50 @@ should be either implemented or annotated as "deferred":
 - `actiondispatch/log-subscriber.ts`
 - `actiondispatch/constants.ts`
 
-Do **not** add empty stubs for journey/ or system_testing/ — flag
-those as deferred in this doc and skip until a follow-up plan exists.
+Do **not** add empty stubs for `system_testing/` — it's intentionally
+not ported (see Known divergences). `journey/` gets its own wave; do
+not stub here.
 
-### Wave 7+ — selective fill-in (open-ended)
+### Wave 7 — journey/ routing engine port (5+ PRs, multi-stage)
+
+**Decision (2026-05-14): port now.** 17 Rails files under
+`action_dispatch/journey/` — `routes.rb`, `route.rb`, `router.rb`,
+`gtg/builder.rb`, `gtg/transition_table.rb`, `nfa/builder.rb`,
+`nfa/transition_table.rb`, `nodes/node.rb`, `path/pattern.rb`,
+`scanner.rb`, `parser.rb`, `visitors.rb`, etc. The routing engine is
+a tightly-coupled module; expect 5–7 PRs:
+
+1. `journey/scanner.ts` + `journey/parser.ts` + nodes (~250 LOC)
+2. `journey/nfa/{builder,transition-table,simulator}.ts` (~280 LOC)
+3. `journey/gtg/{builder,transition-table,simulator}.ts` (~280 LOC)
+4. `journey/path/pattern.ts` + `journey/route.ts` (~250 LOC)
+5. `journey/routes.ts` + `journey/router.ts` + format/parser/visitor glue (~280 LOC)
+6. Wire-up: `actiondispatch/routing/route-set.ts` switches its router to journey-backed (~200 LOC)
+7. Tail + tests (~200 LOC)
+
+Total ~1700 LOC across 7 PRs. Real work — needs its own scoping pass
+before spawning slots; this is a placeholder sizing.
+
+### Wave 8+ — selective fill-in (open-ended)
 
 Per-file ports for missing `middleware/*` files and `http/*` files.
 Sequenced by what unblocks `actioncontroller-100-percent.md` cleanup.
 Drives independently of this audit.
 
-**Total restructure PRs: 10**, all mechanical, all ≤300 LOC.
+**Total restructure PRs: 10 mechanical waves (1–6) + ~7 journey port PRs (Wave 7) + open-ended fill-in (Wave 8+).**
 
-## Open questions for triage
+## Known divergences from Rails
 
-1. **`abstractcontroller/` as a separate top-level directory?** Recommend yes; needs parent sign-off because it affects import paths across the monorepo.
-2. **`journey/` deferral.** Is the routing engine an intentional non-port, or just not done? If non-port, add a "Known divergences" entry. If just not done, add a journey/ wave to this doc.
-3. **`system_testing/` deferral.** Capybara/Selenium dependency — likely won't port. Confirm and add to "Known divergences".
-4. **`actiondispatch/http-authentication.ts` and `actiondispatch/request-forgery-protection.ts`.** Both have actioncontroller `metal/` counterparts; verify our actiondispatch copies aren't dead code before Wave 2c.
-
-(The `actioncontroller/trailties/` → `railties/` subdir rename is
-prescribed in Wave 5 — Rails source path parity wins over the
-project-wide `trailties` package name, since `api:compare` matches by
-path. Not listed as open.)
+- **`action_dispatch/system_testing/`** — intentionally not ported.
+  Rails ships Capybara + Selenium integration; trails will use
+  Playwright / Vitest browser mode if/when browser testing is on the
+  roadmap. The 5 Rails files under `system_testing/` have no trails
+  counterpart and shouldn't be tracked as a coverage gap.
+- **`actioncontroller/trailties/` directory name** — `trailties` is a
+  deliberate naming exception (trails railties are not
+  `Rails::Railtie` subclasses). See Wave 5 above and the
+  `scripts/api-compare/conventions.ts` precedent for `railtie.rb` →
+  `trailtie.ts`.
 
 ## Tooling impact (api:compare / test:compare)
 
@@ -401,11 +426,16 @@ Test file moves follow `**/*.test.ts` glob in
 `scripts/test-compare/extract-ts-tests.ts` — they're picked up
 automatically once siblings move with their source files.
 
-### Wave 5 (trailties → railties subdir rename) — zero script changes
+### Wave 5 (DROPPED — trailties exception) — small conventions.ts add (~10 LOC)
 
 `rubyFileToTs` emits `railties/helpers.ts` from
 `action_controller/railties/helpers.rb`. The current `trailties/`
-subdir is exactly what makes the match miss; renaming fixes it.
+subdir makes the match miss. Rather than rename, extend
+`scripts/api-compare/conventions.ts` with a directory-level mapping
+analogous to the existing `activerecord:railtie.rb → trailtie.ts`
+override, so Rails' `action_controller/railties/...` paths resolve to
+our `actioncontroller/trailties/...`. Bundle into Wave 6 or open as a
+standalone ~10 LOC PR.
 
 ### Wave 3 (AbstractController top-level split) — script edits required
 

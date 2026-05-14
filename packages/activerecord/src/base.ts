@@ -1520,7 +1520,10 @@ export class Base extends Model {
 
   // -- Scopes registry (used by Relation) --
   static _scopes: Map<string, (rel: any, ...args: any[]) => any> = new Map();
-  static _defaultScope: ((rel: any) => any) | null = null;
+  /** @internal Truthy when at least one defaultScope has been declared. */
+  static _defaultScope: unknown = null;
+  /** Accumulated default_scope declarations. @internal */
+  static defaultScopes: import("./scoping/default.js").DefaultScope[] = [];
 
   // --- Default scope (wired via extend() after class body) ---
   declare static defaultScope: typeof _defaultScope;

@@ -43,7 +43,8 @@ export function scope<T extends typeof Base>(
 
 interface NamedHost {
   currentScope?: any;
-  _defaultScope?: (rel: any) => any;
+  _defaultScope?: unknown;
+  defaultScopes?: import("./default.js").DefaultScope[];
   all?(): any;
   relation?(): any;
 }
@@ -62,10 +63,19 @@ export function scopeForAssociation(this: NamedHost, scope?: any): any {
 /**
  * Mirrors: ActiveRecord::Scoping::Named::ClassMethods#default_scoped
  */
-export function defaultScoped(this: NamedHost, scope?: any): any {
-  const rel = scope ?? this.relation?.() ?? this.all?.();
-  if (this._defaultScope) {
-    return this._defaultScope(rel);
+export function defaultScoped(
+  this: NamedHost,
+  scope?: any,
+  options?: { allQueries?: boolean | null },
+): any {
+  let rel = scope ?? this.relation?.() ?? this.all?.();
+  const scopes = this.defaultScopes ?? [];
+  const allQueries = options?.allQueries;
+  for (const scopeObj of scopes) {
+    if (allQueries == null || (allQueries && scopeObj.allQueries)) {
+      const result = scopeObj.scope(rel);
+      if (result != null) rel = result;
+    }
   }
   return rel;
 }

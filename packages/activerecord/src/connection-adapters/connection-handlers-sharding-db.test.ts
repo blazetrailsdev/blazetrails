@@ -12,6 +12,7 @@ function withBaseConfigs(
 ): void {
   const prevConfigs = (Base as any).configurations;
   const prevDefaultEnv = DatabaseConfigurations.defaultEnv;
+  const prevCurrent = (DatabaseConfigurations as any).current;
   if (opts.defaultEnv) DatabaseConfigurations.defaultEnv = opts.defaultEnv;
   (Base as any).configurations = raw;
   try {
@@ -19,6 +20,7 @@ function withBaseConfigs(
   } finally {
     (Base as any).configurations = prevConfigs;
     DatabaseConfigurations.defaultEnv = prevDefaultEnv;
+    (DatabaseConfigurations as any).current = prevCurrent;
     Base.connectionHandler.clearAllConnectionsBang();
   }
 }
@@ -65,7 +67,7 @@ describe("ConnectionHandlersShardingDbTest", () => {
         const shardOnePool = Base.connectionHandler.retrieveConnectionPool("Base", {
           shard: "shard_one",
         });
-        expect(shardOnePool).not.toBeNull();
+        expect(shardOnePool).not.toBeUndefined();
         expect(shardOnePool!.dbConfig.name).toBe("primary_shard_one");
       },
       { defaultEnv: "default_env" },
@@ -109,14 +111,14 @@ describe("ConnectionHandlersShardingDbTest", () => {
         const shardOneWritingPool = Base.connectionHandler.retrieveConnectionPool("Base", {
           shard: "shard_one",
         });
-        expect(shardOneWritingPool).not.toBeNull();
+        expect(shardOneWritingPool).not.toBeUndefined();
         expect(shardOneWritingPool!.dbConfig.name).toBe("primary_shard_one");
 
         const shardOneReadingPool = Base.connectionHandler.retrieveConnectionPool("Base", {
           role: "reading",
           shard: "shard_one",
         });
-        expect(shardOneReadingPool).not.toBeNull();
+        expect(shardOneReadingPool).not.toBeUndefined();
         expect(shardOneReadingPool!.dbConfig.name).toBe("primary_shard_one_replica");
       },
       { defaultEnv: "default_env" },

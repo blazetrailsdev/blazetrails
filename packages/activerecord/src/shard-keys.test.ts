@@ -15,10 +15,12 @@ describe("ShardsKeysTest", () => {
 
   let prevConfigs: unknown;
   let prevDefaultEnv: string;
+  let prevCurrent: unknown;
 
   beforeEach(() => {
     prevConfigs = (Base as any).configurations;
     prevDefaultEnv = DatabaseConfigurations.defaultEnv;
+    prevCurrent = (DatabaseConfigurations as any).current;
     DatabaseConfigurations.defaultEnv = "default_env";
     (Base as any).configurations = {
       default_env: {
@@ -44,6 +46,7 @@ describe("ShardsKeysTest", () => {
     Base.connectionHandler.clearAllConnectionsBang();
     (Base as any).configurations = prevConfigs;
     DatabaseConfigurations.defaultEnv = prevDefaultEnv;
+    (DatabaseConfigurations as any).current = prevCurrent;
     (Base as any)._shardKeys = undefined;
   });
 

@@ -1,5 +1,5 @@
 import type { Base } from "./base.js";
-import { underscore } from "@blazetrails/activesupport";
+import { camelize, underscore } from "@blazetrails/activesupport";
 
 /**
  * Configuration for a delegated type.
@@ -141,9 +141,11 @@ export function delegatedType(
       configurable: true,
     });
 
-    // FK accessor: entry.message_id (or entry.message_uuid for UUID PKs) → returns FK if type matches
+    // FK accessor: entry.messageId (or entry.uuidMessageUuid for UUID PKs) → returns FK if type matches
     // Mirrors Rails' define_method("#{singular}_#{primary_key}") { public_send(role_id) if public_send(query) }
-    Object.defineProperty(modelClass.prototype, `${snakeName}_${primaryKey}`, {
+    // Name is camelCase of `${snakeName}_${primaryKey}` (e.g. "message_id" → "messageId").
+    const fkAccessorName = camelize(`${snakeName}_${primaryKey}`, false);
+    Object.defineProperty(modelClass.prototype, fkAccessorName, {
       get(this: Base) {
         if (this.readAttribute(foreignType) !== typeName) return null;
         return this.readAttribute(foreignKey);

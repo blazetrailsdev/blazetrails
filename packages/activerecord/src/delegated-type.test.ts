@@ -150,12 +150,12 @@ describe("DelegatedTypeTest", () => {
     const { Entry } = makeModels();
     const eMsg = new Entry({ entryable_type: "Message", entryable_id: 99 });
     expect(eMsg.entryable_id).toBe(99);
-    expect((eMsg as any).message_id).toBe(99);
-    expect((eMsg as any).comment_id).toBeNull();
+    expect((eMsg as any).messageId).toBe(99);
+    expect((eMsg as any).commentId).toBeNull();
 
     const eCmt = new Entry({ entryable_type: "Comment", entryable_id: 42 });
-    expect((eCmt as any).comment_id).toBe(42);
-    expect((eCmt as any).message_id).toBeNull();
+    expect((eCmt as any).commentId).toBe(42);
+    expect((eCmt as any).messageId).toBeNull();
   });
 
   it("association uuid", () => {
@@ -183,15 +183,15 @@ describe("DelegatedTypeTest", () => {
       entryable_type: "UuidMessage",
       entryable_uuid: uuid1,
     });
-    expect((entryWithMessage as any).uuid_message_uuid).toBe(uuid1);
-    expect((entryWithMessage as any).uuid_comment_uuid).toBeNull();
+    expect((entryWithMessage as any).uuidMessageUuid).toBe(uuid1);
+    expect((entryWithMessage as any).uuidCommentUuid).toBeNull();
 
     const entryWithComment = new UuidEntry({
       entryable_type: "UuidComment",
       entryable_uuid: uuid2,
     });
-    expect((entryWithComment as any).uuid_comment_uuid).toBe(uuid2);
-    expect((entryWithComment as any).uuid_message_uuid).toBeNull();
+    expect((entryWithComment as any).uuidCommentUuid).toBe(uuid2);
+    expect((entryWithComment as any).uuidMessageUuid).toBeNull();
   });
 
   it.skip("touch account", () => {

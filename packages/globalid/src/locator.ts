@@ -27,6 +27,8 @@ export interface LocateOptions {
 export interface LocateSignedOptions extends LocateOptions {
   /** Purpose to verify against (Rails: `for:`). */
   for?: string;
+  /** Alias of `for` kept consistent with SignedGlobalIDOptions/ParseOptions. */
+  purpose?: string;
   /** Verifier to validate the SGID signature. */
   verifier: MessageVerifier;
 }
@@ -117,31 +119,34 @@ export class Locator {
   }
 
   /**
-   * Mirrors: Locator.locate_signed(sgid, options).
-   * Parses the SGID with the supplied verifier; returns null on invalid
-   * signature, expired token, purpose mismatch, or unknown model class.
+   * Mirrors: Locator.locate_signed(sgid, options). Accepts a token string or
+   * a SignedGlobalID instance (parity with `locate` which accepts string |
+   * GlobalID). Returns null on invalid signature, expired token, purpose
+   * mismatch, or unknown model class.
    */
-  static async locateSigned(sgid: string, options: LocateSignedOptions): Promise<unknown | null> {
-    const parsed = SignedGlobalID.parse(sgid, {
-      for: options.for,
-      verifier: options.verifier,
-    });
+  static async locateSigned(
+    sgid: string | SignedGlobalID,
+    options: LocateSignedOptions,
+  ): Promise<unknown | null> {
+    const purpose = options.for ?? options.purpose;
+    const parsed = SignedGlobalID.parse(String(sgid), { for: purpose, verifier: options.verifier });
     if (!parsed) return null;
     return Locator.locate(parsed.uri, options);
   }
 
   /**
-   * Mirrors: Locator.locate_many_signed(sgids, options).
-   * Filters out invalid/expired SGIDs and locates the rest. Empty array if
-   * none verify.
+   * Mirrors: Locator.locate_many_signed(sgids, options). Accepts strings or
+   * SignedGlobalID instances. Filters out invalid/expired SGIDs and locates
+   * the rest. Empty array if none verify.
    */
-  static async locateManySigned(sgids: string[], options: LocateSignedOptions): Promise<unknown[]> {
+  static async locateManySigned(
+    sgids: Array<string | SignedGlobalID>,
+    options: LocateSignedOptions,
+  ): Promise<unknown[]> {
+    const purpose = options.for ?? options.purpose;
     const uris: string[] = [];
     for (const s of sgids) {
-      const parsed = SignedGlobalID.parse(s, {
-        purpose: options.for,
-        verifier: options.verifier,
-      });
+      const parsed = SignedGlobalID.parse(String(s), { for: purpose, verifier: options.verifier });
       if (parsed) uris.push(parsed.uri);
     }
     return Locator.locateMany(uris, options);

@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import { Base, RecordNotFound } from "./index.js";
+import { Base, RecordNotFound, registerSubclass } from "./index.js";
 import { setSignedIdVerifierSecret, signedIdVerifier } from "./signed-id.js";
 import { SignedGlobalID, setApp, _resetApp } from "@blazetrails/globalid";
 
@@ -330,6 +330,28 @@ describe("Base.findGlobalId", () => {
     setApp("MyApp");
     const found = await Base.findGlobalId("gid://MyApp/NoSuchModel/1");
     expect(found).toBeNull();
+  });
+
+  it("resolves an inherited-adapter STI subclass via the descendants fallback", async () => {
+    setApp("MyApp");
+    const adapter = freshAdapter();
+    class Animal extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class Dog extends Animal {
+      static {
+        // STI subclass registers with its parent; does NOT set its own adapter.
+        registerSubclass(this);
+      }
+    }
+    const d = await Dog.create({ name: "Rex" });
+    const found = (await Base.findGlobalId(d.toGid())) as Dog;
+    expect(found).toBeInstanceOf(Dog);
+    expect(found.id).toBe(d.id);
   });
 });
 

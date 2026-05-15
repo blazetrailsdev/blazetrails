@@ -5,6 +5,24 @@ import {
   Locator as _Locator,
   GlobalID as _GlobalIDCtor,
 } from "@blazetrails/globalid";
+import type { SignedGlobalID as _SignedGlobalIDType } from "@blazetrails/globalid/signed-global-id";
+
+/**
+ * Options accepted by {@link Base.toSgid} / {@link Base.toSignedGlobalId} /
+ * {@link Base.toSgidParam}. Mirrors SignedGlobalIDOptions minus `verifier`
+ * (AR supplies the verifier via signedIdVerifier(this)). The index signature
+ * carries arbitrary keys through as GID URI params, matching Rails.
+ */
+interface ToSgidOptions {
+  app?: string;
+  /** Rails-canonical purpose option. */
+  for?: string;
+  /** Alias of `for` kept for backward compatibility. */
+  purpose?: string;
+  expiresIn?: number;
+  expiresAt?: Temporal.Instant;
+  [key: string]: unknown;
+}
 import type {
   GlobalIDModel,
   SignedGlobalID as SignedGlobalIDType,
@@ -2846,9 +2864,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base#to_sgid
    */
-  async toSgid(
-    options?: Omit<import("@blazetrails/globalid").SignedGlobalIDOptions, "verifier">,
-  ): Promise<SignedGlobalIDType> {
+  async toSgid(options?: ToSgidOptions): Promise<SignedGlobalIDType> {
     const [SgidMod, SignedIdModule] = await Promise.all([loadSgid(), loadSignedId()]);
     const verifier = SignedIdModule.signedIdVerifier(this.constructor as typeof Base);
     return SgidMod.SignedGlobalID.create(this as GlobalIDModel, { ...options, verifier });
@@ -2897,7 +2913,7 @@ export class Base extends Model {
 
   /** Mirrors: ActiveRecord::Base.find_signed_global_id — uses signedIdVerifier(this). */
   static async findSignedGlobalId(
-    input: string,
+    input: string | _SignedGlobalIDType,
     options?: Omit<import("@blazetrails/globalid").LocateSignedOptions, "verifier">,
   ): Promise<unknown | null> {
     const SignedIdModule = await loadSignedId();
@@ -2907,7 +2923,7 @@ export class Base extends Model {
 
   /** Mirrors: ActiveRecord::Base.find_signed_global_id! — throws on miss. */
   static async findSignedGlobalIdBang(
-    input: string,
+    input: string | _SignedGlobalIDType,
     options?: Omit<import("@blazetrails/globalid").LocateSignedOptions, "verifier">,
   ): Promise<unknown> {
     const found = await this.findSignedGlobalId(input, options);

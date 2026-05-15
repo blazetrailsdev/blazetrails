@@ -1115,7 +1115,6 @@ export function addAutosaveAssociationCallbacks(model: any, reflection: any): vo
   defineAutosaveValidationCallbacks(model, reflection);
 }
 
-
 /** @internal */
 function defineAutosaveValidationCallbacks(klass: any, reflection: any): void {
   if (!reflection.validate) return;
@@ -1153,4 +1152,3 @@ function defineAutosaveValidationCallbacks(klass: any, reflection: any): void {
     });
   }
 }
-

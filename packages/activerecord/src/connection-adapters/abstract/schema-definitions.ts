@@ -985,7 +985,7 @@ export class TableDefinition {
     });
     parts.push(`(${quotedCols.join(", ")})`);
     let sql = parts.join(" ");
-    if (idx.comment) sql += ` COMMENT '${idx.comment.replace(/'/g, "''")}'`;
+    if (idx.comment) sql += ` COMMENT '${idx.comment.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
     return sql;
   }
 

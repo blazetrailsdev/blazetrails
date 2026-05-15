@@ -167,7 +167,7 @@ export class SchemaStatements {
       await this.adapter.changeTableComment(name, options.comment);
     }
 
-    if (this.adapter.adapterName !== "mysql") {
+    if (!this.adapter.supportsIndexesInCreate?.()) {
       for (const idx of td.indexes) {
         await this.addIndex(name, idx.columns, {
           unique: idx.unique,

@@ -64,7 +64,7 @@ export class SchemaCreation extends AbstractSchemaCreation {
   /** @internal */
   override typeToSql(type: ColumnType, options: ColumnOptions = {}): string {
     const limit = options.limit as number | null | undefined;
-    const unsigned = (options as Record<string, unknown>).unsigned;
+    const unsigned = options.unsigned;
     let sql: string;
     switch (type) {
       case "float":

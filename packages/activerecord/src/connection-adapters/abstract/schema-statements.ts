@@ -653,13 +653,7 @@ export class SchemaStatements {
         };
       const recorder: SchemaStatementsLike = {
         addIndex: rec("addIndex"),
-        removeIndex: (t, opts) => {
-          // Rails' CommandRecorder captures removeIndex as [tableName, options]; bulkChangeTable
-          // dispatches to removeIndexForAlter(tableName, column, options). Extract column to match.
-          const { column, ...rest } = (opts ?? {}) as any;
-          ops.push(["removeIndex", t, column, rest]);
-          return Promise.resolve();
-        },
+        removeIndex: rec("removeIndex"),
         addColumn: rec("addColumn"),
         removeColumn: rec("removeColumn"),
         renameColumn: rec("renameColumn"),
@@ -1497,13 +1491,13 @@ export class SchemaStatements {
     const nonCombinable: Array<() => Promise<void>> = [];
 
     for (const [command, table, ...arguments_] of operations) {
-      // Check SchemaStatements first, then the adapter — mirrors Rails where bulk_change_table
-      // lives on the adapter and calls adapter-defined *_for_alter methods.
+      // Prefer adapter-specific *ForAlter over the generic SchemaStatements one — mirrors Rails
+      // where bulk_change_table and all *_for_alter methods live on the same adapter object.
       const forAlterTarget =
-        typeof (this as any)[`${command}ForAlter`] === "function"
-          ? (this as any)
-          : typeof (this.adapter as any)[`${command}ForAlter`] === "function"
-            ? (this.adapter as any)
+        typeof (this.adapter as any)[`${command}ForAlter`] === "function"
+          ? (this.adapter as any)
+          : typeof (this as any)[`${command}ForAlter`] === "function"
+            ? (this as any)
             : null;
       const forAlterMethod = forAlterTarget ? forAlterTarget[`${command}ForAlter`] : null;
       if (typeof forAlterMethod === "function") {
@@ -2046,6 +2040,18 @@ export class SchemaStatements {
     _options: Record<string, unknown> = {},
   ): string[] {
     return columnNames.map((col) => this.removeColumnForAlter(tableName, col));
+  }
+
+  /** @internal */
+  removeIndexForAlter(
+    tableName: string,
+    options: { column?: string | string[]; name?: string } = {},
+  ): string {
+    const name =
+      options.name ??
+      (options.column ? this.indexName(tableName, { column: options.column }) : undefined);
+    if (!name) throw new Error("removeIndexForAlter: must specify :name or :column");
+    return `DROP INDEX ${this.adapter.quoteIdentifier(name)}`;
   }
 
   /** @internal */

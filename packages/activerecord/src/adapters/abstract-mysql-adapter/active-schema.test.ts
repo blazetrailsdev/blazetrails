@@ -187,8 +187,8 @@ describeIfMysql("Mysql2Adapter", () => {
 
     it("add timestamps", async () => {
       const ss = adapter.schemaStatements();
-      await ss.createTable("delete_me", { force: true });
       try {
+        await ss.createTable("delete_me", { force: true });
         await ss.addTimestamps("delete_me", { null: true });
         expect(await ss.columnExists("delete_me", "updated_at")).toBe(true);
         expect(await ss.columnExists("delete_me", "created_at")).toBe(true);
@@ -198,10 +198,10 @@ describeIfMysql("Mysql2Adapter", () => {
     });
     it("remove timestamps", async () => {
       const ss = adapter.schemaStatements();
-      await ss.createTable("delete_me", { force: true }, (t) => {
-        return t.timestamps({ null: true });
-      });
       try {
+        await ss.createTable("delete_me", { force: true }, (t) => {
+          return t.timestamps({ null: true });
+        });
         await ss.removeTimestamps("delete_me");
         expect(await ss.columnExists("delete_me", "updated_at")).toBe(false);
         expect(await ss.columnExists("delete_me", "created_at")).toBe(false);

@@ -28,6 +28,7 @@ import { Table } from "@blazetrails/arel";
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import { UnknownPrimaryKey } from "./errors.js";
+import { ArgumentError } from "@blazetrails/activemodel";
 
 // -- Helpers --
 function freshAdapter(): DatabaseAdapter {
@@ -1040,9 +1041,7 @@ describe("ReflectionTest", () => {
     expect(ref.validate).toBe(false);
   });
   it.skip("symbol for class name", () => {
-    // BLOCKED: associations — reflection feature gap (macros / options inspection)
-    // ROOT-CAUSE: reflection.ts#AggregateReflection or ThroughReflection missing Rails parity
-    // SCOPE: ~50 LOC in reflection.ts; affects ~31 tests in reflection.test.ts
+    // UNPORTED: Ruby Symbol type for className has no JS equivalent.
   });
   it("class for class name", () => {
     class Firm extends Base {
@@ -1066,10 +1065,29 @@ describe("ReflectionTest", () => {
       }),
     ).toThrow(/expecting a string/);
   });
-  it.skip("class for source type", () => {
-    // BLOCKED: associations — reflection feature gap (macros / options inspection)
-    // ROOT-CAUSE: reflection.ts#AggregateReflection or ThroughReflection missing Rails parity
-    // SCOPE: ~50 LOC in reflection.ts; affects ~31 tests in reflection.test.ts
+  it("class for source type", () => {
+    class NsTag extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class NsPost extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("NsTag", NsTag);
+    registerModel("NsPost", NsPost);
+    expect(() =>
+      Associations.hasMany.call(NsTag, "taggedPosts", {
+        through: "taggings",
+        source: "taggable",
+        // @ts-expect-error sourceType must be a string, not a class
+        sourceType: NsPost,
+      }),
+    ).toThrow(ArgumentError);
   });
   it("join table with common prefix", () => {
     class CatalogCategory extends Base {
@@ -1184,24 +1202,16 @@ describe("ReflectionTest", () => {
     expect(ref!.name).toBe("books");
   });
   it.skip("reflect on missing source assocation raise exception", () => {
-    // BLOCKED: associations — reflection feature gap (macros / options inspection)
-    // ROOT-CAUSE: reflection.ts#AggregateReflection or ThroughReflection missing Rails parity
-    // SCOPE: ~50 LOC in reflection.ts; affects ~31 tests in reflection.test.ts
+    // UNPORTED: relies on Ruby Hotel/Chef fixture models — Slot C.
   });
   it.skip("name error from incidental code is not converted to name error for association", () => {
-    // BLOCKED: associations — reflection feature gap (macros / options inspection)
-    // ROOT-CAUSE: reflection.ts#AggregateReflection or ThroughReflection missing Rails parity
-    // SCOPE: ~50 LOC in reflection.ts; affects ~31 tests in reflection.test.ts
+    // UNPORTED: relies on Ruby const_missing mechanism — no JS equivalent.
   });
   it.skip("automatic inverse suppresses name error for association", () => {
-    // BLOCKED: associations — reflection feature gap (macros / options inspection)
-    // ROOT-CAUSE: reflection.ts#AggregateReflection or ThroughReflection missing Rails parity
-    // SCOPE: ~50 LOC in reflection.ts; affects ~31 tests in reflection.test.ts
+    // UNPORTED: relies on Ruby const_missing mechanism — no JS equivalent.
   });
   it.skip("automatic inverse does not suppress name error from incidental code", () => {
-    // BLOCKED: associations — reflection feature gap (macros / options inspection)
-    // ROOT-CAUSE: reflection.ts#AggregateReflection or ThroughReflection missing Rails parity
-    // SCOPE: ~50 LOC in reflection.ts; affects ~31 tests in reflection.test.ts
+    // UNPORTED: relies on Ruby const_missing mechanism — no JS equivalent.
   });
 
   it("has one and belongs to should find inverse automatically", () => {
@@ -1819,11 +1829,70 @@ describe("ReflectionTest", () => {
     expect(addr.city).toBe("Springfield");
   });
 
-  it.skip("association reflection in modules", () => {
-    // BLOCKED: associations — reflection feature gap (macros / options inspection)
-    // ROOT-CAUSE: reflection.ts#AggregateReflection or ThroughReflection missing Rails parity
-    // SCOPE: ~50 LOC in reflection.ts; affects ~31 tests in reflection.test.ts
-    // Requires module/namespace support
+  it("association reflection in modules", () => {
+    const adp = freshAdapter();
+    class NsBizFirm extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adp;
+      }
+    }
+    class NsBizClient extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("firm_id", "integer");
+        this.adapter = adp;
+      }
+    }
+    class NsBillingAccount extends Base {
+      static {
+        this.attribute("firm_id", "integer");
+        this.adapter = adp;
+      }
+    }
+    class NsBillingFirm extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adp;
+      }
+    }
+    class NsBillingNestedFirm extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adp;
+      }
+    }
+    registerModel("MyApplication::Business::Firm", NsBizFirm);
+    registerModel("MyApplication::Business::Client", NsBizClient);
+    registerModel("MyApplication::Billing::Account", NsBillingAccount);
+    registerModel("MyApplication::Billing::Firm", NsBillingFirm);
+    registerModel("MyApplication::Billing::Nested::Firm", NsBillingNestedFirm);
+
+    // Unqualified "Client" resolves namespace-relative from MyApplication::Business::Firm
+    Associations.hasMany.call(NsBizFirm, "clientsOfFirm", { className: "Client" });
+    const firmRef = reflectOnAssociation(NsBizFirm, "clientsOfFirm");
+    expect(firmRef!.klass).toBe(NsBizClient);
+    expect(firmRef!.className).toBe("Client");
+
+    // Fully qualified class_name resolves absolutely
+    Associations.belongsTo.call(NsBillingAccount, "firm", {
+      className: "MyApplication::Business::Firm",
+    });
+    const acctFirmRef = reflectOnAssociation(NsBillingAccount, "firm");
+    expect(acctFirmRef!.klass).toBe(NsBizFirm);
+    expect(acctFirmRef!.className).toBe("MyApplication::Business::Firm");
+
+    // Unqualified "Firm" resolves namespace-relative from MyApplication::Billing::Account
+    Associations.belongsTo.call(NsBillingAccount, "unqualifiedBillingFirm", { className: "Firm" });
+    const unqualRef = reflectOnAssociation(NsBillingAccount, "unqualifiedBillingFirm");
+    expect(unqualRef!.klass).toBe(NsBillingFirm);
+
+    // Partially qualified "Nested::Firm" resolves namespace-relative
+    Associations.belongsTo.call(NsBillingAccount, "nestedUnqualifiedBillingFirm", {
+      className: "Nested::Firm",
+    });
+    const nestedRef = reflectOnAssociation(NsBillingAccount, "nestedUnqualifiedBillingFirm");
+    expect(nestedRef!.klass).toBe(NsBillingNestedFirm);
   });
 
   it("has and belongs to many reflection", () => {

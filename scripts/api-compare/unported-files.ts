@@ -318,6 +318,18 @@ export const UNPORTED_FILES: UnportedFile[] = [
       "Tests Marshal/YAML binary encoding of AR records. " +
       "Ruby binary serialization formats have no Node.js equivalent.",
   },
+  {
+    testFile: "reflection_test.rb",
+    tests: [
+      "symbol for class name",
+      "name error from incidental code is not converted to name error for association",
+      "automatic inverse suppresses name error for association",
+      "automatic inverse does not suppress name error from incidental code",
+    ],
+    reason:
+      "Ruby-only language semantics: Symbol type for class_name and const_missing mechanism " +
+      "have no JavaScript equivalent.",
+  },
 ];
 
 export function isSourceUnported(file: string): boolean {

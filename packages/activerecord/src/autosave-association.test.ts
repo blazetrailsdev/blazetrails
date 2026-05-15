@@ -2102,6 +2102,44 @@ describe("TestAutosaveAssociationsInGeneral", () => {
     expect(valid).toBe(true);
   });
 
+  it("custom validation context is applied to unchanged persisted children", async () => {
+    // Rails association_valid? always validates; the `|| context` guard in error
+    // propagation (autosave_association.rb:384) means custom contexts fire even
+    // on unchanged persisted children, unlike the default :create/:update skip.
+    const innerAdapter = freshAdapter();
+    class Widget extends Base {
+      static {
+        this.attribute("status", "string");
+        this.attribute("owner_id", "integer");
+        this.adapter = innerAdapter;
+        this.validates("status", { presence: true, on: "publish" } as any);
+      }
+    }
+    class Owner extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = innerAdapter;
+      }
+    }
+    registerModel("Widget", Widget);
+    registerModel("Owner", Owner);
+    Associations.hasMany.call(Owner, "widgets", { autosave: true });
+
+    const owner = await Owner.create({ name: "Alice" });
+    // Create a persisted, unchanged widget with a blank status
+    const widget = await Widget.create({ status: "", owner_id: owner.id });
+    cacheAssoc(owner, "widgets", [widget]);
+
+    // Default context: widget is unchanged → skipped → owner is valid
+    const defaultValid = await owner.isValid();
+    expect(defaultValid).toBe(true);
+
+    // Custom context "publish": unchanged widget must be validated too, and its
+    // presence validator fires → owner is invalid
+    const publishValid = await owner.isValid("publish" as any);
+    expect(publishValid).toBe(false);
+  });
+
   it("autosave collection association callbacks get called once", async () => {
     const adapter = freshAdapter();
     let saveCount = 0;

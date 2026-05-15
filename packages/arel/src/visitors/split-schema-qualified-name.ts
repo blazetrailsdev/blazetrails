@@ -2,10 +2,7 @@
  * Split a schema-qualified table name on unquoted dots, preserving
  * double-quoted segments (which may themselves contain dots).
  *
- * Examples:
- *   "schema.table"          → ["schema", "table"]
- *   'schema."table.name"'   → ["schema", '"table.name"']
- *   '"my.schema".table'     → ['"my.schema"', "table"]
+ * @internal
  */
 export function splitSchemaQualifiedName(name: string): string[] {
   const parts: string[] = [];
@@ -36,10 +33,7 @@ export function splitSchemaQualifiedName(name: string): string[] {
  * Quote each part of a schema-qualified name with ANSI double-quotes,
  * stripping any existing outer quotes before re-quoting.
  *
- * Examples:
- *   "schema.table"          → '"schema"."table"'
- *   'schema."table.name"'   → '"schema"."table.name"'
- *   '"my.schema".table'     → '"my.schema"."table"'
+ * @internal
  */
 export function quoteSchemaQualifiedName(name: string): string {
   return splitSchemaQualifiedName(name)

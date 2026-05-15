@@ -152,11 +152,17 @@ export class SignedGlobalID {
     return this._parts().params;
   }
 
-  /** Mirrors: SignedGlobalID#== — equal iff URI and purpose match. */
+  /**
+   * Mirrors: SignedGlobalID#== — equal iff URI and purpose match.
+   *
+   * Compares by value, not by class identity: TS treats src/ vs dist/
+   * resolutions of this module as distinct classes due to private fields
+   * (same trap base.ts works around for findSignedGlobalId), so an
+   * `instanceof` check would falsely report two value-equal SGIDs as
+   * different across module boundaries.
+   */
   equals(other: SignedGlobalID): boolean {
-    return (
-      other instanceof SignedGlobalID && this.uri === other.uri && this.purpose === other.purpose
-    );
+    return other != null && this.uri === other.uri && this.purpose === other.purpose;
   }
 
   /** Mirrors: SignedGlobalID#inspect — `#<SignedGlobalID:0x...>` (stable per instance). */
@@ -199,16 +205,15 @@ function verifyToken(
 function pickExpiration(
   options: Pick<SignedGlobalIDOptions, "expiresAt" | "expiresIn">,
 ): Temporal.Instant | undefined {
-  // Rails: pick_expiration uses options.key?(:expires_at) — explicit key
-  // presence (even with nil) wins over expires_in. So:
-  //   { expiresAt: null, expiresIn: 60 }   → null (no expiration)
-  //   { expiresAt: <instant>, expiresIn: 60 } → expiresAt
-  //   { expiresIn: 60 }                    → expiresIn
-  //   { expiresIn: null }                  → no expiration
-  //   {}                                   → no expiration
-  if ("expiresAt" in options) return options.expiresAt ?? undefined;
-  if ("expiresIn" in options) {
-    if (options.expiresIn == null) return undefined;
+  // Rails parity (with TS-friendly tweak for the spread-defaults case):
+  //   - explicit null   → disable expiration; wins over expiresIn (Rails nil)
+  //   - real Instant    → use it
+  //   - undefined       → treat as omitted; fall through to expiresIn
+  //                       (so `{ ...defaults, expiresIn: 60 }` where defaults
+  //                       has expiresAt: undefined doesn't silently disable)
+  if (options.expiresAt !== undefined) return options.expiresAt ?? undefined;
+  if (options.expiresIn !== undefined) {
+    if (options.expiresIn === null) return undefined;
     const ms = Math.round(options.expiresIn * 1000);
     return Temporal.Now.instant().add({ milliseconds: ms });
   }

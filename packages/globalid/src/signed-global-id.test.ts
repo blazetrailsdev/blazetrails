@@ -171,6 +171,18 @@ describe("SignedGlobalIDExpirationTest", () => {
     expect(Temporal.Instant.compare(sgid.expiresAt!, future)).toBe(0);
   });
 
+  it("expires_at: undefined falls through to expires_in (spread-defaults case)", () => {
+    // `{ ...defaults, expiresIn: 60 }` where defaults has expiresAt: undefined
+    // should still use expiresIn — undefined means 'omitted', not 'disable'.
+    const verifier = makeVerifier();
+    const sgid = SignedGlobalID.create(person(5), {
+      verifier,
+      expiresAt: undefined,
+      expiresIn: 3600,
+    });
+    expect(sgid.expiresAt).toBeDefined();
+  });
+
   it("explicit expires_at: null disables expiration even with expires_in present", () => {
     // Rails: pick_expiration uses options.key?(:expires_at), so an explicit
     // expires_at: nil wins over expires_in — even past expires_in values

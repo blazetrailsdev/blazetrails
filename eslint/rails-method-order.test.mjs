@@ -25,7 +25,6 @@ process.on("exit", () => {
 
 const classFile = path.join(REPO_ROOT, "packages/arel/src/fixture-class.ts");
 const fnFile = path.join(REPO_ROOT, "packages/arel/src/fixture-fns.ts");
-const mixedFile = path.join(REPO_ROOT, "packages/arel/src/fixture-mixed.ts");
 const unlistedFile = path.join(REPO_ROOT, "packages/arel/src/fixture-unlisted.ts");
 
 const tester = new RuleTester({
@@ -85,6 +84,47 @@ tester.run("rails-method-order", rule, {
       code: `export function gamma() {}\nexport function alpha() {}\nexport function beta() {}\n`,
       errors: [{ messageId: "outOfOrder" }],
       output: `export function alpha() {}\nexport function beta() {}\nexport function gamma() {}\n`,
+    },
+    // Line `//` comment block travels with the method.
+    {
+      filename: classFile,
+      code:
+        `class X {\n` +
+        `  // line comment for second\n` +
+        `  // continued\n` +
+        `  second() {}\n` +
+        `  // line comment for first\n` +
+        `  first() {}\n` +
+        `}\n`,
+      errors: [{ messageId: "outOfOrder" }],
+      output:
+        `class X {\n` +
+        `  // line comment for first\n` +
+        `  first() {}\n` +
+        `  // line comment for second\n` +
+        `  // continued\n` +
+        `  second() {}\n` +
+        `}\n`,
+    },
+    // Multi-class file: each ClassBody is reordered independently using
+    // the same manifest list. Names not in this container's manifest
+    // intersection stay put.
+    {
+      filename: classFile,
+      code:
+        `class A {\n  second() {}\n  first() {}\n}\n` +
+        `class B {\n  third() {}\n  second() {}\n}\n`,
+      errors: [{ messageId: "outOfOrder" }],
+      output:
+        `class A {\n  first() {}\n  second() {}\n}\n` +
+        `class B {\n  second() {}\n  third() {}\n}\n`,
+    },
+    // Blank line between methods is preserved across reorder.
+    {
+      filename: classFile,
+      code: `class X {\n  second() {}\n\n  first() {}\n}\n`,
+      errors: [{ messageId: "outOfOrder" }],
+      output: `class X {\n  first() {}\n\n  second() {}\n}\n`,
     },
     // JSDoc travels with the method on reorder.
     {

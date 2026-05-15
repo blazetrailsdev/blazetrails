@@ -71,7 +71,11 @@ function extendedStart(node, sourceCode) {
     if (!c.loc) break;
     if (c.loc.end.line !== prevLine - 1) break;
     const tokenBetween = sourceCode.getTokenAfter(c, { includeComments: false });
-    if (tokenBetween && tokenBetween.range[0] < node.range[0] && tokenBetween.range[0] >= c.range[1]) {
+    if (
+      tokenBetween &&
+      tokenBetween.range[0] < node.range[0] &&
+      tokenBetween.range[0] >= c.range[1]
+    ) {
       break;
     }
     attachedStart = c.range[0];
@@ -171,7 +175,7 @@ const rule = {
     schema: [],
     messages: {
       outOfOrder:
-        "Members are not in Rails source order. Expected sequence (mapped names): {{expected}}; got: {{actual}}.",
+        "Members are not in Rails source order ({{count}} mismatch(es)). Expected first mismatch: `{{name}}` should precede `{{before}}`. Run `pnpm lint --fix` to apply.",
     },
   },
   create(context) {
@@ -198,8 +202,8 @@ const rule = {
         }
 
         const fixes = [];
-        let firstOutOfOrder = null;
-        const reports = [];
+        let firstMismatch = null; // { node, expectedName, beforeName }
+        let mismatchCount = 0;
 
         for (const { members } of containers) {
           const target = computeTargetOrder(members, expectedOrder);
@@ -215,23 +219,28 @@ const rule = {
               range: [slotBlocks[i].start, slotBlocks[i].end],
               text: targetBlocks[i].text,
             });
+            if (members[i] !== target[i]) {
+              mismatchCount++;
+              if (!firstMismatch) {
+                firstMismatch = {
+                  node: members[i],
+                  expectedName: memberName(target[i]),
+                  beforeName: memberName(members[i]),
+                };
+              }
+            }
           }
-
-          const mappedActual = members.map(memberName).filter((n) => n && expectedOrder.includes(n));
-          const mappedExpected = target.map(memberName).filter((n) => n && expectedOrder.includes(n));
-          if (!firstOutOfOrder) firstOutOfOrder = members[0];
-          reports.push({ actual: mappedActual, expected: mappedExpected });
         }
 
         if (fixes.length === 0) return;
 
-        const combined = reports[0];
         context.report({
-          node: firstOutOfOrder ?? programNode,
+          node: firstMismatch.node,
           messageId: "outOfOrder",
           data: {
-            expected: combined.expected.join(", "),
-            actual: combined.actual.join(", "),
+            count: String(mismatchCount),
+            name: firstMismatch.expectedName ?? "?",
+            before: firstMismatch.beforeName ?? "?",
           },
           fix(fixer) {
             // Sort fixes by range start; ESLint requires non-overlapping

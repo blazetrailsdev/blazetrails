@@ -14,7 +14,11 @@ export interface LocatorModel {
 export interface LocateOptions {
   /** Class allowlist — only return records whose class matches one of these. */
   only?: LocatorModel | LocatorModel[];
-  /** Use `where(pk: ids)` instead of `find(ids)` so missing records yield `null`. */
+  /**
+   * Use `where(pk: ids)` instead of `find(ids)` so missing records are
+   * silently skipped (the result array is shorter than the input). Without
+   * this option, a missing record causes `find` to throw.
+   */
   ignoreMissing?: boolean;
 }
 
@@ -78,8 +82,9 @@ export class Locator {
     for (const [klass, ids] of idsByClass) {
       const records = await findRecords(klass, ids, options);
       const byId = new Map<string, unknown>();
+      const pkProp = recordIdProp(klass);
       for (const rec of records) {
-        byId.set(idKey((rec as { id: unknown }).id), rec);
+        byId.set(idKey((rec as Record<string, unknown>)[pkProp]), rec);
       }
       recordsByClassAndId.set(klass.name, byId);
     }
@@ -115,9 +120,10 @@ async function findRecords(
   ids: unknown[],
   options: LocateOptions,
 ): Promise<unknown[]> {
-  if (options.ignoreMissing && klass.where) {
-    const pk = klass.primaryKey ?? "id";
-    const pkKey = Array.isArray(pk) ? pk[0] : pk;
+  // Composite primary keys don't have a single column to filter by, so fall
+  // through to the batch find path even with ignoreMissing.
+  if (options.ignoreMissing && klass.where && !Array.isArray(klass.primaryKey)) {
+    const pkKey = klass.primaryKey ?? "id";
     const rel = klass.where({ [pkKey]: ids });
     const records = await (rel.toArray ? rel.toArray() : []);
     return Array.isArray(records) ? records : [];
@@ -127,6 +133,15 @@ async function findRecords(
   return Array.isArray(result) ? result : [result];
 }
 
+/** Property name to read the primary key value from a record instance. */
+function recordIdProp(klass: LocatorModel): string {
+  // AR exposes composite PKs through `.id` (array form), so use "id" for
+  // composite. For scalar PKs, honor klass.primaryKey when set.
+  return Array.isArray(klass.primaryKey) ? "id" : (klass.primaryKey ?? "id");
+}
+
+/** Serialize an id to a Map key, using JSON for arrays so `['a/b','c']` and
+ *  `['a','b/c']` don't collide. @internal */
 function idKey(id: unknown): string {
-  return Array.isArray(id) ? id.map(String).join("/") : String(id);
+  return Array.isArray(id) ? JSON.stringify(id.map(String)) : String(id);
 }

@@ -125,6 +125,66 @@ describe("GlobalLocatorTest", () => {
   });
 });
 
+describe("locateMany with custom primaryKey and slash-containing composite ids", () => {
+  class UuidModel {
+    static name = "UuidModel";
+    static primaryKey = "uuid";
+    uuid: string;
+    constructor(uuid: string) {
+      this.uuid = uuid;
+    }
+    static async find(id: unknown): Promise<UuidModel | UuidModel[]> {
+      return Array.isArray(id)
+        ? id.map((i) => new UuidModel(String(i)))
+        : new UuidModel(String(id));
+    }
+  }
+  class CpkModel {
+    static name = "CpkModel";
+    static primaryKey: string[] = ["tenant", "key"];
+    id: string[];
+    constructor(id: string[]) {
+      this.id = id;
+    }
+    static async find(id: unknown): Promise<CpkModel | CpkModel[]> {
+      const arr = id as unknown[];
+      // Batch find of multiple composite ids vs. single composite id —
+      // distinguish by whether the first element is an array.
+      if (Array.isArray(arr[0])) return arr.map((i) => new CpkModel((i as string[]).map(String)));
+      return new CpkModel((arr as string[]).map(String));
+    }
+  }
+
+  beforeEach(() => {
+    setApp("bcx");
+    setModelFinder(
+      (name) =>
+        ({ UuidModel, CpkModel })[name as "UuidModel" | "CpkModel"] as unknown as LocatorModel,
+    );
+  });
+  afterEach(() => {
+    _resetApp();
+    _resetModelFinder();
+  });
+
+  it("indexes records by their primaryKey property, not hard-coded id", async () => {
+    const found = await Locator.locateMany(["gid://bcx/UuidModel/abc", "gid://bcx/UuidModel/def"]);
+    expect(found).toHaveLength(2);
+    expect((found[0] as UuidModel).uuid).toBe("abc");
+    expect((found[1] as UuidModel).uuid).toBe("def");
+  });
+
+  it("composite ids with internal slashes don't collide on join", async () => {
+    // ['a/b', 'c'] and ['a', 'b/c'] both join to 'a/b/c' under the old key.
+    const g1 = "gid://bcx/CpkModel/a%2Fb/c";
+    const g2 = "gid://bcx/CpkModel/a/b%2Fc";
+    const found = await Locator.locateMany([g1, g2]);
+    expect(found).toHaveLength(2);
+    expect((found[0] as CpkModel).id).toEqual(["a/b", "c"]);
+    expect((found[1] as CpkModel).id).toEqual(["a", "b/c"]);
+  });
+});
+
 describe("Locator without model finder", () => {
   beforeEach(() => {
     setApp("bcx");

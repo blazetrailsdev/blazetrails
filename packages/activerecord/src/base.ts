@@ -2864,8 +2864,9 @@ export class Base extends Model {
 
   /**
    * Find a record by its GlobalID URI string (or GlobalID instance).
-   * Returns null if the GID is invalid, the model class isn't registered,
-   * or the record isn't found.
+   * Returns null if the GID is invalid, the model class isn't registered, or
+   * the `only:` filter rejects it. If the record doesn't exist, `find`
+   * raises (Rails parity: RecordNotFound).
    *
    * Mirrors: ActiveRecord::Base.find_global_id (via GlobalID::Locator.locate)
    */
@@ -3554,15 +3555,21 @@ registerMigrationArConfig({
   },
 });
 
-// Triggers globalid's registration side-effects. Kept at the bottom for
-// readability — ESM hoists it.
+// Side-effect import (currently no-op); kept so future globalid hooks can
+// register here without callers needing to re-add it.
 import "@blazetrails/globalid/wire";
 
+// Register globalid's model finder. modelRegistry is the canonical lookup
+// (associations populate it via registerModel); Base.descendants is a fallback
+// for classes that extend Base but aren't registered through associations.
 import {
   setModelFinder as _setGlobalIdModelFinder,
   type LocatorModel as _LocatorModel,
 } from "@blazetrails/globalid";
+import { modelRegistry as _gidModelRegistry } from "./associations.js";
 _setGlobalIdModelFinder((name: string) => {
+  const fromRegistry = _gidModelRegistry.get(name);
+  if (fromRegistry) return fromRegistry as unknown as _LocatorModel;
   for (const klass of Base.descendants) {
     if (klass.name === name) return klass as unknown as _LocatorModel;
   }

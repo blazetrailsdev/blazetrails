@@ -11,7 +11,7 @@ import railsPrivateJsdoc from "./eslint/rails-private-jsdoc.mjs";
 import nieRequiresAnnotation from "./eslint/nie-requires-annotation.mjs";
 import noNativeDate from "./eslint/no-native-date.mjs";
 import sqliteDriverAwait from "./eslint/sqlite-driver-await.mjs";
-import railsMethodOrder from "./eslint/rails-method-order.mjs";
+import railsFileStructureMethodOrder from "./eslint/rails-file-structure-method-order.mjs";
 
 export default defineConfig(
   {
@@ -108,7 +108,7 @@ export default defineConfig(
           "no-native-date": noNativeDate,
           "sqlite-driver-await": sqliteDriverAwait,
           "nie-requires-annotation": nieRequiresAnnotation,
-          "rails-method-order": railsMethodOrder,
+          "rails-file-structure-method-order": railsFileStructureMethodOrder,
         },
       },
     },
@@ -183,16 +183,18 @@ export default defineConfig(
     },
   },
 
-  // ── rails-method-order (per-package rollout; widen as packages adopt) ──
-  // Enforces that class members + top-level functions match the Rails
-  // source order documented in `eslint/rails-method-order.json` (built by
-  // `pnpm tsx scripts/build-rails-method-order-manifest.ts`, invoked by
-  // `pnpm api:compare`). Autofixable.
+  // ── rails-file-structure-method-order (per-package rollout) ──
+  // Method-order slice of the rails-file-structure rule family
+  // (docs/rails-file-structure-mirror-plan.md). Enforces that class
+  // members + top-level functions match the Rails source order
+  // documented in `eslint/rails-file-structure-method-order.json` (built
+  // by `pnpm tsx scripts/build-rails-file-structure-manifest.ts`,
+  // invoked by `pnpm api:compare`). Autofixable.
   {
     files: ["packages/arel/src/**/*.ts"],
     ignores: ["**/*.test.ts"],
     rules: {
-      "blazetrails/rails-method-order": "error",
+      "blazetrails/rails-file-structure-method-order": "error",
     },
   },
 

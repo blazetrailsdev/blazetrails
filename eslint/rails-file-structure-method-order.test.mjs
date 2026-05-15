@@ -2,11 +2,11 @@ import { RuleTester } from "eslint";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
-import rule from "./rails-method-order.mjs";
+import rule from "./rails-file-structure-method-order.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
-const MANIFEST_PATH = path.join(__dirname, "rails-method-order.json");
+const MANIFEST_PATH = path.join(__dirname, "rails-file-structure-method-order.json");
 
 const hadExisting = fs.existsSync(MANIFEST_PATH);
 const original = hadExisting ? fs.readFileSync(MANIFEST_PATH, "utf8") : null;
@@ -35,7 +35,7 @@ const tester = new RuleTester({
   },
 });
 
-tester.run("rails-method-order", rule, {
+tester.run("rails-file-structure-method-order", rule, {
   valid: [
     // File not in manifest.
     {
@@ -119,6 +119,26 @@ tester.run("rails-method-order", rule, {
         `class A {\n  first() {}\n  second() {}\n}\n` +
         `class B {\n  second() {}\n  third() {}\n}\n`,
     },
+    // Section header separated by one blank line travels with the
+    // next method.
+    {
+      filename: classFile,
+      code:
+        `class X {\n` +
+        `  third() {}\n\n` +
+        `  // -- section header --\n\n` +
+        `  first() {}\n\n` +
+        `  second() {}\n` +
+        `}\n`,
+      errors: [{ messageId: "outOfOrder" }],
+      output:
+        `class X {\n` +
+        `  // -- section header --\n\n` +
+        `  first() {}\n\n` +
+        `  second() {}\n\n` +
+        `  third() {}\n` +
+        `}\n`,
+    },
     // Blank line between methods is preserved across reorder.
     {
       filename: classFile,
@@ -148,4 +168,4 @@ tester.run("rails-method-order", rule, {
   ],
 });
 
-console.log("rails-method-order tests passed");
+console.log("rails-file-structure-method-order tests passed");

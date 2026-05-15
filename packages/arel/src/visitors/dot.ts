@@ -88,15 +88,15 @@ export class Dot extends Visitor {
     return sink as { value: string };
   }
 
+  // ---------------------------------------------------------------------
+  // visit_* methods (per-node-type edge declarations)
+  // ---------------------------------------------------------------------
+
   protected visitArelNodesFunction(o: Nodes.Function): void {
     this.visitEdge(o, "expressions");
     this.visitEdge(o, "distinct");
     this.visitEdge(o, "alias");
   }
-
-  // ---------------------------------------------------------------------
-  // visit_* methods (per-node-type edge declarations)
-  // ---------------------------------------------------------------------
 
   protected visitArelNodesUnary(o: Nodes.Unary): void {
     this.visitEdge(o, "expr");
@@ -312,6 +312,10 @@ export class Dot extends Visitor {
     this.visitEdge(o, "default");
   }
 
+  // ---------------------------------------------------------------------
+  // Core machinery (visit, edge, with_node, quote, to_dot)
+  // ---------------------------------------------------------------------
+
   /**
    * Mirrors Rails' Dot#visit_edge — descend into a named field. Rails uses
    * `o.send(method)`, which raises `NoMethodError` on a typo; we mirror
@@ -419,10 +423,6 @@ export class Dot extends Visitor {
       this.edgeStack.pop();
     }
   }
-
-  // ---------------------------------------------------------------------
-  // Core machinery (visit, edge, with_node, quote, to_dot)
-  // ---------------------------------------------------------------------
 
   /** Mirrors Rails' Dot#with_node — link incoming edge then push node. */
   protected withNode(node: DotNode, block: () => void): void {

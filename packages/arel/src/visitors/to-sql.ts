@@ -186,6 +186,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
     return this.collector;
   }
+  // -- Boolean literals --
+
   protected visitArelNodesTrue(_node: Nodes.True): SQLString {
     this.collector.append("TRUE");
     return this.collector;
@@ -207,6 +209,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
     return this.collector;
   }
+  // -- Statements --
+
   protected visitArelNodesSelectStatement(node: Nodes.SelectStatement): SQLString {
     if (node.with) {
       this.visit(node.with);
@@ -421,8 +425,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     reg(Table, "visitArelTable");
   }
 
-  // -- Statements --
-
   // Mirrors Rails: visit_Arel_Nodes_Comment (to_sql.rb:175) — emits the
   // joined `/* ... */` blocks without a leading space. Callers add the
   // leading separator (typically via `maybeVisit`).
@@ -431,6 +433,10 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.append(blocks.join(" "));
     return this.collector;
   }
+
+  // ---------------------------------------------------------------------
+  // Rails-mirrored private helpers (to_sql.rb).
+  // ---------------------------------------------------------------------
 
   /**
    * Mirrors `to_sql.rb#collect_nodes_for`. Emits `spacer` then visits each
@@ -453,6 +459,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
+  // -- Leaf nodes --
+
   private visitArelNodesDistinct(_node: Nodes.Distinct): SQLString {
     this.collector.append("DISTINCT");
     return this.collector;
@@ -463,6 +471,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       "DISTINCT ON is not supported by the base ToSql visitor. Use the PostgreSQL visitor instead.",
     );
   }
+
+  // -- CTE --
 
   private visitArelNodesWith(node: Nodes.With): SQLString {
     this.collector.append("WITH ");
@@ -475,6 +485,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.injectJoin(node.children, ", ");
     return this.collector;
   }
+
+  // -- Set operations --
 
   protected visitArelNodesUnion(node: Nodes.Union): SQLString {
     return this.infixValueWithParen(node, " UNION ");
@@ -503,7 +515,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.visitArelNodesWindow(node);
   }
 
-  // -- Joins --
+  // -- Window --
 
   private visitArelNodesWindow(node: Nodes.Window): SQLString {
     this.collector.append("(");
@@ -523,6 +535,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.append(")");
     return this.collector;
   }
+
+  // -- Filter --
 
   private visitArelNodesFilter(node: Nodes.Filter): SQLString {
     this.visitNodeOrValue(node.left);
@@ -585,8 +599,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
     return this.collector;
   }
-
-  // -- Predicates --
 
   protected visitArelNodesOffset(node: Nodes.Offset): SQLString {
     this.collector.append("OFFSET ");
@@ -654,6 +666,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
+  // -- Unary --
+
   private visitArelNodesAscending(node: Nodes.Ascending): SQLString {
     if (node.expr instanceof Node) this.visit(node.expr);
     this.collector.append(" ASC");
@@ -665,6 +679,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.append(" DESC");
     return this.collector;
   }
+
+  // -- NullsFirst / NullsLast --
 
   protected visitArelNodesNullsFirst(node: Nodes.NullsFirst): SQLString {
     if (node.expr instanceof Node) this.visit(node.expr);
@@ -686,7 +702,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // -- Boolean --
+  // -- Functions --
 
   private visitArelNodesNamedFunction(node: Nodes.NamedFunction): SQLString {
     this.collector.retryable = false;
@@ -701,6 +717,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
     return this.collector;
   }
+
+  // -- Extract --
 
   private visitArelNodesExtract(node: Nodes.Extract): SQLString {
     this.collector.append(`EXTRACT(${String(node.field).toUpperCase()} FROM `);
@@ -722,8 +740,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
   protected visitArelNodesSum(node: Nodes.Sum): SQLString {
     return this.aggregate("SUM", node);
   }
-
-  // -- Unary --
 
   protected visitArelNodesMax(node: Nodes.Max): SQLString {
     return this.aggregate("MAX", node);
@@ -802,6 +818,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.visitBinaryOp(node, "<");
   }
 
+  // -- Matches with ESCAPE --
+
   protected visitArelNodesMatches(node: Nodes.Matches): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" LIKE ");
@@ -809,8 +827,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.appendEscape(node.escape);
     return this.collector;
   }
-
-  // -- Functions --
 
   protected visitArelNodesDoesNotMatch(node: Nodes.DoesNotMatch): SQLString {
     this.visitNodeOrValue(node.left);
@@ -820,6 +836,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
+  // -- Joins --
+
   private visitArelNodesJoinSource(node: Nodes.JoinSource): SQLString {
     if (node.left) this.visit(node.left);
     for (const join of node.right) {
@@ -828,8 +846,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
     return this.collector;
   }
-
-  // -- Window --
 
   protected visitArelNodesRegexp(_node: Nodes.Regexp): SQLString {
     throw new NotImplementedError(
@@ -889,8 +905,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
     return this.collector;
   }
-
-  // -- Case --
 
   private visitArelNodesNot(node: Nodes.Not): SQLString {
     this.collector.append("NOT (");
@@ -954,8 +968,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // -- BindParam --
-
   private visitArelNodesNotIn(node: Nodes.NotIn): SQLString {
     let values = node.right;
     if (Array.isArray(values)) {
@@ -985,6 +997,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
+  // -- Boolean --
+
   private visitArelNodesAnd(node: Nodes.And): SQLString {
     for (let i = 0; i < node.children.length; i++) {
       if (i > 0) this.collector.append(" AND ");
@@ -992,8 +1006,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
     return this.collector;
   }
-
-  // -- BoundSqlLiteral --
 
   private visitArelNodesOr(node: Nodes.Or): SQLString {
     for (let i = 0; i < node.children.length; i++) {
@@ -1013,7 +1025,7 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // -- Concat --
+  // -- Predicates --
 
   private visitArelNodesEquality(node: Nodes.Equality): SQLString {
     if (this.unboundableSign(node.right) !== 0) {
@@ -1034,13 +1046,9 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.visitBinaryOp(node, "IS NOT DISTINCT FROM");
   }
 
-  // -- Extract --
-
   protected visitArelNodesIsDistinctFrom(node: Nodes.IsDistinctFrom): SQLString {
     return this.visitBinaryOp(node, "IS DISTINCT FROM");
   }
-
-  // -- InfixOperation --
 
   private visitArelNodesNotEqual(node: Nodes.NotEqual): SQLString {
     if (this.unboundableSign(node.right) !== 0) {
@@ -1057,14 +1065,14 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // -- Set operations --
-
   private visitArelNodesAs(node: Nodes.As): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" AS ");
     this.visitNodeOrValue(node.right);
     return this.collector;
   }
+
+  // -- Case --
 
   private visitArelNodesCase(node: Nodes.Case): SQLString {
     this.collector.append("CASE");
@@ -1100,8 +1108,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // -- CTE --
-
   protected visitArelNodesUnqualifiedColumn(node: Nodes.UnqualifiedColumn): SQLString {
     // Mirrors Arel's visit_Arel_Nodes_UnqualifiedColumn — strips the table
     // qualifier so `SET col = col + 1` works in UPDATE statements.
@@ -1112,6 +1118,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.append(this.quoteColumnName(attr.name));
     return this.collector;
   }
+
+  // -- Cte --
 
   protected visitArelNodesCte(node: Nodes.Cte): SQLString {
     this.collector.append(`${this.quoteTableName(node.name)} AS `);
@@ -1131,8 +1139,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.append(`${this.quoteTableName(tbl)}.${this.quoteColumnName(node.name)}`);
     return this.collector;
   }
-
-  // -- Boolean literals --
 
   /**
    * Mirrors `to_sql.rb#bind_block` (which returns Rails' `BIND_BLOCK = proc { "?" }`).
@@ -1159,8 +1165,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // -- Advanced grouping --
-
   protected visitArelNodesBindParam(node: Nodes.BindParam): SQLString {
     if (this._extractBinds) {
       this.collector.addBind(node.value !== undefined ? node.value : node, this.bindBlock());
@@ -1179,6 +1183,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.append(node.value);
     return this.collector;
   }
+
+  // -- BoundSqlLiteral --
 
   private visitArelNodesBoundSqlLiteral(node: Nodes.BoundSqlLiteral): SQLString {
     this.collector.retryable = false;
@@ -1218,6 +1224,11 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
+  // ---------------------------------------------------------------------
+  // Non-Arel visit dispatchers (Rails dispatches on Ruby native classes
+  // for stray values that drift into the visitor).
+  // ---------------------------------------------------------------------
+
   /** Mirrors Rails: `visit_Integer`. */
   protected visitInteger(o: number): SQLString {
     this.collector.append(String(o));
@@ -1229,12 +1240,16 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     throw new UnsupportedVisitError(`Unknown node type: ${o.constructor.name}`);
   }
 
+  // -- InfixOperation --
+
   private visitArelNodesInfixOperation(node: Nodes.InfixOperation): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(` ${node.operator} `);
     this.visitNodeOrValue(node.right);
     return this.collector;
   }
+
+  // -- UnaryOperation --
 
   private visitArelNodesUnaryOperation(node: Nodes.UnaryOperation): SQLString {
     // Mirrors Rails: `collector << " #{o.operator} "` (visitors/to_sql.rb).
@@ -1259,8 +1274,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     });
     return this.collector;
   }
-
-  // -- Matches with ESCAPE --
 
   protected visitArelNodesFragments(node: Nodes.Fragments): SQLString {
     return this.injectJoin(node.values, " ");
@@ -1323,8 +1336,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.connection.quoteTableName(String(name));
   }
 
-  // -- NullsFirst / NullsLast --
-
   /** @internal */
   protected quoteColumnName(name: string | Nodes.SqlLiteral): string {
     if (name instanceof Nodes.SqlLiteral) return name.value;
@@ -1346,8 +1357,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
       .trim();
   }
 
-  // -- Cte --
-
   /**
    * Mirrors `to_sql.rb#collect_optimizer_hints`. Rails delegates to
    * `maybe_visit o.optimizer_hints`; Trails' SelectCore now stores an
@@ -1358,8 +1367,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.emitOptimizerHints(o);
     return this.collector;
   }
-
-  // -- UnaryOperation --
 
   /**
    * Mirrors `to_sql.rb#maybe_visit`: if `thing` is non-null, emits a leading
@@ -1373,8 +1380,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // -- Filter --
-
   /**
    * Mirrors `to_sql.rb#inject_join`: visits `list[0]`, then for each
    * subsequent node emits `joinStr` and visits.
@@ -1386,8 +1391,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     });
     return this.collector;
   }
-
-  // -- Leaf nodes --
 
   /** Mirrors `to_sql.rb#unboundable?` as a truthy check. */
   protected isUnboundable(value: unknown): boolean {
@@ -1490,8 +1493,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  // -- Helpers --
-
   /**
    * Mirrors `to_sql.rb#grouping_parentheses`. Wraps a SelectStatement in
    * parens when it would otherwise emit ambiguously; otherwise plain visit.
@@ -1549,10 +1550,6 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     this.collector.append(" THEN 0 ELSE 1 END");
     return this.collector;
   }
-
-  // ---------------------------------------------------------------------
-  // Rails-mirrored private helpers (to_sql.rb).
-  // ---------------------------------------------------------------------
 
   /** Mirrors `to_sql.rb#collect_ctes`. Visits each CTE child joined by ", ". */
   protected collectCtes(children: ReadonlyArray<{ toCte(): Node } | Node>): SQLString {
@@ -1670,6 +1667,8 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
+  // -- BindParam --
+
   // Overridable hook for date bind insertion so PostgreSQLWithBinds can
   // emit $N placeholders instead of ?.
   protected addDateBind(value: unknown): void {
@@ -1689,12 +1688,16 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
   }
 
+  // -- Concat --
+
   protected visitArelNodesConcat(node: Nodes.Concat): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" || ");
     this.visitNodeOrValue(node.right);
     return this.collector;
   }
+
+  // -- Advanced grouping --
 
   protected visitArelNodesCube(node: Nodes.Cube): SQLString {
     this.collector.append("CUBE(");
@@ -1766,14 +1769,11 @@ export class ToSql extends Visitor implements NodeVisitor<SQLString> {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // Non-Arel visit dispatchers (Rails dispatches on Ruby native classes
-  // for stray values that drift into the visitor).
-  // ---------------------------------------------------------------------
-
   private visitQuoted(node: Nodes.Quoted): SQLString {
     return this.visitArelNodesCasted(node);
   }
+
+  // -- Helpers --
 
   protected visitNodeOrValue(v: Nodes.NodeOrValue): SQLString {
     // Duck-type check for SelectManager (not a Node, but has ast/toSql).

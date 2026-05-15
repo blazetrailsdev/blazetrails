@@ -1,15 +1,19 @@
 /**
- * Builds eslint/rails-method-order.json from
+ * Builds the manifest(s) consumed by the `rails-file-structure-*`
+ * ESLint rule family (docs/rails-file-structure-mirror-plan.md) from
  * scripts/api-compare/output/rails-api.json.
  *
- * The manifest maps each TS source path (relative to repo root) to an
- * ordered list of TS member names — the expected source order, derived
- * from the Rails source file's method order. The `rails-method-order`
- * ESLint rule reads this manifest at lint time and enforces (with autofix)
- * that class members and top-level functions appear in Rails order.
+ * Currently emits:
+ *   eslint/rails-file-structure-method-order.json — maps each TS source
+ *     path (relative to repo root) to an ordered list of TS member
+ *     names, derived from the Rails source file's method order. Read by
+ *     `blazetrails/rails-file-structure-method-order`.
  *
- * Unmapped TS members (those not present in the manifest list) stay in
- * their existing relative position, after the mapped block.
+ * Future sibling rules (include-position, visibility-grouping, module-
+ * nesting) will emit additional manifests here as they land.
+ *
+ * Unmapped TS members (those not present in the method-order list) stay
+ * in their existing relative position, after the mapped block.
  *
  * Run after `pnpm api:compare` — invoked from run.sh alongside the
  * privates manifest builder.
@@ -35,13 +39,13 @@ const PACKAGE_DIRS: Record<string, string> = {
 };
 
 const RAILS_API_PATH = path.join(ROOT, "scripts/api-compare/output/rails-api.json");
-const OUT = path.join(ROOT, "eslint/rails-method-order.json");
+const OUT = path.join(ROOT, "eslint/rails-file-structure-method-order.json");
 
 if (!fs.existsSync(RAILS_API_PATH)) {
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify({ files: {} }, null, 2) + "\n");
   console.warn(
-    `[build-rails-method-order-manifest] ${RAILS_API_PATH} missing; wrote empty manifest. ` +
+    `[build-rails-file-structure-manifest] ${RAILS_API_PATH} missing; wrote empty manifest. ` +
       `Run \`pnpm api:compare\` to regenerate with real data.`,
   );
   process.exit(0);

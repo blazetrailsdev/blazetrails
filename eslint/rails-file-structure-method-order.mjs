@@ -1,10 +1,12 @@
 /**
- * ESLint rule: rails-method-order
+ * ESLint rule: rails-file-structure-method-order
  *
- * Enforces that class members and top-level functions appear in the same
- * source order as their Rails counterparts. The manifest is generated
- * from rails-api.json:
- *   pnpm tsx scripts/build-rails-method-order-manifest.ts
+ * Method-order slice of the rails-file-structure rule family
+ * (docs/rails-file-structure-mirror-plan.md). Enforces that class
+ * members and top-level functions appear in the same source order as
+ * their Rails counterparts. The manifest is generated from
+ * rails-api.json:
+ *   pnpm tsx scripts/build-rails-file-structure-manifest.ts
  *
  * Scope per file:
  *   - Class instance + static methods (one container per ClassBody).
@@ -27,7 +29,7 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MANIFEST_PATH = path.resolve(__dirname, "rails-method-order.json");
+const MANIFEST_PATH = path.resolve(__dirname, "rails-file-structure-method-order.json");
 
 let manifestCache = null;
 function loadManifest() {
@@ -60,16 +62,20 @@ function relFromRepoRoot(filename) {
 }
 
 function extendedStart(node, sourceCode) {
-  // Walk leading comments backwards, including each that ends on the
-  // line immediately above the previous start (no intervening tokens or
-  // blank lines). This mirrors rails-private-jsdoc's attachment rule.
+  // Walk leading comments backwards. A comment attaches to `node` if
+  // (a) it sits on the line immediately above the previous start, or
+  // (b) it's separated by exactly one blank line — this catches the
+  //     common `// section header` + blank + def pattern (and JSDoc +
+  //     blank + def). Two or more blank lines breaks attachment, as
+  //     does any non-comment token between.
   const comments = sourceCode.getCommentsBefore(node);
   let attachedStart = node.range[0];
   let prevLine = node.loc.start.line;
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
     if (!c.loc) break;
-    if (c.loc.end.line !== prevLine - 1) break;
+    const gap = prevLine - 1 - c.loc.end.line;
+    if (gap < 0 || gap > 1) break;
     const tokenBetween = sourceCode.getTokenAfter(c, { includeComments: false });
     if (
       tokenBetween &&

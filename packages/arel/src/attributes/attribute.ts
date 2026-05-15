@@ -93,6 +93,8 @@ export class Attribute extends Node {
     return this.relation.typeForAttribute ? this.relation.typeForAttribute(this.name) : undefined;
   }
 
+  // -- String functions --
+
   lower(): NamedFunction {
     return new NamedFunction("LOWER", [this]);
   }
@@ -116,8 +118,6 @@ export class Attribute extends Node {
     this.caster = caster;
   }
 
-  // -- Predicates --
-
   /**
    * Mirrors: Arel::Predications#quoted_node — the type-aware wrapper
    * that the Predications mixin calls to bring an arbitrary right-hand
@@ -139,6 +139,8 @@ export class Attribute extends Node {
     }
     return new Casted(value, this);
   }
+
+  // -- Predicates --
 
   eq(other: unknown): Equality {
     return new Equality(this, this.quotedNode(other));
@@ -224,11 +226,11 @@ export class Attribute extends Node {
     return new Equality(this, new Quoted(null));
   }
 
-  // -- _any / _all variants --
-
   isNotNull(): NotEqual {
     return new NotEqual(this, new Quoted(null));
   }
+
+  // -- _any / _all variants --
 
   eqAny(others: unknown[]): Grouping {
     return groupedAny(others.map((o) => this.eq(o)));
@@ -306,6 +308,10 @@ export class Attribute extends Node {
     return groupedAny(others.map((o) => this.notIn(o)));
   }
 
+  notInAll(others: unknown[][]): Grouping {
+    return groupedAll(others.map((o) => this.notIn(o)));
+  }
+
   // -- Rails-private helpers (mirror Arel::Predications) --
   //
   // Rails' Attribute inherits these from Predications via `include`.
@@ -316,10 +322,6 @@ export class Attribute extends Node {
   // visibility of HomogeneousIn#ivars / SelectManager#collapse) since
   // they exist for Rails-fidelity / api:compare privates coverage,
   // not as a public API surface.
-
-  notInAll(others: unknown[][]): Grouping {
-    return groupedAll(others.map((o) => this.notIn(o)));
-  }
 
   protected groupingAny(
     methodId: string | ((this: Attribute, expr: unknown, ...extras: unknown[]) => Node),
@@ -353,8 +355,6 @@ export class Attribute extends Node {
     return Predications.isUnboundable.call(this, value);
   }
 
-  // -- Ordering --
-
   protected isOpenEnded(value: unknown): boolean {
     // Cast widens this' protected isInfinity/isUnboundable so they
     // match Predications.isOpenEnded's `this` constraint, which
@@ -369,18 +369,20 @@ export class Attribute extends Node {
     );
   }
 
+  // -- Ordering --
+
   asc(): Ascending {
     return new Ascending(this);
+  }
+
+  desc(): Descending {
+    return new Descending(this);
   }
 
   // -- Math --
   //
   // Mirrors Arel::Math: operands pass through unwrapped. The visitor
   // renders primitive values via `visitNodeOrValue`.
-
-  desc(): Descending {
-    return new Descending(this);
-  }
 
   add(other: unknown): Grouping {
     return new Grouping(new Addition(this, other as NodeOrValue));
@@ -418,10 +420,14 @@ export class Attribute extends Node {
     return new Grouping(new BitwiseShiftRight(this, other as NodeOrValue));
   }
 
-  // -- Aliasing --
-
   bitwiseNot(): BitwiseNot {
     return new BitwiseNot(this);
+  }
+
+  // -- Aliasing --
+
+  as(aliasName: string): As {
+    return new As(this, new SqlLiteral(aliasName, { retryable: true }));
   }
 
   // -- Aggregate functions --
@@ -431,10 +437,6 @@ export class Attribute extends Node {
   // `instanceof` checks line up across the codebase. The visitor
   // (visitAggregate in to-sql.ts) renders them identically to a
   // NamedFunction with the same name.
-
-  as(aliasName: string): As {
-    return new As(this, new SqlLiteral(aliasName, { retryable: true }));
-  }
 
   count(distinct = false): Count {
     return new Count([this], distinct);
@@ -451,8 +453,6 @@ export class Attribute extends Node {
   minimum(): Min {
     return new Min([this]);
   }
-
-  // -- String functions --
 
   average(): Avg {
     return new Avg([this]);

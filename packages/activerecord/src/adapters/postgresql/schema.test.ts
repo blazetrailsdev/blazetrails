@@ -3,7 +3,6 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
-import { SchemaDumper } from "../../schema-dumper.js";
 
 const SCHEMA_NAME = "test_schema";
 const SCHEMA2_NAME = "test_schema2";
@@ -496,7 +495,9 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("dumping schemas", async () => {
-      const output = await SchemaDumper.dump(adapter);
+      // Must use adapter.createSchemaDumper() to get PgSchemaDumper so schemas()
+      // override runs. SchemaDumper.dump(adapter) uses the base class and skips it.
+      const output = await adapter.createSchemaDumper(adapter).dump();
       expect(output).not.toMatch(/createSchema\("public"\)/);
       expect(output).toMatch(/createSchema\("test_schema"\)/);
       expect(output).toMatch(/createSchema\("test_schema2"\)/);
@@ -523,7 +524,9 @@ describeIfPg("PostgreSQLAdapter", () => {
         const lines: string[] = [];
         await adapter.createSchemaDumper(adapter).foreignKeys("wagons", lines);
         const output = lines.join("\n");
-        expect(output).toMatch(/addForeignKey\("wagons", "my_schema\.trains"\)/);
+        // FK name "fk_rails_wagons_train_id" is not a 10-hex pattern so it's exported;
+        // match just the table arguments, allowing optional trailing options.
+        expect(output).toMatch(/addForeignKey\("wagons", "my_schema\.trains"/);
       } finally {
         await adapter.exec(`DROP TABLE IF EXISTS wagons`);
         await adapter.exec(`DROP TABLE IF EXISTS my_schema.trains`);

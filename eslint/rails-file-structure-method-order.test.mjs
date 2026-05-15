@@ -111,8 +111,9 @@ try {
         code: `const mk = () => class {\n  third() {}\n  first() {}\n  second() {}\n};\n`,
       },
       // Class nested inside another class's method — also rejected.
-      // The ancestor walk catches MethodDefinition before reaching
-      // Program.
+      // The first function-like ancestor encountered is the method's
+      // FunctionExpression (the inner ClassBody's grandparent), which
+      // short-circuits the walk before MethodDefinition.
       {
         filename: classFile,
         code:

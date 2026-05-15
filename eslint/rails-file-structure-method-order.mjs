@@ -281,12 +281,14 @@ const rule = {
         let ancestor = node.parent?.parent;
         let nested = false;
         while (ancestor && ancestor.type !== "Program") {
+          // TSDeclareFunction (signature-only `function foo(...): T;`)
+          // intentionally omitted — it has no body, so it cannot
+          // contain a ClassBody and would never appear in this chain.
           if (
             ancestor.type === "FunctionDeclaration" ||
             ancestor.type === "FunctionExpression" ||
             ancestor.type === "ArrowFunctionExpression" ||
-            ancestor.type === "MethodDefinition" ||
-            ancestor.type === "TSDeclareFunction"
+            ancestor.type === "MethodDefinition"
           ) {
             nested = true;
             break;

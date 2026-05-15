@@ -1033,18 +1033,17 @@ class SchemaAdapter implements DatabaseAdapter {
     this._manualTxDepth++;
   }
   async commit(): Promise<void> {
-    try {
-      await this.inner.commit();
-    } finally {
-      if (this._manualTxDepth > 0) this._manualTxDepth--;
-    }
+    // Only decrement on success — failed COMMIT can leave PG/MySQL in an
+    // unresolved transaction (driver clears `inTransaction` only when COMMIT
+    // succeeds). If we decremented in finally, SchemaAdapter would report
+    // no tx while inner is still mid-transaction, sending the next
+    // transaction() call down the wrong path.
+    await this.inner.commit();
+    if (this._manualTxDepth > 0) this._manualTxDepth--;
   }
   async rollback(): Promise<void> {
-    try {
-      await this.inner.rollback();
-    } finally {
-      if (this._manualTxDepth > 0) this._manualTxDepth--;
-    }
+    await this.inner.rollback();
+    if (this._manualTxDepth > 0) this._manualTxDepth--;
   }
   async createSavepoint(name: string): Promise<void> {
     return this.inner.createSavepoint(name);

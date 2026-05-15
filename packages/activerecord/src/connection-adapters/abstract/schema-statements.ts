@@ -671,10 +671,16 @@ export class SchemaStatements {
         removeTimestamps: rec("removeTimestamps"),
         addReference: rec("addReference"),
         removeReference: rec("removeReference"),
-        // Read-only predicates pass through to the real SchemaStatements so conditional
-        // patterns (t.isColumnExists, t.isIndexExists) work inside bulk blocks.
+        addForeignKey: rec("addForeignKey"),
+        removeForeignKey: rec("removeForeignKey"),
+        addCheckConstraint: rec("addCheckConstraint"),
+        removeCheckConstraint: rec("removeCheckConstraint"),
+        // Read-only predicates pass through to the real SchemaStatements.
         columnExists: (t, col) => this.columnExists(t, col),
         indexExists: (t, col, opts) => this.indexExists(t, col, opts as any),
+        foreignKeyExists: (t, opts) => this.foreignKeyExists(t, opts as any),
+        isCheckConstraintExists: (t, opts) => this.isCheckConstraintExists(t, opts as any),
+        primaryKey: (t) => this.primaryKey(t),
       };
       const bulkTable = new Table(tableName, recorder as any);
       if (callback) await callback(bulkTable);

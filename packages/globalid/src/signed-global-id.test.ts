@@ -104,6 +104,7 @@ describe("SignedGlobalID", () => {
   });
 
   describe("getApp() integration", () => {
+    beforeEach(() => _resetApp()); // undo outer beforeEach for app-sensitive tests
     afterEach(() => _resetApp());
 
     it("uses getApp() when no app option", () => {
@@ -111,6 +112,11 @@ describe("SignedGlobalID", () => {
       const verifier = makeVerifier();
       const sgid = SignedGlobalID.create(fakeModel, { verifier });
       expect(sgid.uri).toBe("gid://ConfiguredApp/User/42");
+    });
+
+    it("throws when no app configured and no app option", () => {
+      const verifier = makeVerifier();
+      expect(() => SignedGlobalID.create(fakeModel, { verifier })).toThrow(/app is required/i);
     });
   });
 });

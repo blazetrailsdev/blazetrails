@@ -199,11 +199,16 @@ function verifyToken(
 function pickExpiration(
   options: Pick<SignedGlobalIDOptions, "expiresAt" | "expiresIn">,
 ): Temporal.Instant | undefined {
-  // Rails: passing `expires_in: nil` or `expires_at: nil` explicitly disables
-  // expiration. Treat both null and undefined as "absent" so callers can use
-  // null to turn it off (matches Rails' `expires_in: nil` semantics).
-  if (options.expiresAt != null) return options.expiresAt;
-  if (options.expiresIn != null) {
+  // Rails: pick_expiration uses options.key?(:expires_at) — explicit key
+  // presence (even with nil) wins over expires_in. So:
+  //   { expiresAt: null, expiresIn: 60 }   → null (no expiration)
+  //   { expiresAt: <instant>, expiresIn: 60 } → expiresAt
+  //   { expiresIn: 60 }                    → expiresIn
+  //   { expiresIn: null }                  → no expiration
+  //   {}                                   → no expiration
+  if ("expiresAt" in options) return options.expiresAt ?? undefined;
+  if ("expiresIn" in options) {
+    if (options.expiresIn == null) return undefined;
     const ms = Math.round(options.expiresIn * 1000);
     return Temporal.Now.instant().add({ milliseconds: ms });
   }

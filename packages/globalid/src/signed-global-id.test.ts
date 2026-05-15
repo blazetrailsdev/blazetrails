@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { SignedGlobalID } from "./signed-global-id.js";
@@ -108,13 +108,22 @@ describe("SignedGlobalIDExpirationTest", () => {
   afterEach(() => _resetApp());
 
   it("passing expires_in less than a second is not expired", () => {
-    const verifier = makeVerifier();
-    // Sub-second value exercises the fractional path through pickExpiration
-    // (Math.round(0.5 * 1000) = 500ms). 500ms is plenty of cushion vs.
-    // typical test runtime (<100ms); we don't mock time so this could
-    // theoretically race under pathological CI load.
-    const sgid = SignedGlobalID.create(person(5), { verifier, expiresIn: 0.5 });
-    expect(SignedGlobalID.parse(sgid.toString(), { verifier })).not.toBeNull();
+    // Rails parity: with expires_in: 1.second, the token is not expired at
+    // 0.5 seconds elapsed but is expired at 2 seconds. Use fake timers so
+    // the test is deterministic — Date.now() drives Temporal.Now via the
+    // js-temporal polyfill.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2024-01-01T00:00:00.000Z"));
+      const verifier = makeVerifier();
+      const sgid = SignedGlobalID.create(person(5), { verifier, expiresIn: 1 });
+      vi.setSystemTime(new Date("2024-01-01T00:00:00.500Z"));
+      expect(SignedGlobalID.parse(sgid.toString(), { verifier })).not.toBeNull();
+      vi.setSystemTime(new Date("2024-01-01T00:00:02.000Z"));
+      expect(SignedGlobalID.parse(sgid.toString(), { verifier })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("passing expires_in nil turns off expiration checking", () => {
@@ -160,6 +169,20 @@ describe("SignedGlobalIDExpirationTest", () => {
       expiresIn: 1,
     });
     expect(Temporal.Instant.compare(sgid.expiresAt!, future)).toBe(0);
+  });
+
+  it("explicit expires_at: null disables expiration even with expires_in present", () => {
+    // Rails: pick_expiration uses options.key?(:expires_at), so an explicit
+    // expires_at: nil wins over expires_in — even past expires_in values
+    // produce a non-expiring SGID.
+    const verifier = makeVerifier();
+    const sgid = SignedGlobalID.create(person(5), {
+      verifier,
+      expiresAt: null,
+      expiresIn: -1, // would expire instantly if it won precedence
+    });
+    expect(sgid.expiresAt).toBeUndefined();
+    expect(SignedGlobalID.parse(sgid.toString(), { verifier })).not.toBeNull();
   });
 
   it("returns null for expired token (expiresAt in the past)", () => {

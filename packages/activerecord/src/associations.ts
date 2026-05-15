@@ -180,10 +180,11 @@ export function resolveModel(name: string): typeof Base {
 }
 
 /**
- * Resolve the target model for an association, using the rich reflection's
+ * Resolve the target model for an association using the rich reflection's
  * namespace-aware klass when available, falling back to flat resolveModel.
- * Safe for polymorphic associations — accessing klass on a polymorphic
- * reflection throws, so we catch and fall back.
+ * Skips `.klass` for polymorphic associations (checked via `isPolymorphic()`)
+ * because polymorphic reflections intentionally throw on `.klass` access.
+ * Non-polymorphic errors (e.g. not-an-AR-subclass) propagate unchanged.
  * @internal
  */
 export function resolveAssocClass(record: Base, assocName: string, className: string): typeof Base {

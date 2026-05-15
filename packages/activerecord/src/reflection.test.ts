@@ -21,6 +21,7 @@ import {
   AssociationReflection,
   registerModel,
   modelRegistry,
+  association,
   composedOf,
 } from "./index.js";
 import { Associations, resolveAssocClass } from "./associations.js";
@@ -1948,6 +1949,14 @@ describe("ReflectionTest", () => {
     // resolution — verifies the actual loading path, not only ref.klass
     const firmInstance = NsBizFirm.new({ name: "Acme" });
     expect(resolveAssocClass(firmInstance, "clientsOfFirm", "Client")).toBe(NsBizClient);
+
+    // CollectionProxy build path: proxy.model and proxy.build() use the
+    // namespace-aware resolved class, catching regressions where ref.klass
+    // resolves but the build/load path hits the wrong target.
+    const proxy = association<InstanceType<typeof NsBizClient>>(firmInstance, "clientsOfFirm");
+    expect((proxy as any).model).toBe(NsBizClient);
+    const built = proxy.build({ name: "Acme Client" });
+    expect(built).toBeInstanceOf(NsBizClient);
   });
 
   it("has and belongs to many reflection", () => {

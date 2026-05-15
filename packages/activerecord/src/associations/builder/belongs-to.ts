@@ -2,7 +2,8 @@ import { underscore, pluralize, camelize } from "@blazetrails/activesupport";
 import type { AssociationInstanceHost } from "./association.js";
 import { SingularAssociation } from "./singular-association.js";
 import { beforeValidation, afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
-import { resolveModel, modelRegistry } from "../../associations.js";
+import { resolveModel, resolveAssocClass, modelRegistry } from "../../associations.js";
+import { registerCounterCachedAssociation } from "../../counter-cache.js";
 import { addAutosaveAssociationCallbacks } from "../../autosave-association.js";
 import { pendingCounterCacheColumns } from "../../counter-cache-state.js";
 
@@ -68,8 +69,13 @@ export class BelongsTo extends SingularAssociation {
         ? (reflection.counterCacheColumn() ?? `${pluralize(underscore(model.name))}_count`)
         : `${pluralize(underscore(model.name))}_count`;
     const targetClassName = reflection.options?.className ?? camelize(name);
-    if (modelRegistry.has(targetClassName)) {
-      const targetClass = resolveModel(targetClassName);
+    let targetClass: typeof import("../../base.js").Base | null = null;
+    try {
+      targetClass = resolveAssocClass(model, name, targetClassName);
+    } catch {
+      targetClass = modelRegistry.has(targetClassName) ? resolveModel(targetClassName) : null;
+    }
+    if (targetClass) {
       const existing: Set<string> = (targetClass as any)._counterCacheColumns ?? new Set();
       existing.add(cacheColumn);
       (targetClass as any)._counterCacheColumns = existing;
@@ -80,6 +86,9 @@ export class BelongsTo extends SingularAssociation {
       pending.add(cacheColumn);
       pendingCounterCacheColumns.set(targetClassName, pending);
     }
+
+    // Mirrors Rails: `model.counter_cached_association_names |= [reflection.name]`
+    registerCounterCachedAssociation(model, name);
 
     // Rails only registers after_update in add_counter_cache_callbacks.
     // Create/destroy counter handling is done by updateCounterCaches()

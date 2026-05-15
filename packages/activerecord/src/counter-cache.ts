@@ -241,12 +241,24 @@ function getCounterCacheColumns(modelClass: typeof Base): Set<string> {
  * Module methods wired onto Base as static methods via `extend()` in base.ts.
  * Mirrors Rails' `ActiveSupport::Concern#ClassMethods` convention.
  */
+/**
+ * Class-attribute accessor mirroring Rails'
+ * `class_attribute :counter_cached_association_names`. Returns an array
+ * (Rails parity) snapshot of the registered association names.
+ *
+ * Mirrors: ActiveRecord::CounterCache#counter_cached_association_names
+ */
+export function getCounterCachedAssociationNames(this: typeof Base): string[] {
+  return counterCachedAssociationNames(this);
+}
+
 export const ClassMethods = {
   incrementCounter,
   decrementCounter,
   updateCounters,
   resetCounters,
   isCounterCacheColumn,
+  counterCachedAssociationNames: getCounterCachedAssociationNames,
 };
 
 type InstanceCounterHost = {
@@ -255,7 +267,23 @@ type InstanceCounterHost = {
   association(name: string): any;
 };
 
+/**
+ * Mirrors: `model.counter_cached_association_names |= [name]` in
+ * Rails' Associations::Builder::BelongsTo.add_counter_cache_callbacks.
+ * Stored as a Set on the owning class for O(1) dedupe.
+ * @internal
+ */
+export function registerCounterCachedAssociation(model: any, name: string): void {
+  const existing: Set<string> = model._counterCachedAssociationNames ?? new Set();
+  existing.add(name);
+  model._counterCachedAssociationNames = existing;
+}
+
 function counterCachedAssociationNames(ctor: typeof Base): string[] {
+  const registered: Set<string> | undefined = (ctor as any)._counterCachedAssociationNames;
+  if (registered && registered.size > 0) return [...registered];
+  // Fallback for models whose belongs_to was registered before the explicit
+  // registry was wired (or via dynamic _associations entries with counterCache).
   const associations: Array<{ type: string; name: string; options: any }> =
     (ctor as any)._associations ?? [];
   return associations

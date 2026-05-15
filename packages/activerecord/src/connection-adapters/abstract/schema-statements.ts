@@ -1380,7 +1380,7 @@ export class SchemaStatements {
     const valid = adapterAlgorithms
       ? ["default", ...Object.keys(adapterAlgorithms)]
       : ["default", "concurrently"];
-    throw new Error(
+    throw new ArgumentError(
       `Algorithm must be one of the following: ${valid.map((a) => `'${a}'`).join(", ")}`,
     );
   }

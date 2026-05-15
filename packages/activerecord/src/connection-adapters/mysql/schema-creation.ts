@@ -5,6 +5,7 @@
  */
 
 import { SchemaCreation as AbstractSchemaCreation } from "../abstract/schema-creation.js";
+import { ArgumentError } from "@blazetrails/activemodel";
 import type {
   ReferentialAction,
   ColumnOptions,
@@ -21,7 +22,12 @@ import {
 import { singularize, underscore } from "@blazetrails/activesupport";
 import { quoteIdentifier, quoteTableName, quoteString as mysqlQuoteString } from "./quoting.js";
 import { quoteDefaultExpression } from "../abstract/quoting.js";
-import { addOptionsForIndexColumns } from "./schema-statements.js";
+import {
+  addOptionsForIndexColumns,
+  integerToSql,
+  typeWithSizeToSql,
+  limitToSize,
+} from "./schema-statements.js";
 
 /** MySQL-specific column options — extends the abstract ColumnOptions with `onUpdate`. */
 export type MysqlAddColumnOptions = ColumnOptions & { onUpdate?: string };
@@ -53,6 +59,37 @@ export class SchemaCreation extends AbstractSchemaCreation {
       quoteTableName: quoteTableName,
       quoteDefaultExpression: quoteDefaultExpression,
     });
+  }
+
+  /** @internal */
+  override typeToSql(type: ColumnType, options: ColumnOptions = {}): string {
+    const limit = options.limit as number | null | undefined;
+    switch (type) {
+      case "float":
+        return limit != null ? `FLOAT(${limit})` : "FLOAT";
+      case "integer":
+        return integerToSql(limit);
+      case "text":
+        return typeWithSizeToSql("text", limitToSize(limit ?? null, "text"));
+      case "blob":
+        return typeWithSizeToSql("blob", limitToSize(limit ?? null, "blob"));
+      case "binary":
+        if (limit != null && limit >= 0 && limit <= 0xfff) return `varbinary(${limit})`;
+        return typeWithSizeToSql("blob", limitToSize(limit ?? null, "binary"));
+      case "string":
+        return `varchar(${limit ?? 255})`;
+      case "datetime":
+      case "timestamp": {
+        const p = options.precision;
+        if (p != null && !(p >= 0 && p <= 6))
+          throw new ArgumentError(
+            `No datetime type has precision of ${p}. The allowed range of precision is from 0 to 6`,
+          );
+        return p != null ? `datetime(${p})` : "datetime";
+      }
+      default:
+        return super.typeToSql(type, options);
+    }
   }
 
   visitAddForeignKey(fromTable: string, toTable: string, options: Record<string, unknown>): string {
@@ -121,13 +158,6 @@ export class SchemaCreation extends AbstractSchemaCreation {
       sql += `SET${this.adapter.quoteDefaultExpression(o.default)}`;
     }
     return sql;
-  }
-
-  override typeToSql(type: ColumnType, options: ColumnOptions = {}): string {
-    if (type === "float") {
-      return options.limit != null ? `FLOAT(${options.limit})` : "FLOAT";
-    }
-    return super.typeToSql(type, options);
   }
 
   /** @internal */

@@ -280,7 +280,9 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
 
   // Filter generated (virtual) columns from fixture rows — PG rejects INSERT on those columns.
   // Mirrors Rails: build_fixture_sql rejects schema_cache.columns_hash entries where column.virtual?
-  if ((adapter as any).supportsVirtualColumns?.()) {
+  // Avoid supportsVirtualColumns() — it requires databaseVersion to be pre-initialized.
+  // isVirtual() returns false for non-virtual adapters, so calling columns() is always safe.
+  if (typeof (adapter as any).columns === "function") {
     const cols: { name: string; isVirtual(): boolean }[] = await (adapter as any).columns(
       tableName,
     );

@@ -22,7 +22,10 @@ const files = execSync(`find ${root} -name '*.test.ts' -type f`, { encoding: "ut
 const offenders: string[] = [];
 for (const f of files) {
   const src = readFileSync(f, "utf8");
-  if (!/class\s+\w+\s+extends\s+Base\b/.test(src)) continue;
+  // Match both named declarations (`class Foo extends Base`) and anonymous
+  // class expressions (`class extends Base` — typically assigned to a const
+  // or returned from a factory, as in encryption/test-helpers.ts).
+  if (!/class(?:\s+\w+)?\s+extends\s+Base\b/.test(src)) continue;
   if (/\bdefineSchema\s*\(/.test(src)) continue;
   offenders.push(f);
 }

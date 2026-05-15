@@ -136,6 +136,22 @@ describe("defineSchema", () => {
       expect("id" in rows[0]).toBe(false);
     });
 
+    it("legacy single-column table named 'columns' with object ColumnSpec stays legacy", async () => {
+      // Corner case: `{ columns: { type: "string" } }` is structurally
+      // indistinguishable from a wrapper with one column named `type` if
+      // the discriminator only inspects `columns`. Requiring `primaryKey`
+      // on the wrapper means a legacy ColumnSpec-object shape like this
+      // unambiguously stays legacy.
+      await defineSchema(adapter, {
+        reports2: { columns: { type: "string" } },
+      });
+      await adapter.executeMutation(`INSERT INTO "reports2" ("columns") VALUES ('hi')`);
+      const rows = (await adapter.execute(`SELECT * FROM "reports2"`)) as Array<
+        Record<string, unknown>
+      >;
+      expect(rows[0]["columns"]).toBe("hi");
+    });
+
     it("does not mis-classify a legacy column literally named 'columns'", async () => {
       // The discriminator must require `columns` to be an object map (not a
       // ColumnSpec string/object) — otherwise a legacy table with a column

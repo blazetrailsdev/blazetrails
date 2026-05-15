@@ -33,8 +33,14 @@ export interface WrappedTableSchema {
    * suppresses the auto-`id` column. `false` builds the table without a PK.
    * `string` is not supported — use the matching column with `primary: true`
    * via the legacy shape, or pass `[name]` for a single-column composite.
+   *
+   * Required: this is the disambiguator that separates the wrapper shape
+   * from the legacy `Record<colName, ColumnSpec>` shape. Without it, a
+   * legacy single-column table whose column happens to be named `columns`
+   * (with an object ColumnSpec) is structurally indistinguishable from a
+   * wrapper. If you don't need to override the PK, use the legacy shape.
    */
-  primaryKey?: string[] | false;
+  primaryKey: string[] | false;
 }
 export type TableSchema = Record<string, ColumnSpec> | WrappedTableSchema;
 export type Schema = Record<string, TableSchema>;
@@ -49,17 +55,20 @@ const WRAPPER_KEYS = new Set(["columns", "primaryKey"]);
 /** @internal */
 function isWrappedSchema(table: TableSchema): table is WrappedTableSchema {
   // The wrapper and the legacy `Record<colName, ColumnSpec>` shape both
-  // permit a key called `columns`, so discrimination has to lean on
-  // structural signals. Rule:
-  //   1. `columns` must be present and an object (not a string ColumnSpec).
-  //   2. Every other top-level key must be a recognised wrapper meta key
-  //      (currently only `primaryKey`). A legacy table almost always has
-  //      additional column names alongside any `columns` column, so this
-  //      cleanly separates the two without inspecting nested values —
-  //      important because the wrapper's columns map can include a column
-  //      named `type` (STI), which collides with the ColumnSpec object
-  //      shape.
+  // permit a key called `columns`, so discrimination needs an unambiguous
+  // signal. We use the presence of `primaryKey` — the wrapper's sole
+  // purpose is to set a table-level PK, so making it required also
+  // collapses the only ambiguity: a legacy single-column table
+  // `{ columns: { type: "string" } }` is structurally identical to a
+  // wrapper with one column named `type`, but it cannot have `primaryKey`,
+  // so it stays unambiguously legacy.
+  //
+  // Rule:
+  //   1. `primaryKey` is present.
+  //   2. `columns` is present and an object map.
+  //   3. No other top-level keys.
   if (!table || typeof table !== "object") return false;
+  if (!("primaryKey" in table)) return false;
   const candidate = (table as { columns?: unknown }).columns;
   if (!candidate || typeof candidate !== "object") return false;
   for (const key of Object.keys(table)) {
@@ -195,7 +204,7 @@ export async function defineSchema(
           if (spec.limit !== undefined) options["limit"] = spec.limit;
           if (spec.null !== undefined) options["null"] = spec.null;
           if (spec.default !== undefined) options["default"] = spec.default;
-          if (spec.primary && !Array.isArray(pk)) {
+          if (spec.primary && pk === undefined) {
             options["primaryKey"] = true;
           }
         }

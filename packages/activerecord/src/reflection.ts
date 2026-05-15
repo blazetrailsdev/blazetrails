@@ -351,15 +351,23 @@ export class MacroReflection extends AbstractReflection {
     return this._klassCache;
   }
 
+  /** @internal */
+  protected activeRecordRegistryName(): string {
+    const ar = this.activeRecord as any;
+    if (Object.prototype.hasOwnProperty.call(ar, "_registryKeys")) {
+      // Filter to keys that actually point to this class (not inherited superclass aliases).
+      const own = (ar._registryKeys as string[]).filter(
+        (k) => modelRegistry.get(k) === this.activeRecord,
+      );
+      if (own.length > 0) return own[0];
+    }
+    return this.activeRecord.name;
+  }
+
   _klass(className: string): typeof Base {
     // Rails: when active_record.name.demodulize == class_name, try ::ClassName
     // (absolute top-level) first, then fall back to namespace-relative lookup.
-    // Use own _registryKeys only — inherited keys belong to a superclass namespace.
-    const ar = this.activeRecord as any;
-    const ownKeys = Object.prototype.hasOwnProperty.call(ar, "_registryKeys")
-      ? (ar._registryKeys as string[])
-      : undefined;
-    const arName = ownKeys?.[0] ?? this.activeRecord.name;
+    const arName = this.activeRecordRegistryName();
     const lastSegment = arName.includes("::") ? arName.split("::").pop()! : arName;
     if (lastSegment === className) {
       try {
@@ -908,12 +916,7 @@ export class AssociationReflection extends MacroReflection {
       // Namespace-relative walk: mirrors Ruby's compute_type candidate list.
       // For activeRecord registered as "A::B::C", tries "A::B::C::Name",
       // "A::B::Name", "A::Name" before falling through to top-level "Name".
-      // Use own _registryKeys only — inherited keys belong to a superclass namespace.
-      const ar = this.activeRecord as any;
-      const ownKeys = Object.prototype.hasOwnProperty.call(ar, "_registryKeys")
-        ? (ar._registryKeys as string[])
-        : undefined;
-      const arName = ownKeys?.[0] ?? this.activeRecord.name;
+      const arName = this.activeRecordRegistryName();
       if (arName.includes("::")) {
         const segments = arName.split("::");
         for (let i = segments.length; i > 0; i--) {
@@ -1137,10 +1140,7 @@ export class ThroughReflection extends AbstractReflection {
     super();
     this._delegate = delegate;
     const sourceTypeVal = delegate.options.sourceType;
-    if (
-      typeof sourceTypeVal === "function" &&
-      /^class[\s{]/.test(Function.prototype.toString.call(sourceTypeVal))
-    ) {
+    if (typeof sourceTypeVal === "function") {
       throw new ArgumentError("A class was passed to `:sourceType` but we are expecting a string.");
     }
   }

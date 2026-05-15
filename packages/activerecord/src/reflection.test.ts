@@ -1783,11 +1783,14 @@ describe("ReflectionTest", () => {
     // Non-AR subclass registered under a different name raises ArgumentError
     class NotAModel {}
     modelRegistry.set("NotAModel", NotAModel as unknown as typeof Base);
-    Associations.hasMany.call(Parent, "notModels", { className: "NotAModel" });
-    const badRef = reflectOnAssociation(Parent, "notModels");
-    expect(() => badRef!.klass).toThrow(ArgumentError);
-    expect(() => badRef!.klass).toThrow(/not an ActiveRecord::Base subclass/);
-    modelRegistry.delete("NotAModel");
+    try {
+      Associations.hasMany.call(Parent, "notModels", { className: "NotAModel" });
+      const badRef = reflectOnAssociation(Parent, "notModels");
+      expect(() => badRef!.klass).toThrow(ArgumentError);
+      expect(() => badRef!.klass).toThrow(/not an ActiveRecord::Base subclass/);
+    } finally {
+      modelRegistry.delete("NotAModel");
+    }
   });
 
   it("reflection klass with same demodularized name", () => {
@@ -1809,6 +1812,36 @@ describe("ReflectionTest", () => {
     Associations.hasMany.call(Project, "tasks", {});
     const ref = reflectOnAssociation(Project, "tasks");
     expect(ref!.klass).toBe(Task);
+  });
+
+  it("reflection klass demodulize top-level-first resolution", () => {
+    // Rails _klass: when demodulize(activeRecord.name) == className,
+    // top-level ::ClassName is tried before namespace-relative lookup.
+    const adp = freshAdapter();
+    class TopUser extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adp;
+      }
+    }
+    class NsAdminUser extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adp;
+      }
+    }
+    // Top-level "User" and namespaced "Admin::User" are both in the registry.
+    registerModel("User", TopUser);
+    registerModel("Admin::User", NsAdminUser);
+    // NsAdminUser.demodulize("Admin::User") == "User" == className("user")
+    // → _klass tries ::User first → resolves to top-level TopUser
+    Associations.hasOne.call(NsAdminUser, "user", {});
+    const ref = reflectOnAssociation(NsAdminUser, "user");
+    expect(ref!.klass).toBe(TopUser);
+    // When className is explicitly qualified it bypasses the demodulize path
+    Associations.hasOne.call(NsAdminUser, "adminUser", { className: "Admin::User" });
+    const nsRef = reflectOnAssociation(NsAdminUser, "adminUser");
+    expect(nsRef!.klass).toBe(NsAdminUser);
   });
 
   it("aggregation reflection", () => {

@@ -233,6 +233,7 @@ export {
   LockWaitTimeout,
   QueryCanceled,
   RangeError,
+  AssociationTypeMismatch,
 } from "./errors.js";
 export {
   ReadonlyAttributeError,
@@ -241,7 +242,6 @@ export {
 } from "./readonly-attributes.js";
 export { RecordInvalid } from "./validations.js";
 export {
-  AssociationTypeMismatch,
   AssociationNotFoundError,
   InverseOfAssociationNotFoundError,
   InverseOfAssociationRecursiveError,

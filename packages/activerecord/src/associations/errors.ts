@@ -6,13 +6,6 @@
  */
 import { ActiveRecordError, ConfigurationError } from "../errors.js";
 
-export class AssociationTypeMismatch extends ActiveRecordError {
-  constructor(expected: string, actual: string) {
-    super(`${expected} expected, got ${actual}`);
-    this.name = "AssociationTypeMismatch";
-  }
-}
-
 export class AssociationNotFoundError extends ConfigurationError {
   readonly record: any;
   readonly associationName: string;

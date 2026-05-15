@@ -23,14 +23,18 @@ import {
 import { Table as ArelTable } from "@blazetrails/arel";
 import type { Nodes } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
-import { StrictLoadingViolationError, RecordNotSaved, ConfigurationError } from "../errors.js";
+import {
+  StrictLoadingViolationError,
+  RecordNotSaved,
+  ConfigurationError,
+  AssociationTypeMismatch,
+} from "../errors.js";
 import { RecordInvalid } from "../validations.js";
 import {
   HasManyThroughCantAssociateThroughHasOneOrManyReflection,
   HasManyThroughNestedAssociationsAreReadonly,
   HasOneThroughNestedAssociationsAreReadonly,
   HasManyThroughOrderError,
-  AssociationTypeMismatch,
 } from "./errors.js";
 import { getInheritanceColumn, findStiClass } from "../inheritance.js";
 import type { AssociationDefinition } from "../associations.js";

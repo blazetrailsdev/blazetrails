@@ -67,6 +67,20 @@ tester.run("rails-file-structure-method-order", rule, {
       filename: classFile,
       code: `/** @rails-structure-skip reason="legacy" */\nclass X {\n  third() {}\n  first() {}\n  second() {}\n}\n`,
     },
+    // Method-level @rails-structure-skip JSDoc does NOT suppress the
+    // whole file — only leading-comment-block markers count. This case
+    // has the marker on a method's JSDoc; the class is still in-order
+    // so it's valid (no-fix expected anyway).
+    {
+      filename: classFile,
+      code:
+        `class X {\n` +
+        `  first() {}\n` +
+        `  /** @rails-structure-skip reason="method only" */\n` +
+        `  second() {}\n` +
+        `  third() {}\n` +
+        `}\n`,
+    },
     // Hoisting-scope safety: ClassDeclaration and `const`/`let` are NOT
     // orderable. A file with only those declarations (no
     // MethodDefinition or FunctionDeclaration) emits no diagnostic,
@@ -85,6 +99,28 @@ tester.run("rails-file-structure-method-order", rule, {
       code: `class X {\n  third() {}\n  first() {}\n  second() {}\n}\n`,
       errors: [{ messageId: "outOfOrder" }],
       output: `class X {\n  first() {}\n  second() {}\n  third() {}\n}\n`,
+    },
+    // Method-level @rails-structure-skip JSDoc must NOT suppress the
+    // whole file — even though the marker is present, it sits inside
+    // the class body (after the first non-comment token), so the rule
+    // still fires on the out-of-order members.
+    {
+      filename: classFile,
+      code:
+        `class X {\n` +
+        `  /** @rails-structure-skip reason="method only" */\n` +
+        `  third() {}\n` +
+        `  first() {}\n` +
+        `  second() {}\n` +
+        `}\n`,
+      errors: [{ messageId: "outOfOrder" }],
+      output:
+        `class X {\n` +
+        `  first() {}\n` +
+        `  second() {}\n` +
+        `  /** @rails-structure-skip reason="method only" */\n` +
+        `  third() {}\n` +
+        `}\n`,
     },
     // Duplicate-named members (getter/setter pairs, TS overload
     // signatures) stay grouped under reorder. The manifest lists each

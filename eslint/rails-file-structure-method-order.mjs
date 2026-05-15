@@ -195,11 +195,16 @@ const rule = {
 
     const sourceCode = context.sourceCode ?? context.getSourceCode();
 
-    // File-level opt-out: `/** @rails-structure-skip … */` anywhere in
-    // the file's leading-comment block disables this rule for the file.
-    // Per docs/rails-file-structure-mirror-plan.md §5.1; gives a
-    // grep-able audit trail vs. generic `/* eslint-disable */`.
+    // File-level opt-out: `/** @rails-structure-skip … */` in the
+    // file's leading-comment block (before any non-comment token)
+    // disables the rule for the file. Per
+    // docs/rails-file-structure-mirror-plan.md §5.1. Restricting to
+    // leading comments prevents a method-level JSDoc from accidentally
+    // suppressing the whole file.
+    const firstToken = sourceCode.getFirstToken(sourceCode.ast);
+    const firstTokenStart = firstToken ? firstToken.range[0] : Infinity;
     for (const c of sourceCode.getAllComments()) {
+      if (c.range[0] >= firstTokenStart) break;
       if (c.type === "Block" && /@rails-structure-skip\b/.test(c.value)) {
         return {};
       }

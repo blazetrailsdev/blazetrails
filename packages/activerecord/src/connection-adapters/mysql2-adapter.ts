@@ -42,15 +42,18 @@ class MysqlSchemaStatements extends SchemaStatements {
   }
 
   /**
-   * MySQL/MariaDB don't support `CREATE INDEX IF NOT EXISTS` (MySQL never
-   * has; MariaDB does, but Rails standardizes on the pre-flight approach
-   * for portability). Override `addIndex` to mirror Rails' MySQL
-   * `add_index`: if `ifNotExists: true` and the index is already present,
-   * short-circuit before emitting DDL — otherwise the second call trips
-   * `ER_DUP_KEYNAME` because `MysqlSchemaCreation` (correctly) omits the
-   * `IF NOT EXISTS` keyword.
+   * `Migration#addIndex` routes through `this.schema.addIndex(...)`, so
+   * we override here. Mirrors Rails' `AbstractMysqlAdapter#add_index` /
+   * `#build_create_index_definition` pair: pre-flight via
+   * `indexExists()` and emit `CREATE INDEX` without `IF NOT EXISTS`
+   * (MySQL doesn't support the keyword; MariaDB does but Rails
+   * standardizes on the pre-flight for portability). Without this, the
+   * second `addIndex(..., { ifNotExists: true })` call trips
+   * `ER_DUP_KEYNAME` on MariaDB because `MysqlSchemaCreation`
+   * correctly omits the keyword.
    *
-   * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::SchemaStatements#add_index
+   * Mirrors: AbstractMysqlAdapter#add_index +
+   * AbstractMysqlAdapter#build_create_index_definition
    */
   override async addIndex(
     tableName: string,

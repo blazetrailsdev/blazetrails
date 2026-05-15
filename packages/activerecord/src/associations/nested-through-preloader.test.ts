@@ -11,9 +11,13 @@
  *   - direct load through a 3-level chain (Author -> Posts ->
  *     Comments -> Ratings) with the regular JOIN-based path
  *   - eager preload through the same chain via `includes`
- *   - eager preload combined with `joins`/`where` filters on the
- *     intermediate table
- *   - STI subclass as the final source of a nested-through chain
+ *   - eager preload combined with an outer-relation `where` filter
+ *     (preloaded targets must not be silently dropped)
+ *   - STI subclass as the final source of a nested-through chain,
+ *     under both direct load and `includes` preload
+ *
+ * Intermediate-table `joins`/`where` and `references` against a
+ * nested-through chain belong to Slot E and are not covered here.
  *
  * Mirrors selected scenarios from
  * vendor/rails/activerecord/test/cases/associations/nested_through_associations_test.rb.
@@ -153,7 +157,7 @@ describe("HMT Slot D — nested-through preloader / STI / joins+includes", () =>
   });
 
   it("includes() + outer-relation where preserves all preloaded nested-through targets", async () => {
-    const { a, r1 } = await seed();
+    const { a, r1, r2, r3 } = await seed();
     const loaded = (await NtdAuthor.all()
       .includes("ntdAllRatings")
       .where({ id: a.id })
@@ -162,10 +166,8 @@ describe("HMT Slot D — nested-through preloader / STI / joins+includes", () =>
     expect(author).toBeDefined();
     const preloaded = author._preloadedAssociations?.get("ntdAllRatings") as any[];
     // Filtering the outer relation must not silently drop preloaded
-    // targets — all three ratings still preload for the surviving
-    // owner row.
-    expect(preloaded.length).toBe(3);
-    expect(preloaded.some((r: any) => r.id === r1.id)).toBe(true);
+    // targets, introduce duplicates, or leak stray rows.
+    expect(preloaded.map((r: any) => r.id).sort()).toEqual([r1.id, r2.id, r3.id].sort());
   });
 
   it("STI subclass instances flow through the nested-through chain with the correct type", async () => {
@@ -183,5 +185,17 @@ describe("HMT Slot D — nested-through preloader / STI / joins+includes", () =>
     // STI promotion: subclass row must materialize as NtdHighRating,
     // not the base class, when the through chain finalizes.
     expect(ratings[0].constructor).toBe(NtdHighRating);
+
+    // Same chain via the preloader path (includes) must also
+    // materialize the STI subclass — a regression that bypasses STI
+    // discriminator dispatch in the source-preload step would
+    // otherwise slip through.
+    const loaded = (await NtdAuthor.all()
+      .includes("ntdAllRatings")
+      .where({ id: a.id })
+      .toArray()) as any[];
+    const preloaded = loaded[0]._preloadedAssociations?.get("ntdAllRatings") as any[];
+    expect(preloaded.length).toBe(1);
+    expect(preloaded[0].constructor).toBe(NtdHighRating);
   });
 });

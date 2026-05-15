@@ -2,16 +2,34 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel } from "../index.js";
 import { Associations } from "../associations.js";
 
 import { createTestAdapter } from "../test-adapter.js";
+import { defineSchema } from "../test-helpers/define-schema.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
-// -- Helpers --
+let _adapter: DatabaseAdapter = createTestAdapter();
+beforeEach(async () => {
+  _adapter = createTestAdapter();
+  await defineSchema(_adapter, {
+    authors: { name: "string" },
+    books: { title: "string", author_id: "integer" },
+    r_authors: { name: "string" },
+    r_books: { title: "string", author_id: "integer" },
+    r_writers: { name: "string" },
+    r_novels: { title: "string", writer_id: "integer" },
+    r_a_users: { name: "string" },
+    r_a_profiles: { bio: "string", r_a_user_id: "integer" },
+    r_h_users: { name: "string" },
+    r_h_profiles: { bio: "string", r_h_user_id: "integer" },
+    r_m_users: { name: "string" },
+    r_m_profiles: { bio: "string", r_m_user_id: "integer" },
+  });
+});
 function freshAdapter(): DatabaseAdapter {
-  return createTestAdapter();
+  return _adapter;
 }
 
 describe("RequiredAssociationsTest", () => {

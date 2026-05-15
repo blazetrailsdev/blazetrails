@@ -125,7 +125,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       // emits intervals via the generic `t.column(...)` helper, so accept
       // either spelling so long as the default round-trips as "P3Y".
       expect(output).toMatch(
-        /t\.(?:interval|column)\("default_term",(?:\s*"interval"(?:\([^)]*\))?,)?\s*\{[^}]*default:\s*"P3Y"/,
+        /t\.interval\("default_term",\s*\{[^}]*default:\s*"P3Y"|t\.column\("default_term",\s*"interval"(?:\([^)]*\))?,\s*\{[^}]*default:\s*"P3Y"/,
       );
     });
   });

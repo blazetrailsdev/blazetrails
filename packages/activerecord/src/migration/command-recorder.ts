@@ -93,8 +93,12 @@ export class CommandRecorder {
     fn?: (t: RecorderTableProxy) => Promise<void> | void,
   ): Promise<void> {
     const options: Record<string, unknown> = typeof fnOrOptions === "function" ? {} : fnOrOptions;
-    const callback: (t: RecorderTableProxy) => Promise<void> | void =
-      typeof fnOrOptions === "function" ? fnOrOptions : fn!;
+    const callback = typeof fnOrOptions === "function" ? fnOrOptions : fn;
+    if (!callback) {
+      throw new TypeError(
+        "changeTable requires a callback. Rails change_table always takes a block.",
+      );
+    }
     const supportsBulk =
       typeof (this._delegate as any)?.supportsBulkAlter === "function" &&
       (this._delegate as any).supportsBulkAlter() === true;

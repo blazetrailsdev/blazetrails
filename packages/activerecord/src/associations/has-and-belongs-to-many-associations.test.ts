@@ -592,10 +592,13 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
 
   it("find should append to association order", async () => {
     // Multiple order() calls on the scope chain compose left-to-right.
+    // Two records share a name so the secondary `id DESC` ordering is
+    // observable as a tiebreaker (without ties, the second order() is a
+    // no-op and the test would pass even if composition were broken).
     const dev = await Developer.create({ name: "AppendOrderDev", salary: 80000 });
     const p1 = await Project.create({ name: "Bravo" });
     const p2 = await Project.create({ name: "Alpha" });
-    const p3 = await Project.create({ name: "Charlie" });
+    const p3 = await Project.create({ name: "Alpha" });
     await DeveloperProject.create({ developer_id: dev.id, project_id: p1.id });
     await DeveloperProject.create({ developer_id: dev.id, project_id: p2.id });
     await DeveloperProject.create({ developer_id: dev.id, project_id: p3.id });
@@ -605,7 +608,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
       foreignKey: "developer_id",
       scope: (r: any) => r.order("name ASC").order("id DESC"),
     });
-    expect(projects.map((p: any) => p.name)).toEqual(["Alpha", "Bravo", "Charlie"]);
+    expect(projects.map((p: any) => p.id)).toEqual([p3.id, p2.id, p1.id]);
   });
 
   it.skip("dynamic find all should respect readonly access", () => {

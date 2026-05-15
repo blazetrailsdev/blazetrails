@@ -204,9 +204,15 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("raise wrapped exception on bad prepare", async () => {
-      // `?` is MySQL-style; PG adapter rewrites → $1, but table doesn't exist → StatementInvalid
+      // Rails: PG adapter rejects `?` (MySQL placeholder) → StatementInvalid.
+      // Our adapter rewrites `?` → `$1`, so we ensure the error by querying a table
+      // that can never exist in the test schema.
       await expect(
-        adapter.execQuery("select * from developers where id = ?", "sql", [1]),
+        adapter.execQuery(
+          "select * from _schema_test_nonexistent_table_xyz where id = ?",
+          "sql",
+          [1],
+        ),
       ).rejects.toThrow();
     });
     it.skip("schema change with prepared stmt", () => {
@@ -294,12 +300,11 @@ describeIfPg("PostgreSQLAdapter", () => {
       // ROOT-CAUSE: test requires 4 AR models with different qualified table_name settings + count/create
       // SCOPE: needs full AR model layer
     });
-    it.skip("raise on unquoted schema name", () => {
-      // BLOCKED: behavior-unclear — with_schema_search_path("$user,public") should raise StatementInvalid
-      // ROOT-CAUSE: Rails uses SET search_path TO $user,public (direct interpolation, no quoting); PG may
-      // treat $user as a dollar-quoted string start causing parse error. Our setSchemaSearchPath uses
-      // set_config() parameter binding which avoids the parse error, so behavior diverges from Rails.
-      // SCOPE: would need to switch setSchemaSearchPath to direct SQL interpolation matching Rails behavior
+    it("raise on unquoted schema name", async () => {
+      // $user without surrounding single quotes is invalid in SET search_path TO (PG
+      // treats $user as a dollar-quoted string start with no closing tag → syntax error).
+      // Rails schema_search_path= uses direct interpolation, so this raises StatementInvalid.
+      await expect(adapter.setSchemaSearchPath("$user,public")).rejects.toThrow();
     });
     it("without schema search path", async () => {
       await adapter.setSchemaSearchPath("public");

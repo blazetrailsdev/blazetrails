@@ -34,7 +34,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.sessionAuth("default");
       await adapter.execute(`RESET search_path`);
       for (const u of USERS) {
-        await adapter.dropSchema(u, { ifExists: true });
+        await adapter.dropSchema(u, { ifExists: true, cascade: true });
         try {
           await adapter.execute(`DROP USER IF EXISTS ${u}`);
         } catch {}

@@ -4226,7 +4226,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   async setSchemaSearchPath(searchPath: string | null): Promise<void> {
     if (searchPath == null) return;
-    await this.schemaQuery(`SELECT set_config('search_path', $1, false)`, [searchPath]);
+    // Mirrors Rails' schema_search_path= which uses direct interpolation:
+    //   execute("SET search_path TO #{schema_csv}")
+    // This means unquoted $user causes a PG parse error (dollar-quoted string),
+    // matching Rails' behavior. Use '$user' (with single quotes) for the special token.
+    await this.execute(`SET search_path TO ${searchPath}`);
   }
 
   async clientMinMessages(): Promise<string> {

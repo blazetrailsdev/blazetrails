@@ -1,7 +1,7 @@
 import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { getApp } from "./config.js";
-import { buildGid, parseGid } from "./uri/gid.js";
+import { buildGid, parseGid, type GidComponents } from "./uri/gid.js";
 import type { GlobalIDModel } from "./global-id.js";
 
 export type { GlobalIDModel };
@@ -47,6 +47,9 @@ export class SignedGlobalID {
 
   private readonly verifier: MessageVerifier;
   private _cached: string | undefined;
+  private _components: GidComponents | undefined;
+  /** Stable per-instance hex id used by inspect(). Rails uses object_id. */
+  private readonly _objectId: string;
 
   private constructor(
     uri: string,
@@ -58,6 +61,14 @@ export class SignedGlobalID {
     this.purpose = purpose;
     this.expiresAt = expiresAt;
     this.verifier = verifier;
+    this._objectId = Math.floor(Math.random() * 0xffffffffffff)
+      .toString(16)
+      .padStart(12, "0");
+  }
+
+  /** @internal — lazily parse and cache. */
+  private _parts(): GidComponents {
+    return (this._components ??= parseGid(this.uri));
   }
 
   /**
@@ -125,17 +136,17 @@ export class SignedGlobalID {
 
   /** Mirrors: GlobalID#model_id (inherited by SignedGlobalID). */
   get modelId(): string | string[] {
-    return parseGid(this.uri).modelId;
+    return this._parts().modelId;
   }
 
   /** Mirrors: GlobalID#model_name (inherited by SignedGlobalID). */
   get modelName(): string {
-    return parseGid(this.uri).modelName;
+    return this._parts().modelName;
   }
 
   /** Mirrors: GlobalID#params (inherited by SignedGlobalID). */
   get params(): Record<string, string> {
-    return parseGid(this.uri).params;
+    return this._parts().params;
   }
 
   /** Mirrors: SignedGlobalID#== — equal iff URI and purpose match. */
@@ -145,14 +156,9 @@ export class SignedGlobalID {
     );
   }
 
-  /** Mirrors: SignedGlobalID#inspect — `#<SignedGlobalID:0x...>`. */
+  /** Mirrors: SignedGlobalID#inspect — `#<SignedGlobalID:0x...>` (stable per instance). */
   inspect(): string {
-    // 16 hex digits is enough to look like an object id; Rails uses the
-    // actual VM pointer but TS has no equivalent.
-    const id = Math.floor(Math.random() * 0xffffffffffff)
-      .toString(16)
-      .padStart(12, "0");
-    return `#<SignedGlobalID:0x${id}>`;
+    return `#<SignedGlobalID:0x${this._objectId}>`;
   }
 
   /** @internal */

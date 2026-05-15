@@ -48,6 +48,11 @@ describe("SignedGlobalIDTest", () => {
     const verifier = makeVerifier();
     const sgid = SignedGlobalID.create(person(5), { verifier });
     expect(sgid.inspect()).toMatch(/^#<SignedGlobalID:0x[0-9a-f]+>$/);
+    // Stable per instance — Ruby's object_id doesn't change between calls.
+    expect(sgid.inspect()).toBe(sgid.inspect());
+    // Distinct instances get distinct ids.
+    const other = SignedGlobalID.create(person(5), { verifier });
+    expect(sgid.inspect()).not.toBe(other.inspect());
   });
 });
 

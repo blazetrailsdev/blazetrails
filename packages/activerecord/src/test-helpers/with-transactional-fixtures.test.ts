@@ -28,7 +28,7 @@ describe("withTransactionalFixtures", () => {
   // rows because the first's INSERT was rolled back by `afterEach`. If it
   // doesn't, the second test sees the row from the first.
   it("inserts a row (first run)", async () => {
-    await a().exec(`INSERT INTO fixture_users (name) VALUES ('alice')`);
+    await a().exec(`INSERT INTO fixture_users (id, name) VALUES (1, 'alice')`);
     const rows = await a().execute(`SELECT * FROM fixture_users`);
     expect(rows).toHaveLength(1);
   });
@@ -40,7 +40,7 @@ describe("withTransactionalFixtures", () => {
 
   it("nested user transaction becomes a savepoint and still rolls back at teardown", async () => {
     await a().innerAdapter.transactionManager.beginTransaction({});
-    await a().exec(`INSERT INTO fixture_users (name) VALUES ('bob')`);
+    await a().exec(`INSERT INTO fixture_users (id, name) VALUES (2, 'bob')`);
     await a().innerAdapter.transactionManager.commitTransaction();
     const rows = await a().execute(`SELECT * FROM fixture_users`);
     expect(rows).toHaveLength(1);

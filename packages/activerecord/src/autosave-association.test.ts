@@ -20,6 +20,7 @@ import {
   markForDestruction,
   isMarkedForDestruction,
   computePrimaryKey,
+  addAutosaveAssociationCallbacks,
 } from "./autosave-association.js";
 
 // -- Helpers --
@@ -2303,35 +2304,167 @@ describe("TestAutosaveAssociationsInGeneral", () => {
     expect(post.author_id).toBe(author.id);
   });
 
-  it.skip("should not add the same callbacks multiple times for has one", () => {
-    // BLOCKED: associations — autosave feature gap
-    // ROOT-CAUSE: associations/autosave-association.ts or preloader.ts missing autosave semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
-    /* needs reflectOnAllAssociations to inspect callback count */
+  it("should not add the same callbacks multiple times for has one", async () => {
+    const adapter = freshAdapter();
+    let saveCount = 0;
+    class Profile extends Base {
+      static {
+        this.attribute("bio", "string");
+        this.attribute("user_id", "integer");
+        this.adapter = adapter;
+        this.beforeSave(() => {
+          saveCount++;
+        });
+      }
+    }
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Profile", Profile);
+    registerModel("User", User);
+    Associations.hasOne.call(User, "profile", {
+      autosave: true,
+      foreignKey: "user_id",
+      className: "Profile",
+    });
+    // Calling addAutosaveAssociationCallbacks a second time must not duplicate callbacks
+    const reflection = (User as any)._reflectOnAssociation("profile");
+    addAutosaveAssociationCallbacks(User, reflection);
+
+    const user = await User.create({ name: "Test" });
+    const profile = new Profile({ bio: "Hello" });
+    profile.bio = "Changed";
+    cacheAssoc(user, "profile", profile);
+    user.name = "trigger";
+    await user.save();
+    expect(saveCount).toBe(1);
   });
-  it.skip("should not add the same callbacks multiple times for belongs to", () => {
-    // BLOCKED: associations — autosave feature gap
-    // ROOT-CAUSE: associations/autosave-association.ts or preloader.ts missing autosave semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
-    /* needs reflectOnAllAssociations to inspect callback count */
+
+  it("should not add the same callbacks multiple times for belongs to", async () => {
+    const adapter = freshAdapter();
+    let saveCount = 0;
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        this.beforeSave(() => {
+          saveCount++;
+        });
+      }
+    }
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Author", Author);
+    registerModel("Post", Post);
+    Associations.belongsTo.call(Post, "author", {
+      autosave: true,
+      foreignKey: "author_id",
+      className: "Author",
+    });
+    const reflection = (Post as any)._reflectOnAssociation("author");
+    addAutosaveAssociationCallbacks(Post, reflection);
+
+    const author = new Author({ name: "New" });
+    const post = await Post.create({ title: "Test" });
+    cacheAssoc(post, "author", author);
+    post.title = "trigger";
+    await post.save();
+    expect(saveCount).toBe(1);
   });
-  it.skip("should not add the same callbacks multiple times for has many", () => {
-    // BLOCKED: associations — autosave feature gap
-    // ROOT-CAUSE: associations/autosave-association.ts or preloader.ts missing autosave semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
-    /* needs reflectOnAllAssociations to inspect callback count */
+
+  it("should not add the same callbacks multiple times for has many", async () => {
+    const adapter = freshAdapter();
+    let saveCount = 0;
+    class Book extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+        this.beforeSave(() => {
+          saveCount++;
+        });
+      }
+    }
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Book", Book);
+    registerModel("Author", Author);
+    Associations.hasMany.call(Author, "books", {
+      autosave: true,
+      foreignKey: "author_id",
+      className: "Book",
+    });
+    const reflection = (Author as any)._reflectOnAssociation("books");
+    addAutosaveAssociationCallbacks(Author, reflection);
+
+    const author = await Author.create({ name: "Test" });
+    const book = new Book({ title: "My Book" });
+    cacheAssoc(author, "books", [book]);
+    author.name = "trigger";
+    await author.save();
+    expect(saveCount).toBe(1);
   });
-  it.skip("should not add the same callbacks multiple times for has and belongs to many", () => {
-    // BLOCKED: associations — autosave feature gap
-    // ROOT-CAUSE: associations/autosave-association.ts or preloader.ts missing autosave semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
-    /* needs reflectOnAllAssociations to inspect callback count */
+
+  it("should not add the same callbacks multiple times for has and belongs to many", async () => {
+    const adapter = freshAdapter();
+    let saveCount = 0;
+    class Parrot extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        this.beforeSave(() => {
+          saveCount++;
+        });
+      }
+    }
+    class Pirate extends Base {
+      static {
+        this.attribute("catchphrase", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Parrot", Parrot);
+    registerModel("Pirate", Pirate);
+    Associations.hasAndBelongsToMany.call(Pirate, "parrots", {
+      autosave: true,
+      className: "Parrot",
+      joinTable: "parrots_pirates",
+    });
+    // Calling addAutosaveAssociationCallbacks a second time must not duplicate callbacks
+    const reflection = (Pirate as any)._reflectOnAssociation("parrots");
+    if (reflection) addAutosaveAssociationCallbacks(Pirate, reflection);
+
+    const pirate = await Pirate.create({ catchphrase: "Arrr" });
+    const parrot = await Parrot.create({ name: "Polly" });
+    saveCount = 0; // reset after create (create triggers beforeSave)
+    const proxy = association(pirate, "parrots");
+    await proxy.push(parrot);
+    // Make parrot dirty so autosave saves it
+    parrot.name = "Polly Updated";
+    pirate.catchphrase = "trigger";
+    await pirate.save();
+    expect(saveCount).toBe(1);
   });
+
   it.skip("cyclic autosaves do not add multiple validations", () => {
-    // BLOCKED: associations — autosave feature gap
-    // ROOT-CAUSE: associations/autosave-association.ts or preloader.ts missing autosave semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in autosave-association.test.ts
-    /* needs cyclic association detection */
+    // BLOCKED: requires afterValidation :_ensure_no_duplicate_errors wiring
+    // The Rails fixture has ShipWithoutNestedAttributes with TWO validates(:name, presence: true)
+    // callbacks + Prisoner belongs_to :ship (autosave: true). The dedup fires via
+    // after_validation :_ensure_no_duplicate_errors registered in defineAutosaveValidationCallbacks.
+    // Our implementation defines _ensureNoDuplicateErrors but never registers it via afterValidation.
+    // Unblocking requires: model.afterValidation(() => _ensureNoDuplicateErrors.call(model)) wiring.
   });
 });
 

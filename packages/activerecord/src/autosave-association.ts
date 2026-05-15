@@ -1027,6 +1027,12 @@ const _AUTOSAVE_AROUND_SAVE_KEY = Symbol.for("blazetrails.autosaveAroundSaveRegi
  */
 export function addAutosaveAssociationCallbacks(model: any, reflection: any): void {
   const saveMethod = `autosaveAssociatedRecordsFor_${reflection.name}`;
+  // Mirrors Rails' `define_non_cyclic_method` early-return: if the method is
+  // already defined on the model, all callbacks for this association are already
+  // registered — calling again would duplicate the after_create/after_update/
+  // before_save lambdas. Rails deduplicates by registering named callbacks
+  // (method symbol); we guard the entire registration block instead.
+  if (typeof model.prototype?.[saveMethod] === "function") return;
   const isCollection: boolean =
     typeof reflection.isCollection === "function"
       ? reflection.isCollection()

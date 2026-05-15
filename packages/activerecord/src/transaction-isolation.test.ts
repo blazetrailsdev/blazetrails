@@ -41,9 +41,12 @@ describe("TransactionIsolationUnsupportedTest", () => {
 });
 
 // Rails: TransactionIsolationTest — guarded by supports_transaction_isolation? && !SQLite3.
-// The skipped tests require PG/MySQL + a second connection (Slot D).
-// The un-skipped test below (isolation-when-joining) is adapter-agnostic: the
-// framework-level check fires before any DB call, so SQLite is a valid harness.
+// The two tests below (isolation-when-joining + nested-transaction) are
+// adapter-agnostic: the framework-level isolation check fires before any DB
+// call, so the SQLite harness is sufficient. The four PG-required cases
+// (read uncommitted / read committed / repeatable read / serializable) live
+// in the `describeIfPg("TransactionIsolationTest", ...)` block at the bottom
+// of this file.
 describe("TransactionIsolationTest", () => {
   it("setting isolation when joining a transaction raises an error", async () => {
     // When already inside a transaction, trying to join with an isolation level set

@@ -11,6 +11,7 @@ import {
   afterAllTransactionsCommit,
   Associations,
   registerModel,
+  modelRegistry,
 } from "./index.js";
 
 import { createTestAdapter } from "./test-adapter.js";
@@ -980,18 +981,23 @@ describe("TransactionTest", () => {
     registerModel(Topic);
     registerModel(Reply);
 
-    const topic = await Topic.create({ title: "First", approved: false });
-    await Reply.create({ content: "A reply", topic_id: topic.id });
-    const repliesCount = (await Reply.all().count()) as number;
-    expect(repliesCount).toBeGreaterThan(0);
+    try {
+      const topic = await Topic.create({ title: "First", approved: false });
+      await Reply.create({ content: "A reply", topic_id: topic.id });
+      const repliesCount = (await Reply.all().count()) as number;
+      expect(repliesCount).toBeGreaterThan(0);
 
-    // Mirrors Rails: author.update!(name: nil, post_ids: [])
-    // Rails' post_ids=[] marks the collection for deletion via autosave. The key
-    // invariant: when update! fails validation, autosave (flushPendingReplaces)
-    // never runs and the DB is unchanged. We verify the same invariant: validation
-    // fails before any autosave DB ops, so reply count is unchanged.
-    await expect((topic as any).updateBang({ title: null })).rejects.toThrow();
-    expect(await Reply.all().count()).toBe(repliesCount);
+      // Mirrors Rails: author.update!(name: nil, post_ids: [])
+      // Rails' post_ids=[] marks the collection for deletion via autosave. The key
+      // invariant: when update! fails validation, autosave (flushPendingReplaces)
+      // never runs and the DB is unchanged. We verify the same invariant: validation
+      // fails before any autosave DB ops, so reply count is unchanged.
+      await expect((topic as any).updateBang({ title: null })).rejects.toThrow();
+      expect(await Reply.all().count()).toBe(repliesCount);
+    } finally {
+      modelRegistry.delete("Topic");
+      modelRegistry.delete("Reply");
+    }
   });
   it("manually rolling back a transaction", async () => {
     class Topic extends Base {
@@ -1110,17 +1116,22 @@ describe("TransactionTest", () => {
     registerModel(Topic);
     registerModel(Reply);
 
-    const topic = await Topic.create({ title: "test" });
-    const reply = await Reply.create({ content: "reply", topic_id: topic.id });
+    try {
+      const topic = await Topic.create({ title: "test" });
+      const reply = await Reply.create({ content: "reply", topic_id: topic.id });
 
-    await Topic.transaction(async () => {
-      await topic.destroy(); // cascades: destroys reply
-      await reply.destroy(); // double destroy
-      throw new Rollback();
-    });
+      await Topic.transaction(async () => {
+        await topic.destroy(); // cascades: destroys reply
+        await reply.destroy(); // double destroy
+        throw new Rollback();
+      });
 
-    expect(reply.isFrozen()).toBe(false);
-    expect(topic.isFrozen()).toBe(false);
+      expect(reply.isFrozen()).toBe(false);
+      expect(topic.isFrozen()).toBe(false);
+    } finally {
+      modelRegistry.delete("Topic");
+      modelRegistry.delete("Reply");
+    }
   });
 
   it.skip("restore previously new record after double save", () => {

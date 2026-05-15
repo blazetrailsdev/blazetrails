@@ -70,6 +70,19 @@ describe("ActionDispatch::Journey::Visitors::FormatBuilder", () => {
     expect(format.evaluate({ slug: "a/b" })).toBe("/a%2Fb");
   });
 
+  it("coerces non-string values via toString (matches Rails .to_s)", () => {
+    const tree = new Parser().parse("/posts/:id");
+    const format = new FormatBuilder().accept(tree);
+    expect(format.evaluate({ id: 42 })).toBe("/posts/42");
+  });
+
+  it("ignores Object.prototype keys when checking for parameter presence", () => {
+    const tree = new Parser().parse("/posts/:toString");
+    const format = new FormatBuilder().accept(tree);
+    // `toString` exists on Object.prototype but wasn't supplied: should return "".
+    expect(format.evaluate({})).toBe("");
+  });
+
   it("emits required_path for stars", () => {
     const tree = new Parser().parse("/*path");
     const format = new FormatBuilder().accept(tree);

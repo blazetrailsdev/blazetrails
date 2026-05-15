@@ -15,8 +15,9 @@ export class Parameter {
     readonly escaper: Escaper,
   ) {}
 
-  escape(value: string): string {
-    return this.escaper(value);
+  /** Rails coerces with `.to_s` before escaping; mirror that here. */
+  escape(value: unknown): string {
+    return this.escaper(globalThis.String(value));
   }
 }
 
@@ -45,12 +46,15 @@ export class Format {
     });
   }
 
-  evaluate(hash: Record<string, string | null | undefined>): string {
+  evaluate(hash: Record<string, unknown>): string {
     const parts: FormatPart[] = [...this._parts];
 
     for (const index of this._parameters) {
       const param = parts[index] as Parameter;
-      const value = hash[param.name];
+      // Guard against prototype pollution: only treat own properties as supplied
+      // parameters. Without this, `toString`/`constructor` from Object.prototype
+      // would satisfy a required-parameter check.
+      const value = Object.hasOwn(hash, param.name) ? hash[param.name] : undefined;
       if (value == null) return "";
       parts[index] = param.escape(value);
     }

@@ -9,14 +9,14 @@ toGid, toGidParam, toSignedGlobalId, toSgid, toSgidParam). AR side: Base.toGid /
 toSgid / toGlobalId / toGidParam / toSignedGlobalId / findGlobalId /
 findSignedGlobalId / findSignedGlobalIdBang.
 
-### Parity scoreboard
+### Parity scoreboard (after GID-6a)
 
-| Signal       | Current         | 100% target | Gap          |
-| ------------ | --------------- | ----------- | ------------ |
-| api:compare  | 19 / 59 (32.2%) | 59 / 59     | 40 methods   |
-| test:compare | 10 / 158 (6.3%) | 158 / 158   | 148 tests    |
-| files (api)  | 4 / 5           | 5 / 5       | verifier.ts  |
-| files (test) | 3 / 8           | 8 / 8       | 5 test files |
+| Signal       | Current          | 100% target | Gap          |
+| ------------ | ---------------- | ----------- | ------------ |
+| api:compare  | 19 / 59 (32.2%)  | 59 / 59     | 40 methods   |
+| test:compare | 55 / 158 (34.8%) | 158 / 158   | 103 tests    |
+| files (api)  | 4 / 5            | 5 / 5       | verifier.ts  |
+| files (test) | 5 / 8            | 8 / 8       | 3 test files |
 
 Per-file api:compare:
 
@@ -30,16 +30,16 @@ Per-file api:compare:
 
 Per-file test:compare:
 
-| Ruby file                       | Match | Total |
-| ------------------------------- | ----- | ----- |
-| `global_identification_test.rb` | 5     | 6     |
-| `global_locator_test.rb`        | 5     | 59    |
-| `global_id_test.rb`             | 0     | 26    |
-| `signed_global_id_test.rb`      | 0     | 24    |
-| `uri_gid_test.rb`               | 0     | 30    |
-| `verifier_test.rb`              | 0     | 4     |
-| `pattern_matching_test.rb`      | 0     | 2     |
-| `railtie_test.rb`               | 0     | 7     |
+| Ruby file                       | Match | Total | %   |
+| ------------------------------- | ----- | ----- | --- |
+| `uri_gid_test.rb`               | 27    | 30    | 90% |
+| `global_identification_test.rb` | 5     | 6     | 83% |
+| `global_id_test.rb`             | 13    | 26    | 50% |
+| `signed_global_id_test.rb`      | 5     | 24    | 21% |
+| `global_locator_test.rb`        | 5     | 59    | 8%  |
+| `verifier_test.rb`              | 0     | 4     | 0%  |
+| `pattern_matching_test.rb`      | 0     | 2     | 0%  |
+| `railtie_test.rb`               | 0     | 7     | 0%  |
 
 Globalid source root: `vendor/globalid/lib/` (abbreviated as `$GID/` below).
 Pinned to globalid 1.3.0 via `vendor/sources.ts`.
@@ -53,12 +53,14 @@ Five PRs, ordered cheapest-first. Each stays under the 300 LOC ceiling.
 Most of the test:compare gap is missing test FILES, not test logic — the
 implementations already exist. Ship the mirrored test suites:
 
-**GID-6a** (~180 LOC): commit the already-drafted Slot C-b tests sitting in
-`worktrees/implement-gid-3-urigid-parser-globalid-c`:
+**GID-6a** — open in [#1631](https://github.com/blazetrailsdev/trails/pull/1631):
 
-- `uri-gid.test.ts` (27 of 30 Ruby tests already match by name)
-- `global-id.test.ts` (6 of 26 match; expand to full mirror)
-- After: test:compare 10 → ~45.
+- `uri-gid.test.ts` — 27/30 Ruby tests match by name (90%).
+- `global-id.test.ts` — 13/26 match (50%); the remaining 13 are
+  `find*`/`finding`/`model class` Ruby tests that depend on
+  `GlobalID#find` → Locator. They belong in `global-locator.test.ts`
+  (GID-6c) once GID-9 lands the Locator class hierarchy.
+- test:compare moved 10 → 55 (6.3% → 34.8%).
 
 **GID-6b** (~180 LOC): expand `signed-global-id.test.ts` to mirror
 `signed_global_id_test.rb` (24 tests) + new `verifier.test.ts` (4 tests once

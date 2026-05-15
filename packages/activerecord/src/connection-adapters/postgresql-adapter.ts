@@ -2597,6 +2597,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       tableCondition = `t.oid = to_regclass($1)`;
     }
 
+    // ix.indnkeyatts was added in PG11 (covering indexes); on older servers
+    // INCLUDE columns don't exist, so all indkey columns are key columns.
+    const includeFilter = this.supportsIndexInclude() ? `WHERE k < ix.indnkeyatts` : "";
+
     const rows = await this.schemaQuery(
       `SELECT i.relname AS index_name,
               ix.indisunique AS is_unique,
@@ -2604,7 +2608,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
               ARRAY(
                 SELECT pg_get_indexdef(ix.indexrelid, k + 1, true)
                 FROM generate_subscripts(ix.indkey, 1) AS k
-                WHERE k < ix.indnkeyatts
+                ${includeFilter}
                 ORDER BY k
               ) AS columns,
               pg_get_indexdef(ix.indexrelid) AS definition,

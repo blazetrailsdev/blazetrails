@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { Parser } from "./parser.js";
 import { Cat, Symbol as SymbolNode } from "./nodes/node.js";
-import { Each, StringVisitor, FormatBuilder, Format, Parameter, DotVisitor } from "./visitors.js";
+import {
+  Each,
+  String as StringVisitor,
+  FormatBuilder,
+  Format,
+  Parameter,
+  Dot as DotVisitor,
+} from "./visitors.js";
 
 // ==========================================================================
 // Rails has no visitors_test.rb — these tests lock down the contracts that

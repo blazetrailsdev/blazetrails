@@ -286,8 +286,8 @@ export class Each extends FunctionalVisitor<(node: Node) => void> {
 /**
  * Serialize an AST back to its source string form.
  */
-export class StringVisitor extends FunctionalVisitor<string> {
-  static readonly INSTANCE = new StringVisitor();
+export class String extends FunctionalVisitor<string> {
+  static readonly INSTANCE = new String();
 
   override binary(node: Node, seed: string): string {
     const left = (node as Node & { left: Node }).left;
@@ -332,8 +332,8 @@ function dotId(node: Node): number {
   return id;
 }
 
-export class DotVisitor extends FunctionalVisitor<DotSeed> {
-  static readonly INSTANCE = new DotVisitor();
+export class Dot extends FunctionalVisitor<DotSeed> {
+  static readonly INSTANCE = new Dot();
 
   override accept(node: Node, seed: DotSeed = [[], []]): DotSeed {
     super.accept(node, seed);

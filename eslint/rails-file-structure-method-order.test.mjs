@@ -144,6 +144,17 @@ try {
         errors: [{ messageId: "outOfOrder" }],
         output: `class X {\n  first() {}\n  second() {}\n  third() {}\n}\n`,
       },
+      // `const X = class { … }` — class expression bound to a
+      // top-level variable. Reachable from Program through
+      // VariableDeclarator / VariableDeclaration with no function-like
+      // ancestor between, so it's still file-level structure and gets
+      // reordered.
+      {
+        filename: classFile,
+        code: `const X = class {\n  third() {}\n  first() {}\n  second() {}\n};\n`,
+        errors: [{ messageId: "outOfOrder" }],
+        output: `const X = class {\n  first() {}\n  second() {}\n  third() {}\n};\n`,
+      },
       // Method-level @rails-structure-skip JSDoc must NOT suppress the
       // whole file — even though the marker is present, it sits inside
       // the class body (after the first non-comment token), so the rule

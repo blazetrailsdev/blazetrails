@@ -611,7 +611,7 @@ export class TableDefinition {
     if (this._id !== false) {
       let pkType: ColumnType;
       let pkOpts: ColumnOptions;
-      if (typeof this._id === "object" && this._id !== null) {
+      if (typeof this._id === "object" && this._id !== null && !Array.isArray(this._id)) {
         // Hash form: id: { type: "string", collation: "utf8mb4_bin" }
         // Mirrors Rails set_primary_key: outer options (incl. default) merge first,
         // then id.except(:type) merges on top, so hash wins on collision.
@@ -1050,8 +1050,21 @@ export class TableDefinition {
       if (this._adapterName === "sqlite" && col.options.collation) {
         parts.push(`COLLATE ${this._adapter.quoteIdentifier(col.options.collation)}`);
       } else if (this._adapterName === "mysql") {
-        if (col.options.charset) parts.push(`CHARACTER SET ${col.options.charset}`);
-        if (col.options.collation) parts.push(`COLLATE ${col.options.collation}`);
+        const safeIdentRe = /^[A-Za-z0-9_]+$/;
+        if (col.options.charset) {
+          if (!safeIdentRe.test(col.options.charset))
+            throw new ArgumentError(
+              `Invalid MySQL charset: ${JSON.stringify(col.options.charset)}`,
+            );
+          parts.push(`CHARACTER SET ${col.options.charset}`);
+        }
+        if (col.options.collation) {
+          if (!safeIdentRe.test(col.options.collation))
+            throw new ArgumentError(
+              `Invalid MySQL collation: ${JSON.stringify(col.options.collation)}`,
+            );
+          parts.push(`COLLATE ${col.options.collation}`);
+        }
       }
 
       if (col.options.array && col.type !== "primary_key") {

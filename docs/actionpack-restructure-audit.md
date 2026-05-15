@@ -361,10 +361,13 @@ project policy):
 - `action-dispatch/constants.ts` — Rack 3 lowercase header constants
   (the Rack 2 branch in Rails' `constants.rb` is omitted; trails
   targets Rack 3 only).
-- `action-dispatch/railtie.ts` — minimal `Railtie` class
-  (initializer registry), mirroring the
-  `action-controller/railtie.ts` pattern. Full initializer wire-up
-  deferred until consumers exist.
+- `action-dispatch/railtie.ts` — **deferred**. Rails'
+  `action_dispatch/railtie.rb` wires 30+ config defaults into classes
+  that don't exist on the trails side yet (`Http::URL.secure_protocol=`,
+  `ParamBuilder.ignore_leading_brackets=`, `QueryParser`,
+  `Cookies::CookieJar.always_write_cookie=`, etc.). Shipping a class
+  with no real initializers would be a stub; adding it now would call
+  setters on phantom classes. Open when the consuming classes land.
 
 Do **not** add empty stubs for `system_testing/` — it's intentionally
 not ported (see Known divergences). `journey/` gets its own wave; do

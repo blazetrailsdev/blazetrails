@@ -1532,7 +1532,17 @@ export async function loadHabtm(
   const targetArelTable = new ArelTable(targetModel.tableName);
   const inNode = targetArelTable.get(targetPkCol as string).in(subquery);
 
-  return targetModel.all().where(inNode).toArray();
+  // Apply caller-supplied scope chain composition (where/order/select/group/
+  // having/unscope etc.). Mirrors `loadHasMany`'s `options.scope(rel)` hook:
+  // Rails' `Association#scope` merges the macro-time `:scope` lambda onto
+  // the association relation via AssociationScope. HABTM's loader runs the
+  // join-subquery path directly, so we apply the lambda here so callers can
+  // compose query methods (where/order/select/group/having/unscope) on top
+  // of the join filter the same way `has_many` does.
+  let rel: any = targetModel.all().where(inNode);
+  if (options.scope) rel = options.scope(rel);
+
+  return rel.toArray();
 }
 
 /**

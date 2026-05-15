@@ -41,7 +41,7 @@ export function buildGemfileContent(): string {
     'source "https://rubygems.org"',
     "",
     `gem "activerecord", "${arVersion}"     # tracks rails ref in vendor/sources.ts`,
-    'gem "sqlite3", "~> 2.1"         # matches AR 8.0.2 declared dependency range',
+    `gem "sqlite3", "~> 2.1"         # matches AR ${arVersion} declared dependency range`,
     'gem "minitest", "~> 5.25"       # canonicalize_test.rb',
     "",
   ].join("\n");

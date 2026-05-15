@@ -62,8 +62,18 @@ function combinedFlagsFor(
   return out.join("");
 }
 
-function combinedFlags(matchers: Record<string, RegExp | RegExp[]>): string {
-  return combinedFlagsFor(Object.values(matchers));
+/**
+ * Union flags only across matchers actually referenced by a list of names.
+ * Avoids leaking flags from extra `requirements` entries (e.g. `{ ignored: /x/i }`)
+ * onto the compiled Pattern regex when the AST never references `:ignored`.
+ */
+function combinedFlagsUsed(
+  matchers: Record<string, RegExp | RegExp[]>,
+  names: readonly string[],
+): string {
+  const values: Array<RegExp | RegExp[]> = [];
+  for (const n of names) if (Object.hasOwn(matchers, n)) values.push(matchers[n]!);
+  return combinedFlagsFor(values);
 }
 
 // =========================================================================
@@ -73,17 +83,19 @@ function combinedFlags(matchers: Record<string, RegExp | RegExp[]>): string {
 export class AnchoredRegexp extends Visitor {
   protected readonly _separator: string;
   protected readonly _matchers: Matchers;
+  protected readonly _names: readonly string[];
   private readonly _separatorRe: string;
 
-  constructor(separator: string, matchers: Matchers) {
+  constructor(separator: string, matchers: Matchers, names: readonly string[] = []) {
     super();
     this._separator = separator;
     this._matchers = matchers;
+    this._names = names;
     this._separatorRe = `([^${escapeCharClass(separator)}]+)`;
   }
 
   override accept(node: Node): RegExp {
-    return new RegExp(`^${this.visit(node)}$`, combinedFlags(this._matchers));
+    return new RegExp(`^${this.visit(node)}$`, combinedFlagsUsed(this._matchers, this._names));
   }
 
   protected override visitCAT(node: Node): string {
@@ -133,7 +145,7 @@ export class AnchoredRegexp extends Visitor {
 export class UnanchoredRegexp extends AnchoredRegexp {
   override accept(node: Node): RegExp {
     const path = this.visit(node) as string;
-    const flags = combinedFlags(this._matchers);
+    const flags = combinedFlagsUsed(this._matchers, this._names);
     if (path === "/") return new RegExp(`^/`, flags);
     // Rails uses `(?:\b|\Z|/)` — `\Z` is "end of string or before trailing
     // newline"; in JS `$` (in default mode) is end-of-string. `\b` is the
@@ -303,7 +315,7 @@ export class Pattern {
   toRegexp(): RegExp {
     if (this._re) return this._re;
     const Klass = this.anchored ? AnchoredRegexp : UnanchoredRegexp;
-    this._re = new Klass(this._separators, this.requirements).accept(this.spec);
+    this._re = new Klass(this._separators, this.requirements, this.names).accept(this.spec);
     return this._re;
   }
 
@@ -335,7 +347,7 @@ export class Pattern {
         //   offsets.push((re.match("").length - 1) + last)
         const reqs = this.requirements[name]!;
         const src = regexUnion(reqs);
-        const re = new RegExp(`(?:${src})|`, combinedFlagsFor([reqs]));
+        const re = new RegExp(`(?:${src})|`, combinedFlagsFor([reqs], { outer: false }));
         const m = re.exec("");
         const groupCount = m ? m.length - 1 : 0;
         offsets.push(groupCount + offsets[offsets.length - 1]!);

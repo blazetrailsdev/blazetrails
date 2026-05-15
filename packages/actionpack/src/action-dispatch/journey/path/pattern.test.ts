@@ -123,11 +123,20 @@ describe("ActionDispatch::Journey::Path::Pattern — matching", () => {
   });
 
   it("does not lift /m flag — would break ^/$ anchoring", () => {
-    // If /m leaked to the outer regex, `^/page/foo$` would match
-    // "anything\n/page/foo" because ^/$ would become line-anchored.
-    const p = buildPath("/page/foo", { ignored: /x/m });
+    // If /m leaked to the outer regex, ^/$ would become line-anchors.
+    // Use a USED requirement so the flag is actually a candidate.
+    const p = buildPath("/page/:name", { name: /foo/m });
     expect(p.isMatch("xxx\n/page/foo")).toBe(false);
     expect(p.isMatch("/page/foo")).toBe(true);
+  });
+
+  it("does not lift flags from unused requirements", () => {
+    // {ignored: /x/i} would have made the whole pattern case-insensitive
+    // before the names-filter landed. With it, the unused requirement is
+    // ignored entirely.
+    const p = buildPath("/Page", { ignored: /x/i });
+    expect(p.isMatch("/Page")).toBe(true);
+    expect(p.isMatch("/page")).toBe(false);
   });
 
   it("escapes char-class metacharacters in separators", () => {

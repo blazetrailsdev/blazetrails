@@ -53,6 +53,25 @@ import * as path from "path";
 import type { ApiManifest, ClassInfo, MethodInfo } from "./types.js";
 import { OUTPUT_DIR } from "./config.js";
 import { rubyFileToTs, rubyMethodToTs } from "./conventions.js";
+import { resolveModuleName } from "./compare.js";
+
+/**
+ * Track the FQN alongside the entity so namespace-scoped include resolution
+ * (`resolveModuleName(short, fqn, …)`) picks the *enclosing* module —
+ * e.g. `AbstractAdapter` including `"Quoting"` resolves to
+ * `ConnectionAdapters::Quoting`, not the adapter-specific siblings.
+ */
+interface RubyEntity {
+  fqn: string;
+  info: ClassInfo;
+}
+
+/** Get-or-init helper: replaces the `(get() ?? set([]).get()!).push(v)` idiom. */
+function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const list = map.get(key);
+  if (list) list.push(value);
+  else map.set(key, [value]);
+}
 
 /**
  * An extra TS name is **moved** if a Ruby method somewhere in Rails-land
@@ -149,18 +168,18 @@ export function parseArgs(argv: string[]): CliArgs {
       filterPkg = requireValue("--package", argv[++i]);
     } else if (a === "--top") {
       const n = Number(requireValue("--top", argv[++i]));
-      if (!Number.isFinite(n) || n <= 0) {
+      if (!Number.isInteger(n) || n <= 0) {
         console.error("--top requires a positive integer");
         process.exit(1);
       }
-      topN = Math.floor(n);
+      topN = n;
     } else if (a === "--max-detail") {
       const n = Number(requireValue("--max-detail", argv[++i]));
-      if (!Number.isFinite(n) || n < 0) {
+      if (!Number.isInteger(n) || n < 0) {
         console.error("--max-detail requires a non-negative integer");
         process.exit(1);
       }
-      maxDetail = Math.floor(n);
+      maxDetail = n;
     } else if (a === "--json") {
       json = true;
     } else if (a === "--novel-only") {
@@ -209,15 +228,32 @@ function collectTsFileNames(
 }
 
 /**
- * For a set of Ruby entities (one Ruby file), compute the union of all TS
- * candidate names produced by `rubyMethodToTs`. Walks `include`s and
- * `extend`s shallowly so methods reached via mixin still count as expected.
+ * For one Ruby file's entities, compute the union of all TS candidate names
+ * produced by `rubyMethodToTs`. Mirrors `compare.flattenIncludedMethodInfos`
+ * mixin routing:
  *
- * Cross-package or stdlib mixins are silently skipped — same convention
- * as compare.ts's `flattenIncludedMethodInfos`.
+ *   - `include M`: M's instance methods land on the host as instance methods.
+ *     A nested `include N` inside M chains through (instance methods only).
+ *     M's own `extend` chain does NOT propagate to the host — Ruby `extend`
+ *     affects only the receiver's singleton class.
+ *   - `extend M` (at host level): M's instance methods land as class methods.
+ *
+ *   - Module `classMethods` are kept here because the api-compare extractor
+ *     folds nested `ClassMethods` submodules (the `ActiveSupport::Concern`
+ *     idiom) into their parent module's `classMethods` before we see them.
+ *     Excluding them would drop the most common Rails mixin pattern from
+ *     the allowed-name set and inflate false-positive extras.
+ *
+ * `include` names are resolved via compare.ts's `resolveModuleName`, which
+ * walks namespace prefixes — `AbstractAdapter` including `"Quoting"` maps
+ * only to `ConnectionAdapters::Quoting`, never to PG/MySQL siblings of the
+ * same short name. The flat-by-short-name lookup we used before pulled in
+ * unrelated modules and silently inflated `allowed`.
+ *
+ * Cross-package or stdlib mixins are silently skipped — same as compare.ts.
  */
 function collectAllowedNames(
-  entities: ClassInfo[],
+  entities: RubyEntity[],
   rubyModules: Record<string, ClassInfo>,
   moduleFqnByShort: Map<string, string[]>,
 ): Set<string> {
@@ -233,8 +269,8 @@ function collectAllowedNames(
     }
   };
 
-  const walkMixin = (name: string): void => {
-    const fqns = name.includes("::") ? [name] : (moduleFqnByShort.get(name) ?? []);
+  const walkMixin = (incName: string, contextFqn: string): void => {
+    const fqns = resolveModuleName(incName, contextFqn, moduleFqnByShort);
     for (const fqn of fqns) {
       if (visited.has(fqn)) continue;
       visited.add(fqn);
@@ -242,16 +278,17 @@ function collectAllowedNames(
       if (!mod) continue;
       addMethods(mod.instanceMethods);
       addMethods(mod.classMethods);
-      for (const inc of mod.includes ?? []) walkMixin(inc);
-      for (const ext of mod.extends ?? []) walkMixin(ext);
+      // Only chain `include`s — a module's own `extend` doesn't propagate
+      // to the host (Ruby singleton-class semantics).
+      for (const inc of mod.includes ?? []) walkMixin(inc, fqn);
     }
   };
 
-  for (const e of entities) {
-    addMethods(e.instanceMethods);
-    addMethods(e.classMethods);
-    for (const inc of e.includes ?? []) walkMixin(inc);
-    for (const ext of e.extends ?? []) walkMixin(ext);
+  for (const { fqn, info } of entities) {
+    addMethods(info.instanceMethods);
+    addMethods(info.classMethods);
+    for (const inc of info.includes ?? []) walkMixin(inc, fqn);
+    for (const ext of info.extends ?? []) walkMixin(ext, fqn);
   }
   return allowed;
 }
@@ -306,26 +343,24 @@ function buildPackageReport(
     moduleFqnByShort.set(short, list);
   }
 
-  const rubyFiles = new Map<string, ClassInfo[]>();
-  for (const entity of [
-    ...Object.values(rubyPkg.classes),
-    ...Object.values(rubyPkg.modules),
-  ] as ClassInfo[]) {
-    if (!entity.file) continue;
-    const list = rubyFiles.get(entity.file) ?? [];
-    list.push(entity);
-    rubyFiles.set(entity.file, list);
+  const rubyFiles = new Map<string, RubyEntity[]>();
+  for (const [fqn, info] of [
+    ...Object.entries(rubyPkg.classes),
+    ...Object.entries(rubyPkg.modules),
+  ] as [string, ClassInfo][]) {
+    if (!info.file) continue;
+    pushTo(rubyFiles, info.file, { fqn, info });
   }
 
   const tsClassesByFile = new Map<string, ClassInfo[]>();
   const tsModulesByFile = new Map<string, ClassInfo[]>();
   for (const c of Object.values(tsPkg.classes) as ClassInfo[]) {
     if (!c.file) continue;
-    (tsClassesByFile.get(c.file) ?? tsClassesByFile.set(c.file, []).get(c.file)!).push(c);
+    pushTo(tsClassesByFile, c.file, c);
   }
   for (const m of Object.values(tsPkg.modules) as ClassInfo[]) {
     if (!m.file) continue;
-    (tsModulesByFile.get(m.file) ?? tsModulesByFile.set(m.file, []).get(m.file)!).push(m);
+    pushTo(tsModulesByFile, m.file, m);
   }
   const tsFileFunctions = tsPkg.fileFunctions ?? {};
 

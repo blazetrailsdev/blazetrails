@@ -225,6 +225,91 @@ describe("buildReport — novel vs moved classification", () => {
     expect(report.packages[0].extraFiles).toHaveLength(0);
   });
 
+  it("resolves include names with namespace scope (no flat short-name pollution)", () => {
+    // Two unrelated `Quoting` modules: AbstractAdapter::Quoting and
+    // PostgreSQL::Quoting. AbstractAdapter `include "Quoting"` must resolve
+    // ONLY to AbstractAdapter::Quoting; PG's `pgOnlyMethod` must NOT count
+    // as allowed surface for abstract-adapter.ts.
+    const ruby: ApiManifest = {
+      source: "ruby",
+      generatedAt: "",
+      packages: {
+        ar: {
+          classes: {
+            "ConnectionAdapters::AbstractAdapter": {
+              ...rubyClass({ name: "AbstractAdapter", file: "abstract_adapter.rb" }),
+              includes: ["Quoting"],
+            },
+          },
+          modules: {
+            "ConnectionAdapters::Quoting": rubyClass({
+              name: "Quoting",
+              file: "abstract/quoting.rb",
+              instance: [method("quote")],
+            }),
+            "ConnectionAdapters::PostgreSQL::Quoting": rubyClass({
+              name: "Quoting",
+              file: "postgresql/quoting.rb",
+              instance: [method("pg_only_method")],
+            }),
+          },
+        },
+      },
+    };
+    const ts: ApiManifest = {
+      source: "typescript",
+      generatedAt: "",
+      packages: {
+        ar: {
+          classes: {
+            AbstractAdapter: {
+              name: "AbstractAdapter",
+              file: "abstract-adapter.ts",
+              includes: [],
+              extends: [],
+              instanceMethods: [method("quote"), method("pgOnlyMethod")],
+              classMethods: [],
+            },
+          },
+          modules: {},
+        },
+      },
+    };
+    const report = buildReport(ruby, ts, {
+      filterPkg: null,
+      excludeGlobs: [],
+      novelOnly: false,
+      topN: 50,
+    });
+    const f = report.packages[0].extraFiles.find((x) => x.tsFile === "abstract-adapter.ts");
+    // pgOnlyMethod must be flagged — namespace-scoped resolution prevents
+    // PG's Quoting from contributing to AbstractAdapter's allowed set.
+    expect(f).toBeDefined();
+    expect(f!.extras.map((e) => e.name)).toContain("pgOnlyMethod");
+  });
+
+  it("rejects non-integer --top and --max-detail", () => {
+    const proc = process as unknown as { exit: (n: number) => never };
+    const origExit = proc.exit;
+    const origErr = console.error;
+    let exited = false;
+    proc.exit = ((n: number) => {
+      exited = true;
+      throw new Error(`exit:${n}`);
+    }) as never;
+    console.error = () => {};
+    try {
+      expect(() => parseArgs(["--top", "3.7"])).toThrow(/exit:1/);
+      expect(exited).toBe(true);
+      exited = false;
+      expect(() => parseArgs(["--max-detail", "1.5"])).toThrow(/exit:1/);
+      expect(exited).toBe(true);
+    } finally {
+      proc.exit = origExit;
+      console.error = origErr;
+    }
+  });
+
   it("ranks files by novel count, not raw extra count", () => {
     // bigBarrel.ts: 0 novel, 5 moved.  smallNovel.ts: 2 novel, 0 moved.
     // smallNovel should outrank bigBarrel even though bigBarrel has more total.

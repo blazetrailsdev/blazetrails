@@ -2043,18 +2043,6 @@ export class SchemaStatements {
   }
 
   /** @internal */
-  removeIndexForAlter(
-    tableName: string,
-    options: { column?: string | string[]; name?: string } = {},
-  ): string {
-    const name =
-      options.name ??
-      (options.column ? this.indexName(tableName, { column: options.column }) : undefined);
-    if (!name) throw new Error("removeIndexForAlter: must specify :name or :column");
-    return `DROP INDEX ${this.adapter.quoteIdentifier(name)}`;
-  }
-
-  /** @internal */
   addTimestampsForAlter(tableName: string, options: ColumnOptions = {}): string[] {
     const opts: ColumnOptions = { ...options };
     if (opts.null == null) opts.null = false;

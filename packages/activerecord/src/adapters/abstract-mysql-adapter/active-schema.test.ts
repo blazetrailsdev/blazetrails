@@ -127,11 +127,7 @@ describeIfMysql("Mysql2Adapter", () => {
 
       const sqls = await captureSql(() =>
         adapter.schemaStatements().changeTable("people", { bulk: true }, (t) => {
-          return t.index("last_name", {
-            length: 10 as unknown as Record<string, number>,
-            using: "btree",
-            algorithm: "copy",
-          });
+          return t.index("last_name", { length: 10, using: "btree", algorithm: "copy" });
         }),
       );
       expect(sqls[0]).toBe(
@@ -191,18 +187,18 @@ describeIfMysql("Mysql2Adapter", () => {
 
     it("add timestamps", async () => {
       const ss = adapter.schemaStatements();
-      await ss.createTable("delete_me", { id: false });
+      await ss.createTable("delete_me", { force: true });
       try {
         await ss.addTimestamps("delete_me", { null: true });
         expect(await ss.columnExists("delete_me", "updated_at")).toBe(true);
         expect(await ss.columnExists("delete_me", "created_at")).toBe(true);
       } finally {
-        await ss.dropTable("delete_me").catch(() => {});
+        await ss.dropTable("delete_me", { ifExists: true });
       }
     });
     it("remove timestamps", async () => {
       const ss = adapter.schemaStatements();
-      await ss.createTable("delete_me", { id: false }, (t) => {
+      await ss.createTable("delete_me", { force: true }, (t) => {
         return t.timestamps({ null: true });
       });
       try {
@@ -210,7 +206,7 @@ describeIfMysql("Mysql2Adapter", () => {
         expect(await ss.columnExists("delete_me", "updated_at")).toBe(false);
         expect(await ss.columnExists("delete_me", "created_at")).toBe(false);
       } finally {
-        await ss.dropTable("delete_me").catch(() => {});
+        await ss.dropTable("delete_me", { ifExists: true });
       }
     });
     it("indexes in create", async () => {

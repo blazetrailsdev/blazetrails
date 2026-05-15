@@ -645,36 +645,32 @@ export class SchemaStatements {
 
     if (options.bulk && supportsBulk) {
       const ops: Array<[string, string, ...unknown[]]> = [];
-      const unsupported = (name: string) => () =>
-        Promise.reject(new Error(`${name} is not supported in bulk changeTable`));
+      const rec =
+        (cmd: string) =>
+        (...args: unknown[]) => {
+          ops.push([cmd, ...(args as [string, ...unknown[]])]);
+          return Promise.resolve();
+        };
       const recorder: SchemaStatementsLike = {
-        addIndex: (t, cols, opts) => {
-          ops.push(["addIndex", t, cols, opts ?? {}]);
+        addIndex: rec("addIndex"),
+        removeIndex: (t, opts) => {
+          // Rails' CommandRecorder captures removeIndex as [tableName, options]; bulkChangeTable
+          // dispatches to removeIndexForAlter(tableName, column, options). Extract column to match.
+          const { column, ...rest } = (opts ?? {}) as any;
+          ops.push(["removeIndex", t, column, rest]);
           return Promise.resolve();
         },
-        addColumn: (t, name, type, opts) => {
-          ops.push(["addColumn", t, name, type, opts ?? {}]);
-          return Promise.resolve();
-        },
-        removeColumn: (t, name, type, opts) => {
-          ops.push(["removeColumn", t, name, type ?? undefined, opts ?? {}]);
-          return Promise.resolve();
-        },
-        renameColumn: (t, old_, new_) => {
-          ops.push(["renameColumn", t, old_, new_]);
-          return Promise.resolve();
-        },
-        addTimestamps: (t, opts) => {
-          ops.push(["addTimestamps", t, opts ?? {}]);
-          return Promise.resolve();
-        },
-        removeTimestamps: (t) => {
-          ops.push(["removeTimestamps", t]);
-          return Promise.resolve();
-        },
-        removeIndex: unsupported("removeIndex"),
-        addReference: unsupported("addReference"),
-        removeReference: unsupported("removeReference"),
+        addColumn: rec("addColumn"),
+        removeColumn: rec("removeColumn"),
+        renameColumn: rec("renameColumn"),
+        changeColumn: rec("changeColumn"),
+        changeColumnDefault: rec("changeColumnDefault"),
+        changeColumnNull: rec("changeColumnNull"),
+        renameIndex: rec("renameIndex"),
+        addTimestamps: rec("addTimestamps"),
+        removeTimestamps: rec("removeTimestamps"),
+        addReference: rec("addReference"),
+        removeReference: rec("removeReference"),
       };
       const bulkTable = new Table(tableName, recorder as any);
       if (callback) await callback(bulkTable);
@@ -1491,9 +1487,17 @@ export class SchemaStatements {
     const nonCombinable: Array<() => Promise<void>> = [];
 
     for (const [command, table, ...arguments_] of operations) {
-      const forAlterMethod = (this as any)[`${command}ForAlter`];
+      // Check SchemaStatements first, then the adapter — mirrors Rails where bulk_change_table
+      // lives on the adapter and calls adapter-defined *_for_alter methods.
+      const forAlterTarget =
+        typeof (this as any)[`${command}ForAlter`] === "function"
+          ? (this as any)
+          : typeof (this.adapter as any)[`${command}ForAlter`] === "function"
+            ? (this.adapter as any)
+            : null;
+      const forAlterMethod = forAlterTarget ? forAlterTarget[`${command}ForAlter`] : null;
       if (typeof forAlterMethod === "function") {
-        const result = forAlterMethod.call(this, table, ...arguments_);
+        const result = forAlterMethod.call(forAlterTarget, table, ...arguments_);
         const results = Array.isArray(result) ? result : [result];
         for (const r of results) {
           if (typeof r === "string") {

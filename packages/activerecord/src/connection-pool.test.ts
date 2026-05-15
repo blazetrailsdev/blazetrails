@@ -574,6 +574,10 @@ it("anonymous class exception", async () => {
   await expect(Anon.establishConnection()).rejects.toThrow("Anonymous class is not allowed.");
 });
 
+class ConnectionTestModel extends Base {
+  static override abstractClass = true;
+}
+
 it("connection notification is called", () => {
   const payloads: Record<string, unknown>[] = [];
   const sub = Notifications.subscribe("!connection.active_record", (event) => {
@@ -584,10 +588,10 @@ it("connection notification is called", () => {
       adapter: "sqlite3",
       database: ":memory:",
     });
-    Base.connectionHandler.establishConnection(dbConfig, { owner: Base });
+    Base.connectionHandler.establishConnection(dbConfig, { owner: ConnectionTestModel });
     expect(payloads).toHaveLength(1);
     expect(Object.keys(payloads[0]).sort()).toEqual(["config", "connection_name", "role", "shard"]);
-    expect(payloads[0].connection_name).toBe("Base");
+    expect(payloads[0].connection_name).toBe(ConnectionTestModel.name);
     expect(payloads[0].shard).toBe("default");
     expect(payloads[0].role).toBe("writing");
   } finally {
@@ -602,12 +606,12 @@ it("connection notification is called for shard", () => {
     payloads.push(event.payload as Record<string, unknown>);
   });
   try {
-    Base.connectsTo({
+    ConnectionTestModel.connectsTo({
       shards: { default: { writing: { adapter: "sqlite3", database: ":memory:" } } },
     });
     expect(payloads).toHaveLength(1);
     expect(Object.keys(payloads[0]).sort()).toEqual(["config", "connection_name", "role", "shard"]);
-    expect(payloads[0].connection_name).toBe("Base");
+    expect(payloads[0].connection_name).toBe(ConnectionTestModel.name);
     expect(payloads[0].shard).toBe("default");
     expect(payloads[0].role).toBe("writing");
   } finally {

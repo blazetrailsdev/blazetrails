@@ -1,5 +1,4 @@
 import { beforeAll, beforeEach, afterEach, afterAll } from "vitest";
-import type { DatabaseAdapter } from "../adapter.js";
 import {
   popSkipGlobalReset,
   pushSkipGlobalReset,
@@ -7,13 +6,23 @@ import {
   type TestDatabaseAdapter,
 } from "../test-adapter.js";
 
-function tm(adapter: DatabaseAdapter): {
-  beginTransaction: (opts: { joinable: boolean; _lazy: boolean }) => Promise<unknown>;
-  rollbackTransaction: () => Promise<void>;
-  openTransactions: number;
-} {
-  const inner = (adapter as TestDatabaseAdapter).innerAdapter ?? adapter;
-  return (inner as unknown as { transactionManager: ReturnType<typeof tm> }).transactionManager;
+interface TxnAdapter {
+  transactionManager: {
+    beginTransaction: (opts: { joinable: boolean; _lazy: boolean }) => Promise<unknown>;
+    rollbackTransaction: () => Promise<void>;
+    openTransactions: number;
+  };
+}
+
+function tm(adapter: TestDatabaseAdapter): TxnAdapter["transactionManager"] {
+  const inner = adapter.innerAdapter as unknown as Partial<TxnAdapter>;
+  if (!inner.transactionManager) {
+    throw new Error(
+      `withTransactionalFixtures: adapter ${(adapter as { adapterName?: string }).adapterName ?? "unknown"} ` +
+        `does not expose transactionManager`,
+    );
+  }
+  return inner.transactionManager;
 }
 
 /**
@@ -26,8 +35,9 @@ function tm(adapter: DatabaseAdapter): {
  *
  * Files calling this helper opt out of the global `resetTestAdapterState`
  * beforeEach (in `test-setup-ar.ts`) for their duration, so a one-time
- * schema set up in `beforeAll` survives across tests. The helper drops any
- * tables left behind in its own `afterAll` so other files are unaffected.
+ * schema set up in `beforeAll` survives across tests. The helper runs
+ * `resetTestAdapterState` in its own `afterAll` so other files are
+ * unaffected.
  *
  * Caller contract:
  *   - Set up schema in `beforeAll` *before* calling this helper, or inside
@@ -42,23 +52,19 @@ function tm(adapter: DatabaseAdapter): {
  *   let adapter: TestDatabaseAdapter;
  *   beforeAll(async () => {
  *     adapter = createTestAdapter();
- *     await adapter.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)`);
+ *     // Use adapter directly for schema setup (see test for cast pattern).
  *   });
  *   withTransactionalFixtures(() => adapter);
  *
- *   it("inserts a user", async () => { ... });  // rolled back in afterEach
+ *   it("inserts a row", async () => { ... });  // rolled back in afterEach
  */
-export function withTransactionalFixtures(getAdapter: () => DatabaseAdapter): void {
+export function withTransactionalFixtures(getAdapter: () => TestDatabaseAdapter): void {
   beforeAll(() => {
     pushSkipGlobalReset();
   });
 
   afterAll(async () => {
     popSkipGlobalReset();
-    // Use resetTestAdapterState (not raw dropAllTables) so module-level
-    // tracking (_createdTables, _declaredColumns, schemaCache) is cleared
-    // alongside the DB drops. Otherwise a following opt-in file that
-    // also skips the global reset starts with stale in-memory tracking.
     await resetTestAdapterState();
   });
 

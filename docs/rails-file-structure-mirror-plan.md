@@ -13,8 +13,8 @@ Style match: [activerecord-type-audit.md](activerecord-type-audit.md) +
 [actionpack-restructure-audit.md](actionpack-restructure-audit.md).
 This is the _within-file_ analog of the actionpack restructure audit.
 
-> **Convergence with [PR #1552](https://github.com/blazetrailsdev/trails/pull/1552)** (ruby-source-fetcher-plan).
-> The sibling plan unifies Ruby source fetching under `vendor/sources.ts`
+> **Convergence with [PR #1552](https://github.com/blazetrailsdev/trails/pull/1552)** (vendor migration, now merged).
+> That PR unified Ruby source fetching under `vendor/sources.ts`
 > and moves the Rails clone from `scripts/api-compare/.rails-source/` to
 > `vendor/rails/`, exposing a `resolvePath(pkg, "lib"|"test")` helper that
 > replaces hardcoded paths in `extract-ruby-api.rb` and friends. This plan
@@ -648,10 +648,8 @@ reason="rails-source-is-itself-disordered"` is the escape hatch and
   the directory-level analog to this within-file plan.
 - [scripts/api-compare/conventions.ts](../scripts/api-compare/conventions.ts) —
   TS↔Ruby naming/path mapping registry; reused by the new rule.
-- [PR #1552](https://github.com/blazetrailsdev/trails/pull/1552) (ruby-source-fetcher-plan, not yet merged on `main`) — sibling
-  plan (PR #1552); `vendor/sources.ts` becomes the source of truth for
-  fetched Ruby source locations and replaces hardcoded `.rails-source`
-  paths consumed here.
+- [PR #1552](https://github.com/blazetrailsdev/trails/pull/1552) — vendor migration; `vendor/sources.ts` is the source of truth for
+  fetched Ruby source locations.
 - [scripts/api-compare/extract-ruby-api.rb](../scripts/api-compare/extract-ruby-api.rb) —
   precedent Ruby extractor; new structure extractor copies its caching gate
   and PACKAGE_DIRS map.

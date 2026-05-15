@@ -1,5 +1,5 @@
 #!/usr/bin/env -S npx tsx
-// Unified Ruby source fetcher. Designed in docs/ruby-source-fetcher-plan.md.
+// Unified Ruby source fetcher.
 //
 // CLI:
 //   tsx vendor/fetch.ts [--source <name>] [--refresh]

@@ -1988,19 +1988,10 @@ describe("DefaultScopingTest", () => {
       }
     }
     const dev = await Dev.create({ name: "Eileen", mentor_id: 1 });
-    const sqls: string[] = [];
-    const spy = vi
-      .spyOn(adapter as any, "executeMutation")
-      .mockImplementation((...args: unknown[]) => {
-        sqls.push(args[0] as string);
-        return (adapter as any).inner.executeMutation(...args);
-      });
-    try {
-      await dev.update({ name: "Not Eileen" });
-    } finally {
-      spy.mockRestore();
-    }
-    const updateSql = sqls.find((s) => /UPDATE/i.test(s));
+    const spy = vi.spyOn(adapter as any, "executeMutation");
+    await dev.update({ name: "Not Eileen" });
+    const updateSql = spy.mock.calls.map((c) => c[0] as string).find((s) => /UPDATE/i.test(s));
+    spy.mockRestore();
     expect(updateSql).toMatch(/mentor_id/);
   });
 
@@ -2014,19 +2005,10 @@ describe("DefaultScopingTest", () => {
       }
     }
     const dev = await Dev2.create({ name: "Eileen", mentor_id: 1 });
-    const sqls: string[] = [];
-    const spy = vi
-      .spyOn(adapter as any, "executeMutation")
-      .mockImplementation((...args: unknown[]) => {
-        sqls.push(args[0] as string);
-        return (adapter as any).inner.executeMutation(...args);
-      });
-    try {
-      await dev.destroy();
-    } finally {
-      spy.mockRestore();
-    }
-    const deleteSql = sqls.find((s) => /DELETE/i.test(s));
+    const spy = vi.spyOn(adapter as any, "executeMutation");
+    await dev.destroy();
+    const deleteSql = spy.mock.calls.map((c) => c[0] as string).find((s) => /DELETE/i.test(s));
+    spy.mockRestore();
     expect(deleteSql).toMatch(/mentor_id/);
   });
 });

@@ -188,6 +188,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   // Set by close() to distinguish permanent teardown from disconnectBang(),
   // which is reconnectable. _checkoutConn() refuses to lazy-reconnect after close().
   private _permanentlyClosed = false;
+  // Set by the _fakeConnection constructor path — prevents _checkoutConn() from
+  // lazily creating a real pool when _driverPool is null.
+  private _isFakeConnection = false;
   // Normalized config passed to newClient — stored for reconnect.
   private _poolConfig: mysql.PoolOptions & MysqlAdapterOptions;
   private _conn: mysql.PoolConnection | null = null;
@@ -379,7 +382,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // _fakeConnection: true skips pool creation — used in unit tests that need
     // an Mysql2Adapter instance without a live DB (mirrors Rails' fake_connection
     // constructor path: `new Mysql2Adapter(fake_conn, logger, nil, config)`).
-    if (!fake) {
+    if (fake) {
+      this._isFakeConnection = true;
+    } else {
       this._driverPool = Mysql2Adapter.newClient(this._poolConfig, this._buildInitSql());
     }
   }
@@ -402,33 +407,55 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     await this.materializeTransactions();
     const driverSql = this.mysqlQuote(sql);
     const driverBinds = this.mysqlBinds(binds);
-    let conn: mysql.PoolConnection | undefined;
-    try {
-      conn = await this.getConn();
-      const prepare = options.prepare ?? this._shouldPrepare(conn, binds);
-      if (prepare) this._trackPrepared(conn, driverSql);
-      const [rawResult] = prepare
-        ? await conn.execute(driverSql, driverBinds as any[])
-        : await conn.query(driverSql, driverBinds);
-      // DML results in a ResultSetHeader (no rows array); SELECT results
-      // in an array of row objects. Return empty Result for DML to avoid
-      // throwing on INSERT/UPDATE/DELETE passed to execQuery.
-      if (!Array.isArray(rawResult)) return new Result([], []);
-      await this._handleWarningsOn(conn, driverSql);
-      return Result.fromRowHashes(rawResult as Record<string, unknown>[]);
-    } catch (e) {
-      if (!conn) throw e;
-      const { error: translated, connReleased } = await this._translateAndEnrich(
-        e,
-        driverSql,
-        driverBinds,
-        conn,
-      );
-      if (connReleased) conn = undefined;
-      throw translated;
-    } finally {
-      if (conn) this.releaseConn(conn);
-    }
+    const payload: Record<string, unknown> = {
+      sql: driverSql,
+      name,
+      binds: driverBinds,
+      type_casted_binds: typeCastedBinds(driverBinds),
+      connection: this,
+      row_count: 0,
+    };
+    return Notifications.instrumentAsync("sql.active_record", payload, async () => {
+      let conn: mysql.PoolConnection | undefined;
+      try {
+        conn = await this.getConn();
+        const prepare = options.prepare ?? this._shouldPrepare(conn, binds);
+        if (prepare) this._trackPrepared(conn, driverSql);
+        const [rawResult] = prepare
+          ? await conn.execute(driverSql, driverBinds as any[])
+          : await conn.query(driverSql, driverBinds);
+        // DML results in a ResultSetHeader (no rows array); SELECT results
+        // in an array of row objects. Return empty Result for DML to avoid
+        // throwing on INSERT/UPDATE/DELETE passed to execQuery.
+        if (!Array.isArray(rawResult)) {
+          this.dirtyCurrentTransaction();
+          await this._handleWarningsOn(conn, driverSql);
+          return new Result([], []);
+        }
+        payload.row_count = rawResult.length;
+        await this._handleWarningsOn(conn, driverSql);
+        return Result.fromRowHashes(rawResult as Record<string, unknown>[]);
+      } catch (e: any) {
+        if (e instanceof SQLWarning) {
+          payload.exception = e;
+          payload.exception_object = e;
+          throw e;
+        }
+        if (!conn) throw e;
+        const { error: translated, connReleased } = await this._translateAndEnrich(
+          e,
+          driverSql,
+          driverBinds,
+          conn,
+        );
+        if (connReleased) conn = undefined;
+        payload.exception = translated;
+        payload.exception_object = translated;
+        throw translated;
+      } finally {
+        if (conn) this.releaseConn(conn);
+      }
+    });
   }
 
   /** Returns true for raw mysql2 errors that indicate the database doesn't exist (ER_BAD_DB_ERROR). */
@@ -443,8 +470,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // Lazy reconnect after disconnectBang() — mirrors Rails' reconnect on next
     // execute after disconnect! (abstract_adapter.rb #with_raw_connection).
     // close() sets _permanentlyClosed so we don't silently reopen after teardown.
+    // _isFakeConnection skips reconnect — fake adapters have no pool by design.
     if (!this._driverPool) {
       if (this._permanentlyClosed) throw new Error("Mysql2Adapter: connection is closed");
+      if (this._isFakeConnection) throw new Error("Mysql2Adapter: fake connection has no pool");
       this._driverPool = Mysql2Adapter.newClient(this._poolConfig, this._buildInitSql());
       this._activeState = true;
     }

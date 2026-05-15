@@ -44,7 +44,9 @@ const ADAPTER_SPECIFIC_EXCLUDE = [
     ? [
         "packages/activerecord/src/adapters/sqlite3/**",
         "packages/activerecord/src/adapters/sqlite3-*.test.ts",
+        "packages/activerecord/src/connection-adapters/sqlite3/**",
         "packages/activerecord/src/connection-adapters/sqlite3-*.test.ts",
+        "packages/activerecord/src/tasks/sqlite-*.test.ts",
       ]
     : []),
 ];

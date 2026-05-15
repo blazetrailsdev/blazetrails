@@ -7,14 +7,6 @@ class CaptureLogger {
   info(msg: string): void {
     this.messages.push(msg);
   }
-  // BaseLogSubscriber consults logger.info? / debug? to gate emission.
-  // Returning true ensures _info() actually writes.
-  get "info?"(): boolean {
-    return true;
-  }
-  get "debug?"(): boolean {
-    return true;
-  }
 }
 
 function makeEvent(payload: Record<string, unknown>, duration = 12): NotificationEvent {

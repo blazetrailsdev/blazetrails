@@ -14,3 +14,5 @@ export class LogSubscriber extends BaseLogSubscriber {
     this._info(`Completed ${status} ${statusText} in ${Math.round(event.duration)}ms`);
   }
 }
+
+LogSubscriber.subscribeLogLevel("redirect", "info");

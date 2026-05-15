@@ -901,6 +901,25 @@ class SchemaAdapter implements DatabaseAdapter {
     return m[1] || m[2] || null;
   }
 
+  async withinNewTransaction<T>(
+    opts: { isolation?: string | null; joinable?: boolean },
+    fn: (tx?: unknown) => Promise<T> | T,
+  ): Promise<T> {
+    return (this.inner as any).withinNewTransaction(opts, fn);
+  }
+
+  currentTransaction() {
+    return (this.inner as any).currentTransaction?.();
+  }
+
+  addTransactionRecord(record: unknown, ensureFinalize?: boolean) {
+    return (this.inner as any).addTransactionRecord?.(record, ensureFinalize);
+  }
+
+  materializeTransactions() {
+    return (this.inner as any).materializeTransactions?.();
+  }
+
   async beginTransaction(): Promise<void> {
     // Run pending DDL before beginning the transaction because MySQL DDL
     // causes implicit commits which destroy savepoints and break nesting.

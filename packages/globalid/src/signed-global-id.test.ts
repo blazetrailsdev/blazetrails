@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { SignedGlobalID } from "./signed-global-id.js";
@@ -9,8 +9,12 @@ function makeVerifier(secret = "test-secret"): MessageVerifier {
 }
 
 const fakeModel = { id: 42, constructor: { name: "User" } };
+const TEST_APP = "TestApp";
 
 describe("SignedGlobalID", () => {
+  beforeEach(() => setApp(TEST_APP));
+  afterEach(() => _resetApp());
+
   it("round-trips create → parse", () => {
     const verifier = makeVerifier();
     const sgid = SignedGlobalID.create(fakeModel, { verifier });

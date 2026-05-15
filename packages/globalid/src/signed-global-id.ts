@@ -1,6 +1,7 @@
 import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { getApp } from "./config.js";
+import { buildGid } from "./uri/gid.js";
 
 const DEFAULT_PURPOSE = "default";
 
@@ -57,8 +58,13 @@ export class SignedGlobalID {
    */
   static create(model: GlobalIDModel, options: SignedGlobalIDOptions): SignedGlobalID {
     const app = options.app ?? getApp();
+    if (!app) {
+      throw new Error(
+        "An app is required to create a SignedGlobalID. Pass the :app option or call setApp() from @blazetrails/globalid.",
+      );
+    }
     const modelName = model.constructor.name;
-    const uri = app ? `gid://${app}/${modelName}/${model.id}` : `gid://${modelName}/${model.id}`;
+    const uri = buildGid(app, modelName, model.id);
 
     const purpose = options.purpose ?? DEFAULT_PURPOSE;
     const expiresAt = pickExpiration(options);

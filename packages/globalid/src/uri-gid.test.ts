@@ -3,6 +3,7 @@ import {
   parseGid,
   buildGid,
   validateApp,
+  GID,
   MissingModelIdError,
   InvalidComponentError,
   BadURIError,
@@ -179,8 +180,7 @@ describe("URI::GIDParamsTest", () => {
 });
 
 describe("URI::GID class wrapper", () => {
-  it("GID.parse exposes app / modelName / modelId / params", async () => {
-    const { GID } = await import("./uri/gid.js");
+  it("GID.parse exposes app / modelName / modelId / params", () => {
     const gid = GID.parse("gid://bcx/Person/5?hello=world");
     expect(gid.app).toBe("bcx");
     expect(gid.modelName).toBe("Person");
@@ -189,14 +189,12 @@ describe("URI::GID class wrapper", () => {
     expect(gid.toString()).toBe("gid://bcx/Person/5?hello=world");
   });
 
-  it("GID.create builds from app + model instance", async () => {
-    const { GID } = await import("./uri/gid.js");
+  it("GID.create builds from app + model instance", () => {
     const gid = GID.create("bcx", { id: 5, constructor: { name: "Person" } });
     expect(gid.toString()).toBe("gid://bcx/Person/5");
   });
 
-  it("GID.build accepts a components-hash with composite primary key", async () => {
-    const { GID } = await import("./uri/gid.js");
+  it("GID.build accepts a components-hash with composite primary key", () => {
     const gid = GID.build({
       app: "bcx",
       modelName: "CompositePrimaryKeyModel",
@@ -207,19 +205,18 @@ describe("URI::GID class wrapper", () => {
     expect(gid.modelId).toEqual(["tenant", "id"]);
   });
 
-  it("GID.validateApp rejects invalid app names", async () => {
-    const { GID } = await import("./uri/gid.js");
+  it("GID.validateApp rejects invalid app names", () => {
     expect(() => GID.validateApp(null)).toThrow();
     expect(() => GID.validateApp("foo_bar")).toThrow();
     expect(GID.validateApp("foo-bar")).toBe("foo-bar");
   });
 
-  it("GID#deconstructKeys returns the component hash", async () => {
-    const { GID } = await import("./uri/gid.js");
+  it("GID#deconstructKeys returns a copy of the component hash", () => {
     const gid = GID.parse("gid://bcx/Person/5");
-    const { app, modelName, modelId } = gid.deconstructKeys();
-    expect(app).toBe("bcx");
-    expect(modelName).toBe("Person");
-    expect(modelId).toBe("5");
+    const a = gid.deconstructKeys();
+    expect(a).toEqual({ app: "bcx", modelName: "Person", modelId: "5", params: {} });
+    // Mutating the returned object must not affect the GID's state.
+    (a as { app: string }).app = "evil";
+    expect(gid.app).toBe("bcx");
   });
 });

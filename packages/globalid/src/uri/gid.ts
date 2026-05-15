@@ -196,10 +196,12 @@ export class GID {
 
   /**
    * Mirrors: URI::GID#deconstruct_keys. Ruby uses this for pattern
-   * matching; TS has no equivalent, so we expose the components hash.
+   * matching; TS has no equivalent, so we return a shallow copy of the
+   * components hash (a copy, not the internal state, so callers can't
+   * mutate the GID via the returned object).
    */
   deconstructKeys(_keys: readonly string[] | null = null): GidComponents {
-    return this._components;
+    return { ...this._components, params: { ...this._components.params } };
   }
 
   // ─── Static factories ────────────────────────────────────────────────────
@@ -226,7 +228,19 @@ export class GID {
     params?: Record<string, string> | null;
   }): GID {
     const uri = buildGid(args.app, args.modelName, args.modelId, args.params);
-    return new GID(uri, parseGid(uri));
+    // Construct components directly from inputs — buildGid already validated
+    // them, so skipping the round-trip through parseGid saves a regex match
+    // + URL decode pass. modelId is normalized to the same shape parseGid
+    // produces: arrays for composite, string for scalar.
+    const modelId = Array.isArray(args.modelId)
+      ? args.modelId.map((p) => String(p))
+      : String(args.modelId ?? "");
+    return new GID(uri, {
+      app: args.app,
+      modelName: args.modelName,
+      modelId,
+      params: args.params ?? {},
+    });
   }
 
   /** Mirrors: URI::GID.validate_app */
@@ -234,7 +248,17 @@ export class GID {
     return validateApp(app);
   }
 
-  // ─── URI::Generic subclass hooks (nominal — kept for api:compare) ────────
+  // ─── URI::Generic subclass hooks ─────────────────────────────────────────
+  //
+  // Rails URI::GID inherits from URI::Generic and overrides these hooks so
+  // the standard URI library calls them while parsing/assigning. We don't
+  // subclass URI in TS — public parsing goes through GID.parse → parseGid,
+  // not through these hooks. They exist for two reasons:
+  //   1. api:compare parity (the methods need to be present on URI::GID).
+  //   2. Subclass extension points: a TS subclass of GID can override these
+  //      to plug into the validation pipeline if needed.
+  // Each delegates to the same standalone helpers parseGid/validateApp use,
+  // so behavior matches if anyone does call them directly.
 
   /** @internal Mirrors URI::GID#set_path — re-parses model components from path. */
   protected setPath(path: string): void {

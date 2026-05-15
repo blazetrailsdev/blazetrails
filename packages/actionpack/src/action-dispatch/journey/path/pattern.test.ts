@@ -122,6 +122,13 @@ describe("ActionDispatch::Journey::Path::Pattern — matching", () => {
     expect(p.isMatch("/page/loVE/aaron")).toBe(true);
   });
 
+  it("propagates /u flag so Unicode property escapes compile", () => {
+    // \p{Letter} requires the /u flag — would throw without flag lifting.
+    const p = buildPath("/page/:name", { name: /\p{Letter}+/u });
+    expect(p.isMatch("/page/Größe")).toBe(true);
+    expect(p.isMatch("/page/123")).toBe(false);
+  });
+
   it("MatchData.at(0) returns the full match", () => {
     const p = buildPath("/page/:name", { name: /\d+/ });
     const m = p.match("/page/42")!;

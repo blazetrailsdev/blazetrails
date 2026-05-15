@@ -20,16 +20,31 @@ function regexUnion(re: RegExp | RegExp[]): string {
  * Collect the union of regex flags across a list of requirement regexes.
  * Rails' `Regexp.union` produces inline flag scopes (`(?i-mx:…)`); JS lacks
  * inline flag groups, so we apply the combined flag set at the outer
- * `RegExp` level. `g`/`y` are filtered out since they change matching
- * semantics in ways that break Pattern's anchored regex.
+ * `RegExp` level.
+ *
+ * - `g`/`y` are filtered: they change matching semantics in ways that
+ *   would break Pattern's anchored regex.
+ * - `u` and `v` are mutually exclusive. If any source uses `v`, `v` wins
+ *   (it's the superset); otherwise `u` is preserved when present so
+ *   Unicode property escapes (`\p{…}`) remain valid.
+ * - `i`/`m`/`s`/`d` are passed through.
  */
-function combinedFlags(matchers: Record<string, RegExp | RegExp[]>): string {
+function combinedFlagsFor(values: ReadonlyArray<RegExp | RegExp[]>): string {
   const seen = new Set<string>();
-  for (const v of Object.values(matchers)) {
+  for (const v of values) {
     const arr = Array.isArray(v) ? v : [v];
     for (const r of arr) for (const f of r.flags) seen.add(f);
   }
-  return [...seen].filter((f) => "ims".includes(f)).join("");
+  const out: string[] = [];
+  for (const f of "imsd") if (seen.has(f)) out.push(f);
+  // `v` supersedes `u`; never include both.
+  if (seen.has("v")) out.push("v");
+  else if (seen.has("u")) out.push("u");
+  return out.join("");
+}
+
+function combinedFlags(matchers: Record<string, RegExp | RegExp[]>): string {
+  return combinedFlagsFor(Object.values(matchers));
 }
 
 // =========================================================================
@@ -280,7 +295,7 @@ export class Pattern {
       // Wrap the union in `(?:…)` so the anchors bind around the whole
       // alternation: `^a|b$` parses as `(^a)|(b$)`, which isn't what we
       // want for a missing-keys equality check.
-      out[k] = new RegExp(`^(?:${regexUnion(v)})$`, combinedFlags({ k: v }));
+      out[k] = new RegExp(`^(?:${regexUnion(v)})$`, combinedFlagsFor([v]));
     }
     this._requirementsAnchoredCache = out;
     return out;
@@ -299,8 +314,9 @@ export class Pattern {
         // and reading the resulting capture count. Mirrors Rails:
         //   re = /#{Regexp.union(reqs)}|/
         //   offsets.push((re.match("").length - 1) + last)
-        const src = regexUnion(this.requirements[name]!);
-        const re = new RegExp(`(?:${src})|`);
+        const reqs = this.requirements[name]!;
+        const src = regexUnion(reqs);
+        const re = new RegExp(`(?:${src})|`, combinedFlagsFor([reqs]));
         const m = re.exec("");
         const groupCount = m ? m.length - 1 : 0;
         offsets.push(groupCount + offsets[offsets.length - 1]!);

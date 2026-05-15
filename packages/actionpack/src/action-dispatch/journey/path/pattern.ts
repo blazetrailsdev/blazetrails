@@ -33,11 +33,12 @@ function regexUnion(re: RegExp | RegExp[]): string {
  *
  * - `g`/`y` are filtered: they change matching semantics in ways that
  *   would break Pattern's anchored regex.
- * - `m` is filtered for the outer Pattern regex: it changes `^`/`$` to
- *   match line boundaries, which would break our `^…$` anchoring (Rails'
- *   `\A…\Z` is unaffected by `/m`). Use `outer: false` when computing
- *   flags for a contained-source RegExp (e.g. requirementsForMissingKeysCheck)
- *   to keep `m`.
+ * - `m` is filtered for the outer Pattern regex (`outer: true`, default):
+ *   it changes `^`/`$` to match line boundaries, which would break our
+ *   `^…$` anchoring (Rails' `\A…\Z` is unaffected by `/m`). Pass
+ *   `outer: false` only when building a non-anchored regex from the
+ *   same sources (e.g. the offset-computation `(?:src)|` regex), where
+ *   preserving the requirement's `m` semantics is safe.
  * - `u` and `v` are mutually exclusive. If any source uses `v`, `v` wins
  *   (it's the superset); otherwise `u` is preserved so Unicode property
  *   escapes (`\p{…}`) remain valid.

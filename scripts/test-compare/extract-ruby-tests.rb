@@ -537,11 +537,6 @@ def run
   }
 
   PACKAGE_TEST_DIRS.each do |pkg_name, pkg_dir|
-    unless File.directory?(pkg_dir)
-      puts "Skipping #{pkg_name}: directory not found at #{pkg_dir}"
-      next
-    end
-
     extractor = TestExtractor.new
 
     # Find test files, excluding arel tests from the activerecord package

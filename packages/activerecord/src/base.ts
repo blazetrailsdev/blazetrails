@@ -2858,6 +2858,21 @@ export class Base extends Model {
     return (await this.toSgid(options)).toParam();
   }
 
+  /**
+   * Find a record by its GlobalID URI string (or GlobalID instance).
+   * Returns null if the GID is invalid, the model class isn't registered,
+   * or the record isn't found.
+   *
+   * Mirrors: ActiveRecord::Base.find_global_id (via GlobalID::Locator.locate)
+   */
+  static async findGlobalId(
+    input: string | import("@blazetrails/globalid").GlobalID,
+    options?: import("@blazetrails/globalid").LocateOptions,
+  ): Promise<unknown | null> {
+    const gid = await import("@blazetrails/globalid");
+    return gid.Locator.locate(input, options);
+  }
+
   // valuesAt / assignAttributes extracted to persistence.ts.
 
   /**
@@ -3536,6 +3551,17 @@ registerMigrationArConfig({
   },
 });
 
-// Triggers globalid's registration side-effects (currently a no-op stub;
-// filled in GID-4). Kept at the bottom for readability — ESM hoists it.
+// Triggers globalid's registration side-effects. Kept at the bottom for
+// readability — ESM hoists it.
 import "@blazetrails/globalid/wire";
+
+import {
+  setModelFinder as _setGlobalIdModelFinder,
+  type LocatorModel as _LocatorModel,
+} from "@blazetrails/globalid";
+_setGlobalIdModelFinder((name: string) => {
+  for (const klass of Base.descendants) {
+    if (klass.name === name) return klass as unknown as _LocatorModel;
+  }
+  return undefined;
+});

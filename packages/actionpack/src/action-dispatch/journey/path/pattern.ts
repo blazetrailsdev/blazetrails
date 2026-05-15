@@ -1,15 +1,5 @@
 import { Ast } from "../ast.js";
-import type {
-  Cat,
-  Dot,
-  Group,
-  Literal,
-  Node,
-  Or,
-  Slash,
-  Star,
-  Symbol as SymbolNode,
-} from "../nodes/node.js";
+import type { Cat, Dot, Group, Literal, Node, Or, Slash, Star } from "../nodes/node.js";
 import { FormatBuilder, Format, Visitor } from "../visitors.js";
 
 type Matchers = Record<string, RegExp | RegExp[]>;
@@ -24,6 +14,22 @@ function escapeRegex(s: string): string {
 function regexUnion(re: RegExp | RegExp[]): string {
   const arr = Array.isArray(re) ? re : [re];
   return arr.map((r) => r.source).join("|");
+}
+
+/**
+ * Collect the union of regex flags across a list of requirement regexes.
+ * Rails' `Regexp.union` produces inline flag scopes (`(?i-mx:…)`); JS lacks
+ * inline flag groups, so we apply the combined flag set at the outer
+ * `RegExp` level. `g`/`y` are filtered out since they change matching
+ * semantics in ways that break Pattern's anchored regex.
+ */
+function combinedFlags(matchers: Record<string, RegExp | RegExp[]>): string {
+  const seen = new Set<string>();
+  for (const v of Object.values(matchers)) {
+    const arr = Array.isArray(v) ? v : [v];
+    for (const r of arr) for (const f of r.flags) seen.add(f);
+  }
+  return [...seen].filter((f) => "ims".includes(f)).join("");
 }
 
 // =========================================================================
@@ -43,7 +49,7 @@ export class AnchoredRegexp extends Visitor {
   }
 
   override accept(node: Node): RegExp {
-    return new RegExp(`^${this.visit(node)}$`);
+    return new RegExp(`^${this.visit(node)}$`, combinedFlags(this._matchers));
   }
 
   protected override visitCAT(node: Node): string {
@@ -92,11 +98,12 @@ export class AnchoredRegexp extends Visitor {
 export class UnanchoredRegexp extends AnchoredRegexp {
   override accept(node: Node): RegExp {
     const path = this.visit(node) as string;
-    if (path === "/") return /^\//;
+    const flags = combinedFlags(this._matchers);
+    if (path === "/") return new RegExp(`^/`, flags);
     // Rails uses `(?:\b|\Z|/)` — `\Z` is "end of string or before trailing
     // newline"; in JS `$` (in default mode) is end-of-string. `\b` is the
     // same word-boundary semantic.
-    return new RegExp(`^${path}(?:\\b|$|/)`);
+    return new RegExp(`^${path}(?:\\b|$|/)`, flags);
   }
 }
 
@@ -136,8 +143,15 @@ export class MatchData {
     return out;
   }
 
-  /** Rails `match[i]` — adjusts by offset before indexing into the underlying match. */
+  /**
+   * Rails `match[i]` — adjusts by offset before indexing into the underlying match.
+   *
+   * `at(0)` returns the full match (Rails `match[0]`); positive indices apply
+   * the per-symbol offset adjustment. Negative indices return undefined.
+   */
   at(x: number): string | undefined {
+    if (x === 0) return this._match[0];
+    if (x < 0 || x >= this.length) return undefined;
     const idx = this._offsets[x - 1]! + x;
     return this._match[idx];
   }
@@ -203,7 +217,10 @@ export class Pattern {
       if (s.type === "DOT" || s.type === "SLASH") continue;
       const back = terminals[i - 1]!;
       const fwd = terminals[i + 1];
-      if (s.isSymbol() && Array.isArray((s as SymbolNode).regexp)) return false;
+      // Rails consults the SymbolNode's regexp after `ast.requirements=`
+      // wires it in; trails-side Pattern stores requirements separately,
+      // so consult the requirements map directly.
+      if (s.isSymbol() && Array.isArray(this.requirements[s.toSym()])) return false;
       if (back.isLiteral()) return false;
       if (fwd && fwd.isLiteral()) return false;
     }
@@ -259,7 +276,10 @@ export class Pattern {
     if (this._requirementsAnchoredCache) return this._requirementsAnchoredCache;
     const out: Record<string, RegExp> = {};
     for (const [k, v] of Object.entries(this.requirements)) {
-      out[k] = new RegExp(`^${regexUnion(v)}$`);
+      // Wrap the union in `(?:…)` so the anchors bind around the whole
+      // alternation: `^a|b$` parses as `(^a)|(b$)`, which isn't what we
+      // want for a missing-keys equality check.
+      out[k] = new RegExp(`^(?:${regexUnion(v)})$`, combinedFlags({ k: v }));
     }
     this._requirementsAnchoredCache = out;
     return out;

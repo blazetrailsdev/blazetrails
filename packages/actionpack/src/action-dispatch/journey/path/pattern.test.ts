@@ -7,7 +7,7 @@ const SEPARATORS = "/.?";
 
 function buildPath(
   path: string,
-  requirements: Record<string, RegExp> = {},
+  requirements: Record<string, RegExp | RegExp[]> = {},
   separators: string = SEPARATORS,
   anchored = true,
 ): Pattern {
@@ -113,13 +113,25 @@ describe("ActionDispatch::Journey::Path::Pattern — matching", () => {
   });
 
   it("test_insensitive_regexp_with_group", () => {
-    // Note: trails preserves regex flags via Regexp.union behavior;
-    // upstream Rails relies on Regexp.union to incorporate /i. Our
-    // regexUnion uses `.source` which drops flags. Skip the inner-flag
-    // case and assert literal match instead to lock down the surface.
-    const p = buildPath("/page/:name/aaron", { name: /tender|love/ });
-    expect(p.isMatch("/page/tender/aaron")).toBe(true);
-    expect(p.isMatch("/page/love/aaron")).toBe(true);
+    // /i flags on requirement regexes are lifted to the compiled
+    // Pattern regex. Rails inline-scopes flags via Regexp.union (impossible
+    // in JS), so the flag leaks to the whole pattern — practical impact is
+    // limited because the surrounding regex is mostly non-letter.
+    const p = buildPath("/page/:name/aaron", { name: /(tender|love)/i });
+    expect(p.isMatch("/page/TENDER/aaron")).toBe(true);
+    expect(p.isMatch("/page/loVE/aaron")).toBe(true);
+  });
+
+  it("MatchData.at(0) returns the full match", () => {
+    const p = buildPath("/page/:name", { name: /\d+/ });
+    const m = p.match("/page/42")!;
+    expect(m.at(0)).toBe("/page/42");
+  });
+
+  it("MatchData.at(negative) returns undefined", () => {
+    const p = buildPath("/page/:name", { name: /\d+/ });
+    const m = p.match("/page/42")!;
+    expect(m.at(-1)).toBeUndefined();
   });
 
   it("test_to_regexp_defaults", () => {
@@ -208,7 +220,18 @@ describe("ActionDispatch::Journey::Path::Pattern — requirements", () => {
     const nameRegex = /test/;
     const p = buildPath("/page/:name", { name: nameRegex });
     const transformed = p.requirementsForMissingKeysCheck["name"]!;
-    expect(transformed.source).toBe(new RegExp(`^test$`).source);
+    expect(transformed.source).toBe(new RegExp(`^(?:test)$`).source);
+  });
+
+  it("anchors the union as a single alternation, not split anchors", () => {
+    // /^a|b$/ parses as /(^a)|(b$)/. Verify the (?:…) wrapping by
+    // checking that neither branch leaks past its anchor.
+    const p = buildPath("/page/:name", { name: [/foo/, /bar/] });
+    const re = p.requirementsForMissingKeysCheck["name"]!;
+    expect(re.test("foo")).toBe(true);
+    expect(re.test("bar")).toBe(true);
+    expect(re.test("xfooy")).toBe(false);
+    expect(re.test("xbary")).toBe(false);
   });
 
   it("test_requirements_for_missing_keys_check_memoization", () => {

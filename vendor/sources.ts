@@ -34,6 +34,12 @@ export interface PackageEntry {
    * on PRs #1561 / #1578).
    */
   compareApi?: boolean;
+  /**
+   * Default true. Mirror of `compareApi` for test-compare. globalid sets this
+   * to false in wave 5 (its tests aren't wired into test-compare yet); wave 6
+   * flips it on alongside its api-compare wiring.
+   */
+  compareTests?: boolean;
 }
 
 export interface UpstreamSource {
@@ -125,7 +131,17 @@ export const SOURCES: readonly UpstreamSource[] = [
       url: "https://github.com/rails/globalid.git",
       ref: "v1.3.0",
     },
-    packages: [{ name: "globalid", libPath: "lib", testPath: "test", compareApi: false }],
+    packages: [
+      {
+        name: "globalid",
+        libPath: "lib",
+        // Globalid puts *_test.rb under test/cases/ (not test/ directly).
+        testPath: "test/cases",
+        compareApi: false,
+        // compareTests defaults to true; globalid tests are already in
+        // extract-ruby-tests.rb's PACKAGE_TEST_DIRS (predates this PR).
+      },
+    ],
   },
 ];
 
@@ -205,4 +221,21 @@ export function vendoredRoot(sourceName: string): string {
   const found = SOURCES.find((s) => s.name === sourceName);
   if (!found) throw new Error(`vendor/sources.ts: no source named "${sourceName}"`);
   return join(VENDOR_DIR, sourceName);
+}
+
+/**
+ * Map of package name → absolute test directory for every package with a
+ * `testPath` and `compareTests !== false`. Wave 5: feeds extract-ruby-tests.rb
+ * via `TEST_PATHS_JSON` env var so the Ruby script's PACKAGE_TEST_DIRS isn't
+ * a hand-maintained map that drifts from SOURCES.
+ */
+export function testPathsManifest(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const source of SOURCES) {
+    for (const pkg of source.packages) {
+      if (!pkg.testPath || pkg.compareTests === false) continue;
+      out[pkg.name] = resolve(VENDOR_DIR, source.name, pkg.testPath);
+    }
+  }
+  return out;
 }

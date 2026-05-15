@@ -7,6 +7,7 @@ describe("vendor/fetch.ts parseArgs", () => {
       refresh: false,
       migrate: false,
       printPaths: { active: false },
+      printTestPaths: false,
     });
   });
 
@@ -37,6 +38,10 @@ describe("vendor/fetch.ts parseArgs", () => {
     const a = parseArgs(["--print-paths", "--source", "rails"]);
     expect(a.printPaths).toEqual({ active: true, name: undefined });
     expect(a.sourceFilter).toBe("rails");
+  });
+
+  it("--print-test-paths sets the flag", () => {
+    expect(parseArgs(["--print-test-paths"]).printTestPaths).toBe(true);
   });
 
   it("rejects unknown flags", () => {

@@ -26,7 +26,9 @@ export type ColumnSpec =
       primary?: boolean;
     };
 
-export type TableSchema = Record<string, ColumnSpec>;
+export type TableSchema =
+  | Record<string, ColumnSpec>
+  | { columns: Record<string, ColumnSpec>; primaryKey?: string | string[] | false };
 export type Schema = Record<string, TableSchema>;
 
 export interface DefineSchemaOpts {
@@ -34,10 +36,27 @@ export interface DefineSchemaOpts {
 }
 
 /** @internal */
+function columnsOf(table: TableSchema): Record<string, ColumnSpec> {
+  if (table && typeof table === "object" && "columns" in table && !("type" in table)) {
+    return (table as { columns: Record<string, ColumnSpec> }).columns;
+  }
+  return table as Record<string, ColumnSpec>;
+}
+
+/** @internal */
+function primaryKeyOf(table: TableSchema): string | string[] | false | undefined {
+  if (table && typeof table === "object" && "columns" in table && !("type" in table)) {
+    return (table as { primaryKey?: string | string[] | false }).primaryKey;
+  }
+  return undefined;
+}
+
+/** @internal */
 function resolveReferences(schema: Schema): string[] {
   const refs = new Map<string, Set<string>>();
-  for (const [table, columns] of Object.entries(schema)) {
+  for (const [table, raw] of Object.entries(schema)) {
     refs.set(table, new Set());
+    const columns = columnsOf(raw);
     for (const spec of Object.values(columns)) {
       if (typeof spec === "object" && spec.references) {
         if (spec.references in schema && spec.references !== table) {
@@ -131,8 +150,19 @@ export async function defineSchema(
   }
 
   for (const table of order) {
-    const columns = schema[table];
-    await ss.createTable(table, (t) => {
+    const raw = schema[table];
+    const columns = columnsOf(raw);
+    const pk = primaryKeyOf(raw);
+    const createOpts: Record<string, unknown> = {};
+    if (pk === false) createOpts["id"] = false;
+    else if (Array.isArray(pk)) {
+      createOpts["primaryKey"] = pk;
+      createOpts["id"] = false;
+    } else if (typeof pk === "string") {
+      createOpts["primaryKey"] = pk;
+      createOpts["id"] = false;
+    }
+    await ss.createTable(table, createOpts, (t) => {
       for (const [colName, spec] of Object.entries(columns)) {
         const primitive: PrimitiveColumnSpec = typeof spec === "string" ? spec : spec.type;
         const arType = typeMap[primitive];
@@ -141,7 +171,9 @@ export async function defineSchema(
           if (spec.limit !== undefined) options["limit"] = spec.limit;
           if (spec.null !== undefined) options["null"] = spec.null;
           if (spec.default !== undefined) options["default"] = spec.default;
-          if (spec.primary) options["primaryKey"] = true;
+          if (spec.primary && !Array.isArray(pk) && typeof pk !== "string") {
+            options["primaryKey"] = true;
+          }
         }
         // MySQL DATETIME without precision = DATETIME(0), which rejects fractional
         // seconds. Default to DATETIME(6) so test schemas accept microseconds.

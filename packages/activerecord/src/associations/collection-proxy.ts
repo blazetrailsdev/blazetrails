@@ -1172,6 +1172,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       if (id != null) return !pkIdentities.has(id);
       return !nullPkRecords.has(r);
     });
+    this._invalidateAssociationIds();
   }
 
   private async _deleteThrough(records: Base[]): Promise<void> {
@@ -2002,6 +2003,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     }
     this._target = [];
     this._targetLoaded = true;
+    this._invalidateAssociationIds();
     this.resetScope();
     return count;
   }

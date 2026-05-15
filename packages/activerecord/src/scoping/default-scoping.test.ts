@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Base, Relation } from "../index.js";
 
 import { createTestAdapter } from "../test-adapter.js";
@@ -1989,15 +1989,16 @@ describe("DefaultScopingTest", () => {
     }
     const dev = await Dev.create({ name: "Eileen", mentor_id: 1 });
     const sqls: string[] = [];
-    const origExecuteMutation = (adapter as any).executeMutation.bind(adapter);
-    (adapter as any).executeMutation = (sql: string, ...args: unknown[]) => {
-      sqls.push(sql);
-      return origExecuteMutation(sql, ...args);
-    };
+    const spy = vi
+      .spyOn(adapter as any, "executeMutation")
+      .mockImplementation((...args: unknown[]) => {
+        sqls.push(args[0] as string);
+        return (adapter as any).inner.executeMutation(...args);
+      });
     try {
       await dev.update({ name: "Not Eileen" });
     } finally {
-      (adapter as any).executeMutation = origExecuteMutation;
+      spy.mockRestore();
     }
     const updateSql = sqls.find((s) => /UPDATE/i.test(s));
     expect(updateSql).toMatch(/mentor_id/);
@@ -2014,15 +2015,16 @@ describe("DefaultScopingTest", () => {
     }
     const dev = await Dev2.create({ name: "Eileen", mentor_id: 1 });
     const sqls: string[] = [];
-    const origExecuteMutation = (adapter as any).executeMutation.bind(adapter);
-    (adapter as any).executeMutation = (sql: string, ...args: unknown[]) => {
-      sqls.push(sql);
-      return origExecuteMutation(sql, ...args);
-    };
+    const spy = vi
+      .spyOn(adapter as any, "executeMutation")
+      .mockImplementation((...args: unknown[]) => {
+        sqls.push(args[0] as string);
+        return (adapter as any).inner.executeMutation(...args);
+      });
     try {
       await dev.destroy();
     } finally {
-      (adapter as any).executeMutation = origExecuteMutation;
+      spy.mockRestore();
     }
     const deleteSql = sqls.find((s) => /DELETE/i.test(s));
     expect(deleteSql).toMatch(/mentor_id/);

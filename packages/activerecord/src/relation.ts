@@ -3225,6 +3225,9 @@ export class Relation<T extends Base> {
     let effectiveBatchSize = batchSize;
     if (this._limitValue !== null) {
       remaining = this._limitValue;
+      if (remaining === 0) {
+        return new BatchEnumerator(async function* () {}, batchSize);
+      }
       if (remaining < effectiveBatchSize) effectiveBatchSize = remaining;
     }
 

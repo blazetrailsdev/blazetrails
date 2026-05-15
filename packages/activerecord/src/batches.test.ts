@@ -733,8 +733,20 @@ describe("EachTest", () => {
     // ROOT-CAUSE fixed: cursor option supported; needs Subscriber test fixture
   });
 
-  it.skip("in_batches should return no records if the limit is 0 and load is ", () => {
-    // ROOT-CAUSE fixed: inBatches now supports composite PK and limit option
+  it("in_batches should return no records if the limit is 0 and load is ", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+      }
+    }
+    for (let i = 0; i < 3; i++) await Post.create({ title: `post-${i}` });
+    let total = 0;
+    for await (const batch of Post.limit(0).inBatches({ batchSize: 1 })) {
+      total += (await batch.count()) as number;
+    }
+    expect(total).toBe(0);
   });
 
   it.skip(".find_each respects table alias", () => {

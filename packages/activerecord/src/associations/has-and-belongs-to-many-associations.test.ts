@@ -611,12 +611,56 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
     expect(projects.map((p: any) => p.id)).toEqual([p3.id, p2.id, p1.id]);
   });
 
+  it("habtm builder forwards `scope:` onto the reflection (macro-time scope)", async () => {
+    // Mirrors Rails' `has_and_belongs_to_many(name, scope = nil, **options)`
+    // signature (vendor/rails/activerecord/lib/active_record/associations.rb:1870-1871):
+    // the macro-time scope flows positionally into the reflection, not
+    // into the options bag. This is the exact wire the PR adds.
+    const a5 = createTestAdapter();
+    class ScDev extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = a5;
+      }
+    }
+    class ScProj extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = a5;
+      }
+    }
+    class ScDevProj extends Base {
+      static {
+        this.attribute("sc_dev_id", "integer");
+        this.attribute("sc_proj_id", "integer");
+        this.adapter = a5;
+      }
+    }
+    registerModel(ScDev);
+    registerModel(ScProj);
+    registerModel(ScDevProj);
+    const macroScope = (rel: any) => rel.where({ name: "Visible" });
+    Associations.hasAndBelongsToMany.call(ScDev, "sc_projs", {
+      className: "ScProj",
+      joinTable: "sc_dev_projs",
+      foreignKey: "sc_dev_id",
+      associationForeignKey: "sc_proj_id",
+      scope: macroScope,
+    });
+
+    const reflection = (ScDev as any)._reflectOnAssociation("sc_projs");
+    expect(reflection).toBeTruthy();
+    // Pre-fix this was `null`; post-fix it carries the macro-time scope
+    // exactly as Rails' HasAndBelongsToManyReflection does.
+    expect(reflection.scope).toBe(macroScope);
+  });
+
   it("dynamic find all should respect readonly access", async () => {
-    // Rails: `has_and_belongs_to_many :categories, -> { readonly }` — the
-    // macro-time scope flips Relation#_isReadonly, which the relation
-    // applies to every loaded record (relation.ts:1962-1967). Slot D
-    // wires this end-to-end: the HABTM builder forwards `scope:` onto
-    // the reflection, and loadHabtm composes it via `options.scope(rel)`.
+    // Verifies the load-path piece of the readonly story: an `options.scope`
+    // that calls `readonlyBang()` propagates `_readonly = true` to every
+    // record returned by `loadHabtm` via Relation (relation.ts:1962-1967).
+    // The companion macro-time wiring is covered by the "habtm builder
+    // forwards `scope:` onto the reflection" test above.
     const dev = await Developer.create({ name: "ROAccess", salary: 90000 });
     const proj = await Project.create({ name: "ROProj" });
     await DeveloperProject.create({ developer_id: dev.id, project_id: proj.id });

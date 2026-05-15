@@ -129,10 +129,13 @@ describe("HasManyThroughDisableJoinsAssociationsTest", () => {
       sourceType: "DjMember",
       disableJoins: true,
     });
-    // Custom FK: explicit foreignKey option on a has_many :through, mirroring Rails'
-    // foreign_key: :post_id on Author#comments_with_foreign_key. In our TS implementation,
-    // ThroughReflection.foreignKey delegates to sourceReflection.foreignKey first (reflection.ts),
-    // so this option is accepted but does not change behavior — the test verifies it doesn't break.
+    // Custom FK: explicit foreignKey: "dj_author_id" (FK on dj_posts → dj_authors, same as
+    // the default) mirrors Rails' foreign_key: :post_id on Author#comments_with_foreign_key.
+    // In Rails, that option sets delegate_reflection.foreign_key and is consulted as the
+    // join_primary_key at the last DJAS step. In our TS impl, ThroughReflection.joinPrimaryKey
+    // resolves via sourceReflection first (reflection.ts:1205), so the option is accepted but
+    // has no behavioral effect — the test verifies it doesn't break through-association loading.
+    // Using "dj_post_id" here breaks things (contaminates scope cache); "dj_author_id" is safe.
     Associations.hasMany.call(DjAuthor, "djCommentsWithForeignKey", {
       className: "DjComment",
       through: "djPosts",

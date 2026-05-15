@@ -387,6 +387,11 @@ function constructJoinAttributes(
  * @internal
  */
 function ensureMutable(assoc: HasManyThroughAssociation): void {
+  // HABTM associations are always mutable: the join model's right side is an
+  // implicit belongsTo, but our habtm reflection doesn't expose that chain.
+  // Rails reaches the same conclusion via source_reflection.belongs_to?.
+  if ((assoc.reflection as any).type === "hasAndBelongsToMany") return;
+
   const ctor = assoc.owner.constructor as { _reflectOnAssociation?: (n: string) => any };
   const refl = ctor._reflectOnAssociation?.(assoc.reflection.name);
   const sourceRefl = refl?.sourceReflection as

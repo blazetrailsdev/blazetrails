@@ -8,6 +8,7 @@ describe("vendor/fetch.ts parseArgs", () => {
       migrate: false,
       printPaths: { active: false },
       printTestPaths: false,
+      printLibPaths: false,
     });
   });
 
@@ -42,6 +43,10 @@ describe("vendor/fetch.ts parseArgs", () => {
 
   it("--print-test-paths sets the flag", () => {
     expect(parseArgs(["--print-test-paths"]).printTestPaths).toBe(true);
+  });
+
+  it("--print-lib-paths sets the flag", () => {
+    expect(parseArgs(["--print-lib-paths"]).printLibPaths).toBe(true);
   });
 
   it("--print-test-paths emits valid JSON matching testPathsManifest()", async () => {

@@ -1203,7 +1203,7 @@ describe("ReflectionTest", () => {
     expect(ref!.name).toBe("books");
   });
   it.skip("reflect on missing source assocation raise exception", () => {
-    // UNPORTED: relies on Ruby Hotel/Chef fixture models — Slot C.
+    // BLOCKED: Hotel/Chef fixture models + check_validity! not yet ported — Slot C.
   });
   it.skip("name error from incidental code is not converted to name error for association", () => {
     // UNPORTED: relies on Ruby const_missing mechanism — no JS equivalent.
@@ -1903,6 +1903,13 @@ describe("ReflectionTest", () => {
     });
     const nestedRef = reflectOnAssociation(NsBillingAccount, "nestedUnqualifiedBillingFirm");
     expect(nestedRef!.klass).toBe(NsBillingNestedFirm);
+
+    // Absolute reference with leading "::" bypasses namespace walk
+    Associations.belongsTo.call(NsBillingAccount, "absoluteFirm", {
+      className: "::MyApplication::Business::Firm",
+    });
+    const absRef = reflectOnAssociation(NsBillingAccount, "absoluteFirm");
+    expect(absRef!.klass).toBe(NsBizFirm);
   });
 
   it("has and belongs to many reflection", () => {

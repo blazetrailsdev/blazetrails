@@ -354,13 +354,19 @@ export class MacroReflection extends AbstractReflection {
   _klass(className: string): typeof Base {
     // Rails: when active_record.name.demodulize == class_name, try ::ClassName
     // (absolute top-level) first, then fall back to namespace-relative lookup.
-    const registryKeys = (this.activeRecord as any)._registryKeys as string[] | undefined;
-    const arName = registryKeys?.[0] ?? this.activeRecord.name;
+    // Use own _registryKeys only — inherited keys belong to a superclass namespace.
+    const ar = this.activeRecord as any;
+    const ownKeys = Object.prototype.hasOwnProperty.call(ar, "_registryKeys")
+      ? (ar._registryKeys as string[])
+      : undefined;
+    const arName = ownKeys?.[0] ?? this.activeRecord.name;
     const lastSegment = arName.includes("::") ? arName.split("::").pop()! : arName;
     if (lastSegment === className) {
       try {
         return this.computeClass(`::${className}`);
-      } catch {
+      } catch (e) {
+        // Rails: rescue NameError only — let ArgumentError (invalid subclass) propagate.
+        if (e instanceof ArgumentError) throw e;
         // fall through to namespace-relative lookup
       }
     }
@@ -902,14 +908,25 @@ export class AssociationReflection extends MacroReflection {
       // Namespace-relative walk: mirrors Ruby's compute_type candidate list.
       // For activeRecord registered as "A::B::C", tries "A::B::C::Name",
       // "A::B::Name", "A::Name" before falling through to top-level "Name".
-      const registryKeys = (this.activeRecord as any)._registryKeys as string[] | undefined;
-      const arName = registryKeys?.[0] ?? this.activeRecord.name;
+      // Use own _registryKeys only — inherited keys belong to a superclass namespace.
+      const ar = this.activeRecord as any;
+      const ownKeys = Object.prototype.hasOwnProperty.call(ar, "_registryKeys")
+        ? (ar._registryKeys as string[])
+        : undefined;
+      const arName = ownKeys?.[0] ?? this.activeRecord.name;
       if (arName.includes("::")) {
         const segments = arName.split("::");
         for (let i = segments.length; i > 0; i--) {
           const candidate = [...segments.slice(0, i), simpleName].join("::");
           const resolved = modelRegistry.get(candidate);
-          if (resolved) return resolved;
+          if (resolved) {
+            if (!(resolved as any)._isActiveRecordBase) {
+              throw new ArgumentError(
+                `The ${candidate} model class for the ${this.activeRecord.name}#${this.name} association is not an ActiveRecord::Base subclass.`,
+              );
+            }
+            return resolved;
+          }
         }
       }
     }

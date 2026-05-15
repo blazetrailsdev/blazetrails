@@ -5207,6 +5207,31 @@ class SimpleTableBuilder {
     this._columns.push({ name, type });
   }
 
+  virtual(name: string, options: { type?: string; as?: string; stored?: boolean } = {}): void {
+    const pgTypes: Record<string, string> = {
+      string: "character varying",
+      text: "text",
+      integer: "integer",
+      bigint: "bigint",
+      float: "double precision",
+      boolean: "boolean",
+      date: "date",
+      datetime: "timestamp without time zone",
+    };
+    const pgType = pgTypes[options.type ?? "string"] ?? options.type ?? "character varying";
+    if (!options.as) {
+      this._columns.push({ name, type: pgType });
+      return;
+    }
+    if (!options.stored) {
+      throw new Error(
+        `PostgreSQL currently does not support VIRTUAL (not persisted) generated columns.\n` +
+          `Specify 'stored: true' option for '${name}'`,
+      );
+    }
+    this._columns.push({ name, type: `${pgType} GENERATED ALWAYS AS (${options.as}) STORED` });
+  }
+
   getColumns(): { name: string; type: string }[] {
     return this._columns;
   }

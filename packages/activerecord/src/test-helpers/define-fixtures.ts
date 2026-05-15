@@ -278,6 +278,20 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
     rows.push(row);
   }
 
+  // Filter generated (virtual) columns from fixture rows — PG rejects INSERT on those columns.
+  // Mirrors Rails: build_fixture_sql rejects schema_cache.columns_hash entries where column.virtual?
+  if ((adapter as any).supportsVirtualColumns?.()) {
+    const cols: { name: string; isVirtual(): boolean }[] = await (adapter as any)
+      .columns(tableName)
+      .catch(() => []);
+    const virtualNames = new Set(cols.filter((c) => c.isVirtual()).map((c) => c.name));
+    if (virtualNames.size > 0) {
+      for (const row of rows) {
+        for (const name of virtualNames) delete row[name];
+      }
+    }
+  }
+
   // Mirrors Rails: pass tableName as tablesToDelete so rows are replaced, not appended.
   await insertFixturesSet.call(adapter as unknown as InsertHost, { [tableName]: rows }, [
     tableName,

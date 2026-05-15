@@ -161,9 +161,11 @@ export class Group extends Unary {
 
 export class Star extends Unary {
   regexp: RegExp = /.+?/s;
+  override left: Node;
 
   constructor(left: Node) {
     super(left);
+    this.left = left;
   }
 
   override get type(): NodeType {
@@ -173,10 +175,10 @@ export class Star extends Unary {
     return true;
   }
   override get name(): string {
-    return (this.left as Node).name.replace(/[*:]/g, "");
+    return this.left.name.replace(/[*:]/g, "");
   }
   override toString(): string {
-    return (this.left as Node).toString();
+    return this.left.toString();
   }
 }
 

@@ -99,7 +99,7 @@ export class SchemaCreation {
     const sqlType = o.sqlType ?? this.typeToSql(o.type, o.options);
     let sql = `${this.adapter.quoteIdentifier(o.name)} ${sqlType}`;
     if (o.type !== "primary_key") {
-      sql = this.addColumnOptions(sql, o.options);
+      sql = this.addColumnOptionsBang(sql, o.options);
     }
     return sql;
   }

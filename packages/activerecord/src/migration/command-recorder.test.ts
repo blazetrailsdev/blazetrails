@@ -402,10 +402,26 @@ describe("CommandRecorder", () => {
     });
   });
 
+  describe("invertAddColumns", () => {
+    it("returns removeColumns", () => {
+      const [cmd] = new CommandRecorder().invertAddColumns(["users", "name", "age"]);
+      expect(cmd).toBe("removeColumns");
+    });
+  });
+
   describe("invert change table (non-bulk)", () => {
+    it("accepts (tableName, fn) without explicit options", async () => {
+      const recorder = new CommandRecorder();
+      // short form: no options argument
+      await recorder.changeTable("fruits", async (t) => {
+        t.string("name");
+      });
+      expect(recorder.commands[0].cmd).toBe("addColumn");
+    });
+
     it("remove with multiple columns records removeColumns", async () => {
       const recorder = new CommandRecorder();
-      await recorder.changeTable("fruits", {}, async (t) => {
+      await recorder.changeTable("fruits", async (t) => {
         t.remove("name", "kind", { type: "string" });
       });
       expect(recorder.commands[0].cmd).toBe("removeColumns");
@@ -415,7 +431,7 @@ describe("CommandRecorder", () => {
     it("reverts string + rename inside change_table block", async () => {
       const recorder = new CommandRecorder();
       await recorder.revert(async () => {
-        await recorder.changeTable("fruits", {}, async (t) => {
+        await recorder.changeTable("fruits", async (t) => {
           t.string("name");
           t.rename("kind", "cultivar");
         });
@@ -434,7 +450,7 @@ describe("CommandRecorder", () => {
       const recorder = new CommandRecorder();
       await expect(
         recorder.revert(async () => {
-          await recorder.changeTable("fruits", {}, async (t) => {
+          await recorder.changeTable("fruits", async (t) => {
             t.remove("kind"); // no type → not reversible
           });
         }),

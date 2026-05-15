@@ -89,9 +89,12 @@ export class CommandRecorder {
    */
   async changeTable(
     tableName: string,
-    options: Record<string, unknown> = {},
-    fn: (t: RecorderTableProxy) => Promise<void> | void,
+    fnOrOptions: ((t: RecorderTableProxy) => Promise<void> | void) | Record<string, unknown>,
+    fn?: (t: RecorderTableProxy) => Promise<void> | void,
   ): Promise<void> {
+    const options: Record<string, unknown> = typeof fnOrOptions === "function" ? {} : fnOrOptions;
+    const callback: (t: RecorderTableProxy) => Promise<void> | void =
+      typeof fnOrOptions === "function" ? fnOrOptions : fn!;
     const supportsBulk =
       typeof (this._delegate as any)?.supportsBulkAlter === "function" &&
       (this._delegate as any).supportsBulkAlter() === true;
@@ -102,13 +105,13 @@ export class CommandRecorder {
       const sub = new CommandRecorder(this._delegate);
       sub.reverting = this._reverting;
       const proxy = new RecorderTableProxy(tableName, sub);
-      await fn(proxy);
+      await callback(proxy);
       this._commands.push({ cmd: "changeTable", args: [tableName, sub.commands] });
     } else {
       // Non-bulk: route operations directly through this recorder so the
       // enclosing revert() block can invert them individually.
       const proxy = new RecorderTableProxy(tableName, this);
-      await fn(proxy);
+      await callback(proxy);
     }
   }
 
@@ -430,6 +433,11 @@ export class CommandRecorder {
       throw new IrreversibleMigration("remove_columns is only reversible if given a type.");
     }
     return ["addColumns", args];
+  }
+
+  /** @internal */
+  invertAddColumns(args: unknown[]): [string, unknown[]] {
+    return ["removeColumns", args];
   }
 
   /** @internal */

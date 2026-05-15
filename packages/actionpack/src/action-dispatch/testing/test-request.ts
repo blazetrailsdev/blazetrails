@@ -1,7 +1,8 @@
+import type { RackEnv } from "@blazetrails/rack";
 import { Request } from "../http/request.js";
 
 export class TestRequest extends Request {
-  constructor(env: import("@blazetrails/rack").RackEnv = {}) {
+  constructor(env: RackEnv = {}) {
     super({
       REQUEST_METHOD: "GET",
       PATH_INFO: "/",

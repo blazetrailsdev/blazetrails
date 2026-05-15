@@ -888,8 +888,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       const typeMapLimit = charLimitVal == null ? (castType?.limit ?? null) : null;
       // Map DATA_TYPE ("varchar") to the Rails semantic type ("string") via the type map,
       // matching how fetchTypeMetadata uses lookupCastType in the SHOW FULL FIELDS path.
-      const rawCastName = (castType?.name ?? baseType).toLowerCase();
-      const semanticType = /^timestamp/.test(rawCastName) ? "datetime" : rawCastName;
+      // MysqlDateTimeType.name is "datetime" for both "datetime" and "timestamp" DATA_TYPEs,
+      // so no explicit timestamp→datetime remapping is needed here.
+      const semanticType = (castType?.name ?? baseType).toLowerCase();
       const meta = new SqlTypeMetadata({
         sqlType,
         type: semanticType,

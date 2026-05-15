@@ -1047,8 +1047,11 @@ export class TableDefinition {
         parts.push("PRIMARY KEY");
       }
 
-      if (col.options.collation && this._adapterName === "sqlite") {
+      if (this._adapterName === "sqlite" && col.options.collation) {
         parts.push(`COLLATE ${this._adapter.quoteIdentifier(col.options.collation)}`);
+      } else if (this._adapterName === "mysql") {
+        if (col.options.charset) parts.push(`CHARACTER SET ${col.options.charset}`);
+        if (col.options.collation) parts.push(`COLLATE ${col.options.collation}`);
       }
 
       if (col.options.array && col.type !== "primary_key") {

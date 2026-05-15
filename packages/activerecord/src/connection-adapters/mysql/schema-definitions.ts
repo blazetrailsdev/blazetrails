@@ -131,19 +131,19 @@ export class TableDefinition extends AbstractTableDefinition {
   ): ColumnDefinition {
     let resolvedType = type as string;
     if (resolvedType === "primary_key") {
+      resolvedType = "integer";
       (options as any).limit = (options as any).limit ?? 8;
       (options as any).primaryKey = true;
-      return new ColumnDefinition(name, "integer" as ColumnType, options);
-    }
-    if (resolvedType === "virtual") {
+    } else if (resolvedType === "virtual") {
       resolvedType = (options as any).type ?? resolvedType;
+    } else {
+      const unsignedMatch = /^unsigned_(.+)$/.exec(resolvedType);
+      if (unsignedMatch) {
+        resolvedType = unsignedMatch[1];
+        (options as any).unsigned = true;
+      }
     }
-    const unsignedMatch = /^unsigned_(.+)$/.exec(resolvedType);
-    if (unsignedMatch) {
-      resolvedType = unsignedMatch[1];
-      (options as any).unsigned = true;
-    }
-    return new ColumnDefinition(name, resolvedType as ColumnType, options);
+    return super.newColumnDefinition(name, resolvedType as ColumnType, options);
   }
 
   /** @internal */
@@ -155,7 +155,17 @@ export class TableDefinition extends AbstractTableDefinition {
   protected override validColumnDefinitionOptions(): string[] {
     return super
       .validColumnDefinitionOptions()
-      .concat(["autoIncrement", "charset", "as", "unsigned", "first", "after", "stored"]);
+      .concat([
+        "autoIncrement",
+        "charset",
+        "as",
+        "size",
+        "unsigned",
+        "first",
+        "after",
+        "type",
+        "stored",
+      ]);
   }
 
   /** @internal */

@@ -139,9 +139,13 @@ export class CollectionAssociation extends Association {
   }
 
   /** @internal */
-  async insertRecord(record: Base, _validate = true, _raise = false): Promise<boolean> {
+  async insertRecord(record: Base, validate = true, raise = false): Promise<boolean> {
     this.setOwnerAttributes(record);
-    return !!(await (record as any).save?.());
+    if (raise) {
+      await (record as any).saveBang?.({ validate });
+      return true;
+    }
+    return !!(await (record as any).save?.({ validate }));
   }
 
   private async concatRecords(records: Base[]): Promise<void> {
@@ -674,29 +678,6 @@ function transaction(assoc: CollectionAssociation, block: () => Promise<void>): 
 }
 
 /** @internal */
-async function insertRecord(
-  assoc: CollectionAssociation,
-  record: Base,
-  validate = true,
-  raise = false,
-): Promise<Base | null> {
-  // Mirrors Rails insert_record: set owner FK attributes on the record, then save it.
-  if (typeof (assoc as any).setOwnerAttributes === "function") {
-    (assoc as any).setOwnerAttributes(record);
-  }
-  const saveMethod = raise ? "saveBang" : "save";
-  if (typeof (record as any)[saveMethod] === "function") {
-    const saved = await (record as any)[saveMethod]({ validate });
-    return saved ? record : null;
-  }
-  if (typeof (record as any).save === "function") {
-    const saved = await (record as any).save();
-    if (!saved && raise) throw new Error(`Failed to insert ${record.constructor.name}`);
-    return saved ? record : null;
-  }
-  return record;
-}
-
 /** @internal */
 async function removeRecords(
   assoc: CollectionAssociation,

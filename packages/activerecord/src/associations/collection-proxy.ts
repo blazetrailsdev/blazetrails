@@ -989,6 +989,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       const saved = await record.save();
       if (saved) {
         this._target.push(record);
+        this._invalidateAssociationIds();
         fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
       }
     }

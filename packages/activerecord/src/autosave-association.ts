@@ -1143,7 +1143,10 @@ function defineAutosaveValidationCallbacks(klass: any, reflection: any): void {
     });
   }
   // Mirrors Rails: after_validation :_ensure_no_duplicate_errors (once per class).
-  if (!klass[_ensureNoDuplicateErrorsRegistered]) {
+  // Own-property check mirrors the same pattern as the validation method guard above —
+  // a subclass inheriting the flag from its parent does NOT inherit the registered
+  // after_validation callback if its chains COW'd before the parent registration.
+  if (!Object.prototype.hasOwnProperty.call(klass, _ensureNoDuplicateErrorsRegistered)) {
     klass[_ensureNoDuplicateErrorsRegistered] = true;
     afterValidation(klass, (record: any) => {
       _ensureNoDuplicateErrors.call(record);

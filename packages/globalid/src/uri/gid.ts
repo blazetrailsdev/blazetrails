@@ -201,7 +201,12 @@ export class GID {
    * mutate the GID via the returned object).
    */
   deconstructKeys(_keys: readonly string[] | null = null): GidComponents {
-    return { ...this._components, params: { ...this._components.params } };
+    const { modelId } = this._components;
+    return {
+      ...this._components,
+      modelId: Array.isArray(modelId) ? [...modelId] : modelId,
+      params: { ...this._components.params },
+    };
   }
 
   // ─── Static factories ────────────────────────────────────────────────────
@@ -294,7 +299,17 @@ export class GID {
     }
     return true;
   }
-  /** @internal Mirrors URI::GID#set_model_components — parses path → model_name + model_id. */
+  /**
+   * @internal Mirrors URI::GID#set_model_components.
+   *
+   * Nominal stub for api:compare parity. In Rails this assigns
+   * `@model_name` and `@model_id` from the path; our GID instances are
+   * built from a parsed `GidComponents` snapshot at construction time
+   * (via parseGid in the public path, or directly from args in build()),
+   * so re-deriving model components from the path string after the fact
+   * isn't needed. We still run the same validation a Rails caller would
+   * see so a TS subclass that overrides this gets predictable failures.
+   */
   protected setModelComponents(path: string, validate = false): void {
     const parts = path.split("/");
     const modelName = parts[1];

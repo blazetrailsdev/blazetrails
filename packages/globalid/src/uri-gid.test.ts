@@ -211,12 +211,22 @@ describe("URI::GID class wrapper", () => {
     expect(GID.validateApp("foo-bar")).toBe("foo-bar");
   });
 
-  it("GID#deconstructKeys returns a copy of the component hash", () => {
-    const gid = GID.parse("gid://bcx/Person/5");
+  it("GID#deconstructKeys returns a deep-enough copy of the component hash", () => {
+    const gid = GID.parse("gid://bcx/Person/5?k=v");
     const a = gid.deconstructKeys();
-    expect(a).toEqual({ app: "bcx", modelName: "Person", modelId: "5", params: {} });
-    // Mutating the returned object must not affect the GID's state.
+    expect(a).toEqual({ app: "bcx", modelName: "Person", modelId: "5", params: { k: "v" } });
+    // Mutating any field of the returned object must not affect the GID.
     (a as { app: string }).app = "evil";
+    a.params["k"] = "evil";
     expect(gid.app).toBe("bcx");
+    expect(gid.params).toEqual({ k: "v" });
+  });
+
+  it("GID#deconstructKeys also copies composite modelId arrays", () => {
+    const gid = GID.parse("gid://bcx/CompositePrimaryKeyModel/tenant/id");
+    const a = gid.deconstructKeys();
+    expect(a.modelId).toEqual(["tenant", "id"]);
+    (a.modelId as string[]).push("evil");
+    expect(gid.modelId).toEqual(["tenant", "id"]);
   });
 });

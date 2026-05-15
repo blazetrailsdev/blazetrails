@@ -53,6 +53,18 @@ export function _resetModelFinder(): void {
 export type LocatorBlock = (gid: GlobalID, options?: LocateOptions) => Promise<unknown> | unknown;
 
 /**
+ * Anything that can be plugged in as a locator — `BaseLocator`,
+ * `UnscopedLocator`, `BlockLocator`, or a custom class that implements
+ * the same `locate` / `locateMany` shape. Used as the public type for
+ * `Locator.defaultLocator` and `Locator.use` so callers don't have to
+ * cast between class hierarchies.
+ */
+export interface LocatorLike {
+  locate(gid: GlobalID, options?: LocateOptions): Promise<unknown | null>;
+  locateMany(gids: GlobalID[], options?: LocateOptions): Promise<unknown[]>;
+}
+
+/**
  * Mirrors: GlobalID::Locator::BaseLocator. Resolves GlobalIDs by looking up
  * the model class via the registered ModelFinder and delegating to
  * `klass.find(id)` (or `klass.where({pk: ids})` for the batch + ignoreMissing
@@ -183,24 +195,31 @@ export class BlockLocator {
   }
 
   /**
-   * Locate each GID via the block sequentially.
+   * Locate each GID via the block sequentially (Rails parity — Ruby's
+   * `gids.map { |gid| locate(gid, options) }` runs single-threaded).
+   * Sequential ordering matters here: a block that touches global state
+   * or external resources would behave unpredictably under `Promise.all`.
    *
-   * Divergence from Rails: Rails' `BlockLocator#locate_many` returns whatever
-   * the block returns (including nils, preserving input order with gaps).
-   * We filter nulls to stay consistent with `BaseLocator#locateMany` which
-   * uses `filter_map` in Rails. If positional alignment with the input array
-   * matters to callers, they should call `locate` per GID directly.
+   * Divergence from Rails: Rails' `BlockLocator#locate_many` returns the
+   * block results including nils (preserving input order with gaps). We
+   * filter nulls to stay consistent with `BaseLocator#locateMany` (which
+   * uses `filter_map` in Rails). If positional alignment with the input
+   * matters, callers should call `locate` per GID directly.
    */
   async locateMany(gids: GlobalID[], options: LocateOptions = {}): Promise<unknown[]> {
-    const results = await Promise.all(gids.map((gid) => this.locate(gid, options)));
-    return results.filter((r): r is unknown => r !== null);
+    const results: unknown[] = [];
+    for (const gid of gids) {
+      const r = await this.locate(gid, options);
+      if (r !== null) results.push(r);
+    }
+    return results;
   }
 }
 
 // ─── Locator (top-level facade — dispatches to per-app or default locator) ─
 
-const _appLocators = new Map<string, BaseLocator | BlockLocator>();
-let _defaultLocator: BaseLocator = new UnscopedLocator();
+const _appLocators = new Map<string, LocatorLike>();
+let _defaultLocator: LocatorLike = new UnscopedLocator();
 
 /** Mirrors: GlobalID::Locator */
 export class Locator {
@@ -262,20 +281,20 @@ export class Locator {
   // ─── Class-level config (Rails: attr_accessor :default_locator) ───────────
 
   /** Mirrors: Locator.default_locator */
-  static get defaultLocator(): BaseLocator {
+  static get defaultLocator(): LocatorLike {
     return _defaultLocator;
   }
   /** Mirrors: Locator.default_locator= */
-  static set defaultLocator(locator: BaseLocator) {
+  static set defaultLocator(locator: LocatorLike) {
     _defaultLocator = locator;
   }
 
   /**
    * Mirrors: Locator.use(app, locator | &block) — register a per-app locator.
-   * Accepts a BaseLocator instance, a BlockLocator, or a plain block function
-   * (wrapped automatically).
+   * Accepts any locator-like object or a plain block function (wrapped
+   * automatically as a BlockLocator).
    */
-  static use(app: string, locator: BaseLocator | BlockLocator | LocatorBlock): void {
+  static use(app: string, locator: LocatorLike | LocatorBlock): void {
     validateApp(app);
     const wrapped = typeof locator === "function" ? new BlockLocator(locator) : locator;
     _appLocators.set(Locator.normalizeApp(app), wrapped);
@@ -284,7 +303,7 @@ export class Locator {
   // ─── Private helpers (Rails class << self private) ───────────────────────
 
   /** @internal Mirrors: Locator.locator_for. */
-  static locatorFor(gid: GlobalID): BaseLocator | BlockLocator {
+  static locatorFor(gid: GlobalID): LocatorLike {
     return _appLocators.get(Locator.normalizeApp(gid.app)) ?? _defaultLocator;
   }
 

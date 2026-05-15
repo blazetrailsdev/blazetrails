@@ -25,6 +25,7 @@ export type {
   LocateSignedOptions,
   ModelFinder,
   LocatorBlock,
+  LocatorLike,
 } from "./locator.js";
 export {
   toGlobalId,

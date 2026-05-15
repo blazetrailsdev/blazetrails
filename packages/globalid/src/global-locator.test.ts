@@ -509,7 +509,9 @@ describe("Locator non-Rails coverage — per-app dispatch helpers", () => {
   it("defaultLocator getter/setter (Rails: Locator.default_locator=)", () => {
     const original = Locator.defaultLocator;
     const custom = new BlockLocator(() => "custom-default");
-    Locator.defaultLocator = custom as unknown as typeof original;
+    // LocatorLike-widened defaultLocator accepts a BlockLocator directly —
+    // no cast needed.
+    Locator.defaultLocator = custom;
     expect(Locator.defaultLocator).toBe(custom);
     Locator.defaultLocator = original;
   });

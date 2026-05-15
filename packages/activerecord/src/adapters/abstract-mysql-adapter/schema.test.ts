@@ -99,7 +99,9 @@ describeIfMysql("Mysql2Adapter", () => {
     it("data source exists?", async () => {
       await defineSchema(adapter, { topics: { title: "string" } });
       try {
-        expect(await adapter.dataSourceExists("topics")).toBe(true);
+        const db = await currentDatabase(adapter);
+        // Rails passes @omgpost.table_name, which is the qualified `db.topics` form.
+        expect(await adapter.dataSourceExists(`${db}.topics`)).toBe(true);
       } finally {
         await adapter.dropTable("topics", { ifExists: true });
       }
@@ -112,18 +114,18 @@ describeIfMysql("Mysql2Adapter", () => {
 
     it("dump indexes", async () => {
       await adapter.dropTable("key_tests", { ifExists: true });
-      await adapter.createTable("key_tests", { force: true }, (t: any) => {
-        t.string("awesome");
-        t.string("pizza");
-        t.string("snack");
-      });
-      await adapter.addIndex("key_tests", ["snack"], { name: "index_key_tests_on_snack" });
-      await adapter.addIndex("key_tests", ["pizza"], { name: "index_key_tests_on_pizza" });
-      await adapter.addIndex("key_tests", ["awesome"], {
-        name: "index_key_tests_on_awesome",
-        type: "fulltext",
-      });
       try {
+        await adapter.createTable("key_tests", { force: true }, (t: any) => {
+          t.string("awesome");
+          t.string("pizza");
+          t.string("snack");
+        });
+        await adapter.addIndex("key_tests", ["snack"], { name: "index_key_tests_on_snack" });
+        await adapter.addIndex("key_tests", ["pizza"], { name: "index_key_tests_on_pizza" });
+        await adapter.addIndex("key_tests", ["awesome"], {
+          name: "index_key_tests_on_awesome",
+          type: "fulltext",
+        });
         const indexes = (await adapter.indexes("key_tests")).sort((a, b) =>
           a.name.localeCompare(b.name),
         );

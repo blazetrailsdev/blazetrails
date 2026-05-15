@@ -119,6 +119,23 @@ describe("defineSchema", () => {
       expect("id" in rows[0]).toBe(false);
     });
 
+    it("STI columns map with a 'type' column is recognised as the wrapper shape", async () => {
+      // Regression: an earlier discriminator looked for `type` inside the
+      // `columns` value to reject ColumnSpec object shapes, which made STI
+      // wrappers (columns: { type: "string", ... }) misclassify as legacy
+      // and silently drop the primaryKey directive.
+      await defineSchema(adapter, {
+        sti: {
+          columns: { type: "string", name: "string" },
+          primaryKey: false,
+        },
+      });
+      await adapter.executeMutation(`INSERT INTO "sti" ("type","name") VALUES ('Dog','Rex')`);
+      const rows = (await adapter.execute(`SELECT * FROM "sti"`)) as Array<Record<string, unknown>>;
+      expect(rows[0]["type"]).toBe("Dog");
+      expect("id" in rows[0]).toBe(false);
+    });
+
     it("does not mis-classify a legacy column literally named 'columns'", async () => {
       // The discriminator must require `columns` to be an object map (not a
       // ColumnSpec string/object) — otherwise a legacy table with a column

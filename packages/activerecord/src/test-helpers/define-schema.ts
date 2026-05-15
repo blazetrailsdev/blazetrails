@@ -44,15 +44,27 @@ export interface DefineSchemaOpts {
 }
 
 /** @internal */
+const WRAPPER_KEYS = new Set(["columns", "primaryKey"]);
+
+/** @internal */
 function isWrappedSchema(table: TableSchema): table is WrappedTableSchema {
-  // Discriminate strictly: only treat as wrapper when `columns` is an object
-  // map — otherwise a legacy column literally named "columns" (with a string
-  // or column-spec value) would be mis-parsed as the wrapper shape.
+  // The wrapper and the legacy `Record<colName, ColumnSpec>` shape both
+  // permit a key called `columns`, so discrimination has to lean on
+  // structural signals. Rule:
+  //   1. `columns` must be present and an object (not a string ColumnSpec).
+  //   2. Every other top-level key must be a recognised wrapper meta key
+  //      (currently only `primaryKey`). A legacy table almost always has
+  //      additional column names alongside any `columns` column, so this
+  //      cleanly separates the two without inspecting nested values —
+  //      important because the wrapper's columns map can include a column
+  //      named `type` (STI), which collides with the ColumnSpec object
+  //      shape.
   if (!table || typeof table !== "object") return false;
   const candidate = (table as { columns?: unknown }).columns;
   if (!candidate || typeof candidate !== "object") return false;
-  // A ColumnSpec object has a `type` key; the wrapper's `columns` map does not.
-  if ("type" in (candidate as object)) return false;
+  for (const key of Object.keys(table)) {
+    if (!WRAPPER_KEYS.has(key)) return false;
+  }
   return true;
 }
 

@@ -31,6 +31,14 @@ describe("SignedGlobalIDTest", () => {
     expect(sgid.modelId).toBe("5");
   });
 
+  it("model name", () => {
+    const verifier = makeVerifier();
+    expect(SignedGlobalID.create(person(5), { verifier }).modelName).toBe("Person");
+    expect(
+      SignedGlobalID.create({ id: 1, constructor: { name: "Account" } }, { verifier }).modelName,
+    ).toBe("Account");
+  });
+
   it("value equality", () => {
     const verifier = makeVerifier();
     const a = SignedGlobalID.create(person(5), { verifier });
@@ -107,7 +115,7 @@ describe("SignedGlobalIDExpirationTest", () => {
   beforeEach(() => setApp(TEST_APP));
   afterEach(() => _resetApp());
 
-  it("passing expires_in less than a second is not expired", async () => {
+  it("passing expires_in less than a second is not expired", () => {
     const verifier = makeVerifier();
     const sgid = SignedGlobalID.create(person(5), { verifier, expiresIn: 1 });
     expect(SignedGlobalID.parse(sgid.toString(), { verifier })).not.toBeNull();

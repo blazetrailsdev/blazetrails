@@ -11,6 +11,9 @@ const DEFAULT_PURPOSE = "default";
 /** Option keys that are NOT forwarded as GID URI params. @internal */
 const KNOWN_SGID_KEYS = new Set(["app", "for", "purpose", "expiresIn", "expiresAt", "verifier"]);
 
+/** Monotonic counter for stable inspect() ids; mirrors Ruby's object_id. @internal */
+let _nextObjectId = 0;
+
 export interface SignedGlobalIDOptions {
   app?: string;
   /** Rails-canonical purpose option. */
@@ -61,9 +64,7 @@ export class SignedGlobalID {
     this.purpose = purpose;
     this.expiresAt = expiresAt;
     this.verifier = verifier;
-    this._objectId = Math.floor(Math.random() * 0xffffffffffff)
-      .toString(16)
-      .padStart(12, "0");
+    this._objectId = (_nextObjectId++).toString(16).padStart(12, "0");
   }
 
   /** @internal — lazily parse and cache. */

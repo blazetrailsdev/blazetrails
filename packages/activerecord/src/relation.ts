@@ -260,7 +260,7 @@ export class Relation<T extends Base> {
   _whereClause: WhereClause = WhereClause.empty();
   private _orderClauses: Array<string | [string, "asc" | "desc"] | { raw: string }> = [];
   private _rawOrderClauses: string[] = [];
-  _reordering = false;
+  private _reordering = false;
   private _limitValue: number | null = null;
   private _offsetValue: number | null = null;
   private _selectColumns: (string | Nodes.Node)[] | null = null;

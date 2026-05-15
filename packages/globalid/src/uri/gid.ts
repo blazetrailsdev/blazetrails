@@ -83,7 +83,9 @@ export function buildGid(
   let uri = `gid://${app}/${modelName}/${idSegment}`;
 
   if (params && Object.keys(params).length > 0) {
-    const qs = new URLSearchParams(params).toString();
+    const qs = Object.entries(params)
+      .map(([k, v]) => `${cgiEscape(k)}=${cgiEscape(v)}`)
+      .join("&");
     uri += `?${qs}`;
   }
 

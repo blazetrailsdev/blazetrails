@@ -3092,6 +3092,36 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   ): Promise<void> {
     const quotedTable = this.quoteTableName(tableName);
     const quotedCol = this.quoteIdentifier(columnName);
+
+    // Virtual (generated) columns: resolve the real type and append GENERATED ALWAYS AS.
+    // Mirrors Rails PG add_column → new_column_definition resolves :virtual → options[:type].
+    if (type === "virtual") {
+      const opts = options as Record<string, unknown>;
+      const realType = (opts["type"] as string | undefined) ?? "string";
+      const as = opts["as"] as string | undefined;
+      const stored = opts["stored"] as boolean | undefined;
+      const pgType = this.typeToSql(realType, {
+        limit: options.limit ?? undefined,
+        precision: options.precision ?? undefined,
+        scale: options.scale ?? undefined,
+      });
+      let colSql = `${quotedCol} ${pgType}`;
+      if (as) {
+        colSql += ` GENERATED ALWAYS AS (${as})`;
+        if (stored) {
+          colSql += " STORED";
+        } else {
+          throw new Error(
+            `PostgreSQL currently does not support VIRTUAL (not persisted) generated columns.\n` +
+              `Specify 'stored: true' option for '${columnName}'`,
+          );
+        }
+      }
+      const ifNotExists = options.ifNotExists ? " IF NOT EXISTS" : "";
+      await this.exec(`ALTER TABLE ${quotedTable} ADD COLUMN${ifNotExists} ${colSql}`);
+      return;
+    }
+
     const resolvedPrecision =
       type === "datetime" && options.precision === undefined ? 6 : (options.precision ?? undefined);
     const pgType = this.typeToSql(type, {

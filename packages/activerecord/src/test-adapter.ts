@@ -79,20 +79,28 @@ let _setupLock: Promise<void> | null = null;
 let _needsCleanup = false;
 let _cleanupPromise: Promise<void> | null = null;
 
-// When true, the global beforeEach in test-setup-ar.ts skips
-// resetTestAdapterState(). Set by `withTransactionalFixtures` for files that
-// take responsibility for their own per-test state via BEGIN/ROLLBACK around
-// each test, so a one-time schema set up in `beforeAll` survives across tests.
-let _skipGlobalReset = false;
+// Refcount of active `withTransactionalFixtures` scopes. When > 0, the
+// global beforeEach in test-setup-ar.ts skips resetTestAdapterState() so a
+// one-time schema set up in `beforeAll` survives across tests in the file.
+// Refcounted (not a bool) so nested describes / multiple suites that each
+// call withTransactionalFixtures don't clobber an outer scope's skip when
+// an inner scope's afterAll runs. Mirrors Rails ConnectionPool's
+// `@pinned_connections_depth` (connection_pool.rb:327, 345).
+let _skipGlobalResetDepth = 0;
 
 /** @internal */
-export function setSkipGlobalReset(value: boolean): void {
-  _skipGlobalReset = value;
+export function pushSkipGlobalReset(): void {
+  _skipGlobalResetDepth += 1;
+}
+
+/** @internal */
+export function popSkipGlobalReset(): void {
+  if (_skipGlobalResetDepth > 0) _skipGlobalResetDepth -= 1;
 }
 
 /** @internal */
 export function shouldSkipGlobalReset(): boolean {
-  return _skipGlobalReset;
+  return _skipGlobalResetDepth > 0;
 }
 
 /** Map ActiveModel type names to SQL column types. */

@@ -1,8 +1,9 @@
 import { beforeAll, beforeEach, afterEach, afterAll } from "vitest";
 import type { DatabaseAdapter } from "../adapter.js";
 import {
+  popSkipGlobalReset,
+  pushSkipGlobalReset,
   resetTestAdapterState,
-  setSkipGlobalReset,
   type TestDatabaseAdapter,
 } from "../test-adapter.js";
 
@@ -49,11 +50,11 @@ function tm(adapter: DatabaseAdapter): {
  */
 export function withTransactionalFixtures(getAdapter: () => DatabaseAdapter): void {
   beforeAll(() => {
-    setSkipGlobalReset(true);
+    pushSkipGlobalReset();
   });
 
   afterAll(async () => {
-    setSkipGlobalReset(false);
+    popSkipGlobalReset();
     // Use resetTestAdapterState (not raw dropAllTables) so module-level
     // tracking (_createdTables, _declaredColumns, schemaCache) is cleared
     // alongside the DB drops. Otherwise a following opt-in file that

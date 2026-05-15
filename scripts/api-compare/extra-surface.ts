@@ -28,6 +28,12 @@
  *   pnpm tsx scripts/api-compare/extra-surface.ts \
  *     [--package <name>] [--top <N>] [--json] [--exclude-glob <glob>]...
  *
+ * Each extra is classified as **novel** (the candidate name appears nowhere
+ * in Rails-land) or **moved** (Rails defines it, just in a different `.rb`).
+ * Files are ranked by novel count primarily — barrel-style aggregators
+ * (`connection-adapters.ts`) drop below smaller novel-heavy files like
+ * `relation/finder-methods.ts`. `--novel-only` drops moved extras entirely.
+ *
  * Flags:
  *   --package <name>      Restrict to one package (e.g. activerecord).
  *   --top <N>             Top-N most-divergent files (default 50).
@@ -37,6 +43,8 @@
  *                         against the TS file path). Repeatable. Useful
  *                         for known-intentional extensions like
  *                         `dx-tests/` or `defineSchema`-only modules.
+ *   --novel-only          Drop moved-not-novel extras (filters barrel noise).
+ *   --max-detail <N>      Cap names per file in detail listing (default 40).
  *   --help                Print this message.
  */
 
@@ -46,18 +54,37 @@ import type { ApiManifest, ClassInfo, MethodInfo } from "./types.js";
 import { OUTPUT_DIR } from "./config.js";
 import { rubyFileToTs, rubyMethodToTs } from "./conventions.js";
 
+/**
+ * An extra TS name is **moved** if a Ruby method somewhere in Rails-land
+ * camelizes to it (just not in the matched file). It's **novel** when no
+ * Ruby method anywhere produces it — that's the high-signal class:
+ * helpers, accidental public surface, TS-only ergonomics. Barrel files
+ * like `connection-adapters.ts` are mostly `moved`; small focused files'
+ * extras are mostly `novel`.
+ */
+export type ExtraKind = "novel" | "moved";
+
+export interface ExtraName {
+  name: string;
+  kind: ExtraKind;
+}
+
 interface ExtraFile {
   package: string;
   tsFile: string;
   rubyFile: string;
   extraCount: number;
-  extras: string[];
+  novelCount: number;
+  movedCount: number;
+  extras: ExtraName[];
 }
 
 interface PackageTotals {
   package: string;
   filesWithDrift: number;
   totalExtras: number;
+  totalNovel: number;
+  totalMoved: number;
   extraFiles: ExtraFile[];
 }
 
@@ -77,24 +104,41 @@ Options:
   --top <N>            Top-N most-divergent files (default 50)
   --json               Emit JSON to stdout instead of the human report
   --exclude-glob <g>   Skip TS files containing substring <g> (repeatable)
+  --novel-only         Only count/show extras that don't appear ANYWHERE
+                       in the Rails source (filters out moved-not-novel
+                       drift; rank order also flips to novel-first)
+  --max-detail <N>     Per-file detail listing cap (default 40 names;
+                       0 = unlimited)
   --help               This message
 
 Requires: pnpm api:compare must have run first to produce
   scripts/api-compare/output/{rails-api.json,ts-api.json}.
 `;
 
-interface CliArgs {
+export interface CliArgs {
   filterPkg: string | null;
   topN: number;
   json: boolean;
   excludeGlobs: string[];
+  novelOnly: boolean;
+  maxDetail: number;
 }
 
 export function parseArgs(argv: string[]): CliArgs {
   let filterPkg: string | null = null;
   let topN = 50;
   let json = false;
+  let novelOnly = false;
+  let maxDetail = 40;
   const excludeGlobs: string[] = [];
+
+  const requireValue = (flag: string, v: string | undefined): string => {
+    if (!v || v.startsWith("--")) {
+      console.error(`${flag} requires a value`);
+      process.exit(1);
+    }
+    return v;
+  };
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -102,36 +146,34 @@ export function parseArgs(argv: string[]): CliArgs {
       console.log(HELP);
       process.exit(0);
     } else if (a === "--package") {
-      const v = argv[++i];
-      if (!v || v.startsWith("--")) {
-        console.error("--package requires a value");
-        process.exit(1);
-      }
-      filterPkg = v;
+      filterPkg = requireValue("--package", argv[++i]);
     } else if (a === "--top") {
-      const v = argv[++i];
-      const n = Number(v);
+      const n = Number(requireValue("--top", argv[++i]));
       if (!Number.isFinite(n) || n <= 0) {
         console.error("--top requires a positive integer");
         process.exit(1);
       }
       topN = Math.floor(n);
-    } else if (a === "--json") {
-      json = true;
-    } else if (a === "--exclude-glob") {
-      const v = argv[++i];
-      if (!v || v.startsWith("--")) {
-        console.error("--exclude-glob requires a value");
+    } else if (a === "--max-detail") {
+      const n = Number(requireValue("--max-detail", argv[++i]));
+      if (!Number.isFinite(n) || n < 0) {
+        console.error("--max-detail requires a non-negative integer");
         process.exit(1);
       }
-      excludeGlobs.push(v);
+      maxDetail = Math.floor(n);
+    } else if (a === "--json") {
+      json = true;
+    } else if (a === "--novel-only") {
+      novelOnly = true;
+    } else if (a === "--exclude-glob") {
+      excludeGlobs.push(requireValue("--exclude-glob", argv[++i]));
     } else {
       console.error(`Unknown flag: ${a}`);
       console.error(HELP);
       process.exit(1);
     }
   }
-  return { filterPkg, topN, json, excludeGlobs };
+  return { filterPkg, topN, json, excludeGlobs, novelOnly, maxDetail };
 }
 
 /**
@@ -214,11 +256,34 @@ function collectAllowedNames(
   return allowed;
 }
 
+/**
+ * Build the global "all Ruby method candidate names anywhere in Rails-land"
+ * set, used to classify each extra as novel (nowhere in Rails) vs moved
+ * (somewhere in Rails, just not in the matched file).
+ */
+export function buildGlobalRubyCandidates(ruby: ApiManifest): Set<string> {
+  const all = new Set<string>();
+  for (const pkg of Object.values(ruby.packages)) {
+    const entities = [...Object.values(pkg.classes), ...Object.values(pkg.modules)] as ClassInfo[];
+    for (const e of entities) {
+      for (const m of [...e.instanceMethods, ...e.classMethods]) {
+        if (m.internal === true) continue;
+        const candidates = rubyMethodToTs(m.name);
+        if (!candidates) continue;
+        for (const c of candidates) all.add(c);
+      }
+    }
+  }
+  return all;
+}
+
 function buildPackageReport(
   pkg: string,
   ruby: ApiManifest,
   ts: ApiManifest,
   excludeGlobs: string[],
+  globalRubyCandidates: Set<string>,
+  novelOnly: boolean,
 ): PackageTotals {
   const rubyPkg = ruby.packages[pkg];
   const tsPkg = ts.packages[pkg];
@@ -226,6 +291,8 @@ function buildPackageReport(
     package: pkg,
     filesWithDrift: 0,
     totalExtras: 0,
+    totalNovel: 0,
+    totalMoved: 0,
     extraFiles: [],
   };
   if (!rubyPkg || !tsPkg) return result;
@@ -280,25 +347,48 @@ function buildPackageReport(
       moduleFqnByShort,
     );
 
-    const extras: string[] = [];
+    const extras: ExtraName[] = [];
+    let novelCount = 0;
+    let movedCount = 0;
     for (const name of tsNames) {
-      if (!allowed.has(name)) extras.push(name);
+      if (allowed.has(name)) continue;
+      const kind: ExtraKind = globalRubyCandidates.has(name) ? "moved" : "novel";
+      if (novelOnly && kind !== "novel") continue;
+      extras.push({ name, kind });
+      if (kind === "novel") novelCount++;
+      else movedCount++;
     }
     if (extras.length === 0) continue;
 
-    extras.sort();
+    // Sort novel before moved, then alphabetical — novel is the higher-signal
+    // tier and surfaces first in per-file detail dumps.
+    extras.sort((a, b) =>
+      a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "novel" ? -1 : 1,
+    );
     result.extraFiles.push({
       package: pkg,
       tsFile: expectedTs,
       rubyFile,
       extraCount: extras.length,
+      novelCount,
+      movedCount,
       extras,
     });
     result.filesWithDrift++;
     result.totalExtras += extras.length;
+    result.totalNovel += novelCount;
+    result.totalMoved += movedCount;
   }
 
-  result.extraFiles.sort((a, b) => b.extraCount - a.extraCount || a.tsFile.localeCompare(b.tsFile));
+  // Rank order: novel-first when --novel-only is on (only novel exists),
+  // and otherwise rank by novel count (high-signal) then total. Pure-moved
+  // barrel files (588 extras, 0 novel) drop below smaller novel-heavy files.
+  result.extraFiles.sort(
+    (a, b) =>
+      b.novelCount - a.novelCount ||
+      b.extraCount - a.extraCount ||
+      a.tsFile.localeCompare(b.tsFile),
+  );
   return result;
 }
 
@@ -316,56 +406,113 @@ function colorCount(n: number, useColor: boolean): string {
   return String(n);
 }
 
-function printHumanReport(report: Report, topN: number): void {
+function printHumanReport(report: Report, topN: number, maxDetail: number): void {
   const useColor = process.stdout.isTTY === true;
 
   console.log(`\n${BOLD}Extra TS surface vs Rails${RESET}  (the inverse of api:compare)`);
-  console.log(`${DIM}Generated ${report.generatedAt}${RESET}\n`);
+  console.log(
+    `${DIM}Generated ${report.generatedAt}  |  novel = name not found anywhere in Rails;  moved = found, just in a different .rb${RESET}\n`,
+  );
 
   console.log(`${BOLD}Per-package totals${RESET}`);
   console.log(
-    `  ${"Package".padEnd(20)} ${"Files w/ drift".padStart(15)} ${"Extra names".padStart(13)}`,
+    `  ${"Package".padEnd(20)} ${"Files".padStart(7)} ${"Novel".padStart(7)} ${"Moved".padStart(7)} ${"Total".padStart(7)}`,
   );
-  console.log(`  ${"-".repeat(20)} ${"-".repeat(15)} ${"-".repeat(13)}`);
+  console.log(
+    `  ${"-".repeat(20)} ${"-".repeat(7)} ${"-".repeat(7)} ${"-".repeat(7)} ${"-".repeat(7)}`,
+  );
   for (const pkg of report.packages) {
+    const novel = colorCount(pkg.totalNovel, useColor);
+    const pad = useColor ? 16 : 7;
     console.log(
-      `  ${pkg.package.padEnd(20)} ${String(pkg.filesWithDrift).padStart(15)} ${colorCount(pkg.totalExtras, useColor).padStart(useColor ? 22 : 13)}`,
+      `  ${pkg.package.padEnd(20)} ${String(pkg.filesWithDrift).padStart(7)} ${novel.padStart(pad)} ${String(pkg.totalMoved).padStart(7)} ${String(pkg.totalExtras).padStart(7)}`,
     );
   }
 
-  console.log(`\n${BOLD}Top ${Math.min(topN, report.topN.length)} most-divergent files${RESET}`);
   console.log(
-    `  ${"#".padStart(3)}  ${"Extra".padStart(5)}  ${"Package".padEnd(16)} ${"TS file".padEnd(60)}`,
+    `\n${BOLD}Top ${Math.min(topN, report.topN.length)} most-divergent files${RESET}  ${DIM}(ranked by novel count, then total)${RESET}`,
   );
-  console.log(`  ${"-".repeat(3)}  ${"-".repeat(5)}  ${"-".repeat(16)} ${"-".repeat(60)}`);
+  console.log(
+    `  ${"#".padStart(3)}  ${"Novel".padStart(5)}  ${"Moved".padStart(5)}  ${"Package".padEnd(16)} ${"TS file".padEnd(60)}`,
+  );
+  console.log(
+    `  ${"-".repeat(3)}  ${"-".repeat(5)}  ${"-".repeat(5)}  ${"-".repeat(16)} ${"-".repeat(60)}`,
+  );
   for (let i = 0; i < Math.min(topN, report.topN.length); i++) {
     const f = report.topN[i];
-    const c = colorCount(f.extraCount, useColor);
+    const c = colorCount(f.novelCount, useColor);
+    const pad = useColor ? 14 : 5;
     console.log(
-      `  ${String(i + 1).padStart(3)}  ${c.padStart(useColor ? 14 : 5)}  ${f.package.padEnd(16)} ${f.tsFile.padEnd(60)}`,
+      `  ${String(i + 1).padStart(3)}  ${c.padStart(pad)}  ${String(f.movedCount).padStart(5)}  ${f.package.padEnd(16)} ${f.tsFile.padEnd(60)}`,
     );
   }
 
   console.log(
-    `\n${BOLD}Per-file detail${RESET} (only files with drift; sorted by extra count desc)\n`,
+    `\n${BOLD}Per-file detail${RESET}  ${DIM}(novel-first; moved names dimmed; +N more elided when over --max-detail)${RESET}\n`,
   );
   for (const pkg of report.packages) {
     if (pkg.extraFiles.length === 0) continue;
     console.log(`${BOLD}${pkg.package}${RESET}`);
     for (const f of pkg.extraFiles) {
-      console.log(`  ${f.tsFile} — +${f.extraCount} over Rails`);
+      const novelTag = useColor
+        ? colorCount(f.novelCount, useColor) + " novel"
+        : `${f.novelCount} novel`;
+      console.log(`  ${f.tsFile} — ${novelTag}, ${f.movedCount} moved`);
+      const shown = maxDetail > 0 ? f.extras.slice(0, maxDetail) : f.extras;
       const cols = 4;
-      for (let i = 0; i < f.extras.length; i += cols) {
-        const row = f.extras.slice(i, i + cols).map((n) => n.padEnd(24));
+      for (let i = 0; i < shown.length; i += cols) {
+        const row = shown.slice(i, i + cols).map((e) => {
+          const label = e.name.padEnd(24);
+          return useColor && e.kind === "moved" ? `${DIM}${label}${RESET}` : label;
+        });
         console.log(`    ${row.join(" ")}`);
       }
+      const elided = f.extras.length - shown.length;
+      if (elided > 0) console.log(`    ${DIM}… +${elided} more${RESET}`);
     }
     console.log();
   }
 }
 
+export function buildReport(
+  ruby: ApiManifest,
+  ts: ApiManifest,
+  opts: {
+    filterPkg: string | null;
+    excludeGlobs: string[];
+    novelOnly: boolean;
+    topN: number;
+  },
+): Report {
+  const globalRubyCandidates = buildGlobalRubyCandidates(ruby);
+
+  const packages: PackageTotals[] = [];
+  for (const pkg of Object.keys(ruby.packages)) {
+    if (opts.filterPkg && pkg !== opts.filterPkg) continue;
+    if (!ts.packages[pkg]) continue;
+    packages.push(
+      buildPackageReport(pkg, ruby, ts, opts.excludeGlobs, globalRubyCandidates, opts.novelOnly),
+    );
+  }
+  packages.sort((a, b) => b.totalNovel - a.totalNovel || b.totalExtras - a.totalExtras);
+
+  const allExtras: ExtraFile[] = packages.flatMap((p) => p.extraFiles);
+  allExtras.sort(
+    (a, b) =>
+      b.novelCount - a.novelCount ||
+      b.extraCount - a.extraCount ||
+      a.tsFile.localeCompare(b.tsFile),
+  );
+
+  return {
+    generatedAt: new Date().toISOString(),
+    packages,
+    topN: allExtras.slice(0, opts.topN),
+  };
+}
+
 export function main(argv = process.argv.slice(2)): void {
-  const { filterPkg, topN, json, excludeGlobs } = parseArgs(argv);
+  const args = parseArgs(argv);
 
   const rubyPath = path.join(OUTPUT_DIR, "rails-api.json");
   const tsPath = path.join(OUTPUT_DIR, "ts-api.json");
@@ -378,28 +525,18 @@ export function main(argv = process.argv.slice(2)): void {
   const ruby: ApiManifest = JSON.parse(fs.readFileSync(rubyPath, "utf-8"));
   const ts: ApiManifest = JSON.parse(fs.readFileSync(tsPath, "utf-8"));
 
-  const packages: PackageTotals[] = [];
-  for (const pkg of Object.keys(ruby.packages)) {
-    if (filterPkg && pkg !== filterPkg) continue;
-    if (!ts.packages[pkg]) continue;
-    packages.push(buildPackageReport(pkg, ruby, ts, excludeGlobs));
-  }
-  packages.sort((a, b) => b.totalExtras - a.totalExtras);
+  const report = buildReport(ruby, ts, {
+    filterPkg: args.filterPkg,
+    excludeGlobs: args.excludeGlobs,
+    novelOnly: args.novelOnly,
+    topN: args.topN,
+  });
 
-  const allExtras: ExtraFile[] = packages.flatMap((p) => p.extraFiles);
-  allExtras.sort((a, b) => b.extraCount - a.extraCount || a.tsFile.localeCompare(b.tsFile));
-
-  const report: Report = {
-    generatedAt: new Date().toISOString(),
-    packages,
-    topN: allExtras.slice(0, topN),
-  };
-
-  if (json) {
+  if (args.json) {
     console.log(JSON.stringify(report, null, 2));
     return;
   }
-  printHumanReport(report, topN);
+  printHumanReport(report, args.topN, args.maxDetail);
 }
 
 const invokedAsScript =

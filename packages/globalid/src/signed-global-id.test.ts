@@ -1,7 +1,11 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import { SignedGlobalID } from "./signed-global-id.js";
+import {
+  SignedGlobalID,
+  ExpiredMessage,
+  _resetSignedGlobalIDClassConfig,
+} from "./signed-global-id.js";
 import { setApp, _resetApp } from "./config.js";
 
 function makeVerifier(secret = "test-secret"): MessageVerifier {
@@ -227,7 +231,7 @@ describe("SignedGlobalIDExpirationTest", () => {
       expect(SignedGlobalID.parse(sgid.toString(), { verifier })).toBeNull();
     } finally {
       vi.useRealTimers();
-      SignedGlobalID.expiresIn = undefined;
+      _resetSignedGlobalIDClassConfig();
     }
   });
 
@@ -245,7 +249,7 @@ describe("SignedGlobalIDExpirationTest", () => {
       expect(SignedGlobalID.parse(sgid.toString(), { verifier })).not.toBeNull();
     } finally {
       vi.useRealTimers();
-      SignedGlobalID.expiresIn = undefined;
+      _resetSignedGlobalIDClassConfig();
     }
   });
 
@@ -262,7 +266,7 @@ describe("SignedGlobalIDExpirationTest", () => {
       expect(SignedGlobalID.parse(sgid.toString(), { verifier })).not.toBeNull();
     } finally {
       vi.useRealTimers();
-      SignedGlobalID.expiresIn = undefined;
+      _resetSignedGlobalIDClassConfig();
     }
   });
 });
@@ -353,9 +357,7 @@ describe("SignedGlobalID (non-Rails coverage)", () => {
   });
 
   describe("class-level verifier config (Rails: SignedGlobalID.verifier=)", () => {
-    afterEach(() => {
-      SignedGlobalID.verifier = undefined;
-    });
+    afterEach(() => _resetSignedGlobalIDClassConfig());
 
     it("create uses class-level verifier when none in options", () => {
       const v = makeVerifier();
@@ -381,6 +383,36 @@ describe("SignedGlobalID (non-Rails coverage)", () => {
       // Class-level verifier can't verify a token signed with a different one.
       expect(SignedGlobalID.parse(sgid.toString())).toBeNull();
       expect(SignedGlobalID.parse(sgid.toString(), { verifier: callV })).not.toBeNull();
+    });
+  });
+
+  describe("verify dispatch + raiseIfExpired (Rails private class methods)", () => {
+    it("verify dispatches to verifyWithVerifierValidatedMetadata first", () => {
+      const verifier = makeVerifier();
+      const sgid = SignedGlobalID.create(person(5), { verifier });
+      const result = SignedGlobalID.verify(sgid.toString(), { verifier });
+      expect(result).not.toBeNull();
+      expect(result!.uri).toBe("gid://bcx/Person/5");
+    });
+
+    it("verifyWithLegacySelfValidatedMetadata always returns null (Trails has no legacy SGIDs)", () => {
+      const verifier = makeVerifier();
+      const sgid = SignedGlobalID.create(person(5), { verifier });
+      expect(
+        SignedGlobalID.verifyWithLegacySelfValidatedMetadata(sgid.toString(), { verifier }),
+      ).toBeNull();
+    });
+
+    it("raiseIfExpired throws ExpiredMessage for past timestamps", () => {
+      expect(() => SignedGlobalID.raiseIfExpired("2020-01-01T00:00:00.000Z")).toThrow(
+        ExpiredMessage,
+      );
+    });
+
+    it("raiseIfExpired is a no-op for future timestamps and null", () => {
+      expect(() => SignedGlobalID.raiseIfExpired("2099-01-01T00:00:00.000Z")).not.toThrow();
+      expect(() => SignedGlobalID.raiseIfExpired(null)).not.toThrow();
+      expect(() => SignedGlobalID.raiseIfExpired(undefined)).not.toThrow();
     });
   });
 });

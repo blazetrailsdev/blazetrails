@@ -2558,6 +2558,16 @@ export class Base extends Model {
           : rawId;
       if (!Array.isArray(ctor.primaryKey) && this.id === null) {
         this._attributes.set(ctor.primaryKey, insertedId);
+      } else if (Array.isArray(ctor.primaryKey) && insertedId != null) {
+        // For composite-PK models with identity columns, write back the
+        // adapter-generated value to the first null PK column. Rails does
+        // this via _returning_columns_for_insert + _create_record write-back.
+        for (const pkCol of ctor.primaryKey) {
+          if (this._readAttribute(pkCol) == null) {
+            this._attributes.set(pkCol, insertedId);
+            break;
+          }
+        }
       }
     });
   }

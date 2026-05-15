@@ -96,7 +96,7 @@ describeIfMysql("Mysql2Adapter", () => {
       // Mirrors: test_mysql2_default_prepared_statements
       // Instantiate with _fakeConnection:true to skip pool creation — mirrors
       // Rails' fake_connection constructor path.
-      const fakeAdapter = new Mysql2Adapter({ _fakeConnection: true } as any);
+      const fakeAdapter = new Mysql2Adapter({ _fakeConnection: true });
       expect(fakeAdapter.preparedStatements).toBe(false);
     });
     it("exec query with prepared statements", async () => {

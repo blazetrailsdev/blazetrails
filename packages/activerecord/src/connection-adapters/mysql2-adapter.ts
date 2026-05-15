@@ -346,7 +346,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       variables,
       _fakeConnection: fake,
       ...mysqlConfig
-    } = config as mysql.PoolOptions & MysqlAdapterOptions & { _fakeConnection?: boolean };
+    } = config as mysql.PoolOptions & MysqlAdapterOptions;
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
     this._database =
@@ -429,6 +429,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
         // throwing on INSERT/UPDATE/DELETE passed to execQuery.
         if (!Array.isArray(rawResult)) {
           this.dirtyCurrentTransaction();
+          payload.row_count = (rawResult as mysql.ResultSetHeader).affectedRows ?? 0;
           await this._handleWarningsOn(conn, driverSql);
           return new Result([], []);
         }

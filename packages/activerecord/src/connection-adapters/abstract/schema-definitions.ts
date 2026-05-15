@@ -984,7 +984,9 @@ export class TableDefinition {
       return q;
     });
     parts.push(`(${quotedCols.join(", ")})`);
-    return parts.join(" ");
+    let sql = parts.join(" ");
+    if (idx.comment) sql += ` COMMENT '${idx.comment.replace(/'/g, "''")}'`;
+    return sql;
   }
 
   /**

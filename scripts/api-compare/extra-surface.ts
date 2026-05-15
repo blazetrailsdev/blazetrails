@@ -16,8 +16,11 @@
  *   3. Collect public TS names declared in the matching TS file — each
  *      class/module's *own* methods (skipping inherited surface so the
  *      diff measures this file's drift, not its ancestor's) plus top-level
- *      `fileFunctions`. Filter out `internal: true` (covers `_`-prefixed,
- *      `@internal` JSDoc, `private`/`protected`, `#`-prefixed fields).
+ *      `fileFunctions`. Filter out `internal: true` (Ruby private/protected,
+ *      TS private/protected, TS `#`-prefixed fields, `@internal` JSDoc) and
+ *      separately filter `_`-prefixed names — the extractor keeps those as
+ *      public exports; the Rails-private convention in this repo means they
+ *      should not count toward extra surface.
  *   4. Extra = TS names \ allowed names. Emit per-file, per-package, and
  *      top-N reports.
  *
@@ -200,6 +203,11 @@ export function parseArgs(argv: string[]): CliArgs {
  * inherited surface. Inherited names that the parent already defines are
  * not "drift" relative to Rails; they're the parent's problem (and Rails
  * inherits them too).
+ *
+ * The extractor keeps `_`-prefixed exports as public (only Ruby
+ * `private`/`protected`, TS `private`/`protected`, `#`-prefixed fields,
+ * and `@internal` JSDoc set `internal: true`). The Rails-private
+ * convention in this repo means we filter `_`-prefix here too.
  */
 function collectTsFileNames(
   file: string,
@@ -228,29 +236,59 @@ function collectTsFileNames(
 }
 
 /**
+ * Pre-fold `Foo::ClassMethods` submodules (the `ActiveSupport::Concern`
+ * idiom) into `Foo.classMethods`, mirroring compare.ts's pre-pass. This
+ * pre-fold lives in compare.ts at the consumer level (not in the Ruby
+ * extractor), so we replicate it here for the same semantics: when a host
+ * `include Foo`, the host gains `Foo::ClassMethods`'s instanceMethods as
+ * class methods even though only `Foo` is named in the include list.
+ *
+ * Returns the set of FQNs that were merged-and-skip-listed so the caller
+ * doesn't double-count them when iterating modules.
+ */
+function foldClassMethodsModules(modules: Record<string, ClassInfo>): Set<string> {
+  const folded = new Set<string>();
+  for (const [fqn, info] of Object.entries(modules)) {
+    if (!fqn.endsWith("::ClassMethods")) continue;
+    const parentFqn = fqn.replace(/::ClassMethods$/, "");
+    const parent = modules[parentFqn];
+    if (!parent) continue;
+    for (const m of info.instanceMethods) {
+      if (!parent.classMethods.some((pm) => pm.name === m.name)) {
+        parent.classMethods.push(m);
+      }
+    }
+    folded.add(fqn);
+  }
+  return folded;
+}
+
+/**
  * For one Ruby file's entities, compute the union of all TS candidate names
  * produced by `rubyMethodToTs`. Mirrors `compare.flattenIncludedMethodInfos`
- * mixin routing:
+ * mixin routing exactly:
  *
  *   - `include M`: M's instance methods land on the host as instance methods.
  *     A nested `include N` inside M chains through (instance methods only).
  *     M's own `extend` chain does NOT propagate to the host — Ruby `extend`
  *     affects only the receiver's singleton class.
  *   - `extend M` (at host level): M's instance methods land as class methods.
+ *   - Module `classMethods` are NOT propagated through include/extend (Ruby
+ *     semantics; `flattenIncludedMethodInfos` only pushes `instanceMethods`).
+ *     The `ActiveSupport::Concern` "class methods via include" pattern is
+ *     handled by `foldClassMethodsModules` above, which moves the nested
+ *     `ClassMethods` submodule's instanceMethods into the parent's own
+ *     `classMethods` — flattening still only reads `instanceMethods`, so
+ *     ASC class methods become entity-level surface, not propagated mixins.
  *
- *   - Module `classMethods` are kept here because the api-compare extractor
- *     folds nested `ClassMethods` submodules (the `ActiveSupport::Concern`
- *     idiom) into their parent module's `classMethods` before we see them.
- *     Excluding them would drop the most common Rails mixin pattern from
- *     the allowed-name set and inflate false-positive extras.
+ * Since `allowed` is a flat name set (instance vs class collapsed on the TS
+ * side anyway), we simply union both `instanceMethods` and `classMethods`
+ * for the *host* entity, but ONLY `instanceMethods` for walked-into mixins.
  *
  * `include` names are resolved via compare.ts's `resolveModuleName`, which
  * walks namespace prefixes — `AbstractAdapter` including `"Quoting"` maps
  * only to `ConnectionAdapters::Quoting`, never to PG/MySQL siblings of the
- * same short name. The flat-by-short-name lookup we used before pulled in
- * unrelated modules and silently inflated `allowed`.
- *
- * Cross-package or stdlib mixins are silently skipped — same as compare.ts.
+ * same short name. Cross-package / stdlib mixins are silently skipped.
  */
 function collectAllowedNames(
   entities: RubyEntity[],
@@ -276,10 +314,12 @@ function collectAllowedNames(
       visited.add(fqn);
       const mod = rubyModules[fqn];
       if (!mod) continue;
+      // Only the module's instance methods cross into the host. Class
+      // methods on the module itself stay on the module (Ruby `include`
+      // semantics; matches compare.flattenIncludedMethodInfos).
       addMethods(mod.instanceMethods);
-      addMethods(mod.classMethods);
-      // Only chain `include`s — a module's own `extend` doesn't propagate
-      // to the host (Ruby singleton-class semantics).
+      // Chain `include`s only — a module's own `extend` doesn't propagate
+      // (Ruby singleton-class semantics).
       for (const inc of mod.includes ?? []) walkMixin(inc, fqn);
     }
   };
@@ -334,8 +374,13 @@ function buildPackageReport(
   };
   if (!rubyPkg || !tsPkg) return result;
 
+  // Pre-fold ASC's `::ClassMethods` submodules into their parent's
+  // classMethods (mirrors compare.ts:759-773). Mutates rubyPkg.modules.
+  const foldedFqns = foldClassMethodsModules(rubyPkg.modules as Record<string, ClassInfo>);
+
   const moduleFqnByShort = new Map<string, string[]>();
   for (const fqn of Object.keys(rubyPkg.modules)) {
+    if (foldedFqns.has(fqn)) continue;
     const short = fqn.split("::").pop();
     if (!short) continue;
     const list = moduleFqnByShort.get(short) ?? [];
@@ -343,12 +388,30 @@ function buildPackageReport(
     moduleFqnByShort.set(short, list);
   }
 
-  const rubyFiles = new Map<string, RubyEntity[]>();
-  for (const [fqn, info] of [
-    ...Object.entries(rubyPkg.classes),
-    ...Object.entries(rubyPkg.modules),
-  ] as [string, ClassInfo][]) {
+  // Match compare.ts's nested-class filter: for each file, keep only the
+  // shortest-named class as the "primary" and skip nested classes that
+  // share the same file (e.g. `Preloader::Association::LoaderQuery` in
+  // `preloader/association.rb` is an implementation detail — its methods
+  // shouldn't inflate the parent file's allowed-name set).
+  const primaryClassPerFile = new Map<string, string>();
+  for (const [fqn, info] of Object.entries(rubyPkg.classes) as [string, ClassInfo][]) {
     if (!info.file) continue;
+    const existing = primaryClassPerFile.get(info.file);
+    if (!existing || fqn.split("::").length < existing.split("::").length) {
+      primaryClassPerFile.set(info.file, fqn);
+    }
+  }
+
+  const rubyFiles = new Map<string, RubyEntity[]>();
+  for (const [fqn, info] of Object.entries(rubyPkg.classes) as [string, ClassInfo][]) {
+    if (!info.file) continue;
+    const primary = primaryClassPerFile.get(info.file);
+    if (primary && primary !== fqn && fqn.startsWith(primary + "::")) continue;
+    pushTo(rubyFiles, info.file, { fqn, info });
+  }
+  for (const [fqn, info] of Object.entries(rubyPkg.modules) as [string, ClassInfo][]) {
+    if (!info.file) continue;
+    if (foldedFqns.has(fqn)) continue;
     pushTo(rubyFiles, info.file, { fqn, info });
   }
 

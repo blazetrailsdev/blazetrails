@@ -288,6 +288,179 @@ describe("buildReport — novel vs moved classification", () => {
     expect(f!.extras.map((e) => e.name)).toContain("pgOnlyMethod");
   });
 
+  it("skips nested classes sharing a file with a shorter-named parent (matches compare.ts)", () => {
+    // Nested Preloader::Association::LoaderQuery in association.rb is an
+    // impl detail; its `nestedHelper` must NOT count as allowed for the
+    // matched TS file. Per compare.ts:738-755.
+    const ruby: ApiManifest = {
+      source: "ruby",
+      generatedAt: "",
+      packages: {
+        ar: {
+          classes: {
+            "Preloader::Association": rubyClass({
+              name: "Association",
+              file: "preloader/association.rb",
+              instance: [method("primary_method")],
+            }),
+            "Preloader::Association::LoaderQuery": rubyClass({
+              name: "LoaderQuery",
+              file: "preloader/association.rb",
+              instance: [method("nested_helper")],
+            }),
+          },
+          modules: {},
+        },
+      },
+    };
+    const ts: ApiManifest = {
+      source: "typescript",
+      generatedAt: "",
+      packages: {
+        ar: {
+          classes: {
+            Association: {
+              name: "Association",
+              file: "preloader/association.ts",
+              includes: [],
+              extends: [],
+              instanceMethods: [method("primaryMethod"), method("nestedHelper")],
+              classMethods: [],
+            },
+          },
+          modules: {},
+        },
+      },
+    };
+    const report = buildReport(ruby, ts, {
+      filterPkg: null,
+      excludeGlobs: [],
+      novelOnly: false,
+      topN: 50,
+    });
+    const f = report.packages[0].extraFiles.find((x) => x.tsFile === "preloader/association.ts");
+    expect(f).toBeDefined();
+    // primaryMethod allowed; nestedHelper flagged (nested class is skipped).
+    expect(f!.extras.map((e) => e.name)).toEqual(["nestedHelper"]);
+  });
+
+  it("folds ASC ::ClassMethods submodules into parent's classMethods", () => {
+    // host `include Foo` — Rails runtime gives Host the methods on
+    // Foo::ClassMethods. The fold puts ascHelper on Foo.classMethods so
+    // it counts as Foo's own surface (compare.ts:759-773).
+    const ruby: ApiManifest = {
+      source: "ruby",
+      generatedAt: "",
+      packages: {
+        ar: {
+          classes: {
+            "P::Host": {
+              ...rubyClass({ name: "Host", file: "host.rb" }),
+              includes: ["Foo"],
+            },
+          },
+          modules: {
+            "P::Foo": rubyClass({ name: "Foo", file: "foo.rb" }),
+            "P::Foo::ClassMethods": rubyClass({
+              name: "ClassMethods",
+              file: "foo.rb",
+              instance: [method("asc_helper")],
+            }),
+          },
+        },
+      },
+    };
+    const ts: ApiManifest = {
+      source: "typescript",
+      generatedAt: "",
+      packages: {
+        ar: {
+          classes: {},
+          modules: {
+            Foo: {
+              name: "Foo",
+              file: "foo.ts",
+              includes: [],
+              extends: [],
+              instanceMethods: [],
+              // After fold, ascHelper is on Foo's own classMethods, so it
+              // counts as Foo's matched surface (not extra).
+              classMethods: [method("ascHelper")],
+            },
+          },
+        },
+      },
+    };
+    const report = buildReport(ruby, ts, {
+      filterPkg: null,
+      excludeGlobs: [],
+      novelOnly: false,
+      topN: 50,
+    });
+    // foo.ts has only ascHelper, which matches (post-fold) → no drift entry.
+    const fooDrift = report.packages[0].extraFiles.find((x) => x.tsFile === "foo.ts");
+    expect(fooDrift).toBeUndefined();
+  });
+
+  it("does NOT propagate module classMethods through include (Ruby semantics)", () => {
+    // Module Bar defines a class method `bareClassMethod` directly (not via
+    // ASC's ClassMethods submodule). Host `include Bar` must NOT give Host
+    // that name as allowed — Ruby's include only crosses instance methods.
+    const ruby: ApiManifest = {
+      source: "ruby",
+      generatedAt: "",
+      packages: {
+        ar: {
+          classes: {
+            "P::Host": {
+              ...rubyClass({ name: "Host", file: "host.rb" }),
+              includes: ["Bar"],
+            },
+          },
+          modules: {
+            "P::Bar": rubyClass({
+              name: "Bar",
+              file: "bar.rb",
+              klass: [method("bare_class_method")],
+            }),
+          },
+        },
+      },
+    };
+    const ts: ApiManifest = {
+      source: "typescript",
+      generatedAt: "",
+      packages: {
+        ar: {
+          classes: {
+            Host: {
+              name: "Host",
+              file: "host.ts",
+              includes: [],
+              extends: [],
+              instanceMethods: [method("bareClassMethod")],
+              classMethods: [],
+            },
+          },
+          modules: {},
+        },
+      },
+    };
+    const report = buildReport(ruby, ts, {
+      filterPkg: null,
+      excludeGlobs: [],
+      novelOnly: false,
+      topN: 50,
+    });
+    const f = report.packages[0].extraFiles.find((x) => x.tsFile === "host.ts");
+    // bareClassMethod IS extra on host.ts — module class methods don't
+    // propagate through include. (It will be classified `moved` because
+    // it exists on Bar globally.)
+    expect(f).toBeDefined();
+    expect(f!.extras.map((e) => e.name)).toEqual(["bareClassMethod"]);
+    expect(f!.extras[0].kind).toBe("moved");
+  });
+
   it("rejects non-integer --top and --max-detail", () => {
     const proc = process as unknown as { exit: (n: number) => never };
     const origExit = proc.exit;

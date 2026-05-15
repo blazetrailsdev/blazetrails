@@ -15,13 +15,13 @@ export class MatchData {
   }
 }
 
-const INITIAL_STATE: GtgState = [[0, null]];
-
 // Rails uses StringScanner with /([\/.?]|[^\/.?]+)/ — match one delimiter or
 // one run of non-delimiters, advancing as we go.
 const TOKEN = /([/.?]|[^/.?]+)/y;
 
 export class Simulator {
+  static readonly INITIAL_STATE: GtgState = [[0, null]];
+
   readonly tt: TransitionTable;
 
   constructor(transitionTable: TransitionTable) {
@@ -34,7 +34,7 @@ export class Simulator {
    * reached (Rails passes a block; we take a callback).
    */
   memos(string: string, onNoMatch: () => readonly unknown[]): readonly unknown[] {
-    let state: GtgState = INITIAL_STATE;
+    let state: GtgState = Simulator.INITIAL_STATE;
     let startIndex = 0;
 
     TOKEN.lastIndex = 0;

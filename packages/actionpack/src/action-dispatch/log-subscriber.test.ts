@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { LogSubscriber as BaseLogSubscriber, NotificationEvent } from "@blazetrails/activesupport";
 import { LogSubscriber } from "./log-subscriber.js";
 
@@ -34,17 +34,15 @@ function makeEvent(payload: Record<string, unknown>, duration = 12): Notificatio
 describe("ActionDispatch::LogSubscriber#redirect", () => {
   let subscriber: LogSubscriber;
   let logger: CaptureLogger;
-  let savedLogger: unknown;
 
   beforeEach(() => {
     subscriber = new LogSubscriber();
     logger = new CaptureLogger();
-    savedLogger = BaseLogSubscriber.logger;
-    BaseLogSubscriber.logger = logger as never;
+    vi.spyOn(BaseLogSubscriber, "logger", "get").mockReturnValue(logger as never);
   });
 
   afterEach(() => {
-    BaseLogSubscriber.logger = savedLogger as never;
+    vi.restoreAllMocks();
   });
 
   it("emits Redirected-to and Completed-status lines", () => {

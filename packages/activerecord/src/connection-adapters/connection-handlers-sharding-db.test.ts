@@ -376,14 +376,17 @@ describe("ConnectionHandlersShardingDbTest", () => {
       ShardedAbstractBase.connectsTo({
         shards: { not_default: { writing: { database: ":memory:", adapter: "sqlite3" } } },
       });
-      expect(ShardedAbstractBase.defaultShard()).toBe("not_default");
+    } finally {
+      Base.connectionHandler.clearAllConnectionsBang();
+    }
+    expect(ShardedAbstractBase.defaultShard()).toBe("not_default");
 
-      ShardedAbstractBase.connectingTo({ role: "writing" });
+    ShardedAbstractBase.connectingTo({ role: "writing" });
+    try {
       expect(ShardedAbstractBase.connectedToQ({ role: "writing", shard: "not_default" })).toBe(
         true,
       );
     } finally {
-      Base.connectionHandler.clearAllConnectionsBang();
       // pop the stack entry added by connectingTo
       connectedToStack().pop();
     }

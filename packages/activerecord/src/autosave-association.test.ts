@@ -3848,12 +3848,15 @@ describe("autosaveHasOne queryConstraints PK/FK pairing", () => {
     }
     registerModel("QcTenant", QcTenant);
     registerModel("QcTenantRecord", QcTenantRecord);
-    // No explicit foreignKey — the FK should be derived from QC if reflection is wired.
-    // Without reflection (inline tests), falls back to scalar default "qc_tenant_id".
-    // With computePrimaryKey: no explicit FK → QC branch returns ["tenant_id","id"] as PK.
-    // But since reflection is not registered here, foreignKey = "qc_tenant_record_id" (scalar),
-    // so computePrimaryKey collapses CPK ["tenant_id","id"] via the `!Array(FK)` guard:
-    //   includes("id") → "id" (scalar) — matches scalar FK.
+    // No explicit foreignKey. Associations.hasOne registers a reflection via addReflection,
+    // so _reflectOnAssociation finds it. reflection.foreignKey calls deriveFkQueryConstraints:
+    // QcTenant has queryConstraints ["tenant_id","id"] and primaryKey "id", so the FK becomes
+    // ["tenant_id","qc_tenant_record_id"] — but QcTenantRecord only has "qc_tenant_id".
+    // With no explicit FK option, computePrimaryKey (no-FK branch) returns QC list ["tenant_id","id"].
+    // The scalar-FK collapse then applies: includes("id") → "id" — but the reflection-derived FK
+    // may be composite. In this inline test the attribute "qc_tenant_id" is present, so the
+    // deriveFkQueryConstraints result falls back to the simpler scalar "qc_tenant_id" path.
+    // Core assertion: autosave assigns rec.qc_tenant_id ← tenant._readAttribute("id") = 42.
     Associations.hasOne.call(QcTenant, "qcTenantRecord", { autosave: true });
     const tenant = new QcTenant({ tenant_id: 7, id: 42, name: "Acme" });
     const rec = new QcTenantRecord({ note: "hello" });
@@ -3861,9 +3864,7 @@ describe("autosaveHasOne queryConstraints PK/FK pairing", () => {
     const saved = await tenant.save();
     expect(saved).toBe(true);
     expect(rec.isNewRecord()).toBe(false);
-    // With no reflection, FK = "qc_tenant_id" (scalar default via underscore(ctor.name)_id).
-    // computePrimaryKey → QC list ["tenant_id","id"] → collapse "id" (scalar) → matches.
-    // rec.qc_tenant_id ← tenant._readAttribute("id") = 42
+    // computePrimaryKey → QC list ["tenant_id","id"] → scalar collapse "id" → rec.qc_tenant_id = 42
     expect(rec.qc_tenant_id).toBe(42);
   });
 });

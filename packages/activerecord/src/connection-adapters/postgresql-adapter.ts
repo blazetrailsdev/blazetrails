@@ -102,7 +102,10 @@ import {
   type ReferentialAction,
 } from "./abstract/schema-definitions.js";
 import { joinTableName as deriveJoinTableName } from "../migration/join-table.js";
-import { SchemaCreation as PgSchemaCreation } from "./postgresql/schema-creation.js";
+import {
+  SchemaCreation as PgSchemaCreation,
+  _pgGeneratedClause,
+} from "./postgresql/schema-creation.js";
 import { SchemaDumper as PgSchemaDumper } from "./postgresql/schema-dumper.js";
 import type { SchemaSource } from "../schema-dumper.js";
 import { pgDatetimeConfig } from "./postgresql/pg-datetime-config.js";
@@ -3093,44 +3096,33 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const quotedTable = this.quoteTableName(tableName);
     const quotedCol = this.quoteIdentifier(columnName);
 
-    // Virtual (generated) columns: resolve the real type and append GENERATED ALWAYS AS.
-    // Mirrors Rails PG add_column → new_column_definition resolves :virtual → options[:type].
+    // Mirrors Rails PG `new_column_definition`: when `type == :virtual`,
+    // resolve the real type from `options[:type]` and pass `as`/`stored`
+    // through to `add_column_options!`. All other options (`null`,
+    // `default`, `comment`) flow through the standard pipeline.
+    let effectiveType = type;
+    let generatedClause = "";
     if (type === "virtual") {
       const opts = options as Record<string, unknown>;
-      const realType = (opts["type"] as string | undefined) ?? "string";
-      const as = opts["as"] as string | undefined;
-      const stored = opts["stored"] as boolean | undefined;
-      const pgType = this.typeToSql(realType, {
-        limit: options.limit ?? undefined,
-        precision: options.precision ?? undefined,
-        scale: options.scale ?? undefined,
-      });
-      let colSql = `${quotedCol} ${pgType}`;
-      if (as) {
-        colSql += ` GENERATED ALWAYS AS (${as})`;
-        if (stored) {
-          colSql += " STORED";
-        } else {
-          throw new Error(
-            `PostgreSQL currently does not support VIRTUAL (not persisted) generated columns.\n` +
-              `Specify 'stored: true' option for '${columnName}'`,
-          );
-        }
-      }
-      const ifNotExists = options.ifNotExists ? " IF NOT EXISTS" : "";
-      await this.exec(`ALTER TABLE ${quotedTable} ADD COLUMN${ifNotExists} ${colSql}`);
-      return;
+      effectiveType = (opts["type"] as string | undefined) ?? "string";
+      generatedClause = _pgGeneratedClause(
+        columnName,
+        opts["as"] as string | undefined,
+        opts["stored"] as boolean | undefined,
+      );
     }
 
     const resolvedPrecision =
-      type === "datetime" && options.precision === undefined ? 6 : (options.precision ?? undefined);
-    const pgType = this.typeToSql(type, {
+      effectiveType === "datetime" && options.precision === undefined
+        ? 6
+        : (options.precision ?? undefined);
+    const pgType = this.typeToSql(effectiveType, {
       ...options,
       precision: resolvedPrecision,
       limit: options.limit ?? undefined,
       scale: options.scale ?? undefined,
     });
-    let colSql = `${quotedCol} ${pgType}`;
+    let colSql = `${quotedCol} ${pgType}${generatedClause}`;
     if (options.default !== undefined) {
       const defaultClause = pgQuoteDefaultExpression(
         options.default,
@@ -5240,22 +5232,12 @@ class SimpleTableBuilder {
   }
 
   virtual(name: string, options: { type?: string; as?: string; stored?: boolean } = {}): void {
-    // Delegate type resolution to the adapter so precision/scale/limit and custom aliases
-    // stay consistent with the addColumn virtual branch (single source of truth).
+    // Mirrors Rails PG `new_column_definition`: resolve `:virtual` → real type,
+    // append the GENERATED clause via the shared helper. When `as` is absent
+    // the helper returns "" (Rails: a plain column).
     const pgType = this._adapter.typeToSql(options.type ?? "string", {});
-    // Rails: if options[:as] is absent, no GENERATED clause is added (plain column).
-    // add_column_options_bang wraps the whole block in `if as = options[:as]`.
-    if (!options.as) {
-      this._columns.push({ name, type: pgType });
-      return;
-    }
-    if (!options.stored) {
-      throw new Error(
-        `PostgreSQL currently does not support VIRTUAL (not persisted) generated columns.\n` +
-          `Specify 'stored: true' option for '${name}'`,
-      );
-    }
-    this._columns.push({ name, type: `${pgType} GENERATED ALWAYS AS (${options.as}) STORED` });
+    const generatedClause = _pgGeneratedClause(name, options.as, options.stored);
+    this._columns.push({ name, type: `${pgType}${generatedClause}` });
   }
 
   getColumns(): { name: string; type: string }[] {

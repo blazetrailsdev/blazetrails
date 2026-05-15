@@ -69,6 +69,41 @@ interface RubyEntity {
   info: ClassInfo;
 }
 
+/**
+ * TS-side method names that mirror Ruby methods on `conventions.SKIP`.
+ * `rubyMethodToTs` returns null for SKIP entries (they have no clean TS
+ * mapping at scoring time), so they never enter `allowed` even when the
+ * Ruby method exists in the matched file — but a TS override of e.g.
+ * `freeze`/`inspect` IS Rails-faithful (Rails AR `Base#freeze` lives in
+ * core.rb, AM `model#inspect` in attribute_methods.rb). Filtering these
+ * from the TS-side name set prevents them from showing up as "novel
+ * drift" when in fact they're carrying-the-pattern through.
+ */
+const TS_ALWAYS_ALLOWED = new Set([
+  "dup",
+  "clone",
+  "freeze",
+  "inspect",
+  "prettyPrint",
+  "tap",
+  "then",
+  "eql",
+  "equals",
+  "initializeDup",
+  "initializeClone",
+  "initializeCopy",
+  "encodeWith",
+  "initWith",
+  "toArray",
+  "toH",
+  "toHash",
+  "valueOf",
+  "klasses",
+  // Node.js / V8 inspection hook — the canonical TS analog of Ruby
+  // `inspect`. Pure language-level convention; never has a Rails counterpart.
+  '[Symbol.for("nodejs.util.inspect.custom")]',
+]);
+
 /** Get-or-init helper: replaces the `(get() ?? set([]).get()!).push(v)` idiom. */
 function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
   const list = map.get(key);
@@ -219,6 +254,7 @@ function collectTsFileNames(
   const push = (m: MethodInfo): void => {
     if (m.internal === true) return;
     if (m.name.startsWith("_")) return;
+    if (TS_ALWAYS_ALLOWED.has(m.name)) return;
     out.add(m.name);
   };
   for (const c of classes) {

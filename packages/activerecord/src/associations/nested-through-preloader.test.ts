@@ -56,6 +56,10 @@ describe("HMT Slot D — nested-through preloader / STI / joins+includes", () =>
     }
   }
   class NtdHighRating extends NtdRating {}
+  // Register STI subclass once at module scope so repeated beforeEach
+  // invocations don't accumulate duplicate descendants on the parent.
+  enableSti(NtdRating);
+  registerSubclass(NtdHighRating);
 
   beforeEach(() => {
     adapter = createTestAdapter();
@@ -69,8 +73,6 @@ describe("HMT Slot D — nested-through preloader / STI / joins+includes", () =>
     registerModel("NtdComment", NtdComment);
     registerModel("NtdRating", NtdRating);
     registerModel("NtdHighRating", NtdHighRating);
-    enableSti(NtdRating);
-    registerSubclass(NtdHighRating);
     (NtdAuthor as any)._associations = [];
     (NtdPost as any)._associations = [];
     (NtdComment as any)._associations = [];
@@ -150,9 +152,8 @@ describe("HMT Slot D — nested-through preloader / STI / joins+includes", () =>
     expect(preloaded.map((c: any) => c.id).sort()).toEqual([c1.id, c2.id, c3.id].sort());
   });
 
-  it("includes() + where on an intermediate column scopes the nested-through result", async () => {
-    const { a, p1, c1, r1 } = await seed();
-    void p1;
+  it("includes() + outer-relation where preserves all preloaded nested-through targets", async () => {
+    const { a, r1 } = await seed();
     const loaded = (await NtdAuthor.all()
       .includes("ntdAllRatings")
       .where({ id: a.id })
@@ -160,11 +161,11 @@ describe("HMT Slot D — nested-through preloader / STI / joins+includes", () =>
     const author = loaded.find((row) => row.id === a.id) as any;
     expect(author).toBeDefined();
     const preloaded = author._preloadedAssociations?.get("ntdAllRatings") as any[];
-    // All three ratings still preload for the owner; where on the
-    // outer relation must not silently drop preloaded targets.
+    // Filtering the outer relation must not silently drop preloaded
+    // targets — all three ratings still preload for the surviving
+    // owner row.
     expect(preloaded.length).toBe(3);
     expect(preloaded.some((r: any) => r.id === r1.id)).toBe(true);
-    void c1;
   });
 
   it("STI subclass instances flow through the nested-through chain with the correct type", async () => {

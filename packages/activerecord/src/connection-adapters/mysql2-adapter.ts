@@ -292,8 +292,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     const adapter = new Mysql2Adapter(config);
     try {
       // Any query that requires a real database will trigger ER_BAD_DB_ERROR
-      // if the DB doesn't exist — getConn() already translates it to NoDatabaseError.
-      const conn = await (adapter as any)._checkoutConn();
+      // if the DB doesn't exist — _checkoutConn() already translates it to NoDatabaseError.
+      const conn = await adapter._checkoutConn();
       conn.release();
       return true;
     } catch (e) {
@@ -399,6 +399,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     binds: unknown[] = [],
     options: { prepare?: boolean } = {},
   ): Promise<Result> {
+    await this.materializeTransactions();
     const driverSql = this.mysqlQuote(sql);
     const driverBinds = this.mysqlBinds(binds);
     let conn: mysql.PoolConnection | undefined;

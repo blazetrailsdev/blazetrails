@@ -419,13 +419,16 @@ describe("CommandRecorder", () => {
       expect(recorder.commands[0].cmd).toBe("addColumn");
     });
 
-    it("remove with multiple columns records removeColumns", async () => {
+    it("remove with multiple columns records individual removeColumn per name", async () => {
       const recorder = new CommandRecorder();
       await recorder.changeTable("fruits", async (t) => {
         t.remove("name", "kind", { type: "string" });
       });
-      expect(recorder.commands[0].cmd).toBe("removeColumns");
-      expect(recorder.commands[0].args[0]).toBe("fruits");
+      expect(recorder.commands).toHaveLength(2);
+      expect(recorder.commands[0].cmd).toBe("removeColumn");
+      expect(recorder.commands[0].args).toEqual(["fruits", "name", "string"]);
+      expect(recorder.commands[1].cmd).toBe("removeColumn");
+      expect(recorder.commands[1].args).toEqual(["fruits", "kind", "string"]);
     });
 
     it("reverts string + rename inside change_table block", async () => {

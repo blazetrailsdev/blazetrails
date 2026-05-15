@@ -685,19 +685,18 @@ export class RecorderTableProxy {
     const hasOpts = typeof last === "object" && last !== null;
     const options = hasOpts ? (args.pop() as Record<string, unknown>) : {};
     const names = args as string[];
-    if (names.length > 1) {
-      // Multi-column: mirrors Rails Table#remove -> remove_columns (plural)
-      this._recorder.record("removeColumns", [this._tableName, ...names, options]);
-    } else {
-      const colArgs: unknown[] = [this._tableName, names[0]];
+    // Emit one removeColumn per name (mirrors Rails Table#remove -> remove_columns
+    // iterating remove_column). This avoids the removeColumns arg-shape mismatch
+    // with Migration.removeColumns (strings only, no trailing options).
+    for (const name of names) {
+      const colArgs: unknown[] = [this._tableName, name];
       if (options["type"]) {
         colArgs.push(options["type"]);
         const rest = Object.fromEntries(Object.entries(options).filter(([k]) => k !== "type"));
         if (Object.keys(rest).length > 0) colArgs.push(rest);
       } else if (Object.keys(options).length > 0) {
         // Forward options (e.g. ifExists) even without type so replay semantics
-        // are preserved. Inversion will still raise IrreversibleMigration since
-        // args.length <= 2 (table + col, no type positional arg).
+        // are preserved. Inversion still raises IrreversibleMigration (no type).
         colArgs.push(options);
       }
       this._recorder.record("removeColumn", colArgs);

@@ -3145,7 +3145,7 @@ export class Relation<T extends Base> {
       errorOnIgnore,
       load: true,
     })) {
-      yield (await (batchRel as any).toArray()) as T[];
+      yield ((batchRel as any)._records ?? []) as T[];
     }
   }
 
@@ -3199,7 +3199,6 @@ export class Relation<T extends Base> {
     cursor,
     errorOnIgnore,
     load = false,
-    useRanges,
   }: {
     batchSize?: number;
     start?: unknown;
@@ -3208,7 +3207,6 @@ export class Relation<T extends Base> {
     cursor?: string | string[];
     errorOnIgnore?: boolean;
     load?: boolean;
-    useRanges?: boolean;
   } = {}): BatchEnumerator<LoadedRelation<Relation<T>>> {
     const self = this;
     const pk = this._modelClass.primaryKey;
@@ -3227,19 +3225,14 @@ export class Relation<T extends Base> {
         const rel = self._clone();
         rel._orderClauses = batchOrders.map(([col, dir]) => [col, dir] as [string, "asc" | "desc"]);
 
-        const batches = await _batchOnUnloadedRelation({
+        for await (const batchRows of _batchOnUnloadedRelation({
           relation: rel,
           start,
           finish,
-          load,
           cursor: cursorArr,
           order: (order ?? "asc") as any,
-          useRanges,
-          remaining: self._limitValue ?? Infinity,
           batchLimit: batchSize,
-        });
-
-        for (const batchRows of batches) {
+        })) {
           const batchRel = self._clone();
           const tuples = (batchRows as any[]).map((r) =>
             cursorArr.map((c) => (r as any).readAttribute(c)),
@@ -4959,16 +4952,13 @@ export class Relation<T extends Base> {
   }
 
   /** @internal */
-  private async batchOnUnloadedRelation(opts: {
+  private batchOnUnloadedRelation(opts: {
     start: unknown;
     finish: unknown;
-    load: boolean;
     cursor: string | string[];
     order: "asc" | "desc" | ("asc" | "desc")[];
-    useRanges: boolean | undefined;
-    remaining: number;
     batchLimit: number;
-  }): Promise<T[][]> {
+  }): AsyncGenerator<T[]> {
     return _batchOnUnloadedRelation({ relation: this, ...opts });
   }
 

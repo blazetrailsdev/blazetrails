@@ -92,6 +92,16 @@ let _setupLock: Promise<void> | null = null;
 // inner.withinNewTransaction returns) skip lock acquisition, avoiding deadlock.
 // A concurrent call from a DIFFERENT async chain sees an empty store and
 // correctly blocks on the mutex.
+//
+// Known limitations (both fixed by Phase 8 — push lock into TM itself):
+//   1. `Promise.all([transaction(M, …, requiresNew), transaction(M, …,
+//      requiresNew)])` started from inside a transaction body shares the
+//      parent's storage flag. Both child branches see "in our own chain"
+//      and skip the mutex, then race the TM stack at await points. Exotic
+//      pattern; the common Promise.all(top-level) case IS serialized.
+//   2. Cross-wrapper manual transactions on the same inner adapter aren't
+//      visible to other wrappers in the same chain (_manualTxDepth is
+//      per-instance). Phase 7 deletes SchemaAdapter so this becomes moot.
 const _withinNewTxLocks = new WeakMap<object, Promise<void>>();
 let _txLockHeld: AsyncContext<true> | null = null;
 function _txLockStorage(): AsyncContext<true> {

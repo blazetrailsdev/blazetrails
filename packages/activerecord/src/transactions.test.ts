@@ -2093,10 +2093,12 @@ describe("TransactionTest", () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    // The tests above exercise the fallback path (test-adapter has no
-    // withinNewTransaction). The TransactionManager path is reached
-    // when an adapter defines withinNewTransaction — cover that branch
-    // explicitly so it can't regress without a failing test.
+    // The "after_failure_actions" tests above run on a SchemaAdapter, which
+    // (after Phase 1) takes the TM path. They cover the SchemaAdapter→TM
+    // delegation by spying on inner.clearCacheBang. The test below covers
+    // the pure-TM path directly, against a hand-rolled TransactionManager
+    // with no SchemaAdapter wrapper — guards against TM-internal regressions
+    // independently of the wrapper.
     it("calls clearCacheBang via TransactionManager.withinNewTransaction", async () => {
       const { PreparedStatementCacheExpired } = await import("./errors.js");
       const { TransactionManager } = await import("./connection-adapters/abstract/transaction.js");
@@ -2363,10 +2365,16 @@ describe("SchemaAdapter TM delegation", () => {
     // After all transactions complete, the adapter's chain-aware view sees
     // no current transaction (storage cleared).
     expect((testAdapter as any).currentTransaction?.()).toBeFalsy();
-    // Every chain saw its own frame, and they aren't all the same object —
-    // if the mutex degenerated to "join", every observed.inside would be ===.
+    // Every chain must have seen a frame (no nulls/undefined) AND each frame
+    // must be distinct — if the mutex degenerated to "join", or if a chain
+    // saw the empty NULL_TRANSACTION, this would fail.
+    expect(observed).toHaveLength(6);
+    for (const o of observed) {
+      expect(o.inside).toBeDefined();
+      expect(o.inside).not.toBeNull();
+    }
     const distinctFrames = new Set(observed.map((o) => o.inside)).size;
-    expect(distinctFrames).toBeGreaterThan(1);
+    expect(distinctFrames).toBe(observed.length);
     expect(await Item.count()).toBe(7);
   });
 });

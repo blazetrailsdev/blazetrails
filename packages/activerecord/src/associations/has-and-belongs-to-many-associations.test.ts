@@ -611,10 +611,18 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
     expect(projects.map((p: any) => p.id)).toEqual([p3.id, p2.id, p1.id]);
   });
 
-  it.skip("dynamic find all should respect readonly access", () => {
-    // BLOCKED: associations — collection-proxy mutation
-    // ROOT-CAUSE: CollectionProxy does not mark returned records readonly when readonly: true is declared
-    // SCOPE: collection-proxy.ts — readonly flag propagation to loaded records
+  it("dynamic find all should respect readonly access", async () => {
+    const dev = await Developer.create({ name: "ROAccess", salary: 90000 });
+    const proj = await Project.create({ name: "ROProj" });
+    await DeveloperProject.create({ developer_id: dev.id, project_id: proj.id });
+    const projects = await loadHabtm(dev, "projects", {
+      className: "Project",
+      joinTable: "developer_projects",
+      foreignKey: "developer_id",
+      readonly: true,
+    });
+    expect(projects.length).toBe(1);
+    expect((projects[0] as any).isReadonly()).toBe(true);
   });
 
   it("new with values in collection", async () => {
@@ -1065,16 +1073,83 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
     expect(dev.id).toBeNull();
   });
 
-  it.skip("association with validate false does not run associated validation callbacks on create", () => {
-    // BLOCKED: associations — collection-proxy mutation
-    // ROOT-CAUSE: push() on collection does not respect validate: false; validation callbacks always run
-    // SCOPE: collection-proxy.ts — validate option on push/create
+  it("association with validate false does not run associated validation callbacks on create", async () => {
+    const a3 = createTestAdapter();
+    class VfDev extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = a3;
+      }
+    }
+    class VfProj extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = a3;
+        this.validates("name", { exclusion: { in: ["0"] } });
+      }
+    }
+    class VfDevProj extends Base {
+      static {
+        this.attribute("vf_dev_id", "integer");
+        this.attribute("vf_proj_id", "integer");
+        this.adapter = a3;
+      }
+    }
+    registerModel(VfDev);
+    registerModel(VfProj);
+    registerModel(VfDevProj);
+    Associations.hasAndBelongsToMany.call(VfDev, "vf_projs", {
+      className: "VfProj",
+      joinTable: "vf_dev_projs",
+      foreignKey: "vf_dev_id",
+      associationForeignKey: "vf_proj_id",
+      validate: false,
+    });
+
+    const dev = await VfDev.create({ name: "VfOwner" });
+    const invalid = new VfProj({ name: "0" });
+    await (dev as any).vf_projs.push(invalid);
+    expect(invalid.isPersisted()).toBe(true);
   });
 
-  it.skip("association with validate false does not run associated validation callbacks on update", () => {
-    // BLOCKED: associations — collection-proxy mutation
-    // ROOT-CAUSE: update through collection does not suppress validation callbacks when validate: false declared
-    // SCOPE: collection-proxy.ts — validate option on update path
+  it("association with validate false does not run associated validation callbacks on update", async () => {
+    const a4 = createTestAdapter();
+    class VfUpDev extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = a4;
+      }
+    }
+    class VfUpProj extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = a4;
+        this.validates("name", { exclusion: { in: ["0"] } });
+      }
+    }
+    class VfUpDevProj extends Base {
+      static {
+        this.attribute("vfup_dev_id", "integer");
+        this.attribute("vfup_proj_id", "integer");
+        this.adapter = a4;
+      }
+    }
+    registerModel(VfUpDev);
+    registerModel(VfUpProj);
+    registerModel(VfUpDevProj);
+    Associations.hasAndBelongsToMany.call(VfUpDev, "vfup_projs", {
+      className: "VfUpProj",
+      joinTable: "vfup_dev_projs",
+      foreignKey: "vfup_dev_id",
+      associationForeignKey: "vfup_proj_id",
+      validate: false,
+    });
+
+    const dev = await VfUpDev.create({ name: "VfUpOwner" });
+    // .create on the proxy goes through _createThrough -> record.save({validate}).
+    // With validate: false, an invalid record persists anyway.
+    const proj = await (dev as any).vfup_projs.create({ name: "0" });
+    expect(proj.isPersisted()).toBe(true);
   });
 
   it("custom join table", async () => {

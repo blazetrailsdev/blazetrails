@@ -709,7 +709,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     if (!fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)) {
       return record;
     }
-    const saved = await record.save();
+    const saved = await record.save({ validate: this._assocDef.options.validate !== false });
     if (saved) {
       this._target.push(record);
       fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
@@ -730,7 +730,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     }
     const record = this._buildThrough(attrs) as T;
     if (block) block(record);
-    const saved = await record.save();
+    const saved = await record.save({ validate: this._assocDef.options.validate !== false });
     if (!saved) return record;
     await this._pushThrough([record]);
     return record;
@@ -986,7 +986,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         record._writeAttribute(foreignKey as string, pkValue);
       }
       if (typeCol) record._writeAttribute(typeCol, ctor.name);
-      const saved = await record.save();
+      const saved = await record.save({ validate: this._assocDef.options.validate !== false });
       if (saved) {
         this._target.push(record);
         this._invalidateAssociationIds();
@@ -1030,12 +1030,22 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         !fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)
       )
         continue;
-      // Save the target record if it's new
+      // Save the target record if it's new. `validate: false` on the
+      // association suppresses validations during push/create — mirrors
+      // Rails' AssociationProxy save semantics where the option flows
+      // into the inner record.save call (collection_association.rb
+      // #insert_record).
+      const validate = this._assocDef.options.validate !== false;
       if (record.isNewRecord()) {
         if (bang) {
-          await record.saveBang(); // raises RecordInvalid if invalid
+          if (!validate) {
+            const saved = await record.save({ validate: false });
+            if (!saved) continue;
+          } else {
+            await record.saveBang(); // raises RecordInvalid if invalid
+          }
         } else {
-          const saved = await record.save();
+          const saved = await record.save({ validate });
           if (!saved) continue;
         }
       }
@@ -1063,9 +1073,14 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       if (bang) {
         // Bang form: raise RecordInvalid if join record is invalid (mirrors Rails' save!)
         joinRecord = new throughModel(joinAttrs);
-        await joinRecord.saveBang();
+        if (!validate) {
+          await joinRecord.save({ validate: false });
+        } else {
+          await joinRecord.saveBang();
+        }
       } else {
-        joinRecord = await throughModel.create(joinAttrs);
+        joinRecord = new throughModel(joinAttrs);
+        await joinRecord.save({ validate });
       }
       if (joinRecord.isPersisted()) {
         this._target.push(record);

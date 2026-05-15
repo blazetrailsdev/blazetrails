@@ -25,7 +25,18 @@ TEST_PATHS_JSON = ENV.fetch("TEST_PATHS_JSON") do
   abort "extract-ruby-tests.rb: TEST_PATHS_JSON env var not set. Caller must export " \
         "it via `TEST_PATHS_JSON=$(pnpm -s vendor:fetch --print-test-paths)`."
 end
-PACKAGE_TEST_DIRS = JSON.parse(TEST_PATHS_JSON)
+PACKAGE_TEST_DIRS =
+  begin
+    parsed = JSON.parse(TEST_PATHS_JSON)
+    unless parsed.is_a?(Hash) && parsed.values.all? { |v| v.is_a?(String) }
+      abort "extract-ruby-tests.rb: TEST_PATHS_JSON must be a JSON object of " \
+            "{string: string}; got #{parsed.class}. Re-run vendor:fetch --print-test-paths."
+    end
+    parsed
+  rescue JSON::ParserError => e
+    abort "extract-ruby-tests.rb: TEST_PATHS_JSON is not valid JSON (#{e.message}). " \
+          "If you set it manually, re-run via `TEST_PATHS_JSON=$(pnpm -s vendor:fetch --print-test-paths)`."
+  end
 
 # Files/directories to skip (infrastructure, not actual tests)
 SKIP_PATTERNS = [

@@ -44,6 +44,23 @@ describe("vendor/fetch.ts parseArgs", () => {
     expect(parseArgs(["--print-test-paths"]).printTestPaths).toBe(true);
   });
 
+  it("--print-test-paths emits valid JSON matching testPathsManifest()", async () => {
+    // Spawn the CLI for real (not just parseArgs) so the integration that
+    // ruby relies on — `TEST_PATHS_JSON=$(pnpm -s vendor:fetch --print-test-paths)`
+    // — gets exercised end-to-end. Catches regressions in stdout shape that
+    // unit-testing the parser alone would miss (extra log lines, banner output,
+    // newline trimming bugs, etc.).
+    const { execFileSync } = await import("node:child_process");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const here = dirname(fileURLToPath(import.meta.url));
+    const out = execFileSync("pnpm", ["-s", "tsx", join(here, "fetch.ts"), "--print-test-paths"], {
+      encoding: "utf8",
+    });
+    const { testPathsManifest } = await import("./sources.js");
+    expect(JSON.parse(out)).toEqual(testPathsManifest());
+  });
+
   it("rejects unknown flags", () => {
     expect(() => parseArgs(["--bogus"])).toThrow(/unknown flag: --bogus/);
   });

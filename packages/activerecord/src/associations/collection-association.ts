@@ -17,7 +17,7 @@ import { RecordNotSaved, Rollback } from "../errors.js";
 export class CollectionAssociation extends Association {
   declare target: Base[];
   nestedAttributesTarget: Base[] | null = null;
-  private _associationIds: unknown[] | null = null;
+  protected _associationIds: unknown[] | null = null;
   _pendingReplace: { newTarget: Base[]; originalTarget: Base[]; wasLoaded: boolean } | null = null;
 
   constructor(owner: Base, definition: AssociationDefinition) {
@@ -580,7 +580,7 @@ export class CollectionAssociation extends Association {
     return JSON.stringify(values.length === 1 ? values[0] : values);
   }
 
-  private primaryKeyValue(record: Base): unknown {
+  protected primaryKeyValue(record: Base): unknown {
     const pk = (this.klass as any).primaryKey ?? "id";
     if (Array.isArray(pk)) {
       return pk.map((key: string) =>

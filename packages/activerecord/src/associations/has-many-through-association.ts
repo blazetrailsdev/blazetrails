@@ -39,6 +39,16 @@ export class HasManyThroughAssociation extends HasManyAssociation {
    * no-ops setOwnerAttributes for through and just calls `record.save`),
    * then creates/saves the join row via the through association.
    */
+  override async idsReader(): Promise<unknown[]> {
+    if (this.isLoaded()) {
+      return this.target.map((r) => this.primaryKeyValue(r));
+    }
+    if (this._associationIds) return this._associationIds as unknown[];
+    const records = await this.doAsyncFindTarget();
+    this._associationIds = records.map((r) => this.primaryKeyValue(r));
+    return this._associationIds as unknown[];
+  }
+
   override async insertRecord(record: Base, validate = true, raise = false): Promise<boolean> {
     ensureNotNested(this);
     const needsTargetSave =

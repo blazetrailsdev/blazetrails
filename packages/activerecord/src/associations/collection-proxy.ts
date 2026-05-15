@@ -948,6 +948,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // Through association (including HABTM): create join records
     if (this._assocDef.options.through) {
       await this._pushThrough(records);
+      this._invalidateAssociationIds();
       return;
     }
 
@@ -1073,6 +1074,11 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         }
       }
     }
+  }
+
+  private _invalidateAssociationIds(): void {
+    const assocInstance = (this._record as any)._associationInstances?.get(this._assocName);
+    if (assocInstance) (assocInstance as any)._associationIds = null;
   }
 
   private _raiseOnTypeMismatch(records: T[]): void {

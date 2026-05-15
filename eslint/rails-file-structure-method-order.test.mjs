@@ -122,6 +122,28 @@ tester.run("rails-file-structure-method-order", rule, {
         `  third() {}\n` +
         `}\n`,
     },
+    // Constructor carve-out: even when `constructor` is NOT in the
+    // manifest (e.g. Rails Struct subclass with no explicit
+    // initialize), it pins to the top of the class rather than falling
+    // into the unmapped tail.
+    {
+      filename: classFile,
+      code:
+        `class X {\n` +
+        `  first() {}\n` +
+        `  third() {}\n` +
+        `  constructor() {}\n` +
+        `  second() {}\n` +
+        `}\n`,
+      errors: [{ messageId: "outOfOrder" }],
+      output:
+        `class X {\n` +
+        `  constructor() {}\n` +
+        `  first() {}\n` +
+        `  second() {}\n` +
+        `  third() {}\n` +
+        `}\n`,
+    },
     // Duplicate-named members (getter/setter pairs, TS overload
     // signatures) stay grouped under reorder. The manifest lists each
     // name once; all same-named nodes travel together to that position.

@@ -151,7 +151,21 @@ function computeTargetOrder(currentNodes, expectedOrder) {
   // Then append remaining unmapped nodes in their current order.
   const used = new Array(currentNodes.length).fill(false);
   const target = [];
+
+  // Constructor carve-out: TS class `constructor` always sorts first
+  // even when not in the manifest. Some Rails classes inherit from
+  // Struct (no explicit `initialize`), so the manifest omits
+  // `constructor` entirely; without this carve-out the constructor
+  // falls into the unmapped tail (visually unusual).
+  for (let i = 0; i < currentNodes.length; i++) {
+    if (!used[i] && names[i] === "constructor") {
+      target.push(currentNodes[i]);
+      used[i] = true;
+    }
+  }
+
   for (const name of expectedOrder) {
+    if (name === "constructor") continue;
     for (let i = 0; i < currentNodes.length; i++) {
       if (used[i]) continue;
       if (names[i] === name) {

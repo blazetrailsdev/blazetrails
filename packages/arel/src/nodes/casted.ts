@@ -97,12 +97,12 @@ export class Casted extends NodeExpression {
  * Mirrors: Arel::Nodes::Quoted (extends Unary; value stored in expr slot)
  */
 export class Quoted extends Unary {
-  get value(): unknown {
-    return this.expr;
-  }
-
   constructor(value: unknown) {
     super(value);
+  }
+
+  get value(): unknown {
+    return this.expr;
   }
 
   valueForDatabase(): unknown {

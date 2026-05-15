@@ -28,10 +28,6 @@ export class Table extends Node {
   readonly klass?: TableKlass;
   private typeCaster: unknown;
 
-  get engine(): unknown {
-    return Table.engine;
-  }
-
   constructor(name: string, options?: { as?: string; klass?: TableKlass; typeCaster?: unknown }) {
     super();
     this.name = name;
@@ -39,6 +35,10 @@ export class Table extends Node {
     this.tableAlias = as === name ? null : as;
     this.klass = options?.klass;
     this.typeCaster = options?.typeCaster ?? null;
+  }
+
+  get engine(): unknown {
+    return Table.engine;
   }
 
   /**

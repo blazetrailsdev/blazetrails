@@ -89,6 +89,13 @@ export class Attribute extends Node {
   readonly name: string;
   readonly caster?: TypeCaster;
 
+  constructor(relation: RelationLike, name: string, caster?: TypeCaster) {
+    super();
+    this.relation = relation;
+    this.name = name;
+    this.caster = caster;
+  }
+
   get typeCaster(): unknown {
     return this.relation.typeForAttribute ? this.relation.typeForAttribute(this.name) : undefined;
   }
@@ -109,13 +116,6 @@ export class Attribute extends Node {
     return typeof this.relation.isAbleToTypeCast === "function"
       ? this.relation.isAbleToTypeCast()
       : false;
-  }
-
-  constructor(relation: RelationLike, name: string, caster?: TypeCaster) {
-    super();
-    this.relation = relation;
-    this.name = name;
-    this.caster = caster;
   }
 
   /**

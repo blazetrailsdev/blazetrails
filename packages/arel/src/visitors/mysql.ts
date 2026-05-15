@@ -11,6 +11,10 @@ import { mysqlDefaultQuoter } from "./default-quoter.js";
  * Mirrors: Arel::Visitors::MySQL
  */
 export class MySQL extends ToSql {
+  constructor(connection: ArelConnection = mysqlDefaultQuoter) {
+    super(connection);
+  }
+
   // Mirrors Rails' MySQL visitor: `CAST(expr AS BINARY)` (the explicit
   // cast form) rather than the prefix-`BINARY ` operator the previous
   // Trails impl used. Both force binary comparison; this matches Rails'
@@ -256,10 +260,6 @@ export class MySQL extends ToSql {
     core.source = new Nodes.JoinSource(new Nodes.Grouping(subselect).as("__active_record_temp"));
     core.projections = [new Nodes.SqlLiteral(this.quoteColumnName(keyName), { retryable: true })];
     return stmt;
-  }
-
-  constructor(connection: ArelConnection = mysqlDefaultQuoter) {
-    super(connection);
   }
 
   protected override prepareDeleteStatement(o: Nodes.DeleteStatement): Nodes.DeleteStatement {

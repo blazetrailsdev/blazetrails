@@ -52,8 +52,7 @@ describe("DelegatedTypeTest", () => {
 
   it("delegated types", () => {
     const { Entry } = makeModels();
-    const e = new Entry({ title: "hi", entryable_type: "Message", entryable_id: 1 });
-    expect(e.entryable_type).toBe("Message");
+    expect((Entry as any).entryableTypes).toEqual(["Message", "Comment"]);
   });
 
   it("delegated class", () => {

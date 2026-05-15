@@ -78,6 +78,15 @@ export function delegatedType(
   }
   (modelClass as any)._delegatedTypes.set(role, config);
 
+  // Class method: Entry.entryableTypes → ["Message", "Comment"]
+  // Mirrors Rails' define_singleton_method("#{role}_types") { types.map(&:to_s) }
+  Object.defineProperty(modelClass, `${role}Types`, {
+    get() {
+      return options.types.map(String);
+    },
+    configurable: true,
+  });
+
   // Add instance method: delegatedClass (e.g. entryableClass)
   Object.defineProperty(modelClass.prototype, `${role}Class`, {
     get(this: Base) {

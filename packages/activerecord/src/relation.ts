@@ -3136,32 +3136,16 @@ export class Relation<T extends Base> {
     cursor?: string | string[];
     errorOnIgnore?: boolean;
   } = {}): AsyncGenerator<T[]> {
-    const pk = this._modelClass.primaryKey;
-    const effectiveCursor = cursor ?? pk;
-    const cursorArr = Array.isArray(effectiveCursor) ? effectiveCursor : [effectiveCursor];
-
-    if (this._orderClauses.length > 0) {
-      this.actOnIgnoredOrder(errorOnIgnore);
-    }
-
-    const batchOrders = _buildBatchOrders(cursorArr, order as any);
-    const rel = this._clone();
-    rel._orderClauses = batchOrders.map(([col, dir]) => [col, dir] as [string, "asc" | "desc"]);
-
-    const batches = await _batchOnUnloadedRelation({
-      relation: rel,
+    for await (const batchRel of this.inBatches({
+      batchSize,
       start,
       finish,
+      order,
+      cursor,
+      errorOnIgnore,
       load: true,
-      cursor: cursorArr,
-      order: (order ?? "asc") as any,
-      useRanges: undefined,
-      remaining: this._limitValue ?? Infinity,
-      batchLimit: batchSize,
-    });
-
-    for (const batch of batches) {
-      yield batch as T[];
+    })) {
+      yield (await (batchRel as any).toArray()) as T[];
     }
   }
 
@@ -3230,6 +3214,7 @@ export class Relation<T extends Base> {
     const pk = this._modelClass.primaryKey;
     const effectiveCursor = cursor ?? pk;
     const cursorArr = Array.isArray(effectiveCursor) ? effectiveCursor : [effectiveCursor];
+    _ensureValidOptionsForBatchingBang(cursorArr, start, finish, (order ?? "asc") as any);
 
     if (this._orderClauses.length > 0) {
       this.actOnIgnoredOrder(errorOnIgnore);

@@ -565,13 +565,9 @@ describe("EachTest", () => {
     expect(batchRels.length).toBeGreaterThan(0);
   });
 
-  it.skip("find in batches should quote batch order", () => {
-    // ROOT-CAUSE fixed: cursor-based order now uses quoted table.column via Arel
-  });
+  it.skip("find in batches should quote batch order", () => {});
 
-  it.skip("find in batches should ignore the order default scope", () => {
-    // ROOT-CAUSE fixed: errorOnIgnore wired; defaultScope order-stripping works
-  });
+  it.skip("find in batches should ignore the order default scope", () => {});
 
   it("find in batches should error on ignore the order", async () => {
     const adp = freshAdapter();
@@ -658,7 +654,7 @@ describe("EachTest", () => {
   });
 
   it.skip("find in batches should use any column as primary key when start is not specified", () => {
-    // ROOT-CAUSE fixed: cursor option now supported; needs Subscriber test fixture
+    // ROOT-CAUSE fixed: cursor option supported; needs Subscriber test fixture
   });
 
   it("in batches update all returns zero when no batches", async () => {
@@ -754,7 +750,7 @@ describe("EachTest", () => {
   });
 
   it.skip("in batches should use any column as primary key when start is not specified", () => {
-    // ROOT-CAUSE fixed: cursor option now supported; needs Subscriber test fixture
+    // ROOT-CAUSE fixed: cursor option supported; needs Subscriber test fixture
   });
 
   it.skip("in_batches should return no records if the limit is 0 and load is ", () => {

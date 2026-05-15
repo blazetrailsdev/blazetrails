@@ -1723,10 +1723,12 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
 }
 
 /**
- * Detect a node-mysql2 driver-level timeout (no MySQL errno). Mirrors
- * Rails' `exception.is_a?(Mysql2::Error::TimeoutError) && !exception.error_number`
+ * Detect a node-mysql2 driver-level timeout (no positive MySQL errno).
+ * Mirrors Rails' `exception.is_a?(Mysql2::Error::TimeoutError) && !exception.error_number`
  * — the node driver surfaces these as `code === 'PROTOCOL_SEQUENCE_TIMEOUT'`
- * or `code === 'ETIMEDOUT'` with no `errno`.
+ * or `code === 'ETIMEDOUT'`. A non-positive `errno` (e.g. libuv's
+ * negative `-ETIMEDOUT`) counts as "no MySQL errno", matching Rails'
+ * `!error_number` predicate which is true for nil and unset values.
  *
  * @internal
  */

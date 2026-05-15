@@ -69,12 +69,17 @@ export class BelongsTo extends SingularAssociation {
         ? (reflection.counterCacheColumn() ?? `${pluralize(underscore(model.name))}_count`)
         : `${pluralize(underscore(model.name))}_count`;
     const targetClassName = reflection.options?.className ?? camelize(name);
-    let targetClass: typeof import("../../base.js").Base | null = null;
-    try {
-      targetClass = resolveAssocClass(model, name, targetClassName);
-    } catch {
-      targetClass = modelRegistry.has(targetClassName) ? resolveModel(targetClassName) : null;
-    }
+    // Rails: `klass = reflection.class_name.safe_constantize` — silently nil
+    // when the target class isn't loaded yet, then guarded by
+    // `if klass && klass.respond_to?(:_counter_cache_columns)`. We mirror
+    // by treating registry-miss as the deferral signal (pending-map path);
+    // namespace-aware resolution via reflection.klass is attempted when the
+    // registry has it, allowing modular class names to resolve correctly.
+    const targetClass: typeof import("../../base.js").Base | null = modelRegistry.has(
+      targetClassName,
+    )
+      ? resolveAssocClass(model, name, targetClassName)
+      : null;
     if (targetClass) {
       const existing: Set<string> = (targetClass as any)._counterCacheColumns ?? new Set();
       existing.add(cacheColumn);

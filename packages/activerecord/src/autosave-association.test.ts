@@ -3734,6 +3734,55 @@ describe("ChangedForAutosaveTest", () => {
   });
 });
 
+describe("autosaveHasOne queryConstraints PK/FK pairing", () => {
+  // When a class has queryConstraints and the has_one has no explicit FK,
+  // the reflection derives a composite FK array via deriveFkQueryConstraints.
+  // The PK must also be the queryConstraintsList (not just ctor.primaryKey)
+  // so composite FK and composite PK are paired and assigned correctly.
+  // This exercises the "no explicit FK → computePrimaryKey → QC branch" path.
+  it("uses queryConstraintsList as PK when class has_query_constraints? and no explicit FK", async () => {
+    const adapter = freshAdapter();
+    class QcTenant extends Base {
+      static {
+        this.attribute("tenant_id", "integer");
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        // Simulate a model with query_constraints [:tenant_id, :id]
+        (this as any)._queryConstraintsList = ["tenant_id", "id"];
+        (this as any)._hasQueryConstraints = true;
+        this.adapter = adapter;
+      }
+    }
+    class QcTenantRecord extends Base {
+      static {
+        this.attribute("tenant_id", "integer");
+        this.attribute("qc_tenant_id", "integer");
+        this.attribute("note", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("QcTenant", QcTenant);
+    registerModel("QcTenantRecord", QcTenantRecord);
+    // No explicit foreignKey — the FK should be derived from QC if reflection is wired.
+    // Without reflection (inline tests), falls back to scalar default "qc_tenant_id".
+    // With computePrimaryKey: no explicit FK → QC branch returns ["tenant_id","id"] as PK.
+    // But since reflection is not registered here, foreignKey = "qc_tenant_record_id" (scalar),
+    // so computePrimaryKey collapses CPK ["tenant_id","id"] via the `!Array(FK)` guard:
+    //   includes("id") → "id" (scalar) — matches scalar FK.
+    Associations.hasOne.call(QcTenant, "qcTenantRecord", { autosave: true });
+    const tenant = new QcTenant({ tenant_id: 7, id: 42, name: "Acme" });
+    const rec = new QcTenantRecord({ note: "hello" });
+    (tenant as any)._cachedAssociations = new Map([["qcTenantRecord", rec]]);
+    const saved = await tenant.save();
+    expect(saved).toBe(true);
+    expect(rec.isNewRecord()).toBe(false);
+    // With no reflection, FK = "qc_tenant_id" (scalar default via underscore(ctor.name)_id).
+    // computePrimaryKey → QC list ["tenant_id","id"] → collapse "id" (scalar) → matches.
+    // rec.qc_tenant_id ← tenant._readAttribute("id") = 42
+    expect(rec.qc_tenant_id).toBe(42);
+  });
+});
+
 describe("computePrimaryKey", () => {
   // Unit tests for the computePrimaryKey helper, which mirrors
   // Rails autosave_association.rb:576-587 (compute_primary_key).

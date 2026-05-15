@@ -552,11 +552,17 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
       assoc.options.foreignKey ??
       `${underscore(ctor.name)}_id`;
     // Mirrors Rails compute_primary_key (autosave_association.rb:576-587):
-    // explicit :primary_key option is returned as-is (line 577), never reaching
-    // the composite_primary_key? fallback — so the CPK "id" collapse only applies
-    // to the class default, not an explicitly set association primaryKey option.
+    // explicit :primary_key is returned as-is (line 577). When no explicit FK option
+    // is set, use computePrimaryKey so the has_query_constraints? branch (line 581)
+    // can return the full queryConstraintsList — needed when reflection.foreignKey is
+    // a QC-derived composite array. When an explicit FK is set, keep ctor.primaryKey
+    // directly (the QC branch is guarded by !reflection.options[:foreign_key] in Rails).
     const explicitPk = assoc.options.primaryKey;
-    let primaryKey: string | string[] = explicitPk ?? ctor.primaryKey;
+    let primaryKey: string | string[] = explicitPk
+      ? explicitPk
+      : assoc.options.foreignKey
+        ? ctor.primaryKey
+        : computePrimaryKey.call(record as unknown as AutosaveAssociationHost, assoc);
     if (!explicitPk && Array.isArray(primaryKey) && !Array.isArray(foreignKey)) {
       // composite_primary_key? branch: if CPK includes "id", assign only that column.
       // If CPK has no "id", leave as array — mismatch branch below throws, matching Rails.

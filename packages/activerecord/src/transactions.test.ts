@@ -2328,4 +2328,45 @@ describe("SchemaAdapter TM delegation", () => {
     expect(outerType).toBe(RealTransaction.name);
     expect(innerType).toBe(SavepointTransaction.name);
   });
+
+  it("concurrent Promise.all top-level transactions are serialized (no shared TM frame)", async () => {
+    // Regression: before the per-inner-adapter mutex + async-chain-aware
+    // delegations, two concurrent top-level transactions would race the
+    // shared TM stack and corrupt instrumenter state (the failure that
+    // hit MariaDB CI).
+    const testAdapter = createTestAdapter();
+    class Item extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = testAdapter;
+      }
+    }
+    // Force a defineSchema-like priming so concurrent creates don't race on DDL.
+    await Item.create({ name: "prime" });
+
+    const observed: Array<{ before: unknown; inside: unknown }> = [];
+    await Promise.all(
+      Array.from({ length: 6 }, (_v, i) =>
+        transaction(Item, async () => {
+          // Each chain must see its own frame inside, and null outside (verified
+          // post-Promise.all). Capture frame identity from the async-chain-aware
+          // currentTransaction() — if foreign chains were leaking, two concurrent
+          // callers would observe the SAME frame here.
+          const before = (testAdapter as any).currentTransaction?.();
+          await Item.create({ name: `concurrent-${i}` });
+          const inside = (testAdapter as any).currentTransaction?.();
+          observed.push({ before, inside });
+        }),
+      ),
+    );
+
+    // After all transactions complete, the adapter's chain-aware view sees
+    // no current transaction (storage cleared).
+    expect((testAdapter as any).currentTransaction?.()).toBeFalsy();
+    // Every chain saw its own frame, and they aren't all the same object —
+    // if the mutex degenerated to "join", every observed.inside would be ===.
+    const distinctFrames = new Set(observed.map((o) => o.inside)).size;
+    expect(distinctFrames).toBeGreaterThan(1);
+    expect(await Item.count()).toBe(7);
+  });
 });

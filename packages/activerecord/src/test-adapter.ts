@@ -982,6 +982,13 @@ class SchemaAdapter implements DatabaseAdapter {
   }
 
   currentTransaction() {
+    // Async-chain-aware: a foreign concurrent caller must NOT see another
+    // chain's TM frame as joinable. database-statements.transaction() checks
+    // currentTransaction() before falling through to withinNewTransaction;
+    // if we exposed a foreign frame here it would "join" and bypass the
+    // outer mutex entirely (Copilot review #3 / #4). Return null when our
+    // own chain has no transaction open.
+    if (_txLockStorage().getStore() !== true) return null;
     return (this.inner as any).currentTransaction?.();
   }
 
@@ -1018,10 +1025,16 @@ class SchemaAdapter implements DatabaseAdapter {
     this.inner.clearCacheBang?.();
   }
   get inTransaction(): boolean {
+    // Async-chain-aware (see currentTransaction comment). transactions.ts:142
+    // uses adapter.inTransaction in the duck-type check; if we returned true
+    // for foreign chains, that caller would route to _transactionFallback and
+    // bypass the outer mutex (Copilot review #4).
+    if (_txLockStorage().getStore() !== true) return false;
     return this.inner.inTransaction;
   }
 
   get openTransactions(): number {
+    if (_txLockStorage().getStore() !== true) return 0;
     return this.inner.openTransactions ?? 0;
   }
 

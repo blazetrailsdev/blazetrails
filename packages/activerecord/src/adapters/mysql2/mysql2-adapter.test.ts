@@ -126,6 +126,11 @@ describeIfMysql("Mysql2Adapter", () => {
       const exists = await Mysql2Adapter.databaseExists(url.toString());
       expect(exists).toBe(false);
     });
+    it("database exists returns true when the database exists", async () => {
+      // Mirrors: test_database_exists_returns_true_when_the_database_exists
+      const exists = await Mysql2Adapter.databaseExists(MYSQL_TEST_URL);
+      expect(exists).toBe(true);
+    });
 
     // FK type-mismatch fixture tables — created/dropped around each test so
     // the FK tests are self-contained. beforeEach/afterEach live directly in

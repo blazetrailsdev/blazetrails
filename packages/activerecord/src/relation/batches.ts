@@ -188,13 +188,16 @@ export async function* batchOnUnloadedRelation(opts: {
   order: "asc" | "desc" | ("asc" | "desc")[];
   batchLimit: number;
   load?: boolean;
+  remaining?: number | null;
 }): AsyncGenerator<any[]> {
-  const { relation, cursor, batchLimit } = opts;
+  const { relation, cursor } = opts;
+  let { batchLimit } = opts;
+  let remaining: number | null | undefined = opts.remaining;
   const batchOrders = buildBatchOrders(cursor, opts.order as any);
   // Apply start/finish limits once on the base relation; advance cursor per
   // iteration — matching Rails' batch_condition(relation, ...) pattern where
   // `relation` is always the original scoped relation, not the previous batch.
-  const baseRelation = applyLimits(relation, cursor, opts.start, opts.finish, batchOrders).limit(
+  let baseRelation = applyLimits(relation, cursor, opts.start, opts.finish, batchOrders).limit(
     batchLimit,
   );
   const cursorArr = Array.isArray(cursor) ? cursor : [cursor];
@@ -213,6 +216,14 @@ export async function* batchOnUnloadedRelation(opts: {
     if (rows.length === 0) break;
     yield rows;
     if (rows.length < batchLimit) break;
+    if (remaining != null) {
+      remaining -= rows.length;
+      if (remaining === 0) break;
+      if (remaining < batchLimit) {
+        batchLimit = remaining;
+        baseRelation = baseRelation.limit(batchLimit);
+      }
+    }
     lastValues = recordCursorValues(rows[rows.length - 1], cursor);
   }
 }

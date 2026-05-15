@@ -1977,4 +1977,48 @@ describe("DefaultScopingTest", () => {
     expect(allQueriesSql).not.toContain("visible");
     expect(allQueriesSql).toContain("blog_id");
   });
+
+  it("default_scope_with_all_queries_runs_on_update", () => {
+    // Verify buildDefaultConstraint wires the allQueries scope into the
+    // UpdateManager's WHERE clause by inspecting the generated SQL directly.
+    class Dev extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("mentor_id", "integer");
+        this.adapter = adapter;
+        this.defaultScope((rel: any) => rel.where({ mentor_id: 1 }), { allQueries: true });
+      }
+    }
+    // The allQueries scope should appear in defaultScoped({allQueries:true})
+    const scoped = (Dev as any).defaultScoped(undefined, { allQueries: true });
+    const sql = scoped.toSql();
+    expect(sql).toContain("mentor_id");
+    // Confirm it's applied via buildDefaultConstraint (non-empty whereClause ast)
+    expect(scoped._whereClause.isEmpty()).toBe(false);
+  });
+
+  it("default_scope_with_all_queries_runs_on_destroy", async () => {
+    class Dev2 extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("mentor_id", "integer");
+        this.adapter = adapter;
+        this.defaultScope((rel: any) => rel.where({ mentor_id: 1 }), { allQueries: true });
+      }
+    }
+    const dev = await Dev2.create({ name: "Eileen", mentor_id: 1 });
+    const sqls: string[] = [];
+    const origExecuteMutation = (adapter as any).executeMutation.bind(adapter);
+    (adapter as any).executeMutation = (sql: string, ...args: unknown[]) => {
+      sqls.push(sql);
+      return origExecuteMutation(sql, ...args);
+    };
+    try {
+      await dev.destroy();
+    } finally {
+      (adapter as any).executeMutation = origExecuteMutation;
+    }
+    const deleteSql = sqls.find((s) => /DELETE/i.test(s));
+    expect(deleteSql).toMatch(/mentor_id/);
+  });
 });

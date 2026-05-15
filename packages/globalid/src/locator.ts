@@ -12,8 +12,15 @@ export interface LocatorModel {
   where?(conditions: Record<string, unknown>): {
     toArray?(): Promise<unknown[]> | unknown[];
   };
-  /** Rails: Model.unscoped { ... } — optional escape hatch UnscopedLocator uses. */
-  unscoped?<T>(block: () => T): T;
+  /**
+   * Rails: `Model.unscoped { ... }` — optional escape hatch
+   * `UnscopedLocator` uses. Block may be sync or async; return matches.
+   * Shape is permissive so AR's `unscoped(block)`
+   * (`(block: () => R | Promise<R>) => Promise<R>`) is assignable
+   * without casts, and a synchronous duck-typed `unscoped(block) => R`
+   * also works.
+   */
+  unscoped?<R>(block: () => R | Promise<R>): R | Promise<R>;
 }
 
 export interface LocateOptions {
@@ -173,7 +180,10 @@ export class UnscopedLocator extends BaseLocator {
   }
 
   /** @internal Mirrors: UnscopedLocator#unscoped. */
-  protected unscoped<T>(klass: LocatorModel | undefined, block: () => T): T {
+  protected unscoped<R>(
+    klass: LocatorModel | undefined,
+    block: () => R | Promise<R>,
+  ): R | Promise<R> {
     return klass?.unscoped ? klass.unscoped(block) : block();
   }
 }

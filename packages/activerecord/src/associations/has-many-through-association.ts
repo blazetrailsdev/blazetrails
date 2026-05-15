@@ -69,8 +69,11 @@ export class HasManyThroughAssociation extends HasManyAssociation {
     // than via the existing `saveThroughRecord` helper because that one
     // filters the through association's target by FK match, which is the
     // wrong direction for the build-and-save path.
+    // Rails: save_through_record unconditionally saves the new join row.
+    // Base has no `changed` getter so the previous `(joinRecord as any).changed`
+    // guard was always falsy, silently skipping join-record creation.
     const joinRecord = buildThroughRecord(this, record);
-    if (joinRecord && (joinRecord as any).changed) {
+    if (joinRecord) {
       const saved = await (joinRecord as any).save({ validate });
       if (!saved) {
         if (raise) raiseValidationError(joinRecord);

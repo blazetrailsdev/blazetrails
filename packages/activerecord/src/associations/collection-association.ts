@@ -138,6 +138,12 @@ export class CollectionAssociation extends Association {
     return flattened;
   }
 
+  /** @internal */
+  async insertRecord(record: Base, _validate = true, _raise = false): Promise<boolean> {
+    this.setOwnerAttributes(record);
+    return !!(await (record as any).save?.());
+  }
+
   private async concatRecords(records: Base[]): Promise<void> {
     let result = true;
     for (const record of records) {
@@ -145,7 +151,7 @@ export class CollectionAssociation extends Association {
       const added = this.addToTarget(record);
       if (!added) continue;
       if (!this.owner.isNewRecord()) {
-        const saved = await insertRecord(this, record, true, false);
+        const saved = await this.insertRecord(record, true, false);
         if (!saved) result = false;
       }
     }

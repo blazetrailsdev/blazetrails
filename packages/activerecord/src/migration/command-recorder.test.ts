@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { CommandRecorder, RecorderTableProxy } from "./command-recorder.js";
+import { CommandRecorder } from "./command-recorder.js";
+import type { RecorderTableProxy } from "./command-recorder.js";
 import { IrreversibleMigration } from "../migration.js";
 
 describe("CommandRecorder", () => {

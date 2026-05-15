@@ -1179,12 +1179,9 @@ export class Table {
   async array(name: string, type: ColumnType, options: ColumnOptions = {}): Promise<void> {
     await this.column(name, type, { ...options, array: true });
   }
-  async remove(
-    name: string,
-    options: { type?: string } & Record<string, unknown> = {},
-  ): Promise<void> {
+  async remove(name: string, options: { type?: string; ifExists?: boolean } = {}): Promise<void> {
     const { type, ...rest } = options;
-    await this._schema.removeColumn(this._tableName, name, type as any, rest);
+    await this._schema.removeColumn(this._tableName, name, type as ColumnType | undefined, rest);
   }
   async rename(oldName: string, newName: string): Promise<void> {
     await this._schema.renameColumn(this._tableName, oldName, newName);

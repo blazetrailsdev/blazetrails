@@ -399,11 +399,18 @@ export class CommandRecorder {
 
   /** @internal */
   invertChangeTable(args: unknown[]): [string, unknown[]] {
-    const [tableName, subCommands] = args as [string, Array<{ cmd: string; args: unknown[] }>];
-    const inverted = [...subCommands].reverse().map(({ cmd, args: subArgs }) => {
-      const [iCmd, iArgs] = this._dispatchInvert(cmd, subArgs);
-      return { cmd: iCmd, args: iArgs };
-    });
+    const [tableName, subCommands] = args as [string, unknown];
+    if (!Array.isArray(subCommands)) {
+      throw new IrreversibleMigration(
+        "change_table is not reversible without captured sub-commands.",
+      );
+    }
+    const inverted = ([...subCommands] as Array<{ cmd: string; args: unknown[] }>)
+      .reverse()
+      .map(({ cmd, args: subArgs }) => {
+        const [iCmd, iArgs] = this._dispatchInvert(cmd, subArgs);
+        return { cmd: iCmd, args: iArgs };
+      });
     return ["changeTable", [tableName, inverted]];
   }
 

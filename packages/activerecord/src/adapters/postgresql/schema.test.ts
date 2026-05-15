@@ -477,15 +477,20 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("prepared statements with multiple schemas", async () => {
-      const Thing5 = await makeThing5Model(adapter);
+      const Thing5 = makeThing5Model(adapter);
       // Load schema within a transaction to pin all queries to one connection.
       // Without this, the pool may route `columns("things")` to a fresh
       // connection without the search path set, returning 0 columns and causing
       // DEFAULT VALUES inserts that silently drop all attributes.
-      await adapter.beginTransaction();
-      await adapter.setSchemaSearchPath(SCHEMA_NAME);
-      await (Thing5 as any).loadSchema();
-      await adapter.commitTransaction();
+      try {
+        await adapter.beginTransaction();
+        await adapter.setSchemaSearchPath(SCHEMA_NAME);
+        await (Thing5 as any).loadSchema();
+        await adapter.commitTransaction();
+      } catch (e) {
+        await adapter.rollbackTransaction();
+        throw e;
+      }
       for (const schema of [SCHEMA_NAME, SCHEMA2_NAME]) {
         await adapter.setSchemaSearchPath(schema);
         await (Thing5 as any).create({

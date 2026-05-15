@@ -42,7 +42,7 @@ export async function makeThingModels(
   return { Thing1, Thing2, Thing3, Thing4 };
 }
 
-export async function makeThing5Model(adapter: PostgreSQLAdapter): Promise<ModelCtor> {
+export function makeThing5Model(adapter: PostgreSQLAdapter): ModelCtor {
   class Thing5 extends Base {
     static {
       this.tableName = "things";

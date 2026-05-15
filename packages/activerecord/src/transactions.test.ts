@@ -2256,6 +2256,12 @@ describe("DirtyTracker.redetectChanges after rollback (Story K-followup)", () =>
 // SchemaAdapter TM delegation regression test (Phase 1)
 // ==========================================================================
 describe("SchemaAdapter TM delegation", () => {
+  // createTestAdapter wraps a shared inner adapter; without local restore,
+  // spies leak into the next test in this file.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   // SchemaAdapter.setup() calls execDdlWithSavepoint which issues
   // this.inner.createSavepoint directly — bypassing TM intentionally.
   // After Phase 1, TM may have an open frame when setup() fires inside a

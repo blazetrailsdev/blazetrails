@@ -16,6 +16,8 @@
  * creation from model definitions — not SQL guessing.
  */
 
+import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
+
 import { inspectExplainOption } from "./adapter.js";
 import type { AdapterName, DatabaseAdapter, ExplainOption } from "./adapter.js";
 import type { SchemaCache } from "./connection-adapters/schema-cache.js";
@@ -77,11 +79,25 @@ let _setupLock: Promise<void> | null = null;
 
 // Per-inner-adapter mutex for outermost withinNewTransaction calls. Rails uses
 // `connection.lock.synchronize` to serialize concurrent transactions on a
-// shared connection; the deleted _transactionFallback had the equivalent via
-// `_adapterLocks`. Routing through TM (Phase 1) loses that serialization, so
-// concurrent `Promise.all([Model.create, Model.create])` callers corrupt the
-// TM stack on the shared inner adapter. This mutex restores serialization.
+// shared connection; the `_transactionFallback` path in `transactions.ts` has
+// the equivalent via `_adapterLocks` (Phase 2 will delete that fallback).
+// SchemaAdapter no longer takes the fallback path after Phase 1, so it loses
+// the fallback's serialization. Concurrent `Promise.all([Model.create, ...])`
+// callers would otherwise corrupt the TM stack on the shared inner adapter.
+// This mutex restores serialization for that case.
+//
+// Reentrancy: AsyncLocalStorage marks "we already hold the lock in THIS async
+// chain." Nested transaction() calls within the same chain (including those
+// fired by after_commit/after_rollback callbacks before
+// inner.withinNewTransaction returns) skip lock acquisition, avoiding deadlock.
+// A concurrent call from a DIFFERENT async chain sees an empty store and
+// correctly blocks on the mutex.
 const _withinNewTxLocks = new WeakMap<object, Promise<void>>();
+let _txLockHeld: AsyncContext<true> | null = null;
+function _txLockStorage(): AsyncContext<true> {
+  if (!_txLockHeld) _txLockHeld = getAsyncContext().create<true>();
+  return _txLockHeld;
+}
 
 async function _acquireWithinNewTxLock(adapter: object): Promise<() => void> {
   while (_withinNewTxLocks.has(adapter)) {
@@ -718,6 +734,12 @@ class SchemaAdapter implements DatabaseAdapter {
       const useSp = isPg() && (this.openTransactions > 0 || this.inTransaction);
       // Force TM materialization (BEGIN on the wire) before SAVEPOINT — TM uses
       // lazy materialization so openTransactions>0 alone doesn't mean BEGIN was sent.
+      // Known limitation: TM.materializeTransactions() returns immediately when
+      // another caller is already materializing, so concurrent statements
+      // inside the same lazy transaction can still race SAVEPOINT-before-BEGIN.
+      // The proper fix lives in TransactionManager (Phase 8 of the plan doc).
+      // The outer mutex in withinNewTransaction prevents the cross-transaction
+      // race that hits MariaDB CI; this case requires deeper TM changes.
       if (useSp) await this.materializeTransactions();
       const sp = useSp ? `_sr_${attempt}` : "";
       try {
@@ -938,13 +960,14 @@ class SchemaAdapter implements DatabaseAdapter {
     fn: (tx?: unknown) => Promise<T> | T,
   ): Promise<T> {
     const inner = this.inner as any;
-    const nested = (inner.openTransactions ?? 0) > 0 || inner.inTransaction;
-    // Only run setup() and acquire the per-adapter mutex on the OUTERMOST
-    // transaction. For nested (requiresNew) calls, running setup() would
-    // drain pending schema work mid-transaction — on MySQL, DDL implicitly
-    // commits the outer transaction so the outer rollback can no longer
-    // undo prior writes.
-    if (nested) return inner.withinNewTransaction(opts, fn);
+    // Detect "nested in our OWN async chain" via AsyncLocalStorage — not via
+    // shared adapter state. An unrelated concurrent transaction on the same
+    // inner adapter must NOT cause us to bypass the mutex (would race the TM
+    // stack); conversely, callbacks fired from within our own transaction
+    // (after_commit, etc.) must skip the lock to avoid self-deadlock.
+    const storage = _txLockStorage();
+    const inOurOwnTx = storage.getStore() === true;
+    if (inOurOwnTx) return inner.withinNewTransaction(opts, fn);
 
     const release = await _acquireWithinNewTxLock(inner);
     try {
@@ -952,7 +975,7 @@ class SchemaAdapter implements DatabaseAdapter {
       // existing invariant): MySQL DDL implicit-commits an open tx; PG would
       // try SAVEPOINT before BEGIN was sent.
       await this.setup();
-      return await inner.withinNewTransaction(opts, fn);
+      return await storage.run(true, () => inner.withinNewTransaction(opts, fn));
     } finally {
       release();
     }

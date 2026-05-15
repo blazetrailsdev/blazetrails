@@ -90,13 +90,8 @@ export class CommandRecorder {
   async changeTable(
     tableName: string,
     options: Record<string, unknown> = {},
-    fn?: (t: RecorderTableProxy) => Promise<void> | void,
+    fn: (t: RecorderTableProxy) => Promise<void> | void,
   ): Promise<void> {
-    if (!fn) {
-      this.record("changeTable", [tableName, options]);
-      return;
-    }
-
     const supportsBulk =
       typeof (this._delegate as any)?.supportsBulkAlter === "function" &&
       (this._delegate as any).supportsBulkAlter() === true;
@@ -658,14 +653,23 @@ export class RecorderTableProxy {
     this._recorder.record("renameColumn", [this._tableName, oldName, newName]);
   }
 
-  remove(name: string, options: Record<string, unknown> = {}): void {
-    const args: unknown[] = [this._tableName, name];
-    if (options["type"]) {
-      args.push(options["type"]);
-      const rest = Object.fromEntries(Object.entries(options).filter(([k]) => k !== "type"));
-      if (Object.keys(rest).length > 0) args.push(rest);
+  remove(...args: [...string[], Record<string, unknown>] | string[]): void {
+    const last = args[args.length - 1];
+    const hasOpts = typeof last === "object" && last !== null;
+    const options = hasOpts ? (args.pop() as Record<string, unknown>) : {};
+    const names = args as string[];
+    if (names.length > 1) {
+      // Multi-column: mirrors Rails Table#remove -> remove_columns (plural)
+      this._recorder.record("removeColumns", [this._tableName, ...names, options]);
+    } else {
+      const colArgs: unknown[] = [this._tableName, names[0]];
+      if (options["type"]) {
+        colArgs.push(options["type"]);
+        const rest = Object.fromEntries(Object.entries(options).filter(([k]) => k !== "type"));
+        if (Object.keys(rest).length > 0) colArgs.push(rest);
+      }
+      this._recorder.record("removeColumn", colArgs);
     }
-    this._recorder.record("removeColumn", args);
   }
 
   change(name: string, type: string, options: Record<string, unknown> = {}): void {

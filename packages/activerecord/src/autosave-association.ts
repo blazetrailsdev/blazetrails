@@ -542,7 +542,15 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
   }
   if (childRecord.isNewRecord() || childRecord.changed) {
     const ctor = record.constructor as typeof Base;
-    const foreignKey = assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
+    // Mirrors Rails save_has_one_association: use the reflection's resolved FK
+    // (handles queryConstraints via deriveFkQueryConstraints when available).
+    const reflection = (ctor as any)._reflectOnAssociation?.(assoc.name);
+    // reflection.foreignKey resolves queryConstraints-derived FK columns;
+    // fall back to the raw option or the default scalar FK.
+    const foreignKey: string | string[] =
+      (reflection && reflection.foreignKey != null ? reflection.foreignKey : null) ??
+      assoc.options.foreignKey ??
+      `${underscore(ctor.name)}_id`;
     // Mirrors Rails compute_primary_key (autosave_association.rb:576-587):
     // explicit :primary_key option is returned as-is (line 577), never reaching
     // the composite_primary_key? fallback — so the CPK "id" collapse only applies

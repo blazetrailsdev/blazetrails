@@ -241,6 +241,7 @@ export {
 } from "./readonly-attributes.js";
 export { RecordInvalid } from "./validations.js";
 export {
+  AssociationTypeMismatch,
   AssociationNotFoundError,
   InverseOfAssociationNotFoundError,
   InverseOfAssociationRecursiveError,

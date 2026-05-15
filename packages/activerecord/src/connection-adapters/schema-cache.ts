@@ -75,14 +75,7 @@ export class SchemaCache {
     try {
       const fs = getFs();
       if (!fs.existsSync(filename)) return null;
-      let data: string;
-      if (filename.endsWith(".gz")) {
-        const raw = fs.readFileSync(filename, "latin1") as string;
-        data = Gzip.decompress(raw);
-      } else {
-        data = SchemaCache.read(filename, (content) => content);
-        if (typeof data !== "string") return null;
-      }
+      const data = SchemaCache.read(filename, (content) => content);
       const parsed = JSON.parse(data);
       const cache = new SchemaCache();
       cache.initWith(parsed);
@@ -92,10 +85,14 @@ export class SchemaCache {
     }
   }
 
+  /** @internal Mirrors SchemaCache.read in Rails: transparently gunzips .gz files. */
   static read<T>(filename: string, callback: (data: string) => T): T {
     const fs = getFs();
-    const content = fs.readFileSync(filename, "utf-8");
-    return callback(content);
+    if (filename.endsWith(".gz")) {
+      const raw = fs.readFileSync(filename, "latin1") as string;
+      return callback(Gzip.decompress(raw));
+    }
+    return callback(fs.readFileSync(filename, "utf-8"));
   }
 
   initializeDup(): SchemaCache {

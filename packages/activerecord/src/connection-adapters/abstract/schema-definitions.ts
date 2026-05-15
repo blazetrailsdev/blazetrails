@@ -616,10 +616,14 @@ export class TableDefinition {
         // Mirrors Rails set_primary_key: outer options (incl. default) merge first,
         // then id.except(:type) merges on top, so hash wins on collision.
         const { type: idType, ...idRest } = this._id as { type?: string; [k: string]: unknown };
-        pkType = ((idType as string) ?? "primary_key") as ColumnType;
+        // Use truthiness so any falsy value (empty string, null) falls back, matching
+        // Rails' `id.delete(:type) || :primary_key`.
+        pkType = (idType || "primary_key") as string as ColumnType;
         pkOpts = { primaryKey: true };
         if (tdOptions.default !== undefined) pkOpts.default = tdOptions.default;
+        // Merge id hash options (charset, collation, limit, etc.) but keep primaryKey: true.
         Object.assign(pkOpts, idRest as Partial<ColumnOptions>);
+        pkOpts.primaryKey = true;
       } else {
         pkType = (typeof this._id === "string" ? this._id : "primary_key") as ColumnType;
         pkOpts = { primaryKey: true };
@@ -629,6 +633,11 @@ export class TableDefinition {
     }
   }
 
+  /**
+   * @todo id parameter doesn't accept the hash form `{ type, collation, ... }` that
+   *   the constructor now supports. createTable doesn't call setPrimaryKey; if a
+   *   caller uses it directly with a hash-form id it must pre-process the hash.
+   */
   setPrimaryKey(
     _tableName: string,
     id: ColumnType | false,
@@ -1050,6 +1059,9 @@ export class TableDefinition {
       if (this._adapterName === "sqlite" && col.options.collation) {
         parts.push(`COLLATE ${this._adapter.quoteIdentifier(col.options.collation)}`);
       } else if (this._adapterName === "mysql") {
+        // MySQL requires CHARACTER SET and COLLATE as bare identifiers — quoteIdentifier
+        // (backtick-wrapping) produces invalid DDL like COLLATE `utf8mb4_bin`.
+        // The safeIdentRe guard substitutes for quoting: only safe charset/collation names pass.
         const safeIdentRe = /^[A-Za-z0-9_]+$/;
         if (col.options.charset) {
           if (!safeIdentRe.test(col.options.charset))

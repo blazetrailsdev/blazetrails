@@ -837,6 +837,20 @@ describeIfMysql("Mysql2Adapter", () => {
       expect((adapter as any).lookupCastType("double")?.limit).toBe(53);
     });
 
+    it("DATA_TYPE maps to Rails semantic type name via the type map", () => {
+      // Ensures columns() emits semantic type names matching Rails rather than raw MySQL DATA_TYPE.
+      const semanticType = (dataType: string) => {
+        const castType = (adapter as any).lookupCastType(dataType);
+        const castName: string = castType.name;
+        return (castName === "value" ? dataType : castName).toLowerCase();
+      };
+      expect(semanticType("varchar")).toBe("string");
+      expect(semanticType("int")).toBe("integer");
+      expect(semanticType("tinyint")).toBe("boolean");
+      expect(semanticType("datetime")).toBe("datetime");
+      expect(semanticType("timestamp")).toBe("datetime");
+    });
+
     it("connect is a no-op and leaves the adapter connected", () => {
       expect(adapter.isConnected()).toBe(true);
       (adapter as any).connect();

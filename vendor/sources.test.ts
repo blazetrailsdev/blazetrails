@@ -149,6 +149,27 @@ describe("vendor/sources.ts", () => {
     expect(pkgs).toContain("abstractcontroller");
   });
 
+  it("apiComparePackages returns exactly the historic 9-entry api-compare set", () => {
+    // Bulletproofs against a future PR that accidentally toggles compareApi on
+    // an api-compared package, or adds/drops a Rails subgem from SOURCES
+    // without updating extract-ruby-api.rb. If extract-ruby-api.rb's PACKAGE_DIRS
+    // gets derived from SOURCES (a future wave), this assertion needs to grow
+    // with it — that's the intended forcing function.
+    expect(apiComparePackages().sort()).toEqual(
+      [
+        "abstractcontroller",
+        "actioncontroller",
+        "actiondispatch",
+        "actionview",
+        "activemodel",
+        "activerecord",
+        "activesupport",
+        "arel",
+        "trailties",
+      ].sort(),
+    );
+  });
+
   it("validateSources rejects missing libPath", () => {
     const bad: UpstreamSource[] = [
       {

@@ -355,11 +355,17 @@ export class MacroReflection extends AbstractReflection {
   protected activeRecordRegistryName(): string {
     const ar = this.activeRecord as any;
     if (Object.prototype.hasOwnProperty.call(ar, "_registryKeys")) {
-      // Filter to keys that actually point to this class (not inherited superclass aliases).
-      const own = (ar._registryKeys as string[]).filter(
+      // Filter to keys that actually point to this class (not inherited superclass aliases),
+      // then prefer the most deeply namespaced key so that a model registered as both
+      // "Author" and "Admin::Author" resolves associations relative to "Admin::Author".
+      const matching = (ar._registryKeys as string[]).filter(
         (k) => modelRegistry.get(k) === this.activeRecord,
       );
-      if (own.length > 0) return own[0];
+      if (matching.length > 0) {
+        return matching.reduce((best, k) =>
+          (k.match(/::/g) ?? []).length > (best.match(/::/g) ?? []).length ? k : best,
+        );
+      }
     }
     return this.activeRecord.name;
   }

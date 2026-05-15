@@ -283,7 +283,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
 
   constructor(record: Base, assocName: string, assocDef: AssociationDefinition) {
     const className = assocDef.options.className ?? camelize(singularize(assocName));
-    const targetModel = resolveModel(className) as typeof Base;
+    // Prefer the rich reflection's klass so namespace-relative resolution applies.
+    const ownerCtor = record.constructor as typeof Base & {
+      _reflectOnAssociation?: (n: string) => { klass?: typeof Base } | null;
+    };
+    const richKlass = ownerCtor._reflectOnAssociation?.(assocName)?.klass;
+    const targetModel = richKlass ?? (resolveModel(className) as typeof Base);
     super(targetModel, targetModel.arelTable);
     this._record = record;
     this._assocName = assocName;

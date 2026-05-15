@@ -4,9 +4,8 @@ import { setSkipGlobalReset, type TestDatabaseAdapter } from "../test-adapter.js
 import { dropAllTables } from "./drop-all-tables.js";
 
 function tm(adapter: DatabaseAdapter): {
-  beginTransaction: (opts: { joinable: boolean; _lazy?: boolean }) => Promise<unknown>;
+  beginTransaction: (opts: { joinable: boolean; _lazy: boolean }) => Promise<unknown>;
   rollbackTransaction: () => Promise<void>;
-  materializeTransactions: () => Promise<void>;
   openTransactions: number;
 } {
   const inner = (adapter as TestDatabaseAdapter).innerAdapter ?? adapter;
@@ -58,9 +57,9 @@ export function withTransactionalFixtures(getAdapter: () => DatabaseAdapter): vo
   });
 
   beforeEach(async () => {
-    const t = tm(getAdapter());
-    await t.beginTransaction({ joinable: false, _lazy: false });
-    await t.materializeTransactions();
+    // Mirrors Rails ConnectionPool#pin_connection!:
+    //   @pinned_connection.begin_transaction joinable: false, _lazy: false
+    await tm(getAdapter()).beginTransaction({ joinable: false, _lazy: false });
   });
 
   afterEach(async () => {

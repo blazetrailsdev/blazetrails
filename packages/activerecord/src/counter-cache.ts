@@ -274,9 +274,13 @@ type InstanceCounterHost = {
  * @internal
  */
 export function registerCounterCachedAssociation(model: any, name: string): void {
-  const existing: Set<string> = model._counterCachedAssociationNames ?? new Set();
-  existing.add(name);
-  model._counterCachedAssociationNames = existing;
+  // Mirror Rails' class_attribute `|=` semantics: copy-on-write so subclass
+  // additions don't mutate the parent class's Set in place.
+  const owns = Object.prototype.hasOwnProperty.call(model, "_counterCachedAssociationNames");
+  const inherited: Set<string> | undefined = model._counterCachedAssociationNames;
+  const next: Set<string> = owns && inherited ? inherited : new Set(inherited ?? []);
+  next.add(name);
+  model._counterCachedAssociationNames = next;
 }
 
 function counterCachedAssociationNames(ctor: typeof Base): string[] {

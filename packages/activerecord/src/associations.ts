@@ -93,7 +93,6 @@ export interface AssociationOptions {
   autosave?: boolean;
   scope?: (rel: any, owner?: any) => any;
   validate?: boolean;
-  readonly?: boolean;
   required?: boolean;
   optional?: boolean;
   beforeAdd?:
@@ -1302,7 +1301,6 @@ export async function loadHasManyThrough(
     if (targetIds.length === 0) return [];
     let rel = targetModel.all().where({ [targetModel.primaryKey as string]: targetIds });
     if (options.scope) rel = options.scope(rel);
-    if (options.readonly) rel = rel.readonlyBang();
     return rel.toArray();
   } else {
     // Source is has_many/has_one: target has FK pointing back to through record
@@ -1320,7 +1318,6 @@ export async function loadHasManyThrough(
     if (sourceAsName) whereConditions[`${underscore(sourceAsName)}_type`] = throughClassName;
     let rel2 = targetModel.all().where(whereConditions);
     if (options.scope) rel2 = options.scope(rel2);
-    if (options.readonly) rel2 = rel2.readonlyBang();
     return rel2.toArray();
   }
 }
@@ -1543,10 +1540,6 @@ export async function loadHabtm(
   // composition (where/order/select/group/having/unscope).
   let rel: any = _scopeForAssociation(targetModel).where(inNode);
   if (options.scope) rel = options.scope(rel);
-  // `readonly: true` flags loaded records as read-only — Rails mirrors
-  // this via Relation#readonly, which propagates `_readonly = true` to
-  // every instance produced by the load (relation.ts:1962-1967).
-  if (options.readonly) rel = rel.readonlyBang();
 
   return rel.toArray();
 }

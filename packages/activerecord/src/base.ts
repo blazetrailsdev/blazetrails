@@ -2809,9 +2809,8 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base#to_gid
    *
-   * When no app is configured the fallback URI has the form
-   * `gid://ClassName/id` (non-standard; GID-3 will require setApp before
-   * producing a parseable URI::GID).
+   * Requires setApp() from \@blazetrails/globalid to be called first;
+   * throws when no app is configured.
    */
   toGid(): string {
     const ctor = this.constructor as typeof Base;

@@ -104,7 +104,7 @@ function buildThroughRecord(assoc: HasManyThroughAssociation, record: Base): Bas
 async function insertHabtmRecord(
   assoc: HasManyThroughAssociation,
   record: Base,
-  validate: boolean,
+  _validate: boolean,
   raise: boolean,
 ): Promise<boolean> {
   const ctor = assoc.owner.constructor as any;
@@ -132,10 +132,13 @@ async function insertHabtmRecord(
     [ownerFk as string]: pkValue,
     [sourceFk]: (record as any)._readAttribute?.(targetPk) ?? (record as any)[targetPk],
   };
-  const joinRecord = new throughModel(joinAttrs);
-  const saved = await (joinRecord as any).save({ validate });
-  if (!saved) {
-    if (raise) raiseValidationError(joinRecord as Base);
+  // Use insertAll (no callbacks/no nested transaction) so we don't create a
+  // second savepoint inside persistReplace's outer transaction — which causes
+  // "SAVEPOINT active_record_N does not exist" on MySQL/MariaDB when the TM
+  // and the fallback path use independent savepoint counters.
+  const count = await throughModel.insertAll([joinAttrs]);
+  if (!count) {
+    if (raise) throw new Error(`Failed to create join record for ${assocDef.name}`);
     return false;
   }
   return true;

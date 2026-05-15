@@ -110,10 +110,14 @@ async function insertHabtmRecord(
   const ctor = assoc.owner.constructor as any;
   const assocDef = assoc.reflection as any;
   const throughName = assocDef.options?.through as string | undefined;
-  if (!throughName) return false;
+  if (!throughName)
+    throw new Error(`HABTM association '${assocDef.name}' on ${ctor.name} has no through name`);
   const associations: AssociationDefinition[] = ctor._associations ?? [];
   const throughAssocDef = associations.find((a: any) => a.name === throughName);
-  if (!throughAssocDef) return false;
+  if (!throughAssocDef)
+    throw new Error(
+      `HABTM association '${assocDef.name}' on ${ctor.name}: through association '${throughName}' not found`,
+    );
   const throughClassName =
     throughAssocDef.options.className ??
     `${ctor.name}::HABTM_${assocDef.name.charAt(0).toUpperCase()}${assocDef.name.slice(1)}`;
@@ -128,8 +132,9 @@ async function insertHabtmRecord(
     [ownerFk as string]: pkValue,
     [sourceFk]: (record as any)._readAttribute?.(targetPk) ?? (record as any)[targetPk],
   };
-  const joinRecord = await throughModel.create(joinAttrs);
-  if (!(joinRecord as any).isPersisted?.()) {
+  const joinRecord = new throughModel(joinAttrs);
+  const saved = await (joinRecord as any).save({ validate });
+  if (!saved) {
     if (raise) raiseValidationError(joinRecord as Base);
     return false;
   }

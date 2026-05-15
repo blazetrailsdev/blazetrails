@@ -37,6 +37,17 @@ describe("vendor/sources.ts", () => {
     expect(rack!.packages).toEqual([{ name: "rack", libPath: "lib", testPath: "test" }]);
   });
 
+  it("declares the globalid source (wave 3)", () => {
+    const gid = SOURCES.find((s) => s.name === "globalid");
+    expect(gid).toBeDefined();
+    expect(gid!.origin).toEqual({
+      type: "git",
+      url: "https://github.com/rails/globalid.git",
+      ref: "v1.3.0",
+    });
+    expect(gid!.packages).toEqual([{ name: "globalid", libPath: "lib", testPath: "test" }]);
+  });
+
   it("contains every scripts/api-compare/config.ts PACKAGES key (parity for wave 4 derivation)", async () => {
     // Wave 4 will derive PACKAGES from SOURCES. SOURCES may legitimately
     // contain extras not in PACKAGES (e.g. "rack" — vendored for test-compare

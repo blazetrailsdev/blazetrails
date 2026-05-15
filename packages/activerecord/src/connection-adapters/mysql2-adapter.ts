@@ -14,6 +14,7 @@ import {
   NotImplementedError,
   SQLWarning,
 } from "../errors.js";
+import { Result } from "../result.js";
 import { CreateIndexDefinition, ForeignKeyDefinition } from "./abstract/schema-definitions.js";
 import type { AddIndexOptions } from "./abstract/schema-definitions.js";
 import { Column } from "./column.js";
@@ -182,7 +183,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return this._driverPool != null;
   }
 
-  private _driverPool: mysql.Pool | null;
+  private _driverPool: mysql.Pool | null = null;
   private _endingPool: Promise<void> | null = null;
   // Set by close() to distinguish permanent teardown from disconnectBang(),
   // which is reconnectable. _checkoutConn() refuses to lazy-reconnect after close().
@@ -280,6 +281,29 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   private _fullVersionString: string | null = null;
   private _database: string | undefined;
 
+  /**
+   * Returns true when the database named in `config` is reachable; false when
+   * the server responds with ER_BAD_DB_ERROR (1049). Mirrors Rails'
+   * `AbstractAdapter.database_exists?(config)` → `new(config).database_exists?`.
+   */
+  static async databaseExists(
+    config: string | (mysql.PoolOptions & MysqlAdapterOptions),
+  ): Promise<boolean> {
+    const adapter = new Mysql2Adapter(config);
+    try {
+      // Any query that requires a real database will trigger ER_BAD_DB_ERROR
+      // if the DB doesn't exist — getConn() already translates it to NoDatabaseError.
+      const conn = await (adapter as any)._checkoutConn();
+      conn.release();
+      return true;
+    } catch (e) {
+      if (e instanceof NoDatabaseError) return false;
+      throw e;
+    } finally {
+      await adapter.close();
+    }
+  }
+
   constructor(config: string | (mysql.PoolOptions & MysqlAdapterOptions)) {
     super();
     if (typeof config === "string") {
@@ -311,8 +335,15 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // hash. Validate & apply the adapter-level keys FIRST so an
     // invalid value fails before `mysql.createPool` runs — otherwise
     // a throw would leave a live pool with no cleanup path.
-    const { statementLimit, preparedStatements, strict, waitTimeout, variables, ...mysqlConfig } =
-      config;
+    const {
+      statementLimit,
+      preparedStatements,
+      strict,
+      waitTimeout,
+      variables,
+      _fakeConnection: fake,
+      ...mysqlConfig
+    } = config as mysql.PoolOptions & MysqlAdapterOptions & { _fakeConnection?: boolean };
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
     this._database =
@@ -345,7 +376,58 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       waitTimeout,
       variables,
     };
-    this._driverPool = Mysql2Adapter.newClient(this._poolConfig, this._buildInitSql());
+    // _fakeConnection: true skips pool creation — used in unit tests that need
+    // an Mysql2Adapter instance without a live DB (mirrors Rails' fake_connection
+    // constructor path: `new Mysql2Adapter(fake_conn, logger, nil, config)`).
+    if (!fake) {
+      this._driverPool = Mysql2Adapter.newClient(this._poolConfig, this._buildInitSql());
+    }
+  }
+
+  /**
+   * Execute a query and return an ActiveRecord::Result. Accepts a `prepare`
+   * option that, when true, forces server-side prepared-statement execution
+   * on this query even if `preparedStatements` is globally off. DML statements
+   * (INSERT/UPDATE/DELETE) are tolerated — they return an empty Result.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::DatabaseStatements#perform_query
+   * (the `prepare:` keyword routing) + Rails' exec_query tolerating no-result DML.
+   */
+  override async execQuery(
+    sql: string,
+    name: string = "SQL",
+    binds: unknown[] = [],
+    options: { prepare?: boolean } = {},
+  ): Promise<Result> {
+    const driverSql = this.mysqlQuote(sql);
+    const driverBinds = this.mysqlBinds(binds);
+    let conn: mysql.PoolConnection | undefined;
+    try {
+      conn = await this.getConn();
+      const prepare = options.prepare ?? this._shouldPrepare(conn, binds);
+      if (prepare) this._trackPrepared(conn, driverSql);
+      const [rawResult] = prepare
+        ? await conn.execute(driverSql, driverBinds as any[])
+        : await conn.query(driverSql, driverBinds);
+      // DML results in a ResultSetHeader (no rows array); SELECT results
+      // in an array of row objects. Return empty Result for DML to avoid
+      // throwing on INSERT/UPDATE/DELETE passed to execQuery.
+      if (!Array.isArray(rawResult)) return new Result([], []);
+      await this._handleWarningsOn(conn, driverSql);
+      return Result.fromRowHashes(rawResult as Record<string, unknown>[]);
+    } catch (e) {
+      if (!conn) throw e;
+      const { error: translated, connReleased } = await this._translateAndEnrich(
+        e,
+        driverSql,
+        driverBinds,
+        conn,
+      );
+      if (connReleased) conn = undefined;
+      throw translated;
+    } finally {
+      if (conn) this.releaseConn(conn);
+    }
   }
 
   /** Returns true for raw mysql2 errors that indicate the database doesn't exist (ER_BAD_DB_ERROR). */

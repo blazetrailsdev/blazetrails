@@ -34,12 +34,13 @@ if [[ "$USE_CACHE" -eq 1 ]]; then
 fi
 
 if [[ "$CACHE_HIT" -eq 0 ]]; then
-  pnpm tsx "$ROOT/vendor/fetch.ts" --source rails
-  pnpm tsx "$ROOT/vendor/fetch.ts" --source rack
-  pnpm tsx "$ROOT/vendor/fetch.ts" --source globalid
-  RAILS_DIR="$(pnpm tsx "$ROOT/vendor/fetch.ts" --print-paths rails)" \
-    RACK_DIR="$(pnpm tsx "$ROOT/vendor/fetch.ts" --print-paths rack)" \
-    GLOBALID_DIR="$(pnpm tsx "$ROOT/vendor/fetch.ts" --print-paths globalid)" \
+  # Single tsx invocation fetches every source registered in vendor/sources.ts.
+  pnpm -s vendor:fetch
+  # Vendored sources always land at $ROOT/vendor/<name> — no need to shell
+  # out to tsx three times just to print the same paths.
+  RAILS_DIR="$ROOT/vendor/rails" \
+    RACK_DIR="$ROOT/vendor/rack" \
+    GLOBALID_DIR="$ROOT/vendor/globalid" \
     ruby "$DIR/extract-ruby-tests.rb"
   pnpm tsx "$DIR/extract-ts-tests.ts"
 fi

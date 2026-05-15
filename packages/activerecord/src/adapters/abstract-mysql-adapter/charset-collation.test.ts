@@ -28,16 +28,14 @@ describeIfMysql("Mysql2Adapter", () => {
       await adapter.dropTable("charset_collations", { ifExists: true });
     });
 
-    it.skip("string column with charset and collation", async () => {
-      // BLOCKED: schema-dump — Rails schema dump emits `id: { type: :string, collation: "utf8mb4_bin" }` form; schema-dumper not yet updated
+    it("string column with charset and collation", async () => {
       const columns = await adapter.columns("charset_collations");
       const col = columns.find((c) => c.name === "string_ascii_bin");
       expect(col?.type).toBe("string");
       expect(col?.collation).toBe("ascii_bin");
     });
 
-    it.skip("text column with charset and collation", async () => {
-      // BLOCKED: schema-dump — Rails schema dump emits `id: { type: :string, collation: "utf8mb4_bin" }` form; schema-dumper not yet updated
+    it("text column with charset and collation", async () => {
       const columns = await adapter.columns("charset_collations");
       const col = columns.find((c) => c.name === "text_ucs2_unicode_ci");
       expect(col?.type).toBe("text");

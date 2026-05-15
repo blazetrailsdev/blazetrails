@@ -884,11 +884,15 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       // On MariaDB, FLOAT COLUMN_TYPE is normalized to "double" which gives limit=53; using
       // DATA_TYPE ("float") correctly yields limit=24 matching Rails' native_database_types.
       const charLimitVal = charLen != null ? Number(charLen) : null;
-      const typeMapLimit =
-        charLimitVal == null ? (this.lookupCastType(baseType)?.limit ?? null) : null;
+      const castType = this.lookupCastType(baseType);
+      const typeMapLimit = charLimitVal == null ? (castType?.limit ?? null) : null;
+      // Map DATA_TYPE ("varchar") to the Rails semantic type ("string") via the type map,
+      // matching how fetchTypeMetadata uses lookupCastType in the SHOW FULL FIELDS path.
+      const rawCastName = (castType?.name ?? baseType).toLowerCase();
+      const semanticType = /^timestamp/.test(rawCastName) ? "datetime" : rawCastName;
       const meta = new SqlTypeMetadata({
         sqlType,
-        type: baseType,
+        type: semanticType,
         limit: charLimitVal ?? typeMapLimit,
         precision: numPrec != null ? Number(numPrec) : null,
         scale: numScale != null ? Number(numScale) : null,

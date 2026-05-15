@@ -613,10 +613,13 @@ export class TableDefinition {
       let pkOpts: ColumnOptions;
       if (typeof this._id === "object" && this._id !== null) {
         // Hash form: id: { type: "string", collation: "utf8mb4_bin" }
-        // Mirrors Rails: set_primary_key merges id.except(:type) into options
+        // Mirrors Rails set_primary_key: outer options (incl. default) merge first,
+        // then id.except(:type) merges on top, so hash wins on collision.
         const { type: idType, ...idRest } = this._id as { type?: string; [k: string]: unknown };
         pkType = ((idType as string) ?? "primary_key") as ColumnType;
-        pkOpts = { primaryKey: true, ...(idRest as Partial<ColumnOptions>) };
+        pkOpts = { primaryKey: true };
+        if (tdOptions.default !== undefined) pkOpts.default = tdOptions.default;
+        Object.assign(pkOpts, idRest as Partial<ColumnOptions>);
       } else {
         pkType = (typeof this._id === "string" ? this._id : "primary_key") as ColumnType;
         pkOpts = { primaryKey: true };

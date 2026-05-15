@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { ApiManifest, ClassInfo, MethodInfo } from "./types.js";
 import { buildGlobalRubyCandidates, buildReport, parseArgs } from "./extra-surface.js";
 
@@ -461,26 +461,21 @@ describe("buildReport — novel vs moved classification", () => {
     expect(f!.extras[0].kind).toBe("moved");
   });
 
-  it("rejects non-integer --top and --max-detail", () => {
-    const proc = process as unknown as { exit: (n: number) => never };
-    const origExit = proc.exit;
-    const origErr = console.error;
-    let exited = false;
-    proc.exit = ((n: number) => {
-      exited = true;
-      throw new Error(`exit:${n}`);
-    }) as never;
-    console.error = () => {};
-    try {
+  describe("integer-only flag validation", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("rejects non-integer --top and --max-detail", () => {
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`exit:${code}`);
+      });
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
       expect(() => parseArgs(["--top", "3.7"])).toThrow(/exit:1/);
-      expect(exited).toBe(true);
-      exited = false;
       expect(() => parseArgs(["--max-detail", "1.5"])).toThrow(/exit:1/);
-      expect(exited).toBe(true);
-    } finally {
-      proc.exit = origExit;
-      console.error = origErr;
-    }
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
   });
 
   it("ranks files by novel count, not raw extra count", () => {

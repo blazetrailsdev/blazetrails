@@ -527,12 +527,22 @@ function pickPalette(): { palette: Palette; colored: boolean } {
     : { palette: COLOR_OFF, colored: false };
 }
 
+/**
+ * Right-pad a colored cell to a target visible width. `colorCount` either
+ * returns plain `String(n)` (no color) or wraps it in ANSI escapes that
+ * vary in length — small novel counts (<5) get no color and large ones
+ * get red+bold+reset (13 invisible chars). Padding off the colored string
+ * with a fixed boost misaligns the table for low-count rows. Compute the
+ * gap from `String(n).length` so every row matches.
+ */
+function padNumCell(n: number, colored: string, width: number): string {
+  const visible = String(n).length;
+  const gap = Math.max(0, width - visible);
+  return " ".repeat(gap) + colored;
+}
+
 function printHumanReport(report: Report, topN: number, maxDetail: number): void {
-  const { palette: p, colored } = pickPalette();
-  // colorCount adds invisible escape characters; widen padding by the
-  // max envelope length so the columns still align when color is on.
-  // Worst case is red+bold+reset = 13 chars (\x1b[31m\x1b[1m...\x1b[0m).
-  const padBoost = colored ? 13 : 0;
+  const { palette: p } = pickPalette();
 
   console.log(`\n${p.bold}Extra TS surface vs Rails${p.reset}  (the inverse of api:compare)`);
   console.log(
@@ -547,9 +557,9 @@ function printHumanReport(report: Report, topN: number, maxDetail: number): void
     `  ${"-".repeat(20)} ${"-".repeat(7)} ${"-".repeat(7)} ${"-".repeat(7)} ${"-".repeat(7)}`,
   );
   for (const pkg of report.packages) {
-    const novel = colorCount(pkg.totalNovel, p);
+    const novel = padNumCell(pkg.totalNovel, colorCount(pkg.totalNovel, p), 7);
     console.log(
-      `  ${pkg.package.padEnd(20)} ${String(pkg.filesWithDrift).padStart(7)} ${novel.padStart(7 + padBoost)} ${String(pkg.totalMoved).padStart(7)} ${String(pkg.totalExtras).padStart(7)}`,
+      `  ${pkg.package.padEnd(20)} ${String(pkg.filesWithDrift).padStart(7)} ${novel} ${String(pkg.totalMoved).padStart(7)} ${String(pkg.totalExtras).padStart(7)}`,
     );
   }
 
@@ -564,9 +574,9 @@ function printHumanReport(report: Report, topN: number, maxDetail: number): void
   );
   for (let i = 0; i < Math.min(topN, report.topN.length); i++) {
     const f = report.topN[i];
-    const c = colorCount(f.novelCount, p);
+    const c = padNumCell(f.novelCount, colorCount(f.novelCount, p), 5);
     console.log(
-      `  ${String(i + 1).padStart(3)}  ${c.padStart(5 + padBoost)}  ${String(f.movedCount).padStart(5)}  ${f.package.padEnd(16)} ${f.tsFile.padEnd(60)}`,
+      `  ${String(i + 1).padStart(3)}  ${c}  ${String(f.movedCount).padStart(5)}  ${f.package.padEnd(16)} ${f.tsFile.padEnd(60)}`,
     );
   }
 

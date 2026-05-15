@@ -422,7 +422,6 @@ describe("InvertibleMigrationTest", () => {
   });
 
   it("migrate revert change table", async () => {
-    // Create horses table with remind_at column
     class CreateHorses extends Migration {
       async change() {
         await this.createTable("horses", (t) => {
@@ -441,21 +440,19 @@ describe("InvertibleMigrationTest", () => {
       }
     }
 
-    async function hasColumn(tbl: string, col: string): Promise<boolean> {
-      const rows = await adapter.execute(`PRAGMA table_info("${tbl}")`);
-      return rows.some((r: any) => r.name === col);
-    }
+    const schemaOf = (m: Migration) => (m as any).schema;
 
-    await makeMigration(new CreateHorses()).up();
-    expect(await hasColumn("horses", "remind_at")).toBe(true);
+    const create = makeMigration(new CreateHorses());
+    await create.up();
+    expect(await schemaOf(create).columnExists("horses", "remind_at")).toBe(true);
 
     const cm = makeMigration(new ChangeHorsesTable());
     await cm.up();
-    expect(await hasColumn("horses", "remind_at")).toBe(false);
-    expect(await hasColumn("horses", "name")).toBe(true);
+    expect(await schemaOf(cm).columnExists("horses", "remind_at")).toBe(false);
+    expect(await schemaOf(cm).columnExists("horses", "name")).toBe(true);
 
     await cm.down();
-    expect(await hasColumn("horses", "remind_at")).toBe(true);
+    expect(await schemaOf(cm).columnExists("horses", "remind_at")).toBe(true);
   });
 });
 

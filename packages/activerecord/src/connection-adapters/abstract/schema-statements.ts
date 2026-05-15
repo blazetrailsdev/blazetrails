@@ -676,11 +676,11 @@ export class SchemaStatements {
         isCheckConstraintExists: (t, opts) => this.isCheckConstraintExists(t, opts as any),
         primaryKey: (t) => this.primaryKey(t),
       };
-      const bulkTable = new Table(tableName, recorder as any);
+      const bulkTable = this.updateTableDefinition(tableName, recorder as any);
       if (callback) await callback(bulkTable);
       await this.bulkChangeTable(tableName, ops);
     } else {
-      const table = new Table(tableName, this);
+      const table = this.updateTableDefinition(tableName, this);
       if (callback) await callback(table);
     }
   }

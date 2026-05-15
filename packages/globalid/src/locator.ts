@@ -240,17 +240,28 @@ export class Locator {
     return locator.locate(parsed, rest);
   }
 
-  /** Mirrors: Locator.locate_many. All GIDs must share an app (Rails parity). */
+  /**
+   * Mirrors: Locator.locate_many. Rails' contract: "All GlobalIDs must
+   * belong to the same app, as they will be located using the same
+   * locator." Rails relies on the caller and silently misroutes
+   * mismatched-app GIDs through the first GID's locator — which is unsafe
+   * with BlockLocators that only know one app's models. We make this
+   * explicit: only GIDs matching the first allowed GID's app are passed
+   * to the locator; the rest are dropped. (Rails-faithful for the
+   * single-app happy path; safer for the mixed-app misuse case.)
+   */
   static async locateMany(
     gids: Array<string | GlobalID>,
     options: LocateOptions = {},
   ): Promise<unknown[]> {
     const allowed = Locator.parseAllowed(gids, options.only);
     if (allowed.length === 0) return [];
+    const app = Locator.normalizeApp(allowed[0].app);
+    const sameApp = allowed.filter((g) => Locator.normalizeApp(g.app) === app);
     const locator = Locator.locatorFor(allowed[0]);
     // Same as locate: strip the only: option before delegating.
     const { only: _, ...rest } = options;
-    return locator.locateMany(allowed, rest);
+    return locator.locateMany(sameApp, rest);
   }
 
   /** Mirrors: Locator.locate_signed */

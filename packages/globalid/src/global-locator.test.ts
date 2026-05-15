@@ -542,4 +542,24 @@ describe("Locator non-Rails coverage — per-app dispatch helpers", () => {
     const found = await Locator.locateMany(["not-a-gid", "gid://bcx/Unknown/1"], {});
     expect(found).toEqual([]);
   });
+
+  it("locateMany filters out mismatched-app GIDs (single-app dispatch invariant)", async () => {
+    // Register an 'other-app' BlockLocator that would crash if asked to
+    // resolve a 'bcx' GID. locateMany should keep only the first-GID-app
+    // entries; the foreign GID is silently dropped.
+    Locator.use("other-app", () => {
+      throw new Error("should not be called — foreign-app GID must be filtered");
+    });
+    const found = await Locator.locateMany(
+      [
+        "gid://bcx/Person/1",
+        "gid://other-app/Person/99", // would route to the throwing locator
+        "gid://bcx/Person/2",
+      ],
+      {},
+    );
+    expect(found).toHaveLength(2);
+    expect((found[0] as Person).id).toBe("1");
+    expect((found[1] as Person).id).toBe("2");
+  });
 });

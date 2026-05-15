@@ -1,7 +1,10 @@
 import { beforeAll, beforeEach, afterEach, afterAll } from "vitest";
 import type { DatabaseAdapter } from "../adapter.js";
-import { setSkipGlobalReset, type TestDatabaseAdapter } from "../test-adapter.js";
-import { dropAllTables } from "./drop-all-tables.js";
+import {
+  resetTestAdapterState,
+  setSkipGlobalReset,
+  type TestDatabaseAdapter,
+} from "../test-adapter.js";
 
 function tm(adapter: DatabaseAdapter): {
   beginTransaction: (opts: { joinable: boolean; _lazy: boolean }) => Promise<unknown>;
@@ -51,9 +54,11 @@ export function withTransactionalFixtures(getAdapter: () => DatabaseAdapter): vo
 
   afterAll(async () => {
     setSkipGlobalReset(false);
-    const adapter = getAdapter();
-    const inner = (adapter as TestDatabaseAdapter).innerAdapter ?? adapter;
-    await dropAllTables(inner);
+    // Use resetTestAdapterState (not raw dropAllTables) so module-level
+    // tracking (_createdTables, _declaredColumns, schemaCache) is cleared
+    // alongside the DB drops. Otherwise a following opt-in file that
+    // also skips the global reset starts with stale in-memory tracking.
+    await resetTestAdapterState();
   });
 
   beforeEach(async () => {

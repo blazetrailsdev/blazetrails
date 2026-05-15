@@ -180,6 +180,26 @@ export function resolveModel(name: string): typeof Base {
 }
 
 /**
+ * Resolve the target model for an association, using the rich reflection's
+ * namespace-aware klass when available, falling back to flat resolveModel.
+ * Safe for polymorphic associations — accessing klass on a polymorphic
+ * reflection throws, so we catch and fall back.
+ * @internal
+ */
+export function resolveAssocClass(record: Base, assocName: string, className: string): typeof Base {
+  const ctor = record.constructor as typeof Base & {
+    _reflectOnAssociation?: (name: string) => { klass?: typeof Base } | null;
+  };
+  try {
+    const richKlass = ctor._reflectOnAssociation?.(assocName)?.klass;
+    if (richKlass) return richKlass;
+  } catch {
+    // polymorphic associations throw on .klass — fall through to flat lookup
+  }
+  return resolveModel(className);
+}
+
+/**
  * Validate that an inverse_of association exists on the target model.
  * Throws InverseOfAssociationNotFoundError if not found.
  */
@@ -648,7 +668,7 @@ export async function loadBelongsTo(
     className = options.className ?? camelize(assocName);
   }
 
-  const targetModel = resolveModel(className);
+  const targetModel = resolveAssocClass(record, assocName, className);
 
   if (options.inverseOf && !options.polymorphic) {
     validateInverseOf(targetModel, assocName, options.inverseOf);
@@ -771,7 +791,7 @@ export async function loadHasOne(
   const className = options.className ?? camelize(assocName);
   const primaryKey = options.primaryKey ?? ctor.primaryKey;
 
-  const targetModel = resolveModel(className);
+  const targetModel = resolveAssocClass(record, assocName, className);
 
   if (options.inverseOf) {
     validateInverseOf(targetModel, assocName, options.inverseOf);
@@ -970,7 +990,7 @@ export async function loadHasMany(
   const className = options.className ?? camelize(singularize(assocName));
   const primaryKey = options.primaryKey ?? ctor.primaryKey;
 
-  const targetModel = resolveModel(className);
+  const targetModel = resolveAssocClass(record, assocName, className);
 
   if (options.inverseOf) {
     validateInverseOf(targetModel, assocName, options.inverseOf);
@@ -1153,7 +1173,7 @@ export function buildHasManyRelation(
   const conditions = computeHasManyWhere(record, assocName, options);
   if (conditions === null) return null;
   const className = options.className ?? camelize(singularize(assocName));
-  const targetModel = resolveModel(className);
+  const targetModel = resolveAssocClass(record, assocName, className);
   let rel = targetModel.all().where(conditions);
   if (options.scope) rel = options.scope(rel);
   return rel;

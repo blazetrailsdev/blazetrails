@@ -23,7 +23,7 @@ import {
   modelRegistry,
   composedOf,
 } from "./index.js";
-import { Associations } from "./associations.js";
+import { Associations, resolveAssocClass } from "./associations.js";
 import { Table } from "@blazetrails/arel";
 
 import { createTestAdapter } from "./test-adapter.js";
@@ -1943,6 +1943,11 @@ describe("ReflectionTest", () => {
     });
     const absRef = reflectOnAssociation(NsBillingAccount, "absoluteFirm");
     expect(absRef!.klass).toBe(NsBizFirm);
+
+    // Runtime: resolveAssocClass uses the reflection layer for namespace-aware
+    // resolution — verifies the actual loading path, not only ref.klass
+    const firmInstance = NsBizFirm.new({ name: "Acme" });
+    expect(resolveAssocClass(firmInstance, "clientsOfFirm", "Client")).toBe(NsBizClient);
   });
 
   it("has and belongs to many reflection", () => {

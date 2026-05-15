@@ -553,18 +553,25 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
       (reflection && reflection.foreignKey != null ? reflection.foreignKey : null) ??
       assoc.options.foreignKey ??
       `${underscore(ctor.name)}_id`;
-    // Mirrors Rails compute_primary_key (autosave_association.rb:576-587):
-    // explicit :primary_key is returned as-is (line 577). When no explicit FK option
-    // is set, use computePrimaryKey so the has_query_constraints? branch (line 581)
-    // can return the full queryConstraintsList — needed when reflection.foreignKey is
-    // a QC-derived composite array. When an explicit FK is set, keep ctor.primaryKey
-    // directly (the QC branch is guarded by !reflection.options[:foreign_key] in Rails).
+    // Mirrors Rails compute_primary_key (autosave_association.rb:576-587).
+    // Use the reflection (when available) so the normalized queryConstraints option
+    // (array FKs are moved there by the reflection constructor) is visible to branch 2.
     const explicitPk = assoc.options.primaryKey;
-    let primaryKey: string | string[] = explicitPk
-      ? explicitPk
-      : assoc.options.foreignKey
-        ? ctor.primaryKey
-        : computePrimaryKey.call(record as unknown as AutosaveAssociationHost, assoc);
+    let primaryKey: string | string[];
+    if (explicitPk) {
+      primaryKey = explicitPk;
+    } else {
+      const candidatePk = computePrimaryKey.call(
+        record as unknown as AutosaveAssociationHost,
+        reflection ?? assoc,
+      );
+      // computePrimaryKey may collapse a CPK to "id" when queryConstraintsList is null
+      // (our queryConstraintsList doesn't auto-return composite PK, unlike Rails).
+      // When that produces a scalar against a composite FK, fall back to ctor.primaryKey
+      // so CPK models with explicit composite FKs still pair correctly.
+      primaryKey =
+        !Array.isArray(candidatePk) && Array.isArray(foreignKey) ? ctor.primaryKey : candidatePk;
+    }
     if (!explicitPk && Array.isArray(primaryKey) && !Array.isArray(foreignKey)) {
       // composite_primary_key? branch: if CPK includes "id", assign only that column.
       // If CPK has no "id", leave as array — mismatch branch below throws, matching Rails.

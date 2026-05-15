@@ -3773,6 +3773,53 @@ describe("ChangedForAutosaveTest", () => {
 });
 
 describe("autosaveHasOne queryConstraints PK/FK pairing", () => {
+  // When a class has queryConstraints and the has_one uses an explicit composite FK,
+  // assoc.options.foreignKey is the composite array. The reflection normalizes it
+  // into options.queryConstraints internally. computePrimaryKey(reflection) therefore
+  // hits branch 2 and returns queryConstraintsList — pairing with the composite FK.
+  it("pairs queryConstraintsList PK with explicit composite FK on QC owner", async () => {
+    const adapter = freshAdapter();
+    class QcOwner extends Base {
+      static {
+        this.attribute("tenant_id", "integer");
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        (this as any)._queryConstraintsList = ["tenant_id", "id"];
+        (this as any)._hasQueryConstraints = true;
+        this.adapter = adapter;
+      }
+    }
+    class QcChild extends Base {
+      static {
+        this.attribute("tenant_id", "integer");
+        this.attribute("qc_owner_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("QcOwner", QcOwner);
+    registerModel("QcChild", QcChild);
+    // Explicit composite FK — assoc.options.foreignKey = ["tenant_id","qc_owner_id"].
+    // The old scalar-guard skipped computePrimaryKey → used ctor.primaryKey = "id" → mismatch.
+    // The fixed code calls computePrimaryKey(reflection) which, via branch 2 (reflection
+    // normalizes array FK into queryConstraints), returns queryConstraintsList = ["tenant_id","id"].
+    Associations.hasOne.call(QcOwner, "qcChild", {
+      className: "QcChild",
+      foreignKey: ["tenant_id", "qc_owner_id"],
+      autosave: true,
+    });
+    const owner = new QcOwner({ tenant_id: 5, id: 11, name: "Corp" });
+    const child = new QcChild({ title: "Doc" });
+    (owner as any)._cachedAssociations = new Map([["qcChild", child]]);
+    const saved = await owner.save();
+    expect(saved).toBe(true);
+    expect(child.isNewRecord()).toBe(false);
+    // PK ["tenant_id","id"] zipped with FK ["tenant_id","qc_owner_id"]:
+    // child.tenant_id ← owner.tenant_id = 5, child.qc_owner_id ← owner.id = 11
+    expect(child.tenant_id).toBe(5);
+    expect(child.qc_owner_id).toBe(11);
+  });
+
   // When a class has queryConstraints and the has_one has no explicit FK,
   // the reflection derives a composite FK array via deriveFkQueryConstraints.
   // The PK must also be the queryConstraintsList (not just ctor.primaryKey)

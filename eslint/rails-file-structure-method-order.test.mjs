@@ -62,6 +62,21 @@ tester.run("rails-file-structure-method-order", rule, {
       filename: classFile,
       code: `class X { first() {} }\n`,
     },
+    // File-level opt-out via @rails-structure-skip JSDoc.
+    {
+      filename: classFile,
+      code: `/** @rails-structure-skip reason="legacy" */\nclass X {\n  third() {}\n  first() {}\n  second() {}\n}\n`,
+    },
+    // Hoisting-scope safety: ClassDeclaration and `const`/`let` are NOT
+    // orderable. A file with only those declarations (no
+    // MethodDefinition or FunctionDeclaration) emits no diagnostic,
+    // even when names would be out of order per the manifest. Guards
+    // against accidental TDZ-risking moves if the rule is later
+    // widened.
+    {
+      filename: fnFile,
+      code: `export const gamma = () => {};\nexport const alpha = () => {};\nexport const beta = () => {};\n`,
+    },
   ],
   invalid: [
     // Class methods out of order.

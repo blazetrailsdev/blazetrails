@@ -193,6 +193,25 @@ const rule = {
     if (!expectedOrder || expectedOrder.length === 0) return {};
 
     const sourceCode = context.sourceCode ?? context.getSourceCode();
+
+    // File-level opt-out: `/** @rails-structure-skip … */` anywhere in
+    // the file's leading-comment block disables this rule for the file.
+    // Per docs/rails-file-structure-mirror-plan.md §5.1; gives a
+    // grep-able audit trail vs. generic `/* eslint-disable */`.
+    for (const c of sourceCode.getAllComments()) {
+      if (c.type === "Block" && /@rails-structure-skip\b/.test(c.value)) {
+        return {};
+      }
+    }
+
+    // Only MethodDefinition (inside ClassBody) and FunctionDeclaration
+    // (top-level, possibly under ExportNamedDeclaration) are orderable.
+    // This is deliberately narrow:
+    //   - Class members have no hoisting/TDZ concern; reordering is safe.
+    //   - FunctionDeclarations are hoisted, so reordering is safe.
+    // Widening to ClassDeclaration / VariableDeclaration / `const x = …`
+    // would risk TDZ violations (plan §7) — don't do it without scope
+    // analysis to verify each move is safe.
     const containers = [];
 
     return {

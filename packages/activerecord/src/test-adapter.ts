@@ -79,6 +79,22 @@ let _setupLock: Promise<void> | null = null;
 let _needsCleanup = false;
 let _cleanupPromise: Promise<void> | null = null;
 
+// When true, the global beforeEach in test-setup-ar.ts skips
+// resetTestAdapterState(). Set by `withTransactionalFixtures` for files that
+// take responsibility for their own per-test state via BEGIN/ROLLBACK around
+// each test, so a one-time schema set up in `beforeAll` survives across tests.
+let _skipGlobalReset = false;
+
+/** @internal */
+export function setSkipGlobalReset(value: boolean): void {
+  _skipGlobalReset = value;
+}
+
+/** @internal */
+export function shouldSkipGlobalReset(): boolean {
+  return _skipGlobalReset;
+}
+
 /** Map ActiveModel type names to SQL column types. */
 function sqlType(typeName: string): string {
   switch (typeName) {

@@ -5983,6 +5983,8 @@ describe("HasManyAssociationsTest", () => {
     // target not loaded — isInclude must query the DB
     expect(proxy.loaded).toBe(false);
     expect(await proxy.isInclude(post as any)).toBe(true);
+    // include? via EXISTS does not load the target (Rails: assert_not loaded?)
+    expect(proxy.loaded).toBe(false);
   });
   it("include returns false for non matching record to verify scoping", async () => {
     class InclScopeAuthor extends Base {

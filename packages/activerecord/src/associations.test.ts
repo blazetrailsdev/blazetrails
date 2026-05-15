@@ -6782,6 +6782,9 @@ describe("AssociationProxyTest", () => {
     await proxy.push(category as any);
     // pushing via through creates the join record but must NOT load the target
     expect(proxy.loaded).toBe(false);
+    // the pushed record is discoverable via include? (Rails: assert_includes)
+    expect(await proxy.isInclude(category as any)).toBe(true);
+    expect(proxy.loaded).toBe(false);
   });
   it("push followed by save does not load target", async () => {
     const { APPost, APComment } = setupProxyModels();

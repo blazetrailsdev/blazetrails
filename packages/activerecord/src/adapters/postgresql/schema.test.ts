@@ -82,9 +82,11 @@ async function setupSchemas(adapter: PostgreSQLAdapter) {
   );
   await adapter.exec(`CREATE SCHEMA IF NOT EXISTS music`);
   await adapter.exec(`CREATE TABLE music.songs (id serial primary key)`);
-  await adapter.exec(`CREATE TABLE music.albums (id serial primary key, name varchar(50))`);
   await adapter.exec(
-    `CREATE TABLE music.songs_albums (song_id integer, album_id integer, PRIMARY KEY (song_id, album_id))`,
+    `CREATE TABLE music.albums (id serial primary key, deleted boolean default false)`,
+  );
+  await adapter.exec(
+    `CREATE TABLE music.albums_songs (album_id integer, song_id integer, PRIMARY KEY (album_id, song_id))`,
   );
 }
 

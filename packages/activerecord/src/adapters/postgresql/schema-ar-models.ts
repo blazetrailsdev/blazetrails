@@ -84,7 +84,8 @@ export function makeSongAlbumModels(adapter: PostgreSQLAdapter): {
       this.adapter = adapter as any;
     }
   }
-  Associations.hasAndBelongsToMany.call(Song, "albums", { joinTable: "music.songs_albums" });
+  // Rails: derive_join_table_name("music.songs", "music.albums") → "music.albums_songs"
+  Associations.hasAndBelongsToMany.call(Song, "albums", { joinTable: "music.albums_songs" });
   registerModel("Song", Song);
   registerModel("Album", Album);
   return {

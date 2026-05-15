@@ -180,22 +180,17 @@ Small Rails-fidelity polish from PR reviews. Subsections group items by topic.
 - **~15 LOC** — `SchemaCache.columns(null, tableName)` null-pool guard. The "case insensitiveness" test had to pre-warm via `adapter.schemaCache.setColumns()` to avoid crashing on null pool. Any future test calling `caseInsensitiveComparison` on a raw adapter hits the same crash. (#1498)
 - **Note** — `test_schema_dump_with_shorthand` regex assertion form differs: Rails `%r[t\.citext "cival"]` (no parens) vs our `/t\.citext\("cival"\)/` (TS parens). Functionally equivalent; the regex was updated in the test, not the dumper. (#1498)
 
-### Callbacks PR 3 aftermath (#1499)
+### Callbacks remaining
 
-- **~5 LOC** — Remove `on?` from `CallbackConditions` in activemodel once PR 4 moves `afterCommit`/`afterRollback`/`afterSaveCommit`/etc. out of `Model`. These methods are the only reason `on?` stays in the interface. (#1499)
-- **~10 LOC (PR 4 territory)** — `resolveCallback` in `activemodel/src/callbacks.ts:172` still checks both `before_save` (snake_case) and `beforeSave` (camelCase). Snake_case branch is dead code per CLAUDE.md. Scoped to PR 4 per convergence plan. (#1499)
-- **~5 LOC** — `CallbackChain.register` accepts `on:` for commit/rollback events without validating the value (validation moved upstream to AR). Direct `chain.register("after", "commit", fn, { on: "bogus" })` silently stores bogus value. Low risk; PR 4 cleanup. (#1499)
-- **Architectural note** — `Model.afterSaveCommit` / `afterCreateCommit` / `afterUpdateCommit` / `afterDestroyCommit` call `this.afterCommit(fn, { on: ... })` which routes through `Base.afterCommit`. These methods arguably belong in AR's `Base`, not `Model` — PR 4 territory. (#1499)
+PRs 1–7 of the convergence merged. Tail-cleanup bundle #1540 closed 5 items; #1550 closed the afterSaveCommit relocation.
 
-### Callbacks convergence aftermath (#1492–#1526)
+**Remaining (~50 LOC, one PR):**
 
 - **~20 LOC** — Targeted test for a model with only `beforeCommit` callbacks to pin the `hasTransactionalCallbacks` path. PR 7 simplified this to check only `commit`/`rollback` chains (before_commit entries live in the `commit` chain as "before"-kind callbacks); prevent future regression. (#1526)
 
-### Callbacks PR 1+2 aftermath (#1492 / #1497)
+**Documented but unfixable:**
 
-- **~5 LOC** — `skipCallback` with `CallbackObject` on `ClassMethods` interface accepted but no dedicated mixin test was added — covered implicitly by the inheritance-clone test. Add a direct mixin-level test for parity. (#1497)
-- **Architectural note** — `resolveCallback` in `activemodel/src/callbacks.ts:172` currently checks both `before_save` snake-case AND `beforeSave` camelCase. PR 3 should decide whether to drop snake-case (camelCase-only per CLAUDE.md) or keep a compatibility shim. (#1497)
-- **Hyphenated chain names** — `beforeMy-save` isn't a valid JS identifier so the object form silently won't dispatch. Same limitation in Rails (Ruby `before_my-save` not valid). Document; `HyphenatedKeyTest` doesn't use the object form. (#1497)
+- Hyphenated chain names — `beforeMy-save` isn't a valid JS identifier so the object form silently won't dispatch. Same limitation in Rails (Ruby `before_my-save` not valid). `HyphenatedKeyTest` doesn't use the object form.
 
 ### Type-audit W1a aftermath (#1500)
 
@@ -316,6 +311,16 @@ Small Rails-fidelity polish from PR reviews. Subsections group items by topic.
 - **~30 LOC** — PG table comment schema dump: forward `adapterTableOpts.comment` in `emitTable`; add `COMMENT ON TABLE` emission after `createTable` in the PG schema dumper (mirroring Rails' `exec_migration` comment hook). `tableOptions()` already queries it; just not forwarded. (#1458)
 - **~20 LOC** — PARTITION BY schema dump: 2 `BLOCKED: adapter-pg` partition tests in `SchemaCreateTableOptionsTest` flow through the same `fetchTableOptions → options:` path; need `tablePartitionDefinition` wired correctly + test bodies. (#1458)
 - **~10 LOC** — `delegatedType` accessor naming gap: current implementation generates `entry.message` (returns FK value); Rails generates `entry.message_id` / `entry.uuid_message_uuid` (type-snake + pk-name). The "accessor" test locks in the wrong behavior; fixing requires a separate PR that also updates that test body. (#1458)
+
+### `delegatedType` followups (post-#1583)
+
+#1583 wired `primaryKey` option + UUID FK accessors + `entryableTypes`. Remaining gaps:
+
+- **~30 LOC** — `entry.message` accessor returns the FK value instead of the associated record. Rails' `define_method singular { public_send(role) if public_send(query) }` calls through the `belongs_to` accessor to return the record. The "accessor" test asserts the FK value (42), locking in wrong behavior. Fix requires the `belongs_to` association accessor to be callable by name. Supersedes the ~10 LOC entry above.
+- **~30 LOC** — `build${Role}` role-level builder is missing. Rails defines `build_entryable(*params)` reading current type, constantizing, calling `.new`. Our "builder method" test tests per-type `buildMessage(attrs)` (which we invented) rather than the Rails role-level builder. `assert_respond_to Entry.new, :build_entryable` would fail.
+- **~20 LOC** — Scope name and singular accessor for namespaced types use raw `snakeName` with slashes (`"admin/messages"` — invalid JS property name). Rails uses `type.tableize.tr("/","_")` = `"admin_messages"`. FK accessor was fixed (replace `/` with `_` before camelizing); scope and singular accessor weren't. Parallel fix.
+- **~5 LOC** — `entryableName` returns plain string; Rails returns `ActiveSupport::StringInquirer` so `entry.entryable_name.message?` works. Test only checks string value. Document deviation permanently or implement StringInquirer-equivalent.
+- Pre-existing snake-case naming deviation — Rails generates `entry.message?` / `entry.comment?` per type. We generate `isMessage()` / `isComment()` (TS convention). `test:compare` matches our camelCase form, so it doesn't flag. Callers expecting Rails naming would find nothing. Document or generate both.
 - **Note for code archaeology** — `schema-dumper.ts:fetchTableOptions` introduced a sync/async union type novel to this codebase; the `void adapterTableOpts.catch(() => {})` swallow in the sync guard may surprise readers. PG `tableOptions()` queries `tableComment()` on every dumped table even when unused — low overhead, worth noting if dump perf becomes a concern. (#1458)
 
 ### Has-one Slot B

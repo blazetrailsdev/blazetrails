@@ -61,7 +61,12 @@ function writeLockfile(lock: Lockfile): void {
   for (const name of Object.keys(lock.sources).sort()) {
     sorted.sources[name] = lock.sources[name];
   }
-  writeFileSync(LOCKFILE_PATH, JSON.stringify(sorted, null, 2) + "\n");
+  const next = JSON.stringify(sorted, null, 2) + "\n";
+  // Only write when content actually changed. Otherwise every no-op fetch
+  // would bump the lockfile mtime and defeat extract-ruby-api.rb's cache
+  // gate (which compares output_path mtime to LOCKFILE_PATH mtime).
+  if (existsSync(LOCKFILE_PATH) && readFileSync(LOCKFILE_PATH, "utf8") === next) return;
+  writeFileSync(LOCKFILE_PATH, next);
 }
 
 async function git(args: string[], cwd: string): Promise<string> {

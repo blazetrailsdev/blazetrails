@@ -73,15 +73,9 @@ describeIfMysql("Mysql2Adapter", () => {
         sqls = await captureSql(() =>
           adapter.addIndex("people", "last_name", { length: 10, using: "btree", algorithm }),
         );
-        if (algorithm === "default") {
-          expect(sqls[0]).toBe(
-            "CREATE INDEX `index_people_on_last_name` USING btree ON `people` (`last_name`(10))",
-          );
-        } else {
-          expect(sqls[0]).toBe(
-            `CREATE INDEX \`index_people_on_last_name\` USING btree ON \`people\` (\`last_name\`(10)) ALGORITHM = ${algorithm.toUpperCase()}`,
-          );
-        }
+        expect(sqls[0]).toBe(
+          `CREATE INDEX \`index_people_on_last_name\` USING btree ON \`people\` (\`last_name\`(10)) ALGORITHM = ${algorithm.toUpperCase()}`,
+        );
       }
 
       await expect(() =>

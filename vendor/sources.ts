@@ -90,14 +90,19 @@ export const SOURCES: readonly UpstreamSource[] = [
         testPath: "activesupport/test",
       },
       {
+        // testPath is the shared `actionpack/test` root — extract-ruby-tests.rb
+        // splits the contents between actiondispatch and actioncontroller via
+        // an in-extractor filter (see PACKAGE_TEST_DIRS loop). Pointing at the
+        // per-subdir path here would shift Ruby-side relative paths and break
+        // matching against TS-side test files.
         name: "actiondispatch",
         libPath: "actionpack/lib/action_dispatch",
-        testPath: "actionpack/test/dispatch",
+        testPath: "actionpack/test",
       },
       {
         name: "actioncontroller",
         libPath: "actionpack/lib/action_controller",
-        testPath: "actionpack/test/controller",
+        testPath: "actionpack/test",
       },
       {
         name: "abstractcontroller",

@@ -45,11 +45,7 @@ class Person {
 }
 // Rails 'Person::Child' equivalent — class extending Person.
 class PersonChild extends Person {}
-// Override static name so toGid produces the right URI.
-Object.defineProperty(PersonChild, "name", { value: "PersonChild" });
-
 class PersonUuid extends Person {}
-Object.defineProperty(PersonUuid, "name", { value: "PersonUuid" });
 
 class CompositePrimaryKeyModel {
   static primaryKey: string[] = ["tenant", "key"];
@@ -65,7 +61,6 @@ class CompositePrimaryKeyModel {
     return new CompositePrimaryKeyModel((arr as string[]).map(String));
   }
 }
-Object.defineProperty(CompositePrimaryKeyModel, "name", { value: "CompositePrimaryKeyModel" });
 
 const REGISTRY: Record<string, LocatorModel> = {
   Person: Person as unknown as LocatorModel,
@@ -73,10 +68,6 @@ const REGISTRY: Record<string, LocatorModel> = {
   PersonUuid: PersonUuid as unknown as LocatorModel,
   CompositePrimaryKeyModel: CompositePrimaryKeyModel as unknown as LocatorModel,
 };
-
-// Wrapper that matches the GlobalID.create contract — accepts model instances.
-const gidOf = (record: { id: unknown; constructor: { name: string } }, opts: object = {}) =>
-  GlobalID.create(record, opts as never);
 
 // ─── GlobalLocatorTest ─────────────────────────────────────────────────────
 
@@ -92,9 +83,9 @@ describe("GlobalLocatorTest", () => {
     setApp(TEST_APP);
     setModelFinder((name) => REGISTRY[name]);
     verifier = makeVerifier();
-    personGid = gidOf(new Person("id"));
-    cpkGid = gidOf(new CompositePrimaryKeyModel(["tenant-key-value", "id-value"]));
-    uuidGid = gidOf(new PersonUuid(UUID));
+    personGid = GlobalID.create(new Person("id"));
+    cpkGid = GlobalID.create(new CompositePrimaryKeyModel(["tenant-key-value", "id-value"]));
+    uuidGid = GlobalID.create(new PersonUuid(UUID));
     personSgid = SignedGlobalID.create(new Person("id"), { verifier });
     cpkSgid = SignedGlobalID.create(
       new CompositePrimaryKeyModel(["tenant-key-value", "id-value"]),
@@ -126,7 +117,7 @@ describe("GlobalLocatorTest", () => {
   });
 
   it("by GID with only: restriction with match subclass", async () => {
-    const childGid = gidOf(new PersonChild("1"));
+    const childGid = GlobalID.create(new PersonChild("1"));
     const found = await Locator.locate(childGid, { only: Person as unknown as LocatorModel });
     expect(found).toBeInstanceOf(PersonChild);
   });
@@ -149,7 +140,10 @@ describe("GlobalLocatorTest", () => {
   });
 
   it("by many GIDs of one class", async () => {
-    const found = await Locator.locateMany([gidOf(new Person("1")), gidOf(new Person("2"))]);
+    const found = await Locator.locateMany([
+      GlobalID.create(new Person("1")),
+      GlobalID.create(new Person("2")),
+    ]);
     expect(found).toHaveLength(2);
     expect((found[0] as Person).id).toBe("1");
     expect((found[1] as Person).id).toBe("2");
@@ -162,7 +156,7 @@ describe("GlobalLocatorTest", () => {
   });
 
   it("by many GIDs of a UUID pk class with ignore missing", async () => {
-    const gids = [uuidGid, gidOf(new PersonUuid("missing")), uuidGid];
+    const gids = [uuidGid, GlobalID.create(new PersonUuid("missing")), uuidGid];
     const found = await Locator.locateMany(gids, { ignoreMissing: true });
     expect(found).toHaveLength(2);
   });
@@ -172,7 +166,7 @@ describe("GlobalLocatorTest", () => {
       new CompositePrimaryKeyModel(["tenant-key-value", "id-value"]),
       new CompositePrimaryKeyModel(["tenant-key-value2", "id-value2"]),
     ];
-    const found = await Locator.locateMany(records.map((r) => gidOf(r)));
+    const found = await Locator.locateMany(records.map((r) => GlobalID.create(r)));
     expect(found).toHaveLength(2);
     expect((found[0] as CompositePrimaryKeyModel).id).toEqual(["tenant-key-value", "id-value"]);
     expect((found[1] as CompositePrimaryKeyModel).id).toEqual(["tenant-key-value2", "id-value2"]);
@@ -180,8 +174,8 @@ describe("GlobalLocatorTest", () => {
 
   it("#locate_many by composite primary key GIDs of different classes", async () => {
     const records = [
-      gidOf(new CompositePrimaryKeyModel(["tenant-key-value", "id-value"])),
-      gidOf(new Person("1")),
+      GlobalID.create(new CompositePrimaryKeyModel(["tenant-key-value", "id-value"])),
+      GlobalID.create(new Person("1")),
     ];
     const found = await Locator.locateMany(records);
     expect(found).toHaveLength(2);
@@ -191,9 +185,9 @@ describe("GlobalLocatorTest", () => {
 
   it("by many GIDs of mixed classes", async () => {
     const found = await Locator.locateMany([
-      gidOf(new Person("1")),
-      gidOf(new PersonChild("1")),
-      gidOf(new Person("2")),
+      GlobalID.create(new Person("1")),
+      GlobalID.create(new PersonChild("1")),
+      GlobalID.create(new Person("2")),
     ]);
     expect(found).toHaveLength(3);
     expect((found[0] as Person).id).toBe("1");
@@ -203,7 +197,11 @@ describe("GlobalLocatorTest", () => {
 
   it("by many GIDs with only: restriction to match subclass", async () => {
     const found = await Locator.locateMany(
-      [gidOf(new Person("1")), gidOf(new PersonChild("1")), gidOf(new Person("2"))],
+      [
+        GlobalID.create(new Person("1")),
+        GlobalID.create(new PersonChild("1")),
+        GlobalID.create(new Person("2")),
+      ],
       { only: PersonChild as unknown as LocatorModel },
     );
     expect(found).toHaveLength(1);
@@ -369,6 +367,8 @@ describe("GlobalLocatorTest", () => {
     expect(await Locator.locate("http://app/Person/1")).toBeNull();
     expect(await Locator.locate("gid://Person/1")).toBeNull();
     expect(await Locator.locate("gid://app/Person")).toBeNull();
+    // Scalar-PK model with composite-form id — exercises modelIdIsValid arity.
+    expect(await Locator.locate("gid://app/Person/1/2")).toBeNull();
   });
 
   it("locating by a GID URI with a mismatching model_id returns nil", async () => {

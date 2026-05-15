@@ -76,7 +76,7 @@ remaining 7 need `expires_in` class-level config (GID-8), `model_class`
 backwards-compat with legacy self-validated metadata (out of scope).
 `verifier.test.ts` ships with GID-11 once a Verifier wrapper exists.
 
-**GID-6c** — expanded `global-locator.test.ts` to 37 tests across the
+**GID-6c** — open in [#1644](https://github.com/blazetrailsdev/trails/pull/1644); expanded `global-locator.test.ts` to 37 tests across the
 GlobalLocatorTest mirror covering `Locator.locate` / `locateMany` /
 `locateSigned` / `locateManySigned` with `only:` / `ignoreMissing:` /
 `for:` permutations plus subclass, UUID, composite-PK fixture models.

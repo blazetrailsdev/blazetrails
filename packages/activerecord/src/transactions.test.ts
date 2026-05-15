@@ -2346,18 +2346,26 @@ describe("SchemaAdapter TM delegation", () => {
     // Force a defineSchema-like priming so concurrent creates don't race on DDL.
     await Item.create({ name: "prime" });
 
-    const observed: Array<{ before: unknown; inside: unknown }> = [];
+    const observed: Array<{ inside: unknown }> = [];
+    // Track concurrent execution: increment on entry, decrement on exit.
+    // The mutex should keep this at 1 for the entire run.
+    let active = 0;
+    let maxActive = 0;
     await Promise.all(
       Array.from({ length: 6 }, (_v, i) =>
         transaction(Item, async () => {
-          // Each chain must see its own frame inside, and null outside (verified
-          // post-Promise.all). Capture frame identity from the async-chain-aware
-          // currentTransaction() — if foreign chains were leaking, two concurrent
-          // callers would observe the SAME frame here.
-          const before = (testAdapter as any).currentTransaction?.();
-          await Item.create({ name: `concurrent-${i}` });
-          const inside = (testAdapter as any).currentTransaction?.();
-          observed.push({ before, inside });
+          active++;
+          if (active > maxActive) maxActive = active;
+          try {
+            // Each chain must see its own frame inside. If foreign chains
+            // were leaking, two concurrent callers would observe the SAME
+            // frame here.
+            await Item.create({ name: `concurrent-${i}` });
+            const inside = (testAdapter as any).currentTransaction?.();
+            observed.push({ inside });
+          } finally {
+            active--;
+          }
         }),
       ),
     );
@@ -2365,6 +2373,8 @@ describe("SchemaAdapter TM delegation", () => {
     // After all transactions complete, the adapter's chain-aware view sees
     // no current transaction (storage cleared).
     expect((testAdapter as any).currentTransaction?.()).toBeFalsy();
+    // Mutex must have fully serialized — no two bodies ever overlapped.
+    expect(maxActive).toBe(1);
     // Every chain must have seen a frame (no nulls/undefined) AND each frame
     // must be distinct — if the mutex degenerated to "join", or if a chain
     // saw the empty NULL_TRANSACTION, this would fail.
@@ -2376,5 +2386,43 @@ describe("SchemaAdapter TM delegation", () => {
     const distinctFrames = new Set(observed.map((o) => o.inside)).size;
     expect(distinctFrames).toBe(observed.length);
     expect(await Item.count()).toBe(7);
+  });
+
+  it("manual beginTransaction/commit pair exposes inner state via _manualTxDepth", async () => {
+    // Direct adapter.beginTransaction() callers (query-cache tests,
+    // migrations, fixtures) don't enter withinNewTransaction so they don't
+    // set the AsyncLocalStorage flag. _manualTxDepth tracks them per
+    // wrapper so the chain-aware delegations expose inner state.
+    const testAdapter = createTestAdapter();
+    class Item extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = testAdapter;
+      }
+    }
+    // Prime the schema before beginTransaction so MySQL DDL doesn't
+    // implicit-commit the manual transaction.
+    await Item.create({ name: "prime" });
+
+    // Before any manual tx: state hidden.
+    expect((testAdapter as any).inTransaction).toBe(false);
+    expect((testAdapter as any).openTransactions).toBe(0);
+    expect((testAdapter as any).currentTransaction?.()).toBeNull();
+
+    await testAdapter.beginTransaction();
+    // After manual BEGIN: inner state visible to this wrapper.
+    expect((testAdapter as any).inTransaction).toBe(true);
+    expect((testAdapter as any).openTransactions).toBeGreaterThan(0);
+
+    await testAdapter.commit();
+    // After commit: state hidden again.
+    expect((testAdapter as any).inTransaction).toBe(false);
+    expect((testAdapter as any).openTransactions).toBe(0);
+
+    // Rollback path also clears.
+    await testAdapter.beginTransaction();
+    expect((testAdapter as any).inTransaction).toBe(true);
+    await testAdapter.rollback();
+    expect((testAdapter as any).inTransaction).toBe(false);
   });
 });

@@ -104,8 +104,17 @@ let _setupLock: Promise<void> | null = null;
 //      per-instance). Phase 7 deletes SchemaAdapter so this becomes moot.
 const _withinNewTxLocks = new WeakMap<object, Promise<void>>();
 let _txLockHeld: AsyncContext<true> | null = null;
+let _txLockHeldAdapter: ReturnType<typeof getAsyncContext> | null = null;
 function _txLockStorage(): AsyncContext<true> {
-  if (!_txLockHeld) _txLockHeld = getAsyncContext().create<true>();
+  // Recreate storage if ActiveSupport.asyncContextAdapter is swapped at
+  // runtime (matches the pattern in transactions.ts / core.ts /
+  // explain-registry.ts). Caching the first adapter forever would leak
+  // visibility state across browser-compat / DI swaps.
+  const asyncContext = getAsyncContext();
+  if (!_txLockHeld || _txLockHeldAdapter !== asyncContext) {
+    _txLockHeld = asyncContext.create<true>();
+    _txLockHeldAdapter = asyncContext;
+  }
   return _txLockHeld;
 }
 
@@ -1011,8 +1020,9 @@ class SchemaAdapter implements DatabaseAdapter {
     // chain's TM frame as joinable. database-statements.transaction() checks
     // currentTransaction() before falling through to withinNewTransaction;
     // if we exposed a foreign frame here it would "join" and bypass the
-    // outer mutex entirely (Copilot review #3 / #4). Return null when our
-    // own chain has no transaction open.
+    // outer mutex entirely (failure mode: Promise.all top-level transactions
+    // observing each other's frame as joinable, breaking serialization).
+    // Return null when our own chain has no transaction open.
     if (!this._txVisible()) return null;
     return (this.inner as any).currentTransaction?.();
   }
@@ -1060,8 +1070,9 @@ class SchemaAdapter implements DatabaseAdapter {
   get inTransaction(): boolean {
     // Async-chain-aware (see currentTransaction comment). transactions.ts:142
     // uses adapter.inTransaction in the duck-type check; if we returned true
-    // for foreign chains, that caller would route to _transactionFallback and
-    // bypass the outer mutex (Copilot review #4).
+    // for foreign chains, that caller would route to _transactionFallback,
+    // bypass the outer mutex, and run as a nested savepoint inside the
+    // unrelated chain's transaction.
     if (!this._txVisible()) return false;
     return this.inner.inTransaction;
   }

@@ -895,6 +895,11 @@ export class Base extends Model {
     return _Core.arelTable.call(this);
   }
 
+  /** @internal */
+  static get predicateBuilder(): import("./relation/predicate-builder.js").PredicateBuilder {
+    return _Core.predicateBuilder.call(this);
+  }
+
   /**
    * Create the database table for this model from its attribute definitions.
    * Drops the table first if it already exists to handle schema changes

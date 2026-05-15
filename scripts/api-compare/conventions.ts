@@ -30,6 +30,7 @@ export function snakeToCamel(name: string): string {
  */
 const FILE_OVERRIDES: Record<string, string> = {
   "activerecord:railtie.rb": "trailtie.ts",
+  "actioncontroller:railtie.rb": "trailtie.ts",
 };
 
 /**

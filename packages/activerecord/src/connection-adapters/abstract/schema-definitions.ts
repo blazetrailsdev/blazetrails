@@ -228,6 +228,7 @@ export interface ColumnOptions {
   ifExists?: boolean;
   ifNotExists?: boolean;
   autoIncrement?: boolean;
+  unsigned?: boolean;
 }
 
 export interface AddIndexOptions {

@@ -94,8 +94,9 @@ export function pushSkipGlobalReset(): void {
 }
 
 /** @internal */
-export function popSkipGlobalReset(): void {
+export function popSkipGlobalReset(): number {
   if (_skipGlobalResetDepth > 0) _skipGlobalResetDepth -= 1;
+  return _skipGlobalResetDepth;
 }
 
 /** @internal */

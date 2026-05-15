@@ -64,8 +64,10 @@ export function withTransactionalFixtures(getAdapter: () => TestDatabaseAdapter)
   });
 
   afterAll(async () => {
-    popSkipGlobalReset();
-    await resetTestAdapterState();
+    // Only reset when the outermost scope exits, mirroring Rails
+    // ConnectionPool#unpin_connection! finalizing at depth zero
+    // (connection_pool.rb:347).
+    if (popSkipGlobalReset() === 0) await resetTestAdapterState();
   });
 
   beforeEach(async () => {

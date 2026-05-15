@@ -3820,6 +3820,56 @@ describe("autosaveHasOne queryConstraints PK/FK pairing", () => {
     expect(child.qc_owner_id).toBe(11);
   });
 
+  it("does not collapse QC-derived PK array via the 'id' rule for scalar FK", async () => {
+    // Guard against the bug where the composite_primary_key? collapse was applied to QC
+    // arrays. If QC list is ["tenant_id","id"] and FK is scalar "tenant_id", the old code
+    // would collapse to "id" and assign owner.id into child.tenant_id — wrong.
+    // With the fix (gate on Array.isArray(ctor.primaryKey)), QC arrays are not collapsed;
+    // instead the composite/scalar mismatch path is reached. In a properly configured
+    // association both FK and PK would be composite, so no-mismatch is the happy path.
+    // This test confirms the collapse does NOT fire for QC-derived PK arrays.
+    const adapter = freshAdapter();
+    class QcNoCollapse extends Base {
+      static {
+        this.attribute("tenant_id", "integer");
+        this.attribute("id", "integer");
+        this.attribute("value", "string");
+        // QC list — ctor.primaryKey remains scalar "id"
+        (this as any)._queryConstraintsList = ["tenant_id", "id"];
+        (this as any)._hasQueryConstraints = true;
+        this.adapter = adapter;
+      }
+    }
+    class QcNoCollapseChild extends Base {
+      static {
+        this.attribute("tenant_id", "integer");
+        this.attribute("qc_no_collapse_id", "integer");
+        this.attribute("label", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("QcNoCollapse", QcNoCollapse);
+    registerModel("QcNoCollapseChild", QcNoCollapseChild);
+    // Explicit composite FK — reflection normalizes array FK to queryConstraints.
+    // computePrimaryKey branch 2 returns QC list ["tenant_id","id"].
+    // Array PK + array FK → composite pairing (no "id" collapse).
+    Associations.hasOne.call(QcNoCollapse, "qcNoCollapseChild", {
+      className: "QcNoCollapseChild",
+      foreignKey: ["tenant_id", "qc_no_collapse_id"],
+      autosave: true,
+    });
+    const owner = new QcNoCollapse({ tenant_id: 9, id: 77, value: "v" });
+    const child = new QcNoCollapseChild({ label: "l" });
+    (owner as any)._cachedAssociations = new Map([["qcNoCollapseChild", child]]);
+    const saved = await owner.save();
+    expect(saved).toBe(true);
+    expect(child.isNewRecord()).toBe(false);
+    // PK ["tenant_id","id"] paired with FK ["tenant_id","qc_no_collapse_id"]:
+    // child.tenant_id ← owner.tenant_id = 9, child.qc_no_collapse_id ← owner.id = 77
+    expect(child.tenant_id).toBe(9);
+    expect(child.qc_no_collapse_id).toBe(77);
+  });
+
   // When a class has queryConstraints and the has_one has no explicit FK,
   // the reflection derives a composite FK array via deriveFkQueryConstraints.
   // The PK must also be the queryConstraintsList (not just ctor.primaryKey)

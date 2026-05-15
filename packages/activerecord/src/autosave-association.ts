@@ -572,9 +572,16 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
       primaryKey =
         !Array.isArray(candidatePk) && Array.isArray(foreignKey) ? ctor.primaryKey : candidatePk;
     }
-    if (!explicitPk && Array.isArray(primaryKey) && !Array.isArray(foreignKey)) {
-      // composite_primary_key? branch: if CPK includes "id", assign only that column.
-      // If CPK has no "id", leave as array — mismatch branch below throws, matching Rails.
+    // Mirrors Rails composite_primary_key? collapse (autosave_association.rb:582-585):
+    // collapse only when the PK array IS the class composite primary key (not a QC-derived
+    // list). QC branch returns early before reaching composite_primary_key? in Rails,
+    // so we gate on Array.isArray(ctor.primaryKey) — QC models typically keep scalar PK.
+    if (
+      !explicitPk &&
+      Array.isArray(ctor.primaryKey) &&
+      Array.isArray(primaryKey) &&
+      !Array.isArray(foreignKey)
+    ) {
       if ((primaryKey as string[]).includes("id")) primaryKey = "id";
     }
     if (Array.isArray(primaryKey) && Array.isArray(foreignKey)) {

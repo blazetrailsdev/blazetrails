@@ -208,7 +208,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         await (Song as any).loadSchema();
         await (Album as any).loadSchema();
         const song = await (Song as any).create({});
-        const album = await (Album as any).create({ name: "Test Album" });
+        const album = await (Album as any).create({});
         await song.albums.push(album);
         const found = await (Song as any).joins("albums").where({ "albums.id": album.id }).first();
         expect(found.id).toBe(song.id);

@@ -64,8 +64,7 @@ export { BasicAuth, TokenAuth, DigestAuth } from "./metal/http-authentication.js
 export { Renderer } from "./renderer.js";
 export { Deprecator, deprecator } from "./deprecator.js";
 export { TestRequest } from "../action-dispatch/testing/test-request.js";
-export { LiveTestResponse } from "../action-dispatch/testing/test-response.js";
-export { TestSession } from "../action-dispatch/testing/test-process.js";
+export { LiveTestResponse, TestSession } from "./test-case.js";
 export { fragmentCacheKey } from "./caching.js";
 export {
   setDefaultFormBuilder,

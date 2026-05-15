@@ -607,9 +607,24 @@ class SchemaAdapter implements DatabaseAdapter {
   }
 
   private inner: DatabaseAdapter;
+  // Counts manual beginTransaction()/commit()/rollback() pairs on this
+  // wrapper instance. Direct callers (migrations, fixtures, query-cache
+  // tests) don't go through withinNewTransaction so they don't set the
+  // AsyncLocalStorage flag — without this counter the chain-aware
+  // delegations would hide the transaction state from them.
+  private _manualTxDepth = 0;
 
   constructor(inner: DatabaseAdapter) {
     this.inner = inner;
+  }
+
+  /**
+   * True when this caller should see the inner adapter's transaction state.
+   * Either we entered through withinNewTransaction (storage set) or the
+   * caller manually opened a transaction on this wrapper instance.
+   */
+  private _txVisible(): boolean {
+    return _txLockStorage().getStore() === true || this._manualTxDepth > 0;
   }
 
   get schemaCache(): SchemaCache | undefined {
@@ -988,7 +1003,7 @@ class SchemaAdapter implements DatabaseAdapter {
     // if we exposed a foreign frame here it would "join" and bypass the
     // outer mutex entirely (Copilot review #3 / #4). Return null when our
     // own chain has no transaction open.
-    if (_txLockStorage().getStore() !== true) return null;
+    if (!this._txVisible()) return null;
     return (this.inner as any).currentTransaction?.();
   }
 
@@ -1004,13 +1019,22 @@ class SchemaAdapter implements DatabaseAdapter {
     // Run pending DDL before beginning the transaction because MySQL DDL
     // causes implicit commits which destroy savepoints and break nesting.
     await this.setup();
-    return this.inner.beginTransaction();
+    await this.inner.beginTransaction();
+    this._manualTxDepth++;
   }
   async commit(): Promise<void> {
-    return this.inner.commit();
+    try {
+      await this.inner.commit();
+    } finally {
+      if (this._manualTxDepth > 0) this._manualTxDepth--;
+    }
   }
   async rollback(): Promise<void> {
-    return this.inner.rollback();
+    try {
+      await this.inner.rollback();
+    } finally {
+      if (this._manualTxDepth > 0) this._manualTxDepth--;
+    }
   }
   async createSavepoint(name: string): Promise<void> {
     return this.inner.createSavepoint(name);
@@ -1029,12 +1053,12 @@ class SchemaAdapter implements DatabaseAdapter {
     // uses adapter.inTransaction in the duck-type check; if we returned true
     // for foreign chains, that caller would route to _transactionFallback and
     // bypass the outer mutex (Copilot review #4).
-    if (_txLockStorage().getStore() !== true) return false;
+    if (!this._txVisible()) return false;
     return this.inner.inTransaction;
   }
 
   get openTransactions(): number {
-    if (_txLockStorage().getStore() !== true) return 0;
+    if (!this._txVisible()) return 0;
     return this.inner.openTransactions ?? 0;
   }
 

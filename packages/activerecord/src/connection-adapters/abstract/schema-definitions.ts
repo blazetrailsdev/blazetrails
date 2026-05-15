@@ -240,7 +240,7 @@ export interface AddIndexOptions {
   type?: string;
   comment?: string;
   ifNotExists?: boolean;
-  length?: number | Record<string, number>;
+  length?: number | null | Record<string, number>;
   opclass?: Record<string, string>;
   include?: string[];
   nullsNotDistinct?: boolean;
@@ -285,7 +285,7 @@ export class IndexDefinition {
     options: {
       where?: string;
       orders?: Record<string, string>;
-      lengths?: number | Record<string, number>;
+      lengths?: number | null | Record<string, number>;
       opclasses?: Record<string, string>;
       type?: string;
       using?: string;

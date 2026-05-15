@@ -671,6 +671,10 @@ export class SchemaStatements {
         removeTimestamps: rec("removeTimestamps"),
         addReference: rec("addReference"),
         removeReference: rec("removeReference"),
+        // Read-only predicates pass through to the real SchemaStatements so conditional
+        // patterns (t.isColumnExists, t.isIndexExists) work inside bulk blocks.
+        columnExists: (t, col) => this.columnExists(t, col),
+        indexExists: (t, col, opts) => this.indexExists(t, col, opts as any),
       };
       const bulkTable = new Table(tableName, recorder as any);
       if (callback) await callback(bulkTable);
@@ -1497,7 +1501,7 @@ export class SchemaStatements {
             : null;
       const forAlterMethod = forAlterTarget ? forAlterTarget[`${command}ForAlter`] : null;
       if (typeof forAlterMethod === "function") {
-        const result = forAlterMethod.call(forAlterTarget, table, ...arguments_);
+        const result = await forAlterMethod.call(forAlterTarget, table, ...arguments_);
         const results = Array.isArray(result) ? result : [result];
         for (const r of results) {
           if (typeof r === "string") {

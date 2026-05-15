@@ -141,8 +141,8 @@ export class CollectionAssociation extends Association {
   /** @internal */
   async insertRecord(record: Base, validate = true, raise = false): Promise<boolean> {
     this.setOwnerAttributes(record);
-    if (raise) {
-      await (record as any).saveBang?.({ validate });
+    if (raise && typeof (record as any).saveBang === "function") {
+      await (record as any).saveBang({ validate });
       return true;
     }
     return !!(await (record as any).save?.({ validate }));

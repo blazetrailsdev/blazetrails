@@ -7,7 +7,7 @@ import {
 } from "./errors.js";
 import { compositeQueryConstraintsList } from "../persistence.js";
 import { raiseValidationError } from "../validations.js";
-import { underscore, singularize } from "@blazetrails/activesupport";
+import { underscore, singularize, camelize } from "@blazetrails/activesupport";
 import { resolveAssocClass } from "../associations.js";
 
 function safeKlass(refl: { klass?: unknown } | null | undefined): any {
@@ -119,8 +119,7 @@ async function insertHabtmRecord(
       `HABTM association '${assocDef.name}' on ${ctor.name}: through association '${throughName}' not found`,
     );
   const throughClassName =
-    throughAssocDef.options.className ??
-    `${ctor.name}::HABTM_${assocDef.name.charAt(0).toUpperCase()}${assocDef.name.slice(1)}`;
+    throughAssocDef.options.className ?? `${ctor.name}::HABTM_${camelize(assocDef.name)}`;
   const throughModel = resolveAssocClass(assoc.owner, throughName, throughClassName);
   const ownerPk = throughAssocDef.options.primaryKey ?? ctor.primaryKey ?? "id";
   const ownerFk = throughAssocDef.options.foreignKey ?? `${underscore(ctor.name)}_id`;

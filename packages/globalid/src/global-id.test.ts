@@ -76,9 +76,12 @@ describe("GlobalIDCreationTest", () => {
 
   it("as JSON", () => {
     const gid = GlobalID.create(fakeModel(5));
-    // Mirror Rails GlobalID#as_json — returns the URI string; JSON.stringify wraps in quotes.
-    expect(gid.toString()).toBe("gid://bcx/Person/5");
-    expect(JSON.stringify(gid.toString())).toBe('"gid://bcx/Person/5"');
+    // Mirror Rails GlobalID#as_json — JSON.stringify(gid) calls toJSON() and
+    // serializes to the URI string, wrapped in quotes.
+    expect(JSON.stringify(gid)).toBe('"gid://bcx/Person/5"');
+    expect(JSON.stringify(GlobalID.create(fakeModel(4, "Person::Child")))).toBe(
+      '"gid://bcx/Person::Child/4"',
+    );
   });
 
   it("model id", () => {

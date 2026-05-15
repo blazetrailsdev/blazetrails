@@ -11,12 +11,15 @@ findSignedGlobalId / findSignedGlobalIdBang.
 
 ### Parity scoreboard (after GID-6a)
 
-| Signal       | Current          | 100% target | Gap          |
-| ------------ | ---------------- | ----------- | ------------ |
-| api:compare  | 19 / 59 (32.2%)  | 59 / 59     | 40 methods   |
-| test:compare | 55 / 158 (34.8%) | 158 / 158   | 103 tests    |
-| files (api)  | 4 / 5            | 5 / 5       | verifier.ts  |
-| files (test) | 5 / 8            | 8 / 8       | 3 test files |
+Targets are **pre-skip** — the unportable-surface skip list (see below)
+brings the practical 100% to 56/56 api / 149/149 tests.
+
+| Signal       | Current          | 100% target (pre-skip) | Gap          |
+| ------------ | ---------------- | ---------------------- | ------------ |
+| api:compare  | 19 / 59 (32.2%)  | 59 / 59                | 40 methods   |
+| test:compare | 55 / 158 (34.8%) | 158 / 158              | 103 tests    |
+| files (api)  | 4 / 5            | 5 / 5                  | verifier.ts  |
+| files (test) | 5 / 8            | 8 / 8                  | 3 test files |
 
 Per-file api:compare:
 
@@ -46,7 +49,8 @@ Pinned to globalid 1.3.0 via `vendor/sources.ts`.
 
 ## Path to 100% — remaining work
 
-Five PRs, ordered cheapest-first. Each stays under the 300 LOC ceiling.
+~10 PRs (GID-6a/b/c + GID-7..11 with 10a/10b/10c sub-PRs), ordered
+cheapest-first. Each stays under the 300 LOC ceiling.
 
 ### GID-6 — Test parity sweep (~3 PRs, ~600 LOC total)
 

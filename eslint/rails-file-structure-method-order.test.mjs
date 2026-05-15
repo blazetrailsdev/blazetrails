@@ -104,6 +104,28 @@ try {
           `  };\n` +
           `}\n`,
       },
+      // Class nested inside an arrow function — also rejected. The
+      // ancestor walk catches ArrowFunctionExpression too.
+      {
+        filename: classFile,
+        code: `const mk = () => class {\n  third() {}\n  first() {}\n  second() {}\n};\n`,
+      },
+      // Class nested inside another class's method — also rejected.
+      // The ancestor walk catches MethodDefinition before reaching
+      // Program.
+      {
+        filename: classFile,
+        code:
+          `class Outer {\n` +
+          `  build() {\n` +
+          `    return class {\n` +
+          `      third() {}\n` +
+          `      first() {}\n` +
+          `      second() {}\n` +
+          `    };\n` +
+          `  }\n` +
+          `}\n`,
+      },
       // Hoisting-scope safety: ClassDeclaration and `const`/`let` are NOT
       // orderable. A file with only those declarations (no
       // MethodDefinition or FunctionDeclaration) emits no diagnostic,

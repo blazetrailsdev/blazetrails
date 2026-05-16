@@ -159,9 +159,13 @@ function openDatabase(config: SqliteOpenConfig): import("node:sqlite").DatabaseS
     enableForeignKeyConstraints: false, // match better-sqlite3 default
   };
   if (config.timeout !== undefined) opts.timeout = config.timeout;
-  // `config.strict` is intentionally unread: node:sqlite's DatabaseSync
-  // options object does not expose the SQLITE_DBCONFIG_DQS_DDL/DML flags,
-  // so there is nothing to attach the strict toggle to here.
+  // node:sqlite's `enableDoubleQuotedStringLiterals` defaults to false (DQS
+  // off = strict), so leaving it alone for `strict: false` would still open
+  // a strict connection. Map from config.strict to keep AR's setting and
+  // the actual driver behavior in lockstep.
+  if (config.strict !== undefined) {
+    opts.enableDoubleQuotedStringLiterals = !config.strict;
+  }
   return new nodeSqlite.DatabaseSync(config.database, opts);
 }
 

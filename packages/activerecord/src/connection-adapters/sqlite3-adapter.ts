@@ -1392,7 +1392,10 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     if (name.includes(".")) {
       // Schema-qualified name (e.g. "aux.widgets") — pragma_table_list does
       // not accept a schema scope, so fall back to the attached catalog.
+      // Mirror the bare-name exclusions so qualified and unqualified callers
+      // agree on names like `aux.sqlite_sequence`.
       const { sqliteMaster, bare } = this._sqliteMasterFor(name);
+      if (bare === "sqlite_sequence" || bare === "sqlite_schema") return false;
       const rows = (await this.execute(
         `SELECT 1 AS one FROM ${sqliteMaster} WHERE type IN ('table','view') AND name=${sqliteQuoteStringLiteral(bare)}`,
         [],
@@ -2087,7 +2090,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
             "Async drivers require an async constructor path (not yet implemented).",
         );
       }
-      const syncConn = factory.openSync({ database: this._filename, readOnly: this._readonly });
+      const syncConn = factory.openSync({
+        database: this._filename,
+        readOnly: this._readonly,
+        strict: this._strict,
+      });
       // Pre-warm version cache while the connection is a known-sync handle so
       // getDatabaseVersion() never needs to touch this.driver directly. (#1269)
       const vRow = syncConn.prepare("SELECT sqlite_version() AS v").get() as any;

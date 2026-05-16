@@ -128,6 +128,22 @@ function parseModelId(raw: string, modelName: string): string | string[] {
   return parts.length === 1 ? parts[0] : parts;
 }
 
+/**
+ * @internal Normalize a raw modelId input (scalar or array) into the
+ * same shape parseGid produces: stringify with `?? ""` (parity with
+ * buildGid), filter empty segments, cap at COMPOSITE_MODEL_ID_MAX_SIZE,
+ * collapse to a single string when arity = 1. Shared by GlobalID.create
+ * and GID.build so their skip-parse paths agree with the round-trip
+ * through parseGid(buildGid(...)).
+ */
+export function normalizeModelId(raw: unknown): string | string[] {
+  const parts = (Array.isArray(raw) ? raw : [raw])
+    .map((p) => String(p ?? ""))
+    .filter((p) => p.length > 0)
+    .slice(0, COMPOSITE_MODEL_ID_MAX_SIZE);
+  return parts.length === 1 ? parts[0] : parts;
+}
+
 function parseQueryParams(qs: string | undefined): Record<string, string> {
   if (!qs) return {};
   const result: Record<string, string> = {};
@@ -233,17 +249,10 @@ export class GID {
     params?: Record<string, string> | null;
   }): GID {
     const uri = buildGid(args.app, args.modelName, args.modelId, args.params);
-    // Construct components directly from inputs — buildGid already validated
-    // them, so skipping the round-trip through parseGid saves a regex match
-    // + URL decode pass. modelId is normalized to the same shape parseGid
-    // produces: arrays for composite, string for scalar.
-    const modelId = Array.isArray(args.modelId)
-      ? args.modelId.map((p) => String(p))
-      : String(args.modelId ?? "");
     return new GID(uri, {
       app: args.app,
       modelName: args.modelName,
-      modelId,
+      modelId: normalizeModelId(args.modelId),
       params: args.params ?? {},
     });
   }

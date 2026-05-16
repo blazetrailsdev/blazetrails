@@ -1,5 +1,11 @@
 import { getApp } from "./config.js";
-import { buildGid, parseGid, validateApp, type GidComponents } from "./uri/gid.js";
+import {
+  buildGid,
+  normalizeModelId,
+  parseGid,
+  validateApp,
+  type GidComponents,
+} from "./uri/gid.js";
 
 export interface GlobalIDModel {
   id: unknown;
@@ -49,19 +55,10 @@ export class GlobalID {
     const modelName = model.constructor.name;
     const params = Object.keys(filteredParams).length ? filteredParams : null;
     const uri = buildGid(app, modelName, model.id, params);
-    // Skip the parseGid round-trip — mirror its modelId normalization
-    // here: stringify with `?? ""` (matching buildGid), filter empty
-    // segments, collapse to a single string when arity = 1. buildGid
-    // guarantees the segment is non-empty overall (throws otherwise),
-    // so `parts` is always at least one element here.
-    const idParts = (Array.isArray(model.id) ? model.id : [model.id])
-      .map((p) => String(p ?? ""))
-      .filter((p) => p.length > 0);
-    const modelId: string | string[] = idParts.length === 1 ? idParts[0] : idParts;
     const components: GidComponents = {
       app,
       modelName,
-      modelId,
+      modelId: normalizeModelId(model.id),
       params: params ?? {},
     };
     return new GlobalID(uri, components);

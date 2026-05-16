@@ -65,6 +65,8 @@ export class Route {
   private readonly paramNames: string[];
   /** @internal lazy single-route Journey router for match() */
   private _journeyRouter: JourneyRouter | null = null;
+  /** @internal true once we've discovered the path can't be parsed */
+  private _journeyRouterUnbuildable = false;
 
   constructor(
     verb: string,
@@ -157,11 +159,19 @@ export class Route {
     if (this.verb !== "ALL" && this.verb !== m && !(m === "HEAD" && this.verb === "GET")) {
       return null;
     }
+    if (this._journeyRouterUnbuildable) return null;
     if (this._journeyRouter === null) {
-      // Path-only matcher: skip request constraints since match() takes
-      // no request attributes — preserves legacy matchSegments semantics
-      // where request constraints (subdomain, format, …) didn't apply.
-      this._journeyRouter = buildJourneyRouter([this], { skipRequestConstraints: true });
+      try {
+        // Path-only matcher: skip request constraints since match() takes
+        // no request attributes — preserves legacy matchSegments semantics
+        // where request constraints (subdomain, format, …) didn't apply.
+        this._journeyRouter = buildJourneyRouter([this], { skipRequestConstraints: true });
+      } catch {
+        // Mirrors collectParamNamesFromJourneyAst's swallow-and-cache policy:
+        // a malformed path shouldn't crash the route table at match time.
+        this._journeyRouterUnbuildable = true;
+        return null;
+      }
     }
     const match = journeyRecognize(this._journeyRouter, method, requestPath);
     if (!match) return null;

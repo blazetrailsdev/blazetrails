@@ -44,6 +44,14 @@ describe("Route", () => {
       expect(route.match("GET", "/posts")).not.toBeNull();
     });
 
+    it("returns null without throwing when the path is unparseable", () => {
+      // Mirrors the Journey-parser swallow in collectParamNamesFromJourneyAst:
+      // a malformed path shouldn't crash the route table at match time.
+      const route = new Route("GET", "/posts/(unclosed", "posts", "show");
+      expect(() => route.match("GET", "/posts/anything")).not.toThrow();
+      expect(route.match("GET", "/posts/anything")).toBeNull();
+    });
+
     it("still enforces path-capture constraints", () => {
       const route = new Route("GET", "/posts/:id", "posts", "show", {
         constraints: { id: /\d+/ },

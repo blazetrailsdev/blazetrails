@@ -209,13 +209,13 @@ export class Association {
           if (i === 0) {
             association.setInverseInstance(record);
           }
+          if (!(owner as any)._preloadedAssociations) {
+            (owner as any)._preloadedAssociations = new Map();
+          }
+          (owner as any)._preloadedAssociations.set(this.reflection.name, record);
         } catch {
           // Ignore
         }
-        if (!(owner as any)._preloadedAssociations) {
-          (owner as any)._preloadedAssociations = new Map();
-        }
-        (owner as any)._preloadedAssociations.set(this.reflection.name, record);
       }
     }
   }

@@ -91,6 +91,25 @@ describe("RouteSet — Journey bridge", () => {
     expect(m!.params).toEqual({ controller: "users", action: "show" });
   });
 
+  it("journeyRecognize does not leak defaults into missing optional captures", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/posts(/:id)", { to: "posts#index", defaults: { id: "1" } });
+    });
+    const m = routes.journeyRecognize("GET", "/posts");
+    expect(m).not.toBeNull();
+    expect(m!.params).not.toHaveProperty("id");
+  });
+
+  it("journeyRecognize normalizes paths (leading slash, trailing slash)", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/posts", { to: "posts#index" });
+    });
+    expect(routes.journeyRecognize("GET", "/posts/")).not.toBeNull();
+    expect(routes.journeyRecognize("GET", "posts")).not.toBeNull();
+  });
+
   it("journeyRecognize params hold only path captures (defaults stripped)", () => {
     const routes = new RouteSet();
     routes.draw((r) => {

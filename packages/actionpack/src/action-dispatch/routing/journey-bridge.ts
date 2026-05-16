@@ -12,6 +12,7 @@ import { Pattern } from "../journey/path/pattern.js";
 import { Route as JourneyRoute, VerbMatchers } from "../journey/route.js";
 import { Routes as JourneyRoutes } from "../journey/routes.js";
 import { Router as JourneyRouter, type RouterRequest } from "../journey/router.js";
+import { normalizePath } from "../journey/router/utils.js";
 import type { Route as LocalRoute } from "./route.js";
 
 const SEPARATORS = "/.?";
@@ -66,22 +67,28 @@ export function journeyRecognize(
   method: string,
   path: string,
 ): JourneyMatch | null {
+  const pathInfo = normalizePath(path);
   const req: RouterRequest = {
-    pathInfo: path,
+    pathInfo,
     scriptName: "",
     requestMethod: method.toUpperCase(),
     pathParameters: {},
   };
   let result: JourneyMatch | null = null;
   try {
-    router.recognize(req, (journeyRoute, parameters) => {
+    router.recognize(req, (journeyRoute) => {
       const local = JOURNEY_TO_LOCAL.get(journeyRoute);
       if (!local) return;
-      const captureNames = new Set(journeyRoute.path.names);
+      // Re-match against the pattern so we get *only* captured segments —
+      // the parameters Router.recognize yields are merged with defaults,
+      // which leaks defaults into optional captures (e.g. /posts(/:id)
+      // with defaults={id:"1"} matching /posts).
+      const match = journeyRoute.path.match(pathInfo);
       const params: Record<string, string> = {};
-      for (const name of captureNames) {
-        const v = parameters[name];
-        if (v != null) params[name] = String(v);
+      if (match) {
+        for (const [name, value] of Object.entries(match.namedCaptures)) {
+          if (value != null) params[name] = value;
+        }
       }
       result = { route: local, params };
       // Router.recognize iterates all matches; short-circuit so large route

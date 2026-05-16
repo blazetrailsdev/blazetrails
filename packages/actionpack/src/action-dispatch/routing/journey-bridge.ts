@@ -104,7 +104,17 @@ export function journeyRecognize(
 const STOP = Symbol("journey-bridge-stop");
 
 function stripAnchors(source: string): string {
-  return source.replace(/^\^/, "").replace(/\$$/, "");
+  let s = source;
+  if (s.startsWith("^")) s = s.slice(1);
+  // Only strip a trailing `$` if it's a true end-of-string anchor — i.e. not
+  // preceded by an odd number of backslashes (which would mean it's `\$`,
+  // a literal dollar sign).
+  if (s.endsWith("$")) {
+    let backslashes = 0;
+    for (let i = s.length - 2; i >= 0 && s[i] === "\\"; i--) backslashes++;
+    if (backslashes % 2 === 0) s = s.slice(0, -1);
+  }
+  return s;
 }
 
 function regexpRequirements(c: Record<string, unknown>): Record<string, RegExp> {

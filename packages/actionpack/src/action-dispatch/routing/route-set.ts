@@ -13,7 +13,11 @@ import { bodyFromString } from "@blazetrails/rack";
 import { Mapper } from "./mapper.js";
 import type { MatchedRoute } from "./route.js";
 import { Route } from "./route.js";
-import { buildJourneyRouter, journeyRecognize, type JourneyMatch } from "./journey-bridge.js";
+import {
+  buildJourneyRouter,
+  journeyRecognize as recognizeViaJourney,
+  type JourneyMatch,
+} from "./journey-bridge.js";
 import type { Router as JourneyRouter } from "../journey/router.js";
 
 export type DrawCallback = (mapper: Mapper) => void;
@@ -64,7 +68,7 @@ export class RouteSet {
 
   /** Route lookup via the Journey-backed router. */
   journeyRecognize(method: string, path: string): JourneyMatch | null {
-    return journeyRecognize(this.journeyRouter, method, path);
+    return recognizeViaJourney(this.journeyRouter, method, path);
   }
 
   /**

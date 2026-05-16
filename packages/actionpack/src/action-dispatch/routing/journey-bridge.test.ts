@@ -81,6 +81,16 @@ describe("RouteSet — Journey bridge", () => {
     expect(routes.journeyRecognize("GET", "/posts/x")).toBeNull();
   });
 
+  it("journeyRecognize preserves escaped \\$ in constraints (only strips true anchors)", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      // Constraint matches a literal `$` followed by digits.
+      r.get("/posts/:id", { to: "posts#show", constraints: { id: /\$\d+/ } });
+    });
+    expect(routes.journeyRecognize("GET", "/posts/$5")).not.toBeNull();
+    expect(routes.journeyRecognize("GET", "/posts/abc")).toBeNull();
+  });
+
   it("journeyRecognize strips anchors from string constraints", () => {
     const routes = new RouteSet();
     routes.draw((r) => {

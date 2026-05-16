@@ -51,10 +51,49 @@ describe("ActionDispatch::Journey::GTG::TransitionTable", () => {
       "/articles/:id/edit(.:format)",
       "/articles/:id(.:format)",
     ]);
-    const json = t.toJSON() as Record<string, unknown>;
-    expect(json["regexp_states"]).toBeDefined();
-    expect(json["string_states"]).toBeDefined();
-    expect(json["accepting"]).toBeDefined();
+    const json = t.toJSON() as {
+      regexp_states: Record<string, Record<string, number>>;
+      string_states: Record<string, Record<string, number>>;
+      stdparam_states: Record<string, Record<string, number>>;
+      accepting: Record<string, true>;
+    };
+
+    // Shape: every accepting key is an integer state id, mapped to `true`.
+    expect(Object.values(json.accepting).every((v) => v === true)).toBe(true);
+    expect(Object.keys(json.accepting).every((k) => /^\d+$/.test(k))).toBe(true);
+    expect(Object.keys(json.accepting).length).toBeGreaterThan(0);
+
+    // A `/articles` route must produce a `/` and `articles` string-state transition.
+    const allStringEdges = new Set<string>();
+    for (const inner of Object.values(json.string_states)) {
+      for (const edge of Object.keys(inner)) allStringEdges.add(edge);
+    }
+    expect(allStringEdges.has("/")).toBe(true);
+    expect(allStringEdges.has("articles")).toBe(true);
+
+    // Standard-param routes (e.g. `:format`, `:id`) should produce a
+    // stdparam transition whose key is the DEFAULT_EXP source.
+    const allStdparamEdges = new Set<string>();
+    for (const inner of Object.values(json.stdparam_states)) {
+      for (const edge of Object.keys(inner)) allStdparamEdges.add(edge);
+    }
+    expect(allStdparamEdges.has("[^./?]+")).toBe(true);
+
+    // Every transition target must point at a known state id (integer key).
+    const allStateIds = new Set<string>([
+      ...Object.keys(json.string_states),
+      ...Object.keys(json.stdparam_states),
+      ...Object.keys(json.regexp_states),
+      ...Object.keys(json.accepting),
+    ]);
+    for (const inner of [
+      ...Object.values(json.string_states),
+      ...Object.values(json.stdparam_states),
+    ]) {
+      for (const target of Object.values(inner)) {
+        expect(allStateIds.has(String(target))).toBe(true);
+      }
+    }
   });
 
   it("test_simulate_gt", () => {

@@ -12,7 +12,7 @@ For workflow + BLOCKED-annotation vocab + audit conventions, see [`test-compare-
 
 ## Story count
 
-~80 actionable batches, ~17.5k LOC. Batches numbered sequentially; the next-to-ship is the lowest-numbered open batch.
+~78 actionable batches (3 in-flight, ~75 queued), ~17.5k LOC. Batches numbered sequentially; the next-to-ship is the lowest-numbered open batch. test:compare standing at 6568/7885 (83.3%) per snapshot above.
 
 The `as any` legacy-cast cleanup sweep has been **superseded by `docs/activerecord-type-audit.md`** — the type-audit's 4-wave plan covers the same `(record as any)._readAttribute` / `.save` / `.destroy` removals more precisely. The 2 `bug-suspected` candidates remain in batches below for surgical verification.
 
@@ -42,6 +42,14 @@ These have agents currently working.
 - ~5 LOC — `UnknownPrimaryKey` message format and no-arg constructor.
 - ~10 LOC — `AbstractReflection#checkValidityOfInverseBang` uses `(this as any).inverseName?.()`. Protected accessor would be cleaner.
 - ~3 LOC — `joinScope` in `AbstractReflection` throws plain `Error`.
+
+### Batch 22 — Associations-core inverseOf wiring (~75 LOC, risk: low) — #1745 OPEN
+
+**Theme:** Auto-inverse population on collection load.
+
+- ~30 LOC — Add `inversable?(record)` check to `AssociationRelation.toArray` + `loadHasMany`'s inverse-wiring loop. Unblocks 2 skipped tests.
+- ~40–60 LOC — Extend automatic-inverse wiring to `loadHasMany`/`loadHasOne`/`loadBelongsTo` (currently only honor explicit `options.inverseOf`).
+- ~5 LOC — Extract `wireInverseAssociation(child, name, owner)` helper.
 
 ### Batch 91 — SQLite Slot A + B (~50 LOC bundled) — #1743 OPEN
 
@@ -74,7 +82,20 @@ For reference. Body removed (see git log + the PR). Findings folded into "Post-m
 | 82    | Unknown-triage Slot A annotation refresh            | #1740 |
 | 83    | Unknown-triage Slot B insert-all (triage, partial)  | #1741 |
 
-Phase 5 (TM unification — universal `defineSchema`) sub-PRs that closed: #1730 (root B finder/validations), #1737 (root C enum), #1738 (relation/where.test.ts). See `tm-unification-plan.md` for Phase 5 progress.
+Phase 5 (TM unification — universal `defineSchema`) sub-PRs:
+
+| Sub-PR | Title                                           | PR    |
+| ------ | ----------------------------------------------- | ----- |
+| init   | Phase 5 initial 32-file migration               | #1633 |
+| tx     | Phase 5 continuation — transaction-family tests | #1686 |
+| assoc  | Phase 5 associations smaller files              | #1690 |
+| enc    | Phase 5 encryption cluster + helper             | #1693 |
+| root A | Phase 5 root cluster A core+callbacks           | #1697 |
+| root B | Phase 5 root cluster B finder+validations       | #1734 |
+| root C | Phase 5 root cluster C enum cluster             | #1737 |
+| where  | Phase 5 `relation/where.test.ts`                | #1738 |
+
+See `tm-unification-plan.md` for Phase 5 remainder.
 
 Other recent closures folded back into queued-batches list:
 
@@ -230,14 +251,6 @@ Watchpoint: the `_invalidateAssociationIds → assocInstance.reset()` widening f
 - ~80–120 LOC — Preload has-many-through with composite query_constraints. Un-skips `preload has many through association with composite query constraints` at `associations.test.ts:8318`.
 - ~30–50 LOC — `AssociationQueryValue` Relation + composite FK: `queries()` array-FK branch still throws when value is a Relation. Gated on `Relation.pluck(primary_key)` with CPK support.
 - ~30–50 LOC — `AssociationQueryValue.convertToId` array-PK branch: handle composite `primaryKey` when value is a record instance. Currently throws. Unblocks 2 "querying by whole/single associated records" tests.
-
-### Batch 22 — Associations-core inverseOf wiring (~75 LOC, risk: low)
-
-**Theme:** Auto-inverse population on collection load.
-
-- ~30 LOC — Add `inversable?(record)` check to `AssociationRelation.toArray` + `loadHasMany`'s inverse-wiring loop. Unblocks 2 skipped tests.
-- ~40–60 LOC — Extend automatic-inverse wiring to `loadHasMany`/`loadHasOne`/`loadBelongsTo` (currently only honor explicit `options.inverseOf`).
-- ~5 LOC — Extract `wireInverseAssociation(child, name, owner)` helper.
 
 ### Batch 23 — Preloader-grouping STI + composite (~280 LOC, risk: medium)
 

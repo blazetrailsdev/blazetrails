@@ -133,11 +133,9 @@ export class AssociationQueryValue {
   private convertToId(value: unknown): unknown {
     const pk = this.primaryKey();
     if (Array.isArray(pk)) {
-      // Rails: pk.map { next nil if value.nil?; ... } — null record → null tuple.
-      if (value === null || value === undefined) return pk.map(() => null);
-      if (Array.isArray(value)) return value;
-      if (typeof value !== "object") return value;
+      // Rails: primary_key.map { |attribute| next nil if value.nil?; attribute == "id" ? value.id_value : value.public_send(attribute) }
       return pk.map((attr) => {
+        if (value === null || value === undefined) return null;
         if (attr === "id" && typeof (value as any).readAttribute === "function") {
           // Rails: id_value reads the scalar `id` column on composite-PK records.
           return (value as any).readAttribute("id");

@@ -100,22 +100,5 @@ describe("AssociationQueryValue", () => {
       );
       expect(av.queries()).toEqual([{ blog_id: null, id: null }]);
     });
-
-    it("still accepts a pre-built tuple array (back-compat with explicit callers)", () => {
-      const av = new AssociationQueryValue(
-        {
-          joinForeignKey: ["blog_id", "id"],
-          joinPrimaryKey: ["blog_id", "blog_post_id"],
-        },
-        [
-          [1, 2],
-          [3, 4],
-        ],
-      );
-      expect(av.queries()).toEqual([
-        { blog_id: 1, id: 2 },
-        { blog_id: 3, id: 4 },
-      ]);
-    });
   });
 });

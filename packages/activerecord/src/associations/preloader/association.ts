@@ -348,6 +348,7 @@ export class LoaderQuery {
         this.associationKeyName.every((k, i) => k === (other.associationKeyName as string[])[i]));
     return (
       keysMatch &&
+      this._scopeAdapterId() === other._scopeAdapterId() &&
       this._scopeTableName() === other._scopeTableName() &&
       this._valuesForQueries() === other._valuesForQueries()
     );
@@ -357,12 +358,36 @@ export class LoaderQuery {
     const keyName = Array.isArray(this.associationKeyName)
       ? this.associationKeyName.join(",")
       : this.associationKeyName;
-    return `${keyName}::${this._scopeTableName()}::${this._valuesForQueries()}`;
+    return `${keyName}::${this._scopeAdapterId()}::${this._scopeTableName()}::${this._valuesForQueries()}`;
   }
 
   private _scopeTableName(): string {
     return this.scope?._modelClass?.tableName ?? this.scope?.tableName ?? "";
   }
+
+  // Rails uses connection identity (Model.connection_specification_name) so that
+  // multi-database models sharing a table name don't get coalesced. We use the
+  // adapter identity, which is the AR-trails analogue.
+  private _scopeAdapterId(): string {
+    const klass = this.scope?._modelClass;
+    const adapter = klass?._adapter ?? klass?.adapter;
+    if (adapter == null) return "";
+    return (
+      (adapter as any)._poolKey ??
+      (adapter as any).connectionName ??
+      `id:${this._objectId(adapter)}`
+    );
+  }
+
+  private _objectId(obj: object): number {
+    let id = (obj as any).__loaderQueryId;
+    if (id != null) return id;
+    id = ++LoaderQuery._idCounter;
+    Object.defineProperty(obj, "__loaderQueryId", { value: id, enumerable: false });
+    return id;
+  }
+
+  private static _idCounter = 0;
 
   private _valuesForQueries(): string {
     if (typeof this.scope?.valuesForQueries === "function") {

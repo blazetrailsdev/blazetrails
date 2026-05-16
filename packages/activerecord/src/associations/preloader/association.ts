@@ -415,6 +415,9 @@ export class LoaderQuery {
     if (Array.isArray(this.associationKeyName)) {
       const conditions: Record<string, Set<unknown>> = {};
       for (const values of keys) {
+        // Composite keys arrive JSON-stringified because JS Map lacks the
+        // structural array equality Ruby Hash uses in Rails' equivalent
+        // (Preloader::Association#derive_key returns the raw array there).
         const valArr = (typeof values === "string" ? JSON.parse(values) : values) as unknown[];
         for (let i = 0; i < this.associationKeyName.length; i++) {
           const keyName = this.associationKeyName[i];

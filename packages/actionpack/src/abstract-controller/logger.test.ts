@@ -52,6 +52,14 @@ describe("benchmark()", () => {
     expect(ran).toBe(true);
   });
 
+  it("tolerates a logger whose `info` is not a function", () => {
+    let ran = false;
+    benchmark({ info: "not a function" } as unknown as LoggerLike, "work", () => {
+      ran = true;
+    });
+    expect(ran).toBe(true);
+  });
+
   it("logs an info line with elapsed ms when a logger is attached", () => {
     const lines: string[] = [];
     const logger: LoggerLike = { info: (m) => lines.push(m) };

@@ -11,6 +11,8 @@ export interface LoggerLike {
   info?(message: string): void;
   debug?(message: string): void;
   warn?(message: string): void;
+  error?(message: string): void;
+  fatal?(message: string): void;
 }
 
 export interface LoggerHost {
@@ -36,7 +38,7 @@ export function applyLogger<T extends new (...args: never[]) => unknown>(
  * block returns. If no logger is attached the block still runs.
  */
 export function benchmark<T>(logger: LoggerLike | undefined, message: string, block: () => T): T {
-  if (!logger?.info) return block();
+  if (typeof logger?.info !== "function") return block();
   // Monotonic timing where available — `Date.now()` is wall-clock and
   // can jump under NTP adjustments. The fallback matches the pattern
   // used by `ActiveRecord::Base.benchmark`.

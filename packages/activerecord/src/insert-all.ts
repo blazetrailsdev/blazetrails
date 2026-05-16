@@ -1,6 +1,7 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { Nodes, Visitors } from "@blazetrails/arel";
 import { SerializeCastValue } from "@blazetrails/activemodel";
+import { IndexDefinition } from "./connection-adapters/abstract/schema-definitions.js";
 import type { Base } from "./base.js";
 import { quoteSqlValue } from "./base.js";
 import { stiName } from "./inheritance.js";
@@ -33,7 +34,13 @@ export class InsertAll {
   readonly connection: ModelClass["adapter"];
   readonly inserts: Record<string, unknown>[];
   readonly keys: Set<string>;
-  readonly uniqueBy: string | string[] | undefined;
+  /**
+   * Initially the user's `:unique_by` input (column name, column list, or
+   * index name). After `_populateUpdatableColumns` resolves, this is
+   * mutated to the matching IndexDefinition — matching Rails' shape, so
+   * Builder.conflictTarget can read `index.columns` / `index.where`.
+   */
+  uniqueBy: string | string[] | IndexDefinition | undefined;
   readonly returning: string | string[] | Nodes.SqlLiteral | false;
 
   onDuplicate: "skip" | "update" | undefined;
@@ -124,7 +131,8 @@ export class InsertAll {
   /** @internal Async init: resolves uniqueByColumns via cache.indexes() then finalizes updatableColumns. */
   private async _populateUpdatableColumns(): Promise<void> {
     if (this._updatableColumns) return;
-    const exclude = new Set([...this.readonlyColumns(), ...(await this.uniqueByColumns())]);
+    this.uniqueBy = await this.findUniqueIndexFor(this.uniqueBy);
+    const exclude = new Set([...this.readonlyColumns(), ...this.uniqueByColumns()]);
     if (this.recordTimestamps() && !this.updateOnly && !this.updateSql) {
       for (const col of TIMESTAMP_COLUMNS) {
         exclude.add(col);
@@ -237,9 +245,9 @@ export class InsertAll {
     return onDuplicate instanceof Nodes.SqlLiteral;
   }
 
-  /** @internal */
-  private async uniqueByColumns(): Promise<string[]> {
-    return this.findUniqueIndexFor(this.uniqueBy);
+  /** @internal Mirrors: ActiveRecord::InsertAll#unique_by_columns */
+  private uniqueByColumns(): string[] {
+    return this.uniqueBy instanceof IndexDefinition ? this.uniqueBy.columns : [];
   }
 
   /** @internal */
@@ -294,46 +302,60 @@ export class InsertAll {
     return aliases?.[attribute] ?? attribute;
   }
 
-  /** @internal */
-  private async findUniqueIndexFor(uniqueBy: string | string[] | undefined): Promise<string[]> {
+  /** @internal Mirrors: ActiveRecord::InsertAll#find_unique_index_for */
+  private async findUniqueIndexFor(
+    uniqueBy: string | string[] | IndexDefinition | undefined,
+  ): Promise<IndexDefinition | undefined> {
+    if (uniqueBy instanceof IndexDefinition) return uniqueBy;
+    const conn = this.connection as { supportsInsertConflictTarget?: () => boolean };
+    if (
+      typeof conn.supportsInsertConflictTarget === "function" &&
+      !conn.supportsInsertConflictTarget()
+    ) {
+      if (uniqueBy == null) return undefined;
+      throw new Error(`${(conn as any).constructor?.name ?? "Adapter"} does not support :uniqueBy`);
+    }
     const nameOrCols =
       uniqueBy == null ? this.primaryKeys() : Array.isArray(uniqueBy) ? uniqueBy : [uniqueBy];
     const sortedMatch = [...nameOrCols].sort().join(",");
+    const tableName = this.model.arelTable.name;
     const idx = (await this.uniqueIndexes()).find(
       (i: any) =>
         nameOrCols.includes(i.name) ||
         (Array.isArray(i.columns) && [...i.columns].sort().join(",") === sortedMatch),
-    ) as any;
-    if (idx) return Array.isArray(idx.columns) ? idx.columns : nameOrCols;
-    // uniqueBy == null → caller wants PK uniqueness; PKs are already in readonlyColumns()
-    // so returning [] here is equivalent (they're excluded from updatableColumns either way).
-    // uniqueBy matching primary keys explicitly → return the PK columns directly.
-    if (uniqueBy == null || sortedMatch === [...this.primaryKeys()].sort().join(","))
-      return uniqueBy == null ? [] : this.primaryKeys();
+    ) as { name: string; columns: string[]; where?: string } | undefined;
+    if (idx) {
+      return idx instanceof IndexDefinition
+        ? idx
+        : new IndexDefinition(tableName, idx.name, true, idx.columns, { where: idx.where });
+    }
+    if ([...nameOrCols].sort().join(",") === [...this.primaryKeys()].sort().join(",")) {
+      return uniqueBy == null
+        ? undefined
+        : new IndexDefinition(tableName, `${tableName}_primary_key`, true, [...nameOrCols]);
+    }
     throw new Error(`No unique index found for ${JSON.stringify(uniqueBy)}`);
   }
 
   /**
    * @internal
-   * Rails schema_cache.indexes() is synchronous; our TS port must be async because the
-   * underlying driver call is async. Always await this method.
+   * Rails' schema_cache.indexes is synchronous; our TS port is async because
+   * the underlying driver call is. Always await this method.
    *
-   * Uses the adapter's raw SchemaCache (AbstractAdapter#schema_cache) with the
-   * adapter's pool (or the adapter itself in tests) as the pool argument so
-   * SchemaCache.indexes(pool, tableName) can reach connection.indexes() on a
-   * cache miss. We do NOT fall back to ConnectionPool#schemaCache (a
-   * BoundSchemaReflection with a one-arg indexes()) — the two-arg call would
-   * misalign and pass the pool object as tableName.
+   * Mirrors: ActiveRecord::InsertAll#unique_indexes
    */
   private async uniqueIndexes(): Promise<unknown[]> {
     const conn = this.connection as any;
-    const cache = conn.schemaCache;
-    if (!cache || typeof cache.indexes !== "function") return [];
-    // Unwrap one level of adapter wrapping (e.g. TestAdapter → SQLite3Adapter)
-    // so the pool we pass to SchemaCache.indexes() can call connection.indexes().
-    const pool = conn.pool ?? conn;
+    const bound = conn.schemaCacheBound;
     const tableName = this.model.arelTable.name;
-    const indexes = await cache.indexes(pool, tableName);
+    let indexes: unknown[];
+    if (bound && typeof bound.indexes === "function") {
+      indexes = await bound.indexes(tableName);
+    } else {
+      const cache = conn.schemaCache;
+      if (!cache || typeof cache.indexes !== "function") return [];
+      indexes = await cache.indexes(conn.pool ?? conn, tableName);
+    }
     return (indexes as unknown[]).filter((i: any) => i.unique);
   }
 
@@ -450,11 +472,14 @@ export class Builder {
   }
 
   conflictTarget(): string {
-    const cols = this._insertAll.uniqueBy
-      ? Array.isArray(this._insertAll.uniqueBy)
-        ? this._insertAll.uniqueBy
-        : [this._insertAll.uniqueBy]
-      : this._insertAll.primaryKeys();
+    const index = this._insertAll.uniqueBy;
+    if (index instanceof IndexDefinition) {
+      const cols = index.columns.map((c) => `"${c}"`).join(", ");
+      return index.where ? `(${cols}) WHERE ${index.where}` : `(${cols})`;
+    }
+    // Pre-resolve fallback (skip path or update-without-uniqueBy): use PKs.
+    const cols =
+      index == null ? this._insertAll.primaryKeys() : Array.isArray(index) ? index : [index];
     return `(${cols.map((c) => `"${c}"`).join(", ")})`;
   }
 

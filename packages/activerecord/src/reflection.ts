@@ -657,16 +657,18 @@ export class AssociationReflection extends MacroReflection {
 
     let reflection: AssociationReflection | ThroughReflection | null | false = null;
     try {
-      for (const n of candidateNames) {
-        reflection = this.klass._reflectOnAssociation(n);
-        if (reflection) break;
+      const lookupNames: string[] = [...candidateNames];
+      if (this.activeRecord.automaticallyInvertPluralAssociations) {
+        for (const n of candidateNames) lookupNames.push(pluralize(n));
       }
-
-      if (!reflection && this.activeRecord.automaticallyInvertPluralAssociations) {
-        for (const n of candidateNames) {
-          const pluralInverseName = pluralize(n);
-          reflection = this.klass._reflectOnAssociation(pluralInverseName);
-          if (reflection) break;
+      // Pick the first candidate whose reflection is a valid inverse. A
+      // hit on an invalid candidate (e.g. inverseOf:false, mismatched FK,
+      // wrong target class) must not shadow a later valid one.
+      for (const n of lookupNames) {
+        const r = this.klass._reflectOnAssociation(n);
+        if (r && this.validInverseReflection(r)) {
+          reflection = r;
+          break;
         }
       }
     } catch (e: unknown) {

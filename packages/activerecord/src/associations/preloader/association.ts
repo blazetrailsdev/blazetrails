@@ -365,24 +365,31 @@ export class LoaderQuery {
     return this.scope?._modelClass?.tableName ?? this.scope?.tableName ?? "";
   }
 
-  // Rails uses connection identity (Model.connection_specification_name) so that
-  // multi-database models sharing a table name don't get coalesced. We use the
-  // adapter instance as the AR-trails analogue, keyed via a WeakMap so the
-  // adapter object itself is never mutated.
+  // Mirrors Rails' `scope.model.connection_specification_name` in
+  // Preloader::Association::LoaderQuery#hash/#eql?. Reads only side-effect-free
+  // state — connectionSpecificationName is a plain string getter and the cached
+  // _adapter field is checked without invoking the .adapter getter (which would
+  // checkout a pooled connection mid-hash-compute). When the spec-name resolves
+  // to a shared ancestor (e.g. "Base" for direct-adapter test setups) we fall
+  // through to a WeakMap-of-adapter id so two models with the same spec but
+  // different adapter instances still don't coalesce.
   private _scopeAdapterId(): string {
-    // Use the *cached* `_adapter` field only — calling the `adapter` getter
-    // would check out a pooled connection, an unwanted side effect during
-    // hash computation. Rails reads `connection_specification_name`, a plain
-    // string, with no DB touch; this is the closest side-effect-free analogue.
     const klass = this.scope?._modelClass;
-    const adapter = klass?._adapter;
-    if (adapter == null) return "";
+    if (klass == null) return "";
+    let spec = "";
+    try {
+      spec = klass.connectionSpecificationName ?? "";
+    } catch {
+      spec = "";
+    }
+    const adapter = klass._adapter;
+    if (adapter == null) return spec;
     let id = LoaderQuery._adapterIds.get(adapter);
     if (id == null) {
       id = ++LoaderQuery._idCounter;
       LoaderQuery._adapterIds.set(adapter, id);
     }
-    return `id:${id}`;
+    return `${spec}:${id}`;
   }
 
   private static _adapterIds = new WeakMap<object, number>();

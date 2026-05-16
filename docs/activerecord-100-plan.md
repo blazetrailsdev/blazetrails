@@ -31,16 +31,6 @@ These have agents currently working.
 - ~20 LOC — Emit non-PK column `defaultFunction` as `default: () => "fn()"` in `emitTable`, mirroring the PK path. Unblocks function-default round-tripping for all non-PK columns.
 - ~30 LOC — Make `SchemaDumper.dumpTableSchema(adapter, ...)` instantiate the adapter's `createSchemaDumper()` class rather than the base.
 
-### Batch 3 — PG schema-dump table/partition polish (~80 LOC, risk: low)
-
-**Theme:** All gated on per-adapter schema-dumper path (Batch 2) being live.
-
-**Sequencing:** Depends on Batch 2 (#1726).
-
-- ~30 LOC — Wire `tableOptions()` into `schema-dumper.ts:emitTable`. Requires making the dump loop async.
-- ~30 LOC — PG table comment schema dump: forward `adapterTableOpts.comment` in `emitTable`; add `COMMENT ON TABLE` emission after `createTable`.
-- ~20 LOC — PARTITION BY schema dump: 2 `BLOCKED: adapter-pg` partition tests in `SchemaCreateTableOptionsTest` flow through the same `fetchTableOptions → options:` path; need `tablePartitionDefinition` wired correctly + test bodies.
-
 ### Batch 10 — Reflection Slot A + B + Rails-name parity (~115 LOC, risk: low) — #1722 OPEN
 
 **Theme:** Single Rails source `reflection.rb`.
@@ -86,6 +76,14 @@ Other recent closures folded back into queued-batches list:
 ## Queued batches
 
 Bundled work-PR slots ready to spawn. Items removed as batches ship.
+
+### Batch 3 — PG schema-dump table/partition polish (~80 LOC, risk: low)
+
+**Sequencing:** Depends on Batch 2 (#1726). Spawn after #1726 merges.
+
+- ~30 LOC — Wire `tableOptions()` into `schema-dumper.ts:emitTable`. Requires making the dump loop async.
+- ~30 LOC — PG table comment schema dump: forward `adapterTableOpts.comment` in `emitTable`; add `COMMENT ON TABLE` emission after `createTable`.
+- ~20 LOC — PARTITION BY schema dump: 2 `BLOCKED: adapter-pg` partition tests in `SchemaCreateTableOptionsTest` flow through the same `fetchTableOptions → options:` path; need `tablePartitionDefinition` wired correctly + test bodies.
 
 ### Batch 14 — Autosave E-series CPK + nested-attributes (~80 LOC, risk: low)
 

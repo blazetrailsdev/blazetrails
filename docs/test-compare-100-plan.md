@@ -93,7 +93,7 @@ For permanently-not-portable tests (Ruby-only — Marshal/YAML/GVL/fork/Rake/dbc
 // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — <category>
 ```
 
-Categories: `marshal`, `yaml`, `psych`, `gvl`, `fork`, `rake`, `pty`, `dbconsole`, `message-pack`, `future_result`, `ruby-encoding`, `env-tz`, `protected-params`, `ruby-module-semantics`. List is non-exhaustive — add new kebab-case slugs as needed.
+Categories: `marshal`, `yaml`, `psych`, `gvl`, `fork`, `rake`, `pty`, `dbconsole`, `message-pack`, `future_result`, `ruby-encoding`, `env-tz`, `protected-params`, `ruby-module-semantics`. List is non-exhaustive — add new kebab-case slugs as needed. (`future_result` is a legacy snake_case slug retained as-is; prefer kebab-case for new slugs.)
 
 ---
 

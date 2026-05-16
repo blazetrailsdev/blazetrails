@@ -1105,7 +1105,10 @@ function annotateFile(src: string, relPath: string): string | null {
 
     const body = result.slice(adjMatchEnd, closePos);
 
-    // Skip if already annotated (BLOCKED: for temp gaps, PERMANENT-SKIP: for ruby-only exclusions)
+    // Skip if already annotated:
+    //   BLOCKED:        — temporary gap to fix
+    //   PERMANENT-SKIP: — current ruby-only exclusion marker (see docs/test-compare-100-plan.md)
+    //   PERMANENT:      — legacy form retained for backward compatibility
     if (/BLOCKED:|PERMANENT-SKIP:|PERMANENT:/.test(body)) continue;
 
     // Determine indentation of the skip call line

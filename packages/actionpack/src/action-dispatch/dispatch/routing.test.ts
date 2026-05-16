@@ -1554,20 +1554,14 @@ describe("TestRoutingMapper", () => {
     expect(m!.params.path).toBe("2024/01/hello");
   });
 
-  // BLOCKED: leading-optional groups like `(/:locale)/posts` produce a
-  // broken Pattern regex (the leading `/` is consumed outside the optional
-  // group, so neither `/posts` nor `/en/posts` matches). Pattern regex
-  // builder bug — pre-existing in the Journey port; surfaced when
-  // Route#match switched to the Journey backend.
-  it.skip("optional scoped root", () => {
+  it("optional scoped root", () => {
     const route = new Route("GET", "(/:locale)/posts", "posts", "index");
     expect(route.match("GET", "/posts")).not.toBeNull();
     expect(route.match("GET", "/en/posts")).not.toBeNull();
     expect(route.match("GET", "/en/posts")!.params.locale).toBe("en");
   });
 
-  // BLOCKED: same Pattern leading-optional-group regex bug as above.
-  it.skip("optional scoped root hierarchy", () => {
+  it("optional scoped root hierarchy", () => {
     const r1 = new Route("GET", "(/:locale)/posts", "posts", "index");
     const r2 = new Route("GET", "(/:locale)/posts/:id", "posts", "show");
     expect(r1.match("GET", "/posts")).not.toBeNull();

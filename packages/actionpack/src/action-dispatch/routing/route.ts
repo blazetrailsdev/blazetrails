@@ -371,7 +371,12 @@ function parseSegments(path: string): PathSegment[] {
 }
 
 function normalizePath(p: string): string {
-  return "/" + p.replace(/^\/+|\/+$/g, "");
+  const stripped = p.replace(/^\/+|\/+$/g, "");
+  // Don't prepend `/` to a leading optional group: `(/:locale)/posts` must
+  // stay as-is so the `/` lives inside the optional. Prepending would
+  // produce `/(/:locale)/posts`, compiled to `^/(?:/...)?/posts$`, which
+  // requires either `//posts` (extra slash) or `/x/posts` (no plain match).
+  return stripped.startsWith("(") ? stripped : "/" + stripped;
 }
 
 function interpolateRedirect(template: string, params: Record<string, string>): string {

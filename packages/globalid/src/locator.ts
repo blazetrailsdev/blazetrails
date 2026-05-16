@@ -27,7 +27,10 @@ export interface LocateOptions {
   only?: LocatorModel | LocatorModel[];
   /**
    * Use `where(pk: ids)` instead of `find(ids)` so missing records are
-   * silently skipped (the result array is shorter than the input).
+   * silently skipped (the result array is shorter than the input). Without
+   * this option, a missing record causes `klass.find` to throw (Rails
+   * raises `RecordNotFound`). Use `ignoreMissing: true` for graceful
+   * missing-record handling.
    */
   ignoreMissing?: boolean;
 }
@@ -104,7 +107,10 @@ export class BaseLocator {
     for (const [klass, ids] of idsByClass) {
       const records = await this.findRecords(klass, ids, options);
       const byId = new Map<string, unknown>();
-      const pkProp = recordIdProp(klass);
+      // Read the record's PK property from the same source of truth as
+      // findRecords/modelIdIsValid — this.primaryKey(klass) — so a
+      // subclass that overrides primaryKey() indexes consistently.
+      const pkProp = recordIdProp(this.primaryKey(klass));
       for (const rec of records) {
         byId.set(idKey((rec as Record<string, unknown>)[pkProp]), rec);
       }
@@ -385,8 +391,11 @@ function lookupClass(name: string): LocatorModel | undefined {
 
 type Ctor = new (...args: never[]) => unknown;
 
-function recordIdProp(klass: LocatorModel): string {
-  return Array.isArray(klass.primaryKey) ? "id" : (klass.primaryKey ?? "id");
+/** Property name to read the PK value from a record. Takes the PK shape
+ *  (string for scalar, array for composite). Composite PKs read through
+ *  AR's `.id` aggregate accessor; scalars use the PK column name. */
+function recordIdProp(pk: string | string[]): string {
+  return Array.isArray(pk) ? "id" : pk;
 }
 
 /** True iff `modelId`'s arity matches `klass.primaryKey`'s arity. @internal */

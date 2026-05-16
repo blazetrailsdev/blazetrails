@@ -10,8 +10,8 @@ import { Locator, lookupClass, type LocateOptions, type LocatorModel } from "./l
 // LAZY-IMPORT CYCLE: global-id ↔ signed-global-id ↔ locator. Safe because
 // every cross-module reference below happens inside a method body (runtime),
 // not at class-body init time. Do NOT add module-level `const X = SignedGlobalID.foo`
-// or similar — those would observe `SignedGlobalID === undefined` during the
-// initial circular load.
+// or similar — native ESM throws ReferenceError (TDZ) for an uninitialized
+// imported binding accessed during the initial circular evaluation.
 import { SignedGlobalID } from "./signed-global-id.js";
 
 /**

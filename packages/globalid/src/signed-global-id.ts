@@ -4,8 +4,9 @@ import { getApp } from "./config.js";
 import { buildGid, parseGid, type GidComponents } from "./uri/gid.js";
 // LAZY-IMPORT CYCLE: signed-global-id ↔ global-id ↔ locator. The `GlobalID`
 // and `isOrExtends` runtime values are only referenced inside method bodies
-// below; don't promote those references to module level — they'd observe
-// `undefined` during the initial circular load.
+// below; don't promote those references to module level — native ESM throws
+// ReferenceError (TDZ) for an uninitialized imported binding accessed during
+// the initial circular evaluation.
 import { GlobalID, isOrExtends, type GlobalIDModel } from "./global-id.js";
 import { lookupClass, type LocatorModel } from "./locator.js";
 

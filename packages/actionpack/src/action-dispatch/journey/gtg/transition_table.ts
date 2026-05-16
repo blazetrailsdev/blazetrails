@@ -185,4 +185,10 @@ export class TransitionTable implements TransitionTableLike, DotHost {
   private _regexpOrStdparam(re: RegExp): Map<number, Map<RegExp, number>> {
     return isDefaultExp(re) ? this._stdparamStates : this._regexpStates;
   }
+
+  // Rails ships `to_svg` (shells out to the `dot` binary) and
+  // `visualizer` (renders an ERB template with an embedded JS visualizer).
+  // Neither is ported: `to_svg` would require a graphviz dependency we
+  // don't want to add, and `visualizer` depends on Rails-side ERB. Both
+  // are debug-only and out of scope for the Wave 7 path-matching work.
 }

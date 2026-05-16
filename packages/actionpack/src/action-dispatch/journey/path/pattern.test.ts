@@ -268,4 +268,16 @@ describe("ActionDispatch::Journey::Path::Pattern — requirements", () => {
     const p = buildPath("/page/:name", { name: /test/ });
     expect(p.requirementsForMissingKeysCheck).toBe(p.requirementsForMissingKeysCheck);
   });
+
+  it("Pattern pushes RegExp requirements into the SymbolNode for GTG widening", () => {
+    // Mirrors Rails `ast.requirements = …` — the symbol's effective regex
+    // becomes the user-supplied requirement so the GTG accepts characters
+    // (e.g. `.`) that the default `[^./?]+` char-class would reject.
+    const tree = new Parser().parse("/posts/:filename");
+    const ast = new Ast(tree, true);
+    new Pattern(ast, { filename: /(.+)/ }, "/.?", true);
+    const symbol = ast.terminals.find((n) => n.isSymbol() && n.name === "filename");
+    expect(symbol).toBeDefined();
+    expect((symbol as unknown as { regexp: RegExp }).regexp.source).toBe("(.+)");
+  });
 });

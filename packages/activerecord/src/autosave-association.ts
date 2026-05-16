@@ -562,9 +562,13 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
   // _record_changed? (FK / inverse-polymorphic / will-save-change) leg too.
   const ctor = record.constructor as typeof Base;
   const reflection = (ctor as any)._reflectOnAssociation?.(assoc.name);
-  const pkForChangeCheck = Array.isArray(ctor.primaryKey)
-    ? ctor.primaryKey.map((k) => record._readAttribute(k))
-    : [record._readAttribute(ctor.primaryKey ?? "id")];
+  // Rails:485-486 — `primary_key = Array(compute_primary_key(reflection, self))`
+  // then `primary_key_value = primary_key.map { _read_attribute(_1) }`.
+  const pkSpec = reflection
+    ? computePrimaryKey.call(record as unknown as AutosaveAssociationHost, reflection)
+    : (ctor.primaryKey ?? "id");
+  const pkArr: string[] = Array.isArray(pkSpec) ? pkSpec : [pkSpec];
+  const pkForChangeCheck = pkArr.map((k) => record._readAttribute(k));
   const changedForSave =
     typeof (childRecord as any).changedForAutosave === "function"
       ? (childRecord as any).changedForAutosave()

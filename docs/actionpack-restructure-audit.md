@@ -349,7 +349,14 @@ Verified mapping already present in
 so api:compare has nothing to verify. Closed as no-op; bundled with
 Wave 6 to avoid a doc-only PR.
 
-### Wave 6 closed — action-dispatch top-level infra files
+### Wave 6 closed — action-dispatch top-level infra files (#1629)
+
+**Followups:**
+
+- ~30 LOC — Align `action-controller/log-subscriber.ts` with the new pattern: extend `@blazetrails/activesupport` LogSubscriber, call `attachTo("action_controller")`, register `subscribeLogLevel` per method. Mirror Rails `action_controller/log_subscriber.rb`.
+- ~5 LOC — Surface `HTTP_STATUS_CODES` barrel re-export at actionpack root (consumers currently reach into rack).
+- ~1 line — Audit-doc note that `ActionDispatch.Constants.VARY` is exported as a namespace by design (matches Rails `module Constants`); Copilot flagged twice as a divergence — it isn't.
+- Pre-existing: `action-controller/deprecator.ts` naming consistency with the `Railtie → Trailtie` precedent (kept as `Deprecator` deliberately; document or rename).
 
 Created as real implementations from Rails source (no stubs, per
 project policy):
@@ -551,18 +558,33 @@ ship in parallel once L+S+V are in):
 LOC ceiling waived per Wave 7's mechanical-port nature. TS LOC ≈
 Ruby × 1.3. Test LOC ports inline alongside the source PR.
 
-| PR  | Cluster | Files                                                              | Src LOC | Test LOC | Total | Deps |
-| --- | ------- | ------------------------------------------------------------------ | ------- | -------- | ----- | ---- |
-| 1   | L       | `router/utils.rb`, `nfa/dot.rb`, `gtg/simulator.rb` + index barrel | ~240    | ~80      | ~320  | —    |
-| 2   | S₁      | `scanner.rb`                                                       | ~100    | ~100     | ~200  | 1    |
-| 3   | S₂      | `nodes/node.rb` + `parser.rb`                                      | ~400    | ~260     | ~660  | 2    |
-| 4   | V       | `visitors.rb`                                                      | ~350    | —        | ~350  | 3, 1 |
-| 5   | P       | `path/pattern.rb`                                                  | ~270    | ~280     | ~550  | 3, 4 |
-| 6   | G       | `gtg/transition_table.rb` + `gtg/builder.rb`                       | ~480    | ~220     | ~700  | 3    |
-| 7   | R₁      | `route.rb` + `routes.rb`                                           | ~350    | ~190     | ~540  | 5, 6 |
-| 8   | R₂      | `formatter.rb`                                                     | ~300    | ~150     | ~450  | 4, 7 |
-| 9   | R₃      | `router.rb`                                                        | ~200    | ~500     | ~700  | 7, 8 |
-| 10  | wire-up | `actiondispatch/routing/route-set.ts` swap                         | ~200    | included | ~200  | 9    |
+| PR                    | Cluster | Files                                                              | Src LOC | Test LOC | Total | Deps |
+| --------------------- | ------- | ------------------------------------------------------------------ | ------- | -------- | ----- | ---- |
+| ~~1~~ closed (#1634)  | L       | `router/utils.rb`, `nfa/dot.rb`, `gtg/simulator.rb` + index barrel | ~240    | ~80      | ~320  | —    |
+| ~~2~~ closed (#1639)  | S₁      | `scanner.rb`                                                       | ~100    | ~100     | ~200  | 1    |
+| ~~3~~ closed (#1643)  | S₂      | `nodes/node.rb` + `parser.rb`                                      | ~400    | ~260     | ~660  | 2    |
+| ~~4~~ closed (#1648)  | V       | `visitors.rb`                                                      | ~350    | —        | ~350  | 3, 1 |
+| ~~5~~ closed (#1654)  | P       | `path/pattern.rb`                                                  | ~270    | ~280     | ~550  | 3, 4 |
+| ~~6~~ closed (#1664)  | G       | `gtg/transition_table.rb` + `gtg/builder.rb`                       | ~480    | ~220     | ~700  | 3    |
+| ~~7~~ closed (#1668)  | R₁      | `route.rb` + `routes.rb`                                           | ~350    | ~190     | ~540  | 5, 6 |
+| ~~8~~ closed (#1673)  | R₂      | `formatter.rb`                                                     | ~300    | ~150     | ~450  | 4, 7 |
+| ~~9~~ closed (#1680)  | R₃      | `router.rb`                                                        | ~200    | ~500     | ~700  | 7, 8 |
+| ~~10~~ closed (#1685) | wire-up | `actiondispatch/routing/route-set.ts` swap (Journey seam)          | ~200    | included | ~200  | 9    |
+
+**🎯 Wave 7 complete.** PRs 1–10 merged. Journey port exercised end-to-end via `RouteSet.journeyRecognize`. Legacy matcher remains the default for `RouteSet.recognize`.
+
+**Wave 7 followups:**
+
+- ~150 LOC — Migrate `RouteSet.recognize()` → `recognizeViaJourney`; delete legacy `matchSegments` (15 tests in `route-set.test.ts`).
+- ~80 LOC — Real dispatcher registry; replace throwing-stub `app` in bridge so `Router.serve` becomes real dispatch.
+- ~30 LOC — Swap `RouterRequest`/`RoutableApp`/`FormatterHost` interim interfaces for real `ActionDispatch::Request` types.
+- ~20 LOC — `Router.recognize` native short-circuit return value to replace the `STOP` sentinel throw.
+
+**Wave 7 PR 1 followups (~25 LOC):**
+
+- ~10 LOC — Drop dead `ESCAPED` regex in `journey/router/utils.ts`. Audit four `UNSAFE_*` regexes for the `/u` flag (non-BMP characters split into surrogate pairs and percent-encode to U+FFFD bytes; Rails works on UTF-8 bytes).
+- ~15 LOC — `unescapeUri` non-BMP support (`codePointAt` + variable step).
+- Pre-existing: `normalizePath` `%Aa` not normalized (faithful Rails port — `/(%[a-f0-9]{2})/` no `/i`). `toGraphviz` doesn't escape label content (`@internal` debug-only, same as Rails). `escapeSegment`/`unescapeUri` callers in trails (activerecord URL generation, actionview link helpers) may have depended on old buggy `+` handling — grep when next touching routing.
 
 **Total: 10 PRs, ~4670 TS LOC.** PRs 4 and 6 can ship in parallel once
 PR 3 lands; PR 5 follows PR 4 (Path/Pattern subclasses

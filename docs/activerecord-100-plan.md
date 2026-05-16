@@ -193,36 +193,103 @@ Small Rails-fidelity polish from PR reviews. Grouped by topic.
 
 Cluster details in [`activerecord-100-clusters.md`](activerecord-100-clusters.md).
 
-| Group                                     | Open slots / status      | LOC est. |
+<<<<<<< Updated upstream
+| Group | Open slots / status | LOC est. |
 | ----------------------------------------- | ------------------------ | -------- |
-| Associations-autosave cluster             | followups only           | ~480     |
-| Associations-reflection cluster           | 1 (C residual)           | ~150     |
-| Associations-core cluster                 | 1 (E)                    | ~140     |
-| Associations has-many-through cluster     | 3 (C, D, E)              | ~750     |
-| Associations-HABTM cluster                | 9 (A–I)                  | ~1690    |
-| Relation cluster                          | 1 (H)                    | ~220     |
-| Migration cluster                         | 2 (D, F in flight #1598) | ~430     |
-| Connection-pool cluster                   | followups only           | ~320     |
-| Schema cluster                            | 4 (H-b, I, J, K)         | ~870     |
-| MySQL active-schema cluster               | 3 (B, C, D)              | ~680     |
-| MySQL mysql2-adapter cluster              | 3 (A, B, C)              | ~700     |
-| MySQL schema cluster                      | 1 (C)                    | ~200     |
-| MySQL table-options cluster               | followups only           | ~100     |
-| MySQL charset-collation cluster           | Slot A in flight #1591   | ~135     |
-| PG-adapter cluster                        | 1 (E optional)           | ~120     |
-| PG-schema audit cluster                   | followups only           | ~50      |
-| PG virtual-column cluster                 | 1 (B in flight #1594)    | ~250     |
-| PG interval cluster                       | followup only            | ~50      |
-| PG UUID residual cluster                  | 1 (B)                    | ~250     |
-| PG long-tail cluster                      | followups only           | ~390     |
-| Transactions cluster                      | 1 (D); E deferred        | ~80      |
-| Unknown-triage cluster                    | 4 (A–D)                  | ~640     |
-| STI annotation-drift                      | 1 (tests-only PR)        | ~20      |
-| NotImplementedError elimination (Phase 2) | 7                        | ~610     |
-| Post-merge fidelity followups             | ~70 items                | ~2200    |
-| Doc-hygiene + infra followups             | 3                        | ~30      |
-| Architectural deferred                    | 3                        | ~410     |
-| Infra-blocked                             | 6                        | n/a      |
+| Associations-autosave cluster | followups only | ~480 |
+| Associations-reflection cluster | 1 (C residual) | ~150 |
+| Associations-core cluster | 1 (E) | ~140 |
+| Associations has-many-through cluster | 3 (C, D, E) | ~750 |
+| Associations-HABTM cluster | 9 (A–I) | ~1690 |
+| Relation cluster | 1 (H) | ~220 |
+| Migration cluster | 2 (D, F in flight #1598) | ~430 |
+| Connection-pool cluster | followups only | ~320 |
+| Schema cluster | 4 (H-b, I, J, K) | ~870 |
+| MySQL active-schema cluster | 3 (B, C, D) | ~680 |
+| MySQL mysql2-adapter cluster | 3 (A, B, C) | ~700 |
+| MySQL schema cluster | 1 (C) | ~200 |
+| MySQL table-options cluster | followups only | ~100 |
+| MySQL charset-collation cluster | Slot A in flight #1591 | ~135 |
+| PG-adapter cluster | 1 (E optional) | ~120 |
+| PG-schema audit cluster | followups only | ~50 |
+| PG virtual-column cluster | 1 (B in flight #1594) | ~250 |
+| PG interval cluster | followup only | ~50 |
+| PG UUID residual cluster | 1 (B) | ~250 |
+| PG long-tail cluster | followups only | ~390 |
+| Transactions cluster | 1 (D); E deferred | ~80 |
+| Unknown-triage cluster | 4 (A–D) | ~640 |
+| STI annotation-drift | 1 (tests-only PR) | ~20 |
+| NotImplementedError elimination (Phase 2) | 7 | ~610 |
+| Post-merge fidelity followups | ~70 items | ~2200 |
+| Doc-hygiene + infra followups | 3 | ~30 |
+| Architectural deferred | 3 | ~410 |
+| Infra-blocked | 6 | n/a |
+||||||| Stash base
+| Group | Open | LOC est. |
+| ----------------------------------------- | ---- | -------- |
+| Relation cluster | 6 | ~1440 |
+| Associations-core cluster | 5 | ~910 |
+| Associations-HABTM cluster | 7 | ~1290 |
+| Associations has-many-through cluster | 5 | ~1280 |
+| Migration cluster | 0 | ~140 |
+| Connection-pool cluster | 0 | ~80 |
+| MySQL active-schema cluster | 0 | ~70 |
+| MySQL mysql2-adapter cluster | 2 | ~480 |
+| MySQL schema cluster | 1 | ~200 |
+| MySQL table-options cluster | 2 | ~480 |
+| MySQL charset-collation cluster | 3 | ~315 |
+| MySQL onUpdate followups | 2 | ~30 |
+| PG-adapter cluster | 1 | ~220 |
+| PG-schema audit cluster | 1 | ~260 |
+| PG virtual-column cluster | 0 | ~120 |
+| PG interval cluster | 1 | ~180 |
+| PG UUID residual cluster | 2 | ~330 |
+| PG long-tail cluster | 7 | ~1510 |
+| Schema cluster | 4 | ~740 |
+| Transactions cluster | 3 | ~350 |
+| Unknown-triage cluster | 4 | ~640 |
+| STI annotation-drift | 1 | ~20 |
+| Associations-autosave cluster | 4 | ~940 |
+| Associations-reflection cluster | 3 | ~700 |
+| NotImplementedError elimination (Phase 2) | 7 | ~610 |
+| Post-merge fidelity followups | 151 | ~2880 |
+| Doc-hygiene + infra followups | 3 | ~30 |
+| Architectural deferred | 3 | ~410 |
+| Infra-blocked | 6 | n/a |
+=======
+| Group | Open | LOC est. |
+| ----------------------------------------- | ---- | -------- |
+| Relation cluster | 0 | followups only |
+| Associations-core cluster | 4 | ~530 |
+| Associations-HABTM cluster | 0 | ~340 followups |
+| Associations has-many-through cluster | 0 | followups only |
+| Migration cluster | 0 | ~140 |
+| Connection-pool cluster | 0 | ~80 |
+| MySQL active-schema cluster | 0 | ~70 |
+| MySQL mysql2-adapter cluster | 0 | followups only |
+| MySQL schema cluster | 0 | ~45 |
+| MySQL table-options cluster | 0 | ~100 followups |
+| MySQL charset-collation cluster | 3 | ~315 |
+| MySQL onUpdate followups | 0 | ~40 optional |
+| PG-adapter cluster | 0 | ~40 followups |
+| PG-schema audit cluster | 0 | followups only |
+| PG virtual-column cluster | 0 | ~120 |
+| PG interval cluster | 0 | ~50 followups |
+| PG UUID residual cluster | 2 | ~330 |
+| PG long-tail cluster | 0 | followups only |
+| Schema cluster | 1 | ~120 |
+| Transactions cluster | 1 | n/a (E deferred) |
+| Unknown-triage cluster | 2 | ~330 |
+| STI annotation-drift | 1 | ~20 |
+| Associations-autosave cluster | 0 | ~480 followups |
+| Associations-reflection cluster | 0 | ~60 followups |
+| NotImplementedError elimination (Phase 2) | 0 | folded into cluster slots |
+| Post-merge fidelity followups | 151 | ~2880 |
+| Doc-hygiene + infra followups | 3 | ~30 |
+| Architectural deferred | 3 | ~410 |
+| Infra-blocked | 6 | n/a |
+
+> > > > > > > Stashed changes
 
 **~45 actionable work-PR slots**, **~12.5k LOC** across the clusters above. Down from ~90 slots / ~18.2k LOC at start of session.
 

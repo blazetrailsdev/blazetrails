@@ -12,9 +12,15 @@ When picking a slot to spawn:
 
 ---
 
-## Associations-autosave cluster — all 4 slots closed (#1558, #1574, #1577, #1584)
+## Associations-autosave cluster — all 4 slots closed (#1558, #1574, #1577, #1584); 5-item fidelity bundle closed (#1678)
 
 i18n tests un-skipped nominally — full I18n backend port still required for real translation pipeline.
+
+**Post-#1678 followups (~45 LOC bundle):**
+
+- ~30 LOC — Centralize-vs-Rails-dispatch decision for autosave validations. Two paths: (a) wire `klass.validate(validationName)` and remove inline child-validation loop in `validateAssociations` so only per-association methods drive it; or (b) delete dead `defineNonCyclicMethod` per-association methods and document `validateAssociations` as canonical dispatch.
+- ~5 LOC — `_autosaveBelongsTo` line 643 still reads `assocRecord.changed` directly; should consult `changed_for_autosave?` (Rails line 549). #1678 fixed only autosaveHasOne.
+- ~10 LOC — `save_has_one_association:487` parity: Rails uses `(autosave && record.changed_for_autosave?) || _record_changed?(reflection, record, primary_key_value)`. We only do the changedForAutosave half; `_record_changed?` (FK-changed / inverse-polymorphic-changed / will-save-change-to FK) is not implemented. Likely blocks some persisted-but-FK-dirty hasOne cases.
 
 **Followups (~480 LOC) — small bundle (~50 LOC) shippable as one PR:**
 
@@ -41,7 +47,13 @@ i18n tests un-skipped nominally — full I18n backend port still required for re
 - `saveHasOneAssociation` relies on `defineNonCyclicMethod`'s `_alreadyCalled` instead of Rails' `record.autosaving_belongs_to_for?(inverse_association)`.
 - `AssociationBuilderExtension` only fires for `autosave: true`; Rails fires for every association. Cyclic dedup needs manual call when `autosave` is not set.
 
-## Associations-reflection cluster — Slot D + E closed (#1571, #1582); Slot C partial (#1580)
+## Associations-reflection cluster — all slots closed (#1571, #1580, #1582, #1670)
+
+**Slot C residual followups (~30–80 LOC):**
+
+- ~30–50 LOC — HABTM ThroughReflection wrap + `isNested` workaround removal (`reflection.ts:1338`). Blocked on auditing `push`/reload path in `CollectionProxy` and `association.ts` for `reflection.macro === "hasAndBelongsToMany"` branches that break when outer reflection becomes ThroughReflection. Start with `grep "macro === \"hasAndBelongsToMany\"\|isHasAndBelongsToMany"`.
+- ~30 LOC — Deeply nested through-association resolution in `CollectionProxy._buildThroughScope` (through-a-through beyond one level). Not exercised by current tests.
+- Pre-existing: `MacroReflection.computeClass` error message wording diverges from Rails' `Missing model class X for the Owner#assoc association.`
 
 31 empty-stub tests with generic boilerplate annotation. **Impl is fundamentally complete**; gaps are fixture plumbing + test-body writing + 3 fixture-model gaps.
 
@@ -57,19 +69,28 @@ i18n tests un-skipped nominally — full I18n backend port still required for re
 - ~30 LOC (E) — Deeply nested through-association resolution in `CollectionProxy._buildThroughScope` (through-a-through chains beyond one level). Not exercised by tests today.
 - Pre-existing deviation — `MacroReflection.computeClass` error message uses our format vs Rails' `Missing model class X for the Owner#assoc association.`
 
-## MySQL schema cluster (~200 LOC, Slot C remaining)
+## MySQL schema cluster — all slots closed (#1468, #1635)
 
-Slots A+B (#1468) closed. Real behavior gaps + one option drop covered; fixture/test-helper gaps remain.
+**Slot C followups (~45 LOC):**
 
-- **Slot C** (~200 LOC) — MySQL fixture/test-helper infrastructure: `posts`, `key_tests`, `lessons_students`/`topics`/`students` fixtures + subclassing `Base` with qualified `db.table` table_name. Uses the TS-native fixture infra (`defineFixtures`/`useFixtures`).
+- ~10 LOC — Extend `scripts/test-compare/extract-ts-tests.ts` to parse `it.skipIf(expr)("name", fn)` callable form. Unblocks recognition of `float limits` in `abstract_mysql_adapter/schema_test.rb` and any other `skipIf`-conditional tests.
+- ~30–50 LOC — `MySQLAnsiQuotesTest` un-skip: adapter-level `setSessionVariable` (or expose `execute("SET SESSION sql_mode='ANSI_QUOTES'")` cleanly) plus a `reconnect!` test hook. Also touches parser/quoting path for double-quoted identifiers under ANSI_QUOTES. Add `lessons_students`/`students` schema for `foreign_keys` test (FK with `ON DELETE CASCADE`) and a `topics` table for `primary_key` test.
+- ~5 LOC — `Mysql2Adapter.currentDatabase()` override (currently inherits abstract's empty `""`). Mirrors PG's impl at `postgresql-adapter.ts:4218`.
 
-## PG interval cluster (~50 LOC followup; Slot B partial)
+## PG interval cluster — all slots closed (#1637, #1687)
 
-Slot B AVG aggregate typecast closed (#1567 verbose-format Interval serialize + AVG dispatch). Interval schema-default extraction still skipped — `pg_get_expr` returns interval defaults as bare numeric (`94670856`) regardless of `intervalstyle = iso_8601` SET (only affects SELECT output, not pg_attrdef text).
+PG row reads route through `lookupCastTypeFromColumn` → `typeMap.fetch(1186)` → `Interval`. The row-read gap was closed implicitly by #1567 (`intervalstyle = iso_8601` per-connection makes PG return ISO 8601 strings parsed via `Duration.parse`); #1687 just un-skipped the tests after verifying.
 
-**Slot B followup (~50 LOC):**
+**Remaining followup (~50 LOC, optional):** `splitPgDefault` cast-aware numeric→Duration for `pg_get_expr` bare numerics → verbose-format deserialize. **Note:** the "bare numeric" theory may itself be a misdiagnosis (per #1637 finding); verify against PG 17+ behavior first.
 
-- ~50 LOC — `splitPgDefault` cast-aware numeric→Duration: detect interval-typed bare numerics from `pg_get_expr` and pass to verbose-format-aware deserialize; matching `Interval.castValue`/`serialize` for seconds → ISO 8601 round-trip. Unblocks the `interval.test.ts > schema dump with default value` test re-skipped in #1567.
+Slot B AVG aggregate typecast closed (#1567 verbose-format Interval serialize + AVG dispatch). Schema-default extraction closed (#1637 — bug was on the dump side: `Duration.toString()` returns total seconds collapsing the Duration through `cleanDefault`'s `String(raw)` path. The original "`pg_get_expr` returns bare numeric" theory was a misdiagnosis — `pg_get_expr` does honour `SET intervalstyle = iso_8601`).
+
+**Followups (~85 LOC):**
+
+- ~30–80 LOC — Row-read deserialization (Slot B remainder). `interval.test.ts > "interval type"` and `> "interval type cast from numeric"` still `.skip` — PG row reads don't route interval values through `Interval.castValue` during attribute materialization (reads back `null` instead of `Duration`). Likely in attribute-set materialization or postgresql/oid type-map result deserialization.
+- ~50 LOC (low priority) — Refactor `SchemaDumper.columns()` to route `col.default` through `col.castType?.typeCastForSchema` when available; drop the `Duration` branch from `cleanDefault`. Closer Rails parity (Rails routes through `schema_default → type.deserialize → type.type_cast_for_schema`). Auto-handles any future type with lossy `toString()` (decimal, bytea, etc.).
+- ~5 LOC (cosmetic) — Once `t.interval(...)` DSL helper exists, simplify the test regex to a single alternative.
+- Sweep — remove other BLOCKED comments around the codebase referencing the now-disproven `pg_get_expr returns bare numeric` theory.
 
 ## PG long-tail cluster — all slots closed (#1498, #1508, #1515, #1543, #1553, #1562, #1585)
 
@@ -164,7 +185,16 @@ Larger refactors:
 - `deriveFkQueryConstraints` raises `ConfigurationError` (Rails raises `ArgumentError`); conscious divergence.
 - EachTest2 CPK placeholder stubs pass trivially without exercising behavior — needs sharpened annotations.
 
-## Associations-core cluster — A, B, C, D closed; E remains
+## Associations-core cluster — A, B, C, D, A-preloader-grouping closed (#1538, #1557, #1566, #1590, #1674); E remains
+
+**Slot A preloader-grouping followups (~430 LOC across multiple slots, ~10 tests remain post-#1674):**
+
+- ~30 LOC — Un-skip `preload groups queries with same sql at second level` once an `extending` association option lands (test body otherwise ready).
+- ~60 LOC — Un-skip `preload can group separate levels` with 3-query assertion (impl correct; needs body restored).
+- ~40 LOC — Postesque fixture for `does not group same scope different key name` (needs different `joinPrimaryKey` to actually exercise the distinction).
+- ~80–120 LOC — STI/through `available_records` bundle (5 tests skipped): `sti`, `with through association`, `only some records available with through`, `available records queries when scoped/collection/incomplete`. Needs test bodies + STI lookup fix.
+- ~120 LOC — Composite-FK preload bundle (3 tests skipped): `has many association with composite foreign key`, `belongs to ... composite foreign key`, `loaded belongs to ... composite foreign key`, `has many through with composite query constraints`. Loader infra supports `string[]`; needs CPK fixtures.
+- ~150 LOC — `preload can group multi level ping pong through` — large fixture (similar_posts + favorite_authors); deferred slot.
 
 Closed: A (#1538), B (#1557), C (#1566), D (#1590). 49 original placeholder stubs in `associations.test.ts`. Many remain — categorized below for routing.
 
@@ -212,11 +242,31 @@ Larger refactors:
 
 3. **Slot E** (~30 LOC, optional) — Annotation re-keying.
 
-## Associations has-many-through cluster — Slot A + B closed (#1573, #1593); C, D, E remain
+## Associations has-many-through cluster — all slots closed (#1573, #1593, #1646, #1656, #1661)
+
+**Slot E followups (~150–230 LOC):**
+
+- ~80–150 LOC — JoinDependency alias resolution for nested-through. `Author.joins(:nested_through).where("far_table.col" => v)` emits FK on wrong intermediate table; closes 2–3 skipped tests in `nested-through-associations.test.ts` (lines 1119, 1610, 1689).
+- ~40–80 LOC — `sourceType` + user-`scope` on nested-through where `through:` is itself through with polymorphic source. Scope binds to wrong table; needs Rails-style scope-attachment to specific reflection in chain.
+- ~30 LOC — Verify `distinct` propagation on nested-through `loadHasManyThrough` — DB pre-dedupes via `WHERE id IN`, so the assertion may not exercise the actual `SELECT DISTINCT` path.
+
+**Slot D followups (~60 LOC):**
+
+- ~30 LOC — Rails-mirrored test for `Author.joins(:ratings).where("ratings.value": N)` against nested-through chain (verifies JoinDependency, not preloader). Belongs in Slot E (intermediate-join SQL through nested chains was deliberately punted).
+- ~20 LOC — `source_type` polymorphic-with-sourceType variant of nested-through preload test. Preloader already filters `foreignType === sourceType` but no test pins the intersection. Slot E territory.
+- ~10 LOC — `_dataAvailable()` / `runnableLoaders()` in `preloader/through-association.ts` only checks single source preloader layer. For 4+ level chains, runnable-loader scheduling may emit one extra wasted pass (perf, not correctness).
+- Pre-existing notes: Slot D shipped ~200 LOC vs ~270 sized — `ThroughAssociation` preloader + `Reflection#chain` walker already handled nested-through end-to-end. Tests use local `Ntd*` model prefixes (not Rails fixtures), descriptive English names (not Rails `test_has_many_through_*`); `test:compare` won't match by name (Δ 0).
 
 33 skipped across 3 files — most are empty placeholders awaiting Rails-mirrored bodies. Production code surface (`has-many-through-association.ts`, `through-association.ts`, `disable-joins-association-scope.ts`) is structurally complete.
 
-1. **Slot C** (~220 LOC) — Autosave-through propagation + Marshal exclusion.
+**Slot C followups (~210 LOC):**
+
+- ~80 LOC — Constructor-form collection writer in `_assignAttributes` (`attribute-assignment.ts:27`): detect when a key matches an association name (via `ctor._associations`) and dispatch to `setHasMany`/`setHasOne`/collection writer instead of `writeAttribute`. Unblocks `new Owner({items: [...]})` Rails pattern across HMT/HABTM/HasMany.
+- ~30 LOC — `association.reset_scope` on owner save. Add a no-op `resetScope()` on Association + invoke from `saveCollectionAssociation` before iterating children. Required for scoped through associations whose target needs re-resolution.
+- ~100 LOC — HMT `insert_record` two-step alignment. Replace `insertHabtmRecord`'s single-row write with Rails' two-step (super.insertRecord → `save_through_record`). Risk: HABTM tests not validating through-target may break; recommend behind HABTM Slot E (polymorphic + STI through).
+- Pre-existing: `marshal_dump_7_1` equivalent skipped (Ruby Marshal only); if JS structured-clone path is ever ported, the "exclusion" semantics (unloaded associations, association cache state) become real work.
+- Pre-existing: `autosave: false` opt-out path skips inserts but Rails always runs `association.reset_scope` unconditionally — latent gap (covered by `resetScope` followup above).
+
 2. **Slot D** (~270 LOC) — Nested-through preloader + STI + joins/includes.
 3. **Slot E** (~260 LOC) — Nested-through advanced (distinct/repeated table/polymorphic-with-scope/source-reset/autosave-skip).
 
@@ -233,9 +283,60 @@ Note: audit worktree didn't have rails source populated (historical path was `sc
 - No `assert_queries_count` equivalent → disable-joins efficiency guarantees aren't tested.
 - `QueryMethodsHost._reordering` is `boolean` but only set to `true` in `reorderBang`. Consider resetting to `false` in `orderBang` for completeness.
 
+<<<<<<< Updated upstream
+
 ## Associations-HABTM cluster (~1690 LOC across 9 slots, from audit-associations-habtm)
 
+||||||| Stash base
+
+## Associations-HABTM cluster — Slots A + B closed (#1597, #1609); C–I remain (~1290 LOC across 7 slots)
+
+=======
+
+## Associations-HABTM cluster — all slots closed (#1597, #1609, #1645, #1652, #1657, #1660, #1666, #1672, #1681)
+
+**Slot F followups (~100 LOC):**
+
+- ~20 LOC — Align HABTM `primaryKey` behavior: `loadHabtm`/`habtmOwnerPk` honors `options.primaryKey` but JoinDependency eager-load passes `modelClass.primaryKey`. Rails macro intentionally doesn't forward `:primary_key` (allowlist `associations.rb:1900`). Recommend dropping `habtmOwnerPk` primaryKey override (option b) for Rails fidelity.
+- ~30 LOC — Real-table-name reuse in `_addThroughAssociation`: mirror collision-check from `addAssociation` (lines 216-217) so user `.where("target_table.col")` predicates work on through eager loads. Affects all through associations, not HABTM-specific.
+- ~50 LOC — Schema-qualified HABTM tables (`"schema.table"` → `"schema"."table"`) — confirm via dedicated test using `makeSongAlbumModels`-style.
+
+**Slot H followups (~200 LOC):**
+
+- ~50 LOC — Wire `associationForeignKey` end-to-end through `createHabtmJoinModel` (target FK on right belongs_to) and `_resolveHabtmJoin`/`loadHabtm`. Today hardcoded as `${underscore(singularize(name))}_id`.
+- ~30 LOC — Pass `options.foreignKey` into middle reflection options so public HABTM no longer needs join-key options leak.
+- ~80 LOC — Wire `destroyAssociations` stub in `persistence.ts:1221` into the destroy flow (call from `persistence.destroy()` before `_destroyRow`, mirroring Rails `persistence.rb:455`). Then refactor HABTM `beforeDestroy` to `destroy_associations` override module.
+- ~40 LOC — Produce distinct hasMany-through reflection for public name (Rails' `has_many name, **hm_options` at end of `has_and_belongs_to_many`). Lets `_reflections[name]` be the through-hasMany and HABTM reflection be parent link only.
+
+**Slot I followups (~40 LOC):**
+
+- ~40 LOC — Centralize scope_for_create on base `Association#initializeAttributes`: read `scope_for_create`, filter by `record.changedAttributeNamesToSave` minus `skipAssign` keys, `_assignAttributes`. Closes 2 deviations (already-assigned filter source + STI `type` column protection) + singular gap (`SingularAssociation#build`/`_createRecord` don't apply scope_for_create today).
+
+**Pre-existing notes:** HABTM ThroughReflection-wrap still open from #1570 followup (`Reflection#isNested` workaround); blocked on auditing `push`/reload path for `reflection.macro === "hasAndBelongsToMany"` branches.
+
+**Slot E followups (~110 LOC):**
+
+- ~30–80 LOC — Preloader already-loaded-through + polymorphic-sourceType empty-result gap (`preloader/through-association.ts:56-71`). When through assoc already loaded on owner, polymorphic-sourceType preload yields empty source records. Reproducer: Hotel → Departments → Chefs → employable[CakeDesigner]; preload `psChefs` first, then `cakeDesigners`.
+- ~50 LOC — Single-through (non-nested) polymorphic+sourceType test variant covering `AssociationScope` direct JOIN path (`Department has_many cake_designers through: chefs, source: employable, source_type: "PsCakeDesigner"`).
+- ~30 LOC — Normalize/unblock 12 `it.skip` stubs in `nested-through-associations.test.ts` tagged `BLOCKED: associations — nested-attributes feature gap` (most look implementable; misleading annotation).
+
+**Slot D followups (~140 LOC):**
+
+- ~50 LOC — Wire `defineAutosaveValidationCallbacks` unconditionally on HABTM reflections at declaration time (currently gated by `options.autosave` at `associations.ts:340-343`). Un-skips two `validate: false … callbacks` tests in `has-and-belongs-to-many-associations.test.ts`.
+- ~30 LOC — Add `parent_reflection` field to MiddleReflection / target hasMany reflection in HABTM builder (Rails `associations.rb:1884, 1905`); affects introspection, error messages, scope corner cases.
+- ~20 LOC — Tighten `habtmOptions → middle hasMany` to Rails' explicit allowlist (`:before_add`, `:after_add`, `:before_remove`, `:after_remove`, `:autosave`, `:validate`, `:join_table`, `:class_name`, `:extend`, `:strict_loading`); drop leakage of `readonly`/`dependent`/`inverseOf`.
+- ~40 LOC — Move HABTM `beforeDestroy` into anonymous `destroy_associations` override mixin (Rails-shape; composes with subclass overrides).
+
+**Slot G followups (~50 LOC):**
+
+- ~30 LOC — Apply copy-on-write Set semantics to `_counterCacheColumns` in `belongs-to.ts:78-81` and `counter-cache.ts:222-236`. Pre-existing parallel STI-inheritance bug.
+- ~20 LOC — Write body for `counter-cache.test.ts:1134` (has_many :through counter cache) — empty stub today, likely passes with registry-driven `counterCachedAssociationNames`. Verify Rails source mapping first (test name doesn't match a Rails test directly; may need `normalize-skips` rename).
+- ~50 LOC — Triage 14 other `BLOCKED: associations — counter cache not fully implemented` stubs in `counter-cache.test.ts` (lines 416, 643, 701, 707, 1213, 1381–1493); several likely unblock with the registry.
+  > > > > > > > Stashed changes
+
 **Important: ~160 of 168 BLOCKED tests are NOT HABTM-specific** — they exercise general associations machinery (`CollectionProxy` mutation, `*_ids` reader/writer, association scope chain composition, eager loading, polymorphic-through, STI-through, etc.). **Significant overlap with audit-associations-core cluster.** The HABTM builder itself is structurally complete.
+
+<<<<<<< Updated upstream
 
 1. **Slot A** (~260 LOC) — HABTM CollectionProxy mutation (`<<`, `push`, `delete`, `clear`, `concat`, `replace`) + `AssociationTypeMismatch`.
 2. **Slot B** (~140 LOC) — `*_ids` reader/writer + ids cache invalidation.
@@ -246,6 +347,50 @@ Note: audit worktree didn't have rails source populated (historical path was `sc
 7. **Slot G** (~120 LOC) — Counter-cache install on `belongs_to` + through.
 8. **Slot H** (~140 LOC, low priority) — HABTM builder polish.
 9. **Slot I** (~150 LOC) — `build`/`create` on HABTM with scope-attr inheritance.
+   ||||||| Stash base
+   **Slot A followups (~140 LOC):**
+
+- ~60 LOC (D) — `readonly: true` HABTM option to mark all loaded records as `ReadOnlyRecord` (raises on `save!`). Scope: `collection-proxy.ts` `loadTarget` + `_buildThroughScope` + readonly propagation. Un-skips `dynamic find all should respect readonly access`.
+- ~80 LOC (D) — `validate: false` on push/create path to suppress validation callbacks on the pushed record. Scope: `collection-proxy.ts` push + `_pushThrough`. Un-skips `association with validate false does not run associated validation callbacks on create/update`.
+- ~10 LOC — Wire `_raiseOnTypeMismatch` into `appendBang` → `_pushThrough` path; bang path bypasses type-check today.
+- ~10 LOC — Type guard at top of `isInclude` (`return false unless record instanceof klass`) for Rails parity (TS generics make low-risk).
+- ~30 LOC — `include_in_memory?` through-chain walk for through associations; currently uses `_target.includes(record)` fallback which misses records reachable only via join chain.
+
+1. **Slot C** (~250 LOC) — Association scope chain composition for HABTM (where/order/select/group/having/unscope).
+2. **Slot D** (~150 LOC) — Association options: `validate:`, `readonly:`, `extend:` (now also absorbs Slot A `readonly`/`validate` followups above).
+3. **Slot E** (~280 LOC, biggest payoff) — Polymorphic + STI through.
+4. **Slot F** (~200 LOC) — Eager loading through HABTM (`includes`/`preload`/`eager_load`).
+5. **Slot G** (~120 LOC) — Counter-cache install on `belongs_to` + through.
+6. **Slot H** (~140 LOC, low priority) — HABTM builder polish.
+7. **Slot I** (~150 LOC) — `build`/`create` on HABTM with scope-attr inheritance.
+
+**Slot B followups (~25 LOC):**
+
+- ~20 LOC — `insertHabtmRecord` uses `throughModel.insertAll([joinAttrs])` which bypasses validation; Rails' `habtm_writer` uses `record.save(validate: validate)`. Wire `validate` through if needed (no real validators on HABTM joins in practice).
+- Sweep — verify `_associationIds` cache invalidation on `destroyAll` and explicit `clear()` (Copilot raised; only `deleteAll` was wired exhaustively).
+- # Pre-existing: `transaction()` HABTM bypass in `collection-association.ts` is a symptom fix; root cause is `_transactionFallback` vs `TransactionManager` savepoint counter collision (`active_record_N` duplicates on MySQL/MariaDB). Broader transaction-infra gap, not HABTM-specific.
+
+  **Slot A followups (~140 LOC):**
+
+- ~60 LOC (D) — `readonly: true` HABTM option to mark all loaded records as `ReadOnlyRecord` (raises on `save!`). Scope: `collection-proxy.ts` `loadTarget` + `_buildThroughScope` + readonly propagation. Un-skips `dynamic find all should respect readonly access`.
+- ~80 LOC (D) — `validate: false` on push/create path to suppress validation callbacks on the pushed record. Scope: `collection-proxy.ts` push + `_pushThrough`. Un-skips `association with validate false does not run associated validation callbacks on create/update`.
+- ~10 LOC — Wire `_raiseOnTypeMismatch` into `appendBang` → `_pushThrough` path; bang path bypasses type-check today.
+- ~10 LOC — Type guard at top of `isInclude` (`return false unless record instanceof klass`) for Rails parity (TS generics make low-risk).
+- ~30 LOC — `include_in_memory?` through-chain walk for through associations; currently uses `_target.includes(record)` fallback which misses records reachable only via join chain.
+
+**Slot C followups (~70 LOC) — cross-cutting cleanup affecting ALL association loaders:**
+
+- ~20 LOC — `applyAssociationScope(rel, scope, owner)` helper that handles arity (0-arity uses `this = rel`; 1-arity gets `rel`; 2-arity `(rel, owner)`) + falsy-return fallback. Swap 6 call sites: `loadHabtm` (associations.ts ~1543), `loadHasMany` (1067), `loadHasOne` (854), `loadHasManyThrough` (1187, 1303, 1320). `AssociationOptions.scope`'s `owner` parameter is currently dead.
+- ~50 LOC — `Associations.hasAndBelongsToMany` builder-time `scope` (captured in `habtmOptions` but never reapplied) → wire into the reflection so `loadHabtm` auto-applies. Natural Slot D followup.
+
+**Pending sweep:** Re-tag mis-labeled `BLOCKED: habtm` tests across `has-and-belongs-to-many-associations.test.ts`, `eager.test.ts`, `nested-through-associations.test.ts`, `extension.test.ts`, `inner-join-association.test.ts`, `has-many-associations.test.ts` (mirror #1641's STI annotation drift workflow). 3 known stubs need Slot D/A territory: `scoped find on through association doesnt return read only records` (readonly flag propagation through CollectionProxy), `attributes are being set when initialized from habtm association with where clause` + multi-condition variant (`scope_attributes` on `build()`/`new()`). 2. **Slot D** (~150 LOC) — Association options: `validate:`, `readonly:`, `extend:` (now also absorbs Slot A `readonly`/`validate` followups above). 3. **Slot E** (~280 LOC, biggest payoff) — Polymorphic + STI through. 4. **Slot F** (~200 LOC) — Eager loading through HABTM (`includes`/`preload`/`eager_load`). 5. **Slot G** (~120 LOC) — Counter-cache install on `belongs_to` + through. 6. **Slot H** (~140 LOC, low priority) — HABTM builder polish. 7. **Slot I** (~150 LOC) — `build`/`create` on HABTM with scope-attr inheritance.
+
+**Slot B followups (~25 LOC):**
+
+- ~20 LOC — `insertHabtmRecord` uses `throughModel.insertAll([joinAttrs])` which bypasses validation; Rails' `habtm_writer` uses `record.save(validate: validate)`. Wire `validate` through if needed (no real validators on HABTM joins in practice).
+- Sweep — verify `_associationIds` cache invalidation on `destroyAll` and explicit `clear()` (Copilot raised; only `deleteAll` was wired exhaustively).
+- Pre-existing: `transaction()` HABTM bypass in `collection-association.ts` is a symptom fix; root cause is `_transactionFallback` vs `TransactionManager` savepoint counter collision (`active_record_N` duplicates on MySQL/MariaDB). Broader transaction-infra gap, not HABTM-specific.
+  > > > > > > > Stashed changes
 
 **Annotation drift sweep needed first** — ~160 of these are mis-tagged as `BLOCKED: habtm` when the real cause is general-associations machinery.
 
@@ -316,7 +461,114 @@ Slot D was 2 notification un-skips. Gap 8 (process-fork lifecycle) was a phantom
 
 ## PG virtual-column cluster (~250 LOC, Slot B remaining)
 
+<<<<<<< Updated upstream
+
 - **Slot B** (~250 LOC) — Live-PG round-trip harness + un-skip 5 Rails-mirrored tests. `defineSchema`-less `create_table`; `change_table { |t| t.virtual ... }`; `buildFixtureSql` virtual-column filter.
+  ||||||| Stash base
+- ~30 LOC — Extract MySQL `buildCreateIndexDefinition` pre-flight into a shared helper consumed by both `AbstractMysqlAdapter.buildCreateIndexDefinition` and `MysqlSchemaStatements.addIndex` (currently duplicated because `TestDatabaseAdapter`/`SchemaAdapter` doesn't forward `addIndex` to the raw adapter).
+- ~40 LOC — Refactor abstract `SchemaStatements.addIndex` (`abstract/schema-statements.ts:257`) to delegate to `buildCreateIndexDefinition` (Rails' `AbstractAdapter#add_index` does). Then MySQL just overrides `buildCreateIndexDefinition` instead of `addIndex`.
+
+**Slot C pre-existing notes:**
+
+- `_mysqlInlineIndexSql` in `TableDefinition.toSql()` duplicates `MysqlSchemaCreation.visitIndexDefinition` logic; must update both if MySQL index options grow.
+- Inline form doesn't handle per-column `order` option (Rails' `addOptionsForIndexColumns` handles both length and order).
+- `MigrationContext.createTable` parallel index-creation loop in `migration.ts` duplicates `SchemaStatements.createTable`.
+
+**Slot B followups (~40 LOC bundle):**
+
+- ~10 LOC — `typeToSql` `unsigned` suffix: append `" unsigned"` when `options.unsigned && type !== "primary_key"`. Unblocks unsigned integer column migrations.
+- ~30 LOC — `addTimestamps`/`removeTimestamps` DDL type-check (datetime emit verified; only blocked on live-table scope).
+
+**Pre-existing notes:**
+
+- `MysqlSchemaCreation` instance in `mysql2-adapter.ts` is constructed without adapter ref; safe today (stateless + quoting passed in constructor) but any future method needing live adapter will fail silently.
+- `recreateDatabase` skips Rails' `reconnect!` (TS async pool handles implicitly).
+- `indexAlgorithm` error message uses `'default', 'copy', ...` strings vs Rails' `:default, :copy, ...` symbol inspect.
+
+## MySQL mysql2-adapter cluster — Slot A closed (#1617); B + C remain (~480 LOC)
+
+1. **Slot B — Translate-exception depth: timeout + statement-timeout** (~200 LOC). `read_timeout` → `AdapterTimeout`, `ER_FILSORT_ABORT` / `ER_QUERY_TIMEOUT` → `StatementTimeout`.
+2. **Slot C — Timezone re-sync + db_warnings_action + test-helper infra** (~280 LOC). `query_options[:database_timezone]` plumbing + `with_db_warnings_action`.
+
+**Slot A pre-existing notes:**
+
+- `_fakeConnection` sentinel lives in public `MysqlAdapterOptions` with `@internal` JSDoc (no global `stripInternal`; ~5 LOC tsconfig followup, repo-wide).
+- `execQuery` does not update `database_timezone` per-query (Slot C scope).
+- `_shouldPrepare` with `statementLimit === 0` + explicit `prepare: true` accumulates server-side prepared statements without unprepare. Pre-existing in `execute`/`executeMutation`; low risk.
+
+## PG virtual-column cluster — all slots closed (#1594)
+
+**Followups (~120 LOC):**
+
+- ~10 LOC — `addColumn` virtual + `comment` option: live-PG test that `changeColumnComment` reaches `pg_description` for virtual columns.
+- ~10 LOC — Un-skip `schema dumping` test (`adapters/postgresql/virtual-column.test.ts:90`): `schema-dumper.ts:emitTable` bypasses `prepareColumnOptions` for virtual columns so `as`/`stored` never reach output.
+- ~30 LOC — `_schemaLoadPromise` STI cascade regression test (`model-schema.ts:512–541`). Promote `_schemaLoadPromise` onto `SchemaHost` proper to remove the cast.
+- ~80 LOC — Retire `SimpleTableBuilder` (`postgresql-adapter.ts:5180+`) and unify `addColumn` + `createTable` virtual paths through `schemaCreation.accept(...)` visitor. Today `DEFAULT`/`NOT NULL`/`COLLATE` are duplicated between `addColumn` and `addColumnOptionsBang`; `SimpleTableBuilder.virtual` silently drops `null`/`default`/`comment`.
+
+**Pre-existing notes:**
+
+- `virtual()` with omitted `options.as` silently creates a plain column — matches Rails `add_column_options!` `if as = options[:as]` wrap.
+- # PG 18 will need `_pgGeneratedClause` server-version gate for `stored: false` → `VIRTUAL`. Single point of change.
+- ~30 LOC — Extract MySQL `buildCreateIndexDefinition` pre-flight into a shared helper consumed by both `AbstractMysqlAdapter.buildCreateIndexDefinition` and `MysqlSchemaStatements.addIndex` (currently duplicated because `TestDatabaseAdapter`/`SchemaAdapter` doesn't forward `addIndex` to the raw adapter).
+- ~40 LOC — Refactor abstract `SchemaStatements.addIndex` (`abstract/schema-statements.ts:257`) to delegate to `buildCreateIndexDefinition` (Rails' `AbstractAdapter#add_index` does). Then MySQL just overrides `buildCreateIndexDefinition` instead of `addIndex`.
+
+**Slot C pre-existing notes:**
+
+- `_mysqlInlineIndexSql` in `TableDefinition.toSql()` duplicates `MysqlSchemaCreation.visitIndexDefinition` logic; must update both if MySQL index options grow.
+- Inline form doesn't handle per-column `order` option (Rails' `addOptionsForIndexColumns` handles both length and order).
+- `MigrationContext.createTable` parallel index-creation loop in `migration.ts` duplicates `SchemaStatements.createTable`.
+
+**Slot B followups (~40 LOC bundle):**
+
+- ~10 LOC — `typeToSql` `unsigned` suffix: append `" unsigned"` when `options.unsigned && type !== "primary_key"`. Unblocks unsigned integer column migrations.
+- ~30 LOC — `addTimestamps`/`removeTimestamps` DDL type-check (datetime emit verified; only blocked on live-table scope).
+
+**Pre-existing notes:**
+
+- `MysqlSchemaCreation` instance in `mysql2-adapter.ts` is constructed without adapter ref; safe today (stateless + quoting passed in constructor) but any future method needing live adapter will fail silently.
+- `recreateDatabase` skips Rails' `reconnect!` (TS async pool handles implicitly).
+- `indexAlgorithm` error message uses `'default', 'copy', ...` strings vs Rails' `:default, :copy, ...` symbol inspect.
+
+## MySQL mysql2-adapter cluster — all slots closed (#1617, #1647, #1662)
+
+**Slot C followups (~60 LOC):**
+
+- ~30 LOC — Wire `Rails.error.report` for `report` warning action (joint with PG `_flushWarnings`'s `TODO(report)`). Blocked on global ErrorReporter singleton.
+- ~20 LOC — Hoist `CLIENT_NOT_CONNECTED_RE` into `isClientNotConnected(e)` predicate; abstract `when nil` branch could gate on error shape (code undefined or connection-protocol codes) to shrink the "abstract `when nil` fires for any errno-less Error matching" deviation.
+- ~10 LOC — When `Mysql2Adapter#configureConnection` no-op gets real impl (per-pool-connection init), set `database_timezone`-equivalent state from `getDefaultTimezone()` so first-query sync isn't load-bearing.
+
+**Pre-existing notes:** `_syncDatabaseTimezone()` called per-method (execute/execQuery/executeMutation/exec/explain) not centralized — matches Rails `perform_query`-only sync. `databaseTimezone` is per-adapter field, not per-PoolConnection (Rails ties to single `@raw_connection`).
+
+**Slot B followups (~110 LOC):**
+
+- ~30 LOC — Wire 4 lock/range/canceled cases into `AbstractMysqlAdapter._translateException`: `ER_LOCK_DEADLOCK`→`Deadlocked`, `ER_LOCK_WAIT_TIMEOUT`→`LockWaitTimeout`, `ER_QUERY_INTERRUPTED`→`QueryCanceled`, `ER_OUT_OF_RANGE`→`RangeError` (error classes + constants already exist; just missing switch cases).
+- ~80 LOC — `Mysql2Adapter` `ConnectionError` branch (`Mysql2::Error::ConnectionError` → `ConnectionNotEstablished` when msg matches `/MySQL client is not connected/i`, else `ConnectionFailed`) + abstract `when nil → ConnectionNotEstablished`. Verify/add `DatabaseAlreadyExists` for `ER_DB_CREATE_EXISTS` mapping.
+
+Bundles cleanly as a single fidelity-sweep PR (~110–150 LOC).
+
+1. **Slot B — Translate-exception depth: timeout + statement-timeout** (~200 LOC). `read_timeout` → `AdapterTimeout`, `ER_FILSORT_ABORT` / `ER_QUERY_TIMEOUT` → `StatementTimeout`.
+2. **Slot C — Timezone re-sync + db_warnings_action + test-helper infra** (~280 LOC). `query_options[:database_timezone]` plumbing + `with_db_warnings_action`.
+
+**Slot A pre-existing notes:**
+
+- `_fakeConnection` sentinel lives in public `MysqlAdapterOptions` with `@internal` JSDoc (no global `stripInternal`; ~5 LOC tsconfig followup, repo-wide).
+- `execQuery` does not update `database_timezone` per-query (Slot C scope).
+- `_shouldPrepare` with `statementLimit === 0` + explicit `prepare: true` accumulates server-side prepared statements without unprepare. Pre-existing in `execute`/`executeMutation`; low risk.
+
+## PG virtual-column cluster — all slots closed (#1594)
+
+**Followups (~120 LOC):**
+
+- ~10 LOC — `addColumn` virtual + `comment` option: live-PG test that `changeColumnComment` reaches `pg_description` for virtual columns.
+- ~10 LOC — Un-skip `schema dumping` test (`adapters/postgresql/virtual-column.test.ts:90`): `schema-dumper.ts:emitTable` bypasses `prepareColumnOptions` for virtual columns so `as`/`stored` never reach output.
+- ~30 LOC — `_schemaLoadPromise` STI cascade regression test (`model-schema.ts:512–541`). Promote `_schemaLoadPromise` onto `SchemaHost` proper to remove the cast.
+- ~80 LOC — Retire `SimpleTableBuilder` (`postgresql-adapter.ts:5180+`) and unify `addColumn` + `createTable` virtual paths through `schemaCreation.accept(...)` visitor. Today `DEFAULT`/`NOT NULL`/`COLLATE` are duplicated between `addColumn` and `addColumnOptionsBang`; `SimpleTableBuilder.virtual` silently drops `null`/`default`/`comment`.
+
+**Pre-existing notes:**
+
+- `virtual()` with omitted `options.as` silently creates a plain column — matches Rails `add_column_options!` `if as = options[:as]` wrap.
+- PG 18 will need `_pgGeneratedClause` server-version gate for `stored: false` → `VIRTUAL`. Single point of change.
+  > > > > > > > Stashed changes
 
 ---
 
@@ -330,7 +582,7 @@ Re-categorization of all 89 `BLOCKED: unknown` annotations. **Single foundationa
 
 1. **Slot A — Annotation refresh** (~200 LOC, comment-only). Re-tag all 89 annotations into the controlled vocabulary, moving the Ruby-only language-semantics ones (`modules.test.ts` x7, `mixin.test.ts` x2, `base.test.ts` x1 — `Module#prepend`, `singleton_class`, `Module#ancestors`, constant-path lookup) to `PERMANENT-SKIP` form in `unported-files.ts`.
 2. **Slot B — `insert-all.test.ts` investigation + un-skip** (~250 LOC). **64 of the 89 have stale "`MemoryAdapter accepts any attrs"` comments** that mislead the audit — there is no `MemoryAdapter`; the test setup uses `SchemaAdapter` wrapping a real driver. `InsertAll` impl is at 100% per. Real work: scrub stale comments (largely done), investigate what's actually skipped, rewrite test bodies to assert against real-adapter behavior.
-3. **Slot C — SignedId real-feature gaps** (~140 LOC).
+3. **Slot C — SignedId real-feature gaps** — closed (#1684). ~20 LOC followup: `Relation.findSigned` / `Relation.findSignedBang` scoping wrappers (mirrors Rails `SignedId::RelationMethods`); un-skips 2 remaining `find signed record on relation` / `find signed record with a bang on relation` tests.
 4. **Slot D — Callbacks `afterCommit` refinements** (~50 LOC).
 5. **Deferred** — Misc small feature closes (~80 LOC); timezone-aware attribute methods (~150 LOC).
 
@@ -338,7 +590,25 @@ Re-categorization of all 89 `BLOCKED: unknown` annotations. **Single foundationa
 
 audit-STI found **no STI implementation gap**. All 6 `BLOCKED: STI` tests are mis-labeled — real causes are missing fixture scopes, UUID PK + touch on polymorphic delegated_type, and PG `CREATE TABLE … INHERITS` schema-dump . Single tests-only PR re-annotates the 6 tests under correct categories.
 
-## Schema cluster — Slots D, E, F closed; Slot H partial (#1467, #1546, #1564, #1576); H-b + I + J + K remain
+## Schema cluster — Slots D, E, F, H-b, I, J closed (#1467, #1546, #1564, #1576, #1618, #1650, #1665); Slot H partial; K remains
+
+**Slot I followups (~25 LOC):**
+
+- ~5 LOC — Add `supportsNativePartitioning()` skip guard to `partitions.test.ts` tests (mirrors Rails `skip unless database_version >= 100000`).
+- ~10 LOC — Drop or align extra `partition table` test in `partitions.test.ts` with Rails `partitions_test.rb` (Rails only has `test_partitions_table_exists`).
+- ~10 LOC — Move `commented_table` round-trip into its own describe block (Rails layout parity).
+
+Note: Slot I shipped ~113 LOC vs ~250 sized — the dump wiring (`pgSchemaDumper.fetchTableOptions` → `tableOptions` → `inheritedTableNames` / `tablePartitionDefinition`) had already landed in the Slot H window. The 6 "un-skips" were already gated by `describeIfPg` (stale framing).
+
+**Slot J followups (~185 LOC):**
+
+- ~30 LOC — Un-skip `marshal dump and load with ignored tables`: wire `ActiveRecord.schemaCacheIgnoredTables` config into `tablesToCache`/`addAll` (Rails `schema_cache.rb:436-438`).
+- ~40 LOC — Un-skip `marshal dump and load with gzip` + `yaml dump and load with gzip` (gzip plumbing landed; tests assert Rails serialization shapes — need TS equivalent or rewrite to JSON+gzip).
+- ~80 LOC — Un-skip `when lazily load schema cache is set cache is lazily populated when est connection` (needs lazy-load wiring on connection-pool establish).
+- ~20 LOC — `yaml loads 5 1 dump` / `yaml loads 5 1 dump without indexes still queries for indexes`: drop as Rails-specific 5.1 YAML, or replicate fixture for JSON path.
+- ~15 LOC — Unify `addTimestamps` to route through `addTimestampsForAlter` + single `executeMutation` (currently issues two `addColumn` calls vs Rails' one combined ALTER).
+- Pre-existing: `Migration#changeTable` has both explicit method and method_missing dispatch; Rails has only method_missing. Revisit when method_missing unified.
+- Pre-existing: `Gzip.compress`/`decompress` go through `latin1` strings; Buffer-native would skip encode/decode hop.
 
 1. **Slot H-b** (~310 LOC, 13 un-skips, in flight as Slot-H followup #1592 closed partial; rest remain) — `where/pluck/classes with qualified schema name` (~200 LOC Thing1..5 AR models), `sequence schema caching` SchemaThing (~50 LOC), `habtm table name with schema` Song/Album (~30 LOC), `schema change with prepared stmt` (~20 LOC), `Active Record basics` dot-in-schema (~10 LOC). Recommended: shared `defineSchema`-based fixture file (pattern in `active-schema.test.ts`).
 2. **Slot I** (~250 LOC, exploratory) — PG partitioning + inheritance introspection in dumper. 6 un-skips.
@@ -362,7 +632,16 @@ audit-STI found **no STI implementation gap**. All 6 `BLOCKED: STI` tests are mi
 - ~10 LOC — Promote `_instrumentedQueryOnClient` to a named internal helper and dedupe with `execQuery`'s inner lambda. Cosmetic.
 - ~30 LOC — Unify `execInsert` paths: abstract default (`abstract/database-statements.ts:1375`) bypasses `sqlForInsert` entirely; a separate standalone `execInsert` function (line 390) does the right thing but isn't wired. Wire it in (or rewrite the default to call `sqlForInsert` first). Then the PG-specific `pk === false` scaffolding (#1567) can be removed.
 
-## Transactions cluster — Slot B + C closed (#1572); D remains; E deferred
+## Transactions cluster — Slots B, C, D closed (#1572, #1651); E deferred
+
+**Slot D followups (~50 LOC):**
+
+- ~10 LOC — Un-skip `write attribute after rollback` (`transactions.test.ts` ~1664); same Topic fixture as `read attribute after rollback`, trivial port.
+- ~15 LOC — Un-skip `test_assign_custom_primary_key_after_rollback` (unblocked by wTRS fix tracked separately).
+- ~10 LOC — `restore previously new record after double save` — needs `_startTransactionState` snapshot timing fix (deferred).
+- ~5 LOC — `scripts/test-compare/normalize-skips.ts` `transaction-isolation.test.ts` entry: replace stale "GVL" wording with PG-required gating (or remove if no `it.skip` remains).
+- ~10 LOC — `primaryKey = "movieid"` should auto-declare the attribute so callers don't need redundant `attribute("movieid", "integer")` (DX gap).
+- Pre-existing: Rails `Tag.establish_connection :arunit` checks out from same pool; our `withSecondAdapter` uses fully independent pools. Equivalent for dirty-read/non-repeatable-read semantics; could matter for future serializability tests.
 
 1. **Slot D** (~80 LOC) — Wire isolation tests through PG-adapter Slot D's `secondConnection` helper. 4–6 un-skips.
 2. **Slot E** (deferred) — Autosave + nested_attributes (depends on `accepts_nested_attributes_for`).
@@ -374,7 +653,7 @@ audit-STI found **no STI implementation gap**. All 6 `BLOCKED: STI` tests are mi
 - ~15 LOC — Un-skip `test_assign_custom_primary_key_after_rollback` (Movie create → tx update PK → rollback). Unblocked by wTRS fix.
 - ~20 LOC — Deeper `update should rollback on failure!` fidelity: needs `update()` to call property setters (not just `writeAttribute`) so `replyIds: []` collection-clear works inline. Pre-existing: Rails `assign_attributes` calls setters; our writeAttribute loop doesn't.
 
-## `NotImplementedError` elimination initiative — guardrail shipped (#1523)
+## `NotImplementedError` elimination initiative — Phase 2 closed (#1663); remainder folds into cluster slots
 
 **Goal: zero unjustified `NotImplementedError` throws when AR is "done."** PR #1523 annotated every throw site with `// @nie disposition=... rails=... cluster=...` and added the `blazetrails/nie-requires-annotation` ESLint rule. The annotations are now the **source of truth**; the 2026-05-11 audit numbers are superseded.
 
@@ -400,10 +679,29 @@ These don't merit their own multi-slot cluster section.
 
 After #1555 moved belongs_to autosave into the `before_save` chain via `defineNonCyclicMethod`, the standalone `autosaveBelongsTo` function in `packages/activerecord/src/autosave-association.ts:375` and its `_autosavingRecords` add/delete calls are unreferenced. Delete the function body; keep the `_autosavingRecords` WeakSet (still used by `autosaveChildren`). Bundle into next fidelity sweep.
 
+<<<<<<< Updated upstream
+
 ### MySQL onUpdate followups closed (#1402, follow-up bundle)
+
+||||||| Stash base
+
+### MySQL onUpdate followups (~30 LOC, from #1382)
+
+=======
+
+### MySQL onUpdate followups — closed (#1382 + #1682)
+
+> > > > > > > Stashed changes
+
+<<<<<<< Updated upstream
 
 - `onUpdate` abstract leakage closed in #1402 — `onUpdate` moved off abstract `ColumnOptions` onto `MysqlAddColumnOptions` in mysql/schema-creation.ts.
 - Function-default detection in `renameColumnForAlter` widened — non-DEFAULT_GENERATED defaults outside `RENAME_FUNC_DEFAULT_RE` now route through `defaultType(createTableInfo, columnName)`, mirroring Rails' `new_column_from_field` broader detection.
+  ||||||| Stash base
+- **`onUpdate` abstract leakage** — lives in abstract `ColumnOptions`/`addColumnOptions`; MySQL-specific option leaking into abstract layer. Move to MySQL override. Low risk in practice.
+- # **Function-default detection narrowness** — `renameColumnForAlter` regex only covers `CURRENT_TIMESTAMP`. Bundled into small-followup sweep.
+  **Remaining followup (~40 LOC, optional structural refactor):** Route `renameColumnForAlter` through `columnFor` like Rails (`abstract_mysql_adapter.rb:863-878`) _and_ extend `newColumnFromField` so `on_update` and compound `DEFAULT_GENERATED on update X` cases keep flowing through. Centralizes function-default logic instead of duplicating between `newColumnFromField` and `renameColumnForAlter`. Net structural win, no behavior change. Includes ~5 LOC widening of `meta.extra === "DEFAULT_GENERATED"` strict equality to startsWith/regex.
+  > > > > > > > Stashed changes
 
 ### Unported-list additions (~30 LOC bundled, 1 PR)
 

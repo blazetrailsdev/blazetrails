@@ -226,7 +226,7 @@ export class Formatter {
     const queue: CacheNode[] = [cache];
     for (let i = 0; i < queue.length; i++) {
       const c = queue[i]!;
-      if (c.routes) routes.push(...c.routes);
+      routes.push(...c.routes);
       for (const [k, v] of Object.entries(options)) {
         const key = pairKey(k, v);
         const child = c.children.get(key);
@@ -274,7 +274,7 @@ export class Formatter {
         }
         h = child;
       }
-      (h.routes ??= []).push([i, route]);
+      h.routes.push([i, route]);
     }
     this._cache = root;
     return root;
@@ -320,6 +320,10 @@ function rubyInspect(v: unknown): string {
   if (v == null) return "nil";
   if (typeof v === "string") return `"${escapeRubyString(v)}"`;
   if (typeof v === "symbol") return `:${v.description ?? ""}`;
+  if (Array.isArray(v)) return rubyInspectArray(v);
+  if (typeof v === "object") {
+    return rubyInspectHash(Object.entries(v as Record<string, unknown>));
+  }
   return String(v);
 }
 

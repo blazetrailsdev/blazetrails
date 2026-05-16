@@ -1096,7 +1096,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     }
     const fkCols = Array.isArray(ownerFk) ? ownerFk : [ownerFk as string];
 
-    // Mirror Reflection#activeRecordPrimaryKey (reflection.rb:587-603).
+    // Mirror Reflection#active_record_primary_key (reflection.rb:587-603).
     // `options[:query_constraints]` describes the *foreign-key* shape on the
     // join table — Rails never reuses it as the owner PK. The owner PK comes
     // from the class-level `query_constraints_list`, falling back to the

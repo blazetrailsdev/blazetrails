@@ -55,6 +55,9 @@ const TEST_SCHEMA = {
     status: "integer",
     priority: "integer",
   },
+  string_status_posts: {
+    status: "string",
+  },
 } as const;
 
 async function freshAdapter(): Promise<DatabaseAdapter> {
@@ -1033,6 +1036,7 @@ describe("EnumTest", () => {
   it("find via where with strings", () => {
     class Post extends Base {
       static {
+        this.tableName = "string_status_posts";
         this.attribute("status", "string");
         this.adapter = adapter;
       }
@@ -1042,6 +1046,7 @@ describe("EnumTest", () => {
   it("find via where with large number", () => {
     class Post extends Base {
       static {
+        this.tableName = "string_status_posts";
         this.attribute("status", "string");
         this.adapter = adapter;
       }
@@ -1051,6 +1056,7 @@ describe("EnumTest", () => {
   it("find via where should be type casted", () => {
     class Post extends Base {
       static {
+        this.tableName = "string_status_posts";
         this.attribute("status", "string");
         this.adapter = adapter;
       }
@@ -1060,6 +1066,7 @@ describe("EnumTest", () => {
   it("build from scope", async () => {
     class Post extends Base {
       static {
+        this.tableName = "string_status_posts";
         this.attribute("status", "string");
         this.adapter = adapter;
       }

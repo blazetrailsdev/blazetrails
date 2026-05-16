@@ -12,26 +12,34 @@ For workflow + BLOCKED-annotation vocab + audit conventions, see [`test-compare-
 
 ## Story count
 
-~78 actionable batches (3 in-flight, ~75 queued), ~17.5k LOC. Batches numbered sequentially; the next-to-ship is the lowest-numbered open batch. test:compare standing at 6568/7885 (83.3%) per snapshot above.
+~99 queued batches, ~17.5k LOC. Batches numbered sequentially; the next-to-ship is the lowest-numbered open batch. test:compare standing at 6568/7885 (83.3%) per snapshot above. GitHub is the source of truth for which batches have PRs in flight — search `feat(activerecord): batch N` in open PRs.
 
 The `as any` legacy-cast cleanup sweep has been **superseded by `docs/activerecord-type-audit.md`** — the type-audit's 4-wave plan covers the same `(record as any)._readAttribute` / `.save` / `.destroy` removals more precisely. The 2 `bug-suspected` candidates remain in batches below for surgical verification.
 
 ---
 
-## In-flight batches
+## Queued batches
 
-These have agents currently working.
+Bundled work-PR slots ready to spawn. Items removed as batches ship.
 
-### Batch 2 — PG virtual-column emit pipeline (~110 LOC, risk: medium) — #1726 OPEN
+### Batch 2 — PG virtual-column emit pipeline (~110 LOC, risk: medium)
 
-**Theme:** One Rails source surface — `postgresql/schema-statements.rb` columnSpec + `schema_dumper.rb#emit_table`. Items mutually unblock the same un-skip set (test_non_persisted_column, test_change_table, test_schema_dumping).
+**Theme:** One Rails source surface — `postgresql/schema-statements.rb` columnSpec + `schema_dumper.rb#emit_table`. Unblocks test_non_persisted_column, test_change_table, test_schema_dumping.
 
 - ~15–30 LOC — Route `addColumn` through `schemaCreation.accept(AddColumnDefinition)`; fix `visitColumnDefinition` to call `addColumnOptionsBang` instead of `addColumnOptions`.
 - ~30–80 LOC — Rewire `emitTable` to use connection-adapter `columnSpec` / `prepareColumnOptions`.
-- ~20 LOC — Emit non-PK column `defaultFunction` as `default: () => "fn()"` in `emitTable`, mirroring the PK path. Unblocks function-default round-tripping for all non-PK columns.
+- ~20 LOC — Emit non-PK column `defaultFunction` as `default: () => "fn()"` in `emitTable`, mirroring the PK path.
 - ~30 LOC — Make `SchemaDumper.dumpTableSchema(adapter, ...)` instantiate the adapter's `createSchemaDumper()` class rather than the base.
 
-### Batch 10 — Reflection Slot A + B + Rails-name parity (~115 LOC, risk: low) — #1722 OPEN
+### Batch 3 — PG schema-dump table/partition polish (~80 LOC, risk: low)
+
+**Sequencing:** Depends on Batch 2 (#1726). Spawn after #1726 merges.
+
+- ~30 LOC — Wire `tableOptions()` into `schema-dumper.ts:emitTable`. Requires making the dump loop async.
+- ~30 LOC — PG table comment schema dump: forward `adapterTableOpts.comment` in `emitTable`; add `COMMENT ON TABLE` emission after `createTable`.
+- ~20 LOC — PARTITION BY schema dump: 2 `BLOCKED: adapter-pg` partition tests in `SchemaCreateTableOptionsTest` flow through the same `fetchTableOptions → options:` path; need `tablePartitionDefinition` wired correctly + test bodies.
+
+### Batch 10 — Reflection Slot A + B + Rails-name parity (~115 LOC, risk: low)
 
 **Theme:** Single Rails source `reflection.rb`.
 
@@ -42,91 +50,6 @@ These have agents currently working.
 - ~5 LOC — `UnknownPrimaryKey` message format and no-arg constructor.
 - ~10 LOC — `AbstractReflection#checkValidityOfInverseBang` uses `(this as any).inverseName?.()`. Protected accessor would be cleaner.
 - ~3 LOC — `joinScope` in `AbstractReflection` throws plain `Error`.
-
-### Batch 22 — Associations-core inverseOf wiring (~75 LOC, risk: low) — #1745 OPEN
-
-**Theme:** Auto-inverse population on collection load.
-
-- ~30 LOC — Add `inversable?(record)` check to `AssociationRelation.toArray` + `loadHasMany`'s inverse-wiring loop. Unblocks 2 skipped tests.
-- ~40–60 LOC — Extend automatic-inverse wiring to `loadHasMany`/`loadHasOne`/`loadBelongsTo` (currently only honor explicit `options.inverseOf`).
-- ~5 LOC — Extract `wireInverseAssociation(child, name, owner)` helper.
-
-### Batch 91 — SQLite Slot A + B (~50 LOC bundled) — #1743 OPEN
-
-**Theme:** `sqlite-adapter.ts` strict opt-in + `dataSourceExists()` alignment with `tableExists()` pragma_table_list path.
-
----
-
-## Recently merged batches
-
-For reference. Body removed (see git log + the PR). Findings folded into "Post-merge findings" section below.
-
-| Batch | Title                                               | PR    |
-| ----- | --------------------------------------------------- | ----- |
-| 1     | PG createTable signature harmonization              | #1709 |
-| 4     | PG index option parse + emit (Schema Slot C)        | #1710 |
-| 5     | PG interval round-trip (interval[] + binary parser) | #1727 |
-| 6     | PG-only type registration + citext aftermath        | #1718 |
-| 7     | PG infinity + time-zone wiring                      | #1711 |
-| 8     | MySQL warnings + quoting + init fidelity            | #1723 |
-| 9     | Autosave + has-one Rails-divergence                 | #1712 |
-| 11    | Query-cache Phases 2–3 wiring                       | #1713 |
-| 12    | Insert-all conflict-target + IndexDefinition        | #1720 |
-| 13    | Autosave fidelity sweep A                           | #1730 |
-| 14    | Fixtures schema-gap closures                        | #1715 |
-| 27    | HMT post-#1714 composite cleanup                    | #1732 |
-| 41    | Migration older B/C/E small fidelity                | #1733 |
-| 44    | Connection-pool fidelity sweep B+C                  | #1735 |
-| 47    | MySQL table-options polish                          | #1736 |
-| 79    | Transactions Slot D wTRS fixture ports              | #1742 |
-| 82    | Unknown-triage Slot A annotation refresh            | #1740 |
-| 83    | Unknown-triage Slot B insert-all (triage, partial)  | #1741 |
-
-Phase 5 (TM unification — universal `defineSchema`) sub-PRs:
-
-| Sub-PR | Title                                           | PR    |
-| ------ | ----------------------------------------------- | ----- |
-| init   | Phase 5 initial 32-file migration               | #1633 |
-| tx     | Phase 5 continuation — transaction-family tests | #1686 |
-| assoc  | Phase 5 associations smaller files              | #1690 |
-| enc    | Phase 5 encryption cluster + helper             | #1693 |
-| root A | Phase 5 root cluster A core+callbacks           | #1697 |
-| root B | Phase 5 root cluster B finder+validations       | #1734 |
-| root C | Phase 5 root cluster C enum cluster             | #1737 |
-| where  | Phase 5 `relation/where.test.ts`                | #1738 |
-
-See `tm-unification-plan.md` for Phase 5 remainder.
-
-Other recent closures folded back into queued-batches list:
-
-- Batch 84 (SignedId Relation methods) — closed by #1694.
-- Batch 85 (Unknown-triage Slot D afterCommit refinements) — closed by #1705.
-
----
-
-## Post-merge inline notes (2026-05-16 triage cycle)
-
-Actionable items from the merge wave that don't fit a standalone batch. Sized followups have been promoted to batches B109–B118; this section captures the residue.
-
-- **Mechanical sweep (from #1740)** — `normalize-skips.ts` `/PERMANENT:/` regex previously missed `PERMANENT-SKIP:`. Fixed in #1740. Audit `grep "PERMANENT:" scripts/` for other tooling with the same bug.
-- **~1 LOC cleanup (from #1740)** — `scripts/api-compare/unported-files.ts:480` has a pre-existing `className` type error (not introduced by #1740).
-- **Watchpoint (from #1736)** — `MigrationContext.createTable` now has three PK code paths in `_columnMeta` (`compositePk` array, `primaryKey: false`, `primaryKey: "name"` string). Future batches touching this method should verify `id: false` with `primaryKey: ["a","b"]` interactions through `force: :cascade` recreation.
-- **Pattern note (from #1737)** — `as const` on a TEST_SCHEMA with wrapped `{ columns, primaryKey }` breaks structural assignment to `Schema` (readonly tuples). Cast `: Schema` and drop `as const`. Flat column-only schemas can keep `as const`.
-- **Pattern note (from #1734)** — When migrating to async `freshAdapter`, callbacks previously calling sync `freshAdapter()` must flip to `async () => {`. Inline `createTestAdapter()` outside `freshAdapter()` (e.g. in `beforeEach`) needs its own conversion — grep for them after the sed.
-
----
-
-## Queued batches
-
-Bundled work-PR slots ready to spawn. Items removed as batches ship.
-
-### Batch 3 — PG schema-dump table/partition polish (~80 LOC, risk: low)
-
-**Sequencing:** Depends on Batch 2 (#1726). Spawn after #1726 merges.
-
-- ~30 LOC — Wire `tableOptions()` into `schema-dumper.ts:emitTable`. Requires making the dump loop async.
-- ~30 LOC — PG table comment schema dump: forward `adapterTableOpts.comment` in `emitTable`; add `COMMENT ON TABLE` emission after `createTable`.
-- ~20 LOC — PARTITION BY schema dump: 2 `BLOCKED: adapter-pg` partition tests in `SchemaCreateTableOptionsTest` flow through the same `fetchTableOptions → options:` path; need `tablePartitionDefinition` wired correctly + test bodies.
 
 ### Batch 14 — Autosave E-series CPK + nested-attributes (~80 LOC, risk: low)
 
@@ -155,18 +78,10 @@ Bundled work-PR slots ready to spawn. Items removed as batches ship.
 
 - ~80 LOC — Rewrite the two "indexed errors should be properly translated" tests against a real I18n backend.
 
-### Batch 18 — Reflection call-site sweep — mostly shipped, ~15 LOC residual
-
-Audit `batch-18-reflection-call-site-20260516T211122Z.md` found 3 of 5 items already closed by prior PRs:
-
-- `resolveModel(className)` call-site sweep — closed by #1582.
-- `associations/builder/belongs-to.ts` counter-cache `resolveModel` — closed by #1670.
-- HABTM builder ThroughReflection registration — closed by #1672.
-
-**Residual (~15 LOC), fold into next adjacent slot:**
+### Batch 18 — Reflection residual cleanup (~35 LOC, risk: low)
 
 - ~5 LOC — Delete dead `createReflection` in `reflection.ts:1772` (now-stale asymmetry vs `Reflection.create`).
-- ~30 LOC — Deeply nested through-association resolution in `CollectionProxy._buildThroughScope` (through-a-through beyond one level). Not exercised by tests today; keep as standalone followup.
+- ~30 LOC — Deeply nested through-association resolution in `CollectionProxy._buildThroughScope` (through-a-through beyond one level). Not exercised by tests today.
 
 Watchpoint: the `_invalidateAssociationIds → assocInstance.reset()` widening fires for every through-association push.
 
@@ -196,6 +111,14 @@ Watchpoint: the `_invalidateAssociationIds → assocInstance.reset()` widening f
 - ~80–120 LOC — Preload has-many-through with composite query_constraints. Un-skips `preload has many through association with composite query constraints` at `associations.test.ts:8318`.
 - ~30–50 LOC — `AssociationQueryValue` Relation + composite FK: `queries()` array-FK branch still throws when value is a Relation. Gated on `Relation.pluck(primary_key)` with CPK support.
 - ~30–50 LOC — `AssociationQueryValue.convertToId` array-PK branch: handle composite `primaryKey` when value is a record instance. Currently throws. Unblocks 2 "querying by whole/single associated records" tests.
+
+### Batch 22 — Associations-core inverseOf wiring (~75 LOC, risk: low)
+
+**Theme:** Auto-inverse population on collection load.
+
+- ~30 LOC — Add `inversable?(record)` check to `AssociationRelation.toArray` + `loadHasMany`'s inverse-wiring loop. Unblocks 2 skipped tests.
+- ~40–60 LOC — Extend automatic-inverse wiring to `loadHasMany`/`loadHasOne`/`loadBelongsTo` (currently only honor explicit `options.inverseOf`).
+- ~5 LOC — Extract `wireInverseAssociation(child, name, owner)` helper.
 
 ### Batch 23 — Preloader-grouping STI + composite (~280 LOC, risk: medium)
 
@@ -609,6 +532,17 @@ Mechanical: add to `scripts/api-compare/unported-files.ts` as `PERMANENT-SKIP`.
 
 **Risk:** Medium — touches every WHERE clause in the suite. Files (Option A): `predicate-builder/basic-object-handler.ts`, `predicate-builder/range-handler.ts`, `arel/src/visitors/to-sql.ts#visitBindParam`, plus `scripts/parity/fixtures/ar-01/`, `ar-52/`, `ar-65/`.
 
+### Batch 91 — SQLite Slot A + B (~50 LOC bundled, risk: low)
+
+**Theme:** `sqlite-adapter.ts` strict opt-in + `dataSourceExists()` alignment with `tableExists()` `pragma_table_list` path.
+
+- ~5 LOC — Add `strict` field to `SqliteOpenConfig` in `activesupport/src/sqlite-adapter.ts`.
+- ~20 LOC — better-sqlite3 DQS toggle: pass `strict` through `Database.Options` in `sqlite-drivers/better-sqlite3.ts:openDatabase` when upstream exposes `sqlite3_db_config`.
+- ~15 LOC — `dataSourceExists()` in `sqlite3-adapter.ts` still uses the old `sqlite_master`-based query; align with `tableExists()` `pragma_table_list` path.
+- ~10 LOC — Extract `assertLogged` from `sqlite3-adapter.test.ts` to a shared `packages/activerecord/src/adapters/sqlite3/test-helper.ts`.
+
+Known limitation: `strict_strings_by_default` is a no-op in current driver — better-sqlite3 compiles with `SQLITE_DQS=0`. Document inline.
+
 ### Batch 92 — Has-one Slots C+D scope merge + eager (~260 LOC, risk: medium)
 
 - ~100 LOC — `ThroughAssociation#target_scope` chain merge. Rails' override merges each intermediate reflection's `scope_for_association`; our base returns `klass.all()`. Unblocks "has one through with default scope on join model" + 2 custom-select default_scope tests.
@@ -777,6 +711,8 @@ Followup from #1732. `collection-proxy.ts` has an `it.skip` documented in #1732.
 - **Decision** — Root `Gemfile` / `Gemfile.lock`: globalid workstream or not? Currently untracked-and-ambiguous.
 - **Follow-up PR** — Run `sync-stats` refresh and clear "pending" disclaimer on README Data Layer Parity test-percentage.
 - **~30 LOC** — `postgresql/temporal-type-parsers.ts` still has one eager `import pg from "pg"` (the last per `browser-compat-plan.md`). Move to lazy registry. Blocks browser-bundle smoke tests.
+- **~1 LOC** — `scripts/api-compare/unported-files.ts:480` has a pre-existing `className` type error.
+- **Sweep** — Audit `grep "PERMANENT:" scripts/` for tooling missing the `PERMANENT-SKIP:` form (the canonical marker per `docs/test-compare-100-plan.md`).
 
 ---
 

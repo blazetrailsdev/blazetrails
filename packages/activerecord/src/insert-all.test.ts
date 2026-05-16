@@ -1018,4 +1018,39 @@ describe("InsertAll async uniqueIndexes regression", () => {
       Pkg.upsertAll([{ name: "foo", sha: "abc123" }], { uniqueBy: ["sha", "name"] }),
     ).resolves.toBeGreaterThanOrEqual(0);
   });
+
+  it("upsertAll with partial unique index emits WHERE in conflict target", async () => {
+    const adapter = createTestAdapter();
+    await defineSchema(adapter, {
+      flags: { key: "string", active: "boolean" },
+    });
+    const ss = new SchemaStatements(adapter);
+    await ss.addIndex("flags", ["key"], {
+      unique: true,
+      name: "idx_flags_key_active",
+      where: '"active" = 1',
+    });
+
+    class Flag extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("key", "string");
+        this.attribute("active", "boolean");
+        this.adapter = adapter;
+        this._tableName = "flags";
+      }
+    }
+
+    const captured: string[] = [];
+    const orig = adapter.executeMutation.bind(adapter);
+    (adapter as any).executeMutation = (sql: string, ...rest: unknown[]) => {
+      captured.push(sql);
+      return (orig as any)(sql, ...rest);
+    };
+
+    await Flag.upsertAll([{ key: "feature_x", active: true }], { uniqueBy: "key" });
+    const upsertSql = captured.find((s) => s.includes("ON CONFLICT"));
+    expect(upsertSql).toBeDefined();
+    expect(upsertSql).toMatch(/ON CONFLICT \("key"\) WHERE "active" = 1/);
+  });
 });

@@ -50,6 +50,7 @@ export class InsertAll {
   private _scopeAttributes: Record<string, unknown>;
   private _recordTimestamps: boolean;
   private _updatableColumns: string[] | undefined;
+  private _uniqueByResolved = false;
   private _keysIncludingTimestamps: Set<string> | undefined;
 
   static async execute(
@@ -130,8 +131,16 @@ export class InsertAll {
 
   /** @internal Async init: resolves uniqueByColumns via cache.indexes() then finalizes updatableColumns. */
   private async _populateUpdatableColumns(): Promise<void> {
+    // Rails resolves @unique_by synchronously in the constructor (line 42 of
+    // insert_all.rb), before configure_on_duplicate_update_logic. Our port
+    // defers it because schema-cache reads are async — but it must still
+    // run on every path so updateOnly + uniqueBy still gets validated and
+    // index.where flows through to conflictTarget.
+    if (!this._uniqueByResolved) {
+      this.uniqueBy = await this.findUniqueIndexFor(this.uniqueBy);
+      this._uniqueByResolved = true;
+    }
     if (this._updatableColumns) return;
-    this.uniqueBy = await this.findUniqueIndexFor(this.uniqueBy);
     const exclude = new Set([...this.readonlyColumns(), ...this.uniqueByColumns()]);
     if (this.recordTimestamps() && !this.updateOnly && !this.updateSql) {
       for (const col of TIMESTAMP_COLUMNS) {

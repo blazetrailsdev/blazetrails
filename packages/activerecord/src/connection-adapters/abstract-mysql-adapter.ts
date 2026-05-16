@@ -63,7 +63,11 @@ import {
 } from "./abstract/schema-definitions.js";
 import type { ColumnType, ColumnOptions } from "./abstract/schema-definitions.js";
 import { TableDefinition as MysqlTableDefinition } from "./mysql/schema-definitions.js";
-import { isRowFormatDynamicByDefault, defaultType } from "./mysql/schema-statements.js";
+import {
+  isRowFormatDynamicByDefault,
+  defaultType,
+  quotedScope,
+} from "./mysql/schema-statements.js";
 import { TypeMap } from "../type/type-map.js";
 import {
   StringType,
@@ -485,9 +489,11 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   async tableComment(tableName: string): Promise<string | null> {
+    const scope = quotedScope(tableName);
+    if (!scope.name) return null;
     const rows = await this.schemaQuery(
       `SELECT table_comment FROM information_schema.tables` +
-        ` WHERE table_schema = database() AND table_name = ${this.quote(tableName)}`,
+        ` WHERE table_schema = ${scope.schema} AND table_name = ${scope.name}`,
     );
     const val = rows[0]?.["table_comment"] as string | null | undefined;
     return val || null;
@@ -725,6 +731,18 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     const td = new MysqlTableDefinition(tableName, { id: false });
     const colDef = td.newColumnDefinition(column.name, resolvedType as any, opts as any);
     return new ChangeColumnDefinition(colDef, column.name);
+  }
+
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::SchemaStatements#create_table_definition.
+   * Routes `createTable` through the MySQL-specific `TableDefinition` so MySQL column
+   * methods (`blob`, `tinytext`, `unsignedInteger`, …) and the MySQL `primary_key` /
+   * unsigned alias handling are available inside the createTable block.
+   * @internal
+   */
+  createTableDefinition(name: string, options: Record<string, unknown> = {}): MysqlTableDefinition {
+    const { adapter: _adapter, adapterName: _adapterName, ...rest } = options;
+    return new MysqlTableDefinition(name, rest as any);
   }
 
   async renameColumn(tableName: string, columnName: string, newColumnName: string): Promise<void> {

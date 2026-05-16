@@ -1029,18 +1029,18 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
     const throughModel = resolveAssocClass(this._record, throughAssoc.name, throughClassName);
     const ownerFk = throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
-    if (Array.isArray(ownerFk)) {
-      throw new Error(
-        `Through associations do not support composite foreign keys on "${this._assocName}".`,
-      );
-    }
     const primaryKey = throughAssoc.options.primaryKey ?? ctor.primaryKey;
-    if (Array.isArray(primaryKey)) {
+    const ownerFkCols = Array.isArray(ownerFk) ? ownerFk : [ownerFk as string];
+    const ownerPkCols = Array.isArray(primaryKey) ? primaryKey : [primaryKey as string];
+    if (ownerFkCols.length !== ownerPkCols.length) {
       throw new Error(
-        `Through associations do not support composite primary keys on "${this._assocName}".`,
+        `Composite primaryKey/foreignKey mismatch on through "${this._assocName}": ${ownerPkCols.length} pk vs ${ownerFkCols.length} fk`,
       );
     }
-    const pkValue = this._record._readAttribute(primaryKey);
+    const ownerJoinAttrs: Record<string, unknown> = {};
+    for (let i = 0; i < ownerFkCols.length; i++) {
+      ownerJoinAttrs[ownerFkCols[i]] = this._record._readAttribute(ownerPkCols[i]);
+    }
     const sourceName = this._assocDef.options.source ?? singularize(this._assocName);
     const sourceFk = `${underscore(sourceName)}_id`;
 
@@ -1060,24 +1060,23 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         }
       }
       // Create the join record
+      const targetPk = (record.constructor as typeof Base).primaryKey;
+      if (Array.isArray(targetPk)) {
+        throw new Error(
+          `Through associations do not support composite primary keys on target model for "${this._assocName}".`,
+        );
+      }
       const joinAttrs: Record<string, unknown> = {
-        [ownerFk as string]: pkValue,
-        [sourceFk]: (() => {
-          const targetPk = (record.constructor as typeof Base).primaryKey;
-          if (Array.isArray(targetPk)) {
-            throw new Error(
-              `Through associations do not support composite primary keys on target model for "${this._assocName}".`,
-            );
-          }
-          return record._readAttribute(targetPk);
-        })(),
+        ...ownerJoinAttrs,
+        [sourceFk]: record._readAttribute(targetPk),
       };
       // Handle polymorphic through (as option on through association)
       if (throughAssoc.options.as) {
         const typeCol = `${underscore(throughAssoc.options.as)}_type`;
-        joinAttrs[`${underscore(throughAssoc.options.as)}_id`] = pkValue;
+        // Polymorphic through uses a single _id/_type pair, not composite owner FK
+        for (const col of ownerFkCols) delete joinAttrs[col];
+        joinAttrs[`${underscore(throughAssoc.options.as)}_id`] = ownerJoinAttrs[ownerFkCols[0]];
         joinAttrs[typeCol] = ctor.name;
-        delete joinAttrs[ownerFk as string];
       }
       let joinRecord: Base;
       if (bang) {
@@ -1215,7 +1214,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     const throughModel = resolveAssocClass(this._record, throughAssoc.name, throughClassName);
     const ownerFk = throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
     const primaryKey = throughAssoc.options.primaryKey ?? ctor.primaryKey;
-    const pkValue = this._record._readAttribute(primaryKey as string);
+    const ownerFkCols = Array.isArray(ownerFk) ? ownerFk : [ownerFk as string];
+    const ownerPkCols = Array.isArray(primaryKey) ? primaryKey : [primaryKey as string];
+    const ownerConditions: Record<string, unknown> = {};
+    for (let i = 0; i < ownerFkCols.length; i++) {
+      ownerConditions[ownerFkCols[i]] = this._record._readAttribute(ownerPkCols[i]);
+    }
     const sourceName = this._assocDef.options.source ?? singularize(this._assocName);
     const sourceFk = `${underscore(sourceName)}_id`;
 
@@ -1226,7 +1230,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         (record.constructor as typeof Base).primaryKey as string,
       );
       const joinRecord = await throughModel.findBy({
-        [ownerFk as string]: pkValue,
+        ...ownerConditions,
         [sourceFk]: targetPk,
       });
       if (joinRecord) {
@@ -1250,26 +1254,22 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
     const throughModel = resolveAssocClass(this._record, throughAssoc.name, throughClassName);
     const primaryKey = throughAssoc.options.primaryKey ?? ctor.primaryKey;
-    if (Array.isArray(primaryKey)) {
-      throw new Error(
-        `deleteAll does not support composite primary keys for through associations on "${this._assocName}".`,
-      );
-    }
-    const pkValue = this._record._readAttribute(primaryKey);
-    if (pkValue == null) return 0;
+    const ownerPkCols = Array.isArray(primaryKey) ? primaryKey : [primaryKey as string];
+    const ownerPkValues = ownerPkCols.map((c) => this._record._readAttribute(c));
+    if (ownerPkValues.some((v) => v == null)) return 0;
     const throughAs = throughAssoc.options.as;
     const conditions: Record<string, unknown> = {};
     if (throughAs) {
-      conditions[`${underscore(throughAs)}_id`] = pkValue;
+      // Polymorphic through uses a single _id/_type pair; composite-PK owners
+      // are not representable in that schema, so use the first PK column.
+      conditions[`${underscore(throughAs)}_id`] = ownerPkValues[0];
       conditions[`${underscore(throughAs)}_type`] = ctor.name;
     } else {
       const ownerFk = throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
-      if (Array.isArray(ownerFk)) {
-        throw new Error(
-          `deleteAll does not support composite foreign keys for through associations on "${this._assocName}".`,
-        );
+      const ownerFkCols = Array.isArray(ownerFk) ? ownerFk : [ownerFk as string];
+      for (let i = 0; i < ownerFkCols.length; i++) {
+        conditions[ownerFkCols[i]] = ownerPkValues[i];
       }
-      conditions[ownerFk] = pkValue;
     }
     if (this._assocDef.options.sourceType) {
       const sourceName = this._assocDef.options.source ?? singularize(this._assocName);
@@ -1816,27 +1816,28 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       ? (throughAssoc.options.foreignKey ?? `${underscore(throughAs)}_id`)
       : (throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`);
     const ownerPk = throughAssoc.options.primaryKey ?? ctor.primaryKey;
-
-    if (Array.isArray(ownerPk)) {
-      throw new Error(
-        `CollectionProxy#scope does not support composite primary keys for through associations on "${this._assocName}".`,
-      );
-    }
-
-    const pkValue = this._record._readAttribute(ownerPk as string);
-    if (pkValue == null) return (targetModel as any).all().none();
+    const ownerPkCols = Array.isArray(ownerPk) ? ownerPk : [ownerPk as string];
+    const ownerFkCols = Array.isArray(ownerFk) ? ownerFk : [ownerFk as string];
+    const ownerPkValues = ownerPkCols.map((c) => this._record._readAttribute(c));
+    if (ownerPkValues.some((v) => v == null)) return (targetModel as any).all().none();
 
     const throughTable = new ArelTable(throughModel.tableName);
     const targetArelTable = new ArelTable(targetModel.tableName);
     const sourceAssocKind = sourceAssoc?.type ?? "belongsTo";
 
-    // Build the through table subquery
-    if (Array.isArray(ownerFk)) {
-      throw new Error(
-        `CollectionProxy#scope does not support composite foreign keys for through associations on "${this._assocName}".`,
+    // Build the through table subquery — AND together each (fk = pkValue) pair.
+    let throughSubquery = throughTable.from();
+    if (throughAs) {
+      throughSubquery = throughSubquery.where(
+        throughTable.get(ownerFkCols[0]).eq(ownerPkValues[0]),
       );
+    } else {
+      for (let i = 0; i < ownerFkCols.length; i++) {
+        throughSubquery = throughSubquery.where(
+          throughTable.get(ownerFkCols[i]).eq(ownerPkValues[i]),
+        );
+      }
     }
-    let throughSubquery = throughTable.from().where(throughTable.get(ownerFk).eq(pkValue));
     if (throughAs) {
       throughSubquery = throughSubquery.where(
         throughTable.get(`${underscore(throughAs)}_type`).eq(ctor.name),

@@ -37,6 +37,10 @@ import {
   HasManyThroughOrderError,
 } from "./errors.js";
 import { getInheritanceColumn, findStiClass } from "../inheritance.js";
+import {
+  hasQueryConstraints as ownerHasQueryConstraints,
+  queryConstraintsList as ownerQueryConstraintsList,
+} from "../persistence.js";
 import type { AssociationDefinition } from "../associations.js";
 import {
   resolveModel,
@@ -1026,18 +1030,35 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     throughAssoc: AssociationDefinition,
     ctor: typeof Base,
   ): { fkCols: string[]; pkCols: string[] } {
-    const ownerFk = throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
-    // Mirror Reflection#activeRecordPrimaryKey (reflection.ts:780-796): an
-    // explicit primaryKey wins, otherwise queryConstraints wins, otherwise
-    // a composite PK that includes "id" collapses to "id" when no query
-    // constraints are involved. Rails uses this same resolution inside
-    // `construct_join_attributes` (through_association.rb).
+    // Mirror Reflection's foreignKey resolution (reflection.ts:520-535):
+    // explicit options.foreignKey wins, then options.queryConstraints, then a
+    // class-level queryConstraints on the owner promotes the default
+    // `${owner}_id` to a composite list. Without that step, a scalar
+    // derived FK would silently drop tenant/discriminator columns.
+    let ownerFk: string | string[];
+    if (throughAssoc.options.foreignKey !== undefined) {
+      ownerFk = throughAssoc.options.foreignKey;
+    } else if (throughAssoc.options.queryConstraints) {
+      ownerFk = throughAssoc.options.queryConstraints;
+    } else if (ownerHasQueryConstraints.call(ctor as any)) {
+      ownerFk = ownerQueryConstraintsList.call(ctor as any) ?? `${underscore(ctor.name)}_id`;
+    } else {
+      ownerFk = `${underscore(ctor.name)}_id`;
+    }
     const fkCols = Array.isArray(ownerFk) ? ownerFk : [ownerFk as string];
+
+    // Mirror Reflection#activeRecordPrimaryKey (reflection.ts:780-796).
     let ownerPk: string | string[];
     if (throughAssoc.options.primaryKey !== undefined) {
       ownerPk = throughAssoc.options.primaryKey;
-    } else if (throughAssoc.options.queryConstraints) {
-      ownerPk = throughAssoc.options.queryConstraints;
+    } else if (
+      ownerHasQueryConstraints.call(ctor as any) ||
+      throughAssoc.options.queryConstraints
+    ) {
+      ownerPk =
+        (throughAssoc.options.queryConstraints as string[] | undefined) ??
+        ownerQueryConstraintsList.call(ctor as any) ??
+        (ctor.primaryKey as string | string[]);
     } else if (
       // Rails' id-collapse: a scalar FK against a composite PK that includes
       // "id" pairs with the scalar "id" column (reflection.ts:791-793).
@@ -1084,8 +1105,27 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     const throughClassName =
       throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
     const throughModel = resolveAssocClass(this._record, throughAssoc.name, throughClassName);
-    const { fkCols: ownerFkCols } = this._throughOwnerCols(throughAssoc, ctor);
-    const ownerJoinAttrs = this._throughOwnerAttrs(throughAssoc, ctor);
+    // Polymorphic-through bypasses the composite-aware helper: the schema
+    // has a single `<as>_id`/`<as>_type` pair, which is not pairable with a
+    // composite owner PK. Use the scalar polymorphic FK column and the
+    // owner's scalar/collapsed PK so writes and reads agree on the same
+    // column (kept in lock-step with _buildThroughScope's polymorphic branch
+    // below).
+    let ownerFkCols: string[];
+    let ownerJoinAttrs: Record<string, unknown>;
+    if (throughAssoc.options.as) {
+      const polyFk = throughAssoc.options.foreignKey ?? `${underscore(throughAssoc.options.as)}_id`;
+      ownerFkCols = [Array.isArray(polyFk) ? polyFk[0] : polyFk];
+      const polyPk = Array.isArray(ctor.primaryKey)
+        ? ctor.primaryKey.includes("id")
+          ? "id"
+          : ctor.primaryKey[0]
+        : (ctor.primaryKey as string);
+      ownerJoinAttrs = { [ownerFkCols[0]]: this._record._readAttribute(polyPk) };
+    } else {
+      ownerFkCols = this._throughOwnerCols(throughAssoc, ctor).fkCols;
+      ownerJoinAttrs = this._throughOwnerAttrs(throughAssoc, ctor);
+    }
     const sourceName = this._assocDef.options.source ?? singularize(this._assocName);
     const sourceFk = `${underscore(sourceName)}_id`;
 

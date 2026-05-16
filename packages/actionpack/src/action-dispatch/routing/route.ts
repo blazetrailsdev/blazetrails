@@ -270,13 +270,19 @@ interface OptionalGroup {
 
 type PathSegment = StaticSegment | DynamicSegment | GlobSegment | OptionalGroup;
 
-const CAPTURE_RE = /[:*]([a-zA-Z_][a-zA-Z0-9_]*)/g;
+// Capture sigil (`:` or `*`) followed by a name, but only when the sigil
+// itself isn't escaped — Journey's scanner treats `\:foo` / `\*foo` as
+// literals. A bare `*` with no name (e.g. trailing `/page*`) is also
+// literal in Journey, which the `+` quantifier on the name already
+// excludes.
+const CAPTURE_RE = /(\\)?[:*]([a-zA-Z_][a-zA-Z0-9_]*)/g;
 
 function collectParamNamesFromPath(path: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const m of path.matchAll(CAPTURE_RE)) {
-    const name = m[1]!;
+    if (m[1] === "\\") continue; // escaped sigil → literal
+    const name = m[2]!;
     if (!seen.has(name)) {
       seen.add(name);
       out.push(name);

@@ -54,6 +54,18 @@ describe("Route", () => {
       expect(route.pathParamNames).toEqual(["controller", "format"]);
     });
 
+    it("treats escaped sigils (\\: / \\*) and bare * as literals, not captures", () => {
+      const escapedColon = new Route("GET", "/page\\:foo", "x", "y");
+      expect(escapedColon.pathParamNames).toEqual([]);
+
+      const escapedStar = new Route("GET", "/page\\*rest", "x", "y");
+      expect(escapedStar.pathParamNames).toEqual([]);
+
+      // A bare `*` with no name is literal in Journey.
+      const bareStar = new Route("GET", "/page*", "x", "y");
+      expect(bareStar.pathParamNames).toEqual([]);
+    });
+
     it("returns a defensive copy that cannot mutate route internals", () => {
       const route = new Route("GET", "/posts/:id", "posts", "show");
       const names = route.pathParamNames as string[];

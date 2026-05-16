@@ -3,7 +3,7 @@ import {
   type DatabaseStatementsHost,
 } from "../connection-adapters/abstract/database-statements.js";
 import type { DatabaseAdapter } from "../adapter.js";
-import type { Base } from "../base.js";
+import { Base } from "../base.js";
 import type { Quoting } from "../connection-adapters/abstract/quoting-interface.js";
 import { singularize } from "@blazetrails/activesupport";
 
@@ -228,12 +228,8 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
           continue;
         }
 
-        if (
-          typeof val === "object" &&
-          typeof (val as any).constructor === "function" &&
-          (val as any).constructor !== Object
-        ) {
-          const instance = val as FixtureAttrs;
+        if (val instanceof Base) {
+          const instance = val as unknown as FixtureAttrs;
           const instanceClass = (instance as any).constructor as BaseClass | undefined;
           const instancePk = (instanceClass as any)?.primaryKey;
           if (Array.isArray(instancePk)) {

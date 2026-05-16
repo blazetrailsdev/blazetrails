@@ -42,6 +42,7 @@ export interface TestFixtures {
   Parrot: typeof Base;
   Developer: typeof Base;
   Project: typeof Base;
+  DevelopersProject: typeof Base;
   Company: typeof Base;
   Account: typeof Base;
   Topic: typeof Base;
@@ -215,6 +216,17 @@ export function createFixtures(existingAdapter?: DatabaseAdapter): TestFixtures 
     }
   }
 
+  // ── DevelopersProject (HABTM join model) ────────────────────────────
+  class DevelopersProject extends Base {
+    static {
+      this._tableName = "developers_projects";
+      this.attribute("developer_id", "integer");
+      this.attribute("project_id", "integer");
+      this.attribute("joined_on", "date");
+      this.adapter = adapter;
+    }
+  }
+
   // ── Company ─────────────────────────────────────────────────────────
   class Company extends Base {
     static {
@@ -307,6 +319,7 @@ export function createFixtures(existingAdapter?: DatabaseAdapter): TestFixtures 
     Parrot,
     Developer,
     Project,
+    DevelopersProject,
     Company,
     Topic,
     Book,

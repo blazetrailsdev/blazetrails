@@ -7,6 +7,7 @@ import {
   resolveModelForTable,
 } from "./define-fixtures.js";
 import type { DatabaseAdapter } from "../adapter.js";
+import { Base } from "../base.js";
 
 function makeAdapter(): DatabaseAdapter {
   return {
@@ -217,12 +218,13 @@ describe("defineFixtures", () => {
 
     // Post instance with a known ID
     const postId = fixtureId("welcome");
-    class Post {
-      static tableName = "posts";
-      static primaryKey = "id";
-      id = postId;
+    class Post extends Base {
+      static {
+        this._tableName = "posts";
+      }
     }
     const postInstance = new Post();
+    (postInstance as any).id = postId;
 
     // Tagging model with a polymorphic belongs_to :taggable reflection
     const taggingId = fixtureId("welcome_tag");

@@ -91,6 +91,7 @@ import {
 } from "./postgresql/schema-definitions.js";
 import { TypeMetadata as PgTypeMetadata } from "./postgresql/type-metadata.js";
 import {
+  AddColumnDefinition,
   CheckConstraintDefinition,
   ChangeColumnDefinition,
   ChangeColumnDefaultDefinition,
@@ -102,10 +103,7 @@ import {
   type ReferentialAction,
 } from "./abstract/schema-definitions.js";
 import { joinTableName as deriveJoinTableName } from "../migration/join-table.js";
-import {
-  SchemaCreation as PgSchemaCreation,
-  _pgGeneratedClause,
-} from "./postgresql/schema-creation.js";
+import { SchemaCreation as PgSchemaCreation } from "./postgresql/schema-creation.js";
 import { SchemaDumper as PgSchemaDumper } from "./postgresql/schema-dumper.js";
 import type { SchemaSource } from "../schema-dumper.js";
 import { pgDatetimeConfig } from "./postgresql/pg-datetime-config.js";
@@ -3071,49 +3069,33 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       ifNotExists?: boolean;
     } = {},
   ): Promise<void> {
-    const quotedTable = this.quoteTableName(tableName);
-    const quotedCol = this.quoteIdentifier(columnName);
-
-    // Mirrors Rails PG `new_column_definition`: when `type == :virtual`,
-    // resolve the real type from `options[:type]` and pass `as`/`stored`
-    // through to `add_column_options!`. All other options (`null`,
-    // `default`, `comment`) flow through the standard pipeline.
-    let effectiveType = type;
-    let generatedClause = "";
-    if (type === "virtual") {
-      const opts = options as Record<string, unknown>;
-      effectiveType = (opts["type"] as string | undefined) ?? "string";
-      generatedClause = _pgGeneratedClause(
-        columnName,
-        opts["as"] as string | undefined,
-        opts["stored"] as boolean | undefined,
-      );
-    }
-
+    // Route through the SchemaCreation visitor (Rails parity). The
+    // PostgreSQL-specific override emits `ADD COLUMN [IF NOT EXISTS]`,
+    // honors virtual `as`/`stored`, and routes defaults through the
+    // array- and typeMap-aware quoter.
+    const { ifNotExists, comment, ...colOpts } = options;
+    const td = this.createTableDefinition(tableName);
+    const colDef = td.newColumnDefinition(columnName, type as ColumnType, colOpts as ColumnOptions);
+    // Pre-resolve the SQL type so the visitor uses the PG adapter's
+    // `typeToSql` (with datetime default-precision 6) rather than the
+    // abstract one.
+    const effectiveType = colDef.type;
     const resolvedPrecision =
-      effectiveType === "datetime" && options.precision === undefined
+      effectiveType === "datetime" && colOpts.precision === undefined
         ? 6
-        : (options.precision ?? undefined);
-    const pgType = this.typeToSql(effectiveType, {
-      ...options,
+        : (colOpts.precision ?? undefined);
+    colDef.sqlType = this.typeToSql(effectiveType, {
+      ...colOpts,
       precision: resolvedPrecision,
-      limit: options.limit ?? undefined,
-      scale: options.scale ?? undefined,
+      limit: colOpts.limit ?? undefined,
+      scale: colOpts.scale ?? undefined,
     });
-    let colSql = `${quotedCol} ${pgType}${generatedClause}`;
-    if (options.default !== undefined) {
-      const defaultClause = pgQuoteDefaultExpression(
-        options.default,
-        { array: options.array, sqlType: pgType },
-        this.typeMap,
-      );
-      colSql += options.default === null ? " DEFAULT NULL" : defaultClause;
-    }
-    if (options.null === false) colSql += " NOT NULL";
-    const ifNotExists = options.ifNotExists ? " IF NOT EXISTS" : "";
-    await this.exec(`ALTER TABLE ${quotedTable} ADD COLUMN${ifNotExists} ${colSql}`);
-    if (options.comment !== undefined) {
-      await this.changeColumnComment(tableName, columnName, options.comment ?? null);
+    const addDef = new AddColumnDefinition(colDef, !!ifNotExists);
+    await this.exec(
+      `ALTER TABLE ${this.quoteTableName(tableName)} ${this.schemaCreation.accept(addDef)}`,
+    );
+    if (comment !== undefined) {
+      await this.changeColumnComment(tableName, columnName, comment ?? null);
     }
   }
 

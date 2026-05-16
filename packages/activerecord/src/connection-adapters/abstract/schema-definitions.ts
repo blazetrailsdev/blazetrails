@@ -54,7 +54,14 @@ export class ColumnDefinition {
  * Mirrors: ActiveRecord::ConnectionAdapters::AddColumnDefinition
  */
 export class AddColumnDefinition {
-  constructor(readonly column: ColumnDefinition) {}
+  readonly ifNotExists?: boolean;
+  constructor(column: ColumnDefinition, ifNotExists?: boolean);
+  constructor(
+    readonly column: ColumnDefinition,
+    ifNotExists?: boolean,
+  ) {
+    if (ifNotExists !== undefined) this.ifNotExists = ifNotExists;
+  }
 }
 
 /**

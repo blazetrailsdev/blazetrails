@@ -99,13 +99,14 @@ export class SchemaCreation {
     const sqlType = o.sqlType ?? this.typeToSql(o.type, o.options);
     let sql = `${this.adapter.quoteIdentifier(o.name)} ${sqlType}`;
     if (o.type !== "primary_key") {
-      sql = this.addColumnOptionsBang(sql, o.options);
+      sql = this.addColumnOptionsBang(sql, this.columnOptions(o) as ColumnOptions);
     }
     return sql;
   }
 
   protected visitAddColumnDefinition(o: AddColumnDefinition): string {
-    return `ADD ${this.accept(o.column)}`;
+    const ifNotExists = o.ifNotExists ? " IF NOT EXISTS" : "";
+    return `ADD${ifNotExists} ${this.accept(o.column)}`;
   }
 
   protected visitAlterTable(o: AlterTable): string {

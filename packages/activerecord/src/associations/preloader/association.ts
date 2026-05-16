@@ -366,22 +366,18 @@ export class LoaderQuery {
   }
 
   // Mirrors Rails' `scope.model.connection_specification_name` in
-  // Preloader::Association::LoaderQuery#hash/#eql?. Reads only side-effect-free
-  // state — connectionSpecificationName is a plain string getter and the cached
-  // _adapter field is checked without invoking the .adapter getter (which would
-  // checkout a pooled connection mid-hash-compute). When the spec-name resolves
-  // to a shared ancestor (e.g. "Base" for direct-adapter test setups) we fall
-  // through to a WeakMap-of-adapter id so two models with the same spec but
-  // different adapter instances still don't coalesce.
+  // Preloader::Association::LoaderQuery#hash/#eql?. Does not check out a DB
+  // connection — `connectionSpecificationName` is a plain string getter and
+  // the cached `_adapter` field is read without invoking the `.adapter`
+  // getter (which would call `pool.checkout()`). When the spec name resolves
+  // to a shared ancestor (e.g. "Base" for direct-adapter test setups) we
+  // append a stable per-process adapter id (lazily assigned in a WeakMap)
+  // so two models with the same spec but different adapter instances don't
+  // coalesce. The WeakMap allocation is intentional and not a DB side effect.
   private _scopeAdapterId(): string {
     const klass = this.scope?._modelClass;
     if (klass == null) return "";
-    let spec = "";
-    try {
-      spec = klass.connectionSpecificationName ?? "";
-    } catch {
-      spec = "";
-    }
+    const spec = klass.connectionSpecificationName ?? "";
     const adapter = klass._adapter;
     if (adapter == null) return spec;
     let id = LoaderQuery._adapterIds.get(adapter);

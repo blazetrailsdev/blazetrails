@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Parser } from "../parser.js";
 import { Ast } from "../ast.js";
+import { Symbol as SymbolNode } from "../nodes/node.js";
 import { Pattern } from "./pattern.js";
 
 const SEPARATORS = "/.?";
@@ -276,8 +277,10 @@ describe("ActionDispatch::Journey::Path::Pattern — requirements", () => {
     const tree = new Parser().parse("/posts/:filename");
     const ast = new Ast(tree, true);
     new Pattern(ast, { filename: /(.+)/ }, "/.?", true);
-    const symbol = ast.terminals.find((n) => n.isSymbol() && n.name === "filename");
-    expect(symbol).toBeDefined();
-    expect((symbol as unknown as { regexp: RegExp }).regexp.source).toBe("(.+)");
+    const symbol = ast.terminals.find(
+      (n): n is SymbolNode => n instanceof SymbolNode && n.name === "filename",
+    );
+    expect(symbol).toBeInstanceOf(SymbolNode);
+    expect(symbol!.regexp.source).toBe("(.+)");
   });
 });

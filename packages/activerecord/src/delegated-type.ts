@@ -1,5 +1,6 @@
 import type { Base } from "./base.js";
-import { camelize, underscore } from "@blazetrails/activesupport";
+import { camelize, inquiry, singularize, tableize, underscore } from "@blazetrails/activesupport";
+import { resolveModel } from "./associations.js";
 
 /**
  * Configuration for a delegated type.
@@ -97,22 +98,55 @@ export function delegatedType(
     configurable: true,
   });
 
-  // Add instance method: delegatedName (e.g. entryableName)
+  // Add instance method: delegatedName (e.g. entryableName).
+  // Rails: public_send("#{role}_class").model_name.singular.inquiry — returns
+  // an ActiveSupport::StringInquirer so callers can do entryable_name.message?
   Object.defineProperty(modelClass.prototype, `${role}Name`, {
     get(this: Base) {
       const typeName = this.readAttribute(foreignType) as string | null;
       if (!typeName) return null;
-      return typeName.toLowerCase().replace(/.*::/, "");
+      const singular = underscore(typeName.replace(/.*::/, ""));
+      return inquiry(singular);
     },
     configurable: true,
   });
 
-  // For each type, add predicates, scopes, accessors, and builder methods
-  for (const typeName of options.types) {
-    const snakeName = underscore(typeName);
+  // Role-level builder: entry.buildEntryable(attrs) builds a new record of
+  // the currently-set foreign_type and assigns it via the polymorphic
+  // belongs_to writer (which also fills foreign_type/foreign_key).
+  // Rails: define_method "build_#{role}" { |*params| public_send("#{role}=", public_send("#{role}_class").new(*params)) }
+  Object.defineProperty(modelClass.prototype, `build${camelize(role, true)}`, {
+    value: function (this: Base, attrs: Record<string, unknown> = {}): Base {
+      const typeName = this.readAttribute(foreignType) as string | null;
+      if (!typeName) {
+        throw new Error(`Cannot build${camelize(role, true)}: ${foreignType} is not set`);
+      }
+      const TargetClass = resolveModel(typeName);
+      const instance = new (TargetClass as unknown as new (a: Record<string, unknown>) => Base)(
+        attrs,
+      );
+      (this as unknown as Record<string, unknown>)[role] = instance;
+      return instance;
+    },
+    writable: true,
+    configurable: true,
+  });
 
-    // Type predicate: isMessage(), isComment()
-    Object.defineProperty(modelClass.prototype, `is${typeName}`, {
+  // For each type, add predicates, scopes, and accessors.
+  // Rails: scope_name = type.tableize.tr("/", "_"); singular = scope_name.singularize
+  // Namespaced types like "Access::NoticeMessage" tableize to "access/notice_messages",
+  // then "/" → "_" gives "access_notice_messages" (a valid scope/method name).
+  for (const typeName of options.types) {
+    const scopeSnake = tableize(typeName).replace(/\//g, "_");
+    const singularSnake = singularize(scopeSnake);
+    const scopeName = camelize(scopeSnake, false);
+    const singularName = camelize(singularSnake, false);
+    // Predicate name preserves the original CamelCase tail: is${demodulized}().
+    // e.g. "Access::NoticeMessage" → isNoticeMessage()
+    const predicateSuffix = typeName.replace(/.*::/, "");
+
+    // Type predicate: isMessage(), isAccessNoticeMessage()
+    Object.defineProperty(modelClass.prototype, `is${predicateSuffix}`, {
       value: function (this: Base): boolean {
         return this.readAttribute(foreignType) === typeName;
       },
@@ -120,11 +154,8 @@ export function delegatedType(
       configurable: true,
     });
 
-    // Also add a snake_case predicate style: message?, comment? → we use isX
-
-    // Scope: Model.messages(), Model.comments()
-    const pluralName = snakeName + "s";
-    Object.defineProperty(modelClass, pluralName, {
+    // Scope: Model.messages(), Model.accessNoticeMessages()
+    Object.defineProperty(modelClass, scopeName, {
       value: function (this: typeof Base) {
         return this.where({ [foreignType]: typeName });
       },
@@ -132,37 +163,25 @@ export function delegatedType(
       configurable: true,
     });
 
-    // Accessor: entry.message → returns the FK value if type matches
-    Object.defineProperty(modelClass.prototype, snakeName, {
+    // Accessor: entry.message → returns the associated record via the
+    // polymorphic belongs_to reader when type matches, otherwise null.
+    // Rails: define_method(singular) { public_send(role) if public_send(query) }
+    Object.defineProperty(modelClass.prototype, singularName, {
       get(this: Base) {
         if (this.readAttribute(foreignType) !== typeName) return null;
-        return this.readAttribute(foreignKey);
+        return (this as unknown as Record<string, unknown>)[role];
       },
       configurable: true,
     });
 
-    // FK accessor: entry.messageId (or entry.uuidMessageUuid for UUID PKs) → returns FK if type matches
-    // Mirrors Rails' define_method("#{singular}_#{primary_key}") { public_send(role_id) if public_send(query) }
-    // Name is camelCase of `${snakeName}_${primaryKey}` (e.g. "message_id" → "messageId").
-    const fkAccessorName = camelize(`${snakeName.replace(/\//g, "_")}_${primaryKey}`, false);
+    // FK accessor: entry.messageId (or entry.uuidMessageUuid for UUID PKs).
+    // Rails: define_method("#{singular}_#{primary_key}") { public_send(role_id) if public_send(query) }
+    const fkAccessorName = camelize(`${singularSnake}_${primaryKey}`, false);
     Object.defineProperty(modelClass.prototype, fkAccessorName, {
       get(this: Base) {
         if (this.readAttribute(foreignType) !== typeName) return null;
         return this.readAttribute(foreignKey);
       },
-      configurable: true,
-    });
-
-    // Builder method: entry.buildMessage(attrs) → sets type and returns
-    Object.defineProperty(modelClass.prototype, `build${typeName}`, {
-      value: function (this: Base, attrs: Record<string, unknown> = {}): Base {
-        this.writeAttribute(foreignType, typeName);
-        for (const [k, v] of Object.entries(attrs)) {
-          this.writeAttribute(k, v);
-        }
-        return this;
-      },
-      writable: true,
       configurable: true,
     });
   }

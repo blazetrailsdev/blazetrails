@@ -3,7 +3,8 @@
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
 import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
-import { Base, delegatedType } from "./index.js";
+import { Base, delegatedType, registerModel } from "./index.js";
+import { StringInquirer } from "@blazetrails/activesupport";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -81,7 +82,12 @@ describe("DelegatedTypeTest", () => {
   it("delegated type name", () => {
     const { Entry } = makeModels();
     const e = new Entry({ entryable_type: "Message", entryable_id: 1 });
-    expect((e as any).entryableName).toBe("message");
+    // Rails: entryable_name is an ActiveSupport::StringInquirer so
+    // `entryable_name.message?` works in addition to string equality.
+    expect(String((e as any).entryableName)).toBe("message");
+    expect((e as any).entryableName).toBeInstanceOf(StringInquirer);
+    expect((e as any).entryableName.message()).toBe(true);
+    expect((e as any).entryableName.comment()).toBe(false);
   });
 
   it("delegated type predicates", () => {
@@ -140,9 +146,20 @@ describe("DelegatedTypeTest", () => {
   });
 
   it("accessor", () => {
+    // Rails: @entry.message returns the associated record (a Message
+    // instance) via the polymorphic belongs_to accessor, not the FK value.
+    class Message extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Message", Message);
     const { Entry } = makeModels();
     const e = new Entry({ entryable_type: "Message", entryable_id: 42 });
-    expect((e as any).message).toBe(42);
+    const msg = new Message({ id: 42 });
+    (e as any).entryable = msg;
+    expect((e as any).message).toBe(msg);
     expect((e as any).comment).toBeNull();
   });
 
@@ -199,11 +216,38 @@ describe("DelegatedTypeTest", () => {
   });
 
   it("builder method", () => {
+    // Rails: Entry.new(entryable_type: "Message").build_entryable returns
+    // a Message instance — the role-level builder dispatches on the
+    // currently-set foreign_type rather than baking the type into the name.
+    class Message extends Base {
+      static {
+        this.attribute("subject", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Message", Message);
     const { Entry } = makeModels();
-    const e = new Entry({ title: "test" });
-    (e as any).buildMessage({ entryable_id: 5 });
-    expect(e.entryable_type).toBe("Message");
-    expect(e.entryable_id).toBe(5);
+    const e = new Entry({ entryable_type: "Message" });
+    const built = (e as any).buildEntryable({ subject: "hi" });
+    expect(built).toBeInstanceOf(Message);
+    expect(built.subject).toBe("hi");
+  });
+
+  it("namespaced types", () => {
+    // Rails: types: %w[Access::NoticeMessage] generates Entry.access_notice_messages
+    // scope and @entry.access_notice_message accessor via type.tableize.tr("/", "_").
+    class Entry3 extends Base {
+      static {
+        this.attribute("entryable_id", "integer");
+        this.attribute("entryable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    delegatedType(Entry3, "entryable", { types: ["Access::NoticeMessage"] });
+    expect(typeof (Entry3 as any).accessNoticeMessages).toBe("function");
+    const e = new Entry3({ entryable_type: "Access::NoticeMessage", entryable_id: 7 });
+    expect((e as any).isNoticeMessage()).toBe(true);
+    expect((e as any).accessNoticeMessageId).toBe(7);
   });
 
   it("registers a polymorphic belongs_to for the delegated role", () => {

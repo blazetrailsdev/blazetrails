@@ -250,6 +250,35 @@ describe("DelegatedTypeTest", () => {
     expect((e as any).accessNoticeMessageId).toBe(7);
   });
 
+  it("buildEntryable preserves namespaced foreign_type", () => {
+    // Rails BelongsToPolymorphicAssociation stores record.class.polymorphic_name
+    // (the Ruby class name, including "::"). JS class names can't carry "::",
+    // so the writer must prefer the registry key the class was registered
+    // under — otherwise buildEntryable on a namespaced type clobbers
+    // entryable_type from "Access::NoticeMessage" to "AccessNoticeMessage"
+    // and breaks the generated predicates/scope/accessor.
+    class AccessNoticeMessage extends Base {
+      static {
+        this.attribute("body", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Access::NoticeMessage", AccessNoticeMessage);
+    class Entry4 extends Base {
+      static {
+        this.attribute("entryable_id", "integer");
+        this.attribute("entryable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    delegatedType(Entry4, "entryable", { types: ["Access::NoticeMessage"] });
+    const e = new Entry4({ entryable_type: "Access::NoticeMessage" });
+    const built = (e as any).buildEntryable({ body: "hi" });
+    expect(built).toBeInstanceOf(AccessNoticeMessage);
+    expect(e.entryable_type).toBe("Access::NoticeMessage");
+    expect((e as any).isAccessNoticeMessage()).toBe(true);
+  });
+
   it("registers a polymorphic belongs_to for the delegated role", () => {
     const { Entry } = makeModels();
     const reflection = Entry._reflectOnAssociation("entryable");

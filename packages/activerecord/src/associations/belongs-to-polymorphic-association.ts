@@ -60,7 +60,13 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
    */
   protected override replace(record: Base | null): void {
     const typeCol = this.foreignTypeName();
-    const typeName = record ? (record.constructor as any).name : null;
+    // Rails: writes record.class.polymorphic_name, which is the Ruby class
+    // name (including "::" for namespaced classes). The closest equivalent
+    // is the registry key the class was registered under — JS class names
+    // can't contain "::", so plain `constructor.name` would clobber values
+    // like "Access::NoticeMessage" into "AccessNoticeMessage".
+    const ctor = record ? (record.constructor as { name: string; _registryKeys?: string[] }) : null;
+    const typeName = ctor ? (ctor._registryKeys?.[0] ?? ctor.name) : null;
     if (typeof (this.owner as any)._writeAttribute === "function") {
       (this.owner as any)._writeAttribute(typeCol, typeName);
     } else {

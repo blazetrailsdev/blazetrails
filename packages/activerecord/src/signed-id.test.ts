@@ -290,7 +290,7 @@ describe("toGid", () => {
       }
     }
     const u = await User.create({ name: "Alice" });
-    expect(u.toGid()).toBe(`gid://MyApp/User/${u.id}`);
+    expect(u.toGid().toString()).toBe(`gid://MyApp/User/${u.id}`);
   });
 
   it("throws when no app is configured", async () => {

@@ -216,14 +216,20 @@ export class HasAndBelongsToMany {
       "afterRemove",
       "autosave",
       "validate",
-      "joinTable",
       "className",
       "extend",
       "strictLoading",
       "foreignKey",
       "primaryKey",
-      "associationForeignKey",
     ] as const;
+    // Note: `joinTable` is intentionally NOT forwarded — `joinTableName`
+    // (set above) already resolves `options.joinTable ?? default`, so the
+    // value is captured. Re-forwarding would also overwrite it with
+    // `undefined` when callers pass `joinTable: undefined` explicitly.
+    // `associationForeignKey` is also omitted: the HABTM machinery
+    // hard-codes the target FK as `${singular(name)}_id` in `_build` and
+    // in `_resolveHabtmJoin`/`loadHabtm`, so advertising it here would
+    // mislead — full wiring is a follow-up.
     const habtmOptions: Record<string, unknown> = {
       joinTable: joinTableName,
       through: middleName,

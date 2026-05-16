@@ -2,6 +2,9 @@
  * A single route entry, mirroring ActionDispatch::Journey::Route.
  */
 
+import { Parser } from "../journey/parser.js";
+import { Ast } from "../journey/ast.js";
+
 export interface RouteConstraints {
   [key: string]: string | RegExp;
 }
@@ -78,11 +81,12 @@ export class Route {
     this.anchor = options.anchor !== false;
 
     this.segments = parseSegments(this.path);
-    // Extract capture names directly from the path source so we catch
-    // captures inside nested optional groups (e.g. `/:c(/:a(/:id))`) and
-    // embedded captures inside static text (e.g. `/:controller.:format`)
-    // that a segment-level walk would miss.
-    this.paramNames = collectParamNamesFromPath(this.path);
+    // Derive capture names from the Journey parser/AST — the same source
+    // the Journey bridge uses. Keeps the path-vs-request constraint split
+    // in lockstep with what `Pattern.names` will report, so escaped sigils
+    // (`\:`, `\(`, `\)`), bare `*`, embedded captures, and nested optional
+    // groups all classify identically.
+    this.paramNames = collectParamNamesFromJourneyAst(this.path);
   }
 
   get isRedirect(): boolean {
@@ -270,25 +274,23 @@ interface OptionalGroup {
 
 type PathSegment = StaticSegment | DynamicSegment | GlobSegment | OptionalGroup;
 
-// Capture sigil (`:` or `*`) followed by a name, but only when the sigil
-// itself isn't escaped — Journey's scanner treats `\:foo` / `\*foo` as
-// literals. A bare `*` with no name (e.g. trailing `/page*`) is also
-// literal in Journey, which the `+` quantifier on the name already
-// excludes.
-const CAPTURE_RE = /(\\)?[:*]([a-zA-Z_][a-zA-Z0-9_]*)/g;
-
-function collectParamNamesFromPath(path: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const m of path.matchAll(CAPTURE_RE)) {
-    if (m[1] === "\\") continue; // escaped sigil → literal
-    const name = m[2]!;
-    if (!seen.has(name)) {
-      seen.add(name);
-      out.push(name);
+function collectParamNamesFromJourneyAst(path: string): string[] {
+  try {
+    const tree = new Parser().parse(path);
+    const ast = new Ast(tree, true);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const name of ast.names) {
+      if (!seen.has(name)) {
+        seen.add(name);
+        out.push(name);
+      }
     }
+    return out;
+  } catch {
+    // Parser failure shouldn't crash the route table; fall back to no captures.
+    return [];
   }
-  return out;
 }
 
 function parseSegments(path: string): PathSegment[] {

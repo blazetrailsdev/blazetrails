@@ -54,12 +54,15 @@ describe("Route", () => {
       expect(route.pathParamNames).toEqual(["controller", "format"]);
     });
 
-    it("treats escaped sigils (\\: / \\*) and bare * as literals, not captures", () => {
+    it("classifies sigils the way Journey's scanner does", () => {
+      // `\:foo` is a literal escaped colon — Journey's LITERAL_RUN absorbs `\:`.
       const escapedColon = new Route("GET", "/page\\:foo", "x", "y");
       expect(escapedColon.pathParamNames).toEqual([]);
 
+      // `\*rest` is NOT an escaped sequence in Journey's scanner — the
+      // backslash is literal, the STAR captures `rest`.
       const escapedStar = new Route("GET", "/page\\*rest", "x", "y");
-      expect(escapedStar.pathParamNames).toEqual([]);
+      expect(escapedStar.pathParamNames).toEqual(["rest"]);
 
       // A bare `*` with no name is literal in Journey.
       const bareStar = new Route("GET", "/page*", "x", "y");

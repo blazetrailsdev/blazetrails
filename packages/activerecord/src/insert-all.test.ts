@@ -737,14 +737,13 @@ describe("InsertAllTest", () => {
 
   it.skip("insert all raises on unknown attribute", async () => {
     // BLOCKED: relation
-    // ROOT-CAUSE: insert-all.ts#verifyAttributes only validates row-key uniformity across rows;
-    // Rails' InsertAll raises ActiveRecord::UnknownAttributeError when any insert key is not a
-    // model attribute (insert_all_test.rb#test_insert_all_raises_on_unknown_attribute).
+    // ROOT-CAUSE: insert-all.ts#verifyAttributes checks row-key uniformity across rows but not membership in model.attributeNames; Rails raises ActiveRecord::UnknownAttributeError (insert_all_test.rb#test_insert_all_raises_on_unknown_attribute).
     // SCOPE: ~10 LOC — extend verifyAttributes to assert keys ⊆ model.attributeNames; affects ~3 tests
+    const { UnknownAttributeError } = await import("./errors.js");
     const Book = makeBookWithAdapter();
     await expect(
       Book.all().insertAllBang([{ title: "Valid", unknown_attribute: "x" }]),
-    ).rejects.toThrow();
+    ).rejects.toThrow(UnknownAttributeError);
   });
 
   it("skip duplicates strategy does not secretly upsert", async () => {

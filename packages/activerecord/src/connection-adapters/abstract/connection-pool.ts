@@ -245,7 +245,7 @@ export class ConnectionPool implements ReapablePool {
     this._idleTimeout = this.dbConfig.idleTimeout;
     this._available = new ConnectionLeasingQueue();
     this._cacheConfig = new ConnectionPoolConfiguration(
-      this.dbConfig.queryCache as number | false | null | undefined,
+      normalizeQueryCacheConfig(this.dbConfig.queryCache),
     );
 
     this.reaper = new Reaper(this, this.dbConfig.reapingFrequency ?? 0);
@@ -615,7 +615,7 @@ export class ConnectionPool implements ReapablePool {
       throw new ConnectionNotEstablished("Connection pool has been discarded");
     }
     this._checkedOut.add(c);
-    (c as unknown as QueryCacheHost)._queryCache = this._cacheConfig.queryCache;
+    this._cacheConfig.checkoutAndVerify(c as unknown as QueryCacheHost);
     return c;
   }
 
@@ -993,6 +993,21 @@ export class ConnectionPool implements ReapablePool {
     }
     return this._leases.get(String(executionContextId()));
   }
+}
+
+/**
+ * Map `DatabaseConfig#queryCache` to the shape ConnectionPoolConfiguration
+ * expects. Rails' initializer case-matches on `0/false/Integer/nil`; trails'
+ * public config type also accepts the documented "enabled"/"disabled"
+ * strings, which Rails would never see as raw values. Normalize them so a
+ * pool configured with `queryCache: "disabled"` actually disables storage
+ * instead of falling through to DEFAULT_MAX_SIZE.
+ */
+function normalizeQueryCacheConfig(raw: unknown): number | false | null | undefined {
+  if (raw === "disabled" || raw === false || raw === 0) return false;
+  if (raw === "enabled" || raw === true || raw == null) return raw as null | undefined;
+  if (typeof raw === "number") return raw;
+  return undefined;
 }
 
 function isTransactionAware(conn: DatabaseAdapter): conn is TransactionAwareConnection {

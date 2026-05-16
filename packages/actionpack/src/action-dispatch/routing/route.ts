@@ -73,6 +73,8 @@ export class Route {
   private _pathFormatter: Format | null = null;
   /** @internal required (non-optional) path captures, computed from Pattern */
   private _requiredParamNames: readonly string[] | null = null;
+  /** @internal anchored requirement regexes for path captures, by capture name */
+  private _pathRequirements: Record<string, RegExp> | null = null;
   /** @internal true once we've discovered the path can't be parsed */
   private _journeyRouterUnbuildable = false;
 
@@ -181,8 +183,18 @@ export class Route {
         return;
       }
       if (n.type === "OR") {
-        // Or-children are alternatives at the same nesting level.
-        for (const c of n.children?.() ?? []) walk(c, nested);
+        // Or-children are alternatives — only one can match a real
+        // request, so score the most specific branch rather than the
+        // sum of all branches.
+        let max = 0;
+        for (const c of n.children?.() ?? []) {
+          const before = s;
+          walk(c, nested);
+          const branch = s - before;
+          if (branch > max) max = branch;
+          s = before;
+        }
+        s += max;
         return;
       }
       if (n.isLiteral?.()) {
@@ -234,29 +246,45 @@ export class Route {
     if (this._pathFormatter === null) {
       const tree = new Parser().parse(this.path);
       const ast = new Ast(tree, true);
-      const pattern = new Pattern(ast, {}, PATHFOR_SEPARATORS, this.anchor);
+      // Pass path-capture constraints into the Pattern so requirement
+      // checks (e.g. `id: /\d+/`) are honored at generation time.
+      const reqs: Record<string, RegExp> = {};
+      for (const [k, v] of Object.entries(this.constraints)) {
+        if (v instanceof RegExp) reqs[k] = v;
+      }
+      const pattern = new Pattern(ast, reqs, PATHFOR_SEPARATORS, this.anchor);
       this._pathFormatter = pattern.buildFormatter();
       // `Pattern.requiredNames` filters by optional-name *set*, so a name
       // that appears both required and optional (e.g. `/:id(.:id)`) gets
       // dropped. Walk the AST and collect symbol names strictly outside
-      // Group/Star nodes — that's the true "must be supplied" set.
+      // Group nodes (top-level Stars count as required too) — that's the
+      // true "must be supplied" set.
       this._requiredParamNames = topLevelSymbolNames(tree);
+      this._pathRequirements = pattern.requirementsForMissingKeysCheck;
     }
     for (const name of this._requiredParamNames!) {
-      // Empty string is treated as missing — Format.evaluate would still
-      // emit a literal `""` and leave structural slashes around it,
-      // producing malformed URLs like `//x`. Rails URL helpers raise on
-      // empty required params for the same reason.
-      const v = params[name];
-      if (!Object.hasOwn(params, name) || v == null || v === "") {
+      // Match Journey Formatter's Ruby-truthiness rule: only nil/undefined
+      // are missing. Empty string is treated as supplied and emitted by
+      // Format.evaluate (e.g. `/posts/:id` with `{ id: "" }` → `/posts/`).
+      if (!Object.hasOwn(params, name) || params[name] == null) {
         throw new Error(
           `Missing required parameter :${name} for route "${this.name ?? this.path}"`,
         );
       }
     }
-    // Null-prototype object so route params named `__proto__` /
-    // `constructor` etc. become own properties rather than hitting the
-    // inherited setter (which would silently drop them).
+    // Validate supplied path-capture values against the route's
+    // requirement regexes (Rails Journey Formatter `missing_keys` check).
+    for (const [name, re] of Object.entries(this._pathRequirements!)) {
+      const v = params[name];
+      if (v != null && !re.test(String(v))) {
+        throw new Error(
+          `Missing required parameter :${name} for route "${this.name ?? this.path}"`,
+        );
+      }
+    }
+    // Null-prototype object so an own `__proto__` route param becomes a
+    // real own property rather than hitting the inherited setter (which
+    // would silently update the prototype instead of storing the value).
     const hash: Record<string, unknown> = Object.create(null);
     for (const [k, v] of Object.entries(params)) {
       if (v != null) hash[k] = String(v);
@@ -269,9 +297,11 @@ export class Route {
     // Format.requiredPath / escapePath, preserving `/`) and collapsing
     // would munge them. When the slash-bearing capture is omitted (e.g.
     // it's inside an unsatisfied optional group), collapsing is safe.
-    if (!suppliedAnySlash(params, this.paramNames)) {
+    if (!suppliedSlashInPathPreservingCapture(params, this.path)) {
+      // Only collapse `/{2,}` runs from omitted optional groups; don't
+      // strip trailing slashes — those can be structural (e.g. `/posts/`
+      // is the correct output for `/posts/:id` with `{ id: "" }`).
       out = out.replace(/\/{2,}/g, "/");
-      if (out.length > 1 && out.endsWith("/")) out = out.slice(0, -1);
     }
     return out;
   }
@@ -317,29 +347,40 @@ export class Route {
 }
 
 /**
- * True if any supplied param value that the route actually uses
- * contains a literal `/`. Glob and `:controller` captures preserve
- * slashes (via `escapePath`), so when such a value is actually
- * supplied, post-process slash-collapse would corrupt it. Unused
- * params are ignored — they never reach the formatter output.
+ * True if a *path-preserving* capture is supplied with a value
+ * containing `/`. Only `*splat` and `:controller` parameters preserve
+ * slashes (via `Format.requiredPath` + `escapePath`); ordinary `:name`
+ * segments percent-encode `/` to `%2F`, so their values can't introduce
+ * literal `/` runs into the output and don't need to suppress collapse.
+ * Captures inside an omitted optional group don't contribute output, so
+ * we restrict the check to *supplied* path-preserving captures.
  */
-function suppliedAnySlash(
+function suppliedSlashInPathPreservingCapture(
   params: Record<string, string | number>,
-  declaredNames: readonly string[],
+  path: string,
 ): boolean {
-  const declared = new Set(declaredNames);
+  // Names of path-preserving captures declared by this route. Splat
+  // (`*name`) is always path-preserving; the `:controller` symbol gets
+  // special-cased by Journey's FormatBuilder.
+  const splatNames = new Set<string>();
+  for (const m of path.matchAll(/(?<!\\)\*([a-zA-Z_][a-zA-Z0-9_]*)/g)) {
+    splatNames.add(m[1]!);
+  }
+  const declaresController = /(?<!\\):controller\b/.test(path);
   for (const [k, v] of Object.entries(params)) {
-    if (!declared.has(k)) continue;
-    if (typeof v === "string" && v.includes("/")) return true;
+    if (typeof v !== "string" || !v.includes("/")) continue;
+    if (splatNames.has(k)) return true;
+    if (declaresController && k === "controller") return true;
   }
   return false;
 }
 
 function topLevelSymbolNames(tree: unknown): readonly string[] {
   // Names of `:symbol` and `*splat` captures that appear strictly outside
-  // any optional `Group`. Stars are treated as required when top-level —
-  // omitting `*path` from a route like `/files/*path` should still throw
-  // missing-parameter rather than silently produce `/files/`.
+  // any optional `Group`. Top-level `Star` nodes ARE counted as required
+  // (recurse into them without flipping `nested`) so omitting `*path`
+  // from `/files/*path` still throws missing-parameter rather than
+  // silently producing `/files/`.
   const out: string[] = [];
   const seen = new Set<string>();
   const walk = (node: unknown, nested: boolean): void => {

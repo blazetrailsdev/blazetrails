@@ -115,14 +115,23 @@ describe("Route", () => {
       expect(route.pathFor({ b: "x", extra: "/" } as Record<string, string>)).toBe("/x");
     });
 
-    it("treats empty-string required params as missing", () => {
-      // Format.evaluate would emit `""` and leave structural slashes
-      // around it, producing malformed URLs like `//x`. Throw instead.
-      const route = new Route("GET", "/:a/:b", "x", "y");
-      expect(() => route.pathFor({ a: "", b: "x" })).toThrow(/Missing required parameter :a/);
+    it("treats empty string as supplied (matches Journey Formatter semantics)", () => {
+      // Journey Formatter follows Ruby truthiness — `""` is supplied.
+      // `/posts/:id` with `{ id: "" }` formats as `/posts/` (the empty
+      // segment is preserved by the structural separator that follows).
+      const route = new Route("GET", "/posts/:id", "posts", "show");
+      expect(route.pathFor({ id: "" })).toBe("/posts/");
     });
 
-    it("does not lose route params named __proto__ / constructor", () => {
+    it("rejects path-capture values that violate the route's requirement regex", () => {
+      const route = new Route("GET", "/posts/:id", "posts", "show", {
+        constraints: { id: /\d+/ },
+      });
+      expect(() => route.pathFor({ id: "abc" })).toThrow(/Missing required parameter :id/);
+      expect(route.pathFor({ id: "42" })).toBe("/posts/42");
+    });
+
+    it("does not lose a route param named __proto__", () => {
       // Plain-object hash inside pathFor() would route an own `__proto__`
       // assignment to the inherited setter, silently dropping it. Using a
       // null-prototype hash makes it an own property. The input needs an

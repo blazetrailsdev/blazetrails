@@ -413,9 +413,8 @@ describe("parseTableOptions", () => {
   });
 });
 
-// Unit coverage for the four charset-collation slot helpers added in #1568.
-// The existing abstract-mysql-adapter test suite is live-DB only; these
-// exercise pure SQL-fragment shape via Object.create + minimal stubs.
+// Unit coverage for the four charset-collation slot helpers added in #1568,
+// complementing the existing fragment-shape coverage above.
 
 function makeChangeColumnTextColumn(opts: { null_?: boolean; default_?: unknown } = {}) {
   return new Column(
@@ -562,8 +561,9 @@ describe("AbstractMysqlAdapter#changeColumnNull (#1568)", () => {
     expect(executed).toEqual([]);
   });
 
-  it("propagates validateChangeColumnNullArgumentBang errors before any SQL", async () => {
+  it("propagates validateChangeColumnNullArgumentBang errors before any SQL or changeColumn dispatch", async () => {
     const executed: string[] = [];
+    const changeColumnCalls: unknown[] = [];
     const adapter = await makeMinimalMysqlAdapter({
       schemaStatements: () => ({
         validateChangeColumnNullArgumentBang: () => {
@@ -573,27 +573,24 @@ describe("AbstractMysqlAdapter#changeColumnNull (#1568)", () => {
       _execMutation: async (sql: string) => {
         executed.push(sql);
       },
-      changeColumn: async () => {},
+      changeColumn: async (...args: unknown[]) => {
+        changeColumnCalls.push(args);
+      },
     });
     await expect(
       adapter.changeColumnNull("users", "name", false as unknown as boolean, "x"),
     ).rejects.toThrow("bad null arg");
     expect(executed).toEqual([]);
+    expect(changeColumnCalls).toEqual([]);
   });
 });
 
 describe("AbstractMysqlAdapter#changeColumnComment (#1568)", () => {
   async function makeAdapterCapturingChangeColumn() {
+    // Use the real, inherited schemaStatements() so these tests exercise the
+    // production extractNewCommentValue path and catch regressions in it.
     const calls: Array<[string, string, string, Record<string, unknown>]> = [];
     const adapter = await makeMinimalMysqlAdapter({
-      schemaStatements: () => ({
-        extractNewCommentValue: (v: unknown) => {
-          if (v !== null && typeof v === "object" && "from" in v && "to" in v) {
-            return (v as { to: unknown }).to;
-          }
-          return v;
-        },
-      }),
       changeColumn: async (t: string, c: string, type: string, opts: Record<string, unknown>) => {
         calls.push([t, c, type, opts]);
       },
@@ -627,7 +624,3 @@ describe("AbstractMysqlAdapter#changeColumnComment (#1568)", () => {
     expect(calls).toEqual([["users", "name", "", { comment: null }]]);
   });
 });
-
-// Sanity: ChangeColumnDefinition import kept live (it is consumed by the
-// existing buildChangeColumnDefinition suite above).
-void ChangeColumnDefinition;

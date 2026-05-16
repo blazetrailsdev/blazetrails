@@ -1007,7 +1007,19 @@ export class TransactionManager {
     });
   }
 
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::TransactionManager#commit_transaction
+   * (`abstract/transaction.rb:593`). Wrapped in `synchronize` so direct
+   * callers (manual TM use outside `within_new_transaction`) get the same
+   * exclusion the body-internal callers already have. Reentrant for the
+   * common case where this is called from inside `_withinNewTransactionBody`.
+   */
   async commitTransaction(): Promise<void> {
+    await this.synchronize(() => this._commitTransactionInner());
+  }
+
+  /** @internal */
+  private async _commitTransactionInner(): Promise<void> {
     const transaction = this._stack[this._stack.length - 1];
     if (!(transaction instanceof Transaction)) return;
 
@@ -1025,7 +1037,17 @@ export class TransactionManager {
     await transaction.commitRecords();
   }
 
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::TransactionManager#rollback_transaction
+   * (`abstract/transaction.rb:610`). Wrapped in `synchronize` for the same
+   * reason as {@link commitTransaction}.
+   */
   async rollbackTransaction(transaction?: Transaction): Promise<void> {
+    await this.synchronize(() => this._rollbackTransactionInner(transaction));
+  }
+
+  /** @internal */
+  private async _rollbackTransactionInner(transaction?: Transaction): Promise<void> {
     const txn = transaction || this._stack[this._stack.length - 1];
 
     if (!(txn instanceof Transaction)) return;

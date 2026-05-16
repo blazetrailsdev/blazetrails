@@ -993,7 +993,7 @@ class SchemaAdapter implements DatabaseAdapter {
       await this.setup();
       return await inner.withinNewTransaction(opts, fn);
     };
-    const tm = inner._transactionManager as
+    const tm = inner.transactionManager as
       | { synchronize?<R>(fn: () => Promise<R> | R): Promise<R> }
       | undefined;
     const wrapped = storage.getStore() === true ? run : () => storage.run(true, run);

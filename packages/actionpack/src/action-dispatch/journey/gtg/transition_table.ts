@@ -169,11 +169,12 @@ export class TransitionTable implements TransitionTableLike, DotHost {
     for (const [from, inner] of this._stringStates) {
       for (const [s, to] of inner) out.push([from, s, to] as const);
     }
+    const regexLabel = (re: RegExp) => (re.flags ? `${re.source}/${re.flags}` : re.source);
     for (const [from, inner] of this._stdparamStates) {
-      for (const [s, to] of inner) out.push([from, s.source, to] as const);
+      for (const [s, to] of inner) out.push([from, regexLabel(s), to] as const);
     }
     for (const [from, inner] of this._regexpStates) {
-      for (const [s, to] of inner) out.push([from, s.source, to] as const);
+      for (const [s, to] of inner) out.push([from, regexLabel(s), to] as const);
     }
     return out;
   }
@@ -188,13 +189,16 @@ export class TransitionTable implements TransitionTableLike, DotHost {
     for (const [from, inner] of this._stringStates) {
       stringStates[from] = Object.fromEntries(inner);
     }
+    // Encode flags in the key so two regex edges from the same state with the
+    // same source but different flags don't collapse to one JSON entry.
+    const regexKey = (re: RegExp) => (re.flags ? `${re.source}/${re.flags}` : re.source);
     const stdparamStates: Record<number, Record<string, number>> = {};
     for (const [from, inner] of this._stdparamStates) {
-      stdparamStates[from] = Object.fromEntries([...inner].map(([re, v]) => [re.source, v]));
+      stdparamStates[from] = Object.fromEntries([...inner].map(([re, v]) => [regexKey(re), v]));
     }
     const regexpStates: Record<number, Record<string, number>> = {};
     for (const [from, inner] of this._regexpStates) {
-      regexpStates[from] = Object.fromEntries([...inner].map(([re, v]) => [re.source, v]));
+      regexpStates[from] = Object.fromEntries([...inner].map(([re, v]) => [regexKey(re), v]));
     }
     const accepting: Record<number, true> = {};
     for (const s of this._accepting) accepting[s] = true;

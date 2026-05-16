@@ -7,6 +7,7 @@ import {
   type GidComponents,
 } from "./uri/gid.js";
 import { Locator, lookupClass, type LocateOptions, type LocatorModel } from "./locator.js";
+import { SignedGlobalID } from "./signed-global-id.js";
 
 export interface GlobalIDModel {
   id: unknown;
@@ -124,8 +125,13 @@ export class GlobalID {
         `Cannot resolve model class for ${this.modelName}. Register the class via setModelFinder.`,
       );
     }
-    // Rails: `if model <= GlobalID then raise ArgumentError`.
-    if (klass === (GlobalID as unknown as LocatorModel)) {
+    // Rails: `if model <= GlobalID then raise ArgumentError` — in Ruby
+    // SignedGlobalID < GlobalID so the single check covers both. In TS
+    // they're peers, so reject both identities explicitly.
+    if (
+      klass === (GlobalID as unknown as LocatorModel) ||
+      klass === (SignedGlobalID as unknown as LocatorModel)
+    ) {
       throw new Error("GlobalID and SignedGlobalID cannot be used as model_class.");
     }
     return klass;

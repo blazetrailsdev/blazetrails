@@ -385,7 +385,7 @@ export function _resetLocators(): void {
   _defaultLocator = new UnscopedLocator();
 }
 
-// ─── Module-private helpers ────────────────────────────────────────────────
+// ─── Helpers (mostly module-private; lookupClass is @internal-shared) ─────
 
 /** @internal — shared by `GlobalID#model_class` / `SignedGlobalID#modelClass`. */
 export function lookupClass(name: string): LocatorModel | undefined {

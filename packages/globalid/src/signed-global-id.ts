@@ -38,6 +38,19 @@ export interface SignedGlobalIDOptions {
   [key: string]: unknown;
 }
 
+/**
+ * Options accepted by {@link SignedGlobalID.fromUri}. A narrower slice of
+ * {@link SignedGlobalIDOptions} — only the knobs that affect verification
+ * and the SGID instance fields, since fromUri operates on a pre-built URI
+ * and can't embed `app` or arbitrary extra URI params.
+ */
+export interface FromUriOptions {
+  for?: string;
+  expiresIn?: number | null;
+  expiresAt?: Temporal.Instant | null;
+  verifier?: MessageVerifier;
+}
+
 export interface ParseOptions {
   /** Rails-canonical purpose option (`options.fetch :for, DEFAULT_PURPOSE`). */
   for?: string;
@@ -123,9 +136,11 @@ export class SignedGlobalID {
    * Mirrors: SignedGlobalID.new(uri, options) — the Rails initializer that
    * `SignedGlobalIDPurposeTest > 'new accepts a :for'` exercises. Use
    * {@link create} for the model-first entry point; use this when you
-   * already have a URI string and want the SGID wrapper.
+   * already have a URI string and want the SGID wrapper. Only
+   * verifier/purpose/expiration are read — `app` and extra URI params
+   * can't be threaded into an already-built URI string.
    */
-  static fromUri(uri: string, options: SignedGlobalIDOptions = {}): SignedGlobalID {
+  static fromUri(uri: string, options: FromUriOptions = {}): SignedGlobalID {
     const verifier = SignedGlobalID.pickVerifier(options);
     const purpose = SignedGlobalID.pickPurpose(options);
     const expiresAt = pickExpiration(options);
@@ -268,17 +283,17 @@ export class SignedGlobalID {
     return this.toString();
   }
 
-  /** Mirrors: GlobalID#model_id (inherited by SignedGlobalID). */
+  /** Mirrors: GlobalID#model_id  — re-exposed on SignedGlobalID (peer class in TS, not a subclass). */
   get modelId(): string | string[] {
     return this._parts().modelId;
   }
 
-  /** Mirrors: GlobalID#model_name (inherited by SignedGlobalID). */
+  /** Mirrors: GlobalID#model_name  — re-exposed on SignedGlobalID (peer class in TS, not a subclass). */
   get modelName(): string {
     return this._parts().modelName;
   }
 
-  /** Mirrors: GlobalID#params (inherited by SignedGlobalID). */
+  /** Mirrors: GlobalID#params  — re-exposed on SignedGlobalID (peer class in TS, not a subclass). */
   get params(): Record<string, string> {
     return this._parts().params;
   }
@@ -286,7 +301,7 @@ export class SignedGlobalID {
   /**
    * Resolve the model class via the registered ModelFinder.
    *
-   * Mirrors: GlobalID#model_class (inherited by SignedGlobalID).
+   * Mirrors: GlobalID#model_class  — re-exposed on SignedGlobalID (peer class in TS, not a subclass).
    */
   get modelClass(): LocatorModel {
     const klass = lookupClass(this.modelName);

@@ -226,17 +226,14 @@ describe("GlobalIDCreationTest", () => {
   it("find with subclass", async () => {
     // Rails: a PersonChild GID with only: Person succeeds because
     // PersonChild < Person. findAllowed uses `instanceof prototype`.
-    const childGid = GlobalID.create(
-      new PersonChild("4") as unknown as { id: unknown; constructor: { name: string } },
-    );
-    // Rebind the modelName to the namespaced form Rails uses so the
-    // finder resolves to PersonChild.
+    // Use the namespaced 'Person::Child' GID directly — that's how
+    // GlobalID.create(new PersonChild(...)) renders the modelName when
+    // the class is registered under the Rails namespaced spelling.
     const namespacedGid = GlobalID.parse(`gid://bcx/Person::Child/4`)!;
     const found = (await namespacedGid.find({
       only: Person as unknown as LocatorModel,
     })) as PersonChild;
     expect(found).toBeInstanceOf(PersonChild);
-    void childGid;
   });
 
   it("find with subclass no match", async () => {

@@ -123,28 +123,34 @@ describe("Route", () => {
       expect(route.pathFor({ id: "" })).toBe("/posts/");
     });
 
-    it("rejects path-capture values that violate the route's requirement regex", () => {
+    it("rejects path-capture values that violate the route's requirement regex (anchored)", () => {
       const route = new Route("GET", "/posts/:id", "posts", "show", {
         constraints: { id: /\d+/ },
       });
+      // `42abc` would pass an unanchored `/\d+/` but fails the anchored
+      // `^(?:\d+)$` Journey wraps requirements in.
+      expect(() => route.pathFor({ id: "42abc" })).toThrow(/Missing required parameter :id/);
       expect(() => route.pathFor({ id: "abc" })).toThrow(/Missing required parameter :id/);
       expect(route.pathFor({ id: "42" })).toBe("/posts/42");
     });
 
     it("ignores request-attribute constraints (only path captures are validated)", () => {
       // `subdomain` is a request constraint, not a path capture. pathFor
-      // shouldn't validate path params against it (and shouldn't fail
-      // when an unrelated param happens to share the key).
+      // shouldn't validate against it even when the caller supplies an
+      // unrelated value with a non-matching key.
       const route = new Route("GET", "/posts/:id", "posts", "show", {
         constraints: { id: /\d+/, subdomain: /^api$/ },
       });
-      expect(route.pathFor({ id: "42" })).toBe("/posts/42");
+      expect(route.pathFor({ id: "42", subdomain: "www" } as Record<string, string>)).toBe(
+        "/posts/42",
+      );
     });
 
     it("honors string path constraints (Rails-shape anchored RegExp)", () => {
       const route = new Route("GET", "/posts/:id", "posts", "show", {
         constraints: { id: "\\d+" },
       });
+      expect(() => route.pathFor({ id: "42abc" })).toThrow(/Missing required parameter :id/);
       expect(() => route.pathFor({ id: "abc" })).toThrow(/Missing required parameter :id/);
       expect(route.pathFor({ id: "42" })).toBe("/posts/42");
     });

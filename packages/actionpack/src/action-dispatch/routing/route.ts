@@ -265,7 +265,14 @@ export class Route {
       // Group nodes (top-level Stars count as required too) — that's the
       // true "must be supplied" set.
       this._requiredParamNames = topLevelSymbolNames(tree);
-      this._pathRequirements = pattern.requirementsForMissingKeysCheck;
+      // `requirementsForMissingKeysCheck` returns a plain object, which
+      // would route a `__proto__` capture to the inherited setter.
+      // Copy into a null-prototype map so all capture names survive.
+      const safeReqs: Record<string, RegExp> = Object.create(null);
+      for (const [k, v] of Object.entries(pattern.requirementsForMissingKeysCheck)) {
+        safeReqs[k] = v;
+      }
+      this._pathRequirements = safeReqs;
     }
     for (const name of this._requiredParamNames!) {
       // Match Journey Formatter's Ruby-truthiness rule: only nil/undefined
@@ -298,13 +305,12 @@ export class Route {
       if (v != null) hash[k] = String(v);
     }
     let out = this._pathFormatter.evaluate(hash);
-    // Collapse runs of `/` left over from omitted optional groups (e.g.
-    // `(/:a)(/:b)` with `{ b: "x" }` → `//x`) and strip a single trailing
-    // slash. Skip when a supplied value actually contains a literal `/`
-    // — those values come from a splat or `:controller` (which use
-    // Format.requiredPath / escapePath, preserving `/`) and collapsing
-    // would munge them. When the slash-bearing capture is omitted (e.g.
-    // it's inside an unsatisfied optional group), collapsing is safe.
+    // Collapse runs of `/` left over from omitted optional groups
+    // (e.g. `(/:a)(/:b)` with `{ b: "x" }` → `//x` → `/x`). Skip when
+    // a path-preserving capture (`*splat` / `:controller`) is supplied
+    // with a value containing `/` — those use Format.requiredPath /
+    // escapePath, which keeps `/` literal, so collapsing would munge
+    // the user value.
     if (!suppliedSlashInPathPreservingCapture(params, this.path)) {
       // Collapse `/{2,}` runs left over from omitted optional groups
       // (e.g. `(/:a)(/:b)` with `{ b: "x" }` → `//x` → `/x`). Trailing
@@ -373,10 +379,10 @@ function suppliedSlashInPathPreservingCapture(
   // special-cased by Journey's FormatBuilder.
   // `\*name` is NOT escaped by Journey's scanner — only `\:`, `\(`, `\)`
   // are literalized. So splat names are matched without a backslash
-  // exclusion. `:controller` likewise has no scanner-level escape for
-  // `*`/`:` mid-segment.
+  // exclusion, and the name accepts any `\w` after `*` (matching the
+  // scanner's STAR rule, including digit-leading names like `*123`).
   const splatNames = new Set<string>();
-  for (const m of path.matchAll(/\*([a-zA-Z_][a-zA-Z0-9_]*)/g)) {
+  for (const m of path.matchAll(/\*(\w+)/g)) {
     splatNames.add(m[1]!);
   }
   const declaresController = /(?<!\\):controller\b/.test(path);

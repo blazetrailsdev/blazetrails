@@ -8,6 +8,7 @@ import {
   transaction,
   savepoint,
   Rollback,
+  ReadOnlyRecord,
   afterAllTransactionsCommit,
   Associations,
   registerModel,
@@ -771,9 +772,9 @@ describe("TransactionTest", () => {
     log.length = 0;
     t.readonlyBang();
     t.title = "changed";
-    await expect(t.save()).rejects.toThrow(/readonly/);
+    await expect(t.save()).rejects.toThrow(ReadOnlyRecord);
     expect(log).toEqual([]);
-    await expect(t.destroy()).rejects.toThrow(/readonly/);
+    await expect(t.destroy()).rejects.toThrow(ReadOnlyRecord);
     expect(log).toEqual([]);
   });
   it("transaction within transaction", async () => {

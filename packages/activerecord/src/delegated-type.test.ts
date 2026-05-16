@@ -231,6 +231,10 @@ describe("DelegatedTypeTest", () => {
     const built = (e as any).buildEntryable({ subject: "hi" });
     expect(built).toBeInstanceOf(Message);
     expect(built.subject).toBe("hi");
+    // Writer side-effects: role association is set and reads back as the
+    // same instance, foreign_type is preserved by the polymorphic writer.
+    expect((e as any).entryable).toBe(built);
+    expect(e.entryable_type).toBe("Message");
   });
 
   it("namespaced types", () => {
@@ -243,11 +247,24 @@ describe("DelegatedTypeTest", () => {
         this.adapter = adapter;
       }
     }
+    class NoticeMsg extends Base {
+      static {
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Access::NoticeMessage", NoticeMsg);
     delegatedType(Entry3, "entryable", { types: ["Access::NoticeMessage"] });
     expect(typeof (Entry3 as any).accessNoticeMessages).toBe("function");
     const e = new Entry3({ entryable_type: "Access::NoticeMessage", entryable_id: 7 });
     expect((e as any).isAccessNoticeMessage()).toBe(true);
     expect((e as any).accessNoticeMessageId).toBe(7);
+    // The per-type singular accessor mirrors Rails: returns the role
+    // association reader when the foreign_type matches, otherwise null.
+    const target = new NoticeMsg();
+    (e as any).entryable = target;
+    expect((e as any).accessNoticeMessage).toBe(target);
+    // entryableName also tracks the full namespaced form.
+    expect(String((e as any).entryableName)).toBe("access_notice_message");
   });
 
   it("buildEntryable preserves namespaced foreign_type", () => {

@@ -39,7 +39,7 @@ const delegatedTypeRegistry = new WeakMap<
  *   });
  *
  * This adds:
- *   - entry.entryableClass         → the class of the delegated type
+ *   - entry.entryableClass         → current foreign_type string (Rails-divergence: Rails returns the constantized class; pre-existing from #1583)
  *   - entry.entryableName          → StringInquirer (e.g. inquiry("message"))
  *   - entry.isMessage()            → type predicate
  *   - entry.isComment()            → type predicate

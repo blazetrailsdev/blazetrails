@@ -12,7 +12,7 @@ import { Pattern } from "../journey/path/pattern.js";
 import { Route as JourneyRoute, VerbMatchers } from "../journey/route.js";
 import { Routes as JourneyRoutes } from "../journey/routes.js";
 import { Router as JourneyRouter, type RouterRequest } from "../journey/router.js";
-import { normalizePath } from "../journey/router/utils.js";
+import { normalizePath, unescapeUri } from "../journey/router/utils.js";
 import type { Route as LocalRoute } from "./route.js";
 
 const SEPARATORS = "/.?";
@@ -87,7 +87,7 @@ export function journeyRecognize(
       const params: Record<string, string> = {};
       if (match) {
         for (const [name, value] of Object.entries(match.namedCaptures)) {
-          if (value != null) params[name] = value;
+          if (value != null) params[name] = unescapeUri(value);
         }
       }
       result = { route: local, params };
@@ -103,6 +103,10 @@ export function journeyRecognize(
 
 const STOP = Symbol("journey-bridge-stop");
 
+function stripAnchors(source: string): string {
+  return source.replace(/^\^/, "").replace(/\$$/, "");
+}
+
 function regexpRequirements(c: Record<string, unknown>): Record<string, RegExp> {
   const out: Record<string, RegExp> = {};
   for (const [k, v] of Object.entries(c)) {
@@ -110,10 +114,9 @@ function regexpRequirements(c: Record<string, unknown>): Record<string, RegExp> 
     // we must strip embedded anchors from RegExp sources and never add them
     // for string constraints — otherwise the anchor binds to the whole path.
     if (v instanceof RegExp) {
-      const source = v.source.replace(/^\^/, "").replace(/\$$/, "");
-      out[k] = new RegExp(source, v.flags);
+      out[k] = new RegExp(stripAnchors(v.source), v.flags);
     } else if (typeof v === "string") {
-      out[k] = new RegExp(v);
+      out[k] = new RegExp(stripAnchors(v));
     }
   }
   return out;

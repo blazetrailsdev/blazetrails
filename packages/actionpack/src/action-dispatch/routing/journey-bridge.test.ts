@@ -81,6 +81,23 @@ describe("RouteSet — Journey bridge", () => {
     expect(routes.journeyRecognize("GET", "/posts/x")).toBeNull();
   });
 
+  it("journeyRecognize strips anchors from string constraints", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/posts/:id", { to: "posts#show", constraints: { id: "^\\d+$" } });
+    });
+    expect(routes.journeyRecognize("GET", "/posts/9")).not.toBeNull();
+  });
+
+  it("journeyRecognize URI-decodes captured parameters", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/posts/:slug", { to: "posts#show" });
+    });
+    const m = routes.journeyRecognize("GET", "/posts/hello%20world");
+    expect(m!.params["slug"]).toBe("hello world");
+  });
+
   it("journeyRecognize keeps :controller/:action captures for generic routes", () => {
     const routes = new RouteSet();
     routes.draw((r) => {

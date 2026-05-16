@@ -1051,8 +1051,27 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       } else if (constraints.includes(derivedFk)) {
         ownerFk = constraints;
       } else {
+        // Mirror Reflection#deriveFkQueryConstraints validation
+        // (reflection.ts:555-571): only 2-column constraints are derivable,
+        // and the owner's scalar primary key must be one of them.
+        if (constraints.length > 2) {
+          throw new ConfigurationError(
+            `The query constraints list on the \`${ctor.name}\` model has more than 2 ` +
+              `attributes. Active Record is unable to derive the query constraints ` +
+              `for the association. You need to explicitly define the query constraints ` +
+              `for this association.`,
+          );
+        }
         const ownerPk = ctor.primaryKey;
         const ownerPkStr = Array.isArray(ownerPk) ? undefined : ownerPk;
+        if (ownerPkStr && !constraints.includes(ownerPkStr)) {
+          throw new ConfigurationError(
+            `The query constraints on the \`${ctor.name}\` model does not include the primary ` +
+              `key so Active Record is unable to derive the foreign key constraints for ` +
+              `the association. You need to explicitly define the query constraints for this ` +
+              `association.`,
+          );
+        }
         if (ownerPkStr && constraints[0] === ownerPkStr) {
           ownerFk = [derivedFk, constraints[1]];
         } else if (ownerPkStr && constraints[1] === ownerPkStr) {
@@ -1110,7 +1129,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     asName: string,
   ): { idCol: string; idValue: unknown; typeCol: string; typeValue: string } {
     const polyFk = throughAssoc.options.foreignKey ?? `${underscore(asName)}_id`;
-    const idCol = Array.isArray(polyFk) ? polyFk[0] : polyFk;
+    if (Array.isArray(polyFk)) {
+      // Polymorphic associations have only one `<as>_id`/`<as>_type` pair
+      // in the schema, so a composite foreignKey is unrepresentable.
+      // Matches the rejection at associations.ts:829-833 / :1028-1032.
+      throw new ConfigurationError(
+        `Polymorphic-through "${this._assocName}" cannot use a composite foreign key — ` +
+          `the schema only supports a single \`${underscore(asName)}_id\`/\`${underscore(asName)}_type\` pair.`,
+      );
+    }
+    const idCol = polyFk;
     const ownerPk = throughAssoc.options.primaryKey ?? ctor.primaryKey;
     const polyPk = Array.isArray(ownerPk)
       ? ownerPk.includes("id")
@@ -1151,22 +1179,15 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     const throughClassName =
       throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
     const throughModel = resolveAssocClass(this._record, throughAssoc.name, throughClassName);
-    // Polymorphic-through bypasses the composite-aware helper: the schema
-    // has a single `<as>_id`/`<as>_type` pair, which is not pairable with a
-    // composite owner PK. Use the scalar polymorphic FK column and the
-    // owner's scalar/collapsed PK so writes and reads agree on the same
-    // column (kept in lock-step with _buildThroughScope's polymorphic branch
-    // below).
-    let ownerFkCols: string[];
-    let ownerJoinAttrs: Record<string, unknown>;
-    if (throughAssoc.options.as) {
-      const poly = this._throughOwnerPolymorphic(throughAssoc, ctor, throughAssoc.options.as);
-      ownerFkCols = [poly.idCol];
-      ownerJoinAttrs = { [poly.idCol]: poly.idValue };
-    } else {
-      ownerFkCols = this._throughOwnerCols(throughAssoc, ctor).fkCols;
-      ownerJoinAttrs = this._throughOwnerAttrs(throughAssoc, ctor);
-    }
+    // Polymorphic-through uses a single `<as>_id`/`<as>_type` pair; the
+    // composite-aware helper does not apply. Writes and reads share
+    // _throughOwnerPolymorphic so they target the same column.
+    const ownerJoinAttrs: Record<string, unknown> = throughAssoc.options.as
+      ? (() => {
+          const poly = this._throughOwnerPolymorphic(throughAssoc, ctor, throughAssoc.options.as!);
+          return { [poly.idCol]: poly.idValue };
+        })()
+      : this._throughOwnerAttrs(throughAssoc, ctor);
     const sourceName = this._assocDef.options.source ?? singularize(this._assocName);
     const sourceFk = `${underscore(sourceName)}_id`;
 

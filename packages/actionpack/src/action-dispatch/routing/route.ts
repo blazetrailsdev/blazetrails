@@ -371,12 +371,17 @@ function parseSegments(path: string): PathSegment[] {
 }
 
 function normalizePath(p: string): string {
-  const stripped = p.replace(/^\/+|\/+$/g, "");
-  // Don't prepend `/` to a leading optional group: `(/:locale)/posts` must
-  // stay as-is so the `/` lives inside the optional. Prepending would
-  // produce `/(/:locale)/posts`, compiled to `^/(?:/...)?/posts$`, which
-  // requires either `//posts` (extra slash) or `/x/posts` (no plain match).
-  return stripped.startsWith("(") ? stripped : "/" + stripped;
+  // Mirrors Rails `ActionDispatch::Routing::Mapper.normalize_path`:
+  // first apply Journey's normalize (leading-`/` + collapse runs + strip
+  // trailing) then swap `/(` → `(/` so leading optional groups keep the
+  // `/` *inside* the optional. The leading `/(` form is restored only when
+  // the entire path is composed of optional segments (root-style routes).
+  let path = "/" + p.replace(/^\/+|\/+$/g, "");
+  path = path.replace(/\/(\(+)\/?/g, "$1/");
+  if (/^(\(+[^)]+\))(\(+\/:[^)]+\))*$/.test(path)) {
+    path = path.replace(/^(\(+)\//, "/$1");
+  }
+  return path;
 }
 
 function interpolateRedirect(template: string, params: Record<string, string>): string {

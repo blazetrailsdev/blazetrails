@@ -61,6 +61,32 @@ describe("Route", () => {
     });
   });
 
+  describe("path normalization — leading optional groups", () => {
+    it("normalizes (/:locale)/posts so /posts and /en/posts both match", () => {
+      const route = new Route("GET", "(/:locale)/posts", "posts", "index");
+      expect(route.match("GET", "/posts")).not.toBeNull();
+      const m = route.match("GET", "/en/posts");
+      expect(m).not.toBeNull();
+      expect(m!.params["locale"]).toBe("en");
+    });
+
+    it("normalizes when caller passes the leading '/' explicitly", () => {
+      // Rails' normalize_path collapses '/(' to '(/' so both forms classify
+      // identically.
+      const route = new Route("GET", "/(/:locale)/posts", "posts", "index");
+      expect(route.match("GET", "/posts")).not.toBeNull();
+      expect(route.match("GET", "/en/posts")).not.toBeNull();
+    });
+
+    it("keeps leading /( for all-optional paths (root-style routes)", () => {
+      // Rails restores '/(' when the path is composed entirely of optional
+      // segments, so the root '/' case still matches.
+      const route = new Route("GET", "(/:locale)(/:platform)", "x", "y");
+      expect(route.match("GET", "/")).not.toBeNull();
+      expect(route.match("GET", "/en")).not.toBeNull();
+    });
+  });
+
   describe("pathParamNames", () => {
     it("lists dynamic and glob captures in declaration order", () => {
       const route = new Route("GET", "/a/:id/b/*rest", "x", "y");

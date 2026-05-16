@@ -6,10 +6,10 @@
  *
  *   - `has_many :through` whose source reflection is a polymorphic
  *     belongs_to, disambiguated by `source_type:` ("polymorphic
- *     has_many through"). Both the JOIN-based loader and the
- *     `includes()` preloader must filter through-records by the
- *     polymorphic discriminator (`*_type`) and only materialize the
- *     matching target class.
+ *     has_many through"). Both the direct (loadHasManyThrough) path
+ *     and the `includes()` preloader must filter through-records by
+ *     the polymorphic discriminator (`*_type`) and only materialize
+ *     the matching target class.
  *   - The same chain with an STI subclass as the polymorphic target —
  *     the source-type filter is applied at the through step *and*
  *     STI promotion happens at the leaf so subclass rows materialize
@@ -25,7 +25,6 @@
  * Mirrors selected scenarios from
  * vendor/rails/activerecord/test/cases/associations/nested_through_associations_test.rb
  *   - test_polymorphic_has_many_through_when_through_association_has_not_loaded
- *   - test_polymorphic_has_many_through_when_through_association_has_already_loaded
  *   - test_polymorphic_has_many_through_joined_different_table_twice
  *   - test_has_many_through_with_sti_on_through_reflection (STI variant)
  *   - test_has_many_through_reset_source_reflection_after_loading_is_complete
@@ -139,7 +138,17 @@ describe("HABTM Slot E — polymorphic + STI through", () => {
     })) as any;
     const cake1 = (await PsCakeDesigner.create({ name: "cake1" })) as any;
     const cake2 = (await PsCakeDesigner.create({ name: "cake2" })) as any;
+    // strayCake has no chef row pointing at it. Burn enough drink
+    // rows to bump the per-table sequence so the actual drink-type
+    // chef points at a drink whose id collides with strayCake (=3).
+    // If the source_type filter is missing, the unfiltered through
+    // walk hands strayCake.id to the cake-table load and strayCake
+    // leaks into the cakeDesigners result.
+    const strayCake = (await PsCakeDesigner.create({ name: "stray" })) as any;
+    await PsDrinkDesigner.create({ name: "filler1" });
+    await PsDrinkDesigner.create({ name: "filler2" });
     const drink = (await PsDrinkDesigner.create({ name: "drink" })) as any;
+    expect(drink.id).toBe(strayCake.id);
 
     await PsChef.create({
       ps_department_id: dept.id,
@@ -157,21 +166,19 @@ describe("HABTM Slot E — polymorphic + STI through", () => {
       employable_type: "PsDrinkDesigner",
     });
 
-    return { hotel, dept, cake1, cake2, drink };
+    return { hotel, dept, cake1, cake2, strayCake, drink };
   }
 
-  it("loadHasMany filters polymorphic-through by source_type and excludes id-colliding other-type rows", async () => {
-    const { hotel, cake1, cake2, drink } = await seed();
-    // ID collision between polymorphic targets — the source_type
-    // filter is the only thing that can discriminate. Per-table
-    // sequences in the test adapter mean the first row of each
-    // table shares id=1.
-    expect(drink.id).toBe(cake1.id);
+  it("loadHasManyThrough filters polymorphic-through by source_type and excludes the wrong-type cake row sharing the drink's id", async () => {
+    const { hotel, cake1, cake2, strayCake } = await seed();
     const reflection = (PsHotel as any)._reflectOnAssociation("cakeDesigners");
     const designers = await loadHasMany(hotel, "cakeDesigners", reflection.options);
     expect(designers.map((d: any) => d.id).sort()).toEqual([cake1.id, cake2.id].sort());
-    // Every result is a PsCakeDesigner — never the id-colliding
-    // PsDrinkDesigner row.
+    // strayCake shares an id with the drink-type chef row's
+    // employable_id; if the source_type filter were absent the
+    // through walk would pass that id to the cake-table load and
+    // strayCake would appear here.
+    expect(designers.find((d: any) => d.id === strayCake.id)).toBeUndefined();
     expect(designers.every((d: any) => d instanceof PsCakeDesigner)).toBe(true);
   });
 
@@ -210,6 +217,12 @@ describe("HABTM Slot E — polymorphic + STI through", () => {
     const drinks = h._preloadedAssociations?.get("drinkDesigners") as any[];
     expect(cakes.map((d: any) => d.id).sort()).toEqual([cake1.id, cake2.id].sort());
     expect(drinks.map((d: any) => d.id).sort()).toEqual([drink.id].sort());
+    // Class assertions matter: the drink row's id (1) collides with
+    // cake1's id, so a preloader that materialized cake rows for
+    // `drinkDesigners` would still satisfy the id expectation. Pin
+    // the constructor on both sides.
+    expect(cakes.every((d: any) => d instanceof PsCakeDesigner)).toBe(true);
+    expect(drinks.every((d: any) => d instanceof PsDrinkDesigner)).toBe(true);
   });
 
   it("STI subclass at the polymorphic leaf materializes with the correct constructor under both load paths", async () => {
@@ -266,18 +279,28 @@ describe("HABTM Slot E — polymorphic + STI through", () => {
     // to contain (or omit) the first owner's targets.
     const { hotel: h1, cake1, cake2 } = await seed();
     const { hotel: h2 } = await seed();
-    const loaded = (await PsHotel.all()
+
+    const first = (await PsHotel.all()
       .includes("cakeDesigners")
-      .where({ id: [h1.id, h2.id] })
+      .where({ id: h1.id })
       .toArray()) as any[];
-    const a = loaded.find((row) => row.id === h1.id) as any;
-    const b = loaded.find((row) => row.id === h2.id) as any;
-    const aIds = (a._preloadedAssociations?.get("cakeDesigners") as any[]).map((d) => d.id);
-    const bIds = (b._preloadedAssociations?.get("cakeDesigners") as any[]).map((d) => d.id);
-    // Each owner sees only its own designers; h1's pair survives,
-    // h2's pair is the second seed's distinct rows.
-    expect(aIds.sort()).toEqual([cake1.id, cake2.id].sort());
-    expect(bIds.length).toBe(2);
-    expect(bIds.every((id) => !aIds.includes(id))).toBe(true);
+    const firstIds = (first[0]._preloadedAssociations?.get("cakeDesigners") as any[])
+      .map((d) => d.id)
+      .sort();
+    expect(firstIds).toEqual([cake1.id, cake2.id].sort());
+
+    // Second preload — independent relation, same reflection. If
+    // source-reflection scope/owner state isn't reset after the
+    // first preload completes, h2's preloaded set will contain h1's
+    // cakes (or miss h2's entirely).
+    const second = (await PsHotel.all()
+      .includes("cakeDesigners")
+      .where({ id: h2.id })
+      .toArray()) as any[];
+    const secondIds = (second[0]._preloadedAssociations?.get("cakeDesigners") as any[])
+      .map((d) => d.id)
+      .sort();
+    expect(secondIds.length).toBe(2);
+    expect(secondIds.every((id) => !firstIds.includes(id))).toBe(true);
   });
 });

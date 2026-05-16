@@ -370,8 +370,12 @@ export class LoaderQuery {
   // adapter instance as the AR-trails analogue, keyed via a WeakMap so the
   // adapter object itself is never mutated.
   private _scopeAdapterId(): string {
+    // Use the *cached* `_adapter` field only — calling the `adapter` getter
+    // would check out a pooled connection, an unwanted side effect during
+    // hash computation. Rails reads `connection_specification_name`, a plain
+    // string, with no DB touch; this is the closest side-effect-free analogue.
     const klass = this.scope?._modelClass;
-    const adapter = klass?._adapter ?? klass?.adapter;
+    const adapter = klass?._adapter;
     if (adapter == null) return "";
     let id = LoaderQuery._adapterIds.get(adapter);
     if (id == null) {

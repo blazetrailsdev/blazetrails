@@ -7692,9 +7692,15 @@ describe("PreloaderTest", () => {
         this.adapter = adapter;
       }
     }
+    Associations.hasMany.call(IAAuthor, "iaFavs", {
+      className: "IAFav",
+      foreignKey: "ia_author_id",
+      inverseOf: "iaAuthor",
+    });
     Associations.belongsTo.call(IAFav, "iaAuthor", {
       className: "IAAuthor",
       foreignKey: "ia_author_id",
+      inverseOf: "iaFavs",
     });
     Associations.belongsTo.call(IAFav, "iaFavoriteAuthor", {
       className: "IAAuthor",
@@ -7714,8 +7720,14 @@ describe("PreloaderTest", () => {
     // Both belongs_to loaders hit the same table with the same scope/key →
     // coalesced into 1 batched query.
     expect(spy).toHaveBeenCalledTimes(1);
-    expect((favorites[0] as any)._preloadedAssociations.get("iaAuthor").name).toBe("Mary");
-    expect((favorites[0] as any)._preloadedAssociations.get("iaFavoriteAuthor").name).toBe("Bob");
+    const fav = favorites[0] as any;
+    expect(fav._preloadedAssociations.get("iaAuthor").name).toBe("Mary");
+    expect(fav._preloadedAssociations.get("iaFavoriteAuthor").name).toBe("Bob");
+    // Inverse caching: the loaded mary record must have iaFavs back-pointing
+    // to the same fav instance via the inverse cache populated during grouped
+    // preloading (mirrors Rails' inverse_of behavior under Batch).
+    const loadedMary = fav._preloadedAssociations.get("iaAuthor");
+    expect(loadedMary._cachedAssociations?.get("iaFavs")).toBe(fav);
   });
   it.skip("preload can group separate levels", () => {
     /* deferred to Slot B: requires multi-round batch coalescing across through */

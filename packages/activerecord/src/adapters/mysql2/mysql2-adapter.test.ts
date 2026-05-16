@@ -36,7 +36,7 @@ import { Result } from "../../result.js";
 describe("Mysql2Adapter#translateException (fabricated errors)", () => {
   let adapter: Mysql2Adapter;
   beforeEach(() => {
-    adapter = new Mysql2Adapter({ _fakeConnection: true } as any);
+    adapter = new Mysql2Adapter({ _fakeConnection: true });
   });
   afterEach(async () => {
     await adapter.close().catch(() => {});
@@ -118,6 +118,11 @@ describeIfMysql("Mysql2Adapter", () => {
     adapter = new Mysql2Adapter(MYSQL_TEST_URL);
   });
   afterEach(async () => {
+    // Restore any console / logger spies installed by the warning-handler
+    // tests so a throw before the inner mockRestore() can't leak the stub
+    // into subsequent suites — matches the cleanup pattern in
+    // adapters/abstract-mysql-adapter/warnings.test.ts.
+    vi.restoreAllMocks();
     await adapter.close();
   });
 
@@ -444,6 +449,9 @@ describeIfMysql("Mysql2Adapter", () => {
         adapter.databaseTimezone = "utc";
         await adapter.executeMutation("DO 1");
         expect(adapter.databaseTimezone).toBe("local");
+        adapter.databaseTimezone = "utc";
+        await adapter.exec("DO 1");
+        expect(adapter.databaseTimezone).toBe("local");
       });
       await adapter.execute("SELECT 1");
       expect(adapter.databaseTimezone).toBe("utc");
@@ -463,23 +471,20 @@ describeIfMysql("Mysql2Adapter", () => {
         await adapter.executeMutation(`SET SESSION sql_mode=''`);
         await adapter.executeMutation(`INSERT INTO warn_posts (title) VALUES ('Title')`);
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        try {
-          await withDbWarningsAction("log", async () => {
-            // `id > (0+'foo')` triggers a "Truncated incorrect DOUBLE value" warning;
-            // under db_warnings_action=:log that warning is logged, not raised, and
-            // must not corrupt the affected-row count returned by executeMutation.
-            const affected = await adapter.executeMutation(
-              `UPDATE warn_posts SET title = 'Updated' WHERE id > (0+'foo') LIMIT 1`,
-            );
-            expect(affected).toBe(1);
-          });
-          // The warning handler must have actually fired — otherwise this
-          // test would silently still pass on a regression that disconnected
-          // executeMutation from _handleWarningsOn.
-          expect(warnSpy).toHaveBeenCalled();
-        } finally {
-          warnSpy.mockRestore();
-        }
+        // Spy is restored by the outer afterEach via vi.restoreAllMocks().
+        await withDbWarningsAction("log", async () => {
+          // `id > (0+'foo')` triggers a "Truncated incorrect DOUBLE value" warning;
+          // under db_warnings_action=:log that warning is logged, not raised, and
+          // must not corrupt the affected-row count returned by executeMutation.
+          const affected = await adapter.executeMutation(
+            `UPDATE warn_posts SET title = 'Updated' WHERE id > (0+'foo') LIMIT 1`,
+          );
+          expect(affected).toBe(1);
+        });
+        // The warning handler must have actually fired — otherwise this
+        // test would silently still pass on a regression that disconnected
+        // executeMutation from _handleWarningsOn.
+        expect(warnSpy).toHaveBeenCalled();
       } finally {
         await adapter.rollback().catch(() => {});
         await adapter.executeMutation(`DROP TABLE IF EXISTS warn_posts`).catch(() => {});
@@ -497,20 +502,14 @@ describeIfMysql("Mysql2Adapter", () => {
         await adapter.executeMutation(`SET SESSION sql_mode=''`);
         await adapter.executeMutation(`INSERT INTO warn_posts_d (title) VALUES ('Title')`);
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        try {
-          await withDbWarningsAction("log", async () => {
-            const affected = await adapter.executeMutation(
-              `DELETE FROM warn_posts_d WHERE id > (0+'foo') LIMIT 1`,
-            );
-            expect(affected).toBe(1);
-          });
-          // The warning handler must have actually fired — otherwise this
-          // test would silently still pass on a regression that disconnected
-          // executeMutation from _handleWarningsOn.
-          expect(warnSpy).toHaveBeenCalled();
-        } finally {
-          warnSpy.mockRestore();
-        }
+        // Spy is restored by the outer afterEach via vi.restoreAllMocks().
+        await withDbWarningsAction("log", async () => {
+          const affected = await adapter.executeMutation(
+            `DELETE FROM warn_posts_d WHERE id > (0+'foo') LIMIT 1`,
+          );
+          expect(affected).toBe(1);
+        });
+        expect(warnSpy).toHaveBeenCalled();
       } finally {
         await adapter.rollback().catch(() => {});
         await adapter.executeMutation(`DROP TABLE IF EXISTS warn_posts_d`).catch(() => {});

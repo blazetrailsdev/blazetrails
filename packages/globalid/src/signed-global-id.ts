@@ -3,6 +3,7 @@ import { Temporal } from "@blazetrails/activesupport/temporal";
 import { getApp } from "./config.js";
 import { buildGid, parseGid, type GidComponents } from "./uri/gid.js";
 import type { GlobalIDModel } from "./global-id.js";
+import { lookupClass, type LocatorModel } from "./locator.js";
 
 export type { GlobalIDModel };
 
@@ -265,6 +266,21 @@ export class SignedGlobalID {
   /** Mirrors: GlobalID#params (inherited by SignedGlobalID). */
   get params(): Record<string, string> {
     return this._parts().params;
+  }
+
+  /**
+   * Resolve the model class via the registered ModelFinder.
+   *
+   * Mirrors: GlobalID#model_class (inherited by SignedGlobalID).
+   */
+  get modelClass(): LocatorModel {
+    const klass = lookupClass(this.modelName);
+    if (!klass) {
+      throw new Error(
+        `Cannot resolve model class for ${this.modelName}. Register the class via setModelFinder.`,
+      );
+    }
+    return klass;
   }
 
   /**

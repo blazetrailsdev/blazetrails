@@ -6,6 +6,7 @@ import {
   validateApp,
   type GidComponents,
 } from "./uri/gid.js";
+import { Locator, lookupClass, type LocateOptions, type LocatorModel } from "./locator.js";
 
 export interface GlobalIDModel {
   id: unknown;
@@ -107,5 +108,35 @@ export class GlobalID {
   /** Mirrors: GlobalID.app= validation */
   static validateApp(app: string | null | undefined): string {
     return validateApp(app);
+  }
+
+  /**
+   * Resolve the model class via the registered ModelFinder.
+   *
+   * Mirrors: GlobalID#model_class — `model_name.constantize`. Raises if the
+   * resolved class is GlobalID / SignedGlobalID (Rails has the same guard
+   * against recursive `model_class` lookup).
+   */
+  get modelClass(): LocatorModel {
+    const klass = lookupClass(this.modelName);
+    if (!klass) {
+      throw new Error(
+        `Cannot resolve model class for ${this.modelName}. Register the class via setModelFinder.`,
+      );
+    }
+    // Rails: `if model <= GlobalID then raise ArgumentError`.
+    if (klass === (GlobalID as unknown as LocatorModel)) {
+      throw new Error("GlobalID and SignedGlobalID cannot be used as model_class.");
+    }
+    return klass;
+  }
+
+  /**
+   * Find the record this GID references.
+   *
+   * Mirrors: GlobalID#find — delegates to `Locator.locate(self, options)`.
+   */
+  find(options?: LocateOptions): Promise<unknown | null> {
+    return Locator.locate(this, options);
   }
 }

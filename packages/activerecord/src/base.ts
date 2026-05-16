@@ -3582,6 +3582,13 @@ import {
   type LocatorModel as _LocatorModel,
 } from "@blazetrails/globalid";
 import { modelRegistry as _gidModelRegistry } from "./associations.js";
+// AR's static `Base.unscoped(block)` is the `LocatorModel.unscoped`
+// implementation that GlobalID's `UnscopedLocator` invokes — wrapping
+// lookups in `klass.unscoped { ... }` so default scopes don't hide rows
+// being located by GID. `Base.unscoped` is wired statically via the
+// `extend(Base, { unscoped: _unscoped })` block above, and the model
+// finder below returns Base subclasses unchanged, so AR models satisfy
+// the `LocatorModel.unscoped` duck shape without further plumbing.
 _setGlobalIdModelFinder((name: string) => {
   const fromBase = Base._modelsByName.get(name);
   if (fromBase) return fromBase as unknown as _LocatorModel;

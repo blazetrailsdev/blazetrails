@@ -117,16 +117,19 @@ the TM stack — the TM stack is the truth.
 - **HABTM/HMT insert-record parity (deferred)** — `insertHabtmRecord` still bypasses Rails' two-step (target save + through save via `save_through_record`). We persist the join row only. Larger semantic change, out of plan-doc scope.
 - **Phase 8 cross-file PG flakes** — observed during local verification: HABTM/HMT/nested-through files green in isolation, mixed runs surface 5–18 cross-file races. Tracked under Phase 8 (TM-internal mutex, `connection-adapters/abstract/transaction.ts:1009`).
 
-## Phase 5 — Universal `defineSchema` adoption — partial (#1633, #1686, #1693, #1697)
+## Phase 5 — Universal `defineSchema` adoption — partial (#1633, #1686, #1690, #1693, #1697)
 
-**Remaining (post-#1697):**
+**Currently in flight (2026-05-16):**
 
-- `packages/activerecord/src/calculations.test.ts` — 7596 LOC, 101 `freshAdapter()` sites, no `defineSchema` yet. Likely 2–3 sub-PRs by describe-block cluster.
-- `packages/activerecord/src/enum.test.ts` — 2018 LOC, 75 `freshAdapter()` sites. One PR via async-freshAdapter pattern (proven on `core.test.ts` in #1697).
+- Root cluster B (calculations + finder + persistence + validations) — pane %142.
+- Root cluster C (enum + primary-keys + attribute / store / dirty / scoping / locking) — scheduled 17:36.
+- `relation/where.test.ts` standalone (~2062 LOC) — scheduled 17:51.
+
+**Remaining after the in-flight wave clears:**
+
 - `associations/association-scope.test.ts` — 1118 LOC standalone.
 - `associations/inverse-associations.test.ts` — 1717 LOC, may need 2 PRs.
-- `relation/where.test.ts` — 2062 LOC, 45 `_tableName` overrides.
-- root cluster B remainder (finder/persistence/primary-keys/validations) — may have landed in a parallel sub-PR.
+- Any other Phase 5 offenders surfaced by `pnpm tsx scripts/audit-define-schema.ts` after the in-flight PRs merge.
 
 **Pattern note from #1697:** `core.test.ts` async-freshAdapter pattern (shared `TEST_SCHEMA` constant, helper async, sed-replace, flip sync `it()` to async) reusable for `enum.test.ts`. `calculations.test.ts` has too many distinct tables for one shared schema — per-describe `beforeEach` `defineSchema` (the pattern from `callbacks.test.ts`).
 
@@ -140,12 +143,12 @@ the TM stack — the TM stack is the truth.
 
 **#1633 migrated 32 of 100 files** (smaller files, full `scoping/` cluster, contained `associations/` files, most of `relation/` except `where.test.ts`). 68 files remain.
 
-**Phase 5 remainder (~1500 LOC over 4–5 PRs, ≤300 LOC each by directory):**
+**Phase 5 split breakdown** (historical — see In-flight + Remaining sections above for current state):
 
-- associations/ remainder (~25 files; `association-scope.test.ts` 1118 LOC + `inverse-associations.test.ts` 1717 LOC → 2–3 splits).
-- encryption/ cluster (~9 files; best as one PR extending `test-helpers.ts` with `installEncryptionSchema(adapter)`, ~80 LOC).
-- root cluster (~25 files: calculations, callbacks, core, enum, finder, persistence, primary-keys, validations, etc.).
-- `relation/where.test.ts` standalone (~2062 LOC, 45 `_tableName` overrides with namespaced prefixes + composite-PK fixtures).
+- ~~encryption/ cluster~~ — closed (#1693) via `installEncryptionSchema(adapter)` helper.
+- root cluster — split A (core + callbacks, #1697); B (calculations + finder + persistence + validations, in flight); C (enum + primary-keys + attribute/store/dirty/scoping/locking, scheduled).
+- associations/ — ~~smaller files~~ (#1690); association-scope + inverse-associations remainder.
+- `relation/where.test.ts` — standalone, in flight.
 
 **Pattern catalogue from #1633** (for follow-up agents):
 

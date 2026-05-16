@@ -733,18 +733,6 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return new ChangeColumnDefinition(colDef, column.name);
   }
 
-  /**
-   * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::SchemaStatements#create_table_definition.
-   * Routes `createTable` through the MySQL-specific `TableDefinition` so MySQL column
-   * methods (`blob`, `tinytext`, `unsignedInteger`, …) and the MySQL `primary_key` /
-   * unsigned alias handling are available inside the createTable block.
-   * @internal
-   */
-  createTableDefinition(name: string, options: Record<string, unknown> = {}): MysqlTableDefinition {
-    const { adapter: _adapter, adapterName: _adapterName, ...rest } = options;
-    return new MysqlTableDefinition(name, rest as any);
-  }
-
   async renameColumn(tableName: string, columnName: string, newColumnName: string): Promise<void> {
     void tableName;
     void columnName;

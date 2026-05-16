@@ -50,20 +50,13 @@ export class TableDefinition extends AbstractTableDefinition {
   constructor(
     tableName: string,
     options: {
-      id?: boolean | "uuid" | string | Record<string, unknown>;
-      primaryKey?: string | string[] | false;
+      id?: boolean | "uuid";
       charset?: string | null;
       collation?: string | null;
-      temporary?: boolean;
-      ifNotExists?: boolean;
-      options?: string;
-      comment?: string;
-      as?: string;
-      default?: unknown;
     } = {},
   ) {
     super(tableName, {
-      ...(options as any),
+      ...options,
       charset: options.charset ?? undefined,
       collation: options.collation ?? undefined,
       adapterName: "mysql",

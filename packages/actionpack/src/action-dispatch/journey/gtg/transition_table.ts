@@ -21,12 +21,16 @@ function isDefaultExp(re: RegExp): boolean {
  * Wraps the source in `(?:…)` so anchoring binds around an alternation
  * (`/^foo|bar$/` parses as `(^foo)|(bar$)` — wrong).
  *
- * `g`/`y` are filtered (they change matching semantics in ways that break
- * a single-shot anchored test); `u` and `v` are mutually exclusive (`v`
- * supersedes).
+ * Filters:
+ * - `g`/`y` are dropped — they change matching semantics in ways that
+ *   break a single-shot anchored test.
+ * - `m` is dropped — it changes `^`/`$` to match line boundaries, which
+ *   would break the strict-string anchoring we want (Rails' `\A…\Z` is
+ *   immune to `/m`).
+ * - `u` and `v` are mutually exclusive; `v` supersedes.
  */
 function anchorPreservingFlags(re: RegExp): RegExp {
-  const flags = [...re.flags].filter((f) => "imsd".includes(f));
+  const flags = [...re.flags].filter((f) => "isd".includes(f));
   if (re.flags.includes("v")) flags.push("v");
   else if (re.flags.includes("u")) flags.push("u");
   return new RegExp(`^(?:${re.source})$`, flags.join(""));

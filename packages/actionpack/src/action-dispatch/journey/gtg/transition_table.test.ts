@@ -40,6 +40,15 @@ describe("ActionDispatch::Journey::GTG::TransitionTable — set() regex anchorin
     t.set(0, 1, /foo/i);
     expect(t.move([[0, null]], "FOO", 0, 3).some(([s]) => s === 1)).toBe(true);
   });
+
+  it("filters /m to keep ^/$ strict — newline tokens must not slip in", () => {
+    const t = new TransitionTable();
+    t.set(0, 1, /foo/m);
+    // /m would have made ^foo$ line-anchored; "foo\nbar" would have matched
+    // the first line. After filtering, only "foo" exactly matches.
+    expect(t.move([[0, null]], "foo\nbar", 0, 7).some(([s]) => s === 1)).toBe(false);
+    expect(t.move([[0, null]], "foo", 0, 3).some(([s]) => s === 1)).toBe(true);
+  });
 });
 
 describe("ActionDispatch::Journey::GTG::TransitionTable", () => {
@@ -88,6 +97,7 @@ describe("ActionDispatch::Journey::GTG::TransitionTable", () => {
     for (const inner of [
       ...Object.values(json.string_states),
       ...Object.values(json.stdparam_states),
+      ...Object.values(json.regexp_states),
     ]) {
       for (const target of Object.values(inner)) {
         expect(allStateIds.has(String(target))).toBe(true);

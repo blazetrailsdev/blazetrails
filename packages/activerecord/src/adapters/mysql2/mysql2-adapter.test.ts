@@ -463,6 +463,10 @@ describeIfMysql("Mysql2Adapter", () => {
             );
             expect(affected).toBe(1);
           });
+          // The warning handler must have actually fired — otherwise this
+          // test would silently still pass on a regression that disconnected
+          // executeMutation from _handleWarningsOn.
+          expect(warnSpy).toHaveBeenCalled();
         } finally {
           warnSpy.mockRestore();
         }
@@ -490,6 +494,10 @@ describeIfMysql("Mysql2Adapter", () => {
             );
             expect(affected).toBe(1);
           });
+          // The warning handler must have actually fired — otherwise this
+          // test would silently still pass on a regression that disconnected
+          // executeMutation from _handleWarningsOn.
+          expect(warnSpy).toHaveBeenCalled();
         } finally {
           warnSpy.mockRestore();
         }

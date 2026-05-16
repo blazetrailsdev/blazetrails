@@ -733,18 +733,24 @@ export class AbstractAdapter implements Quoting {
       let nameMatches = false;
       for (const k of entry.klasses) {
         if (typeof k !== "function") continue;
-        // "Includes Base" covers the literal Base class AND the designated
-        // primary class (ApplicationRecord), which PoolConfig normalizes to
-        // the "Base" connection descriptor — so a connected_to scope on
-        // either should apply to every pool.
-        if (
-          Object.prototype.hasOwnProperty.call(k, "_isActiveRecordBase") ||
-          (typeof (k as any).primaryClassQ === "function" && (k as any).primaryClassQ())
-        ) {
+        // Rails' `klasses.include?(Base)` matches the literal Base class by
+        // identity — so a `Base.connected_to` scope blankets every pool.
+        // ApplicationRecord is NOT promoted here; its scope should only
+        // affect pools that share its normalized descriptor name (handled
+        // below in the name-match branch).
+        if (Object.prototype.hasOwnProperty.call(k, "_isActiveRecordBase")) {
           includesBase = true;
         }
-        if (ownerName !== undefined && k.name === ownerName) {
-          nameMatches = true;
+        if (ownerName !== undefined) {
+          // PoolConfig normalizes primary-class owners (Base/ApplicationRecord)
+          // to the "Base" descriptor name. Mirror that on the read side so an
+          // `ApplicationRecord.connected_to(...)` scope targets the primary
+          // pool without leaking into unrelated abstract-class pools.
+          const targetName =
+            typeof (k as any).primaryClassQ === "function" && (k as any).primaryClassQ()
+              ? "Base"
+              : k.name;
+          if (targetName === ownerName) nameMatches = true;
         }
       }
       if (includesBase || nameMatches) return entry.preventWrites;

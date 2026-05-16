@@ -88,9 +88,16 @@ export function connectsTo(
   (this as any)._defaultShard = Object.keys(shardEntries)[0];
   (this as any).connectionClass = true;
 
+  // Normalize configurations once for the multi-shard/role loop instead of
+  // rebuilding DatabaseConfigurations.fromEnv inside resolveConfigForConnection
+  // on every iteration. The `connection_specification_name` side effect only
+  // depends on `this`, so plant it once upfront.
+  if (!this.name) throw new Error("Anonymous class is not allowed.");
+  (this as any)._connectionSpecificationName = isPrimaryClass.call(this) ? "Base" : this.name;
+  const configs = normalizeConfigurations(this);
   for (const [shard, dbKeys] of Object.entries(shardEntries)) {
     for (const [role, dbKey] of Object.entries(dbKeys)) {
-      const dbConfig = resolveConfigForConnection.call(this, dbKey);
+      const dbConfig = configs.resolve(dbKey);
       const pool = this.connectionHandler.establishConnection(dbConfig, {
         owner: this.connectionClassForSelf(),
         role,
@@ -859,26 +866,27 @@ export function resolveConfigForConnection(
   // subsequent connectionPool() lookups hit the right key. The reader uses
   // an own-property check so writing here doesn't bleed through JS static
   // inheritance into unrelated subclasses.
-  const connectionName = isPrimaryClass.call(this) ? "Base" : this.name;
-  (this as any)._connectionSpecificationName = connectionName;
+  (this as any)._connectionSpecificationName = isPrimaryClass.call(this) ? "Base" : this.name;
+  return normalizeConfigurations(this).resolve(configOrEnv);
+}
 
-  const rawConfigs = (this as any).configurations;
-  // `configurations` may be the unset static accessor (a function value), a
-  // plain hash assigned by tests, or an already-built DatabaseConfigurations.
-  // Mirror Rails' `Base.configurations.resolve(config_or_env)` by always
-  // normalizing to a DatabaseConfigurations instance before resolving — so
-  // string env names surface AdapterNotSpecified with the available-configs
-  // hint instead of silently passing through.
-  let configs: DatabaseConfigurations;
-  if (rawConfigs instanceof DatabaseConfigurations) {
-    configs = rawConfigs;
-  } else if (rawConfigs && typeof rawConfigs === "object") {
-    configs = DatabaseConfigurations.fromEnv(
+/**
+ * Normalize a class's `configurations` static into a DatabaseConfigurations
+ * instance. Mirror Rails' `Base.configurations.resolve(...)` entry point by
+ * always returning a real configurations object — string env names then
+ * surface AdapterNotSpecified with the available-configs hint instead of
+ * silently passing through.
+ *
+ * @internal
+ */
+function normalizeConfigurations(klass: typeof Base): DatabaseConfigurations {
+  const rawConfigs = (klass as any).configurations;
+  if (rawConfigs instanceof DatabaseConfigurations) return rawConfigs;
+  if (rawConfigs && typeof rawConfigs === "object") {
+    return DatabaseConfigurations.fromEnv(
       (rawConfigs as { toH?: () => RawConfigurations }).toH?.() ??
         (rawConfigs as RawConfigurations),
     );
-  } else {
-    configs = DatabaseConfigurations.fromEnv({});
   }
-  return configs.resolve(configOrEnv);
+  return DatabaseConfigurations.fromEnv({});
 }

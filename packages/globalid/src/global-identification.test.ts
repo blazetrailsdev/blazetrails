@@ -80,6 +80,17 @@ describe("GlobalIdentificationTest", () => {
     expect(parsed!.uri).toContain("?db=primary");
   });
 
+  it("dup should clear memoized to_global_id", () => {
+    // Rails: dup'd model with a mutated id yields a different to_global_id.
+    // Trails: toGlobalId is not memoized — each call builds afresh from
+    // the current id, so the dup-then-mutate behavior is the default.
+    const model = new Person("1");
+    const globalId = toGlobalId.call(model);
+    const dupModel = new Person(String(Number(model.id) + 1));
+    const dupGlobalId = toGlobalId.call(dupModel);
+    expect(globalId.uri).not.toBe(dupGlobalId.uri);
+  });
+
   it("toGidParam round-trips through GlobalID.parse", () => {
     const p = new Person("5");
     const parsed = GlobalID.parse(toGidParam.call(p));

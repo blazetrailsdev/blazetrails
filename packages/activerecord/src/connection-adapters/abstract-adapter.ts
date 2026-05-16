@@ -738,6 +738,15 @@ export class AbstractAdapter implements Quoting {
         // ApplicationRecord is NOT promoted here; its scope should only
         // affect pools that share its normalized descriptor name (handled
         // below in the name-match branch).
+        //
+        // Note: when an abstract subclass without `connectionClass = true`
+        // (e.g. ApplicationRecord set up via `primaryAbstractClass()` only,
+        // never `connectsTo`) calls `connectedTo`, `withRoleAndShard` pushes
+        // `connectionClassForSelf()` which walks up to Base, so klasses will
+        // contain Base and this branch fires globally. That mirrors the
+        // pre-existing convention in `core.ts#matchesStack`. Realistic
+        // primary-class flows call `connectsTo` first (setting
+        // `connectionClass = true`) so the walk stops at the primary class.
         if (Object.prototype.hasOwnProperty.call(k, "_isActiveRecordBase")) {
           includesBase = true;
         }

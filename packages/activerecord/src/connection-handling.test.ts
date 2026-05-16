@@ -193,7 +193,9 @@ describe("ConnectionHandlingTest", () => {
         database: { writing: "primary" },
         shards: { default: { writing: "primary" } },
       }),
-    ).toThrow(/can only accept/);
+    ).toThrow(
+      "`connects_to` can only accept a `database` or `shards` argument, but not both arguments.",
+    );
   });
 
   it("connectedTo requires role or shard", () => {
@@ -504,95 +506,127 @@ describe("withRoleAndShard loads Relation return values within scope (Story K ga
 
     expect(loadCalled).toBe(true);
   });
+});
 
-  describe("AbstractAdapter#isPreventingWrites stack matching", () => {
-    afterEach(() => {
-      connectedToStack().length = 0;
-      Base.connectionHandler.clearAllConnectionsBang();
-    });
+describe("AbstractAdapter#isPreventingWrites stack matching", () => {
+  afterEach(() => {
+    connectedToStack().length = 0;
+    Base.connectionHandler.clearAllConnectionsBang();
+  });
 
-    it("Base.connectedTo preventing writes applies globally to unrelated pools", () => {
-      class UnrelatedAbstract extends Base {
-        static {
-          this.abstractClass = true;
-          this.connectionClass = true;
-        }
+  it("Base.connectedTo preventing writes applies globally to unrelated pools", () => {
+    class UnrelatedAbstract extends Base {
+      static {
+        this.abstractClass = true;
+        this.connectionClass = true;
       }
-      Base.connectionHandler.establishConnection(
-        new HashConfig("test", "UnrelatedAbstract", { adapter: "sqlite3", database: ":memory:" }),
-        {
-          owner: "UnrelatedAbstract",
-          role: "writing",
-          adapterFactory: () => new SQLite3Adapter(),
-        },
-      );
-      const conn = UnrelatedAbstract.leaseConnection();
-      expect(conn.isPreventingWrites()).toBe(false);
-      Base.connectedTo({ role: "writing", preventWrites: true }, () => {
-        expect(conn.isPreventingWrites()).toBe(true);
-      });
-      expect(conn.isPreventingWrites()).toBe(false);
+    }
+    Base.connectionHandler.establishConnection(
+      new HashConfig("test", "UnrelatedAbstract", { adapter: "sqlite3", database: ":memory:" }),
+      {
+        owner: "UnrelatedAbstract",
+        role: "writing",
+        adapterFactory: () => new SQLite3Adapter(),
+      },
+    );
+    const conn = UnrelatedAbstract.leaseConnection();
+    expect(conn.isPreventingWrites()).toBe(false);
+    Base.connectedTo({ role: "writing", preventWrites: true }, () => {
+      expect(conn.isPreventingWrites()).toBe(true);
     });
+    expect(conn.isPreventingWrites()).toBe(false);
+  });
 
-    it("abstract-class connectedTo does not leak to unrelated pools", () => {
-      class AnimalsRecord extends Base {
-        static {
-          this.abstractClass = true;
-          this.connectionClass = true;
-        }
+  it("abstract-class connectedTo does not leak to unrelated pools", () => {
+    class AnimalsRecord extends Base {
+      static {
+        this.abstractClass = true;
+        this.connectionClass = true;
       }
-      class MealsRecord extends Base {
-        static {
-          this.abstractClass = true;
-          this.connectionClass = true;
-        }
+    }
+    class MealsRecord extends Base {
+      static {
+        this.abstractClass = true;
+        this.connectionClass = true;
       }
-      Base.connectionHandler.establishConnection(
-        new HashConfig("test", "AnimalsRecord", { adapter: "sqlite3", database: ":memory:" }),
-        { owner: "AnimalsRecord", role: "writing", adapterFactory: () => new SQLite3Adapter() },
-      );
-      Base.connectionHandler.establishConnection(
-        new HashConfig("test", "MealsRecord", { adapter: "sqlite3", database: ":memory:" }),
-        { owner: "MealsRecord", role: "writing", adapterFactory: () => new SQLite3Adapter() },
-      );
-      const animals = AnimalsRecord.leaseConnection();
-      const meals = MealsRecord.leaseConnection();
-      AnimalsRecord.connectedTo({ role: "writing", preventWrites: true }, () => {
-        expect(animals.isPreventingWrites()).toBe(true);
-        expect(meals.isPreventingWrites()).toBe(false);
-      });
+    }
+    Base.connectionHandler.establishConnection(
+      new HashConfig("test", "AnimalsRecord", { adapter: "sqlite3", database: ":memory:" }),
+      { owner: "AnimalsRecord", role: "writing", adapterFactory: () => new SQLite3Adapter() },
+    );
+    Base.connectionHandler.establishConnection(
+      new HashConfig("test", "MealsRecord", { adapter: "sqlite3", database: ":memory:" }),
+      { owner: "MealsRecord", role: "writing", adapterFactory: () => new SQLite3Adapter() },
+    );
+    const animals = AnimalsRecord.leaseConnection();
+    const meals = MealsRecord.leaseConnection();
+    AnimalsRecord.connectedTo({ role: "writing", preventWrites: true }, () => {
+      expect(animals.isPreventingWrites()).toBe(true);
+      expect(meals.isPreventingWrites()).toBe(false);
     });
+  });
 
-    it("primary class connectedTo targets the Base-normalized pool only", () => {
-      class ApplicationRecord extends Base {
-        static {
-          this.abstractClass = true;
-          this.connectionClass = true;
-        }
-        static override primaryClassQ(): boolean {
-          return true;
-        }
+  it("primary class connectedTo (after connectsTo) targets the Base-normalized pool", () => {
+    // Realistic primary-class flow: primaryAbstractClass marks abstract, then
+    // connectsTo sets connectionClass=true so connectionClassForSelf walks no
+    // further than ApplicationRecord. PoolConfig normalizes the descriptor
+    // name to "Base"; the matcher must match the primary-class scope entry
+    // (klasses=[ApplicationRecord]) against that normalized "Base" pool name.
+    class ApplicationRecord extends Base {
+      static {
+        this.abstractClass = true;
+        this.connectionClass = true;
       }
-      class OtherAbstract extends Base {
-        static {
-          this.abstractClass = true;
-          this.connectionClass = true;
-        }
+      static override primaryClassQ(): boolean {
+        return true;
       }
-      Base.connectionHandler.establishConnection(
-        new HashConfig("test", "ApplicationRecord", { adapter: "sqlite3", database: ":memory:" }),
-        { owner: ApplicationRecord, role: "writing", adapterFactory: () => new SQLite3Adapter() },
-      );
-      Base.connectionHandler.establishConnection(
-        new HashConfig("test", "OtherAbstract", { adapter: "sqlite3", database: ":memory:" }),
-        { owner: "OtherAbstract", role: "writing", adapterFactory: () => new SQLite3Adapter() },
-      );
-      const appConn = ApplicationRecord.leaseConnection();
-      const otherConn = OtherAbstract.leaseConnection();
-      ApplicationRecord.connectedTo({ role: "writing", preventWrites: true }, () => {
-        expect(appConn.isPreventingWrites()).toBe(true);
-        expect(otherConn.isPreventingWrites()).toBe(false);
-      });
+    }
+    class OtherAbstract extends Base {
+      static {
+        this.abstractClass = true;
+        this.connectionClass = true;
+      }
+    }
+    Base.connectionHandler.establishConnection(
+      new HashConfig("test", "ApplicationRecord", { adapter: "sqlite3", database: ":memory:" }),
+      { owner: ApplicationRecord, role: "writing", adapterFactory: () => new SQLite3Adapter() },
+    );
+    Base.connectionHandler.establishConnection(
+      new HashConfig("test", "OtherAbstract", { adapter: "sqlite3", database: ":memory:" }),
+      { owner: "OtherAbstract", role: "writing", adapterFactory: () => new SQLite3Adapter() },
+    );
+    const appConn = ApplicationRecord.leaseConnection();
+    const otherConn = OtherAbstract.leaseConnection();
+    ApplicationRecord.connectedTo({ role: "writing", preventWrites: true }, () => {
+      expect(appConn.isPreventingWrites()).toBe(true);
+      expect(otherConn.isPreventingWrites()).toBe(false);
     });
+  });
+});
+
+describe("resolveConfigForConnection / connectsTo with unset configurations", () => {
+  afterEach(() => {
+    Base.connectionHandler.clearAllConnectionsBang();
+    delete (Base as any)._connectionSpecificationName;
+  });
+
+  it("unknown string config name raises AdapterNotSpecified with available-configs hint", async () => {
+    const { resolveConfigForConnection } = await import("./connection-handling.js");
+    const { AdapterNotSpecified } = await import("./errors.js");
+    class Untouched extends Base {
+      static {
+        this.abstractClass = true;
+      }
+    }
+    // No `Untouched.configurations` assigned — normalizeConfigurations falls
+    // back to DatabaseConfigurations.fromEnv({}), so resolving an unknown
+    // env name must surface AdapterNotSpecified rather than passing the
+    // string through.
+    expect(() => resolveConfigForConnection.call(Untouched, "missing_env")).toThrow(
+      AdapterNotSpecified,
+    );
+    expect(() => resolveConfigForConnection.call(Untouched, "missing_env")).toThrow(
+      /`missing_env` database is not configured/,
+    );
   });
 });

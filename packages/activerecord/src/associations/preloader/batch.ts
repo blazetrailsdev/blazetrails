@@ -15,7 +15,7 @@ export class Batch {
   private _preloaders: Preloader[];
   private _availableRecords: Map<typeof Base, Base[]>;
 
-  constructor(preloaders: Preloader[], availableRecords: Base[] = []) {
+  constructor(preloaders: Preloader[], availableRecords: (Base | Base[])[] = []) {
     this._preloaders = preloaders.filter((p) => !p.isEmpty());
     this._availableRecords = new Map();
     for (const record of availableRecords.flat()) {

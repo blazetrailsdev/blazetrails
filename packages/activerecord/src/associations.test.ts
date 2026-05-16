@@ -7879,7 +7879,7 @@ describe("PreloaderTest", () => {
     await new Preloader({
       records: [book],
       associations: "essay",
-      availableRecords: [[essaySpecial]] as any,
+      availableRecords: [[essaySpecial]],
     }).call();
     const queryCalls = spy.mock.calls.filter((c) => (c[0] as unknown[]).length > 0);
     expect(queryCalls).toHaveLength(0);
@@ -8004,7 +8004,7 @@ describe("PreloaderTest", () => {
     await new Preloader({
       records: [author],
       associations: "essayCategories",
-      availableRecords: categories as any,
+      availableRecords: categories,
     }).call();
     const queryCalls = spy.mock.calls.filter((c) => (c[0] as unknown[]).length > 0);
     // One query for the middle (essay) records; categories come from availableRecords
@@ -8062,7 +8062,7 @@ describe("PreloaderTest", () => {
     await new Preloader({
       records: [mary, dave],
       associations: "essayCategories",
-      availableRecords: [tech] as any,
+      availableRecords: [tech],
     }).call();
     const queryCalls = spy.mock.calls.filter((c) => (c[0] as unknown[]).length > 0);
     // One query for essays, one for the missing category (general)
@@ -8148,7 +8148,7 @@ describe("PreloaderTest", () => {
       records: [post],
       associations: "author",
       scope: QSAuthor.where({ name: "David" }) as any,
-      availableRecords: [david] as any,
+      availableRecords: [david],
     }).call();
     const queryCalls = spy.mock.calls.filter((c) => (c[0] as unknown[]).length > 0);
     // Scope present → availableRecords ignored, runs the query
@@ -8185,7 +8185,7 @@ describe("PreloaderTest", () => {
     await new Preloader({
       records: [post],
       associations: "comments",
-      availableRecords: comments as any,
+      availableRecords: comments,
     }).call();
     const queryCalls = spy.mock.calls.filter((c) => (c[0] as unknown[]).length > 0);
     // Collection association → availableRecords skipped, runs the query
@@ -8222,7 +8222,7 @@ describe("PreloaderTest", () => {
     await new Preloader({
       records: [post],
       associations: "author",
-      availableRecords: [bob] as any,
+      availableRecords: [bob],
     }).call();
     const queryCalls = spy.mock.calls.filter((c) => (c[0] as unknown[]).length > 0);
     // Bob doesn't match david's key → still 1 query

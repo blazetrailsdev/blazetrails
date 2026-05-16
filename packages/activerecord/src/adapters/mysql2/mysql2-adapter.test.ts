@@ -11,10 +11,17 @@ import {
 import { withTimezoneConfig } from "../../test-helper.js";
 import {
   AdapterTimeout,
+  ConnectionFailed,
+  ConnectionNotEstablished,
+  DatabaseAlreadyExists,
+  Deadlocked,
   InvalidForeignKey,
+  LockWaitTimeout,
   MismatchedForeignKey,
   NotNullViolation,
   QueryAborted,
+  QueryCanceled,
+  RangeError as ARRangeError,
   RecordNotUnique,
   StatementTimeout,
   ValueTooLong,
@@ -335,6 +342,65 @@ describeIfMysql("Mysql2Adapter", () => {
         expect((translated as StatementTimeout).cause).toBe(driverErr);
       }
     });
+    it("translates connection-loss errnos to ConnectionFailed", () => {
+      // Mirrors Rails' AbstractMysqlAdapter#translate_exception cases for
+      // ER_CONNECTION_KILLED / ER_SERVER_SHUTDOWN / CR_SERVER_GONE_ERROR /
+      // CR_SERVER_LOST / ER_CLIENT_INTERACTION_TIMEOUT.
+      for (const errno of [
+        AbstractMysqlAdapter.ER_CONNECTION_KILLED,
+        AbstractMysqlAdapter.ER_SERVER_SHUTDOWN,
+        AbstractMysqlAdapter.CR_SERVER_GONE_ERROR,
+        AbstractMysqlAdapter.CR_SERVER_LOST,
+        AbstractMysqlAdapter.ER_CLIENT_INTERACTION_TIMEOUT,
+      ]) {
+        const driverErr = Object.assign(new Error("conn lost"), { errno });
+        const translated = adapter.translateException(driverErr, { sql: "SELECT 1", binds: [] });
+        expect(translated).toBeInstanceOf(ConnectionFailed);
+        expect((translated as ConnectionFailed).cause).toBe(driverErr);
+      }
+    });
+
+    it("translates ER_LOCK_DEADLOCK / ER_LOCK_WAIT_TIMEOUT / ER_QUERY_INTERRUPTED / ER_OUT_OF_RANGE / ER_DB_CREATE_EXISTS", () => {
+      const cases: Array<[number, new (...a: any[]) => Error]> = [
+        [AbstractMysqlAdapter.ER_LOCK_DEADLOCK, Deadlocked],
+        [AbstractMysqlAdapter.ER_LOCK_WAIT_TIMEOUT, LockWaitTimeout],
+        [AbstractMysqlAdapter.ER_QUERY_INTERRUPTED, QueryCanceled],
+        [AbstractMysqlAdapter.ER_OUT_OF_RANGE, ARRangeError],
+        [AbstractMysqlAdapter.ER_DB_CREATE_EXISTS, DatabaseAlreadyExists],
+      ];
+      for (const [errno, klass] of cases) {
+        const driverErr = Object.assign(new Error("fail"), { errno });
+        const translated = adapter.translateException(driverErr, { sql: "SELECT 1", binds: [] });
+        expect(translated).toBeInstanceOf(klass);
+        expect((translated as Error & { cause?: unknown }).cause).toBe(driverErr);
+      }
+    });
+
+    it("promotes 'MySQL client is not connected' to ConnectionNotEstablished", () => {
+      // Mirrors Mysql2Adapter#translate_exception's ConnectionError branch.
+      const driverErr = Object.assign(new Error("MySQL client is not connected"), {
+        code: "PROTOCOL_CONNECTION_LOST",
+      });
+      const translated = adapter.translateException(driverErr, { sql: "SELECT 1", binds: [] });
+      expect(translated).toBeInstanceOf(ConnectionNotEstablished);
+    });
+
+    it("translates node-mysql2 connection codes to ConnectionFailed", () => {
+      // node-mysql2 / Node net codes for a lost or refused connection —
+      // Rails catches the equivalent via Mysql2::Error::ConnectionError.
+      for (const code of [
+        "PROTOCOL_CONNECTION_LOST",
+        "PROTOCOL_ENQUEUE_AFTER_QUIT",
+        "ECONNRESET",
+        "ECONNREFUSED",
+        "ENOTFOUND",
+      ]) {
+        const driverErr = Object.assign(new Error("connection lost"), { code });
+        const translated = adapter.translateException(driverErr, { sql: "SELECT 1", binds: [] });
+        expect(translated).toBeInstanceOf(ConnectionFailed);
+      }
+    });
+
     it("database timezone changes synced to connection", async () => {
       // Mirrors: test_database_timezone_changes_synced_to_connection. The Ruby
       // mysql2 driver carries `query_options[:database_timezone]` on the raw

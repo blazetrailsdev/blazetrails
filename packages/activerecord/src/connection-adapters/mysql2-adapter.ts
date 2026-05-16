@@ -1802,6 +1802,9 @@ function isMysql2ConnectionError(e: unknown): boolean {
     code === "POOL_CLOSED" ||
     code === "ECONNRESET" ||
     code === "ECONNREFUSED" ||
+    code === "ENOTFOUND" ||
+    code === "EHOSTUNREACH" ||
+    code === "ENETUNREACH" ||
     code === "EPIPE"
   );
 }

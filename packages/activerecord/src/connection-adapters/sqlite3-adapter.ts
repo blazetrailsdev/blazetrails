@@ -1394,10 +1394,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       // rows for every attached schema and exposes the schema name as a
       // column, so we can scope by it directly — keeping the qualified and
       // bare-name branches on the same exclusion semantics (no virtuals,
-      // no FTS shadow tables, no sqlite_* internals).
-      const dot = name.indexOf(".");
-      const schema = name.slice(0, dot);
-      const bare = name.slice(dot + 1);
+      // no FTS shadow tables).
+      const { schema, bare } = this._splitTableName(name);
       const rows = (await this.execute(
         `SELECT name FROM pragma_table_list WHERE schema = ${sqliteQuoteStringLiteral(schema)} AND name NOT IN ('sqlite_sequence', 'sqlite_schema') AND name = ${sqliteQuoteStringLiteral(bare)} AND type IN ('table','view')`,
         [],

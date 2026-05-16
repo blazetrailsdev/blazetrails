@@ -165,25 +165,7 @@ test:compare `global_locator_test.rb`: 33/59 → **37/59 (63%)** with the
 class`, `app locator is case insensitive`, `locator name cannot have
 underscore`). Overall test:compare: 98/158 → **102/158 (64.6%)**.
 
-<<<<<<< Updated upstream
-
 ### GID-10a — Drop `purpose:` option key — **done**
-
-||||||| Stash base
-
-### GID-10a — Drop `purpose:` option key (~40 LOC, breaking)
-
-=======
-
-### GID-10a — Drop `purpose:` option key — closed (#1676)
-
-Trails-only `purpose:` option key removed; `for:` is canonical (matches Rails).
-
-**GID-10a followup (~5 LOC + investigation):** `KNOWN_SGID_KEYS` still filters `expiresIn` / `expiresAt`, but Rails' `GlobalID.create` does `options.except(:app, :verifier, :for)` — only those three stripped, so `:expires_in`/`:expires_at` flow through to URI params. Verify via Rails test trace; if our filtering is the deviation, drop those two keys from `KNOWN_SGID_KEYS` + add coverage test.
-
-### ~~GID-10a~~ — Drop `purpose:` option key (~40 LOC, breaking)
-
-> > > > > > > Stashed changes
 
 Removed the Trails-only `purpose:` option key from `SignedGlobalIDOptions`,
 `ParseOptions`, `LocateSignedOptions`, and `ToSgidOptions`. `for:` is now
@@ -195,27 +177,9 @@ switch to `{ for: "..." }`.
 
 ### GID-10b — Unify `Base.toGid()` to return GlobalID instance — **done**
 
-<<<<<<< Updated upstream
 `Base.toGid()` is now an alias of `Base.toGlobalId()` and returns a
 GlobalID instance, matching Rails' `to_gid → to_global_id` alias.
 Breaking: callers expecting a URI string need `.toString()` or `.uri`.
-||||||| Stash base
-
-### GID-10b — Unify `Base.toGid()` to return GlobalID instance (~80 LOC, breaking)
-
-=======
-
-### GID-10b — Unify `Base.toGid()` to return GlobalID instance — closed (#1677)
-
-Trails `Base.toGid` now returns a GlobalID instance (delegates to `toGlobalId`). Call sites migrated to `.toString()` where needed.
-
-**Pre-existing note:** `Base.prototype.toGid !== Base.prototype.toGlobalId` (separate function references) where Rails has true `alias`. TS method-signature checking trips up the identity-equality form. No known caller depends on `===`. Documented as known divergence.
-
-**Carried over (still open):** ~15 LOC to convert `Base.signedId` / `findSigned` / `findSignedBang` from async to sync (test-site updates included). Flagged in #1675.
-
-### ~~GID-10b~~ — Unify `Base.toGid()` to return GlobalID instance (~80 LOC, breaking)
-
-> > > > > > > Stashed changes
 
 ### GID-10c — Global `SignedGlobalID.verifier` — **done (shipped in GID-8)**
 
@@ -237,29 +201,11 @@ Public surface: `constructor(secret)`, `generate(data, options?)`,
 `encode(buf | string)` → urlsafe base64, `decode(str)` → Buffer
 (tolerates both urlsafe and standard forms).
 
-<<<<<<< Updated upstream
 `verifier_test.rb` mirror: 3/4 tests match (`generates URL-safe
 messages`, `verifies URL-safe messages`, `verifies non-URL-safe
 messages`). The 4th Ruby test asserts an exact Marshal-serialized
 token that can't be reproduced because we use JSON serialization;
 documented as a permanent skip.
-||||||| Stash base
-
-### GID-11 — `Verifier` wrapper (~30 LOC)
-
-=======
-
-### GID-11 — `Verifier` wrapper — closed (#1667) 🎯
-
-**api:compare 100% (59/59).** All 5 Ruby files (`identification.rb`, `uri/gid.rb`, `signed_global_id.rb`, `locator.rb`, `verifier.rb`) at 100%. api-parity arc of the GID-1..11 series closed.
-
-`@blazetrails/globalid` Verifier is a preset wrapper around `MessageVerifier` (sha256 + url_safe). Future cross-package consumers (ActionCable / ActiveJob) should use this directly.
-
-test:compare at **66.7% (104/156)** post-skip-list entry. Remaining gap is unportable surface (Ruby pattern-matching, Railtie wiring, module-based `only:`).
-
-### ~~GID-11~~ — `Verifier` wrapper (~30 LOC)
-
-> > > > > > > Stashed changes
 
 **api:compare verifier.rb: 0% → 100% (2/2). Overall api:compare reaches
 100% (59/59).**

@@ -112,15 +112,18 @@ Bundled work-PR slots ready to spawn. Items removed as batches ship.
 
 - ~80 LOC — Rewrite the two "indexed errors should be properly translated" tests against a real I18n backend.
 
-### Batch 18 — Reflection call-site sweep (~95 LOC, risk: low)
+### Batch 18 — Reflection call-site sweep — mostly shipped, ~15 LOC residual
 
-**Theme:** `reflection.ts` + `associations/builder/*.ts` — resolveModel → resolveAssocClass migration + small asymmetry fix.
+Audit `batch-18-reflection-call-site-20260516T211122Z.md` found 3 of 5 items already closed by prior PRs:
 
-- ~5 LOC — `Reflection.create` and `createReflection` (reflection.ts:1745-1755 / :1772) both branch on "wrap in ThroughReflection if options.through". `createReflection` still excludes `assocDef.type === "hasAndBelongsToMany"` — now-stale asymmetry.
-- ~10 LOC — Sweep remaining `resolveModel(className)` call-sites to use `resolveAssocClass(record, assocName, className)`: `loadHasOneThrough` fallback, `loadHabtm`, `processDependentAssociations` (×2), `updateCounterCaches` (×2), `buildHasOne`, `buildBelongsTo`.
-- ~20 LOC — `associations/builder/belongs-to.ts` counter-cache wiring (~line 95) uses raw `resolveModel(targetClassName)` — convert too.
-- ~30 LOC — Deeply nested through-association resolution in `CollectionProxy._buildThroughScope` (through-a-through beyond one level). Not exercised by tests today.
-- ~30–50 LOC — HABTM builder registers a `HasAndBelongsToManyReflection`; Rails registers a `ThroughReflection`. Fix `has-and-belongs-to-many.ts:195–220` `_build`. Removes the `isNested()` workaround.
+- `resolveModel(className)` call-site sweep — closed by #1582.
+- `associations/builder/belongs-to.ts` counter-cache `resolveModel` — closed by #1670.
+- HABTM builder ThroughReflection registration — closed by #1672.
+
+**Residual (~15 LOC), fold into next adjacent slot:**
+
+- ~5 LOC — Delete dead `createReflection` in `reflection.ts:1772` (now-stale asymmetry vs `Reflection.create`).
+- ~30 LOC — Deeply nested through-association resolution in `CollectionProxy._buildThroughScope` (through-a-through beyond one level). Not exercised by tests today; keep as standalone followup.
 
 Watchpoint: the `_invalidateAssociationIds → assocInstance.reset()` widening fires for every through-association push.
 

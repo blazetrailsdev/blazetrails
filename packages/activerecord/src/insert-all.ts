@@ -1,6 +1,6 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { Nodes, Visitors } from "@blazetrails/arel";
-import { SerializeCastValue } from "@blazetrails/activemodel";
+import { ArgumentError, SerializeCastValue } from "@blazetrails/activemodel";
 import { IndexDefinition } from "./connection-adapters/abstract/schema-definitions.js";
 import type { Base } from "./base.js";
 import { quoteSqlValue } from "./base.js";
@@ -316,6 +316,13 @@ export class InsertAll {
     uniqueBy: string | string[] | IndexDefinition | undefined,
   ): Promise<IndexDefinition | undefined> {
     if (uniqueBy instanceof IndexDefinition) return uniqueBy;
+    // Rails returns nil here in the dominant nil-uniqueBy case (no matching
+    // unique index → line 163 returns nil since unique_by.nil?). Short-circuit
+    // before probing adapter capabilities so plain insertAll doesn't trigger
+    // lazy databaseVersion fetches on adapters whose supports_* getters read
+    // it synchronously (PG). Builder.conflictTarget falls back to primary
+    // keys when uniqueBy is undefined, matching Rails' nil path.
+    if (uniqueBy == null) return undefined;
     // Default to unsupported when the predicate is missing — matches Rails'
     // AbstractAdapter#supports_insert_conflict_target? returning false, so a
     // wrapper adapter that forgets to delegate doesn't silently fall through
@@ -327,7 +334,9 @@ export class InsertAll {
         : false;
     if (!supports) {
       if (uniqueBy == null) return undefined;
-      throw new Error(`${(conn as any).constructor?.name ?? "Adapter"} does not support :uniqueBy`);
+      throw new ArgumentError(
+        `${(conn as any).constructor?.name ?? "Adapter"} does not support :uniqueBy`,
+      );
     }
     const nameOrCols =
       uniqueBy == null ? this.primaryKeys() : Array.isArray(uniqueBy) ? uniqueBy : [uniqueBy];

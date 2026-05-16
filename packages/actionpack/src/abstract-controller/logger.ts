@@ -37,11 +37,13 @@ export function applyLogger<T extends new (...args: never[]) => unknown>(
  */
 export function benchmark<T>(logger: LoggerLike | undefined, message: string, block: () => T): T {
   if (!logger?.info) return block();
-  // Use `performance.now()` for monotonic timing — `Date.now()` is
-  // wall-clock and can jump under NTP adjustments (negative durations).
-  const start = performance.now();
+  // Monotonic timing where available — `Date.now()` is wall-clock and
+  // can jump under NTP adjustments. The fallback matches the pattern
+  // used by `ActiveRecord::Base.benchmark`.
+  const now = () => globalThis.performance?.now() ?? Date.now();
+  const start = now();
   const result = block();
-  const ms = Math.round(performance.now() - start);
+  const ms = (now() - start).toFixed(1);
   logger.info(`${message} (${ms}ms)`);
   return result;
 }

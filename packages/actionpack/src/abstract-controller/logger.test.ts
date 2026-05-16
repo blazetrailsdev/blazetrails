@@ -57,6 +57,6 @@ describe("benchmark()", () => {
     const logger: LoggerLike = { info: (m) => lines.push(m) };
     benchmark(logger, "render template", () => 1 + 1);
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^render template \(\d+ms\)$/);
+    expect(lines[0]).toMatch(/^render template \(\d+\.\d+ms\)$/);
   });
 });

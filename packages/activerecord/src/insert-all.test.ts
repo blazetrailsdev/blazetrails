@@ -186,9 +186,21 @@ describe("InsertAllTest", () => {
     const adapter = freshAdapter();
     const Book = makeBook(adapter);
     const b = await Book.create({ title: "Existing", author: "Author" });
-    await Book.upsertAll([{ id: b.id, title: "Updated", author: "Author" }], { uniqueBy: "id" });
-    const found = await Book.find(b.id);
-    expect(found.title).toBe("Updated");
+    const supports = (
+      adapter as { supportsInsertConflictTarget?: () => boolean }
+    ).supportsInsertConflictTarget?.();
+    if (supports) {
+      await Book.upsertAll([{ id: b.id, title: "Updated", author: "Author" }], { uniqueBy: "id" });
+      const found = await Book.find(b.id);
+      expect(found.title).toBe("Updated");
+    } else {
+      // Rails parity: insert_all.rb#find_unique_index_for raises ArgumentError
+      // when :unique_by is given to an adapter without conflict-target support
+      // (MySQL's ON DUPLICATE KEY UPDATE has no conflict-target syntax).
+      await expect(
+        Book.upsertAll([{ id: b.id, title: "Updated", author: "Author" }], { uniqueBy: "id" }),
+      ).rejects.toThrow(/does not support :uniqueBy/);
+    }
   });
 
   it.skip("insert all raises on unknown attribute", async () => {

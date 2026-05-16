@@ -671,7 +671,8 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
       _setAutosavingBelongsToFor(record, assoc, false);
     }
 
-    const foreignKey = assoc.options.foreignKey ?? `${underscore(assoc.name)}_id`;
+    const foreignKey =
+      assoc.options.foreignKey ?? assoc.options.queryConstraints ?? `${underscore(assoc.name)}_id`;
     const primaryKey =
       assoc.options.primaryKey ?? (assocRecord.constructor as typeof Base).primaryKey ?? "id";
     if (Array.isArray(primaryKey) && Array.isArray(foreignKey)) {

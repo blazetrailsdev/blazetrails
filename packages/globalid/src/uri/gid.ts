@@ -141,10 +141,14 @@ function parseModelId(raw: string, modelName: string): string | string[] {
  * agree with the round-trip through parseGid(buildGid(...)).
  */
 export function normalizeModelId(raw: unknown, modelName: string): string | string[] {
+  // Mirror parseModelId ordering: cap raw segments at
+  // COMPOSITE_MODEL_ID_MAX_SIZE first, then filter empties. Reversing
+  // the order would let a 21st non-empty segment slip past the cap
+  // when preceded by empty/null entries.
   const parts = (Array.isArray(raw) ? raw : [raw])
+    .slice(0, COMPOSITE_MODEL_ID_MAX_SIZE)
     .map((p) => String(p ?? ""))
-    .filter((p) => p.length > 0)
-    .slice(0, COMPOSITE_MODEL_ID_MAX_SIZE);
+    .filter((p) => p.length > 0);
   if (parts.length === 0) {
     throw new MissingModelIdError(
       `Unable to create a Global ID for ${modelName} without a model id.`,

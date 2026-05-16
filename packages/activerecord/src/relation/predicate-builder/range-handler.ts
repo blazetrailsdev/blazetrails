@@ -31,20 +31,15 @@ export class RangeHandler {
 
   callNegated(attribute: Nodes.Attribute, value: Range): Nodes.Node {
     const [beginVal, endVal] = this._castBounds(attribute, value);
-    // Exclusive ranges negate to `(col < begin OR col >= end)` —
-    // `NOT (gteq AND lt)` would lose the explicit ordering that AR
-    // callers (and parity tests) match on.
-    if (
-      value.excludeEnd &&
-      beginVal !== null &&
-      beginVal !== undefined &&
-      beginVal !== -Infinity &&
-      beginVal !== Infinity &&
-      endVal !== null &&
-      endVal !== undefined &&
-      endVal !== Infinity &&
-      endVal !== -Infinity
-    ) {
+    // Exclusive ranges with finite bounds negate to `(col < begin OR
+    // col >= end)` — `NOT (gteq AND lt)` would lose the explicit ordering
+    // that AR callers (and parity tests) match on. Non-finite numeric
+    // bounds (±Infinity, NaN) and null/undefined fall through to
+    // `.between(...).invert()` so Arel's collapsed-predicate inversion
+    // handles them.
+    const isFiniteBound = (v: unknown): boolean =>
+      v !== null && v !== undefined && (typeof v !== "number" || Number.isFinite(v));
+    if (value.excludeEnd && isFiniteBound(beginVal) && isFiniteBound(endVal)) {
       return new Nodes.Grouping(new Nodes.Or(attribute.lt(beginVal), attribute.gteq(endVal)));
     }
     // Mirrors Rails WhereClause#invert: call `.invert()` on the Arel node so
@@ -62,8 +57,12 @@ export class RangeHandler {
     // nil / Float::INFINITY. We mirror the intent by passing those through
     // uncast — type.cast on null/undefined / Infinity would be a no-op or
     // worse (numeric types may coerce Infinity into something finite).
+    // Rails open_ended? recognizes ±Infinity (via Float#infinite?) but not
+    // NaN (`NaN.infinite?` returns nil); pass only nil/undefined/±Infinity
+    // through uncast so a NaN bound still flows through type.cast as a
+    // regular numeric value.
     const skipCast = (v: unknown): boolean =>
-      v === null || v === undefined || (typeof v === "number" && !Number.isFinite(v));
+      v === null || v === undefined || v === Infinity || v === -Infinity;
     const cast = this._castBound
       ? (v: unknown) => this._castBound!(attribute, v)
       : (v: unknown) => v;

@@ -1900,9 +1900,11 @@ export class MigrationContext {
         ? ` USING ${options.using}`
         : "";
     let sql = `CREATE ${uniqueStr}INDEX ${ifNotExistsStr}${this.adapter.quoteIdentifier(indexName)} ON ${this.adapter.quoteTableName(table)}${usingStr} (${colsStr})`;
-    if (an === "postgres" && options?.nullsNotDistinct) sql += " NULLS NOT DISTINCT";
+    // Clause order mirrors Rails' visit_CreateIndexDefinition
+    // (abstract/schema_creation.rb): INCLUDE → NULLS NOT DISTINCT → WHERE.
     if (an === "postgres" && options?.include && options.include.length > 0)
       sql += ` INCLUDE (${options.include.map((c) => this.adapter.quoteIdentifier(c)).join(", ")})`;
+    if (an === "postgres" && options?.nullsNotDistinct) sql += " NULLS NOT DISTINCT";
     if (an !== "mysql" && options?.where) sql += ` WHERE ${options.where}`;
     await this.adapter.executeMutation(sql);
     if (!this._indexes.has(table)) this._indexes.set(table, []);

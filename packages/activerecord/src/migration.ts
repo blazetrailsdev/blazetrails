@@ -1689,7 +1689,7 @@ export class MigrationContext {
     const ifExists = options?.ifExists === false ? "" : " IF EXISTS";
     const cascade =
       options?.force === "cascade" && this._adapterName === "postgres" ? " CASCADE" : "";
-    const quoted = this._adapterName === "mysql" ? `\`${name}\`` : `"${name}"`;
+    const quoted = this.adapter.quoteTableName(name);
     await this.adapter.executeMutation(`DROP${temporary} TABLE${ifExists} ${quoted}${cascade}`);
     this._tables.delete(name);
     this._columns.delete(name);

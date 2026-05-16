@@ -39,9 +39,26 @@ describe("Route", () => {
       expect(route.pathParamNames).toEqual(["id", "rest"]);
     });
 
-    it("includes captures inside optional groups", () => {
+    it("includes captures inside optional groups in declaration order", () => {
       const route = new Route("GET", "/posts(/:id)(.:format)", "posts", "show");
-      expect(route.pathParamNames).toEqual(expect.arrayContaining(["id", "format"]));
+      expect(route.pathParamNames).toEqual(["id", "format"]);
+    });
+
+    it("includes captures inside nested optional groups", () => {
+      const route = new Route("GET", "/:c(/:a(/:id(.:format)))", "x", "y");
+      expect(route.pathParamNames).toEqual(["c", "a", "id", "format"]);
+    });
+
+    it("includes embedded captures inside static text", () => {
+      const route = new Route("GET", "/:controller.:format", "x", "y");
+      expect(route.pathParamNames).toEqual(["controller", "format"]);
+    });
+
+    it("returns a defensive copy that cannot mutate route internals", () => {
+      const route = new Route("GET", "/posts/:id", "posts", "show");
+      const names = route.pathParamNames as string[];
+      names.push("evil");
+      expect(route.pathParamNames).toEqual(["id"]);
     });
 
     it("treats optional-group captures as path constraints", () => {

@@ -78,7 +78,11 @@ export class Route {
     this.anchor = options.anchor !== false;
 
     this.segments = parseSegments(this.path);
-    this.paramNames = collectParamNames(this.segments);
+    // Extract capture names directly from the path source so we catch
+    // captures inside nested optional groups (e.g. `/:c(/:a(/:id))`) and
+    // embedded captures inside static text (e.g. `/:controller.:format`)
+    // that a segment-level walk would miss.
+    this.paramNames = collectParamNamesFromPath(this.path);
   }
 
   get isRedirect(): boolean {
@@ -87,10 +91,11 @@ export class Route {
 
   /**
    * Returns the path-capture (dynamic/glob) parameter names declared by
-   * this route, e.g. `["id"]` for `/posts/:id`.
+   * this route, e.g. `["id"]` for `/posts/:id`. Returns a defensive copy
+   * so external callers can't mutate the route's internal classification.
    */
   get pathParamNames(): readonly string[] {
-    return this.paramNames;
+    return this.paramNames.slice();
   }
 
   /**
@@ -265,15 +270,16 @@ interface OptionalGroup {
 
 type PathSegment = StaticSegment | DynamicSegment | GlobSegment | OptionalGroup;
 
-function collectParamNames(segments: readonly PathSegment[]): string[] {
+const CAPTURE_RE = /[:*]([a-zA-Z_][a-zA-Z0-9_]*)/g;
+
+function collectParamNamesFromPath(path: string): string[] {
+  const seen = new Set<string>();
   const out: string[] = [];
-  for (const s of segments) {
-    if (s.type === "dynamic" || s.type === "glob") {
-      out.push(s.name);
-    } else if (s.type === "optional") {
-      for (const child of s.children) {
-        if (child.type === "dynamic") out.push(child.name);
-      }
+  for (const m of path.matchAll(CAPTURE_RE)) {
+    const name = m[1]!;
+    if (!seen.has(name)) {
+      seen.add(name);
+      out.push(name);
     }
   }
   return out;

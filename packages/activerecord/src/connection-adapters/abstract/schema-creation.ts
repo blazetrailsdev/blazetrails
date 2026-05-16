@@ -105,8 +105,7 @@ export class SchemaCreation {
   }
 
   protected visitAddColumnDefinition(o: AddColumnDefinition): string {
-    const ifNotExists = o.ifNotExists ? " IF NOT EXISTS" : "";
-    return `ADD${ifNotExists} ${this.accept(o.column)}`;
+    return `ADD ${this.accept(o.column)}`;
   }
 
   protected visitAlterTable(o: AlterTable): string {
@@ -205,8 +204,11 @@ export class SchemaCreation {
   }
 
   addColumnOptions(sql: string, options: ColumnOptions): string {
-    if (options.default !== undefined) {
-      sql += this.adapter.quoteDefaultExpression(options.default);
+    if (this.optionsIncludeDefault(options)) {
+      sql += this.adapter.quoteDefaultExpression(
+        options.default,
+        (options as Record<string, unknown>)["column"],
+      );
     }
     if (options.null === false) {
       sql += " NOT NULL";
@@ -218,6 +220,12 @@ export class SchemaCreation {
       sql += " PRIMARY KEY";
     }
     return sql;
+  }
+
+  /** Mirrors: `options_include_default?` in abstract/schema_statements.rb. */
+  protected optionsIncludeDefault(options: ColumnOptions): boolean {
+    if (!("default" in options)) return false;
+    return !(options.null === false && options.default == null);
   }
 
   typeToSql(type: ColumnType, options: ColumnOptions = {}): string {

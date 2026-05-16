@@ -315,9 +315,4 @@ export class SchemaCreation extends AbstractSchemaCreation {
     if (!comment) return sql;
     return `${sql} COMMENT ${mysqlQuoteString(comment)}`;
   }
-
-  /** @internal */
-  private optionsIncludeDefault(options: MysqlColumnOptions): boolean {
-    return options.default !== undefined;
-  }
 }

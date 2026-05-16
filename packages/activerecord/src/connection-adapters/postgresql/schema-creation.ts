@@ -6,7 +6,6 @@
 
 import { SchemaCreation as AbstractSchemaCreation } from "../abstract/schema-creation.js";
 import {
-  type AddColumnDefinition,
   type ForeignKeyDefinition,
   type ReferentialAction,
   type ColumnOptions,
@@ -14,7 +13,6 @@ import {
   ChangeColumnDefaultDefinition,
   CheckConstraintDefinition,
 } from "../abstract/schema-definitions.js";
-import { quoteDefaultExpression as pgQuoteDefaultExpression } from "./quoting.js";
 import type { SchemaQuoter } from "../abstract/assert-schema-adapter.js";
 import type {
   ExclusionConstraintDefinition,
@@ -246,46 +244,6 @@ export class SchemaCreation extends AbstractSchemaCreation {
       opts["stored"] as boolean | undefined,
     );
     return super.addColumnOptionsBang(sql, options);
-  }
-
-  /**
-   * PostgreSQL emits `ADD COLUMN [IF NOT EXISTS] ...`; the abstract default
-   * is `ADD ...`. Mirrors Rails' `PostgreSQL::SchemaCreation#visit_AddColumnDefinition`.
-   * @internal
-   */
-  protected override visitAddColumnDefinition(o: AddColumnDefinition): string {
-    const ifNotExists = o.ifNotExists ? " IF NOT EXISTS" : "";
-    return `ADD COLUMN${ifNotExists} ${this.accept(o.column)}`;
-  }
-
-  /**
-   * PostgreSQL overrides default-expression handling to route through the
-   * array- and typeMap-aware `pgQuoteDefaultExpression` rather than the
-   * adapter's `quoteDefaultExpression`, which lacks column context.
-   * @internal
-   */
-  override addColumnOptions(sql: string, options: ColumnOptions): string {
-    const opts = options as Record<string, unknown>;
-    if (options.default !== undefined) {
-      const col = opts["column"] as { sqlType?: string; type?: string } | undefined;
-      const typeMap = (this.adapter as unknown as { typeMap?: unknown }).typeMap as
-        | Parameters<typeof pgQuoteDefaultExpression>[2]
-        | undefined;
-      sql += pgQuoteDefaultExpression(
-        options.default,
-        col != null
-          ? {
-              array: opts["array"] === true,
-              sqlType: col.sqlType ?? col.type ?? null,
-            }
-          : null,
-        typeMap ?? null,
-      );
-    }
-    if (options.null === false) sql += " NOT NULL";
-    if (options.autoIncrement) sql += " AUTO_INCREMENT";
-    if (options.primaryKey) sql += " PRIMARY KEY";
-    return sql;
   }
 
   /** @internal */

@@ -91,7 +91,6 @@ import {
 } from "./postgresql/schema-definitions.js";
 import { TypeMetadata as PgTypeMetadata } from "./postgresql/type-metadata.js";
 import {
-  AddColumnDefinition,
   CheckConstraintDefinition,
   ChangeColumnDefinition,
   ChangeColumnDefaultDefinition,
@@ -2484,6 +2483,26 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return pgTypeCast(value);
   }
 
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#quote_default_expression.
+   * Routes through the array- and typeMap-aware `pgQuoteDefaultExpression`
+   * so DEFAULT clauses on array columns and OID-backed types serialize
+   * correctly.
+   */
+  override quoteDefaultExpression(value: unknown, column?: unknown): string {
+    const col = column as { sqlType?: string | null; type?: string; array?: boolean } | undefined;
+    return pgQuoteDefaultExpression(
+      value,
+      col != null
+        ? {
+            array: col.array === true,
+            sqlType: col.sqlType ?? col.type ?? null,
+          }
+        : null,
+      this.typeMap,
+    );
+  }
+
   columnsForDistinct(columns: string | string[], orders?: (string | Nodes.Node)[]): string {
     const base = Array.isArray(columns) ? columns.join(", ") : columns;
     const visitor = this.arelVisitor;
@@ -3058,44 +3077,17 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     tableName: string,
     columnName: string,
     type: string,
-    options: {
+    options: ColumnOptions & {
       comment?: string | null;
-      default?: unknown;
-      null?: boolean;
-      array?: boolean;
-      limit?: number | null;
-      precision?: number | null;
-      scale?: number | null;
       ifNotExists?: boolean;
     } = {},
   ): Promise<void> {
-    // Route through the SchemaCreation visitor (Rails parity). The
-    // PostgreSQL-specific override emits `ADD COLUMN [IF NOT EXISTS]`,
-    // honors virtual `as`/`stored`, and routes defaults through the
-    // array- and typeMap-aware quoter.
-    const { ifNotExists, comment, ...colOpts } = options;
-    const td = this.createTableDefinition(tableName);
-    const colDef = td.newColumnDefinition(columnName, type as ColumnType, colOpts as ColumnOptions);
-    // Pre-resolve the SQL type so the visitor uses the PG adapter's
-    // `typeToSql` (with datetime default-precision 6) rather than the
-    // abstract one.
-    const effectiveType = colDef.type;
-    const resolvedPrecision =
-      effectiveType === "datetime" && colOpts.precision === undefined
-        ? 6
-        : (colOpts.precision ?? undefined);
-    colDef.sqlType = this.typeToSql(effectiveType, {
-      ...colOpts,
-      precision: resolvedPrecision,
-      limit: colOpts.limit ?? undefined,
-      scale: colOpts.scale ?? undefined,
-    });
-    const addDef = new AddColumnDefinition(colDef, !!ifNotExists);
-    await this.exec(
-      `ALTER TABLE ${this.quoteTableName(tableName)} ${this.schemaCreation.accept(addDef)}`,
-    );
-    if (comment !== undefined) {
-      await this.changeColumnComment(tableName, columnName, comment ?? null);
+    // Mirrors PostgreSQL::SchemaStatements#add_column: defer to the abstract
+    // implementation (which builds an AlterTable and accepts it through
+    // schema_creation), then propagate :comment via change_column_comment.
+    await super.addColumn(tableName, columnName, type as ColumnType, options);
+    if ("comment" in options) {
+      await this.changeColumnComment(tableName, columnName, options.comment ?? null);
     }
   }
 

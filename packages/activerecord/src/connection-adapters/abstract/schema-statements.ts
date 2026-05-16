@@ -234,14 +234,9 @@ export class SchemaStatements {
     type: ColumnType,
     options: ColumnOptions & { ifNotExists?: boolean } = {},
   ): Promise<void> {
-    if (options.ifNotExists && (await this.columnExists(tableName, columnName))) {
-      return;
-    }
-    const colDef = new ColumnDefinition(columnName, type, options);
-    const addDef = new AddColumnDefinition(colDef);
-    await this.adapter.executeMutation(
-      `ALTER TABLE ${this._qi(tableName)} ${this.schemaCreation.accept(addDef)}`,
-    );
+    const addColumnDef = await this.buildAddColumnDefinition(tableName, columnName, type, options);
+    if (!addColumnDef) return;
+    await this.adapter.executeMutation(this.schemaCreation.accept(addColumnDef));
   }
 
   async removeColumn(
@@ -1101,6 +1096,19 @@ export class SchemaStatements {
       return null;
     }
     const { ifNotExists: _, ...colOpts } = options;
+    // Mirrors abstract/schema_statements.rb#build_add_column_definition:
+    // default datetime precision to 6 when the adapter supports it.
+    const supportsDtPrecision = (
+      this.adapter as unknown as { supportsDatetimeWithPrecision?: () => boolean }
+    ).supportsDatetimeWithPrecision;
+    if (
+      typeof supportsDtPrecision === "function" &&
+      supportsDtPrecision.call(this.adapter) &&
+      type === "datetime" &&
+      colOpts.precision === undefined
+    ) {
+      colOpts.precision = 6;
+    }
     const at = new AlterTable(tableName);
     at.addColumn(columnName, type, colOpts);
     return at;

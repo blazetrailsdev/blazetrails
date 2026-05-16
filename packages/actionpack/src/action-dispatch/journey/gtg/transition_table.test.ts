@@ -3,6 +3,7 @@ import { Parser } from "../parser.js";
 import { Or } from "../nodes/node.js";
 import { Builder } from "./builder.js";
 import { Simulator } from "./simulator.js";
+import { TransitionTable } from "./transition_table.js";
 
 function asts(strings: string[]) {
   const parser = new Parser();
@@ -20,8 +21,6 @@ function tt(strings: string[]) {
 function simulatorFor(strings: string[]) {
   return new Simulator(tt(strings));
 }
-
-import { TransitionTable } from "./transition_table.js";
 
 describe("ActionDispatch::Journey::GTG::TransitionTable — set() regex anchoring", () => {
   it("wraps alternation so anchors bind around the whole regex, not branches", () => {
@@ -117,6 +116,13 @@ describe("ActionDispatch::Journey::GTG::TransitionTable", () => {
     expect(sim.memos("/foo", () => []).length).toBeGreaterThan(0);
     expect(sim.memos("/foo/bar", () => []).length).toBeGreaterThan(0);
     expect(sim.memos("/foo/", () => []).length).toBe(0);
+  });
+
+  it("root-level optional group matches paths starting with the optional segment", () => {
+    // `(/:foo)` is fully-optional at the root; the parser produces a Group
+    // wrapping Cat(Slash, Symbol). Match must succeed for a real path.
+    const sim = simulatorFor(["(/:foo)"]);
+    expect(sim.memos("/bar", () => []).length).toBeGreaterThan(0);
   });
 
   it("test_match_data", () => {

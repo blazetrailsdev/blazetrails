@@ -1,10 +1,12 @@
 import { toDot, type DotHost, type DotTransition } from "../nfa/dot.js";
+import { Symbol as SymbolNode } from "../nodes/node.js";
 import type { GtgState, TransitionTableLike } from "./simulator.js";
 
 export type Edge = string | RegExp;
 
-const DEFAULT_EXP = /[^./?]+/;
-const DEFAULT_EXP_SOURCE = DEFAULT_EXP.source;
+// Default segment regex — reuse the canonical Symbol.DEFAULT_EXP so this
+// table and the parser stay in lockstep if the segment pattern ever shifts.
+const DEFAULT_EXP_SOURCE = SymbolNode.DEFAULT_EXP.source;
 const DEFAULT_EXP_ANCHORED = new RegExp(`^${DEFAULT_EXP_SOURCE}$`);
 
 function isDefaultExp(re: RegExp): boolean {

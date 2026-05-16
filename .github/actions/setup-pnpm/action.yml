@@ -45,6 +45,16 @@ runs:
         node-version: ${{ inputs.node-version }}
         cache: pnpm
 
+    # setup-node first so the pnpm sanity check below runs under the same
+    # Node the install/build steps will use. If the runner image's system
+    # Node differs from inputs.node-version, validating pnpm under the
+    # wrong Node could spuriously fail (or worse, succeed for the wrong
+    # reason). No `cache: pnpm` — the whole point of the self-hosted path
+    # is to avoid GitHub's hosted cache service.
+    - if: runner.environment != 'github-hosted'
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: ${{ inputs.node-version }}
     - if: runner.environment != 'github-hosted'
       shell: bash
       env:
@@ -70,7 +80,3 @@ runs:
         # pnpm config writes to ~/.npmrc, which is OUTSIDE the mounted
         # volume — re-run every job. Cheap no-op when already set.
         pnpm config set store-dir "$STORE_DIR"
-    - if: runner.environment != 'github-hosted'
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-      with:
-        node-version: ${{ inputs.node-version }}

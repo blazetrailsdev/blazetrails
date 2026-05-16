@@ -517,48 +517,84 @@ describe("AbstractMysqlAdapter — DROP vs SET DEFAULT fragment (#1568)", () => 
   });
 });
 
+describe("AbstractMysqlAdapter#changeColumnDefault wiring (#1568)", () => {
+  // Drives the public surface end-to-end through changeColumnDefaultForAlter
+  // → buildChangeColumnDefaultDefinition → MysqlSchemaCreation.accept so a
+  // regression in the wiring (or in the ALTER TABLE wrap) is caught.
+  async function build(column: Column) {
+    const executed: string[] = [];
+    const adapter = await makeMinimalMysqlAdapter({
+      columnFor: async () => column,
+      _execMutation: async (sql: string) => {
+        executed.push(sql);
+      },
+    });
+    return { adapter, executed };
+  }
+
+  it("changeColumnDefault wraps the SET DEFAULT fragment in ALTER TABLE", async () => {
+    const { adapter, executed } = await build(makeChangeColumnTextColumn({ null_: true }));
+    await adapter.changeColumnDefault("users", "body", "world");
+    expect(executed).toEqual(["ALTER TABLE `users` ALTER COLUMN `body` SET DEFAULT 'world'"]);
+  });
+
+  it("changeColumnDefault wraps DROP DEFAULT for null on a NOT NULL column", async () => {
+    const { adapter, executed } = await build(makeChangeColumnTextColumn({ null_: false }));
+    await adapter.changeColumnDefault("users", "body", null);
+    expect(executed).toEqual(["ALTER TABLE `users` ALTER COLUMN `body` DROP DEFAULT"]);
+  });
+
+  it("changeColumnDefault unwraps {from, to} via the full pipeline", async () => {
+    const { adapter, executed } = await build(makeChangeColumnTextColumn({ null_: true }));
+    await adapter.changeColumnDefault("users", "body", { from: "old", to: "new" });
+    expect(executed).toEqual(["ALTER TABLE `users` ALTER COLUMN `body` SET DEFAULT 'new'"]);
+  });
+
+  it("changeColumnDefaultForAlter returns the bare fragment (no ALTER TABLE wrap)", async () => {
+    const { adapter } = await build(makeChangeColumnTextColumn({ null_: true }));
+    const fragment = await adapter.changeColumnDefaultForAlter("users", "body", "world");
+    expect(fragment).toBe("ALTER COLUMN `body` SET DEFAULT 'world'");
+  });
+});
+
 describe("AbstractMysqlAdapter#changeColumnNull (#1568)", () => {
-  it("emits UPDATE ... SET ... WHERE IS NULL to backfill when flipping to NOT NULL with a default", async () => {
-    const executed: string[] = [];
-    const changeColumnCalls: Array<[string, string, string, Record<string, unknown>]> = [];
+  // Record both `_execMutation` (UPDATE backfill) and `changeColumn` (ALTER
+  // dispatch) into a single sequence so tests can assert relative ordering
+  // — Rails requires the UPDATE to run BEFORE the ALTER, otherwise existing
+  // NULL rows would fail the new NOT NULL constraint.
+  async function makeSequencingAdapter() {
+    const events: Array<["exec", string] | ["changeColumn", unknown[]]> = [];
     const adapter = await makeMinimalMysqlAdapter({
       schemaStatements: () => ({ validateChangeColumnNullArgumentBang: (_: boolean) => {} }),
       _execMutation: async (sql: string) => {
-        executed.push(sql);
+        events.push(["exec", sql]);
       },
-      changeColumn: async (t: string, c: string, type: string, opts: Record<string, unknown>) => {
-        changeColumnCalls.push([t, c, type, opts]);
+      changeColumn: async (...args: unknown[]) => {
+        events.push(["changeColumn", args]);
       },
     });
+    return { adapter, events };
+  }
+
+  it("emits UPDATE backfill BEFORE the changeColumn ALTER dispatch", async () => {
+    const { adapter, events } = await makeSequencingAdapter();
     await adapter.changeColumnNull("users", "name", false, "anon");
-    expect(executed).toEqual(["UPDATE `users` SET `name`='anon' WHERE `name` IS NULL"]);
-    expect(changeColumnCalls).toEqual([["users", "name", "", { null: false }]]);
+    expect(events).toEqual([
+      ["exec", "UPDATE `users` SET `name`='anon' WHERE `name` IS NULL"],
+      ["changeColumn", ["users", "name", "", { null: false }]],
+    ]);
   });
 
-  it("does NOT issue a backfill UPDATE when default_ is omitted", async () => {
-    const executed: string[] = [];
-    const adapter = await makeMinimalMysqlAdapter({
-      schemaStatements: () => ({ validateChangeColumnNullArgumentBang: (_: boolean) => {} }),
-      _execMutation: async (sql: string) => {
-        executed.push(sql);
-      },
-      changeColumn: async () => {},
-    });
+  it("dispatches changeColumn with null:false but skips UPDATE when default_ is omitted", async () => {
+    const { adapter, events } = await makeSequencingAdapter();
     await adapter.changeColumnNull("users", "name", false);
-    expect(executed).toEqual([]);
+    expect(events).toEqual([["changeColumn", ["users", "name", "", { null: false }]]]);
   });
 
-  it("does NOT issue a backfill UPDATE when null_ is true (allowing NULLs)", async () => {
-    const executed: string[] = [];
-    const adapter = await makeMinimalMysqlAdapter({
-      schemaStatements: () => ({ validateChangeColumnNullArgumentBang: (_: boolean) => {} }),
-      _execMutation: async (sql: string) => {
-        executed.push(sql);
-      },
-      changeColumn: async () => {},
-    });
+  it("dispatches changeColumn with null:true and skips UPDATE when null_ is true", async () => {
+    const { adapter, events } = await makeSequencingAdapter();
     await adapter.changeColumnNull("users", "name", true, "anon");
-    expect(executed).toEqual([]);
+    expect(events).toEqual([["changeColumn", ["users", "name", "", { null: true }]]]);
   });
 
   it("propagates validateChangeColumnNullArgumentBang errors before any SQL or changeColumn dispatch", async () => {

@@ -77,8 +77,8 @@ describeIfPg("PostgreSQLAdapter", () => {
     it("interval type cast from invalid string", async () => {
       const i = await IntervalDataType.createBang({ maximum_term: "1 year 2 minutes" });
       // Rails: invalid non-ISO string casts to nil before INSERT, so column is NULL.
-      // Verify at the SQL level so this can't be a false positive from the parallel
-      // row-read deserialization gap (see skipped "interval type" test).
+      // Verify at the SQL level (in addition to the reload assertion below) to pin
+      // the pre-INSERT cast independently of row-read deserialization.
       const rows = await adapter.execute(
         `SELECT maximum_term IS NULL AS is_null FROM interval_data_types WHERE id = $1`,
         [(i as any).id],

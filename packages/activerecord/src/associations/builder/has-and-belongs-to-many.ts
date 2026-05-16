@@ -198,11 +198,17 @@ export class HasAndBelongsToMany {
       return record.association(middleName).handleDependency();
     });
 
-    // Mirrors Rails' `hm_options` allowlist in `has_and_belongs_to_many`:
-    // only this explicit set forwards from the user's options into the
-    // generated has_many. Spreading `...options` would leak keys like
-    // `readonly`, `dependent`, `inverseOf` into the middle hasMany
-    // semantics — Rails drops them.
+    // Tightened option set forwarded to the public HABTM reflection.
+    // Rails' `hm_options` allowlist for the generated `has_many :through`
+    // is the canonical set: before/after_add/remove, autosave, validate,
+    // join_table, class_name, extend, strict_loading (associations.rb:1899).
+    // We additionally retain `foreignKey`/`primaryKey` because our public
+    // HABTM reflection plays the dual role Rails splits between
+    // `habtm_reflection` (which keeps the full options) and the generated
+    // through-`has_many` — join-key resolution (`_resolveHabtmJoin`,
+    // `loadHabtm`) reads these directly off the public reflection.
+    // Spreading `...options` previously leaked `readonly`/`dependent`/
+    // `inverseOf` into through-hasMany semantics — Rails drops them.
     const HABTM_FORWARDED_KEYS = [
       "beforeAdd",
       "afterAdd",
@@ -214,6 +220,9 @@ export class HasAndBelongsToMany {
       "className",
       "extend",
       "strictLoading",
+      "foreignKey",
+      "primaryKey",
+      "associationForeignKey",
     ] as const;
     const habtmOptions: Record<string, unknown> = {
       joinTable: joinTableName,

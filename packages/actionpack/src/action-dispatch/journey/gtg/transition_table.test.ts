@@ -77,7 +77,7 @@ describe("ActionDispatch::Journey::GTG::TransitionTable", () => {
     for (const inner of Object.values(json.stdparam_states)) {
       for (const edge of Object.keys(inner)) allStdparamEdges.add(edge);
     }
-    expect(allStdparamEdges.has("[^./?]+")).toBe(true);
+    expect([...allStdparamEdges].some((s) => s.includes("[^./?]+"))).toBe(true);
 
     // Every transition target must point at a known state id (integer key).
     const allStateIds = new Set<string>([

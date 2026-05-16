@@ -96,10 +96,12 @@ export class SchemaCreation {
   }
 
   protected visitColumnDefinition(o: ColumnDefinition): string {
-    // Mirrors Rails' `visit_ColumnDefinition` (abstract/schema_creation.rb):
-    // mutate `o.sql_type` so callers (e.g. `column_options(o) → column`)
-    // see the resolved SQL type when emitting DEFAULT clauses.
-    o.sqlType ??= this.typeToSql(o.type, o.options);
+    // Mirrors Rails' `visit_ColumnDefinition` (abstract/schema_creation.rb:34):
+    // unconditionally reassign `column.sql_type = type_to_sql(...)` so a
+    // re-accept after option changes recomputes the type, and so callers
+    // (`column_options(o) → column`) see the resolved SQL type when
+    // emitting DEFAULT clauses.
+    o.sqlType = this.typeToSql(o.type, o.options);
     let sql = `${this.adapter.quoteIdentifier(o.name)} ${o.sqlType}`;
     if (o.type !== "primary_key") {
       sql = this.addColumnOptionsBang(sql, this.columnOptions(o) as ColumnOptions);
@@ -225,10 +227,16 @@ export class SchemaCreation {
     return sql;
   }
 
-  /** Mirrors: `options_include_default?` in abstract/schema_statements.rb. */
+  /**
+   * Mirrors `options_include_default?` (abstract/schema_statements.rb:1517):
+   * `options.include?(:default) && !(options[:null] == false && options[:default].nil?)`.
+   * Use strict `=== null` to match Ruby's `.nil?` (which does not match
+   * `undefined`), keeping `{ default: undefined, null: false }` distinct
+   * from `{ default: nil, null: false }`.
+   */
   protected optionsIncludeDefault(options: ColumnOptions): boolean {
     if (!("default" in options)) return false;
-    return !(options.null === false && options.default == null);
+    return !(options.null === false && options.default === null);
   }
 
   typeToSql(type: ColumnType, options: ColumnOptions = {}): string {

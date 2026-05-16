@@ -3076,7 +3076,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async addColumn(
     tableName: string,
     columnName: string,
-    type: string,
+    // `ColumnType` already accepts arbitrary strings via its `(string & {})`
+    // branch — Rails passes adapter-specific types (`timestamptz`, enum
+    // type names, etc.) verbatim, so no cast is needed.
+    type: ColumnType,
     options: ColumnOptions & {
       comment?: string | null;
       ifNotExists?: boolean;
@@ -3085,7 +3088,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // Mirrors PostgreSQL::SchemaStatements#add_column: defer to the abstract
     // implementation (which builds an AlterTable and accepts it through
     // schema_creation), then propagate :comment via change_column_comment.
-    await super.addColumn(tableName, columnName, type as ColumnType, options);
+    await super.addColumn(tableName, columnName, type, options);
     if ("comment" in options) {
       await this.changeColumnComment(tableName, columnName, options.comment ?? null);
     }

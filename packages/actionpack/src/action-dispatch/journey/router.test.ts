@@ -158,6 +158,29 @@ describe("ActionDispatch::Journey::Router", () => {
     expect(seen["slug"]).toBe("hello world");
   });
 
+  it("recognize() stops iterating when the block returns true", () => {
+    const r1 = new Route({ name: "a", app: okApp("a"), path: pat("/x") });
+    const r2 = new Route({ name: "b", app: okApp("b"), path: pat("/x") });
+    const router = new Router(buildRoutes([r1, r2]));
+    const seen: string[] = [];
+    router.recognize(req({ pathInfo: "/x" }), (route) => {
+      seen.push(route.name);
+      return true;
+    });
+    expect(seen).toEqual(["a"]);
+  });
+
+  it("recognize() continues when the block returns falsy", () => {
+    const r1 = new Route({ name: "a", app: okApp("a"), path: pat("/x") });
+    const r2 = new Route({ name: "b", app: okApp("b"), path: pat("/x") });
+    const router = new Router(buildRoutes([r1, r2]));
+    const seen: string[] = [];
+    router.recognize(req({ pathInfo: "/x" }), (route) => {
+      seen.push(route.name);
+    });
+    expect(seen).toEqual(["a", "b"]);
+  });
+
   it("eagerLoadBang() initializes the simulator without throwing", () => {
     const route = new Route({ name: "p", app: okApp("ok"), path: pat("/x") });
     const router = new Router(buildRoutes([route]));

@@ -834,17 +834,21 @@ export class TransactionManager {
   private _connection: TransactionConnection;
   private _hasUnmaterializedTransactions = false;
   private _lazyTransactionsEnabled = true;
-  /** @internal Async-chain re-entrancy flag for {@link withinNewTransaction}. */
-  private _lockHeld: AsyncContext<true> | null = null;
+  /** @internal AsyncContext carrying the per-acquisition lock-owner token. */
+  private _lockOwner: AsyncContext<symbol> | null = null;
   /** @internal Cached AsyncContext adapter (refresh on swap, like other call sites). */
-  private _lockHeldAdapter: ReturnType<typeof getAsyncContext> | null = null;
+  private _lockOwnerAdapter: ReturnType<typeof getAsyncContext> | null = null;
+  /** @internal Token identifying the chain that currently holds the lock. */
+  private _currentLockOwner: symbol | null = null;
   /** @internal Outermost-call mutex; non-null while a foreign chain holds it. */
   private _lockChain: Promise<void> | null = null;
-  /** @internal Async-chain re-entrancy flag for {@link materializeTransactions}. */
-  private _materializing: AsyncContext<true> | null = null;
-  /** @internal Cached AsyncContext adapter for the materialize flag. */
-  private _materializingAdapter: ReturnType<typeof getAsyncContext> | null = null;
-  /** @internal In-flight materialization promise for cross-chain waiters. */
+  /** @internal AsyncContext carrying the per-materialization owner token. */
+  private _materializingOwner: AsyncContext<symbol> | null = null;
+  /** @internal Cached AsyncContext adapter for the materialize owner. */
+  private _materializingOwnerAdapter: ReturnType<typeof getAsyncContext> | null = null;
+  /** @internal Token identifying the chain currently materializing. */
+  private _currentMaterializingOwner: symbol | null = null;
+  /** @internal In-flight materialization promise; rejects with the underlying error. */
   private _materializingPromise: Promise<void> | null = null;
 
   static readonly NULL_TRANSACTION = Object.freeze(new NullTransaction());
@@ -948,34 +952,38 @@ export class TransactionManager {
   }
 
   /** @internal */
-  private _materializingStorage(): AsyncContext<true> {
+  private _materializingStorage(): AsyncContext<symbol> {
     const asyncContext = getAsyncContext();
-    if (!this._materializing || this._materializingAdapter !== asyncContext) {
-      this._materializing = asyncContext.create<true>();
-      this._materializingAdapter = asyncContext;
+    if (!this._materializingOwner || this._materializingOwnerAdapter !== asyncContext) {
+      this._materializingOwner = asyncContext.create<symbol>();
+      this._materializingOwnerAdapter = asyncContext;
     }
-    return this._materializing;
+    return this._materializingOwner;
   }
 
   async materializeTransactions(): Promise<void> {
     // Re-entrant call from inside an in-progress materializeBang on the same
     // chain — skip to avoid infinite recursion (queries issued by
-    // materializeBang itself call back into here). Async-chain-aware so a
-    // foreign chain falls through to wait on _materializingPromise instead of
-    // racing to issue queries against an unmaterialized stack.
-    if (this._materializingStorage().getStore() === true) return;
+    // materializeBang itself call back into here). Owner-token check so a
+    // foreign chain (no token, or stale token from an earlier completed pass)
+    // falls through to wait on _materializingPromise instead of racing to
+    // issue queries against an unmaterialized stack.
+    const storage = this._materializingStorage();
+    if (this._currentMaterializingOwner && storage.getStore() === this._currentMaterializingOwner) {
+      return;
+    }
     if (this._materializingPromise) {
+      // Surfaces materialization failures to foreign waiters (otherwise they
+      // would proceed assuming a materialized stack and fire queries against
+      // an unmaterialized one).
       await this._materializingPromise;
       return;
     }
     if (!this._hasUnmaterializedTransactions) return;
 
-    let resolveDone!: () => void;
-    this._materializingPromise = new Promise<void>((r) => {
-      resolveDone = r;
-    });
-    try {
-      await this._materializingStorage().run(true, async () => {
+    const owner = Symbol("tm.materialize");
+    const op = (async () => {
+      await storage.run(owner, async () => {
         for (const t of this._stack) {
           if (t instanceof Transaction && !t.isMaterialized()) {
             await t.materializeBang();
@@ -983,9 +991,14 @@ export class TransactionManager {
         }
       });
       this._hasUnmaterializedTransactions = false;
+    })();
+    this._materializingPromise = op;
+    this._currentMaterializingOwner = owner;
+    try {
+      await op;
     } finally {
+      this._currentMaterializingOwner = null;
       this._materializingPromise = null;
-      resolveDone();
     }
   }
 
@@ -1053,40 +1066,60 @@ export class TransactionManager {
    * recursive call from inside the body (e.g. `after_commit` re-entry) skips
    * re-acquisition to avoid self-deadlock.
    *
+   * Token-based ownership: each acquisition mints a fresh symbol stored both
+   * in the AsyncContext and in `_currentLockOwner`. Reentry requires both to
+   * match — so a detached task that inherits the AsyncContext but outlives
+   * the holder's release (token cleared) correctly re-acquires the lock.
+   *
    * @internal
    */
-  private _lockStorage(): AsyncContext<true> {
+  private _lockStorage(): AsyncContext<symbol> {
     const asyncContext = getAsyncContext();
-    if (!this._lockHeld || this._lockHeldAdapter !== asyncContext) {
-      this._lockHeld = asyncContext.create<true>();
-      this._lockHeldAdapter = asyncContext;
+    if (!this._lockOwner || this._lockOwnerAdapter !== asyncContext) {
+      this._lockOwner = asyncContext.create<symbol>();
+      this._lockOwnerAdapter = asyncContext;
     }
-    return this._lockHeld;
+    return this._lockOwner;
+  }
+
+  /**
+   * Run `fn` under the per-connection lock that serializes
+   * {@link withinNewTransaction}. Mirrors Rails'
+   * `@connection.lock.synchronize do … end` so callers can extend the lock
+   * scope across pre-/post-transaction work (e.g. DDL setup) without
+   * starting a transaction. Same reentrance rules as
+   * {@link withinNewTransaction}.
+   */
+  async synchronize<T>(fn: () => Promise<T> | T): Promise<T> {
+    const storage = this._lockStorage();
+    if (this._currentLockOwner && storage.getStore() === this._currentLockOwner) {
+      return await fn();
+    }
+    while (this._lockChain) {
+      await this._lockChain;
+    }
+    const owner = Symbol("tm.lock");
+    let release!: () => void;
+    this._lockChain = new Promise<void>((r) => {
+      release = () => {
+        this._lockChain = null;
+        this._currentLockOwner = null;
+        r();
+      };
+    });
+    this._currentLockOwner = owner;
+    try {
+      return await storage.run(owner, () => fn());
+    } finally {
+      release();
+    }
   }
 
   async withinNewTransaction<T>(
     options: { isolation?: string | null; joinable?: boolean },
     fn: (tx: UserTransaction) => Promise<T> | T,
   ): Promise<T> {
-    const storage = this._lockStorage();
-    if (storage.getStore() === true) {
-      return await this._withinNewTransactionBody(options, fn);
-    }
-    while (this._lockChain) {
-      await this._lockChain;
-    }
-    let release!: () => void;
-    this._lockChain = new Promise<void>((r) => {
-      release = () => {
-        this._lockChain = null;
-        r();
-      };
-    });
-    try {
-      return await storage.run(true, () => this._withinNewTransactionBody(options, fn));
-    } finally {
-      release();
-    }
+    return await this.synchronize(() => this._withinNewTransactionBody(options, fn));
   }
 
   /** @internal */

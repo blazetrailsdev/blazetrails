@@ -980,17 +980,25 @@ class SchemaAdapter implements DatabaseAdapter {
     opts: { isolation?: string | null; joinable?: boolean },
     fn: (tx?: unknown) => Promise<T> | T,
   ): Promise<T> {
-    // setup() runs before TM enters its frame: MySQL DDL implicit-commits
-    // an open tx; PG would try SAVEPOINT before BEGIN was sent.
-    await this.setup();
     const inner = this.inner as any;
-    // Per-connection serialization moved into TransactionManager in Phase 8.
-    // The wrapper still marks "this chain is inside a TM frame on this
-    // adapter" so _txVisible() can expose transaction state to in-chain
-    // callers without leaking it to foreign chains.
+    // Per-connection serialization lives in TransactionManager in Phase 8
+    // (#1669). Wrap setup() in the same TM-owned mutex so lazy DDL can't
+    // interleave with a concurrent transaction on the shared connection
+    // (MySQL DDL implicit-commits, PG would race SAVEPOINT-before-BEGIN).
+    // The wrapper also tags this async chain so _txVisible() can expose
+    // transaction state to in-chain callers without leaking it across
+    // foreign chains.
     const storage = _txLockStorage();
-    if (storage.getStore() === true) return inner.withinNewTransaction(opts, fn);
-    return await storage.run(true, () => inner.withinNewTransaction(opts, fn));
+    const run = async () => {
+      await this.setup();
+      return await inner.withinNewTransaction(opts, fn);
+    };
+    const tm = inner._transactionManager as
+      | { synchronize?<R>(fn: () => Promise<R> | R): Promise<R> }
+      | undefined;
+    const wrapped = storage.getStore() === true ? run : () => storage.run(true, run);
+    if (tm?.synchronize) return tm.synchronize(wrapped);
+    return wrapped();
   }
 
   currentTransaction() {

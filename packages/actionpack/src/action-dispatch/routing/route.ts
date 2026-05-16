@@ -88,6 +88,43 @@ export class Route {
   }
 
   /**
+   * Returns the path-capture (dynamic/glob) parameter names declared by
+   * this route, e.g. `["id"]` for `/posts/:id`.
+   */
+  get pathParamNames(): readonly string[] {
+    return this.paramNames;
+  }
+
+  /**
+   * Constraints that apply to *request* attributes (subdomain, format,
+   * signed-in, etc.) rather than to path captures. Path-capture
+   * constraints are passed into the pattern requirements instead, so the
+   * Journey `Route#matches` request-constraint loop should not re-check
+   * them against undefined request properties.
+   */
+  get requestConstraints(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    const paths = new Set<string>(this.paramNames);
+    for (const [k, v] of Object.entries(this.constraints)) {
+      if (!paths.has(k)) out[k] = v;
+    }
+    return out;
+  }
+
+  /**
+   * Constraints that apply to path captures (key matches a `:name` /
+   * `*name` segment). These become Journey pattern requirements.
+   */
+  get pathConstraints(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    const paths = new Set<string>(this.paramNames);
+    for (const [k, v] of Object.entries(this.constraints)) {
+      if (paths.has(k)) out[k] = v;
+    }
+    return out;
+  }
+
+  /**
    * Compute a specificity score for this route. Higher = more specific.
    */
   score(knowledge: Record<string, boolean> = {}): number {

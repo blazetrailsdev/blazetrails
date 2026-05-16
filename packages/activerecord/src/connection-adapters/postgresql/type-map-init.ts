@@ -52,7 +52,6 @@ typeRegistry.register("jsonb", () => new Jsonb());
 typeRegistry.register("money", () => new Money());
 typeRegistry.register("inet", () => new Inet());
 typeRegistry.register("cidr", () => new Cidr());
-typeRegistry.register("macaddr", () => new Macaddr());
 typeRegistry.register("bit", () => new Bit());
 typeRegistry.register("bit_varying", () => new BitVarying());
 typeRegistry.register("xml", () => new Xml());

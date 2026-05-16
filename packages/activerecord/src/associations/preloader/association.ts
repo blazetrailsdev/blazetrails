@@ -415,7 +415,7 @@ export class LoaderQuery {
     if (Array.isArray(this.associationKeyName)) {
       const conditions: Record<string, Set<unknown>> = {};
       for (const values of keys) {
-        const valArr = values as unknown[];
+        const valArr = (typeof values === "string" ? JSON.parse(values) : values) as unknown[];
         for (let i = 0; i < this.associationKeyName.length; i++) {
           const keyName = this.associationKeyName[i];
           if (!conditions[keyName]) conditions[keyName] = new Set();

@@ -758,7 +758,7 @@ class SchemaAdapter implements DatabaseAdapter {
       const useSp = isPg() && (this.openTransactions > 0 || this.inTransaction);
       // Force TM materialization (BEGIN on the wire) before SAVEPOINT — TM uses
       // lazy materialization so openTransactions>0 alone doesn't mean BEGIN was sent.
-      // Since Phase 8 (#TBD) materializeTransactions() awaits any in-flight
+      // Since Phase 8 (#1669) materializeTransactions() awaits any in-flight
       // materialization on another chain, so concurrent statements inside the
       // same lazy transaction no longer race SAVEPOINT-before-BEGIN.
       if (useSp) await this.materializeTransactions();

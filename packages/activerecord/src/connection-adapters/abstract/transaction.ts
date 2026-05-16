@@ -833,7 +833,6 @@ export class TransactionManager {
   private _stack: (Transaction | NullTransaction)[] = [];
   private _connection: TransactionConnection;
   private _hasUnmaterializedTransactions = false;
-  private _materializingTransactions = false;
   private _lazyTransactionsEnabled = true;
   /** @internal Async-chain re-entrancy flag for {@link withinNewTransaction}. */
   private _lockHeld: AsyncContext<true> | null = null;
@@ -841,6 +840,10 @@ export class TransactionManager {
   private _lockHeldAdapter: ReturnType<typeof getAsyncContext> | null = null;
   /** @internal Outermost-call mutex; non-null while a foreign chain holds it. */
   private _lockChain: Promise<void> | null = null;
+  /** @internal Async-chain re-entrancy flag for {@link materializeTransactions}. */
+  private _materializing: AsyncContext<true> | null = null;
+  /** @internal Cached AsyncContext adapter for the materialize flag. */
+  private _materializingAdapter: ReturnType<typeof getAsyncContext> | null = null;
   /** @internal In-flight materialization promise for cross-chain waiters. */
   private _materializingPromise: Promise<void> | null = null;
 
@@ -944,14 +947,23 @@ export class TransactionManager {
     });
   }
 
+  /** @internal */
+  private _materializingStorage(): AsyncContext<true> {
+    const asyncContext = getAsyncContext();
+    if (!this._materializing || this._materializingAdapter !== asyncContext) {
+      this._materializing = asyncContext.create<true>();
+      this._materializingAdapter = asyncContext;
+    }
+    return this._materializing;
+  }
+
   async materializeTransactions(): Promise<void> {
     // Re-entrant call from inside an in-progress materializeBang on the same
     // chain — skip to avoid infinite recursion (queries issued by
-    // materializeBang itself call back into here).
-    if (this._materializingTransactions) return;
-    // Foreign-chain caller: wait for the in-flight pass to finish before
-    // proceeding so this caller observes a materialized stack rather than
-    // racing to issue queries against an unmaterialized one.
+    // materializeBang itself call back into here). Async-chain-aware so a
+    // foreign chain falls through to wait on _materializingPromise instead of
+    // racing to issue queries against an unmaterialized stack.
+    if (this._materializingStorage().getStore() === true) return;
     if (this._materializingPromise) {
       await this._materializingPromise;
       return;
@@ -962,16 +974,16 @@ export class TransactionManager {
     this._materializingPromise = new Promise<void>((r) => {
       resolveDone = r;
     });
-    this._materializingTransactions = true;
     try {
-      for (const t of this._stack) {
-        if (t instanceof Transaction && !t.isMaterialized()) {
-          await t.materializeBang();
+      await this._materializingStorage().run(true, async () => {
+        for (const t of this._stack) {
+          if (t instanceof Transaction && !t.isMaterialized()) {
+            await t.materializeBang();
+          }
         }
-      }
+      });
       this._hasUnmaterializedTransactions = false;
     } finally {
-      this._materializingTransactions = false;
       this._materializingPromise = null;
       resolveDone();
     }

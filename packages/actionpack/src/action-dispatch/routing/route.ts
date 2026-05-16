@@ -165,7 +165,9 @@ export class Route {
         isGroup?: () => boolean;
         isStar?: () => boolean;
         isCat?: () => boolean;
+        type?: string;
         toSym?: () => string;
+        children?: () => unknown[];
         left?: unknown;
         right?: unknown;
       };
@@ -176,6 +178,11 @@ export class Route {
       if (n.isCat?.()) {
         walk(n.left, nested);
         walk(n.right, nested);
+        return;
+      }
+      if (n.type === "OR") {
+        // Or-children are alternatives at the same nesting level.
+        for (const c of n.children?.() ?? []) walk(c, nested);
         return;
       }
       if (n.isLiteral?.()) {
@@ -242,18 +249,22 @@ export class Route {
         );
       }
     }
-    const hash: Record<string, unknown> = {};
+    // Null-prototype object so route params named `__proto__` /
+    // `constructor` etc. become own properties rather than hitting the
+    // inherited setter (which would silently drop them).
+    const hash: Record<string, unknown> = Object.create(null);
     for (const [k, v] of Object.entries(params)) {
       if (v != null) hash[k] = String(v);
     }
     let out = this._pathFormatter.evaluate(hash);
     // Collapse runs of `/` left over from omitted optional groups (e.g.
     // `(/:a)(/:b)` with `{ b: "x" }` → `//x`) and strip a single trailing
-    // slash. Skip when the path can emit literal `/` inside a captured
-    // value — top-level `*splat` or `:controller` parameters preserve
-    // slashes via Format.requiredPath / escapePath, so post-processing
-    // would corrupt those values.
-    if (!hasUnescapedSlashCaptures(this.path)) {
+    // slash. Skip when a supplied value actually contains a literal `/`
+    // — those values come from a splat or `:controller` (which use
+    // Format.requiredPath / escapePath, preserving `/`) and collapsing
+    // would munge them. When the slash-bearing capture is omitted (e.g.
+    // it's inside an unsatisfied optional group), collapsing is safe.
+    if (!suppliedAnySlash(params)) {
       out = out.replace(/\/{2,}/g, "/");
       if (out.length > 1 && out.endsWith("/")) out = out.slice(0, -1);
     }
@@ -301,14 +312,17 @@ export class Route {
 }
 
 /**
- * True when the route can emit literal `/` inside a captured value —
- * i.e. it has a `*splat` glob or a `:controller` parameter, both of
- * which use Format.requiredPath / `escapePath` (which preserves `/`).
- * Slash-collapse post-processing is unsafe for these routes because it
- * would munge user-supplied glob values containing `/`.
+ * True if any supplied param value contains a literal `/`. Glob and
+ * `:controller` captures preserve slashes (via `escapePath`), so when
+ * such a value is actually supplied, post-process slash-collapse would
+ * corrupt it. When no supplied value contains `/`, collapse is safe
+ * even if the route declares a splat/controller that was omitted.
  */
-function hasUnescapedSlashCaptures(path: string): boolean {
-  return /\*[a-zA-Z_]/.test(path) || /:controller\b/.test(path);
+function suppliedAnySlash(params: Record<string, string | number>): boolean {
+  for (const v of Object.values(params)) {
+    if (typeof v === "string" && v.includes("/")) return true;
+  }
+  return false;
 }
 
 function topLevelSymbolNames(tree: unknown): readonly string[] {
@@ -324,7 +338,9 @@ function topLevelSymbolNames(tree: unknown): readonly string[] {
       isGroup?: () => boolean;
       isStar?: () => boolean;
       isCat?: () => boolean;
+      type?: string;
       toSym?: () => string;
+      children?: () => unknown[];
       left?: unknown;
       right?: unknown;
     };
@@ -341,6 +357,10 @@ function topLevelSymbolNames(tree: unknown): readonly string[] {
     if (n.isCat?.()) {
       walk(n.left, nested);
       walk(n.right, nested);
+      return;
+    }
+    if (n.type === "OR") {
+      for (const c of n.children?.() ?? []) walk(c, nested);
       return;
     }
     if (!nested && n.isSymbol?.()) {

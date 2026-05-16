@@ -98,6 +98,27 @@ describe("Route", () => {
       expect(route.pathFor({ path: "a/b/c" })).toBe("/files/a/b/c");
     });
 
+    it("collapses slashes when splat-bearing optional is omitted", () => {
+      // The route *declares* a splat inside an optional but the user
+      // doesn't supply it. The supplied-value check should detect that
+      // no value contains `/`, so the collapse runs and removes the
+      // leading `//` from the omitted optional.
+      const route = new Route("GET", "(/:controller)(/:action)", "x", "y");
+      expect(route.pathFor({ action: "show" })).toBe("/show");
+    });
+
+    it("does not lose route params named __proto__ / constructor", () => {
+      // Plain-object hash inside pathFor() would route an own `__proto__`
+      // assignment to the inherited setter, silently dropping it. Using a
+      // null-prototype hash makes it an own property. The input needs an
+      // explicit own __proto__ since the literal { __proto__: ... } sets
+      // the prototype rather than an own property.
+      const route = new Route("GET", "/:__proto__", "x", "y");
+      const params: Record<string, string> = Object.create(null);
+      params["__proto__"] = "evil";
+      expect(route.pathFor(params)).toBe("/evil");
+    });
+
     it("throws missing-required when a name is required at the top level even if it also appears optionally", () => {
       // `/:id(.:id)` has `:id` both required (top-level) and inside an
       // optional group. Pattern.requiredNames would drop it; the

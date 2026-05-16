@@ -720,19 +720,27 @@ export class AbstractAdapter implements Quoting {
     if (pool?.preventWrites === true) return true;
     if (pool?.dbConfig?.preventWrites === true) return true;
     if (this._config.preventWrites === true) return true;
-    // Mirrors Rails: connection_descriptor.current_preventing_writes
-    // Filter by the pool's owner class name so an unrelated abstract-class
-    // connected_to block doesn't affect this adapter's connection scope.
+    // Mirrors Rails: connection_descriptor.current_preventing_writes →
+    // Base.preventing_writes?(class_name). Walks the stack in reverse and
+    // returns the entry's prevent_writes flag when (a) it includes Base by
+    // identity, or (b) any klass's name matches the pool's connection name.
     const ownerName: string | undefined = pool?.poolConfig?.connectionDescriptor?.name;
     const stack = connectedToStack();
     for (let i = stack.length - 1; i >= 0; i--) {
       const entry = stack[i];
       if (entry.preventWrites === undefined) continue;
+      let includesBase = false;
+      let nameMatches = false;
       for (const k of entry.klasses) {
-        if (typeof k === "function" && (k.name === ownerName || k.name === "Base")) {
-          return entry.preventWrites;
+        if (typeof k !== "function") continue;
+        if (Object.prototype.hasOwnProperty.call(k, "_isActiveRecordBase")) {
+          includesBase = true;
+        }
+        if (ownerName !== undefined && k.name === ownerName) {
+          nameMatches = true;
         }
       }
+      if (includesBase || nameMatches) return entry.preventWrites;
     }
     return false;
   }

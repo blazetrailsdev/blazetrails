@@ -6,7 +6,10 @@ import { getFsAsync, getPathAsync, getEnv } from "@blazetrails/activesupport";
 import { DatabaseConfigurations, type RawConfigurations } from "./database-configurations.js";
 import { HashConfig } from "./database-configurations/hash-config.js";
 import { UrlConfig } from "./database-configurations/url-config.js";
-import { _setAdapterClassResolver } from "./database-configurations/database-config.js";
+import {
+  _setAdapterClassResolver,
+  type DatabaseConfig,
+} from "./database-configurations/database-config.js";
 import { resolve as resolveConnectionAdapter } from "./connection-adapters.js";
 import {
   AdapterNotFound,
@@ -70,27 +73,24 @@ export function connectsTo(
 
   if (Object.keys(database).length > 0 && Object.keys(shards).length > 0) {
     throw new ArgumentError(
-      "`connectsTo` can only accept a `database` or `shards` argument, but not both.",
+      "`connects_to` can only accept a `database` or `shards` argument, but not both arguments.",
     );
   }
 
   const connections: ConnectionPool[] = [];
-  // Mirrors: @shard_keys = shards.keys (before injecting :default for database: usage)
+  // Mirrors Rails' flow: capture @shard_keys before the default-merge, then
+  // inject {default: database} when no shards were given, then read
+  // shards.keys.first for default_shard from the post-merge map.
   (this as any)._shardKeys = Object.keys(shards);
-  const shardEntries = Object.keys(shards).length > 0 ? shards : { default: database };
-  // Mirrors: self.default_shard = shards.keys.first
-  (this as any)._defaultShard = Object.keys(shardEntries)[0] ?? "default";
+  const shardEntries: Record<string, Record<string, unknown>> = Object.keys(shards).length > 0
+    ? shards
+    : { default: database };
+  (this as any)._defaultShard = Object.keys(shardEntries)[0];
   (this as any).connectionClass = true;
-
-  const rawConfigs = (this as any).configurations;
-  const configs =
-    rawConfigs instanceof DatabaseConfigurations
-      ? rawConfigs
-      : DatabaseConfigurations.fromEnv(rawConfigs?.toH?.() ?? rawConfigs ?? {});
 
   for (const [shard, dbKeys] of Object.entries(shardEntries)) {
     for (const [role, dbKey] of Object.entries(dbKeys)) {
-      const dbConfig = configs.resolve(dbKey);
+      const dbConfig = resolveConfigForConnection.call(this, dbKey);
       const pool = this.connectionHandler.establishConnection(dbConfig, {
         owner: this.connectionClassForSelf(),
         role,
@@ -841,12 +841,38 @@ _setAdapterClassResolver(async (adapterName) => _loadAdapter(adapterName));
  *
  * @internal
  */
-export function resolveConfigForConnection(this: typeof Base, configOrEnv: unknown): unknown {
+export function resolveConfigForConnection(
+  this: typeof Base,
+  configOrEnv: unknown,
+): DatabaseConfig {
   if (!this.name) throw new Error("Anonymous class is not allowed.");
-  // Rails also sets self.connection_specification_name = connection_name as a side effect.
-  const connectionName = isPrimaryClass.call(this)
-    ? ((this as any)._baseClassName ?? this.name)
-    : this.name;
-  (this as any)._connectionSpecificationName = connectionName;
-  return (this as any).configurations?.resolve(configOrEnv) ?? configOrEnv;
+  // Rails sets self.connection_specification_name = connection_name as a side
+  // effect. Skip it for the primary class (Base/ApplicationRecord) since
+  // class statics inherit via prototype in JS and we don't want subclasses
+  // to read Base's spec name in place of their own connectionClass-derived
+  // value. The reader already returns "Base" for the primary class as a
+  // fallback, so this is a no-op for the primary case.
+  if (!isPrimaryClass.call(this)) {
+    (this as any)._connectionSpecificationName = this.name;
+  }
+
+  const rawConfigs = (this as any).configurations;
+  // `configurations` may be the unset static accessor (a function value), a
+  // plain hash assigned by tests, or an already-built DatabaseConfigurations.
+  // Mirror Rails' `Base.configurations.resolve(config_or_env)` by always
+  // normalizing to a DatabaseConfigurations instance before resolving — so
+  // string env names surface AdapterNotSpecified with the available-configs
+  // hint instead of silently passing through.
+  let configs: DatabaseConfigurations;
+  if (rawConfigs instanceof DatabaseConfigurations) {
+    configs = rawConfigs;
+  } else if (rawConfigs && typeof rawConfigs === "object") {
+    configs = DatabaseConfigurations.fromEnv(
+      (rawConfigs as { toH?: () => RawConfigurations }).toH?.() ??
+        (rawConfigs as RawConfigurations),
+    );
+  } else {
+    configs = DatabaseConfigurations.fromEnv({});
+  }
+  return configs.resolve(configOrEnv);
 }

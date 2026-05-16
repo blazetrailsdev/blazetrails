@@ -895,6 +895,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * Execute raw SQL (for DDL and other non-query statements).
    */
   async exec(sql: string): Promise<void> {
+    this._syncDatabaseTimezone();
     const conn = await this.getConn();
     try {
       await conn.query(this.mysqlQuote(sql));

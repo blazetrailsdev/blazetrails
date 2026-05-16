@@ -81,6 +81,16 @@ describe("RouteSet — Journey bridge", () => {
     expect(routes.journeyRecognize("GET", "/posts/x")).toBeNull();
   });
 
+  it("journeyRecognize keeps :controller/:action captures for generic routes", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/:controller/:action", {});
+    });
+    const m = routes.journeyRecognize("GET", "/users/show");
+    expect(m).not.toBeNull();
+    expect(m!.params).toEqual({ controller: "users", action: "show" });
+  });
+
   it("journeyRecognize params hold only path captures (defaults stripped)", () => {
     const routes = new RouteSet();
     routes.draw((r) => {

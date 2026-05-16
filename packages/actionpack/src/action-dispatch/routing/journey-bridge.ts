@@ -74,11 +74,14 @@ export function journeyRecognize(
     const local = JOURNEY_TO_LOCAL.get(journeyRoute);
     if (!local) return;
     // Router.recognize merges route.defaults into parameters; for parity with
-    // the local matcher's MatchedRoute shape, keep only path captures.
-    const defaultKeys = new Set(Object.keys(journeyRoute.defaults));
+    // the local matcher's MatchedRoute shape, keep only path captures. Pick
+    // by the pattern's name set so captures sharing a default key (e.g.
+    // /:controller/:action) survive.
+    const captureNames = new Set(journeyRoute.path.names);
     const params: Record<string, string> = {};
-    for (const [k, v] of Object.entries(parameters)) {
-      if (v != null && !defaultKeys.has(k)) params[k] = String(v);
+    for (const name of captureNames) {
+      const v = parameters[name];
+      if (v != null) params[name] = String(v);
     }
     result = { route: local, params };
   });

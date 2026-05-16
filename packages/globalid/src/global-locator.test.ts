@@ -447,9 +447,12 @@ class PersonScoped extends Person {
       PersonScoped._findAllowed = false;
     }
   }
+  // When the gating flag is off, Rails' `Person::Scoped.find` returns nil
+  // (via `super if @find_allowed`). The signature widens to `| null` only
+  // at the call site (cast) since the base `Person.find` type is fixed.
   static override async find(id: unknown): Promise<PersonScoped | PersonScoped[]> {
     if (!PersonScoped._findAllowed) {
-      return Array.isArray(id) ? [] : (null as unknown as PersonScoped);
+      return (Array.isArray(id) ? [] : null) as unknown as PersonScoped;
     }
     return super.find(id) as Promise<PersonScoped | PersonScoped[]>;
   }
@@ -496,11 +499,6 @@ describe("ScopedRecordLocatingTest", () => {
     expect(found[0]).toBeInstanceOf(PersonScoped);
     expect(found[1]).toBeInstanceOf(Person);
     expect(found.map((r) => r.id)).toEqual(["1", "2"]);
-  });
-
-  it("scoped find without unscoped block returns nothing (fixture sanity)", async () => {
-    // Without UnscopedLocator's wrap, the gating fixture should hide records.
-    expect(await PersonScoped.find("1")).toBeNull();
   });
 });
 

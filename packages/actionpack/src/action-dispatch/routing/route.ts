@@ -229,7 +229,11 @@ export class Route {
       const ast = new Ast(tree, true);
       const pattern = new Pattern(ast, {}, PATHFOR_SEPARATORS, this.anchor);
       this._pathFormatter = pattern.buildFormatter();
-      this._requiredParamNames = pattern.requiredNames;
+      // `Pattern.requiredNames` filters by optional-name *set*, so a name
+      // that appears both required and optional (e.g. `/:id(.:id)`) gets
+      // dropped. Walk the AST and collect symbol names strictly outside
+      // Group/Star nodes — that's the true "must be supplied" set.
+      this._requiredParamNames = topLevelSymbolNames(tree);
     }
     for (const name of this._requiredParamNames!) {
       if (!Object.hasOwn(params, name) || params[name] == null) {
@@ -242,7 +246,14 @@ export class Route {
     for (const [k, v] of Object.entries(params)) {
       if (v != null) hash[k] = String(v);
     }
-    return this._pathFormatter.evaluate(hash);
+    // Collapse runs of `/` and strip a trailing `/` (unless that's the
+    // whole string). When all-optional groups partially supply params,
+    // adjacent slashes from omitted groups can leave double slashes
+    // (e.g. `(/:a)(/:b)` with `{ b: "x" }` → `//x`).
+    let out = this._pathFormatter.evaluate(hash);
+    out = out.replace(/\/{2,}/g, "/");
+    if (out.length > 1 && out.endsWith("/")) out = out.slice(0, -1);
+    return out;
   }
 
   /**
@@ -283,6 +294,40 @@ export class Route {
     const url = `http://${host}${path}`;
     return { url, status };
   }
+}
+
+function topLevelSymbolNames(tree: unknown): readonly string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (node: unknown, nested: boolean): void => {
+    const n = node as {
+      isSymbol?: () => boolean;
+      isGroup?: () => boolean;
+      isStar?: () => boolean;
+      isCat?: () => boolean;
+      toSym?: () => string;
+      left?: unknown;
+      right?: unknown;
+    };
+    if (n.isGroup?.() || n.isStar?.()) {
+      walk(n.left, true);
+      return;
+    }
+    if (n.isCat?.()) {
+      walk(n.left, nested);
+      walk(n.right, nested);
+      return;
+    }
+    if (!nested && n.isSymbol?.()) {
+      const name = n.toSym!();
+      if (!seen.has(name)) {
+        seen.add(name);
+        out.push(name);
+      }
+    }
+  };
+  walk(tree, false);
+  return out;
 }
 
 function collectParamNamesFromJourneyAst(path: string): string[] {

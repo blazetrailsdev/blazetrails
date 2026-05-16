@@ -61,6 +61,24 @@ describe("Route", () => {
     });
   });
 
+  describe("pathFor() — edge cases", () => {
+    it("throws missing-required when a name is required at the top level even if it also appears optionally", () => {
+      // `/:id(.:id)` has `:id` both required (top-level) and inside an
+      // optional group. Pattern.requiredNames would drop it; the
+      // top-level-symbol walk keeps it.
+      const route = new Route("GET", "/:id(.:id)", "x", "y");
+      expect(() => route.pathFor({})).toThrow(/Missing required parameter :id/);
+    });
+
+    it("collapses double slashes from partially-supplied adjacent optional groups", () => {
+      const route = new Route("GET", "(/:a)(/:b)", "x", "y");
+      expect(route.pathFor({ b: "x" })).toBe("/x");
+      expect(route.pathFor({ a: "y" })).toBe("/y");
+      expect(route.pathFor({ a: "y", b: "x" })).toBe("/y/x");
+      expect(route.pathFor({})).toBe("/");
+    });
+  });
+
   describe("path normalization — leading optional groups", () => {
     it("normalizes (/:locale)/posts so /posts and /en/posts both match", () => {
       const route = new Route("GET", "(/:locale)/posts", "posts", "index");

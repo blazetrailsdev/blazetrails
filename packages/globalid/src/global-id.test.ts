@@ -3,12 +3,10 @@ import { setApp, _resetApp } from "./config.js";
 import { GlobalID } from "./global-id.js";
 import { setModelFinder, _resetModelFinder, type LocatorModel } from "./locator.js";
 
-// Synthetic GlobalIDModel — overrides `constructor.name` without building a
-// real class. Cast because TS types Object.constructor as Function (which
-// would conflict with `{ name }`); the runtime code reads `.name` off the
-// constructor regardless of identity.
-const fakeModel = (id: unknown, name = "Person") =>
-  ({ id, constructor: { name } }) as unknown as { id: unknown };
+// Synthetic GlobalIDModel — overrides `constructor.name` without building
+// a real class. Both real instances and these literals satisfy
+// GlobalIDModel's `readonly constructor: { readonly name: string }`.
+const fakeModel = (id: unknown, name = "Person") => ({ id, constructor: { name } });
 
 // ─── Fixture models for find / model_class tests ───────────────────────────
 

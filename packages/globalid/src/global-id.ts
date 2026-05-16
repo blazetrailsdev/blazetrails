@@ -28,15 +28,14 @@ export function isOrExtends(klass: LocatorModel, base: { prototype: object }): b
 /**
  * Duck-typed model accepted by `GlobalID.create` / `SignedGlobalID.create`.
  *
- * Only `id` is part of the interface contract; the model name is read
- * from `(model.constructor as Function).name` at runtime. The earlier
- * `constructor: { name: string }` field made every test fixture need
- * an `as unknown as ...` cast — TS types `instance.constructor` as
- * `Function`, which doesn't structurally satisfy `{ name: string }`
- * even though Function has a `name` property.
+ * Requires `id` plus a constructor exposing a `name` string — both real
+ * class instances (whose `.constructor` is `Function`, which has `name`)
+ * and synthetic literal fixtures (`{ id, constructor: { name } }`)
+ * structurally satisfy the `{ readonly name: string }` shape.
  */
 export interface GlobalIDModel {
   id: unknown;
+  readonly constructor: { readonly name: string };
 }
 
 export interface GlobalIDOptions {
@@ -79,7 +78,7 @@ export class GlobalID {
     for (const [k, v] of Object.entries(rest)) {
       if (v != null) filteredParams[k] = String(v);
     }
-    const modelName = (model.constructor as { name: string }).name;
+    const modelName = model.constructor.name;
     const params = Object.keys(filteredParams).length ? filteredParams : null;
     const uri = buildGid(app, modelName, model.id, params);
     const components: GidComponents = {

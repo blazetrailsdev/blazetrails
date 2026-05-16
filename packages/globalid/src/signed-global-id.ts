@@ -115,7 +115,7 @@ export class SignedGlobalID {
         "An app is required to create a SignedGlobalID. Pass the :app option or call setApp() from @blazetrails/globalid.",
       );
     }
-    const modelName = (model.constructor as { name: string }).name;
+    const modelName = model.constructor.name;
     // Rails: arbitrary options beyond the known SGID keys become GID URI params.
     const filteredParams: Record<string, string> = {};
     for (const [k, v] of Object.entries(options)) {
@@ -253,8 +253,10 @@ export class SignedGlobalID {
   /**
    * @internal Mirrors verify_with_legacy_self_validated_metadata — Rails
    * 1.3.0 still parses SGIDs issued before the verifier-validated form.
-   * Trails has no legacy SGIDs to read; documented as out of scope in the
-   * GlobalID plan, so this always returns null. Kept for api:compare parity.
+   * Trails has no legacy SGIDs to read; the corresponding Ruby test
+   * `parse is backwards compatible with the self validated metadata` is
+   * on the permanent skip list (`scripts/api-compare/unported-files.ts`).
+   * This implementation always returns null; kept for api:compare parity.
    */
   static verifyWithLegacySelfValidatedMetadata(
     _sgid: string,

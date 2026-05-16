@@ -13,10 +13,9 @@ function makeVerifier(secret = "test-secret"): MessageVerifier {
   return new MessageVerifier(secret, { digest: "sha256", url_safe: true });
 }
 
-// Synthetic GlobalIDModel — see global-id.test.ts:fakeModel for the
-// constructor-cast rationale.
-const person = (id: unknown = 5) =>
-  ({ id, constructor: { name: "Person" } }) as unknown as { id: unknown };
+// Synthetic GlobalIDModel — both real instances and these literals satisfy
+// GlobalIDModel's `readonly constructor: { readonly name: string }`.
+const person = (id: unknown = 5) => ({ id, constructor: { name: "Person" } });
 const TEST_APP = "bcx";
 
 // Minimal Person class used by `model class` test below.
@@ -346,10 +345,7 @@ describe("SignedGlobalID (non-Rails coverage)", () => {
     const verifier = makeVerifier();
     expect(SignedGlobalID.create(person(5), { verifier }).modelName).toBe("Person");
     expect(
-      SignedGlobalID.create(
-        { id: 1, constructor: { name: "Account" } } as unknown as { id: unknown },
-        { verifier },
-      ).modelName,
+      SignedGlobalID.create({ id: 1, constructor: { name: "Account" } }, { verifier }).modelName,
     ).toBe("Account");
   });
 

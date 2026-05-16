@@ -6,15 +6,17 @@ description: Picks hosted vs self-hosted pnpm + cache strategy.
 #
 # Self-hosted runners: use the preinstalled pnpm from the runner image, pin
 # store-dir to the persistent mounted volume, and skip cache: pnpm so no
-# tarballs traverse the WAN. See docs/self-hosted-runner-restart-plan.md
-# for the bandwidth incident context.
+# tarballs traverse the WAN. Context: a prior incident on the home runner
+# burned ~1 TB WAN egress over 36 h because actions/setup-node's pnpm cache
+# pulled the store tarball from GitHub's hosted cache service on every job.
 #
 # Branch selection uses runner.environment != 'github-hosted' so an
 # empty/missing value fails open to the self-hosted branch — surfaces as a
 # loud "no cache" CI run rather than silently fetching from GitHub's cache.
 #
-# Third-party actions are pinned by SHA, not tag, so a retag can't change
-# CI without a PR. Renovate/dependabot bumps the SHAs.
+# Third-party actions are pinned by SHA, not tag, so a retag can't change CI
+# without a PR. There is no Dependabot/Renovate config in this repo yet;
+# SHA bumps are manual until one is added.
 
 inputs:
   pnpm-version:

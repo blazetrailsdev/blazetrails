@@ -33,19 +33,49 @@ export function applyLogger<T extends new (...args: never[]) => unknown>(
 }
 
 /**
- * Mirrors `ActiveSupport::Benchmarkable#benchmark`. Logs the elapsed
- * milliseconds for `block` to `logger.info`, returning whatever the
- * block returns. If no logger is attached the block still runs.
+ * Mirrors `ActiveSupport::Benchmarkable#benchmark` (and the
+ * `ActiveRecord::Base.benchmark` shape used elsewhere in trails). Logs
+ * the elapsed milliseconds for `block` to `logger.info` and returns
+ * whatever the block returns.
+ *
+ * - Synchronous: logs immediately, then returns the result.
+ * - Promise-returning: logs after the promise settles (resolve OR
+ *   reject), and rejections propagate to the caller.
+ * - Throwing sync block: logs the elapsed time, then rethrows.
+ * - No logger attached: block runs unchanged; no timing.
  */
-export function benchmark<T>(logger: LoggerLike | undefined, message: string, block: () => T): T {
+export function benchmark<T>(logger: LoggerLike | undefined, message: string, block: () => T): T;
+export function benchmark<T>(
+  logger: LoggerLike | undefined,
+  message: string,
+  block: () => Promise<T>,
+): Promise<T>;
+export function benchmark<T>(
+  logger: LoggerLike | undefined,
+  message: string,
+  block: () => T | Promise<T>,
+): T | Promise<T> {
   if (typeof logger?.info !== "function") return block();
   // Monotonic timing where available — `Date.now()` is wall-clock and
   // can jump under NTP adjustments. The fallback matches the pattern
   // used by `ActiveRecord::Base.benchmark`.
   const now = () => globalThis.performance?.now() ?? Date.now();
   const start = now();
-  const result = block();
-  const ms = (now() - start).toFixed(1);
-  logger.info(`${message} (${ms}ms)`);
-  return result;
+  const log = (): void => {
+    const ms = (now() - start).toFixed(1);
+    logger.info!(`${message} (${ms}ms)`);
+  };
+  try {
+    const result = block();
+    if (result instanceof Promise) {
+      // `.finally` fires on both resolve and reject, and the rejection
+      // still propagates to callers.
+      return result.finally(log);
+    }
+    log();
+    return result;
+  } catch (err) {
+    log();
+    throw err;
+  }
 }

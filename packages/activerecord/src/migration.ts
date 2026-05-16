@@ -2031,7 +2031,9 @@ export class MigrationContext {
     name?: string;
     where?: string;
     orders?: Record<string, string>;
+    using?: string;
     nullsNotDistinct?: boolean;
+    include?: string[];
   }> {
     const idxs = this._indexes.get(tableName);
     if (!idxs) return [];

@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
+import { Range } from "../../index.js";
 
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
@@ -101,17 +102,15 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it("where clause with infinite range on a datetime column", async () => {
       const M = await modelClass();
-      const created = await (M as any).create({ datetime: new Date().toISOString() });
-      const found = await (M as any)
-        .where({ datetime: { begin: -Infinity, end: Infinity } })
-        .take();
+      const created = await (M as any).create({ datetime: "2020-01-01 00:00:00" });
+      const found = await (M as any).where({ datetime: new Range(-Infinity, Infinity) }).take();
       expect(found.id).toBe(created.id);
     });
 
     it("where clause with infinite range on a date column", async () => {
       const M = await modelClass();
       const created = await (M as any).create({ date: "2020-01-01" });
-      const found = await (M as any).where({ date: { begin: -Infinity, end: Infinity } }).take();
+      const found = await (M as any).where({ date: new Range(-Infinity, Infinity) }).take();
       expect(found.id).toBe(created.id);
     });
   });

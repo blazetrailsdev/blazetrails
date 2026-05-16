@@ -1081,7 +1081,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         } else if (ownerPkStr && constraints[1] === ownerPkStr) {
           ownerFk = [constraints[0], derivedFk];
         } else {
-          ownerFk = constraints;
+          // Mirrors reflection.ts:583-588 — when constraints can't be
+          // resolved (e.g. composite owner PK with class-level
+          // queryConstraints), we cannot derive a join-table FK shape
+          // without producing invalid columns.
+          throw new ConfigurationError(
+            `Active Record couldn't correctly interpret the query constraints ` +
+              `for the \`${ctor.name}\` model. The query constraints on \`${ctor.name}\` are ` +
+              `\`${constraints}\` and the foreign key is \`${derivedFk}\`. ` +
+              `You need to explicitly set the query constraints for this association.`,
+          );
         }
       }
     }

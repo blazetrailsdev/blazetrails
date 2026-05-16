@@ -1647,6 +1647,84 @@ describe("EagerAssociationTest", () => {
     expect(profile).not.toBeNull();
     expect(profile.bio).toBe("HoBio");
   });
+  it("eager association loading with explicit join habtm", async () => {
+    class EjHabtmPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    class EjHabtmCategory extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    Associations.hasAndBelongsToMany.call(EjHabtmPost, "ejHabtmCategories", {
+      className: "EjHabtmCategory",
+      joinTable: "ej_habtm_categories_ej_habtm_posts",
+    });
+    registerModel(EjHabtmPost);
+    registerModel(EjHabtmCategory);
+
+    const p1 = await EjHabtmPost.create({ title: "P1" });
+    const p2 = await EjHabtmPost.create({ title: "P2" });
+    const tech = await EjHabtmCategory.create({ name: "Technology" });
+    const gen = await EjHabtmCategory.create({ name: "General" });
+
+    const { CollectionProxy } = await import("./collection-proxy.js");
+    const assoc = (EjHabtmPost as any)._associations.find(
+      (a: any) => a.name === "ejHabtmCategories",
+    )!;
+    await new CollectionProxy(p1, "ejHabtmCategories", assoc).push(tech, gen);
+    await new CollectionProxy(p2, "ejHabtmCategories", assoc).push(gen);
+
+    const posts = await EjHabtmPost.all()
+      .eagerLoad("ejHabtmCategories")
+      .order("id", "asc")
+      .toArray();
+    expect(posts).toHaveLength(2);
+    const cats0 = (posts[0] as any)._preloadedAssociations.get("ejHabtmCategories");
+    const cats1 = (posts[1] as any)._preloadedAssociations.get("ejHabtmCategories");
+    expect(cats0).toHaveLength(2);
+    expect(cats1).toHaveLength(1);
+    expect(cats1[0].name).toBe("General");
+  });
+  it("eager association loading with habtm via preload", async () => {
+    class PrHabtmPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    class PrHabtmCategory extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    Associations.hasAndBelongsToMany.call(PrHabtmPost, "prHabtmCategories", {
+      className: "PrHabtmCategory",
+      joinTable: "pr_habtm_categories_pr_habtm_posts",
+    });
+    registerModel(PrHabtmPost);
+    registerModel(PrHabtmCategory);
+
+    const p1 = await PrHabtmPost.create({ title: "P1" });
+    const tech = await PrHabtmCategory.create({ name: "Technology" });
+    const gen = await PrHabtmCategory.create({ name: "General" });
+
+    const { CollectionProxy } = await import("./collection-proxy.js");
+    const assoc = (PrHabtmPost as any)._associations.find(
+      (a: any) => a.name === "prHabtmCategories",
+    )!;
+    await new CollectionProxy(p1, "prHabtmCategories", assoc).push(tech, gen);
+
+    const posts = await PrHabtmPost.all().preload("prHabtmCategories").toArray();
+    expect(posts).toHaveLength(1);
+    const cats = (posts[0] as any)._preloadedAssociations.get("prHabtmCategories");
+    expect(cats).toHaveLength(2);
+  });
   it("eager with has many through", async () => {
     class EagerHmtReader extends Base {
       static {

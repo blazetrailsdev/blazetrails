@@ -251,7 +251,7 @@ describe("UnknownPrimaryKeyTest", () => {
     expect(err.model).toBeNull();
   });
 
-  it("description is appended on a new line (Rails format)", () => {
+  it("description is separated by newline+space", () => {
     class Dummy extends Base {
       static _tableName = "dummies";
     }

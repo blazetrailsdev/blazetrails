@@ -399,9 +399,15 @@ describeIfMysql("Mysql2Adapter", () => {
       for (const code of [
         "PROTOCOL_CONNECTION_LOST",
         "PROTOCOL_ENQUEUE_AFTER_QUIT",
+        "PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR",
+        "PROTOCOL_ENQUEUE_HANDSHAKE_TWICE",
+        "POOL_CLOSED",
         "ECONNRESET",
         "ECONNREFUSED",
         "ENOTFOUND",
+        "EHOSTUNREACH",
+        "ENETUNREACH",
+        "EPIPE",
       ]) {
         const driverErr = Object.assign(new Error("connection lost"), { code });
         const translated = adapter.translateException(driverErr, { sql: "SELECT 1", binds: [] });
@@ -447,16 +453,19 @@ describeIfMysql("Mysql2Adapter", () => {
         await adapter.executeMutation(`SET SESSION sql_mode=''`);
         await adapter.executeMutation(`INSERT INTO warn_posts (title) VALUES ('Title')`);
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        await withDbWarningsAction("log", async () => {
-          // `id > (0+'foo')` triggers a "Truncated incorrect DOUBLE value" warning;
-          // under db_warnings_action=:log that warning is logged, not raised, and
-          // must not corrupt the affected-row count returned by executeMutation.
-          const affected = await adapter.executeMutation(
-            `UPDATE warn_posts SET title = 'Updated' WHERE id > (0+'foo') LIMIT 1`,
-          );
-          expect(affected).toBe(1);
-        });
-        warnSpy.mockRestore();
+        try {
+          await withDbWarningsAction("log", async () => {
+            // `id > (0+'foo')` triggers a "Truncated incorrect DOUBLE value" warning;
+            // under db_warnings_action=:log that warning is logged, not raised, and
+            // must not corrupt the affected-row count returned by executeMutation.
+            const affected = await adapter.executeMutation(
+              `UPDATE warn_posts SET title = 'Updated' WHERE id > (0+'foo') LIMIT 1`,
+            );
+            expect(affected).toBe(1);
+          });
+        } finally {
+          warnSpy.mockRestore();
+        }
       } finally {
         await adapter.rollback().catch(() => {});
         await adapter.executeMutation(`DROP TABLE IF EXISTS warn_posts`).catch(() => {});
@@ -474,13 +483,16 @@ describeIfMysql("Mysql2Adapter", () => {
         await adapter.executeMutation(`SET SESSION sql_mode=''`);
         await adapter.executeMutation(`INSERT INTO warn_posts_d (title) VALUES ('Title')`);
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        await withDbWarningsAction("log", async () => {
-          const affected = await adapter.executeMutation(
-            `DELETE FROM warn_posts_d WHERE id > (0+'foo') LIMIT 1`,
-          );
-          expect(affected).toBe(1);
-        });
-        warnSpy.mockRestore();
+        try {
+          await withDbWarningsAction("log", async () => {
+            const affected = await adapter.executeMutation(
+              `DELETE FROM warn_posts_d WHERE id > (0+'foo') LIMIT 1`,
+            );
+            expect(affected).toBe(1);
+          });
+        } finally {
+          warnSpy.mockRestore();
+        }
       } finally {
         await adapter.rollback().catch(() => {});
         await adapter.executeMutation(`DROP TABLE IF EXISTS warn_posts_d`).catch(() => {});

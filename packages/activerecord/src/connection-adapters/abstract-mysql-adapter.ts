@@ -1006,6 +1006,16 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   static readonly ER_CLIENT_INTERACTION_TIMEOUT = ER_CLIENT_INTERACTION_TIMEOUT;
 
   /**
+   * Mirrors the message regex Rails' `Mysql2Adapter#translate_exception`
+   * uses to distinguish `ConnectionNotEstablished` from `ConnectionFailed`
+   * when a `Mysql2::Error::ConnectionError` arrives. Centralized so the
+   * abstract `when nil` branch and the Mysql2Adapter `ConnectionError`
+   * branch cannot drift if mysql2 changes the wording.
+   * @internal
+   */
+  static readonly CLIENT_NOT_CONNECTED_RE = /MySQL client is not connected/i;
+
+  /**
    * Boolean MySQL EXPLAIN flags. MySQL 8.0.18+ supports `EXPLAIN
    * ANALYZE`; older versions and MariaDB support at least `EXTENDED`
    * and `PARTITIONS`. Format is handled separately via the
@@ -1186,7 +1196,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       // errno (e.g. node-mysql2 surfacing a closed-socket failure as a
       // generic Error) get promoted to ConnectionNotEstablished when the
       // message indicates the client lost the server handshake.
-      if (/MySQL client is not connected/i.test(msg)) {
+      if (AbstractMysqlAdapter.CLIENT_NOT_CONNECTED_RE.test(msg)) {
         return new ConnectionNotEstablished(msg, { cause });
       }
     }

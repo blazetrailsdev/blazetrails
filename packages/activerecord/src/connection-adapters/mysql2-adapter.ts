@@ -250,7 +250,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       // connected" message is promoted to ConnectionNotEstablished;
       // everything else in this family is ConnectionFailed.
       const msg = (e as Error).message;
-      if (/MySQL client is not connected/i.test(msg)) {
+      if (AbstractMysqlAdapter.CLIENT_NOT_CONNECTED_RE.test(msg)) {
         return new ConnectionNotEstablished(msg, { cause: e });
       }
       return new ConnectionFailed(msg, { sql, binds, cause: e });
@@ -1781,7 +1781,8 @@ function isMysql2DriverTimeout(e: unknown): boolean {
  * Detect a node-mysql2 error that mirrors Ruby's
  * `Mysql2::Error::ConnectionError` family — driver-level connection-loss
  * conditions surfaced without a positive MySQL errno. These include
- * socket-level failures (`ECONNRESET` / `ECONNREFUSED` / `EPIPE`),
+ * socket-level failures (`ECONNRESET` / `ECONNREFUSED` / `EPIPE` /
+ * `ENOTFOUND` / `EHOSTUNREACH` / `ENETUNREACH`),
  * mysql2 protocol errors after the connection died
  * (`PROTOCOL_CONNECTION_LOST`, `PROTOCOL_ENQUEUE_AFTER_QUIT`,
  * `PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR`, `PROTOCOL_ENQUEUE_HANDSHAKE_TWICE`),

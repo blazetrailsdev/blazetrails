@@ -109,6 +109,12 @@ jobs:
               ;;
           esac
 
+  # `vars.RUNNER` is a single runner label (e.g. `self-hosted` or
+  # `ubuntu-latest`). GitHub treats `runs-on:` as one literal label when given
+  # a string, so a comma-separated value like `self-hosted,Linux,X64` will
+  # NOT match any runner. If a multi-label selector is ever needed, switch
+  # this expression to `fromJSON(vars.RUNNER)` and store the variable as a
+  # JSON array. Today the plan is to set it to exactly `self-hosted`.
   build-and-typecheck:
     name: Build & Type Check
     needs: changes

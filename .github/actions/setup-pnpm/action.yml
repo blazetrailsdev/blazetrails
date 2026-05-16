@@ -51,11 +51,18 @@ runs:
         EXPECTED: ${{ inputs.pnpm-version }}
         STORE_DIR: ${{ inputs.store-dir }}
       run: |
+        set -euo pipefail
         if ! command -v pnpm >/dev/null 2>&1; then
           echo "::error::self-hosted runner has no preinstalled pnpm on PATH — rebuild the runner image"
           exit 1
         fi
-        ACTUAL=$(pnpm --version)
+        # Capture exit status separately: `pnpm --version` can find pnpm on
+        # PATH but fail to execute (e.g. broken Node install), leaving
+        # ACTUAL empty. Report that distinctly from a version mismatch.
+        if ! ACTUAL=$(pnpm --version 2>&1); then
+          echo "::error::pnpm is on PATH but failed to run: $ACTUAL"
+          exit 1
+        fi
         if [ "$ACTUAL" != "$EXPECTED" ]; then
           echo "::error::self-hosted runner has pnpm $ACTUAL; expected $EXPECTED"
           exit 1

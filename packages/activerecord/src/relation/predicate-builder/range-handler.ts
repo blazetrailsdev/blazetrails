@@ -31,6 +31,22 @@ export class RangeHandler {
 
   callNegated(attribute: Nodes.Attribute, value: Range): Nodes.Node {
     const [beginVal, endVal] = this._castBounds(attribute, value);
+    // Exclusive ranges negate to `(col < begin OR col >= end)` —
+    // `NOT (gteq AND lt)` would lose the explicit ordering that AR
+    // callers (and parity tests) match on.
+    if (
+      value.excludeEnd &&
+      beginVal !== null &&
+      beginVal !== undefined &&
+      beginVal !== -Infinity &&
+      beginVal !== Infinity &&
+      endVal !== null &&
+      endVal !== undefined &&
+      endVal !== Infinity &&
+      endVal !== -Infinity
+    ) {
+      return new Nodes.Grouping(new Nodes.Or(attribute.lt(beginVal), attribute.gteq(endVal)));
+    }
     // Mirrors Rails' AR-level `where.not(col: 1..5)`: the predicate
     // builder constructs `Between` then `where.not` wraps it in `Not`,
     // yielding `NOT (col BETWEEN b AND e)`. Don't delegate to

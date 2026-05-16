@@ -733,7 +733,14 @@ export class AbstractAdapter implements Quoting {
       let nameMatches = false;
       for (const k of entry.klasses) {
         if (typeof k !== "function") continue;
-        if (Object.prototype.hasOwnProperty.call(k, "_isActiveRecordBase")) {
+        // "Includes Base" covers the literal Base class AND the designated
+        // primary class (ApplicationRecord), which PoolConfig normalizes to
+        // the "Base" connection descriptor — so a connected_to scope on
+        // either should apply to every pool.
+        if (
+          Object.prototype.hasOwnProperty.call(k, "_isActiveRecordBase") ||
+          (typeof (k as any).primaryClassQ === "function" && (k as any).primaryClassQ())
+        ) {
           includesBase = true;
         }
         if (ownerName !== undefined && k.name === ownerName) {

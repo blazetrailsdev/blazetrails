@@ -364,7 +364,13 @@ export function removeConnection(this: typeof Base): void {
 }
 
 export function connectionSpecificationName(this: typeof Base): string {
-  if ((this as any)._connectionSpecificationName != null) {
+  // Check own property first to avoid prototype-static inheritance bleeding a
+  // value set on Base/ApplicationRecord into unrelated abstract subclasses.
+  // The recursive walk below handles cross-class inheritance explicitly.
+  if (
+    Object.prototype.hasOwnProperty.call(this, "_connectionSpecificationName") &&
+    (this as any)._connectionSpecificationName != null
+  ) {
     return (this as any)._connectionSpecificationName;
   }
   if (this.name === "Base") {
@@ -846,15 +852,15 @@ export function resolveConfigForConnection(
   configOrEnv: unknown,
 ): DatabaseConfig {
   if (!this.name) throw new Error("Anonymous class is not allowed.");
-  // Rails sets self.connection_specification_name = connection_name as a side
-  // effect. Skip it for the primary class (Base/ApplicationRecord) since
-  // class statics inherit via prototype in JS and we don't want subclasses
-  // to read Base's spec name in place of their own connectionClass-derived
-  // value. The reader already returns "Base" for the primary class as a
-  // fallback, so this is a no-op for the primary case.
-  if (!isPrimaryClass.call(this)) {
-    (this as any)._connectionSpecificationName = this.name;
-  }
+  // Mirrors Rails: connection_name = primary_class? ? Base.name : name, then
+  // self.connection_specification_name = connection_name. The primary class
+  // (Base/ApplicationRecord) stores its pool under "Base" — matching
+  // PoolConfig#connectionDescriptor's primary-class normalization — so
+  // subsequent connectionPool() lookups hit the right key. The reader uses
+  // an own-property check so writing here doesn't bleed through JS static
+  // inheritance into unrelated subclasses.
+  const connectionName = isPrimaryClass.call(this) ? "Base" : this.name;
+  (this as any)._connectionSpecificationName = connectionName;
 
   const rawConfigs = (this as any).configurations;
   // `configurations` may be the unset static accessor (a function value), a

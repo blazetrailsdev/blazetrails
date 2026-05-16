@@ -221,6 +221,7 @@ export class HasAndBelongsToMany {
       "strictLoading",
       "foreignKey",
       "primaryKey",
+      "inverseOf",
     ] as const;
     // Note: `joinTable` is intentionally NOT forwarded — `joinTableName`
     // (set above) already resolves `options.joinTable ?? default`, so the

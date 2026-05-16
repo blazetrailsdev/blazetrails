@@ -1030,20 +1030,37 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     throughAssoc: AssociationDefinition,
     ctor: typeof Base,
   ): { fkCols: string[]; pkCols: string[] } {
-    // Mirror Reflection's foreignKey resolution (reflection.ts:520-535):
-    // explicit options.foreignKey wins, then options.queryConstraints, then a
-    // class-level queryConstraints on the owner promotes the default
-    // `${owner}_id` to a composite list. Without that step, a scalar
-    // derived FK would silently drop tenant/discriminator columns.
+    // Mirror Reflection's foreignKey resolution (reflection.ts:520-535 +
+    // deriveFkQueryConstraints at :548-585). When the owner has class-level
+    // query constraints and no explicit option, the derived `<owner>_id`
+    // *replaces* the owner-PK column inside the constraints list (rather
+    // than taking the constraints verbatim, which would put `id` on the
+    // join table instead of the actual FK column).
     let ownerFk: string | string[];
     if (throughAssoc.options.foreignKey !== undefined) {
       ownerFk = throughAssoc.options.foreignKey;
     } else if (throughAssoc.options.queryConstraints) {
       ownerFk = throughAssoc.options.queryConstraints;
-    } else if (ownerHasQueryConstraints.call(ctor as any)) {
-      ownerFk = ownerQueryConstraintsList.call(ctor as any) ?? `${underscore(ctor.name)}_id`;
     } else {
-      ownerFk = `${underscore(ctor.name)}_id`;
+      const derivedFk = `${underscore(ctor.name)}_id`;
+      const constraints = ownerHasQueryConstraints.call(ctor as any)
+        ? ownerQueryConstraintsList.call(ctor as any)
+        : null;
+      if (!constraints) {
+        ownerFk = derivedFk;
+      } else if (constraints.includes(derivedFk)) {
+        ownerFk = constraints;
+      } else {
+        const ownerPk = ctor.primaryKey;
+        const ownerPkStr = Array.isArray(ownerPk) ? undefined : ownerPk;
+        if (ownerPkStr && constraints[0] === ownerPkStr) {
+          ownerFk = [derivedFk, constraints[1]];
+        } else if (ownerPkStr && constraints[1] === ownerPkStr) {
+          ownerFk = [constraints[0], derivedFk];
+        } else {
+          ownerFk = constraints;
+        }
+      }
     }
     const fkCols = Array.isArray(ownerFk) ? ownerFk : [ownerFk as string];
 
@@ -1077,6 +1094,35 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       );
     }
     return { fkCols, pkCols };
+  }
+
+  /**
+   * Resolve the polymorphic `<as>_id`/`<as>_type` column descriptor for a
+   * polymorphic-through. The schema is intrinsically scalar, so the owner
+   * PK collapses to "id" when composite-with-id (matching Rails' polymorphic
+   * derivation) and otherwise to the scalar/first PK column. Used by every
+   * polymorphic-through write/read site to keep them in lock-step.
+   * @internal
+   */
+  private _throughOwnerPolymorphic(
+    throughAssoc: AssociationDefinition,
+    ctor: typeof Base,
+    asName: string,
+  ): { idCol: string; idValue: unknown; typeCol: string; typeValue: string } {
+    const polyFk = throughAssoc.options.foreignKey ?? `${underscore(asName)}_id`;
+    const idCol = Array.isArray(polyFk) ? polyFk[0] : polyFk;
+    const ownerPk = throughAssoc.options.primaryKey ?? ctor.primaryKey;
+    const polyPk = Array.isArray(ownerPk)
+      ? ownerPk.includes("id")
+        ? "id"
+        : ownerPk[0]
+      : (ownerPk as string);
+    return {
+      idCol,
+      idValue: this._record._readAttribute(polyPk),
+      typeCol: `${underscore(asName)}_type`,
+      typeValue: ctor.name,
+    };
   }
 
   /** @internal Builds an FK→ownerPkValue map for join-row WHERE/INSERT shapes. */
@@ -1114,14 +1160,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     let ownerFkCols: string[];
     let ownerJoinAttrs: Record<string, unknown>;
     if (throughAssoc.options.as) {
-      const polyFk = throughAssoc.options.foreignKey ?? `${underscore(throughAssoc.options.as)}_id`;
-      ownerFkCols = [Array.isArray(polyFk) ? polyFk[0] : polyFk];
-      const polyPk = Array.isArray(ctor.primaryKey)
-        ? ctor.primaryKey.includes("id")
-          ? "id"
-          : ctor.primaryKey[0]
-        : (ctor.primaryKey as string);
-      ownerJoinAttrs = { [ownerFkCols[0]]: this._record._readAttribute(polyPk) };
+      const poly = this._throughOwnerPolymorphic(throughAssoc, ctor, throughAssoc.options.as);
+      ownerFkCols = [poly.idCol];
+      ownerJoinAttrs = { [poly.idCol]: poly.idValue };
     } else {
       ownerFkCols = this._throughOwnerCols(throughAssoc, ctor).fkCols;
       ownerJoinAttrs = this._throughOwnerAttrs(throughAssoc, ctor);
@@ -1155,13 +1196,10 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         ...ownerJoinAttrs,
         [sourceFk]: record._readAttribute(targetPk),
       };
-      // Handle polymorphic through (as option on through association)
+      // Polymorphic through: ownerJoinAttrs already has the polymorphic
+      // _id column from _throughOwnerPolymorphic; just add the _type.
       if (throughAssoc.options.as) {
-        const typeCol = `${underscore(throughAssoc.options.as)}_type`;
-        // Polymorphic through uses a single _id/_type pair, not composite owner FK
-        for (const col of ownerFkCols) delete joinAttrs[col];
-        joinAttrs[`${underscore(throughAssoc.options.as)}_id`] = ownerJoinAttrs[ownerFkCols[0]];
-        joinAttrs[typeCol] = ctor.name;
+        joinAttrs[`${underscore(throughAssoc.options.as)}_type`] = ctor.name;
       }
       let joinRecord: Base;
       if (bang) {
@@ -1297,7 +1335,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     const throughClassName =
       throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
     const throughModel = resolveAssocClass(this._record, throughAssoc.name, throughClassName);
-    const ownerConditions = this._throughOwnerAttrs(throughAssoc, ctor);
+    // Polymorphic through goes through _throughOwnerPolymorphic (same lookup
+    // shape as _pushThrough / _buildThroughScope); composite owners go
+    // through the column-paired helper.
+    const throughAs = throughAssoc.options.as;
+    const ownerConditions = throughAs
+      ? (() => {
+          const poly = this._throughOwnerPolymorphic(throughAssoc, ctor, throughAs);
+          return { [poly.idCol]: poly.idValue, [poly.typeCol]: poly.typeValue };
+        })()
+      : this._throughOwnerAttrs(throughAssoc, ctor);
     const sourceName = this._assocDef.options.source ?? singularize(this._assocName);
     const sourceFk = `${underscore(sourceName)}_id`;
 
@@ -1332,19 +1379,14 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
     const throughModel = resolveAssocClass(this._record, throughAssoc.name, throughClassName);
     const throughAs = throughAssoc.options.as;
-    const conditions: Record<string, unknown> = throughAs
-      ? {}
-      : this._throughOwnerAttrs(throughAssoc, ctor);
-    if (Object.values(conditions).some((v) => v == null)) return 0;
+    let conditions: Record<string, unknown>;
     if (throughAs) {
-      // Polymorphic through uses a single _id/_type pair; composite-PK owners
-      // are not representable in that schema, so use the first PK column.
-      const primaryKey = throughAssoc.options.primaryKey ?? ctor.primaryKey;
-      const firstPk = Array.isArray(primaryKey) ? primaryKey[0] : (primaryKey as string);
-      const pkValue = this._record._readAttribute(firstPk);
-      if (pkValue == null) return 0;
-      conditions[`${underscore(throughAs)}_id`] = pkValue;
-      conditions[`${underscore(throughAs)}_type`] = ctor.name;
+      const poly = this._throughOwnerPolymorphic(throughAssoc, ctor, throughAs);
+      if (poly.idValue == null) return 0;
+      conditions = { [poly.idCol]: poly.idValue, [poly.typeCol]: poly.typeValue };
+    } else {
+      conditions = this._throughOwnerAttrs(throughAssoc, ctor);
+      if (Object.values(conditions).some((v) => v == null)) return 0;
     }
     if (this._assocDef.options.sourceType) {
       const sourceName = this._assocDef.options.source ?? singularize(this._assocName);
@@ -1887,43 +1929,31 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       throughModelAssocs.find((a) => a.name === pluralize(sourceName));
 
     const throughAs = throughAssoc.options.as;
-    // For polymorphic through we can't run the FK/PK pair check (the FK
-    // shape is the polymorphic _id/_type pair, not the owner key). For the
-    // canonical through path, defer to the helper so resolution matches
-    // Reflection#activeRecordPrimaryKey.
-    const ownerPkCols = throughAs
-      ? (() => {
-          const pk = throughAssoc.options.primaryKey ?? ctor.primaryKey;
-          return Array.isArray(pk) ? pk : [pk as string];
-        })()
-      : this._throughOwnerCols(throughAssoc, ctor).pkCols;
-    const ownerPkValues = ownerPkCols.map((c) => this._record._readAttribute(c));
-    if (ownerPkValues.some((v) => v == null)) return (targetModel as any).all().none();
-
     const throughTable = new ArelTable(throughModel.tableName);
     const targetArelTable = new ArelTable(targetModel.tableName);
     const sourceAssocKind = sourceAssoc?.type ?? "belongsTo";
 
-    // Build the through table subquery — AND together each (fk = pkValue) pair.
     let throughSubquery = throughTable.from();
     if (throughAs) {
-      // Polymorphic through: single _id/_type pair, composite-PK owners use
-      // first PK column (the schema is not representable with composite owner).
-      const polyFk = throughAssoc.options.foreignKey ?? `${underscore(throughAs)}_id`;
-      const polyFkCol = Array.isArray(polyFk) ? polyFk[0] : polyFk;
-      throughSubquery = throughSubquery.where(throughTable.get(polyFkCol).eq(ownerPkValues[0]));
+      // Polymorphic-through: defer to the shared polymorphic helper so the
+      // scope reads from the same column _pushThrough writes to.
+      const poly = this._throughOwnerPolymorphic(throughAssoc, ctor, throughAs);
+      if (poly.idValue == null) return (targetModel as any).all().none();
+      throughSubquery = throughSubquery
+        .where(throughTable.get(poly.idCol).eq(poly.idValue))
+        .where(throughTable.get(poly.typeCol).eq(poly.typeValue));
     } else {
-      const { fkCols: ownerFkCols } = this._throughOwnerCols(throughAssoc, ctor);
+      const { fkCols: ownerFkCols, pkCols: ownerPkCols } = this._throughOwnerCols(
+        throughAssoc,
+        ctor,
+      );
+      const ownerPkValues = ownerPkCols.map((c) => this._record._readAttribute(c));
+      if (ownerPkValues.some((v) => v == null)) return (targetModel as any).all().none();
       for (let i = 0; i < ownerFkCols.length; i++) {
         throughSubquery = throughSubquery.where(
           throughTable.get(ownerFkCols[i]).eq(ownerPkValues[i]),
         );
       }
-    }
-    if (throughAs) {
-      throughSubquery = throughSubquery.where(
-        throughTable.get(`${underscore(throughAs)}_type`).eq(ctor.name),
-      );
     }
 
     if (sourceAssocKind === "belongsTo") {

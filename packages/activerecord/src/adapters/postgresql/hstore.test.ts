@@ -169,12 +169,6 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(parsed).toEqual({ a: "1", b: "2" });
     });
 
-    it.skip("hstore with store accessors", async () => {
-      // BLOCKED: store
-      // ROOT-CAUSE: base.ts#storeAccessor does not generate per-key getters/setters that
-      //   read/write sub-keys of a hstore attribute.
-      // SCOPE: ~50 LOC in base.ts; affects ~5 store_accessor-gated tests across hstore/json/store.
-    });
     it("hstore mutate", async () => {
       const hstore = await HstoreModel.createBang({ settings: { one: "two" } });
       (hstore as any).settings.three = "four";
@@ -369,13 +363,21 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
     it.skip("with store accessors", () => {
       // BLOCKED: store
-      // ROOT-CAUSE: base.ts#storeAccessor does not generate per-key getters/setters.
-      // SCOPE: ~50 LOC in base.ts; affects ~5 store_accessor-gated tests.
+      // ROOT-CAUSE: Test body is an empty stub. Base.storeAccessor (base.ts:1535) and the
+      //   underlying storeAccessor() (store.ts:329) ARE implemented — accessors get defined
+      //   via Object.defineProperty on a per-class prototype module. The blocker is that
+      //   HstoreModel is not configured with `store("settings", { accessors: [...] })`, so
+      //   the Rails-mirrored assertions (x.language / x.timezone) cannot be exercised.
+      // SCOPE: ~10 LOC port — declare a separate model class with store() wiring + paste
+      //   Rails body. Same applies to "duplication with store accessors" and
+      //   "changes with store accessors".
     });
     it.skip("duplication with store accessors", () => {
       // BLOCKED: store
-      // ROOT-CAUSE: storeAccessor must generate getters/setters before dup can propagate them.
-      // SCOPE: ~50 LOC (shares fix with "with store accessors") + verify dup copies attribute hash.
+      // ROOT-CAUSE: Same as "with store accessors" — empty stub; needs a model with
+      //   `store("settings", { accessors: ["language", "timezone"] })` plus the dup
+      //   assertions from Rails test_duplication_with_store_accessors.
+      // SCOPE: ~10 LOC port.
     });
     it.skip("yaml round trip with store accessors", () => {
       // BLOCKED: serialization — Ruby YAML/Marshal round-trip, no Node.js equivalent
@@ -384,9 +386,14 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
     it.skip("changes with store accessors", () => {
       // BLOCKED: store
-      // ROOT-CAUSE: (1) base.ts#storeAccessor not implemented; (2) Attribute.changedInPlace
-      //   does not call type.isChangedInPlace() for mutable types.
-      // SCOPE: ~50 LOC store_accessor + ~5 LOC attribute.ts changedInPlace delegation.
+      // ROOT-CAUSE: Empty stub. storeAccessor is implemented (store.ts:329) and
+      //   changedInPlace already works for hstore (see "hstore mutate" passing).
+      //   The blocker is porting Rails' per-accessor dirty-tracking expectations
+      //   (language_changed?, language_was, language_change) which require generated
+      //   `<accessor>_changed?` / `<accessor>_was` / `<accessor>_change` aliases on
+      //   the store accessor module — confirm those are wired before un-skipping.
+      // SCOPE: ~15 LOC port + verify per-accessor dirty alias methods exist on the
+      //   storeAccessor-defined module.
     });
     it("changes in place", async () => {
       const hstore = await HstoreModel.createBang({ settings: { one: "two" } });

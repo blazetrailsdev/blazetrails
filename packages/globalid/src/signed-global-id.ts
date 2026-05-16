@@ -2,7 +2,7 @@ import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { getApp } from "./config.js";
 import { buildGid, parseGid, type GidComponents } from "./uri/gid.js";
-import type { GlobalIDModel } from "./global-id.js";
+import { GlobalID, type GlobalIDModel } from "./global-id.js";
 import { lookupClass, type LocatorModel } from "./locator.js";
 
 export type { GlobalIDModel };
@@ -141,6 +141,11 @@ export class SignedGlobalID {
    * can't be threaded into an already-built URI string.
    */
   static fromUri(uri: string, options: FromUriOptions = {}): SignedGlobalID {
+    // Rails' SignedGlobalID#initialize delegates to URI::GID.parse, which
+    // raises on malformed URIs. Match that invariant here so callers get
+    // an early error rather than deferred failures from modelId/modelName
+    // getters reading garbage components.
+    parseGid(uri);
     const verifier = SignedGlobalID.pickVerifier(options);
     const purpose = SignedGlobalID.pickPurpose(options);
     const expiresAt = pickExpiration(options);
@@ -302,6 +307,9 @@ export class SignedGlobalID {
    * Resolve the model class via the registered ModelFinder.
    *
    * Mirrors: GlobalID#model_class  — re-exposed on SignedGlobalID (peer class in TS, not a subclass).
+   * In Ruby SGID inherits the `model <= GlobalID` guard from GID; in TS
+   * the peer class repeats it so a misconfigured ModelFinder can't slip
+   * either identity through.
    */
   get modelClass(): LocatorModel {
     const klass = lookupClass(this.modelName);
@@ -309,6 +317,12 @@ export class SignedGlobalID {
       throw new Error(
         `Cannot resolve model class for ${this.modelName}. Register the class via setModelFinder.`,
       );
+    }
+    if (
+      klass === (GlobalID as unknown as LocatorModel) ||
+      klass === (SignedGlobalID as unknown as LocatorModel)
+    ) {
+      throw new Error("GlobalID and SignedGlobalID cannot be used as model_class.");
     }
     return klass;
   }

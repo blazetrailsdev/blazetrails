@@ -316,11 +316,16 @@ export class InsertAll {
     uniqueBy: string | string[] | IndexDefinition | undefined,
   ): Promise<IndexDefinition | undefined> {
     if (uniqueBy instanceof IndexDefinition) return uniqueBy;
+    // Default to unsupported when the predicate is missing — matches Rails'
+    // AbstractAdapter#supports_insert_conflict_target? returning false, so a
+    // wrapper adapter that forgets to delegate doesn't silently fall through
+    // and emit a bogus conflict target.
     const conn = this.connection as { supportsInsertConflictTarget?: () => boolean };
-    if (
-      typeof conn.supportsInsertConflictTarget === "function" &&
-      !conn.supportsInsertConflictTarget()
-    ) {
+    const supports =
+      typeof conn.supportsInsertConflictTarget === "function"
+        ? conn.supportsInsertConflictTarget()
+        : false;
+    if (!supports) {
       if (uniqueBy == null) return undefined;
       throw new Error(`${(conn as any).constructor?.name ?? "Adapter"} does not support :uniqueBy`);
     }

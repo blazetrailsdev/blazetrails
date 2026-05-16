@@ -1025,10 +1025,12 @@ describe("InsertAll async uniqueIndexes regression", () => {
       flags: { key: "string", active: "boolean" },
     });
     const ss = new SchemaStatements(adapter);
+    // WHERE "active" works on both SQLite (1=true) and PG (boolean column).
+    // Avoid '"active" = 1' which PG rejects (boolean ≠ integer).
     await ss.addIndex("flags", ["key"], {
       unique: true,
       name: "idx_flags_key_active",
-      where: '"active" = 1',
+      where: '"active"',
     });
 
     class Flag extends Base {
@@ -1051,6 +1053,6 @@ describe("InsertAll async uniqueIndexes regression", () => {
     await Flag.upsertAll([{ key: "feature_x", active: true }], { uniqueBy: "key" });
     const upsertSql = captured.find((s) => s.includes("ON CONFLICT"));
     expect(upsertSql).toBeDefined();
-    expect(upsertSql).toMatch(/ON CONFLICT \("key"\) WHERE "active" = 1/);
+    expect(upsertSql).toMatch(/ON CONFLICT \("key"\) WHERE "active"/);
   });
 });

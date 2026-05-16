@@ -913,29 +913,6 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return dumper;
   }
 
-  /**
-   * Fetch generation expressions for virtual/generated columns in a table
-   * via `information_schema.columns.generation_expression`. Used by
-   * `MysqlSchemaDumper` to render `as: "<expr>"` for virtual columns.
-   * @internal
-   */
-  async virtualColumnExpressions(tableName: string): Promise<Record<string, string>> {
-    const rows = (await this.schemaQuery(
-      `SELECT column_name, generation_expression FROM information_schema.columns ` +
-        `WHERE table_schema = database() AND table_name = ${this.quote(tableName)} ` +
-        `AND generation_expression <> ''`,
-    )) as Array<{ column_name?: string; generation_expression?: string }>;
-    const out: Record<string, string> = Object.create(null);
-    for (const row of rows) {
-      const name = row.column_name;
-      const expr = row.generation_expression;
-      if (typeof name === "string" && typeof expr === "string" && expr.length > 0) {
-        out[name] = JSON.stringify(expr);
-      }
-    }
-    return out;
-  }
-
   override schemaStatements(host?: DatabaseAdapter): MysqlSchemaStatements {
     return new MysqlSchemaStatements((host ?? this) as DatabaseAdapter);
   }

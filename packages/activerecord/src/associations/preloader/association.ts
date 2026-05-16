@@ -205,13 +205,17 @@ export class Association {
         const owner = owners[i];
         try {
           const association = (owner as any).association(this.reflection.name);
-          association.target = record;
+          association.setTarget(record);
           if (i === 0) {
             association.setInverseInstance(record);
           }
         } catch {
           // Ignore
         }
+        if (!(owner as any)._preloadedAssociations) {
+          (owner as any)._preloadedAssociations = new Map();
+        }
+        (owner as any)._preloadedAssociations.set(this.reflection.name, record);
       }
     }
   }

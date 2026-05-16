@@ -848,8 +848,6 @@ export class TransactionManager {
   private _materializingOwnerAdapter: ReturnType<typeof getAsyncContext> | null = null;
   /** @internal Token identifying the chain currently materializing. */
   private _currentMaterializingOwner: symbol | null = null;
-  /** @internal In-flight materialization promise; rejects with the underlying error. */
-  private _materializingPromise: Promise<void> | null = null;
 
   static readonly NULL_TRANSACTION = Object.freeze(new NullTransaction());
 
@@ -870,6 +868,20 @@ export class TransactionManager {
   async beginTransaction(
     options: { isolation?: string | null; joinable?: boolean; _lazy?: boolean } = {},
   ): Promise<Transaction> {
+    return await this.synchronize(() => this._beginTransactionInner(options));
+  }
+
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::TransactionManager#begin_transaction
+   * inner body (the part inside `@connection.lock.synchronize`,
+   * `abstract/transaction.rb:507`).
+   * @internal
+   */
+  private async _beginTransactionInner(options: {
+    isolation?: string | null;
+    joinable?: boolean;
+    _lazy?: boolean;
+  }): Promise<Transaction> {
     const { isolation = null, joinable = true, _lazy = true } = options;
     const current = this.currentTransaction;
     const runCommitCallbacks = current instanceof Transaction ? !current.joinable : true;
@@ -964,42 +976,35 @@ export class TransactionManager {
   async materializeTransactions(): Promise<void> {
     // Re-entrant call from inside an in-progress materializeBang on the same
     // chain — skip to avoid infinite recursion (queries issued by
-    // materializeBang itself call back into here). Owner-token check so a
-    // foreign chain (no token, or stale token from an earlier completed pass)
-    // falls through to wait on _materializingPromise instead of racing to
-    // issue queries against an unmaterialized stack.
+    // materializeBang itself call back into here).
     const storage = this._materializingStorage();
     if (this._currentMaterializingOwner && storage.getStore() === this._currentMaterializingOwner) {
       return;
     }
-    if (this._materializingPromise) {
-      // Surfaces materialization failures to foreign waiters (otherwise they
-      // would proceed assuming a materialized stack and fire queries against
-      // an unmaterialized one).
-      await this._materializingPromise;
-      return;
-    }
-    if (!this._hasUnmaterializedTransactions) return;
-
-    const owner = Symbol("tm.materialize");
-    const op = (async () => {
-      await storage.run(owner, async () => {
-        for (const t of this._stack) {
-          if (t instanceof Transaction && !t.isMaterialized()) {
-            await t.materializeBang();
+    // Mirrors Rails (`abstract/transaction.rb:577-591`): the pass runs under
+    // the per-connection lock. Foreign chains block here; once they enter,
+    // an earlier holder will have flipped `_hasUnmaterializedTransactions`
+    // off and they no-op. `beginTransaction` is wrapped in the same lock
+    // (mirroring Rails line 507) so `_hasUnmaterializedTransactions` cannot
+    // flip back to true mid-pass — making the unconditional clear at the
+    // end of the loop safe by exclusion.
+    await this.synchronize(async () => {
+      if (!this._hasUnmaterializedTransactions) return;
+      const owner = Symbol("tm.materialize");
+      this._currentMaterializingOwner = owner;
+      try {
+        await storage.run(owner, async () => {
+          for (const t of this._stack) {
+            if (t instanceof Transaction && !t.isMaterialized()) {
+              await t.materializeBang();
+            }
           }
-        }
-      });
-      this._hasUnmaterializedTransactions = false;
-    })();
-    this._materializingPromise = op;
-    this._currentMaterializingOwner = owner;
-    try {
-      await op;
-    } finally {
-      this._currentMaterializingOwner = null;
-      this._materializingPromise = null;
-    }
+        });
+        this._hasUnmaterializedTransactions = false;
+      } finally {
+        this._currentMaterializingOwner = null;
+      }
+    });
   }
 
   async commitTransaction(): Promise<void> {

@@ -4,9 +4,13 @@
 
 import { Parser } from "../journey/parser.js";
 import { Ast } from "../journey/ast.js";
+import { Pattern } from "../journey/path/pattern.js";
+import type { Format } from "../journey/visitors.js";
 import { normalizePath as journeyNormalizePath } from "../journey/router/utils.js";
 import { buildJourneyRouter, journeyRecognize } from "./journey-bridge.js";
 import type { Router as JourneyRouter } from "../journey/router.js";
+
+const PATHFOR_SEPARATORS = "/.?";
 
 export interface RouteConstraints {
   [key: string]: string | RegExp;
@@ -62,10 +66,13 @@ export class Route {
   readonly redirectTarget: string | RedirectOptions | RedirectFunction | undefined;
   readonly anchor: boolean;
 
-  private readonly segments: PathSegment[];
   private readonly paramNames: string[];
   /** @internal lazy single-route Journey router for match() */
   private _journeyRouter: JourneyRouter | null = null;
+  /** @internal lazy Journey Format tree for pathFor() */
+  private _pathFormatter: Format | null = null;
+  /** @internal required (non-optional) path captures, computed from Pattern */
+  private _requiredParamNames: readonly string[] | null = null;
   /** @internal true once we've discovered the path can't be parsed */
   private _journeyRouterUnbuildable = false;
 
@@ -87,7 +94,6 @@ export class Route {
     this.redirectTarget = options.redirect;
     this.anchor = options.anchor !== false;
 
-    this.segments = parseSegments(this.path);
     // Derive capture names from the Journey parser/AST — the same source
     // the Journey bridge uses. Keeps the path-vs-request constraint split
     // in lockstep with what `Pattern.names` will report, so escaped sigils
@@ -140,15 +146,48 @@ export class Route {
 
   /**
    * Compute a specificity score for this route. Higher = more specific.
+   * Static literals score 3, top-level dynamic captures score 1 (or 2 if
+   * the caller signals knowledge of that name). Captures nested inside
+   * an optional group or glob score 0.
    */
   score(knowledge: Record<string, boolean> = {}): number {
-    let s = 0;
-    for (const seg of this.segments) {
-      if (seg.type === "static") s += 3;
-      else if (seg.type === "dynamic") s += knowledge[seg.name] ? 2 : 1;
-      else if (seg.type === "glob") s += 0;
-      else if (seg.type === "optional") s += 0;
+    let tree;
+    try {
+      tree = new Parser().parse(this.path);
+    } catch {
+      return 0;
     }
+    let s = 0;
+    const walk = (node: unknown, nested: boolean): void => {
+      const n = node as {
+        isLiteral?: () => boolean;
+        isSymbol?: () => boolean;
+        isGroup?: () => boolean;
+        isStar?: () => boolean;
+        isCat?: () => boolean;
+        toSym?: () => string;
+        left?: unknown;
+        right?: unknown;
+      };
+      if (n.isGroup?.() || n.isStar?.()) {
+        walk(n.left, true);
+        return;
+      }
+      if (n.isCat?.()) {
+        walk(n.left, nested);
+        walk(n.right, nested);
+        return;
+      }
+      if (n.isLiteral?.()) {
+        if (!nested) s += 3;
+        return;
+      }
+      if (n.isSymbol?.()) {
+        if (!nested) s += knowledge[n.toSym!()] ? 2 : 1;
+        return;
+      }
+    };
+    walk(tree, false);
     return s;
   }
 
@@ -180,49 +219,30 @@ export class Route {
   }
 
   /**
-   * Generate a path from this route by substituting params.
+   * Generate a path from this route by substituting params. Throws if a
+   * required (non-optional) capture is missing, matching Rails'
+   * UrlGenerationError behavior.
    */
   pathFor(params: Record<string, string | number> = {}): string {
-    const parts: string[] = [];
-    for (const seg of this.segments) {
-      if (seg.type === "static") {
-        parts.push(seg.value);
-      } else if (seg.type === "dynamic") {
-        const val = params[seg.name];
-        if (val === undefined) {
-          throw new Error(
-            `Missing required parameter :${seg.name} for route "${this.name ?? this.path}"`,
-          );
-        }
-        parts.push(String(val));
-      } else if (seg.type === "glob") {
-        const val = params[seg.name];
-        if (val !== undefined) {
-          parts.push(String(val));
-        }
-      } else if (seg.type === "optional") {
-        // Include optional group only if all dynamic params are provided
-        const optParts: string[] = [];
-        let allPresent = true;
-        for (const child of seg.children) {
-          if (child.type === "static") {
-            optParts.push(child.value);
-          } else if (child.type === "dynamic") {
-            const val = params[child.name];
-            if (val === undefined || val === null) {
-              allPresent = false;
-              break;
-            }
-            optParts.push(String(val));
-          }
-        }
-        if (allPresent && optParts.length > 0) {
-          parts.push(...optParts);
-        }
+    if (this._pathFormatter === null) {
+      const tree = new Parser().parse(this.path);
+      const ast = new Ast(tree, true);
+      const pattern = new Pattern(ast, {}, PATHFOR_SEPARATORS, this.anchor);
+      this._pathFormatter = pattern.buildFormatter();
+      this._requiredParamNames = pattern.requiredNames;
+    }
+    for (const name of this._requiredParamNames!) {
+      if (!Object.hasOwn(params, name) || params[name] == null) {
+        throw new Error(
+          `Missing required parameter :${name} for route "${this.name ?? this.path}"`,
+        );
       }
     }
-    const result = "/" + parts.join("/");
-    return result === "/" ? "/" : result;
+    const hash: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v != null) hash[k] = String(v);
+    }
+    return this._pathFormatter.evaluate(hash);
   }
 
   /**
@@ -265,27 +285,6 @@ export class Route {
   }
 }
 
-// --- Path segment types ---
-
-interface StaticSegment {
-  type: "static";
-  value: string;
-}
-interface DynamicSegment {
-  type: "dynamic";
-  name: string;
-}
-interface GlobSegment {
-  type: "glob";
-  name: string;
-}
-interface OptionalGroup {
-  type: "optional";
-  children: (StaticSegment | DynamicSegment)[];
-}
-
-type PathSegment = StaticSegment | DynamicSegment | GlobSegment | OptionalGroup;
-
 function collectParamNamesFromJourneyAst(path: string): string[] {
   try {
     const tree = new Parser().parse(path);
@@ -298,77 +297,6 @@ function collectParamNamesFromJourneyAst(path: string): string[] {
     // Parser failure shouldn't crash the route table; fall back to no captures.
     return [];
   }
-}
-
-function parseSegments(path: string): PathSegment[] {
-  const segments: PathSegment[] = [];
-  const raw = path.replace(/^\/+/, "");
-  if (!raw) return segments;
-
-  // Handle optional groups: (/:locale) or (.:format)
-  let i = 0;
-  const parts: string[] = [];
-  let current = "";
-
-  // First split by / but handle parenthesized groups
-  while (i < raw.length) {
-    if (raw[i] === "(") {
-      // Find matching close paren
-      if (current) {
-        parts.push(current);
-        current = "";
-      }
-      let depth = 1;
-      let group = "(";
-      i++;
-      while (i < raw.length && depth > 0) {
-        if (raw[i] === "(") depth++;
-        if (raw[i] === ")") depth--;
-        group += raw[i];
-        i++;
-      }
-      parts.push(group);
-    } else if (raw[i] === "/") {
-      if (current) {
-        parts.push(current);
-        current = "";
-      }
-      i++;
-    } else {
-      current += raw[i];
-      i++;
-    }
-  }
-  if (current) parts.push(current);
-
-  for (const part of parts) {
-    if (part.startsWith("(") && part.endsWith(")")) {
-      // Optional group
-      const inner = part.slice(1, -1).replace(/^\/+/, "").replace(/^\./, "");
-      const children: (StaticSegment | DynamicSegment)[] = [];
-      for (const sub of inner.split("/").filter(Boolean)) {
-        if (sub.startsWith(":")) {
-          children.push({ type: "dynamic", name: sub.slice(1) });
-        } else if (sub.startsWith("*")) {
-          // glob in optional — treat as dynamic
-          children.push({ type: "dynamic", name: sub.slice(1) });
-        } else {
-          children.push({ type: "static", value: sub });
-        }
-      }
-      if (children.length > 0) {
-        segments.push({ type: "optional", children });
-      }
-    } else if (part.startsWith("*")) {
-      segments.push({ type: "glob", name: part.slice(1) });
-    } else if (part.startsWith(":")) {
-      segments.push({ type: "dynamic", name: part.slice(1) });
-    } else {
-      segments.push({ type: "static", value: part });
-    }
-  }
-
-  return segments;
 }
 
 function normalizePath(p: string): string {

@@ -1690,7 +1690,15 @@ describe("EagerAssociationTest", () => {
     expect(cats1).toHaveLength(1);
     expect(cats1[0].name).toBe("General");
   });
-  it("eager association loading with habtm and limit", async () => {
+  it("eager association loading with habtm and limit", async (ctx) => {
+    // MariaDB (CI MySQL adapter) rejects "LIMIT & IN/ALL/ANY/SOME subquery",
+    // which is exactly the path HABTM-as-hasMany takes through the
+    // subquery-limited eager load. Mirrors Rails' MysqlAdapter behavior;
+    // skip rather than attempt a hoist.
+    if ((adapter as any).adapterName === "mysql") {
+      ctx.skip();
+      return;
+    }
     class EjlHabtmPost extends Base {
       static {
         this.attribute("title", "string");

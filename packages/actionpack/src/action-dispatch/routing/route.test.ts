@@ -98,6 +98,23 @@ describe("Route", () => {
       expect(route.pathFor({ path: "a/b/c" })).toBe("/files/a/b/c");
     });
 
+    it("treats bare '*' as a literal (no implicit empty-name splat)", () => {
+      // The Journey scanner treats trailing/bare `*` as a literal — it
+      // doesn't capture an empty-named splat. So `/page*` has no path
+      // params and pathFor() round-trips the literal star.
+      const route = new Route("GET", "/page*", "x", "y");
+      expect(route.pathParamNames).toEqual([]);
+      expect(route.pathFor()).toBe("/page*");
+    });
+
+    it("collapses structural // when slash-bearing capture is in an omitted optional", () => {
+      // controller carries '/' but its group is omitted because :action is
+      // missing. The slash-bearing value never lands in the output, so
+      // the structural `//` left by that omitted group must still collapse.
+      const route = new Route("GET", "(/:controller/:action)(/:id)", "x", "y");
+      expect(route.pathFor({ controller: "admin/posts", id: "1" })).toBe("/1");
+    });
+
     it("collapses slashes when slash-bearing-capture optional is omitted", () => {
       // The route declares a `:controller` (which preserves `/` in its
       // value via Format.requiredPath) but the user doesn't supply it.

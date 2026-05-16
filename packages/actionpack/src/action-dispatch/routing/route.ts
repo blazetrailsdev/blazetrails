@@ -125,10 +125,12 @@ export class Route {
    * them against undefined request properties.
    */
   get requestConstraints(): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
+    // Null-prototype map so a constraint keyed `__proto__` becomes an own
+    // property rather than hitting the inherited setter.
+    const out: Record<string, unknown> = Object.create(null);
     const paths = new Set<string>(this.paramNames);
-    for (const [k, v] of Object.entries(this.constraints)) {
-      if (!paths.has(k)) out[k] = v;
+    for (const k of Object.keys(this.constraints)) {
+      if (!paths.has(k)) out[k] = this.constraints[k];
     }
     return out;
   }
@@ -138,10 +140,10 @@ export class Route {
    * `*name` segment). These become Journey pattern requirements.
    */
   get pathConstraints(): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
+    const out: Record<string, unknown> = Object.create(null);
     const paths = new Set<string>(this.paramNames);
-    for (const [k, v] of Object.entries(this.constraints)) {
-      if (paths.has(k)) out[k] = v;
+    for (const k of Object.keys(this.constraints)) {
+      if (paths.has(k)) out[k] = this.constraints[k];
     }
     return out;
   }
@@ -265,12 +267,15 @@ export class Route {
       // Group nodes (top-level Stars count as required too) — that's the
       // true "must be supplied" set.
       this._requiredParamNames = topLevelSymbolNames(tree);
-      // `requirementsForMissingKeysCheck` returns a plain object, which
-      // would route a `__proto__` capture to the inherited setter.
-      // Copy into a null-prototype map so all capture names survive.
+      // Build the anchored requirements ourselves from `reqs` (which is
+      // already null-prototype). Going through Pattern's
+      // `requirementsForMissingKeysCheck` getter would route a
+      // `__proto__` capture to the plain-object inherited setter,
+      // dropping the requirement before we can copy it.
       const safeReqs: Record<string, RegExp> = Object.create(null);
-      for (const [k, v] of Object.entries(pattern.requirementsForMissingKeysCheck)) {
-        safeReqs[k] = v;
+      for (const name of Object.keys(reqs)) {
+        const re = reqs[name]!;
+        safeReqs[name] = new RegExp(`^(?:${re.source})$`, re.flags);
       }
       this._pathRequirements = safeReqs;
     }
@@ -311,7 +316,7 @@ export class Route {
     // with a value containing `/` — those use Format.requiredPath /
     // escapePath, which keeps `/` literal, so collapsing would munge
     // the user value.
-    if (!suppliedSlashInPathPreservingCapture(params, this.path)) {
+    if (!emittedSlashInPathPreservingCapture(params, this.path, out)) {
       // Collapse `/{2,}` runs left over from omitted optional groups
       // (e.g. `(/:a)(/:b)` with `{ b: "x" }` → `//x` → `/x`). Trailing
       // slashes are kept — they can be structural (e.g. `/posts/` is
@@ -362,17 +367,22 @@ export class Route {
 }
 
 /**
- * True if a *path-preserving* capture is supplied with a value
- * containing `/`. Only `*splat` and `:controller` parameters preserve
- * slashes (via `Format.requiredPath` + `escapePath`); ordinary `:name`
- * segments percent-encode `/` to `%2F`, so their values can't introduce
- * literal `/` runs into the output and don't need to suppress collapse.
- * Captures inside an omitted optional group don't contribute output, so
- * we restrict the check to *supplied* path-preserving captures.
+ * True if a *path-preserving* capture's slash-bearing value was actually
+ * emitted by the formatter. Checking emitted-vs-supplied matters when
+ * the capture sits in an optional group that gets omitted because some
+ * other required param in the same group is missing — the value
+ * shouldn't suppress the structural-slash collapse if it never made it
+ * to the output.
+ *
+ * Only `*splat` and `:controller` parameters preserve slashes (via
+ * `Format.requiredPath` + `escapePath`); ordinary `:name` segments
+ * percent-encode `/` to `%2F`, so their values can't introduce literal
+ * `/` runs into the output and don't need to suppress collapse.
  */
-function suppliedSlashInPathPreservingCapture(
+function emittedSlashInPathPreservingCapture(
   params: Record<string, string | number>,
   path: string,
+  out: string,
 ): boolean {
   // Names of path-preserving captures declared by this route. Splat
   // (`*name`) is always path-preserving; the `:controller` symbol gets
@@ -388,8 +398,14 @@ function suppliedSlashInPathPreservingCapture(
   const declaresController = /(?<!\\):controller\b/.test(path);
   for (const [k, v] of Object.entries(params)) {
     if (typeof v !== "string" || !v.includes("/")) continue;
-    if (splatNames.has(k)) return true;
-    if (declaresController && k === "controller") return true;
+    const isPathPreserving = splatNames.has(k) || (declaresController && k === "controller");
+    if (!isPathPreserving) continue;
+    // `escapePath` keeps `/` literal but escapes other unsafe chars,
+    // so the value can land in `out` either verbatim or partially
+    // escaped. Cheap proof-of-presence: the slash-containing prefix up
+    // to the first non-path-safe character should appear unchanged.
+    const slashPrefix = v.split(/[^a-zA-Z0-9\-._~!$&'()*+,;=:@/]/, 1)[0]!;
+    if (slashPrefix.includes("/") && out.includes(slashPrefix)) return true;
   }
   return false;
 }

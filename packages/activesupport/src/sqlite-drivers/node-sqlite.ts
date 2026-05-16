@@ -159,6 +159,9 @@ function openDatabase(config: SqliteOpenConfig): import("node:sqlite").DatabaseS
     enableForeignKeyConstraints: false, // match better-sqlite3 default
   };
   if (config.timeout !== undefined) opts.timeout = config.timeout;
+  // `config.strict` is intentionally unread: node:sqlite's DatabaseSync
+  // options object does not expose the SQLITE_DBCONFIG_DQS_DDL/DML flags,
+  // so there is nothing to attach the strict toggle to here.
   return new nodeSqlite.DatabaseSync(config.database, opts);
 }
 

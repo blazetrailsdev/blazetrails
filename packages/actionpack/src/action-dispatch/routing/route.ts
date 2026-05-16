@@ -158,7 +158,10 @@ export class Route {
       return null;
     }
     if (this._journeyRouter === null) {
-      this._journeyRouter = buildJourneyRouter([this]);
+      // Path-only matcher: skip request constraints since match() takes
+      // no request attributes — preserves legacy matchSegments semantics
+      // where request constraints (subdomain, format, …) didn't apply.
+      this._journeyRouter = buildJourneyRouter([this], { skipRequestConstraints: true });
     }
     const match = journeyRecognize(this._journeyRouter, method, requestPath);
     if (!match) return null;

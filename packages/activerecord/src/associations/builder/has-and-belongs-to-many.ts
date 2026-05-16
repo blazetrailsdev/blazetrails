@@ -198,12 +198,38 @@ export class HasAndBelongsToMany {
       return record.association(middleName).handleDependency();
     });
 
+    // Mirrors Rails' `hm_options` allowlist in `has_and_belongs_to_many`:
+    // only this explicit set forwards from the user's options into the
+    // generated has_many. Spreading `...options` would leak keys like
+    // `readonly`, `dependent`, `inverseOf` into the middle hasMany
+    // semantics — Rails drops them.
+    const HABTM_FORWARDED_KEYS = [
+      "beforeAdd",
+      "afterAdd",
+      "beforeRemove",
+      "afterRemove",
+      "autosave",
+      "validate",
+      "joinTable",
+      "className",
+      "extend",
+      "strictLoading",
+    ] as const;
     const habtmOptions: Record<string, unknown> = {
-      ...options,
       joinTable: joinTableName,
       through: middleName,
       source: (options.source as string) ?? singularize(name),
     };
+    for (const k of HABTM_FORWARDED_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(options, k)) {
+        habtmOptions[k] = options[k];
+      }
+    }
+    // `scope:` is captured as a positional reflection arg below, but keep
+    // it on the options bag too for callers that bypass reflection.
+    if (typeof options.scope === "function") {
+      habtmOptions.scope = options.scope;
+    }
     model._associations.push({
       type: "hasAndBelongsToMany",
       name,
@@ -228,6 +254,11 @@ export class HasAndBelongsToMany {
       model,
     );
     Reflection.addReflection(model, name, habtmReflection as any);
+    // Mirrors Rails' `middle_reflection.parent_reflection = habtm_reflection`
+    // — the through middle is owned by the public HABTM reflection. Some
+    // reflection-walking code paths (e.g. nested-through resolution and
+    // inverse lookup) inspect this link.
+    (middleReflection as any).parentReflection = habtmReflection;
     CollectionAssociationBuilder.defineAccessors(model, habtmReflection);
   }
 }

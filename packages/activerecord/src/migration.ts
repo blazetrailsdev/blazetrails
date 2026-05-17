@@ -1553,6 +1553,7 @@ export class MigrationContext {
         limit?: number | null;
         precision?: number | null;
         scale?: number | null;
+        array?: boolean;
       }
     >
   >();
@@ -1602,9 +1603,16 @@ export class MigrationContext {
   }
 
   /** @internal Query catalog for column names+types — used after CTAS where columns derive from the SELECT. */
-  private async _introspectColumns(
-    name: string,
-  ): Promise<{ name: string; type: string; limit?: number; precision?: number; scale?: number }[]> {
+  private async _introspectColumns(name: string): Promise<
+    {
+      name: string;
+      type: string;
+      limit?: number;
+      precision?: number;
+      scale?: number;
+      array?: boolean;
+    }[]
+  > {
     const a = this._adapterName;
     const qt = this.adapter.quoteTableName(name);
     let sql: string;
@@ -1626,8 +1634,17 @@ export class MigrationContext {
       const colName = (x.name ?? x.column_name ?? x.Field) as string;
       // SQLite: type; PG: data_type (with udt_name for USER-DEFINED); MySQL: Type
       let rawType = ((x.type ?? x.data_type ?? x.Type) as string | undefined) ?? "";
-      if (a === "postgres" && rawType.toUpperCase() === "USER-DEFINED" && x.udt_name) {
-        rawType = String(x.udt_name);
+      let isArray = false;
+      if (a === "postgres") {
+        // PG reports array columns as data_type='ARRAY' + udt_name='_int4'
+        // etc. — strip the leading underscore and surface as the base type
+        // plus array:true (schema-dumper/array.test.ts pattern).
+        if (rawType.toUpperCase() === "ARRAY" && typeof x.udt_name === "string") {
+          rawType = (x.udt_name as string).replace(/^_/, "");
+          isArray = true;
+        } else if (rawType.toUpperCase() === "USER-DEFINED" && x.udt_name) {
+          rawType = String(x.udt_name);
+        }
       }
       // Mirror the configured MySQL emulateBooleans setting rather than
       // hard-coding Rails' default — abstract-mysql-adapter exposes it.
@@ -1661,7 +1678,7 @@ export class MigrationContext {
         )
           normalized.precision = dtPrec;
       }
-      return { name: colName, ...normalized };
+      return { name: colName, ...normalized, ...(isArray ? { array: true } : {}) };
     });
   }
 
@@ -1725,6 +1742,10 @@ export class MigrationContext {
     if (/^citext$/.test(head)) return { type: "citext" };
     if (/^(int|integer|int4|int2|smallint|mediumint|tinyint|serial|smallserial|year)$/.test(head)) {
       if (adapter === "sqlite") return { type: "integer", limit: 8 };
+      // MySQL `year` is registered as a plain IntegerType with no limit
+      // (abstract-mysql-adapter.ts:1422). Other integer aliases keep their
+      // adapter-registered byte limit.
+      if (head === "year") return { type: "integer" };
       return { type: "integer", limit: intByteLimit[head] ?? 4 };
     }
     if (/^(bigint|int8|bigserial)$/.test(head))
@@ -1748,7 +1769,9 @@ export class MigrationContext {
     // mysql-type-lookup. PG `bit varying` arrives via information_schema.
     if (/^bit$/.test(head))
       return adapter === "postgres" ? { type: "bit", ...limit } : { type: "binary", ...limit };
-    if (/^(varbit|bit varying)$/.test(head)) return { type: "bitVarying", ...limit };
+    // Store the raw SQL form 'bit varying' so SchemaDumper SQL_TYPE_MAP
+    // (schema-dumper.ts:142-143) resolves it to the bitVarying DSL helper.
+    if (/^(varbit|bit varying)$/.test(head)) return { type: "bit varying", ...limit };
     if (/^date$/.test(head)) return { type: "date" };
     if (/^(time|time without time zone)$/.test(head)) return { type: "time", ...precOnly };
     if (/^(timetz|time with time zone)$/.test(head)) return { type: "time", ...precOnly };
@@ -2262,6 +2285,7 @@ export class MigrationContext {
     limit?: number | null;
     precision?: number | null;
     scale?: number | null;
+    array?: boolean;
   }> {
     const meta = this._columnMeta.get(tableName);
     if (meta) {
@@ -2743,9 +2767,13 @@ export class Migrator {
     // Rails sorts by `version.to_i` — non-numeric rows coerce to 0 rather
     // than raising. Use BigInt for precision (versions can exceed
     // MAX_SAFE_INTEGER) with a 0-fallback for non-numeric legacy rows.
+    // Mirror Ruby String#to_i: take the leading signed integer prefix and
+    // return 0 when none — strings like "123abc" sort as 123 (Rails parity).
     const toBig = (v: string): bigint => {
+      const m = v.match(/^\s*(-?\d+)/);
+      if (!m) return 0n;
       try {
-        return /^-?\d+$/.test(v) ? BigInt(v) : 0n;
+        return BigInt(m[1]!);
       } catch {
         return 0n;
       }

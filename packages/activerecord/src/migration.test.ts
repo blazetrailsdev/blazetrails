@@ -2000,7 +2000,8 @@ describe("MigrationTest", () => {
     expect(N("smallint", "mysql")).toEqual({ type: "integer", limit: 2 });
     expect(N("mediumint", "mysql")).toEqual({ type: "integer", limit: 3 });
     expect(N("int(11)", "mysql")).toEqual({ type: "integer", limit: 4 });
-    expect(N("year", "mysql")).toEqual({ type: "integer", limit: 4 });
+    // MySQL `year` is registered as plain IntegerType (abstract-mysql-adapter.ts:1422).
+    expect(N("year", "mysql")).toEqual({ type: "integer" });
     expect(N("enum('a','b')", "mysql")).toEqual({ type: "string" });
     expect(N("set('a','b')", "mysql")).toEqual({ type: "string" });
     expect(N("bit(8)", "mysql")).toEqual({ type: "binary", limit: 8 });
@@ -2042,10 +2043,12 @@ describe("MigrationTest", () => {
     expect(N("timestamptz", "postgres")).toEqual({ type: "timestamptz" });
     expect(N("timestamp", "postgres")).toEqual({ type: "datetime" });
 
-    // PG bit / bit varying are their own types (NOT binary like MySQL)
+    // PG bit / bit varying are their own types (NOT binary like MySQL).
+    // bit varying is stored as the SQL form so schema-dumper.ts:142-143
+    // resolves it to the bitVarying DSL.
     expect(N("bit", "postgres")).toEqual({ type: "bit" });
-    expect(N("bit varying", "postgres")).toEqual({ type: "bitVarying" });
-    expect(N("varbit", "postgres")).toEqual({ type: "bitVarying" });
+    expect(N("bit varying", "postgres")).toEqual({ type: "bit varying" });
+    expect(N("varbit", "postgres")).toEqual({ type: "bit varying" });
 
     // Binary / uuid / json
     expect(N("bytea", "postgres")).toEqual({ type: "binary" });

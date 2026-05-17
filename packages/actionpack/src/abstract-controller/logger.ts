@@ -45,5 +45,5 @@ export function benchmark<T>(
   message: string,
   block: () => T | Promise<T>,
 ): T | Promise<T> {
-  return benchmarkable(logger, message, block) as T | Promise<T>;
+  return benchmarkable(logger, message, { logOnError: true }, block) as T | Promise<T>;
 }

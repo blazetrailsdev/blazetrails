@@ -229,14 +229,11 @@ export class Metal extends AbstractController {
       contentType = options.content_type;
       for (const [key, value] of Object.entries(options)) {
         if (key === "location" || key === "content_type") continue;
-        // Rails capitalizes each `-`/`_`-separated segment: `cache_control`
-        // → `Cache-Control`. `setHeader` lowercases storage; mirror the
-        // wire-format expectation in the assigned name regardless.
-        const headerName = key
-          .split(/[-_]/)
-          .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
-          .join("-");
-        this.setHeader(headerName, String(value));
+        // Rails capitalizes each `-`/`_`-separated segment (`cache_control`
+        // → `Cache-Control`), but `setHeader` lowercases keys for storage,
+        // so the case transformation has no observable effect — only the
+        // underscore-to-hyphen normalization matters here.
+        this.setHeader(key.replace(/_/g, "-"), String(value));
       }
     }
     if (typeof resolvedStatus === "string") {

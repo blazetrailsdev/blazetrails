@@ -202,12 +202,12 @@ export class Base extends Metal {
     // through `_responseBody`, which doubles as the `performed?` signal —
     // assigning "" would otherwise leave the controller permanently
     // "performed" after a render-to-string.
-    const oldBody = (this as any)._responseBody;
-    const oldPerformed = this.performed;
+    const oldBody = this._responseBody;
+    const oldPerformed = this._performed;
     this.render(options);
     const result = this.body;
-    (this as any)._responseBody = oldBody;
-    (this as any)._performed = oldPerformed;
+    this._responseBody = oldBody;
+    this._performed = oldPerformed;
     return result;
   }
 

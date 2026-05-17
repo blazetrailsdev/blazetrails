@@ -1004,13 +1004,17 @@ export function isInversePolymorphicAssociationChanged(reflection: any, record: 
   // but the polymorphic _type column points at a different active_record.
   const foreignType: string = inverse.foreignType ?? `${underscore(String(inverse.name))}_type`;
   const className = record._readAttribute(foreignType);
+  // Rails: polymorphic_class_for(nil) raises NameError. Treat a missing
+  // type column as "no inverse parent set" → no change detected, so the
+  // caller's `||` chain falls through to FK-changed / will-save legs.
+  if (className == null) return false;
   const recordClass = record.constructor as {
     polymorphicClassFor?: (n: string) => unknown;
   };
   const resolved =
     typeof recordClass.polymorphicClassFor === "function"
       ? recordClass.polymorphicClassFor(String(className))
-      : (modelRegistry.get(String(className)) ?? recordClass);
+      : (modelRegistry.get(String(className)) ?? reflection.activeRecord);
   return reflection.activeRecord !== resolved;
 }
 

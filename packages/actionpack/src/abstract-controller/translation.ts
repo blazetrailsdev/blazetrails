@@ -42,11 +42,19 @@ export function translate(
     const scopedKey = `${path}.${this.actionName}${key}`;
     const fallbackKey = `${path}${key}`;
 
-    // Try the scoped key first, then the path-scoped (no-action) fallback.
-    const direct = I18n.translate(scopedKey, {});
+    // Forward caller options (interpolation vars, locale, etc.) to
+    // every internal lookup, but strip `default` — the chain below
+    // implements its own default-walking semantics.
+    const passOptions = { ...options };
+    delete passOptions.default;
+
+    const direct = I18n.translate(scopedKey, passOptions as Parameters<typeof I18n.translate>[1]);
     if (!isMissing(direct)) return direct;
 
-    const fallback = I18n.translate(fallbackKey, {});
+    const fallback = I18n.translate(
+      fallbackKey,
+      passOptions as Parameters<typeof I18n.translate>[1],
+    );
     if (!isMissing(fallback)) return fallback;
 
     // User-supplied defaults — Rails treats Symbols as keys to try
@@ -57,7 +65,7 @@ export function translate(
       const defs = Array.isArray(options.default) ? options.default : [options.default];
       for (const d of defs as unknown[]) {
         if (typeof d === "string" && d.startsWith(":")) {
-          const r = I18n.translate(d.slice(1), {});
+          const r = I18n.translate(d.slice(1), passOptions as Parameters<typeof I18n.translate>[1]);
           if (!isMissing(r)) return r;
         } else {
           return d;

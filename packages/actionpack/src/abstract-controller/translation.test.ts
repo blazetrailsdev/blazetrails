@@ -172,6 +172,14 @@ describe("AbstractController::Translation — trails-only", () => {
     expect(translate.call(host, ".foo")).toBe("scoped people index foo");
   });
 
+  it("forwards caller options (e.g. locale) to internal lookups on dot keys", () => {
+    I18n.backend.storeTranslations("fr", {
+      people: { index: { foo: "bonjour" } },
+    });
+    const host = makeHost("people", "index");
+    expect(translate.call(host, ".foo", { locale: "fr" })).toBe("bonjour");
+  });
+
   it("converts slashes in controller path to dots", () => {
     I18n.backend.storeTranslations("en", {
       admin: { users: { show: { foo: "admin users show foo" } } },

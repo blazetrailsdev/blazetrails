@@ -286,7 +286,7 @@ export class BelongsToAssociation extends SingularAssociation {
    * Handles composite keys by zipping FK columns with PK columns.
    * Rails: replace_keys(record, force: false)
    */
-  private replaceKeys(record: Base | null): void {
+  protected replaceKeys(record: Base | null): void {
     const fks = this.foreignKeyNames();
     const pks = this.associationPrimaryKeys(record);
 

@@ -55,10 +55,14 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
   }
 
   /**
-   * Override replace to also write/clear the polymorphic type column.
-   * Rails: BelongsToPolymorphicAssociation#replace_keys sets foreign_type.
+   * Write the polymorphic type column alongside the foreign key. Mirrors
+   * Rails `BelongsToPolymorphicAssociation#replace_keys` — both column
+   * writes happen here (after `super.replace` has already run
+   * `setInverseInstance`, so a missing-inverse raise leaves owner state
+   * untouched).
    */
-  protected override replace(record: Base | null): void {
+  protected override replaceKeys(record: Base | null): void {
+    super.replaceKeys(record);
     const typeCol = this.foreignTypeName();
     // Rails: writes record.class.polymorphic_name, which is the Ruby class
     // name (including "::" for namespaced classes). JS class names can't
@@ -77,7 +81,6 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
     } else {
       (this.owner as any)[typeCol] = typeName;
     }
-    super.replace(record);
   }
 
   /**

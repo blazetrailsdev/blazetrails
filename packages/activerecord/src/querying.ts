@@ -298,8 +298,9 @@ export function insert<T extends typeof Base>(
 export function insertBang<T extends typeof Base>(
   this: T,
   record: Record<string, unknown>,
+  options?: Parameters<Relation<InstanceType<T>>["insertBang"]>[1],
 ): Promise<number> {
-  return this.all().insertBang(record);
+  return this.all().insertBang(record, options);
 }
 
 /** Mirrors: ActiveRecord::Querying#insert_all */
@@ -315,8 +316,9 @@ export function insertAll<T extends typeof Base>(
 export function insertAllBang<T extends typeof Base>(
   this: T,
   records: Record<string, unknown>[],
+  options?: Parameters<Relation<InstanceType<T>>["insertAllBang"]>[1],
 ): Promise<number> {
-  return this.all().insertAllBang(records);
+  return this.all().insertAllBang(records, options);
 }
 
 /** Mirrors: ActiveRecord::Querying#upsert */

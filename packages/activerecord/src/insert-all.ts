@@ -14,6 +14,10 @@ type AdapterDialect = AdapterName;
 
 const TIMESTAMP_COLUMNS = ["created_at", "updated_at"] as const;
 const UPDATE_TIMESTAMP_COLUMNS = ["updated_at"] as const;
+// Mirrors timestamp.ts CREATED_ATTRS/UPDATED_ATTRS: both _at and _on are magic
+// timestamp columns, so verifyAttributes must allow either pair even when only
+// the other is in the model's declared attribute set.
+const TIMESTAMP_ATTR_ALLOWLIST = ["created_at", "created_on", "updated_at", "updated_on"] as const;
 
 // Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#column_name_with_order_matcher
 // Intentionally more restrictive than Rails: quoted identifiers ("col", `col`) and COLLATE
@@ -228,7 +232,7 @@ export class InsertAll {
     const known = new Set(this.model.attributeNames());
     if (known.size === 0) return;
     for (const pk of this.primaryKeys()) known.add(pk);
-    for (const col of TIMESTAMP_COLUMNS) known.add(col);
+    for (const col of TIMESTAMP_ATTR_ALLOWLIST) known.add(col);
     for (const key of this.keys) {
       if (!known.has(key)) {
         throw new UnknownAttributeError(new (this.model as any)(), key);

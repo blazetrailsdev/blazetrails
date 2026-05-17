@@ -260,27 +260,31 @@ function _resolveInverseName(
  * @internal
  */
 function _wireInverseAssociation(owner: Base, child: Base, inverseName: string): void {
-  child._cachedAssociations = child._cachedAssociations ?? new Map();
   const childCtor = child.constructor as typeof Base;
   const inverseRefl = childCtor._reflectOnAssociation?.(inverseName);
-  // When the inverse is a has_many collection AND the child's class opts into
-  // has_many_inversing, push the owner onto the parent's cached collection
-  // (deduped by identity). Rails models this as `replace_on_target(...,
-  // inversing: true)` writing into `CollectionAssociation#@target` and
-  // `@replaced_or_added_targets`; trails' equivalent target for inverse-of
-  // wiring is `_cachedAssociations`, so the dedup lives here. The
-  // CollectionProxy `<<` / `build` paths read this cache, so the invariant
-  // carries through; full proxy-side dedup is a deferred follow-up.
-  if (
-    inverseRefl?.macro === "hasMany" &&
-    (childCtor as typeof Base & { hasManyInversing: boolean }).hasManyInversing
-  ) {
+  // Rails `BelongsToAssociation#invertible_for?` (belongs_to_association.rb:159):
+  // when the inverse is a has_many, wiring is gated on `klass.has_many_inversing`.
+  // Without the flag, Rails does NOT touch the parent collection cache. trails'
+  // equivalent cache target is `_cachedAssociations`; mirror the gate here so we
+  // never poison a hasMany cache slot with a scalar (loadHasMany casts the slot
+  // to Base[] unconditionally).
+  if (inverseRefl?.macro === "hasMany") {
+    if (!childCtor.hasManyInversing) return;
+    child._cachedAssociations = child._cachedAssociations ?? new Map();
+    // Mirror Rails `replace_on_target(..., inversing: true)`: append + identity
+    // dedup. Promote a stray scalar value (legacy pre-flag write) into a 1-element
+    // array so we never silently drop a previously-cached record.
     const existing = child._cachedAssociations.get(inverseName);
-    const collection = Array.isArray(existing) ? (existing as Base[]) : [];
+    const collection: Base[] = Array.isArray(existing)
+      ? (existing as Base[])
+      : existing != null
+        ? [existing as Base]
+        : [];
     if (!collection.includes(owner)) collection.push(owner);
     child._cachedAssociations.set(inverseName, collection);
     return;
   }
+  child._cachedAssociations = child._cachedAssociations ?? new Map();
   child._cachedAssociations.set(inverseName, owner);
 }
 

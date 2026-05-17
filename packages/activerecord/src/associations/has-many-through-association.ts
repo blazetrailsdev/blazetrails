@@ -112,15 +112,19 @@ function buildHabtmThroughRecord(assoc: HasManyThroughAssociation, record: Base)
   const ownerPk = throughAssocDef.options.primaryKey ?? ctor.primaryKey ?? "id";
   const ownerFk = throughAssocDef.options.foreignKey ?? `${underscore(ctor.name)}_id`;
   const pkValue = (assoc.owner as any)._readAttribute?.(ownerPk) ?? (assoc.owner as any)[ownerPk];
-  // Prefer the HABTM builder's rightReflection FK (className-derived) so
-  // the join row writes to the same column the builder declared on the
-  // generated JoinModel. Fall back to the source/singularized name only
-  // when the right reflection is absent (non-builder-constructed habtm).
-  const rightReflection = (
-    throughModel as { rightReflection?: { options?: { foreignKey?: string } } }
-  ).rightReflection;
+  // The HABTM JoinModel (createHabtmJoinModel in associations.ts) declares
+  // two belongsTo entries on `_associations`: "leftSide" (owner-side) and a
+  // right-side entry whose `foreignKey` is the builder-computed targetFk
+  // (className-derived, honoring `associationForeignKey`). Read it from
+  // there so we write to the column the JoinModel actually declared, rather
+  // than re-deriving via `singularize(assocName)` and silently dropping the
+  // value when the conventions diverge.
+  const joinAssocs = (throughModel as { _associations?: AssociationDefinition[] })._associations;
+  const rightSide = joinAssocs?.find(
+    (a) => a.type === "belongsTo" && a.name !== "leftSide" && a.options?.foreignKey,
+  );
   const sourceFk =
-    rightReflection?.options?.foreignKey ??
+    (rightSide?.options?.foreignKey as string | undefined) ??
     `${underscore(assocDef.options?.source ?? singularize(assocDef.name))}_id`;
   const targetPk = (record.constructor as any).primaryKey ?? "id";
   const joinAttrs: Record<string, unknown> = {

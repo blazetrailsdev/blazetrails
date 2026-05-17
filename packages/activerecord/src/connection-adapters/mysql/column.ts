@@ -25,6 +25,7 @@ export class Column extends BaseColumn {
     null_: boolean = true,
     options: {
       collation?: string | null;
+      comment?: string | null;
       defaultFunction?: string | null;
       primaryKey?: boolean;
       unsigned?: boolean;
@@ -41,6 +42,7 @@ export class Column extends BaseColumn {
     });
     super(name, defaultValue, meta, null_, {
       collation: options.collation,
+      comment: options.comment,
       defaultFunction: options.defaultFunction,
       primaryKey: options.primaryKey,
     });

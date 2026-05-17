@@ -908,6 +908,27 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     }
   }
 
+  /**
+   * Set a MySQL session variable to the given value.
+   * Emits `SET SESSION @name = <quoted value>` against the active connection.
+   * Pass the symbol `"DEFAULT"` (case-insensitive) or the value `null` to
+   * restore the variable to its default. Identifier is validated against
+   * MySQL variable-name characters before interpolation.
+   *
+   * Cheaper alternative to the `variables:` pool-init pattern when callers
+   * just need to flip a session flag mid-test (e.g. `sql_mode`).
+   */
+  async setSessionVariable(name: string, value: unknown): Promise<void> {
+    if (!/^\w+$/.test(name)) {
+      throw new Error(`setSessionVariable: invalid variable name ${name}`);
+    }
+    const quotedValue =
+      value === null || (typeof value === "string" && value.toUpperCase() === "DEFAULT")
+        ? "DEFAULT"
+        : this.quote(value);
+    await this._execMutation(`SET SESSION ${name} = ${quotedValue}`);
+  }
+
   async primaryKeys(tableName: string): Promise<string[]> {
     void tableName;
     return [];

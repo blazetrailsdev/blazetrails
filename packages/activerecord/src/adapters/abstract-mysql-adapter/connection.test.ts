@@ -128,6 +128,20 @@ describeIfMysql("Mysql2Adapter", () => {
       const v = await adapter.showVariable("collation_connection");
       expect(v).not.toBeNull();
     });
+    it("mysql set session variable", async () => {
+      await adapter.setSessionVariable("default_week_format", 3);
+      const rows = await adapter.execute("SELECT @@SESSION.default_week_format AS v");
+      expect(Number(rows[0].v)).toBe(3);
+    });
+
+    it("mysql set session variable to default", async () => {
+      const global = await adapter.execute("SELECT @@GLOBAL.default_week_format AS v");
+      await adapter.setSessionVariable("default_week_format", 3);
+      await adapter.setSessionVariable("default_week_format", "DEFAULT");
+      const session = await adapter.execute("SELECT @@SESSION.default_week_format AS v");
+      expect(session[0].v).toEqual(global[0].v);
+    });
+
     it("mysql default in strict mode", async () => {
       const rows = await adapter.execute("SELECT @@SESSION.sql_mode AS v");
       expect(String(rows[0].v)).toMatch(/STRICT_ALL_TABLES/);

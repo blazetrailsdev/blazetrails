@@ -143,7 +143,7 @@ export function editPolymorphicUrl(
   recordOrHash: PolymorphicArg,
   options: PolymorphicOptions = {},
 ): string {
-  return polymorphicUrl.call(this, recordOrHash, { ...options, action: "edit" });
+  return polymorphicUrlForAction.call(this, "edit", recordOrHash, options);
 }
 
 export function editPolymorphicPath(
@@ -151,7 +151,7 @@ export function editPolymorphicPath(
   recordOrHash: PolymorphicArg,
   options: PolymorphicOptions = {},
 ): string {
-  return polymorphicPath.call(this, recordOrHash, { ...options, action: "edit" });
+  return polymorphicPathForAction.call(this, "edit", recordOrHash, options);
 }
 
 export function newPolymorphicUrl(
@@ -159,7 +159,7 @@ export function newPolymorphicUrl(
   recordOrHash: PolymorphicArg,
   options: PolymorphicOptions = {},
 ): string {
-  return polymorphicUrl.call(this, recordOrHash, { ...options, action: "new" });
+  return polymorphicUrlForAction.call(this, "new", recordOrHash, options);
 }
 
 export function newPolymorphicPath(
@@ -167,11 +167,31 @@ export function newPolymorphicPath(
   recordOrHash: PolymorphicArg,
   options: PolymorphicOptions = {},
 ): string {
-  return polymorphicPath.call(this, recordOrHash, { ...options, action: "new" });
+  return polymorphicPathForAction.call(this, "new", recordOrHash, options);
 }
 
 /** @internal Rails-private helper. */
-function polymorphicMapping(
+export function polymorphicUrlForAction(
+  this: PolymorphicHost,
+  action: string,
+  recordOrHash: PolymorphicArg,
+  options: PolymorphicOptions,
+): string {
+  return polymorphicUrl.call(this, recordOrHash, { ...options, action });
+}
+
+/** @internal Rails-private helper. */
+export function polymorphicPathForAction(
+  this: PolymorphicHost,
+  action: string,
+  recordOrHash: PolymorphicArg,
+  options: PolymorphicOptions,
+): string {
+  return polymorphicPath.call(this, recordOrHash, { ...options, action });
+}
+
+/** @internal Rails-private helper. */
+export function polymorphicMapping(
   host: PolymorphicHost,
   record: unknown,
 ): PolymorphicMappingEntry | undefined {

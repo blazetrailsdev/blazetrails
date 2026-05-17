@@ -1629,7 +1629,15 @@ export class MigrationContext {
       if (a === "postgres" && rawType.toUpperCase() === "USER-DEFINED" && x.udt_name) {
         rawType = String(x.udt_name);
       }
-      const normalized = MigrationContext._normalizeIntrospectedType(rawType, a);
+      // Mirror the configured MySQL emulateBooleans setting rather than
+      // hard-coding Rails' default — abstract-mysql-adapter exposes it.
+      const emulateBooleans =
+        a === "mysql"
+          ? ((this.adapter as { emulateBooleans?: boolean }).emulateBooleans ?? true)
+          : true;
+      const normalized = MigrationContext._normalizeIntrospectedType(rawType, a, {
+        emulateBooleans,
+      });
       // Prefer PG's authoritative size columns when present — they sit in
       // information_schema rather than baked into the type string.
       if (a === "postgres") {
@@ -1664,16 +1672,19 @@ export class MigrationContext {
   static _normalizeIntrospectedType(
     raw: string,
     adapter: "sqlite" | "postgres" | "mysql" = "sqlite",
+    opts: { emulateBooleans?: boolean } = {},
   ): {
     type: string;
     limit?: number;
     precision?: number;
     scale?: number;
   } {
+    const emulateBooleans = opts.emulateBooleans ?? true;
     const t = raw.toLowerCase().trim();
     if (!t) return { type: "string" };
     // MySQL boolean emulation must run before modifier stripping.
-    if (/^tinyint\s*\(\s*1\s*\)/.test(t)) return { type: "boolean" };
+    if (/^tinyint\s*\(\s*1\s*\)/.test(t))
+      return emulateBooleans ? { type: "boolean" } : { type: "integer", limit: 1 };
     // enum/set carry a literal value list, not a length.
     if (/^enum\s*\(/.test(t) || /^set\s*\(/.test(t)) return { type: "string" };
     const parenMatch = t.match(/^([a-z_ ]+?)\s*\((\d+)(?:\s*,\s*(\d+))?\)/);
@@ -1739,11 +1750,12 @@ export class MigrationContext {
     if (/^date$/.test(head)) return { type: "date" };
     if (/^(time|time without time zone)$/.test(head)) return { type: "time", ...precOnly };
     if (/^(timetz|time with time zone)$/.test(head)) return { type: "time", ...precOnly };
-    if (
-      /^(datetime|timestamp|timestamptz|timestamp with time zone|timestamp without time zone)$/.test(
-        head,
-      )
-    )
+    // Distinguish PG timestamptz from naive datetime — schema-dumper.ts:117-118
+    // emits the `timestamptz` DSL for timestamp-with-time-zone, separate from
+    // the `datetime` DSL used for naive timestamps.
+    if (/^(timestamptz|timestamp with time zone)$/.test(head))
+      return { type: "timestamptz", ...precOnly };
+    if (/^(datetime|timestamp|timestamp without time zone)$/.test(head))
       return { type: "datetime", ...precOnly };
     if (/^uuid$/.test(head)) return { type: "uuid" };
     if (/^(json|jsonb)$/.test(head)) return { type: head };

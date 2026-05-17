@@ -1984,12 +1984,18 @@ describe("MigrationTest", () => {
         _normalizeIntrospectedType: (
           raw: string,
           a?: "sqlite" | "postgres" | "mysql",
+          opts?: { emulateBooleans?: boolean },
         ) => { type: string; limit?: number; precision?: number; scale?: number };
       }
     )._normalizeIntrospectedType;
 
     // MySQL boolean emulation + integer byte limits + enum/set/year/bit
     expect(N("tinyint(1)", "mysql")).toEqual({ type: "boolean" });
+    // emulateBooleans=false falls back to a 1-byte integer (mysql-type-lookup parity).
+    expect(N("tinyint(1)", "mysql", { emulateBooleans: false })).toEqual({
+      type: "integer",
+      limit: 1,
+    });
     expect(N("tinyint", "mysql")).toEqual({ type: "integer", limit: 1 });
     expect(N("smallint", "mysql")).toEqual({ type: "integer", limit: 2 });
     expect(N("mediumint", "mysql")).toEqual({ type: "integer", limit: 3 });
@@ -2031,7 +2037,10 @@ describe("MigrationTest", () => {
     expect(N("datetime(6)", "mysql")).toEqual({ type: "datetime", precision: 6 });
     expect(N("time(3)", "mysql")).toEqual({ type: "time", precision: 3 });
     expect(N("time with time zone", "postgres")).toEqual({ type: "time" });
-    expect(N("timestamp with time zone", "postgres")).toEqual({ type: "datetime" });
+    // PG schema-dumper.ts:117-118 distinguishes `timestamptz` DSL from `datetime`.
+    expect(N("timestamp with time zone", "postgres")).toEqual({ type: "timestamptz" });
+    expect(N("timestamptz", "postgres")).toEqual({ type: "timestamptz" });
+    expect(N("timestamp", "postgres")).toEqual({ type: "datetime" });
 
     // PG bit / bit varying are their own types (NOT binary like MySQL)
     expect(N("bit", "postgres")).toEqual({ type: "bit" });

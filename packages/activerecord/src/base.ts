@@ -2328,7 +2328,7 @@ export class Base extends Model {
     // Split out constructor-form association values (e.g. `new Owner({items:
     // [...]})`) so super() never sees them as plain attributes. Dispatched
     // after super() so the association proxy exists on `this`.
-    const assocPending = _extractAssociationAttrs(new.target as typeof Base, attrs);
+    let assocPending = _extractAssociationAttrs(new.target as typeof Base, attrs);
     if (assocPending) attrs = assocPending.rest;
     if (hasMultiparameterKeys(attrs)) {
       // Mirrors Rails: Base#initialize calls assign_attributes which handles
@@ -2376,6 +2376,10 @@ export class Base extends Model {
         inheritanceInitializeInternalsCallback.call(this as any);
         // Re-snapshot so internals writes are part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);
+        if (assocPending) {
+          _dispatchAssociationAttrs(this as unknown as Base, assocPending.assocs);
+          assocPending = null;
+        }
         cbRunAfter(ctor.prototype, "initialize", this, { strict: "sync" });
       }
     } else {
@@ -2412,9 +2416,15 @@ export class Base extends Model {
         inheritanceInitializeInternalsCallback.call(this as any);
         // Re-snapshot so internals writes are part of the initial clean state.
         (this as any)._dirty.snapshot((this as any)._attributes);
+        if (assocPending) {
+          _dispatchAssociationAttrs(this as unknown as Base, assocPending.assocs);
+          assocPending = null;
+        }
         cbRunAfter(ctor2.prototype, "initialize", this, { strict: "sync" });
       }
     }
+    // Suppressed-callback fallback: parent caller fires after_initialize, so
+    // we still dispatch first to keep Rails' "assign → after_initialize" order.
     if (assocPending) {
       _dispatchAssociationAttrs(this as unknown as Base, assocPending.assocs);
     }

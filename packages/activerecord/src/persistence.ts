@@ -711,8 +711,8 @@ export function assignAttributes(this: AttributeIO, attrs: Record<string, unknow
     const { multiparams, regular } = extractMultiparameterCallstack(attrs);
     // Assign regular attributes first (with existing error wrapping)
     for (const [key, value] of Object.entries(regular)) {
-      if (assignIfAssociation(this, key, value)) continue;
       try {
+        if (assignIfAssociation(this, key, value)) continue;
         this.writeAttribute(key, value);
       } catch (e) {
         let repr: string;

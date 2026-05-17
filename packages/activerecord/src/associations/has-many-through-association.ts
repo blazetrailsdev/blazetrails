@@ -90,14 +90,22 @@ function buildThroughRecord(assoc: HasManyThroughAssociation, record: Base): Bas
 }
 
 /** @internal */
-function buildHabtmThroughRecord(assoc: HasManyThroughAssociation, record: Base): Base | null {
+function buildHabtmThroughRecord(assoc: HasManyThroughAssociation, record: Base): Base {
   const ctor = assoc.owner.constructor as any;
   const assocDef = assoc.reflection as any;
   const throughName = assocDef.options?.through as string | undefined;
-  if (!throughName) return null;
+  // The HABTM builder (associations/builder/has-and-belongs-to-many.ts) always
+  // sets options.through to the generated middle reflection, so a missing
+  // through-name or missing through definition signals genuine misconfiguration —
+  // surface it loudly rather than silently dropping the join write.
+  if (!throughName)
+    throw new Error(`HABTM association '${assocDef.name}' on ${ctor.name} has no through name`);
   const associations: AssociationDefinition[] = ctor._associations ?? [];
   const throughAssocDef = associations.find((a: any) => a.name === throughName);
-  if (!throughAssocDef) return null;
+  if (!throughAssocDef)
+    throw new Error(
+      `HABTM association '${assocDef.name}' on ${ctor.name}: through association '${throughName}' not found`,
+    );
   const throughClassName =
     throughAssocDef.options.className ?? `${ctor.name}::HABTM_${camelize(assocDef.name)}`;
   const throughModel = resolveAssocClass(assoc.owner, throughName, throughClassName);

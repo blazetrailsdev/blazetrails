@@ -4415,7 +4415,8 @@ describe("EagerAssociationTest", () => {
     registerModel("AweAuthor", AweAuthor);
     registerModel("AwePost", AwePost);
     // Rails: `has_many :posts_with_extension, -> { order(:title) } do ... end`
-    // Extension block + arity-0 scope; not instance dependent.
+    // Extension block + ownerless scope (relation-only param, no owner) —
+    // checkEagerLoadableBang treats scope.length > 1 as instance-dependent.
     Associations.hasMany.call(AweAuthor, "awePostsWithExtension", {
       className: "AwePost",
       foreignKey: "awe_author_id",

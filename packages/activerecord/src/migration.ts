@@ -1018,6 +1018,12 @@ export abstract class Migration {
   ): Promise<void> {
     const options = typeof fnOrOptions === "function" ? {} : (fnOrOptions ?? {});
     const callback = typeof fnOrOptions === "function" ? fnOrOptions : fn;
+    if (this._recording) {
+      // Rails: change_table delegates to the CommandRecorder so individual
+      // ops inside the block can be inverted (or batched, in the bulk path).
+      await (this._recorder as any).changeTable(tableName, options, callback);
+      return;
+    }
     if (options.bulk) {
       // Bulk path mirrors Rails: delegate to SchemaStatements#changeTable which
       // records ops via a Proxy and coalesces into a single ALTER. Apply
@@ -1046,6 +1052,12 @@ export abstract class Migration {
   }
 
   async removeColumns(tableName: string, ...columns: string[]): Promise<void> {
+    if (this._recording) {
+      // Record as a single removeColumns op so invertRemoveColumns can flip
+      // it back to addColumns (Rails: CommandRecorder#invert_remove_columns).
+      this._recorder.record("removeColumns", [tableName, ...columns]);
+      return;
+    }
     for (const col of columns) {
       await this.removeColumn(tableName, col);
     }
@@ -1055,6 +1067,10 @@ export abstract class Migration {
     tableName: string,
     ...columns: Array<{ name: string; type: ColumnType; options?: ColumnOptions }>
   ): Promise<void> {
+    if (this._recording) {
+      this._recorder.record("addColumns", [tableName, ...columns]);
+      return;
+    }
     for (const col of columns) {
       await this.addColumn(tableName, col.name, col.type, col.options ?? {});
     }

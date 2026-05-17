@@ -276,10 +276,11 @@ describe("TableDefinition#toSql", () => {
     td.oid("oid_col");
     td.tsrange("during");
     const sql = td.toSql();
-    // pgColumn helpers route through nativeDatabaseTypes, which stores names
-    // in lowercase (Rails parity with NATIVE_DATABASE_TYPES). bit / bitVarying
-    // remain uppercase because they carry a (limit) suffix that nativeDatabaseTypes
-    // doesn't express, so their helpers still set sqlType explicitly.
+    // pgColumn helpers now pass a semantic column type (e.g. "cidr", "inet")
+    // and leave sqlType unset. TableDefinition#toSql's default branch emits
+    // the column type verbatim, which matches Rails' NATIVE_DATABASE_TYPES
+    // lowercase names. bit / bitVarying still set sqlType explicitly because
+    // they carry a (limit) suffix that the native map doesn't express.
     expect(sql).toContain('"net" cidr');
     expect(sql).toContain('"addr" inet');
     expect(sql).toContain('"props" hstore');

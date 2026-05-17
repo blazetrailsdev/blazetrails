@@ -48,6 +48,9 @@ export class TableDefinition extends AbstractTableDefinition {
   /** @internal Full adapter when constructed by `createTableDefinition`; consulted by
    * `toSql()` to build a host-aware MySQL visitor (support flags + MariaDB). */
   private readonly _mysqlAdapter?: VisitorHostAdapter;
+  /** @internal Lazily-allocated visitor; the host adapter ref is fixed for our lifetime so
+   * one instance is reused across `toSql()` calls. */
+  private _visitor?: MysqlSchemaCreation;
 
   constructor(
     tableName: string,
@@ -61,7 +64,7 @@ export class TableDefinition extends AbstractTableDefinition {
       as?: string;
       options?: string;
       comment?: string;
-      adapter?: unknown;
+      adapter?: VisitorHostAdapter;
       adapterName?: "sqlite" | "postgres" | "mysql";
     } = {},
   ) {
@@ -77,9 +80,7 @@ export class TableDefinition extends AbstractTableDefinition {
         quoteDefaultExpression: quoteDefaultExpression,
       },
     });
-    if (adapter && typeof adapter === "object") {
-      this._mysqlAdapter = adapter as TableDefinition["_mysqlAdapter"];
-    }
+    this._mysqlAdapter = adapter;
   }
 
   /**
@@ -93,7 +94,8 @@ export class TableDefinition extends AbstractTableDefinition {
     // `isMariadb()` are the only state the visitor consults, and going through
     // `schemaStatements().schemaCreation` would allocate a fresh `SchemaStatements` per call
     // on adapters whose `schemaStatements()` isn't memoized (current behavior on Mysql2Adapter).
-    return new MysqlSchemaCreation(this._mysqlAdapter).accept(this);
+    // Memoize the visitor since the host adapter ref is fixed for our lifetime.
+    return (this._visitor ??= new MysqlSchemaCreation(this._mysqlAdapter)).accept(this);
   }
 
   blob(name: string, options: ColumnOptions & { limit?: number } = {}): this {

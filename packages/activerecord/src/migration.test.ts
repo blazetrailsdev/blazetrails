@@ -2057,6 +2057,33 @@ describe("MigrationTest", () => {
     expect(N("jsonb", "postgres")).toEqual({ type: "jsonb" });
   });
 
+  it("_introspectColumns handles PG ARRAY + USER-DEFINED + datetime_precision rows", async () => {
+    // Stub the adapter to feed PG-shaped catalog rows through the live
+    // _introspectColumns code path (sqlite test adapter can't return them).
+    const stub = {
+      adapterName: "postgres" as const,
+      quoteTableName: (n: string) => `"${n}"`,
+      execute: async () => [
+        { column_name: "tags", data_type: "ARRAY", udt_name: "_int4" },
+        { column_name: "score", data_type: "numeric", numeric_precision: 10, numeric_scale: 2 },
+        { column_name: "doc", data_type: "USER-DEFINED", udt_name: "citext" },
+        { column_name: "made_at", data_type: "timestamp with time zone", datetime_precision: 6 },
+        { column_name: "name", data_type: "character varying", character_maximum_length: 100 },
+      ],
+    };
+    const ctx = new MigrationContext(stub as unknown as DatabaseAdapter);
+    const cols = await (
+      ctx as unknown as { _introspectColumns: (n: string) => Promise<unknown[]> }
+    )._introspectColumns("things");
+    expect(cols).toEqual([
+      { name: "tags", type: "integer", limit: 4, array: true },
+      { name: "score", type: "decimal", precision: 10, scale: 2 },
+      { name: "doc", type: "citext" },
+      { name: "made_at", type: "timestamptz", precision: 6 },
+      { name: "name", type: "string", limit: 100 },
+    ]);
+  });
+
   it.skipIf(adapterType === "mysql")("create table with query", async () => {
     const adapter = freshAdapter();
     const ctx = new MigrationContext(adapter);

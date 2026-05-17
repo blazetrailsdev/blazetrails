@@ -1685,8 +1685,10 @@ export class MigrationContext {
   /**
    * @internal Map raw catalog types (PG/MySQL/SQLite) to Rails-canonical
    * names plus precision/scale/limit. Mirrors the per-adapter type-lookup
-   * registrations (mysql-type-lookup, postgresql/oid). Assumes MySQL
-   * `emulate_booleans: true` (Rails default) so `tinyint(1)` → boolean.
+   * registrations (mysql-type-lookup, postgresql/oid). Callers may pass
+   * `emulateBooleans` (default true) so MySQL `tinyint(1)` follows the
+   * adapter's configured emulation mode; `_introspectColumns` threads in
+   * the live `abstract-mysql-adapter#emulateBooleans` value.
    */
   static _normalizeIntrospectedType(
     raw: string,
@@ -1776,8 +1778,10 @@ export class MigrationContext {
     if (/^(time|time without time zone)$/.test(head)) return { type: "time", ...precOnly };
     if (/^(timetz|time with time zone)$/.test(head)) return { type: "time", ...precOnly };
     // Distinguish PG timestamptz from naive datetime — schema-dumper.ts:117-118
-    // emits the `timestamptz` DSL for timestamp-with-time-zone, separate from
-    // the `datetime` DSL used for naive timestamps.
+    // maps `timestamp with time zone` to the `timestamptz` SQL_TYPE_MAP entry
+    // (the emitter then falls back to `t.column(..., "timestamptz")` since
+    // `timestamptz` isn't in DSL_HELPER_METHODS). Separate from the `datetime`
+    // DSL used for naive timestamps.
     if (/^(timestamptz|timestamp with time zone)$/.test(head))
       return { type: "timestamptz", ...precOnly };
     if (/^(datetime|timestamp|timestamp without time zone)$/.test(head))
@@ -1866,6 +1870,7 @@ export class MigrationContext {
         limit?: number | null;
         precision?: number | null;
         scale?: number | null;
+        array?: boolean;
       }
     >();
     const compositePk =
@@ -1892,6 +1897,7 @@ export class MigrationContext {
         limit: col.options.limit,
         precision: col.options.precision,
         scale: col.options.scale,
+        array: (col.options as { array?: boolean }).array,
       });
     }
     if (options?.as != null) {
@@ -2054,6 +2060,7 @@ export class MigrationContext {
       limit: _options?.limit,
       precision: _options?.precision,
       scale: _options?.scale,
+      array: (_options as { array?: boolean } | undefined)?.array,
     });
   }
 

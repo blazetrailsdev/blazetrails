@@ -136,12 +136,17 @@ export function connectsTo(
  */
 function buildAdapterArg(adapterName: string, configuration: Record<string, unknown>): unknown {
   const normalized = normalizeAdapterName(adapterName);
+  const url = configuration.url as string | undefined;
+  const database = configuration.database as string | undefined;
   if (normalized === "sqlite") {
-    const dbOrUrl =
-      (configuration.database as string | undefined) ??
-      (configuration.url as string | undefined) ??
-      ":memory:";
-    return parseSqliteUrl(dbOrUrl);
+    return parseSqliteUrl(database || url || ":memory:");
+  }
+  // Mirrors establishWithConfig's `else if (url) adapterArg = url` branch:
+  // URL-only configs (e.g. opaque adapter strings like jdbc:...) are passed
+  // through as the raw URL string. Hash-form configs (no url, or url + an
+  // explicit database) get the normalized hash with username/host defaults.
+  if (url && database === undefined) {
+    return url;
   }
   const { adapter: _a, url: _u, username, ...rest } = configuration;
   const adapterConfig: Record<string, unknown> = { ...rest };

@@ -12,12 +12,12 @@
  */
 
 const DEFAULT_SEP = /& */;
-const COMMON_SEP: Record<string, RegExp> = {
+const COMMON_SEP: Record<string, RegExp> = Object.assign(Object.create(null), {
   ";": /; */,
   ";,": /[;,] */,
   "&": /& */,
   "&;": /[&;] */,
-};
+});
 
 export type QueryPair = [string, string | null];
 

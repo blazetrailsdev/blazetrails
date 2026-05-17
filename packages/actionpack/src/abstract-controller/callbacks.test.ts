@@ -38,11 +38,6 @@ class Callback2 extends AbstractController {
   _second() {
     this.second = "Goodbye";
   }
-  async aroundz_(_c: AbstractController, next: () => Promise<void>) {
-    this.aroundz = "FIRST";
-    await next();
-    this.aroundz += "SECOND";
-  }
   async index() {
     this.responseBody = (this.text ?? "") as string;
   }

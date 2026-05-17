@@ -204,11 +204,16 @@ export class Base extends Metal {
     // "performed" after a render-to-string.
     const oldBody = this._responseBody;
     const oldPerformed = this._performed;
-    this.render(options);
-    const result = this.body;
-    this._responseBody = oldBody;
-    this._performed = oldPerformed;
-    return result;
+    try {
+      this.render(options);
+      return this.body;
+    } finally {
+      // Restore controller state even if `render` throws so a failed
+      // `renderToString` doesn't leave the controller permanently
+      // "performed" with a mutated body.
+      this._responseBody = oldBody;
+      this._performed = oldPerformed;
+    }
   }
 
   // --- Redirecting ---

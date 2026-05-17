@@ -156,8 +156,11 @@ export class Metal extends AbstractController {
     if (this._contentType) {
       this.response.setHeader("content-type", this._contentType);
     }
+    // Commit on any explicit assignment — `_responseBody` is `null` only
+    // when no render/head ran. An empty string from `head()` must still
+    // clear any body the caller wrote earlier in the same request.
     const body = this._responseBody;
-    if (body) {
+    if (body !== null) {
       this.response.body = typeof body === "string" ? body : body.toString();
     }
 
@@ -251,7 +254,9 @@ export class Metal extends AbstractController {
         this._contentType = contentType ? String(contentType) : "text/html";
       }
     }
-    this._responseBody = "";
+    // Route through the public setter so the response stream is updated
+    // in lock-step (mirrors Rails' `self.response_body = ""` in head.rb).
+    this.responseBody = "";
     return true;
   }
 

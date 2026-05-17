@@ -225,6 +225,24 @@ describe("defineSchema", () => {
     });
   });
 
+  describe("PG-only column types", () => {
+    it("rejects citext/hstore/uuid/interval/oid against non-PG adapters", async () => {
+      for (const ty of ["citext", "hstore", "uuid", "interval", "oid"] as const) {
+        await expect(
+          defineSchema(adapter, { t: { col: ty } }, { dropExisting: true }),
+        ).rejects.toThrow(/PostgreSQL-only type/);
+      }
+    });
+
+    it("rejects array:true against non-PG adapters", async () => {
+      await expect(
+        defineSchema(adapter, {
+          t: { tags: { type: "integer", array: true } },
+        }),
+      ).rejects.toThrow(/array:true.*PostgreSQL-only/);
+    });
+  });
+
   it("dropExisting drops first then creates", async () => {
     await defineSchema(adapter, { items: { name: "string" } });
     await adapter.executeMutation(`INSERT INTO "items" ("name") VALUES ('old')`);

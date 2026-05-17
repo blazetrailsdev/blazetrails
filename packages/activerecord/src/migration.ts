@@ -1613,7 +1613,10 @@ export class MigrationContext {
     } else if (a === "postgres") {
       const [s, t] = name.includes(".") ? name.split(".", 2) : ["public", name];
       const e = (x: string) => x.replace(/'/g, "''");
-      sql = `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = '${e(s)}' AND table_name = '${e(t)}' ORDER BY ordinal_position`;
+      // Pull udt_name for user-defined types (citext, hstore, …) which
+      // surface as "USER-DEFINED" via data_type, plus size fields for
+      // limit/precision/scale propagation.
+      sql = `SELECT column_name, data_type, udt_name, character_maximum_length, numeric_precision, numeric_scale, datetime_precision FROM information_schema.columns WHERE table_schema = '${e(s)}' AND table_name = '${e(t)}' ORDER BY ordinal_position`;
     } else {
       sql = `SHOW COLUMNS FROM ${qt}`;
     }
@@ -1621,9 +1624,34 @@ export class MigrationContext {
     return rows.map((r) => {
       const x = r as Record<string, unknown>;
       const colName = (x.name ?? x.column_name ?? x.Field) as string;
-      // SQLite: type field; PG: data_type; MySQL: Type
-      const rawType = ((x.type ?? x.data_type ?? x.Type) as string | undefined) ?? "";
-      return { name: colName, ...MigrationContext._normalizeIntrospectedType(rawType) };
+      // SQLite: type; PG: data_type (with udt_name for USER-DEFINED); MySQL: Type
+      let rawType = ((x.type ?? x.data_type ?? x.Type) as string | undefined) ?? "";
+      if (a === "postgres" && rawType.toUpperCase() === "USER-DEFINED" && x.udt_name) {
+        rawType = String(x.udt_name);
+      }
+      const normalized = MigrationContext._normalizeIntrospectedType(rawType);
+      // Prefer PG's authoritative size columns when present — they sit in
+      // information_schema rather than baked into the type string.
+      if (a === "postgres") {
+        const charLen = x.character_maximum_length;
+        const numPrec = x.numeric_precision;
+        const numScale = x.numeric_scale;
+        const dtPrec = x.datetime_precision;
+        if (typeof charLen === "number") normalized.limit = charLen;
+        if (
+          typeof numPrec === "number" &&
+          (normalized.type === "decimal" || normalized.type === "float")
+        ) {
+          normalized.precision = numPrec;
+          if (typeof numScale === "number") normalized.scale = numScale;
+        }
+        if (
+          typeof dtPrec === "number" &&
+          (normalized.type === "datetime" || normalized.type === "time")
+        )
+          normalized.precision = dtPrec;
+      }
+      return { name: colName, ...normalized };
     });
   }
 
@@ -1647,34 +1675,54 @@ export class MigrationContext {
     if (/^enum\s*\(/.test(t) || /^set\s*\(/.test(t)) return { type: "string" };
     const parenMatch = t.match(/^([a-z_ ]+?)\s*\((\d+)(?:\s*,\s*(\d+))?\)/);
     const head = (parenMatch?.[1] ?? t.replace(/\s+unsigned\b.*$/, "")).trim();
-    const sizes = parenMatch
-      ? parenMatch[3] != null
-        ? { precision: Number(parenMatch[2]), scale: Number(parenMatch[3]) }
-        : { limit: Number(parenMatch[2]) }
-      : {};
+    const arg1 = parenMatch ? Number(parenMatch[2]) : undefined;
+    const arg2 = parenMatch && parenMatch[3] != null ? Number(parenMatch[3]) : undefined;
+    const limit = arg1 !== undefined && arg2 === undefined ? { limit: arg1 } : {};
+    // decimal(N) / decimal(N,M) — one-arg is precision (Rails decimal_columns).
+    const decSizes =
+      arg1 !== undefined
+        ? arg2 !== undefined
+          ? { precision: arg1, scale: arg2 }
+          : { precision: arg1 }
+        : {};
+    // datetime(N) / time(N) — N is fractional-seconds precision.
+    const precOnly = arg1 !== undefined && arg2 === undefined ? { precision: arg1 } : {};
+    // MySQL fixed byte-limits for small-int variants (mirrors mysql-type-lookup).
+    const intByteLimit: Record<string, number> = {
+      tinyint: 1,
+      smallint: 2,
+      int2: 2,
+      mediumint: 3,
+      int: 4,
+      integer: 4,
+      int4: 4,
+      year: 4,
+    };
     if (/^(varchar|character varying|character|char|nvarchar|nchar)$/.test(head))
-      return { type: "string", ...sizes };
+      return { type: "string", ...limit };
     if (/^(text|tinytext|mediumtext|longtext|clob)$/.test(head)) return { type: "text" };
     if (/^citext$/.test(head)) return { type: "citext" };
     if (/^(int|integer|int4|int2|smallint|mediumint|tinyint|serial|smallserial|year)$/.test(head))
-      return { type: "integer", ...sizes };
+      // MySQL `int(N)` is a display width, not a Rails limit — use byte limit.
+      return { type: "integer", limit: intByteLimit[head] ?? 4 };
     if (/^(bigint|int8|bigserial)$/.test(head)) return { type: "bigint" };
-    if (/^(float|float4|float8|double|double precision|real)$/.test(head)) return { type: "float" };
-    if (/^(numeric|decimal|number)$/.test(head)) return { type: "decimal", ...sizes };
+    if (/^(float|float4)$/.test(head)) return { type: "float", limit: 24 };
+    if (/^(double|double precision|float8|real)$/.test(head)) return { type: "float", limit: 53 };
+    if (/^(numeric|decimal|number)$/.test(head)) return { type: "decimal", ...decSizes };
     if (/^(bool|boolean)$/.test(head)) return { type: "boolean" };
-    if (/^bit$/.test(head)) return { type: "binary", ...sizes }; // MySQL BIT is binary per mysql-type-lookup
+    if (/^bit$/.test(head)) return { type: "binary", ...limit }; // MySQL BIT is binary per mysql-type-lookup
     if (/^date$/.test(head)) return { type: "date" };
-    if (/^time$/.test(head)) return { type: "time" };
+    if (/^time$/.test(head)) return { type: "time", ...precOnly };
     if (
       /^(datetime|timestamp|timestamptz|timestamp with time zone|timestamp without time zone)$/.test(
         head,
       )
     )
-      return { type: "datetime" };
+      return { type: "datetime", ...precOnly };
     if (/^uuid$/.test(head)) return { type: "uuid" };
     if (/^(json|jsonb)$/.test(head)) return { type: head };
     if (/^(bytea|blob|tinyblob|mediumblob|longblob|binary|varbinary)$/.test(head))
-      return { type: "binary", ...sizes };
+      return { type: "binary", ...limit };
     return { type: head };
   }
 

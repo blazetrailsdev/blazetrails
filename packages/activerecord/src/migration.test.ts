@@ -1890,6 +1890,94 @@ describe("MigrationTest", () => {
     }
   });
 
+  it("schema mutators honor table_name_prefix and table_name_suffix", async () => {
+    // Regression coverage: each Migration schema method must route the table
+    // argument through `_pt()` so global table_name_prefix/suffix wraps it.
+    // Stub the underlying schema and assert the wrapped name reached the
+    // adapter — independent of which DDL each ALTER would emit per adapter.
+    const savedPrefix = Base.tableNamePrefix;
+    const savedSuffix = Base.tableNameSuffix;
+    Base.tableNamePrefix = "p_";
+    Base.tableNameSuffix = "_s";
+    try {
+      class CoverPrefix extends Migration {}
+      const m = new CoverPrefix();
+      const fakeConn = {} as any;
+      m.connection = fakeConn;
+      (m as any)._schemaConn = fakeConn;
+      const calls: Array<[string, string]> = [];
+      const stub =
+        (method: string) =>
+        async (tname: string, ..._rest: unknown[]) => {
+          calls.push([method, tname]);
+        };
+      // Stub schema and connection methods that Migration delegates to.
+      (m as any)._schema = {
+        addColumn: stub("addColumn"),
+        removeColumn: stub("removeColumn"),
+        renameColumn: stub("renameColumn"),
+        changeColumn: stub("changeColumn"),
+        changeColumnDefault: stub("changeColumnDefault"),
+        changeColumnNull: stub("changeColumnNull"),
+        addIndex: stub("addIndex"),
+        removeIndex: stub("removeIndex"),
+        renameIndex: stub("renameIndex"),
+        addReference: stub("addReference"),
+        removeReference: stub("removeReference"),
+        addForeignKey: stub("addForeignKey"),
+        removeForeignKey: stub("removeForeignKey"),
+        addCheckConstraint: stub("addCheckConstraint"),
+        removeCheckConstraint: stub("removeCheckConstraint"),
+        addTimestamps: stub("addTimestamps"),
+        removeTimestamps: stub("removeTimestamps"),
+        createJoinTable: stub("createJoinTable"),
+        dropJoinTable: stub("dropJoinTable"),
+        indexName: (tname: string) => `index_${tname}_x`,
+      };
+      Object.assign(fakeConn, {
+        changeColumnComment: stub("changeColumnComment"),
+        changeTableComment: stub("changeTableComment"),
+        validateCheckConstraint: stub("validateCheckConstraint"),
+        validateForeignKey: stub("validateForeignKey"),
+      });
+
+      await m.addColumn("widgets", "price", "integer");
+      await m.removeColumn("widgets", "note");
+      await m.renameColumn("widgets", "a", "b");
+      await m.changeColumn("widgets", "price", "decimal");
+      await m.changeColumnDefault("widgets", "price", 0);
+      await m.changeColumnNull("widgets", "price", false);
+      await m.addIndex("widgets", "category_id");
+      await m.removeIndex("widgets", { column: "category_id" });
+      await m.renameIndex("widgets", "old", "new");
+      await m.addReference("widgets", "bucket");
+      await m.removeReference("widgets", "bucket");
+      await m.addForeignKey("widgets", "buckets");
+      await m.removeForeignKey("widgets", "buckets");
+      await m.addCheckConstraint("widgets", "price >= 0", { name: "c" });
+      await m.removeCheckConstraint("widgets", { name: "c" });
+      await m.addTimestamps("widgets");
+      await m.removeTimestamps("widgets");
+      await m.createJoinTable("widgets", "buckets");
+      await m.dropJoinTable("widgets", "buckets");
+      await m.changeColumnComment("widgets", "price", "msg");
+      await m.changeTableComment("widgets", "msg");
+      await m.validateCheckConstraint("widgets", "c");
+      await m.validateForeignKey("widgets", "buckets");
+
+      // Every recorded call must have received the prefixed/suffixed name.
+      expect(calls).not.toHaveLength(0);
+      for (const [method, tname] of calls) {
+        expect(tname, `${method} did not apply prefix/suffix`).toBe("p_widgets_s");
+      }
+      // indexName itself must apply the wrapper.
+      expect(m.indexName("widgets", { column: "category_id" })).toBe("index_p_widgets_s_x");
+    } finally {
+      Base.tableNamePrefix = savedPrefix;
+      Base.tableNameSuffix = savedSuffix;
+    }
+  });
+
   it.skipIf(adapterType === "mysql")("create table with query", async () => {
     const adapter = freshAdapter();
     const ctx = new MigrationContext(adapter);

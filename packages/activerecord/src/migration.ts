@@ -1620,9 +1620,41 @@ export class MigrationContext {
       const x = r as Record<string, unknown>;
       const colName = (x.name ?? x.column_name ?? x.Field) as string;
       // SQLite: type field; PG: data_type; MySQL: Type
-      const colType = ((x.type ?? x.data_type ?? x.Type) as string | undefined) ?? "string";
-      return { name: colName, type: colType };
+      const rawType = ((x.type ?? x.data_type ?? x.Type) as string | undefined) ?? "";
+      return { name: colName, type: MigrationContext._normalizeIntrospectedType(rawType) };
     });
+  }
+
+  /** @internal Map raw catalog types (PG/MySQL/SQLite) to Rails-canonical names. */
+  private static _normalizeIntrospectedType(raw: string): string {
+    const t = raw.toLowerCase().trim();
+    if (!t) return "string";
+    // Strip trailing modifiers e.g. "varchar(255)", "numeric(10,2)", "integer unsigned"
+    const head = t.replace(/\s*\(.*$/, "").split(/\s+/, 1)[0]!;
+    if (
+      /^(varchar|character varying|character|char|nvarchar|nchar|text|tinytext|mediumtext|longtext|citext|clob)$/.test(
+        head,
+      )
+    )
+      return "string";
+    if (/^(int|integer|int4|int2|smallint|mediumint|tinyint|serial|smallserial)$/.test(head))
+      return "integer";
+    if (/^(bigint|int8|bigserial)$/.test(head)) return "bigint";
+    if (/^(float|float4|float8|double|double precision|real)$/.test(head)) return "float";
+    if (/^(numeric|decimal|number)$/.test(head)) return "decimal";
+    if (/^(bool|boolean|bit)$/.test(head)) return "boolean";
+    if (/^(date)$/.test(head)) return "date";
+    if (/^(time)$/.test(head)) return "time";
+    if (
+      /^(datetime|timestamp|timestamptz|timestamp with time zone|timestamp without time zone)$/.test(
+        head,
+      )
+    )
+      return "datetime";
+    if (/^(uuid)$/.test(head)) return "uuid";
+    if (/^(json|jsonb)$/.test(head)) return head;
+    if (/^(bytea|blob|tinyblob|mediumblob|longblob|binary|varbinary)$/.test(head)) return "binary";
+    return head;
   }
 
   async createTable(
@@ -2579,13 +2611,30 @@ export class Migrator {
     Array<{ status: "up" | "down"; version: string; name: string }>
   > {
     await this._ensureSchemaTable();
-    const applied = await this._appliedVersions();
+    const applied = new Set(await this._appliedVersions());
 
-    return this._migrations.map((m) => ({
-      status: applied.has(m.version) ? ("up" as const) : ("down" as const),
-      version: m.version,
-      name: m.name,
+    const fileList = this._migrations.map((m) => {
+      const isUp = applied.delete(m.version);
+      return {
+        status: (isUp ? "up" : "down") as "up" | "down",
+        version: m.version,
+        name: m.name,
+      };
+    });
+
+    // Mirrors Rails Migrator#migrations_status: applied versions with no
+    // matching file get a placeholder name. Combined list sorts numerically.
+    const dbList = [...applied].map((version) => ({
+      status: "up" as const,
+      version,
+      name: "********** NO FILE **********",
     }));
+
+    return [...dbList, ...fileList].sort((a, b) => {
+      const va = BigInt(a.version);
+      const vb = BigInt(b.version);
+      return va < vb ? -1 : va > vb ? 1 : 0;
+    });
   }
 
   /**
@@ -2613,10 +2662,20 @@ export class Migrator {
    * Mirrors: ActiveRecord::MigrationContext#migrations (the discovery half)
    */
   static fromDir(dir: string, adapter: DatabaseAdapter): Migrator {
+    return new Migrator(adapter, Migrator.fromPath(dir, adapter));
+  }
+
+  /**
+   * Scan `dir` for migration files and build `MigrationProxy[]` (without
+   * wrapping them in a Migrator). Mirrors the discovery half of Rails'
+   * `MigrationContext#migrations`.
+   *
+   * Mirrors: ActiveRecord::MigrationContext#migrations (discovery)
+   */
+  static fromPath(dir: string, adapter: DatabaseAdapter): MigrationProxy[] {
     const helper = new Migrator(adapter, []);
-    const files = helper.migrationFiles([dir]);
     const proxies: MigrationProxy[] = [];
-    for (const file of files) {
+    for (const file of helper.migrationFiles([dir])) {
       const parsed = helper.parseMigrationFilename(file);
       if (!parsed) continue;
       const [version, rawName, scope] = parsed;
@@ -2633,7 +2692,7 @@ export class Migrator {
         },
       });
     }
-    return new Migrator(adapter, proxies);
+    return proxies;
   }
 
   private _sortMigrations(migrations: MigrationProxy[]): MigrationProxy[] {

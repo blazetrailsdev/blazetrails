@@ -182,14 +182,12 @@ export function quoteDefaultExpression(
     const sqlType = column.sqlType ?? column.type ?? null;
     const castType = sqlType ? typeMap?.lookup(sqlType) : null;
     if (column.array === true && globalThis.Array.isArray(value)) {
-      // Rails routes the JS array through OID::Array.serialize so each
+      // Rails routes JS arrays through OID::Array.serialize so each
       // element is cast by the element subtype before quoting. Trails'
-      // TypeMapLike contract permits two return shapes here: an
-      // already-array-aware type (whose serialize() returns ArrayData
-      // for the whole array) or an element subtype (e.g. IntegerType
-      // for an `integer[]` column). Run serialize first; if the result
-      // is ArrayData the type was already array-aware, otherwise wrap
-      // the original value in OidArray(subtype) so each element is cast.
+      // TypeMapLike permits two shapes: an already-array-aware type
+      // (serialize returns ArrayData) or the element subtype. Run
+      // serialize first; if ArrayData, use it. Otherwise wrap the
+      // original value in OidArray(subtype) for per-element coercion.
       const fromTypeMap = castType?.serialize ? castType.serialize(value) : value;
       if (fromTypeMap instanceof ArrayData) {
         serialized = fromTypeMap;
@@ -197,6 +195,12 @@ export function quoteDefaultExpression(
         const subtype = (castType ?? new ValueType()) as ConstructorParameters<typeof OidArray>[0];
         serialized = new OidArray(subtype).serialize(value);
       }
+    } else if (column.array === true) {
+      // Non-array values on an array column (e.g. a raw `"{}"` literal)
+      // must pass through to quote() unchanged — the lookup here returns
+      // the element subtype, whose serialize would coerce the string
+      // (Integer#serialize("{}") → NaN) and break the literal default.
+      serialized = value;
     } else if (castType?.serialize) {
       serialized = castType.serialize(value);
     }

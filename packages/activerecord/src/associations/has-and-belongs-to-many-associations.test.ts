@@ -1492,13 +1492,11 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
     const origAssoc = (owner as any).association.bind(owner);
     (owner as any).association = (n: string) => {
       const a = origAssoc(n);
-      if (n.endsWith("tag_as") || n.endsWith("tag_bs")) {
-        const orig = a.handleDependency.bind(a);
-        a.handleDependency = async () => {
-          calls.push(n);
-          return orig();
-        };
-      }
+      const orig = a.handleDependency.bind(a);
+      a.handleDependency = async () => {
+        calls.push(n);
+        return orig();
+      };
       return a;
     };
 
@@ -1507,7 +1505,7 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
     expect(calls.length).toBe(2);
   });
 
-  it("does not double-install the destroy bridge on subclasses", () => {
+  it("subclass HABTM extends destroyAssociations chain via super", async () => {
     const a2 = createTestAdapter();
     class ParentOwner extends Base {
       static {
@@ -1520,18 +1518,33 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
       className: "TagA",
       joinTable: "parent_owners_p_tags",
     });
-    const parentDestroyCount = (ParentOwner as any)._callbacks?.destroy?.length ?? 0;
 
     class ChildOwner extends ParentOwner {}
+    ChildOwner.adapter = a2;
     registerModel(ChildOwner);
     Associations.hasAndBelongsToMany.call(ChildOwner, "c_tags", {
       className: "TagB",
       joinTable: "child_owners_c_tags",
     });
-    const childDestroyCount = (ChildOwner as any)._callbacks?.destroy?.length ?? 0;
 
-    // Subclass should not add a second bridge dispatcher — the parent's
-    // bridge is COW'd into the child chain by the callback engine.
-    expect(childDestroyCount).toBeLessThanOrEqual(parentDestroyCount);
+    // A ChildOwner instance's destroyAssociations override should chain
+    // through parent's override too, hitting both HABTM middles.
+    const child = await ChildOwner.create({ name: "Child" });
+    const calls: string[] = [];
+    const origAssoc = (child as any).association.bind(child);
+    (child as any).association = (n: string) => {
+      const a = origAssoc(n);
+      const orig = a.handleDependency.bind(a);
+      a.handleDependency = async () => {
+        calls.push(n);
+        return orig();
+      };
+      return a;
+    };
+
+    await (child as any).destroyAssociations();
+    // Two middle hasMany associations should be visited — one from
+    // parent's HABTM override, one from child's, chained via super.
+    expect(calls.length).toBe(2);
   });
 });

@@ -62,6 +62,31 @@ describe("constructor-form association writer", () => {
     expect(target[1]).toBe(i2);
   });
 
+  it("dispatches via assignAttributes (manual-call path, non-multiparameter)", () => {
+    const { B30Owner, B30Item } = makeHasManyModels();
+    const owner = new B30Owner();
+    const i1 = new B30Item({ name: "a" });
+    owner.assignAttributes({ name: "Acme", items: [i1] });
+    expect((owner as any).readAttribute("name")).toBe("Acme");
+    expect((owner as any).association("items").target).toEqual([i1]);
+  });
+
+  it("dispatches via assignAttributes (multiparameter branch)", () => {
+    const { B30Owner, B30Item } = makeHasManyModels();
+    const owner = new B30Owner();
+    const i1 = new B30Item({ name: "a" });
+    // Mix in a multiparameter key so assignAttributes takes the
+    // hasMultiparameterKeys branch — association routing must still happen.
+    owner.assignAttributes({
+      items: [i1],
+      // Force the multiparameter branch via a parenthesized key —
+      // value content is irrelevant; we only care that `items` still
+      // routes through assignAssociationIfMatch in this branch.
+      "name(1)": "x",
+    });
+    expect((owner as any).association("items").target).toEqual([i1]);
+  });
+
   it("dispatches single record to hasOne association on construction", () => {
     class B30Profile extends Base {
       static {

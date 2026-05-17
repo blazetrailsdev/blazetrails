@@ -24,7 +24,7 @@ Bundled work-PR slots ready to spawn. Items removed as batches ship.
 
 ### Batch 3 — PG schema-dump table/partition polish (~80 LOC, risk: low)
 
-**Sequencing:** Depends on Batch 2 (#1726). Spawn after #1726 merges.
+Unblocked by #1726 (the prior PG addColumn-through-schemaCreation slot, merged).
 
 - ~30 LOC — Wire `tableOptions()` into `schema-dumper.ts:emitTable`. Requires making the dump loop async.
 - ~30 LOC — PG table comment schema dump: forward `adapterTableOpts.comment` in `emitTable`; add `COMMENT ON TABLE` emission after `createTable`.

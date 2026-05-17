@@ -39,12 +39,12 @@ export {
   type OptionRedirectOptions,
 } from "./redirection.js";
 export {
-  urlFor as routingUrlFor,
+  urlFor,
   fullUrlFor,
-  urlOptions as routingUrlOptions,
+  urlOptions,
   routeFor,
   optimizeRoutesGeneration,
-  initialize as initializeUrlFor,
+  initialize,
   _withRoutes,
   _routesContext,
   type UrlForHost,

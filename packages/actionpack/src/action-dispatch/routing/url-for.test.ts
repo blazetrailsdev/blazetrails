@@ -177,6 +177,13 @@ describe("ActionDispatch::Routing::UrlFor", () => {
     expect(host._routes).toBe(original);
   });
 
+  it("_withRoutes rejects an async block (would restore _routes too early)", () => {
+    const host = makeHost();
+    expect(() => _withRoutes.call(host, makeRoutes(), (() => Promise.resolve(1)) as never)).toThrow(
+      /synchronous/,
+    );
+  });
+
   it("_routesContext returns the host itself", () => {
     const host = makeHost();
     expect(_routesContext.call(host)).toBe(host);

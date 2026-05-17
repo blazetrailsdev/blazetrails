@@ -151,11 +151,21 @@ export function optimizeRoutesGeneration(this: UrlForHost): boolean {
  * a separate API.
  * @internal
  */
-export function _withRoutes<T>(this: UrlForHost, routes: UrlForRoutes, block: () => T): T {
+export function _withRoutes<T>(
+  this: UrlForHost,
+  routes: UrlForRoutes,
+  block: () => Exclude<T, Promise<unknown>>,
+): Exclude<T, Promise<unknown>> {
   const old = this._routes;
   this._routes = routes;
   try {
-    return block();
+    const result = block();
+    if (result != null && typeof (result as { then?: unknown }).then === "function") {
+      throw new Error(
+        "_withRoutes block must be synchronous; got a Promise. Use an async-aware helper instead.",
+      );
+    }
+    return result;
   } finally {
     this._routes = old;
   }

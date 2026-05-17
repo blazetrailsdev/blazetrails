@@ -278,7 +278,14 @@ export function modulesForHelpers(
  * basename list (without the `_helper` suffix or extension).
  */
 export async function allHelpersFromPath(paths: string | readonly string[]): Promise<string[]> {
-  const { glob } = await import("@blazetrails/activesupport/glob");
+  // Built path + `@vite-ignore` so bundlers (the website SW bundle in
+  // particular) don't statically resolve the Node-only glob dep
+  // (`tinyglobby` → `fdir` uses `createRequire`). Callers in non-Node
+  // environments must not invoke this function.
+  const modName = ["@blazetrails", "activesupport", "glob"].join("/");
+  const { glob } = (await import(
+    /* @vite-ignore */ modName
+  )) as typeof import("@blazetrails/activesupport/glob");
   const roots = typeof paths === "string" ? [paths] : paths;
   // Rails: per-path `sort!` then concat across paths, then `uniq!`
   // preserving first-occurrence order. We do NOT globally re-sort.

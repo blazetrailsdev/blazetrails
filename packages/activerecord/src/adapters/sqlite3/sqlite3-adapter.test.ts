@@ -684,6 +684,7 @@ describe("SQLite3AdapterTest", () => {
       },
     };
 
+    const originalDefault = SQLite3Adapter.strictStringsByDefault;
     SQLite3Adapter.strictStringsByDefault = true;
     try {
       const conn = new SQLite3Adapter(":memory:", { driver: fakeDriver });
@@ -694,7 +695,7 @@ describe("SQLite3AdapterTest", () => {
         await conn.close();
       }
     } finally {
-      SQLite3Adapter.strictStringsByDefault = false;
+      SQLite3Adapter.strictStringsByDefault = originalDefault;
     }
 
     capture.config = null;

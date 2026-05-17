@@ -1488,7 +1488,12 @@ export abstract class Migration {
         const nextNumber = last ? BigInt(last.version) + 1n : 0n;
         const newVersion = Migration.nextMigrationNumber(nextNumber);
         const fileBase = underscore(source.name);
-        const newPath = path.join(destination, `${newVersion}_${fileBase}.${scope}.ts`);
+        // Preserve the source file extension — a `.js` source must stay
+        // loadable under a JS-only runtime; switching to `.ts` would break
+        // both `Migrator.fromPath` discovery (regex matches .ts|.js) and
+        // the proxy's dynamic `import()`.
+        const ext = path.extname(source.filename) || ".ts";
+        const newPath = path.join(destination, `${newVersion}_${fileBase}.${scope}${ext}`);
         const oldPath = source.filename;
         // Build a fresh migration factory that imports the NEW path — spreading
         // `source` would carry over a closure pinned to the old engine file.

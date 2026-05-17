@@ -23,6 +23,7 @@ import {
 import { Table as ArelTable } from "@blazetrails/arel";
 import type { Nodes } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
+import { _assignAttributes } from "@blazetrails/activemodel";
 import {
   StrictLoadingViolationError,
   RecordNotSaved,
@@ -657,7 +658,6 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       : (this._assocDef.options.foreignKey ?? `${underscore(ctor.name)}_id`);
 
     const buildAttrs: Record<string, unknown> = {
-      ...this._scopeForCreateAttrs(attrs),
       ...attrs,
       [foreignKey as string]: this._record._readAttribute(primaryKey as string),
     };
@@ -674,7 +674,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       targetModel = findStiClass(targetModel, typeName);
     }
 
-    return new targetModel(buildAttrs);
+    const record = new targetModel(buildAttrs);
+    this._applyScopeForCreate(record, attrs, foreignKey as string);
+    return record;
   }
 
   private _buildThrough(attrs: Record<string, unknown> = {}): Base {
@@ -686,26 +688,44 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       targetModel = findStiClass(targetModel, typeName);
     }
 
-    const merged = { ...this._scopeForCreateAttrs(attrs), ...attrs };
-    return new targetModel(merged);
+    const record = new targetModel(attrs);
+    this._applyScopeForCreate(record, attrs);
+    return record;
   }
 
-  // Mirrors Rails' Association#initialize_attributes: scope_for_create
-  // pre-fills attributes from where-conditions on the association scope,
-  // letting user-supplied attrs win.
-  private _scopeForCreateAttrs(userAttrs: Record<string, unknown>): Record<string, unknown> {
+  // Mirrors Rails' Association#initialize_attributes (association.rb:217):
+  // pre-fill scope_for_create attrs, skipping keys the caller already
+  // supplied AND never overwriting the FK / STI type column.
+  private _applyScopeForCreate(
+    record: Base,
+    exceptFromScope: Record<string, unknown>,
+    foreignKey?: string,
+  ): void {
     const sfc =
       typeof (this as unknown as { scopeForCreate?: () => Record<string, unknown> })
         .scopeForCreate === "function"
         ? (this as unknown as { scopeForCreate: () => Record<string, unknown> }).scopeForCreate()
         : {};
+    if (!sfc || Object.keys(sfc).length === 0) return;
+
+    const skipAssign = new Set<string>();
+    if (foreignKey) skipAssign.add(foreignKey);
+    const inheritanceCol = getInheritanceColumn(record.constructor as typeof Base);
+    if (inheritanceCol) skipAssign.add(inheritanceCol);
+
+    const assigned = new Set<string>(
+      ((record as any).changedAttributeNamesToSave ?? []) as string[],
+    );
+    for (const k of Object.keys(exceptFromScope)) assigned.add(k);
+
     const out: Record<string, unknown> = {};
+    let any = false;
     for (const [k, v] of Object.entries(sfc)) {
-      if (!Object.prototype.hasOwnProperty.call(userAttrs, k)) {
-        out[k] = v;
-      }
+      if (assigned.has(k) && !skipAssign.has(k)) continue;
+      out[k] = v;
+      any = true;
     }
-    return out;
+    if (any) _assignAttributes(record as any, out);
   }
 
   /**

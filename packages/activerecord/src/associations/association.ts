@@ -4,6 +4,7 @@ import { resolveModel, buildHasManyRelation } from "../associations.js";
 import { AssociationScope } from "./association-scope.js";
 import { validateThroughReflection } from "./validate-through-reflection.js";
 import { camelize, singularize } from "@blazetrails/activesupport";
+import { _assignAttributes } from "@blazetrails/activemodel";
 
 /**
  * Base class for all association proxies. An Association wraps a single
@@ -317,11 +318,14 @@ export class Association {
   }
 
   /**
-   * Set the inverse instance on a newly built record. Subclasses
-   * (CollectionAssociation, HasOneAssociation) override to also set
-   * FK/type columns via setOwnerAttributes.
+   * Mirrors Rails' `Association#initialize_attributes` (association.rb:217):
+   * pre-fill the newly built record with attributes derived from the
+   * association's `scope_for_create` (where-conditions on the scope), but
+   * skip keys the caller already assigned, and never overwrite the FK or
+   * STI type column (those are managed by `setOwnerAttributes`).
    */
-  initializeAttributes(record: Base, _exceptFromScopeAttributes?: Record<string, unknown>): void {
+  initializeAttributes(record: Base, exceptFromScopeAttributes?: Record<string, unknown>): void {
+    applyScopeForCreate(this, record, exceptFromScopeAttributes);
     this.setInverseInstance(record);
   }
 
@@ -460,7 +464,8 @@ export class Association {
     return (this.klass as any)?.all?.() ?? null;
   }
 
-  private scopeForCreate(): Record<string, unknown> {
+  /** @internal */
+  scopeForCreate(): Record<string, unknown> {
     return (this.scope() as any)?.scopeForCreate?.() ?? {};
   }
 
@@ -532,4 +537,48 @@ export class Association {
 /** @internal */
 function associationScope(assoc: Association): unknown {
   return assoc.associationScope();
+}
+
+/**
+ * Apply scope_for_create attrs to `record`, mirroring Rails'
+ * `initialize_attributes` (association.rb:217). Skips keys the record
+ * already changed (so caller-supplied attrs win) and never overwrites
+ * the FK / STI type column (owned by `setOwnerAttributes`).
+ *
+ * @internal
+ */
+export function applyScopeForCreate(
+  assoc: Association,
+  record: Base,
+  exceptFromScopeAttributes?: Record<string, unknown>,
+): void {
+  const scope = assoc.scopeForCreate();
+  if (!scope || Object.keys(scope).length === 0) return;
+
+  const reflection = assoc.reflection as unknown as {
+    foreignKey?: string | string[];
+    type?: string | null;
+  };
+  const fk = reflection.foreignKey;
+  const skipAssign = new Set<string>();
+  if (Array.isArray(fk)) {
+    for (const k of fk) if (k) skipAssign.add(String(k));
+  } else if (fk) {
+    skipAssign.add(String(fk));
+  }
+  if (reflection.type) skipAssign.add(String(reflection.type));
+
+  const assigned = new Set<string>(((record as any).changedAttributeNamesToSave ?? []) as string[]);
+  if (exceptFromScopeAttributes) {
+    for (const k of Object.keys(exceptFromScopeAttributes)) assigned.add(k);
+  }
+
+  const attributes: Record<string, unknown> = {};
+  let any = false;
+  for (const [k, v] of Object.entries(scope)) {
+    if (assigned.has(k) && !skipAssign.has(k)) continue;
+    attributes[k] = v;
+    any = true;
+  }
+  if (any) _assignAttributes(record as any, attributes);
 }

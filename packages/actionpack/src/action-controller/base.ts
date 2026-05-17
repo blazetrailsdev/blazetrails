@@ -202,17 +202,23 @@ export class Base extends Metal {
     // through `_responseBody`, which doubles as the `performed?` signal —
     // assigning "" would otherwise leave the controller permanently
     // "performed" after a render-to-string.
+    // Snapshot every response-affecting slot — `render()` may mutate
+    // status, content-type, and headers in addition to the body, and
+    // Rails' `render_to_string` is documented as side-effect free.
     const oldBody = this._responseBody;
     const oldPerformed = this._performed;
+    const oldStatus = this._status;
+    const oldContentType = this._contentType;
+    const oldHeaders = { ...this._headers };
     try {
       this.render(options);
       return this.body;
     } finally {
-      // Restore controller state even if `render` throws so a failed
-      // `renderToString` doesn't leave the controller permanently
-      // "performed" with a mutated body.
       this._responseBody = oldBody;
       this._performed = oldPerformed;
+      this._status = oldStatus;
+      this._contentType = oldContentType;
+      this._headers = oldHeaders;
     }
   }
 

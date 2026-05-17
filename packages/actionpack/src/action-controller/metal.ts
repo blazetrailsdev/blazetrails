@@ -134,9 +134,9 @@ export class Metal extends AbstractController {
     return str;
   }
 
-  private _status: number = 200;
-  private _headers: Record<string, string> = {};
-  private _contentType: string | null = null;
+  protected _status: number = 200;
+  protected _headers: Record<string, string> = {};
+  protected _contentType: string | null = null;
 
   /** Dispatch an action in the context of a request/response. */
   async dispatch(action: string, request: Request, response: Response): Promise<Response> {

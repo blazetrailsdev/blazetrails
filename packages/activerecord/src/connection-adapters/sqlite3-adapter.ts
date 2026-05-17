@@ -845,9 +845,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   override checkVersion(): void {
-    if (this.databaseVersion.lt("3.37.0")) {
+    if (this.databaseVersion.lt("3.8.0")) {
       throw new Error(
-        `Your version of SQLite (${this.databaseVersion}) is too old. Active Record supports SQLite >= 3.37.0.`,
+        `Your version of SQLite (${this.databaseVersion}) is too old. Active Record supports SQLite >= 3.8.`,
       );
     }
   }

@@ -1051,28 +1051,44 @@ export abstract class Migration {
     return this.schema.indexName(this._pt(tableName), options);
   }
 
-  async removeColumns(tableName: string, ...columns: string[]): Promise<void> {
+  async removeColumns(
+    tableName: string,
+    ...columnsOrOptions: Array<string | ({ type?: ColumnType } & Record<string, unknown>)>
+  ): Promise<void> {
     if (this._recording) {
       // Record as a single removeColumns op so invertRemoveColumns can flip
       // it back to addColumns (Rails: CommandRecorder#invert_remove_columns).
-      this._recorder.record("removeColumns", [tableName, ...columns]);
+      this._recorder.record("removeColumns", [tableName, ...columnsOrOptions]);
       return;
     }
+    const last = columnsOrOptions[columnsOrOptions.length - 1];
+    const hasOpts = typeof last === "object" && last !== null;
+    const opts = (hasOpts ? (columnsOrOptions.pop() as Record<string, unknown>) : {}) as {
+      type?: ColumnType;
+      ifExists?: boolean;
+    };
+    const columns = columnsOrOptions as string[];
     for (const col of columns) {
-      await this.removeColumn(tableName, col);
+      await this.removeColumn(tableName, col, opts.type, { ifExists: opts.ifExists });
     }
   }
 
   async addColumns(
     tableName: string,
-    ...columns: Array<{ name: string; type: ColumnType; options?: ColumnOptions }>
+    ...columnsAndOptions: Array<string | ({ type: ColumnType } & ColumnOptions)>
   ): Promise<void> {
     if (this._recording) {
-      this._recorder.record("addColumns", [tableName, ...columns]);
+      this._recorder.record("addColumns", [tableName, ...columnsAndOptions]);
       return;
     }
+    const last = columnsAndOptions[columnsAndOptions.length - 1];
+    if (typeof last !== "object" || last === null || !("type" in last)) {
+      throw new TypeError("addColumns requires a trailing options hash with a :type entry");
+    }
+    const { type, ...rest } = columnsAndOptions.pop() as { type: ColumnType } & ColumnOptions;
+    const columns = columnsAndOptions as string[];
     for (const col of columns) {
-      await this.addColumn(tableName, col.name, col.type, col.options ?? {});
+      await this.addColumn(tableName, col, type, rest);
     }
   }
 

@@ -98,16 +98,25 @@ describe("ActionDispatch::Routing::UrlFor", () => {
     expect(host._routes).toBeNull();
   });
 
-  it("routeFor calls `${name}Url` on the host", () => {
-    const userUrl = vi.fn(() => "/users/42");
+  it("routeFor calls `${name}_url` on the host (matches generateRouteHelpers)", () => {
+    const user_url = vi.fn(() => "/users/42");
     const host = makeHost();
-    (host as unknown as Record<string, unknown>)["userUrl"] = userUrl;
+    (host as unknown as Record<string, unknown>)["user_url"] = user_url;
     expect(routeFor.call(host, "user", { id: 42 })).toBe("/users/42");
-    expect(userUrl).toHaveBeenCalledWith({ id: 42 });
+    expect(user_url).toHaveBeenCalledWith({ id: 42 });
   });
 
   it("routeFor throws when helper missing", () => {
-    expect(() => routeFor.call(makeHost(), "missing")).toThrow(/missingUrl/);
+    expect(() => routeFor.call(makeHost(), "missing")).toThrow(/missing_url/);
+  });
+
+  it("class-instance options fall through to HelperMethodBuilder dispatch", () => {
+    class Post {
+      id = 1;
+    }
+    expect(() =>
+      fullUrlFor.call(makeHost(), new Post() as unknown as Record<string, unknown>),
+    ).toThrow(/HelperMethodBuilder/);
   });
 
   it("optimizeRoutesGeneration requires empty defaultUrlOptions", () => {
@@ -147,8 +156,8 @@ describe("ActionDispatch::Routing::UrlFor", () => {
     expect(urlOptions.call(host)).toEqual({ host: "x.test", port: 3000 });
   });
 
-  it("throws when no _routes available", () => {
+  it("throws Rails-shaped NO_ROUTES_MESSAGE when _routes missing", () => {
     const host = makeHost({ _routes: null });
-    expect(() => fullUrlFor.call(host, null)).toThrow(/No routes/);
+    expect(() => fullUrlFor.call(host, null)).toThrow(/include routing helpers explicitly/);
   });
 });

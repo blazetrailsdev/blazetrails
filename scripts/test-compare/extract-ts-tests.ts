@@ -4,6 +4,8 @@ import * as fs from "fs";
 import { globSync } from "tinyglobby";
 import type { TestManifest, TestPackageInfo, TestFileInfo, TestCaseInfo } from "./types.js";
 
+const GATING_MODIFIERS = new Set(["skipIf", "runIf"]);
+
 const SCRIPT_DIR = __dirname;
 const ROOT_DIR = path.resolve(SCRIPT_DIR, "../..");
 const OUTPUT_DIR = path.join(SCRIPT_DIR, "output");
@@ -161,7 +163,6 @@ function extractFileTests(filePath: string): TestFileInfo {
         const inner = expression.expression;
         const base = inner.expression;
         const modifier = inner.name.text;
-        const GATING_MODIFIERS = new Set(["skipIf", "runIf"]);
         if (ts.isIdentifier(base) && GATING_MODIFIERS.has(modifier)) {
           if (
             base.text === "describe" ||

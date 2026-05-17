@@ -207,12 +207,23 @@ export class HasAndBelongsToMany {
     model.prototype.destroyAssociations = async function (this: any): Promise<void> {
       await this.association(middleName).handleDependency();
       this.association(name).reset?.();
+      // Rails' `association(:name).reset` only clears the Association
+      // instance's loaded state. In this codebase, collection readers are
+      // additionally memoized in `_collectionProxies` (see associations.ts
+      // ~2334), so the user-facing reader would still return the stale
+      // proxy unless we evict it too.
+      this._collectionProxies?.delete(name);
       if (typeof prevDestroyAssociations === "function") {
         await prevDestroyAssociations.call(this);
       }
     };
     const HABTM_DESTROY_INSTALLED = Symbol.for("blazetrails.habtm.destroyAssociations.installed");
-    if (!Object.prototype.hasOwnProperty.call(model, HABTM_DESTROY_INSTALLED)) {
+    // Use `in` (inheritance walk) rather than own-property: when a subclass
+    // declares its own HABTM, the parent already installed a bridge that the
+    // callback engine COW'd into the subclass's chain. Installing a second
+    // bridge on the subclass would dispatch `destroyAssociations` twice,
+    // running the full chained override stack twice (duplicate cleanup).
+    if (!(HABTM_DESTROY_INSTALLED in model)) {
       Object.defineProperty(model, HABTM_DESTROY_INSTALLED, {
         value: true,
         configurable: true,

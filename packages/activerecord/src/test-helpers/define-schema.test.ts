@@ -225,11 +225,12 @@ describe("defineSchema", () => {
     });
   });
 
-  // PG-only-type guard tests are skipped under the PG test adapter because
-  // they assert the throw path that fires only on MySQL/SQLite. The PG
-  // round-trip path is covered by adapters/postgresql/define-schema-pg-types.test.ts.
-  describe.skipIf(process.env["TEST_ADAPTER"] === "postgresql")("PG-only column types", () => {
+  // PG-only-type guards fire only on MySQL/SQLite — skip these when the
+  // test adapter resolves to PG. PG positive path lives in
+  // adapters/postgresql/define-schema-pg-types.test.ts.
+  describe("PG-only column types", () => {
     it("rejects citext/hstore/uuid/interval/oid against non-PG adapters", async () => {
+      if (adapter.adapterName === "postgres") return;
       for (const ty of ["citext", "hstore", "uuid", "interval", "oid"] as const) {
         await expect(
           defineSchema(adapter, { t: { col: ty } }, { dropExisting: true }),
@@ -238,6 +239,7 @@ describe("defineSchema", () => {
     });
 
     it("rejects array:true against non-PG adapters", async () => {
+      if (adapter.adapterName === "postgres") return;
       await expect(
         defineSchema(adapter, {
           t: { tags: { type: "integer", array: true } },

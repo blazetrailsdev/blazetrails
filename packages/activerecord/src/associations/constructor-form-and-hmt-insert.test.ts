@@ -21,6 +21,9 @@ beforeEach(async () => {
     b30_profiles: { name: "string", owner_id: "integer" },
     b30_posts: { title: "string" },
     b30_tags: { name: "string" },
+    // HABTM defaults from associations/builder/has-and-belongs-to-many.ts:
+    //   ownerFk  = `${underscore(model.name)}_id`             = "b30_post_id"
+    //   sourceFk = `${underscore(demodulize(className))}_id`  = "b30_tag_id"
     b30_posts_b30_tags: { b30_post_id: "integer", b30_tag_id: "integer" },
   });
 });
@@ -118,8 +121,11 @@ describe("HABTM insert_record two-step", () => {
     expect(ok).toBe(true);
     // super.insertRecord saved the target
     expect(tag.isPersisted()).toBe(true);
-    // join row exists with correct FKs — verify via the through proxy
-    const tags = await (post as any).association("tags").loadTarget();
+    // Reload to force a fresh through-load from the DB so we know the join
+    // row was actually persisted (rather than just cached in the in-memory
+    // proxy from build()).
+    const reloaded = await B30Post.find(post.id);
+    const tags = await (reloaded as any).association("tags").loadTarget();
     expect(tags).toHaveLength(1);
     expect((tags[0] as any).id).toBe(tag.id);
   });

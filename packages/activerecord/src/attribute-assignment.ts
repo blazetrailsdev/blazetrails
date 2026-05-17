@@ -35,7 +35,13 @@ export function _assignAttributes(
   for (const [k, v] of Object.entries(attributes)) {
     if (k.includes("(")) {
       (multiParameterAttributes ??= Object.create(null))[k] = v;
-    } else if (assignAssociationIfMatch(this, k, v)) {
+    } else if (
+      assignAssociationIfMatch(
+        this as { constructor?: unknown; association?: (name: string) => unknown },
+        k,
+        v,
+      )
+    ) {
       // Routed to association proxy writer (constructor-form collection / singular).
     } else if (v !== null && typeof v === "object" && !Array.isArray(v)) {
       (nestedParameterAttributes ??= Object.create(null))[k] = v;
@@ -136,13 +142,18 @@ export function findParameterPosition(multiparameterName: string): number {
 
 /**
  * @internal
- * Constructor-form association writer. When `key` matches a declared
- * association on the host's constructor, dispatch `value` to the
- * association proxy's `replace`/`writer` rather than `writeAttribute`.
- * Mirrors Rails' `_assign_attribute` routing into association writers.
+ * Shared dispatch for constructor-form / assignAttributes association
+ * writers. When `key` matches a declared association on `host.constructor`,
+ * route `value` to the proxy's `replace`/`writer` rather than
+ * `writeAttribute`. Mirrors Rails' `_assign_attribute` routing through
+ * `public_send("#{k}=")` into association writer methods.
+ *
+ * Single source of truth used by `persistence.ts#assignAttributes`,
+ * `attribute-assignment.ts#_assignAttributes`, and the constructor
+ * dispatch in `base.ts`.
  */
-function assignAssociationIfMatch(
-  host: AttributeAssignmentHost,
+export function assignAssociationIfMatch(
+  host: { constructor?: unknown; association?: (name: string) => unknown },
   key: string,
   value: unknown,
 ): boolean {

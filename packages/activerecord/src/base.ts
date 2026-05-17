@@ -589,15 +589,12 @@ function _dispatchAssociationAttrs(
   record: Base,
   assocs: Array<{ type: string; name: string; value: unknown }>,
 ): void {
-  for (const { type, name, value } of assocs) {
-    const proxy = (record as unknown as { association: (n: string) => unknown }).association(
+  for (const { name, value } of assocs) {
+    _AttributeAssignment.assignAssociationIfMatch(
+      record as unknown as { constructor?: unknown; association?: (name: string) => unknown },
       name,
-    ) as { replace?: (v: unknown[]) => void; writer?: (v: unknown) => void };
-    if (type === "hasMany" || type === "hasAndBelongsToMany") {
-      proxy.replace?.(Array.isArray(value) ? (value as unknown[]) : value == null ? [] : [value]);
-    } else {
-      proxy.writer?.(value);
-    }
+      value,
+    );
   }
 }
 

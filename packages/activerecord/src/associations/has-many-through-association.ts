@@ -112,8 +112,16 @@ function buildHabtmThroughRecord(assoc: HasManyThroughAssociation, record: Base)
   const ownerPk = throughAssocDef.options.primaryKey ?? ctor.primaryKey ?? "id";
   const ownerFk = throughAssocDef.options.foreignKey ?? `${underscore(ctor.name)}_id`;
   const pkValue = (assoc.owner as any)._readAttribute?.(ownerPk) ?? (assoc.owner as any)[ownerPk];
-  const sourceName = assocDef.options?.source ?? singularize(assocDef.name);
-  const sourceFk = `${underscore(sourceName)}_id`;
+  // Prefer the HABTM builder's rightReflection FK (className-derived) so
+  // the join row writes to the same column the builder declared on the
+  // generated JoinModel. Fall back to the source/singularized name only
+  // when the right reflection is absent (non-builder-constructed habtm).
+  const rightReflection = (
+    throughModel as { rightReflection?: { options?: { foreignKey?: string } } }
+  ).rightReflection;
+  const sourceFk =
+    rightReflection?.options?.foreignKey ??
+    `${underscore(assocDef.options?.source ?? singularize(assocDef.name))}_id`;
   const targetPk = (record.constructor as any).primaryKey ?? "id";
   const joinAttrs: Record<string, unknown> = {
     [ownerFk as string]: pkValue,

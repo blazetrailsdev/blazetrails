@@ -49,3 +49,16 @@ export {
   type RouteSetLike,
   type UrlForClassMethods,
 } from "./url-for.js";
+export {
+  applyCaching,
+  cache,
+  cacheConfigured,
+  CACHING_DEFAULTS,
+  CACHING_SLOTS,
+  viewCacheDependencies,
+  viewCacheDependency,
+  type CachingClassMethods,
+  type CachingHost,
+  type CachingSlot,
+  type ViewCacheDependency,
+} from "./caching.js";

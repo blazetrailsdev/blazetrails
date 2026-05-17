@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   _routesInstanceDefault,
   _routesClassDefault,
+  UrlForDefaults,
   filterActionMethodsForRoutes,
   type RouteSetLike,
 } from "./url-for.js";
@@ -45,6 +46,23 @@ describe("AbstractController::UrlFor", () => {
       const filtered = filterActionMethodsForRoutes(original, null);
       filtered.push("evil");
       expect(original).toEqual(["a", "b"]);
+    });
+
+    it("accepts a non-array iterable for helperNames (Set, generator)", () => {
+      const routes: RouteSetLike = {
+        namedRoutes: { helperNames: new Set(["posts_path", "show"]) },
+      };
+      expect(filterActionMethodsForRoutes(["show", "index"], routes)).toEqual(["index"]);
+    });
+  });
+
+  describe("UrlForDefaults", () => {
+    it("exposes the instance stub under Rails-shaped name", () => {
+      expect(UrlForDefaults._routes).toBe(_routesInstanceDefault);
+    });
+
+    it("exposes the class default under _routesStatic", () => {
+      expect(UrlForDefaults._routesStatic).toBe(_routesClassDefault);
     });
   });
 });

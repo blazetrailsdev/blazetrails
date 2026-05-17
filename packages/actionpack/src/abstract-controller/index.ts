@@ -42,6 +42,7 @@ export {
 export {
   _routesInstanceDefault,
   _routesClassDefault,
+  UrlForDefaults,
   filterActionMethodsForRoutes,
   type NamedRoutesLike,
   type RouteSetLike,

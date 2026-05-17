@@ -16,7 +16,14 @@
  */
 
 export interface NamedRoutesLike {
-  helperNames: readonly string[];
+  /**
+   * Names of generated route helpers (e.g. `posts_path`, `post_url`).
+   * Typed as a generic `Iterable<string>` so the future
+   * `NamedRouteCollection` port can return a Set or any other lazy
+   * source without forcing an array allocation just to satisfy the
+   * contract.
+   */
+  helperNames: Iterable<string>;
 }
 
 export interface RouteSetLike {
@@ -53,6 +60,24 @@ export function _routesInstanceDefault(this: object): never {
  * a route set is wired up.
  */
 export const _routesClassDefault: UrlForClassMethods["_routes"] = () => null;
+
+/**
+ * Convenience bag of Rails-shaped defaults. Use this to wire both
+ * sides of the contract at once without renaming:
+ *
+ * ```ts
+ * Host.prototype._routes = UrlForDefaults._routes;        // instance
+ * (Host as { _routes: () => RouteSetLike | null })._routes = UrlForDefaults._routesStatic;
+ * ```
+ *
+ * The two flat exports (`_routesInstanceDefault` /
+ * `_routesClassDefault`) remain the canonical names — they're
+ * unambiguous when both sides are in scope.
+ */
+export const UrlForDefaults = {
+  _routes: _routesInstanceDefault,
+  _routesStatic: _routesClassDefault,
+} as const;
 
 /**
  * Filter `actionMethods` by removing any names that collide with

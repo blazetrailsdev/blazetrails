@@ -3,7 +3,7 @@ import type { AssociationDefinition, AssociationOptions } from "../associations.
 import { resolveModel, buildHasManyRelation } from "../associations.js";
 import { AssociationScope } from "./association-scope.js";
 import { validateThroughReflection } from "./validate-through-reflection.js";
-import { camelize, singularize } from "@blazetrails/activesupport";
+import { camelize, singularize, underscore } from "@blazetrails/activesupport";
 import { _assignAttributes } from "@blazetrails/activemodel";
 
 /**
@@ -320,9 +320,12 @@ export class Association {
   /**
    * Mirrors Rails' `Association#initialize_attributes` (association.rb:217):
    * pre-fill the newly built record with attributes derived from the
-   * association's `scope_for_create` (where-conditions on the scope), but
-   * skip keys the caller already assigned, and never overwrite the FK or
-   * STI type column (those are managed by `setOwnerAttributes`).
+   * association's `scope_for_create` (where-conditions on the scope).
+   * Caller-supplied / already-changed keys normally win; the exception is
+   * `skip_assign = [foreign_key, foreign_type]`, where the scope value is
+   * allowed through (Rails relies on this so a scoped association's FK /
+   * polymorphic type gets anchored from the scope). `foreign_type` is the
+   * polymorphic-belongs-to type column — NOT the STI inheritance column.
    */
   initializeAttributes(record: Base, exceptFromScopeAttributes?: Record<string, unknown>): void {
     applyScopeForCreate(this, record, exceptFromScopeAttributes);
@@ -577,7 +580,7 @@ export function applyScopeForCreate(
   const fk = rich?.foreignKey ?? options.foreignKey;
   // Polymorphic foreign-type column derives from `:as` when the rich
   // reflection isn't yet installed (same shape `setOwnerAttributes` uses).
-  const foreignType = rich?.type ?? (options.as ? `${options.as}_type` : null);
+  const foreignType = rich?.type ?? (options.as ? `${underscore(options.as)}_type` : null);
   const skipAssign = new Set<string>();
   if (Array.isArray(fk)) {
     for (const k of fk) if (k) skipAssign.add(String(k));

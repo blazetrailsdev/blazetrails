@@ -708,8 +708,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   }
 
   // Mirrors Rails' Association#initialize_attributes (association.rb:217):
-  // pre-fill scope_for_create attrs, skipping keys the caller already
-  // supplied AND never overwriting the FK / STI type column.
+  // pre-fill scope_for_create attrs. Caller-supplied / already-changed
+  // keys normally win, except for skip_assign = [foreign_key,
+  // foreign_type], where the scope value is allowed through (Rails
+  // relies on this to re-anchor a scoped FK / polymorphic type).
+  // `foreign_type` here is the polymorphic-belongs-to type column
+  // (`${as}_type`), NOT the STI inheritance column.
   private _applyScopeForCreate(
     record: Base,
     exceptFromScope: Record<string, unknown>,

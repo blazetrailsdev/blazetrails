@@ -212,7 +212,9 @@ describe("DelegatedTypeTest", () => {
   });
 
   it.skip("touch account", () => {
-    // BLOCKED: uuid + polymorphic-touch — requires UUID PK + touch on a polymorphic delegated_type association; no STI routing gap
+    // BLOCKED: uuid + polymorphic-touch — touch on a polymorphic delegated_type association with a UUID PK; no STI routing gap (audit-STI)
+    // ROOT-CAUSE: associations/belongs-to-association.ts#touch + connection-adapters timestamp paths do not propagate touch through a polymorphic owner whose PK is a UUID (foreign_type/foreign_key resolution falls back to integer-PK assumptions)
+    // SCOPE: ~30–50 LOC across associations/belongs-to-association.ts + persistence touch path; affects this single delegated-type touch test
   });
 
   it("builder method", () => {

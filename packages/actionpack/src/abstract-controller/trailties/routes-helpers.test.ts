@@ -64,6 +64,33 @@ describe("withRoutesHelpers", () => {
     expect(nsSpy).toHaveBeenCalledWith(false);
   });
 
+  it("copies methods reachable through the module's prototype chain (not just own keys)", () => {
+    const base: HelperMethodsModule = { inherited: () => "from-proto" };
+    const layered = Object.create(base) as HelperMethodsModule;
+    layered.own = () => "own";
+    const cls = makeClass();
+    withRoutesHelpers({ urlHelpers: () => layered })(cls);
+    const proto = cls.prototype as { inherited?: () => string; own?: () => string };
+    expect(proto.inherited?.()).toBe("from-proto");
+    expect(proto.own?.()).toBe("own");
+  });
+
+  it("does not pick up trailtieRoutesUrlHelpers planted on Object.prototype", () => {
+    (Object.prototype as { trailtieRoutesUrlHelpers?: unknown }).trailtieRoutesUrlHelpers = () => ({
+      sneaky: () => "polluted",
+    });
+    try {
+      const cls = makeClass();
+      const RouteHelper: HelperMethodsModule = { clean: () => "clean" };
+      withRoutesHelpers({ urlHelpers: () => RouteHelper })(cls);
+      const proto = cls.prototype as { clean?: () => string; sneaky?: () => string };
+      expect(proto.clean?.()).toBe("clean");
+      expect(proto.sneaky).toBeUndefined();
+    } finally {
+      delete (Object.prototype as { trailtieRoutesUrlHelpers?: unknown }).trailtieRoutesUrlHelpers;
+    }
+  });
+
   it("multiple wirings layer on the same prototype without clobbering unrelated entries", () => {
     const A: HelperMethodsModule = { a: () => "a" };
     const B: HelperMethodsModule = { b: () => "b" };

@@ -68,9 +68,14 @@ export function withRoutesHelpers(
       : routes.urlHelpers(includePathHelpers);
     // Rails: `klass.include(mod)` — make URL helpers available as
     // instance methods on the controller. Copy each method onto the
-    // class prototype.
-    for (const [name, fn] of Object.entries(mod)) {
-      (cls.prototype as Record<string, unknown>)[name] = fn;
+    // class prototype. Iterate with `for...in` so methods reachable
+    // via prototype chains (e.g. a helpers module built through
+    // `_helpersForModification` / `makeIncludeLink` proxy nodes)
+    // aren't silently skipped.
+    const proto = cls.prototype as Record<string, unknown>;
+    for (const name in mod) {
+      const fn = (mod as Record<string, unknown>)[name];
+      if (typeof fn === "function") proto[name] = fn;
     }
   };
 }
@@ -88,7 +93,11 @@ function findTrailtieUrlHelpers(
   cls: RoutesHelpersClassMethods,
 ): RoutesHelpersClassMethods["trailtieRoutesUrlHelpers"] {
   let current: object | null = cls;
-  while (current) {
+  // Stop before Function.prototype / Object.prototype so a polyfill
+  // or accidental property defined there can't be picked up. Rails
+  // restricts the lookup to namespace modules; we restrict to
+  // user-defined classes.
+  while (current && current !== Function.prototype && current !== Object.prototype) {
     const own = Object.getOwnPropertyDescriptor(current, "trailtieRoutesUrlHelpers")?.value as
       | RoutesHelpersClassMethods["trailtieRoutesUrlHelpers"]
       | undefined;

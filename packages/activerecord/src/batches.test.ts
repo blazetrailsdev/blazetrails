@@ -587,8 +587,30 @@ describe("EachTest", () => {
     }).rejects.toThrow();
   });
 
-  it.skip("find in batches should not error if config overridden", () => {
-    // ROOT-CAUSE fixed: activeRecordConfig.errorOnIgnoredOrder + errorOnIgnore:false override
+  it("find in batches should not error if config overridden", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+      }
+    }
+    await Post.create({ title: "a" });
+    activeRecordConfig.errorOnIgnoredOrder = true;
+    let threw = false;
+    try {
+      for await (const _b of Post.order("title").findInBatches({
+        batchSize: 1,
+        errorOnIgnore: false,
+      })) {
+        /* noop */
+      }
+    } catch {
+      threw = true;
+    } finally {
+      activeRecordConfig.errorOnIgnoredOrder = false;
+    }
+    expect(threw).toBe(false);
   });
 
   it("find in batches should error on config specified to error", async () => {
@@ -633,8 +655,25 @@ describe("EachTest", () => {
     expect(batches.length).toBe(1);
   });
 
-  it.skip("find in batches should use any column as primary key when start is not specified", () => {
-    // ROOT-CAUSE fixed: cursor option supported; needs Subscriber test fixture
+  it("find in batches should use any column as primary key when start is not specified", async () => {
+    const adp = freshAdapter();
+    class Subscriber extends Base {
+      static {
+        this.primaryKey = "nick";
+        this.attribute("nick", "string");
+        this.attribute("name", "string");
+        this.adapter = adp;
+      }
+    }
+    await Subscriber.create({ nick: "a", name: "Alice" });
+    await Subscriber.create({ nick: "b", name: "Bob" });
+    await Subscriber.create({ nick: "c", name: "Carol" });
+    const collected: any[] = [];
+    for await (const batch of Subscriber.findInBatches({ batchSize: 1, cursor: "nick" })) {
+      expect(Array.isArray(batch)).toBe(true);
+      collected.push(...batch);
+    }
+    expect(collected.map((r) => r.readAttribute("nick"))).toEqual(["a", "b", "c"]);
   });
 
   it("in batches update all returns zero when no batches", async () => {
@@ -729,8 +768,25 @@ describe("EachTest", () => {
     expect(total).toBe(0);
   });
 
-  it.skip("in batches should use any column as primary key when start is not specified", () => {
-    // ROOT-CAUSE fixed: cursor option supported; needs Subscriber test fixture
+  it("in batches should use any column as primary key when start is not specified", async () => {
+    const adp = freshAdapter();
+    class Subscriber extends Base {
+      static {
+        this.primaryKey = "nick";
+        this.attribute("nick", "string");
+        this.attribute("name", "string");
+        this.adapter = adp;
+      }
+    }
+    await Subscriber.create({ nick: "a", name: "Alice" });
+    await Subscriber.create({ nick: "b", name: "Bob" });
+    await Subscriber.create({ nick: "c", name: "Carol" });
+    let count = 0;
+    for await (const rel of Subscriber.all().inBatches({ batchSize: 1, cursor: "nick" })) {
+      expect(rel).toBeInstanceOf(Relation);
+      count += (await rel.toArray()).length;
+    }
+    expect(count).toBe(3);
   });
 
   it("in_batches should return no records if the limit is 0 and load is ", async () => {
@@ -801,6 +857,22 @@ describe("EachTest", () => {
     const lastBatch = batches[batches.length - 1];
     const records = await lastBatch.toArray();
     expect(records[records.length - 1].readAttribute("id")).toBe(secondToLast.readAttribute("id"));
+  });
+
+  it("in batches with useRanges yields batches that cover all rows", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+      }
+    }
+    for (let i = 0; i < 7; i++) await Post.create({ title: `t-${i}` });
+    let total = 0;
+    for await (const rel of Post.all().inBatches({ batchSize: 3, useRanges: true })) {
+      total += (await rel.toArray()).length;
+    }
+    expect(total).toBe(7);
   });
 });
 

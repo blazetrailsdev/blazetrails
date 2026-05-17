@@ -135,7 +135,6 @@ export class Metal extends AbstractController {
 
   private _status: number = 200;
   private _headers: Record<string, string> = {};
-  private _body: string = "";
   private _contentType: string | null = null;
 
   /** Dispatch an action in the context of a request/response. */
@@ -156,8 +155,9 @@ export class Metal extends AbstractController {
     if (this._contentType) {
       this.response.setHeader("content-type", this._contentType);
     }
-    if (this._body) {
-      this.response.body = this._body;
+    const body = this._responseBody;
+    if (body) {
+      this.response.body = typeof body === "string" ? body : body.toString();
     }
 
     return this.response;
@@ -212,7 +212,9 @@ export class Metal extends AbstractController {
     return this._contentType;
   }
 
-  /** Send a head-only response with given status. */
+  /** Send a head-only response with given status. Mirrors Rails'
+   * `ActionController::Head#head` which sets `self.response_body = ""`
+   * to mark `performed?` true. */
   head(status: number | string): void {
     if (typeof status === "string") {
       const code = STATUS_CODES[status];
@@ -221,17 +223,17 @@ export class Metal extends AbstractController {
     } else {
       this._status = status;
     }
-    this._body = "";
-    this.markPerformed();
+    this._responseBody = "";
   }
 
   /** Set the response body directly. */
   set body(value: string) {
-    this._body = value;
+    this._responseBody = value;
   }
 
   get body(): string {
-    return this._body;
+    const body = this._responseBody;
+    return typeof body === "string" ? body : (body?.toString() ?? "");
   }
 
   /**
@@ -239,12 +241,14 @@ export class Metal extends AbstractController {
    * response. Mirrors `ActionController::Metal#response_body=`. After
    * assignment, `isPerformed()` returns true.
    */
-  set responseBody(body: string | string[] | Buffer | null | undefined) {
+  override set responseBody(body: string | string[] | Buffer | null | undefined) {
     if (body === null || body === undefined) {
-      // Mirror Rails' `else: response.reset_body!` — only the response
-      // stream is reset; `@_response_body` is left untouched, so a
-      // controller that previously assigned a body remains "performed?".
-      this._body = "";
+      // Mirror Rails' `else: response.reset_body!`. We assign the empty
+      // string (rather than leaving the prior body in place) so the
+      // visible `responseBody`/`body` getters reflect the reset; the
+      // non-null value still keeps `performed?` true, matching Rails'
+      // semantic where assigning falsy body still records the call.
+      this._responseBody = "";
       if (this.response) this.response.body = "";
       return;
     }
@@ -253,13 +257,13 @@ export class Metal extends AbstractController {
       : Buffer.isBuffer(body)
         ? body.toString()
         : body;
-    this._body = str;
     this._responseBody = str;
     if (this.response) this.response.body = str;
   }
 
   override get responseBody(): string {
-    return this._body;
+    const body = this._responseBody;
+    return typeof body === "string" ? body : (body?.toString() ?? "");
   }
 
   /**
@@ -277,7 +281,7 @@ export class Metal extends AbstractController {
     if (this._contentType) {
       headers["content-type"] = this._contentType;
     }
-    return [this._status, headers, bodyFromString(this._body)];
+    return [this._status, headers, bodyFromString(this.body)];
   }
 
   /** Resolve a status symbol to a number. */

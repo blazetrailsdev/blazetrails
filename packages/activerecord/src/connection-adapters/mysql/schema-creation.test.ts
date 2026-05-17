@@ -9,6 +9,7 @@ import {
   ColumnDefinition,
   TableDefinition,
 } from "../abstract/schema-definitions.js";
+import { TableDefinition as MyTd } from "./schema-definitions.js";
 
 describe("MySQL::SchemaCreation", () => {
   const sc = new SchemaCreation();
@@ -140,8 +141,7 @@ describe("MySQL::SchemaCreation", () => {
 });
 
 describe("MySQL::TableDefinition#toSql via SchemaCreation.accept", () => {
-  it("emits bigint AUTO_INCREMENT PRIMARY KEY for default id column", async () => {
-    const { TableDefinition: MyTd } = await import("./schema-definitions.js");
+  it("emits bigint AUTO_INCREMENT PRIMARY KEY for default id column", () => {
     const td = new MyTd("users", {});
     td.string("name");
     expect(td.toSql()).toBe(
@@ -149,15 +149,13 @@ describe("MySQL::TableDefinition#toSql via SchemaCreation.accept", () => {
     );
   });
 
-  it("honors id: false (no primary key column)", async () => {
-    const { TableDefinition: MyTd } = await import("./schema-definitions.js");
+  it("honors id: false (no primary key column)", () => {
     const td = new MyTd("logs", { id: false });
     td.string("body");
     expect(td.toSql()).toBe("CREATE TABLE `logs` (`body` varchar(255))");
   });
 
-  it("appends DEFAULT CHARSET and COLLATE from table options", async () => {
-    const { TableDefinition: MyTd } = await import("./schema-definitions.js");
+  it("appends DEFAULT CHARSET and COLLATE from table options", () => {
     const td = new MyTd("posts", { charset: "utf8mb4", collation: "utf8mb4_unicode_ci" });
     td.string("title");
     const sql = td.toSql();
@@ -165,15 +163,13 @@ describe("MySQL::TableDefinition#toSql via SchemaCreation.accept", () => {
     expect(sql).toContain("COLLATE=utf8mb4_unicode_ci");
   });
 
-  it("emits IF NOT EXISTS and TEMPORARY modifiers", async () => {
-    const { TableDefinition: MyTd } = await import("./schema-definitions.js");
+  it("emits IF NOT EXISTS and TEMPORARY modifiers", () => {
     const td = new MyTd("tmp", { id: false, temporary: true, ifNotExists: true });
     td.integer("n");
     expect(td.toSql()).toBe("CREATE TEMPORARY TABLE IF NOT EXISTS `tmp` (`n` int)");
   });
 
-  it("emits composite PRIMARY KEY clause", async () => {
-    const { TableDefinition: MyTd } = await import("./schema-definitions.js");
+  it("emits composite PRIMARY KEY clause", () => {
     const td = new MyTd("memberships", { primaryKey: ["user_id", "group_id"] });
     td.bigint("user_id", { null: false });
     td.bigint("group_id", { null: false });
@@ -181,8 +177,7 @@ describe("MySQL::TableDefinition#toSql via SchemaCreation.accept", () => {
     expect(sql).toContain("PRIMARY KEY (`user_id`, `group_id`)");
   });
 
-  it("inlines indexes when supportsIndexesInCreate (MySQL)", async () => {
-    const { TableDefinition: MyTd } = await import("./schema-definitions.js");
+  it("inlines indexes when supportsIndexesInCreate (MySQL)", () => {
     const td = new MyTd("users", {});
     td.string("email");
     td.index(["email"], { unique: true, name: "idx_users_email" });

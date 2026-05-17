@@ -41,7 +41,7 @@ export interface ColumnMethods {
 
 export class TableDefinition extends AbstractTableDefinition {
   /** @internal Full adapter when constructed by `createTableDefinition`; used so `toSql()`
-   * reuses the adapter's pre-configured `MysqlSchemaCreation` (carrying MariaDB flag, etc.). */
+   * reuses the adapter's `MysqlSchemaCreation` instance rather than allocating a new one. */
   private readonly _mysqlAdapter?: {
     schemaStatements?: () => { schemaCreation: MysqlSchemaCreation };
   };

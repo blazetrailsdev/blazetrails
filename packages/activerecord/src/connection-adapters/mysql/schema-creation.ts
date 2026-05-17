@@ -182,6 +182,21 @@ export class SchemaCreation extends AbstractSchemaCreation {
     );
   }
 
+  /** @internal Mirrors `AbstractMysqlAdapter#supportsIndexesInCreate` (always true on MySQL/MariaDB). */
+  protected supportsIndexesInCreate(): boolean {
+    return true;
+  }
+
+  /** @internal Mirrors Rails' `use_foreign_keys?` — true on MySQL/MariaDB. */
+  protected useForeignKeys(): boolean {
+    return true;
+  }
+
+  /** @internal Mirrors `AbstractMysqlAdapter#supportsCheckConstraints` — true on MySQL 8+/MariaDB 10.2+. */
+  protected supportsCheckConstraints(): boolean {
+    return true;
+  }
+
   /**
    * MySQL CREATE TABLE generator. Mirrors Rails'
    * `abstract/schema_creation.rb#visit_TableDefinition`, routing every
@@ -201,14 +216,15 @@ export class SchemaCreation extends AbstractSchemaCreation {
       const cols = o.compositePrimaryKey.map((k) => this.adapter.quoteIdentifier(k)).join(", ");
       statements.push(`PRIMARY KEY (${cols})`);
     }
-    for (const idx of o.indexes) {
-      statements.push(this.visitIndexDefinition(idx, false));
+    if (this.supportsIndexesInCreate()) {
+      for (const idx of o.indexes) statements.push(this.visitIndexDefinition(idx, false));
     }
-    for (const fk of o.foreignKeys) {
-      statements.push(this.visitForeignKeyDefinition(fk));
+    if (this.useForeignKeys()) {
+      for (const fk of o.foreignKeys) statements.push(this.visitForeignKeyDefinition(fk));
     }
-    for (const chk of o.checkConstraints) {
-      statements.push(this.visitCheckConstraintDefinition(chk));
+    if (this.supportsCheckConstraints()) {
+      for (const chk of o.checkConstraints)
+        statements.push(this.visitCheckConstraintDefinition(chk));
     }
 
     if (statements.length > 0) sql += `(${statements.join(", ")})`;

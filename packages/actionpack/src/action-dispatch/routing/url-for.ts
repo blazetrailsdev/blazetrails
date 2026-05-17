@@ -68,7 +68,13 @@ export type UrlForOptions =
   | symbol
   | unknown[]
   | Record<string, unknown>
-  | (new (...args: never[]) => unknown);
+  // Rails dispatch matches `Class` and arbitrary models in addition to the
+  // explicit `Hash`/`Array`/`String`/`Symbol` cases; widening to `object`
+  // and any function lets callers pass model instances and class refs
+  // without casting (the unsupported branches throw at runtime).
+  | object
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  | Function;
 
 /** @internal */
 export function fullUrlFor(this: UrlForHost, options?: UrlForOptions): string {
@@ -136,7 +142,14 @@ export function optimizeRoutesGeneration(this: UrlForHost): boolean {
   );
 }
 
-/** @internal Rails: `private def _with_routes(routes)` */
+/**
+ * Rails: `private def _with_routes(routes) ... ensure ... end`. The block
+ * **must be synchronous** — Rails uses `ensure` around a `yield`. Passing
+ * an `async () => ...` block will restore `_routes` before the awaited
+ * work runs and is unsupported; an async-aware variant would have to be
+ * a separate API.
+ * @internal
+ */
 export function _withRoutes<T>(this: UrlForHost, routes: UrlForRoutes, block: () => T): T {
   const old = this._routes;
   this._routes = routes;

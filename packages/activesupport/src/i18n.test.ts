@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { I18n } from "./i18n.js";
+import { I18n, MissingTranslationData } from "./i18n.js";
 import { toSentence } from "./array-utils.js";
 
 describe("I18nTest", () => {
@@ -159,5 +159,21 @@ describe("I18nTest", () => {
 
   it("to sentence with empty i18n store", () => {
     expect(toSentence(["a", "b", "c"])).toBe("a, b, and c");
+  });
+
+  it("translate { raise: true } throws MissingTranslationData for unknown keys", () => {
+    expect(() => I18n.translate("nope.never.was", { raise: true })).toThrow(MissingTranslationData);
+    try {
+      I18n.translate("nope.never.was", { raise: true });
+    } catch (e) {
+      expect(e).toBeInstanceOf(MissingTranslationData);
+      expect((e as MissingTranslationData).key).toBe("nope.never.was");
+      expect((e as MissingTranslationData).locale).toBe("en");
+      expect((e as Error).message).toBe("Translation missing: en.nope.never.was");
+    }
+  });
+
+  it("translate { raise: true } honors a supplied default (does not throw)", () => {
+    expect(I18n.translate("nope", { raise: true, default: "fallback" })).toBe("fallback");
   });
 });

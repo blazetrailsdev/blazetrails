@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { I18n } from "@blazetrails/activesupport";
+import { I18n, MissingTranslationData } from "@blazetrails/activesupport";
 import {
   l,
   localize,
@@ -81,11 +81,11 @@ describe("TranslationControllerTest", () => {
     expect(typeof controller.l).toBe("function");
   });
 
-  // BLOCKED: `I18n.translate` does not support `{ raise: true }`. It
-  // returns a "Translation missing: ..." string for unknown keys. Adding
-  // a raise option to activesupport I18n is a ~30 LOC follow-up
-  // (introduce `MissingTranslationData` class, threading the option).
-  it.skip("raises missing translation message with raise option", () => {});
+  it("raises missing translation message with raise option", () => {
+    expect(() => controller.t("translations.missing", { raise: true })).toThrow(
+      MissingTranslationData,
+    );
+  });
 
   it("lazy lookup", () => {
     controller.actionName = "index";

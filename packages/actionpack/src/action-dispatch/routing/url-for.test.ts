@@ -117,6 +117,27 @@ describe("ActionDispatch::Routing::UrlFor", () => {
     expect(() => routeFor.call(makeHost(), "missing")).toThrow(/missing_url/);
   });
 
+  it("ActionController::Parameters-like options route through hash branch via toH()", () => {
+    const host = makeHost();
+    const routes = host._routes as ReturnType<typeof makeRoutes>;
+    const params = {
+      toH: () => ({ controller: "posts", action: "show", id: 7 }),
+    };
+    fullUrlFor.call(host, params as unknown as Record<string, unknown>);
+    expect(routes.calls[0]![0]).toEqual({ controller: "posts", action: "show", id: 7 });
+  });
+
+  it("unpermitted Parameters propagate the toH() error", () => {
+    const params = {
+      toH: () => {
+        throw new Error("unable to convert unpermitted parameters to hash");
+      },
+    };
+    expect(() => fullUrlFor.call(makeHost(), params as unknown as Record<string, unknown>)).toThrow(
+      /unpermitted/,
+    );
+  });
+
   it("class-instance options fall through to HelperMethodBuilder dispatch", () => {
     class Post {
       id = 1;

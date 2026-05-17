@@ -86,8 +86,9 @@ export function fullUrlFor(this: UrlForHost, options?: UrlForOptions): string {
     }
     return this.polymorphicUrl(components, opts);
   }
-  if (isPlainObject(options)) {
-    const hash = { ...(options as Record<string, unknown>) };
+  const asHash = coerceHashOrParameters(options);
+  if (asHash) {
+    const hash = { ...asHash };
     const rawRouteName = hash["use_route"];
     delete hash["use_route"];
     const merged = { ...this.urlOptions(), ...hash };
@@ -159,11 +160,30 @@ function requireRoutes(host: UrlForHost): UrlForRoutes {
   return host._routes;
 }
 
-/** @internal Rails: `case ... when Hash, ActionController::Parameters` — strict plain-object match. */
+/** @internal Plain-object check (proto null or Object.prototype). */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value == null || typeof value !== "object") return false;
   const proto = Object.getPrototypeOf(value);
   return proto === null || proto === Object.prototype;
+}
+
+/**
+ * Rails: `case options when Hash, ActionController::Parameters`. Treats both
+ * plain hashes and `Parameters` instances as the hash branch. For
+ * `Parameters` we call `toH()` (Rails: `options.to_h`), preserving the
+ * permitted/unpermitted error semantics.
+ * @internal
+ */
+function coerceHashOrParameters(value: unknown): Record<string, unknown> | null {
+  if (isPlainObject(value)) return value;
+  if (
+    value != null &&
+    typeof value === "object" &&
+    typeof (value as { toH?: unknown }).toH === "function"
+  ) {
+    return (value as { toH(): Record<string, unknown> }).toH();
+  }
+  return null;
 }
 
 /** @internal Rails: `Array#extract_options!` — pops a trailing options hash. */

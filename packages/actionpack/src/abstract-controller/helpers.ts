@@ -96,14 +96,15 @@ export function helper(
   cls: HelpersClassMethods,
   ...args: Array<HelperMethodsModule | ((mod: HelperMethodsModule) => void)>
 ): void {
-  const mod = _helpersForModification(cls);
+  // Rails only triggers copy-on-write when actually mutating; a no-op
+  // duplicate include must leave the subclass still delegating to the
+  // parent via the prototype chain.
   for (const arg of args) {
     if (typeof arg === "function") {
-      // `helper do ... end` — eval the block against the helpers module.
-      arg(mod);
+      arg(_helpersForModification(cls));
     } else if (arg && typeof arg === "object") {
       if (helpersInclude(cls._helpers, arg)) continue;
-      Object.assign(mod, arg);
+      Object.assign(_helpersForModification(cls), arg);
     }
   }
 }

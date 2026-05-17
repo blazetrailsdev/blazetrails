@@ -107,6 +107,18 @@ describe("helper", () => {
     expect(Object.keys(cls._helpers!)).toEqual(["foo"]);
   });
 
+  it("a duplicate-include no-op does NOT fork the subclass helpers module", () => {
+    const parent = makeBase();
+    const FooHelper: HelperMethodsModule = { foo: () => "FOO" };
+    helper(parent, FooHelper);
+    const child: HelpersClassMethods = Object.create(parent) as HelpersClassMethods;
+
+    helper(child, FooHelper);
+
+    expect(Object.prototype.hasOwnProperty.call(child, "_helpers")).toBe(false);
+    expect(child._helpers).toBe(parent._helpers);
+  });
+
   it("evaluates a trailing block against the helpers module (Rails `helper do ... end`)", () => {
     const cls = makeBase();
     helper(cls, (mod: HelperMethodsModule) => {

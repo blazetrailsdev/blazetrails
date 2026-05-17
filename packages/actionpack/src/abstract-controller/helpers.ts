@@ -120,9 +120,23 @@ export function helper(
       arg(_helpersForModification(cls));
     } else if (arg && typeof arg === "object") {
       if (isHelperIncluded(cls._helpers, arg)) continue;
-      const mod = _helpersForModification(cls);
-      recordHelperIncluded(mod, arg);
-      Object.assign(mod, arg);
+      const head = _helpersForModification(cls);
+      // Rails' `Module#include` inserts the module *behind* the
+      // includer in the ancestor chain. Match that by splicing a new
+      // proto-link between `head` (own methods from helperMethod /
+      // block) and its current tail (previously-included modules,
+      // parent helpers). This preserves direct-method precedence:
+      // anything defined on `head` itself still wins over `arg`'s
+      // methods, and earlier includes remain reachable.
+      //
+      // Snapshot caveat: methods added to `arg` *after* this call are
+      // not visible — Ruby Module#include keeps a live reference. A
+      // fully-live impl would need a Proxy node.
+      const currentTail = Object.getPrototypeOf(head) as object | null;
+      const link = Object.create(currentTail) as HelperMethodsModule;
+      Object.assign(link, arg);
+      Object.setPrototypeOf(head, link);
+      recordHelperIncluded(head, arg);
     }
   }
 }

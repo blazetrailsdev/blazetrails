@@ -102,9 +102,12 @@ describe("helper", () => {
     const FooHelper: HelperMethodsModule = { foo: () => "FOO" };
     helper(cls, FooHelper);
     const fooBefore = cls._helpers!.foo;
+    const headProtoBefore = Object.getPrototypeOf(cls._helpers!);
     helper(cls, FooHelper);
+    // Re-include is a no-op: the lookup still resolves to the same fn,
+    // and no new proto link was spliced in.
     expect(cls._helpers!.foo).toBe(fooBefore);
-    expect(Object.keys(cls._helpers!)).toEqual(["foo"]);
+    expect(Object.getPrototypeOf(cls._helpers!)).toBe(headProtoBefore);
   });
 
   it("a duplicate-include no-op does NOT fork the subclass helpers module", () => {
@@ -137,6 +140,28 @@ describe("helper", () => {
       mod.wadus = () => "wadus";
     });
     expect(cls._helpers!.wadus.call({})).toBe("wadus");
+  });
+
+  it("direct-method precedence: helperMethod beats a later helper(Mod) with the same name", () => {
+    const cls = makeBase();
+    helperMethod(cls, "x");
+    const Override: HelperMethodsModule = { x: () => "from-module" };
+    helper(cls, Override);
+    // Definition on the helpers module itself stays on top of the chain.
+    expect(typeof cls._helpers!.x).toBe("function");
+    // The proxy installed by helperMethod throws when controller lacks x,
+    // proving the helperMethod proxy is what runs (not Override.x).
+    expect(() => cls._helpers!.x.call({ controller: {} })).toThrow(/does not respond to 'x'/);
+  });
+
+  it("multiple includes layer in the ancestor chain (both reachable)", () => {
+    const cls = makeBase();
+    const A: HelperMethodsModule = { fromA: () => "A" };
+    const B: HelperMethodsModule = { fromB: () => "B" };
+    helper(cls, A);
+    helper(cls, B);
+    expect(cls._helpers!.fromA.call({})).toBe("A");
+    expect(cls._helpers!.fromB.call({})).toBe("B");
   });
 
   it("accepts modules and a block mixed together", () => {
@@ -175,7 +200,8 @@ describe("clearHelpers", () => {
     const ExtraHelper: HelperMethodsModule = { extra: () => "EXTRA" };
     helperMethod(cls, "keep");
     helper(cls, ExtraHelper);
-    expect(Object.keys(cls._helpers!).sort()).toEqual(["extra", "keep"]);
+    expect(typeof cls._helpers!.keep).toBe("function");
+    expect(typeof cls._helpers!.extra).toBe("function");
 
     clearHelpers(cls);
 
@@ -183,6 +209,7 @@ describe("clearHelpers", () => {
     expect(cls._helperMethods).toEqual(["keep"]);
     expect(Object.keys(cls._helpers!)).toEqual(["keep"]);
     expect(typeof cls._helpers!.keep).toBe("function");
+    expect(cls._helpers!.extra).toBeUndefined();
   });
 });
 

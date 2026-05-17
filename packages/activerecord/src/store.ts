@@ -417,15 +417,18 @@ function defineStoreAccessorDirtyMethods(
     const [prev] = this.changes[storeAttribute] ?? [undefined];
     return dig(prev, key) ?? null;
   });
+  // Matches Model's `savedChangeToAttribute(name)` predicate shape; the value
+  // form is exposed as `savedChangeTo<X>Values()` (parallel to
+  // `savedChangeToAttributeValues` on Model).
   define(`savedChangeTo${cap}`, function (this) {
-    if (!this.savedChangeToAttribute?.(storeAttribute)) return undefined;
-    const [prev, next] = this.savedChanges?.[storeAttribute] ?? [undefined, undefined];
-    return [dig(prev, key) ?? null, dig(next, key) ?? null];
-  });
-  define(`savedChangeTo${cap}?`, function (this) {
     if (!this.savedChangeToAttribute?.(storeAttribute)) return false;
     const [prev, next] = this.savedChanges?.[storeAttribute] ?? [undefined, undefined];
     return dig(prev, key) !== dig(next, key);
+  });
+  define(`savedChangeTo${cap}Values`, function (this) {
+    if (!this.savedChangeToAttribute?.(storeAttribute)) return undefined;
+    const [prev, next] = this.savedChanges?.[storeAttribute] ?? [undefined, undefined];
+    return [dig(prev, key) ?? null, dig(next, key) ?? null];
   });
   define(`${accessorName}BeforeLastSave`, function (this) {
     if (!this.savedChangeToAttribute?.(storeAttribute)) return undefined;

@@ -2319,7 +2319,7 @@ describe("MigrationTest", () => {
     // "changing columns", "changing column null with default", and "default
     // functions on columns" live in adapters/postgresql/change-schema.test.ts
     // (describeIfPg) — they require PostgreSQL.
-    // "updating auto increment" lives in adapters/mysql2/bulk-alter.test.ts
+    // "updating auto increment" lives in adapters/abstract-mysql-adapter/bulk-alter.test.ts
     // (describeIfMysql) — it requires MySQL/Trilogy.
 
     it("changing index", async () => {

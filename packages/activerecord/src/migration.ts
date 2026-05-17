@@ -1051,6 +1051,11 @@ export abstract class Migration {
     return this.schema.indexName(this._pt(tableName), options);
   }
 
+  async removeColumns(tableName: string, ...columns: string[]): Promise<void>;
+  async removeColumns(
+    tableName: string,
+    ...args: [...string[], { type?: ColumnType; ifExists?: boolean }]
+  ): Promise<void>;
   async removeColumns(
     tableName: string,
     ...columnsOrOptions: Array<string | ({ type?: ColumnType } & Record<string, unknown>)>
@@ -1073,6 +1078,10 @@ export abstract class Migration {
     }
   }
 
+  async addColumns(
+    tableName: string,
+    ...args: [...string[], { type: ColumnType } & ColumnOptions]
+  ): Promise<void>;
   async addColumns(
     tableName: string,
     ...columnsAndOptions: Array<string | ({ type: ColumnType } & ColumnOptions)>

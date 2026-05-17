@@ -16,11 +16,6 @@ const GENERIC_RESPONSE_CODES: Record<string, string> = {
   error: "5XX",
 };
 
-const GENERIC_INVERT: Record<string, string> = {};
-for (const [name, code] of Object.entries(GENERIC_RESPONSE_CODES)) {
-  GENERIC_INVERT[code] = name;
-}
-
 export class AssertionResponse {
   readonly code: string;
   readonly name: string;
@@ -60,7 +55,8 @@ function codeFromName(name: string): string | undefined {
 }
 
 function nameFromCode(code: number): string | undefined {
-  const codeStr = String(code);
-  if (GENERIC_INVERT[codeStr]) return GENERIC_INVERT[codeStr];
+  // Faithful Rails behavior: GENERIC_RESPONSE_CODES.invert keys are
+  // Strings ("2XX", "404", ...) and we look up by Integer, which
+  // always misses — so we fall straight through to HTTP_STATUS_CODES.
   return HTTP_STATUS_CODES[code];
 }

@@ -10,6 +10,11 @@
 export {
   assertResponse,
   assertRedirectedTo,
+  parameterize,
+  normalizeArgumentToRedirection,
   type AssertionResponseHost,
   type AssertionResponseLike,
 } from "./assertions/response.js";
+
+// htmlDocument + RoutingAssertions methods follow once rails-dom-testing
+// and RouteSet#recognize_path / #generate_extras are ported.

@@ -67,25 +67,45 @@ export function assertRedirectedTo(
   assertResponse.call(this, status, message);
 
   const location = this.response.getHeader?.("location") ?? "";
-  if (urlOptions instanceof RegExp) {
-    if (urlOptions.test(location)) return;
-  } else if (typeof urlOptions === "string") {
-    if (normalizeRedirect(urlOptions) === normalizeRedirect(location)) return;
+  const redirectIs = normalizeArgumentToRedirection.call(this, location);
+  const redirectExpected = normalizeArgumentToRedirection.call(this, urlOptions);
+
+  if (redirectExpected instanceof RegExp) {
+    if (redirectExpected.test(String(redirectIs))) return;
+  } else if (redirectExpected === redirectIs) {
+    return;
   }
 
-  const expected =
-    urlOptions instanceof RegExp ? urlOptions.source : normalizeRedirect(String(urlOptions));
   throw new Error(
     message ??
-      `Expected response to be a redirect to <${expected}> but was a redirect to <${normalizeRedirect(location)}>`,
+      `Expected response to be a redirect to <${redirectExpected instanceof RegExp ? redirectExpected.source : redirectExpected}> but was a redirect to <${redirectIs}>`,
   );
 }
 
-function normalizeRedirect(fragment: string): string {
-  // Faithful Rails port punts non-string fragments to
-  // Redirecting._compute_redirect_to_location, which isn't ported yet.
-  // For strings we return as-is (Rails parses through URI to canonicalize,
-  // but normalizing relative vs. absolute belongs to Redirecting itself).
+/** @internal */
+export function parameterize(this: AssertionResponseHost, value: unknown): unknown {
+  if (value != null && typeof (value as { toParam?: () => unknown }).toParam === "function") {
+    return (value as { toParam: () => unknown }).toParam();
+  }
+  return value;
+}
+
+/** @internal */
+export function normalizeArgumentToRedirection(
+  this: AssertionResponseHost,
+  fragment: unknown,
+): unknown {
+  if (fragment instanceof RegExp) return fragment;
+  // Rails routes non-Regexp fragments through
+  // `(@controller || ActionController::Redirecting)._compute_redirect_to_location(@request, fragment)`.
+  // Until Redirecting is ported, fall back to the controller hook if present
+  // and otherwise return the fragment unchanged.
+  const handle = this.controller as
+    | { _computeRedirectToLocation?: (req: unknown, frag: unknown) => unknown }
+    | undefined;
+  if (handle?._computeRedirectToLocation) {
+    return handle._computeRedirectToLocation(this.request, fragment);
+  }
   return fragment;
 }
 
@@ -112,14 +132,16 @@ function locationIfRedirected(host: AssertionResponseHost): string {
   if (status < 300 || status > 399) return "";
   const location = host.response.getHeader?.("location");
   if (!location) return "";
-  return ` redirect to <${location}>`;
+  const normalized = normalizeArgumentToRedirection.call(host, location);
+  return ` redirect to <${String(normalized)}>`;
 }
 
 function exceptionIfPresent(host: AssertionResponseHost): string {
   const ex = host.request?.env?.["action_dispatch.exception"];
   if (!ex) return "";
+  const name = ex instanceof Error ? ex.name || "Error" : "Error";
   const message = ex instanceof Error ? ex.message : String(ex);
-  return `\n\nException while processing request: ${message}\n`;
+  return `\n\nException while processing request: ${name}: ${message}\n`;
 }
 
 function responseBodyIfShort(host: AssertionResponseHost): string {

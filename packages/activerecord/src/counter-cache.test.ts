@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Base, registerModel } from "./index.js";
 import { Associations, association } from "./associations.js";
 import { Notifications } from "@blazetrails/activesupport";
@@ -303,6 +303,10 @@ describe("CounterCacheTest", () => {
 
   beforeEach(() => {
     adapter = freshAdapter();
+  });
+
+  afterEach(() => {
+    Notifications.unsubscribeAll();
   });
 
   // Rails: test_counters_are_updated_both_in_memory_and_in_the_database_on_create

@@ -132,7 +132,7 @@ export async function resetCounters(
     }
   }
 
-  const record = await this.find(id as any);
+  const record = await this.find(id);
   const assocDefs = (this as any)._associations as
     | Array<{ type: string; name: string; options: any }>
     | undefined;

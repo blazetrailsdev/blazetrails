@@ -3,7 +3,7 @@
  * controller methods (and external modules) to views. This PR ports
  * the runtime surface that operates on already-resolved modules:
  *
- *   - `applyHelpers(cls)` — seed the per-class `_helpers` module + `_helperMethods`.
+ *   - `applyHelpers(cls)` — no-op slot-contract marker (mirrors `applyAssetPaths` / `applyFragments`).
  *   - `helperMethod(cls, ...names)` — proxy `name(...args)` → `controller[name](...args)`.
  *   - `helper(cls, ...mods)` — include resolved modules into `_helpers`.
  *   - `clearHelpers(cls)` — reset, then re-add previous `_helperMethods`.
@@ -80,8 +80,9 @@ export function _helpersInstance(this: HelpersHost): HelperMethodsModule {
 /**
  * `ClassMethods#helper_method(*methods)` — register controller method
  * names as view helpers. Each name gets a proxy on the helpers module
- * that does `this.controller[name](...args)`. Names are flattened (the
- * spread does it for us) and appended to `_helperMethods` so
+ * that does `this.controller[name](...args)`. Nested-array inputs are
+ * flattened via `Array.prototype.flat(Infinity)` (matching Ruby's
+ * `methods.flatten!`) and appended to `_helperMethods` so
  * `clearHelpers` can re-establish them after a wipe.
  */
 export function helperMethod(cls: HelpersClassMethods, ...names: HelperMethodNameList[]): void {

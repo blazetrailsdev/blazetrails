@@ -66,13 +66,6 @@ const TEST_SCHEMA = {
     created_at: "datetime",
     occurred_at: "date",
   },
-  custom_pks: {
-    custom_id: "integer",
-    name: "string",
-  },
-  no_pks: {
-    name: "string",
-  },
   post_bools: {
     title: "string",
     published: "boolean",

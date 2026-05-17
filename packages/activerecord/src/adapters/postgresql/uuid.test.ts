@@ -17,9 +17,11 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-// The `uuid_data_type` table uses the PG-specific `uuid` type, which
-// isn't expressible via defineSchema. The table is created via raw DDL
-// below; defineSchema(adapter, {}) marks the file as TM-Phase-5 compliant.
+// The `uuid_data_type` table needs raw DDL because the `guid` column's
+// DEFAULT is `gen_random_uuid()` (from the `pgcrypto` extension set up
+// in beforeAll). defineSchema can express the `uuid` column type but
+// not the function-call default; defineSchema(adapter, {}) marks the
+// file as TM-Phase-5 compliant.
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
 

@@ -3,7 +3,7 @@ import { bodyFromString } from "@blazetrails/rack";
 import type { RackEnv, RackResponse } from "@blazetrails/rack";
 import { AssumeSSL } from "./assume-ssl.js";
 
-describe("AssumeSSL", () => {
+describe("AssumeSSLTest", () => {
   it("sets expected headers", async () => {
     const env: RackEnv = {};
     const app = async (_env: RackEnv): Promise<RackResponse> => [200, {}, bodyFromString("")];

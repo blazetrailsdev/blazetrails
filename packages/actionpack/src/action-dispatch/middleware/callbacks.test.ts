@@ -16,14 +16,14 @@ async function dispatch(block?: () => Promise<RackResponse>): Promise<RackRespon
   return new Callbacks(app).call({});
 }
 
-describe("Dispatcher", () => {
+describe("DispatcherTest", () => {
   beforeEach(() => {
     counts.a = 0;
     counts.b = 0;
     Callbacks.resetCallbacks("call");
   });
 
-  it("test_before_and_after_callbacks", async () => {
+  it("before and after callbacks", async () => {
     Callbacks.before(() => {
       counts.a += 1;
       counts.b += 1;

@@ -41,6 +41,6 @@ export class Callbacks extends CallbacksBase {
       }
     });
     if (error) throw error;
-    return result as RackResponse;
+    return result!;
   }
 }

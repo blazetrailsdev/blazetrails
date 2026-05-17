@@ -160,7 +160,7 @@ function extractFileTests(filePath: string): TestFileInfo {
         // Restricted to gating modifiers (skipIf / runIf) — `each` and friends
         // generate multiple runtime tests from a template title, so static
         // extraction of the template name would add noise to test:compare.
-        const inner = expression.expression;
+        const inner: ts.PropertyAccessExpression = expression.expression;
         const base = inner.expression;
         const modifier = inner.name.text;
         if (ts.isIdentifier(base) && GATING_MODIFIERS.has(modifier)) {

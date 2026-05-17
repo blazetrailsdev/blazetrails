@@ -1655,7 +1655,9 @@ export class MigrationContext {
         }
         if (
           typeof dtPrec === "number" &&
-          (normalized.type === "datetime" || normalized.type === "time")
+          (normalized.type === "datetime" ||
+            normalized.type === "time" ||
+            normalized.type === "timestamptz")
         )
           normalized.precision = dtPrec;
       }
@@ -2739,11 +2741,20 @@ export class Migrator {
     }));
 
     // Rails sorts by `version.to_i` — non-numeric rows coerce to 0 rather
-    // than raising. Avoid BigInt here so a legacy non-numeric row preserved
-    // by _appliedVersions() doesn't crash status reporting.
-    return [...dbList, ...fileList].sort(
-      (a, b) => (parseInt(a.version, 10) || 0) - (parseInt(b.version, 10) || 0),
-    );
+    // than raising. Use BigInt for precision (versions can exceed
+    // MAX_SAFE_INTEGER) with a 0-fallback for non-numeric legacy rows.
+    const toBig = (v: string): bigint => {
+      try {
+        return /^-?\d+$/.test(v) ? BigInt(v) : 0n;
+      } catch {
+        return 0n;
+      }
+    };
+    return [...dbList, ...fileList].sort((a, b) => {
+      const va = toBig(a.version);
+      const vb = toBig(b.version);
+      return va < vb ? -1 : va > vb ? 1 : 0;
+    });
   }
 
   /**

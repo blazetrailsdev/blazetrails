@@ -88,6 +88,25 @@ describe("AbstractController::Collector", () => {
     expect(resolved).toBe(c);
   });
 
+  it("JSON.stringify does not trip the unknown-format thrower (toJSON is inert)", () => {
+    const c = new TestCollector();
+    expect(() => JSON.stringify(c)).not.toThrow();
+  });
+
+  it("`has` returns false for reserved keys even when a MIME type collides", () => {
+    const c = new TestCollector();
+    // Register a MIME called `then` to simulate a collision. The
+    // unknown-format thrower would otherwise become reachable via
+    // `await collector`, and the `in` check would report true.
+    MimeType.register("application/then", "then");
+    try {
+      expect("then" in c).toBe(false);
+      expect((c as unknown as { then?: unknown }).then).toBeUndefined();
+    } finally {
+      MimeType.unregister("then");
+    }
+  });
+
   it("shadows real properties even when they hold undefined", () => {
     class WithUndef extends Collector {
       myFlag: string | undefined = undefined;

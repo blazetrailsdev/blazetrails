@@ -26,9 +26,12 @@ export abstract class Collector {
   }
 }
 
-// Keys we must never intercept, or the Collector instance becomes
-// thenable and gets assimilated by Promise.resolve / `await`.
-const PROMISE_KEYS = new Set<string | symbol>(["then", "catch", "finally"]);
+// Keys we must never intercept. `then`/`catch`/`finally` would make
+// the instance look thenable (assimilated by Promise.resolve / await).
+// `toJSON` would be called by JSON.stringify; synthesizing a thrower
+// there breaks serialization. `Symbol.toPrimitive` and `toString` are
+// kept inert too so coercion never hits the unknown-format thrower.
+const RESERVED_KEYS = new Set<string | symbol>(["then", "catch", "finally", "toJSON"]);
 
 const COLLECTOR_HANDLER: ProxyHandler<Collector> = {
   get(target, prop, receiver) {
@@ -37,7 +40,7 @@ const COLLECTOR_HANDLER: ProxyHandler<Collector> = {
     // than the undefined check so a subclass `myProp = undefined` isn't
     // mistakenly routed through MIME dispatch.
     if (Reflect.has(target, prop)) return Reflect.get(target, prop, receiver);
-    if (PROMISE_KEYS.has(prop)) return undefined;
+    if (RESERVED_KEYS.has(prop)) return undefined;
     if (typeof prop !== "string") return undefined;
     const mime = MimeType.lookup(prop);
     if (mime) {
@@ -63,6 +66,10 @@ const COLLECTOR_HANDLER: ProxyHandler<Collector> = {
 
   has(target, prop) {
     if (Reflect.has(target, prop)) return true;
+    // Keep `has` in lockstep with `get`: if get returns undefined for
+    // these keys, has must report false even when a MIME type is
+    // registered under a colliding symbol.
+    if (RESERVED_KEYS.has(prop)) return false;
     return typeof prop === "string" && MimeType.lookup(prop) !== undefined;
   },
 };

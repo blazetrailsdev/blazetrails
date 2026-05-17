@@ -1501,8 +1501,9 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
     };
 
     await (owner as any).destroyAssociations();
-    // Both layered overrides should have run — chained super reaches both.
-    expect(calls.length).toBe(2);
+    // Both layered overrides should have run with distinct middle
+    // associations — chained super reaches both, not the same one twice.
+    expect(new Set(calls).size).toBe(2);
   });
 
   it("subclass HABTM extends destroyAssociations chain via super", async () => {
@@ -1543,8 +1544,8 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
     };
 
     await (child as any).destroyAssociations();
-    // Two middle hasMany associations should be visited — one from
-    // parent's HABTM override, one from child's, chained via super.
-    expect(calls.length).toBe(2);
+    // Two distinct middle hasMany associations should be visited — one
+    // from parent's HABTM override, one from child's, chained via super.
+    expect(new Set(calls).size).toBe(2);
   });
 });

@@ -94,6 +94,15 @@ describe("TranslationControllerTest", () => {
     expect(controller.t(".twoz", { raise: true, default: [":one.two"] })).toBe("bar");
   });
 
+  it("raises when raise: true and the whole chain (scoped + fallback + defaults-as-keys) misses", () => {
+    controller.actionName = "index";
+    // Both the scoped and all `:`-keyed defaults miss → must throw
+    // MissingTranslationData (not silently return the defaults array).
+    expect(() =>
+      controller.t(".twoz", { raise: true, default: [":also.missing", ":still.gone"] }),
+    ).toThrow(MissingTranslationData);
+  });
+
   it("lazy lookup", () => {
     controller.actionName = "index";
     expect(controller.t(".foo")).toBe("bar");

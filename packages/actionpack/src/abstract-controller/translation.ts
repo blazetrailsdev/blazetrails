@@ -1,4 +1,4 @@
-import { I18n } from "@blazetrails/activesupport";
+import { I18n, MissingTranslationData } from "@blazetrails/activesupport";
 
 /**
  * Host shape `translate` / `localize` mix into. Trails' `Metal` provides
@@ -76,10 +76,16 @@ export function translate(
       }
     }
 
-    // Chain exhausted — honor `raise: true` now (forwarding it to a
-    // final lookup throws `MissingTranslationData` from I18n).
+    // Chain exhausted — honor `raise: true`. Throw directly rather
+    // than re-entering I18n.translate with the original options:
+    // `default` is still in there and I18n returns it before honoring
+    // raise, so we'd silently return the already-exhausted defaults
+    // array instead of raising.
     if ((options as { raise?: boolean }).raise) {
-      return I18n.translate(scopedKey, options as Parameters<typeof I18n.translate>[1]);
+      const locale =
+        (passOptions as { locale?: string }).locale ??
+        (I18n as unknown as { locale: string }).locale;
+      throw new MissingTranslationData(locale, scopedKey);
     }
     return direct; // "Translation missing: ..." from the scoped lookup
   }

@@ -65,10 +65,16 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
     // Write the polymorphic type column FIRST so that the dynamic
     // `this.klass` resolves via the _type column before
     // `super.replaceKeys` derives composite foreign-key names via
-    // `foreignKeyNames() → associationPrimaryKeys(null)`. Atomicity
-    // with respect to inverse-validation is unaffected: the
-    // `setInverseInstance` raise happens in `replace()` above us,
-    // before `replaceKeys` runs.
+    // `foreignKeyNames() → associationPrimaryKeys(null)`.
+    //
+    // Note: `replaceKeys` is called from both `replace(record)` (writer
+    // path) and `inversedFrom(record)` (inverse-wiring path). On the
+    // writer path, `setInverseInstance` runs in `replace()` before
+    // `replaceKeys`, so a missing-inverse raise leaves owner state
+    // untouched. On the `inversedFrom` path no inverse validation runs
+    // at all — the caller has already resolved the inverse pair — so
+    // the ordering inside `replaceKeys` is independent of that
+    // atomicity guarantee.
     const typeCol = this.foreignTypeName();
     // Rails: writes record.class.polymorphic_name, which is the Ruby class
     // name (including "::" for namespaced classes). JS class names can't

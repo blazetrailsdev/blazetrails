@@ -556,8 +556,21 @@ export abstract class Migration {
         await this.addUniqueConstraint(rucTable, rucColumn, rucOpts);
         break;
       }
-      default:
-        throw new IrreversibleMigration(`Cannot reverse operation: ${cmd}`);
+      default: {
+        // Delegate unknown commands to CommandRecorder's invert dispatch so
+        // Rails-shape ops like removeColumns/addColumns/changeTable round-
+        // trip. Mirrors Rails: revert { } -> recorder.replay(self) where
+        // replayed cmds are the inverted ones.
+        const { cmd: iCmd, args: iArgs } = this._recorder.inverseOf(cmd, args);
+        const method = (this as unknown as Record<string, (...a: unknown[]) => Promise<void>>)[
+          iCmd
+        ];
+        if (typeof method !== "function") {
+          throw new IrreversibleMigration(`Cannot reverse operation: ${cmd}`);
+        }
+        await method.apply(this, iArgs);
+        break;
+      }
     }
   }
 
@@ -1021,7 +1034,11 @@ export abstract class Migration {
     if (this._recording) {
       // Rails: change_table delegates to the CommandRecorder so individual
       // ops inside the block can be inverted (or batched, in the bulk path).
-      await (this._recorder as any).changeTable(tableName, options, callback);
+      await this._recorder.changeTable(
+        tableName,
+        options as Record<string, unknown>,
+        callback as Parameters<CommandRecorder["changeTable"]>[2],
+      );
       return;
     }
     if (options.bulk) {

@@ -19,18 +19,27 @@ describeIfMysql("Migration", () => {
 
   describe("BulkAlterTableMigrationsTest", () => {
     it("updating auto increment", async () => {
+      // Query EXTRA directly from information_schema — Mysql2Adapter#columns
+      // doesn't surface auto_increment metadata on Column yet (separate gap).
+      const isAutoIncrement = async (): Promise<boolean> => {
+        const rows = (await adapter.execute(
+          `SELECT EXTRA FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = 'delete_me' AND column_name = 'id'`,
+        )) as Array<{ EXTRA?: string; extra?: string }>;
+        const extra = String(rows[0]?.EXTRA ?? rows[0]?.extra ?? "").toLowerCase();
+        return extra.includes("auto_increment");
+      };
+
       const ss = adapter.schemaStatements();
       await ss.changeTable("delete_me", { bulk: true }, (t: any) => {
         t.change("id", "bigint", { autoIncrement: true });
       });
-      let cols = await adapter.columns("delete_me");
-      expect((cols.find((c) => c.name === "id") as any).autoIncrement).toBe(true);
+      expect(await isAutoIncrement()).toBe(true);
 
       await ss.changeTable("delete_me", { bulk: true }, (t: any) => {
         t.change("id", "bigint", { autoIncrement: false });
       });
-      cols = await adapter.columns("delete_me");
-      expect((cols.find((c) => c.name === "id") as any).autoIncrement).toBeFalsy();
+      expect(await isAutoIncrement()).toBe(false);
     });
   });
 });

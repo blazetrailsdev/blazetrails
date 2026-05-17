@@ -120,13 +120,6 @@ Watchpoint: the `_invalidateAssociationIds → assocInstance.reset()` widening f
 - ~40–60 LOC — Extend automatic-inverse wiring to `loadHasMany`/`loadHasOne`/`loadBelongsTo` (currently only honor explicit `options.inverseOf`).
 - ~5 LOC — Extract `wireInverseAssociation(child, name, owner)` helper.
 
-### Batch 23 — Preloader-grouping STI + composite (~280 LOC, risk: medium)
-
-**Theme:** Slot A preloader-grouping — 5 STI/through tests + 3 composite-FK preload tests.
-
-- ~80–120 LOC — STI/through `available_records` bundle (5 tests skipped): `sti`, `with through association`, `only some records available with through`, `available records queries when scoped/collection/incomplete`. Needs test bodies + STI lookup fix.
-- ~120 LOC — Composite-FK preload bundle (3 tests skipped): `has many association with composite foreign key`, `belongs to ... composite foreign key`, `loaded belongs to ... composite foreign key`, `has many through with composite query constraints`. Loader infra supports `string[]`; needs CPK fixtures.
-
 ### Batch 24 — Preloader-grouping miscellaneous (~290 LOC, split if needed)
 
 **Theme:** Slot A preloader-grouping — remaining tests (some larger).

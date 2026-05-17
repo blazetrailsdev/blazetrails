@@ -58,7 +58,10 @@ export class UrlGenerationError extends ActionControllerError {
 
   get corrections(): string[] {
     if (!this.routeName || !this.routes) return [];
-    const routes = this.routes as RouteSetLike | undefined;
+    // `this.routes` may be a full `RouteSetLike` OR a Journey
+    // `FormatterHost` (which has `namedRoutes.has/get`, not
+    // `namedRoutes.helperNames`). Treat both shapes as optional.
+    const routes = this.routes as Partial<RouteSetLike> | undefined;
     const helpers = routes?.namedRoutes?.helperNames ?? [];
     const target = this.routeName.toLowerCase();
     return helpers

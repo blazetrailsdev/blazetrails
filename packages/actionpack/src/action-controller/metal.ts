@@ -241,8 +241,10 @@ export class Metal extends AbstractController {
    */
   set responseBody(body: string | string[] | Buffer | null | undefined) {
     if (body === null || body === undefined) {
+      // Mirror Rails' `else: response.reset_body!` — only the response
+      // stream is reset; `@_response_body` is left untouched, so a
+      // controller that previously assigned a body remains "performed?".
       this._body = "";
-      this._responseBody = null;
       if (this.response) this.response.body = "";
       return;
     }
@@ -266,9 +268,7 @@ export class Metal extends AbstractController {
    * `response_body || response.committed?`.
    */
   isPerformed(): boolean {
-    return (
-      this._responseBody !== null || Boolean(this._body) || (this.response?.committed ?? false)
-    );
+    return this.performed || (this.response?.committed ?? false);
   }
 
   /** Convert controller to a Rack-compatible response. */

@@ -260,11 +260,13 @@ describe("MetalControllerInstanceTests", () => {
     expect(c.responseBody).toBe("");
   });
 
-  it("isPerformed reflects body presence", () => {
+  it("isPerformed mirrors performed and reflects responseBody=", () => {
     const c = new (class extends Metal {})();
     expect(c.isPerformed()).toBe(false);
-    c.body = "x";
+    c.response = makeResponse();
+    c.responseBody = "x";
     expect(c.isPerformed()).toBe(true);
+    expect(c.performed).toBe(true);
   });
 
   it("callbacks work through dispatch", async () => {

@@ -87,7 +87,21 @@ function isHash(x: unknown): boolean {
   if (typeof x !== "object") return false;
   if (Array.isArray(x)) return false;
   if (isToModel(x)) return false;
-  return Object.getPrototypeOf(x) === Object.prototype;
+  // Mirrors Rails `is_a?(Hash)`: accept both plain object literals and
+  // `Object.create(null)` (`JSON.parse(..., { ... })` shapes, prototype-less
+  // bags) — anything that walks like a hash.
+  const proto = Object.getPrototypeOf(x);
+  return proto === Object.prototype || proto === null;
+}
+
+function symbolToString(s: symbol): string {
+  const name = s.description;
+  if (!name) {
+    throw new ArgumentError(
+      'Cannot build a polymorphic route from a description-less Symbol. Use Symbol.for("name") or a string.',
+    );
+  }
+  return name;
 }
 
 /** Mirrors Rails `polymorphic_url`. */
@@ -109,7 +123,7 @@ export function polymorphicUrl(
   const opts = { ...options };
   const action = opts.action;
   delete opts.action;
-  const type = opts.routingType ?? "url";
+  const type: "path" | "url" = opts.routingType ?? "url";
   delete opts.routingType;
 
   return HelperMethodBuilder.polymorphicMethod(this, recordOrHashOrArray, action, type, opts);
@@ -219,6 +233,16 @@ export class HelperMethodBuilder {
     url: Map<string | null, HelperMethodBuilder>;
   } = { path: new Map(), url: new Map() };
 
+  // Mirrors Rails' bottom-of-class CACHE seeding loop. Static initializer
+  // block guarantees this runs as part of class evaluation — no ordering
+  // hazard from import side effects.
+  static {
+    for (const action of [null, "new", "edit"] as const) {
+      HelperMethodBuilder.CACHE.url.set(action, HelperMethodBuilder.build(action, "url"));
+      HelperMethodBuilder.CACHE.path.set(action, HelperMethodBuilder.build(action, "path"));
+    }
+  }
+
   static get(action: string | null | undefined, type: "path" | "url"): HelperMethodBuilder {
     const key = action ?? null;
     const cached = HelperMethodBuilder.CACHE[type].get(key);
@@ -254,10 +278,10 @@ export class HelperMethodBuilder {
     recipient: PolymorphicHost,
     recordOrHashOrArray: PolymorphicArg,
     action: string | null | undefined,
-    type: "path" | "url" | string,
+    type: "path" | "url",
     options: Record<string, unknown>,
   ): string {
-    const builder = HelperMethodBuilder.get(action, type as "path" | "url");
+    const builder = HelperMethodBuilder.get(action, type);
 
     let method: string;
     let args: unknown[];
@@ -268,11 +292,10 @@ export class HelperMethodBuilder {
       }
       // RoutesProxy branch omitted — not yet ported.
       [method, args] = builder.handleList(compact);
-    } else if (typeof recordOrHashOrArray === "string" || typeof recordOrHashOrArray === "symbol") {
-      [method, args] =
-        typeof recordOrHashOrArray === "symbol"
-          ? builder.handleString(recordOrHashOrArray.description ?? "")
-          : builder.handleString(recordOrHashOrArray);
+    } else if (typeof recordOrHashOrArray === "string") {
+      [method, args] = builder.handleString(recordOrHashOrArray);
+    } else if (typeof recordOrHashOrArray === "symbol") {
+      [method, args] = builder.handleString(symbolToString(recordOrHashOrArray));
     } else if (isModelClass(recordOrHashOrArray)) {
       [method, args] = builder.handleClass(recordOrHashOrArray);
     } else if (recordOrHashOrArray == null) {
@@ -340,7 +363,7 @@ export class HelperMethodBuilder {
     const args: unknown[] = [];
 
     const route: string[] = recordList.map((parent) => {
-      if (typeof parent === "symbol") return parent.description ?? "";
+      if (typeof parent === "symbol") return symbolToString(parent);
       if (typeof parent === "string") {
         throw new ArgumentError("Please use symbols for polymorphic route arguments.");
       }
@@ -382,15 +405,4 @@ export class HelperMethodBuilder {
   private getMethodForString(str: string): string {
     return `${this.prefix}${str}_${this.suffix}`;
   }
-}
-
-// Mirrors Rails' bottom-of-class CACHE seeding loop.
-type _Cache = {
-  path: Map<string | null, HelperMethodBuilder>;
-  url: Map<string | null, HelperMethodBuilder>;
-};
-for (const action of [null, "new", "edit"] as const) {
-  const cache = (HelperMethodBuilder as unknown as { CACHE: _Cache }).CACHE;
-  cache.url.set(action, HelperMethodBuilder.build(action, "url"));
-  cache.path.set(action, HelperMethodBuilder.build(action, "path"));
 }

@@ -259,7 +259,19 @@ export function modulesForHelpers(
 ): HelperMethodsModule[] {
   const flat = (args as readonly unknown[]).flat(Infinity);
   return flat.map((arg) => {
-    if (arg && typeof arg === "object") return arg as HelperMethodsModule;
+    if (arg && typeof arg === "object") {
+      // Rails' `when Module` is identity-strict; JS has no `Module`
+      // type so we approximate with a "method bag" shape check: every
+      // own enumerable value must be a function. Rejects `Date`,
+      // `{ a: 1 }`, etc. so the failure surfaces here rather than
+      // deep inside `helper(cls, ...)`.
+      for (const v of Object.values(arg)) {
+        if (typeof v !== "function") {
+          throw new TypeError("helper must be a String, Symbol, or Module");
+        }
+      }
+      return arg as HelperMethodsModule;
+    }
     if (typeof arg === "string" || typeof arg === "symbol") {
       const raw = typeof arg === "symbol" ? (arg.description ?? "") : arg;
       const name = `${/^[A-Z]/.test(raw) ? raw : camelizeHelperPrefix(raw)}Helper`;

@@ -62,6 +62,12 @@ describe("modulesForHelpers", () => {
       /must be a String, Symbol, or Module/,
     );
   });
+
+  it("raises TypeError when an object has non-function values (not module-shaped)", () => {
+    expect(() =>
+      modulesForHelpers([{ x: 1 } as unknown as HelperMethodsModule], { resolve }),
+    ).toThrow(/must be a String, Symbol, or Module/);
+  });
 });
 
 describe("allHelpersFromPath", () => {

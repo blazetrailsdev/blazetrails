@@ -170,7 +170,12 @@ export function assignAssociationIfMatch(
   if (!proxy) return false;
   if (assoc.type === "hasMany" || assoc.type === "hasAndBelongsToMany") {
     if (typeof proxy.replace !== "function") return false;
-    proxy.replace(Array.isArray(value) ? (value as unknown[]) : value == null ? [] : [value]);
+    // Rails fidelity: pass the value through unchanged. The normal writer
+    // path (`record.items = value` → CollectionAssociation#writer →
+    // #replace) does not Array.wrap — Rails' replace calls `.each` on the
+    // argument and raises on nil / scalars. Coercing here would silently
+    // accept inputs the regular writer rejects.
+    proxy.replace(value as unknown[]);
     return true;
   }
   if (assoc.type === "hasOne" || assoc.type === "belongsTo") {

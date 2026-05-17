@@ -13,6 +13,15 @@ import { MimeType } from "../action-dispatch/http/mime-type.js";
  *
  * Subclasses must implement `custom(mime, …args)` and may declare
  * additional non-MIME methods normally.
+ *
+ * **Limitation — ECMAScript `#private` fields:** the constructor
+ * returns a Proxy, so `this` inside instance methods is the Proxy
+ * (intentional — lets `this.html()` inside `custom()` re-enter the
+ * MIME dispatch). ECMAScript private fields are looked up on the
+ * underlying object, not through a Proxy, so a subclass that uses
+ * `#state`-style fields will throw at runtime. Use a normal
+ * `private` TypeScript field or a `_` prefix instead — both are
+ * stored as regular own properties and traverse the Proxy correctly.
  */
 export abstract class Collector {
   /** Implemented by subclasses; invoked when a per-MIME method is called. */

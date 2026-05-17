@@ -69,7 +69,7 @@ export type PolymorphicArg =
   | Record<string, unknown>;
 
 export interface PolymorphicOptions {
-  action?: "edit" | "new" | string;
+  action?: "edit" | "new" | (string & {});
   routingType?: "path" | "url";
   [key: string]: unknown;
 }
@@ -378,7 +378,7 @@ export class HelperMethodBuilder {
 
     let tail: string;
     if (typeof record === "symbol") {
-      tail = record.description ?? "";
+      tail = symbolToString(record);
     } else if (typeof record === "string") {
       throw new ArgumentError("Please use symbols for polymorphic route arguments.");
     } else if (isModelClass(record)) {

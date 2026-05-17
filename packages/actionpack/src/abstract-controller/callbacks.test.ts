@@ -359,6 +359,14 @@ describe("AbstractController::Base — trails-only", () => {
     expect(actions).toContain("show");
   });
 
+  it("has action", () => {
+    class HasActionController extends AbstractController {
+      async index() {}
+    }
+    expect(HasActionController.hasAction("index")).toBe(true);
+    expect(HasActionController.hasAction("missing")).toBe(false);
+  });
+
   it("performed starts false", () => {
     const c = new (class extends AbstractController {})();
     expect(c.performed).toBe(false);

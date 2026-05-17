@@ -146,6 +146,32 @@ function extractFileTests(filePath: string): TestFileInfo {
             fileInfo.testCases.push(testCase);
           }
         }
+      } else if (
+        ts.isCallExpression(expression) &&
+        ts.isPropertyAccessExpression(expression.expression)
+      ) {
+        // Handle the callable-modifier form: it.skipIf(expr)("name", fn) / test.runIf(expr)("name", fn).
+        // The outer CallExpression's expression is itself a CallExpression whose expression is a
+        // PropertyAccessExpression like `it.skipIf`. Treat these as a regular test case (modifier
+        // gating happens at runtime; static extraction just needs to recognize the name).
+        const inner = expression.expression;
+        const base = inner.expression;
+        if (ts.isIdentifier(base) && (base.text === "it" || base.text === "test")) {
+          const title = getFirstArgString(node);
+          if (title) {
+            const testCase: TestCaseInfo = {
+              path: [...currentAncestors, title].join(" > "),
+              description: title,
+              ancestors: [...currentAncestors],
+              file: relativePath,
+              line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
+              style: base.text as "it" | "test",
+              assertions: [],
+              pending: false,
+            };
+            fileInfo.testCases.push(testCase);
+          }
+        }
       } else if (ts.isPropertyAccessExpression(expression)) {
         // Handle describe.skip, it.skip, it.todo, it.only, etc.
         const base = expression.expression;

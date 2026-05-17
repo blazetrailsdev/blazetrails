@@ -7,11 +7,6 @@ import { Base } from "../../base.js";
 import { defineSchema } from "../../test-helpers/define-schema.js";
 import { defineFixtures } from "../../test-helpers/define-fixtures.js";
 
-async function currentDatabase(adapter: Mysql2Adapter): Promise<string> {
-  const rows = (await adapter.execute("SELECT DATABASE() AS db")) as Array<{ db: string }>;
-  return rows[0]!.db;
-}
-
 describeIfMysql("Mysql2Adapter", () => {
   let adapter: Mysql2Adapter;
   beforeEach(async () => {
@@ -71,7 +66,7 @@ describeIfMysql("Mysql2Adapter", () => {
           welcome: { title: "Welcome to the weblog", body: "Such a lovely day", type: "Post" },
         });
 
-        const db = await currentDatabase(adapter);
+        const db = await adapter.currentDatabase();
         class OmgPost extends Base {
           static _tableName = `${db}.posts`;
         }
@@ -99,7 +94,7 @@ describeIfMysql("Mysql2Adapter", () => {
     it("data source exists?", async () => {
       await defineSchema(adapter, { topics: { title: "string" } });
       try {
-        const db = await currentDatabase(adapter);
+        const db = await adapter.currentDatabase();
         // Rails passes @omgpost.table_name, which is the qualified `db.topics` form.
         expect(await adapter.dataSourceExists(`${db}.topics`)).toBe(true);
       } finally {
@@ -108,7 +103,7 @@ describeIfMysql("Mysql2Adapter", () => {
     });
 
     it("data source exists wrong schema", async () => {
-      const db = await currentDatabase(adapter);
+      const db = await adapter.currentDatabase();
       expect(await adapter.dataSourceExists(`${db}.zomg`)).toBe(false);
     });
 
@@ -153,14 +148,46 @@ describeIfMysql("Mysql2Adapter", () => {
   });
 
   describe("MySQLAnsiQuotesTest", () => {
-    it.skip("primary key method with ansi quotes", () => {
-      // BLOCKED: adapter-mysql — requires SET SESSION sql_mode='ANSI_QUOTES' which
-      // needs adapter-level session-variable setter not yet wired for test setup
-      // (ansi-quotes mode)
+    // Build a fresh adapter with sql_mode='ANSI_QUOTES' applied in the pool init SQL
+    // so it persists across every checked-out connection — Rails uses
+    // `execute("SET SESSION sql_mode='ANSI_QUOTES'")` on its single leased connection;
+    // we apply the variable per-connection via the pool init hook (newClient).
+    let ansi: Mysql2Adapter;
+    beforeEach(async () => {
+      ansi = new Mysql2Adapter({ uri: MYSQL_TEST_URL, variables: { sql_mode: "ANSI_QUOTES" } });
+    });
+    afterEach(async () => {
+      // Mirrors Rails' teardown `@connection.reconnect!` — rebuild the pool so any leaked
+      // session state on the test runner's connection cache is cleared.
+      ansi.reconnectBang();
+      await ansi.close();
     });
 
-    it.skip("foreign keys method with ansi quotes", () => {
-      // BLOCKED: adapter-mysql — same session-variable setup gap as above (ansi-quotes mode)
+    it("primary key method with ansi quotes", async () => {
+      await defineSchema(ansi, { topics: { title: "string" } });
+      try {
+        expect(await ansi.primaryKey("topics")).toBe("id");
+      } finally {
+        await ansi.dropTable("topics", { ifExists: true });
+      }
+    });
+
+    it("foreign keys method with ansi quotes", async () => {
+      await defineSchema(ansi, {
+        students: { name: "string" },
+        lessons_students: { student_id: "integer" },
+      });
+      try {
+        await ansi.addForeignKey("lessons_students", "students", { onDelete: "cascade" });
+        const fks = await ansi.foreignKeys("lessons_students");
+        expect(fks).toHaveLength(1);
+        expect(fks[0].fromTable).toBe("lessons_students");
+        expect(fks[0].toTable).toBe("students");
+        expect(fks[0].onDelete).toBe("cascade");
+      } finally {
+        await ansi.dropTable("lessons_students", { ifExists: true });
+        await ansi.dropTable("students", { ifExists: true });
+      }
     });
   });
 });

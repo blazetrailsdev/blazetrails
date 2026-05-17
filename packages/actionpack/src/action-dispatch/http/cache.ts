@@ -187,6 +187,11 @@ export function cacheControlHeaders(this: ResponseCacheHost): CacheControlHash {
   return result;
 }
 
+/** Rails' `attr_reader :cache_control` — returns the parsed hash. */
+export function cacheControl(this: ResponseCacheHost): CacheControlHash {
+  return cacheControlHeaders.call(this);
+}
+
 /** @internal */
 export function prepareCacheControl(this: ResponseCacheHost): CacheControlHash {
   return cacheControlHeaders.call(this);

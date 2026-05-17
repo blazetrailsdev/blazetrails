@@ -2,6 +2,7 @@ import { Temporal } from "@blazetrails/activesupport/temporal";
 import { Nodes, Visitors } from "@blazetrails/arel";
 import { ArgumentError, SerializeCastValue } from "@blazetrails/activemodel";
 import { IndexDefinition } from "./connection-adapters/abstract/schema-definitions.js";
+import { UnknownAttributeError } from "./errors.js";
 import type { Base } from "./base.js";
 import { quoteSqlValue } from "./base.js";
 import { stiName } from "./inheritance.js";
@@ -213,11 +214,24 @@ export class InsertAll {
 
   /** @internal */
   private verifyAttributes(): void {
-    if (this.inserts.length <= 1) return;
-    for (const row of this.inserts.slice(1)) {
-      const rowKeys = new Set([...Object.keys(row), ...Object.keys(this._scopeAttributes)]);
-      if (rowKeys.size !== this.keys.size || ![...this.keys].every((k) => rowKeys.has(k))) {
-        throw new Error("All objects being inserted must have the same keys");
+    if (this.inserts.length > 1) {
+      for (const row of this.inserts.slice(1)) {
+        const rowKeys = new Set([...Object.keys(row), ...Object.keys(this._scopeAttributes)]);
+        if (rowKeys.size !== this.keys.size || ![...this.keys].every((k) => rowKeys.has(k))) {
+          throw new Error("All objects being inserted must have the same keys");
+        }
+      }
+    }
+    // Rails raises UnknownAttributeError in extract_types_from_columns_on against
+    // schema_cache.columns_hash; we mirror the same intent against the model's
+    // declared attribute set so the error surfaces before any SQL is built.
+    const known = new Set(this.model.attributeNames());
+    if (known.size === 0) return;
+    for (const pk of this.primaryKeys()) known.add(pk);
+    for (const col of TIMESTAMP_COLUMNS) known.add(col);
+    for (const key of this.keys) {
+      if (!known.has(key)) {
+        throw new UnknownAttributeError(new (this.model as any)(), key);
       }
     }
   }

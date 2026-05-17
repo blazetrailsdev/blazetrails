@@ -22,6 +22,7 @@ import { modelRegistry } from "../associations.js";
 import { reflectOnAssociation } from "../reflection.js";
 import { getInheritanceColumn, isStiSubclass } from "../inheritance.js";
 import { ConnectionNotDefined } from "../errors.js";
+import { quote as abstractQuote } from "../connection-adapters/abstract/quoting.js";
 
 export interface JoinNode {
   tableIndex: number;
@@ -128,6 +129,10 @@ export class JoinDependency {
   // Connection used for adapter-aware string quoting in polymorphic
   // source_type / STI type predicates. Resolved eagerly in the constructor;
   // null only when no pool is wired (mirrors `quoterFor` in sanitization.ts).
+  // Eager resolution is safe because all production call sites construct
+  // JoinDependency immediately before walking it; there is no window in
+  // which the pool could become wired between construction and the first
+  // `_quoteString` call.
   private _adapter: DatabaseAdapter | null;
 
   constructor(baseModel: typeof Base) {
@@ -143,30 +148,32 @@ export class JoinDependency {
    * configured pool (`ConnectionNotDefined`) falls back to the portable
    * escape; other failures (pool exhaustion, adapter errors) propagate so
    * real connection problems don't silently downgrade the emitted SQL.
+   * Structurally rejects adapters missing `quote` for the same reason.
    * @internal
    */
   private static _resolveAdapter(baseModel: typeof Base): DatabaseAdapter | null {
     if (typeof (baseModel as any).connection !== "function") return null;
+    let conn: DatabaseAdapter | null | undefined;
     try {
-      return ((baseModel as any).connection() as DatabaseAdapter) ?? null;
+      conn = (baseModel as any).connection() as DatabaseAdapter | null | undefined;
     } catch (err) {
       if (err instanceof ConnectionNotDefined) return null;
       throw err;
     }
+    if (!conn || typeof (conn as any).quote !== "function") return null;
+    return conn;
   }
 
   /**
    * Mirrors Rails' `connection.quote(value)` for string literals embedded
    * into JOIN predicates (polymorphic source_type, STI type IN-lists).
-   * Falls back to a portable escape only when no pool is wired.
+   * Falls back to the abstract adapter's `quote` only when no pool is
+   * wired (delegates to a single source of truth for the portable escape).
    * @internal
    */
   private _quoteString(value: string): string {
-    if (this._adapter && typeof (this._adapter as any).quote === "function") {
-      return (this._adapter as any).quote(value);
-    }
-    const escaped = String(value).replaceAll("\\", "\\\\").replaceAll("'", "''");
-    return `'${escaped}'`;
+    if (this._adapter) return (this._adapter as any).quote(value);
+    return abstractQuote(value);
   }
 
   get nodes(): JoinNode[] {

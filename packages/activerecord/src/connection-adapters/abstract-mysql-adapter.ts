@@ -920,6 +920,13 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
    * alternative when callers just need to flip a session flag mid-test
    * (e.g. `sql_mode`) without rebuilding the pool.
    *
+   * Caveat: this SETs the variable on whichever pool connection happens
+   * to be checked out, then releases it. Subsequent calls may land on a
+   * different connection where the variable is unchanged. Callers must
+   * pin to a single connection (e.g. `connectionLimit: 1` or an active
+   * transaction) for the variable to be observed across calls. For
+   * pool-wide configuration, use the `variables:` pool-init option.
+   *
    * @internal
    */
   async setSessionVariable(name: string, value: unknown): Promise<void> {

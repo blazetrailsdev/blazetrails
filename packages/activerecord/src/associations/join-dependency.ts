@@ -708,7 +708,13 @@ export class JoinDependency {
         // polymorphic type column is `foreign_type` (options[:foreign_type]
         // || "#{name}_type"), and the value is the literal :source_type.
         const typeCol = sourceAssocDef.options.foreignType ?? `${_toUnderscore(sourceName)}_type`;
-        const sourceTypeLit = String(assocDef.options.sourceType).replaceAll("'", "''");
+        // Escape backslash first, then single-quote — order matters so we
+        // don't double-escape an already-escaped quote. MySQL/MariaDB treat
+        // `\` as a string escape by default (NO_BACKSLASH_ESCAPES off), so
+        // both must be escaped to be portable across adapters.
+        const sourceTypeLit = String(assocDef.options.sourceType)
+          .replaceAll("\\", "\\\\")
+          .replaceAll("'", "''");
         targetJoinOn += ` AND "${throughAlias}"."${typeCol}" = '${sourceTypeLit}'`;
       }
     } else {

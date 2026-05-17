@@ -1268,14 +1268,16 @@ describe("NestedThroughAssociationsTest", () => {
     });
     // INNER JOIN path (Relation#_resolveThroughJoin)
     const innerSql = (PstTag as any).all().joins("taggedPosts").toSql();
-    expect(innerSql).toMatch(/JOIN "pst_posts"/);
-    expect(innerSql).toMatch(/"taggable_type"\s*=\s*'PstPost'/);
-    expect(innerSql).toMatch(/"pst_posts"."id"\s*=\s*"[^"]+"\."taggable_id"/);
+    expect(innerSql).toMatch(/JOIN ["`]pst_posts["`]/);
+    expect(innerSql).toMatch(/["`]taggable_type["`]\s*=\s*'PstPost'/);
+    expect(innerSql).toMatch(
+      /["`]pst_posts["`].["`]id["`]\s*=\s*["`][^"`]+["`].["`]taggable_id["`]/,
+    );
 
     // LEFT OUTER JOIN path (JoinDependency#_addThroughAssociation)
     const leftSql = (PstTag as any).all().leftJoins("taggedPosts").toSql();
-    expect(leftSql).toMatch(/LEFT OUTER JOIN "pst_posts"/);
-    expect(leftSql).toMatch(/"taggable_type"\s*=\s*'PstPost'/);
+    expect(leftSql).toMatch(/LEFT OUTER JOIN ["`]pst_posts["`]/);
+    expect(leftSql).toMatch(/["`]taggable_type["`]\s*=\s*'PstPost'/);
   });
 
   it("has many through with foreign key option on through reflection", async () => {

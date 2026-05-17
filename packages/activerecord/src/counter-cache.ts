@@ -185,9 +185,10 @@ export async function resetCounters(
   }
 
   if (Object.keys(updates).length > 0) {
-    // Use the caller-supplied id (not `record.id`) so composite-PK arrays
-    // flow through `buildPkPredicate` untouched.
-    await this.unscoped().where(buildPkPredicate(this, id)).updateAll(updates);
+    // Mirrors Rails: `unscoped.where(primary_key => [object.id]).update_all(updates)`.
+    // `record.id` returns the CPK tuple via the PrimaryKey#id accessor, and
+    // matches the cast already applied by `find` for scalar PKs.
+    await this.unscoped().where(buildPkPredicate(this, record.id)).updateAll(updates);
   }
 }
 

@@ -46,7 +46,7 @@ export class AssertionResponse {
 }
 
 function codeFromName(name: string): string | undefined {
-  if (GENERIC_RESPONSE_CODES[name]) return GENERIC_RESPONSE_CODES[name];
+  if (Object.hasOwn(GENERIC_RESPONSE_CODES, name)) return GENERIC_RESPONSE_CODES[name];
   try {
     return String(rackStatusCode(name));
   } catch {

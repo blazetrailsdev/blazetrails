@@ -2,10 +2,10 @@
  * ActionDispatch::Assertions::ResponseAssertions
  *
  * Functional port of the Rails ResponseAssertions module. Each
- * exported function accepts an explicit `host` (the Test instance)
- * whose `response` is checked. Mix in via `this`-typed assignment
- * (`Test.assertResponse = assertResponse`) when wiring into an
- * IntegrationTest class.
+ * exported function is `this`-typed — invoke via `fn.call(host, ...)`
+ * or assign onto a test class (`Test.prototype.assertResponse =
+ * assertResponse`) so the host's `response`/`request`/`controller`
+ * resolve from `this` at call time, per the CLAUDE.md mixin pattern.
  */
 
 import { AssertionResponse } from "../assertion-response.js";
@@ -35,7 +35,10 @@ export function assertResponse(
   message?: string,
 ): void {
   const status = this.response.status;
-  const predicate = typeof type === "string" ? RESPONSE_PREDICATES[type] : undefined;
+  const predicate =
+    typeof type === "string" && Object.hasOwn(RESPONSE_PREDICATES, type)
+      ? RESPONSE_PREDICATES[type]
+      : undefined;
 
   if (predicate) {
     if (!predicate(status)) {
@@ -71,7 +74,11 @@ export function assertRedirectedTo(
   const redirectExpected = normalizeArgumentToRedirection.call(this, urlOptions);
 
   if (redirectExpected instanceof RegExp) {
-    if (redirectExpected.test(String(redirectIs))) return;
+    // Ruby's `Regexp#===` is stateless (match?-equivalent). Clone the
+    // pattern so a /g or /y caller doesn't carry `lastIndex` between
+    // assertions.
+    const probe = new RegExp(redirectExpected.source, redirectExpected.flags);
+    if (probe.test(String(redirectIs))) return;
   } else if (redirectExpected === redirectIs) {
     return;
   }

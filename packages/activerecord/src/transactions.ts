@@ -538,9 +538,6 @@ export async function withTransactionReturningStatus<T>(
 ): Promise<T> {
   const modelClass = this.constructor as typeof Base;
 
-  // rememberTransactionRecordState also sets _newRecordBeforeLastCommit.
-  const snapshot = rememberTransactionRecordState.call(this);
-
   // _triggerUpdateCallback/_triggerDestroyCallback are NOT reset here; Rails resets
   // those only in committed!/rolledback! ensure blocks.
   const r = this as any;
@@ -552,14 +549,16 @@ export async function withTransactionReturningStatus<T>(
   const adapter = modelClass.adapter;
   const hadOuterTransaction = currentTransaction() !== null || adapter.inTransaction;
 
-  await transaction(modelClass, async (tx) => {
+  await transaction(modelClass, async () => {
     // Enroll record with the TransactionManager so it fires committedBang/
-    // rolledbackBang after the transaction commits or rolls back.
+    // rolledbackBang after the transaction commits or rolls back. The TM-driven
+    // rolledbackBang path calls _restoreTransactionRecordState which reads the
+    // persistent _startTransactionState snapshot — matching Rails exactly. We
+    // intentionally do NOT register a per-call tx.afterRollback hook here: the
+    // closure would capture per-save state, and on multi-save rollbacks the
+    // last-registered hook would overwrite the correct outermost snapshot.
     await addToTransaction.call(this, !hadOuterTransaction || hasTransactionalCallbacks.call(this));
-
-    tx.afterRollback(async () => {
-      restoreTransactionRecordState.call(this, snapshot);
-    });
+    rememberTransactionRecordState.call(this);
 
     status = await fn();
     // Ruby truthiness: only false/nil trigger rollback (0, "" are truthy in Ruby)

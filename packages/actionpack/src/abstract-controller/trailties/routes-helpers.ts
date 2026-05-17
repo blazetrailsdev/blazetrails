@@ -1,5 +1,5 @@
 /**
- * `AbstractController::Railties::RoutesHelpers` — factory that
+ * `AbstractController::Railties::RoutesHelpers` (trails: `Trailties`) — factory that
  * produces a per-class wiring step. The Rails version returns an
  * anonymous `Module` whose `inherited(klass)` hook walks
  * `klass.module_parents` for a namespace exposing
@@ -12,7 +12,7 @@
  * subclass. The Ruby namespace chain (e.g. `Admin::PostsController`
  * → `[Admin, Object]`) has no JS equivalent; we approximate by
  * walking the class's own static-side prototype chain for an
- * optional `railtieRoutesUrlHelpers` slot. This catches the common
+ * optional `trailtieRoutesUrlHelpers` slot. This catches the common
  * "Admin::PostsController extends AdminController" shape but won't
  * find a same-name namespace module that isn't an ancestor class —
  * a documented deviation, not a fixable gap.
@@ -41,12 +41,12 @@ export interface UrlHelpersRouteSet {
 /**
  * Optional class-level slot: if a host class (or one of its
  * inheritance chain ancestors) wants to override the inherited
- * url-helper module, it sets `railtieRoutesUrlHelpers` to a builder
+ * url-helper module, it sets `trailtieRoutesUrlHelpers` to a builder
  * function. Mirrors the Rails `respond_to?(:railtie_routes_url_helpers)`
  * branch.
  */
 export interface RoutesHelpersClassMethods extends HelpersClassMethods {
-  railtieRoutesUrlHelpers?(includePathHelpers?: boolean): HelperMethodsModule;
+  trailtieRoutesUrlHelpers?(includePathHelpers?: boolean): HelperMethodsModule;
 }
 
 /**
@@ -62,7 +62,7 @@ export function withRoutesHelpers(
   includePathHelpers = true,
 ): (cls: RoutesHelpersControllerClass) => void {
   return (cls) => {
-    const namespaceBuilder = findRailtieUrlHelpers(cls);
+    const namespaceBuilder = findTrailtieUrlHelpers(cls);
     const mod = namespaceBuilder
       ? namespaceBuilder(includePathHelpers)
       : routes.urlHelpers(includePathHelpers);
@@ -84,13 +84,13 @@ export interface RoutesHelpersControllerClass extends RoutesHelpersClassMethods 
   prototype: object;
 }
 
-function findRailtieUrlHelpers(
+function findTrailtieUrlHelpers(
   cls: RoutesHelpersClassMethods,
-): RoutesHelpersClassMethods["railtieRoutesUrlHelpers"] {
+): RoutesHelpersClassMethods["trailtieRoutesUrlHelpers"] {
   let current: object | null = cls;
   while (current) {
-    const own = Object.getOwnPropertyDescriptor(current, "railtieRoutesUrlHelpers")?.value as
-      | RoutesHelpersClassMethods["railtieRoutesUrlHelpers"]
+    const own = Object.getOwnPropertyDescriptor(current, "trailtieRoutesUrlHelpers")?.value as
+      | RoutesHelpersClassMethods["trailtieRoutesUrlHelpers"]
       | undefined;
     if (typeof own === "function") return own;
     current = Object.getPrototypeOf(current);

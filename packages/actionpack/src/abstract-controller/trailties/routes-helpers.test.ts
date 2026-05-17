@@ -28,12 +28,12 @@ describe("withRoutesHelpers", () => {
     expect(spy2).toHaveBeenCalledWith(false);
   });
 
-  it("prefers a class-level railtieRoutesUrlHelpers over routes.urlHelpers", () => {
+  it("prefers a class-level trailtieRoutesUrlHelpers over routes.urlHelpers", () => {
     const Namespaced: HelperMethodsModule = { nsPath: () => "/ns" };
     const routesSpy = vi.fn();
     const cls: RoutesHelpersControllerClass = {
       prototype: {},
-      railtieRoutesUrlHelpers: () => Namespaced,
+      trailtieRoutesUrlHelpers: () => Namespaced,
     };
     withRoutesHelpers({ urlHelpers: routesSpy })(cls);
 
@@ -43,7 +43,7 @@ describe("withRoutesHelpers", () => {
 
   it("walks the static-side prototype chain (approximation of Ruby module_parents)", () => {
     const Inherited: HelperMethodsModule = { up: () => "from-parent" };
-    const parent = { railtieRoutesUrlHelpers: () => Inherited };
+    const parent = { trailtieRoutesUrlHelpers: () => Inherited };
     const child: RoutesHelpersControllerClass = Object.create(
       parent,
     ) as RoutesHelpersControllerClass;
@@ -58,7 +58,7 @@ describe("withRoutesHelpers", () => {
     const nsSpy = vi.fn().mockReturnValue({});
     const cls: RoutesHelpersControllerClass = {
       prototype: {},
-      railtieRoutesUrlHelpers: nsSpy,
+      trailtieRoutesUrlHelpers: nsSpy,
     };
     withRoutesHelpers({ urlHelpers: vi.fn() }, false)(cls);
     expect(nsSpy).toHaveBeenCalledWith(false);

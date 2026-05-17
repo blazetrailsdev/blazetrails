@@ -100,4 +100,4 @@ export {
   type RoutesHelpersClassMethods,
   type RoutesHelpersControllerClass,
   type UrlHelpersRouteSet,
-} from "./railties/routes-helpers.js";
+} from "./trailties/routes-helpers.js";

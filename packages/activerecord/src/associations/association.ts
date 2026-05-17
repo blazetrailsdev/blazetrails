@@ -541,9 +541,12 @@ function associationScope(assoc: Association): unknown {
 
 /**
  * Apply scope_for_create attrs to `record`, mirroring Rails'
- * `initialize_attributes` (association.rb:217). Skips keys the record
- * already changed (so caller-supplied attrs win) and never overwrites
- * the FK / STI type column (owned by `setOwnerAttributes`).
+ * `initialize_attributes` (association.rb:217). Caller-supplied attrs
+ * normally win — except for `skip_assign = [foreign_key, foreign_type]`,
+ * where the scope value is allowed through even when already assigned
+ * (Rails relies on this so a scoped association's FK / polymorphic type
+ * gets re-anchored from the scope). Note: `foreign_type` is the
+ * polymorphic-belongs-to type column, NOT the STI inheritance column.
  *
  * @internal
  */
@@ -567,9 +570,14 @@ export function applyScopeForCreate(
   const rich = ctor._reflectOnAssociation?.(assoc.reflection.name) as
     | { foreignKey?: string | string[]; type?: string | null }
     | undefined;
-  const fk =
-    rich?.foreignKey ?? (assoc.reflection.options as { foreignKey?: string | string[] }).foreignKey;
-  const foreignType = rich?.type ?? null;
+  const options = assoc.reflection.options as {
+    foreignKey?: string | string[];
+    as?: string;
+  };
+  const fk = rich?.foreignKey ?? options.foreignKey;
+  // Polymorphic foreign-type column derives from `:as` when the rich
+  // reflection isn't yet installed (same shape `setOwnerAttributes` uses).
+  const foreignType = rich?.type ?? (options.as ? `${options.as}_type` : null);
   const skipAssign = new Set<string>();
   if (Array.isArray(fk)) {
     for (const k of fk) if (k) skipAssign.add(String(k));

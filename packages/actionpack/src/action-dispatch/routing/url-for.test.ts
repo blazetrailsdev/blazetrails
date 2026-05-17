@@ -69,6 +69,13 @@ describe("ActionDispatch::Routing::UrlFor", () => {
     expect(opts).not.toHaveProperty("use_route");
   });
 
+  it("use_route accepts Symbol (Rails parity) → uses description", () => {
+    const host = makeHost();
+    const routes = host._routes as ReturnType<typeof makeRoutes>;
+    fullUrlFor.call(host, { use_route: Symbol("post") });
+    expect(routes.calls[0]![1]).toBe("post");
+  });
+
   it("explicit option wins over urlOptions default", () => {
     const host = makeHost({ defaultUrlOptions: { host: "default.test" } });
     const routes = host._routes as ReturnType<typeof makeRoutes>;

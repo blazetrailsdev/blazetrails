@@ -910,7 +910,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   /**
    * Set a MySQL session variable to the given value.
-   * Emits `SET SESSION @name = <quoted value>` against the active connection.
+   * Emits `SET SESSION <name> = <quoted value>` against the active connection.
    * Pass the symbol `"DEFAULT"` (case-insensitive) or the value `null` to
    * restore the variable to its default. Identifier is validated against
    * MySQL variable-name characters before interpolation.

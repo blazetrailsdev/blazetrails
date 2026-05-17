@@ -5,6 +5,7 @@
  */
 
 import { Column as BaseColumn } from "../column.js";
+import type { ColumnJSON } from "../column.js";
 import { SqlTypeMetadata } from "../sql-type-metadata.js";
 
 export class Column extends BaseColumn {
@@ -70,4 +71,46 @@ export class Column extends BaseColumn {
   isVirtual(): boolean {
     return this.virtual;
   }
+
+  override toJSON(): MysqlColumnJSON {
+    return {
+      ...super.toJSON(),
+      __mysql: true,
+      unsigned: this.unsigned,
+      autoIncrement: this.autoIncrement,
+      virtual: this.virtual,
+    };
+  }
+
+  static override fromJSON(data: ColumnJSON): Column {
+    const m = data as MysqlColumnJSON;
+    return new Column(
+      m.name,
+      m.default,
+      {
+        sqlType: m.sqlTypeMetadata?.sqlType,
+        type: m.sqlTypeMetadata?.type,
+        limit: m.sqlTypeMetadata?.limit ?? null,
+        precision: m.sqlTypeMetadata?.precision ?? null,
+        scale: m.sqlTypeMetadata?.scale ?? null,
+      },
+      m.null,
+      {
+        collation: m.collation,
+        comment: m.comment,
+        defaultFunction: m.defaultFunction,
+        primaryKey: m.primaryKey,
+        unsigned: m.unsigned,
+        autoIncrement: m.autoIncrement,
+        virtual: m.virtual,
+      },
+    );
+  }
+}
+
+export interface MysqlColumnJSON extends ColumnJSON {
+  __mysql: true;
+  unsigned: boolean;
+  autoIncrement: boolean;
+  virtual: boolean;
 }

@@ -42,10 +42,14 @@ export interface ColumnMethods {
 }
 
 export class TableDefinition extends AbstractTableDefinition {
-  /** @internal Full adapter when constructed by `createTableDefinition`; used so `toSql()`
-   * can obtain a host-aware `MysqlSchemaCreation` (carrying adapter support flags). */
+  /** @internal Full adapter when constructed by `createTableDefinition`; consulted by `toSql()`
+   * for a host-aware visitor (support flags + MariaDB) or to construct one in the fallback path. */
   private readonly _mysqlAdapter?: {
     schemaStatements?: () => { schemaCreation: MysqlSchemaCreation };
+    supportsCheckConstraints?(): boolean;
+    supportsForeignKeys?(): boolean;
+    supportsIndexesInCreate?(): boolean;
+    isMariadb?(): boolean;
   };
 
   constructor(
@@ -94,7 +98,9 @@ export class TableDefinition extends AbstractTableDefinition {
     // addColumnOptions / charset handling.
     const fromAdapter = this._mysqlAdapter?.schemaStatements?.().schemaCreation;
     const visitor =
-      fromAdapter instanceof MysqlSchemaCreation ? fromAdapter : new MysqlSchemaCreation();
+      fromAdapter instanceof MysqlSchemaCreation
+        ? fromAdapter
+        : new MysqlSchemaCreation(this._mysqlAdapter);
     return visitor.accept(this);
   }
 

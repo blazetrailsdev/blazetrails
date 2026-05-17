@@ -10,6 +10,7 @@
  */
 
 import { NO_ROUTES_MESSAGE } from "../../abstract-controller/url-for.js";
+import { Parameters } from "../../action-controller/metal/strong-parameters.js";
 
 /**
  * The minimal RouteSet surface UrlFor calls into. Matches Rails'
@@ -189,13 +190,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 function coerceHashOrParameters(value: unknown): Record<string, unknown> | null {
   if (isPlainObject(value)) return value;
-  if (
-    value != null &&
-    typeof value === "object" &&
-    typeof (value as { toH?: unknown }).toH === "function"
-  ) {
-    return (value as { toH(): Record<string, unknown> }).toH();
-  }
+  if (value instanceof Parameters) return value.toH();
   return null;
 }
 

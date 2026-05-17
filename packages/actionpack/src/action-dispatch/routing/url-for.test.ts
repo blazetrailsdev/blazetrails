@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { Parameters } from "../../action-controller/metal/strong-parameters.js";
+
 import {
   _routesContext,
   _withRoutes,
@@ -117,36 +119,35 @@ describe("ActionDispatch::Routing::UrlFor", () => {
     expect(() => routeFor.call(makeHost(), "missing")).toThrow(/missing_url/);
   });
 
-  it("ActionController::Parameters-like options route through hash branch via toH()", () => {
-    class FakeParameters {
-      toH() {
-        return { controller: "posts", action: "show", id: 7 };
-      }
-    }
+  it("permitted ActionController::Parameters route through hash branch", () => {
+    const params = new Parameters({ controller: "posts", action: "show", id: 7 });
+    params.permitBang();
     const host = makeHost();
     const routes = host._routes as ReturnType<typeof makeRoutes>;
-    fullUrlFor.call(host, new FakeParameters() as unknown as Record<string, unknown>);
+    fullUrlFor.call(host, params);
     expect(routes.calls[0]![0]).toEqual({ controller: "posts", action: "show", id: 7 });
   });
 
-  it("unpermitted Parameters propagate the toH() error", () => {
-    class FakeParameters {
-      toH(): Record<string, unknown> {
-        throw new Error("unable to convert unpermitted parameters to hash");
+  it("unpermitted Parameters throw UnfilteredParameters from toH()", () => {
+    const params = new Parameters({ id: 1 });
+    expect(() => fullUrlFor.call(makeHost(), params)).toThrow(/unpermitted|unfiltered/i);
+  });
+
+  it("class instance with toH() but not a Parameters falls through to HelperMethodBuilder", () => {
+    // Guards against the previous duck-type check accepting any toH().
+    class FakeParams {
+      toH() {
+        return { id: 1 };
       }
     }
-    expect(() =>
-      fullUrlFor.call(makeHost(), new FakeParameters() as unknown as Record<string, unknown>),
-    ).toThrow(/unpermitted/);
+    expect(() => fullUrlFor.call(makeHost(), new FakeParams())).toThrow(/HelperMethodBuilder/);
   });
 
   it("class-instance options fall through to HelperMethodBuilder dispatch", () => {
     class Post {
       id = 1;
     }
-    expect(() =>
-      fullUrlFor.call(makeHost(), new Post() as unknown as Record<string, unknown>),
-    ).toThrow(/HelperMethodBuilder/);
+    expect(() => fullUrlFor.call(makeHost(), new Post())).toThrow(/HelperMethodBuilder/);
   });
 
   it("optimizeRoutesGeneration requires empty defaultUrlOptions", () => {

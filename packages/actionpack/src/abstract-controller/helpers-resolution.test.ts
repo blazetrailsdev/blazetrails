@@ -93,6 +93,21 @@ describe("allHelpersFromPath", () => {
       "users",
     ]);
   });
+
+  it("sorts within each path, then concatenates across paths (Rails ordering)", async () => {
+    const r1 = mkdtempSync(join(tmpdir(), "helpers-order-1-"));
+    const r2 = mkdtempSync(join(tmpdir(), "helpers-order-2-"));
+    writeFileSync(join(r1, "zebra_helper.ts"), "");
+    writeFileSync(join(r1, "alpha_helper.ts"), "");
+    writeFileSync(join(r2, "yak_helper.ts"), "");
+    writeFileSync(join(r2, "bear_helper.ts"), "");
+    try {
+      expect(await allHelpersFromPath([r1, r2])).toEqual(["alpha", "zebra", "bear", "yak"]);
+    } finally {
+      rmSync(r1, { recursive: true, force: true });
+      rmSync(r2, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("helperModulesFromPaths", () => {
@@ -139,10 +154,25 @@ describe("defaultHelperModule", () => {
     expect(cls._helpers).toBeUndefined();
   });
 
-  it("is a no-op when the class name lacks a Controller suffix", () => {
+  it("still tries to resolve when the class name lacks a Controller suffix (Rails delete_suffix is a no-op then)", () => {
+    // Rails: `helper_prefix = name.delete_suffix("Controller")` returns
+    // "Plain" unchanged, then `helper("Plain")` is called. PlainHelper
+    // doesn't exist → NameError → swallowed.
     const cls: HelpersClassMethods = { name: "Plain" };
     defaultHelperModule(cls, { resolve });
     expect(cls._helpers).toBeUndefined();
+  });
+
+  it("only swallows the NameError matching this specific helper name", () => {
+    const cls: HelpersClassMethods = { name: "FooController" };
+    const surprising = (name: string): HelperMethodsModule | undefined => {
+      if (name === "FooHelper") {
+        // simulate: FooHelper file exists but references some other missing const
+        throw new Error("uninitialized constant SomeOtherThing");
+      }
+      return undefined;
+    };
+    expect(() => defaultHelperModule(cls, { resolve: surprising })).toThrow(/SomeOtherThing/);
   });
 
   it("composes with helper(): subsequent helper(cls, X) layers on top", () => {

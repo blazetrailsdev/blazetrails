@@ -280,16 +280,21 @@ export function modulesForHelpers(
 export async function allHelpersFromPath(paths: string | readonly string[]): Promise<string[]> {
   const { glob } = await import("@blazetrails/activesupport/glob");
   const roots = typeof paths === "string" ? [paths] : paths;
+  // Rails: per-path `sort!` then concat across paths, then `uniq!`
+  // preserving first-occurrence order. We do NOT globally re-sort.
+  const out: string[] = [];
   const seen = new Set<string>();
   for (const root of roots) {
     const matches = await glob("**/*_helper.{ts,js,rb}", { cwd: root });
-    for (const file of matches) {
-      const noExt = file.replace(/\.(ts|js|rb)$/, "");
-      const noSuffix = noExt.replace(/_helper$/, "");
-      seen.add(noSuffix);
+    const names = matches.map((f) => f.replace(/\.(ts|js|rb)$/, "").replace(/_helper$/, "")).sort();
+    for (const name of names) {
+      if (!seen.has(name)) {
+        seen.add(name);
+        out.push(name);
+      }
     }
   }
-  return [...seen].sort();
+  return out;
 }
 
 /**
@@ -313,14 +318,18 @@ export async function helperModulesFromPaths(
  */
 export function defaultHelperModule(cls: HelpersClassMethods, options: ResolutionOptions): void {
   const className = cls.name;
-  if (!className) return; // anonymous — skip
+  if (!className) return; // anonymous — Rails' inherited hook also skips
   const helperPrefix = className.replace(/Controller$/, "");
-  if (helperPrefix === className) return; // not a Controller suffix
+  const expectedName = `${/^[A-Z]/.test(helperPrefix) ? helperPrefix : camelize(helperPrefix)}Helper`;
   try {
     const [mod] = modulesForHelpers([helperPrefix], options);
     helper(cls, mod);
   } catch (err) {
-    if (err instanceof Error && /^uninitialized constant /.test(err.message)) return;
+    // Rails: `rescue NameError => e; raise unless e.missing_name?("#{helper_prefix}Helper")`.
+    // Only swallow the missing-constant error for *this* specific helper
+    // name. Errors from elsewhere (e.g. the helper module's own body
+    // referencing some other missing constant) must propagate.
+    if (err instanceof Error && err.message === `uninitialized constant ${expectedName}`) return;
     throw err;
   }
 }

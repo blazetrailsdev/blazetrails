@@ -5,8 +5,10 @@ import {
   applyCaching,
   cache,
   cacheConfigured,
+  cacheStore,
   CACHING_DEFAULTS,
   CACHING_SLOTS,
+  setCacheStore,
   viewCacheDependencies,
   viewCacheDependency,
   type CachingHost,
@@ -46,6 +48,24 @@ describe("AbstractController::Caching", () => {
 
     it("applyCaching is a slot-contract no-op", () => {
       expect(() => applyCaching(HostClass)).not.toThrow();
+    });
+  });
+
+  describe("cacheStore reader/writer", () => {
+    it("reads the class-level slot", () => {
+      const store = new MemoryStore();
+      const host = makeHost(store);
+      expect(cacheStore.call(host)).toBe(store);
+    });
+    it("returns null when no store is wired up", () => {
+      expect(cacheStore.call(makeHost())).toBeNull();
+    });
+    it("setCacheStore assigns onto the class slot", () => {
+      const host = makeHost();
+      const store = new MemoryStore();
+      setCacheStore.call(host, store);
+      expect(HostClass.cacheStore).toBe(store);
+      expect(cacheStore.call(host)).toBe(store);
     });
   });
 

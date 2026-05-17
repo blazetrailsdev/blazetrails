@@ -55,6 +55,26 @@ export function applyCaching<T extends new (...args: never[]) => unknown>(
 }
 
 /**
+ * `ConfigMethods#cache_store` reader. Rails delegates to `config.cache_store`;
+ * trails stores the slot directly on the class, so this is a thin lookup
+ * that walks the prototype chain via `host.constructor`.
+ */
+export function cacheStore(this: CachingHost): CacheStore | null {
+  return this.constructor.cacheStore ?? null;
+}
+
+/**
+ * `ConfigMethods#cache_store=` writer. Rails wraps via
+ * `ActiveSupport::Cache.lookup_store(*store)`; that helper isn't ported
+ * yet, so for now we accept a fully-constructed `CacheStore` (or `null`)
+ * and assign it onto the class slot directly. The signature stays
+ * Rails-shaped so future wiring of `lookupStore` is a drop-in upgrade.
+ */
+export function setCacheStore(this: CachingHost, store: CacheStore | null): void {
+  this.constructor.cacheStore = store;
+}
+
+/**
  * Mirrors `AbstractController::Caching::ConfigMethods#cache_configured?`.
  * Truthy when caching is on AND a store is wired up.
  */

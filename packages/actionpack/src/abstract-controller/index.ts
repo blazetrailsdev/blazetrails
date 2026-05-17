@@ -53,6 +53,8 @@ export {
   applyCaching,
   cache,
   cacheConfigured,
+  cacheStore,
+  setCacheStore,
   CACHING_DEFAULTS,
   CACHING_SLOTS,
   viewCacheDependencies,

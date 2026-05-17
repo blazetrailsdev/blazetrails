@@ -1,3 +1,5 @@
+import { camelize } from "@blazetrails/activesupport";
+
 /**
  * `AbstractController::Helpers` — class-level registry that exposes
  * controller methods (and external modules) to views. This PR ports
@@ -8,11 +10,10 @@
  *   - `helper(cls, ...mods)` — include resolved modules into `_helpers`.
  *   - `clearHelpers(cls)` — reset, then re-add previous `_helperMethods`.
  *   - `_helpersForModification(cls)` — copy-on-write clone for subclass mutation.
- *
- * String/symbol resolution (`AbstractController::Helpers::Resolution`)
- * and the `default_helper_module!` autoload-by-name path are deferred
- * to a follow-up PR; that's where `modules_for_helpers`,
- * `all_helpers_from_path`, and the constantize-by-name path live.
+ *   - `modulesForHelpers(args, opts)` — Rails `Resolution#modules_for_helpers`.
+ *   - `allHelpersFromPath(paths)` — Rails `Resolution#all_helpers_from_path`.
+ *   - `helperModulesFromPaths(paths, opts)` — Rails `Resolution#helper_modules_from_paths`.
+ *   - `defaultHelperModule(cls, opts)` — Rails `default_helper_module!`.
  *
  * Ported from `vendor/rails/actionpack/lib/abstract_controller/helpers.rb`.
  *
@@ -221,4 +222,111 @@ export function _helpersForModification(cls: HelpersClassMethods): HelperMethods
   const child = Object.create(inherited) as HelperMethodsModule;
   cls._helpers = child;
   return child;
+}
+
+// ---------------------------------------------------------------------------
+// `AbstractController::Helpers::Resolution`
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves a helper-module name (e.g. `"users"`, `"Foo::Bar"`) into a
+ * `HelperMethodsModule`. Returns `undefined` when no module exists for
+ * the name — `modulesForHelpers` raises in that case to mirror Ruby's
+ * `NameError`.
+ *
+ * trails has no global constant table, so the resolver is host-supplied:
+ * typically a registry built at boot from configured helper paths or
+ * static imports.
+ */
+export type HelperResolver = (name: string) => HelperMethodsModule | undefined;
+
+export interface ResolutionOptions {
+  resolve: HelperResolver;
+}
+
+/**
+ * `Resolution#modules_for_helpers(modules_or_helper_prefixes)` — accepts
+ * a mixed array of resolved modules and prefix names (string | symbol).
+ * Names that don't start with an upper-case letter are camelized; a
+ * `"Helper"` suffix is appended; the resolver is asked to turn the
+ * resulting name into a module. Throws `TypeError` / a `NameError`-shaped
+ * `Error` on bad inputs / unknown names, matching Rails' two failure
+ * modes.
+ */
+export function modulesForHelpers(
+  args: ReadonlyArray<HelperMethodsModule | string | symbol | Array<unknown>>,
+  options: ResolutionOptions,
+): HelperMethodsModule[] {
+  const flat = (args as readonly unknown[]).flat(Infinity);
+  return flat.map((arg) => {
+    if (arg && typeof arg === "object") return arg as HelperMethodsModule;
+    if (typeof arg === "string" || typeof arg === "symbol") {
+      const raw = typeof arg === "symbol" ? (arg.description ?? "") : arg;
+      const name = `${/^[A-Z]/.test(raw) ? raw : camelizeHelperPrefix(raw)}Helper`;
+      const mod = options.resolve(name);
+      if (!mod) throw new Error(`uninitialized constant ${name}`);
+      return mod;
+    }
+    throw new TypeError("helper must be a String, Symbol, or Module");
+  });
+}
+
+/**
+ * `Resolution#all_helpers_from_path(path)` — glob `*_helper.{ts,js}`
+ * (and `.rb` so callers porting from Rails can point at a real Rails
+ * app path) under each given root and return the de-duplicated, sorted
+ * basename list (without the `_helper` suffix or extension).
+ */
+export async function allHelpersFromPath(paths: string | readonly string[]): Promise<string[]> {
+  const { glob } = await import("@blazetrails/activesupport/glob");
+  const roots = typeof paths === "string" ? [paths] : paths;
+  const seen = new Set<string>();
+  for (const root of roots) {
+    const matches = await glob("**/*_helper.{ts,js,rb}", { cwd: root });
+    for (const file of matches) {
+      const noExt = file.replace(/\.(ts|js|rb)$/, "");
+      const noSuffix = noExt.replace(/_helper$/, "");
+      seen.add(noSuffix);
+    }
+  }
+  return [...seen].sort();
+}
+
+/**
+ * `Resolution#helper_modules_from_paths(paths)` — chains
+ * `allHelpersFromPath` and `modulesForHelpers`.
+ */
+export async function helperModulesFromPaths(
+  paths: string | readonly string[],
+  options: ResolutionOptions,
+): Promise<HelperMethodsModule[]> {
+  const names = await allHelpersFromPath(paths);
+  return modulesForHelpers(names, options);
+}
+
+/**
+ * `ClassMethods#default_helper_module!` — strip the `Controller` suffix
+ * from `cls.name` and call `helper(cls, <Name>)`. Rails rescues a
+ * `NameError` for the specific missing constant; we swallow only the
+ * matching `uninitialized constant` error raised by
+ * `modulesForHelpers`, so unrelated resolver failures still propagate.
+ */
+export function defaultHelperModule(cls: HelpersClassMethods, options: ResolutionOptions): void {
+  const className = cls.name;
+  if (!className) return; // anonymous — skip
+  const helperPrefix = className.replace(/Controller$/, "");
+  if (helperPrefix === className) return; // not a Controller suffix
+  try {
+    const [mod] = modulesForHelpers([helperPrefix], options);
+    helper(cls, mod);
+  } catch (err) {
+    if (err instanceof Error && /^uninitialized constant /.test(err.message)) return;
+    throw err;
+  }
+}
+
+function camelizeHelperPrefix(raw: string): string {
+  // Ruby `helper_prefix.camelize` — activesupport's `camelize` already
+  // translates `/` to `::`, so `"foo/bar"` → `"Foo::Bar"`.
+  return camelize(raw);
 }

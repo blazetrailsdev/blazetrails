@@ -441,6 +441,22 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect((x as any).languageWas()).toBe("de");
       expect((x as any).languageChange()).toEqual(["de", null]);
     });
+    it("saved changes with store accessors", async () => {
+      const HstoreWithAccessors = await freshStoreAccessorModel(adapter);
+      const x = HstoreWithAccessors.new({ language: "fr" });
+      await (x as any).saveBang();
+
+      // After save: previousChanges has [nil, {language: "fr"}] for settings.
+      expect((x as any).savedChangeToLanguage()).toBe(true);
+      expect((x as any).savedChangeToLanguageValues()).toEqual([null, "fr"]);
+      expect((x as any).languageBeforeLastSave()).toBeNull();
+
+      (x as any).language = "de";
+      await (x as any).saveBang();
+      expect((x as any).savedChangeToLanguage()).toBe(true);
+      expect((x as any).savedChangeToLanguageValues()).toEqual(["fr", "de"]);
+      expect((x as any).languageBeforeLastSave()).toBe("fr");
+    });
     it("changes in place", async () => {
       const hstore = await HstoreModel.createBang({ settings: { one: "two" } });
       (hstore as any).settings["three"] = "four";

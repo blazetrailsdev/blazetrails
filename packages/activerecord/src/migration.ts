@@ -1382,29 +1382,41 @@ export abstract class Migration {
     return /^\d{3,}$/.test(version);
   }
 
-  static nextMigrationNumber(number?: number): string {
+  static nextMigrationNumber(number?: number | bigint | string): string {
     // Rails: max(now.utc.strftime("%Y%m%d%H%M%S"), "%.14d" % number) — so a
     // numerically-larger sequence wins over a same-second timestamp. Callers
     // (e.g. Migration.copy) pass `last.version + 1` to guarantee monotonicity
-    // across iterations within the same second.
+    // across iterations within the same second. Accepts bigint/string so
+    // versions beyond Number.MAX_SAFE_INTEGER (e.g. future renumbering above
+    // 9.0e15) survive without precision loss.
     const stamp = Temporal.Now.instant()
       .toString()
       .replace(/[-T:Z.]/g, "")
       .slice(0, 14);
     if (number == null) return stamp;
-    const padded = Math.max(0, Math.trunc(number)).toString().padStart(14, "0");
+    const n =
+      typeof number === "bigint"
+        ? number
+        : BigInt(typeof number === "number" ? Math.max(0, Math.trunc(number)) : number);
+    const padded = (n < 0n ? 0n : n).toString().padStart(14, "0");
     return padded > stamp ? padded : stamp;
   }
 
   static properTableName(
-    name: string | { tableName?: string },
+    name: string | { tableName?: unknown },
     options: { tableNamePrefix?: string; tableNameSuffix?: string } = {},
   ): string {
-    // Mirrors Rails: if the argument quacks like a Model class (responds to
-    // `table_name`), return that directly — the model's own prefix/suffix
-    // are already baked in.
-    if (name !== null && typeof name === "object" && typeof name.tableName === "string") {
-      return name.tableName;
+    // Mirrors Rails `name.respond_to?(:table_name)`: any non-null reference
+    // exposing a string `tableName` is honored. Model classes (functions)
+    // expose it as a static getter, so `typeof name === "function"` must
+    // count too — guarding only on "object" silently produces a stringified
+    // function name with prefix/suffix applied.
+    if (
+      name != null &&
+      (typeof name === "object" || typeof name === "function") &&
+      typeof (name as { tableName?: unknown }).tableName === "string"
+    ) {
+      return (name as { tableName: string }).tableName;
     }
     const prefix = options.tableNamePrefix ?? "";
     const suffix = options.tableNameSuffix ?? "";
@@ -1462,16 +1474,24 @@ export abstract class Migration {
           continue;
         }
 
-        const nextNumber = last ? (BigInt(last.version) + 1n).toString() : "0";
-        const newVersion = Migration.nextMigrationNumber(Number(nextNumber));
+        const nextNumber = last ? BigInt(last.version) + 1n : 0n;
+        const newVersion = Migration.nextMigrationNumber(nextNumber);
         const fileBase = underscore(source.name);
         const newPath = path.join(destination, `${newVersion}_${fileBase}.${scope}.ts`);
         const oldPath = source.filename;
+        // Build a fresh migration factory that imports the NEW path — spreading
+        // `source` would carry over a closure pinned to the old engine file.
+        const proxyName = source.name;
         const copy: MigrationProxy = {
-          ...source,
+          name: source.name,
           version: newVersion,
           scope,
           filename: newPath,
+          migration: async () => {
+            const { pathToFileURL } = await import("node:url");
+            const mod = (await import(pathToFileURL(newPath).href)) as Record<string, unknown>;
+            return (mod.default ?? mod[proxyName]) as MigrationLike;
+          },
         };
         last = copy;
 

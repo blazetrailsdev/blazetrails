@@ -3270,6 +3270,18 @@ describe("MigrationProperTableNameAndCopy", () => {
     expect(
       Migration.properTableName(reminderClass, { tableNamePrefix: "x_", tableNameSuffix: "_y" }),
     ).toBe("reminders");
+
+    // A real Model class is a function (typeof === "function") with a static
+    // `tableName` getter — exercises the function-branch of the guard.
+    class ReminderModel extends Base {
+      static get tableName(): string {
+        return "reminders";
+      }
+    }
+    expect(Migration.properTableName(ReminderModel)).toBe("reminders");
+    expect(
+      Migration.properTableName(ReminderModel, { tableNamePrefix: "x_", tableNameSuffix: "_y" }),
+    ).toBe("reminders");
   });
 
   it("copy renumbers, scopes filenames, prepends provenance comment", async () => {

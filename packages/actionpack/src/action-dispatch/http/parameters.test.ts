@@ -1,13 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { MimeType } from "./mime-type.js";
 import {
   DEFAULT_PARSERS,
   PARAMETERS_KEY,
   ParseError,
+  type ParameterParser,
   type ParametersHost,
+  logParseErrorOnce,
+  parameterParsers,
   parameters,
+  paramsParsers,
   parseFormattedParameters,
   pathParameters,
+  setParameterParsers,
   setPathParameters,
 } from "./parameters.js";
 
@@ -112,6 +117,42 @@ describe("setPathParameters", () => {
     setPathParameters.call(host, { controller: "x" });
     expect(host.getHeader(PARAMETERS_KEY)).toEqual({ controller: "x" });
     expect(host.getHeader("action_dispatch.request.parameters")).toBeUndefined();
+  });
+});
+
+describe("parameterParsers registry", () => {
+  afterEach(() => setParameterParsers(DEFAULT_PARSERS));
+
+  it("starts at DEFAULT_PARSERS", () => {
+    expect(parameterParsers()).toBe(DEFAULT_PARSERS);
+  });
+
+  it("setParameterParsers replaces the registry", () => {
+    const xml: ParameterParser = (raw) => ({ xml: raw });
+    setParameterParsers({ xml });
+    expect(parameterParsers()).toEqual({ xml });
+  });
+
+  it("paramsParsers host helper forwards to the registry", () => {
+    const xml: ParameterParser = () => ({});
+    setParameterParsers({ xml });
+    const host = makeHost();
+    expect(paramsParsers.call(host)).toEqual({ xml });
+  });
+});
+
+describe("logParseErrorOnce", () => {
+  it("logs once per host then no-ops", () => {
+    const messages: string[] = [];
+    const host = makeHost({
+      rawPost: "garbage",
+      logger: { debug: (m) => messages.push(m) },
+    });
+    logParseErrorOnce.call(host);
+    logParseErrorOnce.call(host);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain("Error occurred while parsing request parameters");
+    expect(messages[0]).toContain("garbage");
   });
 });
 

@@ -42,7 +42,7 @@ export const DEFAULT_PARSERS: ParameterParsers = {
  */
 export class ParseError extends Error {
   constructor(message?: string) {
-    super(message ?? (typeof globalThis !== "undefined" ? "Parse error" : ""));
+    super(message);
     this.name = "ActionDispatch::Http::Parameters::ParseError";
   }
 }
@@ -60,6 +60,26 @@ export interface ParametersHost {
   contentLength: number;
   contentMimeType: MimeType | null;
   rawPost: string;
+  logger?: { debug(message: string): void } | null;
+}
+
+/**
+ * Class-level parameter-parser registry. Mirrors Rails'
+ * `Request.parameter_parsers` attr_accessor. Symbol keys are normalized via
+ * `key.symbol` (`MimeType#symbol`) when present, matching the Ruby setter.
+ */
+let _parameterParsers: ParameterParsers = DEFAULT_PARSERS;
+
+export function parameterParsers(): ParameterParsers {
+  return _parameterParsers;
+}
+
+export function setParameterParsers(parsers: Record<string, ParameterParser>): void {
+  const normalized: ParameterParsers = {};
+  for (const key of Object.keys(parsers)) {
+    normalized[key] = parsers[key];
+  }
+  _parameterParsers = normalized;
 }
 
 /**
@@ -126,6 +146,33 @@ export function parseFormattedParameters(
   try {
     return strategy(this.rawPost);
   } catch {
+    logParseErrorOnce.call(this);
     throw new ParseError("Error occurred while parsing request parameters");
   }
+}
+
+/**
+ * Logs the parse failure exactly once per request. Mirrors Rails'
+ * `log_parse_error_once`; the once-per-request guard lives on the host as
+ * `_parseErrorLogged` (Rails uses `@parse_error_logged`).
+ *
+ * @internal
+ */
+export function logParseErrorOnce(this: ParametersHost): void {
+  const host = this as ParametersHost & { _parseErrorLogged?: boolean };
+  if (host._parseErrorLogged) return;
+  host._parseErrorLogged = true;
+  const logger = this.logger ?? { debug: (m: string) => console.error(m) };
+  logger.debug(`Error occurred while parsing request parameters.\nContents:\n\n${this.rawPost}`);
+}
+
+/**
+ * Returns the currently-registered parameter parsers. Mirrors Rails'
+ * private `params_parsers` which simply forwards to
+ * `ActionDispatch::Request.parameter_parsers`.
+ *
+ * @internal
+ */
+export function paramsParsers(this: ParametersHost): ParameterParsers {
+  return parameterParsers();
 }

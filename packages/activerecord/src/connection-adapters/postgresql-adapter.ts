@@ -3085,11 +3085,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       if (options.default === null) {
         await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} DROP DEFAULT`);
       } else {
-        const defaultExpr = pgQuoteDefaultExpression(
-          options.default,
-          { array: options.array, sqlType: pgType },
-          this.typeMap,
-        );
+        const defaultExpr = this.quoteDefaultExpression(options.default, {
+          array: options.array,
+          sqlType: pgType,
+        });
         // pgQuoteDefaultExpression returns " DEFAULT value" — strip the prefix
         const defaultValue = defaultExpr.replace(/^ DEFAULT /, "");
         await this.exec(
@@ -3178,14 +3177,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} DROP DEFAULT`);
     } else {
       const col = (await this.columns(tableName)).find((c) => (c as Column).name === columnName);
-      const clause = pgQuoteDefaultExpression(
-        defaultValue,
-        {
-          array: (col as Column | undefined)?.array,
-          sqlType: (col as Column | undefined)?.sqlType ?? undefined,
-        },
-        this.typeMap,
-      );
+      const clause = this.quoteDefaultExpression(defaultValue, col);
       const expr = clause.startsWith(" DEFAULT ") ? clause.slice(" DEFAULT ".length) : clause;
       await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT ${expr}`);
     }
@@ -3238,14 +3230,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const quotedCol = this.quoteIdentifier(columnName);
     if (!nullable && defaultValue != null) {
       const col = (await this.columns(tableName)).find((c) => (c as Column).name === columnName);
-      const clause = pgQuoteDefaultExpression(
-        defaultValue,
-        {
-          array: (col as Column | undefined)?.array,
-          sqlType: (col as Column | undefined)?.sqlType ?? undefined,
-        },
-        this.typeMap,
-      );
+      const clause = this.quoteDefaultExpression(defaultValue, col);
       const expr = clause.startsWith(" DEFAULT ") ? clause.slice(" DEFAULT ".length) : clause;
       await this.exec(
         `UPDATE ${quotedTable} SET ${quotedCol} = ${expr} WHERE ${quotedCol} IS NULL`,

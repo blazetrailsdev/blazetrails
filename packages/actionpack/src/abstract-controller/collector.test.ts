@@ -62,6 +62,24 @@ describe("AbstractController::Collector", () => {
     expect(() => c.thisIsNotAMime()).toThrow(/register it as a MIME type/);
   });
 
+  it("binds `this` inside custom() to the Proxy receiver, not the raw target", () => {
+    class ThisChecker extends Collector {
+      seenThis: unknown;
+      custom(_mime: MimeType): unknown {
+        this.seenThis = this;
+        return null;
+      }
+    }
+    const c = new ThisChecker() as ThisChecker & { html: () => unknown };
+    // Direct call → `this` is the proxy
+    c.custom(MimeType.HTML);
+    const viaDirect = c.seenThis;
+    c.seenThis = undefined;
+    // Per-MIME dispatch → `this` must be the same proxy
+    c.html();
+    expect(c.seenThis).toBe(viaDirect);
+  });
+
   it("is not assimilated by Promise.resolve (no synthesized `then`)", async () => {
     const c = new TestCollector();
     const resolved = await Promise.resolve(c);

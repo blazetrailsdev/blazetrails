@@ -41,7 +41,15 @@ const COLLECTOR_HANDLER: ProxyHandler<Collector> = {
     if (typeof prop !== "string") return undefined;
     const mime = MimeType.lookup(prop);
     if (mime) {
-      return (...args: unknown[]): unknown => target.custom(mime, ...args);
+      // Bind `this` inside custom() to the Proxy receiver, not the raw
+      // target — otherwise property access inside custom() would bypass
+      // this proxy and miss the MIME dispatch / shadowing rules. Mirrors
+      // how `format.html(...)` and `format.custom(...)` should resolve
+      // the same `this` for subclasses.
+      return (...args: unknown[]): unknown => {
+        const fn = Reflect.get(target, "custom", receiver) as Collector["custom"];
+        return fn.call(receiver, mime, ...args);
+      };
     }
     // Unknown format — mirror Rails' NoMethodError message so callers
     // who try `format.fakemime { … }` get a useful hint.

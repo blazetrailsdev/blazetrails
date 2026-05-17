@@ -18,6 +18,7 @@ import type {
 } from "../abstract/schema-definitions.js";
 import { quoteIdentifier, quoteTableName } from "./quoting.js";
 import { quoteDefaultExpression } from "../abstract/quoting.js";
+import { SchemaCreation as MysqlSchemaCreation } from "./schema-creation.js";
 
 /**
  * MySQL-specific column type methods mixed into TableDefinition.
@@ -38,27 +39,34 @@ export interface ColumnMethods {
   unsignedDecimal(name: string, options?: ColumnOptions): unknown;
 }
 
-/**
- * @todo `SchemaStatements#createTable` instantiates `AbstractTableDefinition` directly (not this
- *   subclass) via `new TableDefinition(...)`. The MySQL-specific overrides here
- *   (`newColumnDefinition`, `integerLikePrimaryKeyType`, `validColumnDefinitionOptions`) are
- *   exercised by `changeColumn` (see `abstract-mysql-adapter.ts`) but NOT by `createTable`.
- *   Fix: override `createTableDefinition()` in an MySQL-specific SchemaStatements to return
- *   this subclass, mirroring Rails' `MySQL::SchemaStatements#create_table_definition`.
- */
 export class TableDefinition extends AbstractTableDefinition {
+  /** @internal Full adapter when constructed by `createTableDefinition`; used so `toSql()`
+   * reuses the adapter's pre-configured `MysqlSchemaCreation` (carrying MariaDB flag, etc.). */
+  private readonly _mysqlAdapter?: {
+    schemaStatements?: () => { schemaCreation: MysqlSchemaCreation };
+  };
+
   constructor(
     tableName: string,
     options: {
       id?: boolean | "uuid";
       charset?: string | null;
       collation?: string | null;
+      primaryKey?: string | string[] | false;
+      temporary?: boolean;
+      ifNotExists?: boolean;
+      as?: string;
+      options?: string;
+      comment?: string;
+      adapter?: unknown;
+      adapterName?: "sqlite" | "postgres" | "mysql";
     } = {},
   ) {
+    const { adapter, adapterName: _ignoredAdapterName, ...rest } = options;
     super(tableName, {
-      ...options,
-      charset: options.charset ?? undefined,
-      collation: options.collation ?? undefined,
+      ...rest,
+      charset: rest.charset ?? undefined,
+      collation: rest.collation ?? undefined,
       adapterName: "mysql",
       adapter: {
         quoteIdentifier: quoteIdentifier,
@@ -66,6 +74,21 @@ export class TableDefinition extends AbstractTableDefinition {
         quoteDefaultExpression: quoteDefaultExpression,
       },
     });
+    if (adapter && typeof adapter === "object") {
+      this._mysqlAdapter = adapter as TableDefinition["_mysqlAdapter"];
+    }
+  }
+
+  /**
+   * Routes `CREATE TABLE` SQL generation through the MySQL `SchemaCreation`
+   * visitor (Arel-style accept). Doing so makes `options.autoIncrement` and
+   * other column options consistent between `createTable`, `addColumn`, and
+   * `changeColumn` — they all go through {@link SchemaCreation#addColumnOptions}.
+   */
+  override toSql(): string {
+    const fromAdapter = this._mysqlAdapter?.schemaStatements?.().schemaCreation;
+    const visitor = fromAdapter ?? new MysqlSchemaCreation();
+    return visitor.accept(this);
   }
 
   blob(name: string, options: ColumnOptions & { limit?: number } = {}): this {

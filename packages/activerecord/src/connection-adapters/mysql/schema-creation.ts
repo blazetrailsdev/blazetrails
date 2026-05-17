@@ -182,6 +182,47 @@ export class SchemaCreation extends AbstractSchemaCreation {
     );
   }
 
+  /**
+   * MySQL CREATE TABLE generator. Mirrors Rails'
+   * `abstract/schema_creation.rb#visit_TableDefinition`, routing every
+   * column through {@link SchemaCreation#visitColumnDefinition} so
+   * `addColumnOptions` (this subclass) handles `AUTO_INCREMENT`,
+   * `ON UPDATE`, charset/collation, etc. consistently with addColumn.
+   *
+   * @internal
+   */
+  protected override visitTableDefinition(o: TableDefinition): string {
+    let sql = `CREATE${this.tableModifierInCreate(o)} TABLE`;
+    if (o.ifNotExists) sql += " IF NOT EXISTS";
+    sql += ` ${this.adapter.quoteTableName(o.tableName)}`;
+
+    if (o.as) {
+      let inline = "";
+      if (o.indexes.length > 0) {
+        const idxSql = o.indexes.map((idx) => this.visitIndexDefinition(idx, false));
+        inline = ` (${idxSql.join(", ")})`;
+      }
+      sql += `${inline} AS ${o.as}`;
+    } else {
+      const parts: string[] = o.columns.map((c) => this.visitColumnDefinition(c));
+      for (const chk of o.checkConstraints) {
+        parts.push(this.visitCheckConstraintDefinition(chk));
+      }
+      for (const fk of o.foreignKeys) {
+        parts.push(this.visitForeignKeyDefinition(fk));
+      }
+      if (o.compositePrimaryKey && o.compositePrimaryKey.length > 0) {
+        const cols = o.compositePrimaryKey.map((k) => this.adapter.quoteIdentifier(k)).join(", ");
+        parts.push(`PRIMARY KEY (${cols})`);
+      }
+      for (const idx of o.indexes) {
+        parts.push(this.visitIndexDefinition(idx, false));
+      }
+      sql += ` (${parts.join(", ")})`;
+    }
+    return this.addTableOptionsBang(sql, o);
+  }
+
   /** @internal */
   override accept(
     o:

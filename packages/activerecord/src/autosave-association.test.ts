@@ -1189,6 +1189,9 @@ describe("TestDefaultAutosaveAssociationOnAHasOneAssociation", () => {
     });
     const parent = new PolyParent({ name: "P" });
     const child = new PolyChild({ name: "C" });
+    // Mirrors Rails HasOneAssociation#set_owner_attributes which writes the
+    // polymorphic _type column at assignment time (before save).
+    child._writeAttribute("employable_type", "PolyParent");
     cacheAssoc(parent, "polyChild", child);
     await parent.save();
     expect(log).toContain("before_validation");
@@ -1279,6 +1282,9 @@ describe("TestDefaultAutosaveAssociationOnAHasOneAssociation", () => {
     });
     const parent = new PolyAsParent({ name: "P" });
     const child = new PolyAsChild({ name: "C" });
+    // Mirrors Rails BelongsToPolymorphicAssociation#replace_keys which
+    // writes the polymorphic _type column at assignment time.
+    child._writeAttribute("employable_type", "PolyAsParent");
     cacheAssoc(child, "employable", parent);
     await child.save();
     expect(log).toContain("parent_before_validation");
@@ -1608,6 +1614,7 @@ describe("TestAutosaveAssociationOnAHasOneAssociation", () => {
     const cake = await SwapCakeDesigner.create({ name: "Cake" });
     const drink = await SwapDrinkDesigner.create({ name: "Drink" });
     const chef = new SwapChef({ name: "Gordon" });
+    chef._writeAttribute("employable_type", "SwapCakeDesigner");
     cacheAssoc(cake, "chef", chef);
     await cake.save();
     expect(chef._readAttribute("employable_type")).toBe("SwapCakeDesigner");
@@ -1615,6 +1622,7 @@ describe("TestAutosaveAssociationOnAHasOneAssociation", () => {
 
     // Reassign chef to drink — polymorphic type column flips even when
     // employable_id may collide. autosave on drink should re-persist the chef.
+    chef._writeAttribute("employable_type", "SwapDrinkDesigner");
     cacheAssoc(drink, "chef", chef);
     await drink.save();
     expect(chef._readAttribute("employable_type")).toBe("SwapDrinkDesigner");

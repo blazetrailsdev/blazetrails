@@ -940,6 +940,19 @@ describe("ReflectionTest", () => {
     // macro must NOT appear here.
     expect(ref.joinPrimaryKey).toBe("post_id");
     expect(ref.joinForeignKey).toBe("id");
+
+    // When sourceReflection cannot be resolved, Rails raises
+    // HasManyThroughSourceAssociationNotFoundError (reflection.rb:1469).
+    // Before this fix, joinPrimaryKey/joinForeignKey silently fell back
+    // to delegate_reflection and could leak the bogus foreignKey.
+    Associations.hasMany.call(Author, "missing", {
+      through: "posts",
+      source: "doesNotExist",
+      foreignKey: "bogus_id",
+    });
+    const bad = reflectOnAssociation(Author, "missing") as ThroughReflection;
+    expect(() => bad.joinPrimaryKey).toThrow(/source association/i);
+    expect(() => bad.joinForeignKey).toThrow(/source association/i);
   });
   it("join scope builds arel predicate for has many", () => {
     const { Author } = makeModels();

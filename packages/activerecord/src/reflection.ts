@@ -1290,12 +1290,8 @@ export class ThroughReflection extends AbstractReflection {
 
   get joinPrimaryKey(): string | string[] {
     const src = this.sourceReflection;
-    if (!src) {
-      throw new Error(
-        `Could not find the source association(s) ${JSON.stringify(this.options.source ?? this.name)} in model ${this.through}`,
-      );
-    }
-    return src.joinPrimaryKey;
+    if (!src) this.checkValidityBang();
+    return this.sourceReflection!.joinPrimaryKey;
   }
 
   /**
@@ -1311,24 +1307,18 @@ export class ThroughReflection extends AbstractReflection {
       joinPrimaryKey: string | string[];
     } | null;
     if (!src) {
-      throw new Error(
-        `Could not find the source association(s) ${JSON.stringify(this.options.source ?? this.name)} in model ${this.through}`,
-      );
+      this.checkValidityBang();
     }
-    if (typeof src.joinPrimaryKeyFor === "function") {
+    if (src && typeof src.joinPrimaryKeyFor === "function") {
       return src.joinPrimaryKeyFor(klass);
     }
-    return src.joinPrimaryKey;
+    return src!.joinPrimaryKey;
   }
 
   get joinForeignKey(): string | string[] {
     const src = this.sourceReflection;
-    if (!src) {
-      throw new Error(
-        `Could not find the source association(s) ${JSON.stringify(this.options.source ?? this.name)} in model ${this.through}`,
-      );
-    }
-    return src.joinForeignKey;
+    if (!src) this.checkValidityBang();
+    return this.sourceReflection!.joinForeignKey;
   }
 
   scopeFor(relation: any, owner?: any): any {

@@ -35,16 +35,24 @@ export type HelperMethodsModule = Record<string, (...args: unknown[]) => unknown
 export interface HelpersClassMethods {
   _helpers?: HelperMethodsModule;
   _helperMethods?: string[];
-  /**
-   * Identity set of helper modules already included via `helper(...)`.
-   * Mirrors Rails' `_helpers.include?(mod)` (ancestor-chain identity
-   * check), so a later module that overrides one of an earlier
-   * module's methods can't be undone by a duplicate include of the
-   * earlier module.
-   */
-  _includedHelperModules?: WeakSet<object>;
   name?: string;
 }
+
+/**
+ * A nested-array list of helper method names. Mirrors Ruby's
+ * `helper_method(*methods)` + `methods.flatten!`: callers may pass
+ * varargs, a single array, or arbitrarily nested arrays.
+ */
+export type HelperMethodNameList = string | HelperMethodNameList[];
+
+/**
+ * Identity set of helper modules included into a given helpers module.
+ * Keyed by the helpers module itself, walked along the module's
+ * prototype chain so `clearHelpers` (which severs the chain) correctly
+ * forgets included modules and Rails' `_helpers.include?(mod)`
+ * ancestor-chain semantics are preserved.
+ */
+const includedHelperModules = new WeakMap<HelperMethodsModule, WeakSet<object>>();
 
 export interface HelpersHost {
   constructor: HelpersClassMethods;
@@ -76,7 +84,7 @@ export function _helpersInstance(this: HelpersHost): HelperMethodsModule {
  * spread does it for us) and appended to `_helperMethods` so
  * `clearHelpers` can re-establish them after a wipe.
  */
-export function helperMethod(cls: HelpersClassMethods, ...names: Array<string | string[]>): void {
+export function helperMethod(cls: HelpersClassMethods, ...names: HelperMethodNameList[]): void {
   // Rails: `methods.flatten!` — flattens recursively (default depth nil).
   const flat = (names as readonly unknown[]).flat(Infinity) as string[];
   if (flat.length === 0) return;
@@ -111,30 +119,38 @@ export function helper(
     if (typeof arg === "function") {
       arg(_helpersForModification(cls));
     } else if (arg && typeof arg === "object") {
-      if (isHelperIncluded(cls, arg)) continue;
-      recordHelperIncluded(cls, arg);
-      Object.assign(_helpersForModification(cls), arg);
+      if (isHelperIncluded(cls._helpers, arg)) continue;
+      const mod = _helpersForModification(cls);
+      recordHelperIncluded(mod, arg);
+      Object.assign(mod, arg);
     }
   }
 }
 
-function isHelperIncluded(cls: HelpersClassMethods, mod: object): boolean {
-  let current: object | null = cls;
+/**
+ * Walks the helpers module's prototype chain — each link is a module
+ * that included a (possibly different) set of helper modules. Mirrors
+ * Rails' `_helpers.include?(mod)`: only ancestors reachable via the
+ * actual helpers module chain count.
+ */
+function isHelperIncluded(helpers: HelperMethodsModule | undefined, mod: object): boolean {
+  let current: object | null = helpers ?? null;
   while (current) {
-    const own = Object.getOwnPropertyDescriptor(current, "_includedHelperModules")?.value as
-      | WeakSet<object>
-      | undefined;
-    if (own?.has(mod)) return true;
+    if (includedHelperModules.get(current as HelperMethodsModule)?.has(mod)) {
+      return true;
+    }
     current = Object.getPrototypeOf(current);
   }
   return false;
 }
 
-function recordHelperIncluded(cls: HelpersClassMethods, mod: object): void {
-  if (!Object.prototype.hasOwnProperty.call(cls, "_includedHelperModules")) {
-    cls._includedHelperModules = new WeakSet<object>();
+function recordHelperIncluded(helpers: HelperMethodsModule, mod: object): void {
+  let set = includedHelperModules.get(helpers);
+  if (!set) {
+    set = new WeakSet<object>();
+    includedHelperModules.set(helpers, set);
   }
-  cls._includedHelperModules!.add(mod);
+  set.add(mod);
 }
 
 /**
@@ -147,7 +163,6 @@ export function clearHelpers(cls: HelpersClassMethods): void {
   const inherited = [...(cls._helperMethods ?? [])];
   cls._helpers = Object.create(null) as HelperMethodsModule;
   cls._helperMethods = [];
-  cls._includedHelperModules = new WeakSet<object>();
   helperMethod(cls, ...inherited);
 }
 

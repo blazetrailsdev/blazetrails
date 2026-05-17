@@ -150,6 +150,25 @@ describe("helper", () => {
   });
 });
 
+describe("identity tracking lives on the helpers module chain, not the class", () => {
+  it("after clearHelpers, the same module can be re-included on the cleared child", () => {
+    const parent = makeBase();
+    const Shared: HelperMethodsModule = { shared: () => "S" };
+    helper(parent, Shared);
+    const child: HelpersClassMethods = Object.create(parent) as HelpersClassMethods;
+
+    helper(child, Shared);
+    expect(Object.prototype.hasOwnProperty.call(child, "_helpers")).toBe(false);
+
+    clearHelpers(child);
+    helper(child, Shared);
+    // Re-included successfully — clearHelpers severed the chain so the
+    // earlier identity record on parent's helpers module is no longer
+    // reachable from child._helpers.
+    expect(child._helpers!.shared.call({})).toBe("S");
+  });
+});
+
 describe("clearHelpers", () => {
   it("wipes _helpers + _helperMethods, then re-adds the previous helper_method proxies", () => {
     const cls = makeBase();
@@ -198,9 +217,9 @@ describe("_helpersForModification", () => {
     expect(_helpersForModification(child)).toBe(mod);
   });
 
-  it("also flattens nested array inputs", () => {
+  it("also flattens deeply nested array inputs", () => {
     const cls = makeBase();
-    helperMethod(cls, ["a", ["b", ["c"]]] as unknown as string);
+    helperMethod(cls, ["a", ["b", ["c"]]]);
     expect(cls._helperMethods).toEqual(["a", "b", "c"]);
   });
 });

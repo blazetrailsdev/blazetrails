@@ -194,9 +194,32 @@ export class HasAndBelongsToMany {
     const middleReflection = Reflection.create("hasMany", middleName, null, middleOptions, model);
     Reflection.addReflection(model, middleName, middleReflection as any);
 
-    beforeDestroy(model, (record: any) => {
-      return record.association(middleName).handleDependency();
-    });
+    // Mirrors Rails associations.rb:1886-1894 — instead of registering a
+    // bare `before_destroy` callback per HABTM, Rails includes an anonymous
+    // module that overrides `destroy_associations` and chains with `super`.
+    // Each HABTM declaration layers its own override; multiple HABTMs on
+    // the same class chain naturally through the captured `prev` reference.
+    // Translation note: `destroyAssociations` isn't yet wired into the
+    // standard destroy flow (see Batch 37), so we still register a
+    // class-level `beforeDestroy` once that invokes it — this preserves
+    // current behavior while installing the Rails-shape override module.
+    const prevDestroyAssociations = model.prototype.destroyAssociations;
+    model.prototype.destroyAssociations = async function (this: any): Promise<void> {
+      await this.association(middleName).handleDependency();
+      this.association(name).reset?.();
+      if (typeof prevDestroyAssociations === "function") {
+        await prevDestroyAssociations.call(this);
+      }
+    };
+    const HABTM_DESTROY_INSTALLED = Symbol.for("blazetrails.habtm.destroyAssociations.installed");
+    if (!Object.prototype.hasOwnProperty.call(model, HABTM_DESTROY_INSTALLED)) {
+      Object.defineProperty(model, HABTM_DESTROY_INSTALLED, {
+        value: true,
+        configurable: true,
+        writable: false,
+      });
+      beforeDestroy(model, (record: any) => record.destroyAssociations());
+    }
 
     // Tightened option set forwarded to the public HABTM reflection.
     // Rails' `hm_options` allowlist for the generated `has_many :through`

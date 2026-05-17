@@ -594,12 +594,30 @@ export function applyScopeForCreate(
     for (const k of Object.keys(exceptFromScopeAttributes)) assigned.add(k);
   }
 
-  const attributes: Record<string, unknown> = {};
+  const attributes = filterScopeForCreate(scope, assigned, skipAssign);
+  if (attributes) _assignAttributes(record as any, attributes);
+}
+
+/**
+ * Core of Rails' `scope_for_create.except!(*(assigned - skip_assign))`
+ * filter: returns the attribute hash to apply, or `null` when nothing
+ * is left after filtering. Shared between `applyScopeForCreate` (the
+ * `Association#initializeAttributes` path) and `CollectionProxy`'s
+ * direct-build paths.
+ *
+ * @internal
+ */
+export function filterScopeForCreate(
+  scope: Record<string, unknown>,
+  assigned: Set<string>,
+  skipAssign: Set<string>,
+): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {};
   let any = false;
   for (const [k, v] of Object.entries(scope)) {
     if (assigned.has(k) && !skipAssign.has(k)) continue;
-    attributes[k] = v;
+    out[k] = v;
     any = true;
   }
-  if (any) _assignAttributes(record as any, attributes);
+  return any ? out : null;
 }

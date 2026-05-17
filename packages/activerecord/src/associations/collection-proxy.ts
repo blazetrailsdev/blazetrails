@@ -24,6 +24,7 @@ import { Table as ArelTable } from "@blazetrails/arel";
 import type { Nodes } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { _assignAttributes } from "@blazetrails/activemodel";
+import { filterScopeForCreate } from "./association.js";
 import {
   StrictLoadingViolationError,
   RecordNotSaved,
@@ -737,14 +738,8 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     );
     for (const k of Object.keys(exceptFromScope)) assigned.add(k);
 
-    const out: Record<string, unknown> = {};
-    let any = false;
-    for (const [k, v] of Object.entries(sfc)) {
-      if (assigned.has(k) && !skipAssign.has(k)) continue;
-      out[k] = v;
-      any = true;
-    }
-    if (any) _assignAttributes(record as any, out);
+    const out = filterScopeForCreate(sfc, assigned, skipAssign);
+    if (out) _assignAttributes(record as any, out);
   }
 
   /**

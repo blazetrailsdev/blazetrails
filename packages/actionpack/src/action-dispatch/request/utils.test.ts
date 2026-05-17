@@ -44,6 +44,13 @@ describe("RequestUtils", () => {
         x: [null, "1"],
       });
     });
+
+    it("always clones output hashes with a null prototype (defangs __proto__ keys)", () => {
+      const malicious = JSON.parse('{"__proto__": {"polluted": true}, "ok": "1"}');
+      const out = RequestUtils.normalizeEncodeParams(malicious);
+      expect(Object.getPrototypeOf(out)).toBe(null);
+      expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+    });
   });
 
   describe("eachParamValue", () => {

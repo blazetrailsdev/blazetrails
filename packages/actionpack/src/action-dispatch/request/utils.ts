@@ -12,7 +12,15 @@
  * indifferent-access concern doesn't apply (object keys are strings only).
  */
 
-export type ParamValue = string | null | ParamValue[] | { [key: string]: ParamValue };
+// JSON-compatible primitives: urlencoded bodies yield string|null, JSON bodies
+// can also yield number|boolean. ParamValue covers both.
+export type ParamValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ParamValue[]
+  | { [key: string]: ParamValue };
 export type ParamHash = { [key: string]: ParamValue };
 
 export class RequestUtils {
@@ -35,42 +43,41 @@ export class RequestUtils {
   }
 
   /**
-   * Returns a normalized version of `params`. When `performDeepMunge` is
-   * true (the Rails default), the structure is recursively cloned with
-   * `null` entries removed from arrays. When false, `params` is returned
-   * as-is — Rails wraps with HashWithIndifferentAccess at this point,
-   * which we don't need in TS.
+   * Returns a normalized clone of `params`. Hashes are rebuilt with a
+   * null prototype so attacker-controlled `__proto__` keys (e.g. from
+   * `JSON.parse`) land as plain data rather than mutating the prototype
+   * chain. When `performDeepMunge` is true (the Rails default), `null`
+   * entries are additionally compacted out of arrays.
    *
-   * Mirrors `Request::Utils.normalize_encode_params`.
+   * Mirrors `Request::Utils.normalize_encode_params` — Rails' choice
+   * between `NoNilParamEncoder` and `ParamEncoder` (HashWithIndifferent-
+   * Access wrap omitted; TS object keys are already strings).
    */
   static normalizeEncodeParams(params: ParamValue): ParamValue {
-    if (this.performDeepMunge) {
-      return noNilNormalize(params);
-    }
-    return params;
+    return normalize(params, this.performDeepMunge);
   }
 
   /**
    * Standalone deep-munge: strip `null` from arrays at every depth.
    * Equivalent to Rails' `NoNilParamEncoder.handle_array` applied
-   * recursively.
+   * recursively. Always normalizes (compaction is unconditional here).
    */
   static deepMunge(params: ParamValue): ParamValue {
-    return noNilNormalize(params);
+    return normalize(params, true);
   }
 }
 
-function noNilNormalize(params: ParamValue): ParamValue {
+function normalize(params: ParamValue, stripNil: boolean): ParamValue {
   if (Array.isArray(params)) {
-    const mapped = params.map(noNilNormalize);
-    return mapped.filter((el) => el !== null);
+    const mapped = params.map((el) => normalize(el, stripNil));
+    return stripNil ? mapped.filter((el) => el !== null) : mapped;
   }
   if (params !== null && typeof params === "object") {
     // Null-prototype to (a) match parseNestedQuery's shape and (b) make
     // `__proto__` in an own key land as data instead of mutating the
     // prototype chain.
     const out: ParamHash = Object.create(null);
-    for (const [k, v] of Object.entries(params)) out[k] = noNilNormalize(v);
+    for (const [k, v] of Object.entries(params)) out[k] = normalize(v, stripNil);
     return out;
   }
   return params;

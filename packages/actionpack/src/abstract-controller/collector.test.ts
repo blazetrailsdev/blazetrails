@@ -29,8 +29,8 @@ describe("AbstractController::Collector", () => {
       latefmt?: (...args: unknown[]) => unknown;
     };
     expect(MimeType.lookup("latefmt")).toBeUndefined();
-    // No extension mapping — unregister() doesn't clean extensionMap, so
-    // leaving one behind leaks global MIME state across the test suite.
+    // Only the registry lookup matters for Collector dispatch; skip the
+    // extension mapping to keep this test focused.
     MimeType.register("application/latefmt", "latefmt");
     try {
       expect(c.latefmt!("ok")).toBe("dispatched:latefmt");

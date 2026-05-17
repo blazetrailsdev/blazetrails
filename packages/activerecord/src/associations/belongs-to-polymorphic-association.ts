@@ -94,6 +94,12 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
       const pk = (record.constructor as any).primaryKey;
       if (pk) return Array.isArray(pk) ? pk : [pk];
     }
+    // Polymorphic belongs_to: this.klass is dynamic — resolved at runtime
+    // from the _type column. Preserve the base class's klass-fallback for
+    // scope() / counter-cache paths that hit `associationPrimaryKeys(null)`
+    // once the _type column is set.
+    const pk = (this.klass as any)?.primaryKey;
+    if (pk) return Array.isArray(pk) ? pk : [pk];
     const targetPk = (this.target as any)?.constructor?.primaryKey;
     if (targetPk) return Array.isArray(targetPk) ? targetPk : [targetPk];
     return ["id"];

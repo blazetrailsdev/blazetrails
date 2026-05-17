@@ -1461,6 +1461,36 @@ describe("InversePolymorphicBelongsToTests", () => {
       }),
     ).toThrow(InverseOfAssociationNotFoundError);
   });
+
+  it("association-writer path also raises when polymorphic inverse missing", async () => {
+    // Cover the regular `record.association(name).writer(...)` path —
+    // BelongsToPolymorphicAssociation#inverseReflectionFor must reach
+    // polymorphicInverseOf during setInverseInstance and raise when the
+    // configured inverse name does not exist on the assigned record's
+    // class (Rails belongs_to_polymorphic_association.rb:35-37).
+    class Man extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class Tag extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("taggable_id", "integer");
+        this.attribute("taggable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    Associations.belongsTo.call(Tag, "taggable", { polymorphic: true, inverseOf: "nonexistent" });
+    registerModel(Man);
+    registerModel(Tag);
+    const m = await Man.create({ name: "Gordon" });
+    const t = await Tag.create({ name: "cool", taggable_id: m.id, taggable_type: "Man" });
+    expect(() => (t as any).association("taggable").writer(m)).toThrow(
+      InverseOfAssociationNotFoundError,
+    );
+  });
 });
 
 describe("InverseCachedPathTests", () => {

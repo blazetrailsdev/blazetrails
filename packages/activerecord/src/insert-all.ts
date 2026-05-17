@@ -235,7 +235,10 @@ export class InsertAll {
     for (const col of TIMESTAMP_ATTR_ALLOWLIST) known.add(col);
     for (const key of this.keys) {
       if (!known.has(key)) {
-        throw new UnknownAttributeError(new (this.model as any)(), key);
+        // UnknownAttributeError only reads record?.constructor?.name; skip the
+        // full constructor (attribute init, defaults, callbacks) on the error
+        // path by handing it a bare object with the right constructor link.
+        throw new UnknownAttributeError({ constructor: this.model }, key);
       }
     }
   }

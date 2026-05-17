@@ -76,12 +76,18 @@ export class MimeType {
   static unregister(symbol: string): void {
     const type = MimeType.registry.get(symbol);
     if (!type) return;
-    // Sweep every entry whose value is this type — captures the
-    // symbol, string, synonyms, AND any aliases added later via
+    // Sweep every registry entry whose value is this type — captures
+    // the symbol, string, synonyms, AND any aliases added later via
     // registerAlias(). Avoids partial removals where lookup() still
     // resolves the type through a stale alias key.
     for (const [key, value] of MimeType.registry) {
       if (value === type) MimeType.registry.delete(key);
+    }
+    // Same sweep for extensionMap — register() can install extension
+    // mappings, and leaving them behind would let lookupByExtension()
+    // resolve an unregistered type.
+    for (const [ext, value] of MimeType.extensionMap) {
+      if (value === type) MimeType.extensionMap.delete(ext);
     }
   }
 

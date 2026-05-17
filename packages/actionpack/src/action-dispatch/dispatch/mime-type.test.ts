@@ -179,6 +179,13 @@ describe("MimeTypeTest", () => {
     expect(jsonIdx).toBeGreaterThan(htmlIdx);
   });
 
+  it("unregister sweeps extensionMap so lookupByExtension can't resolve a removed type", () => {
+    MimeType.register("application/ext-test", "exttest", [], ["exttest"]);
+    expect(MimeType.lookupByExtension("exttest")?.symbol).toBe("exttest");
+    MimeType.unregister("exttest");
+    expect(MimeType.lookupByExtension("exttest")).toBeUndefined();
+  });
+
   it("unregister sweeps aliases too — type is no longer reachable via any key", () => {
     MimeType.register("application/aliased", "aliased");
     MimeType.registerAlias("aliased", "aliased_alias");

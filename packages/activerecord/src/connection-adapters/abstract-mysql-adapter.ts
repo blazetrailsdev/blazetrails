@@ -176,12 +176,12 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
    * @internal
    */
   createTableDefinition(name: string, options: Record<string, unknown> = {}): MysqlTableDefinition {
-    // Pass `this` (the MySQL adapter) as the `adapter` option so `MysqlTableDefinition#toSql`
-    // can build a host-aware visitor (support flags + MariaDB). `MysqlTableDefinition` is the
-    // authoritative layer for normalizing `adapter` / `adapterName` — it discards anything we
-    // pass for `adapterName` and the bare SchemaQuoter shape supplied by abstract
-    // SchemaStatements#createTable — so we don't strip those here.
-    return new MysqlTableDefinition(name, { ...options, adapter: this });
+    // Strip caller-supplied adapter/adapterName (abstract SchemaStatements#createTable forwards
+    // a bare SchemaQuoter shape) and substitute `this` — the full MySQL adapter — so the
+    // TableDefinition's `toSql()` can build a host-aware visitor. Matches the PG sibling
+    // (postgresql-adapter.ts) so the dispatch is symmetric across dialects.
+    const { adapter: _adapterOpt, adapterName: _adapterNameOpt, ...rest } = options;
+    return new MysqlTableDefinition(name, { ...rest, adapter: this });
   }
 
   protected _mariadb = false;

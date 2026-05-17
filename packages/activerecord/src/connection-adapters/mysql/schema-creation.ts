@@ -346,8 +346,14 @@ export class SchemaCreation extends AbstractSchemaCreation {
         sql += " NULL";
       }
     }
-    if (mo.charset) sql += ` CHARACTER SET ${mo.charset}`;
-    if (mo.collation) sql += ` COLLATE ${mo.collation}`;
+    if (mo.charset) {
+      assertSafeMysqlIdentifier(mo.charset, "charset");
+      sql += ` CHARACTER SET ${mo.charset}`;
+    }
+    if (mo.collation) {
+      assertSafeMysqlIdentifier(mo.collation, "collation");
+      sql += ` COLLATE ${mo.collation}`;
+    }
     if (mo.as) {
       sql += ` AS (${mo.as})`;
       if (mo.stored) sql += this.isMariadb() ? " PERSISTENT" : " STORED";

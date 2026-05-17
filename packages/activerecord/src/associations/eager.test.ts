@@ -4398,12 +4398,62 @@ describe("EagerAssociationTest", () => {
     const widgets = await PiaWidget.all().preload("nonExistent").toArray();
     expect(widgets).toHaveLength(1);
   });
-  it.skip("associations with extensions are not instance dependent", () => {
-    // extensions (do...end block) do NOT make a scope instance-dependent;
-    // only a scope lambda with arity>1 does. Deferred to follow-up sweep.
+  it("associations with extensions are not instance dependent", async () => {
+    class AweAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class AwePost extends Base {
+      static {
+        this.attribute("awe_author_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("AweAuthor", AweAuthor);
+    registerModel("AwePost", AwePost);
+    // Arity-1 scope (no owner) — analog of a Rails extension block; not instance dependent.
+    Associations.hasMany.call(AweAuthor, "awePostsWithExtension", {
+      className: "AwePost",
+      foreignKey: "awe_author_id",
+      scope: (_rel: any) => _rel,
+    });
+    await AweAuthor.create({ name: "A" });
+    await expect(
+      (AweAuthor as any).includes("awePostsWithExtension").toArray(),
+    ).resolves.not.toThrow();
   });
-  it.skip("including associations with extensions and an instance dependent scope is supported", () => {
-    // Deferred — same infra as "preloading of instance dependent"; follow-up sweep.
+  it("including associations with extensions and an instance dependent scope is supported", async () => {
+    class AwexAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class AwexPost extends Base {
+      static {
+        this.attribute("awex_author_id", "integer");
+        this.attribute("mention", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("AwexAuthor", AwexAuthor);
+    registerModel("AwexPost", AwexPost);
+    Associations.hasMany.call(AwexAuthor, "awexPostsWithExtAndInstance", {
+      className: "AwexPost",
+      foreignKey: "awex_author_id",
+      scope: (_rel: any, owner?: any) =>
+        owner ? _rel.where({ mention: owner.name.toLowerCase() }) : _rel,
+    });
+    const author = await AwexAuthor.create({ name: "Alice" });
+    await AwexPost.create({ awex_author_id: author.id, mention: "alice" });
+    const authors = await (AwexAuthor as any).includes("awexPostsWithExtAndInstance").toArray();
+    expect(authors).not.toHaveLength(0);
+    for (const a of authors) {
+      expect((a as any)._preloadedAssociations?.has("awexPostsWithExtAndInstance")).toBe(true);
+    }
   });
   it("preloading readonly association", async () => {
     class PraAuthor extends Base {

@@ -453,6 +453,25 @@ describe("InverseHasManyTests", () => {
     }
   });
 
+  it("with has many inversing inverse wire-up pushes onto cached collection and dedupes by identity", async () => {
+    const { Man, Interest } = makeModels();
+    (Man as any).hasManyInversing = true;
+    try {
+      const created = await Man.create({ name: "Gordon" });
+      await Interest.create({ topic: "stamps", man_id: created.id });
+      const i = (await Interest.first()) as Base;
+      const m = await loadBelongsTo(i, "man", { inverseOf: "interests" });
+      // Re-load: cached-hit path also runs _wireInverseAssociation; must dedup.
+      await loadBelongsTo(i, "man", { inverseOf: "interests" });
+      const cached = (m as any)._cachedAssociations?.get("interests") as Base[];
+      expect(Array.isArray(cached)).toBe(true);
+      expect(cached.length).toBe(1);
+      expect(cached[0]).toBe(i);
+    } finally {
+      (Man as any).hasManyInversing = false;
+    }
+  });
+
   it.skip("parent instance should be shared with every child on find for sti", () => {
     // BLOCKED: associations — inverse-of feature gap
     // ROOT-CAUSE: associations/inverse-associations.ts or preloader.ts missing inverse-of semantics

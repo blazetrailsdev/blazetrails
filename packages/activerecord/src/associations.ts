@@ -261,6 +261,24 @@ function _resolveInverseName(
  */
 function _wireInverseAssociation(owner: Base, child: Base, inverseName: string): void {
   child._cachedAssociations = child._cachedAssociations ?? new Map();
+  const childCtor = child.constructor as typeof Base;
+  const inverseRefl = childCtor._reflectOnAssociation?.(inverseName);
+  // When the inverse is a has_many collection AND the child's class opts into
+  // has_many_inversing, the inverse instance must be pushed onto the parent's
+  // cached collection (deduped by identity) — mirrors Rails
+  // `replace_on_target(..., inversing: true)` seeding @replaced_or_added_targets.
+  // Without this gate Rails (and trails) leave the parent collection alone, so
+  // that loading a child's belongs_to does not eagerly mutate parent state.
+  if (
+    inverseRefl?.macro === "hasMany" &&
+    (childCtor as typeof Base & { hasManyInversing: boolean }).hasManyInversing
+  ) {
+    const existing = child._cachedAssociations.get(inverseName);
+    const collection = Array.isArray(existing) ? (existing as Base[]) : [];
+    if (!collection.includes(owner)) collection.push(owner);
+    child._cachedAssociations.set(inverseName, collection);
+    return;
+  }
   child._cachedAssociations.set(inverseName, owner);
 }
 
@@ -2160,9 +2178,8 @@ export function setBelongsTo(
   record._cachedAssociations.set(assocName, target);
 
   // Set inverse on target
-  if (target && options.inverseOf) {
-    if (!target._cachedAssociations) target._cachedAssociations = new Map();
-    target._cachedAssociations.set(options.inverseOf, record);
+  if (target && typeof options.inverseOf === "string") {
+    _wireInverseAssociation(record, target, options.inverseOf);
   }
 }
 
@@ -2212,9 +2229,8 @@ export async function setHasOne(
   record._cachedAssociations.set(assocName, target);
 
   // Set inverse
-  if (target && options.inverseOf) {
-    if (!target._cachedAssociations) target._cachedAssociations = new Map();
-    target._cachedAssociations.set(options.inverseOf, record);
+  if (target && typeof options.inverseOf === "string") {
+    _wireInverseAssociation(record, target, options.inverseOf);
   }
 }
 
@@ -2262,9 +2278,8 @@ export async function setHasMany(
     if (t.isPersisted()) await t.save();
 
     // Set inverse
-    if (options.inverseOf) {
-      if (!t._cachedAssociations) t._cachedAssociations = new Map();
-      t._cachedAssociations.set(options.inverseOf, record);
+    if (typeof options.inverseOf === "string") {
+      _wireInverseAssociation(record, t, options.inverseOf);
     }
   }
 

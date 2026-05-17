@@ -1602,7 +1602,9 @@ export class MigrationContext {
   }
 
   /** @internal Query catalog for column names+types — used after CTAS where columns derive from the SELECT. */
-  private async _introspectColumns(name: string): Promise<{ name: string; type: string }[]> {
+  private async _introspectColumns(
+    name: string,
+  ): Promise<{ name: string; type: string; limit?: number; precision?: number; scale?: number }[]> {
     const a = this._adapterName;
     const qt = this.adapter.quoteTableName(name);
     let sql: string;
@@ -1621,40 +1623,59 @@ export class MigrationContext {
       const colName = (x.name ?? x.column_name ?? x.Field) as string;
       // SQLite: type field; PG: data_type; MySQL: Type
       const rawType = ((x.type ?? x.data_type ?? x.Type) as string | undefined) ?? "";
-      return { name: colName, type: MigrationContext._normalizeIntrospectedType(rawType) };
+      return { name: colName, ...MigrationContext._normalizeIntrospectedType(rawType) };
     });
   }
 
-  /** @internal Map raw catalog types (PG/MySQL/SQLite) to Rails-canonical names. */
-  private static _normalizeIntrospectedType(raw: string): string {
+  /**
+   * @internal Map raw catalog types (PG/MySQL/SQLite) to Rails-canonical
+   * names plus precision/scale/limit. Mirrors the per-adapter type-lookup
+   * registrations (mysql-type-lookup, postgresql/oid). Assumes MySQL
+   * `emulate_booleans: true` (Rails default) so `tinyint(1)` → boolean.
+   */
+  private static _normalizeIntrospectedType(raw: string): {
+    type: string;
+    limit?: number;
+    precision?: number;
+    scale?: number;
+  } {
     const t = raw.toLowerCase().trim();
-    if (!t) return "string";
-    // Strip trailing modifiers e.g. "varchar(255)", "numeric(10,2)", "integer unsigned"
-    const head = t.replace(/\s*\(.*$/, "").split(/\s+/, 1)[0]!;
-    if (
-      /^(varchar|character varying|character|char|nvarchar|nchar|text|tinytext|mediumtext|longtext|citext|clob)$/.test(
-        head,
-      )
-    )
-      return "string";
-    if (/^(int|integer|int4|int2|smallint|mediumint|tinyint|serial|smallserial)$/.test(head))
-      return "integer";
-    if (/^(bigint|int8|bigserial)$/.test(head)) return "bigint";
-    if (/^(float|float4|float8|double|double precision|real)$/.test(head)) return "float";
-    if (/^(numeric|decimal|number)$/.test(head)) return "decimal";
-    if (/^(bool|boolean|bit)$/.test(head)) return "boolean";
-    if (/^(date)$/.test(head)) return "date";
-    if (/^(time)$/.test(head)) return "time";
+    if (!t) return { type: "string" };
+    // MySQL boolean emulation must run before modifier stripping.
+    if (/^tinyint\s*\(\s*1\s*\)/.test(t)) return { type: "boolean" };
+    // enum/set carry a literal value list, not a length.
+    if (/^enum\s*\(/.test(t) || /^set\s*\(/.test(t)) return { type: "string" };
+    const parenMatch = t.match(/^([a-z_ ]+?)\s*\((\d+)(?:\s*,\s*(\d+))?\)/);
+    const head = (parenMatch?.[1] ?? t.replace(/\s+unsigned\b.*$/, "")).trim();
+    const sizes = parenMatch
+      ? parenMatch[3] != null
+        ? { precision: Number(parenMatch[2]), scale: Number(parenMatch[3]) }
+        : { limit: Number(parenMatch[2]) }
+      : {};
+    if (/^(varchar|character varying|character|char|nvarchar|nchar)$/.test(head))
+      return { type: "string", ...sizes };
+    if (/^(text|tinytext|mediumtext|longtext|clob)$/.test(head)) return { type: "text" };
+    if (/^citext$/.test(head)) return { type: "citext" };
+    if (/^(int|integer|int4|int2|smallint|mediumint|tinyint|serial|smallserial|year)$/.test(head))
+      return { type: "integer", ...sizes };
+    if (/^(bigint|int8|bigserial)$/.test(head)) return { type: "bigint" };
+    if (/^(float|float4|float8|double|double precision|real)$/.test(head)) return { type: "float" };
+    if (/^(numeric|decimal|number)$/.test(head)) return { type: "decimal", ...sizes };
+    if (/^(bool|boolean)$/.test(head)) return { type: "boolean" };
+    if (/^bit$/.test(head)) return { type: "binary", ...sizes }; // MySQL BIT is binary per mysql-type-lookup
+    if (/^date$/.test(head)) return { type: "date" };
+    if (/^time$/.test(head)) return { type: "time" };
     if (
       /^(datetime|timestamp|timestamptz|timestamp with time zone|timestamp without time zone)$/.test(
         head,
       )
     )
-      return "datetime";
-    if (/^(uuid)$/.test(head)) return "uuid";
-    if (/^(json|jsonb)$/.test(head)) return head;
-    if (/^(bytea|blob|tinyblob|mediumblob|longblob|binary|varbinary)$/.test(head)) return "binary";
-    return head;
+      return { type: "datetime" };
+    if (/^uuid$/.test(head)) return { type: "uuid" };
+    if (/^(json|jsonb)$/.test(head)) return { type: head };
+    if (/^(bytea|blob|tinyblob|mediumblob|longblob|binary|varbinary)$/.test(head))
+      return { type: "binary", ...sizes };
+    return { type: head };
   }
 
   async createTable(
@@ -1763,9 +1784,10 @@ export class MigrationContext {
       });
     }
     if (options?.as != null) {
-      for (const { name: c, type } of await this._introspectColumns(name)) {
+      for (const col of await this._introspectColumns(name)) {
+        const { name: c, ...rest } = col;
         cols.add(c);
-        meta.set(c, { type });
+        meta.set(c, rest);
       }
     }
     this._columns.set(name, cols);
@@ -2692,7 +2714,13 @@ export class Migrator {
         },
       });
     }
-    return proxies;
+    // Rails MigrationContext#migrations: `migrations.sort_by(&:version)` —
+    // numeric (not lexicographic) so "10" sorts after "2".
+    return proxies.sort((a, b) => {
+      const va = BigInt(a.version);
+      const vb = BigInt(b.version);
+      return va < vb ? -1 : va > vb ? 1 : 0;
+    });
   }
 
   private _sortMigrations(migrations: MigrationProxy[]): MigrationProxy[] {

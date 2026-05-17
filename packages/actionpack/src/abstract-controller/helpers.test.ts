@@ -154,6 +154,15 @@ describe("helper", () => {
     expect(() => cls._helpers!.x.call({ controller: {} })).toThrow(/does not respond to 'x'/);
   });
 
+  it("included modules stay live — methods added after include are visible", () => {
+    const cls = makeBase();
+    const Live: HelperMethodsModule = { early: () => "early" };
+    helper(cls, Live);
+    Live.late = () => "late";
+    expect(cls._helpers!.early.call({})).toBe("early");
+    expect(cls._helpers!.late.call({})).toBe("late");
+  });
+
   it("multiple includes layer in the ancestor chain (both reachable)", () => {
     const cls = makeBase();
     const A: HelperMethodsModule = { fromA: () => "A" };

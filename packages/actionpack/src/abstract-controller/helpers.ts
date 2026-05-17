@@ -123,19 +123,16 @@ export function helper(
       if (isHelperIncluded(cls._helpers, arg)) continue;
       const head = _helpersForModification(cls);
       // Rails' `Module#include` inserts the module *behind* the
-      // includer in the ancestor chain. Match that by splicing a new
-      // proto-link between `head` (own methods from helperMethod /
-      // block) and its current tail (previously-included modules,
-      // parent helpers). This preserves direct-method precedence:
-      // anything defined on `head` itself still wins over `arg`'s
-      // methods, and earlier includes remain reachable.
-      //
-      // Snapshot caveat: methods added to `arg` *after* this call are
-      // not visible — Ruby Module#include keeps a live reference. A
-      // fully-live impl would need a Proxy node.
+      // includer in the ancestor chain and keeps a live reference to
+      // the included module. We mirror both: splice a Proxy node
+      // between `head` (own methods from helperMethod / block) and
+      // its current tail (previously-included modules, parent
+      // helpers). The Proxy forwards lookups to `arg`, so methods
+      // added to `arg` after the include call remain visible. Falling
+      // through to the proxy target preserves chain walking for keys
+      // not in `arg`.
       const currentTail = Object.getPrototypeOf(head) as object | null;
-      const link = Object.create(currentTail) as HelperMethodsModule;
-      Object.assign(link, arg);
+      const link = makeIncludeLink(arg, currentTail);
       Object.setPrototypeOf(head, link);
       recordHelperIncluded(head, arg);
     }
@@ -157,6 +154,31 @@ function isHelperIncluded(helpers: HelperMethodsModule | undefined, mod: object)
     current = Object.getPrototypeOf(current);
   }
   return false;
+}
+
+/**
+ * Build a proto-chain link that forwards lookups to the included
+ * module. The target's prototype is the prior chain tail, so keys not
+ * present on `mod` still walk through to earlier includes / parent
+ * helpers. Using a Proxy (rather than `Object.assign`) keeps reads
+ * live: methods added to `mod` after include are still visible.
+ */
+function makeIncludeLink(
+  mod: HelperMethodsModule,
+  currentTail: object | null,
+): HelperMethodsModule {
+  const target = Object.create(currentTail) as HelperMethodsModule;
+  return new Proxy(target, {
+    get(t, prop, receiver) {
+      if (Object.prototype.hasOwnProperty.call(mod, prop)) {
+        return (mod as Record<PropertyKey, unknown>)[prop as PropertyKey];
+      }
+      return Reflect.get(t, prop, receiver);
+    },
+    has(t, prop) {
+      return Object.prototype.hasOwnProperty.call(mod, prop) || Reflect.has(t, prop);
+    },
+  }) as HelperMethodsModule;
 }
 
 function recordHelperIncluded(helpers: HelperMethodsModule, mod: object): void {

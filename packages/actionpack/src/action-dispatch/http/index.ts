@@ -11,3 +11,15 @@ export {
 export { Headers } from "./headers.js";
 export { QueryParser, type QueryPair } from "./query-parser.js";
 export { URL, type UrlOptions } from "./url.js";
+export {
+  PARAMETERS_KEY,
+  DEFAULT_PARSERS,
+  ParseError,
+  parameters,
+  pathParameters,
+  setPathParameters,
+  parseFormattedParameters,
+  type ParameterParser,
+  type ParameterParsers,
+  type ParametersHost,
+} from "./parameters.js";

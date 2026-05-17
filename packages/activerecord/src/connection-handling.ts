@@ -150,7 +150,12 @@ function buildAdapterArg(adapterName: string, configuration: Record<string, unkn
   const url = configuration.url as string | undefined;
   const database = configuration.database as string | undefined;
   if (normalized === "sqlite") {
-    return parseSqliteUrl(database || url || ":memory:");
+    // Mirrors establishWithConfig's `url || config?.database || ":memory:"`
+    // precedence so connectsTo and establishConnection normalize SQLite
+    // configs identically. autoConnect already pre-zeroes `url` when the
+    // configuration hash carries a `database`, so the resolved-database-
+    // wins semantic is preserved on the public entrypoint.
+    return parseSqliteUrl(url || database || ":memory:");
   }
   // Mirrors establishWithConfig's `else if (url) adapterArg = url` branch:
   // URL-only configs (e.g. opaque adapter strings like jdbc:...) are passed

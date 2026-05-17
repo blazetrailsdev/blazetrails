@@ -7,18 +7,27 @@
  * module into the subclass; if no namespace has one, it falls back to
  * `routes.url_helpers(include_path_helpers)`.
  *
- * TS has no `inherited` trigger and no `module_parents` traversal, so
- * the factory returns a *function* the host calls on each new
- * subclass. The namespace lookup is replaced by an optional
- * `railtieRoutesUrlHelpers` slot on the class itself; absence falls
- * through to `routes.urlHelpers(includePathHelpers)`.
+ * TS has no `inherited` trigger and no `module_parents` traversal,
+ * so the factory returns a *function* the host calls on each new
+ * subclass. The Ruby namespace chain (e.g. `Admin::PostsController`
+ * → `[Admin, Object]`) has no JS equivalent; we approximate by
+ * walking the class's own static-side prototype chain for an
+ * optional `railtieRoutesUrlHelpers` slot. This catches the common
+ * "Admin::PostsController extends AdminController" shape but won't
+ * find a same-name namespace module that isn't an ancestor class —
+ * a documented deviation, not a fixable gap.
+ *
+ * The URL-helpers module is mixed into the controller class as
+ * instance methods (mirroring Rails' `klass.include(mod)`), so an
+ * action can call `this.postPath(post)` directly. Bridging to views
+ * is the job of `ActionController::Helpers`, not this factory.
  *
  * Ported from `vendor/rails/actionpack/lib/abstract_controller/railties/routes_helpers.rb`.
  *
  * @internal
  */
 
-import { helper, type HelperMethodsModule, type HelpersClassMethods } from "../helpers.js";
+import type { HelperMethodsModule, HelpersClassMethods } from "../helpers.js";
 
 /**
  * Minimum shape this factory needs from a route set. Once a real
@@ -51,18 +60,28 @@ export interface RoutesHelpersClassMethods extends HelpersClassMethods {
 export function withRoutesHelpers(
   routes: UrlHelpersRouteSet,
   includePathHelpers = true,
-): (cls: RoutesHelpersClassMethods) => void {
+): (cls: RoutesHelpersControllerClass) => void {
   return (cls) => {
-    // Rails: walk module_parents for the first namespace that
-    // responds to railtie_routes_url_helpers. We approximate by
-    // walking the class's own prototype chain (static-side
-    // inheritance) and picking the nearest one with that slot.
     const namespaceBuilder = findRailtieUrlHelpers(cls);
     const mod = namespaceBuilder
       ? namespaceBuilder(includePathHelpers)
       : routes.urlHelpers(includePathHelpers);
-    helper(cls, mod);
+    // Rails: `klass.include(mod)` — make URL helpers available as
+    // instance methods on the controller. Copy each method onto the
+    // class prototype.
+    for (const [name, fn] of Object.entries(mod)) {
+      (cls.prototype as Record<string, unknown>)[name] = fn;
+    }
   };
+}
+
+/**
+ * Combined shape: a class (`{ prototype }`) optionally carrying the
+ * namespace-helper slot. Splitting these into two types would force
+ * every caller to intersect them; the union keeps the API ergonomic.
+ */
+export interface RoutesHelpersControllerClass extends RoutesHelpersClassMethods {
+  prototype: object;
 }
 
 function findRailtieUrlHelpers(

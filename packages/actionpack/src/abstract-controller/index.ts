@@ -98,5 +98,6 @@ export {
 export {
   withRoutesHelpers,
   type RoutesHelpersClassMethods,
+  type RoutesHelpersControllerClass,
   type UrlHelpersRouteSet,
 } from "./railties/routes-helpers.js";

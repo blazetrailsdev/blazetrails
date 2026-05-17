@@ -1,81 +1,77 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { type HelperMethodsModule } from "../helpers.js";
-import {
-  withRoutesHelpers,
-  type RoutesHelpersClassMethods,
-  type UrlHelpersRouteSet,
-} from "./routes-helpers.js";
+import type { HelperMethodsModule } from "../helpers.js";
+import { withRoutesHelpers, type RoutesHelpersControllerClass } from "./routes-helpers.js";
 
-function makeRoutes(
-  mod: HelperMethodsModule,
-  opts: { spy?: ReturnType<typeof vi.fn> } = {},
-): UrlHelpersRouteSet {
-  return {
-    urlHelpers: opts.spy ?? vi.fn().mockReturnValue(mod),
-  };
+function makeClass(): RoutesHelpersControllerClass {
+  return { prototype: {} } as RoutesHelpersControllerClass;
 }
 
 describe("withRoutesHelpers", () => {
-  it("returns a wiring function that includes routes.urlHelpers on the class", () => {
+  it("returns a wiring function that installs routes.urlHelpers as instance methods on the class", () => {
     const RouteHelper: HelperMethodsModule = { postPath: () => "/posts" };
-    const routes = makeRoutes(RouteHelper);
+    const wire = withRoutesHelpers({ urlHelpers: vi.fn().mockReturnValue(RouteHelper) });
 
-    const wire = withRoutesHelpers(routes);
-    const cls: RoutesHelpersClassMethods = {};
+    const cls = makeClass();
     wire(cls);
 
-    expect(cls._helpers!.postPath.call({})).toBe("/posts");
+    expect((cls.prototype as { postPath?: () => string }).postPath?.()).toBe("/posts");
   });
 
-  it("passes include_path_helpers through to routes.urlHelpers", () => {
-    const RouteHelper: HelperMethodsModule = { x: () => "x" };
-    const spy = vi.fn().mockReturnValue(RouteHelper);
-    const wire = withRoutesHelpers({ urlHelpers: spy }, false);
-    wire({});
-    expect(spy).toHaveBeenCalledWith(false);
-  });
-
-  it("defaults include_path_helpers to true (Rails default)", () => {
+  it("passes include_path_helpers through to routes.urlHelpers (default true)", () => {
     const spy = vi.fn().mockReturnValue({});
-    withRoutesHelpers({ urlHelpers: spy })({});
+    withRoutesHelpers({ urlHelpers: spy })(makeClass());
     expect(spy).toHaveBeenCalledWith(true);
+
+    const spy2 = vi.fn().mockReturnValue({});
+    withRoutesHelpers({ urlHelpers: spy2 }, false)(makeClass());
+    expect(spy2).toHaveBeenCalledWith(false);
   });
 
-  it("prefers a class-level railtieRoutesUrlHelpers when defined", () => {
+  it("prefers a class-level railtieRoutesUrlHelpers over routes.urlHelpers", () => {
     const Namespaced: HelperMethodsModule = { nsPath: () => "/ns" };
-    const RouteHelper: HelperMethodsModule = { fallback: () => "fb" };
-    const routesSpy = vi.fn().mockReturnValue(RouteHelper);
-
-    const cls: RoutesHelpersClassMethods = {
+    const routesSpy = vi.fn();
+    const cls: RoutesHelpersControllerClass = {
+      prototype: {},
       railtieRoutesUrlHelpers: () => Namespaced,
     };
     withRoutesHelpers({ urlHelpers: routesSpy })(cls);
 
-    expect(cls._helpers!.nsPath.call({})).toBe("/ns");
-    // Falls back NOT invoked.
+    expect((cls.prototype as { nsPath?: () => string }).nsPath?.()).toBe("/ns");
     expect(routesSpy).not.toHaveBeenCalled();
   });
 
-  it("walks the class prototype chain for railtieRoutesUrlHelpers (Rails module_parents)", () => {
+  it("walks the static-side prototype chain (approximation of Ruby module_parents)", () => {
     const Inherited: HelperMethodsModule = { up: () => "from-parent" };
-    const parent = {
-      railtieRoutesUrlHelpers: () => Inherited,
-    };
-    const child: RoutesHelpersClassMethods = Object.create(parent) as RoutesHelpersClassMethods;
+    const parent = { railtieRoutesUrlHelpers: () => Inherited };
+    const child: RoutesHelpersControllerClass = Object.create(
+      parent,
+    ) as RoutesHelpersControllerClass;
+    child.prototype = {};
 
     withRoutesHelpers({ urlHelpers: vi.fn() })(child);
 
-    expect(child._helpers!.up.call({})).toBe("from-parent");
+    expect((child.prototype as { up?: () => string }).up?.()).toBe("from-parent");
   });
 
   it("passes include_path_helpers through to the namespaced builder too", () => {
-    const Namespaced: HelperMethodsModule = { x: () => "x" };
-    const nsSpy = vi.fn().mockReturnValue(Namespaced);
-    const cls: RoutesHelpersClassMethods = { railtieRoutesUrlHelpers: nsSpy };
-
+    const nsSpy = vi.fn().mockReturnValue({});
+    const cls: RoutesHelpersControllerClass = {
+      prototype: {},
+      railtieRoutesUrlHelpers: nsSpy,
+    };
     withRoutesHelpers({ urlHelpers: vi.fn() }, false)(cls);
-
     expect(nsSpy).toHaveBeenCalledWith(false);
+  });
+
+  it("multiple wirings layer on the same prototype without clobbering unrelated entries", () => {
+    const A: HelperMethodsModule = { a: () => "a" };
+    const B: HelperMethodsModule = { b: () => "b" };
+    const cls = makeClass();
+    withRoutesHelpers({ urlHelpers: () => A })(cls);
+    withRoutesHelpers({ urlHelpers: () => B })(cls);
+    const proto = cls.prototype as { a?: () => string; b?: () => string };
+    expect(proto.a?.()).toBe("a");
+    expect(proto.b?.()).toBe("b");
   });
 });

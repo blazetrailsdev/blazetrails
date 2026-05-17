@@ -107,6 +107,11 @@ export function readFragment(this: FragmentsHost, key: unknown, options?: CacheO
   );
 }
 
+// `_options` on fragmentExist / expireFragment: Rails forwards options
+// to `cache_store.exist?` / `delete` / `delete_matched`, but the trails
+// `CacheStore` interface in activesupport doesn't accept options on
+// those methods. Follow-up: widen `CacheStore.exist` / `delete` /
+// `deleteMatched` signatures, then drop the `_` prefix here.
 export function fragmentExist(
   this: FragmentsHost,
   key: unknown,

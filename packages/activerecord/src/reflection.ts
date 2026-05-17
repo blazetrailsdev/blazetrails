@@ -1291,7 +1291,7 @@ export class ThroughReflection extends AbstractReflection {
   get joinPrimaryKey(): string | string[] {
     const src = this.sourceReflection;
     if (!src) this.checkValidityBang();
-    return this.sourceReflection!.joinPrimaryKey;
+    return src!.joinPrimaryKey;
   }
 
   /**
@@ -1318,7 +1318,7 @@ export class ThroughReflection extends AbstractReflection {
   get joinForeignKey(): string | string[] {
     const src = this.sourceReflection;
     if (!src) this.checkValidityBang();
-    return this.sourceReflection!.joinForeignKey;
+    return src!.joinForeignKey;
   }
 
   scopeFor(relation: any, owner?: any): any {

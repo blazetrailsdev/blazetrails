@@ -103,7 +103,18 @@ export function viewAssigns<T extends object>(this: T): Record<string, unknown> 
 // Internal helpers — exported for subclass override + tests.
 // ===========================================================================
 
-/** Normalize `render "foo"` → `{ action: "foo" }`. */
+/**
+ * Abstract-layer arg normalizer. Handles only the cases Rails'
+ * `AbstractController::Rendering#_normalize_args` handles:
+ * - a permitted strong-params-like object (uses it directly, or raises
+ *   if not permitted)
+ * - a plain options hash (returns it)
+ * - anything else (returns the second `options` arg as-is)
+ *
+ * String → `{ action: ... }` shorthand lives in
+ * `ActionController::Rendering#_normalize_args` (the concrete layer)
+ * and should be added there, not here.
+ */
 export function _normalizeArgs(action?: unknown, options: RenderOptions = {}): RenderOptions {
   // Strong-params-style permitted hash: trails uses a duck-typed
   // `permitted?(): boolean` predicate when applicable.

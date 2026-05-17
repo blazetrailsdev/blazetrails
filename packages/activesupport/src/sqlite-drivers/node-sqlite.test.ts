@@ -120,11 +120,10 @@ describe.skipIf(!isNodeSqliteAvailable)("SqliteDriver — node-sqlite strict", (
   it("rejects unknown double-quoted identifiers under strict: true", async () => {
     const conn = await nodeSqliteDriver.open({ database: ":memory:", strict: true });
     try {
-      const stmt = await conn.prepare(`SELECT "missing_col" AS v`);
-      // node:sqlite's stmt.get() is synchronous and throws inline — wrap the
-      // call in a thunk so expect() catches the throw rather than evaluating
-      // it inside the argument expression.
-      expect(() => stmt.get()).toThrow(/no such column/i);
+      // node:sqlite raises at prepare() time (not get()) when DQS is off and
+      // the identifier is unknown — wrap the call so expect() catches the
+      // synchronous throw rather than evaluating it as an argument.
+      expect(() => conn.prepare(`SELECT "missing_col" AS v`)).toThrow(/no such column/i);
     } finally {
       await conn.close();
     }

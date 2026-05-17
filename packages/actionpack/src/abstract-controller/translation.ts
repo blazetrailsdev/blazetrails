@@ -43,10 +43,13 @@ export function translate(
     const fallbackKey = `${path}${key}`;
 
     // Forward caller options (interpolation vars, locale, etc.) to
-    // every internal lookup, but strip `default` — the chain below
-    // implements its own default-walking semantics.
-    const passOptions = { ...options };
+    // every internal lookup, but strip `default` and `raise` — the
+    // chain below implements its own default-walking semantics, and
+    // `raise: true` must only fire after the *whole* chain (scoped →
+    // fallback → user defaults) is exhausted, not at the first miss.
+    const passOptions = { ...options } as Record<string, unknown>;
     delete passOptions.default;
+    delete passOptions.raise;
 
     const direct = I18n.translate(scopedKey, passOptions as Parameters<typeof I18n.translate>[1]);
     if (!isMissing(direct)) return direct;
@@ -73,6 +76,11 @@ export function translate(
       }
     }
 
+    // Chain exhausted — honor `raise: true` now (forwarding it to a
+    // final lookup throws `MissingTranslationData` from I18n).
+    if ((options as { raise?: boolean }).raise) {
+      return I18n.translate(scopedKey, options as Parameters<typeof I18n.translate>[1]);
+    }
     return direct; // "Translation missing: ..." from the scoped lookup
   }
   return I18n.translate(key, options as Parameters<typeof I18n.translate>[1]);

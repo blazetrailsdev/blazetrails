@@ -162,15 +162,16 @@ describe("I18nTest", () => {
   });
 
   it("translate { raise: true } throws MissingTranslationData for unknown keys", () => {
-    expect(() => I18n.translate("nope.never.was", { raise: true })).toThrow(MissingTranslationData);
+    let caught: unknown = null;
     try {
       I18n.translate("nope.never.was", { raise: true });
     } catch (e) {
-      expect(e).toBeInstanceOf(MissingTranslationData);
-      expect((e as MissingTranslationData).key).toBe("nope.never.was");
-      expect((e as MissingTranslationData).locale).toBe("en");
-      expect((e as Error).message).toBe("Translation missing: en.nope.never.was");
+      caught = e;
     }
+    expect(caught).toBeInstanceOf(MissingTranslationData);
+    expect((caught as MissingTranslationData).key).toBe("nope.never.was");
+    expect((caught as MissingTranslationData).locale).toBe("en");
+    expect((caught as Error).message).toBe("Translation missing: en.nope.never.was");
   });
 
   it("translate { raise: true } honors a supplied default (does not throw)", () => {

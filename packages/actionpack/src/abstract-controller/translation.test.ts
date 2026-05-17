@@ -87,6 +87,13 @@ describe("TranslationControllerTest", () => {
     );
   });
 
+  it("dot-prefixed lookup with raise: true still honors the user default chain", () => {
+    controller.actionName = "index";
+    // Scoped miss + user default ":one.two" resolves to "bar" — must
+    // NOT throw even though raise: true is set.
+    expect(controller.t(".twoz", { raise: true, default: [":one.two"] })).toBe("bar");
+  });
+
   it("lazy lookup", () => {
     controller.actionName = "index";
     expect(controller.t(".foo")).toBe("bar");

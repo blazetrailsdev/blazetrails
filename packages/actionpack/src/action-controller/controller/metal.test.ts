@@ -236,6 +236,37 @@ describe("MetalControllerInstanceTests", () => {
     }
   });
 
+  it("responseBody= writes through to response and marks performed", () => {
+    const c = new (class extends Metal {})();
+    c.response = makeResponse();
+    c.responseBody = "hello";
+    expect(c.responseBody).toBe("hello");
+    expect(c.response.body).toBe("hello");
+    expect(c.isPerformed()).toBe(true);
+  });
+
+  it("responseBody= accepts array form", () => {
+    const c = new (class extends Metal {})();
+    c.response = makeResponse();
+    c.responseBody = ["a", "b"];
+    expect(c.responseBody).toBe("ab");
+  });
+
+  it("responseBody= with null resets body", () => {
+    const c = new (class extends Metal {})();
+    c.response = makeResponse();
+    c.responseBody = "hi";
+    c.responseBody = null;
+    expect(c.responseBody).toBe("");
+  });
+
+  it("isPerformed reflects body presence", () => {
+    const c = new (class extends Metal {})();
+    expect(c.isPerformed()).toBe(false);
+    c.body = "x";
+    expect(c.isPerformed()).toBe(true);
+  });
+
   it("callbacks work through dispatch", async () => {
     const log: string[] = [];
     class CallbackController extends Metal {

@@ -26,8 +26,17 @@ export class AbstractController {
   /** The action currently being processed. */
   actionName: string = "";
 
+  /** Internal storage for response body. Subclasses may override the
+   * `responseBody` accessor (e.g. Metal writes through to the response). */
+  protected _responseBody: string | Buffer | null = null;
+
   /** Response body. */
-  responseBody: string | Buffer | null = null;
+  get responseBody(): string | Buffer | null {
+    return this._responseBody;
+  }
+  set responseBody(value: string | Buffer | null) {
+    this._responseBody = value;
+  }
 
   /** Whether a response has been committed (render/redirect called). */
   private _performed: boolean = false;

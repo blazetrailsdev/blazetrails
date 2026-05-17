@@ -234,6 +234,41 @@ export class Metal extends AbstractController {
     return this._body;
   }
 
+  /**
+   * Public Rails-style setter that writes through to the underlying
+   * response and marks the controller as performed. Mirrors
+   * `ActionController::Metal#response_body=`.
+   */
+  set responseBody(body: string | string[] | Buffer | null | undefined) {
+    if (body === null || body === undefined) {
+      this._body = "";
+      this._responseBody = null;
+      if (this.response) this.response.body = "";
+      return;
+    }
+    const str = Array.isArray(body)
+      ? body.join("")
+      : Buffer.isBuffer(body)
+        ? body.toString()
+        : body;
+    this._body = str;
+    this._responseBody = str;
+    if (this.response) this.response.body = str;
+    this.markPerformed();
+  }
+
+  override get responseBody(): string {
+    return this._body;
+  }
+
+  /**
+   * Tests if render or redirect has already happened. Mirrors
+   * `ActionController::Metal#performed?`.
+   */
+  isPerformed(): boolean {
+    return Boolean(this._body) || (this.response?.committed ?? false);
+  }
+
   /** Convert controller to a Rack-compatible response. */
   toRackResponse(): RackResponse {
     const headers = { ...this._headers };

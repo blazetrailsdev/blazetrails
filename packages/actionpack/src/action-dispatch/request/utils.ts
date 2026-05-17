@@ -26,9 +26,9 @@ export class RequestUtils {
   /** Yields every string leaf in a parsed param tree. */
   static *eachParamValue(params: ParamValue): Generator<string> {
     if (Array.isArray(params)) {
-      for (const el of params) yield* this.eachParamValue(el);
+      for (const el of params) yield* RequestUtils.eachParamValue(el);
     } else if (params !== null && typeof params === "object") {
-      for (const val of Object.values(params)) yield* this.eachParamValue(val);
+      for (const val of Object.values(params)) yield* RequestUtils.eachParamValue(val);
     } else if (typeof params === "string") {
       yield params;
     }

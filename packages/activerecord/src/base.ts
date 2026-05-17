@@ -577,11 +577,13 @@ function _extractAssociationAttrs(
     if (def) {
       (assocs ??= []).push({ name: def.name, value: v });
     } else {
-      (rest ??= {})[k] = v;
+      // Null-prototype to avoid `__proto__`/`constructor` keys mutating
+      // Object.prototype before `rest` is handed to super().
+      (rest ??= Object.create(null) as Record<string, unknown>)[k] = v;
     }
   }
   if (!assocs) return null;
-  return { rest: rest ?? {}, assocs };
+  return { rest: rest ?? (Object.create(null) as Record<string, unknown>), assocs };
 }
 
 /** @internal */
@@ -2375,6 +2377,10 @@ export class Base extends Model {
         (this as any)._dirty.snapshot((this as any)._attributes);
         if (assocPending) {
           _dispatchAssociationAttrs(this as unknown as Base, assocPending.assocs);
+          // belongsTo writers may write the owner FK; re-snapshot so
+          // constructor-form association assignment lands in the clean
+          // baseline, matching regular constructor attrs.
+          (this as any)._dirty.snapshot((this as any)._attributes);
           assocPending = null;
         }
         cbRunAfter(ctor.prototype, "initialize", this, { strict: "sync" });
@@ -2415,6 +2421,10 @@ export class Base extends Model {
         (this as any)._dirty.snapshot((this as any)._attributes);
         if (assocPending) {
           _dispatchAssociationAttrs(this as unknown as Base, assocPending.assocs);
+          // belongsTo writers may write the owner FK; re-snapshot so
+          // constructor-form association assignment lands in the clean
+          // baseline, matching regular constructor attrs.
+          (this as any)._dirty.snapshot((this as any)._attributes);
           assocPending = null;
         }
         cbRunAfter(ctor2.prototype, "initialize", this, { strict: "sync" });
@@ -2424,6 +2434,10 @@ export class Base extends Model {
     // we still dispatch first to keep Rails' "assign → after_initialize" order.
     if (assocPending) {
       _dispatchAssociationAttrs(this as unknown as Base, assocPending.assocs);
+      // Match the dispatch sites above: re-snapshot so any belongsTo FK
+      // writes from the association writers don't leave construction in a
+      // dirty state.
+      (this as any)._dirty.snapshot((this as any)._attributes);
     }
   }
 

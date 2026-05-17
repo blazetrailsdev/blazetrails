@@ -9,21 +9,21 @@ describe("RequestUtils", () => {
 
   describe("deepMunge", () => {
     it("strips null entries from arrays", () => {
-      expect(RequestUtils.deepMunge([1, null, 2] as never)).toEqual([1, 2]);
+      expect(RequestUtils.deepMunge(["a", null, "b"])).toEqual(["a", "b"]);
     });
 
     it("recurses into nested arrays", () => {
-      expect(RequestUtils.deepMunge({ a: { b: [null] } } as never)).toEqual({ a: { b: [] } });
+      expect(RequestUtils.deepMunge({ a: { b: [null] } })).toEqual({ a: { b: [] } });
     });
 
-    it("recurses into nested hashes", () => {
-      expect(RequestUtils.deepMunge({ a: { b: null } } as never)).toEqual({ a: { b: null } });
+    it("preserves null leaves on hash values (only arrays are compacted)", () => {
+      expect(RequestUtils.deepMunge({ a: { b: null } })).toEqual({ a: { b: null } });
     });
 
     it("preserves nested hashes inside arrays after compaction", () => {
-      expect(
-        RequestUtils.deepMunge({ a: { b: [{ c: null }, null, { d: "1" }] } } as never),
-      ).toEqual({ a: { b: [{ c: null }, { d: "1" }] } });
+      expect(RequestUtils.deepMunge({ a: { b: [{ c: null }, null, { d: "1" }] } })).toEqual({
+        a: { b: [{ c: null }, { d: "1" }] },
+      });
     });
 
     it("leaves string and null leaves alone", () => {
@@ -35,12 +35,12 @@ describe("RequestUtils", () => {
   describe("normalizeEncodeParams", () => {
     it("compacts arrays when performDeepMunge is true (default)", () => {
       RequestUtils.performDeepMunge = true;
-      expect(RequestUtils.normalizeEncodeParams({ x: [null, "1"] } as never)).toEqual({ x: ["1"] });
+      expect(RequestUtils.normalizeEncodeParams({ x: [null, "1"] })).toEqual({ x: ["1"] });
     });
 
     it("preserves arrays when performDeepMunge is false", () => {
       RequestUtils.performDeepMunge = false;
-      expect(RequestUtils.normalizeEncodeParams({ x: [null, "1"] } as never)).toEqual({
+      expect(RequestUtils.normalizeEncodeParams({ x: [null, "1"] })).toEqual({
         x: [null, "1"],
       });
     });
@@ -48,14 +48,12 @@ describe("RequestUtils", () => {
 
   describe("eachParamValue", () => {
     it("yields every string leaf", () => {
-      const leaves = Array.from(
-        RequestUtils.eachParamValue({ a: "1", b: ["2", { c: "3" }] } as never),
-      );
+      const leaves = Array.from(RequestUtils.eachParamValue({ a: "1", b: ["2", { c: "3" }] }));
       expect(leaves).toEqual(["1", "2", "3"]);
     });
 
-    it("skips null and non-string scalars", () => {
-      const leaves = Array.from(RequestUtils.eachParamValue({ a: null, b: ["x"] } as never));
+    it("skips null leaves", () => {
+      const leaves = Array.from(RequestUtils.eachParamValue({ a: null, b: ["x"] }));
       expect(leaves).toEqual(["x"]);
     });
   });

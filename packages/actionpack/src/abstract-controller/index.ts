@@ -95,3 +95,8 @@ export {
   type HelpersHost,
   type ResolutionOptions,
 } from "./helpers.js";
+export {
+  withRoutesHelpers,
+  type RoutesHelpersClassMethods,
+  type UrlHelpersRouteSet,
+} from "./railties/routes-helpers.js";

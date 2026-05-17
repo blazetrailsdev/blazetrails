@@ -385,7 +385,7 @@ interface TransactionRecordSnapshot {
 }
 
 /** @internal */
-export function rememberTransactionRecordState(this: Base): TransactionRecordSnapshot {
+export function rememberTransactionRecordState(this: Base): void {
   const r = this as any;
   // Initialize state once per outermost transaction, then increment level for
   // each savepoint. Mirrors Rails' @_start_transaction_state ||= {...}; level += 1.
@@ -408,20 +408,6 @@ export function rememberTransactionRecordState(this: Base): TransactionRecordSna
   } else {
     r._newRecordBeforeLastCommit = r._startTransactionState.newRecord;
   }
-
-  // Return CURRENT identity state at this savepoint level — not the outermost
-  // _startTransactionState snapshot. The returned snapshot is captured by
-  // withTransactionReturningStatus's afterRollback hook and passed to
-  // restoreTransactionRecordState. For nested savepoints, the record may have
-  // already been modified (e.g. _newRecord flipped after an outer insert), so
-  // restoring to the outermost state would be wrong.
-  return {
-    newRecord: r._newRecord,
-    destroyed: r._destroyed,
-    frozen: r._attributes.isFrozen(),
-    id: this.id,
-    previouslyNewRecord: r._previouslyNewRecord,
-  };
 }
 
 /**

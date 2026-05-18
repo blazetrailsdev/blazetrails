@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import {
   createTestAdapter,
   setUseTransactionalTests,
+  shouldSkipGlobalReset,
   type TestDatabaseAdapter,
 } from "../test-adapter.js";
 import { withTransactionalFixtures } from "./with-transactional-fixtures.js";
@@ -86,5 +87,12 @@ describe("withTransactionalFixtures (useTransactionalTests=false opt-out)", () =
     await tm.beginTransaction({});
     expect(tm.openTransactions).toBe(1);
     await tm.rollbackTransaction();
+  });
+
+  it("does not push the global-reset skip when opted out", () => {
+    // When useTransactionalTests=false, the helper must not call
+    // pushSkipGlobalReset — otherwise opted-out files would silently
+    // bypass the global resetTestAdapterState beforeEach they rely on.
+    expect(shouldSkipGlobalReset()).toBe(false);
   });
 });

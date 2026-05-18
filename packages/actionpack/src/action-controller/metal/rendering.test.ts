@@ -41,7 +41,7 @@ describe("_normalizeOptions", () => {
       status: "not_found",
       plain: { toText: () => "<plain>" },
     });
-    expect(out.html).toBe("&lt;b&gt;&amp;&quot;&#39;&lt;/b&gt;");
+    expect(String(out.html)).toBe("&lt;b&gt;&amp;&quot;&#39;&lt;/b&gt;");
     expect(out.status).toBe(404);
     expect(out.plain).toBe("<plain>");
   });

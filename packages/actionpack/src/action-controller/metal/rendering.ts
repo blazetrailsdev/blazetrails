@@ -6,6 +6,7 @@
  * @see https://api.rubyonrails.org/classes/ActionController/Rendering.html
  */
 
+import { htmlEscape, isPresent } from "@blazetrails/activesupport";
 import { Metal } from "../metal.js";
 import { Renderer } from "../renderer.js";
 
@@ -48,21 +49,12 @@ export function _normalizeText(options: Record<string, unknown>): void {
 export function _normalizeOptions(options: Record<string, unknown>): Record<string, unknown> {
   _normalizeText(options);
   if (options.html) {
-    options.html = htmlEscape(String(options.html));
+    options.html = htmlEscape(options.html);
   }
   if (options.status) {
     options.status = Metal.resolveStatus(options.status as number | string);
   }
   return options;
-}
-
-function htmlEscape(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 export interface RenderingHost {
@@ -92,9 +84,9 @@ export function _processVariant(
   options: Record<string, unknown>,
 ): void {
   const variant = this.request?.variant;
-  if (variant === undefined || variant === null) return;
-  if (Array.isArray(variant) && variant.length === 0) return;
-  options.variant = variant;
+  if (isPresent(variant)) {
+    options.variant = variant;
+  }
 }
 
 /**

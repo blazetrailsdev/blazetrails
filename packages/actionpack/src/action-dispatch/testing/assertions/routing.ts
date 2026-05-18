@@ -72,16 +72,24 @@ export function withRouting<T>(
   // so cross-realm promises and library thenables don't fall through to the
   // synchronous restore path before their awaited work runs.
   if (result != null && typeof (result as { then?: unknown }).then === "function") {
-    return (result as unknown as PromiseLike<unknown>).then(
-      (v) => {
-        restore();
-        return v;
-      },
-      (e) => {
-        restore();
-        throw e;
-      },
-    ) as T;
+    // Wrap the .then() call so a thenable that throws synchronously from
+    // its then() still triggers restore — otherwise the temp RouteSet
+    // would leak across tests.
+    try {
+      return (result as unknown as PromiseLike<unknown>).then(
+        (v) => {
+          restore();
+          return v;
+        },
+        (e) => {
+          restore();
+          throw e;
+        },
+      ) as T;
+    } catch (e) {
+      restore();
+      throw e;
+    }
   }
   restore();
   return result;
@@ -249,6 +257,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   // `id: 1` is meant to fail against actual `id: "1"`.
   if (Object.is(a, b)) return true;
   if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
   const ao = a as Options;
   const bo = b as Options;
   const ak = Object.keys(ao);

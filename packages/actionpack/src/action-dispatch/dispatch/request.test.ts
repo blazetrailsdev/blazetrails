@@ -397,6 +397,17 @@ describe("RequestParameters", () => {
     expect(req.pathParameters).toEqual({});
   });
 
+  it("merges request, query, and path parameters with Rails precedence", () => {
+    // Rails: request_parameters.merge(query_parameters).merge!(path_parameters).
+    // Query wins over request-body; path wins over both.
+    const req = new Request({
+      QUERY_STRING: "k=query",
+      "action_dispatch.request.request_parameters": { k: "body", b: "body-only" },
+      "action_dispatch.request.path_parameters": { k: "path", p: "path-only" },
+    });
+    expect(req.params).toEqual({ k: "path", b: "body-only", p: "path-only" });
+  });
+
   it("pathParameters= invalidates the merged params cache and feeds future params reads", () => {
     const req = new Request({ QUERY_STRING: "view=print" });
     expect(req.params).toEqual({ view: "print" });

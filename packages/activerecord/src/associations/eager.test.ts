@@ -3177,9 +3177,12 @@ describe("EagerAssociationTest", () => {
     // ROOT-CAUSE: associations/preloader/branch.ts groupedRecords() silently skips missing reflections (line ~161)
     //   instead of raising AssociationNotFoundError + "Did you mean?" suggestion for top-level
     //   names (Rails eager_test.rb:878 — Post.all.merge!(includes: :taggingz).find(6) raises with `Did you mean? tagging`).
-    //   Nested-through-null behavior (eager_test.rb:380, :386) must stay silent — see existing passing tests
-    //   "nested loading does not raise..." and "three level nested preloading does not raise...".
-    // SCOPE: ~30 LOC in preloader.ts to raise on unknown top-level association name only; nested branches unchanged.
+    //   Rails nested-through-null behavior (eager_test.rb:380, :386) must stay silent — but note: existing tests at
+    //   eager.test.ts:966 and :979 ("nested loading does not raise...") currently pass a flat top-level string instead
+    //   of Rails' nested-hash form `{ author: :non_existing_association }`; closing this gap must also rework those
+    //   two tests to the nested form so the silent-skip + raise-on-top-level contract is consistent.
+    // SCOPE: ~30 LOC in preloader/branch.ts to raise on unknown top-level association; +~10 LOC rework of the two
+    //   misnamed flat-string tests to nested-hash form per Rails source.
     class ExSugAuthor extends Base {
       static {
         this.attribute("name", "string");

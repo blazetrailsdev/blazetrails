@@ -422,6 +422,10 @@ export class Request {
       get rawPost() {
         return req.rawPost;
       },
+      get logger() {
+        const l = req.env["action_dispatch.logger"] ?? req.env["rack.logger"];
+        return (l as { debug(m: string): void } | null | undefined) ?? null;
+      },
     };
   }
 

@@ -170,6 +170,17 @@ describe("parseFormattedParameters", () => {
     expect(out).toEqual({ y: 1 });
   });
 
+  it("parses when content-length is absent but a body is present (Rails content_length.zero? parity)", () => {
+    const host = makeHost({
+      contentLength: undefined,
+      contentMimeType: MimeType.JSON,
+      rawPost: '{"a":1}',
+    });
+    expect(parseFormattedParameters.call(host, DEFAULT_PARSERS, () => ({ y: 1 }))).toEqual({
+      a: 1,
+    });
+  });
+
   it("yields when no parser registered for the MIME type", () => {
     const host = makeHost({ contentLength: 1, contentMimeType: MimeType.HTML, rawPost: "x" });
     const out = parseFormattedParameters.call(host, DEFAULT_PARSERS, () => ({ y: 1 }));

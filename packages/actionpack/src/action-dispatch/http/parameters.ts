@@ -172,8 +172,10 @@ export function parseFormattedParameters(
 
 /**
  * Logs the parse failure exactly once per request. Mirrors Rails'
- * `log_parse_error_once`; the once-per-request guard lives on the host as
- * `_parseErrorLogged` (Rails uses `@parse_error_logged`).
+ * `log_parse_error_once`; the guard is persisted on the env under
+ * `action_dispatch.request.parse_error_logged` so it survives across
+ * throwaway host adapters (Rails uses `@parse_error_logged` on the
+ * Request instance directly).
  *
  * @internal
  */

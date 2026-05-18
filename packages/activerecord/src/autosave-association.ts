@@ -671,6 +671,18 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
   return true;
 }
 
+/**
+ * Resolve the foreign-key column(s) for a belongs_to association.
+ * Mirrors `Array(reflection.foreign_key)` shape — always returns a list.
+ *
+ * @internal
+ */
+function _resolveBelongsToForeignKey(assoc: AssociationDefinition): string[] {
+  const fk =
+    assoc.options.foreignKey ?? assoc.options.queryConstraints ?? `${underscore(assoc.name)}_id`;
+  return Array.isArray(fk) ? fk : [fk];
+}
+
 async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): Promise<boolean> {
   const inst = _loadedAssociation(record, assoc.name);
   // Rails save_belongs_to_association:538 — skip when the loaded target is
@@ -683,29 +695,32 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
   if (typeof (assocRecord as any).isDestroyed === "function" && (assocRecord as any).isDestroyed())
     return true;
 
-  if (isMarkedForDestruction(assocRecord)) {
-    // Rails save_belongs_to_association:544-547 — when destroying the
-    // associated record, null out the FK on self first so the owner save
-    // doesn't keep a dangling reference.
-    const foreignKey =
-      assoc.options.foreignKey ?? assoc.options.queryConstraints ?? `${underscore(assoc.name)}_id`;
-    const fkList: string[] = Array.isArray(foreignKey) ? foreignKey : [foreignKey];
+  const autosave = assoc.options.autosave;
+  // Rails save_belongs_to_association:548 — `elsif autosave != false`.
+  // Explicit `autosave: false` opts out entirely.
+  if (autosave === false) return true;
+
+  if (autosave && isMarkedForDestruction(assocRecord)) {
+    // Rails save_belongs_to_association:544-547 — destroy path is only
+    // reached when `autosave` is truthy; the destruction nulls the FK on
+    // self first so the owner save doesn't keep a dangling reference.
+    const fkList = _resolveBelongsToForeignKey(assoc);
     for (const key of fkList) record._writeAttribute(key, null);
     if (!assocRecord.isNewRecord()) await assocRecord.destroy();
     return true;
   }
+
   // Rails save_belongs_to_association:549 — `record.new_record? || (autosave && record.changed_for_autosave?)`.
-  // autosave is always true on this path (gated in autosaveAssociation).
   const beChangedForSave =
-    typeof (assocRecord as any).changedForAutosave === "function"
+    autosave &&
+    (typeof (assocRecord as any).changedForAutosave === "function"
       ? (assocRecord as any).changedForAutosave()
-      : !!(assocRecord as any).changed;
+      : !!(assocRecord as any).changed);
   if (assocRecord.isNewRecord() || beChangedForSave) {
     _setAutosavingBelongsToFor(record, assoc, true);
     try {
       // Rails save_belongs_to_association:553: `record.save(validate: !autosave)`.
-      // autosave is always true on this code path (gated in autosaveAssociation).
-      const saved = await assocRecord.save({ validate: false });
+      const saved = await assocRecord.save({ validate: !autosave });
       if (!saved) {
         propagateErrors(record, assocRecord, assoc.name);
         return false;
@@ -714,29 +729,20 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
       _setAutosavingBelongsToFor(record, assoc, false);
     }
 
-    const foreignKey =
-      assoc.options.foreignKey ?? assoc.options.queryConstraints ?? `${underscore(assoc.name)}_id`;
-    const primaryKey =
+    const foreignKey = _resolveBelongsToForeignKey(assoc);
+    const rawPk =
       assoc.options.primaryKey ?? (assocRecord.constructor as typeof Base).primaryKey ?? "id";
-    if (Array.isArray(primaryKey) && Array.isArray(foreignKey)) {
-      if (primaryKey.length !== foreignKey.length) {
-        throw new CompositePrimaryKeyMismatchError(
-          (record.constructor as typeof Base).name,
-          assoc.name,
-        );
-      }
-      primaryKey.forEach((pk: string, i: number) => {
-        const pkValue = assocRecord._readAttribute(pk);
-        if (pkValue != null) record._writeAttribute((foreignKey as string[])[i], pkValue);
-      });
-    } else if (!Array.isArray(primaryKey) && !Array.isArray(foreignKey)) {
-      const pkValue = assocRecord._readAttribute(primaryKey);
-      if (pkValue != null) record._writeAttribute(foreignKey, pkValue);
-    } else {
-      throw new CompositePrimaryKeyMismatchError(
-        (record.constructor as typeof Base).name,
-        assoc.name,
-      );
+    const primaryKey = Array.isArray(rawPk) ? rawPk : [rawPk];
+    // Rails save_belongs_to_association:563: `primary_key.zip(foreign_key)`.
+    // Ruby's Array#zip drops trailing args when the argument is longer than
+    // the receiver, and pads with nil when the argument is shorter. Mirror
+    // that here so shape mismatches don't raise — they just don't write FK
+    // columns we have no PK source for (and vice versa).
+    for (let i = 0; i < primaryKey.length; i++) {
+      const fkCol = foreignKey[i];
+      if (fkCol == null) continue;
+      const pkValue = assocRecord._readAttribute(primaryKey[i]);
+      if (pkValue != null) record._writeAttribute(fkCol, pkValue);
     }
     // Rails save_belongs_to_association:559-568: `association.loaded!` only
     // fires inside the `if association.updated?` branch — after the FK write.

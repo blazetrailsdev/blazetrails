@@ -278,9 +278,12 @@ export class Request {
     if (this.env["action_dispatch.request.parameters"]) {
       return this.env["action_dispatch.request.parameters"] as Record<string, unknown>;
     }
+    // Mirrors Rails `ActionDispatch::Http::Parameters#parameters` —
+    // request_parameters.merge(query_parameters).merge!(path_parameters).
     const merged: Record<string, unknown> = {
-      ...this.queryParameters,
       ...this.requestParameters,
+      ...this.queryParameters,
+      ...this.pathParameters,
     };
     this.env["action_dispatch.request.parameters"] = merged;
     return merged;

@@ -187,7 +187,10 @@ export class RouteSet {
     if (!matched) {
       throw new RoutingError(`No route matches [${method}] ${JSON.stringify(path)}`);
     }
+    // Mirrors Rails: recognize_path returns route defaults merged with the
+    // matched captures (Journey hands defaults back as path_parameters).
     return {
+      ...matched.route.defaults,
       controller: matched.route.controller,
       action: matched.route.action,
       ...matched.params,

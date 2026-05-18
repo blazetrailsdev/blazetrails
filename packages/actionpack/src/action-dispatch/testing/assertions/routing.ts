@@ -49,15 +49,36 @@ export function withRouting<T>(
   }
   const oldRoutes = this.routes;
   const oldController = this.controller;
+  // Mirrors Ruby's `ensure`: cleanup runs after the block's work has
+  // completed. For sync blocks that's the synchronous return; for
+  // Promise-returning blocks we defer until the promise settles so the
+  // temporary RouteSet stays installed across `await` points.
+  const restore = () => resetRoutes.call(this, oldRoutes, oldController);
+  let result: T;
   try {
-    return createRoutes.call<RoutingAssertionsHost, [(r: RouteSet) => T, unknown], T>(
+    result = createRoutes.call<RoutingAssertionsHost, [(r: RouteSet) => T, unknown], T>(
       this,
       cb,
       config,
     );
-  } finally {
-    resetRoutes.call(this, oldRoutes, oldController);
+  } catch (e) {
+    restore();
+    throw e;
   }
+  if (result instanceof Promise) {
+    return result.then(
+      (v) => {
+        restore();
+        return v;
+      },
+      (e) => {
+        restore();
+        throw e;
+      },
+    ) as T;
+  }
+  restore();
+  return result;
 }
 
 /** Asserts that `path` recognizes to `expectedOptions`. */
@@ -214,10 +235,12 @@ function requireRoutes(host: RoutingAssertionsHost): RouteSet {
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {
+  // Strict value comparison. Rails' `assert_recognizes` stringifies expected
+  // option *keys* (`expected_options.stringify_keys!`) only; values in
+  // `request.path_parameters` are URL-decoded strings, so an expected
+  // `id: 1` is meant to fail against actual `id: "1"`.
   if (Object.is(a, b)) return true;
-  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
-    return String(a) === String(b);
-  }
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
   const ao = a as Options;
   const bo = b as Options;
   const ak = Object.keys(ao);

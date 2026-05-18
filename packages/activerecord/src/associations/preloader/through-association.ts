@@ -216,24 +216,32 @@ export class ThroughAssociation extends Association {
   private _alreadyLoadedThroughByOwner(): Map<Base, Base[]> | null {
     const throughRefl = this._throughReflection;
     if (!throughRefl || this.owners.length === 0) return null;
-    const throughName = throughRefl.name;
 
-    const firstOwner = this.owners[0] as any;
-    let isLoaded = firstOwner._preloadedAssociations?.has(throughName) ?? false;
-    if (!isLoaded) {
-      try {
-        isLoaded = !!firstOwner.association?.(throughName)?.loaded;
-      } catch {
-        isLoaded = false;
-      }
-    }
-    if (!isLoaded) return null;
-
+    // Conservative gate: only intercept when the through reflection is a
+    // polymorphic source with a `sourceType` filter AND every owner already has
+    // the through association preloaded. This is the Rails-source-mirrored
+    // empty-result gap (records re-fetched by a separate preloader run no
+    // longer identity-match the source preloader's middle records). Mixed
+    // loaded/unloaded owners stay on the standard LoaderRecords path so it
+    // can merge already-loaded keys with newly queried ones.
     const sourceType = (this.reflection as any).options?.sourceType;
+    if (!sourceType) return null;
     let foreignType: string | null | undefined = (this.reflection as any).foreignType;
     if (!foreignType) {
       foreignType = (this._sourceReflection as any)?.foreignType ?? null;
     }
+    if (!foreignType) return null;
+
+    const throughName = throughRefl.name;
+    const loadedForOwner = (owner: any): boolean => {
+      if (owner._preloadedAssociations?.has(throughName)) return true;
+      try {
+        return !!owner.association?.(throughName)?.loaded;
+      } catch {
+        return false;
+      }
+    };
+    if (!this.owners.every(loadedForOwner)) return null;
 
     const map = new Map<Base, Base[]>();
     for (const owner of this.owners) {
@@ -245,11 +253,11 @@ export class ThroughAssociation extends Association {
           recs = null;
         }
       }
-      let arr: Base[] = Array.isArray(recs) ? [...recs] : recs != null ? [recs] : [];
-      if (sourceType && foreignType) {
-        arr = arr.filter((record) => (record as any)._readAttribute(foreignType!) === sourceType);
-      }
-      map.set(owner, arr);
+      const arr: Base[] = Array.isArray(recs) ? [...recs] : recs != null ? [recs] : [];
+      const filtered = arr.filter(
+        (record) => (record as any)._readAttribute(foreignType!) === sourceType,
+      );
+      map.set(owner, filtered);
     }
     return map;
   }

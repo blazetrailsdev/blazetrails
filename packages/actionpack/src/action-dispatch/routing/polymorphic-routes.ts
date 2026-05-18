@@ -66,7 +66,7 @@ export type PolymorphicArg =
   | ModelClass
   | string
   | symbol
-  | ReadonlyArray<ToModel | ModelClass | string | symbol | null | undefined>
+  | ReadonlyArray<ToModel | ModelClass | string | symbol | RoutesProxy | null | undefined>
   // Hash form: { id: record, ...opts }
   | Record<string, unknown>;
 

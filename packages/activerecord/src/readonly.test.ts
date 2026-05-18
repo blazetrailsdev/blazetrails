@@ -196,7 +196,7 @@ describe("ReadonlyTest", () => {
     class Dev extends Base {
       static {
         this.attribute("name", "string");
-        this.attribute("updated_at", "string");
+        this.attribute("updated_at", "datetime");
         this.adapter = adapter;
       }
     }

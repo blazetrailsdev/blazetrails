@@ -13,18 +13,12 @@
  * ported alongside.
  */
 
+import { BadRequest } from "../../action-controller/metal/exceptions.js";
+
 const TEMPLATES_URL = new URL("./templates", import.meta.url).href;
 
 interface ParamsRequestLike {
   parameters: unknown;
-}
-
-/** @internal */
-export class BadRequest extends Error {
-  constructor(message = "Bad Request") {
-    super(message);
-    this.name = "BadRequest";
-  }
 }
 
 export class DebugView {

@@ -5,7 +5,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { DebugView, BadRequest } from "./debug-view.js";
+import { DebugView } from "./debug-view.js";
+import { BadRequest } from "../../action-controller/metal/exceptions.js";
 
 describe("DebugView", () => {
   it("RESCUES_TEMPLATE_PATHS resolves alongside the source file", () => {

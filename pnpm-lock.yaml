@@ -291,6 +291,9 @@ importers:
       '@blazetrails/rack':
         specifier: workspace:*
         version: link:../../packages/rack
+      '@blazetrails/trails-tsc':
+        specifier: workspace:*
+        version: link:../../packages/trails-tsc
       '@blazetrails/trailties':
         specifier: workspace:*
         version: link:../../packages/trailties

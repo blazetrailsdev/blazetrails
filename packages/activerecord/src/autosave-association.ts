@@ -752,25 +752,34 @@ function _resolveBelongsToPrimaryKey(
   // Rails' compute_primary_key would collapse [tenant_id, id] → "id"
   // (autosave_association.rb:585) — that collapse only matches when the
   // FK is scalar; with composite-FK inference we need the full PK.
-  if (
-    assoc.options.primaryKey == null &&
-    assoc.options.foreignKey == null &&
-    assoc.options.queryConstraints == null
-  ) {
-    const pk = (assocRecord.constructor as typeof Base).primaryKey;
-    if (Array.isArray(pk) && pk.length > 1) return pk;
-    // QC-derived composite FK branch: reflection.foreignKey came from
-    // `deriveFkQueryConstraints` (owner has class-level
-    // query_constraints, scalar FK got expanded to [fk, qc_key]). The
-    // matching PK side is the target's query_constraints_list, which
-    // shares the QC partner column.
+  if (assoc.options.primaryKey == null) {
+    // Explicit composite foreignKey (or QC-derived composite via
+    // reflection) pairs against the target's full primary key array —
+    // mirrors `BelongsToAssociation#associationPrimaryKeys(record)`
+    // (belongs-to-association.ts) which returns the target class's
+    // primaryKey when no explicit primaryKey option is configured.
+    // Rails' `compute_primary_key` collapse to "id"
+    // (autosave_association.rb:585) only matches a scalar FK; with any
+    // composite FK we need the full PK so the zip pairs up.
+    const explicitFk = assoc.options.foreignKey ?? assoc.options.queryConstraints;
+    const fkIsComposite = Array.isArray(explicitFk) && explicitFk.length > 1;
     const reflFk = reflection?.foreignKey;
-    if (Array.isArray(reflFk) && reflFk.length > 1) {
-      const qcl = queryConstraintsList.call(assocRecord.constructor as any) as
-        | string[]
-        | null
-        | undefined;
-      if (qcl) return qcl;
+    const reflFkIsComposite = Array.isArray(reflFk) && reflFk.length > 1;
+    if (fkIsComposite || reflFkIsComposite || explicitFk == null) {
+      const pk = (assocRecord.constructor as typeof Base).primaryKey;
+      if (Array.isArray(pk) && pk.length > 1) return pk;
+      // QC-derived composite FK branch: reflection.foreignKey came from
+      // `deriveFkQueryConstraints` (owner has class-level
+      // query_constraints, scalar FK got expanded to [fk, qc_key]). The
+      // matching PK side is the target's query_constraints_list, which
+      // shares the QC partner column.
+      if (explicitFk == null && reflFkIsComposite) {
+        const qcl = queryConstraintsList.call(assocRecord.constructor as any) as
+          | string[]
+          | null
+          | undefined;
+        if (qcl) return qcl;
+      }
     }
   }
   const rawPk = computePrimaryKey.call(assocRecord as any, { options: assoc.options });

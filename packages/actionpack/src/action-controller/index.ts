@@ -62,11 +62,12 @@ export {
 export { SSE, ClientDisconnected } from "./metal/live.js";
 export { BasicAuth, TokenAuth, DigestAuth } from "./metal/http-authentication.js";
 export { Renderer } from "./renderer.js";
-export { Deprecator, deprecator } from "./deprecator.js";
+export { Deprecator, deprecator, addRenderer, removeRenderer } from "./deprecator.js";
 export { TestRequest } from "../action-dispatch/testing/test-request.js";
 export { LiveTestResponse, TestSession } from "./test-case.js";
 export { fragmentCacheKey } from "./caching.js";
 export {
+  defaultFormBuilder,
   setDefaultFormBuilder,
   getDefaultFormBuilder,
   resolveFormBuilder,

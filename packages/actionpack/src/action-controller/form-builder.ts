@@ -1,21 +1,84 @@
 /**
  * ActionController::FormBuilder
  *
- * Configure a custom form builder for controllers. When set,
- * form_with and form_for will use the specified builder class.
+ * Configure a custom form builder for controllers. When set, `form_with`
+ * and `form_for` will use the specified builder class.
  * @see https://api.rubyonrails.org/classes/ActionController/FormBuilder.html
+ *
+ * Mirrors `actionpack/lib/action_controller/form_builder.rb`:
+ *
+ *     module ClassMethods
+ *       def default_form_builder(builder)
+ *         self._default_form_builder = builder
+ *       end
+ *     end
+ *
+ *     def default_form_builder
+ *       self.class._default_form_builder
+ *     end
+ *
+ * Rails uses `class_attribute :_default_form_builder, instance_accessor: false`
+ * to give per-subclass storage with inheritance. We approximate that with a
+ * WeakMap keyed by the host class so descendants reading without a local set
+ * walk the prototype chain via `Object.getPrototypeOf`.
  */
 
-const _registry = new Map<string, unknown>();
+const _registry = new WeakMap<object, unknown>();
+
+/**
+ * Walk the class's prototype chain looking for a registered builder.
+ * Mirrors how Rails `class_attribute` falls back to the parent class value.
+ */
+function lookupForClass(klass: object | null | undefined): unknown {
+  let cur: object | null | undefined = klass;
+  while (cur) {
+    if (_registry.has(cur)) return _registry.get(cur);
+    cur = Object.getPrototypeOf(cur);
+  }
+  return undefined;
+}
+
+/**
+ * Dual-purpose Rails-style method for the form-builder DSL.
+ *
+ * Class form (setter): `Controller.defaultFormBuilder(MyBuilder)` or
+ *   `Controller.defaultFormBuilder("MyBuilder")`. Stores the builder on the
+ *   class; string form is held as-is — view-layer resolution happens when the
+ *   form helper consumes it (Rails-side equivalent is the form helper's own
+ *   `default_form_builder_class` reader).
+ *
+ * Instance/class form (reader): `controller.defaultFormBuilder()` or
+ *   `Controller.defaultFormBuilder()` (no args) returns the configured value,
+ *   walking the class chain to mirror `class_attribute` inheritance.
+ *
+ * Bind to a controller via `static defaultFormBuilder = defaultFormBuilder`
+ * (class DSL) and/or as an instance method.
+ */
+export function defaultFormBuilder(this: unknown, builder?: unknown): unknown {
+  const klass: object | null =
+    typeof this === "function"
+      ? (this as object)
+      : this && typeof this === "object"
+        ? ((this as { constructor?: object }).constructor ?? null)
+        : null;
+
+  if (arguments.length === 0) {
+    return klass ? lookupForClass(klass) : undefined;
+  }
+  if (klass) _registry.set(klass, builder);
+  return builder;
+}
 
 export function setDefaultFormBuilder(controllerName: string, builder: unknown): void {
-  _registry.set(controllerName, builder);
+  _nameRegistry.set(controllerName, builder);
 }
 
 export function getDefaultFormBuilder(controllerName: string): unknown | undefined {
-  return _registry.get(controllerName);
+  return _nameRegistry.get(controllerName);
 }
 
 export function resolveFormBuilder(controllerName: string, fallback?: unknown): unknown {
-  return _registry.get(controllerName) ?? fallback;
+  return _nameRegistry.get(controllerName) ?? fallback;
 }
+
+const _nameRegistry = new Map<string, unknown>();

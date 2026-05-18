@@ -31,6 +31,8 @@ import {
   isContentSecurityPolicy,
 } from "./metal/content-security-policy.js";
 import { helperMethod, type HelpersClassMethods } from "../abstract-controller/helpers.js";
+import { defaultFormBuilder } from "./form-builder.js";
+import { instrumentPayload, instrumentName } from "./caching.js";
 
 // Re-export callback registration
 export { type ActionCallback, type AroundCallback, type CallbackOptions };
@@ -439,6 +441,23 @@ export class Base extends Metal {
    * @internal
    */
   rateLimiting = rateLimiting;
+
+  /**
+   * Class DSL: override the default form builder for all views rendered by
+   * this controller and its subclasses. Mirrors Rails
+   * `ActionController::FormBuilder::ClassMethods#default_form_builder`.
+   */
+  static defaultFormBuilder = defaultFormBuilder;
+
+  /** Instance reader for the configured form builder (Rails parity). */
+  defaultFormBuilder = defaultFormBuilder;
+
+  /** @internal Rails parity — caching instrumentation payload. */
+  instrumentPayload = instrumentPayload;
+
+  /** @internal Rails parity — caching instrumentation name. */
+  instrumentName = instrumentName;
+
 
   // --- Rescue ---
 

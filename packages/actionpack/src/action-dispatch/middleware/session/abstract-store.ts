@@ -24,6 +24,14 @@ export class SessionId {
   constructor(publicId: string) {
     this.publicId = publicId;
   }
+  /**
+   * Rails: `Rack::Session::SessionId#private_id`. SHA256 hex of the
+   * public id; used as the cache lookup key by `AbstractSecureStore`
+   * subclasses so the raw cookie value never reaches the cache backend.
+   */
+  get privateId(): string {
+    return getCrypto().createHash("sha256").update(this.publicId).digest("hex");
+  }
   toString(): string {
     return this.publicId;
   }

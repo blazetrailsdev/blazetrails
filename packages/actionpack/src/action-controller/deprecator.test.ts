@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Deprecation } from "@blazetrails/activesupport";
 import { deprecator, addRenderer, removeRenderer } from "./deprecator.js";
 import { Renderers } from "./metal/renderers.js";
@@ -16,6 +16,9 @@ describe("ActionController.deprecator", () => {
 describe("ActionController.addRenderer / removeRenderer", () => {
   const KEY = "test-shim-format";
   beforeEach(() => {
+    Renderers.remove(KEY);
+  });
+  afterEach(() => {
     Renderers.remove(KEY);
   });
 

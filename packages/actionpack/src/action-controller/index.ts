@@ -79,4 +79,13 @@ export { resolveHelperPath, inheritedWithHelpers } from "./trailties/helpers.js"
 export { RescueRegistry } from "./metal/rescue.js";
 export { FlashTypeRegistry } from "./metal/flash.js";
 export { ParameterEncodingRegistry } from "./metal/parameter-encoding.js";
-export { MemoryRateLimitStore, isRateLimited } from "./metal/rate-limiting.js";
+export {
+  MemoryRateLimitStore,
+  isRateLimited,
+  rateLimit,
+  rateLimiting,
+  type RateLimitOptions,
+  type RateLimitStore,
+  type RateLimitingClassHost,
+  type RateLimitingHost,
+} from "./metal/rate-limiting.js";

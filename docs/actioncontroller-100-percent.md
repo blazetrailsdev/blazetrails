@@ -103,6 +103,21 @@ up, the modified directives don't round-trip into the response header. The
 class-DSL surface and parity-test coverage are complete; the response-header
 wiring is the remaining work.
 
+### `RateLimiting` — cache backend is divergent
+
+**Rails:** `rate_limit` defaults `store:` to `cache_store`, which Rails wires from
+`config.action_controller.cache_store` / `config.cache_store` — an
+`ActiveSupport::Cache::Store` instance whose `increment(key, amount, expires_in:)`
+returns the new counter atomically (Redis/Memcached in production).
+**Us:** No global `Rails.cache` equivalent yet. The class DSL falls back to a
+`cacheStore` static on the host controller class if not given `store:`, and
+throws if neither is set. A `MemoryRateLimitStore` ships in this package for
+tests and single-process apps; production deployments must supply an
+`ActiveSupport::Cache::Store`-shaped object (sync or async `increment`). The
+DSL surface, key composition (`rate-limit:controllerPath:name:identity`),
+`429` fallback, and `rate_limit.action_controller` instrumentation are all
+parity-faithful — only the cache backend resolution differs.
+
 ### `BrowserBlocker.versions` — returns a copy
 
 **Rails:** `attr_reader :versions` returns the object directly (mutations affect the blocker).

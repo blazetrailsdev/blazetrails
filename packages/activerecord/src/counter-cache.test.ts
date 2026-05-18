@@ -18,7 +18,7 @@ const TEST_SCHEMA: Schema = {
     views_count: "integer",
     unique_replies_count: "integer",
     num_replies: "integer",
-    updated_at: "datetime",
+    updated_at: "string",
     written_on: "datetime",
   },
   replies: {

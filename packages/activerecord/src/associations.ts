@@ -596,17 +596,27 @@ function _scopeForAssociation(model: typeof Base): Relation<Base> {
  */
 export function applyAssociationScope<R>(
   rel: R,
-  scope: ((rel: R, owner: Base) => R | null | undefined) | null | undefined,
+  scope: ((this: R, rel: R, owner: Base) => unknown) | null | undefined,
   owner: Base,
   reflectionScope?: unknown,
 ): R {
   if (!scope) return rel;
   if (reflectionScope !== undefined && scope === reflectionScope) return rel;
-  // Rails' `instance_exec(owner, &scope) || relation` is truthiness-based
-  // (`||`), not nullish — a scope like `cond && rel.where(...)` that
-  // short-circuits to `false` must still fall back to the input relation.
-  // Mirror with `||`, not `??`.
-  return (scope(rel, owner) || rel) as R;
+  // Match the Rails `instance_exec` arity/`this`-binding pattern used by
+  // the head-scope path in `association-scope.ts:583-589`: 0-arg scope →
+  // `this=rel`; 1+-arg → `(rel, owner)` with `this=rel`. Arrow scopes
+  // (the common shape in this codebase) ignore both the `this` binding
+  // and the second arg, so this is additive for existing callers and
+  // unlocks Rails-faithful `function (owner) { this.where(...) }` shapes.
+  //
+  // `|| rel` (not `??`) mirrors Ruby's `instance_exec(owner, &scope) ||
+  // relation` — truthiness-based, so a scope returning `false` (idiomatic
+  // JS `cond && rel.where(...)` short-circuit) falls back to the input.
+  const result =
+    scope.length === 0
+      ? (scope as unknown as (this: R) => unknown).call(rel)
+      : scope.call(rel, rel, owner);
+  return (result || rel) as R;
 }
 
 /**

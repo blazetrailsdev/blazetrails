@@ -39,9 +39,9 @@ describe("applyAssociationScope", () => {
     // short-circuit), and `0`/`""` for completeness.
     expect(applyAssociationScope(rel, () => null, owner)).toBe(rel);
     expect(applyAssociationScope(rel, () => undefined, owner)).toBe(rel);
-    expect(applyAssociationScope(rel, () => false as never, owner)).toBe(rel);
-    expect(applyAssociationScope(rel, () => 0 as never, owner)).toBe(rel);
-    expect(applyAssociationScope(rel, () => "" as never, owner)).toBe(rel);
+    expect(applyAssociationScope(rel, () => false, owner)).toBe(rel);
+    expect(applyAssociationScope(rel, () => 0, owner)).toBe(rel);
+    expect(applyAssociationScope(rel, () => "", owner)).toBe(rel);
   });
 
   it("passes the owner as the second positional arg", () => {
@@ -76,6 +76,22 @@ describe("applyAssociationScope", () => {
     const wrapper = (r: typeof rel) => ({ ...r, wrapped: true }) as typeof rel;
     const out = applyAssociationScope(rel, wrapper, owner, refScope);
     expect(out).toEqual({ tag: "rel", wrapped: true });
+  });
+
+  it("binds `this` to rel for arity-0 function-keyword scopes (Rails `instance_exec`)", () => {
+    // Mirrors the head-scope dispatch in `association-scope.ts:583-589`:
+    // `fn.length === 0 ? fn.call(scope) : fn.call(scope, scope, owner)`.
+    const rel = { tag: "rel", marked: false };
+    const out = applyAssociationScope(
+      rel,
+      function () {
+        // `this` is the relation; mutate-and-return mirrors Ruby's
+        // `instance_exec` self-binding for 0-arg scopes.
+        return { ...this, marked: true };
+      },
+      owner,
+    );
+    expect(out).toEqual({ tag: "rel", marked: true });
   });
 
   it("works with arity-0/1 scopes that ignore the owner arg", () => {

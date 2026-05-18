@@ -154,7 +154,7 @@ export function newColumnFromField(
   if (meta.type === "datetime" && /^CURRENT_TIMESTAMP(\([0-6]?\))?$/i.test(def ?? "")) {
     if (/on update CURRENT_TIMESTAMP/i.test(extraRaw)) def = `${def} ON UPDATE ${def}`;
     [def, defFn] = [null, def];
-  } else if (meta.extra.startsWith("DEFAULT_GENERATED")) {
+  } else if (meta.extra.toUpperCase().startsWith("DEFAULT_GENERATED")) {
     // MySQL 8 emits "DEFAULT_GENERATED" alone (function default) or compound
     // "DEFAULT_GENERATED on update CURRENT_TIMESTAMP". Both flow through the
     // function-default path; fold on_update into the function expression so
@@ -182,7 +182,7 @@ export function newColumnFromField(
     collation: field["Collation"] ?? null,
     unsigned: /unsigned/i.test(field["Type"] ?? ""),
     autoIncrement: /auto_increment/i.test(field["Extra"] ?? ""),
-    virtual: /VIRTUAL GENERATED|STORED GENERATED/i.test(field["Extra"] ?? ""),
+    virtual: /(virtual|stored|persistent)\s+generated/i.test(field["Extra"] ?? ""),
     onUpdate: onUpdateForColumn,
   });
 }

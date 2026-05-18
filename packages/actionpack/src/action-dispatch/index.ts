@@ -105,6 +105,7 @@ export {
   type ErrorReporterLike,
 } from "./middleware/executor.js";
 export { Reloader } from "./middleware/reloader.js";
+export { PublicExceptions } from "./middleware/public-exceptions.js";
 export {
   RemoteIp,
   GetIp,

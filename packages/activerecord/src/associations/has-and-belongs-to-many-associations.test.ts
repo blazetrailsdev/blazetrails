@@ -47,9 +47,8 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
     // Schema covers the shared Developer/Project/DeveloperProject family
     // used by the majority of tests in this describe. Tests further down
     // that build their own `createTestAdapter()` adapter and declare
-    // inline classes (RichPerson/Treasure, CjDeveloper/CjProject, etc.)
-    // remain uncovered under AR_NO_AUTO_SCHEMA=1 and are deferred to
-    // follow-up cluster PRs.
+    // inline classes seed their own schema inline next to the adapter
+    // construction.
     await defineSchema(adapter, {
       developers: { name: "string", salary: "integer" },
       projects: { name: "string", approved: "boolean", featured: "boolean" },

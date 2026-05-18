@@ -124,13 +124,22 @@ export function parseRfc2822Date(s: string | undefined): Date | undefined {
   if (!m) return undefined;
   const [, day, mon, yr, hh, mm, ss, zone] = m;
   if (!RFC2822_ZONE_RE.test(zone)) return undefined;
+  const d = Number(day),
+    h = Number(hh),
+    mi = Number(mm),
+    s2 = Number(ss);
+  // Rails' Time.rfc2822 raises ArgumentError on out-of-range components.
+  if (d < 1 || d > 31 || h > 23 || mi > 59 || s2 > 60) return undefined;
   let year = Number(yr);
   if (year < 50) year += 2000;
   else if (year < 1000) year += 1900;
   let offsetMin = 0;
   if (/^[+-]\d{4}$/.test(zone)) {
+    const oh = Number(zone.slice(1, 3));
+    const om = Number(zone.slice(3, 5));
+    if (oh > 23 || om > 59) return undefined;
     const sign = zone[0] === "-" ? -1 : 1;
-    offsetMin = sign * (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(3, 5)));
+    offsetMin = sign * (oh * 60 + om);
   } else if (zone === "EDT") offsetMin = -4 * 60;
   else if (zone === "EST" || zone === "CDT") offsetMin = -5 * 60;
   else if (zone === "CST" || zone === "MDT") offsetMin = -6 * 60;
@@ -156,7 +165,13 @@ export function parseHttpDate(s: string | undefined): Date | undefined {
   const m = RFC1123_RE.exec(s);
   if (!m) return undefined;
   const [, day, mon, year, hh, mm, ss] = m;
-  const t = Date.UTC(Number(year), MONTHS[mon], Number(day), Number(hh), Number(mm), Number(ss));
+  const d = Number(day),
+    h = Number(hh),
+    mi = Number(mm),
+    s2 = Number(ss);
+  // Rails' Time.httpdate raises ArgumentError on out-of-range components.
+  if (d < 1 || d > 31 || h > 23 || mi > 59 || s2 > 60) return undefined;
+  const t = Date.UTC(Number(year), MONTHS[mon], d, h, mi, s2);
   // boundary: HTTP-date wire-format header value parsed as JS Date.
   return Number.isNaN(t) ? undefined : new Date(t);
 }

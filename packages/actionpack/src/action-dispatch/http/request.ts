@@ -224,9 +224,9 @@ export class Request {
 
   // --- Conditional-GET (ActionDispatch::Http::Cache::Request) ---
   // Mixed in onto Request.prototype below; declared here for typing.
-  declare ifModifiedSince: Date | undefined;
-  declare ifNoneMatch: string | undefined;
-  declare ifNoneMatchEtags: string[];
+  declare readonly ifModifiedSince: Date | undefined;
+  declare readonly ifNoneMatch: string | undefined;
+  declare readonly ifNoneMatchEtags: string[];
   declare notModified: (modifiedAt: Date | undefined) => boolean;
   declare etagMatches: (etag: string | undefined) => boolean;
   declare fresh: (response: CacheResponseLike) => boolean;

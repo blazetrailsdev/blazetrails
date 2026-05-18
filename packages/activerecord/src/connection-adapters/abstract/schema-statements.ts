@@ -264,12 +264,11 @@ export class SchemaStatements {
     columns: string | string[],
     options: AddIndexOptions = {},
   ): Promise<void> {
-    const createIndex = await this.buildCreateIndexDefinition(
+    const createIndex = this.buildCreateIndexDefinition(
       tableName,
       columns,
       options as Record<string, unknown>,
     );
-    if (!createIndex) return;
     await this.adapter.executeMutation(this.schemaCreation.accept(createIndex));
   }
 

@@ -54,16 +54,32 @@ function lookupForClass(klass: object | null | undefined): unknown {
  * Bind to a controller via `static defaultFormBuilder = defaultFormBuilder`
  * (class DSL) and/or as an instance method.
  */
+// Class form (setter): bound as `static defaultFormBuilder = defaultFormBuilder`
+// — `this` is the host class (a function/constructor) and a builder arg is required.
+export function defaultFormBuilder(this: new (...a: never[]) => unknown, builder: unknown): unknown;
+// Class form (reader, no-arg): also valid on the class for ad-hoc lookups.
+export function defaultFormBuilder(this: new (...a: never[]) => unknown): unknown;
+// Instance form (reader): mirrors Rails' 0-arg instance method
+// `def default_form_builder; self.class._default_form_builder; end`.
+export function defaultFormBuilder(this: object): unknown;
 export function defaultFormBuilder(this: unknown, builder?: unknown): unknown {
-  const klass: object | null =
-    typeof this === "function"
-      ? (this as object)
-      : this && typeof this === "object"
-        ? ((this as { constructor?: object }).constructor ?? null)
-        : null;
+  const receiverIsClass = typeof this === "function";
+  const klass: object | null = receiverIsClass
+    ? (this as object)
+    : this && typeof this === "object"
+      ? ((this as { constructor?: object }).constructor ?? null)
+      : null;
 
   if (arguments.length === 0) {
     return klass ? lookupForClass(klass) : undefined;
+  }
+  // Runtime guard: Rails' instance reader takes no args (Ruby would raise
+  // ArgumentError). Refuse to silently mutate the class via an instance call.
+  if (!receiverIsClass) {
+    throw new TypeError(
+      "defaultFormBuilder: instance receiver takes no arguments. " +
+        "Use `Controller.defaultFormBuilder(builder)` to set the class default.",
+    );
   }
   if (klass) _registry.set(klass, builder);
   return builder;

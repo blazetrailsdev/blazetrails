@@ -52,6 +52,17 @@ describe("defaultFormBuilder DSL", () => {
     expect(inst.defaultFormBuilder()).toBe(FakeBuilder);
   });
 
+  it("throws when an instance receiver is given a setter arg (Rails parity)", () => {
+    class C {
+      static defaultFormBuilder = defaultFormBuilder;
+      defaultFormBuilder = defaultFormBuilder;
+    }
+    const inst = new C();
+    expect(() => (inst.defaultFormBuilder as (b: unknown) => unknown)(FakeBuilder)).toThrow(
+      TypeError,
+    );
+  });
+
   it("is wired onto Base as both class DSL and instance reader", () => {
     class MyController extends Base {}
     MyController.defaultFormBuilder(FakeBuilder);

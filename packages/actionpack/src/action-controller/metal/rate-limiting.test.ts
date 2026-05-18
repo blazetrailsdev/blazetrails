@@ -9,6 +9,9 @@ import {
   type RateLimitingHost,
 } from "./rate-limiting.js";
 import { Base } from "../base.js";
+import { API } from "../api.js";
+import { Request } from "../../action-dispatch/request.js";
+import { Response } from "../../action-dispatch/response.js";
 import { Notifications } from "@blazetrails/activesupport";
 import type { CallbackOptions } from "../../abstract-controller/callbacks.js";
 
@@ -147,6 +150,44 @@ describe("rateLimiting (instance helper)", () => {
     }
   });
 
+  it("awaits an async store.increment result", async () => {
+    const store: RateLimitStore = {
+      increment: () => Promise.resolve(11),
+    };
+    const host: RateLimitingHost = { request: { remoteIp: "x" }, head: vi.fn() };
+    await rateLimiting.call(host, { to: 10, within: 60, store });
+    expect(host.head).toHaveBeenCalledWith(429);
+  });
+
+  it("awaits an async `with` callback before resolving", async () => {
+    const order: string[] = [];
+    const store: RateLimitStore = { increment: () => 11 };
+    const host: RateLimitingHost = { request: { remoteIp: "x" }, head: vi.fn() };
+    await rateLimiting.call(host, {
+      to: 10,
+      within: 60,
+      store,
+      async with() {
+        await new Promise((r) => setTimeout(r, 5));
+        order.push("with");
+      },
+    });
+    order.push("after");
+    expect(order).toEqual(["with", "after"]);
+  });
+
+  it("treats a null/undefined `by` result like Rails `compact` (dropped from key)", async () => {
+    const store: RateLimitStore = { increment: vi.fn().mockReturnValue(1) };
+    const host: RateLimitingHost = { controllerPath: "posts" };
+    await rateLimiting.call(host, {
+      to: 10,
+      within: 60,
+      store,
+      by: () => null,
+    });
+    expect(store.increment).toHaveBeenCalledWith("rate-limit:posts", 1, { expiresIn: 60 });
+  });
+
   it("does nothing when store.increment returns null", async () => {
     const store: RateLimitStore = { increment: () => null };
     const host: RateLimitingHost = { request: { remoteIp: "x" }, head: vi.fn() };
@@ -269,5 +310,46 @@ describe("rateLimit class DSL", () => {
     expect(() =>
       PostsController.rateLimit({ to: 5, within: 60, store: new MemoryRateLimitStore() }),
     ).not.toThrow();
+  });
+
+  it("is also wired onto ActionController::API (Rails api.rb:125 includes RateLimiting)", () => {
+    expect(typeof API.rateLimit).toBe("function");
+    class PingApi extends API {}
+    expect(() =>
+      PingApi.rateLimit({ to: 5, within: 60, store: new MemoryRateLimitStore() }),
+    ).not.toThrow();
+  });
+});
+
+describe("rateLimit integration through Base.beforeAction / dispatch", () => {
+  it("triggers head(429) and short-circuits the action body once the limit is exceeded", async () => {
+    const store = new MemoryRateLimitStore();
+    let actionRan = 0;
+
+    class LimitedController extends Base {
+      async show() {
+        actionRan += 1;
+        this.head(200);
+      }
+    }
+    LimitedController.rateLimit({ to: 1, within: 60, store });
+
+    const makeRequest = () =>
+      new Request({
+        REQUEST_METHOD: "GET",
+        PATH_INFO: "/show",
+        HTTP_HOST: "localhost",
+        REMOTE_ADDR: "1.2.3.4",
+      });
+
+    const r1 = new LimitedController();
+    await r1.dispatch("show", makeRequest(), new Response());
+    expect(r1.status).toBe(200);
+    expect(actionRan).toBe(1);
+
+    const r2 = new LimitedController();
+    await r2.dispatch("show", makeRequest(), new Response());
+    expect(r2.status).toBe(429);
+    expect(actionRan).toBe(1);
   });
 });

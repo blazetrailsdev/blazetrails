@@ -19,7 +19,7 @@ export interface RateLimitOptions {
    * Per-request identity function. Default is the remote IP. Invoked with
    * the controller as `this`, matching Rails' `instance_exec(&by)`.
    */
-  by?: (this: RateLimitingHost) => string;
+  by?: (this: RateLimitingHost) => string | null | undefined;
   /**
    * Action to take when the limit is exceeded. Invoked with the controller
    * as `this`. Defaults to `head(429)`.
@@ -62,12 +62,16 @@ export interface RateLimitStore {
  * Expiry is checked lazily on each `increment` for the touched key, matching
  * `activesupport/cache/memory-store` (memory-store.ts:135). To prevent
  * unbounded growth from one-off identities, the store also sweeps expired
- * entries when the map crosses `_pruneThreshold` (default 1024). The sweep is
- * amortized — the threshold doubles after each pass so hot paths stay O(1).
+ * entries once the map crosses `_PRUNE_BASELINE` (1024). If the sweep frees
+ * space, the threshold resets to the baseline — so subsequent low-volume
+ * workloads don't carry stale entries past the next baseline. Only when a
+ * sweep fails to free space (every entry still live) does the threshold
+ * double, amortizing the O(N) walk against the next burst.
  */
 export class MemoryRateLimitStore implements RateLimitStore {
+  private static readonly _PRUNE_BASELINE = 1024;
   private _entries = new Map<string, { count: number; expiresAt: number }>();
-  private _pruneThreshold = 1024;
+  private _pruneThreshold = MemoryRateLimitStore._PRUNE_BASELINE;
 
   increment(key: string, amount: number, options: { expiresIn: number }): number {
     const now = Date.now();
@@ -82,10 +86,15 @@ export class MemoryRateLimitStore implements RateLimitStore {
   }
 
   private _pruneExpired(now: number): void {
+    const before = this._entries.size;
     for (const [key, entry] of this._entries) {
       if (entry.expiresAt <= now) this._entries.delete(key);
     }
-    if (this._entries.size >= this._pruneThreshold) this._pruneThreshold *= 2;
+    if (this._entries.size < before) {
+      this._pruneThreshold = Math.max(MemoryRateLimitStore._PRUNE_BASELINE, this._entries.size * 2);
+    } else {
+      this._pruneThreshold *= 2;
+    }
   }
 }
 
@@ -105,7 +114,11 @@ export function isRateLimited(count: number, limit: number): boolean {
 // the stricter type at the call site.
 export interface RateLimitingClassHost {
   beforeAction: Function; // eslint-disable-line @typescript-eslint/no-unsafe-function-type
-  cacheStore?: RateLimitStore;
+  /**
+   * Mirrors the existing `cacheStore?: ... | null` convention on
+   * AbstractController caching/fragments (caching.ts:35, fragments.ts:24).
+   */
+  cacheStore?: RateLimitStore | null;
 }
 
 /**
@@ -190,7 +203,7 @@ export async function rateLimiting(
   args: {
     to: number;
     within: number;
-    by?: (this: RateLimitingHost) => string;
+    by?: (this: RateLimitingHost) => string | null | undefined;
     with?: (this: RateLimitingHost) => void | Promise<void>;
     store: RateLimitStore;
     name?: string;

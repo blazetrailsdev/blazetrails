@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { ActionableError, NonActionable } from "@blazetrails/activesupport";
 import type { RackEnv, RackResponse } from "@blazetrails/rack";
-import { ActionableExceptions } from "./actionable-exceptions.js";
+import { ActionableExceptions } from "../middleware/actionable-exceptions.js";
 
 const Actions: string[] = [];
 

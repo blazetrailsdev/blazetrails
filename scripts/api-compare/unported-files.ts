@@ -475,6 +475,16 @@ export const UNPORTED_FILES: UnportedFile[] = [
       "packages/globalid/src/verifier.test.ts asserting char-class absence " +
       "rather than exact bytes.",
   },
+  {
+    testFile: "adapter_test.rb",
+    tests: ["#active? is synchronized", "#verify! is synchronized"],
+    reason:
+      "AdapterThreadSafetyTest exercises Ruby Thread.new/Thread.pass concurrency " +
+      "on a single shared connection, asserting mutex-style serialization of " +
+      "#active?/#verify!/#disconnect! under the GVL. JavaScript has no native " +
+      "threads — async/await on a single event-loop cannot reproduce the GVL " +
+      "interleaving that this test pins.",
+  },
 ];
 
 export function isSourceUnported(file: string): boolean {

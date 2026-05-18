@@ -78,7 +78,7 @@ describe("AdapterTest", () => {
   });
   it.skip("disable prepared statements", () => {
     // BLOCKED: connection-pool
-    // ROOT-CAUSE: core/configurations: ActiveRecord.disablePreparedStatements global + establishConnection(prepared_statements:) merge not wired
+    // ROOT-CAUSE: core.ts#preparedStatements + connection-handling.ts#establishConnection: global ActiveRecord.disablePreparedStatements override of per-config prepared_statements:true not wired
     // SCOPE: ~25 LOC; affects ~1 test
   });
   it.skip("table alias", () => {
@@ -148,7 +148,7 @@ describe("AdapterTest", () => {
   });
   it.skip("current database", () => {
     // BLOCKED: adapter-mysql
-    // ROOT-CAUSE: connection-adapters/abstract-mysql-adapter.ts#currentDatabase + postgresql-adapter.ts#currentDatabase: needs MySQL/PG test context (Rails respond_to? gate skips on SQLite) + ARTest.test_configuration_hashes wiring
+    // ROOT-CAUSE: connection-adapters/abstract-mysql-adapter.ts#currentDatabase + postgresql-adapter.ts#currentDatabase: needs MySQL/PG test context (Rails respond_to? gate skips on SQLite); test-adapter.ts only exposes PG_TEST_URL/MYSQL_TEST_URL env, no per-config "database" name lookup
     // SCOPE: ~15 LOC port; affects ~1 test
   });
 });
@@ -344,14 +344,10 @@ describe("AdapterConnectionTest", () => {
 
 describe("AdapterThreadSafetyTest", () => {
   it.skip("#active? is synchronized", () => {
-    // BLOCKED: GVL
-    // ROOT-CAUSE: Ruby Thread.new/Thread.pass concurrency test; no JS thread equivalent — likely permanent
-    // SCOPE: candidate for unported-files.ts; affects ~2 tests
+    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — gvl
   });
   it.skip("#verify! is synchronized", () => {
-    // BLOCKED: GVL
-    // ROOT-CAUSE: Ruby Thread.new/Thread.pass concurrency test; no JS thread equivalent — likely permanent
-    // SCOPE: candidate for unported-files.ts; affects ~2 tests
+    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — gvl
   });
 });
 

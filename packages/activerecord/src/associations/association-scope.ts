@@ -40,6 +40,7 @@ export type ValueTransformation<T = unknown> = (v: T) => unknown;
  */
 export type ScopeLambda<R> = (this: R, rel: R, owner: Base) => R | false | null | undefined;
 
+/** @internal */
 export function invokeScopeLambda<R>(
   fn: ScopeLambda<R>,
   rel: R,

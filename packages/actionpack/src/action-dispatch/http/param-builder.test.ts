@@ -8,6 +8,11 @@ describe("ParamBuilder", () => {
   // This test doesn't need to duplicate all of that: it just
   // offers a simple baseline of unit tests.
 
+  const previous = ParamBuilder.ignoreLeadingBrackets;
+  afterEach(() => {
+    ParamBuilder.ignoreLeadingBrackets = previous;
+  });
+
   test("simple query string", () => {
     const result = ParamBuilder.fromQueryString("foo=bar&baz=quux");
     expect({ ...result }).toEqual({ foo: "bar", baz: "quux" });
@@ -28,13 +33,6 @@ describe("ParamBuilder", () => {
     expect({ ...result, "[foo]": { ...(result["[foo]"] as object) } }).toEqual({
       "[foo]": { bar: "baz" },
     });
-  });
-});
-
-describe("ParamBuilder.ignoreLeadingBrackets toggle", () => {
-  const previous = ParamBuilder.ignoreLeadingBrackets;
-  afterEach(() => {
-    ParamBuilder.ignoreLeadingBrackets = previous;
   });
 
   test("configured for strict brackets", () => {

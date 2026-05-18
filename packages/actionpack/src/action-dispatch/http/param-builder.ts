@@ -78,7 +78,7 @@ export class ParamBuilder {
     pairs: Iterable<QueryPair> | Iterable<[string, unknown]>,
     options: { encodingTemplate?: EncodingTemplate | null } = {},
   ): ParamHash {
-    const params = makeParams();
+    const params = this.makeParams();
     const encodingTemplate = options.encodingTemplate ?? null;
 
     try {
@@ -88,7 +88,7 @@ export class ParamBuilder {
           // Rails wraps Hash values (multipart payloads) as UploadedFile.
           v = new UploadedFile(v as never) as unknown as ParamValue;
         }
-        storeNestedParam(params, k, v, 0, encodingTemplate, this.paramDepthLimit);
+        this.storeNestedParam(params, k, v, 0, encodingTemplate);
       }
     } catch (e) {
       if (e instanceof RangeError || (e instanceof Error && e.name === "ArgumentError")) {
@@ -109,25 +109,49 @@ export class ParamBuilder {
     // pipeline as parseNestedQuery.
     return RequestUtils.normalizeEncodeParams(hash) as ParamHash;
   }
-}
 
-function makeParams(): ParamHash {
-  return Object.create(null) as ParamHash;
-}
-
-function isParamsHash(obj: unknown): obj is ParamHash {
-  return obj !== null && typeof obj === "object" && !Array.isArray(obj);
-}
-
-function paramsHashHasKey(hash: ParamHash, key: string): boolean {
-  if (key.includes("[]")) return false;
-  let h: ParamValue = hash;
-  for (const part of key.split(/[[\]]+/)) {
-    if (part === "") continue;
-    if (!isParamsHash(h) || !Object.hasOwn(h, part)) return false;
-    h = h[part];
+  /** @internal */
+  storeNestedParam(
+    params: ParamHash,
+    name: string | null,
+    v: ParamValue,
+    depth: number,
+    encodingTemplate: EncodingTemplate | null = null,
+  ): ParamValue {
+    return storeNestedParamImpl(this, params, name, v, depth, encodingTemplate);
   }
-  return true;
+
+  /** @internal */
+  makeParams(): ParamHash {
+    return Object.create(null) as ParamHash;
+  }
+
+  /**
+   * Mirrors Rails' `new_depth_limit` — but Rails' own implementation
+   * is broken (references an undefined `@params_class`); kept as a thin
+   * `new(depthLimit)` factory for source-level parity.
+   * @internal
+   */
+  newDepthLimit(paramDepthLimit: number): ParamBuilder {
+    return new (this.constructor as typeof ParamBuilder)(paramDepthLimit);
+  }
+
+  /** @internal */
+  paramsHashType(obj: unknown): obj is ParamHash {
+    return obj !== null && typeof obj === "object" && !Array.isArray(obj);
+  }
+
+  /** @internal */
+  paramsHashHasKey(hash: ParamHash, key: string): boolean {
+    if (key.includes("[]")) return false;
+    let h: ParamValue = hash;
+    for (const part of key.split(/[[\]]+/)) {
+      if (part === "") continue;
+      if (!this.paramsHashType(h) || !Object.hasOwn(h, part)) return false;
+      h = h[part];
+    }
+    return true;
+  }
 }
 
 function classNameOf(v: unknown): string {
@@ -138,16 +162,15 @@ function classNameOf(v: unknown): string {
   return typeof v;
 }
 
-/** @internal */
-function storeNestedParam(
+function storeNestedParamImpl(
+  self: ParamBuilder,
   params: ParamHash,
   name: string | null,
   v: ParamValue,
   depth: number,
   encodingTemplate: EncodingTemplate | null,
-  depthLimit: number,
 ): ParamValue {
-  if (depth >= depthLimit) throw new ParamsTooDeepError("param depth limit exceeded");
+  if (depth >= self.paramDepthLimit) throw new ParamsTooDeepError("param depth limit exceeded");
 
   let k: string;
   let after: string;
@@ -200,13 +223,10 @@ function storeNestedParam(
 
   if (k === "") return params;
 
-  if (depth === 0 && typeof v === "string") {
-    if (encodingTemplate && encodingTemplate[k]) {
-      // force_encoding is a no-op in JS — strings are UTF-16. Encoding
-      // validity is likewise structurally guaranteed; we don't surface
-      // the InvalidParameterError "Invalid encoding" branch.
-    }
-  }
+  // Rails applies encodingTemplate[k] via force_encoding + valid_encoding?
+  // here. Both are no-ops in JS (strings are UTF-16, structurally valid),
+  // so the InvalidParameterError("Invalid encoding…") branch is absent.
+  void encodingTemplate;
 
   if (after === "") {
     if (k === "[]" && depth !== 0) {
@@ -241,18 +261,18 @@ function storeNestedParam(
       throw new ParameterTypeError(`expected Array (got ${classNameOf(arr)}) for param \`${k}'`);
     }
     const last = arr[arr.length - 1];
-    if (isParamsHash(last) && !paramsHashHasKey(last, childKey)) {
-      storeNestedParam(last, childKey, v, depth + 1, null, depthLimit);
+    if (self.paramsHashType(last) && !self.paramsHashHasKey(last, childKey)) {
+      self.storeNestedParam(last, childKey, v, depth + 1);
     } else {
-      arr.push(storeNestedParam(makeParams(), childKey, v, depth + 1, null, depthLimit));
+      arr.push(self.storeNestedParam(self.makeParams(), childKey, v, depth + 1));
     }
   } else {
-    if (!Object.hasOwn(params, k)) params[k] = makeParams();
+    if (!Object.hasOwn(params, k)) params[k] = self.makeParams();
     const child = params[k];
-    if (!isParamsHash(child)) {
+    if (!self.paramsHashType(child)) {
       throw new ParameterTypeError(`expected Hash (got ${classNameOf(child)}) for param \`${k}'`);
     }
-    params[k] = storeNestedParam(child, after, v, depth + 1, null, depthLimit) as ParamValue;
+    params[k] = self.storeNestedParam(child, after, v, depth + 1) as ParamValue;
   }
 
   return params;

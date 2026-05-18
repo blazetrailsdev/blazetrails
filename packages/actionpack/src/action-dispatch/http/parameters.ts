@@ -156,7 +156,12 @@ export function parseFormattedParameters(
   parsers: ParameterParsers,
   fallback: () => Record<string, unknown>,
 ): Record<string, unknown> {
-  if (this.contentLength === 0 || this.contentMimeType === null) {
+  // Rails: `content_length.zero? || content_mime_type.nil?` → yield. Our
+  // `contentLength` returns `undefined` when the header is absent, so also
+  // treat an empty `rawPost` as no body — otherwise JSON requests without a
+  // `CONTENT_LENGTH` header would feed `""` to `JSON.parse` and raise
+  // `ParseError` instead of returning the documented empty-body `{}`.
+  if (this.contentLength === 0 || this.contentMimeType === null || !this.rawPost) {
     return fallback();
   }
   const strategy = parsers[this.contentMimeType.symbol];

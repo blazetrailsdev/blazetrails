@@ -38,11 +38,7 @@ export interface CacheResponseLike {
 }
 
 export function ifModifiedSince(this: RequestCacheHost): Date | undefined {
-  const since = this.getHeader(HTTP_IF_MODIFIED_SINCE);
-  if (!since) return undefined;
-  const t = Date.parse(since);
-  // boundary: HTTP-date wire-format header value parsed as JS Date.
-  return Number.isNaN(t) ? undefined : new Date(t);
+  return parseHttpDate(this.getHeader(HTTP_IF_MODIFIED_SINCE));
 }
 
 export function ifNoneMatch(this: RequestCacheHost): string | undefined {
@@ -92,9 +88,38 @@ function hdrSet(host: ResponseCacheHost, key: string): boolean {
   return host.hasHeader ? host.hasHeader(key) : host.getHeader(key) !== undefined;
 }
 
-function parseHttpDate(s: string | undefined): Date | undefined {
+const RFC1123_RE =
+  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/;
+const MONTHS: Record<string, number> = {
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11,
+};
+
+/**
+ * Parse an HTTP-date header value, strict RFC 1123 (IMF-fixdate) per RFC 9110.
+ * Returns undefined for any non-conforming value — including the obsolete
+ * RFC 850 and asctime forms, and any locale-sensitive `Date.parse` interpretations.
+ *
+ * Rails' `Time.httpdate` is similarly strict (accepts only RFC 1123 / RFC 2616).
+ *
+ * @internal
+ */
+export function parseHttpDate(s: string | undefined): Date | undefined {
   if (!s) return undefined;
-  const t = Date.parse(s);
+  const m = RFC1123_RE.exec(s);
+  if (!m) return undefined;
+  const [, day, mon, year, hh, mm, ss] = m;
+  const t = Date.UTC(Number(year), MONTHS[mon], Number(day), Number(hh), Number(mm), Number(ss));
   // boundary: HTTP-date wire-format header value parsed as JS Date.
   return Number.isNaN(t) ? undefined : new Date(t);
 }

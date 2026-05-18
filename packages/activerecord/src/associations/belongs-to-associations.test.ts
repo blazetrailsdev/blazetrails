@@ -96,11 +96,12 @@ describe("BelongsToAssociationsTest", () => {
 
   beforeEach(async () => {
     adapter = freshAdapter();
-    // Schema covers the first ~30 tests in this describe: base
-    // Company/Account, counter-cache (Btc/Btcas/Cc/CustomCc/Btcau),
-    // polymorphic Post/Comment + Tag (incl. wp_cpk_tags), and Record/Entry
-    // families. Remaining tests inline unique table families and are
-    // deferred to follow-up cluster PRs.
+    // Schema covers the base Company/Account, counter-cache
+    // (Btc/Btcas/Cc/CustomCc/Btcau), polymorphic Post/Comment + Tag
+    // (incl. wp_cpk_tags), and Record/Entry table families. Later tests
+    // in this describe that reuse these tables also benefit; tests that
+    // inline additional unique table families remain uncovered under
+    // AR_NO_AUTO_SCHEMA=1 and are deferred to follow-up cluster PRs.
     await defineSchema(adapter, {
       companies: {
         name: "string",

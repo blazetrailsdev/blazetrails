@@ -351,7 +351,7 @@ describe("ResponseFilterRedirect", () => {
     const res = new Response();
     res.location = "https://example.com/foo";
     expect(res.location).toBe("https://example.com/foo");
-    expect(res.headers["Location"]).toBe("https://example.com/foo");
+    expect(res.headers["location"]).toBe("https://example.com/foo");
   });
 
   it("filteredLocation strips sensitive query params using the request filter", () => {

@@ -133,11 +133,11 @@ export class Response {
 
   /** The value of the `Location` header. Mirrors `Response#location`. */
   get location(): string {
-    return this._headers["Location"] ?? this._headers["location"] ?? "";
+    return this._headers["location"] ?? this._headers["Location"] ?? "";
   }
 
   set location(url: string) {
-    this._headers["Location"] = url;
+    this._headers["location"] = url;
   }
 
   /**

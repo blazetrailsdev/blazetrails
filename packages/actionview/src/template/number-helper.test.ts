@@ -9,13 +9,13 @@ import {
   numberToHumanSize,
   numberToHuman,
   InvalidNumberError,
-} from "./number-helper.js";
+} from "../helpers/number-helper.js";
 
 const raw = htmlSafe;
 const s = (v: unknown) => (v == null ? v : (v as { toString(): string }).toString());
 
 describe("NumberHelperTest", () => {
-  it("test_number_to_phone", () => {
+  it("number to phone", () => {
     expect(numberToPhone(null)).toBeNull();
     expect(s(numberToPhone(5551234))).toBe("555-1234");
     expect(s(numberToPhone(8005551212, { areaCode: true, extension: 123 }))).toBe(
@@ -30,7 +30,7 @@ describe("NumberHelperTest", () => {
     );
   });
 
-  it("test_number_to_currency", () => {
+  it("number to currency", () => {
     expect(numberToCurrency(null)).toBeNull();
     expect(s(numberToCurrency(1234567890.5))).toBe("$1,234,567,890.50");
     expect(s(numberToCurrency(1234567891.5, { precision: 0 }))).toBe("$1,234,567,892");
@@ -45,7 +45,7 @@ describe("NumberHelperTest", () => {
     );
   });
 
-  it("test_number_to_percentage", () => {
+  it("number to percentage", () => {
     expect(numberToPercentage(null)).toBeNull();
     expect(s(numberToPercentage(100))).toBe("100.000%");
     expect(s(numberToPercentage(100, { format: "<b>%n</b> %" }))).toBe(
@@ -59,38 +59,38 @@ describe("NumberHelperTest", () => {
     expect(s(numberToPercentage("98a"))).toBe("98a%");
   });
 
-  it("test_number_with_delimiter", () => {
+  it("number with delimiter", () => {
     expect(numberWithDelimiter(null)).toBeNull();
     expect(s(numberWithDelimiter(12345678))).toBe("12,345,678");
     expect(s(numberWithDelimiter(0))).toBe("0");
   });
 
-  it("test_number_with_precision", () => {
+  it("number with precision", () => {
     expect(numberWithPrecision(null)).toBeNull();
     expect(s(numberWithPrecision(-111.2346))).toBe("-111.235");
     expect(s(numberWithPrecision(111, { precision: 2 }))).toBe("111.00");
   });
 
-  it("test_number_to_human_size", () => {
+  it("number to human size", () => {
     expect(numberToHumanSize(null)).toBeNull();
     expect(s(numberToHumanSize(3.14159265))).toBe("3 Bytes");
     expect(s(numberToHumanSize(1234567, { precision: 2 }))).toBe("1.2 MB");
   });
 
-  it("test_number_to_human", () => {
+  it("number to human", () => {
     expect(numberToHuman(null)).toBeNull();
     expect(s(numberToHuman(0))).toBe("0");
     expect(s(numberToHuman(1234))).toBe("1.23 Thousand");
   });
 
-  it("test_number_to_human_escape_units", () => {
+  it("number to human escape units", () => {
     const volume = { unit: "<b>ml</b>", thousand: "<b>lt</b>", million: "<b>m3</b>" };
     expect(s(numberToHuman(123456, { units: volume }))).toBe("123 &lt;b&gt;lt&lt;/b&gt;");
     expect(s(numberToHuman(12, { units: volume }))).toBe("12 &lt;b&gt;ml&lt;/b&gt;");
     expect(s(numberToHuman(1234567, { units: volume }))).toBe("1.23 &lt;b&gt;m3&lt;/b&gt;");
   });
 
-  it("test_number_helpers_escape_delimiter_and_separator", () => {
+  it("number helpers escape delimiter and separator", () => {
     expect(s(numberToPhone(1111111111, { delimiter: "<script></script>" }))).toBe(
       "111&lt;script&gt;&lt;/script&gt;111&lt;script&gt;&lt;/script&gt;1111",
     );
@@ -105,7 +105,7 @@ describe("NumberHelperTest", () => {
     );
   });
 
-  it("test_number_helpers_outputs_are_html_safe", () => {
+  it("number helpers outputs are html safe", () => {
     for (const fn of [
       numberToHuman,
       numberToHumanSize,
@@ -123,23 +123,29 @@ describe("NumberHelperTest", () => {
     expect(isHtmlSafe(numberToPhone("<script></script>"))).toBe(true);
   });
 
-  it("test_number_helpers_should_raise_error_if_invalid_when_specified", () => {
-    for (const fn of [
-      numberToHuman,
-      numberToHumanSize,
-      numberWithPrecision,
-      numberToCurrency,
-      numberToPercentage,
-      numberWithDelimiter,
-      numberToPhone,
-    ]) {
-      expect(() => fn("x", { raise: true })).toThrow(InvalidNumberError);
-      expect(() => fn("3.33", { raise: true })).not.toThrow();
-    }
+  const fns = [
+    numberToHuman,
+    numberToHumanSize,
+    numberWithPrecision,
+    numberToCurrency,
+    numberToPercentage,
+    numberWithDelimiter,
+    numberToPhone,
+  ];
+
+  it("number helpers should raise error if invalid when specified", () => {
+    for (const fn of fns) expect(() => fn("x", { raise: true })).toThrow(InvalidNumberError);
     try {
       numberToCurrency("x", { raise: true });
     } catch (e) {
       expect((e as InvalidNumberError).number).toBe("x");
     }
   });
+
+  it("number helpers should not raise error if valid when specified", () => {
+    for (const fn of fns) expect(() => fn("3.33", { raise: true })).not.toThrow();
+  });
+
+  // I18n.backend.store_translations support is not yet ported.
+  it.skip("number to human with custom translation scope", () => {});
 });

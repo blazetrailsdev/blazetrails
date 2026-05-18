@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Base, TransactionIsolationError } from "./index.js";
 import type { DatabaseAdapter } from "./adapter.js";
-import { createTestAdapter } from "./test-adapter.js";
+import { SQLite3Adapter } from "./connection-adapters/sqlite3-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./adapters/postgresql/test-helper.js";
 import { withSecondAdapter } from "./test-helpers/second-connection.js";
 
+// Both non-PG blocks below assert behavior tied to an adapter that does NOT
+// support `serializable` (the framework raises TransactionIsolationError on
+// the unsupported path AND on the join/nested checks). Going through
+// `createTestAdapter()` would pick up PG in CI, where `serializable` IS
+// supported, so the unsupported-path assertion silently passes. Pin a
+// dedicated in-memory SQLite3 adapter per test instead.
 async function freshAdapter(): Promise<DatabaseAdapter> {
-  const adapter = createTestAdapter();
+  const adapter = new SQLite3Adapter(":memory:");
   await defineSchema(adapter, { tags: { name: "string" } });
   return adapter;
 }

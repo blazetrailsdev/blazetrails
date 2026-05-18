@@ -69,11 +69,14 @@ jobs:
           # shared scripts, this workflow). Push to main / schedule /
           # workflow_dispatch always force true. Pattern mirrors the
           # AR-touching set in scripts/parity/run.ts.
-          AR_PATHS_RE='^(packages/(activerecord|arel|activemodel|activesupport|globalid)/|pnpm-lock\.yaml$|tsconfig[^/]*\.json$|vitest[^/]*\.config\.ts$|scripts/|\.github/workflows/ci\.yml$|\.github/actions/)'
+          # Cross-cutting paths force every per-package gate true. Anything
+          # here affects all packages: workspace topology, root tooling
+          # config, shared scripts, this workflow, composite actions.
+          INFRA_RE='^(pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|tsconfig[^/]*\.json$|vitest[^/]*\.config\.ts$|scripts/|\.github/workflows/ci\.yml$|\.github/actions/)'
+          AR_PKGS_RE='^packages/(activerecord|arel|activemodel|activesupport|globalid)/'
           # actionpack_affected gates actionpack-tests. True for actionpack +
-          # its runtime deps (actionview/activemodel/activesupport/rack) and
-          # cross-cutting infra files.
-          AP_PATHS_RE='^(packages/(actionpack|actionview|activemodel|activesupport|rack)/|pnpm-lock\.yaml$|tsconfig[^/]*\.json$|vitest[^/]*\.config\.ts$|scripts/|\.github/workflows/ci\.yml$|\.github/actions/)'
+          # its runtime deps (actionview/activemodel/activesupport/rack).
+          AP_PKGS_RE='^packages/(actionpack|actionview|activemodel|activesupport|rack)/'
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
             echo "activerecord_affected=true" >> "$GITHUB_OUTPUT"
@@ -108,12 +111,12 @@ jobs:
                   echo "activerecord_affected=false" >> "$GITHUB_OUTPUT"
                   echo "actionpack_affected=false" >> "$GITHUB_OUTPUT"
                 else
-                  if echo "$files" | grep -qE "$AR_PATHS_RE"; then
+                  if echo "$files" | grep -qE "$INFRA_RE|$AR_PKGS_RE"; then
                     echo "activerecord_affected=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "activerecord_affected=false" >> "$GITHUB_OUTPUT"
                   fi
-                  if echo "$files" | grep -qE "$AP_PATHS_RE"; then
+                  if echo "$files" | grep -qE "$INFRA_RE|$AP_PKGS_RE"; then
                     echo "actionpack_affected=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "actionpack_affected=false" >> "$GITHUB_OUTPUT"

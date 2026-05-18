@@ -2660,10 +2660,31 @@ describe("AssociationsTest", () => {
       parent_id: parent.id,
       parent_type: "PbtBlogPost",
     });
-    const loaded = await loadBelongsTo(child, "parent", { polymorphic: true });
+    const capturedSql: string[] = [];
+    const origExecute = adapter.execute.bind(adapter);
+    const spy = vi
+      .spyOn(adapter, "execute")
+      .mockImplementation(async (sql: string, binds?: unknown[]) => {
+        capturedSql.push(sql);
+        return origExecute(sql, binds);
+      });
+    let loaded: Base | null;
+    try {
+      loaded = await loadBelongsTo(child, "parent", { polymorphic: true });
+    } finally {
+      spy.mockRestore();
+    }
     expect(loaded).not.toBeNull();
     expect(loaded!.id).toBe(parent.id);
     expect((loaded as any).title).toBe("Parent");
+    // The composite query-constraints key must surface in the emitted SQL —
+    // proves blog_id participates in the lookup, not just parent_id.
+    const selectSql = capturedSql.find(
+      (s) => /SELECT/i.test(s) && /pbt_blog_posts/.test(s) && /WHERE/i.test(s),
+    );
+    expect(selectSql).toBeDefined();
+    expect(selectSql).toMatch(/blog_id/);
+    expect(selectSql).toMatch(/\bid\b/);
   });
   it("preloads model with query constraints by explicitly configured fk and pk", async () => {
     const adapter = freshAdapter();

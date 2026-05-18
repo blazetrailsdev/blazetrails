@@ -200,13 +200,12 @@ Sequencing rules:
 
 ### Wave 0 — single-file peripherals
 
-| PR  | Rails file                | Missing | TS file (api:compare row) | Methods                                                                                                                                                                              |
-| --- | ------------------------- | ------: | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| P2  | `metal/rate_limiting.rb`  |       2 | `metal/rate-limiting.ts`  | `rateLimit` (class DSL), `rateLimiting` (private instance). Mirror Rails options `to:`, `within:`, `by:`, `with:`, `store:`, `name:`, `only:`/`except:`. Cache backend is divergent. |
-| P3  | `form_builder.rb`         |       1 | `form-builder.ts`         | `defaultFormBuilder` — class DSL accepting builder class or string name (resolve via existing `@blazetrails/activesupport` constant resolver).                                       |
-| P4  | `metal/data_streaming.rb` |       1 | `metal/data-streaming.ts` | `sendFileHeadersBang` (`send_file_headers!`). Refactor existing `send_file`/`send_data` to delegate. RFC 6266 with both `filename="..."` ASCII fallback and `filename*=UTF-8''...`.  |
-| P7  | `metal/renderers.rb`      |       2 | `metal/renderers.ts`      | `_renderToBodyWithRenderer`, `_renderWithRendererMethodName`. Refactor existing inline dispatch logic into named methods; `Renderers.add` registration must still resolve.           |
-| P9  | `deprecator.rb`           |       3 | `deprecator.ts`           | `deprecator` (Deprecation instance), `addRenderer`, `removeRenderer` (deprecation shims delegating to Renderers registry).                                                           |
+| PR  | Rails file                | Missing | TS file (api:compare row) | Methods                                                                                                                                                                             |
+| --- | ------------------------- | ------: | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P3  | `form_builder.rb`         |       1 | `form-builder.ts`         | `defaultFormBuilder` — class DSL accepting builder class or string name (resolve via existing `@blazetrails/activesupport` constant resolver).                                      |
+| P4  | `metal/data_streaming.rb` |       1 | `metal/data-streaming.ts` | `sendFileHeadersBang` (`send_file_headers!`). Refactor existing `send_file`/`send_data` to delegate. RFC 6266 with both `filename="..."` ASCII fallback and `filename*=UTF-8''...`. |
+| P7  | `metal/renderers.rb`      |       2 | `metal/renderers.ts`      | `_renderToBodyWithRenderer`, `_renderWithRendererMethodName`. Refactor existing inline dispatch logic into named methods; `Renderers.add` registration must still resolve.          |
+| P9  | `deprecator.rb`           |       3 | `deprecator.ts`           | `deprecator` (Deprecation instance), `addRenderer`, `removeRenderer` (deprecation shims delegating to Renderers registry).                                                          |
 
 ### Wave 1 — small bundle peripherals
 

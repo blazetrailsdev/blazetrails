@@ -56,12 +56,18 @@ export interface RateLimitStore {
   ): number | null | Promise<number | null>;
 }
 
-/** In-memory `RateLimitStore` for tests and single-process apps. */
+/**
+ * In-memory `RateLimitStore` for tests and single-process apps.
+ *
+ * Expiry is checked lazily on each `increment` call for the touched key,
+ * mirroring `activesupport/cache/memory-store` (memory-store.ts:135) — this
+ * keeps the hot path O(1) regardless of how many distinct identities are
+ * tracked.
+ */
 export class MemoryRateLimitStore implements RateLimitStore {
   private _entries = new Map<string, { count: number; expiresAt: number }>();
 
   increment(key: string, amount: number, options: { expiresIn: number }): number {
-    this._cleanup();
     const now = Date.now();
     const entry = this._entries.get(key);
     if (entry && entry.expiresAt > now) {
@@ -70,13 +76,6 @@ export class MemoryRateLimitStore implements RateLimitStore {
     }
     this._entries.set(key, { count: amount, expiresAt: now + options.expiresIn * 1000 });
     return amount;
-  }
-
-  private _cleanup(): void {
-    const now = Date.now();
-    for (const [key, entry] of this._entries) {
-      if (entry.expiresAt <= now) this._entries.delete(key);
-    }
   }
 }
 

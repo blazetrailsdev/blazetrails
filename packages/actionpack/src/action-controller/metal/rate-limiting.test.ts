@@ -9,6 +9,7 @@ import {
   type RateLimitingHost,
 } from "./rate-limiting.js";
 import { Base } from "../base.js";
+import { Notifications } from "@blazetrails/activesupport";
 import type { CallbackOptions } from "../../abstract-controller/callbacks.js";
 
 describe("isRateLimited", () => {
@@ -108,6 +109,38 @@ describe("rateLimiting (instance helper)", () => {
     };
     await rateLimiting.call(host, { to: 10, within: 60, store });
     expect(host.head).toHaveBeenCalledWith(429);
+  });
+
+  it("instruments a rate_limit.action_controller event when the limit is exceeded", async () => {
+    const events: Array<{ name: string; payload: Record<string, unknown> }> = [];
+    const sub = Notifications.subscribe("rate_limit.action_controller", (event) => {
+      events.push({ name: event.name, payload: event.payload });
+    });
+    try {
+      const store: RateLimitStore = { increment: () => 11 };
+      const request = { remoteIp: "1.2.3.4" };
+      const host: RateLimitingHost = { controllerPath: "api", request, head: vi.fn() };
+      await rateLimiting.call(host, { to: 10, within: 60, store });
+      expect(events).toHaveLength(1);
+      expect(events[0].name).toBe("rate_limit.action_controller");
+      expect(events[0].payload.request).toBe(request);
+      expect(host.head).toHaveBeenCalledWith(429);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+  });
+
+  it("does not instrument when the limit is not exceeded", async () => {
+    const events: unknown[] = [];
+    const sub = Notifications.subscribe("rate_limit.action_controller", (e) => events.push(e));
+    try {
+      const store: RateLimitStore = { increment: () => 1 };
+      const host: RateLimitingHost = { request: { remoteIp: "x" }, head: vi.fn() };
+      await rateLimiting.call(host, { to: 10, within: 60, store });
+      expect(events).toHaveLength(0);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
   });
 
   it("does nothing when store.increment returns null", async () => {

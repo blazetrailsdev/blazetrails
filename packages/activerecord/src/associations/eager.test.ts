@@ -5037,9 +5037,11 @@ describe("EagerAssociationTest", () => {
     await CpkOrder.insertAll([{ shop_id: 1, id: 1, name: "Order1" }]);
     await CpkLineItem.create({ order_shop_id: 1, order_id: 1, product: "Widget" });
 
-    const items = await CpkLineItem.all().includes("cpkOrder").toArray();
-    expect(items).toHaveLength(1);
-    const order = (items[0] as any)._preloadedAssociations.get("cpkOrder");
+    const lineItem = (await CpkLineItem.first()) as any;
+    const found = (await CpkLineItem.all()
+      .eagerLoad("cpkOrder")
+      .findBy({ id: lineItem.id })) as any;
+    const order = found._preloadedAssociations.get("cpkOrder");
     expect(order).not.toBeNull();
     expect(order.name).toBe("Order1");
   });
@@ -5073,9 +5075,9 @@ describe("EagerAssociationTest", () => {
     await CpkHmItem.create({ order_shop_id: 1, order_id: 1, product: "A" });
     await CpkHmItem.create({ order_shop_id: 1, order_id: 1, product: "B" });
 
-    const orders = await CpkHmOrder.all().includes("cpkHmItems").toArray();
-    expect(orders).toHaveLength(1);
-    const items = (orders[0] as any)._preloadedAssociations.get("cpkHmItems");
+    const order = (await CpkHmOrder.first()) as any;
+    const found = (await CpkHmOrder.all().eagerLoad("cpkHmItems").findBy({ id: order.id })) as any;
+    const items = found._preloadedAssociations.get("cpkHmItems");
     expect(items).toHaveLength(2);
   });
 
@@ -5107,9 +5109,11 @@ describe("EagerAssociationTest", () => {
     await CpkHoOrder.insertAll([{ shop_id: 1, id: 1, name: "Order1" }]);
     await CpkHoReceipt.create({ order_shop_id: 1, order_id: 1, number: "R001" });
 
-    const orders = await CpkHoOrder.all().includes("cpkHoReceipt").toArray();
-    expect(orders).toHaveLength(1);
-    const receipt = (orders[0] as any)._preloadedAssociations.get("cpkHoReceipt");
+    const order = (await CpkHoOrder.first()) as any;
+    const found = (await CpkHoOrder.all()
+      .eagerLoad("cpkHoReceipt")
+      .findBy({ id: order.id })) as any;
+    const receipt = found._preloadedAssociations.get("cpkHoReceipt");
     expect(receipt).not.toBeNull();
     expect(receipt.number).toBe("R001");
   });

@@ -75,17 +75,24 @@ describe("contentSecurityPolicy class DSL", () => {
     expect(controller.request.contentSecurityPolicy).toBeNull();
   });
 
-  it("treats a first-positional options object as enabled=true (Rails kwargs shape)", async () => {
+  it("treats a first-positional options object as enabled=true and accepts a block in arg 2 (Rails kwargs shape)", async () => {
     const controller = makeController(null);
-    contentSecurityPolicy.call(
-      host,
-      { only: ["show"] },
-      undefined as unknown as CallbackOptions,
-      function (policy) {
-        policy.defaultSrc(":self");
-      },
-    );
+    let blockRan = false;
+    contentSecurityPolicy.call(host, { only: ["show"] }, function (policy) {
+      blockRan = true;
+      policy.defaultSrc(":self");
+    });
     expect(registered[0].options).toEqual({ only: ["show"] });
+    await registered[0].callback(controller);
+    expect(blockRan).toBe(true);
+    expect(controller.request.contentSecurityPolicy).toBeInstanceOf(Policy);
+  });
+
+  it("accepts a block-only form (no enabled, no options)", async () => {
+    const controller = makeController(null);
+    contentSecurityPolicy.call(host, function (policy) {
+      policy.defaultSrc(":self");
+    });
     await registered[0].callback(controller);
     expect(controller.request.contentSecurityPolicy).toBeInstanceOf(Policy);
   });

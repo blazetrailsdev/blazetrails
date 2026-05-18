@@ -65,25 +65,35 @@ interface ContentSecurityPolicyInstanceHost {
  */
 export function contentSecurityPolicy(
   this: ContentSecurityPolicyClassHost,
-  enabled: boolean | CallbackOptions = true,
-  options: CallbackOptions = {},
+  enabled: boolean | CallbackOptions | ContentSecurityPolicyBlock = true,
+  options: CallbackOptions | ContentSecurityPolicyBlock = {},
   block?: ContentSecurityPolicyBlock,
 ): void {
   let resolvedEnabled: boolean;
   let resolvedOptions: CallbackOptions;
+  let resolvedBlock: ContentSecurityPolicyBlock | undefined;
   if (typeof enabled === "boolean") {
+    // (enabled, options, block) — Rails canonical positional form
     resolvedEnabled = enabled;
-    resolvedOptions = options;
+    resolvedOptions = typeof options === "function" ? {} : options;
+    resolvedBlock = typeof options === "function" ? options : block;
+  } else if (typeof enabled === "function") {
+    // (block) — block-only form
+    resolvedEnabled = true;
+    resolvedOptions = {};
+    resolvedBlock = enabled;
   } else {
+    // (options, block) — Rails kwargs-leading form, e.g. `content_security_policy(only: :index) do ... end`
     resolvedEnabled = true;
     resolvedOptions = enabled;
+    resolvedBlock = typeof options === "function" ? options : block;
   }
   this.beforeAction(function (controller: unknown) {
     const host = controller as ContentSecurityPolicyInstanceHost;
-    if (block) {
+    if (resolvedBlock) {
       const resolveCurrent = host.currentContentSecurityPolicy ?? currentContentSecurityPolicy;
       const policy = resolveCurrent.call(host);
-      block.call(controller, policy);
+      resolvedBlock.call(controller, policy);
       host.request.contentSecurityPolicy = policy;
     }
     if (!resolvedEnabled) {

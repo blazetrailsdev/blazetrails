@@ -406,14 +406,24 @@ export class Base extends Metal {
    */
   static contentSecurityPolicyReportOnly = contentSecurityPolicyReportOnly;
 
+  /**
+   * Defined as prototype methods (not instance fields) so subclasses can
+   * override via the normal class-method syntax — the DSL dispatches through
+   * `this.currentContentSecurityPolicy` (content-security-policy.ts:80) for
+   * Rails parity (content_security_policy.rb:42 resolves via `self`).
+   */
   /** @internal Private in Rails; exposed for parity coverage. */
-  isContentSecurityPolicy = isContentSecurityPolicy;
-
+  isContentSecurityPolicy(): boolean {
+    return isContentSecurityPolicy.call(this as never);
+  }
   /** @internal Private in Rails; exposed for parity coverage. */
-  contentSecurityPolicyNonce = contentSecurityPolicyNonce;
-
+  contentSecurityPolicyNonce(): string | null {
+    return contentSecurityPolicyNonce.call(this as never);
+  }
   /** @internal Private in Rails; exposed for parity coverage. */
-  currentContentSecurityPolicy = currentContentSecurityPolicy;
+  currentContentSecurityPolicy(): ReturnType<typeof currentContentSecurityPolicy> {
+    return currentContentSecurityPolicy.call(this as never);
+  }
 
   /**
    * Apply a rate limit to all actions (or those selected by `only:`/`except:`).

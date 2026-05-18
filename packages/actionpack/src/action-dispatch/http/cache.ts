@@ -133,6 +133,10 @@ export function parseRfc2822Date(s: string | undefined): Date | undefined {
   let year = Number(yr);
   if (year < 50) year += 2000;
   else if (year < 1000) year += 1900;
+  // Round-trip-validate calendar day (rejects 31 Feb, 30 Feb, etc.).
+  // boundary: probe Date used only to read normalized UTC components.
+  const probe = new Date(Date.UTC(year, MONTHS[mon], d));
+  if (probe.getUTCMonth() !== MONTHS[mon] || probe.getUTCDate() !== d) return undefined;
   let offsetMin = 0;
   if (/^[+-]\d{4}$/.test(zone)) {
     const oh = Number(zone.slice(1, 3));
@@ -171,7 +175,12 @@ export function parseHttpDate(s: string | undefined): Date | undefined {
     s2 = Number(ss);
   // Rails' Time.httpdate raises ArgumentError on out-of-range components.
   if (d < 1 || d > 31 || h > 23 || mi > 59 || s2 > 60) return undefined;
-  const t = Date.UTC(Number(year), MONTHS[mon], d, h, mi, s2);
+  const yr = Number(year);
+  // Round-trip-validate calendar day (rejects 31 Feb, 30 Feb, etc.).
+  // boundary: probe Date used only to read normalized UTC components.
+  const probe = new Date(Date.UTC(yr, MONTHS[mon], d));
+  if (probe.getUTCMonth() !== MONTHS[mon] || probe.getUTCDate() !== d) return undefined;
+  const t = Date.UTC(yr, MONTHS[mon], d, h, mi, s2);
   // boundary: HTTP-date wire-format header value parsed as JS Date.
   return Number.isNaN(t) ? undefined : new Date(t);
 }

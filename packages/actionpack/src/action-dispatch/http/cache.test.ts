@@ -5,6 +5,7 @@ import {
   fresh,
   generateStrongEtag,
   generateWeakEtag,
+  getLastModified,
   handleConditionalGet,
   isWeakEtag,
   mergeAndNormalizeCacheControl,
@@ -65,6 +66,37 @@ describe("Cache::Request", () => {
 });
 
 describe("Cache::Response", () => {
+  it("last_modified parses strict RFC 1123 (Time.httpdate parity)", () => {
+    expect(getLastModified.call(res({ "Last-Modified": "Sun, 06 Nov 1994 08:49:37 GMT" }))).toEqual(
+      new Date("1994-11-06T08:49:37Z"),
+    );
+  });
+
+  it("last_modified rejects RFC 850 / asctime / numeric-zone forms (httpdate is strict)", () => {
+    // RFC 850 form
+    expect(
+      getLastModified.call(res({ "Last-Modified": "Sunday, 06-Nov-94 08:49:37 GMT" })),
+    ).toBeUndefined();
+    // asctime form
+    expect(
+      getLastModified.call(res({ "Last-Modified": "Sun Nov  6 08:49:37 1994" })),
+    ).toBeUndefined();
+    // Numeric zone offset — valid RFC 2822 but rejected by Time.httpdate
+    expect(
+      getLastModified.call(res({ "Last-Modified": "Sun, 06 Nov 1994 08:49:37 -0500" })),
+    ).toBeUndefined();
+  });
+
+  it("last_modified rejects out-of-range and impossible-calendar values", () => {
+    expect(
+      getLastModified.call(res({ "Last-Modified": "Sun, 99 Nov 1994 08:49:37 GMT" })),
+    ).toBeUndefined();
+    // 31 Feb — Date.UTC would silently roll into March
+    expect(
+      getLastModified.call(res({ "Last-Modified": "Tue, 31 Feb 2015 08:49:37 GMT" })),
+    ).toBeUndefined();
+  });
+
   it("etag= sets weak validator", () => {
     const h: Record<string, string> = {};
     setEtag.call(res(h), "foo");

@@ -82,6 +82,56 @@ describe("DebugLocks", () => {
     expect(res[1]["content-type"]).toBe("text/plain; charset=utf-8");
   });
 
+  it("blocks a start_sharing sleeper when blocker holds exclusive", async () => {
+    setInterlock([
+      [thread(1), { sleeper: "start_sharing", sharing: 0 }],
+      [thread(2), { exclusive: true, sharing: 0 }],
+    ]);
+    const res = await new DebugLocks(passthrough).call({
+      REQUEST_METHOD: "GET",
+      PATH_INFO: "/rails/locks",
+    });
+    const body = await bodyToString(res[2]);
+    expect(body).toMatch(/Thread 0[\s\S]*?blocked by: 1/);
+  });
+
+  it("blocks a yield_shares sleeper only on exclusive blockers", async () => {
+    setInterlock([
+      [thread(1), { sleeper: "yield_shares", sharing: 0 }],
+      [thread(2), { sharing: 1 }],
+      [thread(3), { exclusive: true, sharing: 0 }],
+    ]);
+    const res = await new DebugLocks(passthrough).call({
+      REQUEST_METHOD: "GET",
+      PATH_INFO: "/rails/locks",
+    });
+    const body = await bodyToString(res[2]);
+    expect(body).toMatch(/Thread 0[\s\S]*?blocked by: 2\n/);
+  });
+
+  it("blocks a stop_exclusive sleeper via compatible/purpose chain", async () => {
+    setInterlock([
+      [thread(1), { sleeper: "stop_exclusive", sharing: 0, compatible: ["load"] }],
+      [thread(2), { sharing: 0, purpose: "load", compatible: ["load"] }],
+    ]);
+    const res = await new DebugLocks(passthrough).call({
+      REQUEST_METHOD: "GET",
+      PATH_INFO: "/rails/locks",
+    });
+    const body = await bodyToString(res[2]);
+    expect(body).toMatch(/Thread 0[\s\S]*?blocked by: 1/);
+  });
+
+  it("renders 'dead' for a thread with falsy status", async () => {
+    setInterlock([[{ id: 0x5, status: false, backtrace: () => null }, { sharing: 0 }]]);
+    const res = await new DebugLocks(passthrough).call({
+      REQUEST_METHOD: "GET",
+      PATH_INFO: "/rails/locks",
+    });
+    const body = await bodyToString(res[2]);
+    expect(body).toContain("Thread 0 [0x5 dead]");
+  });
+
   it("throws when no interlock is configured", async () => {
     DebugLocks.interlock = null;
     const mw = new DebugLocks(passthrough);

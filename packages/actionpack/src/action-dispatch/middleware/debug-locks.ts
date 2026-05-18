@@ -12,7 +12,12 @@ import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
 import { Request } from "../http/request.js";
 
 export interface ThreadLike {
-  status: string | null;
+  /**
+   * Mirrors Ruby's `Thread#status`: "run" | "sleep" | "aborting" | false (terminated
+   * with exception) | nil (terminated normally). The middleware renders falsy as "dead",
+   * mirroring `thread.status || 'dead'` in the Ruby source.
+   */
+  status: string | false | null;
   backtrace(): string[] | null;
   id: number;
 }
@@ -21,7 +26,7 @@ export interface ThreadInfo {
   exclusive?: boolean;
   sharing?: number;
   waiting?: boolean;
-  sleeper?: string | symbol | null;
+  sleeper?: string | null;
   purpose?: unknown;
   compatible?: Array<unknown> | null;
   index?: number;
@@ -103,7 +108,7 @@ export class DebugLocks {
         lockState += " (yielded share)";
       }
 
-      const status = thread.status ?? "dead";
+      const status = thread.status || "dead";
       let msg = `Thread ${info.index} [0x${thread.id.toString(16)} ${status}]  ${lockState}\n`;
 
       if (info.sleeper) {

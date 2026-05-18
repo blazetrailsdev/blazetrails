@@ -43,9 +43,14 @@ export type DispatcherCallback = (
  */
 export class Dispatcher extends Endpoint {
   private readonly _raiseOnNameError: boolean;
-  private readonly _registry: DispatcherRegistry;
+  // Optional, mirroring the Rails Dispatcher whose only ivar is
+  // `@raise_on_name_error` — controller resolution flows through
+  // `req.controller_class`. Trails has no AC port, so the general-purpose
+  // resolver consults a {@link DispatcherRegistry}; subclasses that bind
+  // a handler directly (e.g. {@link StaticDispatcher}) leave it undefined.
+  private readonly _registry: DispatcherRegistry | undefined;
 
-  constructor(raiseOnNameError: boolean, registry: DispatcherRegistry) {
+  constructor(raiseOnNameError: boolean, registry?: DispatcherRegistry) {
     super();
     this._raiseOnNameError = raiseOnNameError;
     this._registry = registry;
@@ -71,6 +76,7 @@ export class Dispatcher extends Endpoint {
 
   /** @internal */
   protected _controller(req: RouterRequest): DispatchHandler | undefined {
+    if (!this._registry) return undefined;
     const params = req.pathParameters as Record<string, unknown>;
     const controller = typeof params["controller"] === "string" ? params["controller"] : "";
     return this._registry.resolve(controller);
@@ -96,7 +102,9 @@ export class StaticDispatcher extends Dispatcher {
   private readonly _handler: DispatchHandler;
 
   constructor(handler: DispatchHandler) {
-    super(false, new DispatcherRegistry());
+    // raise_on_name_error always false (mapper.rb:297); no registry —
+    // `_controller` returns the bound handler directly.
+    super(false);
     this._handler = handler;
   }
 

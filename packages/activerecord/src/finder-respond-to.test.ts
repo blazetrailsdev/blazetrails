@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { Base, RecordNotFound } from "./index.js";
 import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
@@ -15,6 +15,12 @@ beforeAll(async () => {
   await defineSchema(adapter, {
     topics: { title: "string", author_name: "string", status: "string" },
   });
+});
+withTransactionalFixtures(() => adapter);
+
+// Recreate the model per test so a test that mutates the class (adds an
+// attribute, primes a finder cache, etc.) can't leak into later tests.
+beforeEach(() => {
   Topic = class extends Base {
     static {
       this.attribute("title", "string");
@@ -23,7 +29,6 @@ beforeAll(async () => {
     }
   };
 });
-withTransactionalFixtures(() => adapter);
 
 describe("FinderRespondToTest", () => {
   it("should preserve normal respond to behavior on base", () => {

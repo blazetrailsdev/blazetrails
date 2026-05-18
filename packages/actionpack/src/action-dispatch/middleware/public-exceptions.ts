@@ -75,7 +75,7 @@ export class PublicExceptions {
   }
 
   private renderFormat(status: number, contentType: MimeType, body: string): RackResponse {
-    const bytes = Buffer.byteLength(body, "utf8");
+    const bytes = Buffer.byteLength(body, "utf-8");
     return [
       status,
       {

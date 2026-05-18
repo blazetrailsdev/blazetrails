@@ -2,12 +2,14 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { I18n } from "@blazetrails/activesupport";
 import { bodyToString } from "@blazetrails/rack";
 import { X_CASCADE } from "../constants.js";
 import { PublicExceptions } from "../middleware/public-exceptions.js";
 
 let publicPath: string;
 let app: PublicExceptions;
+let priorLocale: string;
 
 beforeAll(() => {
   publicPath = mkdtempSync(path.join(tmpdir(), "public-exceptions-"));
@@ -15,10 +17,13 @@ beforeAll(() => {
   writeFileSync(path.join(publicPath, "404.html"), "<h1>404</h1>");
   writeFileSync(path.join(publicPath, "500.html"), "<h1>500</h1>");
   writeFileSync(path.join(publicPath, "404.en.html"), "<h1>404 en</h1>");
+  priorLocale = I18n.locale;
+  I18n.locale = "en";
   app = new PublicExceptions(publicPath);
 });
 
 afterAll(() => {
+  I18n.locale = priorLocale;
   rmSync(publicPath, { recursive: true, force: true });
 });
 

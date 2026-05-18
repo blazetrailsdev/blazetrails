@@ -998,6 +998,10 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   async isEmpty(): Promise<boolean> {
     if (this._targetLoaded) return this._target.length === 0;
     if (this._target.length > 0) return false;
+    // Through associations currently load the full target in #exists; fall
+    // back to a COUNT query so isEmpty stays non-loading. Mirrors Rails'
+    // intent that `empty?` not materialize the collection when unloaded.
+    if (this._isThrough) return (await this.count()) === 0;
     return !(await this.exists());
   }
 

@@ -9,6 +9,7 @@ import {
   Notifications,
   getAsyncContext,
   type AsyncContext,
+  type AsyncContextAdapter,
   type NotificationSubscriber,
   type NotificationEvent as Event,
 } from "@blazetrails/activesupport";
@@ -20,13 +21,19 @@ export class Subscriber {
   private static _instance: Subscriber | null = null;
   private _subscriber: NotificationSubscriber | null = null;
   private _context: AsyncContext<Event[]> | null = null;
+  private _contextAdapter: AsyncContextAdapter | null = null;
 
   static instance(): Subscriber {
     return (this._instance ??= new Subscriber());
   }
 
   private _events(): AsyncContext<Event[]> {
-    return (this._context ??= getAsyncContext().create<Event[]>());
+    const adapter = getAsyncContext();
+    if (!this._context || this._contextAdapter !== adapter) {
+      this._contextAdapter = adapter;
+      this._context = adapter.create<Event[]>();
+    }
+    return this._context;
   }
 
   call(event: Event): void {

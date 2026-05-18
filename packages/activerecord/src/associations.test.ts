@@ -2645,6 +2645,11 @@ describe("AssociationsTest", () => {
         this.attribute("title", "string");
         this.attribute("parent_id", "integer");
         this.attribute("parent_type", "string");
+        // Match Rails sharded_blog_posts: single auto-increment PK; the
+        // composite key is enforced at the model layer via query_constraints
+        // only. derive_fk_query_constraints in Rails reflection.rb:865-868
+        // depends on primary_key being a string for the first_key/last_key
+        // comparison, so an array PK would break the FK derivation entirely.
         this.adapter = adapter;
         (this as any)._queryConstraintsList = ["blog_id", "id"];
         (this as any)._hasQueryConstraints = true;
@@ -2660,31 +2665,22 @@ describe("AssociationsTest", () => {
       parent_id: parent.id,
       parent_type: "PbtBlogPost",
     });
-    const capturedSql: string[] = [];
-    const origExecute = adapter.execute.bind(adapter);
-    const spy = vi
-      .spyOn(adapter, "execute")
-      .mockImplementation(async (sql: string, binds?: unknown[]) => {
-        capturedSql.push(sql);
-        return origExecute(sql, binds);
-      });
-    let loaded: Base | null;
-    try {
-      loaded = await loadBelongsTo(child, "parent", { polymorphic: true });
-    } finally {
-      spy.mockRestore();
-    }
+    const loaded = await loadBelongsTo(child, "parent", { polymorphic: true });
     expect(loaded).not.toBeNull();
     expect(loaded!.id).toBe(parent.id);
     expect((loaded as any).title).toBe("Parent");
-    // The composite query-constraints key must surface in the emitted SQL —
-    // proves blog_id participates in the lookup, not just parent_id.
-    const selectSql = capturedSql.find(
-      (s) => /SELECT/i.test(s) && /pbt_blog_posts/.test(s) && /WHERE/i.test(s),
-    );
-    expect(selectSql).toBeDefined();
-    expect(selectSql).toMatch(/blog_id/);
-    expect(selectSql).toMatch(/\bid\b/);
+    // Cross-tenant negative case: a child in blog 2 pointing at parent_id=10
+    // must NOT resolve to the blog-1 parent — proves blog_id participates
+    // (a buggy lookup using only parent_id would return the blog-1 parent).
+    const fakeChild = await PbtBlogPost.create({
+      blog_id: 2,
+      id: 12,
+      title: "WrongTenant",
+      parent_id: parent.id,
+      parent_type: "PbtBlogPost",
+    });
+    const wrong = await loadBelongsTo(fakeChild, "parent", { polymorphic: true });
+    expect(wrong).toBeNull();
   });
   it("preloads model with query constraints by explicitly configured fk and pk", async () => {
     const adapter = freshAdapter();

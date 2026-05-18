@@ -291,7 +291,7 @@ describe("ErrorTest", () => {
   // Rails error.rb:51-55: strip array notation, then pass full dotted attribute
   // to human_attribute_name with `attribute.tr(".", "_").humanize` as the default —
   // so the prefix segment is preserved when no translation matches.
-  it("fullMessage strips array notation but preserves dotted prefix in humanized default", () => {
+  it("fullMessage strips array notation from attribute", () => {
     const e = new Errors(null);
     e.add("items[0].name", "blank");
     const msg = e.fullMessages[0];
@@ -299,7 +299,7 @@ describe("ErrorTest", () => {
     expect(msg).not.toContain("[0]");
   });
 
-  it("fullMessage humanizes the full dotted attribute when no translation matches", () => {
+  it("fullMessage uses last segment of dotted attribute", () => {
     const e = new Errors(null);
     e.add("profile.bio", "blank");
     const msg = e.fullMessages[0];

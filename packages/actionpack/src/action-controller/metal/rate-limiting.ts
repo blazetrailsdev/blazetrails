@@ -9,8 +9,20 @@
 import { Notifications } from "@blazetrails/activesupport";
 import type { CallbackOptions } from "../../abstract-controller/callbacks.js";
 
-/** Options accepted by the `rateLimit` class DSL. */
-export interface RateLimitOptions {
+/**
+ * Options accepted by the `rateLimit` class DSL.
+ *
+ * The generic `TController` parameter widens the `this` type seen inside
+ * `by`/`with` callbacks. Rails runs them via `instance_exec`, so callbacks
+ * can reach params/session/request — pass your controller class type to
+ * surface that API without casts:
+ *
+ *     PostsController.rateLimit<PostsController>({
+ *       to: 10, within: 60,
+ *       by() { return this.request.headers["x-api-key"] ?? this.request.remoteIp; },
+ *     });
+ */
+export interface RateLimitOptions<TController = RateLimitingHost> {
   /** Maximum number of requests allowed within the window. */
   to: number;
   /** Window length in seconds (Rails uses `ActiveSupport::Duration`). */
@@ -19,12 +31,13 @@ export interface RateLimitOptions {
    * Per-request identity function. Default is the remote IP. Invoked with
    * the controller as `this`, matching Rails' `instance_exec(&by)`.
    */
-  by?: (this: RateLimitingHost) => string | null | undefined;
+  by?: (this: TController) => string | null | undefined;
   /**
    * Action to take when the limit is exceeded. Invoked with the controller
-   * as `this`. Defaults to `head(429)`.
+   * as `this`. Defaults to `head(429)`. Matches Rails' Symbol/Integer status
+   * shape: `this.head("too_many_requests")` is valid.
    */
-  with?: (this: RateLimitingHost) => void | Promise<void>;
+  with?: (this: TController) => void | Promise<void>;
   /** Cache backend used to count requests. Defaults to the host's cacheStore. */
   store?: RateLimitStore;
   /** Distinct name when multiple rate limits are stacked on one controller. */
@@ -62,11 +75,13 @@ export interface RateLimitStore {
  * Expiry is checked lazily on each `increment` for the touched key, matching
  * `activesupport/cache/memory-store` (memory-store.ts:135). To prevent
  * unbounded growth from one-off identities, the store also sweeps expired
- * entries once the map crosses `_PRUNE_BASELINE` (1024). If the sweep frees
- * space, the threshold resets to the baseline — so subsequent low-volume
- * workloads don't carry stale entries past the next baseline. Only when a
- * sweep fails to free space (every entry still live) does the threshold
- * double, amortizing the O(N) walk against the next burst.
+ * entries once the map crosses `_pruneThreshold` (starts at 1024). After a
+ * sweep, the next threshold tracks current load: if the sweep freed space,
+ * it's set to `max(baseline, liveCount * 2)` — proportional to remaining
+ * entries, so post-burst the cadence relaxes only as far as the live load
+ * warrants and drops back to the baseline once load recedes. If the sweep
+ * freed nothing (every entry still live), the threshold doubles to
+ * amortize the O(N) walk against the next burst.
  */
 export class MemoryRateLimitStore implements RateLimitStore {
   private static readonly _PRUNE_BASELINE = 1024;
@@ -117,6 +132,17 @@ export interface RateLimitingClassHost {
   /**
    * Mirrors the existing `cacheStore?: ... | null` convention on
    * AbstractController caching/fragments (caching.ts:35, fragments.ts:24).
+   *
+   * NOTE: The Rails `cache_store` slot is normally an
+   * `ActiveSupport::Cache::Store`, but for rate limiting it must satisfy the
+   * stricter `RateLimitStore` contract — `expiresIn` in **seconds** and a
+   * counter initialized to `amount` on first call (Redis/Memcached
+   * behavior). The in-memory activesupport cache (`@blazetrails/activesupport`
+   * `MemoryStore`) uses millisecond `expiresIn` and returns `null` for
+   * missing keys, so plugging it in here will silently disable enforcement
+   * (matches Rails — same caveat applies to `ActiveSupport::Cache::MemoryStore`
+   * upstream). See the "RateLimiting" entry in
+   * docs/actioncontroller-100-percent.md "Known divergences".
    */
   cacheStore?: RateLimitStore | null;
 }
@@ -133,7 +159,12 @@ export interface RateLimitingHost {
    */
   controllerPath?: string | (() => string);
   request?: { remoteIp?: string | null };
-  head?: (status: number) => void;
+  /**
+   * `Metal#head` accepts numeric statuses and Rails-style symbol names
+   * (`"too_many_requests"`) — see action-controller/metal.ts:223. Keep this
+   * type aligned so `with() { this.head("too_many_requests") }` typechecks.
+   */
+  head?: (status: number | string) => void;
 }
 
 /**
@@ -150,7 +181,10 @@ export interface RateLimitingHost {
  *       }, **options
  *     end
  */
-export function rateLimit(this: RateLimitingClassHost, options: RateLimitOptions): void {
+export function rateLimit<TController extends RateLimitingHost = RateLimitingHost>(
+  this: RateLimitingClassHost,
+  options: RateLimitOptions<TController>,
+): void {
   const {
     to,
     within,
@@ -181,8 +215,8 @@ export function rateLimit(this: RateLimitingClassHost, options: RateLimitOptions
     await rateLimiting.call(controller, {
       to,
       within,
-      by,
-      with: withCallback,
+      by: by as ((this: RateLimitingHost) => string | null | undefined) | undefined,
+      with: withCallback as ((this: RateLimitingHost) => void | Promise<void>) | undefined,
       store: resolvedStore,
       name,
     });

@@ -28,7 +28,8 @@ export class Renderers {
    * Returns the conventional dispatch method name for a renderer key.
    */
   static _renderWithRendererMethodName(key: string | symbol): string {
-    return `_render_with_renderer_${String(key)}`;
+    const suffix = typeof key === "symbol" ? (key.description ?? "") : key;
+    return `_render_with_renderer_${suffix}`;
   }
 
   static add(key: string, block: RendererProc): void {

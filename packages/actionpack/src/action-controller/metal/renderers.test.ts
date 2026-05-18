@@ -12,7 +12,7 @@ describe("Renderers", () => {
   test("_renderWithRendererMethodName uses Rails convention", () => {
     expect(Renderers._renderWithRendererMethodName("csv")).toBe("_render_with_renderer_csv");
     expect(Renderers._renderWithRendererMethodName(Symbol("json"))).toBe(
-      "_render_with_renderer_Symbol(json)",
+      "_render_with_renderer_json",
     );
   });
 

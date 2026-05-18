@@ -1182,8 +1182,8 @@ describe("Rails-guided: migrations", () => {
 describe("MigrationTest", () => {
   let adapter: DatabaseAdapter;
 
-  beforeEach(async () => {
-    adapter = await freshAdapterWithSchema();
+  beforeEach(() => {
+    adapter = freshAdapter();
   });
 
   it("migration version matches component version", () => {
@@ -1193,13 +1193,18 @@ describe("MigrationTest", () => {
   });
 
   it("create table raises if already exists", async () => {
+    // Body-level Rails fidelity (second createTable should raise per
+    // activerecord/test/cases/migration_test.rb:158) is blocked by the
+    // shared test adapter, which rewrites every CREATE TABLE into
+    // CREATE TABLE IF NOT EXISTS (test-adapter.ts:812-814). Until that
+    // rewrite is gated, this stays a smoke test for create-then-insert.
+    const adp = await freshAdapterWithSchema();
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
+        this.adapter = adp;
       }
     }
-    // Creating a record works fine
     const post = await Post.create({ title: "first" });
     expect(post.id).toBeDefined();
   });
@@ -1230,10 +1235,11 @@ describe("MigrationTest", () => {
   });
 
   it("instance based migration up", async () => {
+    const adp = await freshAdapterWithSchema();
     class Event extends Base {
       static {
         this.attribute("name", "string");
-        this.adapter = adapter;
+        this.adapter = adp;
       }
     }
     const event = await Event.create({ name: "launch" });
@@ -1242,10 +1248,11 @@ describe("MigrationTest", () => {
   });
 
   it("instance based migration down", async () => {
+    const adp = await freshAdapterWithSchema();
     class Event extends Base {
       static {
         this.attribute("name", "string");
-        this.adapter = adapter;
+        this.adapter = adp;
       }
     }
     const event = await Event.create({ name: "launch" });

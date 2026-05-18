@@ -31,7 +31,44 @@ import {
   type NullType,
 } from "./mime-negotiation.js";
 import type { MimeType } from "./mime-type.js";
+import {
+  filteredEnv as _filteredEnv,
+  filteredParameters as _filteredParameters,
+  filteredPath as _filteredPath,
+  parameterFilter as _parameterFilter,
+} from "./filter-parameters.js";
+import type { ParameterFilter } from "@blazetrails/activesupport";
 import { RequestUtils, type ParamValue } from "../request/utils.js";
+
+const HTTP_HEADER_NAME = /^[A-Za-z0-9-]+$/;
+const CGI_VARIABLES: ReadonlySet<string> = new Set([
+  "AUTH_TYPE",
+  "CONTENT_LENGTH",
+  "CONTENT_TYPE",
+  "GATEWAY_INTERFACE",
+  "HTTPS",
+  "PATH_INFO",
+  "PATH_TRANSLATED",
+  "QUERY_STRING",
+  "REMOTE_ADDR",
+  "REMOTE_HOST",
+  "REMOTE_IDENT",
+  "REMOTE_USER",
+  "REQUEST_METHOD",
+  "SCRIPT_NAME",
+  "SERVER_NAME",
+  "SERVER_PORT",
+  "SERVER_PROTOCOL",
+  "SERVER_SOFTWARE",
+]);
+
+function envName(key: string): string {
+  if (HTTP_HEADER_NAME.test(key)) {
+    const upper = key.toUpperCase().replace(/-/g, "_");
+    return CGI_VARIABLES.has(upper) ? upper : `HTTP_${upper}`;
+  }
+  return key;
+}
 
 export class Request {
   readonly env: RackEnv;
@@ -267,6 +304,13 @@ export class Request {
     _setIgnoreAcceptHeader(value);
   }
 
+  // --- Filter Parameters (ActionDispatch::Http::FilterParameters) ---
+  declare filteredParameters: () => Record<string, unknown>;
+  declare filteredEnv: () => Record<string, unknown>;
+  declare filteredPath: () => string;
+  declare parameterFilter: () => ParameterFilter;
+
+
   // --- Request type checks ---
 
   get isXmlHttpRequest(): boolean {
@@ -460,11 +504,45 @@ export class Request {
 
   // --- Header access ---
 
-  /** Get an HTTP header value by name (case-insensitive). */
+  /**
+   * Returns the value for the given key mapped to the env. HTTP-header-style
+   * names (alphanumerics + dashes) are converted to their CGI/Rack env name —
+   * `"Content-Type" → "CONTENT_TYPE"`, `"If-None-Match" → "HTTP_IF_NONE_MATCH"`
+   * — to mirror `ActionDispatch::Http::Headers#[]`. Keys that don't match the
+   * pattern (e.g. `"action_dispatch.parameter_filter"`) pass through to the
+   * env unchanged, mirroring `Request#get_header`.
+   */
   getHeader(name: string): string | undefined {
-    // Rack convention: HTTP headers are stored as HTTP_UPPER_SNAKE
-    const key = "HTTP_" + name.toUpperCase().replace(/-/g, "_");
-    return this.env[key] as string | undefined;
+    return this.env[envName(name)] as string | undefined;
+  }
+
+  /** Returns true if the env has a value for `name`. Mirrors `has_header?`. */
+  hasHeader(name: string): boolean {
+    return Object.prototype.hasOwnProperty.call(this.env, envName(name));
+  }
+
+  /** Sets `name` on the env. Returns the assigned value. Mirrors `set_header`. */
+  setHeader(name: string, value: unknown): unknown {
+    this.env[envName(name)] = value;
+    return value;
+  }
+
+  /** Deletes `name` from the env. Mirrors `delete_header`. */
+  deleteHeader(name: string): void {
+    delete this.env[envName(name)];
+  }
+
+  /**
+   * Returns the value for `name`, or invokes `fallback` with the key when
+   * absent. Mirrors `fetch_header`, which yields the key on miss.
+   */
+  fetchHeader<T = unknown>(name: string): unknown;
+  fetchHeader<T>(name: string, fallback: (key: string) => T): unknown | T;
+  fetchHeader<T>(name: string, fallback?: (key: string) => T): unknown | T {
+    const key = envName(name);
+    if (Object.prototype.hasOwnProperty.call(this.env, key)) return this.env[key];
+    if (fallback) return fallback(key);
+    throw new Error(`key not found: ${name}`);
   }
 
   // --- Inspect ---
@@ -575,3 +653,10 @@ Request.prototype.setFormat = function (this: Request, extension: unknown) {
 Request.prototype.setFormats = function (this: Request, extensions: unknown[]) {
   _setFormats.call(mimeHost(this), extensions);
 };
+
+// Mix in ActionDispatch::Http::FilterParameters. The mixin reads the merged
+// param hash via the host's `params` getter (already defined on `Request`).
+Request.prototype.filteredParameters = _filteredParameters;
+Request.prototype.filteredEnv = _filteredEnv;
+Request.prototype.filteredPath = _filteredPath;
+Request.prototype.parameterFilter = _parameterFilter;

@@ -3173,9 +3173,12 @@ describe("EagerAssociationTest", () => {
   });
 
   it.skip("exceptions have suggestions for fix", async () => {
-    // BLOCKED: associations — includes("nonexistent_assoc") does not raise
-    // ROOT-CAUSE: associations/preloader.ts: missing AssociationNotFoundError on unknown association name
-    // SCOPE: ~30 LOC fix in preloader.ts to raise on unknown association during eager loading
+    // BLOCKED: associations — top-level eagerLoad/includes of an unknown association does not raise
+    // ROOT-CAUSE: associations/preloader.ts: missing AssociationNotFoundError + "Did you mean?" suggestion for top-level
+    //   names (Rails eager_test.rb:878 — Post.all.merge!(includes: :taggingz).find(6) raises with `Did you mean? tagging`).
+    //   Nested-through-null behavior (eager_test.rb:380, :386) must stay silent — see existing passing tests
+    //   "nested loading does not raise..." and "three level nested preloading does not raise...".
+    // SCOPE: ~30 LOC in preloader.ts to raise on unknown top-level association name only; nested branches unchanged.
     class ExSugAuthor extends Base {
       static {
         this.attribute("name", "string");

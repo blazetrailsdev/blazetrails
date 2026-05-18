@@ -59,7 +59,7 @@ export interface ActionDispatchConfig {
    * messages rotation-configuration port has not landed yet, so this slot
    * is typed `unknown` and defaults to `null` until that arrives.
    */
-  cookiesRotations: unknown;
+  cookiesRotations: unknown | null;
   alwaysWriteCookie?: boolean;
 }
 

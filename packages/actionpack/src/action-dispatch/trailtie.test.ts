@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Railtie as BaseRailtie } from "@blazetrails/activesupport";
 import { Trailtie, type ActionDispatchConfig } from "./trailtie.js";
 import { URL as HttpURL } from "./http/url.js";
@@ -12,6 +12,31 @@ function cfg(): ActionDispatchConfig {
 }
 
 describe("ActionDispatch::Trailtie", () => {
+  let savedConfig: ActionDispatchConfig;
+  let savedTldLength: number;
+  let savedStrictQuery: boolean | null;
+  let savedPerformDeepMunge: boolean;
+  let savedStrictFreshness: boolean;
+  let hadDeprecator: boolean;
+
+  beforeEach(() => {
+    savedConfig = structuredClone(cfg());
+    savedTldLength = HttpURL.tldLength;
+    savedStrictQuery = QueryParser.strictQueryStringSeparator;
+    savedPerformDeepMunge = RequestUtils.performDeepMunge;
+    savedStrictFreshness = CacheConfig.strictFreshness;
+    hadDeprecator = "actionDispatch" in BaseRailtie.deprecators;
+  });
+
+  afterEach(() => {
+    Trailtie.config["actionDispatch"] = savedConfig;
+    HttpURL.tldLength = savedTldLength;
+    QueryParser.strictQueryStringSeparator = savedStrictQuery;
+    RequestUtils.performDeepMunge = savedPerformDeepMunge;
+    CacheConfig.strictFreshness = savedStrictFreshness;
+    if (!hadDeprecator) delete BaseRailtie.deprecators["actionDispatch"];
+  });
+
   it("registers itself with the Railtie registry", () => {
     expect(BaseRailtie.subclasses).toContain(Trailtie);
   });
@@ -43,10 +68,5 @@ describe("ActionDispatch::Trailtie", () => {
     expect(RequestUtils.performDeepMunge).toBe(false);
     expect(CacheConfig.strictFreshness).toBe(true);
     expect(BaseRailtie.deprecators["actionDispatch"]).toBeDefined();
-
-    HttpURL.tldLength = 1;
-    QueryParser.strictQueryStringSeparator = null;
-    RequestUtils.performDeepMunge = true;
-    CacheConfig.strictFreshness = false;
   });
 });

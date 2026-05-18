@@ -12,4 +12,7 @@ export {
   SessionObject,
   AbstractStore,
   AbstractSecureStore,
+  Persisted,
+  PersistedSecure,
+  SessionId,
 } from "./abstract-store.js";

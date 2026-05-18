@@ -370,7 +370,6 @@ export function validateAssociations(record: Base, context?: ValidationContextAr
         const child = inst.target as Base;
         if (typeof (child as any).isDestroyed === "function" && (child as any).isDestroyed())
           continue;
-        if (isMarkedForDestruction(child)) continue;
         if (!((child as any).changedForAutosave?.() ?? false) && !customCtx) continue;
         if (assoc.type === "belongsTo") {
           _setValidatingBelongsToFor(record, assoc, true);

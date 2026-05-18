@@ -602,12 +602,18 @@ export function applyAssociationScope<R>(
 ): R {
   if (!scope) return rel;
   if (reflectionScope !== undefined && scope === reflectionScope) return rel;
-  // Match the Rails `instance_exec` arity/`this`-binding pattern used by
-  // the head-scope path in `association-scope.ts:583-589`: 0-arg scope →
-  // `this=rel`; 1+-arg → `(rel, owner)` with `this=rel`. Arrow scopes
-  // (the common shape in this codebase) ignore both the `this` binding
-  // and the second arg, so this is additive for existing callers and
-  // unlocks Rails-faithful `function (owner) { this.where(...) }` shapes.
+  // Match the head-scope dispatch in `association-scope.ts:583-589`:
+  // 0-arg scope → `fn.call(rel)` (`this=rel`); 1+-arg → `fn.call(rel,
+  // rel, owner)` (`this=rel`, positional `(rel, owner)`).
+  //
+  // Caveat re: Rails parity: Rails' `instance_exec(owner, &scope)` makes
+  // a 1-arg Ruby block `->(owner) { ... }` receive OWNER as the sole
+  // positional. This codebase's convention is different — every scope
+  // call site is `(rel) => rel.where(...)`, so a 1-arg lambda must
+  // receive the RELATION. We preserve that convention here for symmetry
+  // with `association-scope.ts`. Function-keyword scopes that want
+  // owner access can either declare arity-2 `function (rel, owner)` or
+  // close over `this` (set to rel via `.call`).
   //
   // `|| rel` (not `??`) mirrors Ruby's `instance_exec(owner, &scope) ||
   // relation` — truthiness-based, so a scope returning `false` (idiomatic

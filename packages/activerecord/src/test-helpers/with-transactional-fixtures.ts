@@ -8,7 +8,7 @@ import {
   type TestDatabaseAdapter,
 } from "../test-adapter.js";
 
-interface TxnAdapter {
+interface TxnHost {
   transactionManager: {
     beginTransaction: (opts: { joinable: boolean; _lazy: boolean }) => Promise<unknown>;
     rollbackTransaction: () => Promise<void>;
@@ -22,13 +22,16 @@ interface TxnAdapter {
  * `innerAdapter`) or a raw `DatabaseAdapter` constructed directly by a test
  * file (`new PostgreSQLAdapter(...)`, `new SQLite3Adapter(...)`, etc.) which
  * exposes `transactionManager` on itself via `AbstractAdapter`. Adapter-cluster
- * tests under `adapters/**` predominantly take the raw path.
+ * tests under `adapters/**` predominantly take the raw path. Not every
+ * `DatabaseAdapter` shape in the repo carries `transactionManager` (e.g. the
+ * `QueryCacheAdapter` wrapper in `query-cache.ts`), so the union narrows to
+ * adapters that do — type-checking matches runtime behavior.
  */
-export type TransactionalFixturesAdapter = TestDatabaseAdapter | DatabaseAdapter;
+export type TransactionalFixturesAdapter = TestDatabaseAdapter | (DatabaseAdapter & TxnHost);
 
-function tm(adapter: TransactionalFixturesAdapter): TxnAdapter["transactionManager"] {
+function tm(adapter: TransactionalFixturesAdapter): TxnHost["transactionManager"] {
   const wrapped = (adapter as Partial<TestDatabaseAdapter>).innerAdapter;
-  const host = (wrapped ?? adapter) as unknown as Partial<TxnAdapter>;
+  const host = (wrapped ?? adapter) as unknown as Partial<TxnHost>;
   if (!host.transactionManager) {
     throw new Error(
       `withTransactionalFixtures: adapter ${(adapter as { adapterName?: string }).adapterName ?? "unknown"} ` +

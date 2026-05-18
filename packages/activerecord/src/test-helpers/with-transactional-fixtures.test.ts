@@ -118,8 +118,8 @@ describe("withTransactionalFixtures (raw adapter)", () => {
     await defineSchema(adapter, { raw_fixture_users: { name: "string" } });
   });
 
-  afterAll(() => {
-    adapter.close();
+  afterAll(async () => {
+    await adapter.close();
   });
 
   withTransactionalFixtures(() => adapter);

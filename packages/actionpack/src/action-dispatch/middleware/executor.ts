@@ -48,7 +48,7 @@ export class Executor {
       const [status, headers, body] = response;
       const wrapped = new BodyProxy(body, () => state.completeBang());
       returned = true;
-      return [status, headers, wrapped] as unknown as RackResponse;
+      return [status, headers, wrapped];
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       const wrapper = new ExceptionWrapper(err);

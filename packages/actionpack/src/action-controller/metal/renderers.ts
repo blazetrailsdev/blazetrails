@@ -27,9 +27,8 @@ export class Renderers {
    * Mirrors Rails `Renderers._render_with_renderer_method_name(key)`.
    * Returns the conventional dispatch method name for a renderer key.
    */
-  static _renderWithRendererMethodName(key: string | symbol): string {
-    const suffix = typeof key === "symbol" ? (key.description ?? "") : key;
-    return `_render_with_renderer_${suffix}`;
+  static _renderWithRendererMethodName(key: string): string {
+    return `_render_with_renderer_${key}`;
   }
 
   static add(key: string, block: RendererProc): void {
@@ -54,7 +53,7 @@ export class Renderers {
    */
   static _renderToBodyWithRenderer(options: Record<string, unknown>): string | null {
     for (const name of RENDERERS) {
-      if (name in options) {
+      if (Object.hasOwn(options, name)) {
         const methodName = this._renderWithRendererMethodName(name);
         const renderer = this._registry.get(methodName);
         if (renderer) return renderer(options[name], options);

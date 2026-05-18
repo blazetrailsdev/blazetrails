@@ -11,9 +11,13 @@ describe("Renderers", () => {
 
   test("_renderWithRendererMethodName uses Rails convention", () => {
     expect(Renderers._renderWithRendererMethodName("csv")).toBe("_render_with_renderer_csv");
-    expect(Renderers._renderWithRendererMethodName(Symbol("json"))).toBe(
-      "_render_with_renderer_json",
-    );
+    expect(Renderers._renderWithRendererMethodName("json")).toBe("_render_with_renderer_json");
+  });
+
+  test("_renderToBodyWithRenderer ignores prototype keys (Hash#key? semantics)", () => {
+    keysToCleanup.push("toString");
+    Renderers.add("toString", () => "should-not-run");
+    expect(Renderers._renderToBodyWithRenderer({})).toBeNull();
   });
 
   test("add registers a renderer that dispatches by key", () => {

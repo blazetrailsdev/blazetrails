@@ -62,8 +62,15 @@ export class CookieJar implements Iterable<[string, string]> {
    *
    * @internal
    */
-  static build(_request: unknown, cookies: Record<string, string>): CookieJar {
-    const jar = new CookieJar();
+  static build(
+    request: { cookiesAppOptions?: CookieJarOptions } | null | undefined,
+    cookies: Record<string, string>,
+  ): CookieJar {
+    // Rails: `jar = new(req); jar.update(cookies); jar` — the request stores
+    // the options used by signed/encrypted jars. We forward
+    // `request.cookiesAppOptions` if the host exposes it so signed/encrypted
+    // accessors can find their secrets in test setups.
+    const jar = new CookieJar(request?.cookiesAppOptions ?? {});
     for (const [k, v] of Object.entries(cookies ?? {})) {
       jar._cookies.set(k, v);
     }

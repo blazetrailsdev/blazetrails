@@ -1,3 +1,4 @@
+import { getFs, getOs, getPath } from "@blazetrails/activesupport";
 import { describe, expect, it } from "vitest";
 
 import { FlashHash } from "../middleware/flash.js";
@@ -57,9 +58,12 @@ describe("TestProcess", () => {
   });
 
   it("fileFixtureUpload returns an UploadedFile with the given mime type", () => {
+    const dir = getFs().mkdtempSync!(getPath().join(getOs().tmpdir(), "trails-tp-"));
+    const file = getPath().join(dir, "david.png");
+    getFs().writeFileSync(file, "x");
     const host = makeHost();
-    const upload = fileFixtureUpload.call(host, "/etc/hostname", "text/plain");
-    expect(upload.contentType).toBe("text/plain");
-    expect(upload.originalFilename).toBe("hostname");
+    const upload = fileFixtureUpload.call(host, file, "image/png");
+    expect(upload.contentType).toBe("image/png");
+    expect(upload.originalFilename).toBe("david.png");
   });
 });

@@ -9,9 +9,9 @@
  * type-check against a host interface.
  */
 
-import { getFs } from "@blazetrails/activesupport";
+import { getFs, getPath } from "@blazetrails/activesupport";
 
-import { CookieJar } from "../middleware/cookies.js";
+import { CookieJar, type CookieJarOptions } from "../middleware/cookies.js";
 import type { FlashHash } from "../middleware/flash.js";
 import { UploadedFile } from "../http/upload.js";
 
@@ -24,6 +24,8 @@ export interface TestProcessRequest {
   session: Record<string, unknown>;
   flash: FlashHash;
   cookies: Record<string, string>;
+  /** Forwarded to {@link CookieJar.build} for signed/encrypted jars. */
+  cookiesAppOptions?: CookieJarOptions;
 }
 
 /**
@@ -46,6 +48,12 @@ export interface TestProcessHost {
   _cookieJar?: CookieJar;
   /** ActiveSupport::Testing::FileFixtures hook. */
   fileFixture?(path: string): string;
+  /**
+   * Instance-level mirror of Rails' `self.class.file_fixture_path` class
+   * attribute — checked first so plain-object hosts (tests) and real class
+   * instances can both opt in. Falls back to `constructor.fileFixturePath`.
+   */
+  fileFixturePath?: string | null;
   constructor: {
     fileFixturePath?: string | null;
   };
@@ -67,8 +75,9 @@ export function fileFixtureUpload(
   binary: boolean = false,
 ): UploadedFile {
   const fs = getFs();
+  const fixturePath = this.fileFixturePath ?? this.constructor.fileFixturePath;
   let resolved = path;
-  if (this.constructor.fileFixturePath && !fs.existsSync(path)) {
+  if (fixturePath && !fs.existsSync(path)) {
     if (!this.fileFixture) {
       throw new Error(
         "TestProcess#fileFixtureUpload: host does not implement fileFixture(); include ActiveSupport::Testing::FileFixtures.",
@@ -76,9 +85,12 @@ export function fileFixtureUpload(
     }
     resolved = this.fileFixture(path);
   }
-  const filename = resolved.split("/").pop() ?? resolved;
+  // NOTE: Rails uses Rack::Test::UploadedFile which opens the tempfile with
+  // binary encoding when `binary` is true. trails wraps ActionDispatch's
+  // UploadedFile, whose read path already returns a Buffer (binary by
+  // default), so the flag is reflected in the part headers only.
   return new UploadedFile({
-    filename,
+    filename: getPath().basename(resolved),
     type: mimeType ?? undefined,
     tempfile: resolved,
     head: binary ? "Content-Transfer-Encoding: binary" : undefined,

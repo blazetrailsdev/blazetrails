@@ -148,6 +148,25 @@ describe("parameterParsers registry", () => {
     expect(paramsParsers.call(host)).toEqual({ xml });
   });
 
+  it("stream-backed rack.input is drained once and cached under RAW_POST_DATA", () => {
+    let reads = 0;
+    const input = {
+      read() {
+        reads += 1;
+        return '{"a":1}';
+      },
+    };
+    const req = new Request({
+      REQUEST_METHOD: "POST",
+      CONTENT_TYPE: "application/json",
+      "rack.input": input,
+    });
+    expect(req.rawPost).toBe('{"a":1}');
+    expect(req.rawPost).toBe('{"a":1}');
+    expect(req.params).toMatchObject({ a: 1 });
+    expect(reads).toBe(1);
+  });
+
   it("Request.parameterParsers static accessor drives Request#requestParameters", () => {
     const xml: ParameterParser = (raw) => ({ parsed: raw });
     Request.parameterParsers = { ...DEFAULT_PARSERS, xml };

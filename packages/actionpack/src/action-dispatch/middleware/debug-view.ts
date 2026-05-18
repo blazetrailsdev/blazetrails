@@ -7,12 +7,11 @@
  * DebugExceptions to render error pages. ActionView::Base is not yet
  * ported in trails, so this port provides the DebugView helper surface
  * (debugParams / debugHeaders / debugHash / paramsValid /
- * protectAgainstForgery) as a standalone class. Once ActionView::Base
- * lands, DebugView should be re-derived from it and the LookupContext
- * wiring filled in.
+ * protectAgainstForgery / compiledMethodContainer) as a standalone
+ * class. Once ActionView::Base lands, DebugView should be re-derived
+ * from it and its `render` (logger-silence wrapper around super)
+ * ported alongside.
  */
-
-import { LookupContext } from "@blazetrails/actionview";
 
 const TEMPLATES_URL = new URL("./templates", import.meta.url).href;
 
@@ -32,14 +31,11 @@ export class DebugView {
   static readonly RESCUES_TEMPLATE_PATHS: readonly string[] = [TEMPLATES_URL];
 
   /** @internal */
-  protected readonly lookupContext: LookupContext;
-  /** @internal */
   protected readonly assigns: Record<string, unknown>;
   /** @internal */
   protected readonly _request: ParamsRequestLike | undefined;
 
   constructor(assigns: Record<string, unknown>) {
-    this.lookupContext = new LookupContext();
     this.assigns = assigns;
     this._request = assigns["request"] as ParamsRequestLike | undefined;
   }
@@ -84,17 +80,6 @@ export class DebugView {
         return `${k}: ${valueInspected}`;
       })
       .join("\n");
-  }
-
-  /**
-   * Rails wraps `super` with `logger.silence` if available; trails does
-   * not yet have ActionView::Base#render, so this is a placeholder that
-   * callers can override or that will be filled in when ActionView::Base
-   * is ported.
-   * @internal
-   */
-  render(..._args: unknown[]): string {
-    throw new Error("DebugView#render requires ActionView::Base (not yet ported)");
   }
 
   protectAgainstForgery(): boolean {

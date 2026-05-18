@@ -996,6 +996,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#empty?
    */
   async isEmpty(): Promise<boolean> {
+    if (this._targetLoaded) return this._target.length === 0;
     return (await this.count()) === 0;
   }
 

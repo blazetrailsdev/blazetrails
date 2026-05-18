@@ -1690,104 +1690,150 @@ describe("HasManyAssociationsTest", () => {
   // -- Calling size/empty --
 
   it("calling size on an association that has not been loaded performs a query", async () => {
-    class Author extends Base {
+    class SizeUnAuthor extends Base {
       static {
         this.attribute("name", "string");
         this.adapter = adapter;
       }
     }
-    class Post extends Base {
+    class SizeUnPost extends Base {
       static {
         this.attribute("author_id", "integer");
         this.attribute("title", "string");
         this.adapter = adapter;
       }
     }
-    registerModel(Author);
-    registerModel(Post);
-    const author = await Author.create({ name: "Alice" });
-    await Post.create({ author_id: author.id, title: "A" });
-    const posts = await loadHasMany(author, "posts", {
-      className: "Post",
+    Associations.hasMany.call(SizeUnAuthor, "sizeUnPosts", {
+      className: "SizeUnPost",
       foreignKey: "author_id",
     });
-    expect(posts.length).toBe(1);
+    registerModel("SizeUnAuthor", SizeUnAuthor);
+    registerModel("SizeUnPost", SizeUnPost);
+    const author = await SizeUnAuthor.create({ name: "Alice" });
+    await SizeUnPost.create({ author_id: author.id, title: "A" });
+    const proxy = association(author, "sizeUnPosts");
+    expect(proxy.loaded).toBe(false);
+    const sqlQueries: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (e: any) => {
+      if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
+    });
+    try {
+      expect(await proxy.size()).toBe(1);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    expect(sqlQueries.length).toBeGreaterThan(0);
+    expect(proxy.loaded).toBe(false);
   });
 
   it("calling size on an association that has been loaded does not perform query", async () => {
-    class Author extends Base {
+    class SizeLdAuthor extends Base {
       static {
         this.attribute("name", "string");
         this.adapter = adapter;
       }
     }
-    class Post extends Base {
+    class SizeLdPost extends Base {
       static {
         this.attribute("author_id", "integer");
         this.attribute("title", "string");
         this.adapter = adapter;
       }
     }
-    registerModel(Author);
-    registerModel(Post);
-    const author = await Author.create({ name: "Alice" });
-    await Post.create({ author_id: author.id, title: "A" });
-    const posts = await loadHasMany(author, "posts", {
-      className: "Post",
+    Associations.hasMany.call(SizeLdAuthor, "sizeLdPosts", {
+      className: "SizeLdPost",
       foreignKey: "author_id",
     });
-    expect(posts.length).toBe(1);
-    // Second access: still same length
-    expect(posts.length).toBe(1);
+    registerModel("SizeLdAuthor", SizeLdAuthor);
+    registerModel("SizeLdPost", SizeLdPost);
+    const author = await SizeLdAuthor.create({ name: "Alice" });
+    await SizeLdPost.create({ author_id: author.id, title: "A" });
+    const proxy = association(author, "sizeLdPosts");
+    await proxy.load();
+    expect(proxy.loaded).toBe(true);
+    const sqlQueries: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (e: any) => {
+      if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
+    });
+    try {
+      expect(await proxy.size()).toBe(1);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    expect(sqlQueries).toHaveLength(0);
   });
 
   it("calling empty on an association that has not been loaded performs a query", async () => {
-    class Author extends Base {
+    class EmptyUnAuthor extends Base {
       static {
         this.attribute("name", "string");
         this.adapter = adapter;
       }
     }
-    class Post extends Base {
+    class EmptyUnPost extends Base {
       static {
         this.attribute("author_id", "integer");
         this.attribute("title", "string");
         this.adapter = adapter;
       }
     }
-    registerModel(Author);
-    registerModel(Post);
-    const author = await Author.create({ name: "Alice" });
-    const posts = await loadHasMany(author, "posts", {
-      className: "Post",
+    Associations.hasMany.call(EmptyUnAuthor, "emptyUnPosts", {
+      className: "EmptyUnPost",
       foreignKey: "author_id",
     });
-    expect(posts.length === 0).toBe(true);
+    registerModel("EmptyUnAuthor", EmptyUnAuthor);
+    registerModel("EmptyUnPost", EmptyUnPost);
+    const author = await EmptyUnAuthor.create({ name: "Alice" });
+    const proxy = association(author, "emptyUnPosts");
+    expect(proxy.loaded).toBe(false);
+    const sqlQueries: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (e: any) => {
+      if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
+    });
+    try {
+      expect(await proxy.isEmpty()).toBe(true);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    expect(sqlQueries.length).toBeGreaterThan(0);
+    expect(proxy.loaded).toBe(false);
   });
 
   it("calling empty on an association that has been loaded does not performs query", async () => {
-    class Author extends Base {
+    class EmptyLdAuthor extends Base {
       static {
         this.attribute("name", "string");
         this.adapter = adapter;
       }
     }
-    class Post extends Base {
+    class EmptyLdPost extends Base {
       static {
         this.attribute("author_id", "integer");
         this.attribute("title", "string");
         this.adapter = adapter;
       }
     }
-    registerModel(Author);
-    registerModel(Post);
-    const author = await Author.create({ name: "Alice" });
-    await Post.create({ author_id: author.id, title: "A" });
-    const posts = await loadHasMany(author, "posts", {
-      className: "Post",
+    Associations.hasMany.call(EmptyLdAuthor, "emptyLdPosts", {
+      className: "EmptyLdPost",
       foreignKey: "author_id",
     });
-    expect(posts.length > 0).toBe(true);
+    registerModel("EmptyLdAuthor", EmptyLdAuthor);
+    registerModel("EmptyLdPost", EmptyLdPost);
+    const author = await EmptyLdAuthor.create({ name: "Alice" });
+    await EmptyLdPost.create({ author_id: author.id, title: "A" });
+    const proxy = association(author, "emptyLdPosts");
+    await proxy.load();
+    expect(proxy.loaded).toBe(true);
+    const sqlQueries: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (e: any) => {
+      if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
+    });
+    try {
+      expect(await proxy.isEmpty()).toBe(false);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    expect(sqlQueries).toHaveLength(0);
   });
 
   it("calling many should return false if none or one", async () => {

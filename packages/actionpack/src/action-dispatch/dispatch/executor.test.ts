@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
-import { Executor, type ExecutorLike, type ExecutorState } from "./executor.js";
+import { Executor, type ExecutorLike, type ExecutorState } from "../middleware/executor.js";
 
 class StubExecutor implements ExecutorLike {
   runHooks: Array<() => void> = [];
@@ -14,9 +14,9 @@ class StubExecutor implements ExecutorLike {
     this.completeHooks.push(fn);
   }
 
-  run(_opts?: { reset?: boolean }): ExecutorState {
+  runBang(_opts?: { reset?: boolean }): ExecutorState {
     for (const h of this.runHooks) h();
-    return { complete: () => this.completeHooks.forEach((h) => h()) };
+    return { completeBang: () => this.completeHooks.forEach((h) => h()) };
   }
 
   errorReporter = {

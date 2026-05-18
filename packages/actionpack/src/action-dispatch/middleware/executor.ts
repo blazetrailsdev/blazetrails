@@ -10,7 +10,7 @@ import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
 import { ExceptionWrapper } from "./exception-wrapper.js";
 
 export interface ExecutorState {
-  complete(): void;
+  completeBang(): void;
 }
 
 export interface ErrorReporterLike {
@@ -18,7 +18,7 @@ export interface ErrorReporterLike {
 }
 
 export interface ExecutorLike {
-  run(opts?: { reset?: boolean }): ExecutorState;
+  runBang(opts?: { reset?: boolean }): ExecutorState;
   errorReporter: ErrorReporterLike;
 }
 
@@ -32,7 +32,7 @@ export class Executor {
   }
 
   async call(env: RackEnv): Promise<RackResponse> {
-    const state = this.executor.run({ reset: true });
+    const state = this.executor.runBang({ reset: true });
     let returned = false;
     try {
       const response = await this.app(env);
@@ -46,19 +46,19 @@ export class Executor {
       }
 
       const [status, headers, body] = response;
-      const wrapped = new BodyProxy(body, () => state.complete());
+      const wrapped = new BodyProxy(body, () => state.completeBang());
       returned = true;
       return [status, headers, wrapped] as unknown as RackResponse;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       const wrapper = new ExceptionWrapper(err);
-      this.executor.errorReporter.report(wrapper.exception, {
+      this.executor.errorReporter.report(wrapper.unwrappedException, {
         handled: false,
         source: "application.action_dispatch",
       });
       throw err;
     } finally {
-      if (!returned) state.complete();
+      if (!returned) state.completeBang();
     }
   }
 }

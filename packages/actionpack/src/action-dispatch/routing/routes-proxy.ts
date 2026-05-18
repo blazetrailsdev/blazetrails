@@ -12,7 +12,16 @@
  *
  * @see https://api.rubyonrails.org/classes/ActionDispatch/Routing/RoutesProxy.html
  */
-import { _withRoutes, type UrlForHost, type UrlForRoutes } from "./url-for.js";
+import {
+  _routesContext,
+  _withRoutes,
+  fullUrlFor,
+  optimizeRoutesGeneration,
+  routeFor,
+  urlFor,
+  type UrlForHost,
+  type UrlForRoutes,
+} from "./url-for.js";
 
 /** The minimal helpers-module surface RoutesProxy dispatches into. */
 export type RoutesProxyHelpers = Record<string, unknown>;
@@ -28,13 +37,30 @@ export type RoutesProxyInstance = RoutesProxy & {
   [helper: string]: any;
 };
 
-export class RoutesProxy {
+export class RoutesProxy implements UrlForHost {
   scope: UrlForHost;
   routes: UrlForRoutes;
+  /**
+   * UrlForHost field. Rails relies on `@_routes` set by `UrlFor#initialize`;
+   * here we expose it as a getter aliased to `routes` (mirrors the Ruby
+   * `alias :_routes :routes`).
+   */
+  defaultUrlOptions: Record<string, unknown> = {};
   /** @internal Rails: `@helpers` */
   private _helpers: RoutesProxyHelpers;
   /** @internal Rails: `@script_namer` */
   private _scriptNamer: ScriptNamer | null;
+
+  // UrlFor mixin (`include ActionDispatch::Routing::UrlFor` in Rails).
+  // Attached as `this`-typed functions per CLAUDE.md module-mixin pattern.
+  urlFor = urlFor;
+  fullUrlFor = fullUrlFor;
+  routeFor = routeFor;
+  optimizeRoutesGeneration = optimizeRoutesGeneration;
+  /** @internal Rails: `private def _with_routes` */
+  _withRoutes = _withRoutes;
+  /** @internal Rails: `private def _routes_context` */
+  _routesContext = _routesContext;
 
   constructor(
     routes: UrlForRoutes,
@@ -67,6 +93,9 @@ export class RoutesProxy {
   /** Rails: `alias :_routes :routes`. */
   get _routes(): UrlForRoutes {
     return this.routes;
+  }
+  set _routes(value: UrlForRoutes | null) {
+    if (value != null) this.routes = value;
   }
 
   urlOptions(): Record<string, unknown> {

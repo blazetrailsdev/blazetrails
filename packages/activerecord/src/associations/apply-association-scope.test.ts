@@ -92,7 +92,7 @@ describe("applyAssociationScope", () => {
     const rel = { tag: "rel", marked: false };
     const out = applyAssociationScope(
       rel,
-      function () {
+      function (this: typeof rel) {
         // `this` is the relation; mutate-and-return mirrors Ruby's
         // `instance_exec` self-binding for 0-arg scopes.
         return { ...this, marked: true };

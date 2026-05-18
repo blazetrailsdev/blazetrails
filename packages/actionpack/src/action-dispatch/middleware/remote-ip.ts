@@ -30,6 +30,20 @@ export const TRUSTED_PROXIES: readonly string[] = [
 
 export type Proxy = string | RegExp;
 
+/**
+ * What `RemoteIp` accepts as `custom_proxies`. Iterable of proxies, but
+ * intentionally excludes bare `string` (which is technically `Iterable<string>`)
+ * so `new RemoteIp(app, true, "10.0.0.0/8")` fails to type-check rather than
+ * being silently spread into per-character entries. Rails treats String as
+ * a single value and raises ArgumentError. The `length?: never` branch
+ * shape excludes anything with a `length: number` (strings) while still
+ * admitting generators and other non-indexed iterables.
+ */
+export type CustomProxies =
+  | ReadonlyArray<Proxy>
+  | ReadonlySet<Proxy>
+  | (Iterable<Proxy> & { readonly length?: never });
+
 interface ParsedIp {
   value: bigint;
   bits: 32 | 128;
@@ -166,7 +180,7 @@ export class RemoteIp {
   readonly proxies: readonly Proxy[];
   private readonly app: RackApp;
 
-  constructor(app: RackApp, ipSpoofingCheck = true, customProxies?: Iterable<Proxy> | null) {
+  constructor(app: RackApp, ipSpoofingCheck = true, customProxies?: CustomProxies | null) {
     this.app = app;
     this.checkIp = ipSpoofingCheck;
     // Rails: `if custom_proxies.blank?` then `elsif custom_proxies.respond_to?(:any?)`.

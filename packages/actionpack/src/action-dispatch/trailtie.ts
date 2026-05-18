@@ -121,11 +121,11 @@ export class Trailtie extends BaseRailtie {
       CacheConfig.strictFreshness = cfg.strictFreshness;
       // Rails: `on_load(:action_dispatch_response) { self.default_charset =
       //   app.config.action_dispatch.default_charset || app.config.encoding }`
-      // (railtie.rb:65-68). trails has no app-level `encoding` config yet, so
-      // a null `cfg.defaultCharset` leaves the class default ("utf-8") alone.
-      if (cfg.defaultCharset != null) {
-        Response.defaultCharset = cfg.defaultCharset;
-      }
+      // (railtie.rb:65-68). Rails assigns unconditionally — a null cfg
+      // falls through to `app.config.encoding` (defaults to "utf-8"). trails
+      // has no app-level `encoding` config yet, so a null cfg restores
+      // "utf-8" so initializer state doesn't leak across runs.
+      Response.defaultCharset = cfg.defaultCharset ?? "utf-8";
     });
   }
 }

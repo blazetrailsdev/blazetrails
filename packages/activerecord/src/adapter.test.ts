@@ -78,7 +78,7 @@ describe("AdapterTest", () => {
   });
   it.skip("disable prepared statements", () => {
     // BLOCKED: connection-pool
-    // ROOT-CAUSE: connection-adapters/abstract-adapter.ts#preparedStatements (getter/setter at L608) + connection-handling.ts#establishConnection: no global ActiveRecord.disablePreparedStatements toggle exists to override the per-config prepared_statements:true on (re-)establishConnection
+    // ROOT-CAUSE: connection-adapters/abstract-adapter.ts#preparedStatements getter/setter + connection-handling.ts#establishConnection: no global ActiveRecord.disablePreparedStatements toggle exists to override the per-config prepared_statements:true on (re-)establishConnection
     // SCOPE: ~25 LOC; affects ~1 test
   });
   it.skip("table alias", () => {

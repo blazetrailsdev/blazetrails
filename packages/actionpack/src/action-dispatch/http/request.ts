@@ -355,6 +355,10 @@ export class Request {
     return (this.env["action_dispatch.request.path_parameters"] as Record<string, string>) || {};
   }
 
+  set pathParameters(params: Record<string, unknown>) {
+    this.env["action_dispatch.request.path_parameters"] = params;
+  }
+
   // --- Format ---
 
   get format(): string | undefined {

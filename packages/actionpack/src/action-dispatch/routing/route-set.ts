@@ -23,6 +23,7 @@ import type { PolymorphicMappingEntry } from "./polymorphic-routes.js";
 import { Endpoint } from "./endpoint.js";
 import { X_CASCADE } from "../constants.js";
 import { DispatcherRegistry, type DispatchHandler } from "./dispatcher.js";
+import { RoutingError } from "../../action-controller/metal/exceptions.js";
 
 export type DrawCallback = (mapper: Mapper) => void;
 
@@ -174,6 +175,54 @@ export class RouteSet {
   /** End-to-end `Router.serve` using registered handlers. */
   serve(req: RouterRequest): RackishResponse {
     return this.journeyRouter.serve(req);
+  }
+
+  /** Mirrors Rails' `RouteSet#recognize_path` shape for `assert_recognizes`. */
+  recognizePath(
+    path: string,
+    options: { method?: string | null; extras?: Record<string, unknown> } = {},
+  ): Record<string, unknown> {
+    const method = String(options.method ?? "GET").toUpperCase();
+    const matched = this.recognize(method, path);
+    if (!matched) {
+      throw new RoutingError(`No route matches [${method}] ${JSON.stringify(path)}`);
+    }
+    return {
+      controller: matched.route.controller,
+      action: matched.route.action,
+      ...matched.params,
+      ...(options.extras ?? {}),
+    };
+  }
+
+  /**
+   * Inverse of `recognizePath`. Returns `[path, extraKeys]` where extraKeys
+   * are option keys not consumed by the route. `defaults` is accepted for
+   * signature parity (Rails docs: "The `defaults` parameter is unused.").
+   */
+  generateExtras(
+    options: Record<string, unknown>,
+
+    _defaults: Record<string, unknown> = {},
+  ): [string, string[]] {
+    const { controller, action } = options;
+    const route = this.routes.find((r) => r.controller === controller && r.action === action);
+    if (!route) {
+      throw new RoutingError(`No route matches ${JSON.stringify(options)}`);
+    }
+    const captureNames = new Set<string>(route.pathParamNames);
+    const captureParams: Record<string, string | number> = {};
+    for (const name of captureNames) {
+      const v = options[name];
+      if (v != null) captureParams[name] = v as string | number;
+    }
+    const path = route.pathFor(captureParams);
+    const extras: string[] = [];
+    for (const k of Object.keys(options)) {
+      if (k === "controller" || k === "action" || captureNames.has(k)) continue;
+      extras.push(k);
+    }
+    return [path, extras];
   }
 
   /**

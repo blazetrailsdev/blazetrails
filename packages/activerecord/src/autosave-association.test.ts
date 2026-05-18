@@ -2489,6 +2489,48 @@ describe("TestAutosaveAssociationsInGeneral", () => {
     expect(post.author_id).toBe(author.id);
   });
 
+  it("belongs_to autosave with mismatched composite FK/PK uses zip semantics", async () => {
+    // Rails autosave_association.rb:563 — `primary_key.zip(foreign_key)`.
+    // When the FK array is longer than the PK array, Ruby Array#zip
+    // drops the extra FK entries; the loop only writes the positions
+    // where both sides exist. No CompositePrimaryKeyMismatchError.
+    const adapter = freshAdapter();
+    class Parent extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class Child extends Base {
+      static {
+        this.attribute("parent_id", "integer");
+        this.attribute("region", "string");
+        this.attribute("label", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("ZipParent", Parent);
+    registerModel("ZipChild", Child);
+    // PK ["id"] (scalar) zipped against FK ["parent_id", "region"] →
+    // pairs [("id", "parent_id")]; the trailing "region" FK is dropped.
+    Associations.belongsTo.call(Child, "parent", {
+      primaryKey: "id",
+      foreignKey: ["parent_id", "region"],
+      className: "ZipParent",
+      autosave: true,
+    });
+
+    const parent = new Parent({ name: "P" });
+    const child = new Child({ label: "c", region: "us-west" });
+    cacheAssoc(child, "parent", parent);
+    await child.save();
+    expect(parent.isNewRecord()).toBe(false);
+    expect(child.parent_id).toBe(parent.id);
+    // Trailing FK "region" was dropped from the zip; the existing
+    // owner value must survive untouched (no overwrite to undefined/null).
+    expect(child.region).toBe("us-west");
+  });
+
   it("should not add the same callbacks multiple times for has one", async () => {
     const adapter = freshAdapter();
     let saveCount = 0;

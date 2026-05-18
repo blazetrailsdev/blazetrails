@@ -738,8 +738,11 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
     }
 
     const foreignKey = _resolveBelongsToForeignKey(assoc);
-    const rawPk =
-      assoc.options.primaryKey ?? (assocRecord.constructor as typeof Base).primaryKey ?? "id";
+    // Rails save_belongs_to_association:560 — `Array(compute_primary_key(
+    // reflection, record))`. The target record's class drives the lookup
+    // (not the owner's), so query-constraints on the target and the
+    // [tenant_id, id] → "id" inference both go through correctly.
+    const rawPk = computePrimaryKey.call(assocRecord as any, { options: assoc.options });
     const primaryKey = Array.isArray(rawPk) ? rawPk : [rawPk];
     // Rails save_belongs_to_association:563: `primary_key.zip(foreign_key)`.
     // Ruby's Array#zip drops trailing args when the argument is longer than
@@ -1228,7 +1231,14 @@ export function addAutosaveAssociationCallbacks(model: any, reflection: any): vo
     beforeSave(
       model,
       (record: any): Promise<void> =>
-        record[saveMethod]().then((ok: boolean) => (ok ? undefined : (false as unknown as void))),
+        // Wrap with Promise.resolve so the re-entrant branch of
+        // defineNonCyclicMethod (returns sync `true` to mirror Rails'
+        // cyclic-guard early return) doesn't blow up on `.then`. Mirrors
+        // Rails' callback chain, which tolerates both throw-abort and
+        // truthy returns.
+        Promise.resolve(record[saveMethod]()).then((ok: boolean) =>
+          ok ? undefined : (false as unknown as void),
+        ),
     );
   }
 

@@ -38,18 +38,16 @@ export type ValueTransformation<T = unknown> = (v: T) => unknown;
  *
  * @internal
  */
+export type ScopeLambda<R> = (this: R, rel: R, owner: Base) => R | false | null | undefined;
+
 export function invokeScopeLambda<R>(
-  fn: (this: R, ...args: never[]) => R | false | null | undefined,
+  fn: ScopeLambda<R>,
   rel: R,
   owner: Base,
 ): R | false | null | undefined {
   return fn.length === 0
-    ? (fn as unknown as (this: R) => R | false | null | undefined).call(rel)
-    : (fn as unknown as (this: R, rel: R, owner: Base) => R | false | null | undefined).call(
-        rel,
-        rel,
-        owner,
-      );
+    ? (fn as (this: R) => ReturnType<ScopeLambda<R>>).call(rel)
+    : fn.call(rel, rel, owner);
 }
 
 /**
@@ -612,11 +610,7 @@ export class AssociationScope {
     if (!isThrough && typeof head.scopeFor === "function") {
       scope = head.scopeFor.call(head, scope, owner);
     } else if (typeof head.scope === "function") {
-      const result = invokeScopeLambda(
-        head.scope as (this: unknown, ...args: never[]) => unknown,
-        scope,
-        owner,
-      );
+      const result = invokeScopeLambda(head.scope as ScopeLambda<unknown>, scope, owner);
       if (result) scope = result;
     }
     return scope;

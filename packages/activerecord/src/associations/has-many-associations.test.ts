@@ -1711,7 +1711,9 @@ describe("HasManyAssociationsTest", () => {
     registerModel("SizeUnPost", SizeUnPost);
     const author = await SizeUnAuthor.create({ name: "Alice" });
     await SizeUnPost.create({ author_id: author.id, title: "A" });
+    const author2 = await SizeUnAuthor.create({ name: "Bob" });
     const proxy = association(author, "sizeUnPosts");
+    const proxy2 = association(author2, "sizeUnPosts");
     expect(proxy.loaded).toBe(false);
     const sqlQueries: string[] = [];
     const sub = Notifications.subscribe("sql.active_record", (e: any) => {
@@ -1719,10 +1721,13 @@ describe("HasManyAssociationsTest", () => {
     });
     try {
       expect(await proxy.size()).toBe(1);
+      expect(sqlQueries).toHaveLength(1);
+      sqlQueries.length = 0;
+      expect(await proxy2.size()).toBe(0);
+      expect(sqlQueries).toHaveLength(1);
     } finally {
       Notifications.unsubscribe(sub);
     }
-    expect(sqlQueries.length).toBeGreaterThan(0);
     expect(proxy.loaded).toBe(false);
   });
 
@@ -1748,15 +1753,20 @@ describe("HasManyAssociationsTest", () => {
     registerModel("SizeLdPost", SizeLdPost);
     const author = await SizeLdAuthor.create({ name: "Alice" });
     await SizeLdPost.create({ author_id: author.id, title: "A" });
+    const author2 = await SizeLdAuthor.create({ name: "Bob" });
     const proxy = association(author, "sizeLdPosts");
+    const proxy2 = association(author2, "sizeLdPosts");
     await proxy.load();
+    await proxy2.load();
     expect(proxy.loaded).toBe(true);
+    expect(proxy2.loaded).toBe(true);
     const sqlQueries: string[] = [];
     const sub = Notifications.subscribe("sql.active_record", (e: any) => {
       if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
     });
     try {
       expect(await proxy.size()).toBe(1);
+      expect(await proxy2.size()).toBe(0);
     } finally {
       Notifications.unsubscribe(sub);
     }
@@ -1784,18 +1794,24 @@ describe("HasManyAssociationsTest", () => {
     registerModel("EmptyUnAuthor", EmptyUnAuthor);
     registerModel("EmptyUnPost", EmptyUnPost);
     const author = await EmptyUnAuthor.create({ name: "Alice" });
+    await EmptyUnPost.create({ author_id: author.id, title: "A" });
+    const author2 = await EmptyUnAuthor.create({ name: "Bob" });
     const proxy = association(author, "emptyUnPosts");
+    const proxy2 = association(author2, "emptyUnPosts");
     expect(proxy.loaded).toBe(false);
     const sqlQueries: string[] = [];
     const sub = Notifications.subscribe("sql.active_record", (e: any) => {
       if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
     });
     try {
-      expect(await proxy.isEmpty()).toBe(true);
+      expect(await proxy.isEmpty()).toBe(false);
+      expect(sqlQueries).toHaveLength(1);
+      sqlQueries.length = 0;
+      expect(await proxy2.isEmpty()).toBe(true);
+      expect(sqlQueries).toHaveLength(1);
     } finally {
       Notifications.unsubscribe(sub);
     }
-    expect(sqlQueries.length).toBeGreaterThan(0);
     expect(proxy.loaded).toBe(false);
   });
 
@@ -1821,15 +1837,20 @@ describe("HasManyAssociationsTest", () => {
     registerModel("EmptyLdPost", EmptyLdPost);
     const author = await EmptyLdAuthor.create({ name: "Alice" });
     await EmptyLdPost.create({ author_id: author.id, title: "A" });
+    const author2 = await EmptyLdAuthor.create({ name: "Bob" });
     const proxy = association(author, "emptyLdPosts");
+    const proxy2 = association(author2, "emptyLdPosts");
     await proxy.load();
+    await proxy2.load();
     expect(proxy.loaded).toBe(true);
+    expect(proxy2.loaded).toBe(true);
     const sqlQueries: string[] = [];
     const sub = Notifications.subscribe("sql.active_record", (e: any) => {
       if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
     });
     try {
       expect(await proxy.isEmpty()).toBe(false);
+      expect(await proxy2.isEmpty()).toBe(true);
     } finally {
       Notifications.unsubscribe(sub);
     }

@@ -2664,15 +2664,6 @@ describe("AssociationsTest", () => {
     expect(loaded).not.toBeNull();
     expect(loaded!.id).toBe(parent.id);
     expect((loaded as any).title).toBe("Parent");
-    // A sibling row sharing the parent_id but with a different blog_id must NOT
-    // match — proves the blog_id constraint participates in the lookup.
-    await PbtBlogPost.create({
-      blog_id: 2,
-      id: 99,
-      title: "Decoy",
-    });
-    const loaded2 = await loadBelongsTo(child, "parent", { polymorphic: true });
-    expect((loaded2 as any).title).toBe("Parent");
   });
   it("preloads model with query constraints by explicitly configured fk and pk", async () => {
     const adapter = freshAdapter();

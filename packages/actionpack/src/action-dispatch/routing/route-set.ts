@@ -20,21 +20,96 @@ import {
 } from "./journey-bridge.js";
 import type { Router as JourneyRouter, RackishResponse, RouterRequest } from "../journey/router.js";
 import type { PolymorphicMappingEntry } from "./polymorphic-routes.js";
-import { DispatcherRegistry, RouteDispatcher, type DispatchHandler } from "./dispatcher.js";
+import { Endpoint } from "./endpoint.js";
+import { X_CASCADE } from "../constants.js";
+import { DispatcherRegistry, type DispatchHandler } from "./dispatcher.js";
 
 export type DrawCallback = (mapper: Mapper) => void;
 
-export type Dispatcher = (
+/** Legacy {@link RouteSet.setDispatcher} callback (kept for back-compat). */
+export type DispatcherCallback = (
   controller: string,
   action: string,
   params: Record<string, string>,
   env: RackEnv,
 ) => Promise<RackResponse>;
 
+/**
+ * Port of `ActionDispatch::Routing::RouteSet::Dispatcher`. Attached as
+ * each Journey route's `app`; on serve, reads `path_parameters[:controller]`
+ * and dispatches via {@link DispatcherRegistry}. Rails resolves a
+ * controller class through `req.controller_class`; trails has no
+ * ActionController port yet, so the registry holds string-keyed handlers.
+ */
+export class Dispatcher extends Endpoint {
+  private readonly _raiseOnNameError: boolean;
+  private readonly _registry: DispatcherRegistry;
+
+  constructor(raiseOnNameError: boolean, registry: DispatcherRegistry) {
+    super();
+    this._raiseOnNameError = raiseOnNameError;
+    this._registry = registry;
+  }
+
+  dispatcher(): boolean {
+    return true;
+  }
+
+  serve(req: RouterRequest): RackishResponse {
+    const params = req.pathParameters as Record<string, unknown>;
+    const action = typeof params["action"] === "string" ? params["action"] : "";
+    const handler = this._controller(req);
+    if (!handler) {
+      if (this._raiseOnNameError) {
+        const name = typeof params["controller"] === "string" ? params["controller"] : "";
+        throw new Error(`uninitialized constant ${name || "<missing>"}`);
+      }
+      return [404, { [X_CASCADE]: "pass" }, []] as unknown as RackishResponse;
+    }
+    return this._dispatch(handler, action, req);
+  }
+
+  /** @internal */
+  protected _controller(req: RouterRequest): DispatchHandler | undefined {
+    const params = req.pathParameters as Record<string, unknown>;
+    const controller = typeof params["controller"] === "string" ? params["controller"] : "";
+    return this._registry.resolve(controller);
+  }
+
+  /** @internal */
+  protected _dispatch(
+    handler: DispatchHandler,
+    action: string,
+    req: RouterRequest,
+  ): RackishResponse {
+    return handler(action, req);
+  }
+}
+
+/**
+ * Port of `ActionDispatch::Routing::RouteSet::StaticDispatcher`. Binds a
+ * handler at construction (Rails binds a controller class); `_controller`
+ * ignores `path_parameters[:controller]`. `raise_on_name_error` is always
+ * false (no class-resolution path to fail) — mapper.rb:297.
+ */
+export class StaticDispatcher extends Dispatcher {
+  private readonly _handler: DispatchHandler;
+
+  constructor(handler: DispatchHandler) {
+    super(false, new DispatcherRegistry());
+    this._handler = handler;
+  }
+
+  /** @internal */
+  protected override _controller(_req: RouterRequest): DispatchHandler {
+    return this._handler;
+  }
+}
+
 export class RouteSet {
   private routes: Route[] = [];
   private namedRoutes: Map<string, Route> = new Map();
-  private dispatcher: Dispatcher | undefined;
+  private dispatcher: DispatcherCallback | undefined;
   private defaultUrlOptions: { host?: string } = {};
   /**
    * Registry consulted by `polymorphicUrl` / `polymorphicPath` before falling
@@ -42,16 +117,12 @@ export class RouteSet {
    * (not yet ported). Mirrors `RouteSet#polymorphic_mappings`.
    */
   readonly polymorphicMappings: Map<string, PolymorphicMappingEntry> = new Map();
-  /**
-   * Per-RouteSet registry mapping controller name → handler. The single
-   * `RouteDispatcher` shared by every Journey route consults this at
-   * serve-time, matching Rails' `RouteSet::Dispatcher` lookup pattern.
-   */
+  /** Controller name → handler registry consulted by {@link Dispatcher}. */
   readonly dispatcherRegistry: DispatcherRegistry = new DispatcherRegistry();
   /** @internal */
   private _journeyRouter: JourneyRouter | null = null;
   /** @internal */
-  private readonly _routeDispatcher: RouteDispatcher = new RouteDispatcher(this.dispatcherRegistry);
+  private readonly _routeDispatcher: Dispatcher = new Dispatcher(false, this.dispatcherRegistry);
 
   /**
    * Draw routes using the Mapper DSL. Can be called multiple times;
@@ -87,24 +158,12 @@ export class RouteSet {
     return recognizeViaJourney(this.journeyRouter, method, path);
   }
 
-  /**
-   * Register a synchronous handler invoked by the Journey-backed
-   * `Router.serve` path when a route resolves to `controller`. Mirrors the
-   * outcome of `RouteSet::Dispatcher`'s controller-class lookup in Rails
-   * — there the dispatcher resolves a class from `path_parameters[:controller]`;
-   * here we resolve a registered handler since trails has no
-   * ActionController port yet.
-   */
+  /** Register a handler invoked by {@link serve} when `controller` matches. */
   registerController(controller: string, handler: DispatchHandler): void {
     this.dispatcherRegistry.register(controller, handler);
   }
 
-  /**
-   * Dispatch through the Journey router end-to-end (`Router.serve`) using
-   * the controller handlers registered via `registerController`. Returns
-   * a Rack-shaped tuple — `[404, { 'x-cascade': 'pass' }, []]` when no
-   * route matches or no handler is registered for the matched controller.
-   */
+  /** End-to-end `Router.serve` using registered handlers. */
   serve(req: RouterRequest): RackishResponse {
     return this.journeyRouter.serve(req);
   }
@@ -113,7 +172,7 @@ export class RouteSet {
    * Set a dispatcher that handles matched routes.
    * Without one, call() returns a simple JSON response.
    */
-  setDispatcher(dispatcher: Dispatcher): void {
+  setDispatcher(dispatcher: DispatcherCallback): void {
     this.dispatcher = dispatcher;
   }
 

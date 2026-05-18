@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { RouteSet } from "./route-set.js";
-import { DispatcherRegistry, RouteDispatcher } from "./dispatcher.js";
+import { DispatcherRegistry } from "./dispatcher.js";
+import { Dispatcher, StaticDispatcher } from "./route-set.js";
 import type { RackishResponse, RouterRequest } from "../journey/router.js";
 
 function makeReq(path: string, method = "GET"): RouterRequest {
@@ -73,10 +74,38 @@ describe("RouteDispatcher / DispatcherRegistry", () => {
     expect(routes.dispatcherRegistry.has("posts")).toBe(false);
   });
 
-  it("RouteDispatcher reports dispatcher()=true (Endpoint contract)", () => {
+  it("Dispatcher reports dispatcher()=true (Endpoint contract)", () => {
     const reg = new DispatcherRegistry();
-    const d = new RouteDispatcher(reg);
+    const d = new Dispatcher(false, reg);
     expect(d.dispatcher()).toBe(true);
+  });
+
+  it("Dispatcher with raiseOnNameError=true throws for unregistered controllers", () => {
+    const reg = new DispatcherRegistry();
+    const d = new Dispatcher(true, reg);
+    const req: RouterRequest = {
+      pathInfo: "/x",
+      scriptName: "",
+      requestMethod: "GET",
+      pathParameters: { controller: "missing", action: "show" },
+    };
+    expect(() => d.serve(req)).toThrow(/uninitialized constant missing/);
+  });
+
+  it("StaticDispatcher dispatches its bound handler regardless of params[:controller]", () => {
+    const calls: string[] = [];
+    const d = new StaticDispatcher((action) => {
+      calls.push(action);
+      return [200, {}, []] as unknown as RackishResponse;
+    });
+    const req: RouterRequest = {
+      pathInfo: "/x",
+      scriptName: "",
+      requestMethod: "GET",
+      pathParameters: { controller: "anything", action: "index" },
+    };
+    expect(d.serve(req)[0]).toBe(200);
+    expect(calls).toEqual(["index"]);
   });
 
   it("unregister removes a handler so subsequent serves return 404 pass", () => {

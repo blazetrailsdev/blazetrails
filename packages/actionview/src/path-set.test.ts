@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { PathSet, type PathSetResolver } from "./path-set.js";
-import { Requested } from "./template/details.js";
-import { TemplatePath } from "./template/path.js";
+import { Requested } from "./template-details.js";
+import { TemplatePath } from "./template-path.js";
 
 function resolver(results: Record<string, unknown[]> = {}): PathSetResolver & {
   findAll: ReturnType<typeof vi.fn>;

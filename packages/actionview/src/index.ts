@@ -25,12 +25,12 @@ export { EjsHandler } from "./ejs-handler.js";
 export { OutputBuffer, RawOutputBuffer } from "./buffers.js";
 
 export { PathSet, type PathSetResolver } from "./path-set.js";
-export { TemplatePath } from "./template/path.js";
+export { TemplatePath } from "./template-path.js";
 export {
   TemplateDetails,
   Requested as RequestedDetails,
   type DetailKey,
   type RequestedInit,
-} from "./template/details.js";
+} from "./template-details.js";
 
 export * from "./helpers/index.js";

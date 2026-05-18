@@ -68,6 +68,19 @@ export class TemplatePath {
     return this.virtual;
   }
 
+  /**
+   * @internal
+   * String hash code used by `LookupContext`'s details-cache keying. Mirrors
+   * Ruby `Object#hash` for `TemplatePath` (delegates to the virtual path).
+   */
+  hash(): number {
+    let h = 0;
+    for (let i = 0; i < this.virtual.length; i++) {
+      h = ((h << 5) - h + this.virtual.charCodeAt(i)) | 0;
+    }
+    return h;
+  }
+
   /** @internal */
   eql(other: TemplatePath): boolean {
     return this.virtual === other.virtual;

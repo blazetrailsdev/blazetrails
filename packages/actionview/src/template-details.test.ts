@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { Requested, TemplateDetails } from "./details.js";
+import { Requested, TemplateDetails } from "./template-details.js";
 
 function req(overrides: Partial<ConstructorParameters<typeof Requested>[0]> = {}): Requested {
   return new Requested({

@@ -5,6 +5,9 @@
  * to match concrete templates against a `Requested` set.
  */
 
+import type { TemplateHandler } from "./template-handler.js";
+import { TemplateHandlerRegistry } from "./template-handler.js";
+
 export type DetailKey = string | symbol | null;
 
 export interface RequestedInit {
@@ -16,16 +19,6 @@ export interface RequestedInit {
 
 /** Sentinel for `variants: :any` — every variant matches with score 1. */
 const ANY = Symbol.for("ActionView::TemplateDetails::ANY");
-
-function buildIdxMap(arr: ReadonlyArray<DetailKey>): ReadonlyMap<DetailKey, number> {
-  const m = new Map<DetailKey, number>();
-  let i = 0;
-  for (const v of arr) {
-    if (!m.has(v)) m.set(v, i++);
-  }
-  if (!m.has(null)) m.set(null, i);
-  return m;
-}
 
 export class Requested {
   readonly locale: ReadonlyArray<DetailKey>;
@@ -44,10 +37,25 @@ export class Requested {
     this.formats = formats;
     this.variants = variants;
 
-    this.localeIdx = buildIdxMap(locale);
-    this.handlersIdx = buildIdxMap(handlers);
-    this.formatsIdx = buildIdxMap(formats);
-    this.variantsIdx = variants === "any" ? "any" : buildIdxMap(variants);
+    this.localeIdx = this.buildIdxHash(locale);
+    this.handlersIdx = this.buildIdxHash(handlers);
+    this.formatsIdx = this.buildIdxHash(formats);
+    this.variantsIdx = variants === "any" ? "any" : this.buildIdxHash(variants);
+  }
+
+  /**
+   * @internal
+   * Builds the `value -> idx` lookup map (Rails `build_idx_hash`). Includes
+   * `null` as a trailing entry so unspecified facets still resolve.
+   */
+  private buildIdxHash(arr: ReadonlyArray<DetailKey>): ReadonlyMap<DetailKey, number> {
+    const m = new Map<DetailKey, number>();
+    let i = 0;
+    for (const v of arr) {
+      if (!m.has(v)) m.set(v, i++);
+    }
+    if (!m.has(null)) m.set(null, i);
+    return m;
   }
 
   /** @internal */
@@ -91,6 +99,27 @@ export class TemplateDetails {
       requested.lookupVariant(this.variant) ?? Number.MAX_SAFE_INTEGER,
       requested.handlersIdx.get(this.handler) ?? Number.MAX_SAFE_INTEGER,
     ];
+  }
+
+  /**
+   * Look up the handler registered for this template's extension.
+   * Mirrors Rails `Template.handler_for_extension`.
+   */
+  handlerClass(): TemplateHandler | undefined {
+    if (typeof this.handler !== "string") return undefined;
+    return TemplateHandlerRegistry.handlerForExtension(this.handler);
+  }
+
+  /**
+   * Format if set, else fall back to the handler's `defaultFormat`. Used by
+   * `LookupContext` when callers omit an explicit format.
+   */
+  formatOrDefault(): DetailKey {
+    if (this.format !== null) return this.format;
+    const handler = this.handlerClass() as
+      | (TemplateHandler & { defaultFormat?: string })
+      | undefined;
+    return handler?.defaultFormat ?? null;
   }
 }
 

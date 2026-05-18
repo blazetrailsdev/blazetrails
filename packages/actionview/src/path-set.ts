@@ -11,8 +11,8 @@
  * port lands in Phase 1c.
  */
 
-import type { Requested, TemplateDetails } from "./template/details.js";
-import type { TemplatePath } from "./template/path.js";
+import type { Requested, TemplateDetails } from "./template-details.js";
+import type { TemplatePath } from "./template-path.js";
 
 export interface PathSetResolver {
   findAll(
@@ -28,8 +28,17 @@ export interface PathSetResolver {
 export class PathSet implements Iterable<PathSetResolver> {
   readonly paths: ReadonlyArray<PathSetResolver>;
 
-  constructor(paths: ReadonlyArray<PathSetResolver> = []) {
-    this.paths = Object.freeze(paths.slice());
+  constructor(paths: ReadonlyArray<PathSetResolver | unknown> = []) {
+    this.paths = Object.freeze(this.typecast(paths));
+  }
+
+  /**
+   * @internal
+   * Clone for Ruby's `initialize_copy(other)` — frozen, deep-ish copy of paths.
+   */
+  initializeCopy(other: PathSet): this {
+    (this as { paths: ReadonlyArray<PathSetResolver> }).paths = Object.freeze(other.paths.slice());
+    return this;
   }
 
   get size(): number {
@@ -93,14 +102,48 @@ export class PathSet implements Iterable<PathSetResolver> {
     detailsKey: unknown,
     locals: ReadonlyArray<string>,
   ): unknown[] {
+    for (const { resolver, prefix } of this.searchCombinations(prefixes)) {
+      const templates = resolver.findAll(path, prefix, partial, details, detailsKey, locals);
+      if (templates.length > 0) return templates;
+    }
+    return [];
+  }
+
+  /**
+   * @internal
+   * Iterates `(resolver, prefix)` pairs in Rails' `search_combinations` order:
+   * prefixes outer, resolvers inner.
+   */
+  private *searchCombinations(
+    prefixes: string | ReadonlyArray<string>,
+  ): IterableIterator<{ resolver: PathSetResolver; prefix: string }> {
     const pfxs = Array.isArray(prefixes) ? prefixes : [prefixes as string];
     for (const prefix of pfxs) {
       for (const resolver of this.paths) {
-        const templates = resolver.findAll(path, prefix, partial, details, detailsKey, locals);
-        if (templates.length > 0) return templates;
+        yield { resolver, prefix };
       }
     }
-    return [];
+  }
+
+  /**
+   * @internal
+   * Validates incoming paths. Rails additionally wraps `String`/`Pathname`
+   * entries in a `FileSystemResolver`; that wrapping lands with the resolver
+   * port in Phase 1c. Until then non-Resolver entries throw.
+   */
+  private typecast(paths: ReadonlyArray<PathSetResolver | unknown>): PathSetResolver[] {
+    return paths.map((path) => {
+      if (
+        path !== null &&
+        typeof path === "object" &&
+        typeof (path as PathSetResolver).findAll === "function"
+      ) {
+        return path as PathSetResolver;
+      }
+      throw new TypeError(
+        `${String(path)} is not a valid path: must be a Resolver (string/Pathname wrapping lands in Phase 1c)`,
+      );
+    });
   }
 
   exists(

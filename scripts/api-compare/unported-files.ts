@@ -476,7 +476,7 @@ export const UNPORTED_FILES: UnportedFile[] = [
       "rather than exact bytes.",
   },
   {
-    testFile: "cases/adapter_test.rb",
+    testFile: "adapter_test.rb",
     className: "AdapterThreadSafetyTest",
     tests: ["#active? is synchronized", "#verify! is synchronized"],
     reason:

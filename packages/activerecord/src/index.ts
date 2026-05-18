@@ -55,6 +55,7 @@ export {
   association,
   isAssociationCached,
   loadHabtm,
+  applyAssociationScope,
   updateCounterCaches,
   touchBelongsToParents,
   eagerLoadBang,

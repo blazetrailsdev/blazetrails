@@ -12,7 +12,26 @@ export {
   InMemoryResolver,
 } from "./template-resolver.js";
 
-export { LookupContext, MissingTemplate } from "./lookup-context.js";
+export { LookupContext, MissingTemplate, DetailsKey } from "./lookup-context.js";
+
+export { TemplateError } from "./template/error.js";
+export type { TemplateErrorOptions } from "./template/error.js";
+
+export { PathRegistry } from "./path-registry.js";
+
+export { Digestor } from "./digestor.js";
+export type { DigestorOptions } from "./digestor.js";
+
+export { Base } from "./base.js";
+
+export type {
+  Rendering,
+  Layouts,
+  LayoutsClass,
+  ViewPaths,
+  ViewPathsClass,
+  RenderOptions as RenderingOptions,
+} from "./rendering.js";
 
 export {
   Renderer,

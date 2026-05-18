@@ -18,6 +18,17 @@ import type { TemplateResolver } from "./template-resolver.js";
 import type { Template } from "./template.js";
 
 export class MissingTemplate extends Error {
+  /** Rails-shape accessors — refined in Phase 1d. @internal stub - real impl in Phase 1d */
+  readonly path: string;
+  /** @internal stub - real impl in Phase 1d */
+  readonly paths: string[];
+  /** @internal stub - real impl in Phase 1d */
+  readonly prefixes: string[];
+  /** @internal stub - real impl in Phase 1d */
+  readonly partial: boolean;
+  /** @internal stub - real impl in Phase 1d */
+  readonly templateKeys: readonly string[];
+
   constructor(
     public readonly controller: string,
     public readonly action: string,
@@ -29,6 +40,11 @@ export class MissingTemplate extends Error {
         `Searched in: ${searchedPaths.length > 0 ? searchedPaths.join(", ") : "(no resolvers)"}`,
     );
     this.name = "MissingTemplate";
+    this.path = `${controller}/${action}`;
+    this.paths = searchedPaths;
+    this.prefixes = controller ? [controller] : [];
+    this.partial = action.startsWith("_");
+    this.templateKeys = [format];
   }
 }
 
@@ -241,3 +257,17 @@ export class LookupContext {
     return this.resolvers.map((r) => r.constructor.name);
   }
 }
+
+/**
+ * Cache key for `{locale, formats, variants, handlers}` detail tuples.
+ * Hooked by the `action_view` load callback to clear the cache between
+ * request cycles. Real cache wiring lands in Phase 1d.
+ *
+ * @internal stub - real impl in Phase 1d
+ */
+export class DetailsKey {
+  /** @internal stub - real impl in Phase 1d */
+  static clear(): void {}
+}
+
+(LookupContext as unknown as { DetailsKey: typeof DetailsKey }).DetailsKey = DetailsKey;

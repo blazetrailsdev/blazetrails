@@ -94,8 +94,38 @@ describe("touch on belongs_to", () => {
 describe("BelongsToAssociationsTest", () => {
   let adapter: DatabaseAdapter;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     adapter = freshAdapter();
+    // Schema covers the first ~30 tests (lines 101-1190): the base
+    // Company/Account tests plus the counter-cache (Btc/Btcas/Cc/CustomCc/
+    // Btcau), polymorphic Post/Comment + Tag (incl. wp_cpk_tags), and
+    // Record/Entry families. Remaining tests in this describe inline more
+    // unique table families and are deferred to follow-up cluster PRs.
+    await defineSchema(adapter, {
+      companies: {
+        name: "string",
+        accounts_count: "integer",
+        active: "boolean",
+        updated_at: "datetime",
+      },
+      accounts: { company_id: "integer", credit_limit: "integer" },
+      btc_companies: { name: "string", accounts_count: "integer" },
+      btc_accounts: { company_id: "integer" },
+      btcas_companies: { name: "string", accounts_count: "integer" },
+      btcas_accounts: { company_id: "integer" },
+      cc_companies: { name: "string", accounts_count: "integer" },
+      cc_accounts: { company_id: "integer" },
+      custom_cc_companies: { name: "string", custom_count: "integer" },
+      custom_cc_accounts: { company_id: "integer" },
+      btcau_companies: { name: "string", accounts_count: "integer" },
+      btcau_accounts: { company_id: "integer", credit_limit: "integer" },
+      tags: { taggable_id: "integer", taggable_type: "string" },
+      wp_cpk_tags: { taggable_id: "integer", taggable_type: "string", name: "string" },
+      posts: { title: "string" },
+      comments: { commentable_id: "integer", commentable_type: "string" },
+      records: { name: "string" },
+      entries: { record_id: "integer" },
+    });
   });
 
   it("natural assignment", async () => {

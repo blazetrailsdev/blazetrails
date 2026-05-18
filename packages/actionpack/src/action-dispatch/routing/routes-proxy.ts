@@ -31,6 +31,7 @@ import {
   type UrlForHost,
   type UrlForRoutes,
 } from "./url-for.js";
+import type { PolymorphicHost } from "./polymorphic-routes.js";
 
 /** The minimal helpers-module surface RoutesProxy dispatches into. */
 export type RoutesProxyHelpers = Record<string, unknown>;
@@ -86,7 +87,8 @@ export class RoutesProxy implements UrlForHost {
   /** @internal Rails-private helper. */
   polymorphicPathForAction = polymorphicPathForAction;
   /** @internal Rails-private helper. */
-  polymorphicMapping = (record: unknown) => polymorphicMapping(this as never, record);
+  polymorphicMapping = (record: unknown) =>
+    polymorphicMapping(this as unknown as PolymorphicHost, record);
 
   constructor(
     routes: UrlForRoutes,

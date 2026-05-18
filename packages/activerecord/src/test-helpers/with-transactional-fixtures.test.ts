@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import {
   createTestAdapter,
-  setUseTransactionalTests,
   shouldSkipGlobalReset,
   type TestDatabaseAdapter,
 } from "../test-adapter.js";
+import { defineSchema } from "./define-schema.js";
 import { withTransactionalFixtures } from "./with-transactional-fixtures.js";
 
 interface AdapterWithExec {
@@ -64,19 +64,25 @@ describe("withTransactionalFixtures (useTransactionalTests=false opt-out)", () =
   let adapter: TestDatabaseAdapter;
   const a = (): AdapterWithExec => adapter as unknown as AdapterWithExec;
 
-  beforeAll(() => {
+  // Exercises the supported integration: defineSchema(..., { useTransactionalTests: false })
+  // sets the per-adapter flag, then withTransactionalFixtures reads it in
+  // its beforeAll (registered next, so user's beforeAll runs first).
+  beforeAll(async () => {
     adapter = createTestAdapter();
-    setUseTransactionalTests(adapter, false);
+    await defineSchema(
+      adapter,
+      { optout_marker: { name: "string" } },
+      { useTransactionalTests: false },
+    );
   });
 
   withTransactionalFixtures(() => adapter);
 
-  // The helper is inactive — it must not open or roll back a transaction.
-  // We verify behaviorally: open a manual tx in the test body and confirm
-  // the helper's afterEach didn't already roll back something. If the helper
-  // were active, its beforeEach would have opened a tx and our manual
-  // beginTransaction would nest as a savepoint (openTransactions==2);
-  // when inactive, openTransactions==1 after our manual begin.
+  // The helper is inactive — it must not open a transaction in beforeEach.
+  // If the helper were active, its beforeEach would have opened the outer
+  // tx and our manual beginTransaction would nest as a savepoint
+  // (openTransactions==2); when inactive, openTransactions==1 after our
+  // manual begin.
   it("does not open a transaction in beforeEach when opted out", async () => {
     const tm = a().innerAdapter.transactionManager as unknown as {
       openTransactions: number;

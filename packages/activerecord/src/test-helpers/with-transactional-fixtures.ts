@@ -50,16 +50,24 @@ function tm(adapter: TestDatabaseAdapter): TxnAdapter["transactionManager"] {
  * the outer transaction is opened with `joinable: false`.
  *
  * Honors the per-adapter `useTransactionalTests` flag set by `defineSchema`:
- * when `false`, the helper deactivates and the file falls back to the global
- * `resetTestAdapterState` beforeEach. Mirrors Rails' per-test-class
- * `self.use_transactional_tests = false`
+ * when `false` at `beforeAll` time, the helper deactivates and the file
+ * falls back to the global `resetTestAdapterState` beforeEach. Mirrors
+ * Rails' per-test-class `self.use_transactional_tests = false`
  * (test_fixtures.rb:108 `run_in_transaction?`).
  *
- * Opt-out caveat: when `useTransactionalTests: false`, the global
- * `resetTestAdapterState` beforeEach drops all tables before each test —
- * so opted-out files must register schema per-test (e.g. `beforeEach`
- * `defineSchema`), not in `beforeAll`. This matches Rails' non-transactional
- * fixture path (`test_fixtures.rb:135-138`), which reloads fixtures every test.
+ * Timing: the flag is read once in `beforeAll`. To opt out, callers must
+ * set the flag BEFORE `withTransactionalFixtures(...)`'s beforeAll runs —
+ * either via `defineSchema(adapter, ..., { useTransactionalTests: false })`
+ * inside a user `beforeAll` that runs first, or by calling
+ * `setUseTransactionalTests(adapter, false)` directly. Setting the flag
+ * per-test (in `beforeEach`) is too late: the helper has already decided.
+ * Files that need per-test schema registration AND opt-out should simply
+ * not call `withTransactionalFixtures` at all — there's no benefit.
+ *
+ * When opted out, the global reset drops all tables before each test, so
+ * opted-out files using this helper still need per-test schema setup
+ * (matching Rails' non-transactional path in test_fixtures.rb:135-138,
+ * which reloads fixtures every test).
  *
  * @example
  *   let adapter: TestDatabaseAdapter;

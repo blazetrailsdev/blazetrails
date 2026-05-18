@@ -222,17 +222,11 @@ jobs:
     name: Action Pack Tests
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.27.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/setup-pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm vitest run packages/actionpack
 

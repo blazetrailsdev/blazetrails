@@ -13,12 +13,12 @@ describe("AdapterTest", () => {
   });
   it.skip("valid column", () => {
     // BLOCKED: schema
-    // ROOT-CAUSE: connection-adapters/abstract/schema-statements.ts: validType?(type) not implemented (must iterate nativeDatabaseTypes keys)
+    // ROOT-CAUSE: connection-adapters/abstract-adapter.ts#isValidType: stub returns true for any non-empty string; must consult nativeDatabaseTypes()
     // SCOPE: ~10 LOC + nativeDatabaseTypes fix; affects ~2 tests
   });
   it.skip("invalid column", () => {
     // BLOCKED: schema
-    // ROOT-CAUSE: connection-adapters/abstract/schema-statements.ts: validType?(type) not implemented (must return false for unknown types)
+    // ROOT-CAUSE: connection-adapters/abstract-adapter.ts#isValidType: stub returns true for any non-empty string; must return false for types not in nativeDatabaseTypes()
     // SCOPE: ~10 LOC; affects ~2 tests
   });
   it.skip("table exists?", () => {
@@ -78,7 +78,7 @@ describe("AdapterTest", () => {
   });
   it.skip("disable prepared statements", () => {
     // BLOCKED: connection-pool
-    // ROOT-CAUSE: core.ts#preparedStatements + connection-handling.ts#establishConnection: global ActiveRecord.disablePreparedStatements override of per-config prepared_statements:true not wired
+    // ROOT-CAUSE: connection-adapters/abstract-adapter.ts#preparedStatements (getter/setter at L608) + connection-handling.ts#establishConnection: no global ActiveRecord.disablePreparedStatements toggle exists to override the per-config prepared_statements:true on (re-)establishConnection
     // SCOPE: ~25 LOC; affects ~1 test
   });
   it.skip("table alias", () => {
@@ -354,7 +354,7 @@ describe("AdapterThreadSafetyTest", () => {
 describe("AdvisoryLocksEnabledTest", () => {
   it.skip("advisory locks enabled?", () => {
     // BLOCKED: adapter-pg
-    // ROOT-CAUSE: connection-adapters/postgresql-adapter.ts: advisoryLocksEnabled? + establishConnection(advisory_locks:) is PG-only
+    // ROOT-CAUSE: connection-adapters/abstract-adapter.ts#isAdvisoryLocksEnabled (currently hardcoded false): PG override + establishConnection(advisory_locks:) config plumbing not wired
     // SCOPE: ~15 LOC port; affects ~1 test
   });
 });

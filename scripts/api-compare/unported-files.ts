@@ -481,9 +481,10 @@ export const UNPORTED_FILES: UnportedFile[] = [
     reason:
       "AdapterThreadSafetyTest exercises Ruby Thread.new/Thread.pass concurrency " +
       "on a single shared connection, asserting mutex-style serialization of " +
-      "#active?/#verify!/#disconnect! under the GVL. JavaScript has no native " +
-      "threads — async/await on a single event-loop cannot reproduce the GVL " +
-      "interleaving that this test pins.",
+      "#active?/#verify!/#disconnect! under the GVL. Node Worker threads use " +
+      "isolated heaps and structured-clone message passing, not the shared- " +
+      "memory Thread.new model this test relies on, so the GVL interleaving " +
+      "this test pins has no equivalent in our runtime target.",
   },
 ];
 

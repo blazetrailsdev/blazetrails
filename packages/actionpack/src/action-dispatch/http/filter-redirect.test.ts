@@ -36,7 +36,8 @@ describe("filteredLocation", () => {
   });
 
   it("returns FILTERED when the URL cannot be parsed", () => {
-    const host = makeHost("::::not a url::::", makeRequest([]));
+    // `http://[invalid` triggers a WHATWG URL parse error (invalid IPv6 host).
+    const host = makeHost("http://[invalid", makeRequest([]));
     expect(filteredLocation.call(host)).toBe(FILTERED);
   });
 
@@ -58,6 +59,11 @@ describe("filteredLocation", () => {
   it("returns the URL unchanged when there is no request", () => {
     const host = makeHost("https://example.com/path?foo=1", null);
     expect(filteredLocation.call(host)).toBe("https://example.com/path?foo=1");
+  });
+
+  it("handles relative URLs (Rails URI.parse parity)", () => {
+    const host = makeHost("/login?password=hunter2&name=alice", makeRequest([], ["password"]));
+    expect(filteredLocation.call(host)).toBe("/login?password=[FILTERED]&name=alice");
   });
 
   it("treats absent redirect_filter as an empty list", () => {

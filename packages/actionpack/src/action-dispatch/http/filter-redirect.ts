@@ -58,7 +58,11 @@ export function locationFilterMatch(this: FilterRedirectHost): boolean {
 /** @internal */
 export function parameterFilteredLocation(this: FilterRedirectHost): string {
   try {
-    const url = new URL(this.location);
+    // Rails' URI.parse accepts both absolute and relative URLs; the
+    // WHATWG URL constructor requires a base for relative URLs.
+    const PLACEHOLDER_BASE = "http://__filter_redirect_placeholder__/";
+    const isAbsolute = /^[a-z][a-z0-9+.-]*:/i.test(this.location);
+    const url = isAbsolute ? new URL(this.location) : new URL(this.location, PLACEHOLDER_BASE);
     if (url.search.length > 1 && this.request) {
       const filter = this.request.parameterFilter();
       const query = url.search.slice(1);
@@ -75,6 +79,10 @@ export function parameterFilteredLocation(this: FilterRedirectHost): string {
         return part;
       });
       url.search = `?${filteredParts.join("")}`;
+    }
+    if (!isAbsolute) {
+      // Strip the placeholder origin to mirror Rails relative-URL round-trip.
+      return `${url.pathname}${url.search}${url.hash}`;
     }
     return url.toString();
   } catch {

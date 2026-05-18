@@ -450,13 +450,19 @@ export class Base extends Metal {
   static defaultFormBuilder = defaultFormBuilder;
 
   /** Instance reader for the configured form builder (Rails parity). */
-  defaultFormBuilder = defaultFormBuilder;
+  defaultFormBuilder(): unknown {
+    return defaultFormBuilder.call(this as never);
+  }
 
   /** @internal Rails parity — caching instrumentation payload. */
-  instrumentPayload = instrumentPayload;
+  instrumentPayload(key: unknown): { controller: string; action: string; key: unknown } {
+    return instrumentPayload.call(this as never, key);
+  }
 
   /** @internal Rails parity — caching instrumentation name. */
-  instrumentName = instrumentName;
+  instrumentName(): string {
+    return instrumentName.call(this as never);
+  }
 
   // --- Rescue ---
 

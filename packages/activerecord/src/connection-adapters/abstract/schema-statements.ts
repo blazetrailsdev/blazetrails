@@ -597,8 +597,8 @@ export class SchemaStatements {
 
   async removeTimestamps(tableName: string): Promise<void> {
     // Mirrors Rails (abstract/schema_statements.rb:1468): route through removeColumns so
-    // adapters that batch (MySQL) can emit a single ALTER. The default removeColumns
-    // implementation loops sequentially; SQLite overrides to use a rebuild.
+    // adapter overrides apply. The default removeColumns loops sequentially (matching Rails);
+    // SQLite overrides to use a single alter_table rebuild.
     await this.removeColumns(tableName, "updated_at", "created_at");
   }
 

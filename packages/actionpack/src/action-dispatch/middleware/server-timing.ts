@@ -16,18 +16,13 @@ import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
 import { SERVER_TIMING } from "../constants.js";
 
 /** @internal */
-class Subscriber {
+export class Subscriber {
   private static _instance: Subscriber | null = null;
   private _subscriber: NotificationSubscriber | null = null;
   private _context: AsyncContext<Event[]> | null = null;
 
   static instance(): Subscriber {
     return (this._instance ??= new Subscriber());
-  }
-
-  /** @internal */
-  static resetInstance(): void {
-    this._instance = null;
   }
 
   private _events(): AsyncContext<Event[]> {
@@ -58,6 +53,8 @@ class Subscriber {
 }
 
 export class ServerTiming {
+  static Subscriber = Subscriber;
+
   private app: RackApp;
   private subscriber: Subscriber;
 
@@ -89,7 +86,7 @@ export class ServerTiming {
     }
 
     const existing = headers[SERVER_TIMING];
-    if (existing != null && existing !== "") {
+    if (existing != null && existing.trim() !== "") {
       headerInfo.unshift(existing);
     }
     headers[SERVER_TIMING] = headerInfo.join(", ");

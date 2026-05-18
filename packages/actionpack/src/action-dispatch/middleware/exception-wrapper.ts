@@ -31,10 +31,10 @@ export class ExceptionWrapper {
   }
 
   /**
-   * Unwraps the inner cause when @exception is a known wrapper exception
+   * Unwraps the inner cause when `this.exception` is a known wrapper exception
    * (e.g. ActionView::Template::Error). For now we have no wrapper classes
-   * to unwrap, so this always returns @exception. Mirrors Rails'
-   * ExceptionWrapper#unwrapped_exception.
+   * to unwrap, so this always returns `this.exception`. Mirrors Rails'
+   * `ExceptionWrapper#unwrapped_exception`.
    */
   get unwrappedException(): Error {
     return this.exception;

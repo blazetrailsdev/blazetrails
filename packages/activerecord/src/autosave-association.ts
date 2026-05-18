@@ -344,11 +344,20 @@ export function validateAssociations(record: Base, context?: ValidationContextAr
       if (isCollection) {
         // Mirrors Rails validate_collection_association: filter via
         // associated_records_to_validate_or_save, then association_valid? each.
-        const filtered = associatedRecordsToValidateOrSave(
-          inst,
-          typeof record.isNewRecord === "function" ? record.isNewRecord() : false,
-          !!assoc.options.autosave,
-        );
+        // A custom validation context bypasses the changed/new filter so that
+        // unchanged persisted children still run their context-specific validators —
+        // matches the `|| context` arm in `association_valid?` (autosave_association.rb:384).
+        const filtered = customCtx
+          ? Array.isArray(inst.target)
+            ? (inst.target as any[])
+            : inst.target != null
+              ? [inst.target as any]
+              : null
+          : associatedRecordsToValidateOrSave(
+              inst,
+              typeof record.isNewRecord === "function" ? record.isNewRecord() : false,
+              !!assoc.options.autosave,
+            );
         if (!filtered) continue;
         for (const child of filtered) {
           isAssociationValid(reflectionLike, child, record, inst, customCtx);
@@ -371,6 +380,22 @@ export function validateAssociations(record: Base, context?: ValidationContextAr
             _setValidatingBelongsToFor(record, assoc, false);
           }
         } else {
+          // has_one — mirror Rails validate_has_one_association inverse guard
+          // (autosave_association.rb:333-336): skip when the inverse belongs_to
+          // on the child is currently validating or autosaving, to break cycles.
+          const reflection = (ctor as any)._reflectOnAssociation?.(assoc.name) ?? null;
+          const inverse =
+            typeof reflection?.inverseOf === "function" ? reflection.inverseOf() : null;
+          if (inverse) {
+            const inverseInst = _loadedAssociation(child, inverse.name);
+            if (
+              inverseInst &&
+              ((child as any).isValidatingBelongsToFor?.(inverseInst) ||
+                (child as any).isAutosavingBelongsToFor?.(inverseInst))
+            ) {
+              continue;
+            }
+          }
           isAssociationValid(reflectionLike, child, record, inst, customCtx);
         }
       }

@@ -7,8 +7,9 @@
  *   relation.instance_exec(owner, &scope) || relation
  *
  * The TS helper consolidates the equivalent post-merge step shared by
- * `loadBelongsTo`, `loadHasOne`, `loadHasMany`, `loadHasManyThrough` (×3),
- * `loadHabtm`, `buildHasManyRelation`, and the DJAS-routed through loader.
+ * `loadBelongsTo`, `loadHasOne` (×2 — reflection path + inline fallback),
+ * `loadHasMany` (×2), `loadHasManyThrough` (×2), `loadHabtm`,
+ * `buildHasManyRelation`, and the DJAS-routed `_loadThroughViaDisableJoinsScope`.
  */
 import { describe, it, expect } from "vitest";
 import { applyAssociationScope, Base } from "../index.js";
@@ -33,9 +34,14 @@ describe("applyAssociationScope", () => {
 
   it("falls back to rel when the scope returns falsy (Rails `|| relation`)", () => {
     const rel = { tag: "rel" };
-    // Arrow `() => null` — mirrors a conditional Ruby block that returns nil.
+    // Truthiness-based — mirrors Ruby's `|| relation`. Covers nil
+    // (`null`/`undefined`), `false` (idiomatic `cond && rel.where(...)`
+    // short-circuit), and `0`/`""` for completeness.
     expect(applyAssociationScope(rel, () => null, owner)).toBe(rel);
     expect(applyAssociationScope(rel, () => undefined, owner)).toBe(rel);
+    expect(applyAssociationScope(rel, () => false as never, owner)).toBe(rel);
+    expect(applyAssociationScope(rel, () => 0 as never, owner)).toBe(rel);
+    expect(applyAssociationScope(rel, () => "" as never, owner)).toBe(rel);
   });
 
   it("passes the owner as the second positional arg", () => {

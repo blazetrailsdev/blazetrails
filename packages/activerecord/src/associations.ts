@@ -602,7 +602,11 @@ export function applyAssociationScope<R>(
 ): R {
   if (!scope) return rel;
   if (reflectionScope !== undefined && scope === reflectionScope) return rel;
-  return (scope(rel, owner) ?? rel) as R;
+  // Rails' `instance_exec(owner, &scope) || relation` is truthiness-based
+  // (`||`), not nullish — a scope like `cond && rel.where(...)` that
+  // short-circuits to `false` must still fall back to the input relation.
+  // Mirror with `||`, not `??`.
+  return (scope(rel, owner) || rel) as R;
 }
 
 /**

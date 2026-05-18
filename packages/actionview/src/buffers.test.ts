@@ -45,6 +45,25 @@ describe("OutputBuffer", () => {
     expect(buf.toStr()).toBe("<b>unsafe</b>");
   });
 
+  it("safeConcat throws on nil (Rails parity)", () => {
+    expect(() => new OutputBuffer().safeConcat(null)).toThrow(TypeError);
+    expect(() => new OutputBuffer().safeConcat(undefined)).toThrow(TypeError);
+  });
+
+  it("safeExprAppend skips nil and appends raw otherwise", () => {
+    const buf = new OutputBuffer("x");
+    buf.safeExprAppend(null);
+    buf.safeExprAppend(undefined);
+    expect(buf.toStr()).toBe("x");
+    buf.safeExprAppend("<b>");
+    expect(buf.toStr()).toBe("x<b>");
+  });
+
+  it("rawBuffer getter exposes underlying string", () => {
+    const buf = new OutputBuffer("hello");
+    expect(buf.rawBuffer).toBe("hello");
+  });
+
   it("toString returns a SafeBuffer", () => {
     const buf = new OutputBuffer("hi");
     const s = buf.toString();

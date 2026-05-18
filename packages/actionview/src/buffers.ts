@@ -56,9 +56,15 @@ export class OutputBuffer {
     return this;
   }
 
-  /** Append without escaping. Mirrors Rails `safe_concat` / `safe_append=`. */
+  /**
+   * Append without escaping. Mirrors Rails `safe_concat` / `safe_append=`.
+   * Unlike `safeExprAppend`, this does NOT skip nil — Rails raises TypeError
+   * on `String#<<(nil)`, so we throw to match.
+   */
   safeConcat(value: unknown): this {
-    if (value === null || value === undefined) return this;
+    if (value === null || value === undefined) {
+      throw new TypeError("no implicit conversion of nil into String");
+    }
     this._raw += value instanceof SafeBuffer ? value.toString() : String(value);
     return this;
   }

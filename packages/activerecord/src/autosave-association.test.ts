@@ -2531,6 +2531,88 @@ describe("TestAutosaveAssociationsInGeneral", () => {
     expect(child.region).toBe("us-west");
   });
 
+  it("default belongs_to runs validations on the new target via validate: !autosave", async () => {
+    // Rails autosave_association.rb:553 — `record.save(validate: !autosave)`.
+    // With autosave unset, `!autosave` is truthy → the target's validations
+    // run during owner save. A failing validation makes record.save return
+    // false; Rails' `saved if autosave` clamps the return to nil for the
+    // default branch, so the lambda doesn't `throw(:abort)` and the owner
+    // save still succeeds — the child simply remains unpersisted.
+    const adapter = freshAdapter();
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        this.validates("name", { presence: true });
+      }
+    }
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("DefaultAutosaveAuthor", Author);
+    registerModel("DefaultAutosavePost", Post);
+    Associations.belongsTo.call(Post, "author", {
+      foreignKey: "author_id",
+      className: "DefaultAutosaveAuthor",
+    });
+
+    const author = new Author({}); // name missing — validation fails
+    const post = new Post({ title: "ok" });
+    cacheAssoc(post, "author", author);
+    const saved = await post.save();
+    // Owner save succeeds — default branch swallows child failure.
+    expect(saved).toBe(true);
+    expect(post.isNewRecord()).toBe(false);
+    // Child remained unsaved because record.save(validate: true) failed.
+    expect(author.isNewRecord()).toBe(true);
+    // Owner.errors stays clean — propagateErrors is gated on autosave.
+    expect(post.errors.size).toBe(0);
+  });
+
+  it("belongs_to autosave with PK longer than FK skips trailing PK positions", async () => {
+    // Rails autosave_association.rb:563 — `primary_key.zip(foreign_key)`.
+    // When PK is longer, the trailing pairs have `foreign_key = nil`;
+    // Ruby's `self[nil] = id` would raise — our impl skips the nil-FK
+    // partner so a misconfigured pair doesn't blow up the owner save.
+    const adapter = freshAdapter();
+    class Parent extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class Child extends Base {
+      static {
+        this.attribute("parent_id", "integer");
+        this.attribute("label", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("LongPkParent", Parent);
+    registerModel("LongPkChild", Child);
+    // Explicit composite PK ["id", "name"] zipped against scalar FK
+    // ["parent_id"] → only ("id", "parent_id") pairs; ("name", nil) drops.
+    Associations.belongsTo.call(Child, "parent", {
+      primaryKey: ["id", "name"],
+      foreignKey: "parent_id",
+      className: "LongPkParent",
+      autosave: true,
+    });
+
+    const parent = new Parent({ name: "P" });
+    const child = new Child({ label: "c" });
+    cacheAssoc(child, "parent", parent);
+    await child.save();
+    expect(parent.isNewRecord()).toBe(false);
+    expect(child.parent_id).toBe(parent.id);
+    // The dropped ("name", nil) pair didn't attempt to write — no throw,
+    // no spurious column write.
+  });
+
   it("should not add the same callbacks multiple times for has one", async () => {
     const adapter = freshAdapter();
     let saveCount = 0;

@@ -1,0 +1,70 @@
+import { describe, it, expect } from "vitest";
+import { bodyFromString, bodyToString } from "@blazetrails/rack";
+import type { RackEnv, RackResponse } from "@blazetrails/rack";
+import { DebugLocks, type InterlockLike, type ThreadLike, type ThreadInfo } from "./debug-locks.js";
+
+const passthrough = async (_env: RackEnv): Promise<RackResponse> => [200, {}, bodyFromString("ok")];
+
+function makeInterlock(threads: Array<[ThreadLike, ThreadInfo]>): InterlockLike {
+  const map = new Map(threads);
+  return {
+    rawState(block) {
+      return block(map);
+    },
+  };
+}
+
+function thread(id: number, status: string | null = "run", backtrace: string[] = []): ThreadLike {
+  return { id, status, backtrace: () => backtrace };
+}
+
+describe("DebugLocks", () => {
+  it("passes non-matching paths to the inner app", async () => {
+    const mw = new DebugLocks(passthrough, { interlock: makeInterlock([]) });
+    const res = await mw.call({ REQUEST_METHOD: "GET", PATH_INFO: "/other" });
+    expect(res[0]).toBe(200);
+    expect(await bodyToString(res[2])).toBe("ok");
+  });
+
+  it("passes non-GET requests to the inner app", async () => {
+    const mw = new DebugLocks(passthrough, { interlock: makeInterlock([]) });
+    const res = await mw.call({ REQUEST_METHOD: "POST", PATH_INFO: "/rails/locks" });
+    expect(await bodyToString(res[2])).toBe("ok");
+  });
+
+  it("renders thread details at /rails/locks", async () => {
+    const interlock = makeInterlock([
+      [thread(0x1a, "sleep", ["a.rb:1", "b.rb:2"]), { exclusive: true, sharing: 0 }],
+      [thread(0x2b, "run"), { exclusive: false, sharing: 2 }],
+    ]);
+    const mw = new DebugLocks(passthrough, { interlock });
+    const res = await mw.call({ REQUEST_METHOD: "GET", PATH_INFO: "/rails/locks" });
+    expect(res[0]).toBe(200);
+    expect(res[1]["content-type"]).toBe("text/plain; charset=utf-8");
+    const body = await bodyToString(res[2]);
+    expect(body).toContain("Thread 0 [0x1a sleep]  Exclusive");
+    expect(body).toContain("Thread 1 [0x2b run]  Sharing x2");
+    expect(body).toContain("a.rb:1");
+  });
+
+  it("strips a trailing slash from the request path", async () => {
+    const interlock = makeInterlock([]);
+    const mw = new DebugLocks(passthrough, { interlock });
+    const res = await mw.call({ REQUEST_METHOD: "GET", PATH_INFO: "/rails/locks/" });
+    expect(res[0]).toBe(200);
+    expect(res[1]["content-type"]).toBe("text/plain; charset=utf-8");
+  });
+
+  it("reports blockers for a start_exclusive sleeper", async () => {
+    const interlock = makeInterlock([
+      [thread(1), { sleeper: "start_exclusive", sharing: 0, purpose: "load" }],
+      [thread(2), { exclusive: true, sharing: 0 }],
+    ]);
+    const mw = new DebugLocks(passthrough, { interlock });
+    const res = await mw.call({ REQUEST_METHOD: "GET", PATH_INFO: "/rails/locks" });
+    const body = await bodyToString(res[2]);
+    expect(body).toContain("Waiting in start_exclusive");
+    expect(body).toContain("blocked by: 1");
+    expect(body).toContain("blocking: 0");
+  });
+});

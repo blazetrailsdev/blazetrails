@@ -3173,9 +3173,9 @@ describe("EagerAssociationTest", () => {
   });
 
   it.skip("exceptions have suggestions for fix", async () => {
-    // BLOCKED: associations — eager-loading feature gap
-    // ROOT-CAUSE: associations/eager.ts or preloader.ts missing eager-loading semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in eager.test.ts
+    // BLOCKED: associations — includes("nonexistent_assoc") does not raise
+    // ROOT-CAUSE: associations/preloader.ts: missing AssociationNotFoundError on unknown association name
+    // SCOPE: ~30 LOC fix in preloader.ts to raise on unknown association during eager loading
     class ExSugAuthor extends Base {
       static {
         this.attribute("name", "string");
@@ -5009,10 +5009,7 @@ describe("EagerAssociationTest", () => {
     // ROOT-CAUSE: associations/eager.ts or preloader.ts missing eager-loading semantics
     // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in eager.test.ts
   });
-  it.skip("preloading belongs_to with cpk", async () => {
-    // BLOCKED: associations — eager-loading feature gap
-    // ROOT-CAUSE: associations/eager.ts or preloader.ts missing eager-loading semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in eager.test.ts
+  it("preloading belongs_to with cpk", async () => {
     class CpkOrder extends Base {
       static {
         this.attribute("shop_id", "integer");
@@ -5047,10 +5044,7 @@ describe("EagerAssociationTest", () => {
     expect(order.name).toBe("Order1");
   });
 
-  it.skip("preloading has_many with cpk", async () => {
-    // BLOCKED: associations — eager-loading feature gap
-    // ROOT-CAUSE: associations/eager.ts or preloader.ts missing eager-loading semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in eager.test.ts
+  it("preloading has_many with cpk", async () => {
     class CpkHmOrder extends Base {
       static {
         this.attribute("shop_id", "integer");
@@ -5085,10 +5079,7 @@ describe("EagerAssociationTest", () => {
     expect(items).toHaveLength(2);
   });
 
-  it.skip("preloading has_one with cpk", async () => {
-    // BLOCKED: associations — eager-loading feature gap
-    // ROOT-CAUSE: associations/eager.ts or preloader.ts missing eager-loading semantics
-    // SCOPE: ~50–200 LOC fix in associations/ or preloader.ts; affects ~10–79 tests in eager.test.ts
+  it("preloading has_one with cpk", async () => {
     class CpkHoOrder extends Base {
       static {
         this.attribute("shop_id", "integer");

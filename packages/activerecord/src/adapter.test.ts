@@ -3,13 +3,13 @@ import { describe, it } from "vitest";
 describe("AdapterTest", () => {
   it.skip("update prepared statement", () => {
     // BLOCKED: fixture
-    // ROOT-CAUSE: test-helpers/fixtures/books.ts: no Book model + integration round-trip for null bytes through prepared statements
-    // SCOPE: ~30 LOC port + Book fixture; affects ~1 test
+    // ROOT-CAUSE: adapter.test.ts has no createTestAdapter/defineSchema setup; Book model (test-fixtures.ts) is defined but not wired here, and null-byte prepared-statement round-trip needs a live DB
+    // SCOPE: ~30 LOC port (Book wiring + setup); affects ~1 test
   });
   it.skip("create record with pk as zero", () => {
     // BLOCKED: fixture
-    // ROOT-CAUSE: test-helpers/fixtures/books.ts: needs Book.find(0)/Book.destroy(0) integration round-trip
-    // SCOPE: ~20 LOC port; affects ~1 test
+    // ROOT-CAUSE: adapter.test.ts has no createTestAdapter/defineSchema setup; Book (test-fixtures.ts) is defined but not wired here
+    // SCOPE: ~20 LOC port (Book wiring + setup); affects ~1 test
   });
   it.skip("valid column", () => {
     // BLOCKED: schema

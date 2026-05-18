@@ -66,6 +66,24 @@ describe("AbstractMysqlAdapter#renameColumnForAlter fallback", () => {
     return adapter;
   }
 
+  it("rejects virtual/generated columns: rebuild path cannot preserve AS (<expr>)", async () => {
+    const adapter = await makeAdapter("gen_col", "VIRTUAL GENERATED");
+    adapter.columnDefinitions = async () => [
+      {
+        Field: "gen_col",
+        Type: "int(11)",
+        Null: "YES",
+        Default: null,
+        Extra: "VIRTUAL GENERATED",
+        Collation: null,
+        Comment: "",
+      },
+    ];
+    await expect(adapter.renameColumnForAlter("users", "gen_col", "gen_col2")).rejects.toThrow(
+      /virtual\/generated column/,
+    );
+  });
+
   it("allows auto_increment Extra without throwing", async () => {
     const adapter = await makeAdapter("id", "auto_increment");
     const sql: string = await adapter.renameColumnForAlter("users", "id", "user_id");

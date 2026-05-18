@@ -1546,6 +1546,19 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     // (abstract_mysql_adapter.rb:863-878). Route through columnFor so function-default and
     // on_update detection happens once in newColumnFromField — no second-pass parsing here.
     const column = (await this.columnFor(tableName, columnName)) as MysqlColumn;
+    // Rails' rename_column_for_alter has no equivalent guard, but the rebuild path here
+    // (and in Rails) reconstructs columns from {default,null,auto_increment,comment} only —
+    // the `AS (<expr>) [VIRTUAL|STORED]` generation clause has no slot. Emitting a plain
+    // CHANGE for a virtual/generated column would silently drop the generation expression,
+    // which is unrecoverable. Fail loud instead; callers must upgrade to MySQL ≥8.0.3 or
+    // MariaDB ≥10.5.2 to use the RENAME COLUMN path above.
+    if (column.isVirtual()) {
+      throw new Error(
+        `renameColumnForAlter fallback: cannot safely CHANGE virtual/generated column ` +
+          `"${columnName}" in table "${tableName}" — generation expression would be dropped. ` +
+          `Upgrade to MySQL ≥8.0.3 or MariaDB ≥10.5.2 to use RENAME COLUMN instead.`,
+      );
+    }
     const defFn = column.defaultFunction;
     // newColumnFromField sets column.default to null when defaultFunction is present, so we can
     // pass either through ColumnDefinition's `default` slot: a lambda for function defaults

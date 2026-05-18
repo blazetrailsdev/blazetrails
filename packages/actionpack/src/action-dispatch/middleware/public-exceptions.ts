@@ -72,9 +72,6 @@ export class PublicExceptions {
     if (sym === "xml") {
       return this.renderFormat(status, contentType!, toXml(body));
     }
-    if (sym === "text") {
-      return this.renderFormat(status, contentType!, toText(body));
-    }
     return this.renderHtml(status);
   }
 
@@ -116,10 +113,6 @@ function toXml(body: ErrorBody): string {
     `  <error>${escapeXml(body.error)}</error>\n` +
     `</hash>\n`
   );
-}
-
-function toText(body: ErrorBody): string {
-  return `status: ${body.status}\nerror: ${body.error}\n`;
 }
 
 function escapeXml(s: string): string {

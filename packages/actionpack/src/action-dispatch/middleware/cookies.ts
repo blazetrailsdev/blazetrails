@@ -55,6 +55,21 @@ export class CookieJar implements Iterable<[string, string]> {
     this._options = options;
   }
 
+  /**
+   * Build a CookieJar seeded with `cookies` from a request. Mirrors
+   * `Cookies::CookieJar.build(request, cookies)` used by
+   * `ActionDispatch::TestProcess#cookies`.
+   *
+   * @internal
+   */
+  static build(_request: unknown, cookies: Record<string, string>): CookieJar {
+    const jar = new CookieJar();
+    for (const [k, v] of Object.entries(cookies ?? {})) {
+      jar._cookies.set(k, v);
+    }
+    return jar;
+  }
+
   // --- Read ---
 
   get(key: string): string | undefined {

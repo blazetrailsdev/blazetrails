@@ -648,9 +648,10 @@ export class JoinDependency {
 
     // Mirror addAssociation collision-check (Rails AliasTracker): use the
     // real table name unless it's already in use, in which case fall back
-    // to the sequential tN alias.
+    // to the sequential tN alias. The mutation of `_usedTableNames` is
+    // deferred to the commit points below so failure paths don't pollute
+    // the set with tables we never actually joined.
     const throughEffective = this._usedTableNames.has(throughTable) ? throughAlias : throughTable;
-    this._usedTableNames.add(throughTable);
 
     let throughJoinOn = `"${throughEffective}"."${throughFk}" = "${sourceAlias}"."${sourcePk}"`;
     if (throughAssocDef.options.as) {
@@ -698,6 +699,11 @@ export class JoinDependency {
         });
       }
 
+      // Commit-point: the through-node push below is the first
+      // observable side-effect that depends on the alias decision.
+      const throughTableWasNew = !this._usedTableNames.has(throughTable);
+      this._usedTableNames.add(throughTable);
+
       const throughNodeName = parentAssocName
         ? `${parentAssocName}._through_${assocDef.options.through}`
         : `_through_${assocDef.options.through}`;
@@ -727,6 +733,7 @@ export class JoinDependency {
         this._nodes.length = snapshotNodes;
         this._aliases.length = snapshotAliases;
         this._nextTableIndex = snapshotNextIndex;
+        if (throughTableWasNew) this._usedTableNames.delete(throughTable);
         return null;
       }
 
@@ -779,8 +786,9 @@ export class JoinDependency {
     }
 
     // Mirror addAssociation collision-check for the target table too.
+    // Read-only here; the commit-point below pushes the resolved name
+    // into `_usedTableNames` after all failure guards have passed.
     const targetEffective = this._usedTableNames.has(targetTable) ? targetAlias : targetTable;
-    this._usedTableNames.add(targetTable);
     targetJoinOn = targetJoinOn.replaceAll("TARGET_PLACEHOLDER", targetEffective);
 
     // Apply association scope
@@ -802,6 +810,12 @@ export class JoinDependency {
     // Guard against composite PK on target
     const targetModelPk = (targetModel as any).primaryKey ?? "id";
     if (Array.isArray(targetModelPk)) return null;
+
+    // Commit-point for the non-recursive path: all failure guards have
+    // passed, so register both joined tables for AliasTracker collision
+    // checks by later joins.
+    this._usedTableNames.add(throughTable);
+    this._usedTableNames.add(targetTable);
 
     const targetColumns = getModelColumns(targetModel);
 

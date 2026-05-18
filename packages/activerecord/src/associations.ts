@@ -596,7 +596,7 @@ function _scopeForAssociation(model: typeof Base): Relation<Base> {
  */
 export function applyAssociationScope<R>(
   rel: R,
-  scope: ((this: R, rel: R, owner: Base) => unknown) | null | undefined,
+  scope: ((this: R, rel: R, owner: Base) => R | false | null | undefined) | null | undefined,
   owner: Base,
   reflectionScope?: unknown,
 ): R {
@@ -620,9 +620,9 @@ export function applyAssociationScope<R>(
   // JS `cond && rel.where(...)` short-circuit) falls back to the input.
   const result =
     scope.length === 0
-      ? (scope as unknown as (this: R) => unknown).call(rel)
+      ? (scope as unknown as (this: R) => R | false | null | undefined).call(rel)
       : scope.call(rel, rel, owner);
-  return (result || rel) as R;
+  return result || rel;
 }
 
 /**

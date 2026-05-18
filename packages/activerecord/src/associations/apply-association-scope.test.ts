@@ -12,7 +12,11 @@
  * `buildHasManyRelation`, and the DJAS-routed `_loadThroughViaDisableJoinsScope`.
  */
 import { describe, it, expect } from "vitest";
-import { applyAssociationScope, Base } from "../index.js";
+import { Base } from "../index.js";
+// `applyAssociationScope` is `@internal` — imported directly from
+// `associations.ts` rather than re-exported through the package entry,
+// so it stays out of the public API surface.
+import { applyAssociationScope } from "../associations.js";
 
 describe("applyAssociationScope", () => {
   // Use a bare Base instance as the `owner` placeholder; the helper only
@@ -34,14 +38,13 @@ describe("applyAssociationScope", () => {
 
   it("falls back to rel when the scope returns falsy (Rails `|| relation`)", () => {
     const rel = { tag: "rel" };
-    // Truthiness-based — mirrors Ruby's `|| relation`. Covers nil
-    // (`null`/`undefined`), `false` (idiomatic `cond && rel.where(...)`
-    // short-circuit), and `0`/`""` for completeness.
+    // Truthiness-based — mirrors Ruby's `|| relation`. The scope type
+    // `R | false | null | undefined` covers all three legitimate falsy
+    // returns: `null`/`undefined` (Ruby `nil`) and `false` (idiomatic
+    // JS `cond && rel.where(...)` short-circuit).
     expect(applyAssociationScope(rel, () => null, owner)).toBe(rel);
     expect(applyAssociationScope(rel, () => undefined, owner)).toBe(rel);
     expect(applyAssociationScope(rel, () => false, owner)).toBe(rel);
-    expect(applyAssociationScope(rel, () => 0, owner)).toBe(rel);
-    expect(applyAssociationScope(rel, () => "", owner)).toBe(rel);
   });
 
   it("passes the owner as the second positional arg", () => {

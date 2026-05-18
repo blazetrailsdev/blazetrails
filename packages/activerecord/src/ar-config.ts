@@ -36,7 +36,14 @@ export function setSchemaCacheIgnoredTables(value: ReadonlyArray<string | RegExp
  */
 export function isSchemaCacheIgnoredTable(tableName: string): boolean {
   for (const entry of schemaCacheIgnoredTables) {
-    if (entry instanceof RegExp ? entry.test(tableName) : entry === tableName) return true;
+    if (entry instanceof RegExp) {
+      // Reset lastIndex so /g and /y patterns don't alternate between
+      // matches across calls (same precaution SchemaDumper#isIgnored takes).
+      entry.lastIndex = 0;
+      if (entry.test(tableName)) return true;
+    } else if (entry === tableName) {
+      return true;
+    }
   }
   return false;
 }

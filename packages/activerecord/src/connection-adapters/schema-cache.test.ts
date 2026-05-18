@@ -284,10 +284,12 @@ describe("SchemaCacheTest", () => {
     }
   });
   it("marshal dump and load with gzip", () => {
-    // Trails' marshalDump returns a JSON-serializable array; mirror the
-    // Rails property (gzip-on-disk → load → cached columns survive) by
-    // gzipping the JSON-encoded marshal payload and round-tripping it
-    // through dumpTo / _loadFrom, which understands the .gz suffix.
+    // Rails' equivalent gzips a Marshal payload to a `.dump.gz` file and
+    // round-trips it through `dump_to` / `_load_from`. Trails serializes
+    // via `encodeWith` (JSON) rather than Marshal, but the on-disk
+    // property the Rails test asserts — write a `.gz` file, read it back,
+    // cached columns survive — still applies. `dumpTo(".gz")` gzips the
+    // JSON payload and `_loadFrom` auto-detects the `.gz` suffix.
     const cache = new SchemaCache();
     cache.setColumns("courses", [
       makeColumn("id", "integer", { primaryKey: true }),
@@ -373,20 +375,19 @@ describe("SchemaCacheTest", () => {
     cache.setPrimaryKeys("gadgets", "id");
     cache.dumpTo(cachePath);
 
-    const prevLazy = SchemaReflection.lazilyLoadSchemaCache;
     const prevCheck = SchemaReflection.checkSchemaCacheDumpVersion;
-    SchemaReflection.lazilyLoadSchemaCache = true;
     SchemaReflection.checkSchemaCacheDumpVersion = false;
     try {
       const reflection = new SchemaReflection(cachePath);
       // Cache starts nil
       expect(reflection.loadedCache).toBeNull();
-      // load! populates it from disk
+      // load! populates it from disk (this is the building block
+      // ConnectionPool.adoptConnection invokes when the lazy-load
+      // flag is enabled).
       await reflection.loadBang(new FakePool({}));
       expect(reflection.loadedCache).not.toBeNull();
       expect(reflection.loadedCache!.isCached("gadgets")).toBe(true);
     } finally {
-      SchemaReflection.lazilyLoadSchemaCache = prevLazy;
       SchemaReflection.checkSchemaCacheDumpVersion = prevCheck;
     }
   });

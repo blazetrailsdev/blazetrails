@@ -90,11 +90,12 @@ export function isRateLimited(count: number, limit: number): boolean {
  * `beforeAction` and a default `cacheStore`. Matches the subset of
  * `AbstractController` + `ActionController::Base` that Rails' DSL touches.
  */
+// `beforeAction` is intentionally untyped on this contract: AbstractController
+// types its callback against AbstractController, but the DSL only needs the
+// method to exist on the host class. Concrete subclasses (Base/Metal) supply
+// the stricter type at the call site.
 export interface RateLimitingClassHost {
-  beforeAction(
-    callback: (controller: RateLimitingHost) => void | Promise<void>,
-    options?: CallbackOptions,
-  ): void;
+  beforeAction: Function; // eslint-disable-line @typescript-eslint/no-unsafe-function-type
   cacheStore?: RateLimitStore;
 }
 
@@ -103,8 +104,13 @@ export interface RateLimitingClassHost {
  * string (Rails uses `request.remote_ip`) and a sink for over-limit responses.
  */
 export interface RateLimitingHost {
-  controllerPath?: string;
-  request?: { remoteIp?: string };
+  /**
+   * Rails delegates `controller_path` to the class; Metal exposes it as an
+   * instance method. Accept either a method or a string property so the
+   * helper composes the right cache key under both shapes.
+   */
+  controllerPath?: string | (() => string);
+  request?: { remoteIp?: string | null };
   head?: (status: number) => void;
 }
 
@@ -149,7 +155,7 @@ export function rateLimit(this: RateLimitingClassHost, options: RateLimitOptions
   if (unlessFilter !== undefined) filter.unless = unlessFilter;
   if (prepend !== undefined) filter.prepend = prepend;
 
-  this.beforeAction(async function (controller) {
+  const callback = async (controller: RateLimitingHost): Promise<void> => {
     await rateLimiting.call(controller, {
       to,
       within,
@@ -158,7 +164,8 @@ export function rateLimit(this: RateLimitingClassHost, options: RateLimitOptions
       store: resolvedStore,
       name,
     });
-  }, filter);
+  };
+  (this.beforeAction as (cb: typeof callback, opts?: CallbackOptions) => void)(callback, filter);
 }
 
 /**
@@ -180,13 +187,15 @@ export async function rateLimiting(
     name?: string;
   },
 ): Promise<void> {
-  const identity = args.by ? args.by.call(this) : (this.request?.remoteIp ?? "");
-  const cacheKey = ["rate-limit", this.controllerPath, args.name, identity]
+  const identity = args.by ? args.by.call(this) : (this.request?.remoteIp ?? null);
+  const controllerPath =
+    typeof this.controllerPath === "function" ? this.controllerPath() : this.controllerPath;
+  const cacheKey = ["rate-limit", controllerPath, args.name, identity]
     .filter((part): part is string => part != null)
     .join(":");
   const count = await args.store.increment(cacheKey, 1, { expiresIn: args.within });
   if (count != null && isRateLimited(count, args.to)) {
-    await Notifications.instrument(
+    await Notifications.instrumentAsync(
       "rate_limit.action_controller",
       { request: this.request },
       async () => {

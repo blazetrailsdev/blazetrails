@@ -8,6 +8,7 @@ import {
   type RateLimitingClassHost,
   type RateLimitingHost,
 } from "./rate-limiting.js";
+import { Base } from "../base.js";
 import type { CallbackOptions } from "../../abstract-controller/callbacks.js";
 
 describe("isRateLimited", () => {
@@ -116,6 +117,25 @@ describe("rateLimiting (instance helper)", () => {
     expect(host.head).not.toHaveBeenCalled();
   });
 
+  it("calls controllerPath() when it is a method (Metal exposes it as a function)", async () => {
+    const store: RateLimitStore = { increment: vi.fn().mockReturnValue(1) };
+    const host: RateLimitingHost = {
+      controllerPath: () => "admin/users",
+      request: { remoteIp: "1.2.3.4" },
+    };
+    await rateLimiting.call(host, { to: 10, within: 60, store });
+    expect(store.increment).toHaveBeenCalledWith("rate-limit:admin/users:1.2.3.4", 1, {
+      expiresIn: 60,
+    });
+  });
+
+  it("drops a null remoteIp from the cache key (mirrors Rails `compact`)", async () => {
+    const store: RateLimitStore = { increment: vi.fn().mockReturnValue(1) };
+    const host: RateLimitingHost = { controllerPath: "posts", request: { remoteIp: null } };
+    await rateLimiting.call(host, { to: 10, within: 60, store });
+    expect(store.increment).toHaveBeenCalledWith("rate-limit:posts", 1, { expiresIn: 60 });
+  });
+
   it("uses the `by` callback for identity when provided", async () => {
     const store: RateLimitStore = { increment: vi.fn().mockReturnValue(1) };
     const host: RateLimitingHost = {
@@ -146,7 +166,10 @@ describe("rateLimit class DSL", () => {
   let store: RateLimitStore;
 
   const makeHost = (overrides: Partial<RateLimitingClassHost> = {}): RateLimitingClassHost => ({
-    beforeAction(callback, options) {
+    beforeAction(
+      callback: (controller: RateLimitingHost) => void | Promise<void>,
+      options?: CallbackOptions,
+    ) {
       registered.push({ callback, options });
     },
     ...overrides,
@@ -201,5 +224,13 @@ describe("rateLimit class DSL", () => {
     rateLimit.call(host, { to: 3, within: 2, store, name: "short-term" });
     rateLimit.call(host, { to: 10, within: 300, store, name: "long-term" });
     expect(registered).toHaveLength(2);
+  });
+
+  it("is wired onto ActionController::Base as a static method", () => {
+    expect(typeof Base.rateLimit).toBe("function");
+    class PostsController extends Base {}
+    expect(() =>
+      PostsController.rateLimit({ to: 5, within: 60, store: new MemoryRateLimitStore() }),
+    ).not.toThrow();
   });
 });

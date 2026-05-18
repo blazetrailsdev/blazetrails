@@ -112,8 +112,13 @@ returns the new counter atomically (Redis/Memcached in production).
 **Us:** No global `Rails.cache` equivalent yet. The class DSL falls back to a
 `cacheStore` static on the host controller class if not given `store:`, and
 throws if neither is set. A `MemoryRateLimitStore` ships in this package for
-tests and single-process apps; production deployments must supply an
-`ActiveSupport::Cache::Store`-shaped object (sync or async `increment`). The
+tests and single-process apps; production deployments must supply a
+`RateLimitStore` whose `increment(key, amount, { expiresIn })` (1) accepts
+`expiresIn` in **seconds** (Rails parity, not the activesupport cache
+`CacheOptions.expiresIn` which is milliseconds) and (2) initializes a
+missing counter to `amount` (Redis/Memcached behavior — the in-memory
+activesupport cache returns `nil` for missing keys and is not a suitable
+backend on its own). The
 DSL surface, key composition (`rate-limit:controllerPath:name:identity`),
 `429` fallback, and `rate_limit.action_controller` instrumentation are all
 parity-faithful — only the cache backend resolution differs.

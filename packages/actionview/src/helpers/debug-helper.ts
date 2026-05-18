@@ -5,9 +5,10 @@ import { htmlEscape } from "./ejs-util.js";
 
 /**
  * debug — returns a YAML representation of `object` wrapped with `<pre>`.
- * Falls back to a best-effort JSON / `Object.prototype.toString` rendering
- * inside `<code>` if YAML serialization throws (e.g. circular references).
- * Mirrors `ActionView::Helpers::DebugHelper#debug`'s Marshal/YAML rescue path.
+ * Falls back to a recursive inspect-style rendering (objects as
+ * `{ key: value, … }`, arrays as `[v, …]`, cycles as `[Circular]`) inside
+ * `<code>` if YAML serialization throws. Mirrors
+ * `ActionView::Helpers::DebugHelper#debug`'s Marshal/YAML rescue path.
  */
 export function debug(object: unknown): SafeBuffer {
   try {
@@ -32,12 +33,15 @@ function inspect(value: unknown, seen: WeakSet<object> = new WeakSet()): string 
 
   if (seen.has(value as object)) return "[Circular]";
   seen.add(value as object);
-
-  if (Array.isArray(value)) {
-    return `[${value.map((v) => inspect(v, seen)).join(", ")}]`;
+  try {
+    if (Array.isArray(value)) {
+      return `[${value.map((v) => inspect(v, seen)).join(", ")}]`;
+    }
+    const entries = Object.entries(value as Record<string, unknown>).map(
+      ([k, v]) => `${k}: ${inspect(v, seen)}`,
+    );
+    return `{ ${entries.join(", ")} }`;
+  } finally {
+    seen.delete(value as object);
   }
-  const entries = Object.entries(value as Record<string, unknown>).map(
-    ([k, v]) => `${k}: ${inspect(v, seen)}`,
-  );
-  return `{ ${entries.join(", ")} }`;
 }

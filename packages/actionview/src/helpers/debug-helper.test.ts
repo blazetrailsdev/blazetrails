@@ -39,6 +39,17 @@ describe("DebugHelperTest", () => {
     expect(out).not.toContain("<pre");
   });
 
+  it("fallback inspect renders shared (non-cyclic) refs normally, not as Circular", () => {
+    vi.spyOn(yaml, "stringify").mockImplementation(() => {
+      throw new Error("boom");
+    });
+    const shared = { id: 1 };
+    const out = debug({ a: shared, b: shared }).toString();
+    expect(out).not.toContain("[Circular]");
+    expect(out).toContain("a: { id: 1 }");
+    expect(out).toContain("b: { id: 1 }");
+  });
+
   it("fallback inspect renders circular references as [Circular]", () => {
     vi.spyOn(yaml, "stringify").mockImplementation(() => {
       throw new Error("boom");

@@ -1223,24 +1223,21 @@ class SchemaAdapter implements DatabaseAdapter {
   }
 
   supportsIndexesInCreate(): boolean {
-    return (
-      (this.inner as { supportsIndexesInCreate?: () => boolean }).supportsIndexesInCreate?.() ??
-      false
-    );
+    return this._delegateCapability("supportsIndexesInCreate");
   }
 
   supportsAdvisoryLocks(): boolean {
-    return (
-      (this.inner as { supportsAdvisoryLocks?: () => boolean }).supportsAdvisoryLocks?.() ?? false
-    );
+    return this._delegateCapability("supportsAdvisoryLocks");
   }
 
   supportsInsertConflictTarget(): boolean {
-    return (
-      (
-        this.inner as { supportsInsertConflictTarget?: () => boolean }
-      ).supportsInsertConflictTarget?.() ?? false
-    );
+    return this._delegateCapability("supportsInsertConflictTarget");
+  }
+
+  /** Forward a boolean capability probe to the inner adapter; default false when absent. */
+  private _delegateCapability(name: string): boolean {
+    const probe = (this.inner as unknown as Record<string, unknown>)[name];
+    return typeof probe === "function" ? Boolean((probe as () => boolean).call(this.inner)) : false;
   }
 
   async getDatabaseVersion(): Promise<unknown> {

@@ -573,10 +573,10 @@ export class SchemaStatements {
   }
 
   async addTimestamps(tableName: string, options: ColumnOptions = {}): Promise<void> {
-    // Rails: single combined ALTER TABLE via add_timestamps_for_alter.
-    // SQLite-style adapters that don't support bulk ALTER fall back to
-    // two sequential addColumn calls (sqlite3_adapter.rb#add_timestamps
-    // uses the alter_table rebuild path instead of a combined ALTER).
+    // Mirrors Rails (abstract/schema_statements.rb:1459) for adapters that bulk-alter (MySQL,
+    // PG): one combined ALTER TABLE. SQLite-style adapters that don't support bulk ALTER fall
+    // back to two sequential addColumn calls — Rails' sqlite3_adapter#add_timestamps overrides
+    // to use the alter_table rebuild path instead, which trails replicates on its sqlite3 adapter.
     if ((this.adapter as any).supportsBulkAlter?.() === true) {
       const fragments = this.addTimestampsForAlter(tableName, options);
       await this.adapter.executeMutation(
@@ -594,8 +594,10 @@ export class SchemaStatements {
   }
 
   async removeTimestamps(tableName: string): Promise<void> {
-    await this.removeColumn(tableName, "created_at");
-    await this.removeColumn(tableName, "updated_at");
+    // Mirrors Rails (abstract/schema_statements.rb:1468): route through removeColumns so
+    // adapters that batch (MySQL) can emit a single ALTER. The default removeColumns
+    // implementation loops sequentially; SQLite overrides to use a rebuild.
+    await this.removeColumns(tableName, "updated_at", "created_at");
   }
 
   async createJoinTable(

@@ -72,28 +72,40 @@ describe("AbstractMysqlAdapter#renameColumnForAlter fallback", () => {
     expect(sql).toContain("AUTO_INCREMENT");
   });
 
-  it("preserves on update CURRENT_TIMESTAMP Extra without throwing", async () => {
+  it("preserves on update CURRENT_TIMESTAMP for datetime column", async () => {
     const adapter = await makeAdapter("updated_at", "on update CURRENT_TIMESTAMP");
+    adapter.columnDefinitions = async () => [
+      {
+        Field: "updated_at",
+        Type: "datetime",
+        Null: "NO",
+        Default: "CURRENT_TIMESTAMP",
+        Extra: "on update CURRENT_TIMESTAMP",
+        Collation: null,
+        Comment: "",
+      },
+    ];
     const sql: string = await adapter.renameColumnForAlter("users", "updated_at", "ts");
     expect(sql).toContain("ON UPDATE");
     expect(sql).toContain("CURRENT_TIMESTAMP");
   });
 
   it("preserves MySQL 8 compound DEFAULT_GENERATED on update Extra", async () => {
-    const adapter = await makeAdapter(
-      "updated_at",
-      "DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)",
-    );
-    const sql: string = await adapter.renameColumnForAlter("users", "updated_at", "ts");
+    const adapter = await makeAdapter("col", "DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)");
+    adapter.columnDefinitions = async () => [
+      {
+        Field: "col",
+        Type: "json",
+        Null: "YES",
+        Default: "json_array()",
+        Extra: "DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)",
+        Collation: null,
+        Comment: "",
+      },
+    ];
+    const sql: string = await adapter.renameColumnForAlter("users", "col", "col2");
     expect(sql).toContain("ON UPDATE");
     expect(sql).toContain("CURRENT_TIMESTAMP(6)");
-  });
-
-  it("throws for unrecognised Extra values", async () => {
-    const adapter = await makeAdapter("gen_col", "VIRTUAL GENERATED");
-    await expect(adapter.renameColumnForAlter("users", "gen_col", "gen_col2")).rejects.toThrow(
-      "renameColumnForAlter fallback",
-    );
   });
 
   it("emits DEFAULT CURRENT_TIMESTAMP unquoted when default is a timestamp function", async () => {

@@ -364,9 +364,9 @@ export function validateAssociations(record: Base, context?: ValidationContextAr
         }
       } else {
         // has_one / belongs_to — Rails gate is changed_for_autosave? || custom_validation_context?
-        // (autosave_association.rb:332,346). No short-circuit on persisted-unchanged: cached
-        // NestedError instances on the child still re-propagate via the associated_errors filter
-        // inside isAssociationValid.
+        // (autosave_association.rb:332,346). When that gate passes, isAssociationValid runs and
+        // applies the Rails associated_errors filter: a persisted-unchanged child with cached
+        // NestedError instances still re-propagates them (but only NestedError-kind errors).
         const child = inst.target as Base;
         if (typeof (child as any).isDestroyed === "function" && (child as any).isDestroyed())
           continue;

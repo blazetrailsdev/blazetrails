@@ -109,7 +109,11 @@ export function accepts(this: MimeNegotiationHost): MimeType[] {
   const header = String(this.getHeader("HTTP_ACCEPT") ?? "").trim();
   try {
     const ct = contentMimeType.call(this);
-    const v: MimeType[] = header === "" ? (ct ? [ct] : []) : MimeType.parse(header);
+    // Rails: `[content_mime_type]` — array of one element even when nil. The
+    // subsequent `validAcceptHeader` gate prevents `accepts` from being used in
+    // the all-blank branch, so a `[null]` payload never reaches the formats
+    // filter. Kept verbatim for parity with `fetch_header` cache semantics.
+    const v: MimeType[] = header === "" ? ([ct] as MimeType[]) : MimeType.parse(header);
     this.setHeader(ACCEPTS_KEY, v);
     return v;
   } catch (e) {
@@ -188,14 +192,15 @@ export function negotiateMime(
   this: MimeNegotiationHost,
   order: MimeType[],
 ): MimeType | NullType | null {
+  const isAll = (m: MimeType): boolean => m.string === "*/*";
   for (const priority of formats.call(this)) {
-    if (priority === MimeType.ALL) {
+    if (isAll(priority)) {
       return order[0] ?? null;
-    } else if (order.includes(priority)) {
+    } else if (order.some((o) => o.equals(priority))) {
       return priority;
     }
   }
-  return order.includes(MimeType.ALL) ? format.call(this) : null;
+  return order.some(isAll) ? format.call(this) : null;
 }
 
 /** @internal */

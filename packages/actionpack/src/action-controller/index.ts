@@ -83,7 +83,6 @@ export {
   MemoryRateLimitStore,
   isRateLimited,
   rateLimit,
-  rateLimiting,
   type RateLimitOptions,
   type RateLimitStore,
   type RateLimitingClassHost,

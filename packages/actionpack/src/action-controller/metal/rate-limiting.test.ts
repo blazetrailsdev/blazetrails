@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   MemoryRateLimitStore,
   isRateLimited,
@@ -49,6 +49,10 @@ describe("MemoryRateLimitStore", () => {
     store.increment("a", 1, { expiresIn: 60 });
     expect(store.increment("b", 1, { expiresIn: 60 })).toBe(1);
   });
+});
+
+afterEach(() => {
+  Notifications.unsubscribeAll();
 });
 
 describe("rateLimiting (instance helper)", () => {

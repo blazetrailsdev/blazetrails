@@ -123,7 +123,7 @@ export class RouteSet {
   /**
    * Registry consulted by `polymorphicUrl` / `polymorphicPath` before falling
    * back to the standard RESTful helper. Populated by `direct(:name) { ... }`
-   * (not yet ported). Mirrors `RouteSet#polymorphic_mappings`.
+   * (see `polymorphic-routes.ts`). Mirrors `RouteSet#polymorphic_mappings`.
    */
   readonly polymorphicMappings: Map<string, PolymorphicMappingEntry> = new Map();
   /** Controller name → handler registry consulted by {@link Dispatcher}. */

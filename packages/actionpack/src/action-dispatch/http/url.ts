@@ -47,7 +47,10 @@ function extractDomainFrom(host: string, tldLength: number): string {
 
 function extractSubdomainsFrom(host: string, tldLength: number): string[] {
   const parts = host.split(".");
-  return parts.slice(0, parts.length - (tldLength + 1));
+  // Rails: `parts[0..-(tld_length + 2)]` returns `[]` (not the tail) when the
+  // host has fewer parts than the TLD requires. JS `slice` with a negative
+  // `end` would otherwise lop chars off the end, so clamp at 0.
+  return parts.slice(0, Math.max(0, parts.length - (tldLength + 1)));
 }
 
 function addParams(parts: string[], params: unknown): void {

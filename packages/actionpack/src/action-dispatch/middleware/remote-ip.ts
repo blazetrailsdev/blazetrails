@@ -166,13 +166,19 @@ export class RemoteIp {
   readonly proxies: readonly Proxy[];
   private readonly app: RackApp;
 
-  constructor(app: RackApp, ipSpoofingCheck = true, customProxies?: readonly Proxy[] | null) {
+  constructor(app: RackApp, ipSpoofingCheck = true, customProxies?: Iterable<Proxy> | null) {
     this.app = app;
     this.checkIp = ipSpoofingCheck;
-    if (customProxies == null || (Array.isArray(customProxies) && customProxies.length === 0)) {
+    // Rails: `if custom_proxies.blank?` then `elsif custom_proxies.respond_to?(:any?)`.
+    // The TS analogue for "enumerable" is anything implementing the iterable
+    // protocol — strings included, since `for (const c of "10.0.0.0/8")` is
+    // legal in JS just as `"...".chars.any?` is in Ruby (we materialize to an
+    // array so the rest of the middleware sees a stable readonly list).
+    if (customProxies == null) {
       this.proxies = TRUSTED_PROXIES;
-    } else if (Array.isArray(customProxies)) {
-      this.proxies = customProxies;
+    } else if (Symbol.iterator in Object(customProxies)) {
+      const arr = [...customProxies];
+      this.proxies = arr.length === 0 ? TRUSTED_PROXIES : arr;
     } else {
       throw new TypeError(
         "Setting config.action_dispatch.trusted_proxies to a single value isn't supported. " +

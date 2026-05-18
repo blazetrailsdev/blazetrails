@@ -73,4 +73,33 @@ describe("RemoteIp middleware (smoke)", () => {
   it("Request#remoteIp falls back to REMOTE_ADDR without middleware", () => {
     expect(new Request({ REMOTE_ADDR: "127.0.0.1" }).remoteIp).toBe("127.0.0.1");
   });
+
+  it("accepts any iterable as custom_proxies (Rails: responds_to?(:any?))", async () => {
+    async function* emptyBody(): AsyncGenerator<string> {}
+    function* gen(): Generator<Proxy> {
+      yield /^9\.9\.9\.9$/;
+    }
+    const mw = new RemoteIp(async () => [200, {}, emptyBody()], true, gen());
+    expect(mw.proxies).toEqual([/^9\.9\.9\.9$/]);
+
+    const setMw = new RemoteIp(
+      async () => [200, {}, emptyBody()],
+      true,
+      new Set<Proxy>([/^8\.8\.8\.8$/]),
+    );
+    expect(setMw.proxies).toEqual([/^8\.8\.8\.8$/]);
+  });
+
+  it("rejects a non-iterable single value", () => {
+    async function* emptyBody(): AsyncGenerator<string> {}
+    expect(
+      () =>
+        new RemoteIp(
+          async () => [200, {}, emptyBody()],
+          true,
+          // Numbers aren't iterable in JS.
+          42 as unknown as Iterable<Proxy>,
+        ),
+    ).toThrow(/single value/);
+  });
 });

@@ -106,6 +106,34 @@ describe("withRouting", () => {
   });
 });
 
+describe("withRouting (async)", () => {
+  it("keeps the temporary RouteSet installed across awaits and restores after resolve", async () => {
+    const host = buildHost();
+    const original = host.routes;
+    const observedInside: RouteSet[] = [];
+    await withRouting.call(host, async (routes: RouteSet) => {
+      observedInside.push(host.routes!);
+      await Promise.resolve();
+      observedInside.push(host.routes!);
+      expect(host.routes).toBe(routes);
+    });
+    expect(observedInside[0]).toBe(observedInside[1]);
+    expect(host.routes).toBe(original);
+  });
+
+  it("restores after async rejection", async () => {
+    const host = buildHost();
+    const original = host.routes;
+    await expect(
+      withRouting.call(host, async () => {
+        await Promise.resolve();
+        throw new Error("async boom");
+      }),
+    ).rejects.toThrow("async boom");
+    expect(host.routes).toBe(original);
+  });
+});
+
 describe("failOn", () => {
   it("rethrows matching exception with the supplied message", () => {
     expect(() =>

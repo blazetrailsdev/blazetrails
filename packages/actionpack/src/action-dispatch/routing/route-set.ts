@@ -200,8 +200,10 @@ export class RouteSet {
 
   /**
    * Inverse of `recognizePath`. Returns `[path, extraKeys]` where extraKeys
-   * are option keys not consumed by the route. `defaults` is accepted for
-   * signature parity (Rails docs: "The `defaults` parameter is unused.").
+   * are option keys not consumed by the route. The caller-supplied
+   * `defaults` hash and the route's own defaults suppress matching keys
+   * from `extras` when the supplied value equals the default (Rails
+   * threads `defaults` through `generate` as the recall hash).
    */
   generateExtras(
     options: Record<string, unknown>,
@@ -240,7 +242,13 @@ export class RouteSet {
     const extras: string[] = [];
     for (const k of Object.keys(options)) {
       if (k === "controller" || k === "action" || captureNames.has(k)) continue;
-      if (Object.hasOwn(routeDefaults, k) || Object.hasOwn(defaults, k)) continue;
+      // Only suppress the key when the supplied value matches the default
+      // — a caller passing `format: "html"` against a route defaulting
+      // `format: "json"` still surfaces as an extra, since the generated
+      // path can't represent the conflicting value.
+      const v = options[k];
+      if (Object.hasOwn(routeDefaults, k) && routeDefaults[k] === v) continue;
+      if (Object.hasOwn(defaults, k) && defaults[k] === v) continue;
       extras.push(k);
     }
     return [path, extras];

@@ -68,8 +68,11 @@ export function withRouting<T>(
     restore();
     throw e;
   }
-  if (result instanceof Promise) {
-    return result.then(
+  // Treat anything thenable as async (matches the check used in url-for.ts)
+  // so cross-realm promises and library thenables don't fall through to the
+  // synchronous restore path before their awaited work runs.
+  if (result != null && typeof (result as { then?: unknown }).then === "function") {
+    return (result as unknown as PromiseLike<unknown>).then(
       (v) => {
         restore();
         return v;
@@ -122,7 +125,9 @@ export function assertGenerates(
   const routes = requireRoutes(this);
   const opts = { ...options };
   const [generatedPath, queryStringKeys] = routes.generateExtras(opts, defaults);
-  const foundExtras: Options = {};
+  // Null-prototype map so an extra key named `__proto__` becomes an own
+  // property rather than hitting the inherited setter.
+  const foundExtras: Options = Object.create(null);
   for (const k of queryStringKeys) {
     if (Object.hasOwn(opts, k)) foundExtras[k] = opts[k];
   }

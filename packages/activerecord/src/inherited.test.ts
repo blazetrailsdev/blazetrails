@@ -1,19 +1,24 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Base } from "./index.js";
-import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
+import { createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
+import type { DatabaseAdapter } from "./adapter.js";
 
-let adapter: TestDatabaseAdapter;
+let adapter: DatabaseAdapter;
 
-beforeAll(async () => {
+beforeAll(() => {
   adapter = createTestAdapter();
+});
+beforeEach(async () => {
   await defineSchema(adapter, {
     parents: { name: "string" },
     children: { name: "string" },
   });
 });
-withTransactionalFixtures(() => adapter);
+afterAll(async () => {
+  await dropAllTables(adapter);
+});
 
 describe("InheritedTest", () => {
   it("super before filter attributes", async () => {

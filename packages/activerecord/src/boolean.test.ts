@@ -2,20 +2,25 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Base } from "./index.js";
 
-import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
+import { createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
+import type { DatabaseAdapter } from "./adapter.js";
 
-let adapter: TestDatabaseAdapter;
+let adapter: DatabaseAdapter;
 
-beforeAll(async () => {
+beforeAll(() => {
   adapter = createTestAdapter();
+});
+beforeEach(async () => {
   await defineSchema(adapter, { topics: { title: "string", approved: "boolean" } });
 });
-withTransactionalFixtures(() => adapter);
+afterAll(async () => {
+  await dropAllTables(adapter);
+});
 
 describe("BooleanTest", () => {
   function makeModel() {

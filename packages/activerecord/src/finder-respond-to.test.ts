@@ -1,14 +1,17 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Base, RecordNotFound } from "./index.js";
-import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
+import { createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
+import type { DatabaseAdapter } from "./adapter.js";
 
-let adapter: TestDatabaseAdapter;
+let adapter: DatabaseAdapter;
 let Topic: typeof Base;
 
-beforeAll(async () => {
+beforeAll(() => {
   adapter = createTestAdapter();
+});
+beforeEach(async () => {
   await defineSchema(adapter, { topics: { title: "string", author_name: "string" } });
   Topic = class extends Base {
     static {
@@ -18,7 +21,9 @@ beforeAll(async () => {
     }
   };
 });
-withTransactionalFixtures(() => adapter);
+afterAll(async () => {
+  await dropAllTables(adapter);
+});
 
 describe("FinderRespondToTest", () => {
   it("should preserve normal respond to behavior on base", () => {

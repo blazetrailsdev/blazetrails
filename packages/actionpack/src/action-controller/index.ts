@@ -66,12 +66,7 @@ export { Deprecator, deprecator, addRenderer, removeRenderer } from "./deprecato
 export { TestRequest } from "../action-dispatch/testing/test-request.js";
 export { LiveTestResponse, TestSession } from "./test-case.js";
 export { fragmentCacheKey } from "./caching.js";
-export {
-  defaultFormBuilder,
-  setDefaultFormBuilder,
-  getDefaultFormBuilder,
-  resolveFormBuilder,
-} from "./form-builder.js";
+export { defaultFormBuilder } from "./form-builder.js";
 export { Railtie } from "./trailtie.js";
 export { assertTemplate } from "./template-assertions.js";
 export { LogSubscriber } from "./log-subscriber.js";

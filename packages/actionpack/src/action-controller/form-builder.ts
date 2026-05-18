@@ -68,17 +68,3 @@ export function defaultFormBuilder(this: unknown, builder?: unknown): unknown {
   if (klass) _registry.set(klass, builder);
   return builder;
 }
-
-export function setDefaultFormBuilder(controllerName: string, builder: unknown): void {
-  _nameRegistry.set(controllerName, builder);
-}
-
-export function getDefaultFormBuilder(controllerName: string): unknown | undefined {
-  return _nameRegistry.get(controllerName);
-}
-
-export function resolveFormBuilder(controllerName: string, fallback?: unknown): unknown {
-  return _nameRegistry.get(controllerName) ?? fallback;
-}
-
-const _nameRegistry = new Map<string, unknown>();

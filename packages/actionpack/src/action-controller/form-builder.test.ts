@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { defaultFormBuilder } from "./form-builder.js";
+import { Base } from "./base.js";
 
 class FakeBuilder {}
 class OtherBuilder {}
@@ -49,5 +50,16 @@ describe("defaultFormBuilder DSL", () => {
     C.defaultFormBuilder(FakeBuilder);
     const inst = new C();
     expect(inst.defaultFormBuilder()).toBe(FakeBuilder);
+  });
+
+  it("is wired onto Base as both class DSL and instance reader", () => {
+    class MyController extends Base {}
+    MyController.defaultFormBuilder(FakeBuilder);
+    expect(MyController.defaultFormBuilder()).toBe(FakeBuilder);
+    const inst = new MyController();
+    expect(inst.defaultFormBuilder()).toBe(FakeBuilder);
+    // Sibling controllers don't inherit from each other.
+    class SiblingController extends Base {}
+    expect(SiblingController.defaultFormBuilder()).toBeUndefined();
   });
 });

@@ -2668,7 +2668,7 @@ describe("AssociationsTest", () => {
     const loaded = await loadBelongsTo(child, "parent", { polymorphic: true });
     expect(loaded).not.toBeNull();
     expect(loaded!.id).toBe(parent.id);
-    expect((loaded as any).title).toBe("Parent");
+    expect(loaded!.title).toBe("Parent");
     // Cross-tenant negative case: a child in blog 2 pointing at parent_id=10
     // must NOT resolve to the blog-1 parent — proves blog_id participates
     // (a buggy lookup using only parent_id would return the blog-1 parent).

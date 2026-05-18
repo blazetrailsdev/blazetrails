@@ -4,49 +4,13 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { fileURLToPath } from "node:url";
-import {
-  createPlainProgram,
-  createTrailsProgram,
-  createTrailsSolutionBuilder,
-  remapDiagnostics,
-  type CreateTrailsProgramOptions,
-} from "@blazetrails/trails-tsc";
-import { collectBaseDescendants } from "../type-virtualization/transitive-extends-walker.js";
-import { createArModelsPlugin, type ArModelsPluginOptions } from "./ar-models-plugin.js";
+import { remapDiagnostics } from "@blazetrails/trails-tsc";
+import { createArSolutionBuilder, createArTrailsProgram } from "./ar-program.js";
 
-/**
- * Build the `ar-models` plugin for a tsconfig (walks the plain
- * program for Base descendants), then create a virtualizing program
- * with that plugin attached. Mirrors what the AR CLI does in
- * single-project mode.
- */
-function createProgramWithArPlugin(
-  configPath: string,
-  schemaColumnsByTable?: ArModelsPluginOptions["schemaColumnsByTable"],
-): ReturnType<typeof createTrailsProgram> {
-  const pass1 = createPlainProgram(configPath);
-  const { baseNames, modelRegistry } = collectBaseDescendants(pass1.program);
-  const plugin = createArModelsPlugin({
-    baseNames: [...baseNames],
-    modelRegistry,
-    schemaColumnsByTable,
-  });
-  const opts: CreateTrailsProgramOptions = { plugins: [plugin] };
-  return createTrailsProgram(configPath, opts);
-}
-
-function createBuilderWithArPlugin(
-  rootConfigs: readonly string[],
-  buildOpts: Parameters<typeof createTrailsSolutionBuilder>[1],
-): ReturnType<typeof createTrailsSolutionBuilder> {
-  return createTrailsSolutionBuilder(rootConfigs, {
-    ...buildOpts,
-    pluginFactory: (plainProgram) => {
-      const { baseNames, modelRegistry } = collectBaseDescendants(plainProgram);
-      return [createArModelsPlugin({ baseNames: [...baseNames], modelRegistry })];
-    },
-  });
-}
+// Short aliases so the test bodies stay close to their pre-extraction
+// form (only the `createTrails*` → `createAr*` rename changes).
+const createProgramWithArPlugin = createArTrailsProgram;
+const createBuilderWithArPlugin = createArSolutionBuilder;
 
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.resolve(CURRENT_DIR, "__fixtures__");
@@ -417,7 +381,9 @@ describe("trails-tsc — schemaColumnsByTable (Phase R.3)", () => {
   it("types schema-only columns through createTrailsProgram", () => {
     const configPath = path.join(SCHEMA_DIR, "tsconfig.json");
     const { program } = createProgramWithArPlugin(configPath, {
-      users: { name: "string", age: "integer", is_admin: "boolean" },
+      schemaColumnsByTable: {
+        users: { name: "string", age: "integer", is_admin: "boolean" },
+      },
     });
     const checker = program.getTypeChecker();
 

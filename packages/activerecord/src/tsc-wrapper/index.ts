@@ -1,11 +1,25 @@
-// Re-export the trails-tsc plugin surface and program/builder
-// primitives so AR consumers can use a single barrel. The actual
-// host/program/build/remap implementations now live in
-// `@blazetrails/trails-tsc` — this package contributes only the
-// `ar-models` plugin and the CLI shim that wires it up.
+// AR-wired convenience helpers — use these from AR-aware code so the
+// `ar-models` plugin (declares + auto-import) is registered for you.
+// For raw plugin control, import the neutral
+// `createTrailsProgram` / `createTrailsSolutionBuilder` from
+// `@blazetrails/trails-tsc` directly.
+export {
+  createArTrailsProgram,
+  createArSolutionBuilder,
+  type CreateArTrailsProgramOptions,
+  type CreateArSolutionBuilderOptions,
+} from "./ar-program.js";
+export { createArModelsPlugin, type ArModelsPluginOptions } from "./ar-models-plugin.js";
+
+// Re-export plugin types and remap helpers (no behavioral surprise:
+// these are pure / framework-agnostic). The plugin-host primitives
+// (`createTrailsProgram`, `createTrailsSolutionBuilder`,
+// `buildCompilerHost`) are intentionally NOT re-exported from this
+// barrel — re-exporting them under `@blazetrails/activerecord/tsc`
+// would silently drop AR virtualization for callers expecting the
+// pre-extraction behavior. Import them from `@blazetrails/trails-tsc`
+// explicitly when raw access is needed.
 export type {
-  BuildCompilerHostOptions,
-  CreateTrailsProgramOptions,
   LineDelta,
   PluginFactory,
   TrailsBuildOptions,
@@ -15,13 +29,4 @@ export type {
   TscPlugin,
   VirtualizeOutput,
 } from "@blazetrails/trails-tsc";
-export {
-  buildCompilerHost,
-  createPlainProgram,
-  createTrailsProgram,
-  createTrailsSolutionBuilder,
-  remapDiagnostics,
-  remapLine,
-} from "@blazetrails/trails-tsc";
-
-export { createArModelsPlugin, type ArModelsPluginOptions } from "./ar-models-plugin.js";
+export { remapDiagnostics, remapLine } from "@blazetrails/trails-tsc";

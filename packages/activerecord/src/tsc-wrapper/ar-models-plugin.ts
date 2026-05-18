@@ -67,7 +67,10 @@ export function createArModelsPlugin(opts: ArModelsPluginOptions): TscPlugin {
 
   return {
     name: "ar-models",
-    extensions: [".ts"],
+    // Cover every TypeScript source extension. The previous AR host
+    // didn't filter by extension at all; `shouldVirtualize` handles
+    // content-based exclusion (e.g. .d.ts declaration files).
+    extensions: [".ts", ".tsx", ".mts", ".cts"],
     virtualize(filePath, source): VirtualizeOutput | null {
       if (!shouldVirtualize(source)) return null;
       const prependImports = resolveAutoImports(source, filePath, modelRegistry, baseNames);

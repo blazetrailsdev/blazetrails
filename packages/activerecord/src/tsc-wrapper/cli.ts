@@ -4,16 +4,9 @@ import ts from "typescript";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import {
-  createTrailsProgram,
-  createPlainProgram,
-  createTrailsSolutionBuilder,
-  remapDiagnostics,
-  type TscPlugin,
-} from "@blazetrails/trails-tsc";
+import { remapDiagnostics } from "@blazetrails/trails-tsc";
 import { virtualize } from "../type-virtualization/virtualize.js";
-import { collectBaseDescendants } from "../type-virtualization/transitive-extends-walker.js";
-import { createArModelsPlugin } from "./ar-models-plugin.js";
+import { createArTrailsProgram, createArSolutionBuilder } from "./ar-program.js";
 import type { SchemaColumnValue } from "../type-virtualization/synthesize.js";
 
 /**
@@ -257,14 +250,9 @@ function handleBuildMode(args: string[]): void {
   const fh = formatHost();
   const pretty = parsePretty(args, {});
   const schemaColumnsByTable = loadSchemaColumns(args);
-  const builder = createTrailsSolutionBuilder(rootConfigs, {
+  const builder = createArSolutionBuilder(rootConfigs, {
     verbose,
-    pluginFactory: (plainProgram) => {
-      const { baseNames, modelRegistry } = collectBaseDescendants(plainProgram);
-      return [
-        createArModelsPlugin({ baseNames: [...baseNames], modelRegistry, schemaColumnsByTable }),
-      ];
-    },
+    schemaColumnsByTable,
     onDiagnostic: (d) => {
       const out = pretty
         ? ts.formatDiagnosticsWithColorAndContext([d], fh)
@@ -313,22 +301,8 @@ function main(): void {
   }
 
   const schemaColumnsByTable = loadSchemaColumns(args);
-  // Two-pass: walk a plain program first so the ar-models plugin can
-  // see the transitive Base extends graph and the per-project model
-  // registry; then run the virtualizing pass with that plugin attached.
-  const pass1 = createPlainProgram(configPath);
-  if (pass1.configDiagnostics.length > 0) {
-    process.stderr.write(ts.formatDiagnostics(pass1.configDiagnostics, formatHost()));
-    process.exit(1);
-  }
-  const { baseNames, modelRegistry } = collectBaseDescendants(pass1.program);
-  const arPlugin: TscPlugin = createArModelsPlugin({
-    baseNames: [...baseNames],
-    modelRegistry,
+  const { program, host, configDiagnostics } = createArTrailsProgram(configPath, {
     schemaColumnsByTable,
-  });
-  const { program, host, configDiagnostics } = createTrailsProgram(configPath, {
-    plugins: [arPlugin],
   });
 
   const fh = formatHost();

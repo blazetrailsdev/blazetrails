@@ -40,8 +40,8 @@ async function freshAdapterWithSchema(schema: Schema): Promise<DatabaseAdapter> 
 }
 
 // Schema for the small head-of-file describes migrated to defineSchema
-// under TM Phase 5. The main `HasManyAssociationsTest` block (lines ~231
-// onward) still relies on auto-derived schema and is a follow-up.
+// under TM Phase 5. The main `HasManyAssociationsTest` block further down
+// in this file still relies on auto-derived schema and is a follow-up.
 const HEAD_SCHEMA: Schema = {
   cpk_authors: {
     columns: { name: "string", author_code: "string" },

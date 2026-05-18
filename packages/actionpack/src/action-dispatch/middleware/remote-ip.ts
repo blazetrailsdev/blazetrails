@@ -170,13 +170,13 @@ export class RemoteIp {
     this.app = app;
     this.checkIp = ipSpoofingCheck;
     // Rails: `if custom_proxies.blank?` then `elsif custom_proxies.respond_to?(:any?)`.
-    // The TS analogue for "enumerable" is anything implementing the iterable
-    // protocol — strings included, since `for (const c of "10.0.0.0/8")` is
-    // legal in JS just as `"...".chars.any?` is in Ruby (we materialize to an
-    // array so the rest of the middleware sees a stable readonly list).
+    // The TS analogue is "iterable but not a String" — Ruby `String` does not
+    // include `Enumerable` and therefore doesn't respond to `:any?`, so a bare
+    // CIDR like `"10.0.0.0/8"` must hit the "single value" raise, not be
+    // spread into characters.
     if (customProxies == null) {
       this.proxies = TRUSTED_PROXIES;
-    } else if (Symbol.iterator in Object(customProxies)) {
+    } else if (typeof customProxies !== "string" && Symbol.iterator in Object(customProxies)) {
       const arr = [...customProxies];
       this.proxies = arr.length === 0 ? TRUSTED_PROXIES : arr;
     } else {

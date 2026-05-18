@@ -90,6 +90,18 @@ describe("RemoteIp middleware (smoke)", () => {
     expect(setMw.proxies).toEqual([/^8\.8\.8\.8$/]);
   });
 
+  it("rejects a bare String CIDR (Rails: String doesn't respond_to?(:any?))", () => {
+    async function* emptyBody(): AsyncGenerator<string> {}
+    expect(
+      () =>
+        new RemoteIp(
+          async () => [200, {}, emptyBody()],
+          true,
+          "10.0.0.0/8" as unknown as Iterable<Proxy>,
+        ),
+    ).toThrow(/single value/);
+  });
+
   it("rejects a non-iterable single value", () => {
     async function* emptyBody(): AsyncGenerator<string> {}
     expect(

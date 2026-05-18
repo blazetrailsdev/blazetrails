@@ -98,7 +98,7 @@ export class Response {
 
   set contentType(value: string | undefined) {
     if (value) {
-      const charset = this._charset ?? "utf-8";
+      const charset = this._charset ?? (this.constructor as typeof Response).defaultCharset;
       if (value.startsWith("text/")) {
         this._headers["content-type"] = `${value}; charset=${charset}`;
       } else {

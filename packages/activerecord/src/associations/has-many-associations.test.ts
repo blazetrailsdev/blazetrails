@@ -22,6 +22,7 @@ import {
   isAssociationCached,
 } from "../associations.js";
 import { DeleteRestrictionError } from "./errors.js";
+import { assertQueriesCount, assertNoQueries } from "../testing/query-assertions.js";
 
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
@@ -1715,19 +1716,12 @@ describe("HasManyAssociationsTest", () => {
     const proxy = association(author, "sizeUnPosts");
     const proxy2 = association(author2, "sizeUnPosts");
     expect(proxy.loaded).toBe(false);
-    const sqlQueries: string[] = [];
-    const sub = Notifications.subscribe("sql.active_record", (e: any) => {
-      if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
-    });
-    try {
+    await assertQueriesCount(1, false, async () => {
       expect(await proxy.size()).toBe(1);
-      expect(sqlQueries).toHaveLength(1);
-      sqlQueries.length = 0;
+    });
+    await assertQueriesCount(1, false, async () => {
       expect(await proxy2.size()).toBe(0);
-      expect(sqlQueries).toHaveLength(1);
-    } finally {
-      Notifications.unsubscribe(sub);
-    }
+    });
     expect(proxy.loaded).toBe(false);
   });
 
@@ -1760,17 +1754,10 @@ describe("HasManyAssociationsTest", () => {
     await proxy2.load();
     expect(proxy.loaded).toBe(true);
     expect(proxy2.loaded).toBe(true);
-    const sqlQueries: string[] = [];
-    const sub = Notifications.subscribe("sql.active_record", (e: any) => {
-      if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
-    });
-    try {
+    await assertNoQueries(false, async () => {
       expect(await proxy.size()).toBe(1);
       expect(await proxy2.size()).toBe(0);
-    } finally {
-      Notifications.unsubscribe(sub);
-    }
-    expect(sqlQueries).toHaveLength(0);
+    });
   });
 
   it("calling empty on an association that has not been loaded performs a query", async () => {
@@ -1799,19 +1786,12 @@ describe("HasManyAssociationsTest", () => {
     const proxy = association(author, "emptyUnPosts");
     const proxy2 = association(author2, "emptyUnPosts");
     expect(proxy.loaded).toBe(false);
-    const sqlQueries: string[] = [];
-    const sub = Notifications.subscribe("sql.active_record", (e: any) => {
-      if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
-    });
-    try {
+    await assertQueriesCount(1, false, async () => {
       expect(await proxy.isEmpty()).toBe(false);
-      expect(sqlQueries).toHaveLength(1);
-      sqlQueries.length = 0;
+    });
+    await assertQueriesCount(1, false, async () => {
       expect(await proxy2.isEmpty()).toBe(true);
-      expect(sqlQueries).toHaveLength(1);
-    } finally {
-      Notifications.unsubscribe(sub);
-    }
+    });
     expect(proxy.loaded).toBe(false);
   });
 
@@ -1844,17 +1824,10 @@ describe("HasManyAssociationsTest", () => {
     await proxy2.load();
     expect(proxy.loaded).toBe(true);
     expect(proxy2.loaded).toBe(true);
-    const sqlQueries: string[] = [];
-    const sub = Notifications.subscribe("sql.active_record", (e: any) => {
-      if (e?.payload?.sql) sqlQueries.push(e.payload.sql);
-    });
-    try {
+    await assertNoQueries(false, async () => {
       expect(await proxy.isEmpty()).toBe(false);
       expect(await proxy2.isEmpty()).toBe(true);
-    } finally {
-      Notifications.unsubscribe(sub);
-    }
-    expect(sqlQueries).toHaveLength(0);
+    });
   });
 
   it("calling many should return false if none or one", async () => {

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { RouteSet } from "../../routing/route-set.js";
+import { RoutingError } from "../../../action-controller/metal/exceptions.js";
 import {
   assertGenerates,
   assertRecognizes,
   assertRouting,
+  failOn,
+  withRouting,
   type RoutingAssertionsHost,
 } from "./routing.js";
 
@@ -81,5 +84,41 @@ describe("assertRouting", () => {
         id: "23",
       }),
     );
+  });
+});
+
+describe("withRouting", () => {
+  it("swaps in a fresh RouteSet and restores after the block (even on throw)", () => {
+    const original = buildHost();
+    const before = original.routes;
+    withRouting.call(original, (routes: RouteSet) => {
+      routes.draw((m) => m.get("/temp", { to: "tmp#i" }));
+      expect(original.routes).toBe(routes);
+      ok(() => assertRecognizes.call(original, { controller: "tmp", action: "i" }, "/temp"));
+    });
+    expect(original.routes).toBe(before);
+    bad(() =>
+      withRouting.call(original, () => {
+        throw new Error("boom");
+      }),
+    );
+    expect(original.routes).toBe(before);
+  });
+});
+
+describe("failOn", () => {
+  it("rethrows matching exception with the supplied message", () => {
+    expect(() =>
+      failOn(RoutingError, "custom msg", () => {
+        throw new RoutingError("inner");
+      }),
+    ).toThrow("custom msg");
+  });
+  it("falls through unrelated errors", () => {
+    expect(() =>
+      failOn(RoutingError, "ignored", () => {
+        throw new TypeError("other");
+      }),
+    ).toThrow(TypeError);
   });
 });

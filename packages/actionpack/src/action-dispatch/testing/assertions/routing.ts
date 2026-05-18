@@ -1,7 +1,9 @@
 /**
  * ActionDispatch::Assertions::RoutingAssertions — `this`-typed port of
- * Rails' `assertions/routing.rb`. Follow-ups: `withRouting`, URL-form
- * (`://`) path arguments, and `method_missing` named-route forwarding.
+ * Rails' `assertions/routing.rb`. Class-level `with_routing` (via
+ * Minitest setup/teardown) and the `WithIntegrationRouting` flavour are
+ * deferred until integration-session cloning is ported; Ruby's
+ * `method_missing` named-route forwarding has no TS equivalent.
  */
 
 import { RouteSet } from "../../routing/route-set.js";
@@ -19,6 +21,44 @@ export interface PathWithMethod {
 }
 
 type Options = Record<string, unknown>;
+
+/** Initialises `@routes`. Mirrors Rails' `setup`. Call from your own setup. */
+export function setup(this: RoutingAssertionsHost): void {
+  if (this.routes == null) this.routes = undefined;
+}
+
+/**
+ * Temporarily replaces `this.routes` with a fresh RouteSet, yields it to
+ * `block`, and restores the previous routes (and controller) on exit.
+ * Mirrors Rails' instance-level `with_routing`. `config` is accepted for
+ * parity and forwarded to `createRoutes` (Rails passes it to
+ * `RouteSet.new`, which trails doesn't yet wire).
+ */
+export function withRouting<T>(
+  this: RoutingAssertionsHost,
+  configOrBlock: unknown,
+  block?: (routes: RouteSet) => T,
+): T {
+  let cb: (routes: RouteSet) => T;
+  let config: unknown;
+  if (typeof configOrBlock === "function") {
+    cb = configOrBlock as (routes: RouteSet) => T;
+  } else {
+    config = configOrBlock;
+    cb = block as (routes: RouteSet) => T;
+  }
+  const oldRoutes = this.routes;
+  const oldController = this.controller;
+  try {
+    return createRoutes.call<RoutingAssertionsHost, [(r: RouteSet) => T, unknown], T>(
+      this,
+      cb,
+      config,
+    );
+  } finally {
+    resetRoutes.call(this, oldRoutes, oldController);
+  }
+}
 
 /** Asserts that `path` recognizes to `expectedOptions`. */
 export function assertRecognizes(
@@ -113,15 +153,57 @@ export function recognizedRequestFor(
   request.env["PATH_INFO"] = pathStr;
   request.env["REQUEST_METHOD"] = method.toUpperCase();
 
-  let params: Record<string, unknown>;
-  try {
-    params = requireRoutes(this).recognizePath(pathStr, { method, extras });
-  } catch (e) {
-    if (e instanceof RoutingError) throw new Error(msg ?? e.message, { cause: e });
-    throw e;
-  }
+  const params = failOn(RoutingError, msg, () =>
+    requireRoutes(this).recognizePath(pathStr, { method, extras }),
+  );
   request.pathParameters = params;
   return request;
+}
+
+/** @internal Mirrors Rails' private `create_routes`. */
+export function createRoutes<T>(
+  this: RoutingAssertionsHost,
+  block: (routes: RouteSet) => T,
+
+  _config?: unknown,
+): T {
+  const routes = new RouteSet();
+  this.routes = routes;
+  // Rails additionally clones `@controller` and mixes in `_routes.url_helpers`
+  // (and `view_context_class`). That depends on singleton-class re-opening
+  // which has no direct TS equivalent; consumers that need helpers on the
+  // controller assign them explicitly.
+  return block(routes);
+}
+
+/** @internal Mirrors Rails' private `reset_routes`. */
+export function resetRoutes(
+  this: RoutingAssertionsHost,
+  oldRoutes: RouteSet | undefined,
+  oldController: unknown,
+): void {
+  this.routes = oldRoutes;
+  if (this.controller != null) this.controller = oldController;
+}
+
+/**
+ * @internal Mirrors Rails' private `fail_on`. Runs `block`; if it throws
+ * an instance of `ExceptionClass`, re-raises as an assertion error with
+ * the caller-supplied `message` (or the original message when omitted).
+ */
+export function failOn<T>(
+  ExceptionClass: new (...args: never[]) => Error,
+  message: string | undefined,
+  block: () => T,
+): T {
+  try {
+    return block();
+  } catch (e) {
+    if (e instanceof ExceptionClass) {
+      throw new Error(message ?? e.message, { cause: e });
+    }
+    throw e;
+  }
 }
 
 function requireRoutes(host: RoutingAssertionsHost): RouteSet {

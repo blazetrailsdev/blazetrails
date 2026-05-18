@@ -17,7 +17,12 @@ export {
   assertRecognizes,
   assertGenerates,
   assertRouting,
+  withRouting,
+  setup,
+  createRoutes,
+  resetRoutes,
   recognizedRequestFor,
+  failOn,
   type RoutingAssertionsHost,
   type PathWithMethod,
 } from "./assertions/routing.js";

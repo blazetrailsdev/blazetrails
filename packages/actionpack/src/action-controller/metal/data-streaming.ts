@@ -59,24 +59,19 @@ export function sendFileHeadersBang(
   this: SendFileHeadersHost,
   options: SendFileHeadersOptions,
 ): void {
-  const typeProvided = options.type !== undefined;
+  const typeProvided = Object.hasOwn(options, "type");
 
   let contentType: string | null = typeProvided
     ? (options.type as string | null)
     : DEFAULT_SEND_FILE_TYPE;
-
+  this.contentType = contentType;
   this.response.sendingFile = true;
 
   if (contentType === null || contentType === undefined) {
     throw new TypeError(":type option required");
   }
 
-  if (!typeProvided && options.filename) {
-    // Guess from extension when caller didn't pin a type.
-    const ext = getPath().extname(options.filename).toLowerCase().replace(/^\./, "");
-    const guessed = MimeType.lookupByExtension(ext);
-    if (guessed) contentType = guessed.toString();
-  } else if (typeProvided && !contentType.includes("/")) {
+  if (typeProvided && !contentType.includes("/")) {
     // String matches the Mime symbol shape (e.g. "json"). Mirror
     // Rails' `Mime[content_type]` lookup and reject unknown keys.
     const resolved = MimeType.lookup(contentType);
@@ -84,8 +79,12 @@ export function sendFileHeadersBang(
       throw new TypeError(`Unknown MIME type ${String(options.type)}`);
     }
     contentType = resolved.toString();
+  } else if (!typeProvided && options.filename) {
+    // Guess from extension when caller didn't pin a type.
+    const ext = getPath().extname(options.filename).toLowerCase().replace(/^\./, "");
+    const guessed = MimeType.lookupByExtension(ext);
+    if (guessed) contentType = guessed.toString();
   }
-
   this.contentType = contentType;
 
   const disposition: string | false | null | undefined = Object.hasOwn(options, "disposition")

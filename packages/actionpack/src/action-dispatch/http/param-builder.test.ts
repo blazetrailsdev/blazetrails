@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
+import { InvalidParameterError } from "@blazetrails/rack";
 import { ParamBuilder } from "./param-builder.js";
 
 describe("ParamBuilder", () => {
@@ -45,6 +46,10 @@ describe("ParamBuilder", () => {
     expect({ ...result, "[foo]": { ...(result["[foo]"] as object) } }).toEqual({
       "[foo]": { bar: "baz" },
     });
+  });
+
+  test("invalid percent-encoding raises InvalidParameterError", () => {
+    expect(() => ParamBuilder.fromQueryString("foo=%E0%A4%A")).toThrow(InvalidParameterError);
   });
 
   test("configured for ignoring leading brackets", () => {

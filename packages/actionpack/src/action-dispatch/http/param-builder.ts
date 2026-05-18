@@ -84,15 +84,24 @@ export class ParamBuilder {
     try {
       for (const [k, rawV] of pairs) {
         let v = rawV as ParamValue;
-        if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-          // Rails wraps Hash values (multipart payloads) as UploadedFile.
+        if (this.paramsHashType(v)) {
+          // Rails: `if Hash === v` — wrap plain hashes (multipart parser
+          // output) as UploadedFile. Class-strict, so an already-built
+          // UploadedFile passes through.
           v = new UploadedFile(v as never) as unknown as ParamValue;
         }
         this.storeNestedParam(params, k, v, 0, encodingTemplate);
       }
     } catch (e) {
-      if (e instanceof RangeError || (e instanceof Error && e.name === "ArgumentError")) {
-        throw new InvalidParameterError(e.message);
+      // Rails rescues ArgumentError here — in Ruby, malformed percent-
+      // encoding in QueryParser raises ArgumentError. In JS the
+      // equivalent is URIError from decodeURIComponent.
+      if (
+        e instanceof URIError ||
+        e instanceof RangeError ||
+        (e instanceof Error && e.name === "ArgumentError")
+      ) {
+        throw new InvalidParameterError((e as Error).message);
       }
       throw e;
     }
@@ -138,7 +147,13 @@ export class ParamBuilder {
 
   /** @internal */
   paramsHashType(obj: unknown): obj is ParamHash {
-    return obj !== null && typeof obj === "object" && !Array.isArray(obj);
+    // Rails: `Hash === obj` — class-strict, excludes subclasses-of-Object
+    // like UploadedFile. Match by only accepting the null-prototype shape
+    // we build via makeParams(); custom classes (UploadedFile) fall
+    // through and trigger ParameterTypeError on hash-container paths.
+    if (obj === null || typeof obj !== "object" || Array.isArray(obj)) return false;
+    const proto = Object.getPrototypeOf(obj);
+    return proto === null || proto === Object.prototype;
   }
 
   /** @internal */

@@ -2454,6 +2454,41 @@ describe("TestAutosaveAssociationsInGeneral", () => {
     expect(post.author_id).toBe(author.id);
   });
 
+  it("default belongs_to saves new associated record and propagates the FK", async () => {
+    // Rails autosave_association.rb:548-572 — `elsif autosave != false`
+    // branch fires even when `autosave` is unset, so default belongs_to
+    // saves a new target during owner save and writes the parent PK back
+    // onto the owner's foreign key.
+    const adapter = freshAdapter();
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Author", Author);
+    registerModel("Post", Post);
+    // No `autosave:` option — exercises the default-on registration path.
+    Associations.belongsTo.call(Post, "author", {
+      foreignKey: "author_id",
+      className: "Author",
+    });
+
+    const author = new Author({ name: "New Author" });
+    const post = new Post({ title: "Default autosave" });
+    cacheAssoc(post, "author", author);
+    await post.save();
+    expect(author.isNewRecord()).toBe(false);
+    expect(post.author_id).toBe(author.id);
+  });
+
   it("should not add the same callbacks multiple times for has one", async () => {
     const adapter = freshAdapter();
     let saveCount = 0;

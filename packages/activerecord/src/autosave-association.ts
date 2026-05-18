@@ -726,10 +726,15 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
       _setAutosavingBelongsToFor(record, assoc, false);
     }
     if (!saved) {
-      propagateErrors(record, assocRecord, assoc.name);
       // Rails save_belongs_to_association:571 — `saved if autosave`. Only
-      // autosave==true propagates the failure to abort the owner save.
-      return autosave ? false : true;
+      // autosave==true propagates the failure to abort the owner save (and
+      // surfaces child errors via the validate_belongs_to_association path).
+      // Default belongs_to leaves owner.errors untouched on save failure.
+      if (autosave) {
+        propagateErrors(record, assocRecord, assoc.name);
+        return false;
+      }
+      return true;
     }
 
     const foreignKey = _resolveBelongsToForeignKey(assoc);
@@ -1038,10 +1043,16 @@ export async function saveBelongsToAssociation(
   this: AutosaveAssociationHost,
   reflection: any,
 ): Promise<boolean> {
+  // Mirror Rails: `Array(reflection.foreign_key)` (autosave_association.rb:
+  // 545/561). The reflection-resolved FK may differ from the raw option
+  // (e.g. query-constraints-derived composite columns), so forward it
+  // explicitly to override the options.foreignKey fallback.
+  const options = { ...(reflection.options ?? {}) };
+  if (reflection.foreignKey != null) options.foreignKey = reflection.foreignKey;
   return _autosaveBelongsTo(this as unknown as Base, {
     name: reflection.name,
     type: "belongsTo",
-    options: reflection.options ?? {},
+    options,
   });
 }
 

@@ -47,6 +47,7 @@ import {
   _wrapperEnabled,
   type ParamsWrapperHost,
 } from "./metal/params-wrapper.js";
+import { Parameters as StrongParameters } from "./metal/strong-parameters.js";
 
 // Re-export callback registration
 export { type ActionCallback, type AroundCallback, type CallbackOptions };
@@ -586,6 +587,15 @@ export class Base extends Metal {
     try {
       if (this.request && _wrapperEnabled.call(this as unknown as ParamsWrapperHost)) {
         _performParameterWrapping.call(this as unknown as ParamsWrapperHost);
+        // Rails' controller `params` is `request.parameters` by reference, so
+        // the merge in `_performParameterWrapping` is visible to actions. Our
+        // Metal.dispatch snapshots `request.params` into `this.params` before
+        // processAction runs, so we re-sync after wrapping to surface the
+        // wrapped root key to the action.
+        this.params = new StrongParameters({
+          ...this.request.params,
+          ...this.request.pathParameters,
+        });
       }
       await super.processAction(action, ...args);
 

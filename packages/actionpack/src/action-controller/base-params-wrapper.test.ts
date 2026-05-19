@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { Base } from "./base.js";
 import { Options as ParamsWrapperOptions } from "./metal/params-wrapper.js";
+import { Request } from "../action-dispatch/http/request.js";
+import { Response } from "../action-dispatch/http/response.js";
 
 describe("Base ParamsWrapper wiring", () => {
   it("has default _wrapperOptions with empty format array", () => {
@@ -69,5 +71,56 @@ describe("Base ParamsWrapper wiring", () => {
     F.wrapParameters("widget");
     const instance = Object.create(F.prototype) as F;
     expect(instance._wrapperOptions.name).toBe("widget");
+  });
+
+  it("processAction wraps request params and exposes them via this.params", async () => {
+    let seen: Record<string, unknown> | null = null;
+    class WidgetsController extends Base {
+      static actions = ["create"];
+      create(): void {
+        seen = this.params.toUnsafeHash();
+        this.head(204);
+      }
+    }
+    WidgetsController.wrapParameters({ format: ["json"], name: "widget" });
+    const request = new Request({
+      REQUEST_METHOD: "POST",
+      PATH_INFO: "/widgets",
+      HTTP_HOST: "localhost",
+      CONTENT_TYPE: "application/json",
+      "action_dispatch.request.request_parameters": { name: "alpha", color: "blue" },
+    });
+    const controller = new WidgetsController();
+    await controller.dispatch("create", request, new Response());
+    expect(seen).not.toBeNull();
+    expect((seen as unknown as Record<string, unknown>).widget).toEqual({
+      name: "alpha",
+      color: "blue",
+    });
+    expect((seen as unknown as Record<string, unknown>).name).toBe("alpha");
+  });
+
+  it("processAction does not wrap when format does not match request content-type", async () => {
+    let seen: Record<string, unknown> | null = null;
+    class ThingsController extends Base {
+      static actions = ["create"];
+      create(): void {
+        seen = this.params.toUnsafeHash();
+        this.head(204);
+      }
+    }
+    ThingsController.wrapParameters({ format: ["xml"], name: "thing" });
+    const request = new Request({
+      REQUEST_METHOD: "POST",
+      PATH_INFO: "/things",
+      HTTP_HOST: "localhost",
+      CONTENT_TYPE: "application/json",
+      "action_dispatch.request.request_parameters": { name: "beta" },
+    });
+    const controller = new ThingsController();
+    await controller.dispatch("create", request, new Response());
+    expect(seen).not.toBeNull();
+    expect((seen as unknown as Record<string, unknown>).thing).toBeUndefined();
+    expect((seen as unknown as Record<string, unknown>).name).toBe("beta");
   });
 });

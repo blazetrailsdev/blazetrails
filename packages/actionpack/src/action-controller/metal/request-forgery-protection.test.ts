@@ -140,15 +140,14 @@ describe("unverifiedRequestWarningMessage", () => {
 
 describe("isVerifiedRequest", () => {
   it("returns true when protection is disabled or method is GET/HEAD", () => {
-    expect(isVerifiedRequest(controller({ allowForgeryProtection: false }), () => false)).toBe(
-      true,
-    );
-    expect(isVerifiedRequest(controller({ request: { method: "GET" } }), () => false)).toBe(true);
-    expect(isVerifiedRequest(controller({ request: { method: "HEAD" } }), () => false)).toBe(true);
+    expect(isVerifiedRequest(controller({ allowForgeryProtection: false }))).toBe(true);
+    expect(isVerifiedRequest(controller({ request: { method: "GET" } }))).toBe(true);
+    expect(isVerifiedRequest(controller({ request: { method: "HEAD" } }))).toBe(true);
   });
   it("requires valid origin and token for POST", () => {
-    expect(isVerifiedRequest(controller(), () => true)).toBe(true);
-    expect(isVerifiedRequest(controller(), () => false)).toBe(false);
+    expect(isVerifiedRequest(controller({ isAnyAuthenticityTokenValid: () => true }))).toBe(true);
+    expect(isVerifiedRequest(controller({ isAnyAuthenticityTokenValid: () => false }))).toBe(false);
+    expect(isVerifiedRequest(controller())).toBe(false);
   });
 });
 

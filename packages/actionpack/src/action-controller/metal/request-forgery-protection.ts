@@ -214,6 +214,8 @@ export interface CsrfController {
   _markedForSameOriginVerification?: boolean;
   logger?: { warn(msg: string): void } | null;
   logWarningOnCsrfFailure?: boolean;
+  /** Supplied by P20c (token validation). */
+  isAnyAuthenticityTokenValid?: () => boolean;
 }
 
 const CROSS_ORIGIN_JAVASCRIPT_WARNING =
@@ -284,28 +286,17 @@ export function verifySameOriginRequest(controller: CsrfController): void {
 
 /** @internal */
 export function unverifiedRequestWarningMessage(controller: CsrfController): string {
-  try {
-    if (isValidRequestOrigin(controller)) {
-      return "Can't verify CSRF token authenticity.";
-    }
-  } catch {
-    // fall through — origin-check raised, treat as mismatch for messaging
+  if (isValidRequestOrigin(controller)) {
+    return "Can't verify CSRF token authenticity.";
   }
   return `HTTP Origin header (${controller.request.origin}) didn't match request.base_url (${controller.request.baseUrl})`;
 }
 
-/**
- * Caller supplies a token-validity check so this module stays free of crypto
- * concerns (those live in token-generation/validation PRs).
- * @internal
- */
-export function isVerifiedRequest(
-  controller: CsrfController,
-  anyAuthenticityTokenValid: () => boolean,
-): boolean {
+/** @internal */
+export function isVerifiedRequest(controller: CsrfController): boolean {
   if (!isProtectAgainstForgery(controller)) return true;
   if (isGetOrHead(controller.request.method)) return true;
-  return isValidRequestOrigin(controller) && anyAuthenticityTokenValid();
+  return isValidRequestOrigin(controller) && (controller.isAnyAuthenticityTokenValid?.() ?? false);
 }
 
 /** @internal */

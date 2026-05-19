@@ -540,7 +540,9 @@ export class Base extends Metal {
     // on first read. We store name eagerly, so assign the derived default
     // here when wrapping is enabled but no name was provided — otherwise
     // `_wrapperEnabled` would always return false for the common Rails form
-    // `wrap_parameters format: [...]`.
+    // `wrap_parameters format: [...]`. `nameSet` stays `false` in that
+    // case so subclasses re-derive from their own `klass` via
+    // `inheritedParamsWrapper`.
     if ((newOpts.format?.length ?? 0) > 0 && !newOpts.name) {
       newOpts.name = _defaultWrapModel.call({ _wrapperOptions: newOpts });
     }
@@ -558,18 +560,24 @@ export class Base extends Metal {
   static inheritedParamsWrapper(): void {
     const inherited = this._wrapperOptions;
     if (!inherited.format || inherited.format.length === 0) return;
+    // Mirrors Rails' `Options#dup` semantics: copy all fields including
+    // `nameSet`, then rebind `klass`. Pass `null` for name so fromHash's
+    // `nameSet` defaults to false, then assign explicitly below to
+    // preserve the parent's explicit-vs-derived state.
     const dup = ParamsWrapperOptions.fromHash({
-      name: inherited.name,
       format: inherited.format,
       include: inherited.include,
       exclude: inherited.exclude,
     });
     dup.model = inherited.model;
     dup.klass = this;
-    // Re-derive default name from the subclass `klass` when the parent's
-    // name was itself derived (matches Rails' lazy `name` semantics on
-    // `inherited`: each subclass derives from its own `controller_name`).
-    if (!dup.name) {
+    if (inherited.nameSet) {
+      // Parent's name was explicitly provided — inherit it as-is.
+      dup.name = inherited.name;
+      dup.nameSet = true;
+    } else {
+      // Parent's name (if any) was auto-derived; re-derive from the
+      // subclass `klass` so `Child < Parent` wraps under its own name.
       dup.name = _defaultWrapModel.call({ _wrapperOptions: dup });
     }
     this._wrapperOptions = dup;

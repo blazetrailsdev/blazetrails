@@ -66,6 +66,18 @@ describe("Base ParamsWrapper wiring", () => {
     expect(Parent._wrapperOptions.klass).toBe(Parent);
   });
 
+  it("inheritedParamsWrapper re-derives auto-derived name from subclass klass", () => {
+    class UsersController extends Base {}
+    UsersController.wrapParameters({ format: ["json"] });
+    expect(UsersController._wrapperOptions.name).toBe("user");
+    expect(UsersController._wrapperOptions.nameSet).toBe(false);
+    class AdminsController extends UsersController {}
+    AdminsController.inheritedParamsWrapper();
+    // Re-derived from AdminsController, not inherited "user"
+    expect(AdminsController._wrapperOptions.name).toBe("admin");
+    expect(AdminsController._wrapperOptions.klass).toBe(AdminsController);
+  });
+
   it("inheritedParamsWrapper is a no-op when format is empty", () => {
     class E extends Base {}
     const before = E._wrapperOptions;

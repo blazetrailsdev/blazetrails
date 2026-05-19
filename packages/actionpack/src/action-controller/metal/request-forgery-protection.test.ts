@@ -240,6 +240,14 @@ describe("P20b/P20c smoke", () => {
     expect(realCsrfToken(c).equals(realCsrfToken(c))).toBe(true);
   });
 
+  it("encode/decodeCsrfToken use urlsafe base64 without padding; reject garbage", () => {
+    const raw = Buffer.from("?".repeat(32));
+    const encoded = maskToken(raw);
+    expect(encoded).not.toMatch(/[+/=]/);
+    expect(unmaskToken(decodeCsrfToken(encoded)).equals(raw)).toBe(true);
+    expect(() => decodeCsrfToken("!!! not base64 !!!")).toThrow();
+  });
+
   it("isAnyAuthenticityTokenValid: masked global via param + X-CSRF; rejects empty", () => {
     const c = tokenC();
     const masked = maskToken(globalCsrfToken(c));

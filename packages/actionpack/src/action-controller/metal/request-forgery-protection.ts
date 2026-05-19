@@ -328,24 +328,21 @@ const GLOBAL_CSRF_TOKEN_IDENTIFIER = "!real_csrf_token";
 
 /** @internal */
 export function generateCsrfToken(): string {
-  return getCrypto()
-    .randomBytes(AUTHENTICITY_TOKEN_LENGTH)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  // Rails: SecureRandom.urlsafe_base64(AUTHENTICITY_TOKEN_LENGTH).
+  return encodeCsrfToken(getCrypto().randomBytes(AUTHENTICITY_TOKEN_LENGTH));
 }
 
 /** @internal */
 export function encodeCsrfToken(rawToken: Buffer): string {
-  return rawToken.toString("base64");
+  // Rails: Base64.urlsafe_encode64(csrf_token, padding: false)
+  return rawToken.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 /** @internal */
 export function decodeCsrfToken(encodedToken: string): Buffer {
-  const buf = Buffer.from(encodedToken.replace(/-/g, "+").replace(/_/g, "/"), "base64");
-  if (buf.length === 0 && encodedToken.length !== 0) throw new TypeError("invalid base64");
-  return buf;
+  // Rails: Base64.urlsafe_decode64 — raises ArgumentError on invalid input.
+  if (!/^[A-Za-z0-9+/_-]*={0,2}$/.test(encodedToken)) throw new TypeError("invalid base64");
+  return Buffer.from(encodedToken.replace(/-/g, "+").replace(/_/g, "/"), "base64");
 }
 
 /** @internal */
@@ -453,7 +450,9 @@ export function isValidPerFormCsrfToken(
   session?: unknown,
 ): boolean {
   if (!c.perFormCsrfTokens) return false;
-  const path = (c.request.path ?? "/").replace(/\/+$/, "") || "/";
+  const rawPath = c.request.path ?? "/";
+  // Rails: request.path.chomp("/") — strips a single trailing slash only.
+  const path = rawPath.length > 1 && rawPath.endsWith("/") ? rawPath.slice(0, -1) : rawPath;
   const method = c.request.requestMethod ?? c.request.method;
   return compareBuffers(token, perFormCsrfToken(c, session, path, method));
 }

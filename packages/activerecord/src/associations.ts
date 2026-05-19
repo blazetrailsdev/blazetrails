@@ -119,6 +119,10 @@ export interface AssociationOptions {
    * Exists for Rails API parity — Rails uses this to switch between JOIN and
    * multi-query strategies. */
   disableJoins?: boolean;
+  /** HABTM-only: target-side FK column on the join table. Overrides the
+   * `class_name.foreign_key` default. Mirrors Rails'
+   * `has_and_belongs_to_many :tags, association_foreign_key: ...`. */
+  associationForeignKey?: string;
   /** When true, records loaded through this association are marked
    * strict-loading, causing further lazy loads on them to raise.
    *

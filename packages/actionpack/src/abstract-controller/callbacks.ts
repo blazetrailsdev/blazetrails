@@ -94,10 +94,14 @@ export class ActionFilter implements CallbackPredicateLike {
           this._filters.length === 1
             ? _inspectFilter(this._filters[0]!)
             : `[${this._filters.map(_inspectFilter).join(", ")}]`;
+        // Ruby `:key.inspect` renders as `:key`; preserve that for parity
+        // with Rails' error message format (the literal `:only` / `:except`).
         const message =
           `The ${missing} action could not be found for the ${names} ` +
           `callback on ${controller.constructor.name}, but it is listed in the controller's ` +
-          `${JSON.stringify(this._conditionalKey)} option.`;
+          `:${this._conditionalKey} option.\n\n` +
+          `Raising for missing callback actions is a new default in Rails 7.1; ` +
+          `set \`raiseOnMissingCallbackActions = false\` on the controller class to opt out.`;
         throw new ActionNotFound(message, controller, missing);
       }
     }

@@ -200,10 +200,12 @@ Sequencing rules:
 
 ### Wave 0 — single-file peripherals
 
-| PR  | Rails file | Missing | TS file (api:compare row) | Methods |
-| --- | ---------- | ------: | ------------------------- | ------- |
-
-All Wave 0 rows shipped: P3 (#1944), P4 (#1945 + #2013), P7 (#1946), P9 (#1944).
+| PR     | Rails file                    | Missing | TS file (api:compare row)     | Methods                |
+| ------ | ----------------------------- | ------: | ----------------------------- | ---------------------- |
+| ~~P3~~ | ~~`form_builder.rb`~~         |   ~~1~~ | ~~`form-builder.ts`~~         | Shipped #1944.         |
+| ~~P4~~ | ~~`metal/data_streaming.rb`~~ |   ~~1~~ | ~~`metal/data-streaming.ts`~~ | Shipped #1945 + #2013. |
+| ~~P7~~ | ~~`metal/renderers.rb`~~      |   ~~2~~ | ~~`metal/renderers.ts`~~      | Shipped #1946.         |
+| ~~P9~~ | ~~`deprecator.rb`~~           |   ~~3~~ | ~~`deprecator.ts`~~           | Shipped #1944.         |
 
 ### Wave 1 — small bundle peripherals
 
@@ -217,10 +219,10 @@ Ship after Wave 0 lands. One PR per row.
 
 ### Wave 2 — medium peripherals
 
-| PR  | Rails file | Missing | Notes |
-| --- | ---------- | ------: | ----- |
-
-Wave 2 rows shipped: P14 (#1949), P15 (#1950 + #2033).
+| PR      | Rails file                               | Missing | Notes                  |
+| ------- | ---------------------------------------- | ------: | ---------------------- |
+| ~~P14~~ | ~~`metal/redirecting.rb` (privates)~~    |   ~~6~~ | Shipped #1949.         |
+| ~~P15~~ | ~~`metal/params_wrapper.rb` (privates)~~ |   ~~8~~ | Shipped #1950 + #2033. |
 
 ### Wave 3 — split-file PRs
 
@@ -237,18 +239,18 @@ the same TS file, so ship them in alphabetical order (a → b → c).
 
 #### `metal/live.rb` (22 missing) — `metal/live.ts`
 
-| PR  | Subject | Missing | Methods |
-| --- | ------- | ------: | ------- |
-
-`metal/live.rb` shipped: P18a (#1985), P18b (#2004).
+| PR       | Subject                  | Missing | Methods        |
+| -------- | ------------------------ | ------: | -------------- |
+| ~~P18a~~ | ~~`Live::Buffer` class~~ |  ~~12~~ | Shipped #1985. |
+| ~~P18b~~ | ~~`Live` mixin~~         |  ~~10~~ | Shipped #2004. |
 
 #### `metal/request_forgery_protection.rb` (31 missing) — `metal/request-forgery-protection.ts`
 
-| PR       | Subject                              | Missing | Methods        |
-| -------- | ------------------------------------ | ------: | -------------- |
-| ~~P20a~~ | Verification predicates              |      10 | Shipped #1988. |
-| ~~P20b~~ | Token generation/encoding            |      11 | Shipped #2003. |
-| ~~P20c~~ | Token validation + strategy plumbing |      10 | Shipped #2003. |
+| PR       | Subject                                  | Missing | Methods        |
+| -------- | ---------------------------------------- | ------: | -------------- |
+| ~~P20a~~ | ~~Verification predicates~~              |  ~~10~~ | Shipped #1988. |
+| ~~P20b~~ | ~~Token generation/encoding~~            |  ~~11~~ | Shipped #2003. |
+| ~~P20c~~ | ~~Token validation + strategy plumbing~~ |  ~~10~~ | Shipped #2003. |
 
 #### `test_case.rb` (36 missing) — `test-case.ts`
 

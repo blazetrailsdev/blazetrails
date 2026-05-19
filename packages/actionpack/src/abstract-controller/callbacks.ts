@@ -72,6 +72,26 @@ export class ActionFilter implements CallbackPredicateLike {
     return this._actions.has(controller.actionName);
   }
 
+  /**
+   * Rails aliases `after`/`before`/`around` to `match?` so the same
+   * filter object can be invoked by ActiveSupport::Callbacks for each
+   * callback kind. Mirrored here for fidelity even though our dispatch
+   * doesn't currently look them up by kind.
+   *
+   * @internal
+   */
+  after(controller: AbstractController): boolean {
+    return this.isMatch(controller);
+  }
+  /** @internal */
+  before(controller: AbstractController): boolean {
+    return this.isMatch(controller);
+  }
+  /** @internal */
+  around(controller: AbstractController): boolean {
+    return this.isMatch(controller);
+  }
+
   /** @internal */
   get filters(): ReadonlyArray<ActionCallback | AroundCallback> {
     return this._filters;

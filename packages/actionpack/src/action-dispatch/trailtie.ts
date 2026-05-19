@@ -158,13 +158,6 @@ export class Trailtie extends BaseRailtie {
       // "utf-8" so initializer state doesn't leak across runs.
       Response.defaultCharset = cfg.defaultCharset ?? "utf-8";
     });
-
-    // Mirrors Rails' default_middleware_stack.rb:85 (`middleware.use
-    // ActionDispatch::ContentSecurityPolicy::Middleware`). trails has no
-    // app-owned default stack yet, so the middleware is exposed via
-    // [[defaultMiddleware]] for hosts to insert; the initializer is the
-    // hook point where future api-only gating can apply.
-    this.initializer("action_dispatch.content_security_policy", () => {});
   }
 
   /**

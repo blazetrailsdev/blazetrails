@@ -887,7 +887,7 @@ async function freshAdapterCompositeOrders(): Promise<DatabaseAdapter> {
       c: "integer",
       val: "string",
       active: "boolean",
-      price: "float",
+      price: "decimal",
     },
     order_as: { shop_id: "integer", order_num: "integer" },
     order_bs: { shop_id: "integer", order_num: "integer" },

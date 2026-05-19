@@ -222,6 +222,20 @@ const COLUMN_TYPE_MAP_SQLITE: Record<PrimitiveColumnSpec, string> = {
  */
 const _appliedSchemaSignatures = new WeakMap<DatabaseAdapter, Map<string, string>>();
 
+/**
+ * Drop the per-adapter signature cache. Called by `withTransactionalFixtures`
+ * after rolling back a test transaction, so DDL that ran inside an `it()`
+ * body (and was therefore rolled back at the DB) doesn't leave a stale
+ * "we created this table" entry that would cause the next test's
+ * `defineSchema(...)` call to skip recreating the (no-longer-existing)
+ * table.
+ *
+ * @internal
+ */
+export function _clearAppliedSchemaSignaturesForAdapter(adapter: DatabaseAdapter): void {
+  _appliedSchemaSignatures.delete(adapter);
+}
+
 /** @internal */
 function getCache(adapter: DatabaseAdapter): Map<string, string> {
   let cache = _appliedSchemaSignatures.get(adapter);

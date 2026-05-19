@@ -7,6 +7,7 @@ import {
   resetTestAdapterState,
   type TestDatabaseAdapter,
 } from "../test-adapter.js";
+import { _clearAppliedSchemaSignaturesForAdapter } from "./define-schema.js";
 
 interface TxnHost {
   transactionManager: {
@@ -61,6 +62,13 @@ function clearSchemaCache(adapter: TransactionalFixturesAdapter): void {
   const wrapped = (adapter as Partial<TestDatabaseAdapter>).innerAdapter;
   const host = (wrapped ?? adapter) as { schemaCache?: { clear?: () => void } };
   host.schemaCache?.clear?.();
+  // Also drop the parallel per-adapter signature cache maintained by
+  // `defineSchema`. If a test calls `defineSchema(...)` inside an `it()`
+  // body, the rollback reverts the table at the DB but the signature cache
+  // would otherwise still claim "we created this table" — causing the next
+  // test's `defineSchema` call to skip recreating it.
+  _clearAppliedSchemaSignaturesForAdapter(adapter);
+  if (wrapped) _clearAppliedSchemaSignaturesForAdapter(wrapped);
 }
 
 /**

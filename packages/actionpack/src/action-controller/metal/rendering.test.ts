@@ -166,4 +166,16 @@ describe("Metal wiring", () => {
     expect(instance.renderToBody({})).toBe(" ");
     expect(instance.renderToBody({ json: "{}" })).toBe(" ");
   });
+
+  test("renderToBody dispatches to a registered renderer before the priority resolver", async () => {
+    const { Metal } = await import("../metal.js");
+    const { Renderers } = await import("../metal/renderers.js");
+    Renderers.add("csvBody", (v) => `csv:${String(v)}`);
+    try {
+      const instance = Object.create(Metal.prototype) as InstanceType<typeof Metal>;
+      expect(instance.renderToBody({ csvBody: "a,b" })).toBe("csv:a,b");
+    } finally {
+      Renderers.remove("csvBody");
+    }
+  });
 });

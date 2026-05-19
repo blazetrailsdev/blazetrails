@@ -17,6 +17,7 @@ import {
   type MiddlewareEntry,
 } from "../action-dispatch/middleware/stack.js";
 import { includeContent } from "./metal/head.js";
+import { Renderers } from "./metal/renderers.js";
 import {
   _normalizeOptions as _normalizeOptionsFn,
   _normalizeText as _normalizeTextFn,
@@ -335,15 +336,21 @@ export class Metal extends AbstractController {
   }
 
   /**
-   * Mirrors Rails `ActionController::Rendering#render_to_body`:
-   *   super || _render_in_priorities(options) || " "
-   * Subclasses (template renderers) override and `super` falls back to
-   * this body-priority resolution.
+   * Composes the Rails `render_to_body` chain. With `ActionController::Base`'s
+   * include order, the effective chain is:
+   *
+   *   Rendering#render_to_body   → super || _render_in_priorities(options) || " "
+   *   Renderers#render_to_body   → _render_to_body_with_renderer(options) || super
+   *   AbstractController         → (nil — no-op base)
+   *
+   * Flattened: try the registered renderers first, then the
+   * `:body`/`:plain`/`:html` priority resolver, finally the
+   * single-space fallback. Subclasses that template-render override
+   * this and delegate back via `super`.
    * @internal
    */
   renderToBody(options: Record<string, unknown> = {}): unknown {
-    const body = _renderInPrioritiesFn(options);
-    return body ?? " ";
+    return Renderers._renderToBodyWithRenderer(options) ?? _renderInPrioritiesFn(options) ?? " ";
   }
 
   // Rails-private rendering helpers — wired onto the class so the

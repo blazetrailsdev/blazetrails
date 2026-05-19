@@ -151,7 +151,8 @@ export class Template {
       });
     } catch (e) {
       if (e instanceof TemplateError) throw e;
-      throw new TemplateError({ original: e as Error, template: this });
+      const original = e instanceof Error ? e : new Error(String(e));
+      throw new TemplateError({ original, template: this });
     }
   }
 

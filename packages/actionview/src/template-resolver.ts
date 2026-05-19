@@ -14,7 +14,13 @@
  *     find(name, prefix, format, extensions) {
  *       const row = db.query("SELECT source, ext FROM templates WHERE ...");
  *       if (!row) return null;
- *       return { source: row.source, extension: row.ext, ... };
+ *       return new Template({
+ *         source: row.source,
+ *         extension: row.ext,
+ *         identifier: `${prefix}/${name}`,
+ *         virtualPath: `${prefix}/${name}`,
+ *         format,
+ *       });
  *     }
  *   }
  */

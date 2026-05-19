@@ -104,6 +104,38 @@ describe("withTransactionalFixtures (useTransactionalTests=false opt-out)", () =
   });
 });
 
+// DDL executed inside an it() body populates the adapter's SchemaCache.
+// The outer-transaction rollback reverts the DDL at the DB level, but the
+// cache entries it produced would otherwise survive into the next test —
+// reporting columns that no longer exist. The helper's afterEach calls
+// schemaCache.clear() after rollback to keep that in-memory reflection in
+// sync with the rolled-back DB.
+describe("withTransactionalFixtures (schema-cache invalidation)", () => {
+  let adapter: SQLite3Adapter;
+
+  beforeAll(async () => {
+    adapter = new SQLite3Adapter(":memory:");
+    await defineSchema(adapter, { cache_inval_users: { name: "string" } });
+  });
+
+  afterAll(async () => {
+    await adapter.close();
+  });
+
+  withTransactionalFixtures(() => adapter);
+
+  it("addColumn inside a test populates the schema cache", async () => {
+    await adapter.addColumn("cache_inval_users", "extra", "string");
+    const cols = await adapter.columns("cache_inval_users");
+    expect(cols.map((c) => c.name)).toContain("extra");
+  });
+
+  it("next test does not see the rolled-back column in the cache", async () => {
+    const cols = await adapter.columns("cache_inval_users");
+    expect(cols.map((c) => c.name)).not.toContain("extra");
+  });
+});
+
 // Adapter-cluster files (adapters/postgresql/*.test.ts, etc.) construct a
 // raw DatabaseAdapter directly instead of going through createTestAdapter().
 // The helper must accept that shape — `transactionManager` lives on the

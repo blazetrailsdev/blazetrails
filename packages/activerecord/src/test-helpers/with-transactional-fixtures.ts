@@ -42,6 +42,28 @@ function tm(adapter: TransactionalFixturesAdapter): TxnHost["transactionManager"
 }
 
 /**
+ * Drop in-memory schema-reflection (columns/indexes/primary-key/data-source
+ * exists) so the next test re-reads from the live DB. DDL executed inside an
+ * `it()` body — `addColumn`, `createTable`, `changeTable`, etc. — populates
+ * the adapter's `SchemaCache`. The outer transaction's rollback reverts the
+ * DDL on the database side, but the cache entries it produced survive into
+ * the next test and report columns/tables that no longer exist (or vice
+ * versa for cached "missing" markers).
+ *
+ * Mirrors how Rails handles teardown via `ConnectionPool#unpin_connection!`:
+ * the pool drops its bound state after rollback so the next bind starts
+ * fresh. Calling `schemaCache.clear()` from the test-only afterEach keeps
+ * the production rollback path untouched.
+ *
+ * @internal
+ */
+function clearSchemaCache(adapter: TransactionalFixturesAdapter): void {
+  const wrapped = (adapter as Partial<TestDatabaseAdapter>).innerAdapter;
+  const host = (wrapped ?? adapter) as { schemaCache?: { clear?: () => void } };
+  host.schemaCache?.clear?.();
+}
+
+/**
  * Wrap every test in a top-level transaction that rolls back in `afterEach`,
  * so data inserted/updated during the test is discarded without re-running
  * schema DDL between tests.
@@ -130,5 +152,6 @@ export function withTransactionalFixtures(getAdapter: () => TransactionalFixture
     if (!active) return;
     const t = tm(getAdapter());
     while (t.openTransactions > 0) await t.rollbackTransaction();
+    clearSchemaCache(getAdapter());
   });
 }

@@ -7,7 +7,6 @@
  */
 
 import { RouteSet } from "../../routing/route-set.js";
-import { symbolToString } from "../../routing/polymorphic-routes.js";
 import { RoutingError } from "../../../action-controller/metal/exceptions.js";
 import { TestRequest } from "../test-request.js";
 
@@ -133,10 +132,6 @@ export function assertGenerates(
   const path = expectedPath.startsWith("/") ? expectedPath : `/${expectedPath}`;
   const routes = requireRoutes(this);
   const opts = { ...options };
-  // Rails accepts `use_route: :name`; symbols carry their name in `.description`.
-  if (typeof opts["use_route"] === "symbol") {
-    opts["use_route"] = symbolToString(opts["use_route"]);
-  }
   const [generatedPath, queryStringKeys] = routes.generateExtras(opts, defaults);
   // Null-prototype map so an extra key named `__proto__` becomes an own
   // property rather than hitting the inherited setter.

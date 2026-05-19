@@ -483,7 +483,7 @@ export class DatabaseTasks {
   static eachLocalConfiguration(): DatabaseConfig[] {
     if (!this.databaseConfiguration) return [];
     const result: DatabaseConfig[] = [];
-    for (const c of this.databaseConfiguration.configurations) {
+    for (const c of this.databaseConfiguration.configsFor()) {
       if (!c.database) continue;
       if (this._localDatabase(c)) {
         result.push(c);
@@ -498,10 +498,11 @@ export class DatabaseTasks {
     return result;
   }
 
+  // Mirrors Rails: LOCAL_HOSTS = ["127.0.0.1", "localhost"] + host.blank?
   /** @internal */
   static _localDatabase(c: DatabaseConfig): boolean {
     const host = c.host;
-    return !host || host === "localhost" || host === "127.0.0.1" || host === "::1";
+    return !host || host === "localhost" || host === "127.0.0.1";
   }
 
   static cacheDumpFilename(

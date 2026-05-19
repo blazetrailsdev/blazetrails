@@ -16,7 +16,7 @@ import {
 import { Associations, setBelongsTo, association, loadHasManyThrough } from "./associations.js";
 
 import { createTestAdapter } from "./test-adapter.js";
-import { defineSchema } from "./test-helpers/define-schema.js";
+import { defineSchema, type Schema } from "./test-helpers/define-schema.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import {
   markForDestruction,
@@ -25,12 +25,7 @@ import {
   addAutosaveAssociationCallbacks,
 } from "./autosave-association.js";
 
-// -- Helpers --
-function freshAdapter(): DatabaseAdapter {
-  return createTestAdapter();
-}
-
-const UNIVERSAL_AUTOSAVE_SCHEMA = {
+const UNIVERSAL_AUTOSAVE_SCHEMA: Schema = {
   pirates: { catchphrase: "string" },
   ships: { name: "string", pirate_id: "integer" },
   birds: { name: "string", pirate_id: "integer" },
@@ -39,7 +34,10 @@ const UNIVERSAL_AUTOSAVE_SCHEMA = {
   companies: { name: "string" },
   clients: { name: "string", company_id: "integer" },
   unvalidated_clients: { name: "string", company_id: "integer" },
-  cpk_order_pks: { shop_id: "integer", status: "string" },
+  cpk_order_pks: {
+    columns: { shop_id: "integer", id: "integer", status: "string" },
+    primaryKey: ["shop_id", "id"],
+  },
   cpk_book_fks: { order_id: "integer", title: "string" },
   aid_firms: { name: "string" },
   aid_contracts: { aid_firm_id: "integer", aid_developer_id: "integer" },
@@ -126,8 +124,6 @@ const UNIVERSAL_AUTOSAVE_SCHEMA = {
   tch_children: { value: "string", tch_parent_id: "integer" },
   uc_parents: { name: "string" },
   uc_children: { val: "string", uc_parent_id: "integer" },
-  n_auto_tags: { name: "string", nauto_article_id: "integer" },
-  n_auto_articles: { title: "string" },
   asb1_tags: { name: "string", asb1_article_id: "integer" },
   asb1_articles: { title: "string" },
   nuc_tags: { name: "string", nuc_article_id: "integer" },
@@ -167,7 +163,7 @@ const UNIVERSAL_AUTOSAVE_SCHEMA = {
   parrots_pirates: { pirate_id: "integer", parrot_id: "integer" },
   nauto_articles: { title: "string" },
   nauto_tags: { name: "string", nauto_article_id: "integer" },
-} as const;
+};
 
 async function setupAutosaveAdapter(): Promise<DatabaseAdapter> {
   const a = createTestAdapter();

@@ -7,6 +7,7 @@
 
 import { ContentDisposition } from "../../action-dispatch/http/content-disposition.js";
 import { MimeType } from "../../action-dispatch/http/mime-type.js";
+import type { Request } from "../../action-dispatch/http/request.js";
 import { Response as DispatchResponse } from "../../action-dispatch/http/response.js";
 
 export class ClientDisconnected extends Error {
@@ -291,6 +292,7 @@ export async function process(
   runAction: (n: string) => void | Promise<void>,
 ): Promise<void> {
   let error: unknown = undefined;
+  let errorSet = false;
   await newControllerThread.call(this, async () => {
     try {
       await runAction(name);
@@ -311,13 +313,14 @@ export async function process(
         }
       } else {
         error = e;
+        errorSet = true;
       }
     } finally {
       cleanUpThreadLocals.call(this, [], null);
       if (!this.response.committed) this.response.close();
     }
   });
-  if (error) throw error;
+  if (errorSet) throw error;
 }
 
 /** Mirrors `ActionController::Live#response_body=`. */
@@ -398,13 +401,13 @@ export function liveThreadPoolExecutor(): LiveExecutor {
 /** Mirrors `ActionController::Live::ClassMethods#make_response!`. HTTP/1.0
  *  has no chunked transfer encoding, so streaming defers to the parent factory. */
 export function makeResponseBang(
-  request: { getHeader?(name: string): string | undefined },
+  request: Request,
   superFactory: () => DispatchResponse,
 ): DispatchResponse {
-  const protocol = request.getHeader?.("SERVER_PROTOCOL") ?? request.getHeader?.("HTTP_VERSION");
+  const protocol = request.getHeader("SERVER_PROTOCOL") ?? request.getHeader("HTTP_VERSION");
   if (protocol === "HTTP/1.0") return superFactory();
   const res = new Response();
-  res.request = request as unknown as Response["request"];
+  res.request = request;
   return res;
 }
 

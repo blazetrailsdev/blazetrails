@@ -326,17 +326,20 @@ describe("ActionController::Live private helpers", () => {
 });
 
 describe("ActionController::Live::ClassMethods#make_response!", () => {
+  type Req = Parameters<typeof makeResponseBang>[0];
+  function mkReq(protocol: string): Req {
+    return { getHeader: (n: string) => (n === "SERVER_PROTOCOL" ? protocol : undefined) } as Req;
+  }
+
   it("returns a Live::Response for HTTP/1.1+ requests", () => {
-    const req = { getHeader: (n: string) => (n === "SERVER_PROTOCOL" ? "HTTP/1.1" : undefined) };
-    const res = makeResponseBang(req, () => new Response());
+    const res = makeResponseBang(mkReq("HTTP/1.1"), () => new Response());
     expect(res).toBeInstanceOf(Response);
     expect((res as Response).stream).toBeInstanceOf(Buffer);
   });
 
   it("defers to the parent factory for HTTP/1.0 requests", () => {
-    const req = { getHeader: (n: string) => (n === "SERVER_PROTOCOL" ? "HTTP/1.0" : undefined) };
     const sentinel = new Response();
-    const res = makeResponseBang(req, () => sentinel);
+    const res = makeResponseBang(mkReq("HTTP/1.0"), () => sentinel);
     expect(res).toBe(sentinel);
   });
 });

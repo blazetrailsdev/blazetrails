@@ -162,6 +162,7 @@ describe("DatabaseTasksCreateAllTest", () => {
   afterEach(() => {
     DatabaseTasks.clearRegisteredTasks();
     DatabaseTasks.databaseConfiguration = null;
+    vi.restoreAllMocks();
   });
 
   it("ignores configurations without databases", async () => {
@@ -176,31 +177,23 @@ describe("DatabaseTasksCreateAllTest", () => {
     DatabaseTasks.databaseConfiguration = new DatabaseConfigurations({
       development: { adapter: "sqlite3", database: "dev.db", host: "my.server.tld" },
     });
-    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    try {
-      await DatabaseTasks.createAll();
-      expect(created).toHaveLength(0);
-    } finally {
-      writeSpy.mockRestore();
-    }
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    await DatabaseTasks.createAll();
+    expect(created).toHaveLength(0);
   });
   it("warning for remote databases", async () => {
     DatabaseTasks.databaseConfiguration = new DatabaseConfigurations({
       development: { adapter: "sqlite3", database: "dev.db", host: "my.server.tld" },
     });
     const writes: string[] = [];
-    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+    vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
       writes.push(String(chunk));
       return true;
     });
-    try {
-      await DatabaseTasks.createAll();
-      expect(writes.join("")).toMatch(
-        /This task only modifies local databases\. dev\.db is on a remote host\./,
-      );
-    } finally {
-      writeSpy.mockRestore();
-    }
+    await DatabaseTasks.createAll();
+    expect(writes.join("")).toMatch(
+      /This task only modifies local databases\. dev\.db is on a remote host\./,
+    );
   });
 
   it("creates configurations with local ip", async () => {
@@ -371,6 +364,7 @@ describe("DatabaseTasksDropAllTest", () => {
   afterEach(() => {
     DatabaseTasks.clearRegisteredTasks();
     DatabaseTasks.databaseConfiguration = null;
+    vi.restoreAllMocks();
   });
 
   it("ignores configurations without databases", async () => {
@@ -385,31 +379,23 @@ describe("DatabaseTasksDropAllTest", () => {
     DatabaseTasks.databaseConfiguration = new DatabaseConfigurations({
       development: { adapter: "sqlite3", database: "dev.db", host: "my.server.tld" },
     });
-    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    try {
-      await DatabaseTasks.dropAll();
-      expect(dropped).toHaveLength(0);
-    } finally {
-      writeSpy.mockRestore();
-    }
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    await DatabaseTasks.dropAll();
+    expect(dropped).toHaveLength(0);
   });
   it("warning for remote databases", async () => {
     DatabaseTasks.databaseConfiguration = new DatabaseConfigurations({
       development: { adapter: "sqlite3", database: "dev.db", host: "my.server.tld" },
     });
     const writes: string[] = [];
-    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+    vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
       writes.push(String(chunk));
       return true;
     });
-    try {
-      await DatabaseTasks.dropAll();
-      expect(writes.join("")).toMatch(
-        /This task only modifies local databases\. dev\.db is on a remote host\./,
-      );
-    } finally {
-      writeSpy.mockRestore();
-    }
+    await DatabaseTasks.dropAll();
+    expect(writes.join("")).toMatch(
+      /This task only modifies local databases\. dev\.db is on a remote host\./,
+    );
   });
 
   it("drops configurations with local ip", async () => {

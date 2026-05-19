@@ -654,8 +654,8 @@ describe("Pluck (Rails-guided)", () => {
         this.adapter = adapter;
       }
     }
-    await User.create({ name: "Alice" });
-    await User.create({ name: "Bob" });
-    expect(await User.all().ids()).toEqual([1, 2]);
+    const alice = await User.create({ name: "Alice" });
+    const bob = await User.create({ name: "Bob" });
+    expect(await User.all().ids()).toEqual([alice.id, bob.id]);
   });
 });

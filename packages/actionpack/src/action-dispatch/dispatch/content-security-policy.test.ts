@@ -317,6 +317,14 @@ describe("ContentSecurityPolicyTest", () => {
     expect(policy.hasDirective("script-src")).toBe(false);
   });
 
+  // Ruby truthiness: empty string stays truthy, so DSL with "" preserves the
+  // directive (content_security_policy.rb:189-197).
+  it("DSL with empty-string first arg keeps the directive (Ruby truthiness)", () => {
+    const policy = new ContentSecurityPolicy();
+    policy.scriptSrc("");
+    expect(policy.hasDirective("script-src")).toBe(true);
+  });
+
   // Bare directives store the `true` sentinel (Rails parity).
   it("block_all_mixed_content stores true sentinel", () => {
     const policy = new ContentSecurityPolicy();

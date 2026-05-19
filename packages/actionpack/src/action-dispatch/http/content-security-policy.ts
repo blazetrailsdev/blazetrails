@@ -200,7 +200,11 @@ export class ContentSecurityPolicy {
    * empty list.
    */
   private setDirective(name: string, sources: CSPSource[]): this {
-    if (sources.length === 0 || !sources[0]) {
+    // Rails `if sources.first` uses Ruby truthiness: only nil/false are falsy.
+    // Empty strings stay truthy, so `policy.scriptSrc("")` must set the
+    // directive (matching content_security_policy.rb:189-197).
+    const first = sources[0] as CSPSource | false | null | undefined;
+    if (sources.length === 0 || first == null || first === false) {
       this.directives.delete(name);
       return this;
     }

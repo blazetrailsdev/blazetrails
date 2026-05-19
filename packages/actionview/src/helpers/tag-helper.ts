@@ -465,7 +465,14 @@ export class TagBuilder {
     opts?: { escape?: boolean; block?: (tagBuilder: TagBuilder) => unknown },
   ): SafeBuffer {
     const escape = opts?.escape !== false;
-    const actualContent = opts?.block ? opts.block(this) : content;
+    let actualContent: unknown = content;
+    if (opts?.block) {
+      const vc = this.viewContext as { capture?: (b: TagBuilder, fn: () => unknown) => unknown };
+      actualContent =
+        vc && typeof vc.capture === "function"
+          ? vc.capture(this, () => opts.block!(this))
+          : opts.block(this);
+    }
     return contentTagString(name, actualContent, options ?? undefined, escape);
   }
 

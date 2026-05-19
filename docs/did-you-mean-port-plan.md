@@ -66,7 +66,7 @@ From `grep -rn DidYouMean vendor/rails`:
 
 So the consumers we actually need to wire up after the port lands:
 
-1. **AbstractController::ActionNotFound#corrections** (this prompt's motivating case)
+1. **AbstractController::ActionNotFound#corrections** (the motivating case)
 2. **ParameterMissing#corrections** (replaces existing inline Levenshtein)
 3. **AssociationNotFoundError / InverseOfAssociationNotFoundError / HasManyThroughAssociationNotFoundError `#corrections`** (replaces existing `levenshtein()` ad-hoc helpers in `associations.ts` and `reflection.ts`)
 4. **Template::Error#corrections** (needs `jaroDistance` exported)
@@ -225,7 +225,7 @@ pure-math modules instead of landing it standalone:
 
 The standalone package removes one risk that activesupport-home would
 have carried: no chance of a circular dep, since this package depends on
-nothing in the workspace. Consumer PRs (UnpermittedParameters,
+nothing in the workspace. Consumer PRs (ParameterMissing,
 association errors, `Template::Error`) follow the same shape as PR 3 —
 each adds a workspace dep, swaps in `SpellChecker`, and deletes the
 inline Levenshtein helper. Each is well under 100 LOC.
@@ -283,7 +283,7 @@ and overrides `#original_message`) and a class-level
 just put the getter on the subclass — same observable behaviour, no
 runtime mixin.
 
-The other consumers (`UnpermittedParameters`, association errors,
+The other consumers (`ParameterMissing`, association errors,
 `Template::Error`) each get the same shape: a `corrections` getter on the
 error subclass that constructs a `SpellChecker` from the relevant
 dictionary, and a deletion of the inline Levenshtein helper that used to

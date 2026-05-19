@@ -447,4 +447,34 @@ describe("rateLimit integration through Base.beforeAction / dispatch", () => {
     );
     expect(overrideCalls).toEqual(["override"]);
   });
+
+  it("a prototype-method override of rateLimiting wins through rateLimit/beforeAction dispatch", async () => {
+    const store = new MemoryRateLimitStore();
+    const overrideCalls: string[] = [];
+
+    class MethodOverrideController extends Base {
+      async show() {
+        this.head(200);
+      }
+      override async rateLimiting(args: Parameters<typeof rateLimiting>[0]): Promise<void> {
+        overrideCalls.push("method-override");
+        await rateLimiting.call(this, args);
+      }
+    }
+    MethodOverrideController.rateLimit({ to: 1, within: 60, store });
+
+    const c = new MethodOverrideController();
+    await c.dispatch(
+      "show",
+      new Request({ REQUEST_METHOD: "GET", PATH_INFO: "/show", HTTP_HOST: "x" }),
+      new Response(),
+    );
+    expect(overrideCalls).toEqual(["method-override"]);
+    // Sanity: the override lives on the subclass prototype (not as an own
+    // instance field), which is the override shape this PR is enabling.
+    expect(
+      Object.prototype.hasOwnProperty.call(MethodOverrideController.prototype, "rateLimiting"),
+    ).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(c, "rateLimiting")).toBe(false);
+  });
 });

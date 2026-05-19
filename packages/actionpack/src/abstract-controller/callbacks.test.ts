@@ -327,18 +327,79 @@ describe("TestCallbacksWithArgs", () => {
 });
 
 describe("TestCallbacksWithMissingConditions", () => {
-  // BLOCKED: raise_on_missing_callback_actions class flag is not ported.
-  // The whole "callbacks reference an action that doesn't exist on the
-  // controller" diagnostic path is unimplemented (~80 LOC follow-up:
-  // validate :only / :except against availableActions at processAction
-  // time when the flag is set).
-  it.skip("callbacks raise exception when their 'only' condition is a missing action", () => {});
-  it.skip("callbacks raise exception when their 'only' array condition contains a missing action", () => {});
-  it.skip("callbacks raise exception when their 'except' condition is a missing action", () => {});
-  it.skip("callbacks raise exception when their 'except' array condition contains a missing action", () => {});
-  it.skip("raised exception message includes the names of callback actions and missing conditional action", () => {});
-  it.skip("raised exception message includes a block callback", () => {});
-  it.skip("callbacks with both :only and :except options raise an exception with the correct message", () => {});
+  function makeController(
+    register: (k: typeof AbstractController) => void,
+  ): typeof AbstractController {
+    class C extends AbstractController {
+      async index() {}
+      async show() {}
+    }
+    C.raiseOnMissingCallbackActions = true;
+    register(C);
+    return C;
+  }
+
+  async function runAndCatch(C: typeof AbstractController): Promise<Error> {
+    const c = new C();
+    try {
+      await c.processAction("index");
+    } catch (e) {
+      return e as Error;
+    }
+    throw new Error("expected processAction to throw");
+  }
+
+  it("callbacks raise exception when their 'only' condition is a missing action", async () => {
+    const C = makeController((k) => k.beforeAction(function callback() {}, { only: "showw" }));
+    expect(await runAndCatch(C)).toBeInstanceOf(ActionNotFound);
+  });
+
+  it("callbacks raise exception when their 'only' array condition contains a missing action", async () => {
+    const C = makeController((k) =>
+      k.beforeAction(function callback() {}, { only: ["index", "showw"] }),
+    );
+    expect(await runAndCatch(C)).toBeInstanceOf(ActionNotFound);
+  });
+
+  it("callbacks raise exception when their 'except' condition is a missing action", async () => {
+    const C = makeController((k) => k.beforeAction(function callback() {}, { except: "showw" }));
+    expect(await runAndCatch(C)).toBeInstanceOf(ActionNotFound);
+  });
+
+  it("callbacks raise exception when their 'except' array condition contains a missing action", async () => {
+    const C = makeController((k) =>
+      k.beforeAction(function callback() {}, { except: ["index", "showw"] }),
+    );
+    expect(await runAndCatch(C)).toBeInstanceOf(ActionNotFound);
+  });
+
+  it("raised exception message includes the names of callback actions and missing conditional action", async () => {
+    const C = makeController((k) => {
+      k.beforeAction(function callback1() {}, { only: "showw" });
+      k.beforeAction(function callback2() {}, { only: "showw" });
+      k.beforeAction(() => {}, { only: "showw" });
+    });
+    // trails' beforeAction takes one callback at a time, so each
+    // registration gets its own ActionFilter and the first one to fail
+    // surfaces in the message. We assert on that one + the shared bits
+    // (`only`, `showw`) — Rails groups all callbacks into one filter
+    // because `before_action :a, :b, :c, only: :showw` shares a list.
+    const err = await runAndCatch(C);
+    for (const s of [":callback1", "only", "showw"]) expect(err.message).toContain(s);
+  });
+
+  it("raised exception message includes a block callback", async () => {
+    const C = makeController((k) => k.beforeAction(() => {}, { only: "showw" }));
+    expect((await runAndCatch(C)).message).toContain("#<Proc:");
+  });
+
+  it("callbacks with both :only and :except options raise an exception with the correct message", async () => {
+    const C = makeController((k) =>
+      k.beforeAction(function callback() {}, { only: ["index", "show"], except: "showw" }),
+    );
+    const err = await runAndCatch(C);
+    for (const s of [":callback", "except", "showw"]) expect(err.message).toContain(s);
+  });
 });
 
 // ==========================================================================

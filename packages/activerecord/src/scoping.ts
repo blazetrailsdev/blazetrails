@@ -1,3 +1,7 @@
+import { IsolatedExecutionState } from "@blazetrails/activesupport";
+
+const SCOPE_REGISTRY_KEY = "active_record_scoped_methods";
+
 /**
  * Scoping module — manages current scope and scope registry.
  * Base delegates scoping operations to these classes.
@@ -21,11 +25,8 @@ export class ScopeRegistry {
   private static _ignoreDefaultScope: WeakMap<object, any> = new WeakMap();
   private static _globalCurrentScope: WeakMap<object, any> = new WeakMap();
 
-  private static _instance: ScopeRegistry | null = null;
-
   static instance(): ScopeRegistry {
-    if (!this._instance) this._instance = new ScopeRegistry();
-    return this._instance;
+    return IsolatedExecutionState.fetch(SCOPE_REGISTRY_KEY, () => new ScopeRegistry());
   }
 
   currentScope(modelClass: object, skipInherited = false): any | null {

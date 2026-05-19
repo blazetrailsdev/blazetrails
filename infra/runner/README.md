@@ -45,17 +45,20 @@ dokku config:set --no-restart gh-runner \
 #    drains to zero after one CI run.
 dokku ps:set gh-runner restart-policy always
 
-# 5. Stop-timeout MUST be longer than the longest CI job. `docker stop`
-#    forwards SIGTERM, waits `stop-timeout-seconds`, then SIGKILLs. Default
-#    is 30s — shorter than nearly every job. If a scale operation lands
-#    while a runner is mid-job, SIGKILL bypasses the entrypoint's EXIT
-#    trap (infra/runner/entrypoint.sh), the GitHub-side runner record is
-#    not deregistered, and the stale `offline busy=true` registration
-#    holds the job slot for the workflow's `timeout-minutes` (set per-job
-#    in .github/workflows/ci.yml) before GitHub gives up and re-dispatches.
-#    900s (15 min) is generous headroom vs current job lengths; raise if
-#    jobs ever exceed that.
-dokku ps:set gh-runner stop-timeout-seconds 900
+# 5. Stop-timeout MUST be >= the workflow's `timeout-minutes` ceiling.
+#    `docker stop` forwards SIGTERM, waits `stop-timeout-seconds`, then
+#    SIGKILLs. Default is 30s — shorter than nearly every job. If a scale
+#    operation lands while a runner is mid-job, SIGKILL bypasses the
+#    entrypoint's EXIT trap (infra/runner/entrypoint.sh), the GitHub-side
+#    runner record is not deregistered, and the stale `offline busy=true`
+#    registration holds the job slot for the workflow's `timeout-minutes`
+#    before GitHub gives up and re-dispatches.
+#
+#    Workflow jobs in .github/workflows/ci.yml use `timeout-minutes: 30`,
+#    so 1800s is the matching upper bound — a job hitting its own timeout
+#    can still clean up. Raise this in lockstep if the workflow ceiling
+#    ever increases.
+dokku ps:set gh-runner stop-timeout-seconds 1800
 
 # 6. Persistent pnpm store across ephemeral container lifetimes. CAS-safe
 #    for concurrent replicas (pnpm uses content-addressed storage).
@@ -116,7 +119,7 @@ with `status=offline` and `busy=true`. Cause: `docker stop` SIGKILLed an
 in-flight runner before the entrypoint's EXIT trap could deregister.
 Cancel the stuck workflow run (`gh run cancel`), wait for the registration
 to free, then `gh api -X DELETE .../runners/<id>`. Prevent recurrence by
-confirming `dokku ps:report gh-runner | grep stop-timeout` shows 900s —
+confirming `dokku ps:report gh-runner | grep stop-timeout` shows 1800s —
 existing deploys must run setup step 5 once.
 
 **Updating the runner version:** bump `RUNNER_VERSION` in the Dockerfile

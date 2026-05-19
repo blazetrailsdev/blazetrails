@@ -109,10 +109,15 @@ export function highlight(
     working = doSanitize ? sanitize(String(text)).toString() : String(text);
   }
 
-  const phraseList = Array.isArray(phrases) ? phrases : phrases == null ? [] : [phrases];
   const phrasesBlank =
-    phraseList.length === 0 ||
-    phraseList.every((p) => (typeof p === "string" ? p.length === 0 : false));
+    phrases == null ||
+    (typeof phrases === "string" && phrases.length === 0) ||
+    (Array.isArray(phrases) && phrases.length === 0);
+  const phraseList: Array<string | RegExp> = Array.isArray(phrases)
+    ? phrases
+    : phrases == null
+      ? []
+      : [phrases];
 
   if (isBlank(working) || phrasesBlank) {
     return htmlSafe(working);
@@ -155,10 +160,7 @@ export function excerpt(
   if (text == null || phrase == null) return null;
 
   const separator = options.separator ?? "";
-  const regex =
-    phrase instanceof RegExp
-      ? new RegExp(phrase.source, phrase.flags.includes("i") ? phrase.flags : phrase.flags + "i")
-      : new RegExp(escapeRegExp(String(phrase)), "i");
+  const regex = phrase instanceof RegExp ? phrase : new RegExp(escapeRegExp(String(phrase)), "i");
 
   const match = text.match(regex);
   if (!match) return null;

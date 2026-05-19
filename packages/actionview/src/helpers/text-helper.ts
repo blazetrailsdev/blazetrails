@@ -46,7 +46,11 @@ export function truncate(
   if (block && text.length > length) {
     const extra = block();
     const extraStr =
-      extra instanceof SafeBuffer ? extra.toString() : htmlEscape(String(extra ?? "")).toString();
+      extra instanceof SafeBuffer && extra.htmlSafe
+        ? extra.toString()
+        : htmlEscape(
+            extra instanceof SafeBuffer ? extra.toString() : String(extra ?? ""),
+          ).toString();
     content = htmlSafe(content.toString() + extraStr);
   }
 
@@ -65,16 +69,13 @@ export function pluralize(
   count: number | string | null | undefined,
   singular: string,
   pluralOrOptions?: string | PluralizeOptions,
-  options: PluralizeOptions = {},
 ): string {
   let plural: string | undefined;
   if (typeof pluralOrOptions === "string") {
     plural = pluralOrOptions;
-  } else if (pluralOrOptions) {
+  } else if (pluralOrOptions && pluralOrOptions.plural !== undefined) {
     plural = pluralOrOptions.plural;
-    options = pluralOrOptions;
   }
-  if (options.plural !== undefined) plural = options.plural;
 
   const isOne =
     count === 1 || count === "1" || (typeof count === "string" && /^1(\.0+)?$/.test(count));
@@ -141,6 +142,7 @@ export function simpleFormat(
   return htmlSafe(wrapped.join("\n\n"));
 }
 
+/** @internal */
 function splitParagraphs(text: string): string[] {
   if (isBlank(text)) return [];
   return text

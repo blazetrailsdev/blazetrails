@@ -128,6 +128,104 @@ function collectRubyDepMethods(ruby: ApiManifest, pkg: string, dep: string): Rub
 
 type TsDepMap = Map<string, Map<string, boolean>>; // file -> method -> usesDep
 
+function isPkgSourceFile(sf: ts.SourceFile, pkgSrcDir: string): boolean {
+  return (
+    sf.fileName.startsWith(pkgSrcDir) &&
+    !sf.fileName.endsWith(".test.ts") &&
+    !sf.fileName.endsWith(".d.ts")
+  );
+}
+
+export function collectDirectImports(sf: ts.SourceFile, tsImport: string): Set<string> {
+  const names = new Set<string>();
+  for (const stmt of sf.statements) {
+    if (!ts.isImportDeclaration(stmt)) continue;
+    const specifier = (stmt.moduleSpecifier as ts.StringLiteral).text;
+    if (!isImportFromPackage(specifier, tsImport)) continue;
+    const clause = stmt.importClause;
+    if (!clause) continue;
+    if (clause.name) names.add(clause.name.text);
+    if (clause.namedBindings) {
+      if (ts.isNamedImports(clause.namedBindings)) {
+        for (const el of clause.namedBindings.elements) names.add(el.name.text);
+      } else if (ts.isNamespaceImport(clause.namedBindings)) {
+        names.add(clause.namedBindings.name.text);
+      }
+    }
+  }
+  return names;
+}
+
+function visitTopLevelFunctionExports(
+  sf: ts.SourceFile,
+  callback: (name: ts.Identifier, body: ts.Node, anchor: ts.Node) => void,
+) {
+  for (const stmt of sf.statements) {
+    if (ts.isFunctionDeclaration(stmt) && stmt.name && stmt.body) {
+      callback(stmt.name, stmt, stmt);
+    } else if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (
+          ts.isIdentifier(decl.name) &&
+          decl.initializer &&
+          (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))
+        ) {
+          callback(decl.name, decl.initializer, stmt);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Find top-level exported functions in the package whose bodies (transitively)
+ * reference tsImport. These act as "wrappers" — a method that calls
+ * `executionContextId()` should get credit for using activesupport because
+ * `executionContextId`'s body calls `getAsyncContext()`.
+ *
+ * Runs to a fixed point so multi-level wrappers propagate.
+ */
+export function collectTaintedSymbols(
+  program: ts.Program,
+  pkgSrcDir: string,
+  tsImport: string,
+  tsIdentifiers: string[],
+  dep: string,
+): Set<ts.Symbol> {
+  const checker = program.getTypeChecker();
+  const knownIds = new Set(tsIdentifiers);
+  const tainted = new Set<ts.Symbol>();
+
+  type Candidate = { sf: ts.SourceFile; name: ts.Identifier; body: ts.Node; anchor: ts.Node };
+  const candidates: Candidate[] = [];
+  for (const sf of program.getSourceFiles()) {
+    if (!isPkgSourceFile(sf, pkgSrcDir)) continue;
+    visitTopLevelFunctionExports(sf, (name, body, anchor) => {
+      candidates.push({ sf, name, body, anchor });
+    });
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const { sf, name, body, anchor } of candidates) {
+      const sym = checker.getSymbolAtLocation(name);
+      if (!sym || tainted.has(sym)) continue;
+      const direct = collectDirectImports(sf, tsImport);
+      if (
+        methodUsesDepImport(body, direct, knownIds, dep, sf, anchor, {
+          checker,
+          taintedSymbols: tainted,
+        })
+      ) {
+        tainted.add(sym);
+        changed = true;
+      }
+    }
+  }
+  return tainted;
+}
+
 function analyzeTsDepUsage(
   pkgSrcDir: string,
   tsImport: string,
@@ -148,40 +246,20 @@ function analyzeTsDepUsage(
     noEmit: true,
   });
 
+  const checker = program.getTypeChecker();
   const knownIds = new Set(tsIdentifiers);
+  const taintedSymbols = collectTaintedSymbols(program, pkgSrcDir, tsImport, tsIdentifiers, dep);
 
   for (const sourceFile of program.getSourceFiles()) {
-    if (!sourceFile.fileName.startsWith(pkgSrcDir)) continue;
-    if (sourceFile.fileName.endsWith(".test.ts")) continue;
-    if (sourceFile.fileName.endsWith(".d.ts")) continue;
+    if (!isPkgSourceFile(sourceFile, pkgSrcDir)) continue;
 
     // Normalize separators to POSIX so the keys match rubyFileToTs
     // output (which uses path.posix.* for cross-platform stability).
     // Without this, Windows path.relative emits backslashes and the
     // tsDepMap.get(rubyFileToTs(...)) lookup misses.
     const relPath = path.relative(pkgSrcDir, sourceFile.fileName).split(path.sep).join("/");
+    const importedNames = collectDirectImports(sourceFile, tsImport);
 
-    // Collect import bindings from the target package
-    const importedNames = new Set<string>();
-    for (const stmt of sourceFile.statements) {
-      if (!ts.isImportDeclaration(stmt)) continue;
-      const specifier = (stmt.moduleSpecifier as ts.StringLiteral).text;
-      if (!isImportFromPackage(specifier, tsImport)) continue;
-      const clause = stmt.importClause;
-      if (!clause) continue;
-      if (clause.name) importedNames.add(clause.name.text);
-      if (clause.namedBindings) {
-        if (ts.isNamedImports(clause.namedBindings)) {
-          for (const el of clause.namedBindings.elements) {
-            importedNames.add(el.name.text);
-          }
-        } else if (ts.isNamespaceImport(clause.namedBindings)) {
-          importedNames.add(clause.namedBindings.name.text);
-        }
-      }
-    }
-
-    // Check each method's signature and body for dependency references.
     const methodMap = new Map<string, boolean>();
     visitMethodDeclarations(sourceFile, (name, methodNode, anchor) => {
       const uses = methodUsesDepImport(
@@ -191,6 +269,10 @@ function analyzeTsDepUsage(
         dep,
         sourceFile,
         anchor,
+        {
+          checker,
+          taintedSymbols,
+        },
       );
       const existing = methodMap.get(name);
       if (existing === undefined || uses) methodMap.set(name, uses);
@@ -286,6 +368,11 @@ export function hasLintDepsIgnore(node: ts.Node, dep: string, sourceFile: ts.Sou
   return false;
 }
 
+export interface TransitiveContext {
+  checker: ts.TypeChecker;
+  taintedSymbols: Set<ts.Symbol>;
+}
+
 export function methodUsesDepImport(
   node: ts.Node,
   importedNames: Set<string>,
@@ -293,6 +380,7 @@ export function methodUsesDepImport(
   dep: string,
   sourceFile: ts.SourceFile,
   anchor: ts.Node = node,
+  transitive?: TransitiveContext,
 ): boolean {
   if (hasLintDepsIgnore(anchor, dep, sourceFile)) return true;
   let found = false;
@@ -304,6 +392,17 @@ export function methodUsesDepImport(
       if (importedNames.has(n.text) || knownIdentifiers.has(n.text)) {
         found = true;
         return;
+      }
+      if (transitive && transitive.taintedSymbols.size > 0) {
+        const sym = transitive.checker.getSymbolAtLocation(n);
+        if (sym) {
+          const resolved =
+            sym.flags & ts.SymbolFlags.Alias ? transitive.checker.getAliasedSymbol(sym) : sym;
+          if (transitive.taintedSymbols.has(resolved)) {
+            found = true;
+            return;
+          }
+        }
       }
     }
     ts.forEachChild(n, check);

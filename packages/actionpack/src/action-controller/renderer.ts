@@ -47,8 +47,7 @@ export class Renderer {
       merged.status !== undefined && merged.status !== null
         ? Metal.resolveStatus(merged.status as number | string)
         : 200;
-    const explicitContentType =
-      (merged.contentType as string | undefined) ?? (merged.content_type as string | undefined);
+    const explicitContentType = merged.contentType as string | undefined;
 
     if (merged.json !== undefined) {
       this._lastContentType = explicitContentType ?? "application/json; charset=utf-8";

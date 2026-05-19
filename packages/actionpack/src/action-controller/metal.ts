@@ -17,6 +17,16 @@ import {
   type MiddlewareEntry,
 } from "../action-dispatch/middleware/stack.js";
 import { includeContent } from "./metal/head.js";
+import {
+  _normalizeOptions as _normalizeOptionsFn,
+  _normalizeText as _normalizeTextFn,
+  _processOptions as _processOptionsFn,
+  _processVariant as _processVariantFn,
+  _renderInPriorities as _renderInPrioritiesFn,
+  _setHtmlContentType as _setHtmlContentTypeFn,
+  _setRenderedContentType as _setRenderedContentTypeFn,
+  _setVaryHeader as _setVaryHeaderFn,
+} from "./metal/rendering.js";
 
 const STATUS_CODES: Record<string, number> = {
   ok: 200,
@@ -323,4 +333,36 @@ export class Metal extends AbstractController {
     if (typeof status === "number") return status;
     return STATUS_CODES[status] ?? 500;
   }
+
+  /**
+   * Mirrors Rails `ActionController::Rendering#render_to_body`:
+   *   super || _render_in_priorities(options) || " "
+   * Subclasses (template renderers) override and `super` falls back to
+   * this body-priority resolution.
+   * @internal
+   */
+  renderToBody(options: Record<string, unknown> = {}): unknown {
+    const body = _renderInPrioritiesFn(options);
+    return body ?? " ";
+  }
+
+  // Rails-private rendering helpers — wired onto the class so the
+  // `metal/rendering.rb` privates resolve as `Metal._foo` (api:compare
+  // surface) while keeping the implementation in `metal/rendering.ts`.
+  /** @internal */
+  static _normalizeOptions = _normalizeOptionsFn;
+  /** @internal */
+  static _normalizeText = _normalizeTextFn;
+  /** @internal */
+  static _processOptions = _processOptionsFn;
+  /** @internal */
+  static _processVariant = _processVariantFn;
+  /** @internal */
+  static _renderInPriorities = _renderInPrioritiesFn;
+  /** @internal */
+  static _setHtmlContentType = _setHtmlContentTypeFn;
+  /** @internal */
+  static _setRenderedContentType = _setRenderedContentTypeFn;
+  /** @internal */
+  static _setVaryHeader = _setVaryHeaderFn;
 }

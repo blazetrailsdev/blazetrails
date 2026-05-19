@@ -143,3 +143,27 @@ describe("_processOptions", () => {
     expect(host.status).toBe(201);
   });
 });
+
+describe("Metal wiring", () => {
+  test("exposes the rendering privates as static members", async () => {
+    const { Metal } = await import("../metal.js");
+    expect(Metal._renderInPriorities).toBe(_renderInPriorities);
+    expect(Metal._normalizeText).toBe(_normalizeText);
+    expect(Metal._normalizeOptions).toBe(_normalizeOptions);
+    expect(Metal._processVariant).toBe(_processVariant);
+    expect(Metal._setHtmlContentType).toBe(_setHtmlContentType);
+    expect(Metal._setRenderedContentType).toBe(_setRenderedContentType);
+    expect(Metal._setVaryHeader).toBe(_setVaryHeader);
+    expect(Metal._processOptions).toBe(_processOptions);
+  });
+
+  test("renderToBody routes through _renderInPriorities and falls back to ' '", async () => {
+    const { Metal } = await import("../metal.js");
+    const instance = Object.create(Metal.prototype) as InstanceType<typeof Metal>;
+    expect(instance.renderToBody({ body: "hi" })).toBe("hi");
+    expect(instance.renderToBody({ plain: "p", html: "h" })).toBe("p");
+    expect(instance.renderToBody({ html: "h" })).toBe("h");
+    expect(instance.renderToBody({})).toBe(" ");
+    expect(instance.renderToBody({ json: "{}" })).toBe(" ");
+  });
+});

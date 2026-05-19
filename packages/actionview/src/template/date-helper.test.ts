@@ -3,7 +3,7 @@ import {
   distanceOfTimeInWords,
   distanceOfTimeInWordsToNow,
   timeAgoInWords,
-} from "./date-helper.js";
+} from "../helpers/date-helper.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -17,7 +17,7 @@ function add(base: Date, ms: number): Date {
 const from = new Date(Date.UTC(2004, 5, 6, 21, 45, 0));
 
 describe("DateHelperTest", () => {
-  it("test_distance_in_words", () => {
+  it("distance in words", () => {
     // include_seconds: true — sub-minute distances bucketed by seconds
     expect(distanceOfTimeInWords(from, add(from, 0 * SECOND), { includeSeconds: true })).toBe(
       "less than 5 seconds",
@@ -75,23 +75,23 @@ describe("DateHelperTest", () => {
     expect(distanceOfTimeInWords(from, add(from, 2 * DAY + 12 * HOUR))).toBe("3 days");
   });
 
-  it("test_distance_in_words_with_nil_input", () => {
+  it("distance in words with nil input", () => {
     expect(() => distanceOfTimeInWords(null as unknown as Date)).toThrow();
     expect(() => distanceOfTimeInWords(0, null as unknown as Date)).toThrow();
   });
 
-  it("test_distance_in_words_with_mixed_argument_types", () => {
+  it("distance in words with mixed argument types", () => {
     expect(distanceOfTimeInWords(0, 60)).toBe("1 minute");
     expect(distanceOfTimeInWords(600, 0)).toBe("10 minutes");
   });
 
-  it("test_time_ago_in_words_passes_include_seconds", () => {
+  it("time ago in words passes include seconds", () => {
     const past = new Date(Date.now() - 15 * SECOND);
     expect(timeAgoInWords(past, { includeSeconds: true })).toBe("less than 20 seconds");
     expect(timeAgoInWords(past, { includeSeconds: false })).toBe("less than a minute");
   });
 
-  it("test_distance_in_words_with_dates", () => {
+  it("distance in words with dates", () => {
     const startDate = new Date(Date.UTC(1975, 0, 31));
     const endDate = new Date(Date.UTC(1977, 0, 31));
     expect(distanceOfTimeInWords(startDate, endDate)).toBe("about 2 years");
@@ -102,7 +102,7 @@ describe("DateHelperTest", () => {
     expect(distanceOfTimeInWords(e2, s2)).toBe("almost 28 years");
   });
 
-  it("test_distance_in_words_with_integers", () => {
+  it("distance in words with integers", () => {
     expect(distanceOfTimeInWords(59)).toBe("1 minute");
     expect(distanceOfTimeInWords(60 * 60)).toBe("about 1 hour");
     expect(distanceOfTimeInWords(0, 59)).toBe("1 minute");
@@ -111,7 +111,7 @@ describe("DateHelperTest", () => {
     expect(distanceOfTimeInWords(0, 10 ** 8)).toBe("about 3 years");
   });
 
-  it("test_time_ago_in_words", () => {
+  it("time ago in words", () => {
     const oneYearAndOneDayAgo = new Date(Date.now() - (365 * DAY + 1 * DAY));
     expect(timeAgoInWords(oneYearAndOneDayAgo)).toBe("about 1 year");
   });

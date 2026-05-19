@@ -155,7 +155,7 @@ export class DebugLocks {
       200,
       {
         [CONTENT_TYPE]: `text/plain; charset=${DebugLocks.defaultCharset}`,
-        [CONTENT_LENGTH]: str.length.toString(),
+        [CONTENT_LENGTH]: Buffer.byteLength(str).toString(),
       },
       bodyFromString(str),
     ];

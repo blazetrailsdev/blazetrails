@@ -13,6 +13,22 @@ Reference Ruby source (stdlib 3.3):
 
 Mirrored upstream: <https://github.com/ruby/did_you_mean>.
 
+### Licensing / attribution
+
+`did_you_mean` is MIT-licensed; `levenshtein.rb` further attributes the
+algorithm to the Text gem ("Copyright (c) 2006-2013 Paul Battley, Michael
+Neumann, Tim Fletcher"). Trails' `packages/*/src` is MIT (see
+`LICENSES.md`), so the licenses are compatible. PR 1 must:
+
+- Add a top-of-file attribution comment in `levenshtein.ts` and
+  `jaro-winkler.ts` naming `ruby/did_you_mean` (and Text-gem authors for
+  Levenshtein) as the upstream source.
+- Add a `packages/did-you-mean/NOTICE` (or extend `LICENSES.md`'s
+  third-party-notices section) with the upstream MIT license text and
+  the Text-gem copyright line. Pick whichever convention this repo
+  already uses for vendored algorithms — check `vendor/` and
+  `packages/*/NOTICE*` before authoring.
+
 ## Package home
 
 Land it as a **top-level package, `@blazetrails/did-you-mean`**, mirroring
@@ -119,8 +135,9 @@ Notes:
 ### `JaroWinkler.distance(str1, str2)`
 
 - `j = Jaro.distance(str1, str2)`.
-- If `j > 0.7`, count the common prefix length (up to 4 codepoints) and
-  return `j + prefixBonus * 0.1 * (1 - j)`. Otherwise return `j`.
+- If `j > 0.7`, let `prefixLength` = the number of leading codepoints
+  `str1` and `str2` share, capped at 4. Return
+  `j + prefixLength * 0.1 * (1 - j)`. Otherwise return `j`.
 
 ### `Levenshtein.distance(str1, str2)`
 

@@ -142,11 +142,11 @@ export class Template {
 
     try {
       return await handler.render(this._source, locals, {
+        ...context,
         controller: context.controller ?? "",
         action: context.action ?? "",
         format: context.format ?? this.format ?? "",
         yield: context.yield,
-        ...context,
         templatePath: context.templatePath ?? this.fullPath ?? this.identifier,
       });
     } catch (e) {

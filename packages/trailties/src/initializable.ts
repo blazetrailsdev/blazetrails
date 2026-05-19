@@ -23,7 +23,7 @@ export class Initializer<C = unknown> {
   ) {
     this.name = name;
     this._context = context;
-    this._options = { group: "default", ...options };
+    this._options = { ...options, group: options.group ?? "default" };
     this.block = block;
   }
 

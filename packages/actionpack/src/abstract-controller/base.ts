@@ -188,6 +188,20 @@ export class AbstractController {
         chain.push(...(klass as any)._callbacks);
       }
     }
+    // Dedup by `options.name`: when a subclass registers a callback with
+    // the same name, drop the inherited entry. Mirrors AS::Callbacks
+    // identifying callbacks by symbol — `before_action :first, ...` in a
+    // child replaces the parent's `:first` registration.
+    const overriddenNames = new Set<string>();
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const name = chain[i]!.options.name;
+      if (name === undefined) continue;
+      if (overriddenNames.has(name)) {
+        chain.splice(i, 1);
+      } else {
+        overriddenNames.add(name);
+      }
+    }
     return chain;
   }
 

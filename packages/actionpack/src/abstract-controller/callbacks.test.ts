@@ -49,7 +49,7 @@ class Callback2 extends AbstractController {
     this.responseBody = (this.text ?? "") as string;
   }
 }
-Callback2.beforeAction((c) => (c as Callback2).first());
+Callback2.beforeAction((c) => (c as Callback2).first(), { name: "first" });
 Callback2.afterAction((c) => (c as Callback2)._second());
 Callback2.aroundAction(async (c, next) => {
   const self = c as Callback2;
@@ -59,7 +59,10 @@ Callback2.aroundAction(async (c, next) => {
 });
 
 class Callback2Overwrite extends Callback2 {}
-Callback2Overwrite.beforeAction((c) => (c as Callback2).first(), { except: ["index"] });
+Callback2Overwrite.beforeAction((c) => (c as Callback2).first(), {
+  name: "first",
+  except: ["index"],
+});
 
 describe("TestCallbacks2", () => {
   let controller: Callback2;
@@ -82,14 +85,11 @@ describe("TestCallbacks2", () => {
     expect(controller.aroundz).toBe("FIRSTSECOND");
   });
 
-  // BLOCKED: Rails identifies callbacks by name (`:first` symbol), so
-  // `before_action :first, except: :index` in a subclass *replaces* the
-  // parent's unconditional `:first`. trails identifies callbacks by
-  // function reference — no named replacement — so the parent's
-  // unconditional callback still fires on :index. ~60 LOC follow-up to
-  // add a `name?: string` slot on CallbackOptions and dedup-by-name in
-  // the registry.
-  it.skip("before_action with overwritten condition", () => {});
+  it("before_action with overwritten condition", async () => {
+    const overwriteController = new Callback2Overwrite();
+    await overwriteController.processAction("index");
+    expect(overwriteController.responseBody).toBe("");
+  });
 });
 
 class Callback3 extends AbstractController {
@@ -267,7 +267,10 @@ class ChangedConditions extends Callback2 {
     this.responseBody = (this.text ?? "") as string;
   }
 }
-ChangedConditions.beforeAction((c) => (c as Callback2).first(), { only: ["index"] });
+ChangedConditions.beforeAction((c) => (c as Callback2).first(), {
+  name: "first",
+  only: ["index"],
+});
 
 describe("TestCallbacksWithChangedConditions", () => {
   let controller: ChangedConditions;
@@ -280,11 +283,10 @@ describe("TestCallbacksWithChangedConditions", () => {
     expect(controller.responseBody).toBe("Hello world");
   });
 
-  // BLOCKED: same named-callback-replacement gap as TestCallbacks2's
-  // "before_action with overwritten condition" — Rails dedups :first by
-  // symbol, trails doesn't dedup by function reference, so the parent's
-  // unconditional :first still fires on :not_index.
-  it.skip("when a callback is modified in a child with :only, it does not work for other actions", () => {});
+  it("when a callback is modified in a child with :only, it does not work for other actions", async () => {
+    await controller.processAction("not_index");
+    expect(controller.responseBody).toBe("");
+  });
 });
 
 class SetsResponseBody extends AbstractController {

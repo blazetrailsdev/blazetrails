@@ -26,6 +26,14 @@ export interface CallbackPredicateLike {
 }
 
 export interface CallbackOptions {
+  /**
+   * Symbolic name for the callback. When a subclass registers a callback
+   * with the same `name`, it replaces the inherited entry (Rails
+   * identifies callbacks by symbol in AS::Callbacks). Without `name`,
+   * callbacks are identified by function reference and don't dedup
+   * across the inheritance chain.
+   */
+  name?: string;
   only?: string | string[];
   except?: string | string[];
   if?:

@@ -64,7 +64,7 @@ Sized in LOC; all unblocked. Bundle to PR-ceiling (~250 LOC) per
 
 ### Tier 1 — tiny fidelity wins (≤30 LOC each)
 
-- **http/mime-type** (#1848) — `MimeType.ALL` static now interned (`mime-type.ts:243`); remaining: identity compare in `negotiateMime` (still string-compares `m.string === "*/*"`, ~10); allow null symbol for ad-hoc types so `formats` filter isn't a no-op (~10); re-parent `InvalidType` onto `MimeType.InvalidMimeType` when base lands (~10); raise `InvalidType` on media ranges missing `/` (#1861).
+- **http/mime-type** (#1848) — `MimeType.ALL` static exists (`mime-type.ts:243`) but isn't registered, so `parse("*/*")` still mints ad-hoc instances; register it (or special-case `parse`) so identity compare in `negotiateMime` can replace the current `m.string === "*/*"` check (~10); allow null symbol for ad-hoc types so `formats` filter isn't a no-op (~10); re-parent `InvalidType` onto `MimeType.InvalidMimeType` when base lands (~10); raise `InvalidType` on media ranges missing `/` (#1861).
 - **routing/endpoint** (#1836) — `engine()` returns false; ~5 LOC once `Rails::Engine` lands.
 - **middleware/actionable_exceptions** (#1853) — prototype-chain walk in `ActionableError.action` (~15); warn on `_registry` collision (~10); switch endpoint to `cattrAccessor` (~5).
 - **middleware/session/abstract_store** (#1863) — `privateId` + comparison helpers on `SessionId` (~10); add `cookieJar` accessor to `Request` (~20).

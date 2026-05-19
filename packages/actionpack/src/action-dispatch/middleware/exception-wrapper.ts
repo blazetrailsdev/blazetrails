@@ -27,10 +27,6 @@ const STATUS_MAP: Record<string, number> = {
   "ActionDispatch::ParameterTypeError": 400,
   "ActionDispatch::InvalidParameterError": 400,
   "ActionDispatch::ParamsTooDeepError": 400,
-  // Unqualified TS class names so the prototype-chain walk in
-  // `computeStatusCode` can resolve subclasses by ancestor constructor name.
-  ParseError: 400,
-  ParamError: 400,
 };
 
 export class ExceptionWrapper {
@@ -144,23 +140,10 @@ export class ExceptionWrapper {
   }
 
   private computeStatusCode(): number {
-    // Direct lookup by exception name first, mirroring Rails'
-    // `@@rescue_responses[class_name]`. Fall back to a prototype-chain walk
-    // so subclasses inherit the parent's registered status (e.g. an
-    // unregistered `ParseError` subclass still maps to 400).
-    const direct = STATUS_MAP[this.exceptionName];
-    if (direct !== undefined) return direct;
-    let ctor: { name?: string; prototype?: object } | null = this.exception.constructor as {
-      name?: string;
-      prototype?: object;
-    } | null;
-    while (ctor && ctor.name && ctor.name !== "Error" && ctor.name !== "Object") {
-      const status = STATUS_MAP[ctor.name];
-      if (status !== undefined) return status;
-      const proto = ctor.prototype ? Object.getPrototypeOf(ctor.prototype) : null;
-      ctor = proto ? (proto.constructor as { name?: string; prototype?: object } | null) : null;
-    }
-    return 500;
+    // Direct lookup by exception name, mirroring Rails'
+    // `@@rescue_responses[class_name]` (no ancestor walk — Rails subclasses
+    // must register their own name to opt in).
+    return STATUS_MAP[this.exceptionName] ?? 500;
   }
 }
 

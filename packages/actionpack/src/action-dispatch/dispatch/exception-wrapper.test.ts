@@ -76,13 +76,6 @@ describe("ExceptionWrapperTest", () => {
     expect(ExceptionWrapper.statusCodeFor("ParamsTooDeepError")).toBe(400);
   });
 
-  it("inherits a parent's status via the prototype chain walk", () => {
-    class ParamError extends Error {}
-    class SubError extends ParamError {}
-    const wrapper = new ExceptionWrapper(new SubError("nested"));
-    expect(wrapper.statusCode).toBe(400);
-  });
-
   it("#rescue_response? returns false for an exception that's not in rescue_responses", () => {
     expect(ExceptionWrapper.rescueResponse("SomeRandomError")).toBe(false);
   });

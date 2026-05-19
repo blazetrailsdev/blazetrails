@@ -41,6 +41,12 @@ import {
   requestHttpBasicAuthentication,
 } from "./metal/http-authentication.js";
 import { sendFileHeadersBang } from "./metal/data-streaming.js";
+import {
+  Options as ParamsWrapperOptions,
+  _performParameterWrapping,
+  _wrapperEnabled,
+  type ParamsWrapperHost,
+} from "./metal/params-wrapper.js";
 
 // Re-export callback registration
 export { type ActionCallback, type AroundCallback, type CallbackOptions };
@@ -475,6 +481,83 @@ export class Base extends Metal {
     return instrumentName.call(this);
   }
 
+  // --- Params Wrapper ---
+
+  /**
+   * Class-level wrapper options. Mirrors Rails'
+   * `class_attribute :_wrapper_options, default: Options.from_hash(format: [])`.
+   * Statics are inherited through the class chain; `wrapParameters` assigns an
+   * own property on the calling subclass.
+   */
+  static _wrapperOptions: ParamsWrapperOptions = ParamsWrapperOptions.fromHash({ format: [] });
+
+  /** Instance accessor for the active wrapper options (reads from constructor). */
+  get _wrapperOptions(): ParamsWrapperOptions {
+    return (this.constructor as typeof Base)._wrapperOptions;
+  }
+
+  /**
+   * Class DSL: configure parameter wrapping. Mirrors Rails
+   * `ActionController::ParamsWrapper::ClassMethods#wrap_parameters`.
+   *
+   *     wrapParameters({ format: ["json"] })
+   *     wrapParameters("person", { include: ["name"] })
+   *     wrapParameters(false)                    // disable wrapping
+   *     wrapParameters(SomeModelClass)
+   */
+  static wrapParameters(
+    nameOrModelOrOptions:
+      | string
+      | false
+      | Record<string, unknown>
+      | (new (...args: never[]) => unknown),
+    options: Record<string, unknown> = {},
+  ): void {
+    let model: unknown = null;
+    let opts: Record<string, unknown> = options;
+    if (nameOrModelOrOptions === false) {
+      opts = { ...opts, format: [] };
+    } else if (typeof nameOrModelOrOptions === "string") {
+      opts = { ...opts, name: nameOrModelOrOptions };
+    } else if (
+      typeof nameOrModelOrOptions === "object" &&
+      nameOrModelOrOptions !== null &&
+      !Array.isArray(nameOrModelOrOptions)
+    ) {
+      opts = nameOrModelOrOptions as Record<string, unknown>;
+    } else {
+      model = nameOrModelOrOptions;
+    }
+    const current = this._wrapperOptions;
+    const merged = { format: current.format ?? [], ...opts };
+    const newOpts = ParamsWrapperOptions.fromHash(merged);
+    newOpts.model = model;
+    newOpts.klass = this;
+    this._wrapperOptions = newOpts;
+  }
+
+  /**
+   * Rails' ParamsWrapper `inherited` hook duplicates the parent's options
+   * and rebinds `klass` to the subclass when wrapping is enabled (format
+   * non-empty). JS class statics already inherit; this static method should
+   * be invoked explicitly by subclasses that need a per-subclass `klass`
+   * rebind for `_defaultWrapModel` to derive a name from the subclass.
+   * @internal
+   */
+  static inheritedParamsWrapper(): void {
+    const inherited = this._wrapperOptions;
+    if (!inherited.format || inherited.format.length === 0) return;
+    const dup = ParamsWrapperOptions.fromHash({
+      name: inherited.name,
+      format: inherited.format,
+      include: inherited.include,
+      exclude: inherited.exclude,
+    });
+    dup.model = inherited.model;
+    dup.klass = this;
+    this._wrapperOptions = dup;
+  }
+
   // --- HTTP Basic authentication (Rails parity, P17a) ---
 
   /** Class DSL: `http_basic_authenticate_with name:, password:, realm:, **options`. */
@@ -501,6 +584,9 @@ export class Base extends Metal {
    */
   async processAction(action: string, ...args: unknown[]): Promise<void> {
     try {
+      if (this.request && _wrapperEnabled.call(this as unknown as ParamsWrapperHost)) {
+        _performParameterWrapping.call(this as unknown as ParamsWrapperHost);
+      }
       await super.processAction(action, ...args);
 
       // Resolve any pending async renders (template/partial)

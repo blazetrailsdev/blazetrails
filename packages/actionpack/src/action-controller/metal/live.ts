@@ -19,6 +19,7 @@ interface LiveResponseLike {
   headers: Record<string, string>;
   setHeader(key: string, value: string): void;
   deleteHeader(key: string): void;
+  close?(): void;
 }
 
 type ErrorCallback = () => void;
@@ -63,6 +64,8 @@ export class Buffer {
   }
 
   write(string: string): void {
+    if (this._closed) throw new Error("closed stream");
+
     if (!this._response.committed) {
       if (!this._response.headers["cache-control"] && !this._response.headers["Cache-Control"]) {
         this._response.setHeader("cache-control", "no-cache");
@@ -93,6 +96,9 @@ export class Buffer {
    * @see {@link abort}
    */
   close(): void {
+    if (typeof (this._response as { close?: () => void }).close === "function") {
+      (this._response as { close: () => void }).close();
+    }
     this._closed = true;
     this._buf.push(null);
   }
@@ -220,16 +226,29 @@ export class Response extends DispatchResponse {
     this.stream = new Buffer(this);
   }
 
+  close(): void {
+    this.beforeCommitted();
+    super.close();
+  }
+
   /**
    * Hook invoked before the response is committed. Mirrors Rails'
-   * `before_committed`, which flushes cookies into the response. We don't
-   * carry a cookie jar on the request yet, so this is a no-op safe override
-   * point.
+   * `before_committed`, which flushes the request's cookie jar onto the
+   * response. We don't yet carry a `request.cookie_jar` collaborator, but
+   * any cookies set directly via `setCookie` on this response are flattened
+   * into a single `set-cookie` header here so they aren't lost.
    *
    * @internal
    */
   protected beforeCommitted(): void {
-    // Rails: jar = request.cookie_jar; jar.write(self) unless committed?
+    if (this.committed) return;
+    const cookies = this.cookies;
+    const names = Object.keys(cookies);
+    if (names.length === 0) return;
+    if (this.headers["set-cookie"] !== undefined || this.headers["Set-Cookie"] !== undefined) {
+      return;
+    }
+    this.setHeader("set-cookie", names.map((n) => `${n}=${cookies[n]}`).join("\n"));
   }
 
   /**

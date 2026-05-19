@@ -40,9 +40,21 @@ describe("ActionController::Live::Buffer", () => {
     buf.write("one");
     buf.write("two");
     buf.close();
-    buf.write("after-close-but-still-queued");
     expect([...buf.eachChunk()]).toEqual(["one", "two"]);
     expect(buf.closed).toBe(true);
+  });
+
+  it("write after close raises (matches Rails IOError-on-closed-stream)", () => {
+    const buf = new Buffer(makeResponse());
+    buf.close();
+    expect(() => buf.write("x")).toThrow(/closed stream/);
+  });
+
+  it("close commits the underlying response", () => {
+    const res = makeResponse();
+    const buf = new Buffer(res);
+    buf.close();
+    expect(res.committed).toBe(true);
   });
 
   it("abort clears the queue, isConnected flips to false", () => {
@@ -153,5 +165,22 @@ describe("ActionController::Live::Response", () => {
     res.stream.write("b");
     res.stream.close();
     expect([...res.stream.eachChunk()]).toEqual(["a", "b"]);
+  });
+
+  it("beforeCommitted (via close) flushes accumulated cookies into a set-cookie header", () => {
+    const res = new Response();
+    res.setCookie("session", "abc");
+    res.setCookie("flash", "hi");
+    res.stream.close();
+    expect(res.headers["set-cookie"]).toBe("session=abc\nflash=hi");
+    expect(res.committed).toBe(true);
+  });
+
+  it("beforeCommitted does not overwrite an explicit set-cookie header", () => {
+    const res = new Response();
+    res.setCookie("session", "abc");
+    res.setHeader("set-cookie", "manual=1");
+    res.stream.close();
+    expect(res.headers["set-cookie"]).toBe("manual=1");
   });
 });

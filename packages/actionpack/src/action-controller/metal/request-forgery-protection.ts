@@ -226,6 +226,8 @@ export interface CsrfController {
   perFormCsrfTokens?: boolean;
   requestForgeryProtectionToken?: string;
   csrfTokenStorageStrategy?: CsrfTokenStorage;
+  /** Cookie jar — required when `storageStrategy("cookie")` is configured. */
+  cookies?: Record<string, string>;
   _markedForSameOriginVerification?: boolean;
   logger?: { warn(msg: string): void } | null;
   logWarningOnCsrfFailure?: boolean;
@@ -344,7 +346,10 @@ export function encodeCsrfToken(rawToken: Buffer): string {
 export function decodeCsrfToken(encodedToken: string): Buffer {
   // Rails: Base64.urlsafe_decode64 — raises ArgumentError on invalid input.
   if (!/^[A-Za-z0-9+/_-]*={0,2}$/.test(encodedToken)) throw new TypeError("invalid base64");
-  return Buffer.from(encodedToken.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+  // Reject impossible base64 lengths (length % 4 === 1 cannot encode any bytes).
+  const stripped = encodedToken.replace(/=+$/, "");
+  if (stripped.length % 4 === 1) throw new TypeError("invalid base64 length");
+  return Buffer.from(stripped.replace(/-/g, "+").replace(/_/g, "/"), "base64");
 }
 
 /** @internal */
@@ -531,11 +536,10 @@ export function storageStrategy(name: "session" | "cookie" | CsrfTokenStorage): 
   }
   if (name === "cookie") {
     const k = new CookieStore("csrf_token");
-    type CC = { cookies?: Record<string, string> };
     return {
-      fetch: (c) => k.fetch((c as CC).cookies ?? {}),
-      store: (c, t) => k.write((c as CC).cookies ?? {}, t),
-      reset: (c) => k.reset((c as CC).cookies ?? {}),
+      fetch: (c) => k.fetch(c.cookies ?? {}),
+      store: (c, t) => k.write((c.cookies ??= {}), t),
+      reset: (c) => k.reset(c.cookies ?? {}),
     };
   }
   if (isStorageStrategy(name)) return name;

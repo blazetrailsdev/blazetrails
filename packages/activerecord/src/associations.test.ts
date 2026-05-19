@@ -20,7 +20,7 @@ import {
   touchBelongsToParents,
 } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
-import { defineSchema } from "./test-helpers/define-schema.js";
+import { defineSchema, type Schema } from "./test-helpers/define-schema.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import {
   Associations,
@@ -6451,54 +6451,36 @@ function makeFirmClients(adapter: DatabaseAdapter) {
 describe("HasManyAssociationsTest", () => {
   let adapter: DatabaseAdapter;
 
+  const HM_SCHEMA: Schema = {
+    articles: { title: "string" },
+    child2s: { name: "string", root_id: "integer" },
+    children: { name: "string", parent_id: "integer" },
+    clients: { firm_id: "integer", name: "string" },
+    comments: { body: "string", post_id: "integer" },
+    entries: { log_id: "integer", name: "string" },
+    firms: { name: "string" },
+    grandchildren: { child_id: "integer", name: "string" },
+    logs: { name: "string" },
+    parents: { name: "string" },
+    people: { name: "string" },
+    posts: { title: "string" },
+    products: { buyer_id: "integer", name: "string", seller_id: "integer" },
+    roots: { name: "string" },
+    scoped_comments: { approved: "boolean", body: "string", post_id: "integer" },
+    scoped_posts: { title: "string" },
+    shelves: { name: "string" },
+    tags: { name: "string", post_id: "integer" },
+    widgets: { name: "string", shelf_id: "integer" },
+  };
+
   beforeEach(async () => {
     adapter = createTestAdapter();
-    await defineSchema(adapter, {
-      articles: { title: "string" },
-      child2s: { name: "string", root_id: "integer" },
-      children: { name: "string", parent_id: "integer" },
-      clients: { firm_id: "integer", name: "string" },
-      comments: { body: "string", post_id: "integer" },
-      entries: { log_id: "integer", name: "string" },
-      firms: { name: "string" },
-      grandchildren: { child_id: "integer", name: "string" },
-      logs: { name: "string" },
-      parents: { name: "string" },
-      people: { name: "string" },
-      posts: { title: "string" },
-      products: { buyer_id: "integer", name: "string", seller_id: "integer" },
-      roots: { name: "string" },
-      scoped_comments: { approved: "boolean", body: "string", post_id: "integer" },
-      scoped_posts: { title: "string" },
-      shelves: { name: "string" },
-      tags: { name: "string", post_id: "integer" },
-      widgets: { name: "string", shelf_id: "integer" },
-    });
+    await defineSchema(adapter, HM_SCHEMA);
   });
 
   async function setupHMAdapter2(): Promise<DatabaseAdapter> {
     const a = createTestAdapter();
-    await defineSchema(a, {
-      articles: { title: "string" },
-      child2s: { name: "string", root_id: "integer" },
-      children: { name: "string", parent_id: "integer" },
-      clients: { firm_id: "integer", name: "string" },
-      comments: { body: "string", post_id: "integer" },
-      entries: { log_id: "integer", name: "string" },
-      firms: { name: "string" },
-      grandchildren: { child_id: "integer", name: "string" },
-      logs: { name: "string" },
-      parents: { name: "string" },
-      people: { name: "string" },
-      posts: { title: "string" },
-      products: { buyer_id: "integer", name: "string", seller_id: "integer" },
-      roots: { name: "string" },
-      scoped_comments: { approved: "boolean", body: "string", post_id: "integer" },
-      scoped_posts: { title: "string" },
-      shelves: { name: "string" },
-      tags: { name: "string", post_id: "integer" },
-      widgets: { name: "string", shelf_id: "integer" },
-    });
+    await defineSchema(a, HM_SCHEMA);
     return a;
   }
 

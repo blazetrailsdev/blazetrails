@@ -166,7 +166,7 @@ function analyzeTsDepUsage(
     for (const stmt of sourceFile.statements) {
       if (!ts.isImportDeclaration(stmt)) continue;
       const specifier = (stmt.moduleSpecifier as ts.StringLiteral).text;
-      if (specifier !== tsImport) continue;
+      if (specifier !== tsImport && !specifier.startsWith(tsImport + "/")) continue;
       const clause = stmt.importClause;
       if (!clause) continue;
       if (clause.name) importedNames.add(clause.name.text);

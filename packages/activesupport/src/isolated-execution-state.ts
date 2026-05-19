@@ -58,8 +58,9 @@ export const IsolatedExecutionState = {
    */
   fetch<T>(key: string | symbol, init: () => T): T {
     const s = store();
-    const existing = s.get(key);
-    if (existing !== undefined) return existing as T;
+    // `has`-then-`get` (rather than checking `get() !== undefined`) so a
+    // caller that intentionally cached `undefined` doesn't re-run `init()`.
+    if (s.has(key)) return s.get(key) as T;
     const value = init();
     s.set(key, value);
     return value;

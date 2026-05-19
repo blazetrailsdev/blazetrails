@@ -26,10 +26,13 @@ import {
   setFormat as _setFormat,
   setFormats as _setFormats,
   setIgnoreAcceptHeader as _setIgnoreAcceptHeader,
+  setVariant as _setVariant,
   shouldApplyVaryHeader as _shouldApplyVaryHeader,
+  variant as _variant,
   type MimeNegotiationHost,
   type NullType,
 } from "./mime-negotiation.js";
+import type { ArrayInquirer } from "@blazetrails/activesupport";
 import type { MimeType } from "./mime-type.js";
 import { URL as HttpURL } from "./url.js";
 import {
@@ -310,6 +313,7 @@ export class Request {
   declare shouldApplyVaryHeader: () => boolean;
   declare setFormat: (extension: unknown) => void;
   declare setFormats: (extensions: unknown[]) => void;
+  declare variant: ArrayInquirer<string | symbol>;
 
   // Class-level attribute mirroring Rails' `mattr_accessor :ignore_accept_header`.
   // Exposed as a static getter/setter so call sites read as `Request.ignoreAcceptHeader`
@@ -511,27 +515,6 @@ export class Request {
     return ((this.env["SERVER_SOFTWARE"] as string) || "").split("/")[0] || "";
   }
 
-  // --- Variant ---
-
-  private _variant: symbol | symbol[] | undefined;
-
-  get variant(): symbol | symbol[] | undefined {
-    return this._variant;
-  }
-
-  set variant(value: symbol | symbol[] | undefined) {
-    if (Array.isArray(value)) {
-      for (const v of value) {
-        if (typeof v !== "symbol") {
-          throw new TypeError("Variant must be a symbol or array of symbols");
-        }
-      }
-    } else if (value !== undefined && typeof value !== "symbol") {
-      throw new TypeError("Variant must be a symbol or array of symbols");
-    }
-    this._variant = value;
-  }
-
   // --- Header access ---
 
   /**
@@ -688,6 +671,15 @@ Request.prototype.setFormat = function (this: Request, extension: unknown) {
 Request.prototype.setFormats = function (this: Request, extensions: unknown[]) {
   _setFormats.call(mimeHost(this), extensions);
 };
+Object.defineProperty(Request.prototype, "variant", {
+  get(this: Request) {
+    return _variant.call(mimeHost(this));
+  },
+  set(this: Request, value: unknown) {
+    _setVariant.call(mimeHost(this), value);
+  },
+  configurable: true,
+});
 
 // Mix in ActionDispatch::Http::FilterParameters. The mixin reads the merged
 // param hash via the host's `params` getter (already defined on `Request`).

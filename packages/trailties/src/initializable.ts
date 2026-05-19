@@ -39,7 +39,12 @@ export class Initializer<C = unknown> {
   }
 
   run(...args: unknown[]): unknown {
-    return this.block.apply(this._context as C, args);
+    if (this._context === null) {
+      throw new Error(
+        `Initializer "${this.name}" is unbound; call bind(context) (or run via runInitializers) first`,
+      );
+    }
+    return this.block.apply(this._context, args);
   }
 
   bind<T>(context: T): Initializer<T> {

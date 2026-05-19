@@ -191,9 +191,9 @@ jobs:
   prettier:
     name: Prettier
     needs: changes
-    # TEMPORARY: hardcoded to self-hosted for the cold/warm cache trial
-    # described in docs/self-hosted-runner-restart-plan.md (Deliverable 3).
-    # Revert this line to `${{ vars.RUNNER || 'ubuntu-latest' }}` before merge.
+    # TEMPORARY: hardcoded to self-hosted for the cold/warm cache trial in
+    # docs/self-hosted-runner-restart-plan.md (Deliverable 3). Revert this
+    # line to `${{ vars.RUNNER || 'ubuntu-latest' }}` before merge.
     runs-on: self-hosted
     timeout-minutes: 30
     steps:

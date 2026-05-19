@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Railtie as BaseRailtie } from "@blazetrails/activesupport";
-import { Trailtie, type ActionDispatchConfig } from "./trailtie.js";
+import {
+  Trailtie,
+  type ActionDispatchConfig,
+  type ContentSecurityPolicyConfig,
+} from "./trailtie.js";
+import { ContentSecurityPolicy } from "./http/content-security-policy.js";
+import { ContentSecurityPolicyMiddleware } from "./middleware/content-security-policy.js";
 import { URL as HttpURL } from "./http/url.js";
 import { QueryParser } from "./http/query-parser.js";
 import { RequestUtils } from "./request/utils.js";
@@ -81,6 +87,49 @@ describe("ActionDispatch::Trailtie", () => {
     cfg().defaultCharset = "iso-8859-1";
     Trailtie.runInitializers();
     expect(Response.defaultCharset).toBe("iso-8859-1");
+  });
+
+  it("seeds Rails-compatible defaults on config.contentSecurityPolicy", () => {
+    const c = Trailtie.config["contentSecurityPolicy"] as ContentSecurityPolicyConfig;
+    expect(c.policy).toBeNull();
+    expect(c.reportOnly).toBe(false);
+    expect(c.nonceGenerator).toBeNull();
+    expect(c.nonceDirectives).toBeNull();
+  });
+
+  it("defaultMiddleware contributes ContentSecurityPolicyMiddleware", () => {
+    const stack = Trailtie.defaultMiddleware();
+    const klasses = [...stack].map((e) => e.klass);
+    expect(klasses).toContain(ContentSecurityPolicyMiddleware);
+  });
+
+  it("seedContentSecurityPolicyEnv copies config slots onto request env", () => {
+    const headers: Record<string, unknown> = {};
+    const req = {
+      getHeader: (k: string) => headers[k],
+      setHeader: (k: string, v: unknown) => (headers[k] = v),
+    };
+    const policy = new ContentSecurityPolicy((p) => p.defaultSrc("'self'"));
+    const generator = () => "abc";
+    const cfg = Trailtie.config["contentSecurityPolicy"] as ContentSecurityPolicyConfig;
+    cfg.policy = policy;
+    cfg.reportOnly = true;
+    cfg.nonceGenerator = generator;
+    cfg.nonceDirectives = ["script-src"];
+
+    Trailtie.seedContentSecurityPolicyEnv(req);
+
+    expect(headers["action_dispatch.content_security_policy"]).toBe(policy);
+    expect(headers["action_dispatch.content_security_policy_report_only"]).toBe(true);
+    expect(headers["action_dispatch.content_security_policy_nonce_generator"]).toBe(generator);
+    expect(headers["action_dispatch.content_security_policy_nonce_directives"]).toEqual([
+      "script-src",
+    ]);
+
+    cfg.policy = null;
+    cfg.reportOnly = false;
+    cfg.nonceGenerator = null;
+    cfg.nonceDirectives = null;
   });
 
   it("runInitializers resets Response.defaultCharset to utf-8 when cfg is null", () => {

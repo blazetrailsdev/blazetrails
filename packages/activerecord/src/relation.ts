@@ -16,7 +16,7 @@ import {
   columnNameMatcher as abstractColumnNameMatcher,
   defaultSqlTimezone,
 } from "./connection-adapters/abstract/sql-formatting.js";
-import { joinHabtmTableNames, modelRegistry } from "./associations.js";
+import { habtmTargetFk, joinHabtmTableNames, modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
 import { getInheritanceColumn, isStiSubclass } from "./inheritance.js";
 import {
@@ -1597,7 +1597,7 @@ export class Relation<T extends Base> {
     const joinTable = assocDef.options.joinTable ?? defaultJoinTable;
 
     const ownerFk: string = fkOption ?? `${_toUnderscore(modelClass.name)}_id`;
-    const targetFk = `${_toUnderscore(_singularize(assocDef.name))}_id`;
+    const targetFk = habtmTargetFk(assocDef.name, assocDef.options);
 
     const srcT = new Table(sourceTable);
     const joinT = new Table(joinTable);

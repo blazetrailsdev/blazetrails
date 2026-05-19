@@ -65,7 +65,13 @@ import type { Association as AssociationInstance } from "./associations/associat
 import { validateThroughReflection } from "./associations/validate-through-reflection.js";
 import { joinTableName as joinHabtmTableNames } from "./migration/join-table.js";
 export { joinTableName as joinHabtmTableNames } from "./migration/join-table.js";
-import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
+import {
+  underscore,
+  singularize,
+  pluralize,
+  camelize,
+  foreignKey as deriveForeignKey,
+} from "@blazetrails/activesupport";
 import { getInheritanceColumn, findStiClass } from "./inheritance.js";
 import { flushPendingCounterCacheColumns } from "./counter-cache.js";
 import { BelongsTo as BelongsToBuilder } from "./associations/builder/belongs-to.js";
@@ -1651,6 +1657,23 @@ function fallbackTableName(name: string): string {
 }
 
 /**
+ * Compute the target-side FK for a HABTM. Mirrors Rails
+ * Builder::HasAndBelongsToMany#belongs_to_options:
+ *   1. explicit `associationForeignKey` override
+ *   2. `class_name.foreign_key` (demodulize+underscore+"_id")
+ *   3. default belongs_to: singularized association name + "_id"
+ * @internal
+ */
+export function habtmTargetFk(
+  assocName: string,
+  options: { className?: unknown; associationForeignKey?: unknown },
+): string {
+  if (options.associationForeignKey) return String(options.associationForeignKey);
+  if (options.className) return deriveForeignKey(String(options.className));
+  return `${underscore(singularize(assocName))}_id`;
+}
+
+/**
  * Load a has_and_belongs_to_many association.
  */
 export async function loadHabtm(
@@ -1668,7 +1691,7 @@ export async function loadHabtm(
   const targetModel = resolveAssocClass(record, assocName, className);
   const joinTable = options.joinTable ?? defaultJoinTableName(ctor, assocName, options);
   const ownerFk = singleFk(options.foreignKey, `${underscore(ctor.name)}_id`);
-  const targetFk = `${underscore(singularize(assocName))}_id`;
+  const targetFk = habtmTargetFk(assocName, options as { className?: unknown });
   const ownerPkCol = habtmOwnerPk(options, ctor);
   const pkValue = record._readAttribute(ownerPkCol);
   if (pkValue === null || pkValue === undefined) return [];

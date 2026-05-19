@@ -7,7 +7,7 @@ import {
 } from "@blazetrails/activesupport";
 import { beforeDestroy } from "../../callbacks.js";
 import * as Reflection from "../../reflection.js";
-import { joinHabtmTableNames } from "../../associations.js";
+import { habtmTargetFk, joinHabtmTableNames } from "../../associations.js";
 import { CollectionAssociation as CollectionAssociationBuilder } from "./collection-association.js";
 
 /**
@@ -168,7 +168,7 @@ export class HasAndBelongsToMany {
       options.foreignKey as string | string[] | undefined,
       `${underscore(model.name)}_id`,
     );
-    const targetFk = `${underscore(singularize(name))}_id`;
+    const targetFk = habtmTargetFk(name, options);
 
     const joinModelName = `HABTM_${camelize(name)}`;
     const registryKey = `${model.name}::${joinModelName}`;

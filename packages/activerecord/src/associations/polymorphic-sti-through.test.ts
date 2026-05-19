@@ -32,12 +32,12 @@
  *   - test_has_many_through_with_sti_on_through_reflection (STI variant)
  *   - test_has_many_through_reset_source_reflection_after_loading_is_complete
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel, registerSubclass, enableSti } from "../index.js";
 import { Associations, loadHasMany } from "../associations.js";
-import { createTestAdapter, type TestDatabaseAdapter } from "../test-adapter.js";
+import { createTestAdapter } from "../test-adapter.js";
+import type { DatabaseAdapter } from "../adapter.js";
 import { defineSchema, type Schema } from "../test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
 
 const TEST_SCHEMA: Schema = {
   ps_hotels: { name: "string" },
@@ -51,8 +51,14 @@ const TEST_SCHEMA: Schema = {
   ps_drink_designers: { name: "string" },
 };
 
+async function freshAdapter(): Promise<DatabaseAdapter> {
+  const adapter = createTestAdapter();
+  await defineSchema(adapter, TEST_SCHEMA);
+  return adapter;
+}
+
 describe("HABTM Slot E — polymorphic + STI through", () => {
-  let adapter: TestDatabaseAdapter;
+  let adapter: DatabaseAdapter;
 
   class PsHotel extends Base {
     static {
@@ -95,9 +101,8 @@ describe("HABTM Slot E — polymorphic + STI through", () => {
   enableSti(PsCakeDesigner);
   registerSubclass(PsSpecialCakeDesigner);
 
-  beforeAll(async () => {
-    adapter = createTestAdapter();
-    await defineSchema(adapter, TEST_SCHEMA);
+  beforeEach(async () => {
+    adapter = await freshAdapter();
     PsHotel.adapter = adapter;
     PsDepartment.adapter = adapter;
     PsChef.adapter = adapter;
@@ -146,7 +151,6 @@ describe("HABTM Slot E — polymorphic + STI through", () => {
       sourceType: "PsDrinkDesigner",
     });
   });
-  withTransactionalFixtures(() => adapter);
 
   async function seed() {
     const hotel = await PsHotel.create({ name: "h" });

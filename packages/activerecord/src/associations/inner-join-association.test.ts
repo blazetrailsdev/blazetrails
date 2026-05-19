@@ -226,7 +226,7 @@ describe("InnerJoinAssociationTest", () => {
   });
 
   it("find with sti join", async () => {
-    const a = await freshAdapter();
+    const a = adapter;
     class Comment extends Base {
       static {
         this.attribute("body", "string");

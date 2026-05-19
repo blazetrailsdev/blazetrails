@@ -175,7 +175,7 @@ describe("LeftOuterJoinAssociationTest", () => {
   });
 
   it("find with sti join", async () => {
-    const a = await freshAdapter();
+    const a = adapter;
     class LComment extends Base {
       static {
         this.attribute("body", "string");

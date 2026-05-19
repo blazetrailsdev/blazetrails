@@ -157,28 +157,30 @@ export class DetailsKey {
   /** @internal Per-symbol identity tag, so two non-global Symbols with
    * the same description don't collide in `_stableKey`. Mirrors Ruby's
    * symbol interning (where `:foo == :foo` is always true) by giving
-   * each non-interned Symbol a stable per-process numeric id. */
-  private static _symbolIds = new Map<symbol, number>();
+   * each non-interned Symbol a stable per-process numeric id. Stored
+   * in a WeakMap so unreferenced symbols can be GC'd. */
+  private static _symbolIds: WeakMap<WeakKey, number> = new WeakMap();
   private static _nextSymbolId = 0;
   private static _tagSymbol(s: symbol): string {
     const keyed = Symbol.keyFor(s);
     if (keyed !== undefined) return `S@${keyed}`;
-    let id = DetailsKey._symbolIds.get(s);
+    let id = DetailsKey._symbolIds.get(s as unknown as WeakKey);
     if (id === undefined) {
       id = ++DetailsKey._nextSymbolId;
-      DetailsKey._symbolIds.set(s, id);
+      DetailsKey._symbolIds.set(s as unknown as WeakKey, id);
     }
     return `s#${id}`;
   }
 
-  /** @internal Stable key for a details tuple. */
+  /** @internal Unambiguous key for a details tuple — JSON encoding so
+   * raw `:`, `,`, or `|` inside a detail value can't collide. */
   private static _stableKey(details: DetailsMap): string {
-    return REGISTERED_DETAILS.map(
-      (k) =>
-        `${k}:${(details[k] ?? [])
-          .map((v) => (typeof v === "symbol" ? DetailsKey._tagSymbol(v) : `s:${String(v)}`))
-          .join(",")}`,
-    ).join("|");
+    return JSON.stringify(
+      REGISTERED_DETAILS.map((k) => [
+        k,
+        (details[k] ?? []).map((v) => (typeof v === "symbol" ? DetailsKey._tagSymbol(v) : v)),
+      ]),
+    );
   }
 }
 

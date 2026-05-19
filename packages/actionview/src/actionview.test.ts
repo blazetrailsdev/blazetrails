@@ -535,6 +535,14 @@ describe("ActionView::LookupContext", () => {
       expect(a.detailsKey()).toBe(b.detailsKey());
     });
 
+    it("does not collide on detail values containing : , |", () => {
+      const c1 = new LookupContext();
+      const c2 = new LookupContext();
+      c1.variants = ["a", "b"];
+      c2.variants = ["a,s:b|"];
+      expect(c1.detailsKey()).not.toBe(c2.detailsKey());
+    });
+
     it("distinguishes non-global Symbols by identity in the details key", () => {
       const c1 = new LookupContext();
       const c2 = new LookupContext();

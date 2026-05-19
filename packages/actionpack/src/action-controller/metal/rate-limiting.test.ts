@@ -54,9 +54,6 @@ describe("MemoryRateLimitStore", () => {
   });
 
   describe("prune sweep", () => {
-    const BASELINE = 1024;
-    const PRUNE_MAX = BASELINE * 16;
-
     type StoreInternals = {
       _entries: Map<string, unknown>;
       _pruneThreshold: number;
@@ -64,6 +61,14 @@ describe("MemoryRateLimitStore", () => {
     };
     const peek = (store: MemoryRateLimitStore): StoreInternals =>
       store as unknown as StoreInternals;
+    // Derive tuning constants from the implementation so these tests
+    // assert behavior, not specific numeric values.
+    const STATICS = MemoryRateLimitStore as unknown as {
+      _PRUNE_BASELINE: number;
+      _PRUNE_MAX: number;
+    };
+    const BASELINE = STATICS._PRUNE_BASELINE;
+    const PRUNE_MAX = STATICS._PRUNE_MAX;
 
     it("sweeps expired entries once size crosses the threshold", () => {
       vi.useFakeTimers();

@@ -122,7 +122,7 @@ describe("Callbacks", () => {
       expect(target.log).toEqual(["halted"]);
     });
 
-    it("after callbacks still run when around does not yield", () => {
+    it("after callbacks are skipped when around does not yield", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
       setCallback(target, "save", "around", (t: any) => {
@@ -135,7 +135,7 @@ describe("Callbacks", () => {
         target.log.push("block");
       });
       expect(result).toBe(false);
-      expect(target.log).toEqual(["around", "after"]);
+      expect(target.log).toEqual(["around"]);
     });
   });
 

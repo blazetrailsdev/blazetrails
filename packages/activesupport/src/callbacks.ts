@@ -919,11 +919,14 @@ export class CallbackChain {
           return (async () => {
             try {
               await cbResult;
-              if (pendingProceed) await pendingProceed;
             } catch (err) {
               if (pendingProceed) await pendingProceed.catch(() => {});
               throw err;
             }
+            // If the around resolved without throwing, it handled any block
+            // rejection — silently consume pendingProceed so we don't
+            // re-throw the error the around just caught.
+            if (pendingProceed) await pendingProceed.catch(() => {});
           })();
         }
       };
@@ -932,9 +935,9 @@ export class CallbackChain {
     const chainResult = chain();
 
     const finish = (): boolean | Promise<boolean> => {
-      // After callbacks run even when around halts (didn't yield) — mirrors the
-      // original _invoke which ran afters after core() regardless of whether
-      // the block executed. Return blockExecuted so callers can detect around-halt.
+      // Rails AS::Callbacks compiles arounds wrapping (befores + block + afters)
+      // as a single continuation: a non-yielding around skips the afters too.
+      if (!blockExecuted) return false;
       const afterResult = this._runAfters(afters, false, skipAfterIfTerminated, target, opts);
       if (isThenable(afterResult)) return Promise.resolve(afterResult).then(() => blockExecuted);
       return blockExecuted;

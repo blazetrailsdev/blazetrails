@@ -32,8 +32,8 @@ export function truncate(
   text: string | null | undefined,
   options: TruncateOptions = {},
   block?: () => unknown,
-): SafeBuffer | undefined {
-  if (text === null || text === undefined) return undefined;
+): SafeBuffer | null {
+  if (text === null || text === undefined) return null;
 
   const length = options.length ?? 30;
   const truncated = stringTruncate(text, length, {
@@ -59,7 +59,6 @@ export function truncate(
 
 export interface PluralizeOptions {
   plural?: string;
-  locale?: string;
 }
 
 /**
@@ -102,7 +101,9 @@ export function wordWrap(text: string, options: WordWrapOptions = {}): string {
   // OR match an empty line.
   const pattern = new RegExp(`(.{1,${lineWidth}})(?:[^\\S\\n]+\\n?|\\n*$|\\n)|\\n`, "g");
 
-  const replaced = text.replace(pattern, `$1${breakSequence}`);
+  const replaced = text.replace(pattern, (_match, group1: string | undefined) =>
+    group1 === undefined ? breakSequence : group1 + breakSequence,
+  );
   return replaced.endsWith(breakSequence) ? replaced.slice(0, -breakSequence.length) : replaced;
 }
 

@@ -269,12 +269,16 @@ export class AbstractController {
     }
   }
 
-  /** Rails `Base#process` — public entry, sets state, dispatches via
-   * `processAction`. Raises `ActionNotFound` if the action is unknown. */
+  /**
+   * Rails `Base#process` — public entry. Validates the action via
+   * `_findActionName`, resets the response body, then delegates to
+   * `processAction` which handles the per-request `actionName` /
+   * `_performed` setup. Splitting state ownership this way (Rails-style
+   * single-setter is the goal, but trails has long-standing direct
+   * `processAction` callers in Metal and tests that need their state
+   * primed) avoids the double-assign that earlier iterations had.
+   */
   async process(action: string, ...args: unknown[]): Promise<void> {
-    this.actionName = action;
-    this._performed = false;
-    this._responseBody = null;
     if (!this._findActionName(action)) {
       throw new ActionNotFound(
         `The action '${action}' could not be found for ${this.constructor.name}`,
@@ -282,6 +286,7 @@ export class AbstractController {
         action,
       );
     }
+    this._responseBody = null;
     await this.processAction(action, ...args);
   }
 

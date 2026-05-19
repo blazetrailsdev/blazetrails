@@ -29,21 +29,22 @@ export interface TruncateOptions {
  * If a block is given and text was truncated, its return value is appended.
  */
 export function truncate(
-  text: string | null | undefined,
+  text: string | SafeBuffer | null | undefined,
   options: TruncateOptions = {},
   block?: () => unknown,
 ): SafeBuffer | null {
   if (text === null || text === undefined) return null;
 
+  const textStr = text instanceof SafeBuffer ? text.toString() : text;
   const length = options.length ?? 30;
-  const truncated = stringTruncate(text, length, {
+  const truncated = stringTruncate(textStr, length, {
     omission: options.omission,
     separator: options.separator,
   });
 
   let content: SafeBuffer = options.escape === false ? htmlSafe(truncated) : htmlEscape(truncated);
 
-  if (block && text.length > length) {
+  if (block && textStr.length > length) {
     const extra = block();
     const extraStr =
       extra instanceof SafeBuffer && extra.htmlSafe
@@ -91,8 +92,9 @@ export interface WordWrapOptions {
 /**
  * word_wrap — wraps +text+ into lines no longer than +lineWidth+ (80 by default).
  */
-export function wordWrap(text: string, options: WordWrapOptions = {}): string {
-  if (text.length === 0) return "";
+export function wordWrap(text: string | SafeBuffer, options: WordWrapOptions = {}): string {
+  const textStr = text instanceof SafeBuffer ? text.toString() : text;
+  if (textStr.length === 0) return "";
   const lineWidth = options.lineWidth ?? 80;
   const breakSequence = options.breakSequence ?? "\n";
 
@@ -101,7 +103,7 @@ export function wordWrap(text: string, options: WordWrapOptions = {}): string {
   // OR match an empty line.
   const pattern = new RegExp(`(.{1,${lineWidth}})(?:[^\\S\\n]+\\n?|\\n*$|\\n)|\\n`, "g");
 
-  const replaced = text.replace(pattern, (_match, group1: string | undefined) =>
+  const replaced = textStr.replace(pattern, (_match, group1: string | undefined) =>
     group1 === undefined ? breakSequence : group1 + breakSequence,
   );
   return replaced.endsWith(breakSequence) ? replaced.slice(0, -breakSequence.length) : replaced;

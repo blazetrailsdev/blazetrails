@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { bodyFromString } from "@blazetrails/rack";
 import type { RackEnv, RackResponse } from "@blazetrails/rack";
 import { ContentSecurityPolicyMiddleware } from "./content-security-policy.js";
-import { ContentSecurityPolicy } from "../http/content-security-policy.js";
+import {
+  ContentSecurityPolicy,
+  contentSecurityPolicyNonce,
+} from "../http/content-security-policy.js";
+import { Request } from "../http/request.js";
 import { CONTENT_SECURITY_POLICY, CONTENT_SECURITY_POLICY_REPORT_ONLY } from "../constants.js";
 
 const DEFAULT_CSP = "default-src 'self' https: http:";
@@ -104,8 +108,6 @@ describe("ContentSecurityPolicyMiddleware", () => {
       calls++;
       return "abc";
     };
-    const { Request } = await import("../http/request.js");
-    const { contentSecurityPolicyNonce } = await import("../http/content-security-policy.js");
     const request = new Request(env);
     expect(contentSecurityPolicyNonce.call(request)).toBe("abc");
     expect(contentSecurityPolicyNonce.call(request)).toBe("abc");

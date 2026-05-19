@@ -6,7 +6,7 @@
  * actionpack/lib/action_dispatch/http/content_security_policy.rb:32-71.
  */
 
-import type { RackEnv, RackResponse } from "@blazetrails/rack";
+import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
 import { CONTENT_SECURITY_POLICY, CONTENT_SECURITY_POLICY_REPORT_ONLY } from "../constants.js";
 import { Request } from "../http/request.js";
 import {
@@ -15,8 +15,6 @@ import {
   contentSecurityPolicyNonceDirectives,
   contentSecurityPolicyReportOnly,
 } from "../http/content-security-policy.js";
-
-type RackApp = (env: RackEnv) => Promise<RackResponse>;
 
 export class ContentSecurityPolicyMiddleware {
   private app: RackApp;
@@ -58,7 +56,7 @@ export class ContentSecurityPolicyMiddleware {
       : CONTENT_SECURITY_POLICY;
   }
 
-  private policyPresent(headers: Record<string, unknown>): boolean {
+  private policyPresent(headers: Record<string, string>): boolean {
     return (
       headers[CONTENT_SECURITY_POLICY] != null ||
       headers[CONTENT_SECURITY_POLICY_REPORT_ONLY] != null

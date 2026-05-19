@@ -224,8 +224,10 @@ export class AbstractController {
     const callbacks = allCallbacks.filter((entry) => {
       return !skipped.some((s) => {
         if (s.callback !== entry.callback) return false;
-        if (s.options.only && !_actionList(s.options.only).includes(action)) return false;
-        if (s.options.except && _actionList(s.options.except).includes(action)) return false;
+        if (s.options.only !== undefined && !_actionList(s.options.only).includes(action))
+          return false;
+        if (s.options.except !== undefined && _actionList(s.options.except).includes(action))
+          return false;
         return true;
       });
     });
@@ -300,8 +302,8 @@ export class AbstractController {
 
   private _shouldRun(entry: CallbackEntry, action: string): boolean {
     const opts = entry.options;
-    if (opts.only && !_actionList(opts.only).includes(action)) return false;
-    if (opts.except && _actionList(opts.except).includes(action)) return false;
+    if (opts.only !== undefined && !_actionList(opts.only).includes(action)) return false;
+    if (opts.except !== undefined && _actionList(opts.except).includes(action)) return false;
     if (opts.if !== undefined && !this._evalPredicate(opts.if, true)) return false;
     if (opts.unless !== undefined && this._evalPredicate(opts.unless, false)) return false;
     return true;

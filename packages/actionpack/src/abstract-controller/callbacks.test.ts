@@ -470,7 +470,7 @@ describe("_insertCallbacks", () => {
     expect(opts.only).toBeUndefined();
     expect((opts.if as unknown[])[0]).toBeInstanceOf(ActionFilter);
     // `filters` is a transient bookkeeping key; should be removed post-yield.
-    expect(opts.filters).toBeUndefined();
+    expect((opts as Record<string, unknown>).filters).toBeUndefined();
   });
 
   it("appends the block to the callback list when provided", () => {

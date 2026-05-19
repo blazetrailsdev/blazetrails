@@ -35,9 +35,18 @@ export interface CallbackOptions {
     | ((controller: AbstractController) => boolean)
     | Array<((controller: AbstractController) => boolean) | CallbackPredicateLike>;
   prepend?: boolean;
-  /** @internal Used by _insertCallbacks to feed filter names into ActionFilter. */
-  filters?: Array<ActionCallback | AroundCallback>;
 }
+
+/**
+ * Internal extension of CallbackOptions used by _insertCallbacks /
+ * _normalizeCallbackOption to thread the registered callback list
+ * through to ActionFilter (mirrors Rails' `options[:filters]`).
+ *
+ * @internal
+ */
+export type CallbackOptionsWithFilters = CallbackOptions & {
+  filters?: Array<ActionCallback | AroundCallback>;
+};
 
 export interface CallbackEntry {
   callback: ActionCallback | AroundCallback;
@@ -129,7 +138,7 @@ export function _normalizeCallbackOption(
   if (fromValue === undefined) return;
   delete options[from];
 
-  const filters = options.filters ?? [];
+  const filters = (options as CallbackOptionsWithFilters).filters ?? [];
   const filter = new ActionFilter(filters, from, fromValue);
 
   const existing = options[to];
@@ -157,9 +166,10 @@ export function _insertCallbacks(
   yieldFn: (callback: ActionCallback | AroundCallback, options: CallbackOptions) => void,
 ): void {
   if (block) callbacks.push(block);
-  options.filters = callbacks;
+  const opts = options as CallbackOptionsWithFilters;
+  opts.filters = callbacks;
   _normalizeCallbackOptions(options);
-  delete options.filters;
+  delete opts.filters;
   for (const callback of callbacks) {
     yieldFn(callback, options);
   }

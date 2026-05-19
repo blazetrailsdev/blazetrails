@@ -324,7 +324,7 @@ describe("RelationScopingTest", () => {
     expect(unscopedSql).toContain("SELECT");
   });
 
-  it("find with annotation unscope", () => {
+  it("find with annotation unscope", async () => {
     class AnnUnscopePost extends Base {
       static {
         this._tableName = "ann_posts";
@@ -332,11 +332,12 @@ describe("RelationScopingTest", () => {
         this.adapter = adapter;
       }
     }
-    const sql = AnnUnscopePost.annotate("unscope")
-      .where({ title: "x" })
-      .unscope("annotate")
-      .toSql();
-    expect(sql).not.toContain("/* unscope */");
+    await AnnUnscopePost.create({ title: "David" });
+    const rel = AnnUnscopePost.annotate("unscope").where({ title: "David" }).unscope("annotate");
+    expect(rel.toSql()).not.toContain("/* unscope */");
+    const post = (await rel.first()) as Base | null;
+    expect(post).not.toBeNull();
+    expect(post!.title).toBe("David");
   });
 
   it.skip("scoped find include", () => {

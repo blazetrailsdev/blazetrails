@@ -20,6 +20,7 @@ function cfg(): ActionDispatchConfig {
 
 describe("ActionDispatch::Trailtie", () => {
   let savedConfig: ActionDispatchConfig;
+  let savedCspConfig: ContentSecurityPolicyConfig;
   let savedTldLength: number;
   let savedStrictQuery: boolean | null;
   let savedPerformDeepMunge: boolean;
@@ -30,6 +31,9 @@ describe("ActionDispatch::Trailtie", () => {
 
   beforeEach(() => {
     savedConfig = structuredClone(cfg());
+    savedCspConfig = {
+      ...(Trailtie.config["contentSecurityPolicy"] as ContentSecurityPolicyConfig),
+    };
     savedTldLength = HttpURL.tldLength;
     savedStrictQuery = QueryParser.strictQueryStringSeparator;
     savedPerformDeepMunge = RequestUtils.performDeepMunge;
@@ -41,6 +45,7 @@ describe("ActionDispatch::Trailtie", () => {
 
   afterEach(() => {
     Trailtie.config["actionDispatch"] = savedConfig;
+    Trailtie.config["contentSecurityPolicy"] = savedCspConfig;
     HttpURL.tldLength = savedTldLength;
     QueryParser.strictQueryStringSeparator = savedStrictQuery;
     RequestUtils.performDeepMunge = savedPerformDeepMunge;
@@ -125,11 +130,23 @@ describe("ActionDispatch::Trailtie", () => {
     expect(headers["action_dispatch.content_security_policy_nonce_directives"]).toEqual([
       "script-src",
     ]);
+  });
 
-    cfg.policy = null;
-    cfg.reportOnly = false;
-    cfg.nonceGenerator = null;
-    cfg.nonceDirectives = null;
+  it("seedContentSecurityPolicyEnv writes all four slots unconditionally (Rails parity)", () => {
+    const headers: Record<string, unknown> = {
+      "action_dispatch.content_security_policy_report_only": true,
+    };
+    const req = {
+      getHeader: (k: string) => headers[k],
+      setHeader: (k: string, v: unknown) => (headers[k] = v),
+    };
+    // Defaults are all falsy — Rails copies them anyway (application.rb:344),
+    // which must overwrite the stale `true` carried over from a prior request.
+    Trailtie.seedContentSecurityPolicyEnv(req);
+    expect(headers["action_dispatch.content_security_policy_report_only"]).toBe(false);
+    expect(headers["action_dispatch.content_security_policy"]).toBeNull();
+    expect(headers["action_dispatch.content_security_policy_nonce_generator"]).toBeNull();
+    expect(headers["action_dispatch.content_security_policy_nonce_directives"]).toBeNull();
   });
 
   it("runInitializers resets Response.defaultCharset to utf-8 when cfg is null", () => {

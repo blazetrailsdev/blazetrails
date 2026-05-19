@@ -179,11 +179,12 @@ export class Trailtie extends BaseRailtie {
    */
   static seedContentSecurityPolicyEnv(request: CspRequestHost): void {
     const cfg = this.config["contentSecurityPolicy"] as ContentSecurityPolicyConfig;
-    if (cfg.policy) setContentSecurityPolicy.call(request, cfg.policy);
-    if (cfg.reportOnly) setContentSecurityPolicyReportOnly.call(request, cfg.reportOnly);
-    if (cfg.nonceGenerator)
-      setContentSecurityPolicyNonceGenerator.call(request, cfg.nonceGenerator);
-    if (cfg.nonceDirectives)
-      setContentSecurityPolicyNonceDirectives.call(request, cfg.nonceDirectives);
+    // Mirror Rails application.rb:342-346 — all four slots are copied
+    // unconditionally so toggling app config back to a falsy value
+    // overwrites any stale env carried over from a prior request.
+    setContentSecurityPolicy.call(request, cfg.policy);
+    setContentSecurityPolicyReportOnly.call(request, cfg.reportOnly);
+    setContentSecurityPolicyNonceGenerator.call(request, cfg.nonceGenerator);
+    setContentSecurityPolicyNonceDirectives.call(request, cfg.nonceDirectives);
   }
 }

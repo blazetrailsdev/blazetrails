@@ -6814,6 +6814,30 @@ describe("HasManyAssociationsTest", () => {
     });
     expect(posts.length).toBe(0);
   });
+  it("unscopes the default scope of associated model when used with include", async () => {
+    class UsInclAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class UsInclPost extends Base {
+      static {
+        this.attribute("author_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(UsInclAuthor);
+    registerModel(UsInclPost);
+    const author = await UsInclAuthor.create({ name: "Alice" });
+    await UsInclPost.create({ author_id: author.id, title: "A" });
+    const posts = await loadHasMany(author, "us_incl_posts", {
+      className: "UsInclPost",
+      foreignKey: "author_id",
+    });
+    expect(posts.length).toBe(1);
+  });
   it("raises RecordNotDestroyed when replaced child can't be destroyed", async () => {
     class RndAuthor extends Base {
       static {
@@ -7648,17 +7672,13 @@ describe("HasManyAssociationsTest", () => {
   });
 });
 
+// Mirrors Rails Bulb (`default_scope { where(name: "defaulty") }`) and
+// the Car associations that exercise scope chaining: `:bulbs` (default
+// scope applies), `:all_bulbs` (unscope where:name), `:other_bulbs`
+// (unscope + rewrite), `:old_bulbs` (rewhere).
 const DEFAULT_SCOPE_SCHEMA: Schema = {
-  ds_proxy_authors: { name: "string" },
-  ds_proxy_posts: { author_id: "integer", title: "string" },
-  unscope_def_authors: { name: "string" },
-  unscope_def_posts: { author_id: "integer", title: "string" },
-  usw_authors: { name: "string" },
-  usw_posts: { author_id: "integer", title: "string" },
-  rw_authors: { name: "string" },
-  rw_posts: { author_id: "integer", title: "string" },
-  us_incl_authors: { name: "string" },
-  us_incl_posts: { author_id: "integer", title: "string" },
+  ds_cars: { name: "string" },
+  ds_bulbs: { car_id: "integer", name: "string" },
 };
 
 describe("HasManyAssociationsTest", () => {
@@ -7669,132 +7689,103 @@ describe("HasManyAssociationsTest", () => {
   });
   withTransactionalFixtures(() => adapter);
 
-  it("collection proxy respects default scope", async () => {
-    class DsProxyAuthor extends Base {
+  function setupCarBulb() {
+    class DsCar extends Base {
       static {
+        this._tableName = "ds_cars";
         this.attribute("name", "string");
         this.adapter = adapter;
       }
     }
-    class DsProxyPost extends Base {
+    class DsBulb extends Base {
       static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
+        this._tableName = "ds_bulbs";
+        this.attribute("car_id", "integer");
+        this.attribute("name", "string");
         this.adapter = adapter;
+        this.defaultScope((rel: any) => rel.where({ name: "defaulty" }));
       }
     }
-    registerModel(DsProxyAuthor);
-    registerModel(DsProxyPost);
-    Associations.hasMany.call(DsProxyAuthor, "ds_proxy_posts", {
-      className: "DsProxyPost",
-      foreignKey: "author_id",
+    registerModel("DsCar", DsCar);
+    registerModel("DsBulb", DsBulb);
+    Associations.hasMany.call(DsCar, "bulbs", {
+      className: "DsBulb",
+      foreignKey: "car_id",
     });
-    const author = await DsProxyAuthor.create({ name: "Alice" });
-    await DsProxyPost.create({ author_id: author.id, title: "A" });
-    const proxy = association(author, "ds_proxy_posts");
-    expect(proxy).toBeDefined();
+    Associations.hasMany.call(DsCar, "all_bulbs", {
+      className: "DsBulb",
+      foreignKey: "car_id",
+      scope: (rel: any) => rel.unscope({ where: "name" }),
+    });
+    Associations.hasMany.call(DsCar, "other_bulbs", {
+      className: "DsBulb",
+      foreignKey: "car_id",
+      scope: (rel: any) => rel.unscope({ where: "name" }).where({ name: "other" }),
+    });
+    Associations.hasMany.call(DsCar, "old_bulbs", {
+      className: "DsBulb",
+      foreignKey: "car_id",
+      scope: (rel: any) => rel.rewhere({ name: "old" }),
+    });
+    return { DsCar, DsBulb };
+  }
+
+  it("collection proxy respects default scope", async () => {
+    // Rails: `assert_not_predicate author.first_posts, :exists?` —
+    // collection proxy's `exists?` filters by the default scope (no row
+    // matches), so `:exists?` returns false.
+    const { DsCar, DsBulb } = setupCarBulb();
+    const car = await DsCar.create({ name: "v1" });
+    await DsBulb.create({ car_id: car.id, name: "other" }); // not "defaulty"
+    const exists = await association(car, "bulbs").exists();
+    expect(exists).toBe(false);
   });
 
   it("can unscope the default scope of the associated model", async () => {
-    class UnscopeDefAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    class UnscopeDefPost extends Base {
-      static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
-        this.adapter = adapter;
-      }
-    }
-    registerModel(UnscopeDefAuthor);
-    registerModel(UnscopeDefPost);
-    const author = await UnscopeDefAuthor.create({ name: "Alice" });
-    await UnscopeDefPost.create({ author_id: author.id, title: "A" });
-    await UnscopeDefPost.create({ author_id: author.id, title: "B" });
-    const posts = await loadHasMany(author, "unscope_def_posts", {
-      className: "UnscopeDefPost",
-      foreignKey: "author_id",
+    // Rails: car.bulbs => [defaulty]; car.all_bulbs => [defaulty, other]
+    const { DsCar, DsBulb } = setupCarBulb();
+    const car = await DsCar.create({ name: "v1" });
+    await DsBulb.create({ car_id: car.id, name: "defaulty" });
+    await DsBulb.create({ car_id: car.id, name: "other" });
+    const bulbs = await loadHasMany(car, "bulbs", { className: "DsBulb", foreignKey: "car_id" });
+    expect(bulbs.length).toBe(1);
+    const allBulbs = await loadHasMany(car, "all_bulbs", {
+      className: "DsBulb",
+      foreignKey: "car_id",
+      scope: (rel: any) => rel.unscope({ where: "name" }),
     });
-    expect(posts.length).toBe(2);
+    expect(allBulbs.length).toBe(2);
   });
 
   it("can unscope and where the default scope of the associated model", async () => {
-    class UswAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    class UswPost extends Base {
-      static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
-        this.adapter = adapter;
-      }
-    }
-    registerModel(UswAuthor);
-    registerModel(UswPost);
-    const author = await UswAuthor.create({ name: "Alice" });
-    await UswPost.create({ author_id: author.id, title: "A" });
-    await UswPost.create({ author_id: author.id, title: "B" });
-    const posts = await loadHasMany(author, "usw_posts", {
-      className: "UswPost",
-      foreignKey: "author_id",
+    // Rails: car.bulbs => [defaulty]; car.other_bulbs => [other]
+    const { DsCar, DsBulb } = setupCarBulb();
+    const car = await DsCar.create({ name: "v1" });
+    await DsBulb.create({ car_id: car.id, name: "defaulty" });
+    await DsBulb.create({ car_id: car.id, name: "other" });
+    const bulbs = await loadHasMany(car, "bulbs", { className: "DsBulb", foreignKey: "car_id" });
+    expect(bulbs.length).toBe(1);
+    expect((bulbs[0] as any).name).toBe("defaulty");
+    const others = await loadHasMany(car, "other_bulbs", {
+      className: "DsBulb",
+      foreignKey: "car_id",
     });
-    expect(posts.length).toBe(2);
+    expect(others.length).toBe(1);
+    expect((others[0] as any).name).toBe("other");
   });
 
   it("can rewhere the default scope of the associated model", async () => {
-    class RwAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    class RwPost extends Base {
-      static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
-        this.adapter = adapter;
-      }
-    }
-    registerModel(RwAuthor);
-    registerModel(RwPost);
-    const author = await RwAuthor.create({ name: "Alice" });
-    await RwPost.create({ author_id: author.id, title: "A" });
-    const posts = await loadHasMany(author, "rw_posts", {
-      className: "RwPost",
-      foreignKey: "author_id",
-    });
-    expect(posts.length).toBe(1);
-  });
-
-  it("unscopes the default scope of associated model when used with include", async () => {
-    class UsInclAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    class UsInclPost extends Base {
-      static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
-        this.adapter = adapter;
-      }
-    }
-    registerModel(UsInclAuthor);
-    registerModel(UsInclPost);
-    const author = await UsInclAuthor.create({ name: "Alice" });
-    await UsInclPost.create({ author_id: author.id, title: "A" });
-    const posts = await loadHasMany(author, "us_incl_posts", {
-      className: "UsInclPost",
-      foreignKey: "author_id",
-    });
-    expect(posts.length).toBe(1);
+    // Rails: car.bulbs => [defaulty]; car.old_bulbs => [old]
+    const { DsCar, DsBulb } = setupCarBulb();
+    const car = await DsCar.create({ name: "v1" });
+    await DsBulb.create({ car_id: car.id, name: "defaulty" });
+    await DsBulb.create({ car_id: car.id, name: "old" });
+    const bulbs = await loadHasMany(car, "bulbs", { className: "DsBulb", foreignKey: "car_id" });
+    expect(bulbs.length).toBe(1);
+    expect((bulbs[0] as any).name).toBe("defaulty");
+    const old = await loadHasMany(car, "old_bulbs", { className: "DsBulb", foreignKey: "car_id" });
+    expect(old.length).toBe(1);
+    expect((old[0] as any).name).toBe("old");
   });
 });
 

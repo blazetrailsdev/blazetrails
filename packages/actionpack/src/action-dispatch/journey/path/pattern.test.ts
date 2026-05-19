@@ -325,4 +325,20 @@ describe("ActionDispatch::Journey::Path::Pattern — leading-optional normalizat
     const p = buildPath("/posts/:id");
     expect(p.toRegexp().source).toBe("^\\/posts\\/([^/.?]+)$");
   });
+
+  it("handles the single-group all-optional shape `/(/:locale)`", () => {
+    // Smallest all-optional path: one SLASH + one Group whose body
+    // starts with SLASH. Both `/` and `/en` should match.
+    const p = buildPath("/(/:locale)");
+    expect(p.match("/")).toBeDefined();
+    expect(p.match("/en")).toBeDefined();
+  });
+
+  it("doesn't rewrite when the second top-level Group's body is just a SLASH", () => {
+    // Degenerate body `(/)`: there's no symbol after the slash so the
+    // normalization can't safely drop it. Leave the spec alone.
+    const p = buildPath("/(/)/foo");
+    // No crash, no exception — that's the contract.
+    expect(p.toRegexp()).toBeInstanceOf(RegExp);
+  });
 });

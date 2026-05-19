@@ -1,6 +1,6 @@
 import { Ast } from "../ast.js";
-import { Cat, Group as GroupCtor } from "../nodes/node.js";
-import type { Dot, Group, Literal, Node, Or, Slash, Star } from "../nodes/node.js";
+import { Cat, Group } from "../nodes/node.js";
+import type { Dot, Literal, Node, Or, Slash, Star } from "../nodes/node.js";
 import { FormatBuilder, Format, Visitor } from "../visitors.js";
 
 type Matchers = Record<string, RegExp | RegExp[]>;
@@ -398,53 +398,37 @@ export class Pattern {
  * @internal
  */
 function normalizeLeadingOptionalSpec(spec: Node): Node {
-  const parts: Node[] = [];
-  const flatten = (n: Node): void => {
-    if (n.isCat()) {
-      flatten((n as Cat).left as Node);
-      flatten((n as Cat).right);
-    } else {
-      parts.push(n);
-    }
-  };
-  flatten(spec);
-  if (parts.length < 2) return spec;
-  if (parts[0]!.type !== "SLASH") return spec;
+  const parts = flattenCat(spec);
+  if (parts.length < 2 || parts[0]!.type !== "SLASH") return spec;
   const second = parts[1]!;
   if (!second.isGroup()) return spec;
   // The second top-level node must be a Group whose body starts with a
   // SLASH terminal — otherwise there's no slash-doubling to undo.
-  let leftmost: Node = (second as Group).left as Node;
-  while (leftmost.isCat()) leftmost = (leftmost as Cat).left as Node;
-  if (leftmost.type !== "SLASH") return spec;
+  const innerParts = flattenCat((second as Group).left as Node);
+  if (innerParts.length < 2 || innerParts[0]!.type !== "SLASH") return spec;
   const allOptional = parts.slice(1).every((p) => p.isGroup());
-  let newParts: Node[];
-  if (allOptional) {
-    const newBody = dropLeftmostSlash((second as Group).left as Node);
-    newParts = [parts[0]!, new GroupCtor(newBody), ...parts.slice(2)];
-  } else {
-    newParts = parts.slice(1);
-  }
-  if (newParts.length === 1) return newParts[0]!;
-  return newParts.slice(1).reduce((acc, n) => new Cat(acc, n), newParts[0]!);
+  const newParts = allOptional
+    ? [parts[0]!, new Group(buildCat(innerParts.slice(1))), ...parts.slice(2)]
+    : parts.slice(1);
+  return buildCat(newParts);
 }
 
-/**
- * Return a copy of `node` with its leftmost terminal (which must be a
- * SLASH) removed. The body is a Cat chain like `Cat(Slash, Cat(...))`;
- * the surgery keeps the right-hand chain intact.
- *
- * @internal
- */
-function dropLeftmostSlash(node: Node): Node {
-  if (!node.isCat()) {
-    // Body was a bare SLASH — unusual but produce an empty-ish CAT so the
-    // caller sees no slash. Callers only invoke this after verifying the
-    // leftmost terminal is a SLASH, so this is the SLASH itself.
-    return node;
-  }
-  const cat = node as Cat;
-  const left = cat.left as Node;
-  if (left.type === "SLASH") return cat.right;
-  return new Cat(dropLeftmostSlash(left), cat.right);
+/** @internal Flatten a right-leaning Cat chain into an array of nodes. */
+function flattenCat(node: Node): Node[] {
+  const out: Node[] = [];
+  const walk = (n: Node): void => {
+    if (n.isCat()) {
+      walk((n as Cat).left as Node);
+      walk((n as Cat).right);
+    } else {
+      out.push(n);
+    }
+  };
+  walk(node);
+  return out;
+}
+
+/** @internal Rebuild a right-leaning Cat chain from a non-empty node list. */
+function buildCat(parts: readonly Node[]): Node {
+  return parts.slice(1).reduce((acc, n) => new Cat(acc, n), parts[0]!);
 }

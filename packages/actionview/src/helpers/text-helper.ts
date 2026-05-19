@@ -35,6 +35,7 @@ export function truncate(
 ): SafeBuffer | null {
   if (text === null || text === undefined) return null;
 
+  const wasSafe = text instanceof SafeBuffer && text.htmlSafe;
   const textStr = text instanceof SafeBuffer ? text.toString() : text;
   const length = options.length ?? 30;
   const truncated = stringTruncate(textStr, length, {
@@ -42,7 +43,10 @@ export function truncate(
     separator: options.separator,
   });
 
-  let content: SafeBuffer = options.escape === false ? htmlSafe(truncated) : htmlEscape(truncated);
+  // Rails: ERB::Util.html_escape returns html_safe strings unchanged, so an
+  // already-safe input passes through untouched when escape != false.
+  let content: SafeBuffer =
+    options.escape === false || wasSafe ? htmlSafe(truncated) : htmlEscape(truncated);
 
   if (block && textStr.length > length) {
     const extra = block();

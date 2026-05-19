@@ -32,6 +32,13 @@ describe("Base ParamsWrapper wiring", () => {
     expect(B._wrapperOptions.include).toEqual(["x"]);
   });
 
+  it("wrapParameters derives default name from controller class when format enabled", () => {
+    class UsersController extends Base {}
+    UsersController.wrapParameters({ format: ["json"] });
+    expect(UsersController._wrapperOptions.name).toBe("user");
+    expect(UsersController._wrapperOptions.format).toEqual(["json"]);
+  });
+
   it("wrapParameters(false) disables wrapping by zeroing format", () => {
     class C extends Base {}
     C.wrapParameters({ format: ["json"] });

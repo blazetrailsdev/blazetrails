@@ -43,6 +43,7 @@ import {
 import { sendFileHeadersBang } from "./metal/data-streaming.js";
 import {
   Options as ParamsWrapperOptions,
+  _defaultWrapModel,
   _performParameterWrapping,
   _wrapperEnabled,
   type ParamsWrapperHost,
@@ -534,6 +535,15 @@ export class Base extends Metal {
     const newOpts = ParamsWrapperOptions.fromHash(merged);
     newOpts.model = model;
     newOpts.klass = this;
+    // Rails' `Options#name` is a lazy getter that derives a default from
+    // `klass.controller_name.singularize` (or `model.to_s.demodulize.underscore`)
+    // on first read. We store name eagerly, so assign the derived default
+    // here when wrapping is enabled but no name was provided — otherwise
+    // `_wrapperEnabled` would always return false for the common Rails form
+    // `wrap_parameters format: [...]`.
+    if ((newOpts.format?.length ?? 0) > 0 && !newOpts.name) {
+      newOpts.name = _defaultWrapModel.call({ _wrapperOptions: newOpts });
+    }
     this._wrapperOptions = newOpts;
   }
 
@@ -556,6 +566,12 @@ export class Base extends Metal {
     });
     dup.model = inherited.model;
     dup.klass = this;
+    // Re-derive default name from the subclass `klass` when the parent's
+    // name was itself derived (matches Rails' lazy `name` semantics on
+    // `inherited`: each subclass derives from its own `controller_name`).
+    if (!dup.name) {
+      dup.name = _defaultWrapModel.call({ _wrapperOptions: dup });
+    }
     this._wrapperOptions = dup;
   }
 

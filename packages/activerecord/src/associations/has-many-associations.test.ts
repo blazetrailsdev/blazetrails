@@ -6733,31 +6733,6 @@ describe("HasManyAssociationsTest", () => {
     });
     expect(remaining.length).toBe(0);
   });
-  it("collection proxy respects default scope", async () => {
-    class DsProxyAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    class DsProxyPost extends Base {
-      static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
-        this.adapter = adapter;
-      }
-    }
-    registerModel(DsProxyAuthor);
-    registerModel(DsProxyPost);
-    Associations.hasMany.call(DsProxyAuthor, "ds_proxy_posts", {
-      className: "DsProxyPost",
-      foreignKey: "author_id",
-    });
-    const author = await DsProxyAuthor.create({ name: "Alice" });
-    await DsProxyPost.create({ author_id: author.id, title: "A" });
-    const proxy = association(author, "ds_proxy_posts");
-    expect(proxy).toBeDefined();
-  });
   it("association with extend option with multiple extensions", async () => {
     class ExtAuthor extends Base {
       static {
@@ -6838,104 +6813,6 @@ describe("HasManyAssociationsTest", () => {
       foreignKey: "author_id",
     });
     expect(posts.length).toBe(0);
-  });
-  it("can unscope the default scope of the associated model", async () => {
-    class UnscopeDefAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    class UnscopeDefPost extends Base {
-      static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
-        this.adapter = adapter;
-      }
-    }
-    registerModel(UnscopeDefAuthor);
-    registerModel(UnscopeDefPost);
-    const author = await UnscopeDefAuthor.create({ name: "Alice" });
-    await UnscopeDefPost.create({ author_id: author.id, title: "A" });
-    await UnscopeDefPost.create({ author_id: author.id, title: "B" });
-    const posts = await loadHasMany(author, "unscope_def_posts", {
-      className: "UnscopeDefPost",
-      foreignKey: "author_id",
-    });
-    expect(posts.length).toBe(2);
-  });
-  it("can unscope and where the default scope of the associated model", async () => {
-    class UswAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    class UswPost extends Base {
-      static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
-        this.adapter = adapter;
-      }
-    }
-    registerModel(UswAuthor);
-    registerModel(UswPost);
-    const author = await UswAuthor.create({ name: "Alice" });
-    await UswPost.create({ author_id: author.id, title: "A" });
-    await UswPost.create({ author_id: author.id, title: "B" });
-    const posts = await loadHasMany(author, "usw_posts", {
-      className: "UswPost",
-      foreignKey: "author_id",
-    });
-    expect(posts.length).toBe(2);
-  });
-  it("can rewhere the default scope of the associated model", async () => {
-    class RwAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    class RwPost extends Base {
-      static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
-        this.adapter = adapter;
-      }
-    }
-    registerModel(RwAuthor);
-    registerModel(RwPost);
-    const author = await RwAuthor.create({ name: "Alice" });
-    await RwPost.create({ author_id: author.id, title: "A" });
-    const posts = await loadHasMany(author, "rw_posts", {
-      className: "RwPost",
-      foreignKey: "author_id",
-    });
-    expect(posts.length).toBe(1);
-  });
-  it("unscopes the default scope of associated model when used with include", async () => {
-    class UsInclAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    class UsInclPost extends Base {
-      static {
-        this.attribute("author_id", "integer");
-        this.attribute("title", "string");
-        this.adapter = adapter;
-      }
-    }
-    registerModel(UsInclAuthor);
-    registerModel(UsInclPost);
-    const author = await UsInclAuthor.create({ name: "Alice" });
-    await UsInclPost.create({ author_id: author.id, title: "A" });
-    const posts = await loadHasMany(author, "us_incl_posts", {
-      className: "UsInclPost",
-      foreignKey: "author_id",
-    });
-    expect(posts.length).toBe(1);
   });
   it("raises RecordNotDestroyed when replaced child can't be destroyed", async () => {
     class RndAuthor extends Base {
@@ -7768,6 +7645,156 @@ describe("HasManyAssociationsTest", () => {
     });
     expect(posts.length).toBe(1);
     expect(posts[0].id).toBe(post.id);
+  });
+});
+
+const DEFAULT_SCOPE_SCHEMA: Schema = {
+  ds_proxy_authors: { name: "string" },
+  ds_proxy_posts: { author_id: "integer", title: "string" },
+  unscope_def_authors: { name: "string" },
+  unscope_def_posts: { author_id: "integer", title: "string" },
+  usw_authors: { name: "string" },
+  usw_posts: { author_id: "integer", title: "string" },
+  rw_authors: { name: "string" },
+  rw_posts: { author_id: "integer", title: "string" },
+  us_incl_authors: { name: "string" },
+  us_incl_posts: { author_id: "integer", title: "string" },
+};
+
+describe("HasManyAssociationsTest", () => {
+  let adapter: TestDatabaseAdapter;
+  beforeAll(async () => {
+    adapter = createTestAdapter();
+    await defineSchema(adapter, DEFAULT_SCOPE_SCHEMA);
+  });
+  withTransactionalFixtures(() => adapter);
+
+  it("collection proxy respects default scope", async () => {
+    class DsProxyAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class DsProxyPost extends Base {
+      static {
+        this.attribute("author_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(DsProxyAuthor);
+    registerModel(DsProxyPost);
+    Associations.hasMany.call(DsProxyAuthor, "ds_proxy_posts", {
+      className: "DsProxyPost",
+      foreignKey: "author_id",
+    });
+    const author = await DsProxyAuthor.create({ name: "Alice" });
+    await DsProxyPost.create({ author_id: author.id, title: "A" });
+    const proxy = association(author, "ds_proxy_posts");
+    expect(proxy).toBeDefined();
+  });
+
+  it("can unscope the default scope of the associated model", async () => {
+    class UnscopeDefAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class UnscopeDefPost extends Base {
+      static {
+        this.attribute("author_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(UnscopeDefAuthor);
+    registerModel(UnscopeDefPost);
+    const author = await UnscopeDefAuthor.create({ name: "Alice" });
+    await UnscopeDefPost.create({ author_id: author.id, title: "A" });
+    await UnscopeDefPost.create({ author_id: author.id, title: "B" });
+    const posts = await loadHasMany(author, "unscope_def_posts", {
+      className: "UnscopeDefPost",
+      foreignKey: "author_id",
+    });
+    expect(posts.length).toBe(2);
+  });
+
+  it("can unscope and where the default scope of the associated model", async () => {
+    class UswAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class UswPost extends Base {
+      static {
+        this.attribute("author_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(UswAuthor);
+    registerModel(UswPost);
+    const author = await UswAuthor.create({ name: "Alice" });
+    await UswPost.create({ author_id: author.id, title: "A" });
+    await UswPost.create({ author_id: author.id, title: "B" });
+    const posts = await loadHasMany(author, "usw_posts", {
+      className: "UswPost",
+      foreignKey: "author_id",
+    });
+    expect(posts.length).toBe(2);
+  });
+
+  it("can rewhere the default scope of the associated model", async () => {
+    class RwAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class RwPost extends Base {
+      static {
+        this.attribute("author_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(RwAuthor);
+    registerModel(RwPost);
+    const author = await RwAuthor.create({ name: "Alice" });
+    await RwPost.create({ author_id: author.id, title: "A" });
+    const posts = await loadHasMany(author, "rw_posts", {
+      className: "RwPost",
+      foreignKey: "author_id",
+    });
+    expect(posts.length).toBe(1);
+  });
+
+  it("unscopes the default scope of associated model when used with include", async () => {
+    class UsInclAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class UsInclPost extends Base {
+      static {
+        this.attribute("author_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(UsInclAuthor);
+    registerModel(UsInclPost);
+    const author = await UsInclAuthor.create({ name: "Alice" });
+    await UsInclPost.create({ author_id: author.id, title: "A" });
+    const posts = await loadHasMany(author, "us_incl_posts", {
+      className: "UsInclPost",
+      foreignKey: "author_id",
+    });
+    expect(posts.length).toBe(1);
   });
 });
 

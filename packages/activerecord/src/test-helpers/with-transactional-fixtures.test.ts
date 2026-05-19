@@ -136,6 +136,41 @@ describe("withTransactionalFixtures (schema-cache invalidation)", () => {
   });
 });
 
+// Parallel to schemaCache: defineSchema maintains its own per-adapter
+// signature WeakMap so repeated `defineSchema(adapter, sameSpec)` is a
+// no-op. If a test runs `defineSchema(...)` inside an `it()` body, the
+// rolled-back table at the DB would otherwise be paired with a stale
+// signature entry — the next test's `defineSchema` would think the table
+// still exists and skip recreating it.
+describe("withTransactionalFixtures (defineSchema signature cache invalidation)", () => {
+  let adapter: SQLite3Adapter;
+
+  beforeAll(async () => {
+    adapter = new SQLite3Adapter(":memory:");
+  });
+
+  afterAll(async () => {
+    await adapter.close();
+  });
+
+  withTransactionalFixtures(() => adapter);
+
+  it("defineSchema inside a test populates the signature cache", async () => {
+    await defineSchema(adapter, { defsig_table: { name: "string" } });
+    const cols = await adapter.columns("defsig_table");
+    expect(cols.map((c) => c.name).sort()).toEqual(["id", "name"]);
+  });
+
+  it("next test re-runs defineSchema and the rolled-back table is recreated", async () => {
+    // If the signature cache hadn't been cleared, `defineSchema` would
+    // short-circuit on the cached signature and `columns()` below would
+    // throw because the table was rolled back at the DB.
+    await defineSchema(adapter, { defsig_table: { name: "string" } });
+    const cols = await adapter.columns("defsig_table");
+    expect(cols.map((c) => c.name).sort()).toEqual(["id", "name"]);
+  });
+});
+
 // Adapter-cluster files (adapters/postgresql/*.test.ts, etc.) construct a
 // raw DatabaseAdapter directly instead of going through createTestAdapter().
 // The helper must accept that shape — `transactionManager` lives on the

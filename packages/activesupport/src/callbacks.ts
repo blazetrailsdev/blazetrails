@@ -915,6 +915,7 @@ export class CallbackChain {
               `Async callback on sync chain "${this.name}" — around callback or block returned a Promise`,
             );
           }
+          const cbWasThenable = isThenable(cbResult);
           return (async () => {
             try {
               await cbResult;
@@ -922,10 +923,14 @@ export class CallbackChain {
               if (pendingProceed) await pendingProceed.catch(() => {});
               throw err;
             }
-            // If the around resolved without throwing, it handled any block
-            // rejection — silently consume pendingProceed so we don't
-            // re-throw the error the around just caught.
-            if (pendingProceed) await pendingProceed.catch(() => {});
+            if (pendingProceed) {
+              // If the around returned a Promise it had an opportunity to await
+              // and rescue the inner rejection — consume silently to avoid
+              // re-throwing an error it just handled. A synchronous around
+              // could not have observed the rejection, so propagate.
+              if (cbWasThenable) await pendingProceed.catch(() => {});
+              else await pendingProceed;
+            }
           })();
         }
       };

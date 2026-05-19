@@ -49,12 +49,12 @@ dokku ps:set gh-runner restart-policy always
 #    forwards SIGTERM, waits `stop-timeout-seconds`, then SIGKILLs. Default
 #    is 30s — shorter than nearly every job. If a scale operation lands
 #    while a runner is mid-job, SIGKILL bypasses the entrypoint's EXIT
-#    trap, the GitHub-side runner record is not deregistered, and the
-#    stale `offline busy=true` registration holds the job slot for the
-#    workflow's `timeout-minutes` (30 here) before GitHub gives up. The
-#    re-dispatch loses ~30 minutes of CI per stale runner. 900s (15 min)
-#    is generous headroom vs current job lengths; raise if jobs ever
-#    exceed that.
+#    trap (infra/runner/entrypoint.sh), the GitHub-side runner record is
+#    not deregistered, and the stale `offline busy=true` registration
+#    holds the job slot for the workflow's `timeout-minutes` (set per-job
+#    in .github/workflows/ci.yml) before GitHub gives up and re-dispatches.
+#    900s (15 min) is generous headroom vs current job lengths; raise if
+#    jobs ever exceed that.
 dokku ps:set gh-runner stop-timeout-seconds 900
 
 # 6. Persistent pnpm store across ephemeral container lifetimes. CAS-safe
@@ -108,6 +108,16 @@ dokku logs gh-runner --tail 100
 **Crash-looping?** Most likely a bad `GH_PAT` (401 from token endpoint) or
 a revoked PAT. Check the entrypoint log line `→ Requesting registration
 token` followed by the response.
+
+**Stale `offline busy=true` runner blocking job dispatch?** Symptom: a job
+sits "in progress" for the full workflow `timeout-minutes` without ever
+emitting logs, and `gh api repos/<repo>/actions/runners` shows a runner
+with `status=offline` and `busy=true`. Cause: `docker stop` SIGKILLed an
+in-flight runner before the entrypoint's EXIT trap could deregister.
+Cancel the stuck workflow run (`gh run cancel`), wait for the registration
+to free, then `gh api -X DELETE .../runners/<id>`. Prevent recurrence by
+confirming `dokku ps:report gh-runner | grep stop-timeout` shows 900s —
+existing deploys must run setup step 5 once.
 
 **Updating the runner version:** bump `RUNNER_VERSION` in the Dockerfile
 and `git push dokku main`. Check

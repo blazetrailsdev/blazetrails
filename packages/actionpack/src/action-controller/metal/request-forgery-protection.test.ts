@@ -227,7 +227,7 @@ describe("P20b/P20c smoke", () => {
         method: "POST",
         baseUrl: "https://example.com",
         path: "/posts",
-        env: { "action_dispatch.request.csrf_token": generateCsrfToken() },
+        env: { "action_controller.csrf_token": generateCsrfToken() },
       },
       ...overrides,
     };
@@ -268,7 +268,7 @@ describe("P20b/P20c smoke", () => {
         method: "POST",
         baseUrl: "https://example.com",
         path: "/posts/",
-        env: { "action_dispatch.request.csrf_token": generateCsrfToken() },
+        env: { "action_controller.csrf_token": generateCsrfToken() },
       },
     });
     expect(isValidPerFormCsrfToken(c, perFormCsrfToken(c, null, "/posts", "POST"))).toBe(true);

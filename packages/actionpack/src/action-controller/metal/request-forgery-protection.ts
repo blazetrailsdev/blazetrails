@@ -327,7 +327,8 @@ export function isVerifiedRequest(controller: CsrfController): boolean {
 // ---------------------------------------------------------------------------
 
 const AUTHENTICITY_TOKEN_LENGTH = 32;
-const CSRF_TOKEN_ENV_KEY = "action_dispatch.request.csrf_token";
+// Rails: CSRF_TOKEN = "action_controller.csrf_token" (request_forgery_protection.rb:64).
+const CSRF_TOKEN_ENV_KEY = "action_controller.csrf_token";
 const GLOBAL_CSRF_TOKEN_IDENTIFIER = "!real_csrf_token";
 
 /** @internal */

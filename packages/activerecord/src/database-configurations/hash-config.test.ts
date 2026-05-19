@@ -99,8 +99,7 @@ describe("DatabaseConfigurations", () => {
         reapingFrequency: "0",
         adapter: "abstract",
       });
-      // Rails: 0.0; trails treats <=0 as nil for reaping_frequency (same rule as idle_timeout).
-      expect(config.reapingFrequency).toBeNull();
+      expect(config.reapingFrequency).toBe(0.0);
     });
 
     it("when no reaping frequency uses default", () => {
@@ -165,8 +164,7 @@ describe("DatabaseConfigurations", () => {
         schemaDump: false,
         adapter: "abstract",
       });
-      // Rails returns nil for both false and nil; trails preserves the literal false.
-      expect(config.schemaDump()).toBe(false);
+      expect(config.schemaDump()).toBeNull();
     });
 
     it("database tasks defaults to true", () => {

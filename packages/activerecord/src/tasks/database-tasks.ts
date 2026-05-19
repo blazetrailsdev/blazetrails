@@ -482,11 +482,26 @@ export class DatabaseTasks {
   /** @internal */
   static eachLocalConfiguration(): DatabaseConfig[] {
     if (!this.databaseConfiguration) return [];
-    return this.databaseConfiguration.configurations.filter((c) => {
-      if (!c.database) return false;
-      const host = c.host;
-      return !host || host === "localhost" || host === "127.0.0.1" || host === "::1";
-    });
+    const result: DatabaseConfig[] = [];
+    for (const c of this.databaseConfiguration.configurations) {
+      if (!c.database) continue;
+      if (this._localDatabase(c)) {
+        result.push(c);
+      } else {
+        const stderr = (globalThis as { process?: { stderr?: { write: (s: string) => unknown } } })
+          .process?.stderr;
+        stderr?.write?.(
+          `This task only modifies local databases. ${c.database} is on a remote host.\n`,
+        );
+      }
+    }
+    return result;
+  }
+
+  /** @internal */
+  static _localDatabase(c: DatabaseConfig): boolean {
+    const host = c.host;
+    return !host || host === "localhost" || host === "127.0.0.1" || host === "::1";
   }
 
   static cacheDumpFilename(

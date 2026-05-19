@@ -418,12 +418,14 @@ export function resetCycle(this: TextHelperHost, name = "default"): void {
 
 /** @internal */
 function getCycle(host: TextHelperHost, name: string): Cycle | undefined {
-  return host._cycles?.[name];
+  const cycles = host._cycles;
+  if (!cycles || !Object.hasOwn(cycles, name)) return undefined;
+  return cycles[name];
 }
 
 /** @internal */
 function setCycle(host: TextHelperHost, name: string, cycle: Cycle): Cycle {
-  host._cycles ??= {};
+  host._cycles ??= Object.create(null) as Record<string, Cycle>;
   host._cycles[name] = cycle;
   return cycle;
 }

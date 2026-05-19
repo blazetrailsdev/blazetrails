@@ -156,7 +156,11 @@ export function collectDirectImports(sf: ts.SourceFile, tsImport: string): Set<s
   return names;
 }
 
-function visitTopLevelFunctionExports(
+// Visits every top-level function declaration and function-valued
+// `const`/`let`/`var` binding, regardless of `export` modifier. We
+// include non-exported helpers because a same-file caller can still
+// reach them and inherit their dep usage transitively.
+function visitTopLevelFunctions(
   sf: ts.SourceFile,
   callback: (name: ts.Identifier, body: ts.Node, anchor: ts.Node) => void,
 ) {
@@ -178,7 +182,7 @@ function visitTopLevelFunctionExports(
 }
 
 /**
- * Find top-level exported functions in the package whose bodies (transitively)
+ * Find top-level functions in the package whose bodies (transitively)
  * reference tsImport. These act as "wrappers" — a method that calls
  * `executionContextId()` should get credit for using activesupport because
  * `executionContextId`'s body calls `getAsyncContext()`.
@@ -195,12 +199,21 @@ export function collectTaintedSymbols(
   const checker = program.getTypeChecker();
   const knownIds = new Set(tsIdentifiers);
   const tainted = new Set<ts.Symbol>();
+  const directCache = new Map<ts.SourceFile, Set<string>>();
+  const getDirect = (sf: ts.SourceFile): Set<string> => {
+    let s = directCache.get(sf);
+    if (!s) {
+      s = collectDirectImports(sf, tsImport);
+      directCache.set(sf, s);
+    }
+    return s;
+  };
 
   type Candidate = { sf: ts.SourceFile; name: ts.Identifier; body: ts.Node; anchor: ts.Node };
   const candidates: Candidate[] = [];
   for (const sf of program.getSourceFiles()) {
     if (!isPkgSourceFile(sf, pkgSrcDir)) continue;
-    visitTopLevelFunctionExports(sf, (name, body, anchor) => {
+    visitTopLevelFunctions(sf, (name, body, anchor) => {
       candidates.push({ sf, name, body, anchor });
     });
   }
@@ -211,9 +224,8 @@ export function collectTaintedSymbols(
     for (const { sf, name, body, anchor } of candidates) {
       const sym = checker.getSymbolAtLocation(name);
       if (!sym || tainted.has(sym)) continue;
-      const direct = collectDirectImports(sf, tsImport);
       if (
-        methodUsesDepImport(body, direct, knownIds, dep, sf, anchor, {
+        methodUsesDepImport(body, getDirect(sf), knownIds, dep, sf, anchor, {
           checker,
           taintedSymbols: tainted,
         })

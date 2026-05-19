@@ -307,6 +307,7 @@ export class Relation<T extends Base> {
 
   private _table: Table | null = null;
 
+  // lint-deps-ignore: arel — table/predicateBuilder are caller-supplied (built via arelTable in callers)
   constructor(modelClass: typeof Base, table?: Table, predicateBuilder?: PredicateBuilder) {
     this._modelClass = modelClass;
     if (table) {

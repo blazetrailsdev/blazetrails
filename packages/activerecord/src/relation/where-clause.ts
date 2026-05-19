@@ -145,6 +145,7 @@ export class WhereClause {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+// lint-deps-ignore: arel — delegates to Node#invert(); Not/SqlLiteral construction lives in Arel
 /** @internal */
 function invertPredicate(node: Nodes.Node): Nodes.Node {
   return node.invert();

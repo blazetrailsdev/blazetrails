@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -192,8 +192,17 @@ describe("isImportFromPackage", () => {
 });
 
 describe("collectTaintedSymbols — transitive dep usage", () => {
+  const tmpDirs: string[] = [];
+  afterEach(() => {
+    while (tmpDirs.length) {
+      const d = tmpDirs.pop()!;
+      fs.rmSync(d, { recursive: true, force: true });
+    }
+  });
+
   function writePkg(files: Record<string, string>): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lint-deps-"));
+    tmpDirs.push(dir);
     for (const [rel, content] of Object.entries(files)) {
       const full = path.join(dir, rel);
       fs.mkdirSync(path.dirname(full), { recursive: true });

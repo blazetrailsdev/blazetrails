@@ -23,11 +23,13 @@ Neumann, Tim Fletcher"). Trails' `packages/*/src` is MIT (see
 - Add a top-of-file attribution comment in `levenshtein.ts` and
   `jaro-winkler.ts` naming `ruby/did_you_mean` (and Text-gem authors for
   Levenshtein) as the upstream source.
-- Add a `packages/did-you-mean/NOTICE` (or extend `LICENSES.md`'s
-  third-party-notices section) with the upstream MIT license text and
-  the Text-gem copyright line. Pick whichever convention this repo
-  already uses for vendored algorithms — check `vendor/` and
-  `packages/*/NOTICE*` before authoring.
+- Add a new `packages/did-you-mean/NOTICE` file with the upstream MIT
+  license text and the Text-gem copyright line. (`LICENSES.md` today
+  has no third-party-notices section — don't try to "extend" one that
+  doesn't exist; either create a NOTICE per-package, or add a new
+  "Third-party code" section to `LICENSES.md` if that's the route the
+  reviewer prefers. Default to the per-package NOTICE so future
+  vendored ports follow the same pattern.)
 
 ## Package home
 
@@ -72,7 +74,7 @@ From `grep -rn DidYouMean vendor/rails`:
 | Call site (vendor/rails path)                                                                                                                                                                           | What it suggests          | trails status today                                                                                                                                                   |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `actionpack/lib/abstract_controller/base.rb` — `ActionNotFound#corrections`                                                                                                                             | controller action names   | `packages/actionpack/src/abstract-controller/base.ts:26` — `ActionNotFound` has no `corrections`                                                                      |
-| `actionpack/lib/action_controller/metal/exceptions.rb` — `UrlGenerationError#corrections`                                                                                                               | route name dictionary     | not yet ported                                                                                                                                                        |
+| `actionpack/lib/action_controller/metal/exceptions.rb` — `UrlGenerationError#corrections`                                                                                                               | route name dictionary     | `packages/actionpack/src/action-controller/metal/exceptions.ts:59` ships a substring-match suggestion (not SpellChecker) — should be replaced with `SpellChecker`     |
 | `actionpack/lib/action_controller/metal/strong_parameters.rb` — `ParameterMissing#corrections`                                                                                                          | permitted-keys dictionary | `strong-parameters.ts:23-31` ships an inline Levenshtein ≤2 helper on `ParameterMissing` — should be replaced by `SpellChecker`                                       |
 | `activerecord/lib/active_record/associations/errors.rb` — `AssociationNotFoundError#corrections`, `InverseOfAssociationNotFoundError#corrections`, `HasManyThroughAssociationNotFoundError#corrections` | reflection names          | `packages/activerecord/src/associations.ts` + `reflection.ts` use an ad-hoc `levenshtein()` with `≤3` threshold (only covers two of the three error types faithfully) |
 | `actionview/lib/action_view/template/error.rb` — `Template::Error#corrections` (uses raw `DidYouMean::Jaro.distance`)                                                                                   | template virtual paths    | not yet ported — needs `Jaro.distance` exported, not just `SpellChecker`                                                                                              |
@@ -86,7 +88,7 @@ So the consumers we actually need to wire up after the port lands:
 2. **ParameterMissing#corrections** (replaces existing inline Levenshtein)
 3. **AssociationNotFoundError / InverseOfAssociationNotFoundError / HasManyThroughAssociationNotFoundError `#corrections`** (replaces existing `levenshtein()` ad-hoc helpers in `associations.ts` and `reflection.ts`)
 4. **Template::Error#corrections** (needs `jaroDistance` exported)
-5. **UrlGenerationError#corrections** (new, when route exceptions are ported)
+5. **UrlGenerationError#corrections** (replaces the existing substring-match suggestion in `exceptions.ts:59` with a `SpellChecker` call against `namedRoutes.helperNames`)
 
 Each becomes its own follow-up PR after the port.
 

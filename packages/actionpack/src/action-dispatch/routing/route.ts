@@ -241,9 +241,13 @@ export class Route {
         return;
       }
       if (n.isSymbol?.()) {
-        // `Object.hasOwn` so captures named `constructor`/`toString` don't
-        // read inherited truthy values off `Object.prototype` and inflate the score.
-        if (!nested) s += Object.hasOwn(knowledge, n.toSym!()) ? 2 : 1;
+        // Preserve the original truthy-gate (`knowledge[name] ? 2 : 1`)
+        // while avoiding prototype-chain reads: own-property + truthy.
+        // Otherwise a capture named `constructor`/`toString` would inherit
+        // a truthy function from `Object.prototype` and boost the score.
+        const name = n.toSym!();
+        const known = Object.hasOwn(knowledge, name) && knowledge[name];
+        if (!nested) s += known ? 2 : 1;
         return;
       }
     };

@@ -63,6 +63,8 @@ import { ForeignAssociation } from "./associations/foreign-association.js";
 import { AssociationScope, invokeScopeLambda } from "./associations/association-scope.js";
 import type { Association as AssociationInstance } from "./associations/association.js";
 import { validateThroughReflection } from "./associations/validate-through-reflection.js";
+import { joinTableName as joinHabtmTableNames } from "./migration/join-table.js";
+export { joinTableName as joinHabtmTableNames } from "./migration/join-table.js";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { getInheritanceColumn, findStiClass } from "./inheritance.js";
 import { flushPendingCounterCacheColumns } from "./counter-cache.js";
@@ -1646,14 +1648,6 @@ function defaultJoinTableName(
 // underscores, so do the same when the target model isn't registered yet.
 function fallbackTableName(name: string): string {
   return underscore(pluralize(name)).replace(/\//g, "_");
-}
-
-/** @internal */
-export function joinHabtmTableNames(a: string, b: string): string {
-  const sorted = [a, b].sort();
-  const joined = sorted.join("\0");
-  const collapsed = joined.replace(/^(.*[._])(.+)\0\1(.+)/, "$1$2_$3");
-  return collapsed.replace(/\0/g, "_");
 }
 
 /**

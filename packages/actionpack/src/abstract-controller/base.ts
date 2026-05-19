@@ -188,18 +188,22 @@ export class AbstractController {
         chain.push(...(klass as any)._callbacks);
       }
     }
-    // Dedup by `options.name`: when a subclass registers a callback with
-    // the same name, drop the inherited entry. Mirrors AS::Callbacks
-    // identifying callbacks by symbol — `before_action :first, ...` in a
-    // child replaces the parent's `:first` registration.
-    const overriddenNames = new Set<string>();
+    // Dedup by (`options.name`, `type`): when a subclass registers a
+    // callback with the same name and kind, drop the inherited entry.
+    // Mirrors AS::Callbacks CallbackChain#remove_duplicates, which
+    // matches on Callback#duplicates? (same filter + same kind) — so
+    // `before_action :first` and `after_action :first` coexist, but a
+    // child's `before_action :first, except: :index` replaces the
+    // parent's `before_action :first`.
+    const seen = new Set<string>();
     for (let i = chain.length - 1; i >= 0; i--) {
-      const name = chain[i]!.options.name;
-      if (name === undefined) continue;
-      if (overriddenNames.has(name)) {
+      const entry = chain[i]!;
+      if (entry.options.name === undefined) continue;
+      const key = `${entry.type}\0${entry.options.name}`;
+      if (seen.has(key)) {
         chain.splice(i, 1);
       } else {
-        overriddenNames.add(name);
+        seen.add(key);
       }
     }
     return chain;

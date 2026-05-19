@@ -1473,7 +1473,7 @@ describe("UniquenessWithCompositeKey", () => {
     const adp = await freshAdapterCompositeOrders();
     class Order extends Base {
       static {
-        this.attribute("price", "float");
+        this.attribute("price", "decimal");
         this.attribute("code", "string");
         this.adapter = adp;
         this.validatesUniqueness("code", { scope: "price" });

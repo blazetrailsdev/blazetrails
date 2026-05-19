@@ -156,15 +156,16 @@ export class ContentSecurityPolicy {
   reportTo(...sources: CSPSource[]): this {
     return this.setDirective("report-to", sources);
   }
-  blockAllMixedContent(enabled = true): this {
-    if (!enabled) {
+  blockAllMixedContent(enabled: boolean | null = true): this {
+    // Rails `if enabled`: only nil/false delete; numeric/empty-string stay truthy.
+    if (enabled === false || enabled == null) {
       this.directives.delete("block-all-mixed-content");
       return this;
     }
     return this.setDirective("block-all-mixed-content", []);
   }
-  upgradeInsecureRequests(enabled = true): this {
-    if (!enabled) {
+  upgradeInsecureRequests(enabled: boolean | null = true): this {
+    if (enabled === false || enabled == null) {
       this.directives.delete("upgrade-insecure-requests");
       return this;
     }

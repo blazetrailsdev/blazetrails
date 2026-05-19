@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { I18n, Error as ModelError } from "@blazetrails/activemodel";
 import {
   Base,
@@ -18,6 +18,7 @@ import { Associations, setBelongsTo, association, loadHasManyThrough } from "./a
 import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
 import { defineSchema, type Schema } from "./test-helpers/define-schema.js";
 import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
+import type { DatabaseAdapter } from "./adapter.js";
 import {
   markForDestruction,
   isMarkedForDestruction,
@@ -1474,15 +1475,14 @@ describe("TestDefaultAutosaveAssociationOnAHasOneAssociation", () => {
 });
 
 describe("TestAutosaveAssociationOnAHasOneAssociation", () => {
-  let adapter: TestDatabaseAdapter;
+  let adapter: DatabaseAdapter;
   function cacheAssoc(record: Base, name: string, value: unknown) {
     if (!(record as any)._cachedAssociations) (record as any)._cachedAssociations = new Map();
     (record as any)._cachedAssociations.set(name, value);
   }
-  beforeAll(async () => {
+  beforeEach(async () => {
     adapter = await setupAutosaveAdapter();
   });
-  withTransactionalFixtures(() => adapter);
 
   function makeModels() {
     class Pirate extends Base {

@@ -5,7 +5,7 @@ import { Temporal } from "@blazetrails/activesupport/temporal";
  */
 // Side-effect: registers encryptionHooks so Base.encrypts() is wired up.
 import "./encryption.js";
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import {
   Base,
   association,
@@ -23,7 +23,9 @@ import type { JoinDependency } from "./associations/join-dependency.js";
 import { lookupCastTypeFromJoinDependencies } from "./relation/calculations.js";
 import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
+import type { DatabaseAdapter } from "./adapter.js";
 import { runBeforeCallbacksOnProto, runAfterCallbacksOnProto } from "@blazetrails/activemodel";
 import { setApp, _resetApp } from "@blazetrails/globalid";
 
@@ -2825,9 +2827,9 @@ describe("CalculationsTest", () => {
 });
 
 describe("CalculationsTest", () => {
-  let adapter: TestDatabaseAdapter;
+  let adapter: DatabaseAdapter;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     adapter = freshAdapter();
     await defineSchema(adapter, {
       accounts: { balance: "integer" },
@@ -2891,7 +2893,10 @@ describe("CalculationsTest", () => {
       vehicles: { name: "string", type: "string" },
     });
   });
-  withTransactionalFixtures(() => adapter);
+
+  afterAll(async () => {
+    await dropAllTables(adapter);
+  });
 
   // Rails: test "group count"
   it("group().count() returns counts keyed by group value", async () => {

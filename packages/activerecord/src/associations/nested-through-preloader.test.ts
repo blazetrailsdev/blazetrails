@@ -177,6 +177,34 @@ describe("HMT Slot D — nested-through preloader / STI / joins+includes", () =>
     expect(preloaded.map((r: any) => r.id).sort()).toEqual([r1.id, r2.id, r3.id].sort());
   });
 
+  it.skip("joins() on a nested-through chain emits intermediates and accepts where on the target table", async () => {
+    // BLOCKED: associations — JoinDependency nested-through chaining.
+    // Author -> Posts -> Comments -> Ratings. JOINing `ntdAllRatings`
+    // emits `ntd_comments` joined on `ntd_comments.ntd_author_id`
+    // instead of walking through `ntd_posts` first; the inner
+    // through (`ntdAllComments`) is not flattened by JoinDependency.
+    // Verifies JoinDependency, not the preloader.
+    // Author -> Posts -> Comments -> Ratings. JOINing `ntdAllRatings`
+    // must traverse both the direct-through (ntdPosts) and the inner
+    // through (ntdAllComments) so a where-clause on the final
+    // ntd_ratings table resolves against the chained join, not a
+    // dangling reference. JoinDependency, not the preloader, drives
+    // this path; the preload-based tests above don't cover it.
+    const { a } = await seed();
+    const matched = await NtdAuthor.all()
+      .joins("ntdAllRatings")
+      .where({ "ntd_ratings.value": 7 })
+      .distinct()
+      .toArray();
+    expect(matched.map((row: any) => row.id)).toEqual([a.id]);
+
+    const none = await NtdAuthor.all()
+      .joins("ntdAllRatings")
+      .where({ "ntd_ratings.value": 999 })
+      .toArray();
+    expect(none).toHaveLength(0);
+  });
+
   it("STI subclass instances flow through the nested-through chain with the correct type", async () => {
     const a = await NtdAuthor.create({ name: "sti" });
     const p = (await NtdPost.create({ ntd_author_id: a.id, title: "sp" })) as any;

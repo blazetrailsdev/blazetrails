@@ -465,6 +465,9 @@ describe("Response Cache::Response wiring", () => {
     expect(res.isWeakEtag()).toBe(true);
     expect(res.isStrongEtag()).toBe(false);
     expect(res.hasEtag).toBe(true);
+    // Case-insensitive read: same value via any casing.
+    expect(res.getHeader("etag")).toBe(e);
+    expect(res.getHeader("ETAG")).toBe(e);
   });
 
   it("setStrongEtag writes an unprefixed digest", () => {
@@ -500,6 +503,23 @@ describe("Response Cache::Response wiring", () => {
     res.setWeakEtag("v1");
     res.handleConditionalGet();
     expect(res.getHeader("Cache-Control")).toBe("max-age=0, private, must-revalidate");
+    expect(res.getHeader("cache-control")).toBe("max-age=0, private, must-revalidate");
+  });
+
+  it("lastModified = undefined clears the Last-Modified header", () => {
+    const res = new Response();
+    res.lastModified = new Date("1994-11-06T08:49:37Z");
+    res.lastModified = undefined;
+    expect(res.hasLastModified).toBe(false);
+    expect(res.lastModified).toBeUndefined();
+  });
+
+  it("date = undefined clears the Date header", () => {
+    const res = new Response();
+    res.date = new Date("1994-11-06T08:49:37Z");
+    res.date = undefined;
+    expect(res.hasDate).toBe(false);
+    expect(res.date).toBeUndefined();
   });
 
   it("handleConditionalGet is a no-op when Cache-Control is already set", () => {

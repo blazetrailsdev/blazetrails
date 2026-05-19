@@ -94,7 +94,13 @@ export class Response {
   }
 
   getHeader(key: string): string | undefined {
-    return this._headers[key.toLowerCase()] ?? this._headers[key];
+    const direct = this._headers[key] ?? this._headers[key.toLowerCase()];
+    if (direct !== undefined) return direct;
+    const lower = key.toLowerCase();
+    for (const k of Object.keys(this._headers)) {
+      if (k.toLowerCase() === lower) return this._headers[k];
+    }
+    return undefined;
   }
 
   setHeader(key: string, value: string): void {
@@ -328,8 +334,9 @@ Object.defineProperty(Response.prototype, "lastModified", {
   get(this: Response) {
     return _getLastModified.call(this);
   },
-  set(this: Response, t: Date) {
-    _setLastModified.call(this, t);
+  set(this: Response, t: Date | undefined) {
+    if (t === undefined) this.deleteHeader("Last-Modified");
+    else _setLastModified.call(this, t);
   },
   configurable: true,
 });
@@ -343,8 +350,9 @@ Object.defineProperty(Response.prototype, "date", {
   get(this: Response) {
     return _getDate.call(this);
   },
-  set(this: Response, t: Date) {
-    _setDate.call(this, t);
+  set(this: Response, t: Date | undefined) {
+    if (t === undefined) this.deleteHeader("Date");
+    else _setDate.call(this, t);
   },
   configurable: true,
 });

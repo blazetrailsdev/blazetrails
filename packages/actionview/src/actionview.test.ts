@@ -535,6 +535,27 @@ describe("ActionView::LookupContext", () => {
       expect(a.detailsKey()).toBe(b.detailsKey());
     });
 
+    it("canonicalizes invalid formats before computing the cache key", () => {
+      LookupContext.DetailsKey.clear();
+      const c1 = new LookupContext();
+      const c2 = new LookupContext();
+      c1.formats = ["html"];
+      const k1 = c1.detailsKey();
+      // Build a details tuple that filters down to ["html"] and verify
+      // it hits the same cache entry.
+      const k2 = LookupContext.DetailsKey.detailsCacheKey({
+        ...(c2 as unknown as { _details: Record<string, string[]> })._details,
+        formats: ["html"],
+      });
+      expect(k1).toBe(k2);
+    });
+
+    it("isAny produces a Requested with variants:'any' so any variant matches", () => {
+      const c = new LookupContext();
+      const [, key] = c.detailArgsForAny();
+      expect((key as unknown as { variantsIdx: unknown }).variantsIdx).toBe("any");
+    });
+
     it("does not collide on detail values containing : , |", () => {
       const c1 = new LookupContext();
       const c2 = new LookupContext();

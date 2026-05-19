@@ -105,20 +105,21 @@ export class DetailsKey {
 
   /** Canonical Requested object for a given detail tuple. */
   static detailsCacheKey(details: DetailsMap): Requested {
-    const key = DetailsKey._stableKey(details);
-    let req = DetailsKey._detailsKeys.get(key);
-    if (req) return req;
     let formats = details.formats;
     if (formats && !formats.every((f) => typeof f === "string" && VALID_FORMAT_SYMBOLS.has(f))) {
       formats = formats.filter(
         (f) => typeof f === "string" && VALID_FORMAT_SYMBOLS.has(f),
       ) as DetailValue;
     }
+    const normalized: DetailsMap = { ...details, formats: formats ?? [] };
+    const key = DetailsKey._stableKey(normalized);
+    let req = DetailsKey._detailsKeys.get(key);
+    if (req) return req;
     req = new Requested({
-      locale: details.locale ?? [],
-      handlers: details.handlers ?? [],
-      formats: formats ?? [],
-      variants: details.variants ?? [],
+      locale: normalized.locale ?? [],
+      handlers: normalized.handlers ?? [],
+      formats: normalized.formats ?? [],
+      variants: normalized.variants ?? [],
     });
     DetailsKey._detailsKeys.set(key, req);
     return req;
@@ -450,9 +451,21 @@ export class LookupContext {
     if (this._detailArgsForAny) return this._detailArgsForAny;
     const details: DetailsMap = {};
     for (const k of REGISTERED_DETAILS) {
-      details[k] = k === "variants" ? ["*"] : DEFAULT_PROCS[k]();
+      details[k] = DEFAULT_PROCS[k]();
     }
-    const key = this._detailsCache ? DetailsKey.detailsCacheKey(details) : null;
+    // Rails passes `variants: :any` here; the canonical Requested uses
+    // a sentinel-array branch ("any") that matches every variant. We
+    // bypass DetailsKey._detailsKeys for this special form since
+    // `Requested.variantsIdx === "any"` is not representable in the
+    // DetailsMap.
+    const key = this._detailsCache
+      ? new Requested({
+          locale: details.locale,
+          handlers: details.handlers,
+          formats: details.formats,
+          variants: "any",
+        })
+      : null;
     this._detailArgsForAny = [details, key];
     return this._detailArgsForAny;
   }

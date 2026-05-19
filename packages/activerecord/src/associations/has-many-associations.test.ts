@@ -260,7 +260,7 @@ describe("HasManyAssociationsTestForReorderWithJoinDependency", () => {
   });
 });
 
-describe("HasManyAssociationsTest polymorphic", () => {
+describe("HasManyAssociationsTest", () => {
   let adapter: TestDatabaseAdapter;
 
   beforeAll(async () => {

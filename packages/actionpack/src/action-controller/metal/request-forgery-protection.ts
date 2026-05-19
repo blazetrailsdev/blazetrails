@@ -198,7 +198,7 @@ export function skipForgeryProtection(
 export interface CsrfRequest {
   method: string;
   origin?: string | null;
-  baseUrl?: string | null;
+  baseUrl: string;
   path?: string;
   mediaType?: string | null;
   xhr?: boolean;
@@ -308,19 +308,21 @@ export function normalizeRelativeActionPath(relActionPath: string, requestPath: 
 
 /** @internal */
 export function normalizeActionPath(actionPath: string, requestPath: string): string {
+  // Mirrors Ruby's URI.parse: relative inputs without a leading "/" pass
+  // through unparsed; absolute paths, protocol-relative ("//host/x"), and
+  // absolute URLs all have their `.pathname` extracted (using a dummy base
+  // so the URL constructor accepts the schemeless cases).
+  if (actionPath === "" || !actionPath.startsWith("/")) {
+    const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+    if (!SCHEME_RE.test(actionPath)) {
+      return normalizeRelativeActionPath(actionPath, requestPath);
+    }
+  }
   let parsedPath: string;
-  let isRelative: boolean;
   try {
-    const url = new URL(actionPath);
-    parsedPath = url.pathname;
-    isRelative = false;
+    parsedPath = new URL(actionPath, "http://_placeholder_").pathname;
   } catch {
     parsedPath = actionPath;
-    isRelative = true;
-  }
-
-  if (isRelative && (actionPath === "" || !actionPath.startsWith("/"))) {
-    return normalizeRelativeActionPath(parsedPath, requestPath);
   }
   return parsedPath.endsWith("/") && parsedPath.length > 1 ? parsedPath.slice(0, -1) : parsedPath;
 }

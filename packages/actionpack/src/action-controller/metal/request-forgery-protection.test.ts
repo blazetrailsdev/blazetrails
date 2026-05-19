@@ -67,11 +67,11 @@ describe("isValidRequestOrigin", () => {
 
 describe("markForSameOriginVerificationBang / isMarkedForSameOriginVerification", () => {
   it("sets the flag based on GET", () => {
-    const get = controller({ request: { method: "GET" } });
+    const get = controller({ request: { method: "GET", baseUrl: "https://example.com" } });
     markForSameOriginVerificationBang(get);
     expect(isMarkedForSameOriginVerification(get)).toBe(true);
 
-    const post = controller({ request: { method: "POST" } });
+    const post = controller({ request: { method: "POST", baseUrl: "https://example.com" } });
     markForSameOriginVerificationBang(post);
     expect(isMarkedForSameOriginVerification(post)).toBe(false);
   });
@@ -84,19 +84,30 @@ describe("isNonXhrJavascriptResponse", () => {
   it("matches text/ and application/javascript when not xhr", () => {
     for (const mediaType of ["text/javascript", "application/javascript"]) {
       expect(
-        isNonXhrJavascriptResponse(controller({ request: { method: "GET", mediaType } })),
+        isNonXhrJavascriptResponse(
+          controller({ request: { method: "GET", baseUrl: "https://example.com", mediaType } }),
+        ),
       ).toBe(true);
     }
   });
   it("is false when xhr or non-js media type", () => {
     expect(
       isNonXhrJavascriptResponse(
-        controller({ request: { method: "GET", mediaType: "text/javascript", xhr: true } }),
+        controller({
+          request: {
+            method: "GET",
+            baseUrl: "https://example.com",
+            mediaType: "text/javascript",
+            xhr: true,
+          },
+        }),
       ),
     ).toBe(false);
     expect(
       isNonXhrJavascriptResponse(
-        controller({ request: { method: "GET", mediaType: "text/html" } }),
+        controller({
+          request: { method: "GET", baseUrl: "https://example.com", mediaType: "text/html" },
+        }),
       ),
     ).toBe(false);
   });
@@ -106,16 +117,46 @@ describe("verifySameOriginRequest", () => {
   it("raises when marked + non-xhr js response", () => {
     const c = controller({
       _markedForSameOriginVerification: true,
-      request: { method: "GET", mediaType: "text/javascript" },
+      request: { method: "GET", baseUrl: "https://example.com", mediaType: "text/javascript" },
     });
     expect(() => verifySameOriginRequest(c)).toThrow(InvalidCrossOriginRequest);
   });
   it("no-ops when not marked", () => {
     expect(() =>
       verifySameOriginRequest(
-        controller({ request: { method: "GET", mediaType: "text/javascript" } }),
+        controller({
+          request: {
+            method: "GET",
+            baseUrl: "https://example.com",
+            mediaType: "text/javascript",
+          },
+        }),
       ),
     ).not.toThrow();
+  });
+
+  it("warns via logger when raising", () => {
+    const calls: string[] = [];
+    const c = controller({
+      _markedForSameOriginVerification: true,
+      request: { method: "GET", baseUrl: "https://example.com", mediaType: "text/javascript" },
+      logger: { warn: (m) => calls.push(m) },
+    });
+    expect(() => verifySameOriginRequest(c)).toThrow(InvalidCrossOriginRequest);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatch(/Security warning/);
+  });
+
+  it("suppresses logger warning when logWarningOnCsrfFailure is false", () => {
+    const calls: string[] = [];
+    const c = controller({
+      _markedForSameOriginVerification: true,
+      request: { method: "GET", baseUrl: "https://example.com", mediaType: "text/javascript" },
+      logger: { warn: (m) => calls.push(m) },
+      logWarningOnCsrfFailure: false,
+    });
+    expect(() => verifySameOriginRequest(c)).toThrow(InvalidCrossOriginRequest);
+    expect(calls).toHaveLength(0);
   });
 });
 
@@ -141,8 +182,14 @@ describe("unverifiedRequestWarningMessage", () => {
 describe("isVerifiedRequest", () => {
   it("returns true when protection is disabled or method is GET/HEAD", () => {
     expect(isVerifiedRequest(controller({ allowForgeryProtection: false }))).toBe(true);
-    expect(isVerifiedRequest(controller({ request: { method: "GET" } }))).toBe(true);
-    expect(isVerifiedRequest(controller({ request: { method: "HEAD" } }))).toBe(true);
+    expect(
+      isVerifiedRequest(controller({ request: { method: "GET", baseUrl: "https://example.com" } })),
+    ).toBe(true);
+    expect(
+      isVerifiedRequest(
+        controller({ request: { method: "HEAD", baseUrl: "https://example.com" } }),
+      ),
+    ).toBe(true);
   });
   it("requires valid origin and token for POST", () => {
     expect(isVerifiedRequest(controller({ isAnyAuthenticityTokenValid: () => true }))).toBe(true);
@@ -158,6 +205,9 @@ describe("normalizeActionPath / normalizeRelativeActionPath", () => {
   });
   it("extracts path from full URL", () => {
     expect(normalizeActionPath("https://example.com/foo/", "/current")).toBe("/foo");
+  });
+  it("extracts path from protocol-relative URL", () => {
+    expect(normalizeActionPath("//example.com/foo/", "/current")).toBe("/foo");
   });
   it("joins relative paths onto request path and collapses /./", () => {
     expect(normalizeActionPath("bar", "/foo")).toBe("/foo/bar");

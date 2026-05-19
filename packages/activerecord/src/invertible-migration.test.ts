@@ -481,8 +481,7 @@ describe("Reversible Migrations", () => {
 
     // Down — drops the table
     await migration.run(adapter, "down");
-    // Table was dropped; SchemaAdapter returns empty rows on a missing-table select.
-    const afterDrop = await adapter.execute(`SELECT * FROM "posts"`);
-    expect(afterDrop).toHaveLength(0);
+    // Table was dropped; selecting from it now raises.
+    await expect(adapter.execute(`SELECT * FROM "posts"`)).rejects.toThrow(/no such table|posts/);
   });
 });

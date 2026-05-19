@@ -484,11 +484,20 @@ describe("Reversible Migrations", () => {
     // Table was dropped; selecting from it raises (auto-schema off) or
     // returns empty rows (auto-schema on, pre-Phase-7). Only swallow the
     // missing-table error so unrelated failures still surface.
-    const afterDrop = await adapter.execute(`SELECT * FROM "posts"`).catch((e: unknown) => {
-      const msg = String((e as Error)?.message ?? e);
-      if (/no such table|does not exist|doesn't exist/i.test(msg)) return [] as unknown[];
-      throw e;
-    });
+    const afterDrop = await adapter
+      .execute(`SELECT * FROM "posts"`)
+      .catch((e: unknown): Record<string, unknown>[] => {
+        const msg = String((e as Error)?.message ?? e);
+        // Mirrors the table-missing patterns in test-adapter.ts handleMissingSchemaError.
+        if (
+          /relation "\w+" does not exist|Table '(?:\w+\.)?\w+' doesn't exist|no such table:/i.test(
+            msg,
+          )
+        ) {
+          return [];
+        }
+        throw e;
+      });
     expect(afterDrop).toHaveLength(0);
   });
 });

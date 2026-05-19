@@ -195,11 +195,10 @@ export class ContentSecurityPolicy {
    * keyword in [[MAPPINGS]] or throws.
    */
   private applyMapping(source: string): string {
-    const mapped = MAPPINGS[source as keyof typeof MAPPINGS] as string | undefined;
-    if (mapped === undefined) {
+    if (!Object.hasOwn(MAPPINGS, source)) {
       throw new TypeError(`Unknown content security policy source mapping: ${source}`);
     }
-    return mapped;
+    return MAPPINGS[source as keyof typeof MAPPINGS];
   }
 
   /**

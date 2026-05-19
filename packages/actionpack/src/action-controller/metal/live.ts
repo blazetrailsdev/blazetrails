@@ -321,7 +321,7 @@ export async function process(
 }
 
 /** Mirrors `ActionController::Live#response_body=`. */
-export function setResponseBody(this: LiveControllerHost, body: string): void {
+export function responseBody(this: LiveControllerHost, body: string): void {
   this.response.body = body;
   this.response.close();
 }

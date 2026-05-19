@@ -14,7 +14,7 @@ import {
   originalNewControllerThread,
   process,
   sendStream,
-  setResponseBody,
+  responseBody,
 } from "./live.js";
 
 function makeResponse() {
@@ -255,7 +255,7 @@ describe("ActionController::Live#process", () => {
 describe("ActionController::Live#response_body=", () => {
   it("assigns the body and closes the response", () => {
     const host = makeHost();
-    setResponseBody.call(host, "payload");
+    responseBody.call(host, "payload");
     expect(host.response.body).toBe("payload");
     expect(host.response.committed).toBe(true);
   });

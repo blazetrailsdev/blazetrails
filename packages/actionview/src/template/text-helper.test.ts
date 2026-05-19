@@ -19,7 +19,8 @@ import { raw } from "../helpers/output-safety-helper.js";
 
 // Mirrors actionview/test/template/text_helper_test.rb. truncate / pluralize /
 // wordWrap / simpleFormat / highlight / excerpt / cycle / current_cycle /
-// reset_cycle / concat / safe_concat are covered.
+// reset_cycle / concat are covered. (Rails has no safe_concat test;
+// behavior is exercised in buffers.test.ts.)
 
 function newHost(initial = ""): TextHelperHost {
   return { outputBuffer: new OutputBuffer(initial) };

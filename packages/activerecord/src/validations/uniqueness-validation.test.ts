@@ -1413,7 +1413,7 @@ describe("UniquenessWithCompositeKey", () => {
   });
 
   it("uniqueness validation composite key with empty string", async () => {
-    const adp = await freshAdapterCompositeOrders();
+    const adp = await freshAdapterCompositeOrders2();
     class Order extends Base {
       static {
         this.attribute("shop_id", "string");

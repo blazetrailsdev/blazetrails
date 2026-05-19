@@ -206,8 +206,9 @@ Estimated LOC (source + tests, plus standalone-package scaffolding):
 the scaffolding (package.json, tsconfig, root README stub, pnpm-workspace
 recognition) wants to land together with at least one working module so
 the package isn't a hollow build target, and the Wave-1 PR has to add the
-package to any aggregate scripts that enumerate workspaces. Two PRs
-instead of three:
+package to any aggregate scripts that enumerate workspaces. Still three
+PRs, but the first now bundles the package scaffolding with the
+pure-math modules instead of landing it standalone:
 
 - **PR 1 (~290 LOC):** scaffold `packages/did-you-mean/` (package.json,
   tsconfig, dx-tests dir matching globalid's layout) + `levenshtein.ts` +

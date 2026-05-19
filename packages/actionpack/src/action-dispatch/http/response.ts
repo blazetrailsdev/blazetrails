@@ -10,13 +10,13 @@ import {
   type CacheControlHash,
   cacheControl as _cacheControl,
   getDate as _getDate,
-  getEtag as _getEtag,
   getLastModified as _getLastModified,
   handleConditionalGet as _handleConditionalGet,
   hasDate as _hasDate,
   hasEtag as _hasEtag,
   hasLastModified as _hasLastModified,
   isStrongEtag as _isStrongEtag,
+  mergeAndNormalizeCacheControl as _mergeAndNormalizeCacheControl,
   isWeakEtag as _isWeakEtag,
   setDate as _setDate,
   setLastModified as _setLastModified,
@@ -98,11 +98,22 @@ export class Response {
   }
 
   setHeader(key: string, value: string): void {
+    // Headers are logically case-insensitive (Rack response semantics).
+    // Clear any other-case entry so reads through `getHeader` / accessors
+    // can't return a stale value written under a different case.
+    const lower = key.toLowerCase();
+    if (lower !== key && lower in this._headers) delete this._headers[lower];
+    for (const k of Object.keys(this._headers)) {
+      if (k !== key && k.toLowerCase() === lower) delete this._headers[k];
+    }
     this._headers[key] = value;
   }
 
   deleteHeader(key: string): void {
-    delete this._headers[key];
+    const lower = key.toLowerCase();
+    for (const k of Object.keys(this._headers)) {
+      if (k === key || k.toLowerCase() === lower) delete this._headers[k];
+    }
   }
 
   // --- Content type ---
@@ -220,13 +231,21 @@ export class Response {
     return result;
   }
 
-  // --- Cache-Control ---
+  // --- Cache-Control (raw string accessor; Rails aliases this as `_cache_control`) ---
 
-  get cacheControl(): string | undefined {
+  /**
+   * Raw `Cache-Control` header value. Mirrors Rails'
+   * `Response#_cache_control` alias (`Rack::Response::Helpers#cache_control`),
+   * which is the un-parsed header string. The parsed directive hash is
+   * exposed via {@link cacheControl} (wired below from `Cache::Response`).
+   *
+   * @internal
+   */
+  get _cacheControl(): string | undefined {
     return this._headers["cache-control"] ?? this._headers["Cache-Control"];
   }
 
-  set cacheControl(value: string | undefined) {
+  set _cacheControl(value: string | undefined) {
     if (value) {
       this._headers["cache-control"] = value;
     } else {
@@ -237,30 +256,23 @@ export class Response {
 
   // --- ETag ---
 
+  /** Mirrors Rails' `Cache::Response#etag` reader — returns the `ETag` header. */
   get etag(): string | undefined {
     return this._headers["etag"] ?? this._headers["ETag"];
   }
 
-  set etag(value: string | undefined) {
-    if (value) {
-      // Ensure proper quoting
-      if (!value.startsWith('"') && !value.startsWith('W/"')) {
-        value = `"${value}"`;
-      }
-      this._headers["etag"] = value;
-    } else {
+  /**
+   * Mirrors Rails' `Cache::Response#etag=` — delegates to
+   * {@link setWeakEtag}, which hashes `validators` into a weak validator
+   * (`W/"<md5>"`). Pass `undefined` to delete the header.
+   */
+  set etag(value: unknown) {
+    if (value === undefined) {
       delete this._headers["etag"];
       delete this._headers["ETag"];
+      return;
     }
-  }
-
-  get weakEtag(): boolean {
-    return this.etag?.startsWith('W/"') ?? false;
-  }
-
-  get strongEtag(): boolean {
-    const e = this.etag;
-    return e !== undefined && e.startsWith('"') && !e.startsWith('W/"');
+    this.setWeakEtag(value);
   }
 
   // --- Cache::Response wiring (declared here for typing; bound below) ---
@@ -274,12 +286,14 @@ export class Response {
   declare isWeakEtag: () => boolean;
   declare isStrongEtag: () => boolean;
   declare handleConditionalGet: () => void;
+  declare mergeAndNormalizeCacheControl: (cacheControl: CacheControlHash) => void;
   /**
    * Parsed `Cache-Control` directives as a hash, mirroring Rails'
-   * `Cache::Response#cache_control`. The raw header string remains available
-   * via the existing {@link cacheControl} string accessor.
+   * `Cache::Response#cache_control` (an `attr_reader` set by
+   * `prepare_cache_control!`). The raw header string is exposed via
+   * {@link _cacheControl}.
    */
-  declare readonly cacheControlHash: CacheControlHash;
+  declare readonly cacheControl: CacheControlHash;
 
   // --- Rack response ---
 
@@ -307,10 +321,9 @@ export class Response {
 
 // Mix in ActionDispatch::Http::Cache::Response. Property-style helpers
 // (Rails no-arg accessors) are wired as getters/setters; methods that take
-// arguments are wired as prototype methods. The existing `etag`/`cacheControl`
-// string accessors are intentionally retained — Rails-parity replacements
-// (etag= → weakEtag=, cacheControl as parsed hash) are tracked as a separate
-// follow-up since they break existing test expectations.
+// arguments are wired as prototype methods. The raw `Cache-Control` header
+// string is exposed via `_cacheControl` (Rails: aliased `_cache_control`),
+// and `cacheControl` (this wiring) is the parsed directive hash.
 Object.defineProperty(Response.prototype, "lastModified", {
   get(this: Response) {
     return _getLastModified.call(this);
@@ -347,7 +360,7 @@ Object.defineProperty(Response.prototype, "hasEtag", {
   },
   configurable: true,
 });
-Object.defineProperty(Response.prototype, "cacheControlHash", {
+Object.defineProperty(Response.prototype, "cacheControl", {
   get(this: Response) {
     return _cacheControl.call(this);
   },
@@ -368,11 +381,12 @@ Response.prototype.isStrongEtag = function (this: Response) {
 Response.prototype.handleConditionalGet = function (this: Response) {
   _handleConditionalGet.call(this);
 };
-// `_getEtag` mirrors Rails' `Cache::Response#etag` reader. The existing
-// `Response.etag` getter already returns the header value (case-insensitive),
-// so we don't re-wire it here. Reference the import to satisfy TS unused-import.
-void _getEtag;
-
+Response.prototype.mergeAndNormalizeCacheControl = function (
+  this: Response,
+  cacheControl: CacheControlHash,
+) {
+  _mergeAndNormalizeCacheControl.call(this, cacheControl);
+};
 export interface CookieOptions {
   value: string;
   path?: string;

@@ -97,17 +97,18 @@ describe("ResponseTest", () => {
 
   it("read ETag and Cache-Control", () => {
     const res = new Response();
-    res.etag = "abc123";
-    res.cacheControl = "public, max-age=3600";
-    expect(res.etag).toBe('"abc123"');
-    expect(res.cacheControl).toBe("public, max-age=3600");
+    res.setWeakEtag("abc123");
+    res._cacheControl = "public, max-age=3600";
+    // Rails: `etag` reader returns the raw header set by weak_etag=.
+    expect(res.etag?.startsWith('W/"')).toBe(true);
+    expect(res._cacheControl).toBe("public, max-age=3600");
   });
 
   it("read strong ETag", () => {
     const res = new Response();
-    res.etag = '"strong-etag"';
-    expect(res.strongEtag).toBe(true);
-    expect(res.weakEtag).toBe(false);
+    res.setStrongEtag("strong-etag");
+    expect(res.isStrongEtag()).toBe(true);
+    expect(res.isWeakEtag()).toBe(false);
   });
 
   it("read charset and content type", () => {
@@ -119,14 +120,14 @@ describe("ResponseTest", () => {
 
   it("respect no-store cache-control", () => {
     const res = new Response();
-    res.cacheControl = "no-store";
-    expect(res.cacheControl).toBe("no-store");
+    res._cacheControl = "no-store";
+    expect(res._cacheControl).toBe("no-store");
   });
 
   it("respect private, no-store cache-control", () => {
     const res = new Response();
-    res.cacheControl = "private, no-store";
-    expect(res.cacheControl).toBe("private, no-store");
+    res._cacheControl = "private, no-store";
+    expect(res._cacheControl).toBe("private, no-store");
   });
 
   it("does not include Status header", () => {
@@ -222,8 +223,8 @@ describe("ResponseTest", () => {
   it("weak ETag detection", () => {
     const res = new Response();
     res.setHeader("etag", 'W/"abc"');
-    expect(res.weakEtag).toBe(true);
-    expect(res.strongEtag).toBe(false);
+    expect(res.isWeakEtag()).toBe(true);
+    expect(res.isStrongEtag()).toBe(false);
   });
 
   it("setting etag to undefined removes it", () => {
@@ -233,25 +234,20 @@ describe("ResponseTest", () => {
     expect(res.etag).toBeUndefined();
   });
 
-  it("etag auto-quotes unquoted value", () => {
+  it("etag= delegates to setWeakEtag (Rails parity)", () => {
     const res = new Response();
     res.etag = "abc";
-    expect(res.etag).toBe('"abc"');
-  });
-
-  it("etag preserves W/ prefix", () => {
-    const res = new Response();
-    res.etag = 'W/"weak"';
-    expect(res.etag).toBe('W/"weak"');
+    expect(res.etag?.startsWith('W/"')).toBe(true);
+    expect(res.isWeakEtag()).toBe(true);
   });
 
   // --- Cache-Control ---
 
-  it("setting cacheControl to undefined removes it", () => {
+  it("setting _cacheControl to undefined removes it", () => {
     const res = new Response();
-    res.cacheControl = "no-cache";
-    res.cacheControl = undefined;
-    expect(res.cacheControl).toBeUndefined();
+    res._cacheControl = "no-cache";
+    res._cacheControl = undefined;
+    expect(res._cacheControl).toBeUndefined();
   });
 
   // --- Content type ---
@@ -481,13 +477,22 @@ describe("Response Cache::Response wiring", () => {
     expect(res.isWeakEtag()).toBe(false);
   });
 
-  it("cacheControlHash returns a parsed directive hash", () => {
+  it("cacheControl returns a parsed directive hash", () => {
     const res = new Response();
     res.setHeader("Cache-Control", "max-age=600, public, foo=bar");
-    const hash = res.cacheControlHash;
+    const hash = res.cacheControl;
     expect(hash["max_age"]).toBe("600");
     expect(hash["public"]).toBe(true);
     expect(hash.extras).toEqual(["foo=bar"]);
+  });
+
+  it("mergeAndNormalizeCacheControl writes back the combined directive set", () => {
+    const res = new Response();
+    res._cacheControl = "no-cache";
+    res.mergeAndNormalizeCacheControl({ public: true, max_age: 30 });
+    const cc = res._cacheControl!;
+    expect(cc).toContain("max-age=30");
+    expect(cc).toContain("public");
   });
 
   it("handleConditionalGet sets a default Cache-Control when an ETag is present", () => {

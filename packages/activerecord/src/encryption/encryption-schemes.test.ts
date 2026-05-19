@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
+import type { TestDatabaseAdapter } from "../test-adapter.js";
+import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { Scheme } from "./scheme.js";
 import { Configurable } from "./configurable.js";
@@ -59,8 +61,15 @@ function makeType(
 }
 
 describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
+  let adapter: TestDatabaseAdapter;
   let savedSupportUnencryptedData: boolean;
   let configSnapshot: ReturnType<typeof snapshotEncryptionConfig>;
+
+  beforeAll(async () => {
+    adapter = await freshAdapter();
+  });
+
+  withTransactionalFixtures(() => adapter);
 
   beforeEach(() => {
     savedSupportUnencryptedData = Configurable.config.supportUnencryptedData;
@@ -79,7 +88,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
     // fails and the fallback path is actually exercised.
     const prevKeyProvider = makeKeyProvider("prev-key-for-schemes-test-32bytes!!");
     Configurable.config.previous = [{ keyProvider: prevKeyProvider }] as SchemeOptions[];
-    const Author = makeEncryptedAuthor(await freshAdapter());
+    const Author = makeEncryptedAuthor(adapter);
     new Author();
     const author = await Author.create({ name: "david" });
     const currentType = (Author as any).typeForAttribute("name") as EncryptedAttributeType;
@@ -103,7 +112,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
     Configurable.config.previous = [
       { keyProvider: makeKeyProvider("prev-key-for-decryption-error-32b!") },
     ] as SchemeOptions[];
-    const Author = makeEncryptedAuthor(await freshAdapter());
+    const Author = makeEncryptedAuthor(adapter);
     new Author();
     const author = await withoutEncryption(() => Author.create({ name: "unencrypted author" }));
     const reloaded = await Author.find(author.id);
@@ -111,7 +120,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
   });
 
   it("use a custom encryptor", async () => {
-    const adp = await freshAdapter();
+    const adp = adapter;
     const EncryptedAuthor1 = await makeFreshModel(adp, { id: "integer", name: "string" });
     EncryptedAuthor1.encrypts("name", { encryptor: new TestEncryptor({ "1": "2" }) });
     new EncryptedAuthor1();
@@ -125,7 +134,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
 
   it("support previous contexts", async () => {
     Configurable.config.supportUnencryptedData = true;
-    const adp = await freshAdapter();
+    const adp = adapter;
     const EncryptedAuthor2 = await makeFreshModel(adp, { id: "integer", name: "string" });
     EncryptedAuthor2.encrypts("name", {
       encryptor: new TestEncryptor({ "2": "3" }),
@@ -324,7 +333,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
         { encryptor: prevEncryptor, deterministic: true } as SchemeOptions,
       ];
 
-      const adp = await freshAdapter();
+      const adp = adapter;
       const Author = await makeFreshModel(adp, { id: "integer", name: "string" });
       Author.encrypts("name", { encryptor: currentEncryptor, deterministic: true, fixed: false });
       new Author();

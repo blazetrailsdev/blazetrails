@@ -44,8 +44,6 @@ import {
 import type { ParameterFilter } from "@blazetrails/activesupport";
 import { RequestUtils, type ParamValue } from "../request/utils.js";
 import { COOKIES_APP_OPTIONS_KEY, type CookieJarOptions } from "../middleware/cookies.js";
-
-const FLASH_HASH_KEY = "action_dispatch.request.flash_hash";
 import {
   parameters as _parameters,
   parameterParsers as _parameterParsers,
@@ -59,6 +57,7 @@ import {
   type ParametersHost,
 } from "./parameters.js";
 
+const FLASH_HASH_KEY = "action_dispatch.request.flash_hash";
 const HTTP_HEADER_NAME = /^[A-Za-z0-9-]+$/;
 const CGI_VARIABLES: ReadonlySet<string> = new Set([
   "AUTH_TYPE",

@@ -192,6 +192,7 @@ export class RemoteIp {
       this.proxies = TRUSTED_PROXIES;
     } else if (
       typeof customProxies !== "string" &&
+      !(customProxies instanceof String) &&
       typeof (customProxies as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function"
     ) {
       const arr = [...customProxies];

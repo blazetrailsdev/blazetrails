@@ -189,30 +189,43 @@ follow-up wiring" below.
 
 ## PR split
 
-Estimated LOC (source + tests, no surrounding docs):
+Estimated LOC (source + tests, plus standalone-package scaffolding):
 
-| File                             | Source | Tests |
-| -------------------------------- | -----: | ----: |
-| `levenshtein.ts`                 |     35 |    50 |
-| `jaro-winkler.ts`                |     70 |    80 |
-| `spell-checker.ts`               |     45 |   120 |
-| `did-you-mean/index.ts` + barrel |     10 |     — |
-| **Total**                        |    160 |   250 |
+| File                                                      | Source | Tests |
+| --------------------------------------------------------- | -----: | ----: |
+| `package.json` + `tsconfig.json` (mirrored from globalid) |     25 |     — |
+| `src/index.ts` barrel                                     |     10 |     — |
+| `src/levenshtein.ts`                                      |     35 |    50 |
+| `src/jaro-winkler.ts`                                     |     70 |    80 |
+| `src/spell-checker.ts`                                    |     45 |   120 |
+| **Total**                                                 |    185 |   250 |
 
-≈410 LOC total — over the 300-LOC ceiling. Split:
+≈435 LOC total. The standalone-package framing shifts the split shape:
+the scaffolding (package.json, tsconfig, root README stub, pnpm-workspace
+recognition) wants to land together with at least one working module so
+the package isn't a hollow build target, and the Wave-1 PR has to add the
+package to any aggregate scripts that enumerate workspaces. Two PRs
+instead of three:
 
-- **PR 1 (~190 LOC):** `levenshtein.ts` + `jaro-winkler.ts` + their tests +
-  barrel exports. Pure math, no consumers. Pin tests against hand-computed
-  values plus a handful of fixtures cross-checked by running the Ruby
-  stdlib (`ruby -rdid_you_mean -e 'p DidYouMean::JaroWinkler.distance(a,b)'`)
-  so we have ground truth.
-- **PR 2 (~170 LOC):** `spell-checker.ts` + tests. Depends on PR 1.
-- **PR 3 (~30 LOC):** AbstractController `ActionNotFound#corrections`
-  wiring (see next section). Lands once PR 2 is merged.
+- **PR 1 (~290 LOC):** scaffold `packages/did-you-mean/` (package.json,
+  tsconfig, dx-tests dir matching globalid's layout) + `levenshtein.ts` +
+  `jaro-winkler.ts` + their tests + `src/index.ts` exporting just those
+  two. Pure math, no consumers, no AR or actionpack imports. Pin tests
+  against hand-computed values plus fixtures cross-checked by running the
+  Ruby stdlib (`ruby -rdid_you_mean -e 'p DidYouMean::JaroWinkler.distance(a,b)'`).
+  Verify `pnpm build` / `pnpm typecheck` pick up the new workspace.
+- **PR 2 (~175 LOC):** `spell-checker.ts` + tests + barrel update.
+  Depends on PR 1.
+- **PR 3 (~30 LOC):** Add `@blazetrails/did-you-mean` to actionpack
+  `dependencies`, wire `ActionNotFound#corrections` (see next section),
+  add one test.
 
-Subsequent consumer PRs (UnpermittedParameters, association errors,
-Template::Error) are separate follow-ups, each well under 100 LOC, and
-each gets to delete an inline ad-hoc Levenshtein helper.
+The standalone package removes one risk that activesupport-home would
+have carried: no chance of a circular dep, since this package depends on
+nothing in the workspace. Consumer PRs (UnpermittedParameters,
+association errors, `Template::Error`) follow the same shape as PR 3 —
+each adds a workspace dep, swaps in `SpellChecker`, and deletes the
+inline Levenshtein helper. Each is well under 100 LOC.
 
 ### Test fixtures
 

@@ -16,8 +16,12 @@
  *   - STI subclass as the final source of a nested-through chain,
  *     under both direct load and `includes` preload
  *
- * Intermediate-table `joins`/`where` and `references` against a
- * nested-through chain belong to Slot E and are not covered here.
+ *   - JOIN-based `joins(nestedThrough).where(targetTable.col: N)`
+ *     traversal of the same 3-level chain (currently BLOCKED on a
+ *     JoinDependency gap — see the skipped test below)
+ *
+ * Intermediate-table `references` against a nested-through chain
+ * belong to Slot E and are not covered here.
  *
  * Mirrors selected scenarios from
  * vendor/rails/activerecord/test/cases/associations/nested_through_associations_test.rb.
@@ -178,12 +182,11 @@ describe("HMT Slot D — nested-through preloader / STI / joins+includes", () =>
   });
 
   it.skip("joins() on a nested-through chain emits intermediates and accepts where on the target table", async () => {
-    // BLOCKED: associations — JoinDependency nested-through chaining.
-    // Author -> Posts -> Comments -> Ratings. JOINing `ntdAllRatings`
-    // emits `ntd_comments` joined on `ntd_comments.ntd_author_id`
-    // instead of walking through `ntd_posts` first; the inner
-    // through (`ntdAllComments`) is not flattened by JoinDependency.
-    // Verifies JoinDependency, not the preloader.
+    // BLOCKED: associations — JoinDependency nested-through chaining
+    // ROOT-CAUSE: associations/join-dependency/ — inner through (ntdAllComments) not flattened; emits ntd_comments.ntd_author_id instead of walking ntd_posts
+    // SCOPE: ~80–120 LOC fix in associations/join-dependency/ and/or CollectionProxy._buildThroughScope; affects nested-through JOIN-based loaders
+    // Mirrors Post.joins(:special_comments_ratings).where(...) in
+    // vendor/rails/activerecord/test/cases/associations/nested_through_associations_test.rb:478,488.
     // Author -> Posts -> Comments -> Ratings. JOINing `ntdAllRatings`
     // must traverse both the direct-through (ntdPosts) and the inner
     // through (ntdAllComments) so a where-clause on the final

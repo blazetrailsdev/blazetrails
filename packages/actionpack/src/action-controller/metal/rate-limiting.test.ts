@@ -52,6 +52,74 @@ describe("MemoryRateLimitStore", () => {
     store.increment("a", 1, { expiresIn: 60 });
     expect(store.increment("b", 1, { expiresIn: 60 })).toBe(1);
   });
+
+  describe("prune sweep", () => {
+    const BASELINE = 1024;
+    const PRUNE_MAX = BASELINE * 16;
+
+    type StoreInternals = {
+      _entries: Map<string, unknown>;
+      _pruneThreshold: number;
+      _skipSweepInserts: number;
+    };
+    const peek = (store: MemoryRateLimitStore): StoreInternals =>
+      store as unknown as StoreInternals;
+
+    it("sweeps expired entries once size crosses the threshold", () => {
+      vi.useFakeTimers();
+      try {
+        const store = new MemoryRateLimitStore();
+        for (let i = 0; i < BASELINE - 1; i += 1) {
+          store.increment(`old:${i}`, 1, { expiresIn: 1 });
+        }
+        vi.advanceTimersByTime(2000);
+        // Stays just under the threshold — no sweep yet.
+        expect(peek(store)._entries.size).toBe(BASELINE - 1);
+        store.increment("trigger", 1, { expiresIn: 60 });
+        // Crossing the threshold triggers a sweep that drops all expired keys.
+        expect(peek(store)._entries.size).toBe(1);
+        // Sweep freed space → threshold relaxes back to the baseline.
+        expect(peek(store)._pruneThreshold).toBe(BASELINE);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("doubles the threshold when an all-live sweep frees nothing", () => {
+      const store = new MemoryRateLimitStore();
+      for (let i = 0; i < BASELINE; i += 1) {
+        store.increment(`live:${i}`, 1, { expiresIn: 3600 });
+      }
+      // All entries are live, so the sweep freed nothing and the next
+      // threshold doubles.
+      expect(peek(store)._pruneThreshold).toBe(BASELINE * 2);
+      expect(peek(store)._skipSweepInserts).toBe(0);
+    });
+
+    it("saturates the threshold at _PRUNE_MAX and arms _skipSweepInserts", () => {
+      const store = new MemoryRateLimitStore();
+      // Enough inserts to double the threshold past the cap: each sterile
+      // sweep doubles 1024 → 2048 → 4096 → 8192 → 16384 (= _PRUNE_MAX).
+      // 8193 entries triggers the fourth sweep and saturates the cap.
+      for (let i = 0; i < BASELINE * 8 + 1; i += 1) {
+        store.increment(`live:${i}`, 1, { expiresIn: 3600 });
+      }
+      expect(peek(store)._pruneThreshold).toBe(PRUNE_MAX);
+      expect(peek(store)._skipSweepInserts).toBe(BASELINE);
+    });
+
+    it("decrements _skipSweepInserts on inserts past the saturated cap (no rescan)", () => {
+      const store = new MemoryRateLimitStore();
+      for (let i = 0; i < PRUNE_MAX; i += 1) {
+        store.increment(`live:${i}`, 1, { expiresIn: 3600 });
+      }
+      // size now == _PRUNE_MAX; the most recent insert hit the sweep block,
+      // saw the skip counter armed, and decremented it once rather than
+      // walking the whole map.
+      expect(peek(store)._pruneThreshold).toBe(PRUNE_MAX);
+      expect(peek(store)._skipSweepInserts).toBe(BASELINE - 1);
+    });
+  });
 });
 
 afterEach(() => {

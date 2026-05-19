@@ -22,6 +22,11 @@ import { DEFAULT_ALLOWED_ATTRIBUTES, DEFAULT_ALLOWED_TAGS } from "./config.js";
  *   new SafeListSanitizer({ prune: true })
  *     .sanitize("<u>leave me <b>now</b></u>", { tags: ["u"] });
  *   // => "<u>leave me </u>"
+ *
+ * Missing vs Rails: `sanitize_css(style_string)`. Loofah delegates to a
+ * CSS-only sanitizer (Crass-backed); `sanitize-html` has no equivalent
+ * standalone API. Deferred until we either ship a CSS sanitizer or swap
+ * to an engine that supports it (revisit alongside PR 3).
  */
 export class SafeListSanitizer extends Sanitizer {
   /**

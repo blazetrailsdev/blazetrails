@@ -54,6 +54,9 @@ export class DebugLocks {
   static get defaultCharset(): string {
     return Response.defaultCharset;
   }
+  static set defaultCharset(value: string) {
+    Response.defaultCharset = value;
+  }
 
   private app: RackApp;
   private path: string;

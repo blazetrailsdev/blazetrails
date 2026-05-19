@@ -971,7 +971,6 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return [];
   }
 
-  // lint-deps-ignore: arel — TODO below tracks the Arel::Nodes::Bin wrapping work
   caseSensitiveComparison(attribute: Nodes.Attribute, value: unknown): Nodes.Node {
     // TODO: Rails checks column.collation && !column.case_sensitive? and wraps
     // in Arel::Nodes::Bin for case-insensitive collations. Add when schema

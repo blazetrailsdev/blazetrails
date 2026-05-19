@@ -41,7 +41,7 @@ function firstVariableStatement(sf: ts.SourceFile): ts.VariableStatement {
 const DEP = "arel";
 
 describe("methodUsesDepImport — type-position filtering", () => {
-  it("cast-only (as Imported) does NOT count as usage", () => {
+  it("body-cast (as Imported) does NOT count as usage", () => {
     const sf = makeSourceFile(`
       function foo(x: unknown) { return (x as Nodes); }
     `);
@@ -49,31 +49,31 @@ describe("methodUsesDepImport — type-position filtering", () => {
     expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), DEP, sf)).toBe(false);
   });
 
-  it("return type annotation does NOT count as usage", () => {
+  it("return type annotation COUNTS (signature is part of the API)", () => {
     const sf = makeSourceFile(`
       function foo(): Nodes { throw new Error(); }
     `);
     const node = firstMethod(sf);
-    expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), DEP, sf)).toBe(false);
+    expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), DEP, sf)).toBe(true);
   });
 
-  it("parameter type annotation does NOT count", () => {
+  it("parameter type annotation COUNTS", () => {
     const sf = makeSourceFile(`
       function foo(x: ArelTable): void {}
     `);
     const node = firstMethod(sf);
-    expect(methodUsesDepImport(node, new Set(["ArelTable"]), new Set(), DEP, sf)).toBe(false);
+    expect(methodUsesDepImport(node, new Set(["ArelTable"]), new Set(), DEP, sf)).toBe(true);
   });
 
-  it("generic type arg does NOT count", () => {
+  it("generic type arg in return type COUNTS", () => {
     const sf = makeSourceFile(`
       function foo(): Promise<Nodes> { return Promise.resolve(null as any); }
     `);
     const node = firstMethod(sf);
-    expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), DEP, sf)).toBe(false);
+    expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), DEP, sf)).toBe(true);
   });
 
-  it("old-style type assertion <Imported>x does NOT count", () => {
+  it("body old-style type assertion <Imported>x does NOT count", () => {
     const sf = makeSourceFile(`
       function foo(x: unknown) { return <Nodes>x; }
     `);
@@ -81,7 +81,7 @@ describe("methodUsesDepImport — type-position filtering", () => {
     expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), DEP, sf)).toBe(false);
   });
 
-  it("satisfies expression does NOT count", () => {
+  it("body satisfies expression does NOT count", () => {
     const sf = makeSourceFile(`
       function foo(x: unknown) { return x satisfies Nodes; }
     `);
@@ -89,15 +89,15 @@ describe("methodUsesDepImport — type-position filtering", () => {
     expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), DEP, sf)).toBe(false);
   });
 
-  it("type predicate (x is T) does NOT count", () => {
+  it("type predicate (x is T) in return type COUNTS", () => {
     const sf = makeSourceFile(`
       function foo(x: unknown): x is Nodes { return true; }
     `);
     const node = firstMethod(sf);
-    expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), DEP, sf)).toBe(false);
+    expect(methodUsesDepImport(node, new Set(["Nodes"]), new Set(), DEP, sf)).toBe(true);
   });
 
-  it("variable type annotation does NOT count", () => {
+  it("body-local variable type annotation does NOT count", () => {
     const sf = makeSourceFile(`
       function foo() { let x: ArelTable; }
     `);
@@ -323,6 +323,38 @@ describe("collectTaintedSymbols — transitive dep usage", () => {
     });
     const program = programFor(dir);
     const tainted = collectTaintedSymbols(program, dir, pkg, [], "activesupport");
+    expect(tainted.size).toBe(0);
+  });
+
+  it("taints a module-level constant whose initializer uses the dep", () => {
+    const pkg = "@blazetrails/activemodel";
+    const dir = writePkg({
+      "helper.ts": `
+        import { BooleanType } from "${pkg}";
+        export const booleanType = new BooleanType();
+      `,
+    });
+    const program = programFor(dir);
+    const tainted = collectTaintedSymbols(program, dir, pkg, [], "activemodel");
+    const sf = program.getSourceFiles().find((s) => s.fileName.endsWith("helper.ts"))!;
+    const stmt = sf.statements.find((s): s is ts.VariableStatement => ts.isVariableStatement(s))!;
+    const decl = stmt.declarationList.declarations[0];
+    const sym = program.getTypeChecker().getSymbolAtLocation(decl.name)!;
+    expect(tainted.has(sym)).toBe(true);
+  });
+
+  it("does not taint wrappers that opt out via lint-deps-ignore", () => {
+    // A helper that declares it intentionally does NOT use the dep
+    // (e.g. raw-SQL path) must not poison callers via the taint set.
+    const pkg = "@blazetrails/arel";
+    const dir = writePkg({
+      "helper.ts": `
+        // lint-deps-ignore: arel — uses raw SQL; no Arel needed
+        export function rawSqlHelper() { return "SELECT 1"; }
+      `,
+    });
+    const program = programFor(dir);
+    const tainted = collectTaintedSymbols(program, dir, pkg, [], "arel");
     expect(tainted.size).toBe(0);
   });
 });

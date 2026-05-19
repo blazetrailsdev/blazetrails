@@ -48,10 +48,12 @@ export function _normalizeText(options: Record<string, unknown>): void {
  */
 export function _normalizeOptions(options: Record<string, unknown>): Record<string, unknown> {
   _normalizeText(options);
-  if (options.html) {
+  // Ruby `if options[:key]` — only `nil`/`false` skip; `""` and `0` are
+  // truthy and must still be processed.
+  if (options.html != null && options.html !== false) {
     options.html = htmlEscape(options.html);
   }
-  if (options.status) {
+  if (options.status != null && options.status !== false) {
     options.status = resolveStatus(options.status as number | string);
   }
   return options;
@@ -134,13 +136,15 @@ export function _processOptions(
   this: Pick<RenderingHost, "status" | "contentType" | "setHeader" | "urlFor">,
   options: Record<string, unknown>,
 ): void {
-  if (options.status) {
+  // Ruby `if options[:key]` — only `nil`/`false` skip; `""` and `0` are
+  // truthy and must still be applied.
+  if (options.status != null && options.status !== false) {
     this.status = resolveStatus(options.status as number | string);
   }
-  if (options.contentType) {
+  if (options.contentType != null && options.contentType !== false) {
     this.contentType = String(options.contentType);
   }
-  if (options.location) {
+  if (options.location != null && options.location !== false) {
     this.setHeader("Location", this.urlFor(String(options.location)));
   }
 }

@@ -313,7 +313,7 @@ describe("ContentSecurityPolicyTest", () => {
   it("DSL with falsy first arg clears the directive", () => {
     const policy = new ContentSecurityPolicy();
     policy.scriptSrc("'self'");
-    policy.scriptSrc(null as unknown as string);
+    policy.scriptSrc(null);
     expect(policy.hasDirective("script-src")).toBe(false);
   });
 

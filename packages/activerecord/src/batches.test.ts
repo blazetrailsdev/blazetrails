@@ -2,13 +2,13 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { Base, Relation } from "./index.js";
 import { activeRecordConfig } from "./relation/batches.js";
 
-import { createTestAdapter } from "./test-adapter.js";
+import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
 import { defineSchema, type Schema } from "./test-helpers/define-schema.js";
-import type { DatabaseAdapter } from "./adapter.js";
+import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
 
 const TEST_SCHEMA: Schema = {
   posts: {
@@ -46,7 +46,7 @@ const TEST_SCHEMA: Schema = {
 };
 
 // -- Helpers --
-async function freshAdapter(): Promise<DatabaseAdapter> {
+async function freshAdapter(): Promise<TestDatabaseAdapter> {
   const adapter = createTestAdapter();
   await defineSchema(adapter, TEST_SCHEMA);
   return adapter;
@@ -56,11 +56,12 @@ async function freshAdapter(): Promise<DatabaseAdapter> {
 // EachTest — targets batches_test.rb
 // ==========================================================================
 describe("EachTest", () => {
-  let adapter: DatabaseAdapter;
+  let adapter: TestDatabaseAdapter;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     adapter = await freshAdapter();
   });
+  withTransactionalFixtures(() => adapter);
 
   it("find_each should honor limit if passed a block", async () => {
     class Post extends Base {
@@ -127,10 +128,11 @@ describe("EachTest", () => {
 // More EachTest — targets batches_test.rb
 // ==========================================================================
 describe("EachTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(async () => {
+  let adapter: TestDatabaseAdapter;
+  beforeAll(async () => {
     adapter = await freshAdapter();
   });
+  withTransactionalFixtures(() => adapter);
 
   it("in batches has attribute readers", async () => {
     class Post extends Base {
@@ -1199,11 +1201,12 @@ describe("EachTest", () => {
 // BatchEnumerator API tests — matches Rails batches_test.rb names
 // ==========================================================================
 describe("EachTest", () => {
-  let adapter: DatabaseAdapter;
+  let adapter: TestDatabaseAdapter;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     adapter = await freshAdapter();
   });
+  withTransactionalFixtures(() => adapter);
 
   it("in_batches each_batch should yield batch relations if block is given", async () => {
     class Post extends Base {
@@ -1329,10 +1332,11 @@ describe("EachTest", () => {
 // EachTest3 — additional missing tests from batches_test.rb
 // ==========================================================================
 describe("EachTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(async () => {
+  let adapter: TestDatabaseAdapter;
+  beforeAll(async () => {
     adapter = await freshAdapter();
   });
+  withTransactionalFixtures(() => adapter);
 
   it("warn if order scope is set", () => {
     class Post extends Base {
@@ -1872,10 +1876,11 @@ describe("EachTest", () => {
 });
 
 describe("EachTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(async () => {
+  let adapter: TestDatabaseAdapter;
+  beforeAll(async () => {
     adapter = await freshAdapter();
   });
+  withTransactionalFixtures(() => adapter);
 
   it("findEach yields each record", async () => {
     class Item extends Base {
@@ -1982,10 +1987,11 @@ describe("EachTest", () => {
 });
 
 describe("EachTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(async () => {
+  let adapter: TestDatabaseAdapter;
+  beforeAll(async () => {
     adapter = await freshAdapter();
   });
+  withTransactionalFixtures(() => adapter);
 
   it("find_in_batches returns batches", async () => {
     class User extends Base {
@@ -2057,7 +2063,7 @@ describe("EachTest", () => {
 });
 
 describe("EachTest", () => {
-  let adapter: DatabaseAdapter;
+  let adapter: TestDatabaseAdapter;
 
   class Record extends Base {
     static {
@@ -2065,10 +2071,11 @@ describe("EachTest", () => {
     }
   }
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     adapter = await freshAdapter();
     Record.adapter = adapter;
   });
+  withTransactionalFixtures(() => adapter);
 
   it("find in batches should return batches", async () => {
     for (let i = 0; i < 10; i++) {
@@ -2138,7 +2145,7 @@ describe("EachTest", () => {
 });
 
 describe("EachTest", () => {
-  let adapter: DatabaseAdapter;
+  let adapter: TestDatabaseAdapter;
 
   class Record extends Base {
     static {
@@ -2146,10 +2153,11 @@ describe("EachTest", () => {
     }
   }
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     adapter = await freshAdapter();
     Record.adapter = adapter;
   });
+  withTransactionalFixtures(() => adapter);
 
   // Rails: test_find_each_processes_all_records
   it("findEach processes all records", async () => {

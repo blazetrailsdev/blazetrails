@@ -1,26 +1,55 @@
-import { it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import { SilenceRequest } from "./silence-request.js";
-import type { RackApp } from "@blazetrails/rack";
+import type { RackApp, RackBody } from "@blazetrails/rack";
 
-it("silence request only to specific path", async () => {
-  const calls: Array<number | string> = [];
-  const logger = {
-    silence(_level: number | string, fn: () => void) {
-      calls.push("silence");
-      fn();
-    },
-  };
+const emptyBody = (): RackBody => ({
+  async *[Symbol.asyncIterator]() {
+    /* empty */
+  },
+});
 
-  const app: RackApp = async (env: Record<string, unknown>) => [
-    200,
-    env as Record<string, string>,
-    [] as any,
-  ];
+describe("Rack::SilenceRequest", () => {
+  it("silence request only to specific path", async () => {
+    const calls: string[] = [];
+    const logger = {
+      silence(_level: number | string, fn: () => void) {
+        calls.push("silence");
+        fn();
+      },
+    };
 
-  const middleware = new SilenceRequest(app, { path: "/up", logger });
+    const app: RackApp = async () => [200, {}, emptyBody()];
 
-  await middleware.call({ PATH_INFO: "/up" });
-  await middleware.call({ PATH_INFO: "/down" });
+    const middleware = new SilenceRequest(app, { path: "/up", logger });
 
-  expect(calls).toEqual(["silence"]);
+    await middleware.call({ PATH_INFO: "/up" });
+    await middleware.call({ PATH_INFO: "/down" });
+
+    expect(calls).toEqual(["silence"]);
+  });
+
+  it("prefers silenceAsync when available", async () => {
+    const calls: string[] = [];
+    const logger = {
+      silence() {
+        calls.push("silence");
+      },
+      async silenceAsync(_level: number | string, fn: () => Promise<unknown>) {
+        calls.push("silenceAsync:start");
+        const out = await fn();
+        calls.push("silenceAsync:end");
+        return out;
+      },
+    };
+
+    const app: RackApp = async () => {
+      calls.push("app");
+      return [200, {}, emptyBody()];
+    };
+
+    const middleware = new SilenceRequest(app, { path: "/up", logger });
+    await middleware.call({ PATH_INFO: "/up" });
+
+    expect(calls).toEqual(["silenceAsync:start", "app", "silenceAsync:end"]);
+  });
 });

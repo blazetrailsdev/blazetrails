@@ -9,6 +9,7 @@ import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
 
 export interface Silencer {
   silence(level: number | string, fn: () => void): void;
+  silenceAsync?(level: number | string, fn: () => Promise<unknown>): Promise<unknown>;
 }
 
 export interface SilenceRequestOptions {
@@ -29,8 +30,12 @@ export class SilenceRequest {
 
   async call(env: RackEnv): Promise<RackResponse> {
     if (env["PATH_INFO"] === this.path && this.logger) {
+      const logger = this.logger;
+      if (logger.silenceAsync) {
+        return (await logger.silenceAsync(2, () => this.app(env))) as RackResponse;
+      }
       let pending: Promise<RackResponse> | undefined;
-      this.logger.silence(2, () => {
+      logger.silence(2, () => {
         pending = this.app(env);
       });
       return pending!;

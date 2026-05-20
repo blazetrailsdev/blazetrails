@@ -42,10 +42,19 @@ export class RouteWrapper {
     this.route = route;
   }
 
-  /** @internal */
+  /**
+   * @internal Mirrors Rails RouteWrapper#matches_filter? — for exact_path_match
+   * the value is a URL-escaped grep string and Rails calls `Pattern#match` on
+   * the route's path. Bypass the verb gate by trying the route's known verb
+   * (Route.match() rejects mismatched verbs up front). For all other filters
+   * the value is a Regexp and Rails tests it against the named attribute.
+   */
   isMatchesFilter(filter: string, value: RegExp | string): boolean {
-    if (filter === "exact_path_match")
-      return typeof value === "string" && this.route.path === value;
+    if (filter === "exact_path_match") {
+      if (typeof value !== "string") return false;
+      const verb = this.route.verb === "ALL" ? "GET" : this.route.verb;
+      return this.route.match(verb, value) !== null;
+    }
     const re = value instanceof RegExp ? value : new RegExp(String(value));
     const target = (this as unknown as Record<string, unknown>)[filter];
     return typeof target === "string" && re.test(target);
@@ -60,9 +69,17 @@ export class RouteWrapper {
     return rest;
   }
 
-  /** @internal */
+  /**
+   * @internal Mirrors Rails RouteWrapper#requirements — combines the route's
+   * routing constraints with the dispatched controller/action so the
+   * formatter can show `controller#action {constraint: …}`.
+   */
   get requirements(): Record<string, unknown> {
-    return { controller: this.route.controller, action: this.route.action };
+    return {
+      ...this.route.constraints,
+      controller: this.route.controller,
+      action: this.route.action,
+    };
   }
 
   /** @internal Rack app of mounted engine — undefined until trails Route wraps one */
@@ -95,9 +112,9 @@ export class RouteWrapper {
     return s;
   }
 
-  /** @internal Marks routes that should be hidden from display (e.g. info routes) */
+  /** @internal Reads the wrapped Route's internal flag — Rails hides these from `routes` output. */
   isInternal(): boolean {
-    return false;
+    return this.route.internal;
   }
 
   /** @internal Engine-mounted routes get nested into a per-engine section */

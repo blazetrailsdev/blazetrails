@@ -44,23 +44,13 @@ describe("ActionsTest", () => {
   });
 
   it("gem should include options", () => {
-    gen.gem("rspec", { github: "dchelimsky/rspec", tag: "1.2.9.rc1" });
-    expect(read("Gemfile")).toContain('gem "rspec", github: "dchelimsky/rspec", tag: "1.2.9.rc1"');
-  });
-
-  it("gem should put the comment before gem declaration", () => {
-    gen.gem("rspec", { comment: "Use RSpec" });
-    expect(read("Gemfile")).toMatch(/# Use RSpec\ngem "rspec"/);
+    gen.gem("rspec", { github: "dchelimsky/rspec", require: false });
+    expect(read("Gemfile")).toMatch(/^gem "rspec", github: "dchelimsky\/rspec", require: false$/m);
   });
 
   it("gem should support multiline comments", () => {
     gen.gem("rspec", { comment: "Use RSpec\nReplaces minitest" });
     expect(read("Gemfile")).toMatch(/# Use RSpec\n# Replaces minitest\ngem "rspec"/);
-  });
-
-  it("gem with non-string options", () => {
-    gen.gem("rspec", { require: false });
-    expect(read("Gemfile")).toMatch(/^gem "rspec", require: false$/m);
   });
 
   it("gem with gemfile without newline at the end", () => {

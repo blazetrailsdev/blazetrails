@@ -14,7 +14,6 @@ export interface ActionsHost {
   output: (msg: string) => void;
   appendToFile(relativePath: string, content: string): void;
   insertIntoFile(relativePath: string, marker: string, content: string): void;
-  /** Rails' append_file_with_newline: appends `\n<content>\n` ensuring a single newline separator. */
   appendWithNewline(relativePath: string, content: string): void;
 }
 

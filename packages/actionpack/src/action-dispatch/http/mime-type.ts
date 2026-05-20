@@ -35,16 +35,17 @@ export class Mimes {
 
   deleteIf(predicate: (type: MimeType) => boolean): void {
     const kept: MimeType[] = [];
+    const removed = new Set<string>();
     for (const m of this._mimes) {
       if (predicate(m)) {
-        const sym = m.toSym();
-        this._symbols = this._symbols.filter((s) => s !== sym);
-        this._symbolsSet.delete(sym);
+        removed.add(m.toSym());
       } else {
         kept.push(m);
       }
     }
     this._mimes = kept;
+    this._symbols = this._symbols.filter((s) => !removed.has(s));
+    for (const sym of removed) this._symbolsSet.delete(sym);
   }
 
   /** @internal */

@@ -11,7 +11,7 @@ import type { RackEnv, RackResponse } from "@blazetrails/rack";
 import { bodyFromString } from "@blazetrails/rack";
 
 export interface SSLOptions {
-  redirect?: boolean | { status?: number; body?: string; port?: number };
+  redirect?: boolean | { status?: number; port?: number };
   hsts?: boolean | HSTSOptions;
   secureCookies?: boolean;
   exclude?: (env: RackEnv) => boolean;

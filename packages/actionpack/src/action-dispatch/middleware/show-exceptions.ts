@@ -102,5 +102,6 @@ export class ShowExceptions {
 }
 
 function isValidMimeLike(value: string): boolean {
-  return /^[\w!#$&^_.+-]+\/[\w!#$&^_.+-]+/.test(value.split(",")[0]?.trim() ?? "");
+  const first = value.split(",")[0]?.trim().split(";")[0]?.trim() ?? "";
+  return /^[\w!#$&^_.+*-]+\/[\w!#$&^_.+*-]+$/.test(first);
 }

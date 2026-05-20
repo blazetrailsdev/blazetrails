@@ -498,6 +498,11 @@ export class IntegrationTest {
     options: IntegrationRequestOptions,
   ): Promise<void> {
     this.requestCount += 1;
+    // Clear per-request memos up front so they don't leak across requests,
+    // including down the no-route 404 path.
+    this._cookieJar = undefined;
+    this._urlOptions = undefined;
+
     // Split path into PATH_INFO + QUERY_STRING; Rack stores them separately.
     const qIdx = path.indexOf("?");
     const pathInfo = qIdx >= 0 ? path.slice(0, qIdx) : path;
@@ -505,8 +510,10 @@ export class IntegrationTest {
     // Match route on pathname only.
     const matched = this.routes.recognize(method, pathInfo);
     if (!matched) {
-      // No route matched — create a 404-like response
-      this.request = new Request({
+      // No route matched — create a 404-like response. Mirror the same
+      // host/scheme/cookie env keys as the matched branch so request.url and
+      // request.cookies are accurate for 404s too.
+      const noRouteEnv: Record<string, unknown> = {
         REQUEST_METHOD: method,
         PATH_INFO: pathInfo,
         QUERY_STRING: queryString,
@@ -517,7 +524,18 @@ export class IntegrationTest {
         "rack.url_scheme": this._https ? "https" : "http",
         REMOTE_ADDR: this.remoteAddr,
         HTTP_ACCEPT: this.accept,
-      });
+      };
+      if (Object.keys(this._persistentCookies).length > 0) {
+        noRouteEnv.HTTP_COOKIE = Object.entries(this._persistentCookies)
+          .map(([k, v]) => `${k}=${v}`)
+          .join("; ");
+      }
+      noRouteEnv.REQUEST_URI = this._buildFullUri(
+        (noRouteEnv.PATH_INFO as string) +
+          (noRouteEnv.QUERY_STRING ? `?${noRouteEnv.QUERY_STRING as string}` : ""),
+        noRouteEnv,
+      );
+      this.request = new Request(noRouteEnv);
       this.response = new Response();
       this.response.status = 404;
       this.response.body = `No route matches [${method}] "${pathInfo}"`;
@@ -570,12 +588,6 @@ export class IntegrationTest {
         .map(([k, v]) => `${k}=${v}`)
         .join("; ");
     }
-
-    // Reset the TestProcess#cookies memoization slot — the jar must reflect
-    // the cookies parsed off this request, not the previous one.
-    this._cookieJar = undefined;
-    // Clear url-options memo so the next call sees the up-to-date host/scheme.
-    this._urlOptions = undefined;
 
     // Format / content type
     if (options.format || options.as) {

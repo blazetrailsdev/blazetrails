@@ -206,11 +206,18 @@ export function recognizedRequestFor(
     request.env["rack.url_scheme"] = scheme;
     request.env["HTTP_HOST"] = parsed.host;
     request.env["SERVER_NAME"] = parsed.hostname;
-    // Rails: `request.port = uri.port if uri.port`. Ruby's URI always yields
-    // the scheme's default port (80/443) even without an explicit `:port`,
-    // so port is set unconditionally. WHATWG URL returns "" for default
-    // ports, so derive the default from the scheme.
-    request.env["SERVER_PORT"] = parsed.port || (scheme === "https" ? "443" : "80");
+    // Rails: `request.port = uri.port if uri.port`. Ruby's URI yields the
+    // scheme's default port for known schemes (80 for http, 443 for https)
+    // and nil for unknown schemes, so the port stays unchanged in that
+    // case. WHATWG URL returns "" for default ports, so reapply defaults
+    // for http/https only and leave SERVER_PORT alone otherwise.
+    if (parsed.port) {
+      request.env["SERVER_PORT"] = parsed.port;
+    } else if (scheme === "https") {
+      request.env["SERVER_PORT"] = "443";
+    } else if (scheme === "http") {
+      request.env["SERVER_PORT"] = "80";
+    }
     pathStr = parsed.pathname || "/";
   } else if (!pathStr.startsWith("/")) {
     pathStr = `/${pathStr}`;

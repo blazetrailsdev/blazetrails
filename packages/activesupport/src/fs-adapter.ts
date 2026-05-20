@@ -79,6 +79,8 @@ export interface FsAdapter {
   mkdtemp?(prefix: string): Promise<string>;
   /** Async realpath — resolves symlinks. Used by EncryptedFile to honor content_path symlinks. */
   realpath?(path: string): Promise<string>;
+  /** Async rmdir (used to clean up mkdtemp directories). */
+  rmdir?(path: string): Promise<void>;
 }
 
 export interface PathAdapter {
@@ -149,6 +151,7 @@ function tryAutoRegisterNode(): boolean {
       rename(src: string, dest: string): Promise<void>;
       mkdtemp(prefix: string): Promise<string>;
       realpath(path: string): Promise<string>;
+      rmdir(path: string): Promise<void>;
     };
     const fs: FsAdapter = Object.assign({}, nodeFs, {
       cwd: () => globalThis.process.cwd(),
@@ -171,6 +174,7 @@ function tryAutoRegisterNode(): boolean {
       rename: (src: string, dest: string) => fsPromises.rename(src, dest),
       mkdtemp: (prefix: string) => fsPromises.mkdtemp(prefix),
       realpath: (p: string) => fsPromises.realpath(p),
+      rmdir: (p: string) => fsPromises.rmdir(p),
     }) as FsAdapter;
     const nodePath = req("node:path") as Required<Omit<PathAdapter, "pathToFileURL">>;
     const nodeUrl = req("node:url") as { pathToFileURL(p: string): URL };

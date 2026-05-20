@@ -148,7 +148,10 @@ export class EncryptedFile {
     const dir = await fs.mkdtemp!(`${path.dirname(resolved)}${path.sep}encfile-`);
     const tmpPath = path.join(dir, `-${base}`);
     try {
-      await fs.writeFile!(tmpPath, contents);
+      // Rails uses Ruby `Tempfile.create`, which defaults to mode 0600.
+      // The temp file holds plaintext secrets between the editor write and
+      // the re-encrypt step, so it must not be world-readable.
+      await fs.writeFile!(tmpPath, contents, { mode: 0o600 });
       await block(tmpPath);
       const updated = await fs.readFile!(tmpPath, "utf8");
       if (updated !== contents) await this.write(updated);
@@ -157,6 +160,13 @@ export class EncryptedFile {
         await fs.unlink!(tmpPath);
       } catch {
         /* tmp already gone */
+      }
+      try {
+        // Rails' Tempfile cleans both file and (implicit) dir; mkdtemp gives
+        // us our own dir, so remove it explicitly to avoid encfile-*/ leaks.
+        await fs.rmdir!(dir);
+      } catch {
+        /* dir already gone */
       }
     }
   }

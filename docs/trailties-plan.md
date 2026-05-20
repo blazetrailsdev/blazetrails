@@ -181,20 +181,25 @@ async `fsAdapter` are sufficient.
 **Rails source:** `activesupport/lib/active_support/encrypted_file.rb`,
 `activesupport/test/encrypted_file_test.rb`.
 
-**Notes / divergences from Rails:**
+**Notes / divergences from Rails (as shipped in PR #2148):**
 
 - `read` / `write` / `change` are **async** (use `fsAdapter.exists`,
-  `readFile`, `writeFile`, `rename`, `mkdtemp`, `unlink`). Rails is sync
-  via `Pathname#binread` + `FileUtils.mv` + `Tempfile.create`.
-- Default serializer is **JSON** (not Ruby `Marshal`). The
-  `change(cb)` round-trip stores plain UTF-8 contents the editor writes,
-  so the serializer only matters when a caller passes structured data
-  via a future `EncryptedConfiguration`. Document the deviation; align
-  with `MessageEncryptor`'s existing default.
-- Key length check uses `CIPHER = "aes-128-gcm"` →
-  `MessageEncryptor.keyLen("aes-128-gcm") * 2` (hex). Mirrors Rails'
-  `expected_key_length` exactly.
+  `readFile`, `writeFile`, `rename`, `mkdtemp`, `rmdir`, `unlink`,
+  `realpath`). Rails is sync via `Pathname#binread` + `FileUtils.mv` +
+  `Tempfile.create`. Required for the "async fs only" rule and browser
+  hosts without sync fs.
+- Default serializer is **`NullSerializer`** (raw string in / raw string
+  out). Rails uses `Marshal`; we have no Marshal port. The higher-level
+  `EncryptedConfiguration` (PR 1.6-pre-b) parses contents itself.
+- Default cipher is **`aes-256-cbc`**, with `expectedKeyLength() = 64`
+  hex chars. Rails uses `aes-128-gcm` (key length 32 hex chars); our
+  `MessageEncryptor` does not yet handle GCM auth tags, so the cipher
+  flip is deferred until that lands. Greenfield port with no on-disk
+  Rails compat needed.
 - `env_key` lookup goes through `processAdapter.env`, not `process.env`.
+- `content_path` symlink resolution (Rails' `Pathname#realpath` in
+  `initialize`) is lazy + memoized on first I/O — constructors can't
+  `await`. Behavior equivalent.
 
 ### PR 1.6-pre-b — `EncryptedConfiguration` in activesupport (~150 LOC)
 

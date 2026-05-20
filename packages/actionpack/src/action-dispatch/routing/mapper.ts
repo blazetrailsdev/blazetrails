@@ -48,6 +48,13 @@ const RESOURCE_OPTIONS: ReadonlySet<string> = new Set([
   "concerns",
 ]);
 
+/** @internal Subset of `RouteSet` consumed by the {@link Mapper} constructor. */
+interface RouteSetLike {
+  resourcesPathNames?: Record<string, string>;
+  drawPaths?: string[];
+  defaultUrlOptions?: Record<string, unknown>;
+}
+
 export class Mapper {
   readonly routes: Route[] = [];
   private scopeStack: ScopeFrame[] = [];
@@ -55,9 +62,34 @@ export class Mapper {
   private redirectFns: Map<string, RedirectFunction> = new Map();
   private redirectCounter = 0;
   /** @internal */
-  _scope: Scope = new Scope({ pathNames: { new: "new", edit: "edit" } }, Scope.ROOT, null);
+  _set: RouteSetLike | undefined;
+  /** @internal */
+  _drawPaths: string[];
+  /** @internal */
+  _scope: Scope;
   /** @internal */
   _apiOnly = false;
+  /** @internal Local fallback when no RouteSet is attached. */
+  private _defaultUrlOptions: Record<string, unknown> = {};
+
+  /** Mirrors Rails `Mapper#initialize(set)`. The `set` is optional in trails. */
+  constructor(set?: RouteSetLike) {
+    this._set = set;
+    this._drawPaths = set?.drawPaths ?? [];
+    const pathNames = set?.resourcesPathNames ?? { new: "new", edit: "edit" };
+    this._scope = new Scope({ pathNames }, Scope.ROOT, null);
+  }
+
+  /** Rails: `default_url_options=(options)`. */
+  set defaultUrlOptions(options: Record<string, unknown>) {
+    if (this._set) this._set.defaultUrlOptions = options;
+    else this._defaultUrlOptions = options;
+  }
+
+  /** Rails: `alias_method :default_url_options, :default_url_options=`. */
+  get defaultUrlOptions(): Record<string, unknown> {
+    return this._set?.defaultUrlOptions ?? this._defaultUrlOptions;
+  }
 
   // --- HTTP verb methods ---
 
@@ -368,6 +400,66 @@ export class Mapper {
     });
     callback(this);
     this.scopeStack.pop();
+  }
+
+  /** Rails: `nested(&block)`. Wraps `block` in a nested resource scope. */
+  nested(callback: MapperCallback): void {
+    if (!this.parentResource()) {
+      throw new Error("can't use nested outside resource(s) scope");
+    }
+    this.withScopeLevel("nested", () => callback(this));
+  }
+
+  /**
+   * Rails: `shallow(&block)`. Pushes a `shallow: true` scope so nested
+   * `resources` inside use shallow path/name conventions.
+   */
+  shallow(callback: MapperCallback): void {
+    this.scopeStack.push({ path: "", namePrefix: undefined, controller: undefined, shallow: true });
+    try {
+      callback(this);
+    } finally {
+      this.scopeStack.pop();
+    }
+  }
+
+  /**
+   * Rails: `draw(name)`. Loads `config/routes/<name>.rb` and evaluates it
+   * in the current Mapper context. The file-loading form is Ruby-specific
+   * (`instance_eval(File.read…)`); in trails, pass a callback that receives
+   * this Mapper instead. Passing a string throws — file-based draw is not
+   * supported.
+   */
+  draw(nameOrCallback: string | MapperCallback): void {
+    if (typeof nameOrCallback === "function") {
+      nameOrCallback(this);
+      return;
+    }
+    throw new Error(
+      `Mapper#draw(${JSON.stringify(nameOrCallback)}): file-based draw is not supported in trails. ` +
+        "Pass a callback (mapper) => void with the route definitions, or import and invoke a routes module directly.",
+    );
+  }
+
+  /**
+   * Rails: `set_member_mappings_for_resource`. Inside a `member { … }` block,
+   * adds the standard member verb mappings (`edit`, `show`, `update`,
+   * `destroy`) when the parent resource's `actions` allows them.
+   *
+   * @internal
+   */
+  setMemberMappingsForResource(): void {
+    const parent = this.parentResource();
+    const actions = parent?.actions ?? [];
+    this.member((m) => {
+      if (actions.includes("edit")) m.get("edit");
+      if (actions.includes("show")) m.get("show");
+      if (actions.includes("update")) {
+        m.patch("update");
+        m.put("update");
+      }
+      if (actions.includes("destroy")) m.delete("destroy");
+    });
   }
 
   // --- constraints block ---

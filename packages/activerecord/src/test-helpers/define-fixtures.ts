@@ -34,6 +34,22 @@ export function fixtureId(label: string): number {
   return crc32(label);
 }
 
+/**
+ * Resolves a row's primary key: the declared value if it's an integer (Rails
+ * fixture parity — YAML `id: N` parses as a number), else `fixtureId(label)`
+ * when the PK column is absent. A PK column present with any other value
+ * (string, boolean, fractional number) is rejected: it means the fixture
+ * author tried to declare an id but the type is wrong, and silently falling
+ * back to CRC32 would mask the bug.
+ */
+function resolveDeclaredPk(tableName: string, label: string, declared: unknown): number {
+  if (declared === undefined) return fixtureId(label);
+  if (typeof declared === "number" && Number.isInteger(declared)) return declared;
+  throw new Error(
+    `defineFixtures: ${tableName}.${label} declares a non-integer primary key (${typeof declared}: ${String(declared)}); use an integer literal (e.g. \`id: 1\`) or omit the column.`,
+  );
+}
+
 const REF_TAG = Symbol("fixture-ref");
 
 export interface FixtureRef {
@@ -229,8 +245,7 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
   const tableIds = new Map<string, number>();
   declaredIdsFor(adapter).set(tableName, tableIds);
   for (const label of labels) {
-    const declared = (fixtures[label] as FixtureAttrs)[pkCol];
-    const id = typeof declared === "number" ? declared : fixtureId(label);
+    const id = resolveDeclaredPk(tableName, label, (fixtures[label] as FixtureAttrs)[pkCol]);
     tableIds.set(label, id);
   }
 
@@ -239,8 +254,7 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
   const rows: FixtureAttrs[] = [];
   for (const label of labels) {
     const attrs = fixtures[label];
-    const declared = attrs[pkCol];
-    const id = typeof declared === "number" ? declared : fixtureId(label);
+    const id = resolveDeclaredPk(tableName, label, attrs[pkCol]);
     const row: FixtureAttrs = { [pkCol]: id };
 
     for (const [col, val] of Object.entries(attrs)) {

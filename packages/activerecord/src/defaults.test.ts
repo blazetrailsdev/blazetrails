@@ -9,7 +9,6 @@ import { loadSchemaFromAdapter } from "./model-schema.js";
 import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
-import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
 
 beforeAll(() => {
@@ -79,9 +78,6 @@ describe("DefaultNumbersTest", () => {
     await defineSchema(adapter, { counters: { value: "integer" } });
   });
   withTransactionalFixtures(() => adapter);
-  afterAll(async () => {
-    await dropAllTables(adapter);
-  });
 
   function makeModel() {
     class Counter extends Base {
@@ -119,9 +115,6 @@ describe("DefaultBinaryTest", () => {
     await defineSchema(adp, { bin_records: { data: "string" } });
   });
   withTransactionalFixtures(() => adp);
-  afterAll(async () => {
-    await dropAllTables(adp);
-  });
   it("default varbinary string", async () => {
     class BinRecord extends Base {
       static {
@@ -198,9 +191,6 @@ describe("DefaultTextTest", () => {
     await defineSchema(adapter, { posts: { body: "string", title: "string" } });
   });
   withTransactionalFixtures(() => adapter);
-  afterAll(async () => {
-    await dropAllTables(adapter);
-  });
   it("default texts", async () => {
     class Post extends Base {
       static {
@@ -230,9 +220,6 @@ describe("DefaultStringsTest", () => {
     await defineSchema(adapter, { posts: { title: "string", body: "string" } });
   });
   withTransactionalFixtures(() => adapter);
-  afterAll(async () => {
-    await dropAllTables(adapter);
-  });
   it("default strings", async () => {
     class Post extends Base {
       static {

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { Base } from "../index.js";
 import { createTestAdapter, type TestDatabaseAdapter } from "../test-adapter.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
-import { dropAllTables } from "../test-helpers/drop-all-tables.js";
 import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
 
 vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
@@ -16,8 +15,7 @@ describe("StringTypeTest", () => {
   });
   withTransactionalFixtures(() => adapter);
 
-  afterAll(async () => {
-    await dropAllTables(adapter);
+  afterAll(() => {
     vi.unstubAllEnvs();
   });
 

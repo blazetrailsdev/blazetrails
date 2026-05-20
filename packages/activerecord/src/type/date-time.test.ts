@@ -3,7 +3,6 @@ import { Temporal } from "@blazetrails/activesupport/temporal";
 import { DateTime } from "./date-time.js";
 import { createTestAdapter, type TestDatabaseAdapter } from "../test-adapter.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
-import { dropAllTables } from "../test-helpers/drop-all-tables.js";
 import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
 import { Base } from "../index.js";
 
@@ -18,8 +17,7 @@ describe("DateTimeTest", () => {
   });
   withTransactionalFixtures(() => adapter);
 
-  afterAll(async () => {
-    await dropAllTables(adapter);
+  afterAll(() => {
     vi.unstubAllEnvs();
   });
 

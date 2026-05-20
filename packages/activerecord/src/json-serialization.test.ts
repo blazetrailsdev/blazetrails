@@ -7,7 +7,6 @@ import { Base } from "./index.js";
 
 import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
-import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
 
 beforeAll(() => {
@@ -135,9 +134,6 @@ describe("JsonSerializationTest", () => {
     contact.serializableHash(options);
     expect(options.only).toEqual(optionsBefore.only);
   });
-  afterAll(async () => {
-    await dropAllTables(adapter);
-  });
 });
 
 describe("DatabaseConnectedJsonEncodingTest", () => {
@@ -168,9 +164,6 @@ describe("DatabaseConnectedJsonEncodingTest", () => {
     });
   });
   withTransactionalFixtures(() => adapter);
-  afterAll(async () => {
-    await dropAllTables(adapter);
-  });
 
   it("includes uses association name", async () => {
     class CommentJ1 extends Base {

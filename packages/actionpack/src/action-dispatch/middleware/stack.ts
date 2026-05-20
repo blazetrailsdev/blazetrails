@@ -52,9 +52,8 @@ export class MiddlewareStack implements Iterable<MiddlewareEntry> {
   deleteBang(target: MiddlewareFactory): void {
     const idx = this.findIndex(target);
     if (idx === -1) {
-      throw new Error(
-        `No such middleware to remove: ${String((target as { name?: string }).name)}`,
-      );
+      const name = (target as { name?: string }).name;
+      throw new Error(`No such middleware to remove: ${name || String(target)}`);
     }
     this.entries.splice(idx, 1);
   }

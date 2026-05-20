@@ -116,7 +116,7 @@ export class Session {
   }
 
   hasKey(key: string): boolean {
-    return key in this.getData();
+    return Object.hasOwn(this.getData(), key);
   }
 
   each(callback: (key: string, value: unknown) => void): void {
@@ -201,7 +201,7 @@ export class Session {
 
   fetch(key: string, ...args: unknown[]): unknown {
     const data = this.getData();
-    if (key in data) return data[key];
+    if (Object.hasOwn(data, key)) return data[key];
     if (args.length > 0) {
       if (typeof args[0] === "function") {
         return (args[0] as (key: string) => unknown)(key);

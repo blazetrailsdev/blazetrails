@@ -130,6 +130,14 @@ export const MODULES: readonly string[] = [
  * Rails' `PROTECTED_IVARS` in `action_controller/base.rb`: extends the
  * abstract-layer `DEFAULT_PROTECTED_INSTANCE_VARIABLES` with the controller-
  * level slots (`_params`, `_response`, `_request`, …).
+ *
+ * Names follow the abstract-layer transliteration convention (Rails
+ * `@_action_name` → trails `_actionName`). This is currently a literal
+ * Rails-parity constant — `viewAssigns` already filters all leading-`_`
+ * fields plus `DEFAULT_PROTECTED_INSTANCE_VARIABLES`, so wiring through
+ * `_protectedIvars()` is unnecessary until trails grows underscored
+ * backing fields for `params`/`request`/`response` (Rails' `@_params`
+ * etc.) and the controller pipeline starts consulting it directly.
  */
 export const PROTECTED_IVARS: readonly string[] = [
   ...DEFAULT_PROTECTED_INSTANCE_VARIABLES,

@@ -36,13 +36,23 @@ const STATUS_MAP: Record<string, number> = {
   "ActionDispatch::ParamsTooDeepError": 400,
 };
 
+// Rails keys these by fully-qualified class names. trails error classes set
+// `.name` inconsistently (TemplateError uses the Rails-qualified form;
+// MissingTemplate/RoutingError/ActionNotFound/MissingExactTemplate use the
+// short form), so both spellings live here until the short ones are
+// promoted to Rails-qualified names.
 /** @internal */
 const RESCUE_TEMPLATES: Record<string, string> = {
+  "ActionView::MissingTemplate": "missing_template",
+  "ActionController::RoutingError": "routing_error",
+  "AbstractController::ActionNotFound": "unknown_action",
+  "ActiveRecord::StatementInvalid": "invalid_statement",
+  "ActionView::Template::Error": "template_error",
+  "ActionController::MissingExactTemplate": "missing_exact_template",
   MissingTemplate: "missing_template",
   RoutingError: "routing_error",
   ActionNotFound: "unknown_action",
   StatementInvalid: "invalid_statement",
-  TemplateError: "template_error",
   MissingExactTemplate: "missing_exact_template",
 };
 
@@ -124,8 +134,10 @@ export class ExceptionWrapper {
     return this.exception instanceof RoutingError || this.exceptionClassName === "RoutingError";
   }
 
-  // ActionView::Template::Error class not yet ported; name match is the best
-  // we can do until ActionView::Base lands.
+  // ActionView::Template::Error is ported (actionview/src/template/error.ts
+  // sets name = "ActionView::Template::Error") but we deliberately avoid
+  // importing actionview from actionpack — name match keeps the dependency
+  // direction one-way.
   isTemplateError(): boolean {
     return (
       this.exceptionClassName === "TemplateError" ||

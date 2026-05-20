@@ -8,9 +8,13 @@
 import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
 
 export interface Silencer {
-  silence(level: number | string, fn: () => void): void;
-  silenceAsync?(level: number | string, fn: () => Promise<unknown>): Promise<unknown>;
+  silence<T>(level: number | string, fn: () => T): T;
+  silenceAsync?<T>(level: number | string, fn: () => Promise<T>): Promise<T>;
 }
+
+// Rails' Rack::SilenceRequest calls `Rails.logger.silence { ... }` with no
+// argument, which defaults to ActiveSupport::Logger::ERROR (= 3).
+const ERROR_LEVEL = 3;
 
 export interface SilenceRequestOptions {
   path: string;
@@ -32,13 +36,9 @@ export class SilenceRequest {
     if (env["PATH_INFO"] === this.path && this.logger) {
       const logger = this.logger;
       if (logger.silenceAsync) {
-        return (await logger.silenceAsync(2, () => this.app(env))) as RackResponse;
+        return logger.silenceAsync(ERROR_LEVEL, () => this.app(env));
       }
-      let pending: Promise<RackResponse> | undefined;
-      logger.silence(2, () => {
-        pending = this.app(env);
-      });
-      return pending!;
+      return logger.silence(ERROR_LEVEL, () => this.app(env));
     }
     return this.app(env);
   }

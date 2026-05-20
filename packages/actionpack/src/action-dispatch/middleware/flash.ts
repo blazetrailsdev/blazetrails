@@ -40,8 +40,11 @@ export interface FlashRequestHost {
  */
 export function flash(this: FlashRequestHost, value?: FlashHash | null): FlashHash | null {
   if (arguments.length > 0) {
-    this.env[FLASH_KEY] = value as FlashHash | null;
-    return value ?? null;
+    // Normalize `undefined` to `null` so the env key is never left in
+    // a non-Railsy "absent vs cleared" limbo state.
+    const normalized = value ?? null;
+    this.env[FLASH_KEY] = normalized;
+    return normalized;
   }
   const existing = flashHash.call(this);
   if (existing) return existing;

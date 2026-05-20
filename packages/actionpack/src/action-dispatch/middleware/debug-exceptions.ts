@@ -112,8 +112,11 @@ export class DebugExceptions {
   }
 
   /**
-   * Final response builder used by both the API and browser paths. Returns
-   * a Rack response tuple with correct Content-Type / Content-Length.
+   * Rack response builder used by {@link renderForApiRequest}. Mirrors
+   * Rails' private `DebugExceptions#render(status, body, format)`. The
+   * legacy `renderJsonError` / `renderXmlError` / `renderHtmlError` /
+   * `renderTextError` paths predate this helper and build their own
+   * tuples directly; they should migrate to `render` over time.
    *
    * @internal
    */
@@ -136,8 +139,11 @@ export class DebugExceptions {
    * @internal
    */
   logError(env: RackEnv, wrapper: ExceptionWrapper): void {
-    const logger = (env["action_dispatch.logger"] as Logger | undefined) ?? this.logger;
-    if (!logger) return;
+    // Rails: `request.logger || ActionView::Base.logger || stderr_logger`
+    // — fall back to the memoized stderr logger when no logger is wired
+    // in env/options so errors are never silently swallowed.
+    const logger =
+      (env["action_dispatch.logger"] as Logger | undefined) ?? this.logger ?? this.stderrLogger();
     if (!this.isLogRescuedResponses(env) && wrapper.statusCode < 500) return;
 
     const lines: string[] = ["  "];

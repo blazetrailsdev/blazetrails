@@ -156,6 +156,19 @@ describe("Mapper public DSL additions", () => {
     expect(added.every((r) => r.controller === "posts")).toBe(true);
   });
 
+  it("shallow inside a namespace preserves the namespace prefix on member paths", () => {
+    const m = new Mapper();
+    m.namespace("admin", () => {
+      m.resources("posts", { shallow: true }, () => {
+        m.resources("comments");
+      });
+    });
+    const commentShow = m.routes.find(
+      (r) => r.action === "show" && r.controller.endsWith("comments"),
+    );
+    expect(commentShow?.path).toBe("/admin/comments/:id");
+  });
+
   it("setMemberMappingsForResource is a safe no-op outside a resource scope", () => {
     const m = new Mapper();
     expect(() => m.setMemberMappingsForResource()).not.toThrow();

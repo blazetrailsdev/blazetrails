@@ -940,15 +940,20 @@ export class Mapper {
    * @internal
    */
   private outerNonResourcePrefix(): string {
-    for (let i = this.scopeStack.length - 1; i >= 0; i--) {
-      const f = this.scopeStack[i];
-      // Skip both resource frames and shallow-marker frames (the latter
-      // carry no real path contribution — they snapshot currentPrefix()
-      // only to keep `member()` from resetting it).
-      if (f.resource || f.shallow) continue;
-      return f.path;
+    // Walk bottom-up to find the deepest non-resource frame that comes
+    // *before* the outermost resource frame. A `scope(...)` opened
+    // inside a resource (e.g. `resources('posts') { scope('/foo') {…} }`)
+    // is NOT outer — its path already contains the parent-resource
+    // segments shallow routing is meant to drop. Shallow-marker frames
+    // carry no real path contribution; they snapshot currentPrefix()
+    // only to keep `member()` from resetting it.
+    let last = "";
+    for (const f of this.scopeStack) {
+      if (f.resource) return last;
+      if (f.shallow) continue;
+      last = f.path;
     }
-    return "";
+    return last;
   }
 
   private prefixedName(name: string): string {

@@ -118,10 +118,10 @@ export function filterActionMethodsForRoutes(
  * @internal
  */
 export function _routes(host?: { _routes?: RouteSetLike | null }): RouteSetLike | null {
-  if (host && Object.prototype.hasOwnProperty.call(host, "_routes")) {
-    return host._routes ?? null;
-  }
-  return _routesClassDefault;
+  // Use normal property lookup (not hasOwnProperty) so subclasses inherit
+  // a route set wired on a superclass — matches Rails' attribute
+  // inheritance via class_attribute.
+  return host?._routes ?? _routesClassDefault;
 }
 
 /**

@@ -35,6 +35,23 @@ describe("snakeToCamel", () => {
     expect(snakeToCamel("name")).toBe("name");
     expect(snakeToCamel("expr")).toBe("expr");
   });
+
+  it("renames `erb` token to `tse` (trails uses .tse in place of .erb)", () => {
+    expect(snakeToCamel("erb")).toBe("tse");
+    expect(snakeToCamel("erb_handler")).toBe("tseHandler");
+    expect(snakeToCamel("compile_erb")).toBe("compileTse");
+    expect(snakeToCamel("compile_erb_template")).toBe("compileTseTemplate");
+    expect(snakeToCamel("_erb_source")).toBe("_tseSource");
+  });
+
+  it("does NOT rename `erb` when it appears as a substring of another token", () => {
+    // Guard: only standalone snake-case segments should be substituted,
+    // not embedded substrings like `verb`, `verbatim`, `superb`, `reverb`.
+    expect(snakeToCamel("verb")).toBe("verb");
+    expect(snakeToCamel("verbatim_copy")).toBe("verbatimCopy");
+    expect(snakeToCamel("http_verb")).toBe("httpVerb");
+    expect(snakeToCamel("superb_thing")).toBe("superbThing");
+  });
 });
 
 describe("rubyMethodToTs", () => {

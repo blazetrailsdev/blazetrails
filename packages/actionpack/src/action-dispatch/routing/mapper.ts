@@ -484,8 +484,12 @@ export class Mapper {
     if (asName) matchOpts.as = asName;
     delete matchOpts.at;
     this.match(path, matchOpts);
+    if (asName) this._mountedApps.set(asName, { app, path });
     if (railsApp && asName) this.defineGeneratePrefix(app, asName);
   }
+
+  /** @internal */
+  _mountedApps: Map<string, { app: MountableApp; path: string }> = new Map();
 
   /** @internal */
   isRailsApp(app: MountableApp): boolean {
@@ -508,10 +512,30 @@ export class Mapper {
     return undefined;
   }
 
-  /** @internal */
-  defineGeneratePrefix(_app: MountableApp, _name: string): void {
-    /* engines reuse the parent URL helpers in trails; full Rails impl extends app.routes with script_namer */
+  /**
+   * Records a `script_namer` for a mounted Rails engine so the engine's URL
+   * helpers can prefix generated paths with the mount point. Mirrors Rails'
+   * `define_generate_prefix(app, name)` registration step; the Rails impl
+   * additionally extends `app.routes` with `find_script_name` /
+   * `optimize_routes_generation?`, which trails wires via the
+   * {@link _mountedScriptNamers} map when the engine helper layer lands.
+   *
+   * @internal
+   */
+  defineGeneratePrefix(app: MountableApp, name: string): void {
+    const scriptNamer = (options: Record<string, unknown>): string => {
+      const prefixOptions: Record<string, unknown> = { ...options };
+      if (options.originalScriptName) prefixOptions.scriptName = "";
+      return `/${name}${prefixOptions.scriptName ? `${prefixOptions.scriptName}` : ""}`;
+    };
+    this._mountedScriptNamers.set(name, { app, scriptNamer });
   }
+
+  /** @internal */
+  _mountedScriptNamers: Map<
+    string,
+    { app: MountableApp; scriptNamer: (options: Record<string, unknown>) => string }
+  > = new Map();
 
   // --- match privates (decomposition pipeline) ---
 

@@ -66,6 +66,127 @@ export class ActionNotFound extends Error {
 }
 
 export class AbstractController {
+  /**
+   * Rails `attr_reader :abstract` (class-level) — backing storage for
+   * the abstract-marker bit set by `abstractBang`. Subclasses default
+   * to `false`; controllers used only as bases (Metal, Base) flip it
+   * to `true` so their public-instance methods get removed from
+   * `actionMethods`.
+   *
+   * @internal
+   */
+  static abstract: boolean = false;
+
+  /**
+   * Rails `abstract?` predicate alias (`alias_method :abstract?, :abstract`).
+   * Reads the abstract flag.
+   *
+   * @internal
+   */
+  static isAbstract(): boolean {
+    return Boolean(this.abstract);
+  }
+
+  /**
+   * Rails `abstract!` — flag this controller class as abstract.
+   *
+   * @internal
+   */
+  static abstractBang(): void {
+    this.abstract = true;
+  }
+
+  /**
+   * Rails `controller_path` (class method) — `name.delete_suffix("Controller").underscore`,
+   * memoised. Returns the empty string for anonymous subclasses.
+   *
+   * @internal
+   */
+  static controllerPath(): string {
+    if (
+      Object.prototype.hasOwnProperty.call(this, "_controllerPathCache") &&
+      typeof (this as unknown as { _controllerPathCache?: string })._controllerPathCache ===
+        "string"
+    ) {
+      return (this as unknown as { _controllerPathCache: string })._controllerPathCache;
+    }
+    const name = this.name ?? "";
+    if (!name) return "";
+    const stripped = name.endsWith("Controller") ? name.slice(0, -"Controller".length) : name;
+    const path = stripped.replace(/([a-z\d])([A-Z])/g, "$1_$2").toLowerCase();
+    (this as unknown as { _controllerPathCache?: string })._controllerPathCache = path;
+    return path;
+  }
+
+  /**
+   * Rails `internal_methods` — returns the instance method names that
+   * should NOT be treated as action methods. Walks ancestors until the
+   * first abstract class is found, then returns its full public-instance
+   * surface minus the methods owned by the concrete leaves.
+   *
+   * @internal
+   */
+  static internalMethods(): string[] {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    let cls: typeof AbstractController = this;
+    const ownedByConcrete: string[] = [];
+    while (cls && !cls.isAbstract()) {
+      const proto = cls.prototype as object | null;
+      if (proto) {
+        for (const name of Object.getOwnPropertyNames(proto)) {
+          if (name === "constructor") continue;
+          const d = Object.getOwnPropertyDescriptor(proto, name);
+          if (d && typeof d.value === "function") ownedByConcrete.push(name);
+        }
+      }
+      const parent = Object.getPrototypeOf(cls) as typeof AbstractController | null;
+      if (!parent || parent === Function.prototype) break;
+      cls = parent;
+    }
+    const all: string[] = [];
+    let proto: object | null = cls?.prototype ?? null;
+    while (proto && proto !== Object.prototype) {
+      for (const name of Object.getOwnPropertyNames(proto)) {
+        if (name === "constructor") continue;
+        const d = Object.getOwnPropertyDescriptor(proto, name);
+        if (d && typeof d.value === "function") all.push(name);
+      }
+      proto = Object.getPrototypeOf(proto);
+    }
+    const owned = new Set(ownedByConcrete);
+    return all.filter((n) => !owned.has(n));
+  }
+
+  /**
+   * Rails `clear_action_methods!` — drops the memoised action methods so
+   * the next `actionMethods` call recomputes. Called by `method_added`.
+   *
+   * @internal
+   */
+  static clearActionMethodsBang(): void {
+    (this as unknown as { _actionMethodCache?: Set<string> })._actionMethodCache = undefined;
+  }
+
+  /**
+   * Rails `method_added(name)` — `super; clear_action_methods!`. JS has
+   * no native method-added hook; this is exposed so framework code that
+   * defines methods at runtime (e.g. via metaprogramming) can call it.
+   *
+   * @internal
+   */
+  static methodAdded(_name: string): void {
+    this.clearActionMethodsBang();
+  }
+
+  /**
+   * Rails `eager_load!` — warm the action-methods cache and return nil.
+   *
+   * @internal
+   */
+  static eagerLoadBang(): void {
+    this.actionMethods();
+  }
+
   /** The action currently being processed. */
   actionName: string = "";
 

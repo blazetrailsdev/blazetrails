@@ -312,10 +312,11 @@ export function _skipActionCallback(
   filter: ActionCallback | AroundCallback | string,
   options: CallbackOptions,
 ): void {
-  const opts: CallbackOptionsWithFilters = {
-    ...options,
-    filters: typeof filter === "function" ? [filter] : [],
-  };
+  // For string-name skips, thread a synthetic { name } so ActionFilter's
+  // raise-on-missing-action message renders `:name` rather than `[]`.
+  const namedFilter =
+    typeof filter === "function" ? filter : ({ name: filter } as unknown as ActionCallback);
+  const opts: CallbackOptionsWithFilters = { ...options, filters: [namedFilter] };
   _normalizeCallbackOptions(opts);
   delete opts.filters;
 
@@ -346,6 +347,12 @@ export function _skipActionCallback(
         ifConds,
         unlessConds,
       );
+      // mergeConditionalOptions creates fresh options ({ if, unless } only),
+      // dropping trails' _trailsName metadata. Re-attach it so future name-based
+      // skips/overrides on this entry continue to match.
+      if (stored !== undefined) {
+        (merged.options as Record<string, unknown>)._trailsName = stored;
+      }
       chain.insert(chain.index(cb), merged);
     }
     chain.delete(cb);

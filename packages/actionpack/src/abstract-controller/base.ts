@@ -43,16 +43,25 @@ export class ActionNotFound extends Error {
     this.action = action;
   }
 
+  #cachedCorrections?: string[];
+
   /**
-   * Mirrors Ruby's `DidYouMean::Correctable#corrections` — suggests
-   * action methods on the raising controller close to the missing
-   * action name. Empty when the error was constructed without a
-   * controller/action context.
+   * Mirrors Ruby's `DidYouMean::Correctable#corrections` (memoised via
+   * `@corrections ||= ...` in Rails). Suggests action methods on the
+   * raising controller close to the missing action name. Empty when
+   * the error was constructed without a controller/action context.
    */
   get corrections(): string[] {
-    if (!this.controller || !this.action) return [];
+    if (this.#cachedCorrections !== undefined) return this.#cachedCorrections;
+    if (!this.controller || !this.action) {
+      this.#cachedCorrections = [];
+      return this.#cachedCorrections;
+    }
     const ctor = this.controller.constructor as typeof AbstractController;
-    return new SpellChecker({ dictionary: ctor.actionMethods() }).correct(this.action);
+    this.#cachedCorrections = new SpellChecker({
+      dictionary: ctor.actionMethods(),
+    }).correct(this.action);
+    return this.#cachedCorrections;
   }
 }
 

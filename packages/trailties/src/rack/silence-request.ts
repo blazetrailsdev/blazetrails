@@ -6,6 +6,7 @@
  */
 
 import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
+import { Logger as ASLogger } from "@blazetrails/activesupport";
 
 export interface Silencer {
   silence<T>(level: number | string, fn: () => T): T;
@@ -13,8 +14,8 @@ export interface Silencer {
 }
 
 // Rails' Rack::SilenceRequest calls `Rails.logger.silence { ... }` with no
-// argument, which defaults to ActiveSupport::Logger::ERROR (= 3).
-const ERROR_LEVEL = 3;
+// argument, which defaults to ActiveSupport::Logger::ERROR.
+const ERROR_LEVEL = ASLogger.ERROR;
 
 export interface SilenceRequestOptions {
   path: string;

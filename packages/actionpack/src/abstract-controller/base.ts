@@ -7,6 +7,7 @@
  */
 
 import { SpellChecker } from "@blazetrails/did-you-mean";
+import { underscore } from "@blazetrails/activesupport";
 
 import {
   _defineActionCallbacks,
@@ -113,7 +114,7 @@ export class AbstractController {
     const name = this.name ?? "";
     if (!name) return "";
     const stripped = name.endsWith("Controller") ? name.slice(0, -"Controller".length) : name;
-    const path = stripped.replace(/([a-z\d])([A-Z])/g, "$1_$2").toLowerCase();
+    const path = underscore(stripped);
     (this as unknown as { _controllerPathCache?: string })._controllerPathCache = path;
     return path;
   }

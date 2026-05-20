@@ -55,6 +55,42 @@ export function isFixtureRef(v: unknown): v is FixtureRef {
   return typeof v === "object" && v !== null && REF_TAG in v;
 }
 
+// Adapter-scoped registry of declared fixture ids: each defineFixtures() call records
+// `${tableName}::${label} → id` for every row that carries an explicit `id`. ref()
+// resolution consults this map first so cross-fixture FKs land on the Rails-mirrored id.
+const declaredIds = new WeakMap<object, Map<string, number>>();
+
+function declaredIdsFor(adapter: object): Map<string, number> {
+  let m = declaredIds.get(adapter);
+  if (!m) {
+    m = new Map();
+    declaredIds.set(adapter, m);
+  }
+  return m;
+}
+
+/** @internal */
+export function resolveFixtureId(
+  adapter: DatabaseAdapter,
+  tableName: string,
+  fixtureName: string,
+): number {
+  const declared = declaredIdsFor(adapter).get(`${tableName}::${fixtureName}`);
+  return declared ?? fixtureId(fixtureName);
+}
+
+/**
+ * Returns the adapter's normalized name (`"postgres"` / `"mysql"` / `"sqlite"`).
+ * Lets ERB-style adapter-conditional fixture data translate to TS:
+ *
+ * ```ts
+ * { data: adapterName(adapter) === "postgres" ? a : b }
+ * ```
+ */
+export function adapterName(adapter: DatabaseAdapter): "postgres" | "mysql" | "sqlite" {
+  return adapter.adapterName;
+}
+
 // --- Phase 1b: tableName → ModelClass registry (scoped per adapter) ---
 
 // WeakMap prevents cross-file leakage: each adapter object gets its own registry that
@@ -73,6 +109,7 @@ function getRegistry(adapter: object): Map<string, BaseClass> {
 /** Clears the model registry for the given adapter. Useful in test suites that reuse one adapter across multiple files. */
 export function clearTableRegistry(adapter: DatabaseAdapter): void {
   tableRegistries.delete(adapter);
+  declaredIds.delete(adapter);
 }
 
 /** @internal */
@@ -179,11 +216,24 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
 
   const labels = Object.keys(fixtures) as K[];
 
-  // Build rows with deterministic IDs and resolved references
+  // Pre-pass: register each row's declared id (when present) so refs in this call —
+  // including self-refs to labels declared later in the same fixture set — resolve
+  // to the Rails-mirrored id rather than the CRC32 fallback.
+  const idRegistry = declaredIdsFor(adapter);
+  for (const label of labels) {
+    const declared = (fixtures[label] as FixtureAttrs)[pkCol];
+    if (typeof declared === "number") {
+      idRegistry.set(`${tableName}::${label}`, declared);
+    }
+  }
+
+  // Build rows with resolved IDs and references. Rows that declare `id: N` use it
+  // verbatim (Rails parity); rows without one fall back to fixtureId(label).
   const rows: FixtureAttrs[] = [];
   for (const label of labels) {
     const attrs = fixtures[label];
-    const id = fixtureId(label);
+    const declared = attrs[pkCol];
+    const id = typeof declared === "number" ? declared : fixtureId(label);
     const row: FixtureAttrs = { [pkCol]: id };
 
     for (const [col, val] of Object.entries(attrs)) {
@@ -199,7 +249,7 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
               `Use explicit ${poly.typeColumn}/${poly.idColumn} if you need to reference by ID.`,
           );
         }
-        row[col] = fixtureId(val.fixtureName);
+        row[col] = resolveFixtureId(adapter, val.tableName, val.fixtureName);
         continue;
       }
 

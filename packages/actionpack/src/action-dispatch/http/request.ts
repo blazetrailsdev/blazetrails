@@ -22,14 +22,18 @@ import {
   contentMimeType as _contentMimeType,
   format as _format,
   formats as _formats,
+  formatFromPathExtension as _formatFromPathExtension,
   hasContentType as _hasContentType,
   ignoreAcceptHeader as _ignoreAcceptHeader,
   negotiateMime as _negotiateMime,
+  paramsReadable as _paramsReadable,
   setFormat as _setFormat,
   setFormats as _setFormats,
   setIgnoreAcceptHeader as _setIgnoreAcceptHeader,
   setVariant as _setVariant,
   shouldApplyVaryHeader as _shouldApplyVaryHeader,
+  useAcceptHeader as _useAcceptHeader,
+  validAcceptHeader as _validAcceptHeader,
   variant as _variant,
   type MimeNegotiationHost,
   type NullType,
@@ -58,12 +62,6 @@ import {
   type ParameterParsers,
   type ParametersHost,
 } from "./parameters.js";
-import {
-  formatFromPathExtension as _formatFromPathExtension,
-  paramsReadable as _paramsReadable,
-  useAcceptHeader as _useAcceptHeader,
-  validAcceptHeader as _validAcceptHeader,
-} from "./mime-negotiation.js";
 import { Headers as HttpHeaders } from "./headers.js";
 
 const FLASH_HASH_KEY = "action_dispatch.request.flash_hash";

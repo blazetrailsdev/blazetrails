@@ -57,9 +57,10 @@ export class Scope {
     this.parent = parent;
     this.scopeLevel = scopeLevel;
     // Rails: @hash = parent ? parent.frame.merge(hash) : hash
-    // Preserve `null` when parent is null so `null?` can be observed; otherwise
-    // merge over parent.frame. Scope.ROOT.frame is {} so root-children fall
-    // through to a plain copy of `hash`.
+    // Preserve `null` when parent is null so `null?` (isNull) is observable
+    // on Scope.ROOT. Children of ROOT spread over `ROOT.frame` (which is
+    // `null`); JS object-spread treats `null` as empty, so the result is
+    // a plain copy of `hash` — matching Rails where ROOT.frame is `{}`.
     this.hash = parent ? { ...parent.frame, ...(hash ?? {}) } : hash;
   }
 

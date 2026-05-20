@@ -174,7 +174,11 @@ export function render<T extends { responseBody?: unknown } & AbstractRenderHost
   this: T,
   ...args: unknown[]
 ): void {
-  if (this.responseBody) throw new DoubleRenderError();
+  // Rails: `if response_body` — Ruby truthiness, so `""` and `0` already
+  // count as rendered. JS truthiness drops `""`/`0`, so explicit null-check.
+  if (this.responseBody != null && this.responseBody !== false) {
+    throw new DoubleRenderError();
+  }
   abstractRender.call(this, ...args);
 }
 
@@ -202,7 +206,10 @@ export function renderToString<T extends AbstractRenderHost>(this: T, ...args: u
 /**
  * Mirrors Rails `ActionController::Rendering#process_action(*)` — sets
  * `self.formats` from `request.formats.filter_map(&:ref)` before the
- * action runs. `this`-typed so include-style mixin works.
+ * action runs. Rails calls `super` to continue the include chain; in
+ * trails the host class is responsible for chaining (this helper just
+ * applies the formats side-effect). Synchronous to mirror the Ruby
+ * source — host-side dispatch handles async separately.
  * @internal
  */
 export function processAction<

@@ -33,6 +33,7 @@
  *   });
  */
 
+import { camelize } from "@blazetrails/activesupport";
 import { Request } from "../action-dispatch/http/request.js";
 import { Response } from "../action-dispatch/http/response.js";
 import { Parameters } from "./metal/strong-parameters.js";
@@ -65,23 +66,24 @@ export class TestCase {
 
   /**
    * Mirrors Rails `TestCase.tests(controller_class)`. Accepts a
-   * controller class or a name that resolves to one. Strings/symbols
-   * receive `"#{name}Controller"` lookup via `globalThis`.
+   * controller class or a string name; the string is camelized + suffixed
+   * with `Controller` and looked up on `globalThis` (the closest JS
+   * analogue to Ruby's `constantize`). Rails also accepts symbols; JS
+   * has no symbol/constant lookup, so the string form covers that case.
    */
   static tests(controllerClass: ControllerClass | string): void {
     if (typeof controllerClass === "string") {
-      const camel =
-        controllerClass.charAt(0).toUpperCase() +
-        controllerClass.slice(1).replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-      const klass = (globalThis as Record<string, unknown>)[`${camel}Controller`];
+      const klass = (globalThis as Record<string, unknown>)[
+        `${camelize(controllerClass)}Controller`
+      ];
       if (typeof klass !== "function") {
-        throw new Error(`controller class must be a String, Symbol, or Class`);
+        throw new Error("controller class must be a String or Class");
       }
       this._controllerClass = klass as ControllerClass;
       return;
     }
     if (typeof controllerClass !== "function") {
-      throw new Error("controller class must be a String, Symbol, or Class");
+      throw new Error("controller class must be a String or Class");
     }
     this._controllerClass = controllerClass;
   }

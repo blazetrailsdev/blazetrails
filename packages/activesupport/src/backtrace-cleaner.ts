@@ -43,7 +43,7 @@ export class BacktraceCleaner {
     return filtered.filter((line) => !this._isSilenced(line));
   }
 
-  /** cleanFrame — clean a single frame; returns undefined if silenced. */
+  /** cleanFrame — clean a single frame; returns undefined when excluded by the selected kind. */
   cleanFrame(frame: string, kind: CleanKind = "silent"): string | undefined {
     const filtered = this._applyFilters(frame);
     if (kind === "all") return filtered;

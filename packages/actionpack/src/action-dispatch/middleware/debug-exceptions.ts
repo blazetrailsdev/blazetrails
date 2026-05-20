@@ -140,15 +140,25 @@ export class DebugExceptions {
     if (!logger) return;
     if (!this.isLogRescuedResponses(env) && wrapper.statusCode < 500) return;
 
-    const lines: string[] = [];
-    lines.push(`${wrapper.exceptionName} (${wrapper.message}):`);
-    let cause = (wrapper.exception as { cause?: Error }).cause;
-    while (cause) {
-      lines.push(`Caused by: ${cause.constructor?.name ?? "Error"} (${cause.message})`);
-      cause = (cause as { cause?: Error }).cause;
+    const lines: string[] = ["  "];
+    if (wrapper.hasCause()) {
+      lines.push(`${wrapper.exceptionClassName} (${wrapper.message})`);
+      for (const cause of wrapper.wrappedCauses) {
+        lines.push(`Caused by: ${cause.exceptionClassName} (${cause.message})`);
+      }
+      lines.push(`\nInformation for: ${wrapper.exceptionClassName} (${wrapper.message}):`);
+    } else {
+      lines.push(`${wrapper.exceptionClassName} (${wrapper.message}):`);
     }
+    lines.push(...wrapper.annotatedSourceCode());
     lines.push("  ");
-    lines.push(...wrapper.applicationTrace);
+    lines.push(...wrapper.exceptionTrace());
+    for (const cause of wrapper.hasCause() ? wrapper.wrappedCauses : []) {
+      lines.push(`\nInformation for cause: ${cause.exceptionClassName} (${cause.message}):`);
+      lines.push(...cause.annotatedSourceCode());
+      lines.push("  ");
+      lines.push(...cause.exceptionTrace());
+    }
     this.logArray(logger, lines, env);
   }
 

@@ -31,7 +31,6 @@ export interface FlashRequestHost {
     set(key: string, value: unknown): void;
     delete(key: string): void;
   };
-  resetSession?(): void;
 }
 
 /**
@@ -96,13 +95,15 @@ export function commitFlash(this: FlashRequestHost): void {
 }
 
 /**
- * Clear the request's flash. Called by Rails' `Request#reset_session`
- * via `super` and a `self.flash = nil` follow-up.
+ * The flash side of `Request#reset_session`. Rails prepends this onto
+ * Request and uses `super` to chain to the original implementation; in
+ * trails-mixin style, the chain is the responsibility of the wiring
+ * code, so this function only owns the post-`super` "clear the flash"
+ * step. Callers must invoke the underlying `Request#resetSession` first.
  *
  * @internal
  */
 export function resetSession(this: FlashRequestHost): void {
-  this.resetSession?.();
   this.env[FLASH_KEY] = null;
 }
 

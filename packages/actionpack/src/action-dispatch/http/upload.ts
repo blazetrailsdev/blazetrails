@@ -131,6 +131,7 @@ export class UploadedFile {
 
   /** Rails `tempfile.open` — re-opens the underlying file for reading. */
   open(): Buffer {
+    this._closed = false;
     return this.read();
   }
 

@@ -161,19 +161,19 @@ export class PermissionsPolicy {
    * `:none` symbols map to `'self'` / `'none'`.
    * @internal
    */
-  applyMappings(sources: readonly PermissionSource[]): string[] {
+  private applyMappings(sources: readonly PermissionSource[]): string[] {
     return sources.map((s) => (s === "self" || s === "none" ? this.applyMapping(s) : s));
   }
 
   /** Rails `apply_mapping(:self|:none)` — single-symbol mapping. @internal */
-  applyMapping(source: "self" | "none"): string {
+  private applyMapping(source: "self" | "none"): string {
     if (source === "self") return "'self'";
     if (source === "none") return "'none'";
     throw new Error(`Unknown HTTP permissions policy source mapping: ${String(source)}`);
   }
 
   /** Rails `build_directives(context)` — array of `"name a b"` entries. @internal */
-  buildDirectives(): string[] {
+  private buildDirectives(): string[] {
     const out: string[] = [];
     for (const [directive, sources] of this.directives) {
       if (Array.isArray(sources) && sources.length > 0) {
@@ -186,12 +186,12 @@ export class PermissionsPolicy {
   }
 
   /** Rails `build_directive(sources, context)`. @internal */
-  buildDirective(sources: readonly PermissionSource[]): string[] {
+  private buildDirective(sources: readonly PermissionSource[]): string[] {
     return sources.map((s) => this.resolveSource(s));
   }
 
   /** Rails `resolve_source(source, context)` — strings pass through. @internal */
-  resolveSource(source: PermissionSource): string {
+  private resolveSource(source: PermissionSource): string {
     if (typeof source === "string") return source;
     throw new Error(`Unexpected permissions policy source: ${String(source)}`);
   }

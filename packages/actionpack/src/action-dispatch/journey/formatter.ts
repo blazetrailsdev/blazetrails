@@ -187,9 +187,8 @@ export class Formatter {
 
   /** @internal */
   private *matchRoute(name: string | null, options: Record<string, unknown>): Generator<Route> {
-    const named = this.routes.namedRoutes;
-    if (name != null && named.has(name)) {
-      const r = named.get(name);
+    if (name != null && this.namedRoutes.has(name)) {
+      const r = this.namedRoutes.get(name);
       if (r) yield r;
       return;
     }

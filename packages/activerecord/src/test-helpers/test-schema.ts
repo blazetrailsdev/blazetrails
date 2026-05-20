@@ -1470,22 +1470,23 @@ export const TEST_SCHEMA: Schema = {
     wheelable_type: "string",
   },
 
-  // Rails declares `id: false` with a string primary_key column — modeled
-  // here via `primaryKey: false` plus an explicit non-null string column.
+  // Rails declares `id: false` with `t.string :<x>_id, primary_key: true` —
+  // a real DB-level primary key on the string column rather than the
+  // implicit `id`. Modeled via `primaryKey: [name]` (NOT NULL implied).
   countries: {
     columns: {
-      country_id: { type: "string", null: false },
+      country_id: "string",
       name: "string",
     },
-    primaryKey: false,
+    primaryKey: ["country_id"],
   },
 
   treaties: {
     columns: {
-      treaty_id: { type: "string", null: false },
+      treaty_id: "string",
       name: "string",
     },
-    primaryKey: false,
+    primaryKey: ["treaty_id"],
   },
 
   countries_treaties: {

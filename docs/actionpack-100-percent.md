@@ -1,8 +1,7 @@
 # actionpack — Road to 100%
 
 Consolidates the ActionDispatch coverage roadmap. ActionController has its own:
-[actioncontroller-100-percent.md](actioncontroller-100-percent.md) +
-[actioncontroller-privates-plan.md](actioncontroller-privates-plan.md).
+[actioncontroller-100-percent.md](actioncontroller-100-percent.md).
 
 Forward-only — completed waves live in git.
 

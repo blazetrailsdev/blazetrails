@@ -28,4 +28,10 @@ export class BacktraceCleaner extends Base {
     this._root = root ? (root.endsWith("/") ? root : `${root}/`) : undefined;
     return this;
   }
+
+  override dup(): this {
+    const copy = super.dup();
+    copy._root = this._root;
+    return copy;
+  }
 }

@@ -60,8 +60,9 @@ export class BacktraceCleaner {
     return this._silencers.some((s) => s(line));
   }
 
-  dup(): BacktraceCleaner {
-    const copy = new BacktraceCleaner();
+  dup(): this {
+    const Ctor = this.constructor as new () => this;
+    const copy = new Ctor();
     copy._filters = [...this._filters];
     copy._silencers = [...this._silencers];
     return copy;

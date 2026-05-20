@@ -150,8 +150,11 @@ export class Mapper {
     const namePrefix = this.currentNamePrefix();
     const routeName = (suffix: string) => (namePrefix ? `${namePrefix}_${suffix}` : suffix);
 
-    // For shallow routes, member routes use un-nested paths
-    const shallowPath = shallow ? `/${name}` : basePath;
+    // For shallow routes, member routes drop *parent resource* segments but
+    // keep outer scope/namespace prefixes. Rails: shallow_path = path until
+    // outermost resource.
+    const shallowPrefix = shallow ? this.outerNonResourcePrefix() : prefix;
+    const shallowPath = shallow ? `${shallowPrefix}/${name}` : basePath;
     const shallowName = (suffix: string) => (shallow ? suffix : routeName(suffix));
 
     const allowed = allowedActions(options, [
@@ -218,6 +221,7 @@ export class Mapper {
           actions: Array.from(allowed) as ResourceAction[],
         },
         resourceController: controller,
+        resourcePathNames: pathNames,
       });
       cb(this);
       this.scopeStack.pop();
@@ -341,6 +345,7 @@ export class Mapper {
           actions: Array.from(allowed) as ResourceAction[],
         },
         resourceController: controller,
+        resourcePathNames: pathNames,
       });
       cb(this);
       this.scopeStack.pop();
@@ -498,7 +503,7 @@ export class Mapper {
     const frame = [...this.scopeStack].reverse().find((f) => f.resource === parent);
     const memberPath = frame?.memberPath ?? this.currentPrefix();
     const controller = frame?.resourceController ?? "";
-    const editPath = this.actionPath("edit");
+    const editPath = frame?.resourcePathNames?.edit ?? this.actionPath("edit");
     if (actions.includes("edit")) {
       this.routes.push(new Route("GET", `${memberPath}/${editPath}`, controller, "edit"));
     }
@@ -925,6 +930,20 @@ export class Mapper {
   private currentPrefix(): string {
     if (this.scopeStack.length === 0) return "";
     return this.scopeStack[this.scopeStack.length - 1].path;
+  }
+
+  /**
+   * Path contributed by the outermost non-resource scope frames (namespaces,
+   * scopes) — used to compute the shallow base path so it preserves
+   * `/admin` etc. but drops parent-resource `/:user_id` segments.
+   *
+   * @internal
+   */
+  private outerNonResourcePrefix(): string {
+    for (let i = this.scopeStack.length - 1; i >= 0; i--) {
+      if (!this.scopeStack[i].resource) return this.scopeStack[i].path;
+    }
+    return "";
   }
 
   private prefixedName(name: string): string {
@@ -1377,6 +1396,8 @@ interface ScopeFrame {
   resource?: ResourceLike;
   /** Controller for member-route emission (Rails: resource_scope controller). */
   resourceController?: string;
+  /** Merged pathNames (scope + options) for this resource frame. */
+  resourcePathNames?: Record<string, string>;
 }
 
 interface ScopeOptions {

@@ -58,13 +58,13 @@ export function isFixtureRef(v: unknown): v is FixtureRef {
   return typeof v === "object" && v !== null && REF_TAG in v;
 }
 
-// Adapter-scoped registry of declared fixture ids: each defineFixtures() call records
-// `${tableName}::${label} → id` for every row that carries an explicit primary key
-// (whichever column the model declares as `primaryKey`, not necessarily `id`). ref()
-// resolution consults this map first so cross-fixture FKs land on the Rails-mirrored id.
-const declaredIds = new WeakMap<object, Map<string, number>>();
+// Adapter-scoped registry of declared fixture ids, nested by table so a subsequent
+// defineFixtures() call for the same table fully replaces the prior label set —
+// no leakage of stale labels when the caller reloads a subset. Values are the row's
+// primary-key value (declared PK when the row carries one, else fixtureId(label)).
+const declaredIds = new WeakMap<object, Map<string, Map<string, number>>>();
 
-function declaredIdsFor(adapter: object): Map<string, number> {
+function declaredIdsFor(adapter: object): Map<string, Map<string, number>> {
   let m = declaredIds.get(adapter);
   if (!m) {
     m = new Map();
@@ -79,7 +79,7 @@ export function resolveFixtureId(
   tableName: string,
   fixtureName: string,
 ): number {
-  const declared = declaredIdsFor(adapter).get(`${tableName}::${fixtureName}`);
+  const declared = declaredIdsFor(adapter).get(tableName)?.get(fixtureName);
   return declared ?? fixtureId(fixtureName);
 }
 
@@ -214,22 +214,24 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
 
   const habtmParts = detectHabtmParts(registry, tableName);
   // Compute once per defineFixtures call; used for every row and column in the inner loop.
-  const habtmFkCols = habtmParts
-    ? new Set([`${singularize(habtmParts[0])}_id`, `${singularize(habtmParts[1])}_id`])
+  const habtmFkColToTable: Map<string, string> | null = habtmParts
+    ? new Map([
+        [`${singularize(habtmParts[0])}_id`, habtmParts[0]],
+        [`${singularize(habtmParts[1])}_id`, habtmParts[1]],
+      ])
     : null;
 
   const labels = Object.keys(fixtures) as K[];
 
-  // Pre-pass: register the row id (declared PK when present, else fixtureId(label))
-  // for every label in this call so refs — including self-refs to labels declared
-  // later in the same set — resolve to the Rails-mirrored id rather than the CRC32
-  // fallback. Always overwrites prior entries so a subsequent defineFixtures() call
-  // on the same adapter can't leak a stale id from an earlier load.
-  const idRegistry = declaredIdsFor(adapter);
+  // Pre-pass: replace this table's label→id map outright so a reload with a subset
+  // of labels evicts entries for omitted labels. Refs — including self-refs to
+  // labels declared later in the same set — resolve through this map.
+  const tableIds = new Map<string, number>();
+  declaredIdsFor(adapter).set(tableName, tableIds);
   for (const label of labels) {
     const declared = (fixtures[label] as FixtureAttrs)[pkCol];
     const id = typeof declared === "number" ? declared : fixtureId(label);
-    idRegistry.set(`${tableName}::${label}`, id);
+    tableIds.set(label, id);
   }
 
   // Build rows with resolved IDs and references. Rows that declare `id: N` use it
@@ -313,11 +315,16 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
         );
       }
 
-      // HABTM auto-resolution: string label values for `a_id`/`b_id` columns auto-resolve.
-      // FK column names are pre-computed outside the loop (habtmFkCols).
-      if (habtmFkCols && typeof val === "string" && habtmFkCols.has(col)) {
-        row[col] = fixtureId(val);
-        continue;
+      // HABTM auto-resolution: string label values for `a_id`/`b_id` columns
+      // resolve through the same declared-id registry as ref(), so explicit
+      // Rails ids on the target fixture (e.g. developers.david.id = 1) win
+      // over the CRC32 fallback.
+      if (habtmFkColToTable && typeof val === "string") {
+        const targetTable = habtmFkColToTable.get(col);
+        if (targetTable !== undefined) {
+          row[col] = resolveFixtureId(adapter, targetTable, val);
+          continue;
+        }
       }
 
       if (val !== null && typeof val === "object" && pkCol in val) {

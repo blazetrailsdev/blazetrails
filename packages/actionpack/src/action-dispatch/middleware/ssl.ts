@@ -32,7 +32,7 @@ export class SSL {
   private app: RackApp;
   private redirect: boolean;
   private redirectPort: number | undefined;
-  private hsts: HSTSOptions | false;
+  private hsts: Required<HSTSOptions>;
   private secureCookies: boolean;
   private sslDefaultRedirectStatus: number | undefined;
   private redirectStatusOverride: number | undefined;
@@ -62,7 +62,7 @@ export class SSL {
   }
 
   /** @internal */
-  private normalizeHstsOptions(options: SSLOptions["hsts"]): Required<HSTSOptions> | false {
+  private normalizeHstsOptions(options: SSLOptions["hsts"]): Required<HSTSOptions> {
     if (options === false) {
       return { ...SSL.defaultHstsOptions(), expires: 0 };
     }
@@ -88,7 +88,7 @@ export class SSL {
 
     const [status, headers, body] = await this.app(env);
 
-    if (isSSL && this.hsts) {
+    if (isSSL) {
       this.setHstsHeaderBang(headers);
     }
 
@@ -139,7 +139,7 @@ export class SSL {
   }
 
   private buildHstsHeader(): string {
-    const opts = this.hsts as Required<HSTSOptions>;
+    const opts = this.hsts;
     let header = `max-age=${opts.expires}`;
     if (opts.subdomains) header += "; includeSubDomains";
     if (opts.preload) header += "; preload";

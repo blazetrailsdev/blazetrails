@@ -66,8 +66,10 @@ export class RequestUtils {
    *
    * Walks the parsed param tree and raises on any string with an invalid
    * encoding. JS strings are UTF-16 and always well-formed, so this is a
-   * no-op in trails — included for surface parity (Rails-private callsites
-   * in `request.ts` invoke it before munging).
+   * no-op in trails — included for surface parity. The matching
+   * callsites in request.ts (Rails invokes this before params munging)
+   * are not yet ported; when they are, they should still route through
+   * here so a future encoding-aware backend slots in cleanly.
    *
    * @internal
    */

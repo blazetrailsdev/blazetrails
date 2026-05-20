@@ -494,8 +494,9 @@ export class Request {
     return {};
   }
 
-  // `format` / `setFormat` are mixed in from MimeNegotiation onto the
-  // prototype below; declared here for typing.
+  // Mixed in from MimeNegotiation onto the prototype below; declared here
+  // for typing. `setFormat` / `setFormats` / `formats` are declared further
+  // up alongside the rest of the MimeNegotiation surface.
   declare readonly format: MimeType | NullType;
 
   // --- Server software ---

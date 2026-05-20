@@ -21,6 +21,7 @@ import {
 import type { Router as JourneyRouter, RackishResponse, RouterRequest } from "../journey/router.js";
 import {
   polymorphicUrl as polymorphicUrlFn,
+  polymorphicMapping as polymorphicMappingFn,
   symbolToString,
   type PolymorphicArg,
   type PolymorphicHost,
@@ -302,20 +303,13 @@ export class UrlHelpersModule {
   ): string {
     return this.polymorphicPath(record, { ...options, action });
   }
-  /** @internal Rails-private polymorphic helper — registry lookup on RouteSet. */
+  /**
+   * @internal Rails-private polymorphic helper — delegates to the shared
+   * `polymorphic-routes.ts` lookup so semantics stay aligned with the
+   * `toModel()` / `modelName` resolution used by `polymorphicUrl` itself.
+   */
   polymorphicMapping(record: unknown): PolymorphicMappingEntry | undefined {
-    const key =
-      record == null
-        ? undefined
-        : typeof record === "object" && "constructor" in record
-          ? (record.constructor as { name?: string }).name
-          : typeof (record as { name?: unknown }).name === "string"
-            ? (record as { name: string }).name
-            : undefined;
-    if (!key) return undefined;
-    return (
-      this._proxy._routes.polymorphicMappings as Map<string, PolymorphicMappingEntry> | undefined
-    )?.get(key);
+    return polymorphicMappingFn(this._proxy as unknown as PolymorphicHost, record);
   }
   get _routes(): UrlForRoutes {
     return this._proxy._routes;
@@ -587,8 +581,12 @@ export class RouteSet {
   private _defaultEnv?: Readonly<Record<string, unknown>>;
 
   /**
-   * Draw routes using the Mapper DSL. Can be called multiple times;
-   * each call appends routes (like Rails).
+   * Draw routes using the Mapper DSL. Rails' `draw` clears + finalizes
+   * around `eval_block` unless `disableClearAndFinalize` is set; trails
+   * adopts that gating only when {@link prepend}/{@link append} blocks
+   * are registered, otherwise it stays append-only (legacy back-compat).
+   * Callers wanting strict Rails semantics in every case should use
+   * {@link clearBang} + {@link evalBlock} + {@link finalizeBang} directly.
    */
   draw(callback: DrawCallback): void {
     // Rails: `clear! unless @disable_clear_and_finalize; eval_block(block); finalize! unless @disable_clear_and_finalize`.
@@ -661,7 +659,8 @@ export class RouteSet {
    * Forces the Journey router build and warms the formatter cache.
    */
   eagerLoadBang(): void {
-    void this.journeyRouter;
+    const router = this.journeyRouter as JourneyRouter & { eagerLoadBang?(): void };
+    router.eagerLoadBang?.();
     this.formatter.eagerLoadBang();
   }
 

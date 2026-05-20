@@ -194,8 +194,7 @@ export function renderToString<T extends AbstractRenderHost>(this: T, ...args: u
   if (
     result != null &&
     typeof result === "object" &&
-    typeof (result as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function" &&
-    typeof result !== "string"
+    typeof (result as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function"
   ) {
     const parts: string[] = [];
     for (const chunk of result as Iterable<unknown>) parts.push(String(chunk));

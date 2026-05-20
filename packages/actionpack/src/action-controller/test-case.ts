@@ -475,9 +475,9 @@ export class TestSession {
     return [...this._data.values()];
   }
 
-  /** Mirrors Rails `TestSession#destroy` — clears the stored data. */
+  /** Mirrors Rails `TestSession#destroy` — `def destroy; clear; end`. */
   destroy(): void {
-    this._data.clear();
+    this.clear();
   }
 
   /** Mirrors Rails `TestSession#dig(*keys)` — first key is coerced to string. */

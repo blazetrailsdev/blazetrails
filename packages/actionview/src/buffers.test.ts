@@ -152,6 +152,14 @@ describe("StreamingBuffer", () => {
     expect(chunks).toEqual([""]);
   });
 
+  it("safeConcat passes nil through as empty string (Rails parity)", () => {
+    const chunks: string[] = [];
+    const buf = new StreamingBuffer((v) => chunks.push(v));
+    buf.safeConcat(null);
+    buf.safeConcat(undefined);
+    expect(chunks).toEqual(["", ""]);
+  });
+
   it("capture swaps the sink and restores it", () => {
     const chunks: string[] = [];
     const buf = new StreamingBuffer((v) => chunks.push(v));

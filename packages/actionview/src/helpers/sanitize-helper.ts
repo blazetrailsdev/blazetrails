@@ -283,8 +283,10 @@ export function stripLinks(html: string | null | undefined): string {
  * Rails mirrors a `ClassMethods` sub-module included via Concern that
  * exposes `full_sanitizer`, `link_sanitizer`, `safe_list_sanitizer` (with
  * matching writers) plus `sanitizer_vendor`. Exposed here as static
- * getter/setter accessors so framework code can read or replace them
- * with the same names Rails uses.
+ * getter/setter accessors using the camelCase equivalents of those
+ * Rails snake_case names (`fullSanitizer`, `linkSanitizer`,
+ * `safeListSanitizer`, `sanitizerVendor`) per the trails camelCase
+ * convention.
  */
 export class SanitizeHelper {
   static get fullSanitizer(): Sanitizer {

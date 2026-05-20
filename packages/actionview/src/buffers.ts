@@ -157,9 +157,14 @@ export class StreamingBuffer {
     return this;
   }
 
-  /** Append without escaping. Mirrors Rails `safe_concat` / `safe_append=`. */
+  /**
+   * Append without escaping. Mirrors Rails `safe_concat` / `safe_append=`,
+   * which is `@block.call(value.to_s)` — `nil.to_s` is `""`, so nil flows
+   * through as an empty chunk rather than the literal "null"/"undefined".
+   */
   safeConcat(value: unknown): this {
-    this._block(value instanceof SafeBuffer ? value.toString() : String(value));
+    const str = value instanceof SafeBuffer ? value.toString() : value == null ? "" : String(value);
+    this._block(str);
     return this;
   }
 

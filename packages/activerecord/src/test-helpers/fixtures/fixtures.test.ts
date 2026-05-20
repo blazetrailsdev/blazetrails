@@ -49,6 +49,16 @@ function idOf(data: Record<string, { id?: number }>, label: string): number {
   return data[label]?.id ?? fixtureId(label);
 }
 
+/**
+ * Find the INSERT statement whose VALUES tuple starts with the given primary key.
+ * Anchoring on the leading `VALUES (<id>` slot avoids false positives from small
+ * integer ids appearing elsewhere in the SQL (counts, dates, other FKs).
+ */
+function findInsertWithPk(sqls: string[], pk: number): string | undefined {
+  const re = new RegExp(`VALUES\\s*\\(\\s*${pk}\\b`);
+  return sqls.find((s) => re.test(s));
+}
+
 function seedRows(
   Model: ReturnType<typeof makeModel>,
   label: string,
@@ -96,7 +106,7 @@ describe("topicFixtureData", () => {
     const insertSqls = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
       .map((c: unknown[]) => c[0] as string)
       .filter((s) => s.includes("INSERT INTO") && s.includes("topics"));
-    const secondInsert = insertSqls.find((s) => s.includes(String(topicFixtureData.second.id)));
+    const secondInsert = findInsertWithPk(insertSqls, topicFixtureData.second.id);
     expect(secondInsert).toBeTruthy();
     expect(secondInsert).toContain(String(topicFixtureData.first.id));
   });
@@ -143,9 +153,7 @@ describe("commentFixtureData", () => {
     const insertSqls = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
       .map((c: unknown[]) => c[0] as string)
       .filter((s) => s.includes("INSERT INTO") && s.includes("comments"));
-    const greetingsInsert = insertSqls.find((s) =>
-      s.includes(String(commentFixtureData.greetings.id)),
-    );
+    const greetingsInsert = findInsertWithPk(insertSqls, commentFixtureData.greetings.id);
     expect(greetingsInsert).toBeTruthy();
     expect(greetingsInsert).toContain(String(fixtureId("welcome")));
   });
@@ -182,7 +190,7 @@ describe("authorFixtureData", () => {
     const insertSqls = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
       .map((c: unknown[]) => c[0] as string)
       .filter((s) => s.includes("INSERT INTO") && s.includes("authors"));
-    const davidInsert = insertSqls.find((s) => s.includes(String(authorFixtureData.david.id)));
+    const davidInsert = findInsertWithPk(insertSqls, authorFixtureData.david.id);
     expect(davidInsert).toBeTruthy();
     expect(davidInsert).toContain(String(fixtureId("david_address")));
   });
@@ -217,7 +225,7 @@ describe("bookFixtureData", () => {
     const insertSqls = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
       .map((c: unknown[]) => c[0] as string)
       .filter((s) => s.includes("INSERT INTO") && s.includes("books"));
-    const awdrInsert = insertSqls.find((s) => s.includes(String(bookFixtureData.awdr.id)));
+    const awdrInsert = findInsertWithPk(insertSqls, bookFixtureData.awdr.id);
     expect(awdrInsert).toBeTruthy();
     expect(awdrInsert).toContain(String(fixtureId("david")));
   });
@@ -311,9 +319,7 @@ describe("companyFixtureData", () => {
     const insertSqls = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
       .map((c: unknown[]) => c[0] as string)
       .filter((s) => s.includes("INSERT INTO") && s.includes("companies"));
-    const clientInsert = insertSqls.find((s) =>
-      s.includes(String(companyFixtureData.first_client.id)),
-    );
+    const clientInsert = findInsertWithPk(insertSqls, companyFixtureData.first_client.id);
     expect(clientInsert).toBeTruthy();
     expect(clientInsert).toContain(String(companyFixtureData.first_firm.id));
   });
@@ -364,9 +370,7 @@ describe("accountFixtureData", () => {
     const insertSqls = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
       .map((c: unknown[]) => c[0] as string)
       .filter((s) => s.includes("INSERT INTO") && s.includes("accounts"));
-    const signals37Insert = insertSqls.find((s) =>
-      s.includes(String(accountFixtureData.signals37.id)),
-    );
+    const signals37Insert = findInsertWithPk(insertSqls, accountFixtureData.signals37.id);
     expect(signals37Insert).toBeTruthy();
     // companies fixture set isn't loaded in this test, so ref("companies", "first_firm")
     // falls back to fixtureId("first_firm") (no entry in declared-id registry).
@@ -403,7 +407,7 @@ describe("developerFixtureData", () => {
     const insertSqls = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
       .map((c: unknown[]) => c[0] as string)
       .filter((s) => s.includes("INSERT INTO") && s.includes("developers"));
-    expect(insertSqls.some((s) => s.includes(String(developerFixtureData.david.id)))).toBe(true);
+    expect(findInsertWithPk(insertSqls, developerFixtureData.david.id)).toBeTruthy();
   });
 });
 

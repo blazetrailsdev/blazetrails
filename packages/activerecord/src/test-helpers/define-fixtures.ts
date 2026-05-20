@@ -239,15 +239,16 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
 
   const labels = Object.keys(fixtures) as K[];
 
-  // Pre-pass: replace this table's label→id map outright so a reload with a subset
-  // of labels evicts entries for omitted labels. Refs — including self-refs to
-  // labels declared later in the same set — resolve through this map.
+  // Pre-pass: build this table's label→id map locally, then swap it in atomically
+  // so a mid-loop validation failure (e.g. non-integer declared PK) leaves the
+  // registry untouched. The swap also replaces any prior label set, evicting
+  // entries for labels omitted from a subset reload.
   const tableIds = new Map<string, number>();
-  declaredIdsFor(adapter).set(tableName, tableIds);
   for (const label of labels) {
     const id = resolveDeclaredPk(tableName, label, (fixtures[label] as FixtureAttrs)[pkCol]);
     tableIds.set(label, id);
   }
+  declaredIdsFor(adapter).set(tableName, tableIds);
 
   // Build rows with resolved IDs and references. Rows that declare `id: N` use it
   // verbatim (Rails parity); rows without one fall back to fixtureId(label).

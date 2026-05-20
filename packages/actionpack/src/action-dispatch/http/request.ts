@@ -57,8 +57,56 @@ import {
   type ParameterParsers,
   type ParametersHost,
 } from "./parameters.js";
+import {
+  formatFromPathExtension as _formatFromPathExtension,
+  paramsReadable as _paramsReadable,
+  useAcceptHeader as _useAcceptHeader,
+  validAcceptHeader as _validAcceptHeader,
+} from "./mime-negotiation.js";
+import { Headers as HttpHeaders } from "./headers.js";
 
 const FLASH_HASH_KEY = "action_dispatch.request.flash_hash";
+const ACTION_DISPATCH_REQUEST_ID = "action_dispatch.request_id";
+const FORM_DATA_MEDIA_TYPES = ["application/x-www-form-urlencoded", "multipart/form-data"] as const;
+const LOCALHOST_RE = /^(?:127(?:\.\d{1,3}){3}|::1|0:0:0:0:0:0:0:1(?:%.*)?)$/;
+
+const RFC_METHODS = [
+  "OPTIONS",
+  "GET",
+  "HEAD",
+  "POST",
+  "PUT",
+  "DELETE",
+  "TRACE",
+  "CONNECT",
+  "PROPFIND",
+  "PROPPATCH",
+  "MKCOL",
+  "COPY",
+  "MOVE",
+  "LOCK",
+  "UNLOCK",
+  "VERSION-CONTROL",
+  "REPORT",
+  "CHECKOUT",
+  "CHECKIN",
+  "UNCHECKOUT",
+  "MKWORKSPACE",
+  "UPDATE",
+  "LABEL",
+  "MERGE",
+  "BASELINE-CONTROL",
+  "MKACTIVITY",
+  "ORDERPATCH",
+  "ACL",
+  "SEARCH",
+  "MKCALENDAR",
+  "PATCH",
+] as const;
+const HTTP_METHOD_LOOKUP: Record<string, string> = Object.fromEntries(
+  RFC_METHODS.map((m) => [m, m.toLowerCase().replace(/-/g, "_")]),
+);
+
 const HTTP_HEADER_NAME = /^[A-Za-z0-9-]+$/;
 const CGI_VARIABLES: ReadonlySet<string> = new Set([
   "AUTH_TYPE",
@@ -629,10 +677,229 @@ export class Request {
     }
   }
 
+  // --- Headers wrapper ---
+
+  get headers(): HttpHeaders {
+    return new HttpHeaders(this.env as Record<string, unknown>);
+  }
+
+  // --- Method symbol ---
+
+  /** Returns the lowercase symbol form of {@link method} (RFC method name). */
+  get methodSymbol(): string | undefined {
+    return HTTP_METHOD_LOOKUP[this.method];
+  }
+
+  /** Returns the lowercase symbol form of {@link requestMethod}. */
+  get requestMethodSymbol(): string | undefined {
+    return HTTP_METHOD_LOOKUP[this.requestMethod];
+  }
+
+  /** @internal Validates `name` against the RFC methods list. */
+  protected checkMethod(name: string | undefined): string | undefined {
+    if (!name) return name;
+    if (HTTP_METHOD_LOOKUP[name] === undefined) {
+      throw new Error(`${name}, accepted HTTP methods are ${RFC_METHODS.join(", ")}`);
+    }
+    return name;
+  }
+
+  // --- Env-header passthroughs ---
+
+  /** Rails: `request.route_uri_pattern` (env: `action_dispatch.route_uri_pattern`). */
+  get routeUriPattern(): string | undefined {
+    return this.env["action_dispatch.route_uri_pattern"] as string | undefined;
+  }
+  set routeUriPattern(pattern: string | undefined) {
+    this.env["action_dispatch.route_uri_pattern"] = pattern;
+  }
+
+  /** @internal Rails: `request.routes` (env: `action_dispatch.routes`). */
+  get routes(): unknown {
+    return this.env["action_dispatch.routes"];
+  }
+  /** @internal */
+  set routes(routes: unknown) {
+    this.env["action_dispatch.routes"] = routes;
+  }
+
+  /** @internal Rails: `engine_script_name(_routes)` — env key from `_routes.env_key`. */
+  engineScriptName(routes: { envKey: string }): unknown {
+    return this.env[routes.envKey];
+  }
+
+  /** Rails: `http_auth_salt` env getter. */
+  get httpAuthSalt(): unknown {
+    return this.env["action_dispatch.http_auth_salt"];
+  }
+
+  /** Rails: `request_id` — set by `ActionDispatch::RequestId` middleware. */
+  get requestId(): string | undefined {
+    return this.env[ACTION_DISPATCH_REQUEST_ID] as string | undefined;
+  }
+  set requestId(id: string | undefined) {
+    this.env[ACTION_DISPATCH_REQUEST_ID] = id;
+  }
+
+  /** Alias of {@link requestId}. */
+  get uuid(): string | undefined {
+    return this.requestId;
+  }
+
+  /** Rails: `logger` — `action_dispatch.logger` env entry. */
+  get logger(): unknown {
+    return this.env["action_dispatch.logger"];
+  }
+
+  // --- Predicates / utility ---
+
+  /** Rails: `request.key?(name)` — alias of {@link hasHeader}. */
+  isKey(key: string): boolean {
+    return this.hasHeader(key);
+  }
+
+  /** Rails: `form_data?` — content-type is form-data. */
+  get isFormData(): boolean {
+    const mt = this.mediaType;
+    return mt != null && (FORM_DATA_MEDIA_TYPES as readonly string[]).includes(mt);
+  }
+
+  /** Rails: `local?` — REMOTE_ADDR and remoteIp both match localhost. */
+  get isLocal(): boolean {
+    const addr = (this.env["REMOTE_ADDR"] as string | undefined) ?? "";
+    const ip = this.remoteIp ?? "";
+    return LOCALHOST_RE.test(addr) && LOCALHOST_RE.test(ip);
+  }
+
+  /** Rails: `authorization` — checks 4 env keys in order. */
+  get authorization(): string | undefined {
+    return (this.env["HTTP_AUTHORIZATION"] ??
+      this.env["X-HTTP_AUTHORIZATION"] ??
+      this.env["X_HTTP_AUTHORIZATION"] ??
+      this.env["REDIRECT_X_HTTP_AUTHORIZATION"]) as string | undefined;
+  }
+
+  // --- Body ---
+
+  /** Rails: `body_stream` — raw `rack.input`. */
+  get bodyStream(): unknown {
+    return this.env["rack.input"];
+  }
+
+  /** @internal Rails: `read_body_stream` — drain `rack.input` with rewind guard. */
+  protected readBodyStream(): string {
+    const stream = this.bodyStream as
+      | { read?: (n?: number) => string; rewind?: () => void }
+      | undefined;
+    if (!stream || typeof stream.read !== "function") return "";
+    return this.resetStream(stream, () =>
+      this.hasHeader("HTTP_TRANSFER_ENCODING") ? stream.read!() : stream.read!(this.contentLength),
+    );
+  }
+
+  /** @internal Rails: `reset_stream` — rewind before+after yielding. */
+  protected resetStream<T>(stream: { rewind?: () => void }, fn: () => T): T {
+    if (typeof stream.rewind === "function") {
+      stream.rewind();
+      const result = fn();
+      stream.rewind();
+      return result;
+    }
+    return fn();
+  }
+
+  /** @internal Rails: `fallback_request_parameters` — parses raw post as form-urlencoded. */
+  protected fallbackRequestParameters(): Record<string, unknown> {
+    return this._fallbackRequestParameters();
+  }
+
+  // --- Session ---
+
+  /** Rails: `reset_session` — destroys session and resets CSRF token. */
+  resetSession(): void {
+    const session = this.env["rack.session"] as { destroy?: () => void } | undefined;
+    if (session && typeof session.destroy === "function") session.destroy();
+    else this.env["rack.session"] = {};
+    this.resetCsrfToken();
+  }
+
+  set sessionOptions(options: Record<string, unknown>) {
+    this.env["rack.session.options"] = options;
+  }
+
+  /** @internal Rails: `default_session` — returns a disabled-session sentinel. */
+  protected defaultSession(): Record<string, unknown> {
+    return {};
+  }
+
+  // --- CSRF ---
+
+  /** Rails: `reset_csrf_token` — forwards to `controller_instance` when supported. */
+  resetCsrfToken(): void {
+    const c = this.controllerInstance as { resetCsrfToken?: (req: unknown) => void } | undefined;
+    if (c && typeof c.resetCsrfToken === "function") c.resetCsrfToken(this);
+  }
+
+  /** Rails: `commit_csrf_token` — forwards to `controller_instance` when supported. */
+  commitCsrfToken(): void {
+    const c = this.controllerInstance as { commitCsrfToken?: (req: unknown) => void } | undefined;
+    if (c && typeof c.commitCsrfToken === "function") c.commitCsrfToken(this);
+  }
+
+  // --- Flash / cookie-jar lifecycle hooks (no-ops; Rails uses these as mixin overrides) ---
+
+  /** Rails: `commit_flash` — no-op on the bare Request; the Flash middleware overrides. */
+  commitFlash(): void {}
+
+  /** @internal Rails: `commit_cookie_jar!` — no-op on the bare Request. */
+  commitCookieJarBang(): void {}
+
+  // --- Aliases ---
+
+  /** Rails: `GET` alias of `query_parameters`. */
+  GET(): Record<string, unknown> {
+    return this.queryParameters;
+  }
+
+  /** Rails: `POST` alias of `request_parameters`. */
+  POST(): Record<string, unknown> {
+    return this.requestParameters;
+  }
+
+  /** Rails: `parameters` alias of `params`. */
+  get parameters(): Record<string, unknown> {
+    return this.params;
+  }
+
+  // --- Early hints ---
+
+  /** Rails: `send_early_hints(links)` — invokes the `rack.early_hints` callable. */
+  sendEarlyHints(links: Record<string, string>): void {
+    const cb = this.env["rack.early_hints"] as ((l: Record<string, string>) => void) | undefined;
+    if (typeof cb === "function") cb(links);
+  }
+
+  // --- Rack request wrapper (env-backed minimal shim) ---
+
+  get rackRequest(): { env: RackEnv } {
+    return { env: this.env };
+  }
+
+  // --- Mime-negotiation privates (declared; bound below via prototype) ---
+
+  declare validAcceptHeader: () => boolean;
+  declare useAcceptHeader: () => boolean;
+  declare formatFromPathExtension: () => MimeType | undefined;
+  declare isParamsReadable: () => boolean;
+
   // --- Static factory ---
 
   static create(env: RackEnv = {}): Request {
     return new Request(env);
+  }
+
+  static empty(): Request {
+    return new Request({});
   }
 }
 
@@ -738,3 +1005,17 @@ Request.prototype.filteredParameters = _filteredParameters;
 Request.prototype.filteredEnv = _filteredEnv;
 Request.prototype.filteredPath = _filteredPath;
 Request.prototype.parameterFilter = _parameterFilter;
+// Mime-negotiation privates wired via prototype; declared on the class for
+// typing. These mirror Rails' private predicates / lookup helpers.
+Request.prototype.validAcceptHeader = function (this: Request) {
+  return _validAcceptHeader.call(mimeHost(this));
+};
+Request.prototype.useAcceptHeader = function (this: Request) {
+  return _useAcceptHeader.call(mimeHost(this));
+};
+Request.prototype.formatFromPathExtension = function (this: Request) {
+  return _formatFromPathExtension.call(mimeHost(this));
+};
+Request.prototype.isParamsReadable = function (this: Request) {
+  return _paramsReadable.call(mimeHost(this));
+};

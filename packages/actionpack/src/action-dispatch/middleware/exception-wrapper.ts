@@ -55,6 +55,17 @@ const SILENT_EXCEPTIONS = new Set<string>([
   "ActionDispatch::Http::MimeNegotiation::InvalidType",
 ]);
 
+// JS closest analog to Ruby's exception.class.name: prefer the actual
+// constructor name and only fall back to the `name` field if the constructor
+// chain is missing. Treats the default "Error" as unset so custom subclasses
+// that forget to set `name` don't collapse into the generic bucket.
+function classNameOf(e: Error): string {
+  const ctor = e.constructor?.name;
+  if (ctor && ctor !== "Error") return ctor;
+  if (e.name && e.name !== "Error") return e.name;
+  return ctor || e.name || "Error";
+}
+
 const EXCEPTION_IDS = new WeakMap<object, number>();
 let _nextExceptionId = 1;
 function _idFor(err: object): number {
@@ -84,7 +95,7 @@ export class ExceptionWrapper {
     const exception = b !== undefined ? b : (a as Error);
     this.backtraceCleaner = backtraceCleaner;
     this.exception = exception;
-    this.exceptionClassName = exception.name || exception.constructor?.name || "Error";
+    this.exceptionClassName = classNameOf(exception);
     this.wrappedCauses = this.wrappedCausesFor(exception, backtraceCleaner);
     this.statusCode = this.computeStatusCode();
     this.statusText = STATUS_TEXTS[this.statusCode] ?? "Internal Server Error";
@@ -99,10 +110,7 @@ export class ExceptionWrapper {
 
   get exceptionName(): string {
     const cause = this.exception.cause;
-    if (cause instanceof Error) {
-      return cause.name || cause.constructor?.name || "Error";
-    }
-    return this.exceptionClassName;
+    return cause instanceof Error ? classNameOf(cause) : this.exceptionClassName;
   }
 
   get message(): string {

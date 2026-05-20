@@ -115,6 +115,17 @@ function parseIpv6(addr: string): bigint {
   }
   const headParts = head ? head.split(":") : [];
   const tailParts = tail ? tail.split(":") : [];
+  // IPv4-embedded IPv6 (e.g. ::ffff:127.0.0.1): convert the final IPv4
+  // dotted-quad into two hextets before counting groups.
+  const last =
+    tailParts.length > 0 ? tailParts[tailParts.length - 1] : headParts[headParts.length - 1];
+  if (last && last.includes(".")) {
+    const v4 = parseIpv4(last);
+    const hi = Number(v4 >> 16n).toString(16);
+    const lo = Number(v4 & 0xffffn).toString(16);
+    const target = tailParts.length > 0 ? tailParts : headParts;
+    target.splice(target.length - 1, 1, hi, lo);
+  }
   const groupCount = headParts.length + tailParts.length;
   let all: string[];
   if (collapsed) {

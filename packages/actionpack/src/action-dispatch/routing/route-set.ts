@@ -179,8 +179,14 @@ export class RouteSet {
   private readonly _append: Array<(mapper: Mapper) => void> = [];
   private readonly _prepend: Array<(mapper: Mapper) => void> = [];
   private _finalized = false;
-  /** @internal Rails-private `_routes`; RouteSet is its own routes target. */
-  _routes: UrlForRoutes = this as unknown as UrlForRoutes;
+  /**
+   * @internal Rails-private `_routes`. Stays `null` until trails' legacy
+   * `urlFor(routeName, params, options)` is replaced by the Rails-shape
+   * `urlFor(options, routeName?)`; pointing it at `this` would route
+   * {@link fullUrlFor} into the wrong-shape `urlFor` at runtime. The
+   * UrlFor delegations on RouteSet raise via `requireRoutes` until then.
+   */
+  _routes: UrlForRoutes | null = null;
   /**
    * Helpers registered via {@link addUrlHelper}. Rails dispatches these
    * through NamedRouteCollection, which isn't ported yet.

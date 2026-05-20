@@ -160,6 +160,20 @@ describe("RouteSetTest", () => {
     );
   });
 
+  it("recognizePathWithRequest merges defaults+params+extras and raise/no-raise", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => r.get("/posts/:id", { to: "posts#show" }));
+    expect(
+      routes.recognizePathWithRequest({ requestMethod: "GET" }, "/posts/42", { from: "test" }),
+    ).toMatchObject({ controller: "posts", action: "show", id: "42", from: "test" });
+    expect(() => routes.recognizePathWithRequest({ method: "GET" }, "/nope")).toThrow(
+      /No route matches/,
+    );
+    expect(
+      routes.recognizePathWithRequest({ method: "GET" }, "/nope", {}, { raiseOnMissing: false }),
+    ).toBeUndefined();
+  });
+
   it("findScriptName, isOptimizeRoutesGeneration, extraKeys", () => {
     const routes = new RouteSet();
     const opts: Record<string, unknown> = { script_name: "/app", x: 1 };

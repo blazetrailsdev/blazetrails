@@ -119,9 +119,10 @@ export function compareValue(tsVal: unknown, railsVal: unknown, attr: string, id
 // Mirror of the (non-exported) discriminator in define-schema.ts: the
 // `WrappedTableSchema` shape is identified by the presence of a wrapper-shaped
 // `primaryKey` (string[] | false) alongside a `columns` map. Returns the
-// column map plus whether an implicit `id` column is created — only legacy
-// shape and wrappers with `primaryKey: string[]` get one; `primaryKey: false`
-// suppresses it (matching defineSchema semantics).
+// column map plus whether `defineSchema` creates an implicit `id` column.
+// Only the legacy shape gets one — define-schema.ts sets `createOpts.id =
+// false` for BOTH `primaryKey: false` and `primaryKey: string[]` (composite
+// PK), so any wrapped form has no implicit `id`.
 function tableShape(table: TableSchema): {
   columns: Record<string, unknown>;
   hasImplicitId: boolean;
@@ -130,7 +131,7 @@ function tableShape(table: TableSchema): {
     const pk = (table as { primaryKey?: unknown }).primaryKey;
     const cols = (table as { columns?: unknown }).columns;
     if ((pk === false || Array.isArray(pk)) && cols && typeof cols === "object") {
-      return { columns: cols as Record<string, unknown>, hasImplicitId: pk !== false };
+      return { columns: cols as Record<string, unknown>, hasImplicitId: false };
     }
   }
   return { columns: table as Record<string, unknown>, hasImplicitId: true };
@@ -143,10 +144,11 @@ function tableShape(table: TableSchema): {
  * useful after Rails-diff hits 100% — fixtures and schema can drift
  * independently afterward.
  *
- * `id` is allowed only when defineSchema would create one — legacy-shape
- * tables and wrappers with composite `primaryKey: string[]` get an implicit
- * `id`; wrappers with `primaryKey: false` do not, so a stray `id` on such a
- * fixture flags as drift.
+ * `id` is allowed only when defineSchema would create one — that's the
+ * legacy `Record<colName, ColumnSpec>` shape only. Any wrapped table
+ * (`primaryKey: false` *or* `primaryKey: string[]`) has `id` suppressed
+ * (see define-schema.ts setting `createOpts.id = false` for both),
+ * so a stray `id` on those flags as drift.
  *
  * Returns `ported=false` when the table hasn't landed in TEST_SCHEMA yet —
  * expected during the 0.5a..0.5h schema port and treated as informational,
@@ -165,6 +167,10 @@ export function schemaCheck(
   if (shape.hasImplicitId) declared.add("id");
   let extras = 0;
   for (const [rowName, row] of Object.entries(tsRows)) {
+    // Skip non-object rows (null/undefined/scalar). compareFile's own row-
+    // shape pass reports those as "row missing in TS"; the schema check
+    // shouldn't promote a malformed-fixture soft DIFF to a runtime crash.
+    if (!row || typeof row !== "object") continue;
     for (const attr of Object.keys(row)) {
       if (!declared.has(attr)) {
         notes.push(`schema-extra-col: ${rowName}.${attr} not in TEST_SCHEMA["${snake}"]`);

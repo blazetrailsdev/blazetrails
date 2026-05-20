@@ -59,8 +59,12 @@ describe("schemaCheck", () => {
     expect(out).toEqual({ ported: true, extras: 1 });
     expect(notes[0]).toMatch(/^schema-extra-col: david\.bogus/);
   });
-  it("reads columns from the WrappedTableSchema shape (composite PK keeps implicit id off, but PK columns are declared)", () => {
-    expect(schemaCheck("wrapped", { row: { id: 1, name: "n" } }, schema, []).extras).toBe(0);
+  it("reads columns from the WrappedTableSchema shape; composite PK suppresses implicit `id`", () => {
+    // define-schema.ts sets createOpts.id = false for both primaryKey:false
+    // and primaryKey:string[], so any wrapped table that lists `id` in a
+    // fixture row is drift.
+    expect(schemaCheck("wrapped", { row: { name: "n" } }, schema, []).extras).toBe(0);
+    expect(schemaCheck("wrapped", { row: { id: 1, name: "n" } }, schema, []).extras).toBe(1);
     expect(schemaCheck("wrapped", { row: { name: "n", extra: 1 } }, schema, []).extras).toBe(1);
   });
   it("flags `id` as drift on a wrapped table with primaryKey: false (no implicit id column)", () => {

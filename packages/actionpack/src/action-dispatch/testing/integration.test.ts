@@ -452,6 +452,25 @@ describe("ActionDispatch::IntegrationTest", () => {
       await expect(app.followRedirectBang()).rejects.toThrow(/not a redirect/);
     });
 
+    it("createSession propagates routes/controllers/app; app falls back to class default", async () => {
+      const sentinel = { name: "app-instance" };
+      app.app = sentinel;
+      const sess = app.createSession();
+      expect(sess.routes).toBe(app.routes);
+      expect(sess.app).toBe(sentinel);
+      // Dispatch works on the new session without re-registering controllers.
+      await sess.get("/posts");
+      sess.assertResponse("success");
+
+      // Falls back to class-level default when no instance override is set.
+      const fresh = new IntegrationTest();
+      expect(fresh.app).toBe(null);
+      const Stub = class extends IntegrationTest {};
+      Stub.app = { name: "class-default" };
+      const stubbed = new Stub();
+      expect(stubbed.app).toEqual({ name: "class-default" });
+    });
+
     it("openSession dups parent: shared routes/controllers, independent state, rootSession propagation", async () => {
       await app.get("/posts");
       expect(app.requestCount).toBe(1);

@@ -211,7 +211,17 @@ export class IntegrationTest {
   }
 
   set _routes(value: UrlForRoutes | null) {
-    this._routesOverride = value ?? undefined;
+    // `_withRoutes` saves `old = this._routes` (the computed delegate) and
+    // later writes it back. If we stored that snapshot verbatim, the
+    // override would shadow future updates to `this.routes`. Detect
+    // round-trips back to the natural delegate and clear the override so
+    // delegation resumes — mirrors Rails' `attr_accessor :_routes` where
+    // the ivar simply re-points at the same object.
+    if (value == null || value === this.routes._routes) {
+      this._routesOverride = undefined;
+    } else {
+      this._routesOverride = value;
+    }
   }
 
   /** @internal */
@@ -630,7 +640,7 @@ export class IntegrationTest {
   declare urlFor: typeof urlForMod.urlFor;
   declare fullUrlFor: typeof urlForMod.fullUrlFor;
   declare routeFor: typeof urlForMod.routeFor;
-  declare isOptimizeRoutesGeneration: typeof urlForMod.optimizeRoutesGeneration;
+  declare optimizeRoutesGeneration: typeof urlForMod.optimizeRoutesGeneration;
   declare _withRoutes: typeof urlForMod._withRoutes;
   declare _routesContext: typeof urlForMod._routesContext;
   declare polymorphicUrl: typeof polymorphicRoutes.polymorphicUrl;
@@ -992,7 +1002,7 @@ proto.failOn = routingAssertions.failOn;
 proto.urlFor = urlForMod.urlFor;
 proto.fullUrlFor = urlForMod.fullUrlFor;
 proto.routeFor = urlForMod.routeFor;
-proto.isOptimizeRoutesGeneration = urlForMod.optimizeRoutesGeneration;
+proto.optimizeRoutesGeneration = urlForMod.optimizeRoutesGeneration;
 proto._withRoutes = urlForMod._withRoutes;
 proto._routesContext = urlForMod._routesContext;
 proto.polymorphicUrl = polymorphicRoutes.polymorphicUrl;

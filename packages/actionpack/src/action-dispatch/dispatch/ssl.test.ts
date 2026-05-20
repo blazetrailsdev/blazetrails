@@ -51,6 +51,28 @@ describe("RedirectSSLTest", () => {
     expect(headers.location).toBe("https://example.com/search?q=hello");
   });
 
+  it("non-GET/HEAD requests redirect with 307 to preserve method", async () => {
+    const ssl = new SSL(okApp);
+    const [status] = await ssl.call({
+      "rack.url_scheme": "http",
+      HTTP_HOST: "example.com",
+      PATH_INFO: "/posts",
+      REQUEST_METHOD: "POST",
+    });
+    expect(status).toBe(307);
+  });
+
+  it("sslDefaultRedirectStatus overrides 307 for non-GET/HEAD", async () => {
+    const ssl = new SSL(okApp, { sslDefaultRedirectStatus: 308 });
+    const [status] = await ssl.call({
+      "rack.url_scheme": "http",
+      HTTP_HOST: "example.com",
+      PATH_INFO: "/posts",
+      REQUEST_METHOD: "POST",
+    });
+    expect(status).toBe(308);
+  });
+
   it("redirect with custom status", async () => {
     const ssl = new SSL(okApp, { redirect: { status: 307 } });
     const [status] = await ssl.call({

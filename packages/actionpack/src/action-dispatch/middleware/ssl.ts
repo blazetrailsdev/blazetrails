@@ -15,6 +15,8 @@ export interface SSLOptions {
   hsts?: boolean | HSTSOptions;
   secureCookies?: boolean;
   exclude?: (env: RackEnv) => boolean;
+  /** Mirrors Rails `ssl_default_redirect_status:` constructor kwarg. */
+  sslDefaultRedirectStatus?: number;
 }
 
 export interface HSTSOptions {
@@ -46,7 +48,7 @@ export class SSL {
     this.app = app;
     this.exclude = options.exclude;
     this.secureCookies = options.secureCookies !== false;
-    this.sslDefaultRedirectStatus = undefined;
+    this.sslDefaultRedirectStatus = options.sslDefaultRedirectStatus;
 
     if (options.redirect === false) {
       this.redirect = false;

@@ -914,6 +914,10 @@ export const TEST_SCHEMA: Schema = {
     title: { type: "string", null: false },
   },
 
+  // Rails uses custom polymorphic column names here (not the
+  // `<name>_id`/`<name>_type` default) to exercise the
+  // `foreign_key:`/`foreign_type:` override path on `belongs_to ...,
+  // polymorphic: true`. Mirrored verbatim from schema.rb.
   images: {
     imageable_identifier: "integer",
     imageable_class: "string",

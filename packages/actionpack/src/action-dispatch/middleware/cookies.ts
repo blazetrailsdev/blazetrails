@@ -12,9 +12,7 @@
 
 import { getCrypto } from "@blazetrails/activesupport";
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import type { RackEnv, RackResponse } from "@blazetrails/rack";
-
-type RackApp = (env: RackEnv) => Promise<RackResponse>;
+import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
 
 /** Cookie expiry — accept either a Date or a Temporal.Instant from AR/AM. */
 export type CookieExpires = Date | Temporal.Instant;
@@ -86,8 +84,6 @@ export class CookieJar implements Iterable<[string, string]> {
    */
   commitBang(): void {
     this._committed = true;
-    Object.freeze(this._setCookies);
-    Object.freeze(this._deletedCookies);
   }
 
   /**
@@ -156,6 +152,7 @@ export class CookieJar implements Iterable<[string, string]> {
   // --- Write ---
 
   set(key: string, valueOrOptions: string | SetCookieOptions): void {
+    if (this._committed) return;
     if (typeof valueOrOptions === "string") {
       this._cookies.set(key, valueOrOptions);
       this._setCookies.set(key, { value: valueOrOptions });
@@ -168,6 +165,7 @@ export class CookieJar implements Iterable<[string, string]> {
   }
 
   delete(key: string, options?: { path?: string; domain?: string }): string | undefined {
+    if (this._committed) return undefined;
     const val = this._cookies.get(key);
     this._cookies.delete(key);
     this._setCookies.delete(key);
@@ -440,6 +438,7 @@ export class Cookies {
         ? [existing, ...setHeaders].join("\n")
         : setHeaders.join("\n");
     }
+    jar.commitBang();
     return [status, outHeaders, body];
   }
 }

@@ -76,7 +76,7 @@ export {
   type FragmentCacheKeyBlock,
   type FragmentsClassMethods,
   type FragmentsHost,
-} from "./fragments.js";
+} from "./caching/fragments.js";
 export {
   _helpersForModification,
   _helpersInstance,

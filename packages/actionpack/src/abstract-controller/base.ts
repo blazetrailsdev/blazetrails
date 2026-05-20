@@ -27,6 +27,7 @@ export type {
 export class ActionNotFound extends Error {
   readonly controller: AbstractController | null;
   readonly action: string | null;
+  private _corrections?: string[];
 
   constructor(
     message: string,
@@ -38,6 +39,40 @@ export class ActionNotFound extends Error {
     this.controller = controller;
     this.action = action;
   }
+
+  /**
+   * DidYouMean-style spelling corrections for the missing action.
+   * Rails wires this through `DidYouMean::SpellChecker`; trails does a
+   * small Levenshtein-style filter over the controller's action list.
+   * @internal
+   */
+  corrections(): string[] {
+    if (this._corrections !== undefined) return this._corrections;
+    if (!this.controller || !this.action) return (this._corrections = []);
+    const Ctor = this.controller.constructor as typeof AbstractController;
+    const dict = Ctor.actionMethods();
+    const target = this.action;
+    this._corrections = dict.filter((name) => editDistance(name, target) <= 2);
+    return this._corrections;
+  }
+}
+
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (Math.abs(m - n) > 3) return 99;
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0]!;
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j]!;
+      dp[j] = a[i - 1] === b[j - 1] ? prev : Math.min(prev, dp[j]!, dp[j - 1]!) + 1;
+      prev = tmp;
+    }
+  }
+  return dp[n]!;
 }
 
 export class AbstractController {
@@ -107,6 +142,83 @@ export class AbstractController {
   ]);
 
   private static _actionMethodCache?: Set<string>;
+
+  /** Rails `attr_reader :abstract` — class-level abstract flag. Defaults
+   * to `false`; flipped via `abstractBang()`. */
+  protected static _abstract: boolean = false;
+
+  /** Rails `class << self; attr_reader :abstract`. @internal */
+  static get abstract(): boolean {
+    return Object.prototype.hasOwnProperty.call(this, "_abstract")
+      ? (this as unknown as { _abstract: boolean })._abstract
+      : false;
+  }
+
+  /** Rails `abstract?` predicate; aliases `abstract`. @internal */
+  static isAbstract(): boolean {
+    return this.abstract;
+  }
+
+  /** Rails `abstract!` — marks this class as abstract. @internal */
+  static abstractBang(): void {
+    (this as unknown as { _abstract: boolean })._abstract = true;
+  }
+
+  /** Cached controller_path memo (per-class own property). @internal */
+  protected static _controllerPath?: string;
+
+  /**
+   * Rails `controller_path` — the controller's underscored name with
+   * the `Controller` suffix stripped (`MyApp::MyPostsController` →
+   * `"my_app/my_posts"`). Returns the empty string for anonymous classes.
+   */
+  static controllerPath(): string {
+    if (Object.prototype.hasOwnProperty.call(this, "_controllerPath")) {
+      return (this as unknown as { _controllerPath: string })._controllerPath;
+    }
+    const name = this.name;
+    if (!name) return ((this as unknown as { _controllerPath: string })._controllerPath = "");
+    // Mirror ActiveSupport's `underscore`: strip "Controller" suffix,
+    // convert "::" → "/", camelCase → snake_case.
+    const stripped = name.replace(/Controller$/, "");
+    const underscored = stripped
+      .replace(/::/g, "/")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+      .replace(/([a-z\d])([A-Z])/g, "$1_$2")
+      .toLowerCase();
+    return ((this as unknown as { _controllerPath: string })._controllerPath = underscored);
+  }
+
+  /**
+   * Rails `internal_methods` — names considered "internal" (not action
+   * methods). In trails, this is the `_internalMethods` set defined on
+   * `AbstractController`; exposed here so `api:compare` matches the
+   * Rails-shaped class method.
+   * @internal
+   */
+  static internalMethods(): string[] {
+    return [...AbstractController._internalMethods];
+  }
+
+  /** Rails `clear_action_methods!` — invalidate the cached action set. @internal */
+  static clearActionMethodsBang(): void {
+    (this as unknown as { _actionMethodCache?: Set<string> })._actionMethodCache = undefined;
+  }
+
+  /**
+   * Rails `method_added(name)` hook — invalidates the action-method
+   * cache when a new method is defined on the controller. JS has no
+   * `method_added` hook; callers (e.g. helpers wiring that defines
+   * methods at runtime) must invoke this explicitly. @internal
+   */
+  static methodAdded(_name: string): void {
+    this.clearActionMethodsBang();
+  }
+
+  /** Rails `eager_load!` — warm the action-method cache. @internal */
+  static eagerLoadBang(): void {
+    this.actionMethods();
+  }
 
   /** Returns the set of public action methods defined on this controller. */
   static actionMethods(): string[] {

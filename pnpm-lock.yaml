@@ -169,6 +169,8 @@ importers:
         specifier: workspace:*
         version: link:../activesupport
 
+  packages/did-you-mean: {}
+
   packages/globalid:
     dependencies:
       '@blazetrails/activesupport':

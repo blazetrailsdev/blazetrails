@@ -84,7 +84,6 @@ export class Session {
 
   static disabled(req: { env: Record<string, unknown> }): Session {
     const session = new Session(null, req.env, { id: null }, false);
-    req.env[ENV_SESSION_KEY] = session;
     req.env[ENV_SESSION_OPTIONS_KEY] = { id: null };
     return session;
   }

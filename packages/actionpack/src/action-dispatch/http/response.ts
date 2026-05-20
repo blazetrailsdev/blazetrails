@@ -76,7 +76,9 @@ export class ResponseBuffer {
     for (const chunk of this.buf) yield chunk;
   }
 
-  abort(): void {}
+  abort(): void {
+    this.close();
+  }
 
   close(): void {
     this.response.commitBang();
@@ -372,11 +374,11 @@ export class Response {
 
   // --- Rack response ---
 
-  toRack(): [number, Record<string, string>, unknown[]] {
-    // If a sendFile-style or buffered stream is installed, surface it through
-    // the Rack body so Rack::Sendfile / BodyProxy can intercept via toPath()
-    // or iterate via each().
-    if (this.stream) return [this._status, { ...this._headers }, this.bodyParts()];
+  toRack(): [number, Record<string, string>, unknown] {
+    // If a stream is installed, surface it directly so Rack::Sendfile /
+    // BodyProxy can intercept via toPath()/close() rather than draining
+    // the file into memory.
+    if (this.stream) return [this._status, { ...this._headers }, this.stream];
     return [this._status, { ...this._headers }, [...this._body]];
   }
 

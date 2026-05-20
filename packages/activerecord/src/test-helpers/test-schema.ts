@@ -72,11 +72,7 @@ export const TEST_SCHEMA: Schema = {
     manufactured_at: "datetime",
   },
 
-  articles: {
-    // Rails declares an empty table (id PK only). defineSchema requires at
-    // least one column; tests using `articles` rely on the row id alone.
-    title: { type: "string", null: true },
-  },
+  articles: {},
 
   articles_magazines: {
     article_id: "integer",
@@ -100,10 +96,7 @@ export const TEST_SCHEMA: Schema = {
     unvalidated_developer_id: "integer",
   },
 
-  author_addresses: {
-    // Rails declares an empty table; same workaround as `articles`.
-    placeholder: { type: "string", null: true },
-  },
+  author_addresses: {},
 
   authors: {
     name: { type: "string", null: false },
@@ -180,9 +173,7 @@ export const TEST_SCHEMA: Schema = {
     updated_at: "datetime",
   },
 
-  hardbacks: {
-    placeholder: { type: "string", null: true },
-  },
+  hardbacks: {},
 
   booleans: {
     value: "boolean",

@@ -683,6 +683,18 @@ export class Parameters {
     if (key in this._data && isPermittedScalar(this._data[key])) {
       params._data[key] = this._data[key];
     }
+    // Rails also walks every existing key to copy multi-parameter keys
+    // — e.g. `zipcode(90210i)` permitted under the bare `zipcode`. The
+    // regex matches the suffix and the prefix must equal the bare key.
+    const re = /\(\d+[if]?\)$/;
+    for (const k of Object.keys(this._data)) {
+      const m = re.exec(k);
+      if (!m) continue;
+      const prefix = k.slice(0, m.index);
+      if (prefix === key && isPermittedScalar(this._data[k])) {
+        params._data[k] = this._data[k];
+      }
+    }
   }
 
   private _hashFilter(

@@ -67,6 +67,7 @@ function _idFor(err: object): number {
 }
 
 export type TraceEntry = { file: string; line: number };
+export type SourceExtract = TraceEntry & { code?: Record<number, string> };
 
 export class ExceptionWrapper {
   readonly exception: Error;
@@ -249,7 +250,7 @@ export class ExceptionWrapper {
     return _idFor(this.exception);
   }
 
-  get sourceExtracts(): TraceEntry[] {
+  get sourceExtracts(): SourceExtract[] {
     return this.backtrace().map((trace) => this.extractSource(trace));
   }
 
@@ -312,7 +313,7 @@ export class ExceptionWrapper {
   }
 
   /** @internal */
-  extractSource(trace: string): TraceEntry & { code?: Record<number, string> } {
+  extractSource(trace: string): SourceExtract {
     const loc = this.extractFileAndLineNumber(trace);
     if (!loc) return { file: trace, line: 0 };
     const code = this.sourceFragment(loc.file, loc.line);

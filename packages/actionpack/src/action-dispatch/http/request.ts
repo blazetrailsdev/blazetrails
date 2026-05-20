@@ -5,7 +5,7 @@
  * mirroring the Rails Request API.
  */
 
-import type { RackEnv } from "@blazetrails/rack";
+import type { RackBody, RackEnv, RackResponse } from "@blazetrails/rack";
 import { parseNestedQuery, Request as RackRequest } from "@blazetrails/rack";
 import { Session } from "../request/session.js";
 import {
@@ -432,15 +432,17 @@ export class Request {
     _setContentSecurityPolicyReportOnly.call(this, value);
   }
 
-  get contentSecurityPolicyNonceGenerator(): NonceGenerator | undefined {
-    return _contentSecurityPolicyNonceGenerator.call(this);
+  get contentSecurityPolicyNonceGenerator(): NonceGenerator | null | undefined {
+    // Env may hold `null` from `request.csp_nonce_generator = nil`; widen to
+    // include it so callers see the same shape the setter accepts.
+    return _contentSecurityPolicyNonceGenerator.call(this) as NonceGenerator | null | undefined;
   }
   set contentSecurityPolicyNonceGenerator(generator: NonceGenerator | null) {
     _setContentSecurityPolicyNonceGenerator.call(this, generator);
   }
 
-  get contentSecurityPolicyNonceDirectives(): readonly string[] | undefined {
-    return _contentSecurityPolicyNonceDirectives.call(this);
+  get contentSecurityPolicyNonceDirectives(): readonly string[] | null | undefined {
+    return _contentSecurityPolicyNonceDirectives.call(this) as readonly string[] | null | undefined;
   }
   set contentSecurityPolicyNonceDirectives(directives: readonly string[] | null) {
     _setContentSecurityPolicyNonceDirectives.call(this, directives);
@@ -1190,14 +1192,16 @@ Request.prototype.logParseErrorOnce = function (this: Request) {
  * `call` short-circuits to a `404` with the `X-Cascade: pass` header so the
  * router falls through to the next matching route.
  */
+async function* emptyRackBody(): RackBody {}
+
 export class PassNotFound {
   /** @internal */
   static action(_name: unknown): typeof PassNotFound {
     return PassNotFound;
   }
   /** @internal */
-  static call(_env: RackEnv): [number, Record<string, string>, string[]] {
-    return [404, { [X_CASCADE]: "pass" }, []];
+  static call(_env: RackEnv): RackResponse {
+    return [404, { [X_CASCADE]: "pass" }, emptyRackBody()];
   }
   /** @internal */
   static actionEncodingTemplate(_action: unknown): false {

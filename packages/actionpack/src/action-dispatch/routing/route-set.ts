@@ -416,7 +416,11 @@ export class RouteSet {
   private readonly _routeDispatcher: Dispatcher = new Dispatcher(false, this.dispatcherRegistry);
 
   constructor(config: RouteSetConfig = { ...DEFAULT_CONFIG }) {
-    this._config = config;
+    // Rails: `def initialize(config = DEFAULT_CONFIG.dup)` — DEFAULT_CONFIG
+    // is dup'd at the call site. Clone here too so a caller passing
+    // `DEFAULT_CONFIG` (or any shared config struct) can't have later
+    // `defaultScope=` mutations leak across instances.
+    this._config = { ...config };
   }
 
   /** Rails: `def self.default_resources_path_names`. */
@@ -480,7 +484,7 @@ export class RouteSet {
    * through `ActionDispatch::Http::URL.full_url_for` to validate options;
    * trails does the assembly inline pending the URL port.
    */
-  defaultEnv(): Record<string, unknown> {
+  defaultEnv(): RackEnv {
     // Rails caches by *value comparison* against the previously-stored
     // options snapshot: `if default_url_options != @default_env&.[](...)`.
     const cachedOpts = this._defaultEnv?.["action_dispatch.routes.default_url_options"] as
@@ -594,7 +598,7 @@ export class RouteSet {
   }
 
   /** @internal Cached {@link defaultEnv} value. */
-  private _defaultEnv?: Readonly<Record<string, unknown>>;
+  private _defaultEnv?: Readonly<RackEnv>;
 
   /**
    * Draw routes using the Mapper DSL. Rails' `draw` clears + finalizes

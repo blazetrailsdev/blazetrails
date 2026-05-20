@@ -16,7 +16,16 @@
 
 import type { Schema } from "./define-schema.js";
 
-/** A-tables (alphabetical group): "1_need_quoting" through "bulbs". */
+/**
+ * PR 0.5a group: alphabetical range "1_need_quoting".."bulbs" (covers
+ * digits, A-tables, and the leading B-tables). Sibling PRs 0.5b..0.5h
+ * append the remaining groups to this same object.
+ *
+ * Tables declared as an empty `{}` mirror Rails `create_table :x do |t| end`
+ * — `defineSchema` (and Rails) creates the table with only the implicit
+ * primary-key column. Use `{ columns: {...}, primaryKey: false }` for a
+ * genuinely id-less table.
+ */
 export const TEST_SCHEMA: Schema = {
   "1_need_quoting": {
     name: "string",
@@ -135,8 +144,9 @@ export const TEST_SCHEMA: Schema = {
     pirate_id: "integer",
   },
 
-  // Rails declares `id: :integer`; defineSchema's default bigint PK is
-  // wider but accepts the same integer values fixtures emit.
+  // Rails declares `id: :integer` (narrower than the default bigint).
+  // defineSchema currently emits the adapter-default PK type; fixture row
+  // ids fit either width, so the override is dropped.
   books: {
     author_id: "integer",
     format: "string",

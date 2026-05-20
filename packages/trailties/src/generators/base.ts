@@ -8,13 +8,8 @@ import {
   tableize as _tableize,
   dasherize as _dasherize,
 } from "@blazetrails/activesupport";
-import {
-  gem as _gem,
-  route as _route,
-  environment as _environment,
-  generate as _generate,
-  type GeneratorActionsState,
-} from "./actions.js";
+import * as Actions from "./actions.js";
+import type { GeneratorActionsState } from "./actions.js";
 
 export interface GeneratorOptions {
   cwd: string;
@@ -27,10 +22,10 @@ export abstract class GeneratorBase implements GeneratorActionsState {
   protected createdFiles: string[] = [];
   pendingGenerators: Array<{ what: string; args: string[] }> = [];
 
-  gem = _gem;
-  route = _route;
-  environment = _environment;
-  generate = _generate;
+  gem = Actions.gem;
+  route = Actions.route;
+  environment = Actions.environment;
+  generate = Actions.generate;
 
   constructor(options: GeneratorOptions) {
     this.cwd = options.cwd;
@@ -61,7 +56,7 @@ export abstract class GeneratorBase implements GeneratorActionsState {
     this.output(`      create  ${relativePath}`);
   }
 
-  appendToFile(relativePath: string, content: string): void {
+  protected appendToFile(relativePath: string, content: string): void {
     const fullPath = this.path.join(this.cwd, relativePath);
     if (!this.fs.existsSync(fullPath)) {
       this.createFile(relativePath, content);

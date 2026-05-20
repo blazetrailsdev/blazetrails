@@ -7,12 +7,12 @@ export class Ast {
   readonly wildcardOptions: Record<string, RegExp> = {};
   readonly terminals: Node[] = [];
 
-  private readonly _symbols: SymbolNode[] = [];
-  private readonly _stars: Star[] = [];
+  private readonly symbols: SymbolNode[] = [];
+  private readonly stars: Star[] = [];
 
   constructor(tree: Node, formatted: boolean | null | undefined) {
     this.tree = tree;
-    this._visitTree(formatted);
+    this.visitTree(formatted);
   }
 
   /** Rails alias :root :tree */
@@ -21,7 +21,7 @@ export class Ast {
   }
 
   set requirements(reqs: Record<string, RegExp>) {
-    for (const node of [...this._symbols, ...this._stars]) {
+    for (const node of [...this.symbols, ...this.stars]) {
       const re = reqs[node.toSym()];
       if (re) node.regexp = re;
     }
@@ -32,20 +32,20 @@ export class Ast {
   }
 
   isGlob(): boolean {
-    return this._stars.length > 0;
+    return this.stars.length > 0;
   }
 
   /** @internal */
-  private _visitTree(formatted: boolean | null | undefined): void {
+  private visitTree(formatted: boolean | null | undefined): void {
     for (const node of this.tree) {
       if (node.isSymbol()) {
         const sym = node as SymbolNode;
         this.pathParams.push(sym.toSym());
         this.names.push(sym.name);
-        this._symbols.push(sym);
+        this.symbols.push(sym);
       } else if (node.isStar()) {
         const star = node as Star;
-        this._stars.push(star);
+        this.stars.push(star);
         if (formatted !== false) {
           const key = star.name;
           if (!(key in this.wildcardOptions)) {

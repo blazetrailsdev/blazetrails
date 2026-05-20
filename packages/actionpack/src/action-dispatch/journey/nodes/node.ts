@@ -1,3 +1,6 @@
+import * as Visitors from "../visitors.js";
+export { Ast } from "../ast.js";
+
 export type NodeType = "LITERAL" | "SLASH" | "DOT" | "SYMBOL" | "GROUP" | "STAR" | "CAT" | "OR";
 
 export abstract class Node {
@@ -44,6 +47,16 @@ export abstract class Node {
 
   toSym(): string {
     return this.name;
+  }
+
+  /** Rails `node.each(&block)` — walks the subtree via the Each visitor. */
+  each(block: (node: Node) => void): void {
+    Visitors.Each.INSTANCE.accept(this, block);
+  }
+
+  /** Rails `node.to_dot` — renders the AST as a Graphviz dot string. */
+  toDot(): string {
+    return Visitors.Dot.INSTANCE.render(this);
   }
 
   toString(): string {

@@ -34,6 +34,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { TestManifest } from "./types.js";
 import { isTestCaseUnported, isTestFileUnported } from "../api-compare/unported-files.js";
+import { SpellChecker } from "../../packages/did-you-mean/src/spell-checker.js";
 
 const SCRIPT_DIR = __dirname;
 const OUTPUT_DIR = path.join(SCRIPT_DIR, "output");
@@ -179,6 +180,19 @@ function main() {
 
   const ruby: TestManifest = JSON.parse(fs.readFileSync(rubyPath, "utf-8"));
   const ts: TestManifest = JSON.parse(fs.readFileSync(tsPath, "utf-8"));
+
+  if (filterPkg) {
+    const knownPkgs = Array.from(
+      new Set([...Object.keys(ruby.packages), ...Object.keys(ts.packages)]),
+    ).sort();
+    if (!knownPkgs.includes(filterPkg)) {
+      const suggestions = new SpellChecker({ dictionary: knownPkgs }).correct(filterPkg);
+      const hint = suggestions.length ? ` Did you mean: ${suggestions.join(", ")}?` : "";
+      console.error(`--package: unknown package "${filterPkg}".${hint}`);
+      console.error(`Available: ${knownPkgs.join(", ")}`);
+      process.exit(1);
+    }
+  }
 
   // Build TS lookups per package.
   // Per-file, we store an ordered list of test info plus pre-indexed queues

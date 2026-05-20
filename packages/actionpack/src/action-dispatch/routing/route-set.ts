@@ -1093,10 +1093,21 @@ export class RouteSet {
       const forwarded: RackEnv = { ...env };
       if (matched.matchedPrefix !== undefined) {
         const scriptName = (env["SCRIPT_NAME"] as string) ?? "";
-        forwarded["SCRIPT_NAME"] = scriptName + matched.matchedPrefix;
+        // Rails: `(script_name.to_s + match.to_s).chomp("/")` — chomp the
+        // combined value so a trailing slash on either side doesn't leak.
+        forwarded["SCRIPT_NAME"] = (scriptName + matched.matchedPrefix).replace(/\/$/, "");
         forwarded["PATH_INFO"] = matched.postMatch ?? "/";
       }
-      forwarded["action_dispatch.request.path_parameters"] = { ...route.defaults, ...params };
+      // Rails (journey/router.rb:45-50): `tmp_params = set_params.merge route.defaults`
+      // then overlay matched parameters. Preserves outer-mount captures
+      // when engines are nested.
+      const setParams =
+        (env["action_dispatch.request.path_parameters"] as Record<string, unknown>) ?? {};
+      forwarded["action_dispatch.request.path_parameters"] = {
+        ...setParams,
+        ...route.defaults,
+        ...params,
+      };
       return typeof mountedApp === "function"
         ? await mountedApp(forwarded)
         : await mountedApp.call(forwarded);

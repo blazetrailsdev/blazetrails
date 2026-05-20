@@ -187,14 +187,6 @@ export class RouteSet {
   private readonly _prepend: Array<(mapper: Mapper) => void> = [];
   private _finalized = false;
   /**
-   * @internal Rails-private `_routes`. Stays `null` until trails' legacy
-   * `urlFor(routeName, params, options)` is replaced by the Rails-shape
-   * `urlFor(options, routeName?)`; pointing it at `this` would route
-   * {@link fullUrlFor} into the wrong-shape `urlFor` at runtime. The
-   * UrlFor delegations on RouteSet raise via `requireRoutes` until then.
-   */
-  _routes: UrlForRoutes | null = null;
-  /**
    * Helpers registered via {@link addUrlHelper}. Rails dispatches these
    * through NamedRouteCollection, which isn't ported yet.
    */
@@ -208,6 +200,22 @@ export class RouteSet {
    * `RouteSet#polymorphic_mappings`.
    */
   readonly polymorphicMappings: Map<string, PolymorphicMappingEntry> = new Map();
+  /**
+   * @internal Rails-private `_routes`. Points at an adapter that exposes
+   * {@link polymorphicMappings} so {@link polymorphicUrl} works, but whose
+   * `urlFor` raises until trails' legacy `urlFor(routeName, params,
+   * options)` is replaced by the Rails-shape `urlFor(options, routeName?)`
+   * (PR b). Wiring `this` directly would route {@link fullUrlFor} into
+   * the wrong-shape `urlFor` at runtime.
+   */
+  _routes: UrlForRoutes = {
+    urlFor: () => {
+      throw new Error(
+        "RouteSet#urlFor needs the Rails-shape (options, routeName?) signature before fullUrlFor can be wired through _routes — see PR b.",
+      );
+    },
+    polymorphicMappings: this.polymorphicMappings,
+  };
   /** Controller name → handler registry consulted by {@link Dispatcher}. */
   readonly dispatcherRegistry: DispatcherRegistry = new DispatcherRegistry();
   /** @internal */

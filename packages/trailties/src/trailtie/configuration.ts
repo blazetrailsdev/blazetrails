@@ -15,10 +15,6 @@ export class Configuration {
   /** @internal */
   static readonly _watchableDirs: Record<string, string[]> = {};
   /** @internal */
-  static readonly _appMiddleware: unknown[] = [];
-  /** @internal */
-  static readonly _appGenerators: Record<string, unknown> = {};
-  /** @internal */
   static readonly _toPrepareBlocks: ConfigurationBlock[] = [];
 
   private readonly _options: Record<string, unknown> = {};
@@ -32,16 +28,8 @@ export class Configuration {
   get watchableDirs(): Record<string, string[]> {
     return Configuration._watchableDirs;
   }
-  get appMiddleware(): unknown[] {
-    return Configuration._appMiddleware;
-  }
   get toPrepareBlocks(): ConfigurationBlock[] {
     return Configuration._toPrepareBlocks;
-  }
-
-  appGenerators(block?: (gen: Record<string, unknown>) => void): Record<string, unknown> {
-    if (block) block(Configuration._appGenerators);
-    return Configuration._appGenerators;
   }
 
   toPrepare(block?: ConfigurationBlock): void {

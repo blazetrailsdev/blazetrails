@@ -160,6 +160,15 @@ describe("StreamingBuffer", () => {
     expect(chunks).toEqual(["", ""]);
   });
 
+  it("concat/safeConcat accept an OutputBuffer without throwing", () => {
+    const chunks: string[] = [];
+    const buf = new StreamingBuffer((v) => chunks.push(v));
+    const ob = new OutputBuffer("<x>");
+    buf.concat(ob);
+    buf.safeConcat(ob);
+    expect(chunks).toEqual(["<x>", "<x>"]);
+  });
+
   it("capture swaps the sink and restores it", () => {
     const chunks: string[] = [];
     const buf = new StreamingBuffer((v) => chunks.push(v));

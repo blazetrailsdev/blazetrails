@@ -152,8 +152,9 @@ export class StreamingBuffer {
    * produces `""`, which is still passed through to the block.
    */
   concat(value: unknown): this {
-    const str = value instanceof SafeBuffer ? value.toString() : value == null ? "" : String(value);
-    this._block(isHtmlSafe(value) ? str : htmlEscape(str).toString());
+    const str = toRawString(value);
+    const safe = isHtmlSafe(value) || value instanceof OutputBuffer;
+    this._block(safe ? str : htmlEscape(str).toString());
     return this;
   }
 
@@ -163,8 +164,7 @@ export class StreamingBuffer {
    * through as an empty chunk rather than the literal "null"/"undefined".
    */
   safeConcat(value: unknown): this {
-    const str = value instanceof SafeBuffer ? value.toString() : value == null ? "" : String(value);
-    this._block(str);
+    this._block(toRawString(value));
     return this;
   }
 
@@ -209,11 +209,24 @@ export class RawStreamingBuffer {
 
   concat(value: unknown): this {
     if (value === null || value === undefined) return this;
-    this.buffer.block(value instanceof SafeBuffer ? value.toString() : String(value));
+    this.buffer.block(toRawString(value));
     return this;
   }
 
   raw(): this {
     return this;
   }
+}
+
+/**
+ * Stringify a value the way Rails `to_s` would for streaming/output
+ * buffers: `nil → ""`, `SafeBuffer → underlying string`, `OutputBuffer →
+ * underlying raw string` (avoids `String(outputBuffer)` throwing because
+ * `OutputBuffer.toString()` returns a non-primitive `SafeBuffer`).
+ */
+function toRawString(value: unknown): string {
+  if (value == null) return "";
+  if (value instanceof SafeBuffer) return value.toString();
+  if (value instanceof OutputBuffer) return value.toStr();
+  return String(value);
 }

@@ -8,10 +8,18 @@ import { Base, Relation, IrreversibleOrderError } from "./index.js";
 import { Associations, registerModel, modelRegistry } from "./associations.js";
 
 import {
+  adapterType,
   createTestAdapter,
   resetTestAdapterState,
   type TestDatabaseAdapter,
 } from "./test-adapter.js";
+
+// Rewrites ANSI `"ident"` to backticked `\`ident\`` when MySQL is active so
+// `toSql()`-output assertions match the adapter's identifier quoting. Phase
+// 9b-2b activated the MySQL Arel visitor; prior to that all adapters emitted
+// ANSI quoting via the dormant ToSql fallback.
+const Q = (s: string): string =>
+  adapterType === "mysql" ? s.replace(/"([A-Za-z_][A-Za-z0-9_]*)"/g, "`$1`") : s;
 import type { DatabaseAdapter } from "./adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { dropAllTables } from "./test-helpers/drop-all-tables.js";
@@ -174,10 +182,10 @@ describe("RelationTest", () => {
     }
     // Computed select alias — must not be qualified as "posts"."avg_rating"
     expect(Post.order(sql("avg_rating DESC")).toSql()).toContain("ORDER BY avg_rating DESC");
-    expect(Post.order(sql("avg_rating DESC")).toSql()).not.toContain('"posts"."avg_rating"');
+    expect(Post.order(sql("avg_rating DESC")).toSql()).not.toContain(Q('"posts"."avg_rating"'));
     // Chained: plain col comes before raw literal, both in call order
     expect(Post.order({ id: "asc" }).order(sql("score DESC")).toSql()).toContain(
-      'ORDER BY "posts"."id" ASC, score DESC',
+      Q('ORDER BY "posts"."id" ASC, score DESC'),
     );
     // Raw SQL expressions pass through verbatim
     expect(Post.order(sql("RANDOM()")).toSql()).toContain("ORDER BY RANDOM()");
@@ -192,7 +200,7 @@ describe("RelationTest", () => {
         this.adapter = adapter;
       }
     }
-    expect(Post.order({ id: "desc" }).toSql()).toContain('"posts"."id" DESC');
+    expect(Post.order({ id: "desc" }).toSql()).toContain(Q('"posts"."id" DESC'));
   });
 
   it("order by unknown column (subquery alias) uses bare quoted name", () => {
@@ -205,8 +213,8 @@ describe("RelationTest", () => {
     }
     const RANKED = "(SELECT id, commits AS hotness FROM developers) developers";
     const sql = Developer.from(RANKED).order({ hotness: "desc" }).limit(10).toSql();
-    expect(sql).toContain('"hotness" DESC');
-    expect(sql).not.toContain('"developers"."hotness"');
+    expect(sql).toContain(Q('"hotness" DESC'));
+    expect(sql).not.toContain(Q('"developers"."hotness"'));
   });
 
   it("order by known column uses table-qualified attribute", () => {
@@ -218,7 +226,7 @@ describe("RelationTest", () => {
       }
     }
     const sql = Developer.order({ commits: "desc" }).toSql();
-    expect(sql).toContain('"developers"."commits" DESC');
+    expect(sql).toContain(Q('"developers"."commits" DESC'));
   });
 
   it("group by bare column name qualifies via table", () => {
@@ -231,7 +239,7 @@ describe("RelationTest", () => {
       }
     }
     const sql = Order.group("created_at").toSql();
-    expect(sql).toContain('"orders"."created_at"');
+    expect(sql).toContain(Q('"orders"."created_at"'));
     expect(sql).not.toMatch(/GROUP BY created_at[^"]/);
   });
 
@@ -245,8 +253,8 @@ describe("RelationTest", () => {
       }
     }
     const sql = Book.group("author_id", "published_year").toSql();
-    expect(sql).toContain('"books"."author_id"');
-    expect(sql).toContain('"books"."published_year"');
+    expect(sql).toContain(Q('"books"."author_id"'));
+    expect(sql).toContain(Q('"books"."published_year"'));
     expect(sql).not.toMatch(/GROUP BY author_id[^"]/);
     expect(sql).not.toMatch(/,\s*published_year[^"]/);
   });
@@ -262,11 +270,11 @@ describe("RelationTest", () => {
     // Function expressions pass through as raw SQL (not quoted as identifier)
     const fnSql = Order.group("DATE(created_at)").toSql();
     expect(fnSql).toContain("GROUP BY DATE(created_at)");
-    expect(fnSql).not.toContain('"orders"."DATE(created_at)"');
+    expect(fnSql).not.toContain(Q('"orders"."DATE(created_at)"'));
     // Cast expressions pass through as raw SQL (not quoted as identifier)
     const castSql = Order.group("created_at::date").toSql();
     expect(castSql).toContain("GROUP BY created_at::date");
-    expect(castSql).not.toContain('"orders"."created_at::date"');
+    expect(castSql).not.toContain(Q('"orders"."created_at::date"'));
     // Positional GROUP BY passes through as raw SQL
     expect(Order.group("1").toSql()).toContain("GROUP BY 1");
   });
@@ -280,7 +288,7 @@ describe("RelationTest", () => {
       }
     }
     const sql = Book.group("authors.name").toSql();
-    expect(sql).toContain('"authors"."name"');
+    expect(sql).toContain(Q('"authors"."name"'));
     expect(sql).not.toContain("authors.name");
   });
 
@@ -292,11 +300,11 @@ describe("RelationTest", () => {
       }
     }
     const sql = User.order({ created_at: "desc" }).limit(10).toSql();
-    expect(sql).toContain('"users"."created_at" DESC');
+    expect(sql).toContain(Q('"users"."created_at" DESC'));
 
     const multiKeySql = User.order({ title: "asc", id: "desc" }).limit(10).toSql();
-    expect(multiKeySql).toContain('"users"."title" ASC');
-    expect(multiKeySql).toContain('"users"."id" DESC');
+    expect(multiKeySql).toContain(Q('"users"."title" ASC'));
+    expect(multiKeySql).toContain(Q('"users"."id" DESC'));
   });
 
   it("unscoped() on a relation discards WHERE/ORDER and returns fresh relation", () => {
@@ -308,8 +316,8 @@ describe("RelationTest", () => {
     }
     const sql = Post.where({ active: true }).order("created_at").unscoped().order("title").toSql();
     expect(sql).not.toContain("active");
-    expect(sql).not.toContain('"posts"."created_at"');
-    expect(sql).toContain('"posts"."title"');
+    expect(sql).not.toContain(Q('"posts"."created_at"'));
+    expect(sql).toContain(Q('"posts"."title"'));
   });
 
   it("joins() accepts Arel join nodes from joinSources", () => {
@@ -332,8 +340,8 @@ describe("RelationTest", () => {
       .on(books.get("author_id").eq(authors.get("id"))).joinSources;
     const sql = Book.joins(...joinSources).toSql();
     expect(sql).toContain("INNER JOIN");
-    expect(sql).toContain('"authors"');
-    expect(sql).toContain('"books"."author_id"');
+    expect(sql).toContain(Q('"authors"'));
+    expect(sql).toContain(Q('"books"."author_id"'));
   });
 
   it("constructJoinDependency handles array-form spec — joins(['posts','comments'])", () => {
@@ -682,7 +690,7 @@ describe("RelationTest", () => {
         this.adapter = adapter;
       }
     }
-    expect(Book.order("title").toSql()).toContain('"books"."title"');
+    expect(Book.order("title").toSql()).toContain(Q('"books"."title"'));
   });
 
   it("string ORDER BY in .from() subquery context stays unqualified for unknown columns", () => {
@@ -694,8 +702,8 @@ describe("RelationTest", () => {
     }
     const RANKED = "SELECT id, commits AS hotness FROM developers";
     const sql = Developer.from(RANKED).order("hotness desc").limit(10).toSql();
-    expect(sql).toContain('"hotness" DESC');
-    expect(sql).not.toContain('"developers"."hotness"');
+    expect(sql).toContain(Q('"hotness" DESC'));
+    expect(sql).not.toContain(Q('"developers"."hotness"'));
   });
 
   it("from() with an Arel TableAlias node emits (SELECT …) alias subquery form", () => {
@@ -726,7 +734,7 @@ describe("RelationTest", () => {
     }
     const sql = Book.optimizerHints("SeqScan(books)").where({ active: true }).toSql();
     expect(sql).toContain("SeqScan(books)");
-    expect(sql).toContain('"books"."active"');
+    expect(sql).toContain(Q('"books"."active"'));
   });
 
   it("whereMissing emits LEFT OUTER JOIN + assoc_pk IS NULL", () => {
@@ -746,9 +754,9 @@ describe("RelationTest", () => {
     try {
       const sql = WmBook.all().whereMissing("author").toSql();
       expect(sql).toContain("LEFT OUTER JOIN");
-      expect(sql).toContain('"authors"');
-      expect(sql).toContain('"authors"."id" IS NULL');
-      expect(sql).not.toContain('"books"."author_id" IS NULL');
+      expect(sql).toContain(Q('"authors"'));
+      expect(sql).toContain(Q('"authors"."id" IS NULL'));
+      expect(sql).not.toContain(Q('"books"."author_id" IS NULL'));
     } finally {
       modelRegistry.delete("Author");
       modelRegistry.delete("Book");
@@ -772,9 +780,9 @@ describe("RelationTest", () => {
     try {
       const sql = WaBook.all().whereAssociated("author").toSql();
       expect(sql).toContain("INNER JOIN");
-      expect(sql).toContain('"authors"');
-      expect(sql).toContain('"authors"."id" IS NOT NULL');
-      expect(sql).not.toContain('"books"."author_id" IS NOT NULL');
+      expect(sql).toContain(Q('"authors"'));
+      expect(sql).toContain(Q('"authors"."id" IS NOT NULL'));
+      expect(sql).not.toContain(Q('"books"."author_id" IS NOT NULL'));
     } finally {
       modelRegistry.delete("Author");
       modelRegistry.delete("Book");
@@ -806,10 +814,10 @@ describe("RelationTest", () => {
       }
     }
     const sql = Book.all().inOrderOf("status", ["published", "draft", "archived"]).toSql();
-    expect(sql).toContain(`"books"."status" IN ('published', 'draft', 'archived')`);
-    expect(sql).toContain(`CASE WHEN "books"."status" = 'published' THEN 1`);
-    expect(sql).toContain(`WHEN "books"."status" = 'draft' THEN 2`);
-    expect(sql).toContain(`WHEN "books"."status" = 'archived' THEN 3`);
+    expect(sql).toContain(Q(`"books"."status" IN ('published', 'draft', 'archived')`));
+    expect(sql).toContain(Q(`CASE WHEN "books"."status" = 'published' THEN 1`));
+    expect(sql).toContain(Q(`WHEN "books"."status" = 'draft' THEN 2`));
+    expect(sql).toContain(Q(`WHEN "books"."status" = 'archived' THEN 3`));
     expect(sql).toMatch(/END ASC/);
     expect(sql).not.toContain("ELSE");
     expect(sql).not.toContain("THEN 0");
@@ -823,8 +831,8 @@ describe("RelationTest", () => {
       }
     }
     const sql = Book.all().inOrderOf("status", ["published", "draft"], false).toSql();
-    expect(sql).toContain(`CASE WHEN "books"."status" = 'published' THEN 1`);
-    expect(sql).toContain(`WHEN "books"."status" = 'draft' THEN 2`);
+    expect(sql).toContain(Q(`CASE WHEN "books"."status" = 'published' THEN 1`));
+    expect(sql).toContain(Q(`WHEN "books"."status" = 'draft' THEN 2`));
     expect(sql).toContain("ELSE 3");
     expect(sql).toMatch(/END ASC/);
     expect(sql).not.toContain(" IN (");
@@ -847,9 +855,9 @@ describe("RelationTest", () => {
     try {
       const sql = WmhAuthor.all().whereMissing("books").toSql();
       expect(sql).toContain("LEFT OUTER JOIN");
-      expect(sql).toContain('"books"');
-      expect(sql).toContain('"books"."id" IS NULL');
-      expect(sql).not.toContain('"authors"."id" IS NULL');
+      expect(sql).toContain(Q('"books"'));
+      expect(sql).toContain(Q('"books"."id" IS NULL'));
+      expect(sql).not.toContain(Q('"authors"."id" IS NULL'));
     } finally {
       modelRegistry.delete("Author");
       modelRegistry.delete("Book");
@@ -873,9 +881,9 @@ describe("RelationTest", () => {
     try {
       const sql = WahAuthor.all().whereAssociated("books").toSql();
       expect(sql).toContain("INNER JOIN");
-      expect(sql).toContain('"books"');
-      expect(sql).toContain('"books"."id" IS NOT NULL');
-      expect(sql).not.toContain('"authors"."id" IS NOT NULL');
+      expect(sql).toContain(Q('"books"'));
+      expect(sql).toContain(Q('"books"."id" IS NOT NULL'));
+      expect(sql).not.toContain(Q('"authors"."id" IS NOT NULL'));
     } finally {
       modelRegistry.delete("Author");
       modelRegistry.delete("Book");
@@ -903,7 +911,7 @@ describe("RelationTest", () => {
       }
     }
     const sql = Book.select(Book.arelTable.get("title").as("t")).toSql();
-    expect(sql).toContain('"title" AS t');
+    expect(sql).toContain(Q('"title" AS t'));
     expect(sql).not.toContain("[object Object]");
   });
 
@@ -967,7 +975,7 @@ describe("RelationTest", () => {
     const sql = Book.from(Book.where({ active: true }), "books").toSql();
     // Rails: FROM (SELECT "books".* FROM "books" WHERE ...) books  ← bare alias
     expect(sql).toMatch(/FROM \(SELECT .+\) books/);
-    expect(sql).not.toContain(') "books"');
+    expect(sql).not.toContain(Q(') "books"'));
   });
 
   it("from(rawSql, alias) emits bare alias for valid identifiers", () => {
@@ -979,7 +987,7 @@ describe("RelationTest", () => {
     }
     const sql = Book.from("(SELECT * FROM books WHERE active = 1) books", "books").toSql();
     expect(sql).toMatch(/\) books/);
-    expect(sql).not.toContain(') "books"');
+    expect(sql).not.toContain(Q(') "books"'));
   });
 
   it("relation with annotation includes comment in to sql", () => {
@@ -1191,7 +1199,7 @@ describe("RelationTest", () => {
     registerModel("Comment", Comment);
     try {
       const sql = Post.joins("comments").toSql();
-      expect(sql).toContain('INNER JOIN "comments"');
+      expect(sql).toContain(Q('INNER JOIN "comments"'));
     } finally {
       modelRegistry.delete("Comment");
     }
@@ -1589,7 +1597,7 @@ describe("RelationTest", () => {
       const sql = Book.all().eagerLoad("author").toSql();
       expect(sql).toMatch(/"books"\."id" AS t0_r/);
       expect(sql).toMatch(/"authors"\.".*" AS t1_r/);
-      expect(sql).toContain('LEFT OUTER JOIN "authors" ON');
+      expect(sql).toContain(Q('LEFT OUTER JOIN "authors" ON'));
       expect(sql).not.toMatch(/LEFT OUTER JOIN "authors" "t\d+"/);
     } finally {
       modelRegistry.delete("Author");
@@ -1681,7 +1689,7 @@ describe("RelationTest", () => {
         .where("authors.name = 'Rails'")
         .references("authors")
         .toSql();
-      expect(sql).toContain('LEFT OUTER JOIN "authors" ON');
+      expect(sql).toContain(Q('LEFT OUTER JOIN "authors" ON'));
       expect(sql).toMatch(/"books"\."id" AS t0_r/);
       expect(sql).toContain("authors.name = 'Rails'");
     } finally {

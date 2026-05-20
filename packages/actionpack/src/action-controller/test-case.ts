@@ -508,7 +508,9 @@ export class TestSession {
     const k = String(key);
     if (this._data.has(k)) return this._data.get(k);
     if (arguments.length >= 2) {
-      return typeof fallback === "function" ? (fallback as () => unknown)() : fallback;
+      // Ruby `Hash#fetch(key) { |k| ... }` yields the missing key to the
+      // block; mirror by passing the stringified key when fallback is callable.
+      return typeof fallback === "function" ? (fallback as (key: string) => unknown)(k) : fallback;
     }
     const err = new Error(`key not found: "${k}"`);
     err.name = "KeyError";

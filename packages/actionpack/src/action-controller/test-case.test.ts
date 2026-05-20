@@ -32,6 +32,7 @@ describe("TestSession Rails-mirroring API", () => {
     expect(s.fetch("a")).toBe(1);
     expect(s.fetch("b", 99)).toBe(99);
     expect(s.fetch("c", () => "lazy")).toBe("lazy");
+    expect(s.fetch("d", (k: string) => `missing:${k}`)).toBe("missing:d");
     expect(() => s.fetch("missing")).toThrow();
   });
 

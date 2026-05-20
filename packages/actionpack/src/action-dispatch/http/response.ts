@@ -29,7 +29,9 @@ import {
 } from "./cache.js";
 import { filteredLocation as _filteredLocation } from "./filter-redirect.js";
 
-const CONTENT_TYPE = "Content-Type";
+// Lowercase to match the rest of this file's header conventions; setHeader
+// is case-insensitive but call sites read `headers["content-type"]` directly.
+const CONTENT_TYPE = "content-type";
 const NO_CONTENT_CODES = [100, 101, 102, 103, 204, 205, 304] as const;
 const CONTENT_TYPE_PARSER =
   /^(?<mime_type>[^;\s]+\s*(?:;\s*(?!charset)[^;\s]+)*)?(?:;\s*charset="?(?<charset>[^;\s"]+)"?)?/;
@@ -370,7 +372,11 @@ export class Response {
 
   // --- Rack response ---
 
-  toRack(): [number, Record<string, string>, string[]] {
+  toRack(): [number, Record<string, string>, unknown[]] {
+    // If a sendFile-style or buffered stream is installed, surface it through
+    // the Rack body so Rack::Sendfile / BodyProxy can intercept via toPath()
+    // or iterate via each().
+    if (this.stream) return [this._status, { ...this._headers }, this.bodyParts()];
     return [this._status, { ...this._headers }, [...this._body]];
   }
 
@@ -394,8 +400,12 @@ export class Response {
     this.commitBang();
     let cached: string | null = null;
     const read = () => (cached ??= getFs().readFileSync(path, "latin1"));
+    // Rack::Sendfile detects file bodies via `body.toPath()` (callable);
+    // Rails' FileBody uses `attr_reader :to_path` which is also a method.
     this.stream = {
-      toPath: path,
+      toPath(): string {
+        return path;
+      },
       get body(): string {
         return read();
       },

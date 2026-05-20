@@ -535,4 +535,51 @@ describe("Response Cache::Response wiring", () => {
     res.handleConditionalGetBang();
     expect(res.getHeader("Cache-Control")).toBeUndefined();
   });
+
+  describe("lifecycle (commit / sending / sent)", () => {
+    it("commitBang is idempotent and runs beforeCommitted once", () => {
+      const res = new Response();
+      res.commitBang();
+      expect(res.committed).toBe(true);
+      // Default content-type set by assignDefaultContentTypeAndCharsetBang
+      expect(res.getHeader("content-type")).toMatch(/text\/html/);
+      res.commitBang(); // second call is a no-op
+      expect(res.committed).toBe(true);
+    });
+
+    it("each wraps iteration in sending! / sent!", () => {
+      const res = new Response(200, {}, ["hello", " world"]);
+      const chunks: unknown[] = [];
+      for (const chunk of res.each()) chunks.push(chunk);
+      expect(chunks).toEqual(["hello", " world"]);
+      expect(res.isSending).toBe(true);
+      expect(res.isSent).toBe(true);
+    });
+  });
+
+  describe("sendFile", () => {
+    it("commits the response and exposes a Rack-compatible file body", () => {
+      const res = new Response();
+      res.sendFile("/etc/hostname");
+      expect(res.committed).toBe(true);
+      const stream = res.stream as { toPath(): string; each(): IterableIterator<string> };
+      expect(typeof stream.toPath).toBe("function");
+      expect(stream.toPath()).toBe("/etc/hostname");
+    });
+
+    it("toRack surfaces the file body when sendFile was called", () => {
+      const res = new Response();
+      res.sendFile("/etc/hostname");
+      const [status, , body] = res.toRack();
+      expect(status).toBe(200);
+      expect(body.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("bodyParts", () => {
+    it("drains the buffered body when no explicit stream is set", () => {
+      const res = new Response(200, {}, ["a", "b"]);
+      expect(res.bodyParts()).toEqual(["a", "b"]);
+    });
+  });
 });

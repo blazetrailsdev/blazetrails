@@ -669,7 +669,11 @@ export class RouteSet {
 
   /**
    * Rails: `def eager_load!` — `router.eager_load!; routes.each(&:eager_load!); formatter.eager_load!; nil`.
-   * Forces the Journey router build and warms the formatter cache.
+   * Trails warms the router and the formatter; the per-route warmup is
+   * skipped because the higher-level `routing::Route` has no Journey
+   * Path/AST cache to populate (Rails warms `route.path.ast` via
+   * `Journey::Route#eager_load!`, which is a no-op for trails Routes
+   * until the routing→Journey bridge lands in PR-c).
    */
   eagerLoadBang(): void {
     const router = this.journeyRouter as JourneyRouter & { eagerLoadBang?(): void };
@@ -1005,9 +1009,14 @@ export class RouteSet {
     this._finalized = false;
     this.routes = [];
     this.namedRoutes.clear();
+    this.set.clear();
+    this.formatter.clear();
     this.polymorphicMappings.clear();
     this.dispatcherRegistry.clear();
     this._customUrlHelpers.clear();
+    this._urlHelpersWithPaths = undefined;
+    this._urlHelpersWithoutPaths = undefined;
+    this._defaultEnv = undefined;
     this._journeyRouter = null;
   }
 

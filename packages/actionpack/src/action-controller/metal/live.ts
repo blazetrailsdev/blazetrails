@@ -134,6 +134,15 @@ export class Buffer {
   }
 
   /**
+   * Public iterator invoked by `DispatchResponse#each` / `bodyParts` /
+   * `rackResponse`. Mirrors Rails' `ActionDispatch::Response::Buffer#each`
+   * (Live::Buffer extends Response::Buffer in Rails, inheriting `each`).
+   */
+  *each(): IterableIterator<string> {
+    yield* this.eachChunk();
+  }
+
+  /**
    * Drain the queue, yielding each non-null chunk in order. Stops at the
    * sentinel `null` pushed by {@link close}.
    *

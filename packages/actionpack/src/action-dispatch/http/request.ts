@@ -42,11 +42,30 @@ import type { ArrayInquirer } from "@blazetrails/activesupport";
 import type { MimeType } from "./mime-type.js";
 import { URL as HttpURL } from "./url.js";
 import {
+  envFilter as _envFilter,
   filteredEnv as _filteredEnv,
   filteredParameters as _filteredParameters,
   filteredPath as _filteredPath,
+  filteredQueryString as _filteredQueryString,
   parameterFilter as _parameterFilter,
+  parameterFilterFor as _parameterFilterFor,
 } from "./filter-parameters.js";
+import {
+  contentSecurityPolicy as _contentSecurityPolicy,
+  contentSecurityPolicyNonce as _contentSecurityPolicyNonce,
+  contentSecurityPolicyNonceDirectives as _contentSecurityPolicyNonceDirectives,
+  contentSecurityPolicyNonceGenerator as _contentSecurityPolicyNonceGenerator,
+  contentSecurityPolicyReportOnly as _contentSecurityPolicyReportOnly,
+  generateContentSecurityPolicyNonce as _generateContentSecurityPolicyNonce,
+  setContentSecurityPolicy as _setContentSecurityPolicy,
+  setContentSecurityPolicyNonceDirectives as _setContentSecurityPolicyNonceDirectives,
+  setContentSecurityPolicyNonceGenerator as _setContentSecurityPolicyNonceGenerator,
+  setContentSecurityPolicyReportOnly as _setContentSecurityPolicyReportOnly,
+  type ContentSecurityPolicy,
+  type NonceGenerator,
+} from "./content-security-policy.js";
+import { QueryParser, type QueryPair } from "./query-parser.js";
+import type { PermissionsPolicy } from "../permissions-policy.js";
 import type { ParameterFilter } from "@blazetrails/activesupport";
 import { RequestUtils, type ParamValue } from "../request/utils.js";
 import { COOKIES_APP_OPTIONS_KEY, type CookieJarOptions } from "../middleware/cookies.js";
@@ -58,6 +77,7 @@ import {
   pathParameters as _pathParameters,
   setParameterParsers as _setParameterParsers,
   setPathParameters as _setPathParameters,
+  logParseErrorOnce as _logParseErrorOnce,
   type ParameterParser,
   type ParameterParsers,
   type ParametersHost,
@@ -388,6 +408,60 @@ export class Request {
   declare filteredEnv: () => Record<string, unknown>;
   declare filteredPath: () => string;
   declare parameterFilter: () => ParameterFilter;
+  /** @internal */
+  declare envFilter: () => ParameterFilter;
+  /** @internal */
+  declare filteredQueryString: () => string;
+  /** @internal */
+  declare parameterFilterFor: (filters: Array<string | RegExp>) => ParameterFilter;
+
+  // --- Content Security Policy (ActionDispatch::ContentSecurityPolicy::Request) ---
+
+  get contentSecurityPolicy(): ContentSecurityPolicy | null | undefined {
+    return _contentSecurityPolicy.call(this);
+  }
+  set contentSecurityPolicy(policy: ContentSecurityPolicy | null) {
+    _setContentSecurityPolicy.call(this, policy);
+  }
+
+  get contentSecurityPolicyReportOnly(): boolean | undefined {
+    return _contentSecurityPolicyReportOnly.call(this);
+  }
+  set contentSecurityPolicyReportOnly(value: boolean) {
+    _setContentSecurityPolicyReportOnly.call(this, value);
+  }
+
+  get contentSecurityPolicyNonceGenerator(): NonceGenerator | undefined {
+    return _contentSecurityPolicyNonceGenerator.call(this);
+  }
+  set contentSecurityPolicyNonceGenerator(generator: NonceGenerator | null) {
+    _setContentSecurityPolicyNonceGenerator.call(this, generator);
+  }
+
+  get contentSecurityPolicyNonceDirectives(): readonly string[] | undefined {
+    return _contentSecurityPolicyNonceDirectives.call(this);
+  }
+  set contentSecurityPolicyNonceDirectives(directives: readonly string[] | null) {
+    _setContentSecurityPolicyNonceDirectives.call(this, directives);
+  }
+
+  get contentSecurityPolicyNonce(): string | undefined {
+    return _contentSecurityPolicyNonce.call(this);
+  }
+
+  /** @internal */
+  generateContentSecurityPolicyNonce(): string {
+    return _generateContentSecurityPolicyNonce.call(this);
+  }
+
+  // --- Permissions Policy (ActionDispatch::PermissionsPolicy::Request) ---
+
+  get permissionsPolicy(): PermissionsPolicy | null | undefined {
+    return this.env["action_dispatch.permissions_policy"] as PermissionsPolicy | null | undefined;
+  }
+  set permissionsPolicy(policy: PermissionsPolicy | null) {
+    this.env["action_dispatch.permissions_policy"] = policy;
+  }
 
   // --- Request type checks ---
 
@@ -504,7 +578,7 @@ export class Request {
   }
 
   /** @internal */
-  private get _paramsHost(): ParametersHost {
+  get _paramsHost(): ParametersHost {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const req = this;
     return {
@@ -903,6 +977,66 @@ export class Request {
   declare formatFromPathExtension: () => MimeType | undefined;
   declare isParamsReadable: () => boolean;
 
+  // --- Controller dispatch ---
+
+  /**
+   * Rails: `request.controller_class` (request.rb:88-92). Defaults the
+   * `action` path-parameter to `"index"` and resolves the controller class
+   * via {@link controllerClassFor}.
+   */
+  controllerClass(): typeof PassNotFound | unknown {
+    const params = this.pathParameters as Record<string, unknown>;
+    if (params["action"] == null) params["action"] = "index";
+    return this.controllerClassFor(params["controller"] as string | undefined);
+  }
+
+  /**
+   * Rails: `request.controller_class_for(name)` (request.rb:94-110).
+   * Sentinel-only path: returns {@link PassNotFound} when `name` is absent.
+   * Registry-backed name resolution is a follow-up.
+   */
+  controllerClassFor(name: string | undefined | null): typeof PassNotFound | unknown {
+    if (name) {
+      throw new Error(
+        `controllerClassFor(${name}): controller registry resolution not yet implemented`,
+      );
+    }
+    return PassNotFound;
+  }
+
+  // --- Request parameters (Rack form pairs / vars) ---
+
+  /**
+   * Rails: `request_parameters_list` (request.rb:437-456). Drives the
+   * `from_pairs` builder by surfacing whichever flat form list Rack has
+   * populated under `rack.request.form_pairs` / `rack.request.form_vars`.
+   * Returns `[]` when the body is empty and `null` when Rack parsed
+   * multipart but did not preserve a pair list.
+   */
+  requestParametersList(): QueryPair[] | null {
+    const rackPost = this.rackRequest.POST;
+    const formPairs = this.env["rack.request.form_pairs"];
+    if (formPairs != null) return formPairs as QueryPair[];
+    const formVars = this.env["rack.request.form_vars"];
+    if (formVars != null) return Array.from(QueryParser.eachPair(formVars as string));
+    if (rackPost && typeof rackPost === "object" && Object.keys(rackPost as object).length > 0) {
+      return null;
+    }
+    return [];
+  }
+
+  // --- Parameters mixin privates (declared; bound below via prototype) ---
+
+  /** @internal */
+  declare paramsParsers: () => ParameterParsers;
+  /** @internal */
+  declare parseFormattedParameters: (
+    parsers: ParameterParsers,
+    fallback: () => Record<string, unknown>,
+  ) => Record<string, unknown>;
+  /** @internal */
+  declare logParseErrorOnce: () => void;
+
   // --- Static factory ---
 
   static create(env: RackEnv = {}): Request {
@@ -1016,6 +1150,47 @@ Request.prototype.filteredParameters = _filteredParameters;
 Request.prototype.filteredEnv = _filteredEnv;
 Request.prototype.filteredPath = _filteredPath;
 Request.prototype.parameterFilter = _parameterFilter;
+Request.prototype.envFilter = _envFilter;
+Request.prototype.filteredQueryString = _filteredQueryString;
+Request.prototype.parameterFilterFor = _parameterFilterFor as (
+  this: Request,
+  filters: Array<string | RegExp>,
+) => ParameterFilter;
+
+// Parameters mixin privates. The host shape comes from `_paramsHost`; these
+// just delegate so `request.paramsParsers()` matches Rails' private API.
+Request.prototype.paramsParsers = function (this: Request) {
+  return _paramsParsers.call(this._paramsHost);
+};
+Request.prototype.parseFormattedParameters = function (
+  this: Request,
+  parsers: ParameterParsers,
+  fallback: () => Record<string, unknown>,
+) {
+  return _parseFormattedParameters.call(this._paramsHost, parsers, fallback);
+};
+Request.prototype.logParseErrorOnce = function (this: Request) {
+  _logParseErrorOnce.call(this._paramsHost);
+};
+
+/**
+ * Sentinel controller used when {@link Request.controllerClassFor} is called
+ * without a controller name. Mirrors Rails' `PASS_NOT_FOUND` anonymous class
+ * (request.rb:82-86): every dispatch path returns the sentinel itself, and
+ * `call` short-circuits to a `404` with the `X-Cascade: pass` header so the
+ * router falls through to the next matching route.
+ */
+export class PassNotFound {
+  static action(_name: unknown): typeof PassNotFound {
+    return PassNotFound;
+  }
+  static call(_env: RackEnv): [number, Record<string, string>, string[]] {
+    return [404, { "x-cascade": "pass" }, []];
+  }
+  static actionEncodingTemplate(_action: unknown): false {
+    return false;
+  }
+}
 // Mime-negotiation privates wired via prototype; declared on the class for
 // typing. These mirror Rails' private predicates / lookup helpers.
 Request.prototype.validAcceptHeader = function (this: Request) {

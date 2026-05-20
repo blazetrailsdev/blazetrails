@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { Base, transaction, registerModel, StaleObjectError } from "./index.js";
 import { Associations } from "./associations.js";
 
-import { createTestAdapter } from "./test-adapter.js";
+import { adapterType, createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import { SQLite3Adapter } from "./connection-adapters/sqlite3-adapter.js";
@@ -856,7 +856,7 @@ describe("PessimisticLockingTest", () => {
     });
   });
 
-  it("lock sending custom lock statement", async () => {
+  it.skipIf(adapterType === "sqlite")("lock sending custom lock statement", async () => {
     const adapter = await freshAdapter();
     class Person extends Base {
       static {

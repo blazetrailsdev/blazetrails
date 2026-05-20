@@ -3394,7 +3394,9 @@ export class Relation<T extends Base> {
   }
 
   private _toSql(): string {
-    // Set operations: generate both sides and combine
+    // Set operations: concatenate without wrapping operands or outer parens.
+    // SQLite rejects parens around compound SELECT operands; PG/MySQL accept
+    // bare-operand compound SELECTs equally.
     if (this._setOperation) {
       const leftSql = this._toSqlWithoutSetOp();
       const rightSql = this._setOperation.other._toSqlWithoutSetOp();
@@ -3404,7 +3406,7 @@ export class Relation<T extends Base> {
         intersect: "INTERSECT",
         except: "EXCEPT",
       }[this._setOperation.type];
-      return `(${leftSql}) ${op} (${rightSql})`;
+      return `${leftSql} ${op} ${rightSql}`;
     }
     return this._toSqlWithoutSetOp();
   }

@@ -72,9 +72,13 @@ export class Headers {
     return this.mergeInPlace(other);
   }
 
-  /** Rails `Headers.from_hash(hash)` — build a Headers from an already-normalized env hash. */
+  /**
+   * Rails `Headers.from_hash(hash)` — wraps the env hash directly so
+   * mutations via the returned `Headers` are reflected in the original
+   * hash, matching Rails' Request-backed wrapper semantics.
+   */
   static fromHash(hash: Record<string, unknown>): Headers {
-    return new Headers({ ...hash });
+    return new Headers(hash);
   }
 
   add(key: string, value: unknown): void {

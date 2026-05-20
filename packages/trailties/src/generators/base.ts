@@ -22,8 +22,6 @@ export abstract class GeneratorBase implements GeneratorActionsState {
   protected createdFiles: string[] = [];
   pendingGenerators: Array<{ what: string; args: string[] }> = [];
 
-  route = Actions.route;
-  environment = Actions.environment;
   generate = Actions.generate;
 
   constructor(options: GeneratorOptions) {
@@ -65,20 +63,15 @@ export abstract class GeneratorBase implements GeneratorActionsState {
     this.output(`      append  ${relativePath}`);
   }
 
-  insertIntoFile(
-    rel: string,
-    marker: string,
-    content: string,
-    opts: { after?: boolean } = {},
-  ): void {
-    const fullPath = this.path.join(this.cwd, rel);
+  protected insertIntoFile(relativePath: string, marker: string, content: string): void {
+    const fullPath = this.path.join(this.cwd, relativePath);
     if (!this.fs.existsSync(fullPath)) return;
     const existing = this.fs.readFileSync(fullPath, "utf-8");
     const idx = existing.indexOf(marker);
     if (idx === -1) return;
-    const pos = opts.after ? idx + marker.length : idx;
-    this.fs.writeFileSync(fullPath, existing.slice(0, pos) + content + existing.slice(pos));
-    this.output(`      insert  ${rel}`);
+    const updated = existing.slice(0, idx) + content + existing.slice(idx);
+    this.fs.writeFileSync(fullPath, updated);
+    this.output(`      insert  ${relativePath}`);
   }
 
   protected fileExists(relativePath: string): boolean {

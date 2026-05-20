@@ -404,16 +404,21 @@ export class IntegrationTest {
   }
 
   /**
-   * Create a new session backed by `app`. Rails returns a fresh
-   * `Integration::Session` subclass instance; trails returns a clean
-   * `IntegrationTest` whose routes mirror `app`'s. The `app` argument is
-   * accepted for parity but currently ignored (we don't yet wire a
-   * Rack-style app facade).
+   * Create a new session for `app`. Rails dynamically subclasses
+   * `Integration::Session`, mixing in `app.routes.url_helpers` and
+   * `mounted_helpers`. trails doesn't yet have a Rack-app facade with
+   * generated helpers, so this creates a fresh `IntegrationTest` and
+   * propagates the current routes + controller registry — the
+   * functional equivalent for tests that share `this.routes`/`this.app`.
    *
    * @internal
    */
-  createSession(_app?: unknown): IntegrationTest {
-    return new IntegrationTest();
+  createSession(app?: unknown): IntegrationTest {
+    const sess = new IntegrationTest();
+    sess.routes = this.routes;
+    sess.controllers = this.controllers;
+    sess._app = app ?? this._app;
+    return sess;
   }
 
   /**
@@ -428,10 +433,20 @@ export class IntegrationTest {
 
   /**
    * Open a new session, optionally yielding it to a block before returning.
-   * Mirrors Rails `Runner#open_session`.
+   * Mirrors Rails `Runner#open_session`, which is `dup.tap { reset!; ... }` —
+   * the dup preserves the integration test's class-level configuration
+   * (`app`, registered controllers, routes) while `resetBang` clears all
+   * per-request state on the copy.
    */
   openSession(block?: (sess: IntegrationTest) => void): IntegrationTest {
-    const sess = this.createSession();
+    const sess: IntegrationTest = Object.assign(
+      Object.create(Object.getPrototypeOf(this) as object),
+      this,
+    );
+    // Routes/controllers are shared with the parent (Rails dup is shallow
+    // for object refs); cookies and session must be independent.
+    sess._persistentCookies = { ...this._persistentCookies };
+    sess.resetBang();
     sess.rootSession = this.rootSession ?? this;
     block?.(sess);
     return sess;
@@ -530,26 +545,6 @@ export class IntegrationTest {
   }
 
   /**
-   * Returns the root DOM element of the parsed response body. Mirrors
-   * `Behavior#document_root_element`.
-   */
-  documentRootElement(): unknown {
-    const doc = this.htmlDocument();
-    return (doc as { root?: unknown } | null)?.root ?? doc;
-  }
-
-  /**
-   * Parsed HTML document for the last response. Rails uses Nokogiri; trails
-   * defers HTML parsing to consumers (jsdom etc.). Returns the raw body
-   * string so callers can plug in their own parser via mixin override.
-   *
-   * @internal
-   */
-  htmlDocument(): unknown {
-    return this.responseBody;
-  }
-
-  /**
    * Controller-instance-variable accessor. Rails extracted this to a gem;
    * trails mirrors the deprecation by raising via TestProcess#assigns.
    */
@@ -578,17 +573,6 @@ export class IntegrationTest {
       mimeType,
       binary,
     );
-  }
-
-  /**
-   * Rack mock-session backing the request loop. trails has its own
-   * dispatch path (`_processPath`) and does not maintain a separate
-   * mock-session object; returns `null` for API surface parity.
-   *
-   * @internal
-   */
-  _mockSession(): unknown {
-    return null;
   }
 
   /** Human-friendly description used by debuggers. Mirrors `Session#inspect`. */

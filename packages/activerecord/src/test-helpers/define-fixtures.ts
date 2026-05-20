@@ -220,15 +220,16 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
 
   const labels = Object.keys(fixtures) as K[];
 
-  // Pre-pass: register each row's declared id (when present) so refs in this call —
-  // including self-refs to labels declared later in the same fixture set — resolve
-  // to the Rails-mirrored id rather than the CRC32 fallback.
+  // Pre-pass: register the row id (declared PK when present, else fixtureId(label))
+  // for every label in this call so refs — including self-refs to labels declared
+  // later in the same set — resolve to the Rails-mirrored id rather than the CRC32
+  // fallback. Always overwrites prior entries so a subsequent defineFixtures() call
+  // on the same adapter can't leak a stale id from an earlier load.
   const idRegistry = declaredIdsFor(adapter);
   for (const label of labels) {
     const declared = (fixtures[label] as FixtureAttrs)[pkCol];
-    if (typeof declared === "number") {
-      idRegistry.set(`${tableName}::${label}`, declared);
-    }
+    const id = typeof declared === "number" ? declared : fixtureId(label);
+    idRegistry.set(`${tableName}::${label}`, id);
   }
 
   // Build rows with resolved IDs and references. Rows that declare `id: N` use it

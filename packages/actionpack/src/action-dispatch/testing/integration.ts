@@ -51,7 +51,9 @@ import * as routingAssertions from "./assertions/routing.js";
 import * as responseAssertions from "./assertions/response.js";
 import * as urlForMod from "../routing/url-for.js";
 import * as polymorphicRoutes from "../routing/polymorphic-routes.js";
+import type { UrlForRoutes } from "../routing/url-for.js";
 import { RequestEncoder } from "./request-encoder.js";
+import type { UploadedFile } from "../http/upload.js";
 
 type ControllerClass = new () => Metal;
 
@@ -190,24 +192,25 @@ export class IntegrationTest {
 
   /**
    * Rails-shaped routes adapter consumed by the `UrlFor` and
-   * `PolymorphicRoutes` mixins. `this.routes` (our `RouteSet`) already
-   * implements `urlFor(options)`, `isOptimizeRoutesGeneration`, and
-   * `polymorphicMappings`, so we expose it under the Rails-private name.
-   * Writable (Rails: `attr_accessor :_routes` via UrlFor) so `_withRoutes`
-   * can swap the host's adapter for the duration of a block.
+   * `PolymorphicRoutes` mixins. Rails' `_routes` points at the
+   * `UrlHelpersModule`, whose `urlFor(options, routeName?)` matches the
+   * mixin's expected shape — `RouteSet.urlFor(routeName, params, options)`
+   * (the legacy positional form) would misroute arguments. Writable
+   * (Rails: `attr_accessor :_routes` via UrlFor) so `_withRoutes` can swap
+   * the host's adapter for the duration of a block.
    *
    * @internal
    */
-  get _routes(): RouteSet {
-    return this._routesOverride ?? this.routes;
+  get _routes(): UrlForRoutes {
+    return this._routesOverride ?? (this.routes.urlHelpers() as unknown as UrlForRoutes);
   }
 
-  set _routes(value: RouteSet | null) {
+  set _routes(value: UrlForRoutes | null) {
     this._routesOverride = value ?? undefined;
   }
 
   /** @internal */
-  _routesOverride?: RouteSet;
+  _routesOverride?: UrlForRoutes;
 
   /**
    * Build the absolute URI for the current request. Matches Rails
@@ -580,23 +583,23 @@ export class IntegrationTest {
    * Shortcut for an UploadedFile from `file_fixture_path`. Delegates to
    * `TestProcess::FixtureFile#fileFixtureUpload`.
    */
-  fileFixtureUpload(path: string, mimeType?: string | null, binary: boolean = false): unknown {
+  fileFixtureUpload(path: string, mimeType?: string | null, binary: boolean = false): UploadedFile {
     return testProcessFileFixtureUpload.call(
       this as unknown as TestProcessHost,
       path,
       mimeType,
       binary,
-    );
+    ) as UploadedFile;
   }
 
   /** Alias of {@link fileFixtureUpload}. */
-  fixtureFileUpload(path: string, mimeType?: string | null, binary: boolean = false): unknown {
+  fixtureFileUpload(path: string, mimeType?: string | null, binary: boolean = false): UploadedFile {
     return testProcessFixtureFileUpload.call(
       this as unknown as TestProcessHost,
       path,
       mimeType,
       binary,
-    );
+    ) as UploadedFile;
   }
 
   /** Human-friendly description used by debuggers. Mirrors `Session#inspect`. */
@@ -632,11 +635,31 @@ export class IntegrationTest {
   declare polymorphicMapping: typeof polymorphicRoutes.polymorphicMapping;
   declare parameterize: typeof responseAssertions.parameterize;
   declare normalizeArgumentToRedirection: typeof responseAssertions.normalizeArgumentToRedirection;
-  declare generateResponseMessage: typeof responseAssertions.generateResponseMessage;
-  declare responseBodyIfShort: typeof responseAssertions.responseBodyIfShort;
-  declare exceptionIfPresent: typeof responseAssertions.exceptionIfPresent;
-  declare locationIfRedirected: typeof responseAssertions.locationIfRedirected;
-  declare codeWithName: typeof responseAssertions.codeWithName;
+  // The remaining response-message helpers (generateResponseMessage,
+  // responseBodyIfShort, exceptionIfPresent, locationIfRedirected,
+  // codeWithName) take an explicit host argument in `assertions/response.ts`;
+  // re-expose them as Rails-shape (`this`-only) instance methods below so
+  // call sites can use Rails-private patterns directly.
+  /** @internal */
+  generateResponseMessage(expected: number | string, actual: number): string {
+    return responseAssertions.generateResponseMessage(this, expected, actual);
+  }
+  /** @internal */
+  responseBodyIfShort(): string {
+    return responseAssertions.responseBodyIfShort(this);
+  }
+  /** @internal */
+  exceptionIfPresent(): string {
+    return responseAssertions.exceptionIfPresent(this);
+  }
+  /** @internal */
+  locationIfRedirected(): string {
+    return responseAssertions.locationIfRedirected(this);
+  }
+  /** @internal */
+  codeWithName(codeOrName: number | string): string {
+    return responseAssertions.codeWithName(codeOrName);
+  }
 
   // --- Assertions ---
 
@@ -974,11 +997,11 @@ proto.polymorphicPathForAction = polymorphicRoutes.polymorphicPathForAction;
 proto.polymorphicMapping = polymorphicRoutes.polymorphicMapping;
 proto.parameterize = responseAssertions.parameterize;
 proto.normalizeArgumentToRedirection = responseAssertions.normalizeArgumentToRedirection;
-proto.generateResponseMessage = responseAssertions.generateResponseMessage;
-proto.responseBodyIfShort = responseAssertions.responseBodyIfShort;
-proto.exceptionIfPresent = responseAssertions.exceptionIfPresent;
-proto.locationIfRedirected = responseAssertions.locationIfRedirected;
-proto.codeWithName = responseAssertions.codeWithName;
+// generateResponseMessage / responseBodyIfShort / exceptionIfPresent /
+// locationIfRedirected / codeWithName are defined as real instance
+// methods on the class above (their source signatures take an explicit
+// host arg, so wrapping them into Rails-shape `this`-only methods keeps
+// call sites idiomatic).
 
 function formatToMime(format: string): string {
   const MIMES: Record<string, string> = {

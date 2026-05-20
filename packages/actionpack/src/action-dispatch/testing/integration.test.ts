@@ -452,6 +452,27 @@ describe("ActionDispatch::IntegrationTest", () => {
       await expect(app.followRedirectBang()).rejects.toThrow(/not a redirect/);
     });
 
+    it("openSession dups parent: shared routes/controllers, independent state, rootSession propagation", async () => {
+      await app.get("/posts");
+      expect(app.requestCount).toBe(1);
+
+      const child = app.openSession();
+      // Routes/controllers carry over (Rails dup is shallow on object refs).
+      expect(child.routes).toBe(app.routes);
+      // Per-request state is reset on the child.
+      expect(child.requestCount).toBe(0);
+      // rootSession threads through to the top-level instance.
+      expect(child.rootSession).toBe(app);
+      // Dispatch on the child works without re-registering controllers.
+      await child.get("/posts");
+      child.assertResponse("success");
+      // Parent's per-request state is independent.
+      expect(app.requestCount).toBe(1);
+      // assertions counter is forwarded to the root.
+      child.assertions = 5;
+      expect(app.assertions).toBe(5);
+    });
+
     it("CRUD lifecycle", async () => {
       // Create
       await app.post("/posts", { params: { title: "CRUD" } });

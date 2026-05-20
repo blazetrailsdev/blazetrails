@@ -201,7 +201,8 @@ export class AbstractController {
     }
     const name = this.name;
     if (!name) return ((this as unknown as { _controllerPath: string })._controllerPath = "");
-    const stripped = name.endsWith("Controller") ? name.slice(0, -"Controller".length) : name;
+    const SUFFIX = "Controller";
+    const stripped = name.endsWith(SUFFIX) ? name.slice(0, -SUFFIX.length) : name;
     return ((this as unknown as { _controllerPath: string })._controllerPath =
       underscore(stripped));
   }

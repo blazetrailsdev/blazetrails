@@ -104,6 +104,6 @@ const COLLECTOR_HANDLER: ProxyHandler<Collector> = {
  */
 export function generateMethodForMime(mime: MimeType | string): void {
   if (typeof mime === "string" && !MimeType.lookup(mime)) {
-    throw new TypeError(`generateMethodForMime: unknown MIME ${mime}`);
+    throw new TypeError(`generateMethodForMime: unknown MIME ${JSON.stringify(mime)}`);
   }
 }

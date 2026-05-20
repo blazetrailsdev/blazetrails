@@ -208,6 +208,6 @@ describe("generateMethodForMime", () => {
   });
 
   it("throws for an unregistered MIME symbol", () => {
-    expect(() => generateMethodForMime("bogusFormatXyz")).toThrow(/unknown MIME/);
+    expect(() => generateMethodForMime("bogusFormatXyz")).toThrow(/unknown MIME "bogusFormatXyz"/);
   });
 });

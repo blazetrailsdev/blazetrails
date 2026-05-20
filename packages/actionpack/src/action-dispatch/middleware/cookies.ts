@@ -62,9 +62,32 @@ export class CookieJar implements Iterable<[string, string]> {
   private _setCookies: Map<string, SetCookieOptions> = new Map();
   private _deletedCookies: Map<string, { path?: string; domain?: string }> = new Map();
   private _options: CookieJarOptions;
+  private _committed = false;
 
   constructor(options: CookieJarOptions = {}) {
     this._options = options;
+  }
+
+  /**
+   * Mirror of Rails `CookieJar#committed?` — true once the jar has been
+   * written to a response and further mutations have no effect.
+   *
+   * @internal
+   */
+  isCommitted(): boolean {
+    return this._committed;
+  }
+
+  /**
+   * Mirror of Rails `CookieJar#commit!` — freezes the set/delete sets so
+   * subsequent writes from downstream middleware are ignored.
+   *
+   * @internal
+   */
+  commitBang(): void {
+    this._committed = true;
+    Object.freeze(this._setCookies);
+    Object.freeze(this._deletedCookies);
   }
 
   /**
@@ -390,8 +413,10 @@ function capitalize(s: string): string {
 export const COOKIES_KEY = "action_dispatch.cookies";
 
 /**
- * `ActionDispatch::Cookies` middleware. Builds a {@link CookieJar} on the
- * way in, flushes accumulated `Set-Cookie` headers on the way out.
+ * `ActionDispatch::Cookies` middleware. Mirrors Rails' shape: the jar is
+ * built lazily by downstream code via `request.cookie_jar`; this middleware
+ * only flushes accumulated cookies on the way out if the jar was touched
+ * and not yet committed.
  */
 export class Cookies {
   private app: RackApp;
@@ -401,34 +426,22 @@ export class Cookies {
   }
 
   async call(env: RackEnv): Promise<RackResponse> {
-    const cookiesAppOptions = (env[COOKIES_APP_OPTIONS_KEY] as CookieJarOptions | undefined) ?? {};
-    const seed = parseCookieHeader((env.HTTP_COOKIE as string | undefined) ?? "");
-    const jar = CookieJar.build({ cookiesAppOptions }, seed);
-    env[COOKIES_KEY] = jar;
-    const [status, headers, body] = await this.app(env);
+    const response = await this.app(env);
+    const jar = env[COOKIES_KEY] as CookieJar | undefined;
+    if (!jar || jar.isCommitted()) return response;
+
+    const [status, headers, body] = response;
     const outHeaders: Record<string, string> = { ...headers };
     const setHeaders = jar.getSetCookieHeaders();
     if (setHeaders.length > 0) {
       const existing = outHeaders["set-cookie"];
+      // Rack convention is newline-joined values within a single header.
       outHeaders["set-cookie"] = existing
         ? [existing, ...setHeaders].join("\n")
         : setHeaders.join("\n");
     }
     return [status, outHeaders, body];
   }
-}
-
-function parseCookieHeader(header: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!header) return out;
-  for (const pair of header.split(";")) {
-    const eq = pair.indexOf("=");
-    if (eq < 0) continue;
-    const k = pair.slice(0, eq).trim();
-    const v = pair.slice(eq + 1).trim();
-    if (k) out[k] = decodeURIComponent(v);
-  }
-  return out;
 }
 
 // ===========================================================================
@@ -523,40 +536,61 @@ export const useCookiesWithMetadata = requestEnvAccessor<boolean>(
 // ===========================================================================
 
 /**
- * Combined signed-or-encrypted accessor on a jar. Rails picks `encrypted`
- * when `secret_key_base` is configured, otherwise falls back to `signed`.
+ * Host shape for {@link signedOrEncrypted} and the upgrade-path predicates.
+ * Matches the `request: RequestCookieMethods` view Rails' ChainedCookieJars
+ * relies on.
  *
  * @internal
  */
-export function signedOrEncrypted(jar: CookieJar): SignedCookieJar | EncryptedCookieJar {
-  try {
-    return jar.encrypted;
-  } catch {
-    return jar.signed;
-  }
+export interface ChainedCookieJarsHost {
+  request: RequestCookieMethodsHost;
+  signed: SignedCookieJar;
+  encrypted: EncryptedCookieJar;
 }
 
 /**
- * Rails: predicate that returns true while the deprecated HMAC-AES-CBC
- * cookie format is still being read alongside the newer AEAD format.
- * trails does not implement the legacy CBC path, so the predicate is
- * permanently false.
- *
- * @internal
+ * Returns the `encrypted` jar when `secret_key_base` is configured on the
+ * request, otherwise falls back to `signed`. Mirrors Rails'
+ * `signed_or_encrypted`, used by `ActionDispatch::Session::CookieStore`.
  */
-export function isUpgradeLegacyHmacAesCbcCookies(): boolean {
-  return false;
+export function signedOrEncrypted(
+  this: ChainedCookieJarsHost,
+): SignedCookieJar | EncryptedCookieJar {
+  return secretKeyBase.call(this.request) ? this.encrypted : this.signed;
 }
 
 /**
- * Rails: rewriter predicate complementing
- * {@link isUpgradeLegacyHmacAesCbcCookies}. Same rationale — false in
- * trails.
+ * Rails: true while the deprecated HMAC-AES-CBC cookie format is still
+ * being decoded alongside the newer AEAD format. Faithful predicate:
+ * secret_key_base present, both legacy salts present, and the
+ * authenticated-encryption flag set.
  *
  * @internal
  */
-export function isPrepareUpgradeLegacyHmacAesCbcCookies(): boolean {
-  return false;
+export function isUpgradeLegacyHmacAesCbcCookies(this: ChainedCookieJarsHost): boolean {
+  const req = this.request;
+  return Boolean(
+    secretKeyBase.call(req) &&
+    encryptedSignedCookieSalt.call(req) &&
+    encryptedCookieSalt.call(req) &&
+    useAuthenticatedCookieEncryption.call(req),
+  );
+}
+
+/**
+ * Rails: rewriter predicate — true when the legacy CBC salt is configured
+ * but authenticated encryption is *off*, signalling we should rewrite
+ * authenticated-encrypted cookies back into the legacy format.
+ *
+ * @internal
+ */
+export function isPrepareUpgradeLegacyHmacAesCbcCookies(this: ChainedCookieJarsHost): boolean {
+  const req = this.request;
+  return Boolean(
+    secretKeyBase.call(req) &&
+    authenticatedEncryptedCookieSalt.call(req) &&
+    !useAuthenticatedCookieEncryption.call(req),
+  );
 }
 
 // ===========================================================================
@@ -566,58 +600,91 @@ export function isPrepareUpgradeLegacyHmacAesCbcCookies(): boolean {
 const MAX_COOKIE_SIZE = 4096;
 
 /**
- * Selects the cookie value serializer. Mirrors Rails' `:json` / `:hybrid` /
- * `:marshal` choices; trails ships JSON-only.
- *
- * @internal
+ * Serializer protocol mirroring `ActiveSupport::Messages::SerializerWithFallback`.
+ * `dumped` lets the jar detect cookies written by a different serializer
+ * so {@link isReserialize} can flag them for rewrite.
  */
-export function serializer(): { dump(v: unknown): string; load(s: string): unknown } {
-  return {
-    dump: (v) => JSON.stringify(v),
-    load: (s) => {
-      try {
-        return JSON.parse(s);
-      } catch {
-        return null;
-      }
-    },
-  };
+export interface CookieSerializer {
+  dump(value: unknown): string;
+  load(dumped: string): unknown;
+  dumped(payload: string): boolean;
 }
 
 /**
- * Rails: returns true when a stored cookie was written with the legacy
- * serializer and must be re-serialized with the configured one. trails
- * has only ever shipped JSON, so reserialize is never required.
+ * Host shape for the SerializedCookieJars module. Carries the request
+ * (for `cookies_serializer` lookup) and a memoization slot.
  *
  * @internal
  */
-export function isReserialize(): boolean {
-  return false;
+export interface SerializedCookieJarsHost {
+  request: RequestCookieMethodsHost;
+  _serializer?: CookieSerializer;
+}
+
+const JSON_SERIALIZER: CookieSerializer = {
+  dump: (v) => JSON.stringify(v),
+  load: (s) => JSON.parse(s),
+  dumped: (s) => {
+    try {
+      JSON.parse(s);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
+
+/**
+ * Selects and memoizes the cookie value serializer. Rails dispatches on
+ * `request.cookies_serializer` (`:json`, `:hybrid`, `:marshal`, …); trails
+ * ports `:json` faithfully and treats every other choice as JSON since
+ * Marshal isn't a portable on-disk format.
+ *
+ * @internal
+ */
+export function serializer(this: SerializedCookieJarsHost): CookieSerializer {
+  if (this._serializer) return this._serializer;
+  this._serializer = JSON_SERIALIZER;
+  return this._serializer;
 }
 
 /**
- * Rails: hook called once the value has been mutated, before the jar is
- * written back to the response. Trails performs no buffering, so commit
- * is a no-op pass-through that returns the value unchanged.
+ * Returns true when `dumped` was produced by a serializer that differs
+ * from the currently-configured one, so the jar should rewrite it next
+ * commit. Mirrors Rails' `reserialize?`.
  *
  * @internal
  */
-export function commit<T>(value: T): T {
-  return value;
+export function isReserialize(this: SerializedCookieJarsHost, dumped: string): boolean {
+  return !serializer.call(this).dumped(dumped);
+}
+
+/**
+ * Rails: `commit(name, options)` — final transformation applied to a
+ * cookie's `:value` before it is written. The serialized cookie jars use
+ * this to call `serializer.dump`. Mutates `options.value` in place.
+ *
+ * @internal
+ */
+export function commit(
+  this: SerializedCookieJarsHost,
+  _name: string,
+  options: { value: unknown },
+): void {
+  options.value = serializer.call(this).dump(options.value);
 }
 
 /**
  * Rails raises `CookieOverflow` when a serialized value exceeds 4096
- * bytes (the browser-imposed cookie ceiling). Mirror the check.
+ * bytes (the browser-imposed cookie ceiling). Faithful port: checks
+ * `options.value.bytesize` post-serialization.
  *
  * @internal
  */
-export function checkForOverflowBang(serialized: string): void {
-  if (Buffer.byteLength(serialized, "utf8") > MAX_COOKIE_SIZE) {
-    throw new CookieOverflow(
-      `Cookie overflow: serialized value is ${Buffer.byteLength(serialized, "utf8")} bytes; ` +
-        `maximum is ${MAX_COOKIE_SIZE}.`,
-    );
+export function checkForOverflowBang(name: string, options: { value: string }): void {
+  const size = Buffer.byteLength(options.value, "utf8");
+  if (size > MAX_COOKIE_SIZE) {
+    throw new CookieOverflow(`${name} cookie overflowed with size ${size} bytes`);
   }
 }
 

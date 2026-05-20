@@ -482,7 +482,6 @@ export class Mapper {
    */
   static normalizePath(path: string): string {
     let result = "/" + path.replace(/\/+/g, "/").replace(/^\/+|\/+$/g, "");
-    if (result === "") result = "/";
     result = result.replace(/\/(\(+)\/?/g, "$1/");
     if (/^(\(+[^)]+\))(\(+\/:[^)]+\))*$/.test(result)) {
       result = result.replace(/^(\(+)\//, "/$1");
@@ -671,7 +670,7 @@ export class Mapper {
 
   /** @internal */
   hasNamedRoute(name: string): boolean {
-    return this.routes.some((r) => (r as unknown as { name?: string }).name === name);
+    return this.routes.some((r) => r.name === name);
   }
 }
 

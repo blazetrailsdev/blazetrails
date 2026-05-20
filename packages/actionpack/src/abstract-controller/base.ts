@@ -6,6 +6,8 @@
  * @see https://api.rubyonrails.org/classes/AbstractController/Base.html
  */
 
+import { SpellChecker } from "@blazetrails/did-you-mean";
+
 import {
   _defineActionCallbacks,
   _insertCallbacks,
@@ -39,6 +41,18 @@ export class ActionNotFound extends Error {
     this.name = "ActionNotFound";
     this.controller = controller;
     this.action = action;
+  }
+
+  /**
+   * Mirrors Ruby's `DidYouMean::Correctable#corrections` — suggests
+   * action methods on the raising controller close to the missing
+   * action name. Empty when the error was constructed without a
+   * controller/action context.
+   */
+  get corrections(): string[] {
+    if (!this.controller || !this.action) return [];
+    const ctor = this.controller.constructor as typeof AbstractController;
+    return new SpellChecker({ dictionary: ctor.actionMethods() }).correct(this.action);
   }
 }
 

@@ -186,7 +186,7 @@ export class MiddlewareStack implements Iterable<MiddlewareEntry> {
   /** @internal */
   assertIndex(index: number | MiddlewareFactory, where: "before" | "after"): number {
     const i = typeof index === "number" ? index : this.indexOf(index);
-    if (i === -1 || i == null) {
+    if (i === -1) {
       throw new Error(`No such middleware to insert ${where}: ${String(index)}`);
     }
     return i;

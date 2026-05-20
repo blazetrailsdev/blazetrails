@@ -151,6 +151,8 @@ export class Session {
       const [sessionId, data] = this.store.loadSession(this.env);
       this.id = sessionId;
       this.data = { ...data };
+    } else if (this.data == null) {
+      this.data = {};
     }
     this.loaded = true;
   }

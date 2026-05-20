@@ -14,6 +14,9 @@ For closed-phase narrative and the original Path 1/Path 2 fallback
 diagnosis, see the merged PRs cited in each phase header and the
 broader history via `git log --grep="TM Phase" --oneline`.
 
+> `[[slug]]` references point to Claude auto-memory entries stored
+> outside the repo; they don't render as links on GitHub.
+
 ## Phase 6 — Hoist `defineSchema` from `beforeEach` to once-per-file — substantially complete
 
 `withTransactionalFixtures` is the canonical pattern. Roughly 85 of

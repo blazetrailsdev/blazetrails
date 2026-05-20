@@ -10,9 +10,7 @@ export interface GemOptions {
 }
 
 export interface ActionsHost {
-  cwd: string;
   output: (msg: string) => void;
-  appendToFile(relativePath: string, content: string): void;
   insertIntoFile(relativePath: string, marker: string, content: string): void;
   appendWithNewline(relativePath: string, content: string): void;
 }
@@ -34,6 +32,11 @@ function quote(value: unknown): string {
   return String(value);
 }
 
+function asArray<T>(v: T | T[] | undefined): T[] {
+  if (v === undefined) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
 export function gem(this: ActionsHost, name: string, ...rest: Array<string | GemOptions>): void {
   let options: GemOptions = {};
   const versions: string[] = [];
@@ -46,15 +49,7 @@ export function gem(this: ActionsHost, name: string, ...rest: Array<string | Gem
   delete outOpts.comment;
   delete outOpts.version;
 
-  const versionList =
-    versions.length > 0
-      ? versions
-      : options.version === undefined
-        ? []
-        : Array.isArray(options.version)
-          ? options.version
-          : [options.version];
-
+  const versionList = versions.length > 0 ? versions : asArray(options.version);
   const parts: string[] = [quote(name), ...versionList.map(quote)];
   if (Object.keys(outOpts).length > 0) parts.push(quote(outOpts));
 
@@ -71,13 +66,8 @@ export function route(
   routingCode: string,
   options: { namespace?: string | string[] } = {},
 ): void {
-  const namespaces = options.namespace
-    ? Array.isArray(options.namespace)
-      ? options.namespace
-      : [options.namespace]
-    : [];
   let code = routingCode;
-  for (const ns of [...namespaces].reverse()) {
+  for (const ns of asArray(options.namespace).reverse()) {
     code = `namespace :${ns} do\n  ${code}\nend`;
   }
   this.output(`      route  ${routingCode}`);
@@ -93,9 +83,7 @@ export function environment(
   const targets =
     options.env == null
       ? ["config/application.rb"]
-      : (Array.isArray(options.env) ? options.env : [options.env]).map(
-          (e) => `config/environments/${e}.rb`,
-        );
+      : asArray(options.env).map((e) => `config/environments/${e}.rb`);
   for (const target of targets) {
     const marker = target.endsWith("application.rb")
       ? "class Application < Rails::Application\n"

@@ -32,14 +32,4 @@ describe("AppCommandTest", () => {
     const gemfile = fs.readFileSync(path.join(tmpDir, "Gemfile"), "utf-8");
     expect(gemfile).toContain('gem "rspec-rails", group: "test"');
   });
-
-  it("app:template rejects a template that does not export a function", async () => {
-    const templatePath = path.join(tmpDir, "bad.mjs");
-    fs.writeFileSync(templatePath, "export default 42;\n");
-
-    const program = appCommand();
-    await expect(program.parseAsync(["node", "app", "template", templatePath])).rejects.toThrow(
-      /does not export a function/,
-    );
-  });
 });

@@ -29,7 +29,7 @@ export interface FileHandlerOptions {
   brotli?: boolean;
 }
 
-type AcceptEncoding = ReadonlyArray<readonly [string, number]>;
+type AcceptEncoding = ReadonlyArray<string>;
 type Found = readonly [filepath: string, contentHeaders: Record<string, string>];
 
 const DEFAULT_COMPRESSIBLE = /^(?:text\/|application\/javascript|image\/svg\+xml)/;
@@ -151,7 +151,7 @@ export class FileHandler {
       }
       headers["vary"] = "Accept-Encoding";
       const re = new RegExp(`\\b${encoding}\\b`, "i");
-      if (acceptEncoding.some(([enc]) => re.test(enc))) {
+      if (acceptEncoding.some((enc) => re.test(enc))) {
         headers["content-encoding"] = encoding;
         result = [candidate, headers];
         return true;
@@ -163,7 +163,8 @@ export class FileHandler {
 
   /** @internal */
   isFileReadable(path: string): boolean {
-    const filePath = getPath().join(this.root, path);
+    const filePath = getPath().resolve(this.root, "." + path);
+    if (filePath !== this.root && !filePath.startsWith(this.root + getPath().sep)) return false;
     try {
       const stat = getFs().statSync(filePath);
       return stat.isFile();
@@ -237,20 +238,13 @@ export class FileHandler {
   }
 }
 
+// Rails' try_precompressed_files only token-matches against the parsed
+// Accept-Encoding entries (the q value is ignored), so trails parses out
+// the bare tokens to mirror that. q=0 ("explicitly refused") is left in
+// the list intentionally — Rails has the same gap.
 function parseAcceptEncoding(header: string): AcceptEncoding {
   if (!header) return [];
-  return header.split(",").map((part) => {
-    const [enc, ...rest] = part.trim().split(";");
-    let q = 1;
-    for (const param of rest) {
-      const [k, v] = param.split("=").map((s) => s.trim());
-      if (k === "q" && v) {
-        const parsed = parseFloat(v);
-        if (!Number.isNaN(parsed)) q = parsed;
-      }
-    }
-    return [enc, q] as const;
-  });
+  return header.split(",").map((part) => part.trim().split(";")[0].trim());
 }
 
 const MIME_TYPES: Record<string, string> = {

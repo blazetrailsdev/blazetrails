@@ -75,18 +75,19 @@ export class PublicExceptions {
 
   private renderFormat(status: number, contentType: MimeType, body: string): RackResponse {
     const charset = Response.defaultCharset;
-    // Buffer.byteLength accepts the same encoding tokens Rails ships
-    // (`Response.default_charset` defaults to "utf-8"); narrow to known
-    // values so a misconfigured charset can't crash the error middleware.
-    const enc: BufferEncoding =
-      charset === "utf-8" || charset === "utf8" || charset === "latin1" || charset === "ascii"
-        ? (charset as BufferEncoding)
-        : "utf-8";
+    // Map common Rails charset tokens (which match the values shipped via
+    // `ActionDispatch::Response.default_charset=`) to a Node BufferEncoding
+    // so `Buffer.byteLength` measures the same bytes the `content-type`
+    // header advertises. Unknown tokens fall back to "utf-8" *and* the
+    // header is rewritten to match so `content-length` stays consistent.
+    const enc = normalizeCharset(charset);
+    const effectiveCharset =
+      enc === "utf-8" && charset.toLowerCase() !== "utf-8" ? "utf-8" : charset;
     const bytes = Buffer.byteLength(body, enc);
     return [
       status,
       {
-        "content-type": `${contentType}; charset=${charset}`,
+        "content-type": `${contentType}; charset=${effectiveCharset}`,
         "content-length": String(bytes),
       },
       bodyFromString(body),
@@ -112,6 +113,29 @@ export class PublicExceptions {
       return this.renderFormat(status, htmlType, html);
     }
     return [404, { [X_CASCADE]: "pass" }, emptyBody()];
+  }
+}
+
+function normalizeCharset(charset: string): BufferEncoding {
+  switch (charset.toLowerCase()) {
+    case "utf-8":
+    case "utf8":
+      return "utf-8";
+    case "utf-16le":
+    case "utf16le":
+    case "ucs-2":
+    case "ucs2":
+      return "utf16le";
+    case "iso-8859-1":
+    case "iso8859-1":
+    case "latin1":
+    case "latin-1":
+      return "latin1";
+    case "us-ascii":
+    case "ascii":
+      return "ascii";
+    default:
+      return "utf-8";
   }
 }
 

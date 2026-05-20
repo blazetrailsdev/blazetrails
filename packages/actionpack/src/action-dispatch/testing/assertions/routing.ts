@@ -202,10 +202,15 @@ export function recognizedRequestFor(
     // Rails: when path is a full URL, populate rack.url_scheme + host/port from
     // the parsed URI and use only its path segment for recognition.
     const parsed = failOn(TypeError, msg, () => new URL(pathStr));
-    request.env["rack.url_scheme"] = parsed.protocol.replace(/:$/, "");
+    const scheme = parsed.protocol.replace(/:$/, "");
+    request.env["rack.url_scheme"] = scheme;
     request.env["HTTP_HOST"] = parsed.host;
     request.env["SERVER_NAME"] = parsed.hostname;
-    if (parsed.port) request.env["SERVER_PORT"] = parsed.port;
+    // Rails: `request.port = uri.port if uri.port`. Ruby's URI always yields
+    // the scheme's default port (80/443) even without an explicit `:port`,
+    // so port is set unconditionally. WHATWG URL returns "" for default
+    // ports, so derive the default from the scheme.
+    request.env["SERVER_PORT"] = parsed.port || (scheme === "https" ? "443" : "80");
     pathStr = parsed.pathname || "/";
   } else if (!pathStr.startsWith("/")) {
     pathStr = `/${pathStr}`;

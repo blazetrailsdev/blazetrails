@@ -239,9 +239,10 @@ export class IntegrationTest {
     );
     if (!hasReferer && this.request) {
       const env = this.request.env as Record<string, string | undefined>;
+      const qs = env.QUERY_STRING ? `?${env.QUERY_STRING}` : "";
       const prev =
         `${env["rack.url_scheme"] ?? "http"}://${env.HTTP_HOST ?? this.host}` +
-        `${env.PATH_INFO ?? ""}`;
+        `${env.PATH_INFO ?? ""}${qs}`;
       headers["HTTP_REFERER"] = prev;
     }
 
@@ -499,7 +500,18 @@ export class IntegrationTest {
     const matched = this.routes.recognize(method, pathInfo);
     if (!matched) {
       // No route matched — create a 404-like response
-      this.request = new Request({ REQUEST_METHOD: method, PATH_INFO: pathInfo });
+      this.request = new Request({
+        REQUEST_METHOD: method,
+        PATH_INFO: pathInfo,
+        QUERY_STRING: queryString,
+        HTTP_HOST: this.host,
+        SERVER_NAME: this.host.split(":")[0],
+        SERVER_PORT: this.host.split(":")[1] ?? (this._https ? "443" : "80"),
+        HTTPS: this._https ? "on" : "off",
+        "rack.url_scheme": this._https ? "https" : "http",
+        REMOTE_ADDR: this.remoteAddr,
+        HTTP_ACCEPT: this.accept,
+      });
       this.response = new Response();
       this.response.status = 404;
       this.response.body = `No route matches [${method}] "${pathInfo}"`;

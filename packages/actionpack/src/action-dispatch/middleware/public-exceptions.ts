@@ -18,12 +18,16 @@
 
 import { I18n, getFs, getPath } from "@blazetrails/activesupport";
 import type { RackBody, RackEnv, RackResponse } from "@blazetrails/rack";
-import { bodyFromString, HTTP_STATUS_CODES } from "@blazetrails/rack";
+import { HTTP_STATUS_CODES } from "@blazetrails/rack";
 import { X_CASCADE } from "../constants.js";
 import { MimeType } from "../http/mime-type.js";
 import { Response } from "../http/response.js";
 
 async function* emptyBody(): RackBody {}
+
+async function* bodyFromBytes(bytes: Uint8Array): RackBody {
+  yield bytes;
+}
 
 const LOCALE_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -75,22 +79,20 @@ export class PublicExceptions {
 
   private renderFormat(status: number, contentType: MimeType, body: string): RackResponse {
     const charset = Response.defaultCharset;
-    // Map common Rails charset tokens (which match the values shipped via
-    // `ActionDispatch::Response.default_charset=`) to a Node BufferEncoding
-    // so `Buffer.byteLength` measures the same bytes the `content-type`
-    // header advertises. Unknown tokens fall back to "utf-8" *and* the
-    // header is rewritten to match so `content-length` stays consistent.
+    // Encode the body into bytes that match the negotiated charset so the
+    // `content-type` header, `content-length`, and wire bytes all agree.
+    // Unknown tokens fall back to utf-8 with the header rewritten to match.
     const enc = normalizeCharset(charset);
     const effectiveCharset =
       enc === "utf-8" && charset.toLowerCase() !== "utf-8" ? "utf-8" : charset;
-    const bytes = Buffer.byteLength(body, enc);
+    const encoded = Buffer.from(body, enc);
     return [
       status,
       {
         "content-type": `${contentType}; charset=${effectiveCharset}`,
-        "content-length": String(bytes),
+        "content-length": String(encoded.byteLength),
       },
-      bodyFromString(body),
+      bodyFromBytes(encoded),
     ];
   }
 

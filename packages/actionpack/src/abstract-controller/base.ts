@@ -6,6 +6,8 @@
  * @see https://api.rubyonrails.org/classes/AbstractController/Base.html
  */
 
+import { underscore } from "@blazetrails/activesupport";
+
 import {
   _insertCallbacks,
   _normalizeCallbackOption,
@@ -55,6 +57,27 @@ export class ActionNotFound extends Error {
     this._corrections = dict.filter((name) => editDistance(name, target) <= 2);
     return this._corrections;
   }
+}
+
+function ownPublicMethodNames(proto: object | null | undefined): string[] {
+  if (!proto) return [];
+  const out: string[] = [];
+  for (const name of Object.getOwnPropertyNames(proto)) {
+    if (name === "constructor" || name.startsWith("_")) continue;
+    const d = Object.getOwnPropertyDescriptor(proto, name);
+    if (d && typeof d.value === "function") out.push(name);
+  }
+  return out;
+}
+
+function allPublicMethodNames(proto: object | null | undefined): string[] {
+  const out = new Set<string>();
+  let cur: object | null = proto ?? null;
+  while (cur && cur !== Object.prototype) {
+    for (const name of ownPublicMethodNames(cur)) out.add(name);
+    cur = Object.getPrototypeOf(cur);
+  }
+  return [...out];
 }
 
 function editDistance(a: string, b: string): number {
@@ -178,26 +201,36 @@ export class AbstractController {
     }
     const name = this.name;
     if (!name) return ((this as unknown as { _controllerPath: string })._controllerPath = "");
-    // Mirror ActiveSupport's `underscore`: strip "Controller" suffix,
-    // convert "::" → "/", camelCase → snake_case.
-    const stripped = name.replace(/Controller$/, "");
-    const underscored = stripped
-      .replace(/::/g, "/")
-      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-      .replace(/([a-z\d])([A-Z])/g, "$1_$2")
-      .toLowerCase();
-    return ((this as unknown as { _controllerPath: string })._controllerPath = underscored);
+    const stripped = name.endsWith("Controller") ? name.slice(0, -"Controller".length) : name;
+    return ((this as unknown as { _controllerPath: string })._controllerPath =
+      underscore(stripped));
   }
 
   /**
-   * Rails `internal_methods` — names considered "internal" (not action
-   * methods). In trails, this is the `_internalMethods` set defined on
-   * `AbstractController`; exposed here so `api:compare` matches the
-   * Rails-shaped class method.
+   * Rails `internal_methods` — walks the superclass chain up to the
+   * first abstract ancestor, collecting non-abstract subclasses' own
+   * public instance methods, then returns the abstract ancestor's full
+   * public method set minus those collected. Combined with the
+   * curated `_internalMethods` constant so wired-up entry points
+   * (`processAction`, `render`, …) are always treated as internal even
+   * before the class chain marks them.
    * @internal
    */
   static internalMethods(): string[] {
-    return [...AbstractController._internalMethods];
+    const collected = new Set<string>();
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    let cursor: typeof AbstractController = this;
+    while (cursor && !cursor.isAbstract()) {
+      for (const name of ownPublicMethodNames(cursor.prototype)) collected.add(name);
+      const next = Object.getPrototypeOf(cursor);
+      if (!next || next === Function.prototype) break;
+      cursor = next as typeof AbstractController;
+    }
+    const abstractProto = cursor?.prototype ?? AbstractController.prototype;
+    const all = new Set<string>(allPublicMethodNames(abstractProto));
+    for (const name of collected) all.delete(name);
+    for (const name of AbstractController._internalMethods) all.add(name);
+    return [...all];
   }
 
   /** Rails `clear_action_methods!` — invalidate the cached action set. @internal */

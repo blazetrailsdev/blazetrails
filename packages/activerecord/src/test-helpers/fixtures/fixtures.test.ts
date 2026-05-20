@@ -59,6 +59,20 @@ function findInsertWithPk(sqls: string[], pk: number): string | undefined {
   return sqls.find((s) => re.test(s));
 }
 
+/**
+ * Assert that the row's VALUES tuple carries `fkId` as one of the column values.
+ * Word-boundary match prevents small integer ids from matching as substrings of
+ * unrelated values (counts, dates, etc.). Use after `findInsertWithPk` has
+ * narrowed the SQL to the specific row we care about.
+ */
+function expectValueInRow(sql: string | undefined, fkId: number): void {
+  expect(sql).toBeTruthy();
+  const valuesMatch = /VALUES\s*\(([^)]*)\)/.exec(sql ?? "");
+  const tuple = valuesMatch?.[1] ?? "";
+  const vals = tuple.split(",").map((v) => v.trim());
+  expect(vals).toContain(String(fkId));
+}
+
 function seedRows(
   Model: ReturnType<typeof makeModel>,
   label: string,
@@ -108,7 +122,7 @@ describe("topicFixtureData", () => {
       .filter((s) => s.includes("INSERT INTO") && s.includes("topics"));
     const secondInsert = findInsertWithPk(insertSqls, topicFixtureData.second.id);
     expect(secondInsert).toBeTruthy();
-    expect(secondInsert).toContain(String(topicFixtureData.first.id));
+    expectValueInRow(secondInsert, topicFixtureData.first.id);
   });
 });
 
@@ -247,12 +261,12 @@ describe("bookFixtureData", () => {
     await defineFixtures(adapter, Author, authorFixtureData);
     await defineFixtures(adapter, Book, bookFixtureData);
 
-    const awdrInsert = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
+    const bookInserts = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
       .map((c: unknown[]) => c[0] as string)
-      .filter((s) => s.includes("INSERT INTO") && s.includes("books"))
-      .find((s) => s.includes(String(bookFixtureData.awdr.id)));
+      .filter((s) => s.includes("INSERT INTO") && s.includes("books"));
+    const awdrInsert = findInsertWithPk(bookInserts, bookFixtureData.awdr.id);
     expect(awdrInsert).toBeTruthy();
-    expect(awdrInsert).toContain(String(authorFixtureData.david.id));
+    expectValueInRow(awdrInsert, authorFixtureData.david.id);
     expect(authorFixtureData.david.id).not.toBe(fixtureId("david"));
   });
 });
@@ -321,7 +335,7 @@ describe("companyFixtureData", () => {
       .filter((s) => s.includes("INSERT INTO") && s.includes("companies"));
     const clientInsert = findInsertWithPk(insertSqls, companyFixtureData.first_client.id);
     expect(clientInsert).toBeTruthy();
-    expect(clientInsert).toContain(String(companyFixtureData.first_firm.id));
+    expectValueInRow(clientInsert, companyFixtureData.first_firm.id);
   });
 });
 

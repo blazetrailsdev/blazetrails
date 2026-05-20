@@ -42,11 +42,16 @@ export function fixtureId(label: string): number {
  * author tried to declare an id but the type is wrong, and silently falling
  * back to CRC32 would mask the bug.
  */
-function resolveDeclaredPk(tableName: string, label: string, declared: unknown): number {
+function resolveDeclaredPk(
+  tableName: string,
+  pkCol: string,
+  label: string,
+  declared: unknown,
+): number {
   if (declared === undefined) return fixtureId(label);
   if (typeof declared === "number" && Number.isInteger(declared)) return declared;
   throw new Error(
-    `defineFixtures: ${tableName}.${label} declares a non-integer primary key (${typeof declared}: ${String(declared)}); use an integer literal (e.g. \`id: 1\`) or omit the column.`,
+    `defineFixtures: ${tableName}.${label} declares a non-integer primary key (${typeof declared}: ${String(declared)}); use an integer literal (e.g. \`${pkCol}: 1\`) or omit the column.`,
   );
 }
 
@@ -245,7 +250,7 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
   // entries for labels omitted from a subset reload.
   const tableIds = new Map<string, number>();
   for (const label of labels) {
-    const id = resolveDeclaredPk(tableName, label, (fixtures[label] as FixtureAttrs)[pkCol]);
+    const id = resolveDeclaredPk(tableName, pkCol, label, (fixtures[label] as FixtureAttrs)[pkCol]);
     tableIds.set(label, id);
   }
   declaredIdsFor(adapter).set(tableName, tableIds);
@@ -255,7 +260,7 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
   const rows: FixtureAttrs[] = [];
   for (const label of labels) {
     const attrs = fixtures[label];
-    const id = resolveDeclaredPk(tableName, label, attrs[pkCol]);
+    const id = resolveDeclaredPk(tableName, pkCol, label, attrs[pkCol]);
     const row: FixtureAttrs = { [pkCol]: id };
 
     for (const [col, val] of Object.entries(attrs)) {

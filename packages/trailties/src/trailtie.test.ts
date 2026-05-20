@@ -1,14 +1,10 @@
 /**
- * Mirrors `railties/test/railties/railtie_test.rb`. Tests depending on
- * Rails-only infrastructure (`Rails::Application`, Rake DSL, ASC
- * `on_load` chains) wait for later PRs; the cases below cover what
- * Trailtie alone can satisfy.
+ * Mirrors `railties/test/railties/railtie_test.rb`. Block-runner and
+ * lifecycle-hook cases land alongside PR 2.1b.
  */
 import { describe, it, expect } from "vitest";
 import { Trailtie } from "./trailtie.js";
 import { Configuration } from "./trailtie/configuration.js";
-
-type WithProtected = { runTasksBlocks: (a: unknown) => void };
 
 describe("Trailtie", () => {
   it("cannot instantiate a Railtie object", () => {
@@ -43,27 +39,6 @@ describe("Trailtie", () => {
     PrepTrailtie.config.toPrepare(block);
     expect(PrepTrailtie.config.toPrepareBlocks.length).toBe(before + 1);
     expect(PrepTrailtie.config.toPrepareBlocks).toContain(block);
-  });
-
-  it("rake_tasks block is executed when MyApp.load_tasks is called", () => {
-    const calls: unknown[] = [];
-    class TaskTrailtie extends Trailtie {}
-    Trailtie.register(TaskTrailtie);
-    TaskTrailtie.rakeTasks((app) => calls.push(app));
-    (TaskTrailtie.instance() as unknown as WithProtected).runTasksBlocks({ name: "app" });
-    expect(calls).toEqual([{ name: "app" }]);
-  });
-
-  it("rake_tasks block defined in superclass of railtie is also executed", () => {
-    const calls: string[] = [];
-    class Parent extends Trailtie {}
-    Trailtie.register(Parent);
-    class Child extends Parent {}
-    Trailtie.register(Child);
-    Parent.rakeTasks(() => calls.push("parent"));
-    Child.rakeTasks(() => calls.push("child"));
-    (Child.instance() as unknown as WithProtected).runTasksBlocks(undefined);
-    expect(calls.sort()).toEqual(["child", "parent"]);
   });
 
   it("railtie can add initializers", () => {

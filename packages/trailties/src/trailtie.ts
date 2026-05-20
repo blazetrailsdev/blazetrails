@@ -7,6 +7,9 @@
  * The class is named `Trailtie` (not `Railtie`) to signal that trails
  * railties are not Rails::Railtie subclasses; the api:compare rename
  * map handles the cross-language name resolution.
+ *
+ * The framework-block runners (`rakeTasks`/`console`/`runner`/
+ * `generators`/`server`) and the `Configurable` mixin land in PR 2.1b.
  */
 import { underscore } from "@blazetrails/activesupport";
 import { Initializable } from "./initializable.js";
@@ -14,21 +17,11 @@ import { Configuration } from "./trailtie/configuration.js";
 
 export const ABSTRACT_RAILTIES = ["Trailtie", "Engine", "Application"] as const;
 
-type BlockKind = "rakeTasks" | "console" | "runner" | "generators" | "server";
-type AppBlock = (app: unknown) => void;
-type Host = {
-  _loadIndex?: number;
-  _railtieName?: string;
-  _instance?: Trailtie;
-  _blocks?: Partial<Record<BlockKind, AppBlock[]>>;
-};
+type Host = { _loadIndex?: number; _railtieName?: string; _instance?: Trailtie };
 
 /** @internal Module-wide load counter shared across subclasses. */
 let loadCounter = 0;
-
-function host(klass: typeof Trailtie): Host {
-  return klass as unknown as Host;
-}
+const host = (k: typeof Trailtie): Host => k as unknown as Host;
 
 export class Trailtie extends Initializable {
   /** @internal */
@@ -90,15 +83,10 @@ export class Trailtie extends Initializable {
     return (this as typeof Trailtie).instance().config;
   }
 
+  /** Run `block` with the singleton as receiver — mirrors Ruby `instance_eval`. */
   static configure(block: (this: Trailtie) => void): void {
     (this as typeof Trailtie).instance().configure(block);
   }
-
-  static rakeTasks = makeBlockRegistrar("rakeTasks");
-  static console = makeBlockRegistrar("console");
-  static runner = makeBlockRegistrar("runner");
-  static generators = makeBlockRegistrar("generators");
-  static server = makeBlockRegistrar("server");
 
   get config(): Configuration {
     if (!this._config) this._config = new Configuration();
@@ -109,56 +97,11 @@ export class Trailtie extends Initializable {
     return (this.constructor as typeof Trailtie).railtieName();
   }
 
-  /** Run `block` with `this` as the receiver — mirrors Ruby `instance_eval`. */
   configure(block: (this: Trailtie) => void): void {
     block.call(this);
   }
 
   inspect(): string {
     return `#<${this.constructor.name}>`;
-  }
-
-  /** @internal */
-  protected runConsoleBlocks(app: unknown): void {
-    eachRegisteredBlock(this, "console", app);
-  }
-  /** @internal */
-  protected runGeneratorsBlocks(app: unknown): void {
-    eachRegisteredBlock(this, "generators", app);
-  }
-  /** @internal */
-  protected runRunnerBlocks(app: unknown): void {
-    eachRegisteredBlock(this, "runner", app);
-  }
-  /** @internal */
-  protected runTasksBlocks(app: unknown): void {
-    eachRegisteredBlock(this, "rakeTasks", app);
-  }
-  /** @internal */
-  protected runServerBlocks(app: unknown): void {
-    eachRegisteredBlock(this, "server", app);
-  }
-}
-
-function makeBlockRegistrar(kind: BlockKind) {
-  return function (this: typeof Trailtie, block?: AppBlock): AppBlock[] {
-    const h = host(this);
-    if (!Object.prototype.hasOwnProperty.call(this, "_blocks")) h._blocks = {};
-    const blocks = (h._blocks![kind] ??= []);
-    if (block) blocks.push(block);
-    return blocks;
-  };
-}
-
-/** @internal Walk the prototype chain firing each ancestor's registered blocks. */
-function eachRegisteredBlock(instance: Trailtie, kind: BlockKind, app: unknown): void {
-  let klass: typeof Trailtie | null = instance.constructor as typeof Trailtie;
-  const seen = new Set<typeof Trailtie>();
-  while (klass && !seen.has(klass)) {
-    seen.add(klass);
-    const blocks = host(klass)._blocks?.[kind];
-    if (blocks) for (const b of blocks) b(app);
-    const parent = Object.getPrototypeOf(klass) as typeof Trailtie | null;
-    klass = parent && parent.prototype instanceof Initializable ? parent : null;
   }
 }

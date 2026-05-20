@@ -1,20 +1,11 @@
 /**
  * Port of `Rails::Railtie::Configuration` from
  * `railties/lib/rails/railtie/configuration.rb`. Holds the shared config
- * accessed via `Trailtie.config`. Hook blocks (`beforeInitialize` etc.)
- * are stored on class-side arrays so any subclass can register them and
- * `Application` can replay them at boot.
+ * accessed via `Trailtie.config`. This PR ships the base state and the
+ * `toPrepare` block list; lifecycle hooks (`beforeConfiguration` etc.)
+ * land alongside `Configurable` in the follow-up.
  */
 export type ConfigurationBlock = (this: unknown, ...args: unknown[]) => void;
-
-const HOOKS = [
-  "beforeConfiguration",
-  "beforeInitialize",
-  "beforeEagerLoad",
-  "afterInitialize",
-  "afterRoutesLoaded",
-] as const;
-type HookName = (typeof HOOKS)[number];
 
 export class Configuration {
   /** @internal Rails `@@`-style shared state. */
@@ -29,10 +20,6 @@ export class Configuration {
   static readonly _appGenerators: Record<string, unknown> = {};
   /** @internal */
   static readonly _toPrepareBlocks: ConfigurationBlock[] = [];
-  /** @internal */
-  static readonly _hooks: Record<HookName, ConfigurationBlock[]> = Object.fromEntries(
-    HOOKS.map((h) => [h, [] as ConfigurationBlock[]]),
-  ) as Record<HookName, ConfigurationBlock[]>;
 
   private readonly _options: Record<string, unknown> = {};
 
@@ -61,12 +48,6 @@ export class Configuration {
     if (block) Configuration._toPrepareBlocks.push(block);
   }
 
-  beforeConfiguration = makeHook("beforeConfiguration");
-  beforeInitialize = makeHook("beforeInitialize");
-  beforeEagerLoad = makeHook("beforeEagerLoad");
-  afterInitialize = makeHook("afterInitialize");
-  afterRoutesLoaded = makeHook("afterRoutesLoaded");
-
   /** Read the free-form option bag (mirrors Ruby `method_missing` getter). */
   get(key: string): unknown {
     return this._options[key];
@@ -78,10 +59,4 @@ export class Configuration {
   respondTo(key: string): boolean {
     return Object.prototype.hasOwnProperty.call(this._options, key);
   }
-}
-
-function makeHook(name: HookName) {
-  return (block: ConfigurationBlock): void => {
-    Configuration._hooks[name].push(block);
-  };
 }

@@ -63,8 +63,8 @@ function tm(adapter: TransactionalFixturesAdapter): TxnHost["transactionManager"
  */
 function clearSchemaCache(adapter: TransactionalFixturesAdapter): void {
   const wrapped = (adapter as Partial<TestDatabaseAdapter>).innerAdapter;
-  const host = (wrapped ?? adapter) as { schemaCache?: { clear?: () => void } };
-  host.schemaCache?.clear?.();
+  const host = (wrapped ?? adapter) as DatabaseAdapter;
+  host.schemaCache?.clear();
 }
 
 function adapterAndInner(

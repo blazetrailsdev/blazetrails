@@ -157,8 +157,10 @@ export class PermissionsPolicy {
   }
 
   /**
-   * Rails `apply_mappings(sources)` — strings pass through, the `:self` /
-   * `:none` symbols map to `'self'` / `'none'`.
+   * Rails `apply_mappings(sources)`. Ruby's `:self` / `:none` symbols
+   * cross the JS boundary as the strings `"self"` / `"none"`; those map
+   * to `'self'` / `'none'` (quoted, per Feature-Policy spec). Other
+   * strings pass through unchanged.
    * @internal
    */
   private applyMappings(sources: readonly PermissionSource[]): string[] {

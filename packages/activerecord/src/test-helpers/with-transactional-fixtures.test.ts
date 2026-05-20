@@ -124,15 +124,24 @@ describe("withTransactionalFixtures (schema-cache invalidation)", () => {
 
   withTransactionalFixtures(() => adapter);
 
-  it("addColumn inside a test populates the schema cache", async () => {
+  // Direct-adapter reads (`adapter.columns(...)`) bypass SchemaCache —
+  // SQLite3Adapter#columns runs PRAGMA against the live DB. To actually
+  // exercise `schemaCache.clear()`, populate the cache directly via
+  // `setColumns` (simulating how Model.loadSchema warms it in real
+  // adapter use) and then assert `isColumnsHashCached` flips false
+  // after rollback.
+  it("warming the schema cache inside a test leaves it populated", async () => {
     await adapter.addColumn("cache_inval_users", "extra", "string");
     const cols = await adapter.columns("cache_inval_users");
-    expect(cols.map((c) => c.name)).toContain("extra");
+    adapter.schemaCache.setColumns("cache_inval_users", cols);
+    expect(adapter.schemaCache.isColumnsHashCached(adapter.pool, "cache_inval_users")).toBe(true);
   });
 
-  it("next test does not see the rolled-back column in the cache", async () => {
-    const cols = await adapter.columns("cache_inval_users");
-    expect(cols.map((c) => c.name)).not.toContain("extra");
+  it("next test sees an empty schema cache because afterEach cleared it", async () => {
+    // Without `schemaCache.clear()` in the helper, this would be true —
+    // the cached hash from the previous test would still report the
+    // rolled-back `extra` column.
+    expect(adapter.schemaCache.isColumnsHashCached(adapter.pool, "cache_inval_users")).toBe(false);
   });
 });
 
@@ -163,8 +172,11 @@ describe("withTransactionalFixtures (defineSchema signature cache invalidation)"
 
   it("next test re-runs defineSchema and the rolled-back table is recreated", async () => {
     // If the signature cache hadn't been cleared, `defineSchema` would
-    // short-circuit on the cached signature and `columns()` below would
-    // throw because the table was rolled back at the DB.
+    // short-circuit on the cached signature without recreating the
+    // table. On SQLite `adapter.columns()` against a missing table
+    // returns `[]` (PRAGMA table_info on an unknown name yields no
+    // rows), so the bug would surface as an empty column list — not a
+    // throw.
     await defineSchema(adapter, { defsig_table: { name: "string" } });
     const cols = await adapter.columns("defsig_table");
     expect(cols.map((c) => c.name).sort()).toEqual(["id", "name"]);

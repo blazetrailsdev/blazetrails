@@ -29,6 +29,7 @@ describeIfPg("PostgreSQLAdapter", () => {
   });
 
   afterAll(async () => {
+    await adapter.exec(`DROP TABLE IF EXISTS "bind_test"`).catch(() => {});
     await adapter.close();
   });
 

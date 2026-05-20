@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  AssociationNotFoundError,
   HasManyThroughAssociationNotFoundError,
   InverseOfAssociationNotFoundError,
 } from "./errors.js";
@@ -35,5 +36,33 @@ describe("AssociationErrors", () => {
   it("InverseOfAssociationNotFoundError.associatedClass defaults to null", () => {
     const err = new InverseOfAssociationNotFoundError("posts", "author");
     expect(err.associatedClass).toBeNull();
+  });
+
+  describe("AssociationNotFoundError#corrections", () => {
+    it("suggests near-match association names declared on the record's class", () => {
+      class FakeRecord {}
+      (FakeRecord as any)._associations = [
+        { name: "comments" },
+        { name: "author" },
+        { name: "tags" },
+      ];
+      const err = new AssociationNotFoundError(new FakeRecord(), "commnets");
+      expect(err.corrections).toEqual(["comments"]);
+    });
+
+    it("returns [] when nothing near matches", () => {
+      class FakeRecord {}
+      (FakeRecord as any)._associations = [{ name: "comments" }];
+      const err = new AssociationNotFoundError(new FakeRecord(), "wildlyDifferent");
+      expect(err.corrections).toEqual([]);
+    });
+
+    it("memoises across reads", () => {
+      class FakeRecord {}
+      (FakeRecord as any)._associations = [{ name: "comments" }];
+      const err = new AssociationNotFoundError(new FakeRecord(), "commnets");
+      const first = err.corrections;
+      expect(err.corrections).toBe(first);
+    });
   });
 });

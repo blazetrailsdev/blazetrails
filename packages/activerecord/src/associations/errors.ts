@@ -4,11 +4,22 @@
  * Mirrors: ActiveRecord::Associations error classes defined in
  * activerecord/lib/active_record/associations/errors.rb
  */
+import { SpellChecker } from "@blazetrails/did-you-mean";
+
 import { ActiveRecordError, ConfigurationError } from "../errors.js";
+
+interface AssociationLike {
+  name: string;
+}
+
+interface AssociationOwner {
+  _associations?: AssociationLike[];
+}
 
 export class AssociationNotFoundError extends ConfigurationError {
   readonly record: any;
   readonly associationName: string;
+  #cachedCorrections?: string[];
 
   constructor(record: any, associationName: string) {
     super(
@@ -17,6 +28,23 @@ export class AssociationNotFoundError extends ConfigurationError {
     this.name = "AssociationNotFoundError";
     this.record = record;
     this.associationName = associationName;
+  }
+
+  /**
+   * Mirrors Rails' `AssociationNotFoundError#corrections`, memoised via
+   * `@corrections ||=`. Suggests association names from the record's
+   * declared reflections close to the missing name.
+   */
+  get corrections(): string[] {
+    if (this.#cachedCorrections !== undefined) return this.#cachedCorrections;
+    if (!this.record || !this.associationName) {
+      this.#cachedCorrections = [];
+      return this.#cachedCorrections;
+    }
+    const ctor = this.record.constructor as AssociationOwner;
+    const dictionary = (ctor._associations ?? []).map((a) => a.name);
+    this.#cachedCorrections = new SpellChecker({ dictionary }).correct(this.associationName);
+    return this.#cachedCorrections;
   }
 }
 

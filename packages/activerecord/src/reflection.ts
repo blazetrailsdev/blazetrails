@@ -10,7 +10,8 @@ import {
   foreignKey as deriveForeignKey,
 } from "@blazetrails/activesupport";
 import { Table } from "@blazetrails/arel";
-import { modelRegistry, levenshtein } from "./associations.js";
+import { modelRegistry } from "./associations.js";
+import { SpellChecker } from "@blazetrails/did-you-mean";
 import {
   hasQueryConstraints,
   queryConstraintsList,
@@ -1549,8 +1550,7 @@ export class ThroughReflection extends AbstractReflection {
     const rawReflections: Record<string, unknown> =
       (this.activeRecord as { _reflections?: Record<string, unknown> })._reflections ?? {};
     const candidates = Object.keys(rawReflections).filter((k) => k !== this.name);
-    const target = this.through;
-    return candidates.filter((k) => levenshtein(k, target) <= 3);
+    return new SpellChecker({ dictionary: candidates }).correct(this.through);
   }
 
   /**

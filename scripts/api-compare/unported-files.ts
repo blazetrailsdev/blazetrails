@@ -15,16 +15,18 @@
 //                (from extract-ruby-tests.rb, e.g. "message_pack_test.rb").
 //                Consumed by isTestFileUnported() → test:compare.
 //                Omit when there is no corresponding Rails test file.
+//   `package`  — (optional) scopes a `pattern` entry to one api-compare
+//                package. Required when the same source basename exists in
+//                more than one package — e.g. `core_ext/name_error.rb`
+//                lives in both activesupport and did_you_mean and the
+//                exclusion should only apply to one. Unscoped patterns
+//                match across all packages.
 //
 // Most entries set both (source and test excluded together).
 // Test-only entries (GVL, Rake, dbconsole, Ruby serialization) set only
 // `testFile` because their TS source counterparts either don't exist or
 // are being actively ported.
 
-// `package` (optional) scopes the entry to a single api-compare package.
-// Without it, the `pattern` substring is matched across every package — used
-// for shared file basenames (e.g. `core_ext/name_error.rb` exists in both
-// activesupport and did_you_mean) where the exclusion should only apply to one.
 export type UnportedFile = { reason: string; package?: string } & (
   | { pattern: string; testFile?: string; tests?: never }
   | { pattern?: string; testFile: string; tests?: never }

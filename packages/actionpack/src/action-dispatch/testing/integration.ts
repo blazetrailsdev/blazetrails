@@ -192,17 +192,22 @@ export class IntegrationTest {
 
   /**
    * Rails-shaped routes adapter consumed by the `UrlFor` and
-   * `PolymorphicRoutes` mixins. Rails' `_routes` points at the
-   * `UrlHelpersModule`, whose `urlFor(options, routeName?)` matches the
-   * mixin's expected shape — `RouteSet.urlFor(routeName, params, options)`
-   * (the legacy positional form) would misroute arguments. Writable
-   * (Rails: `attr_accessor :_routes` via UrlFor) so `_withRoutes` can swap
-   * the host's adapter for the duration of a block.
+   * `PolymorphicRoutes` mixins. Delegates to `RouteSet._routes`, the same
+   * inner adapter Rails wires through `proxy_class.new(routes)._routes` —
+   * it carries `polymorphicMappings` (so `polymorphicUrl/Path` resolve
+   * direct routes) and a `urlFor(options, routeName?)` slot that
+   * currently throws a documented "needs Rails-shape signature — see
+   * PR b" error until trails' legacy `RouteSet.urlFor(name, params,
+   * options)` is rewritten. Callers of `urlFor/fullUrlFor/routeFor` will
+   * surface that same error; `polymorphicUrl/Path` and
+   * `polymorphicMapping` (which read only `polymorphicMappings`) work
+   * end-to-end today. Writable (Rails: `attr_accessor :_routes` via
+   * UrlFor) so `_withRoutes` can swap the adapter for a block.
    *
    * @internal
    */
   get _routes(): UrlForRoutes {
-    return this._routesOverride ?? (this.routes.urlHelpers() as unknown as UrlForRoutes);
+    return this._routesOverride ?? (this.routes._routes as UrlForRoutes);
   }
 
   set _routes(value: UrlForRoutes | null) {

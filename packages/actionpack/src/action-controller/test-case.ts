@@ -424,10 +424,17 @@ export class TestCase {
 
 /**
  * ActionController::TestRequest — a controller-test-flavored TestRequest
- * that mirrors `ActionDispatch::TestRequest`. Subclass kept thin: behavior
- * is inherited from the dispatch layer.
+ * that mirrors `ActionDispatch::TestRequest`. Most behavior is inherited
+ * from the dispatch layer; controller-specific helpers (`newSession`) live
+ * here so test harnesses can synthesize a request without reaching across
+ * packages.
  */
-export class TestRequest extends AbstractTestRequest {}
+export class TestRequest extends AbstractTestRequest {
+  /** Mirrors Rails `ActionController::TestRequest.new_session`. */
+  static newSession(): TestSession {
+    return new TestSession();
+  }
+}
 
 export class LiveTestResponse extends Response {}
 

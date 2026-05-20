@@ -248,9 +248,18 @@ export async function compareFile(yamlBase: string, yamlByTable: Map<string, Fix
   return r;
 }
 
+// `schemaCheck` only runs after a successful TS import, so a result has
+// real schema data exactly when its final status is MATCH or DIFF. Early-
+// return statuses (MISSING, ERB-UNSUPPORTED, YAML-PARSE-ERR, TS-IMPORT-ERR,
+// TS-EXPORT-MISSING) skip the check entirely — distinguish "not evaluated"
+// from "evaluated, no schema entry" both in per-file output and totals.
+function schemaEvaluated(r: FileResult): boolean {
+  return r.status === "MATCH" || r.status === "DIFF";
+}
+
 function formatLine(r: FileResult): string {
   const pct = r.attrsTotal === 0 ? "—" : `${Math.round((r.attrsMatched / r.attrsTotal) * 100)}%`;
-  const sch = !r.tsBase
+  const sch = !schemaEvaluated(r)
     ? ""
     : !r.schemaPorted
       ? "schema:not-ported"
@@ -305,11 +314,13 @@ async function main(): Promise<void> {
   }
   const n = (s: Status): number => results.filter((r) => r.status === s).length;
   const other = results.length - n("MATCH") - n("DIFF") - n("MISSING") - n("ERB-UNSUPPORTED");
-  const considered = results.filter((r) => r.tsBase);
-  const ported = considered.filter((r) => r.schemaPorted).length;
-  const withExtras = considered.filter((r) => r.schemaExtras > 0).length;
+  const evaluated = results.filter(schemaEvaluated);
+  const ported = evaluated.filter((r) => r.schemaPorted).length;
+  const withExtras = evaluated.filter((r) => r.schemaExtras > 0).length;
   console.log(`\n${results.length} files — match=${n("MATCH")} diff=${n("DIFF")} missing=${n("MISSING")} erb-unsupported=${n("ERB-UNSUPPORTED")} other=${other}`); // prettier-ignore
-  console.log(`schema — ported=${ported}/${considered.length} extras-flagged=${withExtras}`);
+  console.log(
+    `schema — ported=${ported}/${evaluated.length} extras-flagged=${withExtras} (skipped ${results.length - evaluated.length})`,
+  );
   console.log("(MISSING/DIFF soft per Decision 4 until PR 7; runtime errors hard-fail)");
   // Decision 4 names DIFF/MISSING as soft; YAML/TS load errors are script-runtime, hard-fail.
   const hard: readonly Status[] = ["YAML-PARSE-ERR", "TS-IMPORT-ERR", "TS-EXPORT-MISSING"];

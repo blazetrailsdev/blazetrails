@@ -14,6 +14,8 @@ export interface ActionsHost {
   output: (msg: string) => void;
   appendToFile(relativePath: string, content: string): void;
   insertIntoFile(relativePath: string, marker: string, content: string): void;
+  /** Rails' append_file_with_newline: appends `\n<content>\n` ensuring a single newline separator. */
+  appendWithNewline(relativePath: string, content: string): void;
 }
 
 export interface GeneratorActionsState {
@@ -23,8 +25,7 @@ export interface GeneratorActionsState {
 function quote(value: unknown): string {
   if (typeof value === "string") return `"${value.replace(/'/g, '"')}"`;
   if (value === null) return "nil";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean" || typeof value === "number") return String(value);
   if (Array.isArray(value)) return `[${value.map(quote).join(", ")}]`;
   if (typeof value === "object") {
     return Object.entries(value as Record<string, unknown>)
@@ -42,9 +43,9 @@ export function gem(this: ActionsHost, name: string, ...rest: Array<string | Gem
     else options = arg;
   }
   const comment = options.comment;
-  const optsForOutput: Record<string, unknown> = { ...options };
-  delete optsForOutput.comment;
-  delete optsForOutput.version;
+  const outOpts: Record<string, unknown> = { ...options };
+  delete outOpts.comment;
+  delete outOpts.version;
 
   const versionList =
     versions.length > 0
@@ -56,14 +57,14 @@ export function gem(this: ActionsHost, name: string, ...rest: Array<string | Gem
           : [options.version];
 
   const parts: string[] = [quote(name), ...versionList.map(quote)];
-  if (Object.keys(optsForOutput).length > 0) parts.push(quote(optsForOutput));
+  if (Object.keys(outOpts).length > 0) parts.push(quote(outOpts));
 
   const lines: string[] = [];
   if (comment) for (const line of comment.split("\n")) lines.push(`# ${line}`);
   lines.push(`gem ${parts.join(", ")}`);
 
   this.output(`      gemfile  ${name}`);
-  this.appendToFile("Gemfile", lines.join("\n") + "\n");
+  this.appendWithNewline("Gemfile", lines.join("\n"));
 }
 
 export function route(

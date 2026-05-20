@@ -26,24 +26,47 @@ function seed(name: string, body: string) {
 }
 
 describe("ActionsTest", () => {
-  it("gem should put gem in Gemfile", () => {
+  it("gem should put gem dependency in gemfile", () => {
     gen.gem("will-paginate");
-    expect(read("Gemfile")).toBe('gem "will-paginate"\n');
+    expect(read("Gemfile")).toMatch(/gem "will-paginate"\n$/);
   });
 
-  it("gem with options should put gem in Gemfile", () => {
-    gen.gem("rspec", { group: "test" });
-    expect(read("Gemfile")).toContain('gem "rspec", group: "test"');
+  it("gem with version should include version in gemfile", () => {
+    gen.gem("rspec", ">= 2.0.0.a5");
+    gen.gem("RedCloth", ">= 4.1.0", "< 4.2.0");
+    gen.gem("nokogiri", { version: ">= 1.4.2" });
+    gen.gem("faker", { version: [">= 0.1.0", "< 0.3.0"] });
+    const c = read("Gemfile");
+    expect(c).toMatch(/gem "rspec", ">= 2\.0\.0\.a5"/);
+    expect(c).toMatch(/gem "RedCloth", ">= 4\.1\.0", "< 4\.2\.0"/);
+    expect(c).toMatch(/gem "nokogiri", ">= 1\.4\.2"/);
+    expect(c).toMatch(/gem "faker", ">= 0\.1\.0", "< 0\.3\.0"/);
   });
 
-  it("gem with versions should put gem in Gemfile", () => {
-    gen.gem("rails", "3.0", "< 4.0");
-    expect(read("Gemfile")).toContain('gem "rails", "3.0", "< 4.0"');
+  it("gem should include options", () => {
+    gen.gem("rspec", { github: "dchelimsky/rspec", tag: "1.2.9.rc1" });
+    expect(read("Gemfile")).toContain('gem "rspec", github: "dchelimsky/rspec", tag: "1.2.9.rc1"');
   });
 
-  it("gem with comment should put gem with comment in Gemfile", () => {
-    gen.gem("will-paginate", { comment: "first line\nsecond line" });
-    expect(read("Gemfile")).toBe('# first line\n# second line\ngem "will-paginate"\n');
+  it("gem should put the comment before gem declaration", () => {
+    gen.gem("rspec", { comment: "Use RSpec" });
+    expect(read("Gemfile")).toMatch(/# Use RSpec\ngem "rspec"/);
+  });
+
+  it("gem should support multiline comments", () => {
+    gen.gem("rspec", { comment: "Use RSpec\nReplaces minitest" });
+    expect(read("Gemfile")).toMatch(/# Use RSpec\n# Replaces minitest\ngem "rspec"/);
+  });
+
+  it("gem with non-string options", () => {
+    gen.gem("rspec", { require: false });
+    expect(read("Gemfile")).toMatch(/^gem "rspec", require: false$/m);
+  });
+
+  it("gem with gemfile without newline at the end", () => {
+    seed("Gemfile", 'gem "rspec-rails"');
+    gen.gem("will-paginate");
+    expect(read("Gemfile")).toMatch(/gem "rspec-rails"\ngem "will-paginate"\n$/);
   });
 
   it("route should add route", () => {
@@ -52,7 +75,7 @@ describe("ActionsTest", () => {
     expect(read("config/routes.rb")).toContain('root "welcome#index"');
   });
 
-  it("route with namespace should wrap route in namespace block", () => {
+  it("route with namespace option should nest route", () => {
     seed("config/routes.rb", "App.routes.draw do\nend\n");
     gen.route('root "admin#index"', { namespace: "admin" });
     const c = read("config/routes.rb");
@@ -60,13 +83,13 @@ describe("ActionsTest", () => {
     expect(c).toContain('root "admin#index"');
   });
 
-  it("environment should add data to application.rb", () => {
+  it("environment should include data in environment initializer block", () => {
     seed("config/application.rb", "class Application < Rails::Application\nend\n");
     gen.environment('config.asset_host = "cdn.example.com"');
     expect(read("config/application.rb")).toContain('config.asset_host = "cdn.example.com"');
   });
 
-  it("environment with env option should add data to environment file", () => {
+  it("environment should include data in environment initializer block with env option", () => {
     seed("config/environments/development.rb", "Rails.application.configure do\nend\n");
     gen.environment('config.asset_host = "localhost:3000"', { env: "development" });
     expect(read("config/environments/development.rb")).toContain(

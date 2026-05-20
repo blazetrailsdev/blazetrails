@@ -709,13 +709,15 @@ export const TEST_SCHEMA: Schema = {
     follower_id: "integer",
   },
 
-  // Rails declares `id: false` with an explicit string `id` column.
+  // Rails declares `id: false` with an explicit `t.string :id, null: false`
+  // column — no DB-level PK constraint. The model promotes `id` to PK at
+  // the AR layer via `self.primary_key = "id"`, same shape as `dashboards`.
   goofy_string_id: {
     columns: {
       id: { type: "string", null: false },
       info: "string",
     },
-    primaryKey: ["id"],
+    primaryKey: false,
   },
 
   // Rails declares `having` between goofy_string_id and guids.

@@ -3,46 +3,52 @@ import { Info } from "./info.js";
 
 // Port of railties/lib/rails/info_controller.rb. The Rails controller relies
 // on an ApplicationController + ActionDispatch::Routing::RoutesInspector that
-// don't yet exist in trails; the routes/notes actions render textual stubs
-// until those land. See docs/trailties-plan.md PR 1.7 and follow-ups.
+// don't yet exist in trails; the routes/notes actions return empty/JSON
+// placeholders until those land. See docs/trailties-plan.md PR 1.7 follow-ups.
+
+export interface RouteSearchResult {
+  exact: string[];
+  fuzzy: string[];
+}
 
 export class InfoController extends ActionController.Base {
   static layout: string | false = "application";
 
-  /** `GET /rails/info` → redirect to routes. */
+  /** `GET /rails/info` — redirects to the routes listing. */
   index(): void {
     this.redirectTo("/rails/info/routes");
   }
 
   /** Renders the property table built by {@link Info}. */
   properties(): void {
-    const info = Info.toHtml();
-    this.render({ html: info });
+    this.render({ html: Info.toHtml() });
   }
 
   /**
    * Routes listing. Rails uses ActionDispatch::Routing::RoutesInspector to
-   * format the routes; until that's ported, return a plain-text placeholder
-   * when no `query` is supplied, and an empty result set otherwise.
+   * format the routes; until that's ported we return an empty search result
+   * — JSON-shaped both with and without a `query` param so callers don't
+   * need to branch on response type.
    */
   routes(): void {
     const query = this.params.get("query");
-    if (typeof query === "string") {
-      this.render({
-        json: { exact: matchingRoutes(query, true), fuzzy: matchingRoutes(query, false) },
-      });
-      return;
-    }
-    this.render({ plain: "Routes inspector not yet implemented" });
+    const q = typeof query === "string" ? query : "";
+    this.render({
+      json: { exact: matchingRoutes(q, true), fuzzy: matchingRoutes(q, false) },
+    });
   }
 
   /** Annotations (TODO/FIXME/...) listing. Pending SourceAnnotationExtractor. */
   notes(): void {
-    this.render({ plain: "Annotation extractor not yet implemented" });
+    this.render({ json: [] });
   }
 }
 
-/** Filter the (currently empty) route table. Public for testing. */
+/**
+ * Filter the (currently empty) route table for `query`. Once `RoutesInspector`
+ * lands, port the body of `Rails::InfoController#matching_routes` here.
+ * @internal
+ */
 export function matchingRoutes(query: string, _exactMatch: boolean): string[] {
   if (!query) return [];
   return [];

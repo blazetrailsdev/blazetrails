@@ -24,10 +24,7 @@ export class Info {
   static properties: PropertyList = new PropertyList();
 
   /** Register a property. Block form lazy-evaluates; exceptions are swallowed. */
-  static property(
-    name: string,
-    value: InfoValue | (() => InfoValue | undefined) | undefined,
-  ): void {
+  static property(name: string, value: InfoValue | (() => InfoValue | undefined)): void {
     try {
       const resolved = typeof value === "function" ? value() : value;
       if (resolved !== undefined && resolved !== null && resolved !== "") {

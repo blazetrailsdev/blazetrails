@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { appCommand } from "./app.js";
+import { appCommand, appTemplateCommand } from "./app.js";
 
 describe("AppCommandTest", () => {
   it("app:template applies a template that calls the gem DSL", async () => {
@@ -13,6 +13,11 @@ describe("AppCommandTest", () => {
       const tmpl = path.join(tmpDir, "template.mjs");
       fs.writeFileSync(tmpl, 'export default (g) => g.gem("rspec-rails", { group: "test" });\n');
       await appCommand().parseAsync(["node", "app", "template", tmpl]);
+      expect(fs.readFileSync(path.join(tmpDir, "Gemfile"), "utf-8")).toContain(
+        'gem "rspec-rails", group: "test"',
+      );
+      fs.rmSync(path.join(tmpDir, "Gemfile"));
+      await appTemplateCommand().parseAsync(["node", "app:template", tmpl]);
       expect(fs.readFileSync(path.join(tmpDir, "Gemfile"), "utf-8")).toContain(
         'gem "rspec-rails", group: "test"',
       );

@@ -404,7 +404,7 @@ export class Mapper {
 
   /** Rails: `nested(&block)`. Wraps `block` in a nested resource scope. */
   nested(callback: MapperCallback): void {
-    if (!this._scope.isResourceScope()) {
+    if (!this.isResourceScope()) {
       throw new Error("can't use nested outside resource(s) scope");
     }
     this.withScopeLevel("nested", () => {
@@ -418,10 +418,17 @@ export class Mapper {
 
   /**
    * Rails: `shallow(&block)`. Pushes a `shallow: true` scope so nested
-   * `resources` inside use shallow path/name conventions.
+   * `resources` inside use shallow path/name conventions. The current
+   * prefix is preserved — Rails clones the scope hash, which keeps `:path`
+   * unchanged.
    */
   shallow(callback: MapperCallback): void {
-    this.scopeStack.push({ path: "", namePrefix: undefined, controller: undefined, shallow: true });
+    this.scopeStack.push({
+      path: this.currentPrefix(),
+      namePrefix: undefined,
+      controller: undefined,
+      shallow: true,
+    });
     try {
       callback(this);
     } finally {

@@ -647,7 +647,7 @@ export class Mapper {
   /** @internal */
   prefixNameForAction(as: string | undefined, action: string | undefined): string | undefined {
     let prefix: string | undefined;
-    if (as) prefix = as;
+    if (as !== undefined && as !== null) prefix = as;
     else if (action && !this.canonicalAction(action)) prefix = action;
     if (prefix && prefix !== "/" && prefix.length > 0) {
       return Mapper.normalizeName(prefix.replace(/-/g, "_"));

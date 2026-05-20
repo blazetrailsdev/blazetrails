@@ -3,9 +3,12 @@
  * directory. Mirrors Rails' `middleware/static.rb` (Static + FileHandler).
  */
 
-import type { RackEnv, RackResponse } from "@blazetrails/rack";
-import { bodyFromString } from "@blazetrails/rack";
+import type { RackBody, RackEnv, RackResponse } from "@blazetrails/rack";
 import { getFs, getPath } from "@blazetrails/activesupport";
+
+async function* bodyFromBytes(bytes: Uint8Array): RackBody {
+  yield bytes;
+}
 
 type RackApp = (env: RackEnv) => Promise<RackResponse>;
 
@@ -93,14 +96,18 @@ export class FileHandler {
 
   /** @internal */
   serve(_env: RackEnv, filepath: string, contentHeaders: Record<string, string>): RackResponse {
-    const absolute = getPath().join(this.root, filepath);
+    const absolute = getPath().resolve(this.root, "." + filepath);
+    if (absolute !== this.root && !absolute.startsWith(this.root + getPath().sep)) {
+      throw new Error(`refusing to serve path outside root: ${filepath}`);
+    }
     const content = getFs().readFileSync(absolute);
+    const bytes = content instanceof Uint8Array ? content : new Uint8Array(content);
     const headers: Record<string, string> = {
-      "content-length": String(content.length),
+      "content-length": String(bytes.byteLength),
       ...this.headers,
       ...contentHeaders,
     };
-    return [200, headers, bodyFromString(content.toString())];
+    return [200, headers, bodyFromBytes(bytes)];
   }
 
   /** @internal */

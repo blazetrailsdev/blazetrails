@@ -869,7 +869,12 @@ export class Request {
 
   /** Rails: `parameters` alias of `params`. */
   get parameters(): Record<string, unknown> {
+    const override = this.env["action_dispatch.request.parameters_override"];
+    if (override) return override as Record<string, unknown>;
     return this.params;
+  }
+  set parameters(value: Record<string, unknown>) {
+    this.env["action_dispatch.request.parameters_override"] = value;
   }
 
   // --- Early hints ---

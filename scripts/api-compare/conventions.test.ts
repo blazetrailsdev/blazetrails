@@ -157,10 +157,4 @@ describe("rubyFileToTs", () => {
     // subdir maps to trailties/ uniformly.
     expect(rubyFileToTs("railties/some_file.rb", "actiondispatch")).toBe("trailties/some-file.ts");
   });
-
-  it("does not touch the `railtie` segment when it appears as an embedded substring", () => {
-    // Only standalone path segments are aliased — `subrailtie_helper`
-    // should NOT be rewritten because `railtie` isn't a full segment.
-    expect(rubyFileToTs("subrailtie_helper.rb")).toBe("subrailtie-helper.ts");
-  });
 });

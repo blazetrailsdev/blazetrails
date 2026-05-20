@@ -90,12 +90,17 @@ export class TestCase {
   /**
    * Mirrors Rails `TestCase.controller_class` / `controller_class=`.
    * Reading lazily falls back to `determineDefaultControllerClass(name)`.
+   * Per-class (not inherited): Rails class ivars don't walk the
+   * superclass chain, so we gate on `Object.hasOwn` to keep subclasses
+   * from picking up the base class's controller.
    */
   static get controllerClass(): ControllerClass | null {
-    if (this._controllerClass) return this._controllerClass;
+    if (Object.hasOwn(this, "_controllerClass") && this._controllerClass) {
+      return this._controllerClass;
+    }
     const inferred = this.determineDefaultControllerClass(this.name);
     if (inferred) this._controllerClass = inferred;
-    return this._controllerClass;
+    return Object.hasOwn(this, "_controllerClass") ? this._controllerClass : null;
   }
   static set controllerClass(v: ControllerClass | null) {
     this._controllerClass = v;

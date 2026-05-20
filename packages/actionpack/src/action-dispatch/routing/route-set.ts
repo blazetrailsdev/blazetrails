@@ -593,6 +593,7 @@ export class RouteSet {
    * `@prepend` blocks).
    */
   clear(): void {
+    this._finalized = false;
     this.routes = [];
     this.namedRoutes.clear();
     this.polymorphicMappings.clear();

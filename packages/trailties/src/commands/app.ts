@@ -13,7 +13,9 @@ export function appTemplateCommand(): Command {
     .action(async (location: string) => {
       const path = getPath();
       if (!path.pathToFileURL) throw new Error("app:template needs PathAdapter.pathToFileURL");
-      const abs = path.isAbsolute?.(location) ? location : path.resolve(getCwd(), location);
+      // PathAdapter contract: undefined isAbsolute → treat all paths as absolute.
+      const abs =
+        path.isAbsolute && !path.isAbsolute(location) ? path.resolve(getCwd(), location) : location;
       const mod = await import(path.pathToFileURL(abs).href);
       const tmpl: unknown = mod.default ?? mod.template ?? mod;
       if (typeof tmpl !== "function") throw new Error(`${location} does not export a function`);

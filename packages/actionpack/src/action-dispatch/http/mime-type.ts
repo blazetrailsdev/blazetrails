@@ -38,8 +38,7 @@ export class Mimes {
     for (const m of this._mimes) {
       if (predicate(m)) {
         const sym = m.toSym();
-        const idx = this._symbols.indexOf(sym);
-        if (idx >= 0) this._symbols.splice(idx, 1);
+        this._symbols = this._symbols.filter((s) => s !== sym);
         this._symbolsSet.delete(sym);
       } else {
         kept.push(m);
@@ -135,12 +134,12 @@ export class AcceptList {
       }
     }
 
-    const seen = new Set<MimeType>();
+    const seen = new Set<string>();
     const out: MimeType[] = [];
     for (const item of list) {
       const looked = MimeType.lookup(item.name) ?? new MimeType(item.name, item.name);
-      if (!seen.has(looked)) {
-        seen.add(looked);
+      if (!seen.has(looked.toString())) {
+        seen.add(looked.toString());
         out.push(looked);
       }
     }
@@ -289,7 +288,7 @@ export class MimeType {
 
   /** Rails-named alias of {@link onRegister}. */
   static registerCallback(callback: (type: MimeType) => void): void {
-    MimeType.callbacks.push(callback);
+    MimeType.onRegister(callback);
   }
 
   /** @internal */
@@ -301,8 +300,9 @@ export class MimeType {
 
   /**
    * For an input of `'text'`, returns all registered MIME types whose
-   * string matches the `text` prefix. Mirrors
-   * `Mime::Type.parse_data_with_trailing_star`.
+   * string or any synonym contains `'text'` as a substring (Rails uses
+   * `Regexp.new(Regexp.quote(type))` against each, so the match is
+   * substring, not prefix). Mirrors `Mime::Type.parse_data_with_trailing_star`.
    *
    * @internal
    */

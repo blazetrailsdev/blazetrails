@@ -4,6 +4,108 @@
  * Flash message store that persists for one request.
  */
 
+import type { RackEnv } from "@blazetrails/rack";
+
+/**
+ * Rack env key under which the request's {@link FlashHash} is stored.
+ * Mirrors `ActionDispatch::Flash::KEY`.
+ *
+ * @internal
+ */
+export const FLASH_KEY = "action_dispatch.request.flash_hash";
+
+/**
+ * Host shape used by {@link flash} / {@link flashHash} / {@link commitFlash}
+ * / {@link resetSession}. Matches the Request surface Rails'
+ * `Flash::RequestMethods` reads from.
+ *
+ * @internal
+ */
+export interface FlashRequestHost {
+  env: RackEnv;
+  session: {
+    isEnabled?(): boolean;
+    isLoaded?(): boolean;
+    hasKey(key: string): boolean;
+    get(key: string): unknown;
+    set(key: string, value: unknown): void;
+    delete(key: string): void;
+  };
+  resetSession?(): void;
+}
+
+/**
+ * Access the contents of the flash. Returns the request's
+ * {@link FlashHash}, building it from the session on first access.
+ * Mirrors `ActionDispatch::Flash::RequestMethods#flash`.
+ */
+export function flash(this: FlashRequestHost, value?: FlashHash | null): FlashHash | null {
+  if (arguments.length > 0) {
+    this.env[FLASH_KEY] = value as FlashHash | null;
+    return value ?? null;
+  }
+  const existing = flashHash.call(this);
+  if (existing) return existing;
+  const built = FlashHash.fromSessionValue(this.session.get("flash") as never);
+  this.env[FLASH_KEY] = built;
+  return built;
+}
+
+/**
+ * Returns the cached {@link FlashHash} for this request without falling
+ * back to the session, or `null` if {@link flash} has not been called yet.
+ *
+ * @internal
+ */
+export function flashHash(this: FlashRequestHost): FlashHash | null {
+  return (this.env[FLASH_KEY] as FlashHash | undefined) ?? null;
+}
+
+/**
+ * Persist this request's {@link FlashHash} back into the session, copying
+ * the live hash so the next request starts with a fresh dup. Mirrors
+ * Rails' `commit_flash`.
+ *
+ * @internal
+ */
+export function commitFlash(this: FlashRequestHost): void {
+  const session = this.session;
+  if (session.isEnabled && !session.isEnabled()) return;
+
+  const hash = flashHash.call(this);
+  if (hash && (!hash.empty || session.hasKey("flash"))) {
+    const value = hash.toSessionValue();
+    if (Object.keys(value).length === 0) {
+      session.delete("flash");
+    } else {
+      session.set("flash", value);
+    }
+    // Rails: `self.flash = flash_hash.dup` so further mutations don't
+    // bleed into the just-stored session value.
+    this.env[FLASH_KEY] = hash.dup();
+  }
+
+  if (
+    session.isLoaded &&
+    session.isLoaded() &&
+    session.hasKey("flash") &&
+    session.get("flash") == null
+  ) {
+    session.delete("flash");
+  }
+}
+
+/**
+ * Clear the request's flash. Called by Rails' `Request#reset_session`
+ * via `super` and a `self.flash = nil` follow-up.
+ *
+ * @internal
+ */
+export function resetSession(this: FlashRequestHost): void {
+  this.resetSession?.();
+  this.env[FLASH_KEY] = null;
+}
+
 export class FlashHash {
   private _flashes: Map<string, unknown> = new Map();
   private _discard: Set<string> = new Set();
@@ -150,11 +252,33 @@ export class FlashHash {
   // --- Session serialization ---
 
   toSessionValue(): Record<string, unknown> {
-    return Object.fromEntries(this._flashes);
+    const keep: Record<string, unknown> = {};
+    for (const [k, v] of this._flashes) {
+      if (!this._discard.has(k)) keep[k] = v;
+    }
+    return keep;
   }
 
-  static fromSessionValue(value: Record<string, unknown> | null | undefined): FlashHash {
-    if (!value) return new FlashHash();
-    return new FlashHash(value);
+  /** Shallow copy mirroring Ruby's `FlashHash#dup`. */
+  dup(): FlashHash {
+    const copy = new FlashHash();
+    for (const [k, v] of this._flashes) copy._flashes.set(k, v);
+    for (const k of this._discard) copy._discard.add(k);
+    for (const k of this._keep) copy._keep.add(k);
+    return copy;
+  }
+
+  static fromSessionValue(
+    value: FlashHash | Record<string, unknown> | null | undefined,
+  ): FlashHash {
+    if (value === null || value === undefined) return new FlashHash();
+    if (value instanceof FlashHash) return value.dup();
+    const flashes = (value["flashes"] ?? value) as Record<string, unknown>;
+    const discard = (value["discard"] as string[]) ?? [];
+    const out = new FlashHash();
+    for (const [k, v] of Object.entries(flashes)) {
+      if (!discard.includes(k)) out._flashes.set(k, v);
+    }
+    return out;
   }
 }

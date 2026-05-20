@@ -5,6 +5,7 @@
  * in development mode.
  */
 
+import { stderr } from "@blazetrails/activesupport/process-adapter";
 import type { RackEnv, RackResponse } from "@blazetrails/rack";
 import { bodyFromString } from "@blazetrails/rack";
 import { ExceptionWrapper } from "./exception-wrapper.js";
@@ -29,17 +30,39 @@ export interface DebugExceptionsOptions {
   /** Log rescued responses (default: true) */
   logRescuedResponses?: boolean;
   /** Interceptors called before rendering error page */
-  interceptors?: Array<(request: RackEnv, exception: Error) => void>;
+  interceptors?: Interceptor[];
+  /** Response shape (default: "default"; "api" disables template rendering) */
+  responseFormat?: "default" | "api";
 }
 
+export type Interceptor = (env: RackEnv, exception: Error) => void;
+
 export class DebugExceptions {
+  /**
+   * Class-level interceptor registry. Mirrors Rails'
+   * `cattr_reader :interceptors`.
+   *
+   * @internal
+   */
+  static readonly interceptors: Interceptor[] = [];
+
+  /**
+   * Append an interceptor to the class-level registry. Mirrors Rails'
+   * `DebugExceptions.register_interceptor`.
+   */
+  static registerInterceptor(interceptor: Interceptor): void {
+    DebugExceptions.interceptors.push(interceptor);
+  }
+
   private app: RackApp;
   private showDetailedExceptions: boolean;
   private showExceptions: boolean;
   private logLevel: "error" | "warn" | "info";
   private logger: Logger | null;
   private logRescuedResponses: boolean;
-  private interceptors: Array<(request: RackEnv, exception: Error) => void>;
+  private interceptors: Interceptor[];
+  private responseFormat: "default" | "api";
+  private _stderrLogger?: Logger;
 
   constructor(app: RackApp, options: DebugExceptionsOptions = {}) {
     this.app = app;
@@ -48,7 +71,154 @@ export class DebugExceptions {
     this.logLevel = options.logLevel ?? "error";
     this.logger = options.logger ?? null;
     this.logRescuedResponses = options.logRescuedResponses !== false;
-    this.interceptors = options.interceptors ?? [];
+    this.interceptors = options.interceptors ?? [...DebugExceptions.interceptors];
+    this.responseFormat = options.responseFormat ?? "default";
+  }
+
+  /**
+   * Iterate registered interceptors, swallowing per-interceptor errors
+   * and logging them via {@link logError}. Mirrors Rails'
+   * `invoke_interceptors`.
+   *
+   * @internal
+   */
+  invokeInterceptors(env: RackEnv, exception: Error, wrapper: ExceptionWrapper): void {
+    for (const interceptor of this.interceptors) {
+      try {
+        interceptor(env, exception);
+      } catch {
+        this.logError(env, wrapper);
+      }
+    }
+  }
+
+  /**
+   * Render the API JSON error body for an exception. Mirrors Rails'
+   * `render_for_api_request`.
+   *
+   * @internal
+   */
+  renderForApiRequest(wrapper: ExceptionWrapper): RackResponse {
+    const body = JSON.stringify({
+      status: wrapper.statusCode,
+      error: wrapper.statusText,
+      exception: wrapper.exceptionName,
+      traces: {
+        "Application Trace": wrapper.applicationTrace,
+        "Framework Trace": wrapper.frameworkTrace,
+      },
+    });
+    return this.render(wrapper.statusCode, body, "application/json");
+  }
+
+  /**
+   * Final response builder used by both the API and browser paths. Returns
+   * a Rack response tuple with correct Content-Type / Content-Length.
+   *
+   * @internal
+   */
+  render(status: number, body: string, format: string): RackResponse {
+    const charset = "utf-8";
+    return [
+      status,
+      {
+        "content-type": `${format}; charset=${charset}`,
+        "content-length": String(Buffer.byteLength(body, "utf8")),
+      },
+      bodyFromString(body),
+    ];
+  }
+
+  /**
+   * Format and log a rescued exception. Mirrors Rails' `log_error` —
+   * walks `cause` chain, then dispatches to {@link logArray}.
+   *
+   * @internal
+   */
+  logError(env: RackEnv, wrapper: ExceptionWrapper): void {
+    const logger = (env["action_dispatch.logger"] as Logger | undefined) ?? this.logger;
+    if (!logger) return;
+    if (!this.isLogRescuedResponses(env) && wrapper.statusCode < 500) return;
+
+    const lines: string[] = [];
+    lines.push(`${wrapper.exceptionName} (${wrapper.message}):`);
+    let cause = (wrapper.exception as { cause?: Error }).cause;
+    while (cause) {
+      lines.push(`Caused by: ${cause.constructor?.name ?? "Error"} (${cause.message})`);
+      cause = (cause as { cause?: Error }).cause;
+    }
+    lines.push("  ");
+    lines.push(...wrapper.applicationTrace);
+    this.logArray(logger, lines, env);
+  }
+
+  /**
+   * Newline-join `lines` and emit them via `logger.add(level, ...)`.
+   * Mirrors Rails' `log_array`.
+   *
+   * @internal
+   */
+  logArray(logger: Logger, lines: string[], env: RackEnv): void {
+    if (lines.length === 0) return;
+    const level =
+      (env["action_dispatch.debug_exception_log_level"] as "error" | "warn" | "info" | undefined) ??
+      this.logLevel;
+    const message = lines.join("\n");
+    const fn =
+      level === "warn"
+        ? (logger.warn ?? logger.error)
+        : level === "info"
+          ? (logger.info ?? logger.error)
+          : logger.error;
+    fn.call(logger, message);
+  }
+
+  /**
+   * Lazily-initialized fallback logger writing to `stderr`. Mirrors
+   * Rails' `stderr_logger`.
+   *
+   * @internal
+   */
+  stderrLogger(): Logger {
+    if (this._stderrLogger) return this._stderrLogger;
+    this._stderrLogger = {
+      error: (m: string) => stderr.write(`${m}\n`),
+      warn: (m: string) => stderr.write(`${m}\n`),
+      info: (m: string) => stderr.write(`${m}\n`),
+    };
+    return this._stderrLogger;
+  }
+
+  /**
+   * Builds a routes inspector for routing/template errors. Mirrors Rails'
+   * `routes_inspector(exception)` — only returns an inspector when the
+   * wrapper marks the exception as a routing or template error.
+   *
+   * @internal
+   */
+  routesInspector(_wrapper: ExceptionWrapper): unknown {
+    // The `@routes_app` constructor argument from Rails isn't plumbed
+    // through trails' DebugExceptions yet — there is no routes_app to
+    // ask for `.routes`. Return null until the wiring lands.
+    return null;
+  }
+
+  /**
+   * Whether the response should be rendered as an API response. Mirrors
+   * Rails' `api_request?` — true when `responseFormat: "api"` was passed
+   * to the constructor and the resolved content type is not HTML.
+   *
+   * @internal
+   */
+  isApiRequest(contentType: string | null | undefined): boolean {
+    if (this.responseFormat !== "api") return false;
+    return !contentType || !contentType.includes("text/html");
+  }
+
+  /** @internal */
+  isLogRescuedResponses(env: RackEnv): boolean {
+    const flag = env["action_dispatch.log_rescued_responses"];
+    return flag === undefined ? this.logRescuedResponses : Boolean(flag);
   }
 
   async call(env: RackEnv): Promise<RackResponse> {

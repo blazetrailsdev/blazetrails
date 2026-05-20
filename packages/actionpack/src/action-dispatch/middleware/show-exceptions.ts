@@ -51,8 +51,9 @@ export class ShowExceptions {
   private async renderException(env: RackEnv, wrapper: ExceptionWrapper): Promise<RackResponse> {
     const status = wrapper.statusCode;
     const originalPath = env["PATH_INFO"];
+    const originalMethod = env["REQUEST_METHOD"];
     env["action_dispatch.original_path"] = originalPath;
-    env["action_dispatch.original_request_method"] = env["REQUEST_METHOD"];
+    env["action_dispatch.original_request_method"] = originalMethod;
     this.fallbackToHtmlFormatIfInvalidMimeType(env);
     env["PATH_INFO"] = `/${status}`;
     env["REQUEST_METHOD"] = "GET";
@@ -66,6 +67,7 @@ export class ShowExceptions {
       }
     } finally {
       env["PATH_INFO"] = originalPath;
+      env["REQUEST_METHOD"] = originalMethod;
     }
   }
 

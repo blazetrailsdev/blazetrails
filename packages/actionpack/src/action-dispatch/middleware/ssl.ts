@@ -31,7 +31,6 @@ const PERMANENT_REDIRECT_REQUEST_METHODS = ["GET", "HEAD"];
 export class SSL {
   private app: RackApp;
   private redirect: boolean;
-  private redirectStatus: number;
   private redirectPort: number | undefined;
   private hsts: HSTSOptions | false;
   private secureCookies: boolean;
@@ -49,18 +48,14 @@ export class SSL {
     this.secureCookies = options.secureCookies !== false;
     this.sslDefaultRedirectStatus = undefined;
 
-    // Redirect config
     if (options.redirect === false) {
       this.redirect = false;
-      this.redirectStatus = 301;
     } else if (typeof options.redirect === "object") {
       this.redirect = true;
-      this.redirectStatus = options.redirect.status ?? 301;
       this.redirectStatusOverride = options.redirect.status;
       this.redirectPort = options.redirect.port;
     } else {
       this.redirect = true;
-      this.redirectStatus = 301;
     }
 
     this.hsts = this.normalizeHstsOptions(options.hsts);
@@ -105,11 +100,12 @@ export class SSL {
   }
 
   private redirectToHttps(env: RackEnv): RackResponse {
+    const location = this.httpsLocationFor(env);
     return [
       this.redirectStatusOverride ?? this.redirectionStatus(env),
-      { "content-type": "text/html; charset=utf-8", location: this.httpsLocationFor(env) },
+      { "content-type": "text/html; charset=utf-8", location },
       bodyFromString(
-        `<html><body>You are being <a href="${this.httpsLocationFor(env)}">redirected</a>.</body></html>`,
+        `<html><body>You are being <a href="${location}">redirected</a>.</body></html>`,
       ),
     ];
   }

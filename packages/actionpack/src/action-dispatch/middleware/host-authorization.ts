@@ -55,9 +55,13 @@ export class HostAuthorization {
   private blockedHosts(env: RackEnv, host: string): string[] {
     const out: string[] = [];
     if (!this.isAuthorized(host)) out.push(host);
-    const forwarded = (env["HTTP_X_FORWARDED_HOST"] as string | undefined)?.split(/,\s?/).pop();
-    if (forwarded && !this.isAuthorized(forwarded.toLowerCase())) {
-      out.push(forwarded);
+    const forwarded = (env["HTTP_X_FORWARDED_HOST"] as string | undefined)
+      ?.split(/,\s?/)
+      .pop()
+      ?.trim();
+    if (forwarded) {
+      const normalized = forwarded.replace(/:\d+$/, "").toLowerCase();
+      if (!this.isAuthorized(normalized)) out.push(normalized);
     }
     return out;
   }

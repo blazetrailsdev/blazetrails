@@ -116,21 +116,24 @@ export function compareValue(tsVal: unknown, railsVal: unknown, attr: string, id
   return false;
 }
 
-// Mirror of the (non-exported) discriminator in define-schema.ts: the
-// `WrappedTableSchema` shape is identified by the presence of a wrapper-shaped
-// `primaryKey` (string[] | false) alongside a `columns` map. Returns the
-// column map plus whether `defineSchema` creates an implicit `id` column.
-// Only the legacy shape gets one — define-schema.ts sets `createOpts.id =
-// false` for BOTH `primaryKey: false` and `primaryKey: string[]` (composite
-// PK), so any wrapped form has no implicit `id`.
+// Mirror of the (non-exported) discriminator in define-schema.ts. Kept in
+// strict step with `isWrappedSchema` there (require well-typed primaryKey,
+// columns map, AND no other top-level keys; PK arrays must be all strings).
+// Returns the column map plus whether `defineSchema` creates an implicit
+// `id` column — only the legacy shape gets one; define-schema.ts sets
+// `createOpts.id = false` for BOTH `primaryKey: false` and `primaryKey:
+// string[]`, so any wrapped form has no implicit `id`.
+const WRAPPER_KEYS = new Set(["columns", "primaryKey"]);
 function tableShape(table: TableSchema): {
   columns: Record<string, unknown>;
   hasImplicitId: boolean;
 } {
-  if (table && typeof table === "object" && "primaryKey" in table && "columns" in table) {
+  if (table && typeof table === "object" && "primaryKey" in table) {
     const pk = (table as { primaryKey?: unknown }).primaryKey;
     const cols = (table as { columns?: unknown }).columns;
-    if ((pk === false || Array.isArray(pk)) && cols && typeof cols === "object") {
+    const pkOk = pk === false || (Array.isArray(pk) && pk.every((v) => typeof v === "string"));
+    const onlyWrapperKeys = Object.keys(table).every((k) => WRAPPER_KEYS.has(k));
+    if (pkOk && cols && typeof cols === "object" && onlyWrapperKeys) {
       return { columns: cols as Record<string, unknown>, hasImplicitId: false };
     }
   }
@@ -173,7 +176,7 @@ export function schemaCheck(
     if (!row || typeof row !== "object") continue;
     for (const attr of Object.keys(row)) {
       if (!declared.has(attr)) {
-        notes.push(`schema-extra-col: ${rowName}.${attr} not in TEST_SCHEMA["${snake}"]`);
+        notes.push(`schema-extra-col: ${rowName}.${attr} not in schema["${snake}"]`);
         extras++;
       }
     }

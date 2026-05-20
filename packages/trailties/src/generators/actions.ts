@@ -56,12 +56,7 @@ export function gem(this: ActionsHost, name: string, ...rest: Array<string | Gem
   const parts: string[] = [quote(name), ...versionList.map(quote)];
   if (Object.keys(outOpts).length > 0) parts.push(quote(outOpts));
 
-  const prefix = comment
-    ? comment
-        .split("\n")
-        .map((l) => `# ${l}\n`)
-        .join("")
-    : "";
+  const prefix = comment ? indent(comment, "# ") + "\n" : "";
   this.output(`      gemfile  ${name}`);
   this.appendWithNewline("Gemfile", `${prefix}gem ${parts.join(", ")}`);
 }

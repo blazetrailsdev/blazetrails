@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { bodyFromString, type RackEnv, type RackResponse } from "@blazetrails/rack";
 import {
+  type ChainedCookieJarsHost,
+  type CookieSerializer,
+  type SerializedCookieJarsHost,
   CookieJar,
   Cookies,
   COOKIES_KEY,
   CookieOverflow,
   checkForOverflowBang,
+  commit,
+  isPrepareUpgradeLegacyHmacAesCbcCookies,
+  isReserialize,
+  isUpgradeLegacyHmacAesCbcCookies,
+  serializer,
+  signedOrEncrypted,
 } from "./cookies.js";
 
 function emptyResponse(): RackResponse {
@@ -118,6 +127,118 @@ describe("Cookies middleware", () => {
     jar.delete("a");
     expect(jar.get("a")).toBe("1");
     expect(jar.get("b")).toBeUndefined();
+  });
+});
+
+function chainedHost(env: Record<string, unknown>): ChainedCookieJarsHost {
+  const jar = new CookieJar({ secret: "secret-key-base-for-tests" });
+  return { request: { env, cookies: {} }, signed: jar.signed, encrypted: jar.encrypted };
+}
+
+describe("ChainedCookieJars predicates", () => {
+  it("signedOrEncrypted prefers encrypted when secret_key_base is present", () => {
+    const host = chainedHost({ "action_dispatch.secret_key_base": "abc" });
+    expect(signedOrEncrypted.call(host)).toBe(host.encrypted);
+  });
+
+  it("signedOrEncrypted falls back to signed when secret_key_base is absent", () => {
+    const host = chainedHost({});
+    expect(signedOrEncrypted.call(host)).toBe(host.signed);
+  });
+
+  it("signedOrEncrypted treats blank secret_key_base as absent", () => {
+    const host = chainedHost({ "action_dispatch.secret_key_base": "" });
+    expect(signedOrEncrypted.call(host)).toBe(host.signed);
+  });
+
+  it("isUpgradeLegacyHmacAesCbcCookies requires every legacy slot to be set", () => {
+    const full = chainedHost({
+      "action_dispatch.secret_key_base": "abc",
+      "action_dispatch.encrypted_signed_cookie_salt": "s1",
+      "action_dispatch.encrypted_cookie_salt": "s2",
+      "action_dispatch.use_authenticated_cookie_encryption": true,
+    });
+    expect(isUpgradeLegacyHmacAesCbcCookies.call(full)).toBe(true);
+
+    const missingFlag = chainedHost({
+      "action_dispatch.secret_key_base": "abc",
+      "action_dispatch.encrypted_signed_cookie_salt": "s1",
+      "action_dispatch.encrypted_cookie_salt": "s2",
+      "action_dispatch.use_authenticated_cookie_encryption": false,
+    });
+    expect(isUpgradeLegacyHmacAesCbcCookies.call(missingFlag)).toBe(false);
+
+    const missingSalt = chainedHost({
+      "action_dispatch.secret_key_base": "abc",
+      "action_dispatch.encrypted_cookie_salt": "s2",
+      "action_dispatch.use_authenticated_cookie_encryption": true,
+    });
+    expect(isUpgradeLegacyHmacAesCbcCookies.call(missingSalt)).toBe(false);
+  });
+
+  it("isPrepareUpgradeLegacyHmacAesCbcCookies requires the encryption flag to be OFF", () => {
+    const ready = chainedHost({
+      "action_dispatch.secret_key_base": "abc",
+      "action_dispatch.authenticated_encrypted_cookie_salt": "aec",
+      "action_dispatch.use_authenticated_cookie_encryption": false,
+    });
+    expect(isPrepareUpgradeLegacyHmacAesCbcCookies.call(ready)).toBe(true);
+
+    const flagOn = chainedHost({
+      "action_dispatch.secret_key_base": "abc",
+      "action_dispatch.authenticated_encrypted_cookie_salt": "aec",
+      "action_dispatch.use_authenticated_cookie_encryption": true,
+    });
+    expect(isPrepareUpgradeLegacyHmacAesCbcCookies.call(flagOn)).toBe(false);
+
+    const missingSalt = chainedHost({
+      "action_dispatch.secret_key_base": "abc",
+      "action_dispatch.use_authenticated_cookie_encryption": false,
+    });
+    expect(isPrepareUpgradeLegacyHmacAesCbcCookies.call(missingSalt)).toBe(false);
+  });
+});
+
+function serializedHost(env: Record<string, unknown> = {}): SerializedCookieJarsHost {
+  return { request: { env, cookies: {} } };
+}
+
+describe("SerializedCookieJars", () => {
+  it("commit dumps via the configured serializer (JSON by default)", () => {
+    const host = serializedHost();
+    const options = { value: { hello: "world" } } as { value: unknown };
+    commit.call(host, "session", options);
+    expect(options.value).toBe('{"hello":"world"}');
+  });
+
+  it("isReserialize is true when the payload was not produced by JSON", () => {
+    const host = serializedHost();
+    expect(isReserialize.call(host, "not-json")).toBe(true);
+    expect(isReserialize.call(host, '{"ok":true}')).toBe(false);
+  });
+
+  it("commit raises TypeError for unserializable values instead of silently dropping", () => {
+    const host = serializedHost();
+    const options = { value: undefined as unknown };
+    expect(() => commit.call(host, "session", options as { value: unknown })).toThrow(TypeError);
+  });
+
+  it("serializer honors a caller-supplied custom serializer object", () => {
+    const custom: CookieSerializer = {
+      dump: (v) => `!${String(v)}!`,
+      load: (s) => s.slice(1, -1),
+      dumped: (s) => s.startsWith("!") && s.endsWith("!"),
+    };
+    const host = serializedHost({ "action_dispatch.cookies_serializer": custom });
+    expect(serializer.call(host)).toBe(custom);
+    const options = { value: "abc" } as { value: unknown };
+    commit.call(host, "k", options);
+    expect(options.value).toBe("!abc!");
+  });
+
+  it("serializer falls back to JSON for symbol-style config values", () => {
+    const host = serializedHost({ "action_dispatch.cookies_serializer": "json" });
+    expect(serializer.call(host).dump("x")).toBe('"x"');
   });
 });
 

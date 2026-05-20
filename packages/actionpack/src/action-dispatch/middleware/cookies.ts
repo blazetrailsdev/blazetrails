@@ -434,23 +434,26 @@ export class Cookies {
     if (setHeaders.length > 0) {
       // Rack 3 standardizes on lowercase header keys, but Rails-shaped
       // middleware can still emit `Set-Cookie` (or stranger casings).
-      // Find any existing variant case-insensitively, drop it, and
+      // Accumulate values from *every* set-cookie variant the response
+      // carries so nothing is dropped when more than one casing is
+      // present (e.g. both "Set-Cookie" and "set-cookie"), then
       // canonicalize on lowercase `set-cookie`.
-      let existing: string | string[] | undefined;
+      const existingList: string[] = [];
       for (const key of Object.keys(outHeaders)) {
-        if (key.toLowerCase() === "set-cookie") {
-          existing = outHeaders[key] as unknown as string | string[];
-          if (key !== "set-cookie") delete outHeaders[key];
-        }
+        if (key.toLowerCase() !== "set-cookie") continue;
+        // Although the RackResponse tuple types headers as
+        // Record<string, string>, downstream apps backed by
+        // `Rack::Response` (Record<string, string | string[]>) can
+        // hand back set-cookie as an array — splatting it into a
+        // string template would stringify with commas and corrupt the
+        // header. Normalize both shapes to a flat string[].
+        const v = outHeaders[key] as unknown as string | string[];
+        if (Array.isArray(v)) existingList.push(...v);
+        else existingList.push(v);
+        if (key !== "set-cookie") delete outHeaders[key];
       }
-      // Although the RackResponse tuple types headers as
-      // Record<string, string>, downstream apps backed by
-      // `Rack::Response` (Record<string, string | string[]>) can hand
-      // back set-cookie as an array — splatting it into a string
-      // template would stringify with commas and corrupt the header.
-      // Normalize both shapes to a flat string[] before joining with
-      // newlines (Rack's wire convention for multi-value set-cookie).
-      const existingList = existing ? (Array.isArray(existing) ? existing : [existing]) : [];
+      // Rack's wire convention is newline-joined values within a
+      // single set-cookie header.
       outHeaders["set-cookie"] = [...existingList, ...setHeaders].join("\n");
     }
     jar.commitBang();
@@ -661,15 +664,31 @@ const JSON_SERIALIZER: CookieSerializer = {
 
 /**
  * Selects and memoizes the cookie value serializer. Rails dispatches on
- * `request.cookies_serializer` (`:json`, `:hybrid`, `:marshal`, …); trails
- * ports `:json` faithfully and treats every other choice as JSON since
- * Marshal isn't a portable on-disk format.
+ * `request.cookies_serializer` (`:json`, `:hybrid`, `:marshal`, a custom
+ * serializer object, or `nil`); trails ports `:json` / `:hybrid` to the
+ * JSON serializer (Marshal isn't a portable on-disk format in JS) and
+ * honors a caller-supplied custom serializer object verbatim. Anything
+ * else falls back to JSON.
  *
  * @internal
  */
 export function serializer(this: SerializedCookieJarsHost): CookieSerializer {
   if (this._serializer) return this._serializer;
-  this._serializer = JSON_SERIALIZER;
+  // Read the env slot directly so a caller-supplied object serializer
+  // is visible (the public `cookiesSerializer` accessor narrows to
+  // string for the common Symbol-name case).
+  const configured = this.request.env["action_dispatch.cookies_serializer"];
+  if (
+    configured &&
+    typeof configured === "object" &&
+    typeof (configured as CookieSerializer).dump === "function" &&
+    typeof (configured as CookieSerializer).load === "function"
+  ) {
+    this._serializer = configured as CookieSerializer;
+  } else {
+    // `:json`, `:hybrid`, `nil`, unknown symbol → JSON.
+    this._serializer = JSON_SERIALIZER;
+  }
   return this._serializer;
 }
 

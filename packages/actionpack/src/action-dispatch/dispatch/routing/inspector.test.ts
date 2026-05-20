@@ -87,6 +87,25 @@ describe("RoutesInspectorTest", () => {
     expect(out).not.toContain("articles");
   });
 
+  it("displays unused routes", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/posts", { to: "posts#index", as: "posts" });
+    });
+    const inspector = new RoutesInspector(routes.getRoutes());
+    const out = inspector.format(new ConsoleFormatter.Unused());
+    expect(out).toContain("Found 1 unused route:");
+    expect(out).toContain("posts");
+    expect(out).toContain("GET");
+  });
+
+  it("no unused routes found", () => {
+    const routes = new RouteSet();
+    const inspector = new RoutesInspector(routes.getRoutes());
+    const out = inspector.format(new ConsoleFormatter.Unused());
+    expect(out).toContain("No unused routes found.");
+  });
+
   it("no routes were defined", () => {
     const routes = new RouteSet();
     const inspector = new RoutesInspector(routes.getRoutes());

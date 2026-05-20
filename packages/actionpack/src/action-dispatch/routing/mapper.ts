@@ -721,9 +721,20 @@ export class Mapper {
 
   private addRoute(verb: string, path: string, options: RouteOptions): void {
     const fullPath = this.currentPrefix() + "/" + path.replace(/^\/+/, "");
-    const endpoint = options.to ?? `${options.controller ?? ""}#${options.action ?? ""}`;
+    // Apply _scope controller/action/to defaults set via controller(...)/defaults(...)/scope(...).
+    // Mirrors mapper.rb:1972-1980: scope[:to] and scope[:controller]+scope[:action] feed options[:to].
+    const scopeTo = this._scope.get("to") as string | undefined;
+    const scopeController = this._scope.get("controller") as string | undefined;
+    const scopeAction = this._scope.get("action") as string | undefined;
+    const effectiveTo =
+      options.to ??
+      scopeTo ??
+      (scopeController && scopeAction ? `${scopeController}#${scopeAction}` : undefined);
+    const effectiveController = options.controller ?? scopeController;
+    const endpoint =
+      effectiveTo ?? `${effectiveController ?? ""}#${options.action ?? scopeAction ?? ""}`;
     // Prepend controller module from scope stack (namespace support)
-    const scopeController = this.currentControllerPrefix();
+    const scopeModulePrefix = this.currentControllerPrefix();
 
     // Check if endpoint is a redirect
     let redirectTarget: string | RedirectOptions | RedirectFunction | undefined;
@@ -743,8 +754,8 @@ export class Mapper {
 
     const [parsedController, action] = redirectTarget ? ["", ""] : parseEndpoint(endpoint);
     let controller = parsedController;
-    if (scopeController && controller && !controller.includes("/")) {
-      controller = scopeController + "/" + controller;
+    if (scopeModulePrefix && controller && !controller.includes("/")) {
+      controller = scopeModulePrefix + "/" + controller;
     }
     const name = options.as ?? options.name;
     const namePrefix = this.currentNamePrefix();

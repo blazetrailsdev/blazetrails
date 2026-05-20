@@ -232,10 +232,19 @@ export class UrlHelpersModule {
     // Passing the bare RouteSet here would route through its legacy
     // positional `urlFor(routeName, params, options)` and break at runtime.
     const target = routes._routes;
+    // Rails' proxy_class includes UrlFor; its `url_options` therefore
+    // returns `default_url_options.dup` — so the proxy reads the
+    // RouteSet's current defaults (host/protocol/port). Mirror that by
+    // reading `routes.defaultUrlOptions` *dynamically* (later
+    // `setDefaultUrlOptions()` calls must flow through). The singleton
+    // `url_options; {}; end` (route_set.rb:591) is separate — that's
+    // the singleton on the *module*, not the proxy.
     const scope: UrlForHost = {
       _routes: target,
-      defaultUrlOptions: routes.defaultUrlOptions,
-      urlOptions: () => ({}),
+      get defaultUrlOptions(): Record<string, unknown> {
+        return routes.defaultUrlOptions;
+      },
+      urlOptions: () => ({ ...routes.defaultUrlOptions }),
     };
     this._proxy = new RoutesProxy(target, scope, {});
     // `withRoutesHelpers` (abstract-controller/trailties/routes-helpers.ts)
@@ -544,20 +553,24 @@ export class RouteSet {
    */
   defineMountedHelper(name: string, scriptNamer: ScriptNamer | null = null): void {
     const proto = MountedHelpers.prototype as Record<string, unknown>;
+    // Rails: `return if MountedHelpers.method_defined?(name)` — Rails
+    // mutates the shared MountedHelpers module (one per app); the early
+    // return is intentional, callers must clear the module to redefine.
     if (Object.hasOwn(proto, name)) return;
-    const helpers = this.urlHelpers();
     const cacheKey = `_${name}` as const;
     const buildProxy = (ctx: Record<string, unknown>): RoutesProxy => {
       const scope =
         (ctx as unknown as UrlForHost & { _routesContext?: () => UrlForHost })._routesContext?.() ??
         (ctx as unknown as UrlForHost);
-      // Pass the `_routes` adapter, not the RouteSet itself — RoutesProxy
-      // dispatches `urlFor` against the Rails-shape signature exposed by
-      // the adapter, not the legacy positional form on RouteSet.
+      // Resolve `helpers` *lazily* so `clearBang()` (which drops the
+      // memoized url-helpers module) doesn't leave mounted proxies bound
+      // to a stale helpers reference. Pass the `_routes` adapter, not
+      // the RouteSet itself — RoutesProxy dispatches `urlFor` against
+      // the Rails-shape signature exposed by the adapter.
       return new RoutesProxy(
         this._routes,
         scope,
-        helpers as unknown as Record<string, unknown>,
+        this.urlHelpers() as unknown as Record<string, unknown>,
         scriptNamer,
       );
     };

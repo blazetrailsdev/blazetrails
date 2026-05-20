@@ -251,3 +251,57 @@ describe("withTransactionalFixtures (raw adapter)", () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+// DDL inside an it() body updates the module-level `_createdTables` /
+// `_createdColumns` trackers (via `recordDdlTracking`). The outer
+// transaction rolls back the DDL on the DB side; the helper restores the
+// trackers to their pre-test snapshot so a follow-up `defineSchema` call
+// can correctly recreate the rolled-back table.
+describe("withTransactionalFixtures (DDL tracker invalidation)", () => {
+  let adapter: TestDatabaseAdapter;
+
+  beforeAll(async () => {
+    adapter = createTestAdapter();
+  });
+
+  withTransactionalFixtures(() => adapter);
+
+  it("createTable inside a test populates the tables tracker", async () => {
+    await (adapter as unknown as AdapterWithExec).exec(
+      `CREATE TABLE ddl_tracker_inner (id INTEGER PRIMARY KEY, name TEXT)`,
+    );
+    expect(adapter.tables.has("ddl_tracker_inner")).toBe(true);
+  });
+
+  it("next test sees the tracker reset because afterEach restored the snapshot", () => {
+    expect(adapter.tables.has("ddl_tracker_inner")).toBe(false);
+  });
+});
+
+// When `invalidateSchemaCache: false`, the helper skips `schemaCache.clear()`
+// in afterEach. Cached column reflection survives across tests — pay this
+// cost only when the file does pure DML.
+describe("withTransactionalFixtures (invalidateSchemaCache: false)", () => {
+  let adapter: SQLite3Adapter;
+
+  beforeAll(async () => {
+    adapter = new SQLite3Adapter(":memory:");
+    await defineSchema(adapter, { opt_out_cache_users: { name: "string" } });
+  });
+
+  afterAll(async () => {
+    await adapter.close();
+  });
+
+  withTransactionalFixtures(() => adapter, { invalidateSchemaCache: false });
+
+  it("warming the schema cache leaves it populated", async () => {
+    const cols = await adapter.columns("opt_out_cache_users");
+    adapter.schemaCache.setColumns("opt_out_cache_users", cols);
+    expect(adapter.schemaCache.isColumnsHashCached(adapter.pool, "opt_out_cache_users")).toBe(true);
+  });
+
+  it("next test still sees the cached columns because the opt-out skipped clear()", () => {
+    expect(adapter.schemaCache.isColumnsHashCached(adapter.pool, "opt_out_cache_users")).toBe(true);
+  });
+});

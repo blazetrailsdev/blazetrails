@@ -70,8 +70,10 @@ When NOT to use this:
   Tests and fixtures count. The historical 20-method rule is a soft guide;
   300 LOC is the hard one — review-cycle data shows PRs ≥400 LOC need 4–6
   rounds minimum and ≥700 LOC need 13+. If a feature is larger, split via the
-  `<base>` / `<base>b` / `<base>c` pattern before opening. Splitting
-  heuristic, in order:
+  `<base>` / `<base>b` / `<base>c` pattern before opening — these are sibling
+  branches each off `main` with **non-overlapping files**, merged sequentially,
+  **not** stacked branches (see "Do NOT stack PRs" below). Splitting heuristic,
+  in order:
   (1) impl + smoke test in `<base>`, full Rails-mirrored tests in `<base>b`;
   (2) public surface first, privates follow; (3) one Rails source file per
   PR when multiple are touched; (4) happy path vs edges only as a last

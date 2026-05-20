@@ -722,12 +722,12 @@ describe("CallbacksTest", () => {
       }
     }
 
-    await Tracked.create({ name: "test" });
+    const created = await Tracked.create({ name: "test" });
     expect(log).toContain("after_create");
     expect(log).not.toContain("after_update");
 
     log.length = 0;
-    const record = await Tracked.find(1);
+    const record = await Tracked.find(created.id);
     await record.update({ name: "updated" });
     expect(log).toContain("after_update");
     expect(log).not.toContain("after_create");
@@ -1138,9 +1138,9 @@ describe("CallbacksTest", () => {
         });
       }
     }
-    await Tracked.create({ name: "test" });
+    const created = await Tracked.create({ name: "test" });
     log.length = 0;
-    await Tracked.find(1);
+    await Tracked.find(created.id);
     expect(log).toContain("after_find");
   });
 
@@ -1567,10 +1567,10 @@ describe("CallbacksTest", () => {
       }
     }
 
-    await Developer.create({ name: "Alice" });
+    const alice = await Developer.create({ name: "Alice" });
     initialized.length = 0; // Clear create initialization
 
-    await Developer.find(1);
+    await Developer.find(alice.id);
     expect(initialized.length).toBeGreaterThan(0);
   });
 
@@ -1594,12 +1594,12 @@ describe("CallbacksTest", () => {
     expect(found).toEqual([]);
 
     // Create triggers after_find (through _instantiate on reload)
-    await Developer.create({ name: "Alice" });
+    const alice = await Developer.create({ name: "Alice" });
     found.length = 0;
 
     // Find triggers after_find
-    await Developer.find(1);
-    expect(found).toEqual([1]);
+    await Developer.find(alice.id);
+    expect(found).toEqual([alice.id]);
   });
 
   // Rails: test "after_find is called on each record in all"
@@ -1638,10 +1638,10 @@ describe("CallbacksTest", () => {
       }
     }
 
-    await Developer.create({ name: "Carol" });
+    const carol = await Developer.create({ name: "Carol" });
     seen.length = 0;
 
-    await Developer.find(1);
+    await Developer.find(carol.id);
     expect(seen).toEqual(["Carol"]);
   });
 
@@ -1668,10 +1668,10 @@ describe("CallbacksTest", () => {
     }
     void Dog;
 
-    await Animal.create({ name: "Rex", type: "Dog" });
+    const rex = await Animal.create({ name: "Rex", type: "Dog" });
     order.length = 0;
 
-    const loaded = await Animal.find(1);
+    const loaded = await Animal.find(rex.id);
     expect(loaded).toBeInstanceOf(Dog);
     expect(order).toEqual(["after_find", "after_initialize"]);
   });

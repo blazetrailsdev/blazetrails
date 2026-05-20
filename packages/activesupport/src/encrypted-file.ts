@@ -1,30 +1,34 @@
 /**
  * EncryptedFile — port of `ActiveSupport::EncryptedFile`.
  *
- * Reads / writes a file whose contents are encrypted with a key sourced from
- * either an env var (`envKey`) or a key file on disk (`keyPath`). The
- * underlying cipher comes from {@link MessageEncryptor}.
+ * Reads / writes a file whose contents are encrypted with a key sourced
+ * from either an env var (`envKey`) or a key file on disk (`keyPath`).
+ * Mirrors `vendor/rails/activesupport/lib/active_support/encrypted_file.rb`
+ * method-for-method, including the private surface
+ * (`writing`, `encrypt`, `decrypt`, `encryptor`, `readEnvKey`,
+ * `readKeyFile`, `handleMissingKey`, `checkKeyLength`).
  *
- * Divergences from Rails (intentional, documented):
+ * Documented divergences from Rails:
  *
- * - **Async API.** All I/O methods return promises; trailties' "async fs
- *   only" rule (and browser hosts without sync fs) forbids the sync surface
- *   Rails uses.
- * - **Default cipher = `aes-256-cbc`.** Rails uses `aes-128-gcm`, but our
- *   `MessageEncryptor` does not currently support GCM auth tags. Greenfield
- *   ports have no on-disk Rails files to read, so the cipher choice is
- *   free; revisit if/when GCM lands.
- * - **Default serializer = identity (string in, string out).** Rails uses
- *   `Marshal`. Higher layers ({@link EncryptedConfiguration}) parse the
- *   string themselves.
+ * - **Async API.** Rails is sync; the async surface is required for
+ *   trailties' "async fs only" rule and for browser hosts without sync fs.
+ * - **Default cipher = `aes-256-cbc`.** Rails uses `aes-128-gcm`. Our
+ *   `MessageEncryptor` does not yet handle GCM auth tags; cipher will flip
+ *   to `aes-128-gcm` in a follow-up that lands GCM support there.
+ * - **Default serializer = `NullSerializer`** (raw string in/out). Rails
+ *   uses `Marshal`; we have no Marshal port. The higher-level
+ *   `EncryptedConfiguration` parses contents itself.
  * - **Env lookup goes through `processAdapter.env`**, not `process.env`.
  */
 
+import { getCrypto } from "./crypto-adapter.js";
 import { getFsAsync, getPathAsync } from "./fs-adapter.js";
 import { MessageEncryptor, NullSerializer } from "./message-encryptor.js";
 import { env as processEnv } from "./process-adapter.js";
 
 const CIPHER = "aes-256-cbc";
+// Bytes of key material consumed by CIPHER. expectedKeyLength() reports the
+// hex-encoded length (2 chars per byte), matching Rails' generate_key.length.
 const KEY_BYTES = 32;
 
 export class MissingContentError extends Error {
@@ -67,6 +71,8 @@ export class EncryptedFile {
 
   private keyFileContents: string | null = null;
   private keyFileChecked = false;
+  private resolvedContentPath: string | null = null;
+  private memoEncryptor: MessageEncryptor | null = null;
 
   constructor(opts: EncryptedFileOptions) {
     this.contentPath = opts.contentPath;
@@ -76,9 +82,11 @@ export class EncryptedFile {
   }
 
   static generateKey(): string {
-    const bytes = new Uint8Array(KEY_BYTES);
-    for (let i = 0; i < KEY_BYTES; i++) bytes[i] = Math.floor(Math.random() * 256);
-    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    // Rails: SecureRandom.hex(MessageEncryptor.key_len(CIPHER)).
+    // Sourced from cryptoAdapter so we never fall back to non-cryptographic
+    // randomness. In Node the adapter auto-registers synchronously; browser
+    // hosts must register a webcrypto adapter before calling generateKey().
+    return Buffer.from(getCrypto().randomBytes(KEY_BYTES)).toString("hex");
   }
 
   static expectedKeyLength(): number {
@@ -90,13 +98,11 @@ export class EncryptedFile {
     if (envValue) return envValue;
     const fileValue = await this.readKeyFile();
     if (fileValue) return fileValue;
-    if (this.raiseIfMissingKey) {
-      throw new MissingKeyError({ keyPath: this.keyPath, envKey: this.envKey });
-    }
-    return null;
+    return this.handleMissingKey();
   }
 
-  async hasKey(): Promise<boolean> {
+  /** Rails: `key?`. */
+  async isKey(): Promise<boolean> {
     if (this.readEnvKey()) return true;
     return (await this.readKeyFile()) !== null;
   }
@@ -104,31 +110,43 @@ export class EncryptedFile {
   async read(): Promise<string> {
     const key = await this.key();
     const fs = await getFsAsync();
-    if (key !== null && (await fs.exists!(this.contentPath))) {
-      const raw = (await fs.readFile!(this.contentPath, "utf8")).trim();
+    const path = await this.resolveContentPath();
+    if (key !== null && (await fs.exists!(path))) {
+      const raw = (await fs.readFile!(path, "utf8")).trim();
       return this.decrypt(key, raw);
     }
-    throw new MissingContentError(this.contentPath);
+    throw new MissingContentError(path);
   }
 
   async write(contents: string): Promise<void> {
     const key = await this.key();
     if (key === null) {
+      // raiseIfMissingKey=false + no key: nothing to encrypt with.
       throw new MissingKeyError({ keyPath: this.keyPath, envKey: this.envKey });
     }
     const fs = await getFsAsync();
-    const tmp = `${this.contentPath}.tmp`;
+    const path = await this.resolveContentPath();
+    const tmp = `${path}.tmp`;
     await fs.writeFile!(tmp, this.encrypt(key, contents), { mode: 0o600 });
-    await fs.rename!(tmp, this.contentPath);
+    await fs.rename!(tmp, path);
   }
 
   async change(block: (tmpPath: string) => void | Promise<void>): Promise<void> {
-    const contents = await this.readOrEmpty();
+    await this.writing(await this.readOrEmpty(), block);
+  }
+
+  // ---- private ----
+
+  private async writing(
+    contents: string,
+    block: (tmpPath: string) => void | Promise<void>,
+  ): Promise<void> {
     const fs = await getFsAsync();
     const path = await getPathAsync();
-    const base = path.basename(this.contentPath).replace(/\.enc$/, "");
-    const dir = await fs.mkdtemp!(`${path.dirname(this.contentPath)}${path.sep}encfile-`);
-    const tmpPath = path.join(dir, base);
+    const resolved = await this.resolveContentPath();
+    const base = path.basename(resolved).replace(/\.enc$/, "");
+    const dir = await fs.mkdtemp!(`${path.dirname(resolved)}${path.sep}encfile-`);
+    const tmpPath = path.join(dir, `-${base}`);
     try {
       await fs.writeFile!(tmpPath, contents);
       await block(tmpPath);
@@ -143,13 +161,22 @@ export class EncryptedFile {
     }
   }
 
-  private async readOrEmpty(): Promise<string> {
-    try {
-      return await this.read();
-    } catch (e) {
-      if (e instanceof MissingContentError) return "";
-      throw e;
-    }
+  private encrypt(key: string, plaintext: string): string {
+    this.checkKeyLength(key);
+    return this.encryptor(key).encryptAndSign(plaintext);
+  }
+
+  private decrypt(key: string, ciphertext: string): string {
+    return this.encryptor(key).decryptAndVerify(ciphertext) as string;
+  }
+
+  private encryptor(key: string): MessageEncryptor {
+    if (this.memoEncryptor) return this.memoEncryptor;
+    this.memoEncryptor = new MessageEncryptor(Buffer.from(key, "hex"), {
+      cipher: CIPHER,
+      serializer: NullSerializer,
+    });
+    return this.memoEncryptor;
   }
 
   private readEnvKey(): string | null {
@@ -166,25 +193,47 @@ export class EncryptedFile {
     return this.keyFileContents;
   }
 
-  private encryptor(key: string): MessageEncryptor {
-    this.checkKeyLength(key);
-    return new MessageEncryptor(Buffer.from(key, "hex"), {
-      cipher: CIPHER,
-      serializer: NullSerializer,
-    });
-  }
-
-  private encrypt(key: string, plaintext: string): string {
-    return this.encryptor(key).encryptAndSign(plaintext);
-  }
-
-  private decrypt(key: string, ciphertext: string): string {
-    return this.encryptor(key).decryptAndVerify(ciphertext) as string;
+  private handleMissingKey(): null {
+    if (this.raiseIfMissingKey) {
+      throw new MissingKeyError({ keyPath: this.keyPath, envKey: this.envKey });
+    }
+    return null;
   }
 
   private checkKeyLength(key: string): void {
     if (key.length !== EncryptedFile.expectedKeyLength()) {
       throw new InvalidKeyLengthError();
     }
+  }
+
+  private async readOrEmpty(): Promise<string> {
+    try {
+      return await this.read();
+    } catch (e) {
+      if (e instanceof MissingContentError) return "";
+      throw e;
+    }
+  }
+
+  /**
+   * Rails resolves `content_path` symlinks eagerly in `initialize`
+   * (`path.symlink? ? path.realpath : path`). We can't await in a
+   * constructor, so the resolution is lazy + memoized on first I/O.
+   */
+  private async resolveContentPath(): Promise<string> {
+    if (this.resolvedContentPath !== null) return this.resolvedContentPath;
+    const fs = await getFsAsync();
+    try {
+      const lstat = fs.lstat ? await fs.lstat(this.contentPath) : null;
+      if (lstat?.isSymbolicLink?.() && fs.realpath) {
+        this.resolvedContentPath = await fs.realpath(this.contentPath);
+      } else {
+        this.resolvedContentPath = this.contentPath;
+      }
+    } catch {
+      // ENOENT etc. — leave unresolved; downstream I/O will surface the error.
+      this.resolvedContentPath = this.contentPath;
+    }
+    return this.resolvedContentPath;
   }
 }

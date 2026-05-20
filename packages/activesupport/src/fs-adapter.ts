@@ -77,6 +77,8 @@ export interface FsAdapter {
   rename?(src: string, dest: string): Promise<void>;
   /** Async mkdtemp (used for EncryptedFile#change tempfile dir). */
   mkdtemp?(prefix: string): Promise<string>;
+  /** Async realpath — resolves symlinks. Used by EncryptedFile to honor content_path symlinks. */
+  realpath?(path: string): Promise<string>;
 }
 
 export interface PathAdapter {
@@ -146,6 +148,7 @@ function tryAutoRegisterNode(): boolean {
       unlink(p: string): Promise<void>;
       rename(src: string, dest: string): Promise<void>;
       mkdtemp(prefix: string): Promise<string>;
+      realpath(path: string): Promise<string>;
     };
     const fs: FsAdapter = Object.assign({}, nodeFs, {
       cwd: () => globalThis.process.cwd(),
@@ -167,6 +170,7 @@ function tryAutoRegisterNode(): boolean {
       unlink: (p: string) => fsPromises.unlink(p),
       rename: (src: string, dest: string) => fsPromises.rename(src, dest),
       mkdtemp: (prefix: string) => fsPromises.mkdtemp(prefix),
+      realpath: (p: string) => fsPromises.realpath(p),
     }) as FsAdapter;
     const nodePath = req("node:path") as Required<Omit<PathAdapter, "pathToFileURL">>;
     const nodeUrl = req("node:url") as { pathToFileURL(p: string): URL };
@@ -209,6 +213,7 @@ function tryAutoRegisterNodeAsync(): Promise<boolean> {
           unlink(p: string): Promise<void>;
           rename(src: string, dest: string): Promise<void>;
           mkdtemp(prefix: string): Promise<string>;
+          realpath(path: string): Promise<string>;
         };
         const fs: FsAdapter = Object.assign({}, nodeFs, {
           cwd: () => globalThis.process.cwd(),
@@ -226,6 +231,7 @@ function tryAutoRegisterNodeAsync(): Promise<boolean> {
           unlink: (p: string) => fsPromises.unlink(p),
           rename: (src: string, dest: string) => fsPromises.rename(src, dest),
           mkdtemp: (prefix: string) => fsPromises.mkdtemp(prefix),
+          realpath: (p: string) => fsPromises.realpath(p),
         }) as FsAdapter;
         const nodePath = (await import("node:path")) as unknown as Required<
           Omit<PathAdapter, "pathToFileURL">

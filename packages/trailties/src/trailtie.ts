@@ -1,15 +1,9 @@
 /**
  * Port of `Rails::Railtie` from `railties/lib/rails/railtie.rb`.
- *
- * Each framework subclasses `Trailtie` to register initializers and
- * lifecycle blocks. Subclasses opt in to the registry explicitly with
- * `Trailtie.register(SubClass)` — there is no `inherited` hook in TS.
- * The class is named `Trailtie` (not `Railtie`) to signal that trails
- * railties are not Rails::Railtie subclasses; the api:compare rename
- * map handles the cross-language name resolution.
- *
- * The framework-block runners (`rakeTasks`/`console`/`runner`/
- * `generators`/`server`) and the `Configurable` mixin land in PR 2.1b.
+ * Subclasses opt in to the registry explicitly via `Trailtie.register(...)`
+ * — there is no `inherited` hook in TS. The block runners
+ * (rakeTasks/console/runner/generators/server) and the `Configurable`
+ * mixin land in PR 2.1b.
  */
 import { underscore } from "@blazetrails/activesupport";
 import { Initializable } from "./initializable.js";
@@ -44,10 +38,7 @@ export class Trailtie extends Initializable {
       .sort((a, b) => (host(a)._loadIndex ?? 0) - (host(b)._loadIndex ?? 0));
   }
 
-  /**
-   * Explicit subclass registration — replaces Rails' `inherited` hook.
-   * Each subclass calls `Trailtie.register(MyTrailtie)` once at load.
-   */
+  /** Explicit subclass registration — replaces Rails' `inherited` hook. */
   static register(subclass: typeof Trailtie): void {
     if (Trailtie._registry.includes(subclass)) return;
     if (!Object.prototype.hasOwnProperty.call(subclass, "_loadIndex")) {
@@ -83,7 +74,6 @@ export class Trailtie extends Initializable {
     return (this as typeof Trailtie).instance().config;
   }
 
-  /** Run `block` with the singleton as receiver — mirrors Ruby `instance_eval`. */
   static configure(block: (this: Trailtie) => void): void {
     (this as typeof Trailtie).instance().configure(block);
   }

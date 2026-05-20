@@ -75,6 +75,18 @@ describe("RoutesInspectorTest", () => {
     expect(out).toContain("Controller#Action | posts#index");
   });
 
+  it("routes can be filtered with namespaced controllers", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.resources("articles");
+      r.resources("comments");
+    });
+    const inspector = new RoutesInspector(routes.getRoutes());
+    const out = inspector.format(new ConsoleFormatter.Sheet(), { grep: "comment" });
+    expect(out).toContain("comments");
+    expect(out).not.toContain("articles");
+  });
+
   it("no routes were defined", () => {
     const routes = new RouteSet();
     const inspector = new RoutesInspector(routes.getRoutes());

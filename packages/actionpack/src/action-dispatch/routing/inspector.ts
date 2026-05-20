@@ -173,6 +173,13 @@ export class RoutesInspector {
   /**
    * Format routes via the given formatter. Defaults to `ConsoleFormatter.Sheet`
    * so the no-arg call returns the column-formatted string.
+   *
+   * Mirrors Rails' single-shot contract: the formatter accumulates output into
+   * an internal buffer and `result()` reads it off. Pass a fresh formatter
+   * instance per call — reusing one across calls will concatenate the prior
+   * call's buffer into the next call's output. (This matches Rails inspector
+   * callers, which always construct a new ConsoleFormatter / HtmlTableFormatter
+   * for each `inspector.format(...)`.)
    */
   format(formatter: RoutesFormatter = new Sheet(), filter: RoutesFilter = {}): string {
     this.engines = {};

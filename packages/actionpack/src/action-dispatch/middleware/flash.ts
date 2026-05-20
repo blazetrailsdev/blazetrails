@@ -73,7 +73,7 @@ export function commitFlash(this: FlashRequestHost): void {
 
   const hash = flashHash.call(this);
   if (hash && (!hash.empty || session.hasKey("flash"))) {
-    const value = hash.toSessionValue();
+    const value = hash.flashesForSession();
     if (Object.keys(value).length === 0) {
       session.delete("flash");
     } else {
@@ -253,6 +253,23 @@ export class FlashHash {
   // --- Session serialization ---
 
   toSessionValue(): Record<string, unknown> {
+    // Returns the full flash contents (no discard filtering) for callers
+    // that want the visible state — ETag generation, debug views,
+    // existing trails tests. The session-commit pipeline does its own
+    // discard pruning via {@link discardedFlashesForSession}; keeping
+    // this method as a plain serialization preserves backward compat
+    // with `metal/etag-with-flash` and downstream callers.
+    return Object.fromEntries(this._flashes);
+  }
+
+  /**
+   * Hash projection used by {@link commitFlash} when storing the flash
+   * back into the session — mirrors Rails' `to_session_value`'s
+   * `@flashes.except(*@discard)` filter.
+   *
+   * @internal
+   */
+  flashesForSession(): Record<string, unknown> {
     const keep: Record<string, unknown> = {};
     for (const [k, v] of this._flashes) {
       if (!this._discard.has(k)) keep[k] = v;

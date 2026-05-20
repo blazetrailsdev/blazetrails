@@ -47,7 +47,7 @@ export const SCOPE_OPTIONS = [
 export class Scope {
   readonly parent: Scope | null;
   readonly scopeLevel: ScopeLevel;
-  private readonly hash: ScopeFrameHash;
+  private readonly hash: ScopeFrameHash | null;
 
   constructor(
     hash: ScopeFrameHash | null,
@@ -56,8 +56,11 @@ export class Scope {
   ) {
     this.parent = parent;
     this.scopeLevel = scopeLevel;
-    this.hash =
-      parent && parent !== Scope.ROOT ? { ...parent.frame, ...(hash ?? {}) } : (hash ?? {});
+    // Rails: @hash = parent ? parent.frame.merge(hash) : hash
+    // Preserve `null` when parent is null so `null?` can be observed; otherwise
+    // merge over parent.frame. Scope.ROOT.frame is {} so root-children fall
+    // through to a plain copy of `hash`.
+    this.hash = parent ? { ...parent.frame, ...(hash ?? {}) } : hash;
   }
 
   isNested(): boolean {
@@ -114,9 +117,9 @@ export class Scope {
   }
 
   get(key: string): unknown {
-    return this.hash[key];
+    return this.hash ? this.hash[key] : undefined;
   }
-  get frame(): ScopeFrameHash {
+  get frame(): ScopeFrameHash | null {
     return this.hash;
   }
 

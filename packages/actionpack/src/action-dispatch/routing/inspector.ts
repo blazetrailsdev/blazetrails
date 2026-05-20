@@ -3,6 +3,7 @@
  */
 
 import { pluralize, underscore } from "@blazetrails/activesupport";
+import { escapePath } from "../journey/router/utils.js";
 import type { Route } from "./route.js";
 
 export interface InspectedRoute {
@@ -76,6 +77,18 @@ export class RouteWrapper {
   }
 
   get endpoint(): string {
+    // Rails dispatches on the wrapped app: `dispatcher?` → `controller#action`,
+    // Proc rack apps → "Inline handler (Proc/Lambda)", otherwise `rack_app.inspect`.
+    // trails Route encodes a redirect target on the route itself; surface a
+    // redirect-shaped endpoint so the Controller#Action column doesn't print "#"
+    // for redirect rows.
+    if (this.route.isRedirect) {
+      const t = this.route.redirectTarget;
+      if (typeof t === "string") return `redirect(301, ${t})`;
+      if (typeof t === "function") return "Inline handler (Proc/Lambda)";
+      if (t) return `redirect(${t.status ?? 301})`;
+    }
+    if (!this.route.controller && !this.route.action) return "";
     return `${this.controller}#${this.action}`;
   }
 
@@ -204,7 +217,10 @@ export class RoutesInspector {
     }
     if (filter.grep) {
       const re = new RegExp(filter.grep);
-      const normalizedPath = ("/" + encodeURI(filter.grep)).replace(/\/+/g, "/");
+      // Rails uses `URI::RFC2396_PARSER.escape(filter[:grep])`, which escapes
+      // reserved chars like `?`/`#` that `encodeURI` deliberately leaves alone.
+      // `escapePath` (journey/router/utils) is the trails RFC3986-safe analogue.
+      const normalizedPath = ("/" + escapePath(filter.grep)).replace(/\/+/g, "/");
       return {
         controller: re,
         action: re,

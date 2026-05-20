@@ -12,7 +12,7 @@ export function appCommand(): Command {
   cmd
     .command("template")
     .description("Apply the template supplied by <location>")
-    .argument("<location>", "Path to a template file (.ts/.mjs/.js)")
+    .argument("<location>", "Path to a template file (.mjs/.js; .ts requires a TS loader like tsx)")
     .action(async (location: string) => {
       const path = getPath();
       if (!path.pathToFileURL) throw new Error("app:template needs PathAdapter.pathToFileURL");

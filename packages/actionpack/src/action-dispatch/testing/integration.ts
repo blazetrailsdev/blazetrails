@@ -173,8 +173,9 @@ export class IntegrationTest {
   }
 
   /**
-   * Build the absolute URI used by `process` when a relative path is given.
-   * Matches Rails `Integration::Session#build_full_uri(path, env)`.
+   * Build the absolute URI for the current request. Matches Rails
+   * `Integration::Session#build_full_uri(path, env)`. Called by `_processPath`
+   * to populate `env.REQUEST_URI`.
    *
    * @internal
    */
@@ -490,14 +491,18 @@ export class IntegrationTest {
     options: IntegrationRequestOptions,
   ): Promise<void> {
     this.requestCount += 1;
-    // Match route
-    const matched = this.routes.recognize(method, path);
+    // Split path into PATH_INFO + QUERY_STRING; Rack stores them separately.
+    const qIdx = path.indexOf("?");
+    const pathInfo = qIdx >= 0 ? path.slice(0, qIdx) : path;
+    const queryString = qIdx >= 0 ? path.slice(qIdx + 1) : "";
+    // Match route on pathname only.
+    const matched = this.routes.recognize(method, pathInfo);
     if (!matched) {
       // No route matched — create a 404-like response
-      this.request = new Request({ REQUEST_METHOD: method, PATH_INFO: path });
+      this.request = new Request({ REQUEST_METHOD: method, PATH_INFO: pathInfo });
       this.response = new Response();
       this.response.status = 404;
-      this.response.body = `No route matches [${method}] "${path}"`;
+      this.response.body = `No route matches [${method}] "${pathInfo}"`;
       this.controller = undefined!;
       return;
     }
@@ -518,7 +523,8 @@ export class IntegrationTest {
     // Build env
     const env: Record<string, unknown> = {
       REQUEST_METHOD: method,
-      PATH_INFO: path,
+      PATH_INFO: pathInfo,
+      QUERY_STRING: queryString,
       HTTP_HOST: this.host,
       SERVER_NAME: this.host.split(":")[0],
       SERVER_PORT: this.host.split(":")[1] ?? (this._https ? "443" : "80"),
@@ -534,6 +540,7 @@ export class IntegrationTest {
       },
       ...(options.env ?? {}),
     };
+    env.REQUEST_URI = this._buildFullUri(path, env);
 
     // Cookies from persistent jar
     if (Object.keys(this._persistentCookies).length > 0) {

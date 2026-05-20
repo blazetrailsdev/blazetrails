@@ -5,7 +5,6 @@
  */
 
 import { ActionableError, type BacktraceCleaner, getFs, getPath } from "@blazetrails/activesupport";
-import { cwd } from "@blazetrails/activesupport/process-adapter";
 import { RoutingError } from "../../action-controller/metal/exceptions.js";
 
 interface ShowExceptionsRequest {
@@ -297,12 +296,19 @@ export class ExceptionWrapper {
   }
 
   /** @internal */
+  // Rails passes `kind` straight into BacktraceCleaner#clean (which supports
+  // :silent/:noise/:all via its silencer chain). Our cleaner doesn't yet take
+  // a kind, so we always apply the local node_modules partition so the three
+  // trace getters stay distinct, then let the cleaner post-process the slice.
   cleanBacktrace(kind: "silent" | "noise" | "all"): string[] {
     const lines = this.backtrace();
-    if (this.backtraceCleaner) return this.backtraceCleaner.clean(lines);
-    if (kind === "silent") return lines.filter((l) => !l.includes("node_modules"));
-    if (kind === "noise") return lines.filter((l) => l.includes("node_modules"));
-    return lines;
+    const partitioned =
+      kind === "silent"
+        ? lines.filter((l) => !l.includes("node_modules"))
+        : kind === "noise"
+          ? lines.filter((l) => l.includes("node_modules"))
+          : lines;
+    return this.backtraceCleaner ? this.backtraceCleaner.clean(partitioned) : partitioned;
   }
 
   /** @internal */
@@ -324,7 +330,7 @@ export class ExceptionWrapper {
 
   /** @internal */
   sourceFragment(file: string, line: number): Record<number, string> | null {
-    const full = getPath().resolve(cwd(), file);
+    const full = getPath().resolve(getFs().cwd(), file);
     if (!getFs().existsSync(full)) return null;
     try {
       const lines = getFs().readFileSync(full, "utf8").split(/\r?\n/);

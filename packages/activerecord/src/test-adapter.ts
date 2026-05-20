@@ -40,9 +40,6 @@ export const adapterType: "sqlite" | "postgres" | "mysql" = PG_TEST_URL
     ? "mysql"
     : "sqlite";
 
-const isPg = (): boolean => !!PG_TEST_URL;
-const isMysql = (): boolean => !!MYSQL_TEST_URL;
-
 let _sharedAdapter: any = null;
 
 // Schema tracking — what tables/columns have been created. Maintained
@@ -382,9 +379,12 @@ export async function resetTestAdapterState(): Promise<void> {
  * Thin wrapper around a real database adapter that:
  *   1. Routes transactions through the inner adapter's TM (Phase 1)
  *   2. Provides async-chain-aware visibility for `currentTransaction()`
- *   3. Patches SQLite-specific SQL incompatibilities (Phase 9 will move
- *      these into SQLite3Adapter directly)
- *   4. Tracks CREATE/DROP TABLE for `defineSchema`'s cache invalidation
+ *   3. Tracks CREATE/DROP TABLE for `defineSchema`'s cache invalidation
+ *
+ * SQLite-specific SQL incompatibilities (FOR UPDATE strip, OFFSET-without-
+ * LIMIT, compound-SELECT parens) are patched inside `SQLite3Adapter` itself
+ * as of Phase 9a, so production callers — not just the test wrapper — get
+ * the same treatment.
  */
 type BooleanCapability =
   | "supportsIndexesInCreate"
@@ -491,61 +491,11 @@ class SchemaAdapter implements DatabaseAdapter {
     return _createdTables;
   }
 
-  private unwrapCompoundSelect(sql: string): string {
-    const ops = /^\s*(UNION\s+ALL|UNION|INTERSECT|EXCEPT)\s+/i;
-    const trimmed = sql.trim();
-    if (trimmed[0] !== "(") return sql;
-
-    // Find the matching close-paren for the opening paren
-    let depth = 0;
-    let i = 0;
-    for (; i < trimmed.length; i++) {
-      if (trimmed[i] === "(") depth++;
-      else if (trimmed[i] === ")") {
-        depth--;
-        if (depth === 0) break;
-      }
-    }
-    if (depth !== 0) return sql;
-
-    const left = trimmed.slice(1, i).trim();
-    const rest = trimmed.slice(i + 1).trim();
-    const opMatch = rest.match(ops);
-    if (!opMatch) return sql;
-
-    const op = opMatch[1];
-    let right = rest.slice(opMatch[0].length).trim();
-    // Unwrap right-side parens if present
-    if (right.startsWith("(") && right.endsWith(")")) {
-      right = right.slice(1, -1).trim();
-    }
-    return `${left} ${op} ${right}`;
-  }
-
-  private fixSqliteCompat(sql: string): string {
-    if (isPg() || isMysql()) return sql;
-    // SQLite doesn't support FOR UPDATE / FOR SHARE
-    sql = sql.replace(
-      /\s+FOR\s+(NO\s+KEY\s+)?(UPDATE|SHARE|KEY\s+SHARE)(\s+OF\s+\w+)?(\s+NOWAIT|\s+SKIP\s+LOCKED)?/gi,
-      "",
-    );
-    // SQLite doesn't support OFFSET without LIMIT
-    if (/OFFSET/i.test(sql) && !/LIMIT/i.test(sql)) {
-      sql = sql.replace(/(OFFSET)/i, "LIMIT -1 $1");
-    }
-    // SQLite doesn't support parenthesized compound SELECT: (SELECT ...) UNION (SELECT ...)
-    // Unwrap only top-level parens by tracking nesting depth
-    sql = this.unwrapCompoundSelect(sql);
-    return sql;
-  }
-
   async execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]> {
-    return this.inner.execute(this.fixSqliteCompat(sql), binds, name);
+    return this.inner.execute(sql, binds, name);
   }
 
   async executeMutation(sql: string, binds?: unknown[], name?: string): Promise<number> {
-    sql = this.fixSqliteCompat(sql);
-
     const createMatch = sql.match(
       /CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:["`](\w+)["`]|(\w+))/i,
     );

@@ -107,6 +107,75 @@ export class SQLiteDateTimeType extends ARDateTimeType {
  * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter
  */
 
+/**
+ * Strip the outer parens from a `(SELECT ...) UNION (SELECT ...)` shape.
+ * SQLite rejects parenthesized SELECT operands of compound queries; PG/MySQL
+ * accept either form. Mirrors the end behavior of Rails'
+ * `Arel::Visitors::SQLite#infix_value_with_paren`. Top-level only — nested
+ * parens inside the SELECTs are left alone.
+ *
+ * @internal
+ */
+function unwrapCompoundSelect(sql: string): string {
+  const ops = /^\s*(UNION\s+ALL|UNION|INTERSECT|EXCEPT)\s+/i;
+  const trimmed = sql.trim();
+  if (trimmed[0] !== "(") return sql;
+
+  let depth = 0;
+  let i = 0;
+  for (; i < trimmed.length; i++) {
+    if (trimmed[i] === "(") depth++;
+    else if (trimmed[i] === ")") {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+  if (depth !== 0) return sql;
+
+  const left = trimmed.slice(1, i).trim();
+  const rest = trimmed.slice(i + 1).trim();
+  const opMatch = rest.match(ops);
+  if (!opMatch) return sql;
+
+  const op = opMatch[1];
+  let right = rest.slice(opMatch[0].length).trim();
+  if (right.startsWith("(") && right.endsWith(")")) {
+    right = right.slice(1, -1).trim();
+  }
+  return `${left} ${op} ${right}`;
+}
+
+/**
+ * Rewrite SQL fragments that PG/MySQL accept but SQLite rejects:
+ *   1. Strip `FOR UPDATE` / `FOR SHARE` row-locking clauses (SQLite has no
+ *      row-level locks; mirrors Rails'
+ *      `Arel::Visitors::SQLite#visit_Arel_Nodes_Lock`, which emits nothing).
+ *   2. Insert `LIMIT -1` before a bare `OFFSET` (SQLite requires a LIMIT
+ *      when OFFSET is present; mirrors Rails' SQLite
+ *      `visit_Arel_Nodes_SelectStatement`).
+ *   3. Unwrap top-level parens around compound SELECTs.
+ *
+ * Applied inside {@link SQLite3Adapter#execute} and
+ * {@link SQLite3Adapter#executeMutation} so production callers — not just
+ * the test wrapper — get the same compat treatment. Phase 9a moved this
+ * out of `SchemaAdapter`. Phase 9a-2 will activate the trails
+ * `Arel::Visitors::SQLite` (currently dormant) and shrink this helper to
+ * raw-SQL callers only.
+ *
+ * @internal
+ */
+function fixSqliteCompat(sql: string): string {
+  sql = sql.replace(
+    /\s+FOR\s+(NO\s+KEY\s+)?(UPDATE|SHARE|KEY\s+SHARE)(\s+OF\s+\w+)?(\s+NOWAIT|\s+SKIP\s+LOCKED)?/gi,
+    "",
+  );
+  if (/OFFSET/i.test(sql) && !/LIMIT/i.test(sql)) {
+    sql = sql.replace(/(OFFSET)/i, "LIMIT -1 $1");
+  }
+  sql = unwrapCompoundSelect(sql);
+  return sql;
+}
+
 function _isSqliteMissingDbError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as { code?: unknown; message?: unknown };
@@ -251,6 +320,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     name: string = "SQL",
   ): Promise<Record<string, unknown>[]> {
     await this.materializeTransactions();
+    sql = fixSqliteCompat(sql);
 
     const payload: Record<string, unknown> = {
       sql,
@@ -343,6 +413,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    */
   async executeMutation(sql: string, binds: unknown[] = [], name: string = "SQL"): Promise<number> {
     await this.materializeTransactions();
+    sql = fixSqliteCompat(sql);
     if (this._preventWrites) {
       throw new ReadOnlyError("Write query attempted while preventing writes");
     }

@@ -525,7 +525,7 @@ export class TestSession {
 }
 
 function randomHex(bytes: number): string {
-  return Buffer.from(getCrypto().randomBytes(bytes)).toString("hex");
+  return getCrypto().randomBytes(bytes).toString("hex");
 }
 
 function formatToMime(format: string): string {

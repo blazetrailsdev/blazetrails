@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { Request } from "../request.js";
+import { Request, PassNotFound } from "../request.js";
 import { MimeType } from "../http/mime-type.js";
+import { X_CASCADE } from "../constants.js";
 
 describe("RequestUrlFor", () => {
   it("url_for class method", () => {
@@ -718,6 +719,60 @@ describe("RequestContentSecurityPolicy", () => {
     req.contentSecurityPolicyNonceGenerator = null;
     expect(req.env["action_dispatch.content_security_policy_nonce_generator"]).toBeNull();
     expect(req.contentSecurityPolicyNonceGenerator).toBeNull();
+  });
+});
+
+describe("RequestControllerClass", () => {
+  it("controllerClassFor returns PassNotFound when name is absent", () => {
+    const req = new Request({});
+    expect(req.controllerClassFor(null)).toBe(PassNotFound);
+    expect(req.controllerClassFor(undefined)).toBe(PassNotFound);
+  });
+
+  it("controllerClassFor throws when a controller name is supplied", () => {
+    const req = new Request({});
+    expect(() => req.controllerClassFor("posts")).toThrow(/no global controller constant table/);
+  });
+
+  it("controllerClass defaults action to 'index' and returns PassNotFound without a controller", () => {
+    const req = new Request({});
+    expect(req.controllerClass()).toBe(PassNotFound);
+    expect(req.pathParameters["action"]).toBe("index");
+  });
+
+  it("PassNotFound.call returns 404 with x-cascade pass", async () => {
+    const [status, headers, body] = PassNotFound.call({});
+    expect(status).toBe(404);
+    expect(headers[X_CASCADE]).toBe("pass");
+    const chunks: unknown[] = [];
+    for await (const c of body) chunks.push(c);
+    expect(chunks).toEqual([]);
+  });
+
+  it("PassNotFound.action returns the sentinel itself", () => {
+    expect(PassNotFound.action("show")).toBe(PassNotFound);
+    expect(PassNotFound.actionEncodingTemplate("show")).toBe(false);
+  });
+});
+
+describe("RequestParametersList", () => {
+  it("returns rack.request.form_pairs verbatim when present", () => {
+    const pairs: Array<[string, unknown]> = [["a", "1"]];
+    const req = new Request({ "rack.request.form_pairs": pairs });
+    expect(req.requestParametersList()).toBe(pairs);
+  });
+
+  it("parses rack.request.form_vars via QueryParser.eachPair", () => {
+    const req = new Request({ "rack.request.form_vars": "a=1&b=2" });
+    expect(req.requestParametersList()).toEqual([
+      ["a", "1"],
+      ["b", "2"],
+    ]);
+  });
+
+  it("returns [] when no body has been parsed", () => {
+    const req = new Request({});
+    expect(req.requestParametersList()).toEqual([]);
   });
 });
 

@@ -1,228 +1,208 @@
-import { describe, it, expect } from "vitest";
-import { CookieStore, CookieOverflow, type SessionData } from "../../session/cookie-store.js";
+import { describe, expect, it } from "vitest";
+import {
+  CookieStore,
+  SessionId as CookieSessionId,
+  DEFAULT_SAME_SITE,
+  type CookieStoreRequest,
+  type CookieJarLike,
+} from "../../middleware/session/cookie-store.js";
+import { SessionId as RackSessionId } from "../../middleware/session/abstract-store.js";
 
-const SECRET = "a]ekdlFa9/4|BjRU*OJ-3o5qK!Z+]WI2"; // 32+ chars
-
-function makeStore(
-  opts: Partial<Parameters<typeof CookieStore.prototype.save>[0]> & Record<string, unknown> = {},
-) {
-  return new CookieStore({ secret: SECRET, ...opts });
+class FakeJar {
+  store = new Map<string, unknown>();
+  signedOrEncrypted: CookieJarLike;
+  constructor() {
+    const store = this.store;
+    this.signedOrEncrypted = new Proxy({} as CookieJarLike, {
+      get: (_t, key: string) => store.get(key),
+      set: (_t, key: string, value) => {
+        store.set(key, value);
+        return true;
+      },
+    });
+  }
 }
 
-// ==========================================================================
-// dispatch/session/cookie_store_test.rb
-// ==========================================================================
-describe("CookieStoreTest", () => {
-  it("setting session value", () => {
-    const store = makeStore();
-    const session = store.newSession();
-    session.user_id = 42;
-    const cookie = store.save(session);
-    expect(cookie).toBeTruthy();
+function makeReq(initial: Record<string, unknown> = {}): CookieStoreRequest & {
+  headers: Record<string, unknown>;
+  jar: FakeJar;
+} {
+  const headers: Record<string, unknown> = { ...initial };
+  const jar = new FakeJar();
+  return {
+    headers,
+    jar,
+    cookieJar: jar as unknown as CookieStoreRequest["cookieJar"],
+    fetchHeader<T>(key: string, fallback: (key: string) => T) {
+      if (Object.prototype.hasOwnProperty.call(headers, key)) return headers[key];
+      return fallback(key);
+    },
+    setHeader(key: string, value: unknown) {
+      headers[key] = value;
+    },
+  };
+}
+
+function makeStore(): CookieStore {
+  return new CookieStore(() => undefined);
+}
+
+describe("ActionDispatch::Session::CookieStore", () => {
+  it("defaults cookieOnly and sameSite when constructed without overrides", () => {
+    const opts: Record<string, unknown> = {};
+    new CookieStore(() => undefined, opts);
+    expect(opts.cookieOnly).toBe(true);
+    expect(opts.sameSite).toBe(DEFAULT_SAME_SITE);
   });
 
-  it("getting session value", () => {
-    const store = makeStore();
-    const session = store.newSession();
-    session.user_id = 42;
-    const cookie = store.save(session);
-    const loaded = store.load(cookie);
-    expect(loaded?.user_id).toBe(42);
+  it("preserves an explicit sameSite override (including null)", () => {
+    const opts: Record<string, unknown> = { sameSite: null };
+    new CookieStore(() => undefined, opts);
+    expect(opts.sameSite).toBeNull();
   });
 
-  it("getting session id", () => {
-    const store = makeStore();
-    const session = store.newSession();
-    const id = store.getSessionId(session);
-    expect(id).toBeTruthy();
-    expect(id!.length).toBe(32); // 16 bytes hex
+  describe("DEFAULT_SAME_SITE", () => {
+    it("yields request.cookiesSameSiteProtection", () => {
+      expect(DEFAULT_SAME_SITE({ cookiesSameSiteProtection: "Lax" })).toBe("Lax");
+    });
   });
 
-  it("disregards tampered sessions", () => {
-    const store = makeStore();
-    const session = store.newSession();
-    session.admin = true;
-    const cookie = store.save(session);
-    // Tamper with the cookie
-    const tampered = cookie.slice(0, -5) + "XXXXX";
-    expect(store.load(tampered)).toBeNull();
+  describe("cookieJar", () => {
+    it("returns the request's signedOrEncrypted jar", () => {
+      const store = makeStore();
+      const req = makeReq();
+      expect(store.cookieJar(req)).toBe(req.jar.signedOrEncrypted);
+    });
   });
 
-  it("does not set secure cookies over http", () => {
-    const store = makeStore();
-    const opts = store.cookieOptions(false);
-    expect(opts.secure).toBe(false);
+  describe("setCookie / getCookie", () => {
+    it("writes and reads through the signedOrEncrypted jar under store.key", () => {
+      const store = makeStore();
+      const req = makeReq();
+      store.setCookie(req, null, { session_id: "abc", user: 1 });
+      expect(req.jar.store.get(store.key)).toEqual({ session_id: "abc", user: 1 });
+      expect(store.getCookie(req)).toEqual({ session_id: "abc", user: 1 });
+    });
   });
 
-  it("properly renew cookies", () => {
-    const store = makeStore();
-    const session = store.newSession();
-    session.counter = 1;
-    const cookie1 = store.save(session);
-    const loaded = store.load(cookie1)!;
-    loaded.counter = 2;
-    const cookie2 = store.save(loaded);
-    const reloaded = store.load(cookie2);
-    expect(reloaded?.counter).toBe(2);
-    // Session ID preserved
-    expect(reloaded?._session_id).toBe(loaded._session_id);
+  describe("unpackedCookieData", () => {
+    it("returns the cached header value when present", () => {
+      const store = makeStore();
+      const req = makeReq({
+        "action_dispatch.request.unsigned_session_cookie": { session_id: "cached" },
+      });
+      expect(store.unpackedCookieData(req)).toEqual({ session_id: "cached" });
+    });
+
+    it("falls back to the cookie jar and memoizes onto the header", () => {
+      const store = makeStore();
+      const req = makeReq();
+      req.jar.store.set(store.key, { session_id: "from-jar" });
+      expect(store.unpackedCookieData(req)).toEqual({ session_id: "from-jar" });
+      expect(req.headers["action_dispatch.request.unsigned_session_cookie"]).toEqual({
+        session_id: "from-jar",
+      });
+    });
+
+    it("memoizes an empty object when no cookie is present", () => {
+      const store = makeStore();
+      const req = makeReq();
+      expect(store.unpackedCookieData(req)).toEqual({});
+      expect(req.headers["action_dispatch.request.unsigned_session_cookie"]).toEqual({});
+    });
   });
 
-  it("does set secure cookies over https", () => {
-    const store = makeStore();
-    const opts = store.cookieOptions(true);
-    expect(opts.secure).toBe(true);
+  describe("persistentSessionIdBang", () => {
+    it("returns an object containing a generated session_id when input is null", () => {
+      const store = makeStore();
+      const out = store.persistentSessionIdBang(null);
+      expect(typeof out["session_id"]).toBe("string");
+      expect((out["session_id"] as string).length).toBe(32);
+    });
+
+    it("preserves an existing session_id", () => {
+      const store = makeStore();
+      const out = store.persistentSessionIdBang({ session_id: "keep-me", user: 1 });
+      expect(out["session_id"]).toBe("keep-me");
+      expect(out["user"]).toBe(1);
+    });
+
+    it("uses the provided sid when no session_id is present", () => {
+      const store = makeStore();
+      const sid = new RackSessionId("a".repeat(32));
+      const out = store.persistentSessionIdBang({}, sid);
+      expect(out["session_id"]).toBe(sid.publicId);
+    });
   });
 
-  it("close raises when data overflows", () => {
-    const store = makeStore({ maxSize: 100 });
-    const session = store.newSession();
-    session.data = "x".repeat(200);
-    expect(() => store.save(session)).toThrow(CookieOverflow);
+  describe("extractSessionId", () => {
+    it("returns a SessionId wrapping the cookie's session_id", () => {
+      const store = makeStore();
+      const req = makeReq();
+      req.jar.store.set(store.key, { session_id: "from-jar" });
+      const sid = store.extractSessionId(req);
+      expect(sid).toBeInstanceOf(RackSessionId);
+      expect(sid!.publicId).toBe("from-jar");
+    });
+
+    it("returns null when no session_id is present", () => {
+      const store = makeStore();
+      const req = makeReq();
+      expect(store.extractSessionId(req)).toBeNull();
+    });
   });
 
-  it("doesnt write session cookie if session is not accessed", () => {
-    const store = makeStore();
-    const original = store.newSession();
-    const current: SessionData = { ...original };
-    // No changes made
-    expect(store.hasChanged(original, current)).toBe(false);
+  describe("loadSession", () => {
+    it("returns the SessionId and data, generating an id when missing", () => {
+      const store = makeStore();
+      const req = makeReq();
+      const [sid, data] = store.loadSession(req);
+      expect(sid).toBeInstanceOf(RackSessionId);
+      expect(sid.publicId).toMatch(/^[0-9a-f]{32}$/);
+      expect(data["session_id"]).toBe(sid.publicId);
+    });
+
+    it("round-trips an existing session", () => {
+      const store = makeStore();
+      const req = makeReq();
+      req.jar.store.set(store.key, { session_id: "abcd", user: 7 });
+      const [sid, data] = store.loadSession(req);
+      expect(sid.publicId).toBe("abcd");
+      expect(data["user"]).toBe(7);
+    });
   });
 
-  it("doesnt write session cookie if session is unchanged", () => {
-    const store = makeStore();
-    const session = store.newSession();
-    session.user = "alice";
-    const saved = store.save(session);
-    const loaded = store.load(saved)!;
-    expect(store.hasChanged(loaded, { ...loaded })).toBe(false);
+  describe("writeSession", () => {
+    it("returns a CookieStore::SessionId carrying the data and assigning session_id", () => {
+      const store = makeStore();
+      const req = makeReq();
+      const sid = new RackSessionId("a".repeat(32));
+      const data: Record<string, unknown> = { user: 1 };
+      const result = store.writeSession(req, sid, data, {});
+      expect(result).toBeInstanceOf(CookieSessionId);
+      expect(result.publicId).toBe(sid.publicId);
+      expect(result.cookieValue).toBe(data);
+      expect(data["session_id"]).toBe(sid.publicId);
+    });
   });
 
-  it("setting session value after session reset", () => {
-    const store = makeStore();
-    const session = store.newSession();
-    session.user = "old";
-    const newSession = store.reset();
-    newSession.user = "new";
-    const cookie = store.save(newSession);
-    const loaded = store.load(cookie);
-    expect(loaded?.user).toBe("new");
-    expect(loaded?._session_id).not.toBe(session._session_id);
-  });
+  describe("deleteSession", () => {
+    it("generates a fresh sid and stamps the unsigned-cookie header", () => {
+      const store = makeStore();
+      const req = makeReq();
+      const result = store.deleteSession(req, null, {});
+      expect(result).toBeInstanceOf(RackSessionId);
+      expect(req.headers["action_dispatch.request.unsigned_session_cookie"]).toEqual({
+        session_id: result!.publicId,
+      });
+    });
 
-  it("class type after session reset", () => {
-    const store = makeStore();
-    const session = store.reset();
-    expect(typeof session).toBe("object");
-    expect(session._session_id).toBeTruthy();
-  });
-
-  it("getting from nonexistent session", () => {
-    const store = makeStore();
-    const loaded = store.load(undefined);
-    expect(loaded).toBeNull();
-  });
-
-  it("setting session value after session clear", () => {
-    const store = makeStore();
-    const session = store.newSession();
-    session.user = "alice";
-    const cleared = store.clear(session);
-    expect(cleared.user).toBeUndefined();
-    // Session ID preserved
-    expect(cleared._session_id).toBe(session._session_id);
-  });
-
-  it("persistent session id", () => {
-    const store = makeStore();
-    const session = store.newSession();
-    const id = session._session_id;
-    const cookie = store.save(session);
-    const loaded = store.load(cookie);
-    expect(loaded?._session_id).toBe(id);
-  });
-
-  it("setting session id to nil is respected", () => {
-    const store = makeStore();
-    const session: SessionData = {};
-    // Don't set session_id
-    const cookie = store.save(session);
-    const loaded = store.load(cookie);
-    // save generates an ID
-    expect(loaded?._session_id).toBeTruthy();
-  });
-
-  it("session store with expire after", () => {
-    const store = makeStore({ expireAfter: 3600 });
-    const session = store.newSession();
-    session.user = "alice";
-    const cookie = store.save(session);
-    const loaded = store.load(cookie);
-    expect(loaded?.user).toBe("alice");
-    expect(loaded?._expires_at).toBeTruthy();
-  });
-
-  it("session store with expire after does not accept expired session", () => {
-    const store = makeStore({ expireAfter: 1 });
-    const session = store.newSession();
-    session.user = "alice";
-    session._expires_at = Date.now() - 10000; // Already expired
-    const cookie = store.save(session);
-    // Manually load - the save sets a new _expires_at, so we need to tamper
-    // Let's just test with a directly created expired session
-    const store2 = makeStore({ expireAfter: 1 });
-    const session2 = store2.newSession();
-    session2.user = "alice";
-    const cookie2 = store2.save(session2);
-
-    // Override expires_at to past
-    const loaded = store2.load(cookie2)!;
-    loaded._expires_at = Date.now() - 10000;
-    const expiredCookie = store2.save(loaded);
-    // Now the cookie itself has a past _expires_at, but save also writes a new one
-    // Test the check by directly manipulating
-    expect(store2.load(cookie2)?.user).toBe("alice");
-  });
-
-  it("session store with explicit domain", () => {
-    const store = makeStore({ domain: "example.com" });
-    const opts = store.cookieOptions();
-    expect(opts.domain).toBe("example.com");
-  });
-
-  it("session store without domain", () => {
-    const store = makeStore();
-    const opts = store.cookieOptions();
-    expect(opts.domain).toBeUndefined();
-  });
-
-  it("session store with nil domain", () => {
-    const store = makeStore({ domain: null });
-    const opts = store.cookieOptions();
-    expect(opts.domain).toBeUndefined();
-  });
-
-  it("session store with all domains", () => {
-    const store = makeStore({ domain: [".example.com", ".sub.example.com"] });
-    const opts = store.cookieOptions();
-    expect(opts.domain).toEqual([".example.com", ".sub.example.com"]);
-  });
-
-  it("default same_site derives SameSite from env", () => {
-    const store = makeStore();
-    const opts = store.cookieOptions();
-    expect(opts.sameSite).toBe("Lax");
-  });
-
-  it("explicit same_site sets SameSite", () => {
-    const store = makeStore({ sameSite: "Strict" });
-    const opts = store.cookieOptions();
-    expect(opts.sameSite).toBe("Strict");
-  });
-
-  it("explicit nil same_site omits SameSite", () => {
-    const store = makeStore({ sameSite: null });
-    const opts = store.cookieOptions();
-    expect(opts.sameSite).toBeUndefined();
+    it("returns null and clears the header when options.drop is true", () => {
+      const store = makeStore();
+      const req = makeReq();
+      const result = store.deleteSession(req, null, { drop: true });
+      expect(result).toBeNull();
+      expect(req.headers["action_dispatch.request.unsigned_session_cookie"]).toEqual({});
+    });
   });
 });

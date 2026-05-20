@@ -139,11 +139,16 @@ export class DebugExceptions {
    * @internal
    */
   logError(env: RackEnv, wrapper: ExceptionWrapper): void {
-    // Rails: `request.logger || ActionView::Base.logger || stderr_logger`
-    // — fall back to the memoized stderr logger when no logger is wired
-    // in env/options so errors are never silently swallowed.
+    // Rails: `request.logger || ActionView::Base.logger || stderr_logger`.
+    // trails' `request.logger` reads `action_dispatch.logger` then
+    // `rack.logger` (http/request.ts:480) — mirror that here, then fall
+    // back to the constructor option, then the stderr logger so errors
+    // are never silently swallowed.
     const logger =
-      (env["action_dispatch.logger"] as Logger | undefined) ?? this.logger ?? this.stderrLogger();
+      (env["action_dispatch.logger"] as Logger | undefined) ??
+      (env["rack.logger"] as Logger | undefined) ??
+      this.logger ??
+      this.stderrLogger();
     if (!this.isLogRescuedResponses(env) && wrapper.statusCode < 500) return;
 
     const lines: string[] = ["  "];

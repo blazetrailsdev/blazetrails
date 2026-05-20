@@ -87,13 +87,16 @@ export function commitFlash(this: FlashRequestHost): void {
     this.env[FLASH_KEY] = hash.dup();
   }
 
-  if (
-    session.isLoaded &&
-    session.isLoaded() &&
-    session.hasKey("flash") &&
-    session.get("flash") == null
-  ) {
-    session.delete("flash");
+  // Rails guards this branch with `session.loaded?` to avoid forcing a
+  // session load just to clean up a nil flash entry. trails' Session
+  // already lazily loads on `hasKey`/`get` (action-dispatch/request/
+  // session.ts), so the guard would be redundant — and `isLoaded()` is
+  // optional on the host shape for environments that do expose it
+  // (e.g. a wrapped Rails-style store).
+  if (session.isLoaded ? session.isLoaded() : true) {
+    if (session.hasKey("flash") && session.get("flash") == null) {
+      session.delete("flash");
+    }
   }
 }
 
@@ -256,12 +259,15 @@ export class FlashHash {
   // --- Session serialization ---
 
   toSessionValue(): Record<string, unknown> {
-    // Returns the full flash contents (no discard filtering) for callers
-    // that want the visible state — ETag generation, debug views,
-    // existing trails tests. The session-commit pipeline does its own
-    // discard pruning via {@link flashesForSession}; keeping
-    // this method as a plain serialization preserves backward compat
-    // with `metal/etag-with-flash` and downstream callers.
+    // Returns the persisted flash entries only. Mirrors Rails'
+    // `to_session_value`, which serializes `@flashes` and excludes
+    // `flash.now` — `now` entries are intentionally request-local and
+    // must not bleed into the next request. Callers that want the
+    // request-visible state (including `flash.now`) should use
+    // {@link toHash} instead. The session-commit pipeline applies
+    // discard filtering via {@link flashesForSession}; this method
+    // intentionally skips that filter to preserve the existing
+    // contract used by `metal/etag-with-flash`.
     return Object.fromEntries(this._flashes);
   }
 

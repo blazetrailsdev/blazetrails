@@ -581,7 +581,7 @@ export class Request {
   }
 
   /** @internal */
-  get _paramsHost(): ParametersHost {
+  private get _paramsHost(): ParametersHost {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const req = this;
     return {
@@ -1037,17 +1037,23 @@ export class Request {
     return [];
   }
 
-  // --- Parameters mixin privates (declared; bound below via prototype) ---
+  // --- Parameters mixin privates (Rails: private instance methods on Request) ---
 
   /** @internal */
-  declare paramsParsers: () => ParameterParsers;
+  paramsParsers(): ParameterParsers {
+    return _paramsParsers.call(this._paramsHost);
+  }
   /** @internal */
-  declare parseFormattedParameters: (
+  parseFormattedParameters(
     parsers: ParameterParsers,
     fallback: () => Record<string, unknown>,
-  ) => Record<string, unknown>;
+  ): Record<string, unknown> {
+    return _parseFormattedParameters.call(this._paramsHost, parsers, fallback);
+  }
   /** @internal */
-  declare logParseErrorOnce: () => void;
+  logParseErrorOnce(): void {
+    _logParseErrorOnce.call(this._paramsHost);
+  }
 
   // --- Static factory ---
 
@@ -1168,22 +1174,6 @@ Request.prototype.parameterFilterFor = _parameterFilterFor as (
   this: Request,
   filters: Array<string | RegExp>,
 ) => ParameterFilter;
-
-// Parameters mixin privates. The host shape comes from `_paramsHost`; these
-// just delegate so `request.paramsParsers()` matches Rails' private API.
-Request.prototype.paramsParsers = function (this: Request) {
-  return _paramsParsers.call(this._paramsHost);
-};
-Request.prototype.parseFormattedParameters = function (
-  this: Request,
-  parsers: ParameterParsers,
-  fallback: () => Record<string, unknown>,
-) {
-  return _parseFormattedParameters.call(this._paramsHost, parsers, fallback);
-};
-Request.prototype.logParseErrorOnce = function (this: Request) {
-  _logParseErrorOnce.call(this._paramsHost);
-};
 
 /**
  * Sentinel controller used when {@link Request.controllerClassFor} is called

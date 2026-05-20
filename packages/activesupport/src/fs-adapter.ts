@@ -62,6 +62,21 @@ export interface FsAdapter {
    * adapters may omit it.
    */
   mkdtempSync?(prefix: string): string;
+  /** Async readFile (utf8). */
+  readFile?(path: string, encoding: "utf-8" | "utf8"): Promise<string>;
+  readFile?(path: string): Promise<Buffer>;
+  /** Async writeFile. */
+  writeFile?(
+    path: string,
+    content: string | Buffer | Uint8Array,
+    options?: { mode?: number },
+  ): Promise<void>;
+  /** Async unlink. */
+  unlink?(path: string): Promise<void>;
+  /** Async rename (used for atomic move on EncryptedFile#write). */
+  rename?(src: string, dest: string): Promise<void>;
+  /** Async mkdtemp (used for EncryptedFile#change tempfile dir). */
+  mkdtemp?(prefix: string): Promise<string>;
 }
 
 export interface PathAdapter {
@@ -126,6 +141,11 @@ function tryAutoRegisterNode(): boolean {
       access(p: string): Promise<void>;
       stat(p: string): Promise<FsStatResult>;
       lstat(p: string): Promise<FsStatResult>;
+      readFile(p: string, enc?: string): Promise<Buffer | string>;
+      writeFile(p: string, c: string | Buffer | Uint8Array, opts?: unknown): Promise<void>;
+      unlink(p: string): Promise<void>;
+      rename(src: string, dest: string): Promise<void>;
+      mkdtemp(prefix: string): Promise<string>;
     };
     const fs: FsAdapter = Object.assign({}, nodeFs, {
       cwd: () => globalThis.process.cwd(),
@@ -140,6 +160,13 @@ function tryAutoRegisterNode(): boolean {
         ),
       stat: (p: string) => fsPromises.stat(p),
       lstat: (p: string) => fsPromises.lstat(p),
+      readFile: (p: string, enc?: string) =>
+        enc ? fsPromises.readFile(p, enc) : fsPromises.readFile(p),
+      writeFile: (p: string, c: string | Buffer | Uint8Array, opts?: { mode?: number }) =>
+        fsPromises.writeFile(p, c, opts),
+      unlink: (p: string) => fsPromises.unlink(p),
+      rename: (src: string, dest: string) => fsPromises.rename(src, dest),
+      mkdtemp: (prefix: string) => fsPromises.mkdtemp(prefix),
     }) as FsAdapter;
     const nodePath = req("node:path") as Required<Omit<PathAdapter, "pathToFileURL">>;
     const nodeUrl = req("node:url") as { pathToFileURL(p: string): URL };
@@ -177,6 +204,11 @@ function tryAutoRegisterNodeAsync(): Promise<boolean> {
           access(p: string): Promise<void>;
           stat(p: string): Promise<FsStatResult>;
           lstat(p: string): Promise<FsStatResult>;
+          readFile(p: string, enc?: string): Promise<Buffer | string>;
+          writeFile(p: string, c: string | Buffer | Uint8Array, opts?: unknown): Promise<void>;
+          unlink(p: string): Promise<void>;
+          rename(src: string, dest: string): Promise<void>;
+          mkdtemp(prefix: string): Promise<string>;
         };
         const fs: FsAdapter = Object.assign({}, nodeFs, {
           cwd: () => globalThis.process.cwd(),
@@ -187,6 +219,13 @@ function tryAutoRegisterNodeAsync(): Promise<boolean> {
             ),
           stat: (p: string) => fsPromises.stat(p),
           lstat: (p: string) => fsPromises.lstat(p),
+          readFile: (p: string, enc?: string) =>
+            enc ? fsPromises.readFile(p, enc) : fsPromises.readFile(p),
+          writeFile: (p: string, c: string | Buffer | Uint8Array, opts?: { mode?: number }) =>
+            fsPromises.writeFile(p, c, opts),
+          unlink: (p: string) => fsPromises.unlink(p),
+          rename: (src: string, dest: string) => fsPromises.rename(src, dest),
+          mkdtemp: (prefix: string) => fsPromises.mkdtemp(prefix),
         }) as FsAdapter;
         const nodePath = (await import("node:path")) as unknown as Required<
           Omit<PathAdapter, "pathToFileURL">

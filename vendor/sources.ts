@@ -134,6 +134,25 @@ export const SOURCES: readonly UpstreamSource[] = [
     packages: [{ name: "rack", libPath: "lib/rack", testPath: "test" }],
   },
   {
+    name: "did_you_mean",
+    origin: {
+      type: "git",
+      url: "https://github.com/ruby/did_you_mean.git",
+      ref: "v1.6.3",
+    },
+    packages: [
+      {
+        // TS-side workspace dir is `packages/did-you-mean/src`; api-compare
+        // derives that from the package name, so use the kebab form.
+        name: "did-you-mean",
+        libPath: "lib/did_you_mean",
+        // No testPath — did_you_mean's test/ uses a different layout from
+        // Rails (test/did_you_mean/spell_checking/*) and we aren't wiring
+        // test-compare for this package yet.
+      },
+    ],
+  },
+  {
     name: "globalid",
     origin: {
       type: "git",

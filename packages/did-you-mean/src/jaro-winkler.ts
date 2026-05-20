@@ -68,6 +68,13 @@ export function jaroDistance(str1: string, str2: string): number {
   return (m / length1 + m / length2 + (m - t) / m) / 3;
 }
 
+/** Mirrors Ruby `DidYouMean::Jaro.distance`. */
+export class Jaro {
+  static distance(str1: string, str2: string): number {
+    return jaroDistance(str1, str2);
+  }
+}
+
 const JW_WEIGHT = 0.1;
 const JW_THRESHOLD = 0.7;
 
@@ -87,4 +94,11 @@ export function jaroWinklerDistance(str1: string, str2: string): number {
     }
   }
   return j + prefixBonus * JW_WEIGHT * (1 - j);
+}
+
+/** Mirrors Ruby `DidYouMean::JaroWinkler.distance`. */
+export class JaroWinkler {
+  static distance(str1: string, str2: string): number {
+    return jaroWinklerDistance(str1, str2);
+  }
 }

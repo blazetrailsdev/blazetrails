@@ -17,6 +17,13 @@ function min3(a: number, b: number, c: number): number {
   return c;
 }
 
+/** Mirrors Ruby `DidYouMean::Levenshtein.distance`. */
+export class Levenshtein {
+  static distance(str1: string, str2: string): number {
+    return levenshteinDistance(str1, str2);
+  }
+}
+
 /** Two-row dynamic-programming Levenshtein distance, codepoint-aware. */
 export function levenshteinDistance(str1: string, str2: string): number {
   const cp1 = codepoints(str1);

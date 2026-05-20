@@ -21,7 +21,11 @@
 // `testFile` because their TS source counterparts either don't exist or
 // are being actively ported.
 
-export type UnportedFile = { reason: string } & (
+// `package` (optional) scopes the entry to a single api-compare package.
+// Without it, the `pattern` substring is matched across every package — used
+// for shared file basenames (e.g. `core_ext/name_error.rb` exists in both
+// activesupport and did_you_mean) where the exclusion should only apply to one.
+export type UnportedFile = { reason: string; package?: string } & (
   | { pattern: string; testFile?: string; tests?: never }
   | { pattern?: string; testFile: string; tests?: never }
   // Per-test exclusion: test-only — never affects api:compare.
@@ -472,6 +476,93 @@ export const UNPORTED_FILES: UnportedFile[] = [
       "`SignedGlobalID#equals` contract is symmetric only within its own " +
       "class. Same-class equality is covered by `value equality`.",
   },
+  // --- did-you-mean: Ruby-only checkers ---
+  // The DidYouMean port is scoped to the algorithms Rails consumes
+  // (SpellChecker + Jaro/JaroWinkler/Levenshtein). The remaining files
+  // patch Ruby's exception hierarchy (NameError#corrections via
+  // core_ext/name_error.rb + formatter.rb), or implement checkers that
+  // suggest names for Ruby-only failure modes — NoMethodError method
+  // names, NameError class/variable names, KeyError keys,
+  // NoMatchingPatternKeyError keys, $LOAD_PATH require targets. None of
+  // these map onto JS errors.
+  {
+    package: "did-you-mean",
+    pattern: "core_ext/name_error.rb",
+    reason:
+      "Patches Ruby's NameError with `corrections`, `original_message`, " +
+      "`detailed_message`, `spell_checker`. JS has no NameError; trails " +
+      "errors carry their own per-subclass `corrections` getter (see " +
+      "ActionNotFound, ParameterMissing, AssociationNotFoundError, etc.).",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "formatter.rb",
+    reason:
+      "Formats `Did you mean? …` suffix for Ruby's Exception#detailed_message " +
+      "integration. JS error stringification is per-error, not via a stdlib hook.",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "spell_checkers/key_error_checker.rb",
+    reason: "Suggests Hash/ENV keys on Ruby KeyError. JS Map/object access doesn't raise.",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "spell_checkers/method_name_checker.rb",
+    reason:
+      "Suggests method names on Ruby NoMethodError using receiver.methods. " +
+      "JS has no NoMethodError; undefined property access returns undefined.",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "spell_checkers/name_error_checkers.rb",
+    reason: "Dispatcher for class/variable name checkers; both checkers are Ruby-only (see below).",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "spell_checkers/name_error_checkers/class_name_checker.rb",
+    reason:
+      "Suggests constant/class names by walking Module#constants + ancestor scopes. " +
+      "Ruby-only — JS has no equivalent constant introspection.",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "spell_checkers/name_error_checkers/variable_name_checker.rb",
+    reason:
+      "Suggests local/instance/class variable names from Binding#local_variables, " +
+      "Object#instance_variables, etc. Ruby-only introspection surface.",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "spell_checkers/null_checker.rb",
+    reason:
+      "Null-object fallback in Ruby's checker registry. Not needed in our " +
+      "error-subclass approach.",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "spell_checkers/pattern_key_name_checker.rb",
+    reason:
+      "Suggests keys on Ruby NoMatchingPatternKeyError (one-liner pattern matching). " +
+      "No JS equivalent.",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "spell_checkers/require_path_checker.rb",
+    reason:
+      "Suggests $LOAD_PATH targets on Ruby LoadError. JS module resolution is " +
+      "engine-handled and doesn't surface this kind of typo suggestion.",
+  },
+  {
+    package: "did-you-mean",
+    pattern: "tree_spell_checker.rb",
+    reason:
+      "Path-segment spell checker used by Rails::TestUnit::InvalidTestError to " +
+      "suggest test file paths. Pre-1.0 scope: trails doesn't yet port " +
+      "`bin/rails test` runner wiring, and the algorithm has no other consumer " +
+      "in the call sites we target.",
+  },
+
   // --- globalid: Ruby-Marshal exact-token assertion ---
   {
     testFile: "verifier_test.rb",
@@ -489,8 +580,13 @@ export const UNPORTED_FILES: UnportedFile[] = [
   },
 ];
 
-export function isSourceUnported(file: string): boolean {
-  return UNPORTED_FILES.some((e) => e.pattern && file.includes(e.pattern));
+export function isSourceUnported(file: string, pkg?: string): boolean {
+  return UNPORTED_FILES.some(
+    (e) =>
+      e.pattern &&
+      file.includes(e.pattern) &&
+      (e.package === undefined || pkg === undefined || e.package === pkg),
+  );
 }
 
 export function isTestFileUnported(testFile: string): boolean {

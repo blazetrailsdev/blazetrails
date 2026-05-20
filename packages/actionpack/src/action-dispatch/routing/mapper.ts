@@ -941,7 +941,12 @@ export class Mapper {
    */
   private outerNonResourcePrefix(): string {
     for (let i = this.scopeStack.length - 1; i >= 0; i--) {
-      if (!this.scopeStack[i].resource) return this.scopeStack[i].path;
+      const f = this.scopeStack[i];
+      // Skip both resource frames and shallow-marker frames (the latter
+      // carry no real path contribution — they snapshot currentPrefix()
+      // only to keep `member()` from resetting it).
+      if (f.resource || f.shallow) continue;
+      return f.path;
     }
     return "";
   }

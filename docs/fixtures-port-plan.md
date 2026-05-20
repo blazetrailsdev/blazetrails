@@ -18,7 +18,7 @@ translated.
    `setup_fixtures` hook — `use-fixtures.ts` already supplies that piece.)
 2. **Kill the inline-DDL hazard.** Phase 6 keeps tripping on
    `defineSchema()` calls inside `it()` bodies under PG/MySQL (see
-   [[feedback_tm_phase6_inline_ddl]]). A canonical schema + named
+   the inline-DDL hazard documented in agent memory). A canonical schema + named
    fixtures matches Rails' "load once in `setup_fixtures`" model and
    removes the surface where this can happen.
 3. **Mechanical parity.** With Rails ids mirrored verbatim (see Decision
@@ -101,7 +101,7 @@ Each `*.yml` becomes one TS file under `fixtures/`, exporting
   Cross-fixture refs must match byte-for-byte.
 - **Comments**: keep the header `// activerecord/test/fixtures/<name>.yml`
   on line 1; per-row comments only when non-obvious (per
-  CLAUDE.md / [[feedback_lint_design]]).
+  [CLAUDE.md](../CLAUDE.md)).
 - **ERB-rendered fixtures** become small inline TS conditionals using the
   new `adapterName(adapter)` helper (see Decision 3).
 
@@ -167,7 +167,8 @@ together; the two over-ceiling clusters (C1, C8) split into `a`/`b`
 sibling PRs from `main`. Cluster sizes (Rails YAML LOC; TS ≈ 1.5×) drive
 bundling: C1 ≈ 510, C2 ≈ 155, C3 ≈ 250, C4 ≈ 110, C5 ≈ 260, C6 ≈ 140,
 C7 ≈ 160, C8 ≈ 510, C9 ≈ 12, C10 ≈ 20. Per
-[[feedback_no_tiny_prs]] / [[feedback_bundle_to_pr_ceiling]].
+the PR-sizing rules in [CLAUDE.md](../CLAUDE.md) (300-LOC ceiling, no
+tiny PRs, bundle adjacent same-cluster slots toward the ceiling).
 
 The two exceptions to the 300-LOC ceiling are called out explicitly
 below: the schema port (split into ~6–8 sibling PRs, each under
@@ -274,11 +275,18 @@ ceiling) and PR 7 (granted ceiling waiver — see entry).
 3. **ERB → `adapterName` helper.** Add `adapterName(adapter)` to
    `define-fixtures.ts` so TS fixtures can write
    `{ data: adapterName(adapter) === "postgres" ? a : b }`. The compare
-   script renders Rails ERB with stub bindings
-   (`ActiveRecord::Base.connection.adapter_name → "PostgreSQL" |
-"Mysql2" | "SQLite"`) and diffs per-adapter. Land the helper alongside
-   the first ERB-using fixture (PR 0.75 if any of the 12 backfill files
-   need it; otherwise the PR that introduces the first ERB fixture).
+   script renders Rails ERB with stub bindings — i.e.
+   `ActiveRecord::Base.connection.adapter_name` returns one of:
+
+   ```
+   "PostgreSQL"
+   "Mysql2"
+   "SQLite"
+   ```
+
+   and the comparer diffs per-adapter. Land the helper alongside the
+   first ERB-using fixture (PR 0.75 if any of the 12 backfill files need
+   it; otherwise the PR that introduces the first ERB fixture).
 
 4. **CI strictness: soft until PR 7, then hard-fail.** `MISSING` is a
    warning through the entire port; `value-differs`, `id-divergence`,

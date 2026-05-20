@@ -11,7 +11,12 @@ export interface GemOptions {
 
 export interface ActionsHost {
   output: (msg: string) => void;
-  insertIntoFile(relativePath: string, marker: string, content: string): void;
+  insertIntoFile(
+    relativePath: string,
+    marker: string,
+    content: string,
+    options?: { after?: boolean },
+  ): void;
   appendWithNewline(relativePath: string, content: string): void;
 }
 
@@ -68,10 +73,18 @@ export function route(
 ): void {
   let code = routingCode;
   for (const ns of asArray(options.namespace).reverse()) {
-    code = `namespace :${ns} do\n  ${code}\nend`;
+    const indented = code
+      .split("\n")
+      .map((l) => (l ? "  " + l : l))
+      .join("\n");
+    code = `namespace :${ns} do\n${indented}\nend`;
   }
   this.output(`      route  ${routingCode}`);
-  this.insertIntoFile("config/routes.rb", ".routes.draw do", code + "\n  ");
+  const indented = code
+    .split("\n")
+    .map((l) => (l ? "  " + l : l))
+    .join("\n");
+  this.insertIntoFile("config/routes.rb", ".routes.draw do\n", indented + "\n", { after: true });
 }
 
 export function environment(
@@ -85,10 +98,16 @@ export function environment(
       ? ["config/application.rb"]
       : asArray(options.env).map((e) => `config/environments/${e}.rb`);
   for (const target of targets) {
-    const marker = target.endsWith("application.rb")
+    const isApp = target.endsWith("application.rb");
+    const marker = isApp
       ? "class Application < Rails::Application\n"
       : "Rails.application.configure do\n";
-    this.insertIntoFile(target, marker, `\n  ${data}\n`);
+    const pad = isApp ? "    " : "  ";
+    const indented = data
+      .split("\n")
+      .map((l) => (l ? pad + l : l))
+      .join("\n");
+    this.insertIntoFile(target, marker, indented + "\n", { after: true });
   }
 }
 

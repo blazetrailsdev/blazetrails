@@ -15,10 +15,11 @@ export function appCommand(): Command {
     .argument("<location>", "Path to a template file (.ts/.mjs/.js)")
     .action(async (location: string) => {
       const path = getPath();
+      if (!path.pathToFileURL) {
+        throw new Error("app:template requires a path adapter with pathToFileURL support");
+      }
       const absolute = path.isAbsolute?.(location) ? location : path.resolve(getCwd(), location);
-      const url = path.pathToFileURL?.(absolute);
-      const href = url ? url.href : absolute;
-      const mod = await import(href);
+      const mod = await import(path.pathToFileURL(absolute).href);
       const template: unknown = mod.default ?? mod.template ?? mod;
       if (typeof template !== "function") {
         throw new Error(`App template ${location} does not export a function`);

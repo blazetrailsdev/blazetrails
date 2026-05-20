@@ -62,28 +62,30 @@ describe("ActionsTest", () => {
   it("route should add route", () => {
     seed("config/routes.rb", "App.routes.draw do\nend\n");
     gen.route('root "welcome#index"');
-    expect(read("config/routes.rb")).toContain('root "welcome#index"');
+    expect(read("config/routes.rb")).toBe('App.routes.draw do\n  root "welcome#index"\nend\n');
   });
 
   it("route with namespace option should nest route", () => {
     seed("config/routes.rb", "App.routes.draw do\nend\n");
     gen.route('root "admin#index"', { namespace: "admin" });
-    const c = read("config/routes.rb");
-    expect(c).toContain("namespace :admin do");
-    expect(c).toContain('root "admin#index"');
+    expect(read("config/routes.rb")).toBe(
+      'App.routes.draw do\n  namespace :admin do\n    root "admin#index"\n  end\nend\n',
+    );
   });
 
   it("environment should include data in environment initializer block", () => {
     seed("config/application.rb", "class Application < Rails::Application\nend\n");
     gen.environment('config.asset_host = "cdn.example.com"');
-    expect(read("config/application.rb")).toContain('config.asset_host = "cdn.example.com"');
+    expect(read("config/application.rb")).toBe(
+      'class Application < Rails::Application\n    config.asset_host = "cdn.example.com"\nend\n',
+    );
   });
 
   it("environment should include data in environment initializer block with env option", () => {
     seed("config/environments/development.rb", "Rails.application.configure do\nend\n");
     gen.environment('config.asset_host = "localhost:3000"', { env: "development" });
-    expect(read("config/environments/development.rb")).toContain(
-      'config.asset_host = "localhost:3000"',
+    expect(read("config/environments/development.rb")).toBe(
+      'Rails.application.configure do\n  config.asset_host = "localhost:3000"\nend\n',
     );
   });
 

@@ -42,8 +42,16 @@ import {
   cookies as testProcessCookies,
   flash as testProcessFlash,
   redirectToUrl as testProcessRedirectToUrl,
+  fileFixtureUpload as testProcessFileFixtureUpload,
+  fixtureFileUpload as testProcessFixtureFileUpload,
+  assigns as assignsFn,
   type TestProcessHost,
 } from "./test-process.js";
+import * as routingAssertions from "./assertions/routing.js";
+import * as responseAssertions from "./assertions/response.js";
+import * as urlForMod from "../routing/url-for.js";
+import * as polymorphicRoutes from "../routing/polymorphic-routes.js";
+import { RequestEncoder } from "./request-encoder.js";
 
 type ControllerClass = new () => Metal;
 
@@ -185,7 +193,7 @@ export class IntegrationTest {
    *
    * @internal
    */
-  _buildFullUri(path: string, env: Record<string, unknown>): string {
+  buildFullUri(path: string, env: Record<string, unknown>): string {
     return `${env["rack.url_scheme"]}://${env["SERVER_NAME"]}:${env["SERVER_PORT"]}${path}`;
   }
 
@@ -196,7 +204,7 @@ export class IntegrationTest {
    *
    * @internal
    */
-  _buildExpandedPath(path: string, onLocation?: (url: URL) => void): string {
+  buildExpandedPath(path: string, onLocation?: (url: URL) => void): string {
     if (!ABSOLUTE_URL_RE.test(path)) return path;
     const location = new URL(path);
     onLocation?.(location);
@@ -213,7 +221,7 @@ export class IntegrationTest {
   ): Promise<number> {
     let expanded = path;
     if (ABSOLUTE_URL_RE.test(path)) {
-      expanded = this._buildExpandedPath(path, (loc) => {
+      expanded = this.buildExpandedPath(path, (loc) => {
         this.httpsBang(loc.protocol === "https:");
         if (loc.host) this.host = loc.host;
       });
@@ -367,6 +375,11 @@ export class IntegrationTest {
     await this.process("HEAD", path, options);
   }
 
+  /** Performs an OPTIONS request. Mirrors `RequestHelpers#options`. */
+  async options(path: string, options: IntegrationRequestOptions = {}): Promise<void> {
+    await this.process("OPTIONS", path, options);
+  }
+
   /**
    * Follow the redirect from the last response.
    * Issues a GET to the Location header.
@@ -378,6 +391,244 @@ export class IntegrationTest {
     }
     await this.get(location);
   }
+
+  // --- Runner / Behavior surface ---
+
+  /**
+   * The current integration session. Rails has separate `Runner` and
+   * `Session` classes; trails collapses them into a single `IntegrationTest`,
+   * so the session is `this`.
+   */
+  get integrationSession(): this {
+    return this;
+  }
+
+  /**
+   * Create a new session backed by `app`. Rails returns a fresh
+   * `Integration::Session` subclass instance; trails returns a clean
+   * `IntegrationTest` whose routes mirror `app`'s. The `app` argument is
+   * accepted for parity but currently ignored (we don't yet wire a
+   * Rack-style app facade).
+   *
+   * @internal
+   */
+  createSession(_app?: unknown): IntegrationTest {
+    return new IntegrationTest();
+  }
+
+  /**
+   * Releases the current session so the next access lazily creates a new
+   * one. Mirrors Rails `Runner#remove!`.
+   *
+   * @internal
+   */
+  removeBang(): void {
+    this.resetBang();
+  }
+
+  /**
+   * Open a new session, optionally yielding it to a block before returning.
+   * Mirrors Rails `Runner#open_session`.
+   */
+  openSession(block?: (sess: IntegrationTest) => void): IntegrationTest {
+    const sess = this.createSession();
+    sess.rootSession = this.rootSession ?? this;
+    block?.(sess);
+    return sess;
+  }
+
+  /**
+   * Root session for nested `openSession` instances. Rails attribute
+   * accessor; reads as `null` for the top-level test.
+   *
+   * @internal
+   */
+  rootSession?: IntegrationTest;
+
+  /**
+   * Assertions counter. Rails delegates to Minitest; trails keeps a plain
+   * integer so frameworks that wrap us can read/write it.
+   *
+   * @internal
+   */
+  get assertions(): number {
+    return this.rootSession ? this.rootSession.assertions : (this._assertions ?? 0);
+  }
+
+  set assertions(value: number) {
+    if (this.rootSession) this.rootSession.assertions = value;
+    else this._assertions = value;
+  }
+
+  /** @internal */
+  _assertions: number = 0;
+
+  /**
+   * Copies session-owned ivars onto the test. In Rails the Runner uses
+   * this after delegating to the Session; trails uses a single class so
+   * this is a no-op kept for parity.
+   *
+   * @internal
+   */
+  copySessionVariablesBang(): void {
+    // No-op: Runner and Session share `this` in trails.
+  }
+
+  /**
+   * Lifecycle hook (Rails `Runner#before_setup`). Resets `app` so the next
+   * call lazily falls back to the class default.
+   *
+   * @internal
+   */
+  beforeSetup(): void {
+    this._app = undefined;
+  }
+
+  /**
+   * Lifecycle hook (Rails `Session#setup`). Currently delegates to the
+   * routing-assertions setup so `this.routes` matches the integration
+   * default. Tests rarely call this directly.
+   */
+  setup(): void {
+    routingAssertions.setup.call(this);
+  }
+
+  /**
+   * Per-instance app override. Reads through to the class-level default
+   * (mirrors `Behavior#app` falling back to `self.class.app`).
+   *
+   * @internal
+   */
+  _app?: unknown;
+
+  /**
+   * Application under test. Mirrors `Behavior#app` (instance method that
+   * falls back to the class-level default).
+   */
+  get app(): unknown {
+    return this._app ?? (this.constructor as typeof IntegrationTest).app;
+  }
+
+  set app(value: unknown) {
+    this._app = value;
+  }
+
+  /** Class-level default app for the test process. Mirrors `Behavior.app=`. */
+  static app: unknown = null;
+
+  /**
+   * Register a custom request encoder. Mirrors `Behavior::ClassMethods#register_encoder`.
+   */
+  static registerEncoder(
+    mimeName: string,
+    options: {
+      paramEncoder?: (params: unknown) => unknown;
+      responseParser?: (body: string) => unknown;
+    } = {},
+  ): void {
+    RequestEncoder.registerEncoder(mimeName, options);
+  }
+
+  /**
+   * Returns the root DOM element of the parsed response body. Mirrors
+   * `Behavior#document_root_element`.
+   */
+  documentRootElement(): unknown {
+    const doc = this.htmlDocument();
+    return (doc as { root?: unknown } | null)?.root ?? doc;
+  }
+
+  /**
+   * Parsed HTML document for the last response. Rails uses Nokogiri; trails
+   * defers HTML parsing to consumers (jsdom etc.). Returns the raw body
+   * string so callers can plug in their own parser via mixin override.
+   *
+   * @internal
+   */
+  htmlDocument(): unknown {
+    return this.responseBody;
+  }
+
+  /**
+   * Controller-instance-variable accessor. Rails extracted this to a gem;
+   * trails mirrors the deprecation by raising via TestProcess#assigns.
+   */
+  assigns(key?: string | symbol): never {
+    return assignsFn.call(this as unknown as TestProcessHost, key) as never;
+  }
+
+  /**
+   * Shortcut for an UploadedFile from `file_fixture_path`. Delegates to
+   * `TestProcess::FixtureFile#fileFixtureUpload`.
+   */
+  fileFixtureUpload(path: string, mimeType?: string | null, binary: boolean = false): unknown {
+    return testProcessFileFixtureUpload.call(
+      this as unknown as TestProcessHost,
+      path,
+      mimeType,
+      binary,
+    );
+  }
+
+  /** Alias of {@link fileFixtureUpload}. */
+  fixtureFileUpload(path: string, mimeType?: string | null, binary: boolean = false): unknown {
+    return testProcessFixtureFileUpload.call(
+      this as unknown as TestProcessHost,
+      path,
+      mimeType,
+      binary,
+    );
+  }
+
+  /**
+   * Rack mock-session backing the request loop. trails has its own
+   * dispatch path (`_processPath`) and does not maintain a separate
+   * mock-session object; returns `null` for API surface parity.
+   *
+   * @internal
+   */
+  _mockSession(): unknown {
+    return null;
+  }
+
+  /** Human-friendly description used by debuggers. Mirrors `Session#inspect`. */
+  inspect(): string {
+    const url = this.request?.env?.REQUEST_URI ?? "(no request)";
+    return `#<${this.constructor.name} ${url}>`;
+  }
+
+  // --- Mixin surface (attached via prototype below) ---------------------
+  // Declared as class properties so api:compare sees the names. Real
+  // implementations live in the imported `this`-typed modules and are
+  // wired onto `IntegrationTest.prototype` after the class body. The
+  // `_`-prefixed and helper-message slots are Rails-private — keep
+  // `@internal` JSDoc grouped at the prototype block, not per-line.
+  declare assertRecognizes: typeof routingAssertions.assertRecognizes;
+  declare assertGenerates: typeof routingAssertions.assertGenerates;
+  declare assertRouting: typeof routingAssertions.assertRouting;
+  declare withRouting: typeof routingAssertions.withRouting;
+  declare createRoutes: typeof routingAssertions.createRoutes;
+  declare resetRoutes: typeof routingAssertions.resetRoutes;
+  declare recognizedRequestFor: typeof routingAssertions.recognizedRequestFor;
+  declare failOn: typeof routingAssertions.failOn;
+  declare urlFor: typeof urlForMod.urlFor;
+  declare fullUrlFor: typeof urlForMod.fullUrlFor;
+  declare routeFor: typeof urlForMod.routeFor;
+  declare isOptimizeRoutesGeneration: typeof urlForMod.optimizeRoutesGeneration;
+  declare _withRoutes: typeof urlForMod._withRoutes;
+  declare _routesContext: typeof urlForMod._routesContext;
+  declare polymorphicUrl: typeof polymorphicRoutes.polymorphicUrl;
+  declare polymorphicPath: typeof polymorphicRoutes.polymorphicPath;
+  declare polymorphicUrlForAction: typeof polymorphicRoutes.polymorphicUrlForAction;
+  declare polymorphicPathForAction: typeof polymorphicRoutes.polymorphicPathForAction;
+  declare polymorphicMapping: typeof polymorphicRoutes.polymorphicMapping;
+  declare parameterize: typeof responseAssertions.parameterize;
+  declare normalizeArgumentToRedirection: typeof responseAssertions.normalizeArgumentToRedirection;
+  declare generateResponseMessage: typeof responseAssertions.generateResponseMessage;
+  declare responseBodyIfShort: typeof responseAssertions.responseBodyIfShort;
+  declare exceptionIfPresent: typeof responseAssertions.exceptionIfPresent;
+  declare locationIfRedirected: typeof responseAssertions.locationIfRedirected;
+  declare codeWithName: typeof responseAssertions.codeWithName;
 
   // --- Assertions ---
 
@@ -530,7 +781,7 @@ export class IntegrationTest {
           .map(([k, v]) => `${k}=${v}`)
           .join("; ");
       }
-      noRouteEnv.REQUEST_URI = this._buildFullUri(
+      noRouteEnv.REQUEST_URI = this.buildFullUri(
         (noRouteEnv.PATH_INFO as string) +
           (noRouteEnv.QUERY_STRING ? `?${noRouteEnv.QUERY_STRING as string}` : ""),
         noRouteEnv,
@@ -580,7 +831,7 @@ export class IntegrationTest {
     // PATH_INFO/QUERY_STRING are honored.
     const finalPath =
       (env.PATH_INFO as string) + (env.QUERY_STRING ? `?${env.QUERY_STRING as string}` : "");
-    env.REQUEST_URI = this._buildFullUri(finalPath, env);
+    env.REQUEST_URI = this.buildFullUri(finalPath, env);
 
     // Cookies from persistent jar
     if (Object.keys(this._persistentCookies).length > 0) {
@@ -683,6 +934,43 @@ export class IntegrationTest {
     this._cookieJar = undefined;
   }
 }
+
+// --- Mixin attachments ---------------------------------------------------
+// Rails composes IntegrationTest from `RoutingAssertions`,
+// `Routing::UrlFor`, `PolymorphicRoutes`, and the response-message helpers
+// from `Assertions::ResponseAssertions`. trails ports each module as
+// `this`-typed standalone functions (CLAUDE.md "Module mixins" pattern).
+// We declare the surface here and attach the implementations on
+// `IntegrationTest.prototype` so api:compare sees the names and runtime
+// callers get a working method.
+
+const proto = IntegrationTest.prototype as unknown as Record<string, unknown>;
+proto.assertRecognizes = routingAssertions.assertRecognizes;
+proto.assertGenerates = routingAssertions.assertGenerates;
+proto.assertRouting = routingAssertions.assertRouting;
+proto.withRouting = routingAssertions.withRouting;
+proto.createRoutes = routingAssertions.createRoutes;
+proto.resetRoutes = routingAssertions.resetRoutes;
+proto.recognizedRequestFor = routingAssertions.recognizedRequestFor;
+proto.failOn = routingAssertions.failOn;
+proto.urlFor = urlForMod.urlFor;
+proto.fullUrlFor = urlForMod.fullUrlFor;
+proto.routeFor = urlForMod.routeFor;
+proto.isOptimizeRoutesGeneration = urlForMod.optimizeRoutesGeneration;
+proto._withRoutes = urlForMod._withRoutes;
+proto._routesContext = urlForMod._routesContext;
+proto.polymorphicUrl = polymorphicRoutes.polymorphicUrl;
+proto.polymorphicPath = polymorphicRoutes.polymorphicPath;
+proto.polymorphicUrlForAction = polymorphicRoutes.polymorphicUrlForAction;
+proto.polymorphicPathForAction = polymorphicRoutes.polymorphicPathForAction;
+proto.polymorphicMapping = polymorphicRoutes.polymorphicMapping;
+proto.parameterize = responseAssertions.parameterize;
+proto.normalizeArgumentToRedirection = responseAssertions.normalizeArgumentToRedirection;
+proto.generateResponseMessage = responseAssertions.generateResponseMessage;
+proto.responseBodyIfShort = responseAssertions.responseBodyIfShort;
+proto.exceptionIfPresent = responseAssertions.exceptionIfPresent;
+proto.locationIfRedirected = responseAssertions.locationIfRedirected;
+proto.codeWithName = responseAssertions.codeWithName;
 
 function formatToMime(format: string): string {
   const MIMES: Record<string, string> = {

@@ -24,7 +24,6 @@ import {
   hasContentType as _hasContentType,
   ignoreAcceptHeader as _ignoreAcceptHeader,
   negotiateMime as _negotiateMime,
-  NullType,
   setFormat as _setFormat,
   setFormats as _setFormats,
   setIgnoreAcceptHeader as _setIgnoreAcceptHeader,
@@ -32,6 +31,7 @@ import {
   shouldApplyVaryHeader as _shouldApplyVaryHeader,
   variant as _variant,
   type MimeNegotiationHost,
+  type NullType,
 } from "./mime-negotiation.js";
 import type { ArrayInquirer } from "@blazetrails/activesupport";
 import type { MimeType } from "./mime-type.js";

@@ -3,6 +3,10 @@ import { ActionController } from "@blazetrails/actionpack";
 import { WelcomeController } from "./welcome-controller.js";
 
 describe("WelcomeController", () => {
+  it("controllerPath mirrors Rails::WelcomeController (`rails/welcome`)", () => {
+    expect(WelcomeController.controllerPath()).toBe("rails/welcome");
+  });
+
   it("disables the layout (mirrors Rails `layout false`)", () => {
     expect(WelcomeController.layout).toBe(false);
   });

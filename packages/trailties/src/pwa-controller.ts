@@ -17,6 +17,11 @@ import { ActionController } from "@blazetrails/actionpack";
 type PWARenderOptions = ActionController.RenderOptions & { template?: string };
 
 export class PWAController extends ActionController.Base {
+  // Rails: Rails::PwaController.controller_path == "rails/pwa".
+  static override controllerPath(): string {
+    return "rails/pwa";
+  }
+
   serviceWorker(): void {
     this.render({ template: "pwa/service-worker", layout: false } as PWARenderOptions);
   }

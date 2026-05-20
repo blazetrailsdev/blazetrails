@@ -9,6 +9,13 @@
 import { ActionController } from "@blazetrails/actionpack";
 
 export class WelcomeController extends ActionController.Base {
+  // Rails: Rails::WelcomeController.controller_path == "rails/welcome",
+  // which aligns LookupContext with the shipped template path at
+  // packages/trailties/src/templates/rails/welcome/index.tse.
+  static override controllerPath(): string {
+    return "rails/welcome";
+  }
+
   static override layout: string | false = false;
 
   index(): void {}

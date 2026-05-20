@@ -3,6 +3,10 @@ import { ActionController } from "@blazetrails/actionpack";
 import { HealthController } from "./health-controller.js";
 
 describe("HealthController", () => {
+  it("controllerPath mirrors Rails::HealthController (`rails/health`)", () => {
+    expect(HealthController.controllerPath()).toBe("rails/health");
+  });
+
   it("health controller renders green success page", async () => {
     class HealthControllerTest extends ActionController.TestCase {}
     HealthControllerTest.tests(HealthController);

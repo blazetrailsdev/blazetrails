@@ -6,6 +6,11 @@
 import { ActionController } from "@blazetrails/actionpack";
 
 export class HealthController extends ActionController.Base {
+  // Rails: Rails::HealthController.controller_path == "rails/health".
+  static override controllerPath(): string {
+    return "rails/health";
+  }
+
   show(): void {
     this.renderUp();
   }

@@ -42,8 +42,19 @@ import { X_CASCADE } from "../constants.js";
 import { DispatcherRegistry, type DispatchHandler } from "./dispatcher.js";
 import { RoutingError, UrlGenerationError } from "../../action-controller/metal/exceptions.js";
 import { RoutesProxy, type ScriptNamer } from "./routes-proxy.js";
+import { Request as AdRequest } from "../http/request.js";
+import { Routes as JourneyRoutes } from "../journey/routes.js";
+import { Formatter as JourneyFormatter } from "../journey/formatter.js";
 
 const ROUTE_NAME_RE = /^[_a-z]\w*$/i;
+
+/** @internal Mirrors Ruby `Hash#==` for shallow string-keyed hashes. */
+function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  for (const k of ka) if (a[k] !== b[k]) return false;
+  return true;
+}
 
 /** @internal Rails: `RouteSet::CustomUrlHelper` — captured `direct(...)` block. */
 export class CustomUrlHelper implements PolymorphicMappingEntry {
@@ -301,22 +312,24 @@ export class RouteSet {
   readonly envKey: string = `ROUTES_${(RouteSet._envSeq = (RouteSet._envSeq ?? 0) + 1)}_SCRIPT_NAME`;
   private static _envSeq?: number;
   /**
-   * Rails: `attr_accessor :formatter`. Rails' Formatter caches generated
-   * paths and clears on `clear!`. Trails has no Journey::Formatter port
-   * yet — this stub exposes only the `clear()` hook that {@link clearBang}
-   * needs so the surface compiles; cache integration is follow-up.
+   * Rails: `attr_accessor :set` — `Journey::Routes` container. Holds the
+   * Journey-level route table; the higher-level routing Route objects
+   * (`this.routes`) are bridged into it by Mapper. `clearBang` drops
+   * both. Rails: `@set = Journey::Routes.new` (route_set.rb:402).
    */
-  formatter: { clear(): void; eagerLoadBang?(): void } = { clear() {} };
+  set: JourneyRoutes = new JourneyRoutes();
   /**
-   * Rails: `attr_accessor :set` and `alias :routes :set` over a
-   * `Journey::Routes`. Trails keeps routes in the private `routes` array;
-   * this accessor exposes a thin facade with the `clear()` hook used by
-   * {@link clearBang}. The full Journey::Routes container is unported.
+   * Rails: `attr_accessor :formatter` — `Journey::Formatter.new(self)`
+   * (route_set.rb:404). Owns the generation-path cache. Wiring a real
+   * {@link JourneyFormatter} requires bridging the higher-level routing
+   * `Route` into `Journey::Route` (NamedRoutes-shape FormatterHost expects
+   * the Journey type). That bridge is PR-c work; until then this exposes
+   * just the `clear()` / `eagerLoadBang()` hooks the rest of RouteSet
+   * actually invokes, satisfying the attr_accessor surface.
    */
-  set: { clear(): void } = {
-    clear: () => {
-      this.routes = [];
-    },
+  formatter: Pick<JourneyFormatter, "clear" | "eagerLoadBang"> = {
+    clear() {},
+    eagerLoadBang() {},
   };
   /** @internal Rails: `@url_helpers_with_paths`. */
   private _urlHelpersWithPaths?: UrlHelpersModule;
@@ -414,24 +427,14 @@ export class RouteSet {
     this._config.defaultScope = value;
   }
 
-  /**
-   * Rails: `def request_class` — returns `ActionDispatch::Request`. Trails
-   * has no AD::Request port yet, so we return a structural stub that wraps
-   * the env. Replace with the real class when Request lands.
-   */
-  requestClass(): new (env: RackEnv) => { env: RackEnv } {
-    return class TrailsRequest {
-      env: RackEnv;
-      constructor(env: RackEnv) {
-        this.env = env;
-      }
-    };
+  /** Rails: `def request_class` — returns `ActionDispatch::Request`. */
+  requestClass(): typeof AdRequest {
+    return AdRequest;
   }
 
   /** @internal Rails: `private def make_request(env)`. */
-  makeRequest(env: RackEnv): { env: RackEnv } {
-    const Klass = this.requestClass();
-    return new Klass(env);
+  makeRequest(env: RackEnv): AdRequest {
+    return new (this.requestClass())(env);
   }
 
   /**
@@ -442,24 +445,32 @@ export class RouteSet {
    * trails does the assembly inline pending the URL port.
    */
   defaultEnv(): Record<string, unknown> {
-    const opts = this.defaultUrlOptions;
-    if (this._defaultEnv && this._defaultEnvFor === opts) return this._defaultEnv;
-    const host = typeof opts["host"] === "string" ? opts["host"] : "example.org";
-    const port = typeof opts["port"] === "number" ? opts["port"] : undefined;
-    const protocol = typeof opts["protocol"] === "string" ? opts["protocol"] : "http";
+    // Rails caches by *value comparison* against the previously-stored
+    // options snapshot: `if default_url_options != @default_env&.[](...)`.
+    const cachedOpts = this._defaultEnv?.["action_dispatch.routes.default_url_options"] as
+      | Record<string, unknown>
+      | undefined;
+    if (this._defaultEnv && cachedOpts && shallowEqual(cachedOpts, this.defaultUrlOptions)) {
+      return this._defaultEnv;
+    }
+    const urlOptions = Object.freeze({ ...this.defaultUrlOptions });
+    const host = typeof urlOptions["host"] === "string" ? urlOptions["host"] : "example.org";
+    const protocol = typeof urlOptions["protocol"] === "string" ? urlOptions["protocol"] : "http";
     const scheme = protocol.replace(/:?\/*$/, "");
-    const scriptName = typeof opts["script_name"] === "string" ? opts["script_name"] : "";
-    const httpHost = port != null ? `${host}:${port}` : host;
+    const port = typeof urlOptions["port"] === "number" ? urlOptions["port"] : undefined;
+    const defaultPort = scheme === "https" ? 443 : 80;
+    const httpHost = port == null || port === defaultPort ? host : `${host}:${port}`;
+    const scriptName =
+      typeof urlOptions["script_name"] === "string" ? urlOptions["script_name"] : "";
     this._defaultEnv = Object.freeze({
       "action_dispatch.routes": this,
-      "action_dispatch.routes.default_url_options": { ...opts },
+      "action_dispatch.routes.default_url_options": urlOptions,
       HTTPS: scheme === "https" ? "on" : "off",
       "rack.url_scheme": scheme,
       HTTP_HOST: httpHost,
       SCRIPT_NAME: scriptName.replace(/\/$/, ""),
       "rack.input": "",
     });
-    this._defaultEnvFor = opts;
     return this._defaultEnv;
   }
 
@@ -469,13 +480,13 @@ export class RouteSet {
    * deep-equals the supplied hash.
    */
   fromRequirements(requirements: Record<string, unknown>): Route | undefined {
-    const keys = Object.keys(requirements);
-    return this.routes.find((r) => {
-      const reqs = (r as unknown as { requirements?: Record<string, unknown> }).requirements ?? {};
-      const reqKeys = Object.keys(reqs);
-      if (reqKeys.length !== keys.length) return false;
-      return keys.every((k) => reqs[k] === requirements[k]);
-    });
+    // Rails: `routes.find { |route| route.requirements == requirements }`.
+    // Trails Route stores requirements as `defaults` (merged controller +
+    // action + path constraints); the field name diverges but the semantic
+    // is the same — the matching shape for `{ controller, action }` lookups.
+    return this.routes.find((r) =>
+      shallowEqual(r.defaults, requirements as Record<string, string>),
+    );
   }
 
   /** Rails: `def url_helpers(supports_path = true)` — memoized per `supportsPath`. */
@@ -538,19 +549,25 @@ export class RouteSet {
     });
   }
 
-  /** @internal Cached {@link defaultEnv} value + the options object it was built for. */
+  /** @internal Cached {@link defaultEnv} value. */
   private _defaultEnv?: Readonly<Record<string, unknown>>;
-  private _defaultEnvFor?: Record<string, unknown>;
 
   /**
    * Draw routes using the Mapper DSL. Can be called multiple times;
    * each call appends routes (like Rails).
    */
   draw(callback: DrawCallback): void {
-    // Rails' `draw` calls `clear!` first; trails keeps it append-only for
-    // back-compat until callers opt into the Rails semantics via
-    // {@link clearBang} + {@link evalBlock} + {@link finalizeBang}.
+    // Rails: `clear! unless @disable_clear_and_finalize; eval_block(block); finalize! unless @disable_clear_and_finalize`.
+    // Trails has historically kept `draw` append-only for back-compat; we
+    // only adopt the Rails clear+finalize semantics when the caller has
+    // *not* set `disableClearAndFinalize` AND has registered at least one
+    // `prepend`/`append` block (otherwise old call sites that rely on
+    // append-only would silently lose routes). The flag controls the
+    // clear/finalize gate exactly as in Rails when those blocks are wired.
+    const railsSemantics = this._prepend.length > 0 || this._append.length > 0;
+    if (railsSemantics && !this.disableClearAndFinalize) this.clearBang();
     this.evalBlock(callback);
+    if (railsSemantics && !this.disableClearAndFinalize) this.finalizeBang();
   }
 
   /** @internal Rails: `private def eval_block(block)`. */
@@ -592,9 +609,13 @@ export class RouteSet {
     for (const blk of this._prepend) this.evalBlock(blk);
   }
 
-  /** Rails: `eager_load!`. Forces the Journey router build. */
+  /**
+   * Rails: `def eager_load!` — `router.eager_load!; routes.each(&:eager_load!); formatter.eager_load!; nil`.
+   * Forces the Journey router build and warms the formatter cache.
+   */
   eagerLoadBang(): void {
     void this.journeyRouter;
+    this.formatter.eagerLoadBang();
   }
 
   /** Rails: `empty?`. */

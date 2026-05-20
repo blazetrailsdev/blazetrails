@@ -23,6 +23,7 @@ import type { Template } from "./template.js";
 import { PathRegistry } from "./path-registry.js";
 import { PathSet, type PathSetResolver } from "./path-set.js";
 import { Requested } from "./template-details.js";
+import { correctTemplatePaths } from "./template/missing-corrections.js";
 
 type DetailValue = ReadonlyArray<string | symbol>;
 type DetailsMap = Record<string, DetailValue>;
@@ -72,12 +73,18 @@ export class MissingTemplate extends Error {
   readonly partial: boolean;
   /** @internal stub - real impl in Phase 1d */
   readonly templateKeys: readonly string[];
+  /** Candidate template paths used to compute `corrections`. Callers
+   * with a resolver chain can pass the enumerated paths here so the
+   * "Did you mean?" panel populates; defaults to empty. */
+  readonly candidateTemplatePaths: ReadonlyArray<string>;
+  #cachedCorrections?: string[];
 
   constructor(
     public readonly controller: string,
     public readonly action: string,
     public readonly format: string,
     public readonly searchedPaths: string[],
+    candidateTemplatePaths: ReadonlyArray<string> = [],
   ) {
     super(
       `Missing template ${controller}/${action} with format "${format}". ` +
@@ -89,6 +96,28 @@ export class MissingTemplate extends Error {
     this.prefixes = controller ? [controller] : [];
     this.partial = action.startsWith("_");
     this.templateKeys = [format];
+    this.candidateTemplatePaths = candidateTemplatePaths;
+  }
+
+  /**
+   * Mirrors Rails' `MissingTemplate#corrections` — Jaro-scored top-6
+   * suggestions from the known template paths, computed lazily and
+   * memoised via the `@corrections ||=` idiom.
+   */
+  get corrections(): string[] {
+    if (this.#cachedCorrections !== undefined) return this.#cachedCorrections;
+    // Rails matches a bare basename (e.g. "show") against files inside
+    // the prefix dirs. trails composes `path` as `${controller}/${action}`,
+    // so strip the prefix here. Partials drop the leading underscore.
+    const raw = this.action;
+    const base = raw.startsWith("_") ? raw.slice(1) : raw;
+    this.#cachedCorrections = correctTemplatePaths(
+      this.candidateTemplatePaths,
+      base,
+      this.prefixes,
+      this.partial,
+    );
+    return this.#cachedCorrections;
   }
 }
 

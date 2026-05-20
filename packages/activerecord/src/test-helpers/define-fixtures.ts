@@ -43,8 +43,11 @@ export interface FixtureRef {
 }
 
 /**
- * Cross-batch cross-reference sentinel. Resolves to the fixture's deterministic ID at insert time.
- * `tableName` is stored for readability and future validation; resolution uses only `fixtureName`.
+ * Cross-batch cross-reference sentinel. Resolves to the target fixture's id at insert time:
+ * `(tableName, fixtureName)` is looked up in the adapter-scoped declared-id registry first
+ * (populated by `defineFixtures()` when a row carries an explicit primary key), falling back
+ * to `fixtureId(fixtureName)` (CRC32) when the target fixture set hasn't been loaded yet
+ * or the target row has no declared PK.
  */
 export function ref(tableName: string, fixtureName: string): FixtureRef {
   return { [REF_TAG]: true, tableName, fixtureName };
@@ -56,7 +59,8 @@ export function isFixtureRef(v: unknown): v is FixtureRef {
 }
 
 // Adapter-scoped registry of declared fixture ids: each defineFixtures() call records
-// `${tableName}::${label} → id` for every row that carries an explicit `id`. ref()
+// `${tableName}::${label} → id` for every row that carries an explicit primary key
+// (whichever column the model declares as `primaryKey`, not necessarily `id`). ref()
 // resolution consults this map first so cross-fixture FKs land on the Rails-mirrored id.
 const declaredIds = new WeakMap<object, Map<string, number>>();
 

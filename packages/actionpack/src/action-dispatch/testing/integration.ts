@@ -64,6 +64,12 @@ const STATUS_RANGES: Record<string, [number, number]> = {
   error: [500, 599],
 };
 
+// Match only paths that *begin* with a scheme (e.g. `http://…`). Rails uses
+// `path.include?("://")` which is fine in Ruby because `URI.parse` is lenient
+// with relative inputs, but JS `new URL` throws on relative paths — so we
+// have to be stricter to avoid breaking `/callback?return=http://example.com`.
+const ABSOLUTE_URL_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+
 const DEFAULT_HOST = "www.example.com";
 const DEFAULT_REMOTE_ADDR = "127.0.0.1";
 const DEFAULT_ACCEPT =
@@ -191,7 +197,7 @@ export class IntegrationTest {
    * @internal
    */
   _buildExpandedPath(path: string, onLocation?: (url: URL) => void): string {
-    if (!path.includes("://")) return path;
+    if (!ABSOLUTE_URL_RE.test(path)) return path;
     const location = new URL(path);
     onLocation?.(location);
     return location.search ? `${location.pathname}${location.search}` : location.pathname;
@@ -206,7 +212,7 @@ export class IntegrationTest {
     options: IntegrationRequestOptions = {},
   ): Promise<number> {
     let expanded = path;
-    if (path.includes("://")) {
+    if (ABSOLUTE_URL_RE.test(path)) {
       expanded = this._buildExpandedPath(path, (loc) => {
         this.httpsBang(loc.protocol === "https:");
         if (loc.host) this.host = loc.host;
@@ -605,8 +611,16 @@ export class IntegrationTest {
     this.request = new Request(env);
     this.response = new Response();
 
-    // Build params: route params + request params
+    // Build params: route params + parsed query string + caller-supplied params.
+    // Rails merges request.GET/request.POST into request.parameters via the
+    // ParamsParser; we mirror that here so query-string params survive the
+    // PATH_INFO/QUERY_STRING split done above.
     const allParams: Record<string, unknown> = { ...params };
+    if (queryString) {
+      for (const [k, v] of new URLSearchParams(queryString)) {
+        allParams[k] = v;
+      }
+    }
     if (options.params) {
       Object.assign(allParams, options.params);
     }

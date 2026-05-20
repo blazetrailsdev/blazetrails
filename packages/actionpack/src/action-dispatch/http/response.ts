@@ -30,7 +30,6 @@ import {
 import { filteredLocation as _filteredLocation } from "./filter-redirect.js";
 
 const CONTENT_TYPE = "Content-Type";
-const SET_COOKIE = "Set-Cookie";
 const NO_CONTENT_CODES = [100, 101, 102, 103, 204, 205, 304] as const;
 const CONTENT_TYPE_PARSER =
   /^(?<mime_type>[^;\s]+\s*(?:;\s*(?!charset)[^;\s]+)*)?(?:;\s*charset="?(?<charset>[^;\s"]+)"?)?/;
@@ -55,10 +54,9 @@ export class ResponseBuffer {
 
   get body(): string {
     if (this.strBody !== null) return this.strBody;
-    let acc = "";
-    for (const chunk of this.buf) acc += String(chunk);
-    this.strBody = acc;
-    return acc;
+    // Rails: `@buf.each { |chunk| buf << chunk }`. Join avoids O(n²) concat.
+    this.strBody = this.buf.map((c) => String(c)).join("");
+    return this.strBody;
   }
 
   write(value: string): void {
@@ -385,22 +383,24 @@ export class Response {
 
   /** Drains the stream into a parts array (Rails `body_parts`). */
   bodyParts(): unknown[] {
+    const stream = this._ensureStream() as { each(): IterableIterator<unknown> };
     const parts: unknown[] = [];
-    for (const chunk of (this.stream as { each(): IterableIterator<unknown> }).each())
-      parts.push(chunk);
+    for (const chunk of stream.each()) parts.push(chunk);
     return parts;
   }
 
   /** Mirrors `Response#send_file(path)` — commits + sets the stream to a `Response::FileBody`-style object. */
   sendFile(path: string): void {
     this.commitBang();
+    let cached: string | null = null;
+    const read = () => (cached ??= getFs().readFileSync(path, "latin1"));
     this.stream = {
       toPath: path,
       get body(): string {
-        return getFs().readFileSync(path, "latin1");
+        return read();
       },
       *each(): IterableIterator<string> {
-        yield getFs().readFileSync(path, "latin1");
+        yield read();
       },
     };
   }
@@ -413,8 +413,9 @@ export class Response {
 
   /** Wraps stream iteration in `sending!`/`sent!` (Rails `each(&block)`). */
   *each(): IterableIterator<unknown> {
+    const stream = this._ensureStream() as { each(): IterableIterator<unknown> };
     this.sendingBang();
-    for (const chunk of (this.stream as { each(): IterableIterator<unknown> }).each()) yield chunk;
+    for (const chunk of stream.each()) yield chunk;
     this.sentBang();
   }
 

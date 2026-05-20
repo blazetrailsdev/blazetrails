@@ -29,7 +29,7 @@ let _deprecator: Deprecation | undefined;
  * namespace. Mirrors Rails `ActionDispatch.deprecator`.
  */
 export function deprecator(): Deprecation {
-  if (!_deprecator) _deprecator = new Deprecation({ gem: "actionpack" });
+  if (!_deprecator) _deprecator = new Deprecation();
   return _deprecator;
 }
 

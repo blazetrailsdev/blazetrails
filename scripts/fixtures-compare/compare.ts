@@ -6,6 +6,11 @@ import { readdirSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { TEST_SCHEMA } from "../../packages/activerecord/src/test-helpers/test-schema.js";
+import type {
+  Schema,
+  TableSchema,
+} from "../../packages/activerecord/src/test-helpers/define-schema.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..", "..");
@@ -17,7 +22,8 @@ type FixtureMap = Record<string, Row>;
 // prettier-ignore
 type Status = "MATCH" | "MISSING" | "DIFF" | "ERB-UNSUPPORTED" | "YAML-PARSE-ERR" | "TS-IMPORT-ERR" | "TS-EXPORT-MISSING";
 
-interface FileResult { yamlBase: string; tsBase: string | null; status: Status; rowsMatched: number; rowsTotal: number; attrsMatched: number; attrsTotal: number; notes: string[]; } // prettier-ignore
+// prettier-ignore
+interface FileResult { yamlBase: string; tsBase: string | null; status: Status; rowsMatched: number; rowsTotal: number; attrsMatched: number; attrsTotal: number; schemaPorted: boolean; schemaExtras: number; notes: string[]; }
 
 function parseArgs(argv: string[]): { pkg: string; filter: string | null } {
   let pkg = "activerecord";
@@ -110,12 +116,71 @@ export function compareValue(tsVal: unknown, railsVal: unknown, attr: string, id
   return false;
 }
 
+// Mirror of the (non-exported) discriminator in define-schema.ts: the
+// `WrappedTableSchema` shape is identified by the presence of a wrapper-shaped
+// `primaryKey` (string[] | false) alongside a `columns` map. Returns the
+// column map plus whether an implicit `id` column is created — only legacy
+// shape and wrappers with `primaryKey: string[]` get one; `primaryKey: false`
+// suppresses it (matching defineSchema semantics).
+function tableShape(table: TableSchema): {
+  columns: Record<string, unknown>;
+  hasImplicitId: boolean;
+} {
+  if (table && typeof table === "object" && "primaryKey" in table && "columns" in table) {
+    const pk = (table as { primaryKey?: unknown }).primaryKey;
+    const cols = (table as { columns?: unknown }).columns;
+    if ((pk === false || Array.isArray(pk)) && cols && typeof cols === "object") {
+      return { columns: cols as Record<string, unknown>, hasImplicitId: pk !== false };
+    }
+  }
+  return { columns: table as Record<string, unknown>, hasImplicitId: true };
+}
+
+/**
+ * Per-fixture schema-parity check. Complements the Rails-YAML diff: catches
+ * drift between a TS fixture and `TEST_SCHEMA` even when the Rails YAML and
+ * TS rows agree (typo'd column, column dropped from schema, etc.). Stays
+ * useful after Rails-diff hits 100% — fixtures and schema can drift
+ * independently afterward.
+ *
+ * `id` is allowed only when defineSchema would create one — legacy-shape
+ * tables and wrappers with composite `primaryKey: string[]` get an implicit
+ * `id`; wrappers with `primaryKey: false` do not, so a stray `id` on such a
+ * fixture flags as drift.
+ *
+ * Returns `ported=false` when the table hasn't landed in TEST_SCHEMA yet —
+ * expected during the 0.5a..0.5h schema port and treated as informational,
+ * not drift.
+ */
+export function schemaCheck(
+  snake: string,
+  tsRows: FixtureMap,
+  schema: Schema,
+  notes: string[],
+): { ported: boolean; extras: number } {
+  const table = schema[snake];
+  if (!table) return { ported: false, extras: 0 };
+  const shape = tableShape(table);
+  const declared = new Set(Object.keys(shape.columns));
+  if (shape.hasImplicitId) declared.add("id");
+  let extras = 0;
+  for (const [rowName, row] of Object.entries(tsRows)) {
+    for (const attr of Object.keys(row)) {
+      if (!declared.has(attr)) {
+        notes.push(`schema-extra-col: ${rowName}.${attr} not in TEST_SCHEMA["${snake}"]`);
+        extras++;
+      }
+    }
+  }
+  return { ported: true, extras };
+}
+
 // prettier-ignore
-export async function compareFile(yamlBase: string, yamlByTable: Map<string, FixtureMap>, idIndex: Map<string, Map<number, string[]>>, prelimFailure: Status | undefined): Promise<FileResult> {
+export async function compareFile(yamlBase: string, yamlByTable: Map<string, FixtureMap>, idIndex: Map<string, Map<number, string[]>>, prelimFailure: Status | undefined, schema: Schema = TEST_SCHEMA): Promise<FileResult> {
   const snake = yamlBase.replace(/\.yml$/, "");
   const tsFile = path.join(TS_DIR, `${kebab(snake)}.ts`);
   const tsBase = existsSync(tsFile) ? `${kebab(snake)}.ts` : null;
-  const r: FileResult = { yamlBase, tsBase, status: "MATCH", rowsMatched: 0, rowsTotal: 0, attrsMatched: 0, attrsTotal: 0, notes: [] }; // prettier-ignore
+  const r: FileResult = { yamlBase, tsBase, status: "MATCH", rowsMatched: 0, rowsTotal: 0, attrsMatched: 0, attrsTotal: 0, schemaPorted: false, schemaExtras: 0, notes: [] }; // prettier-ignore
   if (prelimFailure) { r.status = prelimFailure; return r; } // prettier-ignore
   const railsRows = yamlByTable.get(snake)!;
   r.rowsTotal = Object.keys(railsRows).length;
@@ -138,7 +203,10 @@ export async function compareFile(yamlBase: string, yamlByTable: Map<string, Fix
     r.notes.push(keys.length > 1 ? `${tsBase} exports ${keys.length} *FixtureData symbols (expected 1)` : `no *FixtureData export in ${tsBase}`); // prettier-ignore
     return r;
   }
-  let anyDiff = false;
+  const sc = schemaCheck(snake, tsRows, schema, r.notes);
+  r.schemaPorted = sc.ported;
+  r.schemaExtras = sc.extras;
+  let anyDiff = sc.extras > 0;
   for (const [rowName, railsRow] of Object.entries(railsRows)) {
     const tsRow = tsRows[rowName];
     if (!tsRow || typeof tsRow !== "object") {
@@ -173,12 +241,20 @@ export async function compareFile(yamlBase: string, yamlByTable: Map<string, Fix
 
 function formatLine(r: FileResult): string {
   const pct = r.attrsTotal === 0 ? "—" : `${Math.round((r.attrsMatched / r.attrsTotal) * 100)}%`;
+  const sch = !r.tsBase
+    ? ""
+    : !r.schemaPorted
+      ? "schema:not-ported"
+      : r.schemaExtras > 0
+        ? `schema:extras=${r.schemaExtras}`
+        : "schema:ok";
   return (
     r.yamlBase.padEnd(32) +
     (r.tsBase ?? "(missing)").padEnd(28) +
     `rows: ${r.rowsMatched}/${r.rowsTotal}`.padEnd(14) +
     `attrs: ${r.attrsMatched}/${r.attrsTotal}`.padEnd(16) +
     pct.padEnd(6) +
+    sch.padEnd(20) +
     r.status
   );
 }
@@ -220,7 +296,11 @@ async function main(): Promise<void> {
   }
   const n = (s: Status): number => results.filter((r) => r.status === s).length;
   const other = results.length - n("MATCH") - n("DIFF") - n("MISSING") - n("ERB-UNSUPPORTED");
+  const considered = results.filter((r) => r.tsBase);
+  const ported = considered.filter((r) => r.schemaPorted).length;
+  const withExtras = considered.filter((r) => r.schemaExtras > 0).length;
   console.log(`\n${results.length} files — match=${n("MATCH")} diff=${n("DIFF")} missing=${n("MISSING")} erb-unsupported=${n("ERB-UNSUPPORTED")} other=${other}`); // prettier-ignore
+  console.log(`schema — ported=${ported}/${considered.length} extras-flagged=${withExtras}`);
   console.log("(MISSING/DIFF soft per Decision 4 until PR 7; runtime errors hard-fail)");
   // Decision 4 names DIFF/MISSING as soft; YAML/TS load errors are script-runtime, hard-fail.
   const hard: readonly Status[] = ["YAML-PARSE-ERR", "TS-IMPORT-ERR", "TS-EXPORT-MISSING"];

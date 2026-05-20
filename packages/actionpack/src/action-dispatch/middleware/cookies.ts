@@ -432,11 +432,16 @@ export class Cookies {
     const outHeaders: Record<string, string> = { ...headers };
     const setHeaders = jar.getSetCookieHeaders();
     if (setHeaders.length > 0) {
-      const existing = outHeaders["set-cookie"];
-      // Rack convention is newline-joined values within a single header.
-      outHeaders["set-cookie"] = existing
-        ? [existing, ...setHeaders].join("\n")
-        : setHeaders.join("\n");
+      // Although the RackResponse tuple types headers as
+      // Record<string, string>, downstream apps backed by
+      // `Rack::Response` (Record<string, string | string[]>) can hand
+      // back set-cookie as an array — splatting it into a string
+      // template would stringify with commas and corrupt the header.
+      // Normalize both shapes to a flat string[] before joining with
+      // newlines (Rack's wire convention for multi-value set-cookie).
+      const existing = outHeaders["set-cookie"] as unknown as string | string[] | undefined;
+      const existingList = existing ? (Array.isArray(existing) ? existing : [existing]) : [];
+      outHeaders["set-cookie"] = [...existingList, ...setHeaders].join("\n");
     }
     jar.commitBang();
     return [status, outHeaders, body];

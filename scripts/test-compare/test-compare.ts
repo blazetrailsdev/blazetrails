@@ -165,7 +165,16 @@ interface TsTestInfo {
 
 function main() {
   const args = process.argv.slice(2);
-  const filterPkg = args.includes("--package") ? args[args.indexOf("--package") + 1] : null;
+  const pkgIndex = args.indexOf("--package");
+  let filterPkg: string | null = null;
+  if (pkgIndex !== -1) {
+    const value = args[pkgIndex + 1];
+    if (!value || value.startsWith("--")) {
+      console.error("--package requires a package name (e.g. --package activerecord)");
+      process.exit(1);
+    }
+    filterPkg = value;
+  }
   const showMissing = args.includes("--missing");
   const jsonOutput = args.includes("--json");
   const showIncomplete = args.includes("--incomplete");

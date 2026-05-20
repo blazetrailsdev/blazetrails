@@ -272,9 +272,14 @@ describe.skipIf(adapterType === "mysql")(
     let adapter: TestDatabaseAdapter;
     let outerTables: Set<string>;
 
-    beforeAll(() => {
+    beforeAll(async () => {
       adapter = createTestAdapter();
+      // Register an outer-scope table so the snapshot has at least one
+      // entry to preserve across rollback — without this, the
+      // preservation assertion below would be vacuous.
+      await defineSchema(adapter, { ddl_tracker_outer: { name: "string" } });
       outerTables = _snapshotDdlTrackers().tables;
+      expect(outerTables.has("ddl_tracker_outer")).toBe(true);
     });
 
     withTransactionalFixtures(() => adapter);
@@ -283,13 +288,15 @@ describe.skipIf(adapterType === "mysql")(
       await (adapter as unknown as AdapterWithExec).exec(
         `CREATE TABLE ddl_tracker_inner (id INTEGER PRIMARY KEY)`,
       );
-      expect(_snapshotDdlTrackers().tables.has("ddl_tracker_inner")).toBe(true);
+      const tables = _snapshotDdlTrackers().tables;
+      expect(tables.has("ddl_tracker_inner")).toBe(true);
+      expect(tables.has("ddl_tracker_outer")).toBe(true);
     });
 
-    it("next test sees the tracker reset because afterEach restored the snapshot", () => {
+    it("next test sees the inner tracker reset but outer entries preserved", () => {
       const tables = _snapshotDdlTrackers().tables;
       expect(tables.has("ddl_tracker_inner")).toBe(false);
-      // Sanity: outer-scope entries from beforeAll-time still present.
+      expect(tables.has("ddl_tracker_outer")).toBe(true);
       for (const t of outerTables) expect(tables.has(t)).toBe(true);
     });
   },

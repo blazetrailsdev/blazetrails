@@ -4,6 +4,7 @@
  * Represents an HTTP response with status, headers, and body.
  */
 
+import { getFs } from "@blazetrails/activesupport";
 import type { CookieExpires } from "../middleware/cookies.js";
 import type { Request } from "./request.js";
 import {
@@ -40,11 +41,7 @@ interface ContentTypeHeader {
 }
 const NULL_CONTENT_TYPE_HEADER: ContentTypeHeader = { mimeType: undefined, charset: undefined };
 
-/**
- * Mirrors Rails' `ActionDispatch::Response::Buffer` (response.rb:100-157):
- * wraps the body iterable so writes go through `Response#commit!` and reads
- * cache a concatenated copy. Streamed chunks pass through `each`.
- */
+/** Mirrors Rails' `ActionDispatch::Response::Buffer` (response.rb:100-157). */
 export class ResponseBuffer {
   private response: Response;
   private buf: Array<unknown>;
@@ -103,7 +100,6 @@ export class Response {
   private _cookies: Map<string, CookieValue> = new Map();
   private _sending = false;
   private _sent = false;
-  /** Mirrors Rails `Response#stream` (`attr_reader :stream`). */
   stream: unknown = null;
   /** Rails: `response.sending_file = true` flag set by `send_file_headers!`. */
   sendingFile = false;
@@ -382,13 +378,12 @@ export class Response {
 
   // --- Stream / body parts ---
 
-  /** Lazy stream-init helper (Rails: `initialize` calls `self.body = body`). */
   private _ensureStream(): unknown {
     if (!this.stream) this.stream = this.buildBuffer(this, this.mungeBodyObject(this._body));
     return this.stream;
   }
 
-  /** Mirrors `Response#body_parts` — drains the stream into a parts array. */
+  /** Drains the stream into a parts array (Rails `body_parts`). */
   bodyParts(): unknown[] {
     const parts: unknown[] = [];
     for (const chunk of (this.stream as { each(): IterableIterator<unknown> }).each())
@@ -396,19 +391,27 @@ export class Response {
     return parts;
   }
 
-  /** Mirrors `Response#send_file(path)` — commits + replaces stream with a path-backed body. */
+  /** Mirrors `Response#send_file(path)` — commits + sets the stream to a `Response::FileBody`-style object. */
   sendFile(path: string): void {
     this.commitBang();
-    this.stream = { toPath: path, body: "", each: function* () {} };
+    this.stream = {
+      toPath: path,
+      get body(): string {
+        return getFs().readFileSync(path, "latin1");
+      },
+      *each(): IterableIterator<string> {
+        yield getFs().readFileSync(path, "latin1");
+      },
+    };
   }
 
-  /** Mirrors `Response#reset_body!` — discards stream contents. */
+  /** Discards stream contents (Rails `reset_body!`). */
   resetBodyBang(): void {
     this.stream = this.buildBuffer(this, []);
     this._body = [];
   }
 
-  /** Mirrors `Response#each(&block)` — wraps stream iteration in `sending!`/`sent!`. */
+  /** Wraps stream iteration in `sending!`/`sent!` (Rails `each(&block)`). */
   *each(): IterableIterator<unknown> {
     this.sendingBang();
     for (const chunk of (this.stream as { each(): IterableIterator<unknown> }).each()) yield chunk;
@@ -457,39 +460,29 @@ export class Response {
     return this._sent;
   }
 
-  /** Rails uses Ruby's MonitorMixin to block until committed; JS is single-threaded so this is a no-op once committed. */
+  /** Rails uses MonitorMixin to block; single-threaded JS makes this a no-op. */
   async awaitCommit(): Promise<void> {}
-
-  /** Mirrors `Response#await_sent` — no-op in single-threaded JS. */
   async awaitSent(): Promise<void> {}
 
   // --- Header / mime helpers ---
 
-  /** Alias of `headers` — mirrors Rails' `alias_method :header, :headers`. */
+  /** Rails: `alias_method :header, :headers`. */
   get header(): Record<string, string> {
     return this._headers;
   }
-
   hasHeader(key: string): boolean {
     return this.getHeader(key) !== undefined;
   }
-
-  /** Mirrors `Response#response_code` — the integer status. */
   get responseCode(): number {
     return this._status;
   }
-
-  /** Alias of `message`. */
   get statusMessage(): string {
     return this.message;
   }
-
-  /** Alias of `location` — Rails: `alias_method :redirect_url, :location`. */
+  /** Rails: `alias_method :redirect_url, :location`. */
   get redirectUrl(): string {
     return this.location;
   }
-
-  /** Mirrors `Response#media_type` — parsed mime type, no charset. */
   get mediaType(): string | undefined {
     return this.parsedContentTypeHeader().mimeType;
   }
@@ -525,7 +518,8 @@ export class Response {
   protected beforeCommitted(): void {
     if (this._committed) return;
     this.assignDefaultContentTypeAndCharsetBang();
-    // cacheControl wiring lives in cache.ts; no-op here when no parsed hash present.
+    this.mergeAndNormalizeCacheControlBang(this.cacheControl);
+    this.handleConditionalGetBang();
     this.handleNoContentBang();
   }
 

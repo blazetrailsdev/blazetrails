@@ -174,17 +174,40 @@ export class IntegrationTest {
 
   /**
    * Caller-supplied defaults merged into {@link urlOptions} (Rails
-   * `Runner#default_url_options`). Stored as a separate hash so writes don't
-   * clobber the per-request memo computed by {@link urlOptions}.
+   * `Runner#default_url_options`). Exposed as a getter so the `UrlFor`
+   * mixin can read it as a record (`Object.keys(this.defaultUrlOptions)`)
+   * while writes still invalidate the per-request memo computed by
+   * {@link urlOptions}.
    */
-  defaultUrlOptions(): Record<string, unknown> {
+  get defaultUrlOptions(): Record<string, unknown> {
     return this._defaultUrlOptions;
   }
 
-  setDefaultUrlOptions(options: Record<string, unknown>): void {
+  set defaultUrlOptions(options: Record<string, unknown>) {
     this._defaultUrlOptions = options;
     this._urlOptions = undefined;
   }
+
+  /**
+   * Rails-shaped routes adapter consumed by the `UrlFor` and
+   * `PolymorphicRoutes` mixins. `this.routes` (our `RouteSet`) already
+   * implements `urlFor(options)`, `isOptimizeRoutesGeneration`, and
+   * `polymorphicMappings`, so we expose it under the Rails-private name.
+   * Writable (Rails: `attr_accessor :_routes` via UrlFor) so `_withRoutes`
+   * can swap the host's adapter for the duration of a block.
+   *
+   * @internal
+   */
+  get _routes(): RouteSet {
+    return this._routesOverride ?? this.routes;
+  }
+
+  set _routes(value: RouteSet | null) {
+    this._routesOverride = value ?? undefined;
+  }
+
+  /** @internal */
+  _routesOverride?: RouteSet;
 
   /**
    * Build the absolute URI for the current request. Matches Rails
@@ -414,7 +437,8 @@ export class IntegrationTest {
    * @internal
    */
   createSession(app?: unknown): IntegrationTest {
-    const sess = new IntegrationTest();
+    const Ctor = this.constructor as new () => IntegrationTest;
+    const sess = new Ctor();
     sess.routes = this.routes;
     sess.controllers = this.controllers;
     sess._app = app ?? this._app;
@@ -444,8 +468,7 @@ export class IntegrationTest {
       this,
     );
     // Routes/controllers are shared with the parent (Rails dup is shallow
-    // for object refs); cookies and session must be independent.
-    sess._persistentCookies = { ...this._persistentCookies };
+    // for object refs); per-request state is cleared by resetBang below.
     sess.resetBang();
     sess.rootSession = this.rootSession ?? this;
     block?.(sess);
@@ -453,8 +476,9 @@ export class IntegrationTest {
   }
 
   /**
-   * Root session for nested `openSession` instances. Rails attribute
-   * accessor; reads as `null` for the top-level test.
+   * Root session for nested `openSession` instances. Rails: `attr_accessor
+   * :root_session`. `undefined` on a top-level test; the field is set by
+   * {@link openSession} on each spawned child.
    *
    * @internal
    */

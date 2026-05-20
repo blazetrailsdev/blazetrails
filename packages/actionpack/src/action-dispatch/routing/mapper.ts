@@ -408,7 +408,14 @@ export class Mapper {
       throw new Error("can't use nested outside resource(s) scope");
     }
     this.withScopeLevel("nested", () => {
-      if (this.isShallow() && this.shallowNestingDepth() >= 1) {
+      // Only enter shallowScope if Rails-style shallow keys have been
+      // populated; trails resources() currently tracks path nesting via
+      // scopeStack rather than _scope.shallowPath/Prefix, so the
+      // shallowScope branch would otherwise clobber as/path with undefined.
+      const shallowKeysSet =
+        this._scope.get("shallowPath") !== undefined ||
+        this._scope.get("shallowPrefix") !== undefined;
+      if (shallowKeysSet && this.isShallow() && this.shallowNestingDepth() >= 1) {
         this.shallowScope(() => callback(this));
       } else {
         callback(this);
@@ -465,13 +472,13 @@ export class Mapper {
     const parent = this.parentResource();
     const actions = parent?.actions ?? [];
     this.member((m) => {
-      if (actions.includes("edit")) m.get("edit");
-      if (actions.includes("show")) m.get("show");
+      if (actions.includes("edit")) m.get("edit", { action: "edit" });
+      if (actions.includes("show")) m.get("show", { action: "show" });
       if (actions.includes("update")) {
-        m.patch("update");
-        m.put("update");
+        m.patch("update", { action: "update" });
+        m.put("update", { action: "update" });
       }
-      if (actions.includes("destroy")) m.delete("destroy");
+      if (actions.includes("destroy")) m.delete("destroy", { action: "destroy" });
     });
   }
 

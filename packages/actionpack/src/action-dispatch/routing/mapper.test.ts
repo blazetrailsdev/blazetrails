@@ -81,3 +81,71 @@ describe("scope-merge helpers", () => {
     expect(m.mergeShallowScope(false, "anything")).toBe(true);
   });
 });
+
+describe("Mapper public DSL additions", () => {
+  it("nested throws outside a resource scope", () => {
+    const m = new Mapper();
+    expect(() => m.nested(() => {})).toThrow(/can't use nested outside resource\(s\) scope/);
+  });
+
+  it("nested runs inside a resources block", () => {
+    const m = new Mapper();
+    let ran = false;
+    m.resources("posts", () => {
+      m.nested(() => {
+        ran = true;
+      });
+    });
+    expect(ran).toBe(true);
+  });
+
+  it("shallow preserves the outer path prefix on its frame", () => {
+    const m = new Mapper();
+    let observedInside: string | undefined;
+    m.scope("/admin", () => {
+      m.shallow(() => {
+        observedInside = m["currentPrefix"]();
+      });
+    });
+    expect(observedInside).toBe("/admin");
+  });
+
+  it("draw runs a callback form", () => {
+    const m = new Mapper();
+    let inner: Mapper | undefined;
+    m.draw((inside) => {
+      inner = inside;
+    });
+    expect(inner).toBe(m);
+  });
+
+  it("draw throws on the string (file-load) form", () => {
+    const m = new Mapper();
+    expect(() => m.draw("admin")).toThrow(/file-based draw is not supported/);
+  });
+
+  it("defaultUrlOptions getter/setter round-trip", () => {
+    const m = new Mapper();
+    m.defaultUrlOptions = { host: "example.com" };
+    expect(m.defaultUrlOptions).toEqual({ host: "example.com" });
+  });
+
+  it("defaultUrlOptions delegates to an attached set", () => {
+    const set: { defaultUrlOptions: Record<string, unknown> } = { defaultUrlOptions: {} };
+    const m = new Mapper(set);
+    m.defaultUrlOptions = { port: 3000 };
+    expect(set.defaultUrlOptions).toEqual({ port: 3000 });
+    expect(m.defaultUrlOptions).toEqual({ port: 3000 });
+  });
+
+  it("setMemberMappingsForResource emits member routes with explicit actions", () => {
+    const m = new Mapper();
+    m.resources("posts", () => {
+      m.setMemberMappingsForResource();
+    });
+    const editRoute = m.routes.find((r) => r.action === "edit");
+    const showRoute = m.routes.find((r) => r.action === "show");
+    expect(editRoute?.controller).toBe("posts");
+    expect(showRoute?.controller).toBe("posts");
+  });
+});

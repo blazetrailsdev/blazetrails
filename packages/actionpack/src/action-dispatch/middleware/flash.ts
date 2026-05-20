@@ -259,7 +259,7 @@ export class FlashHash {
     // Returns the full flash contents (no discard filtering) for callers
     // that want the visible state — ETag generation, debug views,
     // existing trails tests. The session-commit pipeline does its own
-    // discard pruning via {@link discardedFlashesForSession}; keeping
+    // discard pruning via {@link flashesForSession}; keeping
     // this method as a plain serialization preserves backward compat
     // with `metal/etag-with-flash` and downstream callers.
     return Object.fromEntries(this._flashes);

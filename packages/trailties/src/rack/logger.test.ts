@@ -29,9 +29,19 @@ describe("Rack::Logger", () => {
     const failingApp: RackApp = async () => {
       throw new Error("boom");
     };
+    const popped: number[] = [];
     let captured: unknown;
     const events = await Notifications.collectEventsAsync("request.action_dispatch", async () => {
-      const middleware = new Logger(failingApp);
+      const middleware = new Logger(failingApp, {
+        logger: {
+          pushTags: (...tags) => tags,
+          popTags: (n = 1) => {
+            popped.push(n);
+            return [];
+          },
+        },
+        taggers: ["t"],
+      });
       try {
         await middleware.call({ REQUEST_METHOD: "GET" });
       } catch (e) {
@@ -40,6 +50,7 @@ describe("Rack::Logger", () => {
     });
     expect((captured as Error).message).toBe("boom");
     expect(events).toHaveLength(1);
+    expect(popped).toEqual([1]);
   });
 
   it("logger does not mutate app return", async () => {

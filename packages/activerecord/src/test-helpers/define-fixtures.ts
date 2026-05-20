@@ -237,7 +237,7 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
     const row: FixtureAttrs = { [pkCol]: id };
 
     for (const [col, val] of Object.entries(attrs)) {
-      if (col === pkCol) continue; // deterministic ID wins; caller must not override it
+      if (col === pkCol) continue; // PK already set above (declared id or fixtureId fallback)
 
       // Evaluate poly once so both the ref guard and the expansion below share the result.
       const poly = findPolymorphicRef(ModelClass, col);

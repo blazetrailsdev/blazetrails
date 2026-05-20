@@ -221,6 +221,32 @@ describe("bookFixtureData", () => {
     expect(awdrInsert).toBeTruthy();
     expect(awdrInsert).toContain(String(fixtureId("david")));
   });
+
+  it("ref() resolves cross-table to declared id once target fixture set is loaded", async () => {
+    // Load authors first so the (authors, david) → id=1 entry lands in the
+    // adapter-scoped declared-id registry; then loading books must resolve
+    // books.awdr.author_id to authorFixtureData.david.id, NOT fixtureId("david").
+    const adapter = makeAdapter();
+    const Author = makeModel("authors");
+    const Book = makeModel("books");
+    for (const k of Object.keys(authorFixtureData) as Array<keyof typeof authorFixtureData>) {
+      seedRows(Author, k, authorFixtureData, { name: authorFixtureData[k].name });
+    }
+    for (const k of Object.keys(bookFixtureData) as Array<keyof typeof bookFixtureData>) {
+      seedRows(Book, k, bookFixtureData, { name: bookFixtureData[k].name });
+    }
+
+    await defineFixtures(adapter, Author, authorFixtureData);
+    await defineFixtures(adapter, Book, bookFixtureData);
+
+    const awdrInsert = (adapter.execute as ReturnType<typeof vi.fn>).mock.calls
+      .map((c: unknown[]) => c[0] as string)
+      .filter((s) => s.includes("INSERT INTO") && s.includes("books"))
+      .find((s) => s.includes(String(bookFixtureData.awdr.id)));
+    expect(awdrInsert).toBeTruthy();
+    expect(awdrInsert).toContain(String(authorFixtureData.david.id));
+    expect(authorFixtureData.david.id).not.toBe(fixtureId("david"));
+  });
 });
 
 describe("companyFixtureData", () => {

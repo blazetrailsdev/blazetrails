@@ -19,10 +19,12 @@ import {
 import {
   accepts as _accepts,
   contentMimeType as _contentMimeType,
+  format as _format,
   formats as _formats,
   hasContentType as _hasContentType,
   ignoreAcceptHeader as _ignoreAcceptHeader,
   negotiateMime as _negotiateMime,
+  NullType,
   setFormat as _setFormat,
   setFormats as _setFormats,
   setIgnoreAcceptHeader as _setIgnoreAcceptHeader,
@@ -30,7 +32,6 @@ import {
   shouldApplyVaryHeader as _shouldApplyVaryHeader,
   variant as _variant,
   type MimeNegotiationHost,
-  type NullType,
 } from "./mime-negotiation.js";
 import type { ArrayInquirer } from "@blazetrails/activesupport";
 import type { MimeType } from "./mime-type.js";
@@ -493,28 +494,9 @@ export class Request {
     return {};
   }
 
-  // --- Format ---
-
-  get format(): string | undefined {
-    // Check explicit format parameter
-    const paramFormat = this.params?.["format"];
-    if (paramFormat) return String(paramFormat);
-
-    // Check path extension
-    const ext = this.path.match(/\.(\w+)$/);
-    if (ext) return ext[1];
-
-    // Infer from Accept header
-    const accept = this.accept;
-    if (!accept || accept === "*/*") return "html";
-    if (accept.includes("text/html")) return "html";
-    if (accept.includes("application/xhtml+xml")) return "html";
-    if (accept.includes("application/xml") || accept.includes("text/xml")) return "xml";
-    if (accept.includes("text/plain")) return "text";
-    if (accept.includes("application/json")) return "json";
-
-    return undefined;
-  }
+  // `format` / `setFormat` are mixed in from MimeNegotiation onto the
+  // prototype below; declared here for typing.
+  declare readonly format: MimeType | NullType;
 
   // --- Server software ---
 
@@ -718,6 +700,12 @@ Object.defineProperty(Request.prototype, "contentMimeType", {
 Object.defineProperty(Request.prototype, "accepts", {
   get(this: Request) {
     return _accepts.call(mimeHost(this));
+  },
+  configurable: true,
+});
+Object.defineProperty(Request.prototype, "format", {
+  get(this: Request) {
+    return _format.call(mimeHost(this));
   },
   configurable: true,
 });

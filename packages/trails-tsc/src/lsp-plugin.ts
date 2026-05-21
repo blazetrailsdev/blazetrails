@@ -73,21 +73,29 @@ export function init(modules: { typescript: typeof ts }): {
       const origGetSnapshot = host.getScriptSnapshot.bind(host);
       const origGetScriptKind = host.getScriptKind?.bind(host);
 
-      host.readFile = (p, enc) => {
+      // `readFile` is optional on `LanguageServiceHost`; when the host
+      // doesn't implement it, fall through to the filesystem so `.tse`
+      // content still resolves. Non-`.tse` paths pass through (returning
+      // whatever the original host returned, including `undefined`).
+      const readTseSource = (p: string, enc?: string): string | undefined => {
         const raw = origReadFile?.(p, enc);
-        return p.endsWith(".tse") && typeof raw === "string" ? virtualize(raw) : raw;
+        if (typeof raw === "string") return raw;
+        try {
+          return fs.readFileSync(p, "utf8");
+        } catch {
+          return undefined;
+        }
+      };
+
+      host.readFile = (p, enc) => {
+        if (!p.endsWith(".tse")) return origReadFile?.(p, enc);
+        const raw = readTseSource(p, enc);
+        return raw === undefined ? undefined : virtualize(raw);
       };
 
       host.getScriptSnapshot = (p) => {
         if (!p.endsWith(".tse")) return origGetSnapshot(p);
-        let raw: string | undefined = origReadFile?.(p, "utf8");
-        if (raw === undefined) {
-          try {
-            raw = fs.readFileSync(p, "utf8");
-          } catch {
-            /* file absent */
-          }
-        }
+        const raw = readTseSource(p, "utf8");
         return raw === undefined ? undefined : tsLib.ScriptSnapshot.fromString(virtualize(raw));
       };
 

@@ -126,4 +126,21 @@ describe("runCli", () => {
   it("prints usage for --help and exits 0", () => {
     expect(runCli(["--help"])).toBe(0);
   });
+
+  it("`dev` starts the watcher synchronously and runs an initial build", () => {
+    const cwd = mkScratch();
+    write(cwd, "app/views/home.html.tse", "hi");
+    const rc = runCli(["dev", "--cwd", cwd]);
+    expect(rc).toBe(0);
+    expect(fs.existsSync(path.join(cwd, ".trails/views/home.html.tse.js"))).toBe(true);
+    // Tear down the registered SIGINT handler's watcher. We can't let
+    // `process.exit` actually run inside vitest, so stub it briefly.
+    const origExit = process.exit;
+    (process as unknown as { exit: (n?: number) => void }).exit = (() => undefined) as never;
+    try {
+      process.emit("SIGINT");
+    } finally {
+      (process as unknown as { exit: typeof origExit }).exit = origExit;
+    }
+  });
 });

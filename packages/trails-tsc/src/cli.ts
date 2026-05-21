@@ -82,5 +82,12 @@ export function runCli(argv: readonly string[]): number {
 // URL-encoded chars don't trip a naive `file://` string compare.
 const entry = process.argv[1];
 if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
-  process.exit(runCli(process.argv.slice(2)));
+  const argv = process.argv.slice(2);
+  const rc = runCli(argv);
+  // `dev` registers SIGINT/SIGTERM handlers and returns 0; calling
+  // `process.exit` here would tear down the watcher immediately. The
+  // open fs.watch handle keeps the event loop alive on its own —
+  // only exit explicitly for one-shot commands.
+  if (argv[0] !== "dev") process.exit(rc);
+  else if (rc !== 0) process.exit(rc);
 }

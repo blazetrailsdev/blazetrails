@@ -41,7 +41,13 @@ export function watchViews(opts: WatchViewsOptions = {}): WatchHandle {
   let pending: NodeJS.Timeout | null = null;
   let lastTrigger: string | undefined;
 
-  const watcher = fs.watch(viewsDir, { recursive: true }, (_event, filename) => {
+  // Node 20+ supports `recursive` on Linux/macOS/Windows, but some
+  // FUSE / network mounts still reject it. Fall back to a non-recursive
+  // watch on the views root rather than failing the whole `dev` command;
+  // top-level edits still trigger rebuilds, just not nested subdirs.
+  const tryWatch = (recursive: boolean): fs.FSWatcher =>
+    fs.watch(viewsDir, { recursive }, (_event, filename) => onEvent(filename));
+  const onEvent = (filename: string | Buffer | null): void => {
     // Some platforms/filesystems (older Windows, certain network mounts)
     // emit a null filename. We can't filter by extension, but the cheap
     // full rebuild remains correct — schedule with an unknown trigger so
@@ -58,7 +64,14 @@ export function watchViews(opts: WatchViewsOptions = {}): WatchHandle {
       lastTrigger = undefined;
       runBuild(trig);
     }, debounceMs);
-  });
+  };
+
+  let watcher: fs.FSWatcher;
+  try {
+    watcher = tryWatch(true);
+  } catch {
+    watcher = tryWatch(false);
+  }
 
   return {
     close() {

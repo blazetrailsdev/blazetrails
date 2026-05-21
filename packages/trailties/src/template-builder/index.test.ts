@@ -1,0 +1,101 @@
+import { describe, expect, it } from "vitest";
+import {
+  ref,
+  type,
+  tsBody,
+  tsImport,
+  tsImportDefault,
+  tsImportType,
+  tsField,
+  tsMethod,
+  tsClass,
+  tsInterface,
+  tsModule,
+} from "./index.js";
+import { assertNoRubySource, parseTs } from "./testing.js";
+
+describe("template-builder", () => {
+  it("dedupes imports across declarations", () => {
+    const { refs: ar } = tsImport("@blazetrails/activerecord", { Base: "named" });
+    const out = tsModule({
+      declarations: [
+        tsClass({ name: "A", extends: ar.Base, body: [] }),
+        tsClass({ name: "B", extends: ar.Base, body: [] }),
+      ],
+    });
+    expect(out.match(/from "@blazetrails\/activerecord"/g) ?? []).toHaveLength(1);
+    expect(out).toContain(`import { Base } from "@blazetrails/activerecord";`);
+  });
+
+  it("combines default + named in same import and emits type-only + renames", () => {
+    const t = tsImportType("x", { T: "named" });
+    const d = tsImportDefault("./foo.js", "Foo");
+    const out = tsModule({
+      imports: [
+        { from: "x", default: "Foo" },
+        { from: "x", named: { Bar: "Bar" } },
+        { from: "y", named: { LocalName: "Original" } },
+        t.import,
+        d.import,
+      ],
+      declarations: [],
+    });
+    expect(out).toContain(`import Foo, { Bar } from "x";`);
+    expect(out).toContain(`import type { T } from "x";`);
+    expect(out).toContain(`import { Original as LocalName } from "y";`);
+    expect(out).toContain(`import Foo from "./foo.js";`);
+  });
+
+  it("propagates refs through type and tsBody, dedents tsBody", () => {
+    const u = ref("User", "./user.js");
+    const body = tsBody`
+      const u = new ${u}();
+      return u;
+    `;
+    expect(body.text).toBe("const u = new User();\nreturn u;");
+    const out = tsModule({
+      declarations: [
+        tsClass({
+          name: "C",
+          body: [tsMethod({ name: "make", params: [], returnType: type`Array<${u}>`, body })],
+        }),
+      ],
+    });
+    expect(out).toContain(`import { User } from "./user.js";`);
+    expect(out).toContain(`Array<User>`);
+    expect(out).toContain(`return u;`);
+  });
+
+  it("emits a valid hand-built module (snapshot + parse + no-Ruby)", () => {
+    const { refs: ar } = tsImport("@blazetrails/activerecord", { Base: "named" });
+    const out = tsModule({
+      preamble: "// auto-generated",
+      declarations: [
+        tsClass({
+          name: "User",
+          extends: ar.Base,
+          body: [
+            tsField("name", "string"),
+            tsMethod({
+              name: "greet",
+              params: [],
+              returnType: "string",
+              body: tsBody`return "hi " + this.name;`,
+            }),
+          ],
+        }),
+        tsInterface({ name: "UserShape", body: [tsField("name", "string")] }),
+      ],
+    });
+    expect(out).toMatchSnapshot();
+    expect(parseTs(out).diagnostics).toEqual([]);
+    assertNoRubySource(out);
+  });
+
+  it("assertNoRubySource flags Ruby class/module/def lines", () => {
+    expect(() => assertNoRubySource("class User < Base\nend")).toThrow();
+    expect(() => assertNoRubySource("module Foo\nend")).toThrow();
+    expect(() => assertNoRubySource("  def greet\n  end")).toThrow();
+    expect(() => assertNoRubySource(`export class User extends Base {}`)).not.toThrow();
+  });
+});

@@ -1,0 +1,73 @@
+/** @internal */
+declare const REF_BRAND: unique symbol;
+
+export type Ref = { readonly [REF_BRAND]: "ref"; readonly name: string; readonly from?: string };
+export type Type = {
+  readonly [REF_BRAND]: "type";
+  readonly text: string;
+  readonly refs: readonly Ref[];
+};
+export type Body = {
+  readonly [REF_BRAND]: "body";
+  readonly text: string;
+  readonly refs: readonly Ref[];
+};
+
+export interface Import {
+  from: string;
+  default?: string;
+  named?: Record<string, string>;
+  typeOnly?: boolean;
+}
+export interface ImportResult<TNames extends string = string> {
+  import: Import;
+  refs: { readonly [K in TNames]: Ref };
+}
+
+export type FieldType = Type | Ref | string;
+export interface Field {
+  name: string;
+  type: FieldType;
+  nullable?: boolean;
+  initializer?: string;
+  comment?: string;
+}
+export interface MethodParam {
+  name: string;
+  type: FieldType;
+}
+export interface Method {
+  name: string;
+  params: MethodParam[];
+  returnType?: FieldType;
+  body: Body;
+  async?: boolean;
+  static?: boolean;
+  visibility?: "public" | "protected" | "private";
+}
+
+export interface ClassOpts {
+  name: string;
+  extends?: Ref;
+  implements?: Ref[];
+  exported?: boolean;
+  body: Array<Field | Method>;
+}
+export type ClassDecl = ClassOpts & { readonly [REF_BRAND]: "class" };
+
+export interface InterfaceOpts {
+  name: string;
+  extends?: Ref[];
+  exported?: boolean;
+  body: Field[];
+}
+export type InterfaceDecl = InterfaceOpts & { readonly [REF_BRAND]: "interface" };
+
+export type RawDecl = { readonly [REF_BRAND]: "raw"; text: string };
+export type Declaration = ClassDecl | InterfaceDecl | RawDecl;
+
+export interface ModuleSource {
+  imports?: Import[];
+  declarations: Declaration[];
+  preamble?: string;
+}

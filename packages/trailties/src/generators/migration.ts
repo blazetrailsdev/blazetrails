@@ -1,10 +1,13 @@
-import { camelize, getFs, getPath } from "@blazetrails/activesupport";
+import { camelize, getPath } from "@blazetrails/activesupport";
 import {
   CreateMigration,
   type CreateMigrationConfig,
   type CreateMigrationHost,
   type MigrationRenderer,
 } from "./actions/create-migration.js";
+import { migrationLookupAt } from "./migration-lookup.js";
+
+export { migrationLookupAt, migrationExists } from "./migration-lookup.js";
 
 // Mirrors railties/lib/rails/generators/migration.rb. ERB template rendering
 // is supplied by the caller (a render callback) until PR 1.12c lands the
@@ -14,26 +17,6 @@ export interface MigrationAssigns {
   migrationNumber: string;
   migrationFileName: string;
   migrationClassName: string;
-}
-
-const MIGRATION_FILE_RE = /^[0-9].*_.*\.(ts|js|rb)$/;
-
-export async function migrationLookupAt(dirname: string): Promise<string[]> {
-  const fs = getFs();
-  if (!(await fs.exists(dirname))) return [];
-  if (!fs.readdir) throw new Error("FsAdapter.readdir is required");
-  const path = getPath();
-  return (await fs.readdir(dirname))
-    .filter((e) => MIGRATION_FILE_RE.test(e))
-    .map((e) => path.join(dirname, e));
-}
-
-export async function migrationExists(
-  dirname: string,
-  fileName: string,
-): Promise<string | undefined> {
-  const re = new RegExp(`\\d+_${fileName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.(ts|js|rb)$`);
-  return (await migrationLookupAt(dirname)).find((f) => re.test(f));
 }
 
 export async function currentMigrationNumber(dirname: string): Promise<number> {
@@ -103,5 +86,10 @@ export async function migrationTemplate(
   const assigns = buildMigrationAssigns(resolved, nextNumber);
   host.setMigrationAssigns(assigns);
   const numbered = path.join(dir, `${nextNumber}_${path.basename(resolved)}`);
-  return createMigration(host, numbered, () => render(assigns), config);
+  // assigns.migrationFileName is the single source of truth for the
+  // CreateMigration action's existence checks. Wrap the host so the action
+  // can't drift from the just-computed assigns even if the host's own
+  // migrationFileName field hasn't been synced.
+  const wrapped: CreateMigrationHost = { ...host, migrationFileName: assigns.migrationFileName };
+  return createMigration(wrapped, numbered, () => render(assigns), config);
 }

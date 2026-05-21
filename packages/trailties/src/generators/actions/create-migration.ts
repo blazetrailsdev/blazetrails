@@ -1,5 +1,5 @@
 import { getFs, getPath } from "@blazetrails/activesupport";
-import { migrationExists } from "../migration.js";
+import { migrationExists } from "../migration-lookup.js";
 
 // Mirrors railties/lib/rails/generators/actions/create_migration.rb. Rails
 // inherits from Thor::Actions::CreateFile; we don't have Thor, so the

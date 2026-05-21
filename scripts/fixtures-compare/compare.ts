@@ -55,7 +55,7 @@ function loadRailsYaml(file: string): { ok: true; data: FixtureMap } | { ok: fal
   if (unsupported) return { ok: false, reason: "ERB-UNSUPPORTED" };
   let parsed: unknown;
   try {
-    parsed = parseYaml(rendered);
+    parsed = parseYaml(rendered, { merge: true });
   } catch {
     return { ok: false, reason: "YAML-PARSE-ERR" };
   }
@@ -65,8 +65,30 @@ function loadRailsYaml(file: string): { ok: true; data: FixtureMap } | { ok: fal
   const entries = Array.isArray(parsed)
     ? parsed.flatMap((e) => (e && typeof e === "object" ? Object.entries(e) : []))
     : Object.entries(parsed as Record<string, unknown>);
+  // Rails reserves `_fixture` (carries `model_class` / `ignore` metadata for
+  // `set_fixture_class`) and YAML anchor blocks like `DEFAULTS` (merged into
+  // rows via `<<: *DEFAULTS`); neither is a fixture row. The `_fixture.ignore`
+  // key further suppresses anchor blocks the user gave a non-DEFAULTS name
+  // (e.g. `_fixture: { ignore: DEAD_PARROT }`).
+  const meta = (parsed as Record<string, unknown>)._fixture;
+  // Only `_fixture` is a YAML metadata key; `DEFAULTS` and other anchor
+  // labels (`&NAME`) are still real fixture rows that Rails inserts unless
+  // they're listed in `_fixture.ignore` (e.g. `ignore: DEAD_PARROT`).
+  const ignored = new Set<string>(["_fixture"]);
+  if (meta && typeof meta === "object" && "ignore" in meta) {
+    const ig = (meta as { ignore: unknown }).ignore;
+    if (typeof ig === "string") ignored.add(ig);
+    else if (Array.isArray(ig)) for (const n of ig) if (typeof n === "string") ignored.add(n);
+  }
   for (const [k, v] of entries)
-    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = v as Row;
+    if (v && typeof v === "object" && !Array.isArray(v) && !ignored.has(k))
+      out[k] = v as Row;
+  // Interpolate Rails' `$LABEL` token (the row name) on scalar string values.
+  for (const [name, row] of Object.entries(out)) {
+    for (const [col, val] of Object.entries(row)) {
+      if (typeof val === "string" && val.includes("$LABEL")) row[col] = val.replace(/\$LABEL/g, name); // prettier-ignore
+    }
+  }
   return { ok: true, data: out };
 }
 
@@ -184,6 +206,37 @@ export function schemaCheck(
   return { ported: true, extras };
 }
 
+/**
+ * Rails fixture loader maps association names to FK columns: `pirate: blackbeard`
+ * → `pirate_id`, `pirate: blackbeard (Pirate)` → `pirate_id` + `pirate_type` for
+ * polymorphic. HABTM keys (`treasures: diamond, sapphire`) populate a join table,
+ * not a column on the host row. The TS side encodes the materialized FK columns
+ * directly. Rewrite the Rails row to canonical TS shape so the per-attr diff
+ * doesn't drown in shorthand-vs-canonical noise: drop association keys whose
+ * `_id` counterpart isn't on either side (HABTM-like), and expand the rest.
+ */
+// prettier-ignore
+export function canonicalizeRailsRow(railsRow: Row, tsRow: Row, columns: Set<string> | null): Row {
+  const out: Row = {};
+  const knows = (k: string): boolean => columns ? columns.has(k) : k in tsRow;
+  for (const [k, v] of Object.entries(railsRow)) {
+    if (knows(k)) { out[k] = v; continue; } // prettier-ignore
+    const idKey = `${k}_id`;
+    if (knows(idKey)) {
+      if (typeof v === "string") {
+        const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(v);
+        if (m) { out[idKey] = m[1]; out[`${k}_type`] = m[2]; }
+        else out[idKey] = v;
+      } else out[idKey] = v as Row[string];
+      continue;
+    }
+    // Drop: HABTM association (e.g. `treasures: diamond, sapphire`) or a
+    // belongs_to whose host model isn't in the schema yet. Either way the
+    // value isn't a column on this table — comparing it would falsely flag.
+  }
+  return out;
+}
+
 // prettier-ignore
 export async function compareFile(yamlBase: string, yamlByTable: Map<string, FixtureMap>, idIndex: Map<string, Map<number, string[]>>, prelimFailure: Status | undefined, schema: Schema = TEST_SCHEMA): Promise<FileResult> {
   const snake = yamlBase.replace(/\.yml$/, "");
@@ -216,13 +269,21 @@ export async function compareFile(yamlBase: string, yamlByTable: Map<string, Fix
   r.schemaPorted = sc.ported;
   r.schemaExtras = sc.extras;
   let anyDiff = sc.extras > 0;
-  for (const [rowName, railsRow] of Object.entries(railsRows)) {
+  const tableShapeForCols = schema[snake] ? tableShape(schema[snake]) : null;
+  const cols: Set<string> | null = tableShapeForCols
+    ? new Set([
+        ...Object.keys(tableShapeForCols.columns),
+        ...(tableShapeForCols.hasImplicitId ? ["id"] : []),
+      ])
+    : null;
+  for (const [rowName, railsRowRaw] of Object.entries(railsRows)) {
     const tsRow = tsRows[rowName];
     if (!tsRow || typeof tsRow !== "object") {
       r.notes.push(`row missing in TS: ${rowName}`);
       anyDiff = true;
       continue;
     }
+    const railsRow = canonicalizeRailsRow(railsRowRaw, tsRow, cols);
     r.rowsMatched++;
     if ("id" in railsRow && (!("id" in tsRow) || tsRow.id !== railsRow.id)) {
       r.notes.push(`id-divergence: ${rowName} ts=${String(tsRow.id)} rails=${String(railsRow.id)}`);

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { stripErb, isRefLike, compareValue, compareFile, schemaCheck } from "./compare.js";
+// prettier-ignore
+import { stripErb, isRefLike, compareValue, compareFile, schemaCheck, canonicalizeRailsRow } from "./compare.js";
 import type { Schema } from "../../packages/activerecord/src/test-helpers/define-schema.js";
 
 // prettier-ignore
@@ -123,11 +124,38 @@ describe("compareFile + schema integration", () => {
   });
 });
 
+describe("canonicalizeRailsRow", () => {
+  const cols = new Set(["id", "name", "pirate_id", "pirate_type", "club_id"]);
+  it("passes column-named keys through unchanged", () => {
+    expect(canonicalizeRailsRow({ id: 1, name: "x" }, {}, cols)).toEqual({ id: 1, name: "x" });
+  });
+  it("expands `assoc: name` belongs_to short-hand into assoc_id", () => {
+    expect(canonicalizeRailsRow({ pirate: "blackbeard" }, {}, cols)).toEqual({
+      pirate_id: "blackbeard",
+    });
+  });
+  it("expands polymorphic `assoc: name (Type)` into assoc_id + assoc_type", () => {
+    expect(canonicalizeRailsRow({ pirate: "blackbeard (Pirate)" }, {}, cols)).toEqual({
+      pirate_id: "blackbeard",
+      pirate_type: "Pirate",
+    });
+  });
+  it("drops keys whose `_id` form isn't a column (HABTM / unknown assoc)", () => {
+    expect(canonicalizeRailsRow({ treasures: "diamond, sapphire" }, {}, cols)).toEqual({});
+  });
+  it("falls back to tsRow keys when no schema columns are available", () => {
+    expect(canonicalizeRailsRow({ pirate: "x" }, { pirate_id: 1 }, null)).toEqual({
+      pirate_id: "x",
+    });
+    expect(canonicalizeRailsRow({ pirate: "x" }, {}, null)).toEqual({});
+  });
+});
+
 describe("compareFile", () => {
   const empty = new Map();
   it("returns MISSING when the TS counterpart doesn't exist", async () => {
-    const rows = new Map([["pirates", { blackbeard: { id: 1 } }]]);
-    const r = await compareFile("pirates.yml", rows, empty, undefined);
+    const rows = new Map([["nonexistent_fixture_xyz", { row1: { id: 1 } }]]);
+    const r = await compareFile("nonexistent_fixture_xyz.yml", rows, empty, undefined);
     expect(r.status).toBe("MISSING");
     expect(r.tsBase).toBeNull();
   });

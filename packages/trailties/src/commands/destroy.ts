@@ -30,7 +30,10 @@ export function destroyCommand(): Command {
         // user-derived tableName so regex metacharacters can't widen
         // the match.
         const escaped = tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const pattern = new RegExp(`create[_-]${escaped}\\.(ts|js)$`);
+        // Anchor to the start of the filename and require the timestamp
+        // + separator so names like `..._recreate_posts.ts` cannot match
+        // `create_posts.ts`.
+        const pattern = new RegExp(`^\\d+[_-]create[_-]${escaped}\\.(ts|js)$`);
         for (const f of fs.readdirSync(migrationsDir)) {
           if (pattern.test(f)) {
             removeFile(cwd, `db/migrations/${f}`);
@@ -89,8 +92,10 @@ export function destroyCommand(): Command {
       // Migration
       const migrationsDir = path.join(cwd, "db", "migrations");
       if (fs.existsSync(migrationsDir)) {
+        const escaped = tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const pattern = new RegExp(`^\\d+[_-]create[_-]${escaped}\\.(ts|js)$`);
         for (const f of fs.readdirSync(migrationsDir)) {
-          if (f.includes(`create-${tableName}`) || f.includes(`create_${tableName}`)) {
+          if (pattern.test(f)) {
             removeFile(cwd, `db/migrations/${f}`);
           }
         }

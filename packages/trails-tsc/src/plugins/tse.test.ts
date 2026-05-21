@@ -25,6 +25,11 @@ describe("virtualizeTse", () => {
     expect(ts).not.toContain("const {");
   });
 
+  it("types empty `<%# locals: () %>` as Record<never, never> (Rails **nil parity)", () => {
+    const out = virtualizeTse("<%# locals: () %><p>hi</p>");
+    expect(out).toContain("locals: Record<never, never>");
+  });
+
   it("destructures locals and types them as unknown when no types block", () => {
     const ts = virtualizeTse("<%# locals: (user:, count: 0) %><%= user %>");
     expect(ts).toContain("locals: { user: unknown; count?: unknown }");

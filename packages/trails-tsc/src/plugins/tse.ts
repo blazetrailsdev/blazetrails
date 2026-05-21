@@ -58,7 +58,10 @@ function parseLocalsSignature(sig: string): LocalEntry[] {
 
 function localsParamType(ast: TseAst, locals: LocalEntry[]): string {
   if (ast.typesAnnotation !== null) return ast.typesAnnotation;
-  if (locals.length === 0) return "Record<string, unknown>";
+  // No `<%# locals: %>` at all → permissive default.
+  if (ast.localsSignature === null) return "Record<string, unknown>";
+  // Explicit empty `<%# locals: () %>` → reject any keys (Rails `**nil`).
+  if (locals.length === 0) return "Record<never, never>";
   const fields = locals.map((l) => `${l.name}${l.defaultExpr ? "?" : ""}: unknown`);
   return `{ ${fields.join("; ")} }`;
 }

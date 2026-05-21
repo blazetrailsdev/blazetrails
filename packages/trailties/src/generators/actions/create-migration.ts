@@ -1,14 +1,13 @@
-import type { FsAdapter, PathAdapter } from "@blazetrails/activesupport";
+import { getFs, getPath } from "@blazetrails/activesupport";
 import { migrationExists } from "../migration.js";
 
 // Mirrors railties/lib/rails/generators/actions/create_migration.rb. Rails
 // inherits from Thor::Actions::CreateFile; we don't have Thor, so the
 // invoke/revoke and conflict behaviors are ported directly. Status output
-// goes through `host.output` (Rails uses shell.say_status).
+// goes through `host.output` (Rails uses shell.say_status). Filesystem and
+// path access come from the activesupport adapter registry.
 
 export interface CreateMigrationHost {
-  fs: FsAdapter;
-  path: PathAdapter;
   output: (msg: string) => void;
   options: { force?: boolean; skip?: boolean; pretend?: boolean };
   migrationFileName: string;
@@ -32,7 +31,7 @@ export class CreateMigration {
   ) {}
 
   get migrationDir(): string {
-    return this.base.path.dirname(this.destination);
+    return getPath().dirname(this.destination);
   }
 
   get migrationFileName(): string {
@@ -51,14 +50,9 @@ export class CreateMigration {
   // exist after a successful invoke!).
   async existingMigration(): Promise<string | undefined> {
     if (this._existingMigration) return this._existingMigration;
-    const found = await migrationExists(
-      this.base.fs,
-      this.base.path,
-      this.migrationDir,
-      this.migrationFileName,
-    );
+    const found = await migrationExists(this.migrationDir, this.migrationFileName);
     const value =
-      found ?? ((await this.base.fs.exists(this.destination)) ? this.destination : undefined);
+      found ?? ((await getFs().exists(this.destination)) ? this.destination : undefined);
     if (value) this._existingMigration = value;
     return value;
   }
@@ -76,8 +70,9 @@ export class CreateMigration {
   async identical(): Promise<boolean> {
     const existing = await this.existingMigration();
     if (!existing) return false;
-    if (!this.base.fs.readFile) throw new Error("FsAdapter.readFile is required");
-    return (await this.base.fs.readFile(existing, "utf-8")) === (await this.render());
+    const fs = getFs();
+    if (!fs.readFile) throw new Error("FsAdapter.readFile is required");
+    return (await fs.readFile(existing, "utf-8")) === (await this.render());
   }
 
   async relativeExistingMigration(): Promise<string> {
@@ -105,7 +100,7 @@ export class CreateMigration {
     // got written (force / no-conflict) and fall back to the relative path
     // of the existing migration (identical / skip).
     if (this.pretend()) return this.destination;
-    if (await this.base.fs.exists(this.destination)) return this.destination;
+    if (await getFs().exists(this.destination)) return this.destination;
     return this.relativeExistingMigration();
   }
 
@@ -115,8 +110,9 @@ export class CreateMigration {
     this.sayStatus("remove", "red", sayDest);
     if (!e) return undefined;
     if (!this.pretend()) {
-      if (!this.base.fs.unlink) throw new Error("FsAdapter.unlink is required");
-      await this.base.fs.unlink(e);
+      const fs = getFs();
+      if (!fs.unlink) throw new Error("FsAdapter.unlink is required");
+      await fs.unlink(e);
       this.invalidateExistingMigration();
     }
     return e;
@@ -134,8 +130,9 @@ export class CreateMigration {
       if (!this.pretend()) {
         const e = await this.existingMigration();
         if (e) {
-          if (!this.base.fs.unlink) throw new Error("FsAdapter.unlink is required");
-          await this.base.fs.unlink(e);
+          const fs = getFs();
+          if (!fs.unlink) throw new Error("FsAdapter.unlink is required");
+          await fs.unlink(e);
           this.invalidateExistingMigration();
         }
         await this.writeRendered();
@@ -155,10 +152,11 @@ export class CreateMigration {
   }
 
   private async writeRendered(): Promise<void> {
-    if (!this.base.fs.writeFile) throw new Error("FsAdapter.writeFile is required");
-    if (!this.base.fs.mkdir) throw new Error("FsAdapter.mkdir is required");
-    await this.base.fs.mkdir(this.base.path.dirname(this.destination), { recursive: true });
-    await this.base.fs.writeFile(this.destination, await this.render());
+    const fs = getFs();
+    if (!fs.writeFile) throw new Error("FsAdapter.writeFile is required");
+    if (!fs.mkdir) throw new Error("FsAdapter.mkdir is required");
+    await fs.mkdir(getPath().dirname(this.destination), { recursive: true });
+    await fs.writeFile(this.destination, await this.render());
   }
 
   private sayStatus(status: string, _color: string, message?: string): void {

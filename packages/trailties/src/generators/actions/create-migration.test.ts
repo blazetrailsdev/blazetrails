@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import type { FsAdapter, PathAdapter } from "@blazetrails/activesupport";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  fsAdapterConfig,
+  registerFsAdapter,
+  type FsAdapter,
+  type PathAdapter,
+} from "@blazetrails/activesupport";
 import { CreateMigration, type MigrationRenderer } from "./create-migration.js";
 
 const path: PathAdapter = {
@@ -11,6 +16,7 @@ const path: PathAdapter = {
     const i = p.lastIndexOf(".");
     return i >= 0 ? p.slice(i) : "";
   },
+  isAbsolute: (p) => p.startsWith("/"),
   sep: "/",
 };
 
@@ -19,11 +25,10 @@ const DEFAULT = "db/migrate/create_articles.rb";
 
 interface Store {
   files: Map<string, string>;
-  fs: FsAdapter;
   log: string[];
 }
 
-function store(): Store {
+function install(): Store {
   const files = new Map<string, string>();
   const dirs = new Set<string>([ROOT, `${ROOT}/db`, `${ROOT}/db/migrate`]);
   const dirOf = (p: string) => p.split("/").slice(0, -1).join("/") || "/";
@@ -42,7 +47,9 @@ function store(): Store {
     readdir: async (p: string) =>
       [...files.keys()].filter((f) => dirOf(f) === p).map((f) => f.slice(p.length + 1)),
   } as unknown as FsAdapter;
-  return { files, fs, log: [] };
+  registerFsAdapter("create-migration-test", fs, path);
+  fsAdapterConfig.adapter = "create-migration-test";
+  return { files, log: [] };
 }
 
 function makeMigration(
@@ -57,8 +64,6 @@ function makeMigration(
   const numbered = `${dir}/${next}_${path.basename(destinationPath)}`;
   const fileName = path.basename(destinationPath).replace(/\.rb$/, "");
   const host = {
-    fs: s.fs,
-    path,
     output: (m: string) => s.log.push(m),
     options: generatorOptions,
     migrationFileName: fileName,
@@ -69,9 +74,13 @@ function makeMigration(
 }
 
 describe("CreateMigration", () => {
+  const PREV = fsAdapterConfig.adapter;
   let s: Store;
   beforeEach(() => {
-    s = store();
+    s = install();
+  });
+  afterEach(() => {
+    fsAdapterConfig.adapter = PREV;
   });
 
   const migrationExists = async (

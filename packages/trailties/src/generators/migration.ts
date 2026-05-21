@@ -1,4 +1,4 @@
-import { camelize, type FsAdapter, type PathAdapter } from "@blazetrails/activesupport";
+import { camelize, getFs, getPath } from "@blazetrails/activesupport";
 import {
   CreateMigration,
   type CreateMigrationConfig,
@@ -8,7 +8,8 @@ import {
 
 // Mirrors railties/lib/rails/generators/migration.rb. ERB template rendering
 // is supplied by the caller (a render callback) until PR 1.12c lands the
-// template pipeline.
+// template pipeline. Filesystem and path access come from the activesupport
+// adapter registry.
 export interface MigrationAssigns {
   migrationNumber: string;
   migrationFileName: string;
@@ -17,35 +18,28 @@ export interface MigrationAssigns {
 
 const MIGRATION_FILE_RE = /^[0-9].*_.*\.(ts|js|rb)$/;
 
-export async function migrationLookupAt(
-  fs: FsAdapter,
-  path: PathAdapter,
-  dirname: string,
-): Promise<string[]> {
+export async function migrationLookupAt(dirname: string): Promise<string[]> {
+  const fs = getFs();
   if (!(await fs.exists(dirname))) return [];
   if (!fs.readdir) throw new Error("FsAdapter.readdir is required");
+  const path = getPath();
   return (await fs.readdir(dirname))
     .filter((e) => MIGRATION_FILE_RE.test(e))
     .map((e) => path.join(dirname, e));
 }
 
 export async function migrationExists(
-  fs: FsAdapter,
-  path: PathAdapter,
   dirname: string,
   fileName: string,
 ): Promise<string | undefined> {
   const re = new RegExp(`\\d+_${fileName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.(ts|js|rb)$`);
-  return (await migrationLookupAt(fs, path, dirname)).find((f) => re.test(f));
+  return (await migrationLookupAt(dirname)).find((f) => re.test(f));
 }
 
-export async function currentMigrationNumber(
-  fs: FsAdapter,
-  path: PathAdapter,
-  dirname: string,
-): Promise<number> {
+export async function currentMigrationNumber(dirname: string): Promise<number> {
+  const path = getPath();
   let max = 0;
-  for (const f of await migrationLookupAt(fs, path, dirname)) {
+  for (const f of await migrationLookupAt(dirname)) {
     const n = parseInt(path.basename(f).split("_")[0]!, 10);
     if (!Number.isNaN(n) && n > max) max = n;
   }
@@ -57,12 +51,10 @@ export function nextMigrationNumber(): never {
   throw new NotImplementedError("nextMigrationNumber must be implemented");
 }
 
-export function buildMigrationAssigns(
-  path: PathAdapter,
-  destination: string,
-  nextNumber: string,
-): MigrationAssigns {
-  const base = path.basename(destination).replace(/\.(ts|js|rb)$/, "");
+export function buildMigrationAssigns(destination: string, nextNumber: string): MigrationAssigns {
+  const base = getPath()
+    .basename(destination)
+    .replace(/\.(ts|js|rb)$/, "");
   return {
     migrationNumber: nextNumber,
     migrationFileName: base,
@@ -98,17 +90,18 @@ export async function migrationTemplate(
   render: (assigns: MigrationAssigns) => string | Promise<string>,
   config: CreateMigrationConfig = {},
 ): Promise<string> {
+  const path = getPath();
   // Per PathAdapter contract: when isAbsolute is undefined, any path is
   // treated as already absolute; only join with destinationRoot when the
   // adapter declares the destination is relative.
   const resolved =
-    host.path.isAbsolute && !host.path.isAbsolute(destination)
-      ? host.path.join(host.destinationRoot, destination)
+    path.isAbsolute && !path.isAbsolute(destination)
+      ? path.join(host.destinationRoot, destination)
       : destination;
-  const dir = host.path.dirname(resolved);
+  const dir = path.dirname(resolved);
   const nextNumber = String(await host.nextMigrationNumber(dir));
-  const assigns = buildMigrationAssigns(host.path, resolved, nextNumber);
+  const assigns = buildMigrationAssigns(resolved, nextNumber);
   host.setMigrationAssigns(assigns);
-  const numbered = host.path.join(dir, `${nextNumber}_${host.path.basename(resolved)}`);
+  const numbered = path.join(dir, `${nextNumber}_${path.basename(resolved)}`);
   return createMigration(host, numbered, () => render(assigns), config);
 }

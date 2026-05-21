@@ -22,7 +22,6 @@ export function generate(
   ...args: string[]
 ): void {
   this.output(`      generate  ${what}`);
-  this.pendingGenerators ??= [];
   this.pendingGenerators.push({ what, args });
 }
 
@@ -37,9 +36,8 @@ export function git(this: ActionsHost, commands: string | Record<string, string>
 }
 
 function runGitCommand(host: ActionsHost, cmd: string, options: string): void {
-  const optionParts = options ? splitArgs(options) : [];
-  const args = [cmd, ...optionParts];
-  host.output(`         run  git ${[cmd, options].filter(Boolean).join(" ")}`);
+  const args = [cmd, ...splitArgs(options)];
+  host.output(`           git  ${[cmd, options].filter(Boolean).join(" ")}`);
   getChildProcess().spawnSync("git", args, { cwd: host.cwd });
 }
 
@@ -47,7 +45,6 @@ export function afterBundle(
   this: GeneratorActionsState,
   callback: () => void | Promise<void>,
 ): void {
-  this.afterBundleCallbacks ??= [];
   this.afterBundleCallbacks.push(callback);
 }
 
@@ -77,7 +74,7 @@ function executeCommand(
   if (opts.sudo) parts.push("sudo");
   parts.push(name, ...splitArgs(command));
   const [bin, ...args] = parts;
-  host.output(`         ${name}  ${command}`);
+  host.output(`          ${name}  ${command}`);
   const result = getChildProcess().spawnSync(bin, args, {
     cwd: host.cwd,
     env: { ...processEnv, RAILS_ENV: envName } as NodeJS.ProcessEnv,

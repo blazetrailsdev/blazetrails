@@ -77,6 +77,14 @@ describe("ActionsTest", () => {
     expect(calls[0].options?.env?.RAILS_ENV).toBe("production");
   });
 
+  it("rake env option should be passed per-call and not mutate adapter env", () => {
+    const gen = makeGen();
+    gen.rake("log:clear", { env: "production" });
+    gen.rake("log:clear");
+    expect(calls[0].options?.env?.RAILS_ENV).toBe("production");
+    expect(calls[1].options?.env?.RAILS_ENV).toBe("development");
+  });
+
   it("rake with sudo option should run rake with sudo", () => {
     makeGen().rake("log:clear", { sudo: true });
     expect(calls[0].cmd).toBe("sudo");

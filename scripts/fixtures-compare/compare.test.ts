@@ -37,6 +37,11 @@ describe("compareValue", () => {
     expect(cmp(ref("e", "modest"), "modest")[0]).toBe(true);
     expect(cmp("a", "b")[1][0]).toMatch(/^value-differs:/);
   });
+  it("compares array values structurally (postgres text[] etc.)", () => {
+    expect(cmp(["a", "b"], ["a", "b"])[0]).toBe(true);
+    expect(cmp(["a", "b"], ["a", "c"])[0]).toBe(false);
+    expect(cmp(["a"], ["a", "b"])[0]).toBe(false);
+  });
 });
 
 describe("schemaCheck", () => {

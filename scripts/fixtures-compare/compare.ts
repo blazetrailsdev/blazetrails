@@ -49,7 +49,7 @@ export function stripErb(text: string): { rendered: string; unsupported: boolean
 }
 
 // prettier-ignore
-function loadRailsYaml(file: string): { ok: true; data: FixtureMap } | { ok: false; reason: Status } {
+function loadRailsYaml(file: string, basename: string): { ok: true; data: FixtureMap } | { ok: false; reason: Status } {
   const raw = readFileSync(file, "utf8");
   const { rendered, unsupported } = stripErb(raw);
   if (unsupported) return { ok: false, reason: "ERB-UNSUPPORTED" };
@@ -61,10 +61,23 @@ function loadRailsYaml(file: string): { ok: true; data: FixtureMap } | { ok: fal
   }
   const out: FixtureMap = {};
   if (!parsed || typeof parsed !== "object") return { ok: true, data: out };
-  // YAML !omap → array of single-key maps; otherwise a plain object.
-  const entries = Array.isArray(parsed)
-    ? parsed.flatMap((e) => (e && typeof e === "object" ? Object.entries(e) : []))
-    : Object.entries(parsed as Record<string, unknown>);
+  // Three shapes Rails accepts:
+  //   1) plain map: `label: { col: val }` → Object.entries.
+  //   2) !omap (array of single-key maps with explicit labels) → entries.
+  //   3) list-form (array of bare maps, no label) → Rails auto-labels as
+  //      `<basename>_<index>` via `Fixtures::ClassCache#auto_named_fixtures`.
+  let entries: [string, unknown][];
+  if (Array.isArray(parsed)) {
+    const flat: [string, unknown][] = [];
+    parsed.forEach((e, i) => {
+      if (!e || typeof e !== "object") return;
+      const ks = Object.keys(e);
+      const looksLabeled = ks.length === 1 && typeof (e as Record<string, unknown>)[ks[0]] === "object"; // prettier-ignore
+      if (looksLabeled) flat.push(...(Object.entries(e) as [string, unknown][]));
+      else flat.push([`${basename}_${i}`, e]);
+    });
+    entries = flat;
+  } else entries = Object.entries(parsed as Record<string, unknown>);
   // Rails reserves `_fixture` (carries `model_class` / `ignore` metadata for
   // `set_fixture_class`) and YAML anchor blocks like `DEFAULTS` (merged into
   // rows via `<<: *DEFAULTS`); neither is a fixture row. The `_fixture.ignore`
@@ -134,6 +147,11 @@ export function compareValue(tsVal: unknown, railsVal: unknown, attr: string, id
     return false;
   }
   if (tsVal === railsVal) return true;
+  // Array-typed columns (postgres `text[]`, etc.) appear as arrays on both
+  // sides; compare structurally so identical contents don't flag.
+  if (Array.isArray(tsVal) && Array.isArray(railsVal)
+    && tsVal.length === railsVal.length && tsVal.every((v, i) => v === railsVal[i]))
+    return true;
   notes.push(`value-differs: ${attr}: ts=${JSON.stringify(tsVal)} rails=${JSON.stringify(railsVal)}`); // prettier-ignore
   return false;
 }
@@ -355,7 +373,7 @@ async function main(): Promise<void> {
   const prelim = new Map<string, Status>();
   for (const f of allYamls) {
     const snake = f.replace(/\.yml$/, "");
-    const loaded = loadRailsYaml(path.join(YML_DIR, f));
+    const loaded = loadRailsYaml(path.join(YML_DIR, f), snake);
     if (loaded.ok) yamlByTable.set(snake, loaded.data);
     else prelim.set(snake, loaded.reason);
   }

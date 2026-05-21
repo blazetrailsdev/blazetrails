@@ -62,6 +62,22 @@ describe("buildViews", () => {
     expect(manifest).toContain("} as const;");
   });
 
+  it("clears stale outputs from a prior build", () => {
+    const cwd = mkScratch();
+    write(cwd, "app/views/users/show.html.tse", "first");
+    write(cwd, "app/views/users/gone.html.tse", "doomed");
+    buildViews({ cwd });
+    expect(fs.existsSync(path.join(cwd, ".trails/views/users/gone.html.tse.js"))).toBe(true);
+
+    fs.rmSync(path.join(cwd, "app/views/users/gone.html.tse"));
+    const { count } = buildViews({ cwd });
+    expect(count).toBe(1);
+    expect(fs.existsSync(path.join(cwd, ".trails/views/users/gone.html.tse.js"))).toBe(false);
+    expect(fs.existsSync(path.join(cwd, ".trails/views/users/gone.html.tse.ts"))).toBe(false);
+    const manifest = fs.readFileSync(path.join(cwd, ".trails/views-manifest.ts"), "utf8");
+    expect(manifest).not.toContain("gone.html");
+  });
+
   it("honors custom viewsDir / outDir", () => {
     const cwd = mkScratch();
     write(cwd, "src/templates/home.html.tse", "hi");

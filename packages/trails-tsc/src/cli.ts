@@ -4,6 +4,7 @@
  * only; `dev` (watch) is 2c-b and `init` is 2c-c.
  */
 
+import { pathToFileURL } from "node:url";
 import { buildViews, type BuildViewsOptions } from "./build-views.js";
 
 const USAGE = "usage: trails-tsc build [--cwd <dir>] [--views <dir>] [--out <dir>]\n";
@@ -39,7 +40,9 @@ export function runCli(argv: readonly string[]): number {
 
 // Skip auto-exec when imported (e.g. from tests). `import.meta.url` is the
 // invoked module only when run as the program entrypoint.
+// Compare module URL to argv[1] via `pathToFileURL` so Windows paths and
+// URL-encoded chars don't trip a naive `file://` string compare.
 const entry = process.argv[1];
-if (entry !== undefined && import.meta.url === `file://${entry}`) {
+if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
   process.exit(runCli(process.argv.slice(2)));
 }

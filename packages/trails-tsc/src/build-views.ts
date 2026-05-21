@@ -35,6 +35,11 @@ export function buildViews(opts: BuildViewsOptions = {}): BuildViewsResult {
   const outDir = path.resolve(cwd, opts.outDir ?? ".trails");
   const outViews = path.join(outDir, "views");
   const files = walkTse(viewsDir);
+  // Wipe the mirror dir so deleted .tse sources don't leave orphan shims
+  // behind. The docs (plan §2.8) state the mirror "is regenerated on
+  // every build"; keeping orphans would let stale `views-manifest.ts`
+  // entries silently typecheck against templates the user already removed.
+  fs.rmSync(outViews, { recursive: true, force: true });
   fs.mkdirSync(outViews, { recursive: true });
   for (const rel of files) {
     const src = fs.readFileSync(path.join(viewsDir, rel), "utf8");

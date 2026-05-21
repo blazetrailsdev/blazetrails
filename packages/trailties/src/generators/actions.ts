@@ -1,6 +1,9 @@
 // Mirrors railties/lib/rails/generators/actions.rb. Ports generate, git,
-// rake, after_bundle. Unported (no trails equivalent — Ruby-shape DSL emits
-// Ruby-shape files that don't exist in a trails app):
+// rake, and after_install (Rails' after_bundle — renamed for the JS
+// ecosystem; trails apps run a package-manager install, not `bundle`).
+//
+// Unported (no trails equivalent — Ruby-shape DSL emits Ruby-shape files
+// that don't exist in a trails app):
 //   gem, gem_group, github, add_source — trails uses package.json
 //   route, environment, application      — trails uses src/config/*.ts
 
@@ -13,7 +16,7 @@ export interface ActionsHost {
 
 export interface GeneratorActionsState {
   pendingGenerators: Array<{ what: string; args: string[] }>;
-  afterBundleCallbacks: Array<() => void | Promise<void>>;
+  afterInstallCallbacks: Array<() => void | Promise<void>>;
 }
 
 export function generate(
@@ -41,11 +44,11 @@ function runGitCommand(host: ActionsHost, cmd: string, options: string): void {
   getChildProcess().spawnSync("git", args, { cwd: host.cwd });
 }
 
-export function afterBundle(
+export function afterInstall(
   this: GeneratorActionsState,
   callback: () => void | Promise<void>,
 ): void {
-  this.afterBundleCallbacks.push(callback);
+  this.afterInstallCallbacks.push(callback);
 }
 
 export interface RakeOptions {

@@ -3,6 +3,7 @@ import { Command } from "commander";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { AppGenerator } from "../generators/app-generator.js";
+import { getPackageManager, packageManagerInstall } from "../package-manager.js";
 
 export function newCommand(): Command {
   const cmd = new Command("new");
@@ -37,12 +38,13 @@ export function newCommand(): Command {
       }
 
       if (!options.skipInstall) {
-        console.log("  Installing dependencies...");
-        try {
-          execSync("pnpm install", { cwd: appDir, stdio: "pipe" });
+        const pm = getPackageManager(appDir);
+        console.log(`  Installing dependencies with ${pm.name}...`);
+        const result = packageManagerInstall(appDir);
+        if (result.status === 0) {
           console.log("  Dependencies installed");
-        } catch {
-          console.log("  Could not install dependencies — run 'pnpm install' manually");
+        } else {
+          console.log(`  Could not install dependencies — run '${pm.name} install' manually`);
         }
       }
 

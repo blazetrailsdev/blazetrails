@@ -113,17 +113,17 @@ describe("ActionsTest", () => {
     expect(() => makeGen().rake("missing-bin", { abortOnFailure: true })).toThrow(/ENOENT/);
   });
 
-  it("after_bundle should queue callbacks for later invocation", () => {
+  it("after_install should queue callbacks for later invocation", () => {
     const gen = makeGen();
     const order: number[] = [];
-    gen.afterBundle(() => {
+    gen.afterInstall(() => {
       order.push(1);
     });
-    gen.afterBundle(() => {
+    gen.afterInstall(() => {
       order.push(2);
     });
-    expect(gen.afterBundleCallbacks).toHaveLength(2);
-    for (const cb of gen.afterBundleCallbacks) cb();
+    expect(gen.afterInstallCallbacks).toHaveLength(2);
+    for (const cb of gen.afterInstallCallbacks) cb();
     expect(order).toEqual([1, 2]);
   });
 });

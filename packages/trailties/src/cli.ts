@@ -11,6 +11,15 @@ import { appTemplateCommand } from "./commands/app.js";
 import { notesCommand } from "./commands/notes.js";
 import { statsCommand } from "./commands/stats.js";
 
+export {
+  registerPackageManagerAdapter,
+  packageManagerAdapterConfig,
+  detectPackageManager,
+  getPackageManager,
+  packageManagerInstall,
+  type PackageManagerAdapter,
+} from "./package-manager.js";
+
 export function createProgram(): Command {
   const program = new Command();
 

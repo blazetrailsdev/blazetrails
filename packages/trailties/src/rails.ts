@@ -100,9 +100,14 @@ export class Trails {
     return app.initialize(group);
   }
 
-  /** Rails: `delegate :initialized?, to: :application`. */
+  /** Rails: `delegate :initialized?, to: :application`. Rails has no
+   * `allow_nil:` on the delegate, so this throws when no app is
+   * registered — matching the symmetric behavior of `initialize()`. */
   static initialized(): boolean {
-    return Trails.application?.initialized() ?? false;
+    const app = Trails.application;
+    if (!app)
+      throw new Error("Trails.application is not set — register an Application subclass first.");
+    return app.initialized();
   }
 
   static get backtraceCleaner(): BacktraceCleaner {

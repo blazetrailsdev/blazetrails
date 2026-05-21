@@ -148,6 +148,10 @@ describe("Trails", () => {
     await expect(Trails.initialize()).rejects.toThrow(/Trails.application is not set/);
   });
 
+  it("Trails.initialized() throws when no application is registered (Rails: no allow_nil:)", () => {
+    expect(() => Trails.initialized()).toThrow(/Trails.application is not set/);
+  });
+
   it("Trails.publicPath returns null when no application is registered", async () => {
     expect(await Trails.publicPath()).toBeNull();
   });

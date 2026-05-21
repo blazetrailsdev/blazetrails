@@ -58,11 +58,7 @@ export class ChangeGenerator extends GeneratorBase {
         "src/config/database.ts",
         "src/config/database.js",
       ].find((p) => this.fileExists(p)) ?? "src/config/database.ts";
-    const content = databaseConfigTs(this.database, this.appName);
-    const full = this.path.join(this.cwd, target);
-    this.fs.mkdirSync(this.path.dirname(full), { recursive: true });
-    this.fs.writeFileSync(full, content);
-    this.output(`     update  ${target}`);
+    this.writeOrUpdate(target, databaseConfigTs(this.database, this.appName));
   }
 
   editPackageJson(): void {
@@ -83,8 +79,7 @@ export class ChangeGenerator extends GeneratorBase {
     const target = this.database.pkgDependency;
     deps[target.name] = target.version;
     pkg.dependencies = deps;
-    this.fs.writeFileSync(fullPath, JSON.stringify(pkg, null, 2) + "\n");
-    this.output(`     update  package.json`);
+    this.writeOrUpdate("package.json", JSON.stringify(pkg, null, 2) + "\n");
   }
 
   editDockerfile(): void {
@@ -100,8 +95,20 @@ export class ChangeGenerator extends GeneratorBase {
       dockerPackages(BUILD_PACKAGES, this.database.buildPackage),
     );
     if (after === before) return;
-    this.fs.writeFileSync(fullPath, after);
-    this.output(`     update  Dockerfile`);
+    this.writeOrUpdate("Dockerfile", after);
+  }
+
+  private writeOrUpdate(relativePath: string, content: string): void {
+    const existed = this.fileExists(relativePath);
+    const full = this.path.join(this.cwd, relativePath);
+    this.fs.mkdirSync(this.path.dirname(full), { recursive: true });
+    this.fs.writeFileSync(full, content);
+    if (existed) {
+      this.output(`      update  ${relativePath}`);
+    } else {
+      this.createdFiles.push(relativePath);
+      this.output(`      create  ${relativePath}`);
+    }
   }
 
   editDevcontainerFiles(): void {

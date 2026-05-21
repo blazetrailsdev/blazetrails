@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { Railtie as BaseRailtie, deprecator } from "@blazetrails/activesupport";
+import { Railtie as BaseRailtie, Deprecation, deprecator } from "@blazetrails/activesupport";
 import { Digest } from "@blazetrails/activesupport/digest";
 import { Trailtie, type TrailtieConfig } from "./active-support.js";
 
@@ -54,6 +54,52 @@ describe("RailtieTest", () => {
     (Trailtie.config as TrailtieConfig).activeSupport = { hashDigestClass: custom };
     Trailtie.runInitializers();
     expect(Digest.hashDigestClass).toBe(custom);
+  });
+
+  it("runInitializers silences all deprecators when reportDeprecations is false", () => {
+    const other = new Deprecation();
+    deprecators["other"] = other;
+    (Trailtie.config as TrailtieConfig).activeSupport = { reportDeprecations: false };
+    const savedBehavior = deprecator.behavior;
+    const savedSilenced = deprecator.silenced;
+    const savedDisallowed = deprecator.disallowedBehavior;
+    try {
+      Trailtie.runInitializers();
+      for (const d of [deprecator, other]) {
+        expect(d.silenced).toBe(true);
+        expect(d.behavior).toBe("silence");
+        expect(d.disallowedBehavior).toBe("silence");
+      }
+    } finally {
+      deprecator.behavior = savedBehavior;
+      deprecator.silenced = savedSilenced;
+      deprecator.disallowedBehavior = savedDisallowed;
+    }
+  });
+
+  it("runInitializers applies deprecation behavior to all registered deprecators", () => {
+    const other = new Deprecation();
+    deprecators["other"] = other;
+    (Trailtie.config as TrailtieConfig).activeSupport = {
+      deprecation: "raise",
+      disallowedDeprecation: "raise",
+      disallowedDeprecationWarnings: ["bad"],
+    };
+    const savedBehavior = deprecator.behavior;
+    const savedDisallowed = deprecator.disallowedBehavior;
+    const savedWarnings = [...deprecator.disallowedWarnings];
+    try {
+      Trailtie.runInitializers();
+      for (const d of [deprecator, other]) {
+        expect(d.behavior).toBe("raise");
+        expect(d.disallowedBehavior).toBe("raise");
+        expect(d.disallowedWarnings).toEqual(["bad"]);
+      }
+    } finally {
+      deprecator.behavior = savedBehavior;
+      deprecator.disallowedBehavior = savedDisallowed;
+      deprecator.disallowedWarnings = savedWarnings;
+    }
   });
 
   it("runInitializers leaves hashDigestClass untouched when config is absent", () => {

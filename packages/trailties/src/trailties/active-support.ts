@@ -24,8 +24,6 @@
  *     has no `useAuthenticatedMessageEncryption` toggle
  *   - active_support.reset_execution_context — no reloader/executor in trails
  *   - active_support.reset_all_current_attributes_instances — same
- *   - active_support.deprecation_behavior — Deprecation has no
- *     `silenced`/`behavior` setters wired through Application
  *   - active_support.initialize_time_zone — no TZInfo binding
  *   - active_support.to_time_preserves_timezone — flag not ported
  *   - active_support.initialize_beginning_of_week — Date.beginning_of_week
@@ -40,15 +38,29 @@
  *     ported
  *   - active_support.set_use_message_serializer_for_metadata — same
  */
-import { Railtie as BaseRailtie, registerRailtie, deprecator } from "@blazetrails/activesupport";
+import {
+  Railtie as BaseRailtie,
+  registerRailtie,
+  deprecator,
+  type Deprecation,
+  type DeprecationBehavior,
+} from "@blazetrails/activesupport";
 import { Digest } from "@blazetrails/activesupport/digest";
 
 export interface HashDigestClass {
   hexdigest(data: string): string;
 }
 
+type DeprecationCallable = (...args: unknown[]) => void;
+type BehaviorSetting = DeprecationBehavior | DeprecationBehavior[] | DeprecationCallable | null;
+type DisallowedBehaviorSetting = DeprecationBehavior | DeprecationCallable | null;
+
 export interface ActiveSupportConfig {
   hashDigestClass?: HashDigestClass;
+  reportDeprecations?: boolean;
+  deprecation?: BehaviorSetting;
+  disallowedDeprecation?: DisallowedBehaviorSetting;
+  disallowedDeprecationWarnings?: (string | RegExp | "all")[];
 }
 
 export interface TrailtieConfig {
@@ -69,6 +81,28 @@ export class Trailtie extends BaseRailtie {
 
     this.initializer("active_support.deprecator", () => {
       BaseRailtie.deprecators["activeSupport"] = deprecator;
+    });
+
+    this.initializer("active_support.deprecation_behavior", () => {
+      const cfg = (Trailtie.config as TrailtieConfig).activeSupport ?? {};
+      const all = Object.values(BaseRailtie.deprecators).filter((d): d is Deprecation => d != null);
+      if (cfg.reportDeprecations === false) {
+        for (const d of all) {
+          d.silenced = true;
+          d.behavior = "silence";
+          d.disallowedBehavior = "silence";
+        }
+        return;
+      }
+      if (cfg.deprecation !== undefined) {
+        for (const d of all) d.behavior = cfg.deprecation;
+      }
+      if (cfg.disallowedDeprecation !== undefined) {
+        for (const d of all) d.disallowedBehavior = cfg.disallowedDeprecation;
+      }
+      if (cfg.disallowedDeprecationWarnings !== undefined) {
+        for (const d of all) d.disallowedWarnings = cfg.disallowedDeprecationWarnings;
+      }
     });
 
     this.initializer("active_support.set_hash_digest_class", () => {

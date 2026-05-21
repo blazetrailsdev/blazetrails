@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import ts from "typescript";
-import { createTsePlugin, virtualizeTse } from "./tse.js";
+import {
+  createTsePlugin,
+  TseLocalsSignatureError,
+  virtualizeTse,
+  virtualizeTseWithDeltas,
+} from "./tse.js";
 
 describe("createTsePlugin", () => {
   it("claims the .tse extension", () => {
@@ -25,9 +30,19 @@ describe("virtualizeTse", () => {
     expect(ts).not.toContain("const {");
   });
 
-  it("types empty `<%# locals: () %>` as Record<never, never> (Rails **nil parity)", () => {
+  it("types empty `<%# locals: () %>` as Record<string, never> (Rails **nil parity)", () => {
+    // `Record<never, never>` collapses to `{}`; `Record<string, never>`
+    // actually rejects any provided key. See plan §2.5 / §2.9.
     const out = virtualizeTse("<%# locals: () %><p>hi</p>");
-    expect(out).toContain("locals: Record<never, never>");
+    expect(out).toContain("locals: Record<string, never>");
+    // Confirm via tsc: passing `{ extra: 1 }` to a `Record<string, never>`
+    // parameter is a type error. (Inline a Record alias because the
+    // diagnose helper runs with `lib: []`.)
+    const probe =
+      "type Record<K extends keyof never, V> = { [P in K]: V };\n" +
+      out +
+      "\nrender({} as RenderContext, { extra: 1 });";
+    expect(diagnose(probe).join("\n")).toMatch(/not assignable|extra/i);
   });
 
   it("destructures locals and types them as unknown when no types block", () => {
@@ -47,6 +62,25 @@ describe("virtualizeTse", () => {
   it("splits locals on top-level commas only", () => {
     const ts = virtualizeTse("<%# locals: (a: f(1, 2), b: [1, 2]) %>");
     expect(ts).toContain("const { a = f(1, 2), b = [1, 2] } = locals;");
+  });
+
+  it("does not split commas inside string or template literals", () => {
+    const ts = virtualizeTse("<%# locals: (a: \"x, y\", b: 'p, q', c: `t, ${x}, u`) %>");
+    expect(ts).toContain("const { a = \"x, y\", b = 'p, q', c = `t, ${x}, u` } = locals;");
+  });
+
+  it("throws on a malformed locals entry (no colon)", () => {
+    expect(() => virtualizeTse("<%# locals: (user) %>")).toThrow(TseLocalsSignatureError);
+  });
+
+  it("reports a LineDelta covering the header so diagnostics remap back to .tse", () => {
+    const { ts, deltas } = virtualizeTseWithDeltas("<h1><%= 1 %></h1>");
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]?.insertedAtLine).toBe(-1);
+    // The header runs from the file start up to (and including) the
+    // `const _ob = …` line. The body should start immediately after.
+    const headerLines = ts.split("\n").slice(0, deltas[0]!.lineCount);
+    expect(headerLines.at(-1)).toContain("const _ob");
   });
 
   it("dispatches expression sites and preserves code chunks raw", () => {

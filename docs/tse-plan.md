@@ -25,23 +25,49 @@ Rails' ERB pipeline is three layers, in order of execution:
 Source: `actionview/lib/action_view/template/handlers/erb.rb` +
 `.../erb/erubi.rb`.
 
-Responsibilities:
+Responsibilities (verified against `vendor/rails/actionview/lib/action_view/template/handlers/erb.rb`):
 
 - Registered against the `.erb` extension by `Template::Handlers.register_template_handler`.
-- `#call(template, source) → ruby_code_string` — returns a Ruby expression
-  whose evaluation, in a binding with `_buf`, produces the rendered output.
-- Delegates compilation to a subclass of `Erubi::Engine`
-  (`ActionView::Template::Handlers::ERB::Erubi`).
-- Reads "magic comments" out of the source before compilation:
-  - `<%# locals: (foo:, bar: "x") %>` — strict locals (Rails 7.1+). Causes
-    the compiled method to take keyword args and raise on unknown locals.
-  - `<%# frozen_string_literal: true %>` — Ruby magic comment, passed through.
-- Recompile key: `[handler.class, source]` — Template caches compiled procs
-  keyed by file mtime + this tuple.
+- Class attributes (user-tunable):
+  - `erb_trim_mode` — default `"-"`. Only `-` is wired through to Erubi.
+  - `erb_implementation` — default `ActionView::Template::Handlers::ERB::Erubi`. Swappable.
+  - `escape_ignore_list` — default `["text/plain"]`. Templates whose
+    `template.type` is in this list invert the meaning of `<%= %>` (see 1.2).
+  - `strip_trailing_newlines` — default `false`. `erb.chomp!` before compile.
+- Protocol methods on handler instance:
+  - `#call(template, source) → ruby_code_string`.
+  - `#supports_streaming? → true`.
+  - `#handles_encoding? → true`.
+  - `#translate_location(spot, backtrace_location, source)` — maps an
+    ErrorHighlight `spot` from compiled-Ruby coordinates back to source
+    coordinates by tokenizing `::ERB::Util.tokenize` and walking
+    consecutive `:CODE`/`:TEXT` token pairs.
+- Strips the encoding magic comment from source before compile via
+  `ENCODING_TAG = /\A(<%#{ENCODING_FLAG}-?%>)[ \t]*/`. Magic-comment
+  form is `<%# encoding: utf-8 %>`.
+- Passes Erubi the options:
+  ```ruby
+  {
+    escape: escape_ignore_list.include?(template.type),
+    trim:   (erb_trim_mode == "-"),
+  }
+  ```
+  And, when `ActionView::Base.annotate_rendered_view_with_filenames`
+  is true and `template.format == :html`, also:
+  ```ruby
+  preamble:  "@output_buffer.safe_append='<!-- BEGIN #{template.short_identifier} -->';"
+  postamble: "@output_buffer.safe_append='<!-- END #{template.short_identifier} -->';@output_buffer"
+  ```
+- Strict locals are **not** handled here. They are handled in
+  `Template#strict_locals!` (see 1.3).
+- Recompile key: not the handler's concern — `Template` invalidates by
+  mtime; `compile!` is one-shot per template instance, guarded by
+  `@compile_mutex`.
 
 ### 1.2 `Erubi::Engine` (the compiler)
 
-Source: gem `erubi` (vendored conceptually, not in Rails repo).
+Source: gem `erubi` upstream; actionview subclasses it in
+`vendor/rails/actionview/lib/action_view/template/handlers/erb/erubi.rb`.
 
 - Lexer/parser walks the source emitting events for:
   - **text chunks** (everything outside `<% %>`)
@@ -54,29 +80,62 @@ Source: gem `erubi` (vendored conceptually, not in Rails repo).
   - `<%- code -%>` — strip leading + trailing whitespace on the line.
   - `<%= expr -%>` — strip trailing newline only.
   - `-` is the only mode actionview enables.
-- Emits a Ruby string of the form:
+- **Subclass overrides set by actionview's `Erubi.initialize`:**
+  - `bufvar = "@output_buffer"` (NOT bare-Erubi default `_buf`).
+  - `escapefunc = ""` — there is no escape function call site; escaping
+    is the _receiver's_ concern (SafeBuffer's `<<` decides based on
+    `html_safe?`).
+  - `freeze_template_literals = !Template.frozen_string_literal`.
+- Emits Ruby of the form (real shape, with `@output_buffer` bufvar):
   ```ruby
-  _buf = ActionView::OutputBuffer.new
-  _buf.safe_append = "<h1>"
-  _buf.append = ( @user.name )         # escapes via to_s + html_safe check
-  _buf.safe_append = "</h1>\n"
-  _buf
+  @output_buffer.safe_append = "<h1>"
+  @output_buffer.append      = ( @user.name )       # html-safe? check at runtime
+  @output_buffer.safe_append = "</h1>\n"
+  @output_buffer
   ```
-- `_buf.append =` calls SafeBuffer's `<<` which html-escapes unless the
-  value is already `html_safe?`.
-- Source maps: each emitted line carries a comment with the original line
-  number; backtraces hit the `.erb` file, not the generated Ruby.
+- **Three append primitives**, dispatched by `add_expression(indicator, code)`:
+  | Site | Dispatch condition | Method |
+  |---|---|---|
+  | `<%= expr %>` in html template (`escape: false`) | indicator `=`, not `==`, not @escape | `.append=` |
+  | `<%= expr %>` in text/plain template (`escape: true`) | @escape is true | `.safe_expr_append=` |
+  | `<%== expr %>` | indicator `==` | `.safe_expr_append=` |
+  | literal text | n/a | `.safe_append=` |
+  - `.append=` routes through `SafeBuffer#<<` which HTML-escapes unless
+    `html_safe?(value)`.
+  - `.safe_expr_append=` writes without escaping but does `to_s` coercion.
+  - `.safe_append=` writes raw without coercion (used for static chunks).
+- **Block-form `<%= %>`.** `BLOCK_EXPR = /((\s|\))do|\{)(\s*\|[^|]*\|)?\s*\Z/`
+  detects `<%= helper do %>...<% end %>` and `<%= helper { ... } %>`.
+  When matched, the emitter writes `.append= helper do ... end` (no
+  paren-wrap) so the block is captured by the helper, not by the assignment.
+- **Newline coalescing.** `@newline_pending` accumulates consecutive `\n`-only
+  text chunks; on the next non-newline append or code event they are flushed
+  in one `safe_append`. Cuts emitted Ruby size on whitespace-heavy templates.
+- Source maps: Erubi emits line directives (`# line N "path"`-equivalent) so
+  backtraces hit the `.erb` file, not the generated Ruby.
 
 ### 1.3 `ActionView::Template#compile!`
 
 - Wraps the Erubi-emitted Ruby in a method definition on a transient
   module (`ActionView::CompiledTemplates`), one method per template +
   variant + locale + format combination.
-- Method signature: `_app_views_users_show_html_erb__1234_5678(local_assigns, output_buffer)`
-  (or, with strict locals, expanded keyword args).
+- `method_name = _#{identifier_method_name}__#{@identifier.hash}_#{__id__}`
+  — `__id__` is Ruby's `object_id`; the suffix makes the name unique
+  across reloads.
+- Base signature: `(local_assigns, output_buffer)`.
+- **Strict locals** (`Template#strict_locals!`):
+  - Parses `STRICT_LOCALS_REGEX = /\#\s+locals:\s+\((.*)\)/` out of the
+    source via `source.sub!(...)` — the magic comment is stripped before
+    Erubi sees it.
+  - Empty body (`<%# locals: () %>`) → `**nil` (no extra kwargs allowed).
+  - Splices kwargs into the method signature:
+    `(local_assigns, output_buffer, #{set_strict_locals})`. Unknown kwargs
+    raise `ArgumentError` via Ruby's own kwarg validation — no manual check.
+  - Renderer warns if `local_assigns` keys don't match `@strict_local_keys`.
 - The method is invoked with `self` set to the **view context** (a
   `ActionView::Base` instance) so all helpers (`link_to`, `form_with`, etc.)
-  resolve as plain method calls.
+  resolve as plain method calls. `@output_buffer` is therefore an ivar on
+  the view context, not a local — explaining the Erubi `bufvar` choice.
 
 ### 1.4 Public surface userland touches
 
@@ -143,17 +202,40 @@ their own extensions (`.builder` → a hypothetical `XmlBuilder` handler,
 `.jbuilder` → `Jbuilder`); `.tse` is one row in the
 `Template::Handlers` registry, not the whole registry.
 
-**Format-specific behavior:** the handler itself is format-agnostic, but
-two things vary by format:
+**Format-specific behavior** (matching Rails' actual model — there is
+no per-format escape _function_; what varies is the dispatch of `<%= %>`):
 
-1. **Escape function.** `html`/`xml` formats wire `escape` to
-   `escapeHtml`. `js` wires to `escapeJs`. `json` wires to
-   `JSON.stringify`-of-the-value (no `<%= %>` for raw strings — output
-   is structurally encoded). `text`/`css` wire `escape` to identity
-   (no escape; safety is the author's job, same as Rails).
+1. **`<%= %>` dispatch flips by format.** Rails has a class attribute
+   `Template::Handlers::ERB.escape_ignore_list = ["text/plain"]`. TSE
+   mirrors with `Tse.escapeIgnoreList = ["text/plain"]`. The rule:
+   - If `template.type ∈ escapeIgnoreList` → `<%= %>` emits
+     `outputBuffer.safeExprAppend(expr)` (no escape).
+   - Otherwise → `<%= %>` emits `outputBuffer.append(expr)`, which
+     routes through `SafeString`'s `<<` and HTML-escapes unless
+     `expr instanceof SafeString`.
+   - `<%== %>` always emits `outputBuffer.safeExprAppend(expr)`.
+
+   Concretely: in `.html.tse`, `.json.tse`, `.xml.tse`, `.js.tse`,
+   `.css.tse`, `<%= %>` HTML-escapes. In `.text.tse`, `<%= %>` does
+   not escape. **There is no JS-escape or CSS-escape baked into the
+   handler.** Authors writing `.js.tse` who want JS-string escaping
+   call the `j(value)` helper explicitly — same as Rails.
+
 2. **Default `Content-Type`.** Set by `LookupContext` from the format
-   token via a `Mime::Type` table — `html → text/html`, `json →
-application/json`, etc. Same lookup Rails uses.
+   token via a `Mime::Type` table — `html → text/html`,
+   `json → application/json`, etc. Same lookup Rails uses.
+
+3. **HTML annotation comments.** When
+   `ActionView.Base.annotateRenderedViewWithFilenames` is true and
+   `template.format === "html"`, the compiler emits preamble/postamble:
+
+   ```
+   outputBuffer.safeAppend("<!-- BEGIN users/show.html.tse -->");
+   ...
+   outputBuffer.safeAppend("<!-- END users/show.html.tse -->");
+   ```
+
+   Matches Rails' annotation feature; default off in production.
 
 **`<%! format: "json" !%>`** override is allowed for the rare case
 where the filename's format is wrong or absent (single-file scripts,
@@ -161,9 +243,10 @@ ad-hoc partials). Defaults to `html` if neither filename nor magic
 block specify.
 
 **Compiler is one.** All these files go through the same
-`Tse.call(template, source)` — the format only changes which `escape`
-the emitted code imports. Parser, AST, trim modes, magic comments,
-trails-tsc plugin behavior — all identical across formats.
+`Tse.call(template, source)` — the format only changes one option
+(`escape: escapeIgnoreList.includes(template.type)`). Parser, AST,
+trim modes, magic comments, trails-tsc plugin behavior — all
+identical across formats.
 
 ### 2.3 Components
 
@@ -193,65 +276,113 @@ trails-tsc plugin behavior — all identical across formats.
 
 ### 2.4 Syntax (1-for-1 with ERB, plus one extension)
 
-| TSE                               | ERB                      | Meaning                                      |
-| --------------------------------- | ------------------------ | -------------------------------------------- |
-| `<% stmt %>`                      | `<% stmt %>`             | TS statement, no output                      |
-| `<%= expr %>`                     | `<%= expr %>`            | Output expr, HTML-escape unless `SafeString` |
-| `<%== expr %>`                    | `<%== expr %>`           | Output expr, never escape                    |
-| `<%- stmt -%>`                    | `<%- stmt -%>`           | Statement + trim surrounding whitespace      |
-| `<%= expr -%>`                    | `<%= expr -%>`           | Output + trim trailing newline               |
-| `<%# comment %>`                  | `<%# comment %>`         | Dropped                                      |
-| `<%% / %%>`                       | `<%% / %%>`              | Literal `<%` / `%>`                          |
-| `<%# locals: { name: string } %>` | `<%# locals: (name:) %>` | Strict locals — see 2.4                      |
-| `<%! types: { name: string } !%>` | _(none)_                 | TSE-only — extended locals type spec         |
+| TSE                               | ERB                            | Meaning                                      |
+| --------------------------------- | ------------------------------ | -------------------------------------------- |
+| `<% stmt %>`                      | `<% stmt %>`                   | TS statement, no output                      |
+| `<%= expr %>`                     | `<%= expr %>`                  | Output expr, HTML-escape unless `SafeString` |
+| `<%== expr %>`                    | `<%== expr %>`                 | Output expr, never escape                    |
+| `<%- stmt -%>`                    | `<%- stmt -%>`                 | Statement + trim surrounding whitespace      |
+| `<%= expr -%>`                    | `<%= expr -%>`                 | Output + trim trailing newline               |
+| `<%# comment %>`                  | `<%# comment %>`               | Dropped                                      |
+| `<%% / %%>`                       | `<%% / %%>`                    | Literal `<%` / `%>`                          |
+| `<%= helper do %>...<% end %>`    | `<%= helper do %>...<% end %>` | Block-form output expression — see below     |
+| `<%# locals: { name: string } %>` | `<%# locals: (name:) %>`       | Strict locals — see 2.5                      |
+| `<%! types: { name: string } !%>` | _(none)_                       | TSE-only — extended locals type spec         |
 
-The two locals forms are equivalent at runtime; the `<%!  !%>` form exists
-because it accepts arbitrary TS type syntax (generics, unions, imported
-types) while `<%# locals: %>` is restricted to a single TS object literal
-for parser simplicity. Pick one per file.
+The two locals forms are equivalent at runtime; the `<%!  !%>` form is a
+**brand-new opener** with no ERB analogue, so the lexer must explicitly
+recognize `<%!` (mid-tag `!` is invalid Ruby in ERB but legal here). It
+accepts arbitrary TS type syntax (generics, unions, imported types)
+while `<%# locals: %>` is restricted to a single TS object literal for
+parser simplicity. Pick one per file.
+
+**Block-form `<%= %>`.** Same as Rails' `BLOCK_EXPR`. When `expr` ends
+in `do ... |args|` or `{`, the emitter does NOT paren-wrap the call —
+it routes the trailing block as-is so the helper captures it:
+
+```tse
+<%= formWith(model: user) do |f| %>
+  <%= f.textField("name") %>
+<% end %>
+```
+
+emits (sketch):
+
+```ts
+outputBuffer.append(
+  formWith({ model: user }, (f) => {
+    outputBuffer.append(f.textField("name"));
+  }),
+);
+```
+
+The lexer must detect the trailing `do` / `{` to switch emit modes; the
+runtime helper convention is "block helpers take a callback as their last
+argument" (matches actionview's `capture` semantics).
 
 ### 2.5 Strict locals
 
-Rails enforces strict locals by generating a method with explicit kwargs.
-TSE does the same thing at two layers:
+Rails enforces strict locals by **splicing kwargs into the compiled
+method's signature** — Ruby's own kwarg validation then raises
+`ArgumentError` on unknown keys, with no manual check in the handler.
+Source-side, the magic comment is matched by
+`STRICT_LOCALS_REGEX = /\#\s+locals:\s+\((.*)\)/` and `sub!`'d out of
+`source` before Erubi sees it. Empty body (`<%# locals: () %>`) becomes
+`**nil` — no extra kwargs accepted.
 
-- **Compile time**: trails-tsc emits `.tse.ts` whose default export is
+TSE mirrors this at two layers:
+
+- **Compile time** (the primary enforcement): the trails-tsc plugin emits
+  `.tse.ts` whose default export is
   `(context: RenderContext, locals: { name: string }): SafeString`. tsc
-  rejects calls that omit `name` or pass the wrong type.
-- **Runtime**: the emitted `.tse.js` checks `Object.keys(locals)` against
-  the declared set and throws `ActionView.Template.Error` (subclass
-  `StrictLocalsMismatch`) on mismatch. Matches Rails' `ArgumentError` for
-  unknown kwargs.
+  rejects calls that omit `name`, pass the wrong type, or pass excess
+  properties (TS' excess-property check is the structural equivalent of
+  Ruby's "unknown kwarg" `ArgumentError`).
+- **Runtime** (defense in depth, for dynamically-built `locals`): the
+  emitted `.tse.js` checks declared keys against `locals` and throws
+  `ActionView.Template.Error` subclass `StrictLocalsMismatch` on
+  mismatch. Off by default in production; on under
+  `ActionView.Base.raiseOnStrictLocalsMismatch`.
 
 If neither magic block is present, locals defaults to `Record<string,
 unknown>` (matching Rails' permissive default).
 
+The magic comment is `sub!`'d out of the source by the lexer before AST
+construction — mirroring Rails' `Template#strict_locals!` mutation — so
+the emitted Ruby/TS never contains the type declaration.
+
 ### 2.6 Emit shape (runtime)
 
-The compiled `.tse.js` mirrors Erubi's `_buf` pattern with renamed primitives:
+The compiled `.tse.js` mirrors Rails' actionview-flavored Erubi output.
+Note that Rails uses `@output_buffer` (an ivar on the view context) as
+its `bufvar`; the TS equivalent is `context.outputBuffer`. There is no
+local `_buf`.
 
 ```js
-// app/views/users/show.tse  →  .trails/views/users/show.tse.js
-import { OutputBuffer } from "@blazetrails/actionview/output-buffer";
-import { escape } from "@blazetrails/actionview/escape";
-
+// app/views/users/show.html.tse  →  .trails/views/users/show.html.tse.js
 export default function render(context, locals) {
-  const _buf = new OutputBuffer();
-  _buf.safeAppend("<h1>");
-  _buf.append(locals.name); // escapes unless SafeString
-  _buf.safeAppend("</h1>\n");
-  return _buf.toSafeString();
+  const _ob = context.outputBuffer; // alias for brevity in emitted code
+  _ob.safeAppend("<h1>");
+  _ob.append(locals.name); // → SafeString#<< → HTML-escape unless SafeString
+  _ob.safeAppend("</h1>\n");
+  return _ob; // returns the OutputBuffer (a SafeString) — matches Rails
 }
 ```
 
-Rails analogue (the Ruby Erubi emits):
+Rails analogue (the Ruby Erubi actually emits — verified against
+`vendor/rails/actionview/.../erb/erubi.rb`):
 
 ```ruby
-_buf = ActionView::OutputBuffer.new
-_buf.safe_append = "<h1>"
-_buf.append      = ( locals[:name] )
-_buf.safe_append = "</h1>\n"
-_buf
+@output_buffer.safe_append = "<h1>"
+@output_buffer.append      = ( locals[:name] )
+@output_buffer.safe_append = "</h1>\n"
+@output_buffer
+```
+
+For `<%== expr %>` (or `<%= expr %>` when `escape: true`, i.e. text/plain):
+
+```js
+_ob.safeExprAppend(expr); // to_s coercion, no HTML-escape
 ```
 
 Member-for-member:
@@ -307,36 +438,58 @@ have Y" should match behavior, not just signature.
 
 ### 3.1 Handler protocol
 
-| Rails                                                     | TSE                                                                     |
-| --------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `Template::Handlers.register_template_handler(:tse, TSE)` | `Template.Handlers.register("tse", Tse)`                                |
-| `Template::Handlers::ERB#call(template, source) → String` | `Tse.call(template, source): { code: string, sourceMap: RawSourceMap }` |
-| `Template::Handlers::ERB.erb_implementation` (class attr) | `Tse.emitter` (replaceable)                                             |
-| `default_format` (e.g. `:html`)                           | `Tse.defaultFormat = "html"`                                            |
+| Rails                                                          | TSE                                                                     |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Template::Handlers.register_template_handler(:tse, TSE)`      | `Template.Handlers.register("tse", Tse)`                                |
+| `Template::Handlers::ERB#call(template, source) → String`      | `Tse.call(template, source): { code: string, sourceMap: RawSourceMap }` |
+| `Template::Handlers::ERB#supports_streaming? → true`           | `Tse.supportsStreaming = true`                                          |
+| `Template::Handlers::ERB#handles_encoding? → true`             | `Tse.handlesEncoding = true` (TS is UTF-8; mostly cosmetic)             |
+| `Template::Handlers::ERB#translate_location(spot, bt, source)` | `Tse.translateLocation(spot, frame, source)` — uses sourceMap consumer  |
+| `Template::Handlers::ERB.erb_implementation` (class attr)      | `Tse.emitter` (replaceable)                                             |
+| `Template::Handlers::ERB.erb_trim_mode = "-"`                  | `Tse.trimMode = "-"` (only `-` supported, matches Rails)                |
+| `Template::Handlers::ERB.escape_ignore_list = ["text/plain"]`  | `Tse.escapeIgnoreList = ["text/plain"]`                                 |
+| `Template::Handlers::ERB.strip_trailing_newlines = false`      | `Tse.stripTrailingNewlines = false`                                     |
+| `ActionView::Base.annotate_rendered_view_with_filenames`       | `ActionView.Base.annotateRenderedViewWithFilenames`                     |
+| `default_format` (e.g. `:html`)                                | `Tse.defaultFormat = "html"`                                            |
 
 Difference: our `call` returns `{code, sourceMap}` instead of a bare
-string. Rails embeds source-map info as Ruby comments; we need a real
-source map for tsc + dev tools. Drivers (Template#compile, error
-formatter) consume both fields.
+string. Rails embeds source-map info as Ruby comments + relies on
+`translate_location` walking tokens; we precompute a real source map for
+tsc + dev tools. Drivers (`Template#compile`, error formatter) consume
+both fields.
 
 ### 3.2 Runtime substrate
 
-| Rails                       | TSE                                 | Notes                                  |
-| --------------------------- | ----------------------------------- | -------------------------------------- |
-| `ActiveSupport::SafeBuffer` | `SafeString` (activesupport)        | Mark + propagate                       |
-| `String#html_safe`          | `safe(s: string): SafeString`       | Free function (TS has no monkey-patch) |
-| `String#html_safe?`         | `(v): v is SafeString` (instanceof) | Used by `append`                       |
-| `ActionView::OutputBuffer`  | `OutputBuffer`                      | `append`, `safeAppend`, `toSafeString` |
-| `ERB::Util.html_escape`     | `escape(s: unknown): string`        | Coerces non-strings via `String(...)`  |
+| Rails                                                        | TSE                                          | Notes                                                                 |
+| ------------------------------------------------------------ | -------------------------------------------- | --------------------------------------------------------------------- |
+| `ActiveSupport::SafeBuffer`                                  | `SafeString` (activesupport)                 | Mark + propagate                                                      |
+| `String#html_safe`                                           | `safe(s: string): SafeString`                | Free function (TS has no monkey-patch)                                |
+| `String#html_safe?`                                          | `(v): v is SafeString` (instanceof)          | Used by `append`                                                      |
+| `ActionView::OutputBuffer`                                   | `OutputBuffer extends SafeString`            | Mutable buffer that is itself html-safe (mirrors Rails)               |
+| `OutputBuffer#safe_append=` (text)                           | `OutputBuffer#safeAppend(s)`                 | Raw concat, no coercion, no escape                                    |
+| `OutputBuffer#append=` (default `<%=`)                       | `OutputBuffer#append(v)`                     | `to_s` coercion + HTML-escape unless `SafeString`                     |
+| `OutputBuffer#safe_expr_append=` (`<%==` / text/plain `<%=`) | `OutputBuffer#safeExprAppend(v)`             | `to_s` coercion, no escape                                            |
+| `OutputBuffer#<<` / `#concat`                                | `OutputBuffer#concat(v)` (alias of `append`) | Same dispatch rules as `append`                                       |
+| `ERB::Util.html_escape`                                      | `escape(s: unknown): string`                 | Coerces non-strings via `String(...)`                                 |
+| `ERB::Util.json_escape` (helper `j`)                         | `j(s: unknown): SafeString`                  | JS-string escaping, used inside `.js.tse` (handler does **not** wire) |
 
 ### 3.3 Magic comments
 
 | Rails                                                         | TSE                                                              |
 | ------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `<%# locals: (name:, count: 0) %>` (strict, defaults allowed) | `<%# locals: { name: string; count?: number } %>`                |
+| `<%# locals: () %>` → `**nil` (no kwargs allowed)             | `<%# locals: {} %>` → `Record<never, never>` (empty exact)       |
 | `<%# frozen_string_literal: true %>`                          | _no analogue_ — TS strings are immutable                         |
 | `<%# encoding: utf-8 %>`                                      | _no analogue_ — UTF-8 only                                       |
 | n/a                                                           | `<%! types: { ... } !%>` — extended (imports + generics allowed) |
+| n/a                                                           | `<%! format: "json" !%>` — override filename-derived format      |
+
+Parsing rule (mirrors Rails' `Template#strict_locals!`): the magic
+comment is matched by a regex (`/<%#\s+locals:\s+(\{[^}]*\})\s+%>/` for
+TSE) and `String.prototype.replace`'d out of the source before the
+lexer constructs the AST. The type info is captured separately and
+threaded into the emitted `.tse.ts` signature; the runtime `.tse.js`
+never sees it.
 
 ### 3.4 Trim modes
 
@@ -405,7 +558,81 @@ each phase has a fidelity bar to hit.
 
 ---
 
-## 5. Open questions
+## 5. Fidelity checklist (verify against `vendor/rails/actionview/`)
+
+Each implementation PR landing TSE pieces must check the box for every
+item it claims to cover. Citations are file paths in vendor (current
+Rails main).
+
+**Handler protocol** (`lib/action_view/template/handlers/erb.rb`):
+
+- [ ] `Tse.call(template, source)` strips encoding tag (TSE: no-op,
+      documented).
+- [ ] `Tse.call` reads `escape_ignore_list` and passes `escape:` option.
+- [ ] `Tse.call` reads `strip_trailing_newlines` and `chomp!`s source.
+- [ ] `Tse.call` reads `annotateRenderedViewWithFilenames` + format and
+      emits BEGIN/END comments for html format.
+- [ ] `Tse.supportsStreaming === true`.
+- [ ] `Tse.handlesEncoding === true`.
+- [ ] `Tse.translateLocation(spot, frame, source)` implemented (can be
+      a stub returning frame as-is until ErrorHighlight equivalent lands).
+- [ ] `Tse.trimMode`, `Tse.escapeIgnoreList`, `Tse.stripTrailingNewlines`,
+      `Tse.emitter` all class-attribute-settable.
+
+**Emitter** (`lib/action_view/template/handlers/erb/erubi.rb`):
+
+- [ ] bufvar resolves to `context.outputBuffer`, not a local.
+- [ ] `<%= %>` dispatches to `.append()` (escape) or `.safeExprAppend()`
+      (no escape) based on `escape:` option — verified with paired
+      `.html.tse` + `.text.tse` fixtures rendering the same expression.
+- [ ] `<%== %>` always dispatches to `.safeExprAppend()`.
+- [ ] Static text dispatches to `.safeAppend()` with backslash-escape of
+      `'` and `\` in the emitted string literal.
+- [ ] `BLOCK_EXPR` equivalent: `<%= helper do |...| %>...<% end %>` and
+      `<%= helper { %>...<% } %>` emit without paren-wrap.
+- [ ] Newline coalescing: consecutive `\n`-only chunks collapse into one
+      `.safeAppend("\n\n\n")` call.
+- [ ] `<%# %>` comments dropped entirely (no AST node, no emit).
+- [ ] `<%% %>` / `%%>` produce literal `<%` / `%>` in output.
+- [ ] Trim `-`: `<%- ... -%>` strips line, `<%= ... -%>` strips trailing
+      newline only.
+
+**Strict locals** (`lib/action_view/template.rb`, `strict_locals!`):
+
+- [ ] Regex `<%# locals: { ... } %>` matched and stripped from source
+      before lex.
+- [ ] Empty `<%# locals: {} %>` enforces "no extra keys" via
+      `Record<never, never>` (or excess-property check).
+- [ ] Defaults: `<%# locals: { name?: string } %>` → optional param;
+      missing pass-through.
+- [ ] Runtime `StrictLocalsMismatch` thrown when
+      `raiseOnStrictLocalsMismatch` is on and `Object.keys(locals)`
+      doesn't match declared set.
+
+**Runtime substrate** (`active_support/safe_buffer.rb`, `lib/action_view/buffers.rb`):
+
+- [ ] `SafeString` instance check; `safe()` wrapper; `escape()` HTML
+      escape for `<`, `>`, `&`, `"`, `'`.
+- [ ] `OutputBuffer extends SafeString` — itself html-safe.
+- [ ] `OutputBuffer#append` html-escapes when arg is plain string,
+      passes through when `SafeString`.
+- [ ] `OutputBuffer#safeAppend` and `#safeExprAppend` never escape.
+- [ ] Concatenating two `SafeString`s yields a `SafeString`.
+
+**Format triple**:
+
+- [ ] Filename `<name>.<format>.tse` parsed into `{name, format, handler}`;
+      missing format defaults to `html`.
+- [ ] `<%! format: "..." !%>` override honored when present.
+- [ ] `escapeIgnoreList` consulted via parsed format, not filename string
+      match.
+
+When all boxes are checked and `api:compare` / `test:compare` show
+non-negative deltas, the corresponding implementation PR is mergeable.
+
+---
+
+## 6. Open questions
 
 1. **Helper binding ergonomics.** `context.linkTo` vs a generated
    `using` block (`<% using context %>`) that aliases helpers as locals.

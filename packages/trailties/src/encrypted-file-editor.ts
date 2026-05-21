@@ -27,9 +27,8 @@ function displayEditorHint(): void {
   );
 }
 
-// Read fs directly rather than `file.isKey()`, which memoizes the negative
-// result and would hide the freshly-written key from `file.change()` later
-// in the same edit pass. Env-var keys still win at read time.
+// Direct fs check: `file.isKey()` memoizes a miss and would hide the
+// freshly-written key from `file.change()` later in the same edit pass.
 async function ensureKeyFile(file: EncryptedFile): Promise<void> {
   const fs = await getFsAsync();
   if (await fs.exists!(file.keyPath)) return;

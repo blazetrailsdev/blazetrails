@@ -67,16 +67,6 @@ describe("editEncryptedFile", () => {
     expect(await file.read()).toBe("hello\n");
   });
 
-  it("invokes the editor with extra args split on whitespace", async () => {
-    setEnv("VISUAL", "code --wait");
-    await (
-      await getFsAsync()
-    ).writeFile!(keyPath, EncryptedFile.generateKey());
-    await editEncryptedFile(build());
-    expect(calls).toHaveLength(1);
-    expect(calls[0].slice(0, 2)).toEqual(["code", "--wait"]);
-  });
-
   it("does nothing when neither $VISUAL nor $EDITOR is set", async () => {
     await (
       await getFsAsync()

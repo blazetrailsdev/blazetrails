@@ -50,7 +50,11 @@ export function init(modules: { typescript: typeof ts }): {
     const lower = p.toLowerCase();
     if (lower.endsWith(".d.ts") || lower.endsWith(".d.mts") || lower.endsWith(".d.cts"))
       return tsLib.ScriptKind.TS;
-    const e = lower.slice(lower.lastIndexOf("."));
+    const dot = lower.lastIndexOf(".");
+    // Extensionless paths (e.g. `README`, `tsconfig`) have no kind; default
+    // to `Unknown` rather than mis-slicing the last character.
+    if (dot < 0) return tsLib.ScriptKind.Unknown;
+    const e = lower.slice(dot);
     return e === ".ts" || e === ".mts" || e === ".cts"
       ? tsLib.ScriptKind.TS
       : e === ".tsx"

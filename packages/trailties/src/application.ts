@@ -1,36 +1,17 @@
-/**
- * Port of `Rails::Application` from `railties/lib/rails/application.rb`.
- *
- * PR 2.5a (this file): the Application shell — class identity, findRoot
- * happy path, `initialize!` happy path that runs the initializer chain
- * (Bootstrap + Trailtie/Engine + Finisher), `initialized?`, and the
- * `appClass` accessor that PR 2.6's `Rails.application` will read.
- *
- * Deferred:
- *   - PR 2.5b: `application/configuration.ts` defaults +
- *     `application/default-middleware-stack.ts` + full Rails-mirrored
- *     tests.
- *   - PR 2.5c: `application/routes-reloader.ts` + `config_for("database")`
- *     dynamic import + credentials/key_generator/message_verifier wiring.
- *
- * Intentionally skipped from upstream (see docs/trailties-plan.md):
- *   - `secrets` (pre-credentials back-compat), `eager_load!`,
- *     `assets`, `sandbox`, `executor`, `reloader`, `autoloaders` —
- *     blocked on subsystems we do not have or that are explicitly out
- *     of scope (Zeitwerk, eager loading).
- *   - `console`/`runner`/`generators`/`server` block runners —
- *     PR 2.1b's Configurable mixin work.
- *   - `migration_railties`, `load_generators`, `helpers_paths`,
- *     `to_app`, `console` block, `require_environment!` — follow-ups.
- *
- * Trailties differences from Rails:
- *   - `findRoot` looks for `config.ts` (the trails equivalent of Rails'
- *     `config.ru` — see `generators/app-generator.ts`).
- *   - Subclasses register explicitly via `Application.register(klass)`
- *     instead of Ruby's `inherited` hook. `register` doubles as Rails'
- *     `Rails.app_class = base` wiring.
- */
-import { getFsAsync, runLoadHooks } from "@blazetrails/activesupport";
+// Port of `Rails::Application` from `railties/lib/rails/application.rb`.
+// PR 2.5a: the Application shell — findRoot, `initialize!` happy path
+// (Bootstrap + inherited Engine/Trailtie chain), `initialized?`, `name`,
+// and the `appClass` accessor that PR 2.6's `Rails.application` reads.
+// Configuration defaults + default middleware stack + Finisher splicing
+// land in PR 2.5b; routes-reloader + config_for + credentials in PR 2.5c.
+// Skipped from upstream (see docs/trailties-plan.md): secrets, eager_load!,
+// assets, sandbox, executor, reloader, autoloaders, helpers_paths, to_app,
+// migration_railties, load_generators, require_environment!, console/
+// runner/generators/server block runners (PR 2.1b Configurable work).
+// Trailties differs from Rails by using `config.ts` as the root flag
+// (trails' rackup analog) and explicit `Application.register(klass)`
+// instead of Ruby's `inherited` hook.
+import { dasherize, getFsAsync, runLoadHooks, underscore } from "@blazetrails/activesupport";
 import { Engine } from "./engine.js";
 import { Trailtie } from "./trailtie.js";
 import { Bootstrap } from "./application/bootstrap.js";
@@ -38,6 +19,8 @@ import { Collection, type InitializerGroup } from "./initializable.js";
 import type { CacheStore, Logger } from "@blazetrails/activesupport";
 
 let _appClass: typeof Application | null = null;
+/** @internal Tracks which subclasses have fired `:before_configuration`. */
+const _registered = new WeakSet<typeof Application>();
 
 export class Application extends Engine {
   private _initialized = false;
@@ -58,9 +41,13 @@ export class Application extends Engine {
    * `:before_configuration` load hooks.
    */
   static register(subclass: typeof Application): void {
+    const fresh = !_registered.has(subclass);
     Trailtie.register(subclass);
     _appClass = subclass;
-    runLoadHooks("before_configuration", subclass);
+    if (fresh) {
+      _registered.add(subclass);
+      runLoadHooks("before_configuration", subclass);
+    }
   }
 
   /**
@@ -76,6 +63,15 @@ export class Application extends Engine {
   /** Returns true once {@link Application#initialize} has completed. */
   initialized(): boolean {
     return this._initialized;
+  }
+
+  /**
+   * Dasherized application name — mirrors Rails' `def name`. Strips a
+   * trailing `/application` segment so `MyApp::Application#name` returns
+   * `"my-app"`.
+   */
+  name(): string {
+    return dasherize(underscore(this.constructor.name)).replace(/-application$/, "");
   }
 
   /**

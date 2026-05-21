@@ -95,6 +95,31 @@ describe("Application", () => {
       Application.register(MyApp3);
       expect(Trailtie.subclasses()).toContain(MyApp3);
     });
+
+    it("is idempotent — :before_configuration fires once per subclass", () => {
+      class MyApp4 extends Application {}
+      const seen: unknown[] = [];
+      onLoad("before_configuration", (base) => {
+        seen.push(base);
+      });
+      Application.register(MyApp4);
+      Application.register(MyApp4);
+      expect(seen).toEqual([MyApp4]);
+    });
+  });
+
+  describe("name", () => {
+    it("dasherizes the class name and strips a trailing /application", () => {
+      class MyBlogApplication extends Application {}
+      Application.register(MyBlogApplication);
+      expect(MyBlogApplication.instance().name()).toBe("my-blog");
+    });
+
+    it("dasherizes without the suffix when the class has no Application name", () => {
+      class WidgetShop extends Application {}
+      Application.register(WidgetShop);
+      expect(WidgetShop.instance().name()).toBe("widget-shop");
+    });
   });
 
   describe("find_root", () => {

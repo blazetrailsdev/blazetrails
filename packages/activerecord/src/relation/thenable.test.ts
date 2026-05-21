@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeAll, beforeEach, vi, afterEach } from "vitest";
 import { Base, Relation, association, registerModel } from "../index.js";
 import { Associations } from "../associations.js";
-import { createSidecarTestAdapter, type SidecarAdapter } from "../test-adapter.js";
+import { createTestAdapter, type TestDatabaseAdapter } from "../test-adapter.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
 import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
 
 describe("Thenable", () => {
-  let adapter: SidecarAdapter;
+  let adapter: TestDatabaseAdapter;
   let ThenableUser: typeof Base;
 
   beforeAll(async () => {
-    ({ adapter: adapter } = createSidecarTestAdapter());
+    adapter = createTestAdapter();
     await defineSchema(adapter, {
       thenable_users: { name: "string", active: "integer" },
       thenable_posts: { title: "string" },

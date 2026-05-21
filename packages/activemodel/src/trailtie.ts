@@ -16,7 +16,7 @@ export interface RailtieConfig {
 }
 
 /**
- * Railtie — initialization hooks for ActiveModel.
+ * Trailtie — initialization hooks for ActiveModel.
  *
  * Mirrors: ActiveModel::Railtie < ::Rails::Railtie
  * (activemodel/lib/active_model/railtie.rb)
@@ -25,7 +25,7 @@ export interface RailtieConfig {
  * matching the Rails inheritance pattern, and registers itself so it
  * participates in the global initialization pipeline.
  */
-export class Railtie extends BaseRailtie {
+export class Trailtie extends BaseRailtie {
   static {
     registerRailtie(this);
 
@@ -34,12 +34,12 @@ export class Railtie extends BaseRailtie {
     });
 
     this.initializer("active_model.secure_password", () => {
-      SecurePassword.minCost = Railtie.detectEnv() === "test";
+      SecurePassword.minCost = Trailtie.detectEnv() === "test";
     });
 
     this.initializer("active_model.i18n_customize_full_message", () => {
-      ActiveModelError.i18nCustomizeFullMessage = Railtie.resolveI18nCustomizeFullMessage(
-        Railtie.config as RailtieConfig,
+      ActiveModelError.i18nCustomizeFullMessage = Trailtie.resolveI18nCustomizeFullMessage(
+        Trailtie.config as RailtieConfig,
       );
     });
   }
@@ -49,9 +49,9 @@ export class Railtie extends BaseRailtie {
    * backwards-compat with existing callers).
    */
   static initialize(config?: RailtieConfig): void {
-    const env = config?.env ?? Railtie.detectEnv();
+    const env = config?.env ?? Trailtie.detectEnv();
     SecurePassword.minCost = env === "test";
-    ActiveModelError.i18nCustomizeFullMessage = Railtie.resolveI18nCustomizeFullMessage(config);
+    ActiveModelError.i18nCustomizeFullMessage = Trailtie.resolveI18nCustomizeFullMessage(config);
   }
 
   private static resolveI18nCustomizeFullMessage(cfg?: RailtieConfig): boolean {

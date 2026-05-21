@@ -16,6 +16,8 @@ export type { TaskRunOptions } from "./rails/task/task-generator.js";
 export { ScriptGenerator } from "./rails/script/script-generator.js";
 export { GeneratorGenerator } from "./rails/generator/generator-generator.js";
 export type { GeneratorRunOptions } from "./rails/generator/generator-generator.js";
+export { AuthenticationGenerator } from "./rails/authentication/authentication-generator.js";
+export type { AuthenticationGeneratorOptions } from "./rails/authentication/authentication-generator.js";
 export { GeneratedAttribute, GeneratorError } from "./generated-attribute.js";
 export type { AttrOptions, IndexType } from "./generated-attribute.js";
 // CreateMigration action deferred to a 1.12b follow-up PR to stay under the

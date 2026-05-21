@@ -14,7 +14,7 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
 describe("ModelGeneratorTest", () => {
-  it("generate model", () => {
+  it("invokes default orm", () => {
     const gen = new ModelGenerator({
       cwd: tmpDir,
       output: () => {},
@@ -29,7 +29,7 @@ describe("ModelGeneratorTest", () => {
     expect(content).toContain("views!: number;");
   });
 
-  it("plural model name is singularized", () => {
+  it("plural names are singularized", () => {
     const gen = new ModelGenerator({ cwd: tmpDir, output: () => {}, name: "posts" });
     expect(gen.run()).toContain("app/models/post.ts");
   });

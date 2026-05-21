@@ -12,7 +12,7 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
 describe("MigrationGeneratorTest", () => {
-  it("generate migration", () => {
+  it("migration", () => {
     const gen = new MigrationGenerator({
       cwd: tmpDir,
       output: () => {},

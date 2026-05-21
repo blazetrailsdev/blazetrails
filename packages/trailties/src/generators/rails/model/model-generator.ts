@@ -1,6 +1,7 @@
 import { camelize } from "@blazetrails/activesupport";
 import { NamedBase, type NamedBaseOptions } from "../../named-base.js";
 import { normalizeModelName, type ModelHelpersOptions } from "../../model-helpers.js";
+import { tsType, type ColumnType } from "../../base.js";
 
 // Mirrors railties/lib/rails/generators/rails/model/model_generator.rb.
 // Rails' `hook_for :orm, required: true` is replaced with a direct ORM-
@@ -17,7 +18,9 @@ export class ModelGenerator extends NamedBase {
     const ext = this.ext();
     const filename = `app/models/${this.filePath()}${ext}`;
     const className = camelize(this.fileName);
-    const attrs = this.attributes.map((a) => `  ${a.columnName()}!: ${tsType(a.type)};`).join("\n");
+    const attrs = this.attributes
+      .map((a) => `  ${a.columnName()}!: ${tsType(a.type as ColumnType)};`)
+      .join("\n");
     this.createFile(
       filename,
       `import { Model } from "@blazetrails/activerecord";
@@ -29,12 +32,4 @@ ${attrs}
     );
     return this.getCreatedFiles();
   }
-}
-
-function tsType(t: string): string {
-  if (t === "integer" || t === "float" || t === "decimal") return "number";
-  if (t === "boolean") return "boolean";
-  if (t === "date" || t === "datetime" || t === "timestamp" || t === "time") return "Date";
-  if (t === "references" || t === "belongs_to") return "number";
-  return "string";
 }

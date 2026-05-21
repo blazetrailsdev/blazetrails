@@ -14,7 +14,7 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
 describe("ResourceGeneratorTest", () => {
-  it("generate resource", () => {
+  it("files from inherited invocation", () => {
     const gen = new ResourceGenerator({
       cwd: tmpDir,
       output: () => {},
@@ -28,7 +28,14 @@ describe("ResourceGeneratorTest", () => {
     expect(routes).toContain("resources :products");
   });
 
-  it("skip routes when actions are present", () => {
+  it("resource routes are added", () => {
+    const gen = new ResourceGenerator({ cwd: tmpDir, output: () => {}, name: "Account" });
+    gen.run();
+    const routes = fs.readFileSync(path.join(tmpDir, "config/routes.ts"), "utf-8");
+    expect(routes).toMatch(/resources :accounts$/m);
+  });
+
+  it("resource controller with actions", () => {
     const gen = new ResourceGenerator({
       cwd: tmpDir,
       output: () => {},

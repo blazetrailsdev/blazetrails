@@ -69,20 +69,20 @@ describe("ActionsTest", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].cmd).toBe("rake");
     expect(calls[0].args).toEqual(["log:clear"]);
-    expect(calls[0].options?.env?.RAILS_ENV).toBe("development");
+    expect(calls[0].options?.env?.TRAILS_ENV).toBe("development");
   });
 
   it("rake with env option should run rake with the env environment", () => {
     makeGen().rake("log:clear", { env: "production" });
-    expect(calls[0].options?.env?.RAILS_ENV).toBe("production");
+    expect(calls[0].options?.env?.TRAILS_ENV).toBe("production");
   });
 
   it("rake env option should be passed per-call and not mutate adapter env", () => {
     const gen = makeGen();
     gen.rake("log:clear", { env: "production" });
     gen.rake("log:clear");
-    expect(calls[0].options?.env?.RAILS_ENV).toBe("production");
-    expect(calls[1].options?.env?.RAILS_ENV).toBe("development");
+    expect(calls[0].options?.env?.TRAILS_ENV).toBe("production");
+    expect(calls[1].options?.env?.TRAILS_ENV).toBe("development");
   });
 
   it("rake with sudo option should run rake with sudo", () => {
@@ -100,6 +100,17 @@ describe("ActionsTest", () => {
   it("rake with abort_on_failure option should raise on failure", () => {
     nextResult = { status: 1, signal: null, stdout: "", stderr: "boom" };
     expect(() => makeGen().rake("invalid", { abortOnFailure: true })).toThrow(/aborted/);
+  });
+
+  it("rake with abort_on_failure should raise when spawn errored (status null)", () => {
+    nextResult = {
+      status: null,
+      signal: null,
+      stdout: "",
+      stderr: "",
+      error: new Error("ENOENT: command not found"),
+    };
+    expect(() => makeGen().rake("missing-bin", { abortOnFailure: true })).toThrow(/ENOENT/);
   });
 
   it("after_bundle should queue callbacks for later invocation", () => {

@@ -7,6 +7,7 @@ import {
   tableize,
   underscore,
 } from "../../base.js";
+import { singularize } from "@blazetrails/activesupport";
 import { tsBody, tsMethod, type Method } from "../../../template-builder/index.js";
 import { emitControllerClass } from "../controller/controller-paths.js";
 import { emitResourceRouteSnippet } from "../resource-route/resource-route-generator.js";
@@ -35,9 +36,11 @@ export class ScaffoldControllerGenerator extends GeneratorBase {
     const leaf = parts[parts.length - 1]!;
     const nsClass = parts.slice(0, -1).map((p) => classify(p));
     const nsDashed = parts.slice(0, -1).map((p) => dasherize(underscore(p)));
-    const modelClassName = [...nsClass, classify(leaf)].join("");
-    const resourceName = tableize(classify(leaf));
-    const singular = underscore(classify(leaf));
+    const nsUnderscored = parts.slice(0, -1).map((p) => underscore(p));
+    const singularLeaf = singularize(underscore(leaf));
+    const modelClassName = [...nsClass, classify(singularLeaf)].join("");
+    const resourceName = tableize(classify(singularLeaf));
+    const singular = singularLeaf;
     const controllerClassName = [...nsClass, classify(resourceName)].join("") + "Controller";
     const controllerFileName = [...nsDashed, dasherize(resourceName)].join("/") + "-controller";
     const ext = this.ext();
@@ -89,7 +92,7 @@ ${skip("index")}${skip("show")}${skip("new")}${skip("create")}${skip("edit")}${s
         this.insertIntoFile(
           routesFile,
           "// routes",
-          emitResourceRouteSnippet(nsDashed, resourceName) + "\n",
+          emitResourceRouteSnippet(nsUnderscored, resourceName),
         );
       }
     }

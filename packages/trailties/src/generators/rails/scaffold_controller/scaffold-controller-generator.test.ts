@@ -130,6 +130,23 @@ describe("ScaffoldControllerGeneratorTest", () => {
     expect(routes).not.toContain('router.resources("admin/accounts")');
   });
 
+  it("singularizes plural input for model + params key", () => {
+    makeGen().run("posts", ["title:string"]);
+    const c = read("src/app/controllers/posts-controller.ts");
+    expect(c).toContain("class PostsController");
+    expect(c).toContain("Post.all()");
+    expect(c).toContain('this.params.expect({ post: ["title"] })');
+    expect(c).toContain("postParams()");
+  });
+
+  it("uses underscored namespace in routes (not dasherized)", () => {
+    makeGen().run("admin_panel/users");
+    const routes = read("src/config/routes.ts");
+    expect(routes).toContain('router.namespace("admin_panel"');
+    expect(routes).not.toContain('router.namespace("admin-panel"');
+    expect(routes.match(/\n\n\n/)).toBeNull();
+  });
+
   it("strips dashed controller suffix", () => {
     makeGen().run("posts-controller");
     const c = read("src/app/controllers/posts-controller.ts");

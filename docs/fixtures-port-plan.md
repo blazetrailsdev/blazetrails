@@ -15,8 +15,8 @@ PR 7 flips `fixtures:compare` MISSING/DIFF to hard-fail and removes the
 four fixtures-related entries from `scripts/api-compare/unported-files.ts`.
 Everything below is what must close (or move to an explicit allow-list)
 first. Cross-referenced to merged PRs; the source finding files this
-section was distilled from live in each PR's GitHub review thread and,
-for contributors running btwhooks locally, under
+section was distilled from are available in each PR's GitHub review
+thread and (for local runs of btwhooks) under
 `~/.btwhooks/data/github/blazetrailsdev/trails/<PR#>/post-pr/`.
 
 ### Compare-script enhancements blocking strict mode (~150 LOC total)
@@ -124,7 +124,7 @@ load:
   `packages/activerecord/src/test-helpers/define-fixtures.ts`. Blocks
   `subscribers.ts` (Rails `Subscriber.primary_key = "nick"`) and
   `string-key-objects.ts`. From #2205 + #2214 findings.
-- **~30–50 LOC — defineFixtures NOT NULL `created_at`/`updated_at`
+- **~30–50 LOC — `defineFixtures` NOT NULL `created_at`/`updated_at`
   auto-stamp.** Unblocks `people.ts` (Rails schema has
   `t.timestamps null: false`; YAML omits both — Rails' loader stamps
   them). From #2209.
@@ -132,7 +132,7 @@ load:
   `memberships.type: "CurrentMembership"` are model enums; loader
   needs to route through the attribute layer (or a small enum-lookup
   helper) before insert. From #2208, #2209.
-- **~80–150 LOC — defineFixtures belongs_to-reflection → FK-column
+- **~80–150 LOC — `defineFixtures` belongs_to-reflection → FK-column
   resolver.** Lets future fixture `.ts` stay byte-closer to YAML
   (write `club: foo` instead of `club_id: ref("clubs", "foo")`).
   From #2209.

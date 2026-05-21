@@ -150,7 +150,7 @@ we omit becomes a friction point later.
 | Magic comment `<%# locals: (foo:, bar:) %>`                   | template source  | Strict locals contract                |
 | `OutputBuffer#<<`, `#concat`, `#safe_append=`, `#append=`     | runtime          | Output collection + escaping          |
 | `SafeBuffer` (`html_safe`, `html_safe?`)                      | runtime          | Safety marker propagation             |
-| `Template::Error` with `#annoted_source_code`                 | error reporting  | Numbered source excerpt in dev errors |
+| `Template::Error` with `#annotated_source_code`               | error reporting  | Numbered source excerpt in dev errors |
 | `ActionView::CompiledTemplates`                               | introspection    | Module where compiled methods live    |
 | `Template#identifier`, `#virtual_path`, `#format`, `#handler` | metadata         | Render dispatch + Digestor input      |
 
@@ -350,36 +350,41 @@ direct port of that boundary.
 | `<%# locals: { name: string } %>` | `<%# locals: (name:) %>`       | Strict locals — see 2.5                      |
 | `<%! types: { name: string } !%>` | _(none)_                       | TSE-only — extended locals type spec         |
 
-The two locals forms are equivalent at runtime; the `<%!  !%>` form is a
-**brand-new opener** with no ERB analogue, so the lexer must explicitly
-recognize `<%!` (mid-tag `!` is invalid Ruby in ERB but legal here). It
-accepts arbitrary TS type syntax (generics, unions, imported types)
-while `<%# locals: %>` is restricted to a single TS object literal for
-parser simplicity. Pick one per file.
+The two locals forms are equivalent at runtime; the `<%! !%>` form is a
+**brand-new opener** with no ERB analogue. The lexer recognizes `<%!`
+specifically and closes on `!%>` rather than `%>` (see §2.10.1 for the
+single-place divergence in the otherwise Erubi-identical scanner).
+`<%! !%>` accepts arbitrary TS type syntax (generics, unions, imported
+types) while `<%# locals: %>` is restricted to a single TS object
+literal for parser simplicity. Pick one per file.
 
 **Block-form `<%= %>`.** Same as Rails' `BLOCK_EXPR`. When `expr` ends
-in `do ... |args|` or `{`, the emitter does NOT paren-wrap the call —
-it routes the trailing block as-is so the helper captures it:
+in `do |args|` or `{`, the emitter passes the block body as a final
+callback argument to the helper, **wrapped in `context.capture(...)`**
+so the inner appends are captured into a fresh buffer rather than
+double-writing to the parent. See §2.10.3 for the full protocol.
 
 ```tse
-<%= formWith(model: user) do |f| %>
+<%= formWith({ model: user }) do |f| %>
   <%= f.textField("name") %>
 <% end %>
 ```
 
-emits (sketch):
+emits:
 
 ```ts
-outputBuffer.append(
-  formWith({ model: user }, (f) => {
-    outputBuffer.append(f.textField("name"));
-  }),
+context.outputBuffer.append(
+  context.formWith({ model: user }, (f) =>
+    context.capture(() => {
+      context.outputBuffer.append(f.textField("name"));
+    }),
+  ),
 );
 ```
 
-The lexer must detect the trailing `do` / `{` to switch emit modes; the
-runtime helper convention is "block helpers take a callback as their last
-argument" (matches actionview's `capture` semantics).
+The block callback returns the captured `SafeString`; the helper
+embeds it in its own output and returns the combined result; the
+outer `append` writes that result. No double-write.
 
 ### 2.5 Strict locals
 
@@ -606,7 +611,7 @@ helpers the same way.
 declare module "@blazetrails/actionview" {
   interface TemplateRegistry {
     "users/show.html": typeof import("./views/users/show.html.tse").default;
-    "users/show.json": typeof import("./views/users/show.html.tse").default;
+    "users/show.json": typeof import("./views/users/show.json.tse").default;
     // ... one entry per .tse file
   }
 }
@@ -657,9 +662,321 @@ GitHub Actions workflow + `pnpm prepare` hook. (Same constraint as
 gRPC-codegen or Prisma-client-generate flows — common pattern, just
 needs a callout so it doesn't surprise people.)
 
----
+### 2.10 Tokenization, helpers, and template features (Erubi parity)
 
-## 3. 1-for-1 API mapping
+This section closes the remaining design gaps. Where Rails/Erubi has an
+answer, we match it exactly — including its known limitations. Where
+TS forces a divergence, the divergence is explicit.
+
+#### 2.10.1 Tokenization: same heuristics as Erubi
+
+The TSE lexer uses **Erubi's regex-based tag tokenization, not a
+TS-aware tokenizer**. This is a deliberate fidelity choice: Erubi's
+heuristics are well-understood, well-documented, and template authors
+already know their edge cases from the Ruby world. We inherit both
+the simplicity and the limits.
+
+Concretely (matching upstream erubi's lexer):
+
+- A tag opens on `<%` and closes on the next `%>`. The scanner does
+  **not** inspect string literals, comments, brace structure, or
+  generic syntax inside the tag.
+- **Known limit (same as ERB):** `<% const x = "foo %> bar" %>` is
+  mis-tokenized. The tag closes at the first `%>`. Template authors
+  must avoid literal `%>` inside tag bodies — Ruby authors face the
+  same constraint. Workaround: escape with `<% const x = "foo " + "%>" + " bar" %>`,
+  or use `<%= "..." %>` and assemble outside the template.
+- **Known limit (same as ERB):** the lexer is line-based for trim
+  detection. A `-%>` followed by `\r\n` on Windows still strips
+  correctly (we normalize line endings to `\n` before lex, matching
+  Rails' `source.b` + encoding handling).
+- `<%%` / `%%>` escape to literal `<%` / `%>` (same as ERB).
+- `<%#` opens a comment that runs to the matching `%>`. Comment bodies
+  may contain anything except `%>` — same restriction as `<% %>`. The
+  comment AND its trailing newline are dropped from output (Erubi
+  parity: `add_text("")` after a comment, no `<br>`).
+- `<%! ... !%>` (the TSE-only types/format block) is parsed as a
+  separate token class with its own delimiter. The scanner looks for
+  `!%>` specifically when it has opened on `<%!`. This is the one
+  place the lexer state machine has more than one closing delimiter;
+  the bodies are restricted to TS type expressions and small JSON-ish
+  values, neither of which legitimately contains `!%>`.
+
+The cost of this choice is the same as in Rails: ~5 lines of
+documentation about literal `%>` and that's it. The benefit is a
+straightforward 200-LOC lexer instead of a TS-AST-aware one.
+
+#### 2.10.2 `RenderContext` — the helper interface
+
+Helpers are **typed methods on the `RenderContext` interface**, not
+free functions, not globals, not `with`-bound names. The renderer
+constructs a `RenderContext` instance per render call and passes it as
+the first argument to the compiled template. Helper invocations in
+templates compile to `context.helperName(...)` calls.
+
+```ts
+// @blazetrails/actionview/render-context.ts
+export interface RenderContext {
+  readonly outputBuffer: OutputBuffer;
+
+  // Capture / concat — see 2.10.3
+  capture(callback: () => void): SafeString;
+  concat(value: unknown): void;
+  raw(value: unknown): SafeString; // alias for safe(value)
+
+  // Translation
+  t(key: string, options?: TranslateOptions): SafeString;
+
+  // Yield (layouts)
+  yield(section?: string): SafeString;
+  contentFor(section: string, callback: () => void): void;
+
+  // Partials
+  render<K extends keyof TemplateRegistry>(options: {
+    partial: K;
+    locals?: TemplateLocals<TemplateRegistry[K]>;
+  }): SafeString;
+  render(options: { partial: string; locals?: Record<string, unknown> }): SafeString;
+}
+```
+
+Helper packages add methods by **declaration merging** (see §2.9):
+
+```ts
+declare module "@blazetrails/actionview" {
+  interface RenderContext {
+    linkTo(name: string, path: string, options?: LinkToOptions): SafeString;
+    formWith<T>(options: FormWithOptions<T>, block: (f: FormBuilder<T>) => void): SafeString;
+    // ...
+  }
+}
+```
+
+The emitted `.tse.ts` carries `context: RenderContext` as the first
+parameter. Once any helper-providing module is imported anywhere in
+the app, its augmentation is in scope and `context.linkTo(...)`
+typechecks.
+
+**Why explicit `context.`** Rails resolves helpers via Ruby's implicit
+`self`. TS has no equivalent (`with` is dead, `this`-typed callable
+modules break narrowing, eval-based name lifting breaks
+tree-shaking). The explicit prefix is the smallest divergence from
+ERB ergonomics that still gives static types. Same trade-off as
+activerecord scopes (`User.scopes.active()` vs Ruby's implicit
+class-method lookup).
+
+**Context lifecycle.** A fresh `RenderContext` is constructed per
+top-level render call. `outputBuffer` is owned by that context; no
+sharing across renders, no thread-local concerns. Nested partial
+renders **inherit the parent context** (so `concat` in a partial
+writes to the parent buffer) — matches Rails' behavior where partials
+share `@output_buffer` with the calling template.
+
+#### 2.10.3 `capture`, `concat`, `raw` — block semantics ported from Rails
+
+The earlier draft's block-form `<%= helper do %>...<% end %>` example
+was incorrect: it would double-write (inner appends + outer
+`append(helper-return-value)`). The Rails mechanism is **`capture`**,
+which temporarily redirects `@output_buffer` to a fresh buffer for the
+duration of the block, returning the captured string to the helper.
+TSE ports this directly.
+
+```ts
+// in @blazetrails/actionview/output-buffer.ts
+class RenderContextImpl implements RenderContext {
+  capture(callback: () => void): SafeString {
+    const saved = this.outputBuffer;
+    const fresh = new OutputBuffer();
+    this.outputBuffer = fresh;
+    try {
+      callback();
+    } finally {
+      this.outputBuffer = saved;
+    }
+    return fresh.toSafeString();
+  }
+  concat(value: unknown): void {
+    this.outputBuffer.append(value);
+  }
+}
+```
+
+Block-form `<%= helper do |args| %>...<% end %>` therefore emits:
+
+```ts
+// <%= formWith({ model: user }) do |f| %><%= f.textField("name") %><% end %>
+context.outputBuffer.append(
+  context.formWith({ model: user }, (f) =>
+    context.capture(() => {
+      context.outputBuffer.append(f.textField("name"));
+    }),
+  ),
+);
+```
+
+The helper receives the block as a callback whose **return value is a
+SafeString** (the captured output). It can use that return value
+directly (e.g. wrapping it in `<form>...</form>`) or call the
+callback for side effects and read the buffer separately.
+
+Block helpers that follow Rails' convention return their full
+rendered output as a SafeString; the outer `append` writes it. No
+double-write, because the inner `append` calls went to the captured
+buffer, not the parent.
+
+**`concat(value)` semantics.** Inside a block, helpers (and template
+code) can call `context.concat(value)` to write to the _currently
+active_ buffer — which is the captured buffer if inside `capture`,
+otherwise the top-level one. Same as Rails' `concat` helper.
+
+**`raw(value)` / `safe(value)`.** Both mark a value as html-safe (i.e.
+wrap as `SafeString`). Rails has both `raw` (a view helper) and
+`html_safe` (a String method); we expose `safe()` as a free function
+(no monkey-patch) AND `context.raw()` (helper alias). They are
+identical.
+
+#### 2.10.4 Filename parsing — locale, format, variant, handler
+
+Rails parses `<name>.<locale?>.<format>.<variant?>.<handler>` left-to-right
+against **registered token lists**: known locales (`I18n.available_locales`),
+known formats (`Mime::Type.lookup` keys), known variants (registered
+via `request.variant`), and registered handlers. Anything that's not
+in a known list is treated as part of `name`.
+
+TSE adopts the same model:
+
+- `Mime.formats` registers the known format tokens
+  (`html`, `json`, `xml`, `text`, `js`, `css`, …).
+- `I18n.availableLocales` registers locales (`en`, `de`, …).
+- `LookupContext.variants` registers variants (e.g. `phone`, `tablet`).
+- `Template.Handlers.registered` provides the handler list (`tse`,
+  potentially `raw`/`html`/`builder` analogues later).
+- Filename parser: split on `.`, take handler from the end (must be
+  registered), then walk right-to-left for variant / format / locale
+  tokens that match registered lists, leaving everything else as
+  `name`.
+
+Examples (all valid):
+
+| Filename                 | Parse                                              |
+| ------------------------ | -------------------------------------------------- |
+| `show.tse`               | name=`show`, format=html (default), locale=default |
+| `show.html.tse`          | name=`show`, format=html                           |
+| `show.en.html.tse`       | name=`show`, locale=en, format=html                |
+| `show.html+phone.tse`    | name=`show`, format=html, variant=phone            |
+| `show.en.html+phone.tse` | full quad                                          |
+| `users.index.html.tse`   | name=`users.index` (no token matches), format=html |
+
+Ambiguity is resolved by registration: a token only acts as a
+locale/format/variant if it's in the registered list at parse time.
+Apps that register `en` as both a locale AND don't have an `en`
+format don't trip over `show.en.tse` (locale wins because handler
+parse already consumed `.tse`).
+
+#### 2.10.5 Layouts and `yield`
+
+Rails layouts wrap a template's rendered output. `<%= yield %>` in a
+layout returns the inner template's `SafeString`. `<%= yield :name %>`
+returns content captured by `<% content_for :name do %>...<% end %>`
+elsewhere.
+
+TSE port (exposed on `RenderContext`):
+
+```ts
+context.yield(); // → inner template output
+context.yield("sidebar"); // → captured :sidebar content
+context.contentFor("sidebar", () => {
+  /* writes via concat */
+});
+```
+
+The renderer captures the inner template's output before invoking the
+layout, stores `:default` and named buffers on the context, and the
+layout's compiled function reads them through `yield()`. Same flow as
+Rails' `ActionView::Layouts`.
+
+**Typed yield.** `RenderContext#yield(section?)` returns `SafeString`
+for all section names; section-name typing (e.g. only `"sidebar"` |
+`"footer"` for a given layout) is deferred — would require
+layout-to-template binding info the renderer doesn't have at type
+level today. Listed as a future enhancement.
+
+#### 2.10.6 Partials and collection rendering
+
+`context.render({ partial, locals })` dispatches to the
+`TemplateRegistry`. Two overloads:
+
+- **Statically known partial name** → typed locals via
+  `TemplateLocals<TemplateRegistry[K]>`. Wrong locals are a tsc error.
+- **Dynamic name** → falls back to `Record<string, unknown>` locals
+  and a runtime registry lookup. Matches Rails' string-form dispatch.
+
+Collection form (`render(@users)` in Rails):
+
+```ts
+context.render({ partial: "users/user", collection: users, as: "user" });
+context.render({ partial: "users/user", collection: users }); // implicit as:
+```
+
+Counter (`user_counter`) and spacer (`spacer_template`) options match
+Rails' `PartialRenderer` 1:1.
+
+**Object-form partial inference (`render @users`)** — defers to
+ActionView's polymorphic-routes equivalent (Phase 5 helpers). The
+type signature accepts a typed model, and the renderer resolves
+`Model.modelName.partialPath` to a path string at runtime. Listed
+in the helpers tier.
+
+#### 2.10.7 Streaming
+
+`Tse.supportsStreaming = true` is the protocol claim, but the **default
+emit shape** in §2.6 returns a single `OutputBuffer` synchronously. A
+streaming emit variant is **deferred to Phase 3d** (renderer streaming):
+
+- Streaming-emit shape: the compiled function becomes an
+  `async function*` that yields chunks at each `safeAppend` /
+  `append` call instead of accumulating in a buffer.
+- Selection: the renderer decides at render time which emit variant
+  to invoke based on response streaming flag. Both variants are
+  emitted into the same `.tse.js` (two exports: `default` and
+  `stream`).
+- Until Phase 3d lands, `supportsStreaming` is technically true (the
+  handler supports it) but the renderer doesn't yet exploit it.
+
+This contradiction is acknowledged and tracked; not a fidelity miss
+vs Rails (Rails' renderer is the same — handler supports streaming;
+whether it's used is the renderer's call).
+
+#### 2.10.8 Strict locals — preserve dual mechanism
+
+Rails passes both `local_assigns` (Hash) and spread kwargs to the
+compiled method. Templates can read either way. TSE ports both:
+
+```ts
+export default function render(
+  context: RenderContext,
+  locals: { name: string; count?: number },
+): SafeString {
+  // typed access:        locals.name
+  // dynamic access:      locals["name"]
+  // (both are the same object; no separate local_assigns hash needed)
+  ...
+}
+```
+
+We collapse `local_assigns` and the typed kwargs into a single typed
+object because TS objects already support both keyed and dynamic
+access via indexed type. No information loss vs Rails; one fewer
+parameter.
+
+#### 2.10.9 i18n `t()` and `cache do` blocks
+
+- `context.t(".title")` — dotted lookup scoped to the template's
+  virtual path (e.g. `users/show` → `users.show.title`). Implemented
+  by passing the virtual path into `RenderContext` construction and
+  having `t()` prefix-resolve. Phase 5 (helpers).
+- `context.cache(key, block)` — Russian-doll fragment caching.
+  Phase 6+, gated on `Digestor` (already a Phase 0.5 stub).
 
 This is the contract we ship. Anything below that says "Rails has X, we
 have Y" should match behavior, not just signature.
@@ -731,12 +1048,12 @@ We deliberately do not ship `>` or `<>` modes Rails leaves disabled.
 
 ### 3.5 Error reporting
 
-| Rails                                                            | TSE                                                                  |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `Template::Error` with `#annoted_source_code` returning ±2 lines | `Template.Error` ditto, via stored sourceMap + source                |
-| Backtrace points at `.erb:line`                                  | Backtrace points at `.tse:line` via source map                       |
-| `MissingTemplate` (no handler match)                             | `MissingTemplate` (same shape)                                       |
-| n/a                                                              | `StrictLocalsMismatch < Template.Error` — strict-locals runtime miss |
+| Rails                                                              | TSE                                                                  |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `Template::Error` with `#annotated_source_code` returning ±2 lines | `Template.Error` ditto, via stored sourceMap + source                |
+| Backtrace points at `.erb:line`                                    | Backtrace points at `.tse:line` via source map                       |
+| `MissingTemplate` (no handler match)                               | `MissingTemplate` (same shape)                                       |
+| n/a                                                                | `StrictLocalsMismatch < Template.Error` — strict-locals runtime miss |
 
 ### 3.6 Render-time integration
 
@@ -801,11 +1118,21 @@ of each other and can land in parallel from sibling branches.
 
 ---
 
-## 5. Fidelity checklist (verify against `vendor/rails/actionview/`)
+## 5. Fidelity checklist
 
 Each implementation PR landing TSE pieces must check the box for every
-item it claims to cover. Citations are file paths in vendor (current
-Rails main).
+item it claims to cover. The checklist is split into two parts:
+
+- **5A — Rails fidelity.** Items verified against
+  `vendor/rails/actionview/`. These are non-negotiable: deviation
+  requires a documented rationale and approval.
+- **5B — TS hygiene.** TSE-specific design decisions. Not present in
+  Rails; defensible to revisit per implementation needs as long as
+  the decision is recorded in this doc.
+
+---
+
+### 5A. Rails fidelity
 
 **Handler protocol** (`lib/action_view/template/handlers/erb.rb`):
 
@@ -862,13 +1189,44 @@ Rails main).
 - [ ] `OutputBuffer#safeAppend` and `#safeExprAppend` never escape.
 - [ ] Concatenating two `SafeString`s yields a `SafeString`.
 
-**Format triple**:
+**Filename parsing** (`lib/action_view/template/resolver.rb` +
+`Mime::Type` registry):
 
-- [ ] Filename `<name>.<format>.tse` parsed into `{name, format, handler}`;
-      missing format defaults to `html`.
+- [ ] Filename `<name>.<locale?>.<format>.<variant?>.tse` parsed via
+      registered token lists (see §2.10.4).
+- [ ] Missing format defaults to `html`.
 - [ ] `<%! format: "..." !%>` override honored when present.
 - [ ] `escapeIgnoreList` consulted via parsed format, not filename string
       match.
+
+**Helpers and capture** (`lib/action_view/helpers/capture_helper.rb`,
+`lib/action_view/helpers/output_safety_helper.rb`):
+
+- [ ] `RenderContext#capture(callback)` redirects `outputBuffer`,
+      restores on finally, returns captured `SafeString`.
+- [ ] `RenderContext#concat(value)` writes to currently-active buffer.
+- [ ] `RenderContext#raw(value)` ≡ `safe(value)`.
+- [ ] Block-form `<%= helper do %>...<% end %>` emits with `capture()`
+      wrapper — no double-write (see §2.10.3).
+- [ ] Nested partial renders inherit parent context's `outputBuffer`.
+
+**Layouts and yield** (`lib/action_view/layouts.rb`):
+
+- [ ] `<%= yield %>` returns inner template output via
+      `RenderContext#yield()`.
+- [ ] `<% contentFor("name", () => ...) %>` captures and stores by name.
+- [ ] `<%= yield("name") %>` returns named capture or empty SafeString.
+
+**Partials** (`lib/action_view/renderer/partial_renderer.rb`):
+
+- [ ] Static partial name → typed locals via `TemplateRegistry`.
+- [ ] Dynamic partial name → string form with `Record<string, unknown>`.
+- [ ] `collection`, `as`, `counter`, `spacer_template` options match
+      Rails 1:1.
+
+---
+
+### 5B. TS hygiene (TSE-specific decisions)
 
 **TypeScript artifacts** (see §2.9):
 
@@ -900,15 +1258,12 @@ non-negative deltas, the corresponding implementation PR is mergeable.
 
 ## 6. Open questions
 
-1. **Helper binding ergonomics.** `context.linkTo` vs a generated
-   `using` block (`<% using context %>`) that aliases helpers as locals.
-   The latter is closer to Rails but adds a compile-time scope-tracker.
-   Defer until a real view stresses it.
-2. **Partials in TSE.** Rails' `render partial: "user", locals:` resolves
-   path → template at runtime. With strict locals + the views manifest
-   we _could_ type-check partial calls at the call site
-   (`<%= render(UserPartial, { user }) %>`). Worth doing — open question
-   is whether to keep the string form too for parity.
+1. _(resolved 2026-05-21: helpers live on the `RenderContext` interface;
+   render provides a typed instance; templates call `context.foo(...)`.
+   See §2.10.2.)_
+2. _(resolved 2026-05-21: partials dispatch via `context.render({ partial,
+locals })` with overloaded type signature — typed locals for known
+   names, string-form fallback for dynamic. See §2.10.6.)_
 3. **Streaming.** Rails uses fibers + `Flow`. We've planned async
    generators (Phase 3d). The TSE compiler doesn't need to know — the
    handler returns a SafeString, streaming is the renderer's problem.

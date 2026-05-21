@@ -124,6 +124,16 @@ describe("ScaffoldControllerGeneratorTest", () => {
     expect(c).toContain('this.params.expect({ account: ["name"] })');
     expect(parseTs(c).diagnostics).toEqual([]);
     expect(fs.existsSync(path.join(tmpDir, "src/app/helpers/admin/accounts-helper.ts"))).toBe(true);
-    expect(read("src/config/routes.ts")).toContain('router.resources("admin/accounts")');
+    const routes = read("src/config/routes.ts");
+    expect(routes).toContain('router.namespace("admin"');
+    expect(routes).toContain('router.resources("accounts")');
+    expect(routes).not.toContain('router.resources("admin/accounts")');
+  });
+
+  it("strips dashed controller suffix", () => {
+    makeGen().run("posts-controller");
+    const c = read("src/app/controllers/posts-controller.ts");
+    expect(c).toContain("class PostsController");
+    expect(c).not.toContain("PostsControllerController");
   });
 });

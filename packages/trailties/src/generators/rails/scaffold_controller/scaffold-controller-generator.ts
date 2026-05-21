@@ -9,6 +9,7 @@ import {
 } from "../../base.js";
 import { tsBody, tsMethod, type Method } from "../../../template-builder/index.js";
 import { emitControllerClass } from "../controller/controller-paths.js";
+import { emitResourceRouteSnippet } from "../resource-route/resource-route-generator.js";
 
 export interface ScaffoldControllerRunOptions {
   api?: boolean;
@@ -29,7 +30,7 @@ export class ScaffoldControllerGenerator extends GeneratorBase {
     options: ScaffoldControllerRunOptions = {},
   ): string[] {
     const { api = false, skipRoutes = false, test = true, helper = true } = options;
-    const stripped = name.replace(/_?controller$/i, "");
+    const stripped = name.replace(/[_-]?controller$/i, "");
     const parts = stripped.split("/");
     const leaf = parts[parts.length - 1]!;
     const nsClass = parts.slice(0, -1).map((p) => classify(p));
@@ -39,7 +40,6 @@ export class ScaffoldControllerGenerator extends GeneratorBase {
     const singular = underscore(classify(leaf));
     const controllerClassName = [...nsClass, classify(resourceName)].join("") + "Controller";
     const controllerFileName = [...nsDashed, dasherize(resourceName)].join("/") + "-controller";
-    const routeResource = [...nsDashed, resourceName].join("/");
     const ext = this.ext();
     const ts = this.isTypeScript();
     const attrNames = parseColumns(attributes).map((c) => c.name);
@@ -86,7 +86,11 @@ ${skip("index")}${skip("show")}${skip("new")}${skip("create")}${skip("edit")}${s
           ? "src/config/routes.js"
           : null;
       if (routesFile) {
-        this.insertIntoFile(routesFile, "// routes", `  router.resources("${routeResource}");\n`);
+        this.insertIntoFile(
+          routesFile,
+          "// routes",
+          emitResourceRouteSnippet(nsDashed, resourceName) + "\n",
+        );
       }
     }
     return this.getCreatedFiles();

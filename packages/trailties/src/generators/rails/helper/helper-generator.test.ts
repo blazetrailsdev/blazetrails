@@ -42,6 +42,14 @@ describe("HelperGeneratorTest", () => {
     );
   });
 
+  it("strips a trailing dashed helper suffix", () => {
+    makeGen().run("account-helper");
+    expect(fs.existsSync(path.join(tmpDir, "src/app/helpers/account-helper.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "src/app/helpers/account-helper-helper.ts"))).toBe(
+      false,
+    );
+  });
+
   it("nested namespace", () => {
     makeGen().run("admin/account");
     const c = fs.readFileSync(

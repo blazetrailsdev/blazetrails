@@ -95,9 +95,11 @@ jobs:
           # trails_tsc_affected gates the virtualized DX type tests, which
           # are activerecord's only consumer of @blazetrails/trails-tsc.
           TRAILS_TSC_PKGS_RE='^packages/trails-tsc/'
-          # tse_compiler_affected gates tse-compiler-tests. Only depends on
-          # activesupport today. The package may not exist on the base ref
-          # yet — when absent, the gate is simply never tripped by paths.
+          # tse_compiler_affected gates tse-compiler-tests. Own package +
+          # activesupport (its only workspace dep). Note: activesupport
+          # changes flip this on even when packages/tse-compiler is absent
+          # on the base ref — the job itself short-circuits in that case
+          # via the directory-presence check after checkout.
           TSE_COMPILER_PKGS_RE='^packages/(tse-compiler|activesupport)/'
           force_all_affected() {
             echo "activerecord_affected=true" >> "$GITHUB_OUTPUT"

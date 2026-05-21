@@ -295,7 +295,10 @@ export class JoinDependency {
     this._usedTableNames.add(targetTable!);
 
     // Substitute the PLACEHOLDER with the effective SQL name
-    joinOn = joinOn.replace(/PLACEHOLDER/g, this._qt(effectiveName));
+    // Function replacer avoids `$&`/`$'`/`` $` ``/`$N` expansion in the
+    // replacement string when an identifier contains `$`.
+    const effectiveQuoted = this._qt(effectiveName);
+    joinOn = joinOn.replace(/PLACEHOLDER/g, () => effectiveQuoted);
 
     // Apply association scope as additional ON conditions
     if (assocDef.options.scope && typeof assocDef.options.scope === "function") {
@@ -304,10 +307,8 @@ export class JoinDependency {
       if (scopeSql) {
         const whereMatch = scopeSql.match(/\bWHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|\s*$)/i);
         if (whereMatch) {
-          const scopeWhere = whereMatch[1].replaceAll(
-            this._qt(targetTable!),
-            this._qt(effectiveName),
-          );
+          const toQ = this._qt(effectiveName);
+          const scopeWhere = whereMatch[1].replaceAll(this._qt(targetTable!), () => toQ);
           joinOn += ` AND ${scopeWhere}`;
         }
       }
@@ -831,7 +832,8 @@ export class JoinDependency {
     // tN alias rather than colliding on the same unaliased identifier.
     const targetCollides = this._usedTableNames.has(targetTable) || targetTable === throughTable;
     const targetEffective = targetCollides ? targetAlias : targetTable;
-    targetJoinOn = targetJoinOn.replaceAll("TARGET_PLACEHOLDER", this._qt(targetEffective));
+    const targetEffectiveQuoted = this._qt(targetEffective);
+    targetJoinOn = targetJoinOn.replaceAll("TARGET_PLACEHOLDER", () => targetEffectiveQuoted);
 
     // Apply association scope
     if (assocDef.options.scope && typeof assocDef.options.scope === "function") {
@@ -840,10 +842,8 @@ export class JoinDependency {
       if (scopeSql) {
         const whereMatch = scopeSql.match(/\bWHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|\s*$)/i);
         if (whereMatch) {
-          const scopeWhere = whereMatch[1].replaceAll(
-            this._qt(targetTable),
-            this._qt(targetEffective),
-          );
+          const toQ = this._qt(targetEffective);
+          const scopeWhere = whereMatch[1].replaceAll(this._qt(targetTable), () => toQ);
           targetJoinOn += ` AND ${scopeWhere}`;
         }
       }

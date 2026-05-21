@@ -16,14 +16,22 @@ const MIGRATION_FILE_PATTERN = /^(\d+)[_-](.+)\.(ts|js)$/;
  * Supports both .ts and .js migration files. When both exist for the same
  * migration, .ts is preferred (source of truth over compiled output).
  *
- * Files match: {timestamp}-{name}.ts or .js (e.g., 20260318120000-create-users.ts)
+ * Files match: {timestamp}_{name}.ts or .js (Rails-faithful underscore form;
+ * the hyphen form is accepted as a pre-1.12c transitional alias).
  */
 export async function discoverMigrations(migrationsDir: string): Promise<MigrationProxy[]> {
   if (!fs.existsSync(migrationsDir)) {
     return [];
   }
 
-  const rawFiles = fs.readdirSync(migrationsDir).filter((f) => MIGRATION_FILE_PATTERN.test(f));
+  // Sort the directory listing so dedupe is deterministic regardless of
+  // readdir order. Underscore (`_`, 0x5F) sorts after hyphen (`-`, 0x2D),
+  // so iterating in sorted order means an underscore variant overwrites
+  // the hyphen alias as a deterministic tie-break.
+  const rawFiles = fs
+    .readdirSync(migrationsDir)
+    .filter((f) => MIGRATION_FILE_PATTERN.test(f))
+    .sort();
 
   // Deduplicate by canonical version_name (underscore form), preferring
   // .ts over .js. The hyphen alias is transitional; we collapse `-` and
@@ -40,8 +48,14 @@ export async function discoverMigrations(migrationsDir: string): Promise<Migrati
       continue;
     }
 
-    // Prefer .ts (source) over .js (compiled)
-    if (path.extname(existing) === ".js" && ext === ".ts") {
+    const existingExt = path.extname(existing);
+    const existingSep = existing.match(/^\d+([_-])/)![1];
+    const fileSep = file.match(/^\d+([_-])/)![1];
+    // Prefer .ts (source) over .js (compiled); at equal extension,
+    // prefer the canonical underscore separator over the hyphen alias.
+    if (existingExt === ".js" && ext === ".ts") {
+      byBasename.set(basename, file);
+    } else if (existingExt === ext && existingSep === "-" && fileSep === "_") {
       byBasename.set(basename, file);
     }
   }

@@ -28,6 +28,16 @@ export interface DockerService {
 }
 
 export abstract class Database {
+  /**
+   * Service/volume identifier — mirrors Rails `Database#name` in
+   * railties/lib/rails/generators/database.rb. This is NOT the same as
+   * the `Database.build` argument or `DatabaseName`: Rails deliberately
+   * exposes `"postgres"` (not `"postgresql"`) so the Docker volume,
+   * service image, and devcontainer feature share an identifier, while
+   * Trilogy keeps `"mysql"` (via `include MySQL`) and the MariaDB
+   * variants surface `"mariadb"`. Use `Database.build(name)` for the
+   * adapter id; use `db.name` for service-layer identity.
+   */
   abstract readonly name: string;
   abstract readonly template: string;
   abstract readonly pkgDependency: PkgDependency;

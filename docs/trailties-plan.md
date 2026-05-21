@@ -14,7 +14,7 @@ current state.
 
 ## Hard rules
 
-0. **All TS-source generator output flows through `@blazetrails/trailties/templates`.**
+0. **All TS-source generator output flows through `@blazetrails/trailties/template-builder`.**
    No raw-string `createFile` for `.ts` files; no `.rb`/`.erb` strings
    anywhere. See `docs/trailties-template-builder.md` for the locked
    Option B design and PR T1 below for the builder PR. Per-generator
@@ -122,7 +122,7 @@ Every PR must pass:
 
 > **Generator output is governed by `docs/trailties-template-builder.md`
 > (Option B: typed tagged-template emitters).** Every PR that produces app
-> source code must build it through `@blazetrails/trailties/templates`'s
+> source code must build it through `@blazetrails/trailties/template-builder`'s
 > `tsModule` / `tsClass` / `tsImport` / `tsField` / `tsMethod` / `tsBody`
 > builder — never raw string templates, never `.rb`/`.erb` content. PR T1
 > (below) lands the builder; PRs that emit code are gated on it.
@@ -137,7 +137,7 @@ Every PR must pass:
 
 **Scope:**
 
-- `packages/trailties/src/templates/{index,types,refs,emit-module,emit-class,emit-interface,emit-import,emit-method,ts-body}.ts`.
+- `packages/trailties/src/template-builder/{index,types,refs,emit-module,emit-class,emit-interface,emit-import,emit-method,ts-body}.ts`.
 - `Ref` (branded `{ kind: "ref"; name: string; from?: string }`), `type` tagged template, `tsImport` family (named / default / type-only), `tsField`, `tsMethod`, `tsBody` (dedent + ref-carrying tagged template), `tsClass`, `tsInterface`, `tsModule`.
 - `tsModule` is the sole record→source resolver. It walks every `Ref` in declarations, dedupes imports, and emits the final file as one string.
 - Unit tests cover: import dedup, default+named in same import, type-only, ref propagation through `type` / `tsBody`, dedent behavior, snapshot golden for a hand-built module, **`extends: "ApplicationRecord"` fails to typecheck** (compile-error assertion via `// @ts-expect-error` in a `*.test-d.ts` file, executed by the existing `test:types` pass).

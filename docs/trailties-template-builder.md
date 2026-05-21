@@ -3,7 +3,7 @@
 Status: **locked (2026-05-21).**
 
 All trailties generators emit TS source through a typed tagged-template
-builder under `@blazetrails/trailties/templates`. Raw-string emit and
+builder under `@blazetrails/trailties/template-builder`. Raw-string emit and
 `.rb`/`.erb` content are prohibited. Per-generator tests are mandatory
 (snapshot + parse-without-diagnostics + no-Ruby regex).
 
@@ -38,7 +38,7 @@ PR T1–T5 below.
 | -------------- | -------------------------------------------------------- |
 | Structure      | `tsModule({ imports, declarations })` typed record       |
 | Declarations   | `tsClass` / `tsInterface` / `tsField` / `tsMethod`       |
-| Symbols        | `Ref` (branded `{ kind: "ref"; name; from? }`) only      |
+| Symbols        | `Ref` (opaque, `unique symbol`-branded; unforgeable)     |
 | Interpolation  | `` type`...` `` and `` tsBody`...` `` tagged templates   |
 | Imports        | Deduplicated centrally by `tsModule` from collected refs |
 | Method bodies  | `` tsBody`...` `` (dedent + ref-carrying)                |
@@ -53,13 +53,24 @@ codified hard rule.
 ## API surface
 
 ```ts
-// packages/trailties/src/templates/index.ts
+// packages/trailties/src/template-builder/index.ts
 
-/** Branded identifier. Only created via tsImport / ref / tsClass.name. */
-export type Ref = { kind: "ref"; name: string; from?: string };
+declare const REF_BRAND: unique symbol;
+
+/**
+ * Opaque branded identifier. Structurally NOT constructible — the
+ * `unique symbol` brand is unforgeable outside this module. The only
+ * ways to obtain a `Ref` are `ref(...)` and the `*.refs` field on the
+ * result of a `tsImport*` call.
+ */
+export type Ref = { readonly [REF_BRAND]: true; readonly name: string; readonly from?: string };
 
 /** Tagged-template result carrying refs through interpolation. */
-export type Type = { kind: "type"; text: string; refs: Ref[] };
+export type Type = {
+  readonly [REF_BRAND]: "type";
+  readonly text: string;
+  readonly refs: readonly Ref[];
+};
 export function ref(name: string, from?: string): Ref;
 export function type(parts: TemplateStringsArray, ...refs: Ref[]): Type;
 
@@ -69,9 +80,22 @@ export interface Import {
   named?: Record<string, string | "named">;
   typeOnly?: boolean;
 }
-export function tsImport(from: string, names: Import["named"]): Import;
-export function tsImportDefault(from: string, name: string): Import;
-export function tsImportType(from: string, names: Import["named"]): Import;
+
+/** Result of an import call: the Import record plus the Refs callers reference. */
+export interface ImportResult<TNames extends string = string> {
+  import: Import;
+  /** Ref for each imported binding, keyed by the imported alias. */
+  refs: { readonly [K in TNames]: Ref };
+}
+export function tsImport<TNames extends string>(
+  from: string,
+  names: Record<TNames, string | "named">,
+): ImportResult<TNames>;
+export function tsImportDefault(from: string, name: string): ImportResult<string>;
+export function tsImportType<TNames extends string>(
+  from: string,
+  names: Record<TNames, string | "named">,
+): ImportResult<TNames>;
 
 export interface Field {
   name: string;
@@ -86,7 +110,7 @@ export interface Method {
   name: string;
   params: Array<{ name: string; type: Field["type"] }>;
   returnType?: Field["type"];
-  body: Body; // see tsBody
+  body: Body; // tsBody required — plain strings rejected at the type level
   async?: boolean;
   static?: boolean;
   visibility?: "public" | "protected" | "private";
@@ -94,34 +118,39 @@ export interface Method {
 export function tsMethod(opts: Method): Method;
 
 /** Dedent + ref-carrying tagged template for method bodies. */
-export type Body = { kind: "body"; text: string; refs: Ref[] };
+export type Body = {
+  readonly [REF_BRAND]: "body";
+  readonly text: string;
+  readonly refs: readonly Ref[];
+};
 export function tsBody(parts: TemplateStringsArray, ...interps: Array<Ref | string>): Body;
 
 export interface ClassDecl {
-  kind?: "class";
+  readonly [REF_BRAND]: "class";
   name: string;
-  extends?: Ref; // must be a Ref, not a string
+  extends?: Ref; // must be a Ref, not a string — brand enforces this
   implements?: Ref[];
   exported?: boolean; // defaults true
   body: Array<Field | Method>;
 }
-export function tsClass(opts: ClassDecl): ClassDecl;
+export function tsClass(opts: Omit<ClassDecl, typeof REF_BRAND>): ClassDecl;
 
 export interface InterfaceDecl {
+  readonly [REF_BRAND]: "interface";
   /* analogous to ClassDecl */
 }
-export function tsInterface(opts: InterfaceDecl): InterfaceDecl;
+export function tsInterface(opts: Omit<InterfaceDecl, typeof REF_BRAND>): InterfaceDecl;
 
 export interface ModuleSource {
   imports?: Import[]; // optional — refs from declarations are auto-collected
-  declarations: Array<ClassDecl | InterfaceDecl | { kind: "raw"; text: string }>;
+  declarations: Array<ClassDecl | InterfaceDecl | { readonly [REF_BRAND]: "raw"; text: string }>;
   preamble?: string; // file-level comment block
 }
 
 /** The sole record→source resolver. */
 export function tsModule(src: ModuleSource): string;
 
-/** Test helpers, exported from "@blazetrails/trailties/templates/testing". */
+/** Test helpers, exported from "@blazetrails/trailties/template-builder/testing". */
 export function parseTs(source: string): { diagnostics: readonly Diagnostic[] };
 export function assertNoRubySource(text: string): void;
 ```
@@ -129,10 +158,11 @@ export function assertNoRubySource(text: string): void;
 ### Design rules baked in
 
 - **`extends` requires a `Ref`.** `tsClass({ extends: "ApplicationRecord" })`
-  is a type error. The only ways to obtain a `Ref` are `tsImport(...)`
-  (which returns refs reachable from the import block) or an explicit
-  `ref("Name", "package")`. This is the load-bearing constraint that
-  blocks the Ruby-emission failure mode.
+  is a type error. `Ref` is branded with a module-private `unique
+symbol`, so it cannot be constructed structurally — the only ways
+  to obtain one are `ref("Name", "package")` or the `.refs[alias]`
+  field of an `ImportResult` returned by `tsImport*`. This is the
+  load-bearing constraint that blocks the Ruby-emission failure mode.
 - **`Type` and `Body` carry refs.** `` type`Array<${userRef}>` `` and `` tsBody`return new ${userRef}();` `` propagate refs to `tsModule`'s import collector.
 - **`tsModule` resolves imports.** Walks every `Ref` in declarations,
   collects the implied imports, dedupes, sorts, and emits the import
@@ -169,8 +199,8 @@ PR T1 lands alone; T2–T5 parallelize off T1.
 
 **Source:** new.
 
-- `packages/trailties/src/templates/{index,types,refs,emit-module,emit-class,emit-interface,emit-import,emit-method,ts-body}.ts`
-- `packages/trailties/src/templates/testing.ts` — exports `parseTs`, `assertNoRubySource`.
+- `packages/trailties/src/template-builder/{index,types,refs,emit-module,emit-class,emit-interface,emit-import,emit-method,ts-body}.ts`
+- `packages/trailties/src/template-builder/testing.ts` — exports `parseTs`, `assertNoRubySource`.
 - Unit tests:
   - Import dedup; default+named in same import; type-only.
   - Ref propagation through `type` and `tsBody`.
@@ -228,9 +258,10 @@ PR T1 lands alone; T2–T5 parallelize off T1.
 
 ## Resolved decisions
 
-1. **Method-body source** — `tsBody` tagged template, dedent + ref-carrying.
-   Plain strings accepted only for trivial one-liners; multi-line use is
-   linted against.
+1. **Method-body source** — `tsBody` tagged template only. Plain strings
+   are rejected at the type level (`Method.body: Body`). Trivial one-liners
+   still go through `` tsBody`...` `` — the dedent and ref-carrying behavior
+   are no-ops on a single-line input, so there's no cost.
 2. **Cross-generator imports** — file-local. No shared symbol table.
 3. **Non-TS output** — `JSON.stringify(..., null, 2)` for JSON,
    `devcontainer.json`, and `compose.yaml` contents (YAML 1.2 ⊇ JSON;
@@ -243,8 +274,12 @@ PR T1 lands alone; T2–T5 parallelize off T1.
    builder via `{ kind: "raw" }` for prose, or (c) snapshot drift
    stops catching real regressions. None of these trip today; revisit
    the day one does.
-5. **No legacy templates** — `packages/trailties/src/templates/` is
-   empty in the tree; PR T1 starts on a blank canvas.
+5. **No legacy generator templates to migrate.** The existing
+   `packages/trailties/src/templates/` tree holds actionview `.tse`
+   view templates (e.g. `welcome/index.tse`) — out of scope here.
+   The builder lives in a sibling subtree at
+   `packages/trailties/src/template-builder/`, exported as
+   `@blazetrails/trailties/template-builder`.
 
 ## Plan-doc cross-references
 

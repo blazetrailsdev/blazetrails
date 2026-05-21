@@ -41,21 +41,19 @@ describe("RoutesReloader", () => {
     const a = makeRouteSet();
     r.routeSets.push(a);
     r.paths.push("/boom");
-    await expect(
-      r.reload(() => {
-        throw new Error("load failed");
-      }),
-    ).rejects.toThrow(/load failed/);
+    const boom = (): never => {
+      throw new Error("load failed");
+    };
+    await expect(r.reload(boom)).rejects.toThrow(/load failed/);
     expect(a.disableClearAndFinalize).toBe(false);
   });
 
   it("test_execute_unless_loaded_runs_once_and_fires_after_routes_loaded", async () => {
     const r = new RoutesReloader();
     const fired: unknown[] = [];
-    onLoad("after_routes_loaded", (app) => void fired.push(app));
+    onLoad("after_routes_loaded", (a) => void fired.push(a));
     const app = { tag: "app" };
-    expect(await r.executeUnlessLoaded(app)).toBe(true);
-    expect([r.loaded, fired]).toEqual([true, [app]]);
+    expect([await r.executeUnlessLoaded(app), r.loaded, fired]).toEqual([true, true, [app]]);
     expect(await r.executeUnlessLoaded(app)).toBe(false);
     expect(fired).toEqual([app]);
   });

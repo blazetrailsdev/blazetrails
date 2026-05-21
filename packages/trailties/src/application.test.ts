@@ -340,23 +340,7 @@ describe("Application key/message/credentials wiring", () => {
     await expect(app.configFor("exception_notification")).rejects.toThrow(/only "database"/);
   });
 
-  it("credentials defaults to config/credentials.yml.enc when no env-specific file exists", async () => {
-    installFs(
-      new Set(["/", "/app", "/app/config"]),
-      new Set(["/app/config.ts", "/app/config/credentials.yml.enc", "/app/config/master.key"]),
-    );
-    class A extends Application {}
-    A.calledFrom("/app");
-    Application.register(A);
-    const file = await A.instance().credentials();
-    expect([file.contentPath, file.keyPath, file.envKey]).toEqual([
-      "/app/config/credentials.yml.enc",
-      "/app/config/master.key",
-      "RAILS_MASTER_KEY",
-    ]);
-  });
-
-  it("credentials prefers config/credentials/{env}.yml.enc + .key when present", async () => {
+  it("credentials prefers env-specific config/credentials/{env}.yml.enc, else config/credentials.yml.enc", async () => {
     const b = "/app/config/credentials";
     installFs(
       new Set(["/", "/app", "/app/config", b]),
@@ -365,10 +349,20 @@ describe("Application key/message/credentials wiring", () => {
     class A extends Application {}
     A.calledFrom("/app");
     Application.register(A);
-    const file = await A.instance().credentials();
-    expect([file.contentPath, file.keyPath]).toEqual([
+    let f = await A.instance().credentials();
+    expect([f.contentPath, f.keyPath]).toEqual([
       `${b}/development.yml.enc`,
       `${b}/development.key`,
+    ]);
+    installFs(new Set(["/", "/o", "/o/config"]), new Set(["/o/config.ts"]));
+    class B extends Application {}
+    B.calledFrom("/o");
+    Application.register(B);
+    f = await B.instance().credentials();
+    expect([f.contentPath, f.keyPath, f.envKey]).toEqual([
+      "/o/config/credentials.yml.enc",
+      "/o/config/master.key",
+      "RAILS_MASTER_KEY",
     ]);
   });
 });

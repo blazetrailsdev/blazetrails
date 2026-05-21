@@ -49,6 +49,11 @@ export class Configuration extends TrailtieConfiguration {
   railtiesOrder: Array<string | symbol> = ["all"];
   relativeUrlRoot: string | null = null;
   requireMasterKey = false;
+  secretKeyBase: string | null = null;
+  credentials: { contentPath: string | null; keyPath: string | null } = {
+    contentPath: null,
+    keyPath: null,
+  };
   disableSandbox = false;
   sandboxByDefault = false;
   encoding = "utf-8";

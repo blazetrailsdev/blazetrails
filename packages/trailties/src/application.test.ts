@@ -310,3 +310,74 @@ describe("Application::DefaultMiddlewareStack", () => {
     expect(app.config.sessionOptions.secure).toBe(true);
   });
 });
+
+// Mirrors `railties/test/application/configuration_test.rb`
+// `test_key_generator`, `test_message_verifier`, and the
+// `routes_reloader` / `config_for` / `encrypted` / `credentials` cases.
+describe("Application::Configuration (2.5c)", () => {
+  it("credentials and secret_key_base default to null", () => {
+    const c = new Configuration();
+    expect(c.credentials).toEqual({ contentPath: null, keyPath: null });
+    expect(c.secretKeyBase).toBeNull();
+  });
+});
+
+describe("Application key/message/credentials wiring", () => {
+  beforeEach(() => resetLoadHooks());
+  afterEach(() => {
+    fsAdapterConfig.adapter = PREV;
+    resetLoadHooks();
+    Application.appClass = null;
+  });
+
+  const setSecret = (app: Application, s: string) => {
+    (app.config as unknown as { secretKeyBase: string }).secretKeyBase = s;
+  };
+
+  it("routes_reloader is memoized, key_generator/message_verifier work, config_for rejects non-database", async () => {
+    class A extends Application {}
+    Application.register(A);
+    const app = A.instance();
+    expect(app.routesReloader()).toBe(app.routesReloader());
+    expect(() => app.keyGenerator()).toThrow(/secret_key_base/);
+    setSecret(app, "test-secret");
+    const gen = app.keyGenerator();
+    expect(gen.generateKey("salt", 16)).toBeInstanceOf(Buffer);
+    expect(app.keyGenerator()).toBe(gen);
+    const v = app.messageVerifier("cookies");
+    expect(v.verify(v.generate({ foo: 1 }))).toEqual({ foo: 1 });
+    await expect(app.configFor("exception_notification")).rejects.toThrow(/only "database"/);
+  });
+
+  it("credentials defaults to config/credentials.yml.enc when no env-specific file exists", async () => {
+    installFs(
+      new Set(["/", "/app", "/app/config"]),
+      new Set(["/app/config.ts", "/app/config/credentials.yml.enc", "/app/config/master.key"]),
+    );
+    class A extends Application {}
+    A.calledFrom("/app");
+    Application.register(A);
+    const file = await A.instance().credentials();
+    expect([file.contentPath, file.keyPath, file.envKey]).toEqual([
+      "/app/config/credentials.yml.enc",
+      "/app/config/master.key",
+      "RAILS_MASTER_KEY",
+    ]);
+  });
+
+  it("credentials prefers config/credentials/{env}.yml.enc + .key when present", async () => {
+    const base = "/app/config/credentials";
+    installFs(
+      new Set(["/", "/app", "/app/config", base]),
+      new Set(["/app/config.ts", `${base}/development.yml.enc`, `${base}/development.key`]),
+    );
+    class A extends Application {}
+    A.calledFrom("/app");
+    Application.register(A);
+    const file = await A.instance().credentials();
+    expect([file.contentPath, file.keyPath]).toEqual([
+      `${base}/development.yml.enc`,
+      `${base}/development.key`,
+    ]);
+  });
+});

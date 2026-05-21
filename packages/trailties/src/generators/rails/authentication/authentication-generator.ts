@@ -107,12 +107,15 @@ export class AuthenticationGenerator extends GeneratorBase {
     if (!this.fileExists(file)) return;
     const full = this.path.join(this.cwd, file);
     let src = this.fs.readFileSync(full, "utf-8");
-    if (src.includes("Authentication.includeInto(this)")) return;
+    const mixin = src.includes("Authentication.includeInto(this)") ? "" : STATIC_INIT;
+    const imp = /import\s*\{[^}]*\bAuthentication\b[^}]*\}\s*from\s*["'][^"']+["']/.test(src)
+      ? ""
+      : AUTH_IMPORT;
+    if (!mixin && !imp) return;
     const m = src.match(/export\s+class\s+ApplicationController\b[^{]*\{/);
     if (!m || m.index === undefined) return;
-    const hasImport = /import\s*\{[^}]*\bAuthentication\b[^}]*\}\s*from\s*["'][^"']+["']/.test(src);
     const at = m.index + m[0].length;
-    src = (hasImport ? "" : AUTH_IMPORT) + src.slice(0, at) + STATIC_INIT + src.slice(at);
+    src = imp + src.slice(0, at) + mixin + src.slice(at);
     this.fs.writeFileSync(full, src);
   }
 

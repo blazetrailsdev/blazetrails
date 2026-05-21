@@ -22,6 +22,8 @@ const write = (rel: string, content: string) => {
   fs.mkdirSync(path.dirname(full), { recursive: true });
   fs.writeFileSync(full, content);
 };
+const writeAC = (find: string, replace: string) =>
+  write(APP_CTRL_PATH, APP_CTRL_EMPTY.replace(find, replace));
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-auth-"));
   write("tsconfig.json", "{}");
@@ -55,10 +57,7 @@ describe("AuthenticationGenerator", () => {
   });
 
   it("injects inside the class even when ApplicationController has a body", () => {
-    write(
-      APP_CTRL_PATH,
-      APP_CTRL_EMPTY.replace("{\n}", "{\n  async preexisting(): Promise<void> { return; }\n}"),
-    );
+    writeAC("{\n}", "{\n  async preexisting(): Promise<void> { return; }\n}");
     makeGen().run();
     const ac = read(APP_CTRL_PATH);
     expect(parseTs(ac).diagnostics).toEqual([]);
@@ -80,12 +79,9 @@ describe("AuthenticationGenerator", () => {
       "src/config/routes.ts",
       `// routes\n  router.resources("passwords");\n  router.resource("session");\n`,
     );
-    write(
-      APP_CTRL_PATH,
-      APP_CTRL_EMPTY.replace(
-        "\n\nexport",
-        `\nimport { Authentication } from "./concerns/authentication";\n\nexport`,
-      ),
+    writeAC(
+      "\n\nexport",
+      `\nimport { Authentication } from "./concerns/authentication";\n\nexport`,
     );
     makeGen().run();
     const routes = read("src/config/routes.ts");
@@ -94,6 +90,15 @@ describe("AuthenticationGenerator", () => {
     const ac = read(APP_CTRL_PATH);
     expect(ac.match(/import\s+\{\s*Authentication\b/g)).toHaveLength(1);
     expect(ac).toContain("Authentication.includeInto(this);");
+    expect(parseTs(ac).diagnostics).toEqual([]);
+  });
+
+  it("repairs partial config: mixin present but import missing (and vice versa)", () => {
+    writeAC("{\n}", "{\n  static {\n    Authentication.includeInto(this);\n  }\n}");
+    makeGen().run();
+    const ac = read(APP_CTRL_PATH);
+    expect(ac).toContain('import { Authentication } from "./concerns/authentication.js";');
+    expect(ac.match(/Authentication\.includeInto\(this\)/g)).toHaveLength(1);
     expect(parseTs(ac).diagnostics).toEqual([]);
   });
 

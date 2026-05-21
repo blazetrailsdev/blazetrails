@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { adapterType } from "../test-adapter.js";
-import { q, qt, quoteColumnName, quoteTableName } from "./quote-regex.js";
+import { q, quoteColumnName, quoteTableName } from "./quote-regex.js";
 
 describe("quote-regex test helpers", () => {
   it("quoteColumnName matches active adapter quoting", () => {
@@ -16,7 +16,7 @@ describe("quote-regex test helpers", () => {
     else expect(out).toBe('"users"."name"');
   });
 
-  it("q escapes regex metacharacters in the quoted identifier", () => {
+  it("q escapes regex metacharacters and accepts bare names", () => {
     const pattern = new RegExp(q("name"));
     if (adapterType === "mysql") {
       expect("SELECT `name` FROM x").toMatch(pattern);
@@ -27,12 +27,12 @@ describe("quote-regex test helpers", () => {
     }
   });
 
-  it("qt composes inside a template literal regex", () => {
-    const re = new RegExp(`SELECT \\* FROM ${qt("users")}`);
+  it("q accepts dotted names (Rails quote_table_name semantics)", () => {
+    const re = new RegExp(`SELECT \\* FROM ${q("posts.title")}`);
     if (adapterType === "mysql") {
-      expect("SELECT * FROM `users`").toMatch(re);
+      expect("SELECT * FROM `posts`.`title`").toMatch(re);
     } else {
-      expect('SELECT * FROM "users"').toMatch(re);
+      expect('SELECT * FROM "posts"."title"').toMatch(re);
     }
   });
 });

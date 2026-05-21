@@ -73,7 +73,7 @@ a model, run migrations, start a server, hit JSON and HTML endpoints.
    Post-100% Rails-fidelity work tracked in `docs/activerecord-100-plan.md`.
 3. **ActionController basics** — implement the rendering pipeline
    (JSON + EJS), params, filters, and CRUD. See the per-file 0% list
-   in `docs/actioncontroller-100-percent.md`.
+   in `docs/actionpack-100-percent.md` (ActionController section).
 4. **ActionDispatch routing** — `resources`, `root`, `get`/`post`/etc, and
    route-to-controller dispatch.
 5. **CLI** — wire up the real CLI commands to match what Frontiers does in the

@@ -311,16 +311,6 @@ describe("Application::DefaultMiddlewareStack", () => {
   });
 });
 
-// Mirrors `railties/test/application/configuration_test.rb` cases for
-// key_generator / message_verifier / credentials / config_for / encrypted.
-describe("Application::Configuration (2.5c)", () => {
-  it("credentials and secret_key_base default to null", () => {
-    const c = new Configuration();
-    expect(c.credentials).toEqual({ contentPath: null, keyPath: null });
-    expect(c.secretKeyBase).toBeNull();
-  });
-});
-
 describe("Application key/message/credentials wiring", () => {
   beforeEach(() => resetLoadHooks());
   afterEach(() => {
@@ -330,10 +320,12 @@ describe("Application key/message/credentials wiring", () => {
   });
 
   const setSecret = (app: Application, s: string) => {
-    (app.config as unknown as { secretKeyBase: string }).secretKeyBase = s;
+    app.config.secretKeyBase = s;
   };
 
-  it("routes_reloader is memoized, key_generator/message_verifier work, config_for rejects non-database", async () => {
+  it("routes_reloader memoized, key_generator/message_verifier work, config_for rejects non-database, Configuration defaults null", async () => {
+    expect(new Configuration().credentials).toEqual({ contentPath: null, keyPath: null });
+    expect(new Configuration().secretKeyBase).toBeNull();
     class A extends Application {}
     Application.register(A);
     const app = A.instance();

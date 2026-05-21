@@ -15,6 +15,7 @@ import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { Engine } from "./engine.js";
 import { Trailtie } from "./trailtie.js";
 import { Bootstrap } from "./application/bootstrap.js";
+import { Configuration } from "./application/configuration.js";
 import { RoutesReloader } from "./application/routes-reloader.js";
 import { resolveEnv, loadDatabaseConfig, type DatabaseConfig } from "./database.js";
 import { Collection, type InitializerGroup } from "./initializable.js";
@@ -65,6 +66,11 @@ export class Application extends Engine {
     return this.findRootWithFlag("config.ts", from, fs.cwd());
   }
 
+  override get config(): Configuration {
+    if (!(this._config instanceof Configuration)) this._config = new Configuration(null);
+    return this._config as Configuration;
+  }
+
   /** Returns true once {@link Application#initialize} has completed. */
   initialized(): boolean {
     return this._initialized;
@@ -109,7 +115,7 @@ export class Application extends Engine {
 
   /** `config.secretKeyBase` wins, else `SECRET_KEY_BASE` env. */
   secretKeyBase(): string | null {
-    return cfgOf(this).secretKeyBase ?? getEnv("SECRET_KEY_BASE") ?? null;
+    return this.config.secretKeyBase ?? getEnv("SECRET_KEY_BASE") ?? null;
   }
 
   /** 1000 iterations match Rails for cookie compatibility. */
@@ -131,10 +137,10 @@ export class Application extends Engine {
 
   async credentials(): Promise<EncryptedFile> {
     if (this._credentials) return this._credentials;
-    const c = cfgOf(this).credentials;
+    const c = this.config.credentials;
     const def = await defaultCredentialPaths(await this.requireRoot());
-    return (this._credentials = await this.encrypted(c?.contentPath ?? def.contentPath, {
-      keyPath: c?.keyPath ?? def.keyPath,
+    return (this._credentials = await this.encrypted(c.contentPath ?? def.contentPath, {
+      keyPath: c.keyPath ?? def.keyPath,
     }));
   }
 
@@ -148,7 +154,7 @@ export class Application extends Engine {
       contentPath: path.resolve(root, relativePath),
       keyPath: path.resolve(root, opts.keyPath ?? "config/master.key"),
       envKey: opts.envKey ?? "RAILS_MASTER_KEY",
-      raiseIfMissingKey: cfgOf(this).requireMasterKey ?? false,
+      raiseIfMissingKey: this.config.requireMasterKey,
     });
   }
 
@@ -164,13 +170,6 @@ export class Application extends Engine {
     return (await this.root()) ?? (await getFsAsync()).cwd();
   }
 }
-
-type AppCfg = {
-  secretKeyBase?: string | null;
-  credentials?: { contentPath?: string | null; keyPath?: string | null };
-  requireMasterKey?: boolean;
-};
-const cfgOf = (app: Application): AppCfg => app.config as never;
 
 async function defaultCredentialPaths(
   root: string,

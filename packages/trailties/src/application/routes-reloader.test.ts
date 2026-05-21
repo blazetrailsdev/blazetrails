@@ -55,8 +55,7 @@ describe("RoutesReloader", () => {
     onLoad("after_routes_loaded", (app) => void fired.push(app));
     const app = { tag: "app" };
     expect(await r.executeUnlessLoaded(app)).toBe(true);
-    expect(r.loaded).toBe(true);
-    expect(fired).toEqual([app]);
+    expect([r.loaded, fired]).toEqual([true, [app]]);
     expect(await r.executeUnlessLoaded(app)).toBe(false);
     expect(fired).toEqual([app]);
   });

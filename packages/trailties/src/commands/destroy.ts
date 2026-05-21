@@ -26,8 +26,11 @@ export function destroyCommand(): Command {
       const migrationsDir = path.join(cwd, "db", "migrations");
       if (fs.existsSync(migrationsDir)) {
         // Match both the underscore form (post-1.12c, Rails-faithful)
-        // and the hyphen form (pre-1.12c transitional).
-        const pattern = new RegExp(`create[_-]${tableName}\\.ts$`);
+        // and the hyphen form (pre-1.12c transitional). Escape the
+        // user-derived tableName so regex metacharacters can't widen
+        // the match.
+        const escaped = tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const pattern = new RegExp(`create[_-]${escaped}\\.ts$`);
         for (const f of fs.readdirSync(migrationsDir)) {
           if (pattern.test(f)) {
             removeFile(cwd, `db/migrations/${f}`);

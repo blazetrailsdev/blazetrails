@@ -40,7 +40,12 @@ export async function discoverMigrations(migrationsDir: string): Promise<Migrati
   for (const file of rawFiles) {
     const ext = path.extname(file);
     const m = file.match(MIGRATION_FILE_PATTERN)!;
-    const basename = `${m[1]}_${m[2]}`;
+    // Canonicalize both the separator and the name segment: pre-1.12c
+    // generated dasherized names ("change-title-body-from-posts") while
+    // post-1.12c uses underscored names ("change_title_body_from_posts"),
+    // so collapsing `-` to `_` in the name keeps a renamed migration
+    // from double-loading.
+    const basename = `${m[1]}_${m[2].replace(/-/g, "_")}`;
     const existing = byBasename.get(basename);
 
     if (!existing) {

@@ -27,11 +27,85 @@ Bar (1) unblocks the rest of trails (we get rid of the commander divergence). Ba
 
 ### Naming policy (TS vs Ruby namespaces)
 
-Thor's class names (`Thor::Command`, `Thor::Base`, `Thor::Group`, `Thor::Error`) collide with Rails-namespaced classes already in trailties (`Rails::Command`, `Rails::Generators::Base`, `Rails::Engine`, `Rails::Error`-flavored errors). Rules:
+In Ruby, `Thor` is itself a top-level class (you write `class MyCli < Thor`), with nested classes `Thor::Command`, `Thor::Base`, `Thor::Group`, `Thor::Error`, `Thor::Actions`, `Thor::Shell::Basic`. The TS pattern that mirrors this shape — and that the rest of the codebase already uses (see `Naming`, `SecurePassword`, `Configurable`, `NumberHelper`) — is **`class X` + `export namespace X`** declaration merging:
 
-- **Keep the Thor surface under a `Thor` namespace** in `@blazetrails/thor` — exported as a single object (`export const Thor = { ... }`) plus named exports for the common types (`ThorCommand`, `ThorGroup`, `ThorError`, `ThorActions`). Matches Rails' `Thor::*` shape and keeps api:compare's class-name matching simple.
-- **Rails' own names stay in trailties** unprefixed (`Command`, `Generators.Base`). Where trailties extends a Thor class, the import is explicit: `import { ThorGroup } from "@blazetrails/thor"` → `class Base extends ThorGroup`. No `Rails::Command::Base extends Thor::Group`-style class-name shadowing.
-- **No re-exports of Thor names from trailties.** Trailties consumers who want raw Thor reach for `@blazetrails/thor` directly. Keeps the two surfaces' api:compare reports independent.
+```ts
+// packages/thor/src/thor.ts
+export class Thor {
+  /* class-level methods Rails::Command::Base inherits */
+}
+export namespace Thor {
+  export class Base {
+    /* ... */
+  }
+  export class Command {
+    /* ... */
+  }
+  export class Group {
+    /* ... */
+  }
+  export class Error extends globalThis.Error {
+    /* ... */
+  }
+  export namespace Actions {
+    export class CreateFile {
+      /* ... */
+    }
+  }
+  export namespace Shell {
+    export class Basic {
+      /* ... */
+    }
+  }
+}
+```
+
+Call sites read `Thor.Group`, `Thor.Actions.CreateFile`, `Thor.Error` — direct transliteration of `Thor::Group`, `Thor::Actions::CreateFile`, `Thor::Error`. api:compare's class-name matching works on `Thor.X` exactly the way it works on `ActiveModel.Naming` today.
+
+Rules for trailties consumption:
+
+- Trailties imports Thor names explicitly: `import { Thor } from "@blazetrails/thor"` → `class Base extends Thor.Group`. No re-exports from trailties.
+- Rails' own names stay in trailties unprefixed at the package level (`Command`, `Generators.Base`) so the `Rails::*` ↔ trailties mapping in `vendor/sources.ts` stays clean.
+
+### Package layout
+
+```
+packages/thor/
+  package.json            # @blazetrails/thor — deps: @blazetrails/activesupport, @blazetrails/tse-compiler
+  tsconfig.json
+  src/
+    thor.ts               # class Thor + namespace Thor (re-exports nested)
+    base.ts               # Thor.Base — file mirror of lib/thor/base.rb
+    command.ts            # Thor.Command — lib/thor/command.rb
+    group.ts              # Thor.Group — lib/thor/group.rb
+    error.ts              # Thor.Error — lib/thor/error.rb
+    invocation.ts         # Thor.Invocation — lib/thor/invocation.rb
+    nested-context.ts     # lib/thor/nested_context.rb
+    util.ts               # Thor.Util — lib/thor/util.rb
+    version.ts            # Thor.VERSION
+    parser/
+      argument.ts         # lib/thor/parser/argument.rb
+      arguments.ts
+      option.ts
+      options.ts
+      index.ts            # lib/thor/parser.rb (re-exports)
+    actions.ts            # Thor.Actions module — lib/thor/actions.rb
+    actions/
+      empty-directory.ts  # lib/thor/actions/empty_directory.rb
+      create-file.ts
+      create-link.ts
+      directory.ts
+      file-manipulation.ts
+      inject-into-file.ts
+    shell.ts              # Thor.Shell — lib/thor/shell.rb
+    shell/
+      basic.ts            # lib/thor/shell/basic.rb
+      color.ts            # lib/thor/shell/color.rb
+    index.ts              # public barrel: re-exports class Thor
+  README.md
+```
+
+Filenames are `snake_case.rb → kebab-case.ts` per the project convention (matches `core_ext/hash_with_indifferent_access.rb` → `hash-with-indifferent-access.ts` elsewhere). Carve-outs (`runner.ts`, `rake-compat.ts`, `line-editor/*`, `shell/html.ts`, `shell/lcs-diff.ts`, `shell/{column,table,wrapped}-printer.ts`, `shell/terminal.ts`, `core-ext/hash-with-indifferent-access.ts`) do **not** get TS files — their absence is what api:compare reads via the unported list.
 
 ### Known risks
 
@@ -55,24 +129,30 @@ Rails' command + generator code reaches for: `Thor::Group`, `Thor::Actions`, `Th
 | `thor/shell/lcs_diff.rb`                                                                                                 | Diff display for `actions/inject_into_file` conflict prompts (`Overwrite? [Yndaqh]`). Defer — show a plain "would overwrite" message in v1, port LCS later if generators feel rough.                                         |
 | `thor/shell/column_printer.rb`, `thor/shell/table_printer.rb`, `thor/shell/wrapped_printer.rb`, `thor/shell/terminal.rb` | Pretty-printing helpers for `say_status` / multi-column command listings. Trim to the minimum `say` / `sayStatus` needed by generators; add the printers back only if a Rails generator's output looks wrong.                |
 
-Measured against Thor v1.3.2: carved files total **789 LOC** (excluding the four printer/terminal files, ~227 LOC, which are provisional and re-evaluated after `Shell::Basic` lands) and **70 specs** by name. Thor's "ported scope" shrinks from 6,275 / 912 specs to roughly 5,486 / 842 specs — about 87% of LOC and 92% of specs remain in scope. Each carved file gets an entry like:
+Measured against Thor v1.3.2: carved files total **789 LOC** (excluding the four printer/terminal files, ~227 LOC, which are provisional and re-evaluated after `Shell::Basic` lands) and **70 specs** by name. Thor's "ported scope" shrinks from 6,275 / 912 specs to roughly 5,486 / 842 specs — about 87% of LOC and 92% of specs remain in scope.
+
+Carve-outs land in `scripts/api-compare/unported-files.ts` — **not** in `vendor/sources.ts`. The two files have separate concerns: `vendor/sources.ts` says what to fetch, `unported-files.ts` says what to ignore once fetched. Each carve-out is one entry shaped per that file's existing schema (`pattern`, `testFile`, `package`, `reason`):
 
 ```ts
-// vendor/sources.ts — inside the thor source entry
-unportedFiles: [
-  "lib/thor/runner.rb",
-  "lib/thor/rake_compat.rb",
-  "lib/thor/line_editor.rb",
-  "lib/thor/line_editor/basic.rb",
-  "lib/thor/line_editor/readline.rb",
-  "lib/thor/shell/html.rb",
-  "lib/thor/shell/lcs_diff.rb",
-  "lib/thor/core_ext/hash_with_indifferent_access.rb",
-  // table/column/wrapped printer + terminal: re-evaluate after Shell::Basic lands
-],
+// scripts/api-compare/unported-files.ts — append to UNPORTED_FILES
+{
+  pattern: "thor/runner.rb",
+  testFile: "runner_spec.rb",
+  package: "thor",
+  reason:
+    "Multi-script CLI runner (`thor list`, `thor install <url>`). Rails " +
+    "never instantiates Thor::Runner — bin/rails is its own entry point.",
+},
+{
+  pattern: "thor/rake_compat.rb",
+  testFile: "rake_compat_spec.rb",
+  package: "thor",
+  reason: "Rakefile DSL bridge; not on Rails::Command path.",
+},
+// ... one block per carve-out row in the table above.
 ```
 
-Same exclusion mechanism already used elsewhere (`scripts/api-compare/unported-files.ts` reads the list). Each entry needs a one-line reason comment so future maintainers know whether to flip it back on — re-evaluate annually.
+`package: "thor"` scopes the substring match so a future package with a colliding basename can't accidentally inherit the exclusion. The schema is documented at the top of `scripts/api-compare/unported-files.ts`. Re-evaluate the list annually — every entry should still pass the "does Rails actually reach for this?" test.
 
 ## Migration plan
 
@@ -81,16 +161,56 @@ Sized so each PR fits the 300 LOC ceiling and is independently mergeable. Two tr
 ### Bootstrap
 
 1. **PR 1 — vendor Thor + scaffold package.** Add `rails/thor` to `vendor/sources.ts` (pinned ref), scaffold `packages/thor/` with `package.json`, `tsconfig.json`, src tree mirroring `lib/thor/`. Wire into `api:compare` and `test:compare`. No real implementation yet — every method is a stub so the baseline grading report exists. ~250 LOC of scaffolding.
-2. **PR 2 — Thor core (parser + base).** `Thor::Base`, `Thor::Command`, option parser. Smallest viable surface to define and dispatch one method-command. Tests ported from `spec/base_spec.rb`, `spec/parser/*_spec.rb` (a slice of them — full coverage comes incrementally).
+2. **PR 2 — Thor core (parser + base).** `Thor.Base`, `Thor.Command`, option parser. Smallest viable surface to define and dispatch one method-command. Tests ported from `spec/base_spec.rb`, `spec/parser/*_spec.rb` (a slice — full coverage comes incrementally). **Concrete acceptance criterion:** this code compiles, dispatches, and passes its spec slice end-to-end:
+
+   ```ts
+   class Hello extends Thor {
+     static {
+       this.desc("say NAME", "say hello to NAME");
+       this.methodOption("loud", { type: "boolean", default: false });
+     }
+     say(name: string): void {
+       const greeting = this.options.loud ? `HELLO ${name.toUpperCase()}` : `hello ${name}`;
+       this.shell.say(greeting);
+     }
+   }
+   Hello.start(["say", "world", "--loud"]); // → "HELLO WORLD"
+   ```
+
+   If this snippet doesn't work at PR 2 merge, the API shape is wrong and the PR doesn't merge. Forces the options-DSL design call (see Known Risks) into PR 2 rather than letting it drift into Track A.
+
 3. **PR 3 — `Thor::Group` + `Thor::Shell`.** What `Rails::Command::Base` actually extends, plus the IO surface generators use.
 4. **PR 4 — `Rails::Command::Base` + pilot command.** Port `command/base.rb` in trailties, migrate `version` off commander as the end-to-end pilot.
 
 ### Parallel tracks after PR 4
 
-- **Track A — Thor coverage** (`@blazetrails/thor` toward 100% on api:compare and test:compare). Actions (`createFile`, `template`, `insertIntoFile`), help formatters, edge cases. Sized in ~250 LOC PRs the same way as arel/activemodel. **Estimated 15–20 PRs over roughly 3 months at one-engineer-half-time cadence**, anchored to the arel campaign's actual pace (25 PRs / 4 months for a similarly-sized package). Rough subdivision: 4 PRs for the parser (options + arguments), 3 PRs for `Thor::Group` + invocation, 4 PRs for `Thor::Actions` family, 2 PRs for `Shell::Basic` + color, 2–4 PRs for help formatting and edge cases, 2 PRs for spec backfill against test:compare gaps. Track B can start after PR 4 and proceed in parallel — it doesn't wait for 100%.
+- **Track A — Thor coverage** (`@blazetrails/thor` toward 100% on api:compare and test:compare). Sized in ~250 LOC PRs the same way as arel/activemodel. **Estimated 15–20 PRs over roughly 3 months at one-engineer-half-time cadence**, anchored to the arel campaign's actual pace (25 PRs / 4 months for a similarly-sized package). Rough breakdown:
+
+  | Cluster                 | PRs | Surface                                                                                         |
+  | ----------------------- | --- | ----------------------------------------------------------------------------------------------- |
+  | Parser (options + args) | 4   | `Thor.Parser.{Argument,Arguments,Option,Options}`                                               |
+  | Group + invocation      | 3   | `Thor.Group`, `Thor.Invocation`, `Thor.NestedContext`                                           |
+  | Actions family          | 4   | `Thor.Actions.{EmptyDirectory,CreateFile,CreateLink,Directory,FileManipulation,InjectIntoFile}` |
+  | Shell                   | 2   | `Thor.Shell.{Basic,Color}`                                                                      |
+  | Help formatting + edges | 2–4 | `--help` rendering, `Util`, error handling                                                      |
+  | test:compare backfill   | 2   | Spec gaps grepped from `pnpm run test:compare --package thor`                                   |
+
+  Track B can start after Bootstrap PR 4 and proceed in parallel — it doesn't wait for Track A to hit 100%.
+
 - **Track B — command migrations** (commander → `Rails::Command::Base`). One Rails source file per PR where possible; bundle the tiniest (e.g. `version`, `notes`, `routes`) up to the LOC budget. Each PR deletes its `import { Command } from "commander"`.
 
 Current commander importers (16 files): `cli.ts`, `commands/{app,console,credentials,db,destroy,encrypted,generate,new,notes,routes,server,stats}.ts`, plus a few helpers. Roughly 3–5 Track B PRs depending on bundling.
+
+### Bail-out plan
+
+Track A is a multi-month campaign. If it stalls (rewrite priorities change, contributor capacity disappears, a Thor design call turns out to be wrong), the project does **not** end up with a half-ported library blocking trails users. Concrete fallback states, ordered by severity:
+
+1. **Track A pauses, Track B done.** `bin/trails` works end-to-end on whatever Thor surface has landed. `commander` is gone from trailties. `pnpm run api:compare --package thor` shows a real-but-incomplete score (e.g. 60–70%). This is a fine resting state — no worse than `arel` looked at month 2 of its campaign.
+2. **Track A pauses, Track B partially done.** Some commands have migrated, others still import `commander`. Both libraries coexist. Ugly but functional. Don't remove `commander` from `package.json` until the last import is gone — the doc's "cleanup signal" gate prevents accidentally bricking the CLI.
+3. **Thor design decision in PR 2 / 3 turns out to be wrong** (e.g. the options DSL spike doesn't produce a clean TS shape). Revert just that PR, re-spike. The bootstrap PRs are deliberately small + sequential so a bad call is one PR to back out, not a whole package.
+4. **Project decides not to finish Thor at all.** Mark `@blazetrails/thor` as `compareApi: false` and `compareTests: false` in `vendor/sources.ts` (same flags `rack` / `globalid` used during their incubation periods). The package stops grading; the surface that's there stays in use. trailties continues consuming what exists.
+
+None of these states require destructive rollback. The campaign is "uphill but exit-able at any step."
 
 ### Cleanup
 

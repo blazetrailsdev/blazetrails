@@ -22,8 +22,9 @@ interface LocalEntry {
 // pragmatic limit as Erubi's regex lexer (plan §2.10.1).
 function parseLocalsSignature(sig: string): LocalEntry[] {
   if (sig === "**nil" || sig.trim() === "") return [];
+  const CLOSERS: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
   const parts: string[] = [];
-  let depth = 0;
+  const stack: string[] = [];
   let quote: '"' | "'" | "`" | null = null;
   let buf = "";
   for (let i = 0; i < sig.length; i++) {
@@ -43,17 +44,17 @@ function parseLocalsSignature(sig: string): LocalEntry[] {
       buf += ch;
       continue;
     }
-    if (ch === "," && depth === 0) {
+    if (ch === "," && stack.length === 0) {
       parts.push(buf);
       buf = "";
       continue;
     }
-    if (ch === "(" || ch === "[" || ch === "{") depth++;
+    if (ch === "(" || ch === "[" || ch === "{") stack.push(CLOSERS[ch]!);
     else if (ch === ")" || ch === "]" || ch === "}") {
-      depth--;
-      if (depth < 0) {
+      const expected = stack.pop();
+      if (expected !== ch) {
         throw new TseLocalsSignatureError(
-          `unbalanced \`${ch}\` in locals signature ${JSON.stringify(sig)}`,
+          `mismatched \`${ch}\` (expected \`${expected ?? "<none>"}\`) in locals signature ${JSON.stringify(sig)}`,
         );
       }
     }
@@ -64,7 +65,7 @@ function parseLocalsSignature(sig: string): LocalEntry[] {
       `unterminated ${quote === "`" ? "template literal" : "string"} in locals signature ${JSON.stringify(sig)}`,
     );
   }
-  if (depth !== 0) {
+  if (stack.length !== 0) {
     throw new TseLocalsSignatureError(
       `unbalanced brackets in locals signature ${JSON.stringify(sig)}`,
     );
@@ -82,6 +83,11 @@ function parseLocalsSignature(sig: string): LocalEntry[] {
       );
     }
     const name = trimmed.slice(0, colon).trim();
+    if (!/^[A-Za-z_$][\w$]*$/.test(name)) {
+      throw new TseLocalsSignatureError(
+        `invalid local name ${JSON.stringify(name)} in locals signature ${JSON.stringify(sig)}`,
+      );
+    }
     const tail = trimmed.slice(colon + 1).trim();
     entries.push({ name, defaultExpr: tail === "" ? null : tail });
   }
@@ -190,12 +196,10 @@ export function virtualizeTseWithDeltas(source: string): VirtualizeTseResult {
   return { ts, deltas };
 }
 
-/**
- * Build a virtualized TS source that surfaces `msg` as a tsc error
- * diagnostic at line 1 (via a `@ts-expect-error`-defying type clash),
- * so a single malformed `.tse` produces a readable error instead of
- * crashing the whole `tsc` run.
- */
+// Build a virtualized TS source that surfaces `msg` as a tsc semantic
+// diagnostic (a string literal assigned to a `never`-typed binding) so
+// a single malformed `.tse` produces a readable error rather than
+// crashing the host's `tsc` run.
 function errorShim(filePath: string, msg: string): string {
   const safe = JSON.stringify(`${filePath}: ${msg}`);
   // `string` is not assignable to `never`, so tsc reports a clear

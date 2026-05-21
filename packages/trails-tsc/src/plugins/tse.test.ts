@@ -122,6 +122,17 @@ describe("virtualizeTse", () => {
     expect(() => virtualizeTse('<%# locals: (a: "oops) %>')).toThrow(TseLocalsSignatureError);
   });
 
+  it("throws on mismatched bracket types", () => {
+    // Outer parens are required by the locals regex; the mismatch is
+    // inside (a square closer for a curly opener).
+    expect(() => virtualizeTse("<%# locals: (a: {1, 2]) %>")).toThrow(/mismatched/);
+  });
+
+  it("throws on an empty / invalid local name", () => {
+    expect(() => virtualizeTse("<%# locals: (: 1) %>")).toThrow(/invalid local name/);
+    expect(() => virtualizeTse("<%# locals: (1bad: 1) %>")).toThrow(/invalid local name/);
+  });
+
   it("dispatches expression sites and preserves code chunks raw", () => {
     const out = virtualizeTse("<% if (n > 0) { %><%= n %><%== raw %><% } %>");
     expect(out).toContain("if (n > 0) {");

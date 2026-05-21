@@ -229,12 +229,13 @@ const COLUMN_TYPE_MAP_SQLITE: Record<PrimitiveColumnSpec, string> = {
  *
  * @internal
  */
-// Strong-ref Map (not WeakMap): we need enumeration for the global
-// `clearAppliedSchemaSignatures()` form. Test adapters are long-lived by
-// design — `_sharedAdapter` in test-adapter.ts is a module singleton, and
-// raw adapter-cluster adapters live for the test file's duration — so
-// holding them strongly here is a non-issue.
-const _appliedSchemaSignatures = new Map<DatabaseAdapter, Map<string, string>>();
+// WeakMap so short-lived adapter wrappers (createTestAdapter() returns a
+// fresh wrapper per call, and withTransactionalFixtures skips the global
+// reset between tests) don't accumulate. The no-arg clear below rebinds
+// the WeakMap rather than enumerating — outstanding snapshots from
+// `_snapshotAppliedSchemaSignaturesForAdapter` are independent Map copies
+// so callers holding a snapshot can still restore.
+let _appliedSchemaSignatures = new WeakMap<DatabaseAdapter, Map<string, string>>();
 
 /**
  * Snapshot the per-adapter signature cache. Paired with
@@ -279,9 +280,7 @@ export function clearAppliedSchemaSignatures(adapter?: DatabaseAdapter): void {
   if (adapter) {
     _appliedSchemaSignatures.delete(adapter);
   } else {
-    // Snapshots taken via `_snapshotAppliedSchemaSignaturesForAdapter` are
-    // independent Map copies, so callers holding a snapshot can still restore.
-    _appliedSchemaSignatures.clear();
+    _appliedSchemaSignatures = new WeakMap();
   }
 }
 

@@ -187,5 +187,6 @@ function apiCrudMethods(
       `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.destroy();\nthis.head(204);`,
       ts,
     ),
+    paramsMethod(singular, attrs, ts),
   ];
 }

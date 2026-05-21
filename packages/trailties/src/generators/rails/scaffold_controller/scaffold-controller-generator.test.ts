@@ -104,6 +104,9 @@ describe("ScaffoldControllerGeneratorTest", () => {
     expect(c).toContain("renderJson");
     expect(c).not.toContain("async new_()");
     expect(c).not.toContain("async edit()");
+    expect(c).toContain('this.params.expect("user", ["name"])');
+    expect(parseTs(c).diagnostics).toEqual([]);
+    assertNoRubySource(c);
     expect(fs.existsSync(path.join(tmpDir, "src/app/helpers/users-helper.ts"))).toBe(false);
   });
 });

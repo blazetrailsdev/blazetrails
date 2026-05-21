@@ -96,10 +96,7 @@ jobs:
           # are activerecord's only consumer of @blazetrails/trails-tsc.
           TRAILS_TSC_PKGS_RE='^packages/trails-tsc/'
           # tse_compiler_affected gates tse-compiler-tests. Own package +
-          # activesupport (its only workspace dep). Note: activesupport
-          # changes flip this on even when packages/tse-compiler is absent
-          # on the base ref — the job itself short-circuits in that case
-          # via the directory-presence check after checkout.
+          # activesupport (its only workspace dep).
           TSE_COMPILER_PKGS_RE='^packages/(tse-compiler|activesupport)/'
           force_all_affected() {
             echo "activerecord_affected=true" >> "$GITHUB_OUTPUT"
@@ -358,22 +355,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      # Package may not exist on the base ref yet; short-circuit before
-      # paying for pnpm setup + install. Remove this guard once #2190 lands.
-      - id: present
-        run: |
-          if [ -d packages/tse-compiler ]; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-            echo "packages/tse-compiler not present on this ref — skipping setup + tests"
-          fi
-      - if: steps.present.outputs.ok == 'true'
-        uses: ./.github/actions/setup-pnpm
-      - if: steps.present.outputs.ok == 'true'
-        run: pnpm install --frozen-lockfile
-      - if: steps.present.outputs.ok == 'true'
-        run: pnpm vitest run packages/tse-compiler
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm vitest run packages/tse-compiler
 
   sqlite-tests:
     name: SQLite Tests

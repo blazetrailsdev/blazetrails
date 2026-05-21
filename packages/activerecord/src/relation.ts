@@ -3622,10 +3622,12 @@ export class Relation<T extends Base> {
    * Returns the adapter's SELECT visitor when one is defined, or null.
    *
    * Real adapters (PG, SQLite, MySQL) expose `arelVisitor` — use it to get
-   * dialect-correct quoting. TestAdapterFixtures (test wrapper) returns undefined,
-   * so callers fall back to manager.toSql() / node.toSql() (global registry
-   * visitor = ANSI double-quotes), which avoids MySQL backticks in toSql()
-   * output and DML execution in MariaDB's default non-ANSI mode.
+   * dialect-correct quoting. `TestAdapterFixtures` delegates `arelVisitor`
+   * to its inner adapter, so wrapped real adapters resolve through here
+   * the same as a bare adapter. The `?? null` fallback covers callers
+   * with no adapter at all (e.g. HABTM join models whose `_adapter` is
+   * null), which fall back to manager.toSql() / node.toSql() (global
+   * registry visitor = ANSI double-quotes).
    */
   private _selectVisitor(): Visitors.ToSql | null {
     return ((this._modelClass as any)._adapter?.arelVisitor as Visitors.ToSql | undefined) ?? null;

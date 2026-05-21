@@ -7,6 +7,7 @@ import {
   resetLoadHooks,
 } from "@blazetrails/activesupport";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { Initializable } from "../initializable.js";
 import { Bootstrap, type BootstrapConfig, type BootstrapHost } from "./bootstrap.js";
 
 class TestApp extends Bootstrap implements BootstrapHost {
@@ -23,9 +24,9 @@ describe("Bootstrap", () => {
     resetLoadHooks();
   });
 
-  describe("default logger", () => {
-    it("returns a NullLogger before :initialize_logger runs", () => {
-      expect(Bootstrap.defaultLogger()).toBeInstanceOf(NullLogger);
+  describe("class shape", () => {
+    it("extends Initializable", () => {
+      expect(new TestApp()).toBeInstanceOf(Initializable);
     });
   });
 
@@ -97,14 +98,26 @@ describe("Bootstrap", () => {
   });
 
   describe("initializer order", () => {
+    const expected = [
+      "load_environment_config",
+      "initialize_logger",
+      "initialize_cache",
+      "bootstrap_hook",
+    ];
+
     it("declares the four initializers in Rails order", () => {
-      const names = Bootstrap._ownInitializers().map((i) => i.name);
-      expect(names).toEqual([
-        "load_environment_config",
-        "initialize_logger",
-        "initialize_cache",
-        "bootstrap_hook",
-      ]);
+      expect(Bootstrap._ownInitializers().map((i) => i.name)).toEqual(expected);
+    });
+
+    it("tsorts to the same Rails order via implicit chaining", () => {
+      const app = new TestApp();
+      expect(app.initializers.tsort().map((i) => i.name)).toEqual(expected);
+    });
+
+    it("places every initializer in the :all group", () => {
+      for (const init of Bootstrap._ownInitializers()) {
+        expect(init.belongsTo("all")).toBe(true);
+      }
     });
   });
 });

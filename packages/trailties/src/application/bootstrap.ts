@@ -18,7 +18,7 @@
  */
 import {
   type CacheStore,
-  Logger,
+  type Logger,
   type LogLevel,
   NullLogger,
   NullStore,
@@ -38,15 +38,7 @@ export interface BootstrapHost {
   config: BootstrapConfig;
 }
 
-export class Bootstrap extends Initializable {
-  /**
-   * Default logger returned before `:initialize_logger` runs. Mirrors the
-   * Rails guarantee that `Rails.logger` is never nil at import time.
-   */
-  static defaultLogger(): Logger {
-    return new NullLogger();
-  }
-}
+export class Bootstrap extends Initializable {}
 
 Bootstrap.initializer("load_environment_config", { group: "all" }, function () {
   // Empty placeholder. Rails loads `config/environments/*.rb` here; trailties

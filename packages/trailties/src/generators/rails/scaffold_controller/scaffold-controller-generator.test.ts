@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { ScaffoldControllerGenerator } from "./scaffold-controller-generator.js";
+import { parseTs, assertNoRubySource } from "../../../template-builder/testing.js";
 
 let tmpDir: string;
 
@@ -75,6 +76,26 @@ describe("ScaffoldControllerGeneratorTest", () => {
   it("skip routes", () => {
     makeGen().run("User", [], { skipRoutes: true });
     expect(read("src/config/routes.ts")).not.toContain('router.resources("users")');
+  });
+
+  it("permits the parameters passed", () => {
+    makeGen().run("User", ["name:string", "age:integer"]);
+    const c = read("src/app/controllers/users-controller.ts");
+    expect(c).toContain('this.params.expect("user", ["name", "age"])');
+    expect(c).toContain("userParams()");
+  });
+
+  it("with no attributes falls back to params.fetch", () => {
+    makeGen().run("User");
+    const c = read("src/app/controllers/users-controller.ts");
+    expect(c).toContain('this.params.fetch("user", {})');
+  });
+
+  it("emits valid TypeScript with no Ruby leakage", () => {
+    makeGen().run("User", ["name:string", "age:integer"]);
+    const c = read("src/app/controllers/users-controller.ts");
+    expect(parseTs(c).diagnostics).toEqual([]);
+    assertNoRubySource(c);
   });
 
   it("api controller", () => {

@@ -3,6 +3,7 @@ import {
   type GeneratorOptions,
   classify,
   dasherize,
+  parseColumns,
   tableize,
   underscore,
 } from "../../base.js";
@@ -24,7 +25,7 @@ export class ScaffoldControllerGenerator extends GeneratorBase {
 
   run(
     name: string,
-    _attributes: string[] = [],
+    attributes: string[] = [],
     options: ScaffoldControllerRunOptions = {},
   ): string[] {
     const { api = false, skipRoutes = false, test = true, helper = true } = options;
@@ -35,30 +36,29 @@ export class ScaffoldControllerGenerator extends GeneratorBase {
     const controllerFileName = dasherize(resourceName) + "-controller";
     const ext = this.ext();
     const ts = this.isTypeScript();
+    const attrNames = parseColumns(attributes).map((c) => c.name);
 
     this.createFile(
       `src/app/controllers/${controllerFileName}${ext}`,
       emitControllerClass({
         className: controllerClassName,
         methods: api
-          ? apiCrudMethods(className, singular, resourceName, ts)
-          : crudMethods(className, singular, resourceName, ts),
+          ? apiCrudMethods(className, singular, resourceName, attrNames, ts)
+          : crudMethods(className, singular, resourceName, attrNames, ts),
       }),
     );
 
     if (test) {
+      const skip = (a: string) =>
+        api && (a === "new" || a === "edit") ? "" : `  it("${a}", () => {});\n`;
       this.createFile(
         `test/controllers/${controllerFileName}.test${ext}`,
         `import { describe, it } from "vitest";
 import { ${controllerClassName} } from "../../src/app/controllers/${controllerFileName}.js";
 
 describe("${controllerClassName}", () => {
-  it("index", () => { void ${controllerClassName}; });
-  it("show", () => {});
-  ${api ? "" : 'it("new", () => {});\n  '}it("create", () => {});
-  ${api ? "" : 'it("edit", () => {});\n  '}it("update", () => {});
-  it("destroy", () => {});
-});
+  it("references controller", () => { void ${controllerClassName}; });
+${skip("index")}${skip("show")}${skip("new")}${skip("create")}${skip("edit")}${skip("update")}${skip("destroy")}});
 `,
       );
     }
@@ -94,8 +94,28 @@ function mk(name: string, body: string, ts: boolean): Method {
   });
 }
 
-function crudMethods(model: string, singular: string, plural: string, ts: boolean): Method[] {
+function paramsMethod(singular: string, attrs: string[], ts: boolean): Method {
+  const list =
+    attrs.length === 0
+      ? `return this.params.fetch("${singular}", {});`
+      : `return this.params.expect("${singular}", [${attrs.map((a) => `"${a}"`).join(", ")}]);`;
+  return tsMethod({
+    name: `${singular}Params`,
+    params: [],
+    returnType: ts ? "Record<string, unknown>" : undefined,
+    body: tsBody`${list}`,
+  });
+}
+
+function crudMethods(
+  model: string,
+  singular: string,
+  plural: string,
+  attrs: string[],
+  ts: boolean,
+): Method[] {
   const anyArr = ts ? ": any[]" : "";
+  const params = `this.${singular}Params()`;
   return [
     mk(
       "index",
@@ -104,27 +124,23 @@ function crudMethods(model: string, singular: string, plural: string, ts: boolea
     ),
     mk(
       "show",
-      `// const ${singular} = await ${model}.find(this.params.get("id"));\nconst ${singular} = { id: this.params.get("id") };\nthis.render({ action: "show", locals: { ${singular} } });`,
+      `// const ${singular} = await ${model}.find(this.params.get("id"));\nthis.render({ action: "show", locals: { ${singular}: { id: this.params.get("id") } } });`,
       ts,
     ),
-    mk(
-      "new_",
-      `const ${singular} = {};\nthis.render({ action: "new", locals: { ${singular} } });`,
-      ts,
-    ),
+    mk("new_", `this.render({ action: "new", locals: { ${singular}: {} } });`, ts),
     mk(
       "create",
-      `// const ${singular} = await ${model}.create(this.params.get("${singular}"));\nthis.redirectTo("/${plural}");`,
+      `// const ${singular} = await ${model}.create(${params});\nvoid ${params};\nthis.redirectTo("/${plural}");`,
       ts,
     ),
     mk(
       "edit",
-      `// const ${singular} = await ${model}.find(this.params.get("id"));\nconst ${singular} = { id: this.params.get("id") };\nthis.render({ action: "edit", locals: { ${singular} } });`,
+      `// const ${singular} = await ${model}.find(this.params.get("id"));\nthis.render({ action: "edit", locals: { ${singular}: { id: this.params.get("id") } } });`,
       ts,
     ),
     mk(
       "update",
-      `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.update(this.params.get("${singular}"));\nthis.redirectTo("/${plural}/" + this.params.get("id"));`,
+      `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.update(${params});\nvoid ${params};\nthis.redirectTo("/${plural}/" + this.params.get("id"));`,
       ts,
     ),
     mk(
@@ -132,11 +148,19 @@ function crudMethods(model: string, singular: string, plural: string, ts: boolea
       `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.destroy();\nthis.redirectTo("/${plural}");`,
       ts,
     ),
+    paramsMethod(singular, attrs, ts),
   ];
 }
 
-function apiCrudMethods(model: string, singular: string, plural: string, ts: boolean): Method[] {
+function apiCrudMethods(
+  model: string,
+  singular: string,
+  plural: string,
+  attrs: string[],
+  ts: boolean,
+): Method[] {
   const anyArr = ts ? ": any[]" : "";
+  const params = `this.${singular}Params()`;
   return [
     mk(
       "index",
@@ -145,17 +169,17 @@ function apiCrudMethods(model: string, singular: string, plural: string, ts: boo
     ),
     mk(
       "show",
-      `// const ${singular} = await ${model}.find(this.params.get("id"));\nconst ${singular} = { id: this.params.get("id") };\nthis.renderJson(${singular});`,
+      `// const ${singular} = await ${model}.find(this.params.get("id"));\nthis.renderJson({ id: this.params.get("id") });`,
       ts,
     ),
     mk(
       "create",
-      `// const ${singular} = await ${model}.create(this.params.get("${singular}"));\nconst ${singular} = this.params.get("${singular}");\nthis.renderJson(${singular}, { status: 201 });`,
+      `// const ${singular} = await ${model}.create(${params});\nthis.renderJson(${params}, { status: 201 });`,
       ts,
     ),
     mk(
       "update",
-      `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.update(this.params.get("${singular}"));\nthis.renderJson({ id: this.params.get("id") });`,
+      `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.update(${params});\nvoid ${params};\nthis.renderJson({ id: this.params.get("id") });`,
       ts,
     ),
     mk(

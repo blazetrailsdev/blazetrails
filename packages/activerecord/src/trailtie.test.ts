@@ -13,7 +13,7 @@ describe("RailtieTest", () => {
 
   beforeEach(() => {
     savedSubclasses = [...BaseRailtie.subclasses];
-    savedConfig = { ...(Trailtie.config["activeRecord"] as ActiveRecordConfig) };
+    savedConfig = structuredClone(Trailtie.config["activeRecord"] as ActiveRecordConfig);
     savedTimeZoneAware = Base.timeZoneAwareAttributes;
   });
 

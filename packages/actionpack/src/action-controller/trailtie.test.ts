@@ -11,7 +11,7 @@ describe("ActionController::Trailtie", () => {
 
   beforeEach(() => {
     savedSubclasses = [...BaseRailtie.subclasses];
-    savedConfig = { ...(Trailtie.config["actionController"] as ActionControllerConfig) };
+    savedConfig = structuredClone(Trailtie.config["actionController"] as ActionControllerConfig);
   });
 
   afterEach(() => {

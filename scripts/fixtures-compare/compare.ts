@@ -67,22 +67,21 @@ function loadRailsYaml(file: string, basename: string): { ok: true; data: Fixtur
   if (!parsed || typeof parsed !== "object") return { ok: true, data: out };
   // Three shapes Rails accepts:
   //   1) plain map: `label: { col: val }` → Object.entries.
-  //   2) !omap (array of single-key maps with explicit labels) → entries.
+  //   2) `!omap` (array of single-key maps; labels preserved in source order)
+  //      — Rails opts in via the document tag `--- !omap`. Disambiguates from
+  //      list-form: without the tag, a single-key array entry is a bare row,
+  //      not a labeled entry (e.g. `- settings: { theme: dark }` is one row
+  //      with column `settings`, not an entry labeled `settings`).
   //   3) list-form (array of bare maps, no label) → Rails auto-labels as
   //      `<basename>_<index>` via `Fixtures::ClassCache#auto_named_fixtures`.
+  const isOmap = /^---\s*!omap\b/m.test(rendered);
   let entries: [string, unknown][];
   if (Array.isArray(parsed)) {
     const flat: [string, unknown][] = [];
     parsed.forEach((e, i) => {
       if (!e || typeof e !== "object") return;
       const ks = Object.keys(e);
-      // Labeled !omap entries wrap a single key whose value is a non-null,
-      // non-array object (the column map). Bare list-form rows may also be
-      // single-key with object values (`- tags: [a, b]`, `- settings: {…}`),
-      // so require both invariants before treating as labeled.
-      const v = (e as Record<string, unknown>)[ks[0]];
-      const looksLabeled = ks.length === 1 && !!v && typeof v === "object" && !Array.isArray(v);
-      if (looksLabeled) flat.push(...(Object.entries(e) as [string, unknown][]));
+      if (isOmap && ks.length === 1) flat.push(...(Object.entries(e) as [string, unknown][]));
       else flat.push([`${basename}_${i}`, e]);
     });
     entries = flat;

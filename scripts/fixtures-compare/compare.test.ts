@@ -201,6 +201,22 @@ describe("loadRailsYaml (parsing fidelity)", () => {
     expect(r).toEqual({ ok: true, data: { listarr_0: { tags: ["a", "b"], name: "x" } } });
   });
 
+  it("auto-labels single-key list-form rows even when the value is a nested object", () => {
+    // `- settings: { theme: dark }` is a bare row with column `settings`,
+    // not a labeled omap entry. Requires the explicit `--- !omap` doc tag
+    // to opt into label-preserving flattening; without it we auto-label.
+    const r = loadRailsYamlForTest(write("lk", "- settings:\n    theme: dark\n"), "lk");
+    expect(r).toEqual({ ok: true, data: { lk_0: { settings: { theme: "dark" } } } });
+  });
+
+  it("preserves labels on `!omap` arrays via the document tag", () => {
+    const r = loadRailsYamlForTest(
+      write("om", "--- !omap\n- alpha:\n    n: 1\n- beta:\n    n: 2\n"),
+      "om",
+    );
+    expect(r).toEqual({ ok: true, data: { alpha: { n: 1 }, beta: { n: 2 } } });
+  });
+
   it("ignores prototype keys when canonicalizing without a schema", () => {
     // toString isn't a column; with `in` it would short-circuit known(); use
     // Object.hasOwn so the Rails key still surfaces as missing-in-ts drift.

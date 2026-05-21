@@ -83,6 +83,18 @@ export class Trailtie extends BaseRailtie {
       BaseRailtie.deprecators["activeSupport"] = deprecator;
     });
 
+    // ORDERING CAVEAT: in Rails, every `<framework>.deprecator` initializer
+    // is annotated `before: :load_environment_config`, while
+    // `active_support.deprecation_behavior` carries no `before:` — so by the
+    // time this fires, *every* framework's deprecator has been registered
+    // and Rails' `app.deprecators` proxy iterates them all. Our BaseRailtie
+    // does not yet support `before:`/`after:` initializer ordering, and
+    // `app.deprecators` is a plain `Record`, not a proxy that tracks future
+    // additions. This means a framework whose `.deprecator` initializer
+    // runs *after* this block (registration order) won't get these
+    // settings applied. The Rails-shaped fix lives on BaseRailtie
+    // (ordering + DeprecatorsProxy) and is a follow-up on PR 2.7a, not a
+    // local patch here.
     this.initializer("active_support.deprecation_behavior", () => {
       const cfg = (Trailtie.config as TrailtieConfig).activeSupport ?? {};
       const all = Object.values(BaseRailtie.deprecators).filter((d): d is Deprecation => d != null);

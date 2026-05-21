@@ -173,8 +173,8 @@ Out of scope: system_testing, full ERB rendering (~150), fragment/page caching (
 
 ```bash
 git fetch origin main
-scripts/start-worktree.sh <slug> <branch>
-cd .claude/worktrees/<slug>
+scripts/start-worktree.sh <name>           # creates ~/github/blazetrailsdev/worktrees/<name>
+cd ~/github/blazetrailsdev/worktrees/<name>
 # Read Rails source first
 less vendor/rails/actionpack/lib/<rails-file>.rb   # pnpm vendor:fetch if absent
 # Implement in the TS file the api:compare row points to (don't relocate methods).

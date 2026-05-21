@@ -2541,7 +2541,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       (value as { bytes?: unknown }).bytes instanceof Uint8Array &&
       !(value instanceof Uint8Array)
     ) {
-      return Buffer.from((value as { bytes: Uint8Array }).bytes);
+      const u8 = (value as { bytes: Uint8Array }).bytes;
+      return Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength);
     }
     return temporalToBindString(value, "postgres");
   }

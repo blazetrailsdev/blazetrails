@@ -16,7 +16,7 @@ export interface TseTemplate {
  * `Template::Handlers::ERB.erb_implementation` — swappable in tests and by
  * downstream apps that want a different emitter.
  */
-export type TseImplementation = (source: string, options: EmitJsOptions) => EmitResult;
+export type TseImplementation = (source: string, options?: EmitJsOptions) => EmitResult;
 
 /**
  * ActionView::Template::Handlers::Tse
@@ -33,9 +33,12 @@ export class Tse implements TemplateHandler {
   readonly extensions = ["tse"];
 
   /**
-   * Trim mode passed to the compiler. Rails default is `"-"` and only `"-"`
-   * is wired through; we mirror that for fidelity even though the current
-   * tse-compiler always trims `<%- -%>` regardless.
+   * Trim mode (Rails: `erb_trim_mode`). API-surface parity only — Rails wires
+   * this through to Erubi, but `@blazetrails/tse-compiler` v0.1.0 hard-codes
+   * `-` trimming (the only mode Rails ever passes). The attribute is exposed
+   * now so downstream code that mirrors Rails patterns (`Tse.trimMode = "-"`)
+   * doesn't crash; it becomes load-bearing once tse-compiler accepts a `trim`
+   * option.
    */
   static trimMode: string = "-";
 
@@ -87,13 +90,29 @@ export class Tse implements TemplateHandler {
   call(template: TseTemplate, source: string): string {
     const ctor = this.constructor as typeof Tse;
     const prepared = ctor.stripTrailingNewlines ? source.replace(/\r?\n$/, "") : source;
-    const escapeIgnore = template.type != null && ctor.escapeIgnoreList.includes(template.type);
+    // Rails compares `template.type` (a MIME string like "text/html") against
+    // `escape_ignore_list`. Trails' `Template#type` currently returns the
+    // format token ("html") until `Mime::Type` lands — normalize both forms
+    // here so the Rails-shape default `["text/plain"]` matches regardless.
+    const mime = template.type != null ? formatToMimeType(template.type) : null;
+    const escapeIgnore = mime != null && ctor.escapeIgnoreList.includes(mime);
     const result = ctor.implementation(prepared, { escapeIgnore });
     return result.code;
   }
 
-  render(source: string, _locals: Record<string, unknown>, context: RenderContext): string {
-    return this.call({ type: context.format ? formatToMimeType(context.format) : null }, source);
+  /**
+   * Not yet executable. Rails' handler protocol returns compiled code from
+   * `call(...)`; turning that code into an output string requires the
+   * runtime substrate (`OutputBuffer`, view context, compiled-template
+   * module loader) that Phase 2c wires up. Returning the JS source from
+   * `render` would be a footgun — a renderer would write template source
+   * into the response body. Throw until execution lands.
+   */
+  render(_source: string, _locals: Record<string, unknown>, _context: RenderContext): string {
+    throw new Error(
+      "Tse#render is not yet implemented — `.tse` execution lands in Phase 2c. " +
+        "Use `Tse#call(template, source)` to get the compiled JS module source.",
+    );
   }
 }
 

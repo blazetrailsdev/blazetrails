@@ -21,7 +21,8 @@ export class ModelGenerator extends NamedBase {
 
   run(): string[] {
     const filename = `app/models/${this.filePath()}${this.ext()}`;
-    const className = camelize(this.fileName);
+    // Flatten Rails Admin::User namespace nesting to AdminUser for TS.
+    const className = [...this.classPathParts, this.fileName].map((p) => camelize(p)).join("");
     const attrs = this.attributes
       .filter((a) => !a.virtual())
       .map((a) => `  ${a.columnName()}!: ${TS_TYPES[a.type] ?? "string"};`)

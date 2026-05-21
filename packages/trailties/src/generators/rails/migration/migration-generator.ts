@@ -1,19 +1,13 @@
-import { NamedBase, type NamedBaseOptions } from "../../named-base.js";
+import { NamedBase } from "../../named-base.js";
 import { classify, dasherize, migrationTimestamp } from "../../base.js";
 
 // Mirrors railties/lib/rails/generators/rails/migration/migration_generator.rb.
-// Rails' `hook_for :orm, required: true` defers all template emission to
-// the ORM-provided generator. This skeleton emits a minimal ORM-agnostic
-// `Migration` class extending @blazetrails/activerecord; richer
-// CreateX / AddXToY inference lives in the existing top-level
-// MigrationGenerator and will be folded in when the ORM hook lands.
+// hook_for :orm defers to the ORM-provided generator. This skeleton emits a
+// minimal Migration shell; CreateX/AddXToY inference lives in the existing
+// top-level MigrationGenerator and folds in when the ORM hook lands.
 let lastTimestamp: string | null = null;
 
 export class MigrationGenerator extends NamedBase {
-  constructor(options: NamedBaseOptions) {
-    super(options);
-  }
-
   static exitOnFailure(): boolean {
     return true;
   }

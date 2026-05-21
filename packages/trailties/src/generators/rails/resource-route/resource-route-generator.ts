@@ -16,11 +16,11 @@ export class ResourceRouteGenerator extends NamedBase {
       this.fileExists(f),
     );
     if (!routesFile) return;
-    const inner = `router.resources("${pluralize(this.fileName)}");`;
-    const nested = this.classPathParts.reduceRight(
-      (body, ns) => `router.namespace("${ns}", (router) => { ${body} });`,
-      inner,
-    );
-    this.insertIntoFile(routesFile, "// routes", `  ${nested}\n`);
+    const ns = this.classPathParts;
+    const lines: string[] = [];
+    ns.forEach((n, i) => lines.push(`${"  ".repeat(i + 1)}router.namespace("${n}", (router) => {`));
+    lines.push(`${"  ".repeat(ns.length + 1)}router.resources("${pluralize(this.fileName)}");`);
+    for (let i = ns.length; i > 0; i--) lines.push(`${"  ".repeat(i)}});`);
+    this.insertIntoFile(routesFile, "// routes", lines.join("\n") + "\n");
   }
 }

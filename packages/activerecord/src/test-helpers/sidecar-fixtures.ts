@@ -74,9 +74,16 @@ export class SidecarFixtures {
 
   /**
    * True when this caller should see the inner adapter's transaction state.
-   * Either we entered through `withinNewTransaction` (storage set on this
-   * async chain) or the caller manually opened a transaction on this
-   * handle.
+   * Either *some* SidecarFixtures' `withinNewTransaction` set the flag on
+   * this async chain, or the caller manually opened a transaction on this
+   * specific handle.
+   *
+   * The async-chain flag is shared across all SidecarFixtures instances
+   * by design — matches the wrapper in `test-adapter.ts` (sub-PR (a) is
+   * additive-only). Because `createSidecarTestAdapter()` returns a fresh
+   * handle wrapping the *same* shared inner adapter, the underlying
+   * transaction state is single-source and "leaking" visibility between
+   * sibling handles on the same chain is the intended behavior.
    */
   private _txVisible(): boolean {
     return _txLockStorage().getStore() === true || this._manualTxDepth > 0;

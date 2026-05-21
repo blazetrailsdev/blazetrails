@@ -63,7 +63,17 @@ describe("createSidecarTestAdapter (path 2 sidecar)", () => {
     await fixtures.beginTransaction();
     expect(fixtures.inTransaction).toBe(true);
     expect(fixtures.openTransactions).toBeGreaterThan(0);
+    await fixtures.commit();
+    expect(fixtures.inTransaction).toBe(false);
+    expect(fixtures.openTransactions).toBe(0);
+  });
+
+  it("manual beginTransaction/rollback also clears depth and hides state", async () => {
+    const { fixtures } = createSidecarTestAdapter();
+    await fixtures.beginTransaction();
+    expect(fixtures.inTransaction).toBe(true);
     await fixtures.rollback();
     expect(fixtures.inTransaction).toBe(false);
+    expect(fixtures.openTransactions).toBe(0);
   });
 });

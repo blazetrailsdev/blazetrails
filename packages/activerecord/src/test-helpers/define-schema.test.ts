@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createTestAdapter } from "../test-adapter.js";
 import { getUseTransactionalTests } from "./use-transactional-tests.js";
 import type { DatabaseAdapter } from "../adapter.js";
-import { defineSchema, type ColumnSpec } from "./define-schema.js";
+import { clearAppliedSchemaSignatures, defineSchema, type ColumnSpec } from "./define-schema.js";
+import { dropAllTables } from "./drop-all-tables.js";
 
 let adapter: DatabaseAdapter;
 
@@ -371,6 +372,45 @@ describe("defineSchema", () => {
     it("defaults to true for an adapter that never called defineSchema", () => {
       const fresh = createTestAdapter();
       expect(getUseTransactionalTests(fresh)).toBe(true);
+    });
+  });
+
+  describe("clearAppliedSchemaSignatures", () => {
+    // Regression: under the sidecar shape a single shared adapter survives
+    // across tests, so the signature cache must be invalidated alongside
+    // dropAllTables — otherwise defineSchema(sameSpec) no-ops over a now-
+    // missing table.
+    it("re-runs DDL after the table is dropped underneath the cache", async () => {
+      const spec = { widgets: { name: "string" as ColumnSpec } };
+      await defineSchema(adapter, spec);
+      await dropAllTables(adapter);
+      clearAppliedSchemaSignatures(adapter);
+
+      await defineSchema(adapter, spec);
+
+      await expect(
+        adapter.executeMutation(`INSERT INTO widgets (name) VALUES ('ok')`),
+      ).resolves.toBeDefined();
+    });
+
+    it("no-arg form clears all tracked adapters", async () => {
+      const a = createTestAdapter();
+      const b = createTestAdapter();
+      const spec = { gizmos: { name: "string" as ColumnSpec } };
+      await defineSchema(a, spec);
+      await defineSchema(b, spec);
+      await dropAllTables(a);
+      await dropAllTables(b);
+      clearAppliedSchemaSignatures();
+
+      await defineSchema(a, spec);
+      await defineSchema(b, spec);
+      await expect(
+        a.executeMutation(`INSERT INTO gizmos (name) VALUES ('a')`),
+      ).resolves.toBeDefined();
+      await expect(
+        b.executeMutation(`INSERT INTO gizmos (name) VALUES ('b')`),
+      ).resolves.toBeDefined();
     });
   });
 });

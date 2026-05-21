@@ -76,7 +76,12 @@ function loadRailsYaml(file: string, basename: string): { ok: true; data: Fixtur
     parsed.forEach((e, i) => {
       if (!e || typeof e !== "object") return;
       const ks = Object.keys(e);
-      const looksLabeled = ks.length === 1 && typeof (e as Record<string, unknown>)[ks[0]] === "object"; // prettier-ignore
+      // Labeled !omap entries wrap a single key whose value is a non-null,
+      // non-array object (the column map). Bare list-form rows may also be
+      // single-key with object values (`- tags: [a, b]`, `- settings: {…}`),
+      // so require both invariants before treating as labeled.
+      const v = (e as Record<string, unknown>)[ks[0]];
+      const looksLabeled = ks.length === 1 && !!v && typeof v === "object" && !Array.isArray(v);
       if (looksLabeled) flat.push(...(Object.entries(e) as [string, unknown][]));
       else flat.push([`${basename}_${i}`, e]);
     });
@@ -242,9 +247,11 @@ export function schemaCheck(
 // prettier-ignore
 export function canonicalizeRailsRow(railsRow: Row, tsRow: Row, columns: Set<string> | null): Row {
   const out: Row = {};
-  const known = (k: string): boolean => columns ? columns.has(k) : k in tsRow;
+  // Use Object.hasOwn for the schemaless tsRow probe so prototype keys
+  // (`toString`, `constructor`, …) don't read as columns.
+  const known = (k: string): boolean => (columns ? columns.has(k) : Object.hasOwn(tsRow, k));
   const hasIdForm = (k: string): boolean =>
-    columns ? columns.has(`${k}_id`) : `${k}_id` in tsRow;
+    columns ? columns.has(`${k}_id`) : Object.hasOwn(tsRow, `${k}_id`);
   for (const [k, v] of Object.entries(railsRow)) {
     if (known(k)) { out[k] = v; continue; } // prettier-ignore
     if (hasIdForm(k)) {

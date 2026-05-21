@@ -193,6 +193,20 @@ describe("loadRailsYaml (parsing fidelity)", () => {
     expect(r).toEqual({ ok: true, data: { list_0: { name: "Foo" }, list_1: { name: "Bar" } } });
   });
 
+  it("keeps list-form entries with array/scalar single-key values (not misclassified as labeled)", () => {
+    // `- tags: [a, b]` is one bare list-form row, not a labeled `tags:` omap
+    // entry. Tightened looksLabeled predicate must require a non-null, non-
+    // array object before treating an entry as labeled.
+    const r = loadRailsYamlForTest(write("listarr", "- tags:\n    - a\n    - b\n  name: x\n"), "listarr"); // prettier-ignore
+    expect(r).toEqual({ ok: true, data: { listarr_0: { tags: ["a", "b"], name: "x" } } });
+  });
+
+  it("ignores prototype keys when canonicalizing without a schema", () => {
+    // toString isn't a column; with `in` it would short-circuit known(); use
+    // Object.hasOwn so the Rails key still surfaces as missing-in-ts drift.
+    expect(canonicalizeRailsRow({ toString: "x" }, {}, null)).toEqual({ toString: "x" });
+  });
+
   it("interpolates `$LABEL` to the row name on scalar string values", () => {
     const r = loadRailsYamlForTest(write("lab", "polly:\n  name: $LABEL\n  breed: $LABEL bird\n"), "lab"); // prettier-ignore
     expect(r).toEqual({ ok: true, data: { polly: { name: "polly", breed: "polly bird" } } });

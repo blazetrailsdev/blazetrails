@@ -8,7 +8,7 @@ import { Base, MigrationContext, MigrationRunner, Migrator } from "./index.js";
 import { SchemaMigration } from "./schema-migration.js";
 import type { MigrationProxy } from "./migration.js";
 import { ConcurrentMigrationError } from "./migration.js";
-import { createTestAdapter, adapterType } from "./test-adapter.js";
+import { createSidecarTestAdapter, createTestAdapter, adapterType } from "./test-adapter.js";
 import { quoteDefaultExpression } from "./connection-adapters/abstract/quoting.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import { Migration } from "./migration.js";
@@ -2171,8 +2171,7 @@ describe("MigrationTest", () => {
   );
 
   it.skipIf(adapterType === "sqlite")("migrator generates valid lock id", async () => {
-    const testAdapter = createTestAdapter();
-    const realAdapter = testAdapter.innerAdapter;
+    const { adapter: realAdapter } = createSidecarTestAdapter();
     const migrator = new Migrator(realAdapter, []);
     const lockId = await migrator.generateMigratorAdvisoryLockId();
     const acquired = await (realAdapter as any).getAdvisoryLock(lockId);
@@ -2238,8 +2237,8 @@ describe("MigrationTest", () => {
     //   (1) acquire/release are called symmetrically, and
     //   (2) _advisoryLockClient is null after migration — the pinned pool client
     //       was actually returned (not just nulled without release).
-    const testAdapter = createTestAdapter();
-    const inner = testAdapter.innerAdapter as any;
+    const { adapter: testAdapter } = createSidecarTestAdapter();
+    const inner = testAdapter as any;
     const getSpy = vi.spyOn(inner, "getAdvisoryLock");
     const releaseSpy = vi.spyOn(inner, "releaseAdvisoryLock");
     try {

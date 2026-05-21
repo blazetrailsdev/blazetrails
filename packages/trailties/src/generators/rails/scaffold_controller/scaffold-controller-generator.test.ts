@@ -1,0 +1,88 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
+import { ScaffoldControllerGenerator } from "./scaffold-controller-generator.js";
+
+let tmpDir: string;
+
+beforeEach(() => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-sc-"));
+  fs.writeFileSync(path.join(tmpDir, "tsconfig.json"), "{}");
+  fs.mkdirSync(path.join(tmpDir, "src/config"), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, "src/config/routes.ts"), "// routes\n");
+});
+
+afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+function makeGen() {
+  return new ScaffoldControllerGenerator({ cwd: tmpDir, output: () => {} });
+}
+
+function read(rel: string): string {
+  return fs.readFileSync(path.join(tmpDir, rel), "utf-8");
+}
+
+describe("ScaffoldControllerGeneratorTest", () => {
+  it("controller content", () => {
+    makeGen().run("User", ["name:string", "age:integer"]);
+    const c = read("src/app/controllers/users-controller.ts");
+    expect(c).toContain("class UsersController extends ActionController.Base");
+    for (const action of ["index", "show", "new_", "create", "edit", "update", "destroy"]) {
+      expect(c).toContain(`async ${action}()`);
+    }
+  });
+
+  it("don't use require", () => {
+    makeGen().run("User");
+    expect(read("src/app/controllers/users-controller.ts")).not.toMatch(/\brequire\(/);
+  });
+
+  it("check class collision", () => {
+    makeGen().run("user_controller");
+    expect(fs.existsSync(path.join(tmpDir, "src/app/controllers/users-controller.ts"))).toBe(true);
+  });
+
+  it("invokes default test framework", () => {
+    makeGen().run("User");
+    expect(fs.existsSync(path.join(tmpDir, "test/controllers/users-controller.test.ts"))).toBe(
+      true,
+    );
+  });
+
+  it("does not invoke test framework if required", () => {
+    makeGen().run("User", [], { test: false });
+    expect(fs.existsSync(path.join(tmpDir, "test/controllers/users-controller.test.ts"))).toBe(
+      false,
+    );
+  });
+
+  it("invokes helper", () => {
+    makeGen().run("User");
+    expect(fs.existsSync(path.join(tmpDir, "src/app/helpers/users-helper.ts"))).toBe(true);
+  });
+
+  it("does not invoke helper if required", () => {
+    makeGen().run("User", [], { helper: false });
+    expect(fs.existsSync(path.join(tmpDir, "src/app/helpers/users-helper.ts"))).toBe(false);
+  });
+
+  it("add routes", () => {
+    makeGen().run("User");
+    expect(read("src/config/routes.ts")).toContain('router.resources("users")');
+  });
+
+  it("skip routes", () => {
+    makeGen().run("User", [], { skipRoutes: true });
+    expect(read("src/config/routes.ts")).not.toContain('router.resources("users")');
+  });
+
+  it("api controller", () => {
+    makeGen().run("User", ["name:string"], { api: true });
+    const c = read("src/app/controllers/users-controller.ts");
+    expect(c).toContain("renderJson");
+    expect(c).not.toContain("async new_()");
+    expect(c).not.toContain("async edit()");
+    expect(fs.existsSync(path.join(tmpDir, "src/app/helpers/users-helper.ts"))).toBe(false);
+  });
+});

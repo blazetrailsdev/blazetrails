@@ -5,37 +5,48 @@ import * as os from "node:os";
 import { ResourceRouteGenerator } from "./resource-route-generator.js";
 
 let tmpDir: string;
+const seed = (): void => {
+  fs.mkdirSync(path.join(tmpDir, "src/config"), { recursive: true });
+  fs.writeFileSync(
+    path.join(tmpDir, "src/config/routes.ts"),
+    "export function drawRoutes(router: any): void {\n  // routes\n}\n",
+  );
+};
+const read = (): string => fs.readFileSync(path.join(tmpDir, "src/config/routes.ts"), "utf-8");
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-route-"));
-  fs.writeFileSync(path.join(tmpDir, "tsconfig.json"), "{}");
+  seed();
 });
 afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
 describe("ResourceRouteGeneratorTest", () => {
   it("add resource route", () => {
-    const gen = new ResourceRouteGenerator({ cwd: tmpDir, output: () => {}, name: "product" });
-    gen.addResourceRoute();
-    expect(fs.readFileSync(path.join(tmpDir, "config/routes.ts"), "utf-8")).toContain(
-      "resources :products",
-    );
+    new ResourceRouteGenerator({
+      cwd: tmpDir,
+      output: () => {},
+      name: "product",
+    }).addResourceRoute();
+    expect(read()).toContain('router.resources("products");');
   });
 
   it("nests namespaces", () => {
-    const gen = new ResourceRouteGenerator({
+    new ResourceRouteGenerator({
       cwd: tmpDir,
       output: () => {},
       name: "admin/users/product",
-    });
-    gen.addResourceRoute();
-    const content = fs.readFileSync(path.join(tmpDir, "config/routes.ts"), "utf-8");
-    expect(content).toContain("namespace :admin do");
-    expect(content).toContain("namespace :users do");
-    expect(content).toContain("resources :products");
+    }).addResourceRoute();
+    const c = read();
+    expect(c).toContain('router.namespace("admin"');
+    expect(c).toContain('router.namespace("users"');
+    expect(c).toContain('router.resources("products");');
   });
 
   it("skips when actions are present", () => {
-    const gen = new ResourceRouteGenerator({ cwd: tmpDir, output: () => {}, name: "product" });
-    gen.addResourceRoute({ actions: ["index"] });
-    expect(fs.existsSync(path.join(tmpDir, "config/routes.ts"))).toBe(false);
+    new ResourceRouteGenerator({ cwd: tmpDir, output: () => {}, name: "product" }).addResourceRoute(
+      {
+        actions: ["index"],
+      },
+    );
+    expect(read()).not.toContain("router.resources");
   });
 });

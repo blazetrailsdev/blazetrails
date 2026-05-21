@@ -3,9 +3,7 @@ import { ResourceRouteGenerator } from "../resource-route/resource-route-generat
 import { applyResourceHelpers, type ResourceHelpersInfo } from "../../resource-helpers.js";
 
 // Mirrors railties/lib/rails/generators/rails/resource/resource_generator.rb.
-// Rails' `hook_for :resource_controller` / `:resource_route` chain is folded
-// here into direct delegation; controller scaffolding ships in scaffold-
-// controller-generator (deferred to a follow-up PR).
+// hook_for :resource_controller / :resource_route → direct delegation.
 export interface ResourceGeneratorOptions extends ModelGeneratorOptions {
   actions?: string[];
 }
@@ -30,7 +28,6 @@ export class ResourceGenerator extends ModelGenerator {
       name: this.name,
     });
     route.addResourceRoute({ actions: this.actions });
-    for (const f of route.getCreatedFiles()) this.createdFiles.push(f);
     return this.getCreatedFiles();
   }
 }

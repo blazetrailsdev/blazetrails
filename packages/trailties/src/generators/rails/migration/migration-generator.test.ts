@@ -17,13 +17,19 @@ describe("MigrationGeneratorTest", () => {
       cwd: tmpDir,
       output: () => {},
       name: "add_title_to_posts",
-      attributes: ["title:string", "body:text"],
     });
     const files = gen.run();
-    expect(files[0]).toMatch(/^db\/migrate\/\d+_add_title_to_posts\.ts$/);
+    expect(files[0]).toMatch(/^db\/migrations\/\d+-add-title-to-posts\.ts$/);
     const content = fs.readFileSync(path.join(tmpDir, files[0]!), "utf-8");
-    expect(content).toContain('t.column("title", "string");');
-    expect(content).toContain('t.column("body", "text");');
+    expect(content).toContain('import { Migration } from "@blazetrails/activerecord";');
+    expect(content).toContain("class AddTitleToPosts extends Migration");
+    expect(content).toContain("async change(): Promise<void>");
+  });
+
+  it("migrations generated simultaneously", () => {
+    const a = new MigrationGenerator({ cwd: tmpDir, output: () => {}, name: "first" }).run();
+    const b = new MigrationGenerator({ cwd: tmpDir, output: () => {}, name: "second" }).run();
+    expect(a[0]).not.toBe(b[0]);
   });
 
   it("exit on failure", () => {

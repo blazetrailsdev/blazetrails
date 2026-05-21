@@ -1,10 +1,14 @@
-import { camelize } from "@blazetrails/activesupport";
 import { NamedBase, type NamedBaseOptions } from "../../named-base.js";
-import { migrationTimestamp } from "../../base.js";
+import { classify, dasherize, migrationTimestamp } from "../../base.js";
 
 // Mirrors railties/lib/rails/generators/rails/migration/migration_generator.rb.
-// Rails' `hook_for :orm, required: true` defers to an ORM-provided generator;
-// trailties emits a minimal ORM-agnostic migration scaffold directly.
+// Rails' `hook_for :orm, required: true` defers all template emission to
+// the ORM-provided generator. This skeleton emits a minimal ORM-agnostic
+// `Migration` class extending @blazetrails/activerecord; richer
+// CreateX / AddXToY inference lives in the existing top-level
+// MigrationGenerator and will be folded in when the ORM hook lands.
+let lastTimestamp: string | null = null;
+
 export class MigrationGenerator extends NamedBase {
   constructor(options: NamedBaseOptions) {
     super(options);
@@ -15,23 +19,22 @@ export class MigrationGenerator extends NamedBase {
   }
 
   run(): string[] {
-    const ext = this.ext();
-    const filename = `db/migrate/${migrationTimestamp()}_${this.fileName}${ext}`;
-    const className = camelize(this.fileName);
-    const cols = this.attributes
-      .map((a) => `      t.column("${a.columnName()}", "${a.type}");`)
-      .join("\n");
+    let timestamp = migrationTimestamp();
+    if (lastTimestamp && timestamp <= lastTimestamp) {
+      timestamp = (parseInt(lastTimestamp, 10) + 1).toString();
+    }
+    lastTimestamp = timestamp;
+    const filename = `db/migrations/${timestamp}-${dasherize(this.fileName)}${this.ext()}`;
+    const className = classify(this.fileName);
     this.createFile(
       filename,
-      `// migration: ${className}
-export default {
-  up: async (m: { createTable: (n: string, fn: (t: { column: (n: string, t: string) => void }) => void) => Promise<void> }) => {
-    await m.createTable("${this.pluralName()}", (t) => {
-${cols}
-    });
-  },
-  down: async () => {},
-};
+      `import { Migration } from "@blazetrails/activerecord";
+
+export class ${className} extends Migration {
+  static version = "${timestamp}";
+
+  async change(): Promise<void> {}
+}
 `,
     );
     return this.getCreatedFiles();

@@ -24,7 +24,8 @@ describe("ModelGeneratorTest", () => {
     const files = gen.run();
     expect(files).toContain("app/models/post.ts");
     const content = fs.readFileSync(path.join(tmpDir, files[0]!), "utf-8");
-    expect(content).toContain("export class Post extends Model");
+    expect(content).toContain('import { Base } from "@blazetrails/activerecord";');
+    expect(content).toContain("export class Post extends Base");
     expect(content).toContain("title!: string;");
     expect(content).toContain("views!: number;");
   });

@@ -49,8 +49,25 @@ function parseLocalsSignature(sig: string): LocalEntry[] {
       continue;
     }
     if (ch === "(" || ch === "[" || ch === "{") depth++;
-    else if (ch === ")" || ch === "]" || ch === "}") depth--;
+    else if (ch === ")" || ch === "]" || ch === "}") {
+      depth--;
+      if (depth < 0) {
+        throw new TseLocalsSignatureError(
+          `unbalanced \`${ch}\` in locals signature ${JSON.stringify(sig)}`,
+        );
+      }
+    }
     buf += ch;
+  }
+  if (quote !== null) {
+    throw new TseLocalsSignatureError(
+      `unterminated ${quote === "`" ? "template literal" : "string"} in locals signature ${JSON.stringify(sig)}`,
+    );
+  }
+  if (depth !== 0) {
+    throw new TseLocalsSignatureError(
+      `unbalanced brackets in locals signature ${JSON.stringify(sig)}`,
+    );
   }
   if (buf.trim() !== "") parts.push(buf);
 
@@ -158,11 +175,15 @@ export function virtualizeTseWithDeltas(source: string): VirtualizeTseResult {
   // Per-node line-precise mapping inside the body is a follow-up tied
   // to tse-compiler emitting token spans.
   const ts = [...header, ...body, ...footer].join("\n");
+  // Body strings may contain embedded newlines (multi-line `<% %>`
+  // code chunks); compute virtual-line counts from the emitted text,
+  // not the node array length.
   const headerLineCount = header.join("\n").split("\n").length;
+  const bodyLineCount = body.length === 0 ? 0 : body.join("\n").split("\n").length;
   const footerLineCount = footer.join("\n").split("\n").length;
   const deltas: LineDelta[] = [
     { insertedAtLine: -1, lineCount: headerLineCount },
-    { insertedAtLine: headerLineCount + body.length, lineCount: footerLineCount },
+    { insertedAtLine: headerLineCount + bodyLineCount - 1, lineCount: footerLineCount },
   ];
   return { ts, deltas };
 }

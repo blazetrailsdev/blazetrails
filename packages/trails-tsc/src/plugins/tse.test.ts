@@ -80,10 +80,27 @@ describe("virtualizeTse", () => {
     expect(head?.insertedAtLine).toBe(-1);
     const lines = ts.split("\n");
     expect(lines[head!.lineCount - 1]).toContain("const _ob");
-    // Footer delta starts at the line after the body and covers the
-    // trailing `return _ob;` + `}` + trailing newline.
-    expect(lines[foot!.insertedAtLine]).toContain("return _ob");
-    expect(foot?.insertedAtLine).toBe(head!.lineCount + 3); // 3 body nodes: text, expr, text
+    // Footer delta marks the line BEFORE the trailing `return _ob;`
+    // (remapLine treats `injectedStart` as exclusive); the footer
+    // block then spans `lineCount` lines starting at injectedStart+1.
+    expect(lines[foot!.insertedAtLine + 1]).toContain("return _ob");
+  });
+
+  it("counts multi-line `<% %>` chunks as multiple virtual lines for the footer offset", () => {
+    const { ts, deltas } = virtualizeTseWithDeltas("<% const x = 1;\nconst y = 2; %>hi");
+    const [, foot] = deltas;
+    const lines = ts.split("\n");
+    // The footer's `return _ob;` should sit immediately after the
+    // body, regardless of how many node-array entries the body has.
+    expect(lines[foot!.insertedAtLine + 1]).toContain("return _ob");
+  });
+
+  it("throws on unbalanced brackets in the locals signature", () => {
+    expect(() => virtualizeTse("<%# locals: (a: (1, 2) %>")).toThrow(TseLocalsSignatureError);
+  });
+
+  it("throws on an unterminated string in the locals signature", () => {
+    expect(() => virtualizeTse('<%# locals: (a: "oops) %>')).toThrow(TseLocalsSignatureError);
   });
 
   it("dispatches expression sites and preserves code chunks raw", () => {

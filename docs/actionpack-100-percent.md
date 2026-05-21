@@ -176,7 +176,7 @@ git fetch origin main
 scripts/start-worktree.sh <slug> <branch>
 cd .claude/worktrees/<slug>
 # Read Rails source first
-less scripts/api-compare/.rails-source/rails/actionpack/lib/<rails-file>.rb
+less vendor/rails/actionpack/lib/<rails-file>.rb   # pnpm vendor:fetch if absent
 # Implement in the TS file the api:compare row points to (don't relocate methods).
 $EDITOR packages/actionpack/src/<sub-pkg>/<ts-file>.ts
 $EDITOR packages/actionpack/src/<sub-pkg>/<ts-file>.test.ts

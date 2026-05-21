@@ -101,12 +101,10 @@ export async function migrationTemplate(
   const resolved = host.path.isAbsolute?.(destination)
     ? destination
     : host.path.join(host.destinationRoot, destination);
-  const migrationDir = host.path.dirname(resolved);
-  const nextNumber = String(await host.nextMigrationNumber(migrationDir));
+  const dir = host.path.dirname(resolved);
+  const nextNumber = String(await host.nextMigrationNumber(dir));
   const assigns = buildMigrationAssigns(host.path, resolved, nextNumber);
   host.setMigrationAssigns(assigns);
-  const dir = host.path.dirname(resolved);
-  const baseName = host.path.basename(resolved);
-  const numbered = host.path.join(dir, `${nextNumber}_${baseName}`);
+  const numbered = host.path.join(dir, `${nextNumber}_${host.path.basename(resolved)}`);
   return createMigration(host, numbered, () => render(assigns), config);
 }

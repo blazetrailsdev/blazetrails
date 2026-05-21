@@ -81,13 +81,18 @@ export class CreateMigration {
 
   async invoke(): Promise<string> {
     const existing = await this.existingMigration();
-    if (existing) {
-      const resolved = await this.onConflictBehavior();
-      return resolved ?? existing;
+    if (existing) await this.onConflictBehavior();
+    else {
+      if (!this.pretend()) await this.writeRendered();
+      this.sayStatus("create", "green");
     }
-    if (!this.pretend()) await this.writeRendered();
-    this.sayStatus("create", "green");
-    return this.destination;
+    // Mirrors Rails' invoke! tail: pretend always returns the destination
+    // (Thor short-circuits); otherwise return the new destination when it
+    // got written (force / no-conflict) and fall back to the relative path
+    // of the existing migration (identical / skip).
+    if (this.pretend()) return this.destination;
+    if (await this.base.fs.exists(this.destination)) return this.destination;
+    return this.relativeExistingMigration();
   }
 
   async revoke(): Promise<string | undefined> {

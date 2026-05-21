@@ -1,149 +1,174 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import type { FsAdapter, PathAdapter } from "@blazetrails/activesupport";
-import { CreateMigration } from "./create-migration.js";
+import { CreateMigration, type MigrationRenderer } from "./create-migration.js";
 
 const path: PathAdapter = {
-  join: (...p: string[]) => p.join("/"),
-  dirname: (p: string) => p.split("/").slice(0, -1).join("/") || "/",
-  basename: (p: string) => p.split("/").pop()!,
-  resolve: (...p: string[]) => p.join("/"),
-  extname: (p: string) => {
+  join: (...p) => p.join("/"),
+  dirname: (p) => p.split("/").slice(0, -1).join("/") || "/",
+  basename: (p) => p.split("/").pop()!,
+  resolve: (...p) => p.join("/"),
+  extname: (p) => {
     const i = p.lastIndexOf(".");
     return i >= 0 ? p.slice(i) : "";
   },
   sep: "/",
 };
 
-function buildFs(initial: Record<string, string>): FsAdapter & {
-  files: Record<string, string>;
-  dirs: Set<string>;
-} {
-  const files = { ...initial };
-  const dirs = new Set<string>();
-  const dirOf = (p: string) => p.split("/").slice(0, -1).join("/");
-  for (const k of Object.keys(files)) dirs.add(dirOf(k));
-  return {
-    files,
-    dirs,
-    exists: async (p: string) => Object.hasOwn(files, p) || dirs.has(p),
-    readFile: (async (p: string) => files[p]) as unknown as FsAdapter["readFile"],
-    writeFile: async (p: string, c: string | Buffer | Uint8Array) => {
-      files[p] = typeof c === "string" ? c : Buffer.from(c).toString("utf-8");
+const ROOT = "/app";
+const DEFAULT = "db/migrate/create_articles.rb";
+
+interface Store {
+  files: Map<string, string>;
+  fs: FsAdapter;
+  log: string[];
+}
+
+function store(): Store {
+  const files = new Map<string, string>();
+  const dirs = new Set<string>([ROOT, `${ROOT}/db`, `${ROOT}/db/migrate`]);
+  const dirOf = (p: string) => p.split("/").slice(0, -1).join("/") || "/";
+  const fs = {
+    exists: async (p: string) => files.has(p) || dirs.has(p),
+    readFile: (async (p: string) => files.get(p)!) as unknown as FsAdapter["readFile"],
+    writeFile: async (p: string, c: string) => {
+      files.set(p, c);
     },
     unlink: async (p: string) => {
-      delete files[p];
+      files.delete(p);
     },
     mkdir: async (p: string) => {
       dirs.add(p);
     },
     readdir: async (p: string) =>
-      Object.keys(files)
-        .filter((f) => dirOf(f) === p)
-        .map((f) => f.slice(p.length + 1)),
-  } as FsAdapter & { files: Record<string, string>; dirs: Set<string> };
+      [...files.keys()].filter((f) => dirOf(f) === p).map((f) => f.slice(p.length + 1)),
+  } as unknown as FsAdapter;
+  return { files, fs, log: [] };
 }
 
-function buildHost(fs: FsAdapter, fileName: string, options: Record<string, boolean> = {}) {
-  const log: string[] = [];
-  return {
-    fs,
+function makeMigration(
+  s: Store,
+  destinationPath: string = DEFAULT,
+  config: { force?: boolean; skip?: boolean } = {},
+  generatorOptions: { pretend?: boolean } = {},
+  data: MigrationRenderer = "contents",
+): CreateMigration {
+  const dir = path.dirname(`${ROOT}/${destinationPath}`);
+  const next = [...s.files.keys()].filter((f) => path.dirname(f) === dir).length + 1;
+  const numbered = `${dir}/${next}_${path.basename(destinationPath)}`;
+  const fileName = path.basename(destinationPath).replace(/\.rb$/, "");
+  const host = {
+    fs: s.fs,
     path,
-    output: (m: string) => log.push(m),
-    options,
+    output: (m: string) => s.log.push(m),
+    options: generatorOptions,
     migrationFileName: fileName,
-    relativeToOriginalDestinationRoot: (p: string) => p.replace(/^\/app\//, ""),
-    log,
+    relativeToOriginalDestinationRoot: (p: string) =>
+      p.startsWith(`${ROOT}/`) ? p.slice(ROOT.length + 1) : p,
   };
+  return new CreateMigration(host, numbered, data, config);
 }
 
 describe("CreateMigration", () => {
-  it("invoke writes a new migration and reports create", async () => {
-    const fs = buildFs({});
-    const host = buildHost(fs, "create_posts");
-    const dest = "/app/db/migrate/20260101000000_create_posts.rb";
-    const action = new CreateMigration(host, dest, "BODY");
-    const result = await action.invoke();
-    expect(result).toBe(dest);
-    expect(fs.files[dest]).toBe("BODY");
-    expect(host.log).toEqual(["      create  db/migrate/20260101000000_create_posts.rb"]);
+  let s: Store;
+  beforeEach(() => {
+    s = store();
   });
 
-  it("invoke reports identical when content matches existing numbered migration", async () => {
-    const fs = buildFs({
-      "/app/db/migrate/20260101000000_create_posts.rb": "BODY",
-    });
-    const host = buildHost(fs, "create_posts");
-    const action = new CreateMigration(
-      host,
-      "/app/db/migrate/20260102000000_create_posts.rb",
-      "BODY",
+  const migrationExists = async (
+    destinationPath: string = DEFAULT,
+    data: MigrationRenderer = "contents",
+  ) => {
+    const m = makeMigration(s, destinationPath, {}, {}, data);
+    await m.invoke();
+    s.log.length = 0;
+    return m;
+  };
+
+  it("test_invoke", async () => {
+    const m = makeMigration(s);
+    await m.invoke();
+    expect(s.log.join("\n")).toMatch(/create {2}db\/migrate\/1_create_articles\.rb/);
+    expect(s.files.has(m.destination)).toBe(true);
+  });
+
+  it("test_invoke_pretended", async () => {
+    const m = makeMigration(s, DEFAULT, {}, { pretend: true });
+    await m.invoke();
+    expect(s.log.join("\n")).toMatch(/create {2}db\/migrate\/1_create_articles\.rb/);
+    expect(s.files.has(m.destination)).toBe(false);
+  });
+
+  it("test_invoke_when_exists", async () => {
+    const existing = await migrationExists();
+    expect(await makeMigration(s).existingMigration()).toBe(existing.destination);
+  });
+
+  it("test_invoke_when_exists_identical", async () => {
+    await migrationExists();
+    const m = makeMigration(s);
+    await m.invoke();
+    expect(s.log.join("\n")).toMatch(/identical {2}db\/migrate\/1_create_articles\.rb/);
+    expect(await m.identical()).toBe(true);
+  });
+
+  it("test_invoke_return_existing_file_when_exists_identical", async () => {
+    const existing = await migrationExists();
+    expect(await makeMigration(s).invoke()).toBe(await existing.relativeExistingMigration());
+  });
+
+  it("test_invoke_when_exists_not_identical", async () => {
+    await migrationExists();
+    await expect(makeMigration(s, DEFAULT, {}, {}, "different").invoke()).rejects.toThrow(
+      /Another migration is already named/,
     );
-    const result = await action.invoke();
-    expect(result).toBe("/app/db/migrate/20260101000000_create_posts.rb");
-    expect(host.log[0]).toMatch(/identical/);
   });
 
-  it("invoke with force replaces the existing migration", async () => {
-    const fs = buildFs({
-      "/app/db/migrate/20260101000000_create_posts.rb": "OLD",
-    });
-    const host = buildHost(fs, "create_posts", { force: true });
-    const dest = "/app/db/migrate/20260102000000_create_posts.rb";
-    const action = new CreateMigration(host, dest, "NEW");
-    const result = await action.invoke();
-    expect(result).toBe(dest);
-    expect(fs.files["/app/db/migrate/20260101000000_create_posts.rb"]).toBeUndefined();
-    expect(fs.files[dest]).toBe("NEW");
+  it("test_invoke_forced_when_exists_not_identical", async () => {
+    const dest = "db/migrate/migration.rb";
+    const existing = await migrationExists(dest);
+    const m = makeMigration(s, dest, { force: true }, {}, "different");
+    await m.invoke();
+    const out = s.log.join("\n");
+    expect(out).toMatch(/remove {2}db\/migrate\/1_migration\.rb/);
+    expect(out).toMatch(/create {2}db\/migrate\/2_migration\.rb/);
+    expect(s.files.has(m.destination)).toBe(true);
+    expect(s.files.has(existing.destination)).toBe(false);
   });
 
-  it("invoke with skip leaves the existing migration", async () => {
-    const fs = buildFs({
-      "/app/db/migrate/20260101000000_create_posts.rb": "OLD",
-    });
-    const host = buildHost(fs, "create_posts", { skip: true });
-    const action = new CreateMigration(
-      host,
-      "/app/db/migrate/20260102000000_create_posts.rb",
-      "NEW",
-    );
-    const result = await action.invoke();
-    expect(result).toBe("/app/db/migrate/20260101000000_create_posts.rb");
-    expect(host.log.some((m) => m.includes("skip"))).toBe(true);
+  it("test_invoke_forced_pretended_when_exists_not_identical", async () => {
+    await migrationExists();
+    const m = makeMigration(s, DEFAULT, { force: true }, { pretend: true }, "different");
+    await m.invoke();
+    const out = s.log.join("\n");
+    expect(out).toMatch(/remove {2}db\/migrate\/1_create_articles\.rb/);
+    expect(out).toMatch(/create {2}db\/migrate\/2_create_articles\.rb/);
+    expect(s.files.has(m.destination)).toBe(false);
   });
 
-  it("invoke on conflict without force/skip raises", async () => {
-    const fs = buildFs({
-      "/app/db/migrate/20260101000000_create_posts.rb": "OLD",
-    });
-    const host = buildHost(fs, "create_posts");
-    const action = new CreateMigration(
-      host,
-      "/app/db/migrate/20260102000000_create_posts.rb",
-      "NEW",
-    );
-    await expect(action.invoke()).rejects.toThrow(/Another migration is already named/);
+  it("test_invoke_skipped_when_exists_not_identical", async () => {
+    await migrationExists();
+    const m = makeMigration(s, DEFAULT, { skip: true }, {}, "different");
+    await m.invoke();
+    expect(s.log.join("\n")).toMatch(/skip {2}db\/migrate\/2_create_articles\.rb/);
+    expect(s.files.has(m.destination)).toBe(false);
   });
 
-  it("revoke removes the existing migration", async () => {
-    const fs = buildFs({
-      "/app/db/migrate/20260101000000_create_posts.rb": "OLD",
-    });
-    const host = buildHost(fs, "create_posts");
-    const action = new CreateMigration(
-      host,
-      "/app/db/migrate/20260102000000_create_posts.rb",
-      "NEW",
-    );
-    const removed = await action.revoke();
-    expect(removed).toBe("/app/db/migrate/20260101000000_create_posts.rb");
-    expect(fs.files["/app/db/migrate/20260101000000_create_posts.rb"]).toBeUndefined();
+  it("test_revoke", async () => {
+    const existing = await migrationExists();
+    await makeMigration(s).revoke();
+    expect(s.log.join("\n")).toMatch(/remove {2}db\/migrate\/1_create_articles\.rb/);
+    expect(s.files.has(existing.destination)).toBe(false);
   });
 
-  it("pretend does not write to the filesystem", async () => {
-    const fs = buildFs({});
-    const host = buildHost(fs, "create_posts", { pretend: true });
-    const dest = "/app/db/migrate/20260101000000_create_posts.rb";
-    await new CreateMigration(host, dest, "BODY").invoke();
-    expect(fs.files[dest]).toBeUndefined();
+  it("test_revoke_pretended", async () => {
+    const existing = await migrationExists();
+    await makeMigration(s, DEFAULT, {}, { pretend: true }).revoke();
+    expect(s.log.join("\n")).toMatch(/remove {2}db\/migrate\/1_create_articles\.rb/);
+    expect(s.files.has(existing.destination)).toBe(true);
+  });
+
+  it("test_revoke_when_no_exists", async () => {
+    await makeMigration(s).revoke();
+    expect(s.log.join("\n")).toMatch(/remove {2}db\/migrate\/1_create_articles\.rb/);
   });
 });

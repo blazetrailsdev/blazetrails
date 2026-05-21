@@ -102,10 +102,10 @@ logic:
 
 ### Phase 9a — activate `Visitors::SQLite`, delete `fixSqliteCompat` — closed (#2127, #2132)
 
-- `SchemaAdapter.arelVisitor` (test-adapter.ts:709-719) now delegates
-  to the inner adapter **for SQLite only**. The gate at line 718
-  (`if (this.inner?.adapterName !== "sqlite") return undefined`) and
-  its comment reserve the PG/MySQL flip for Phase 9b.
+- `SchemaAdapter.arelVisitor` flipped from hard-coded `undefined` to
+  delegating to the inner adapter, **gated on `sqlite`**. PG/MySQL
+  remained on the dormant fallback (PG was added in 9b-1; MySQL
+  pending in 9b-2).
 - `fixSqliteCompat` and `unwrapCompoundSelect` deleted
 - `Relation#_toSql` set-op path simplified to plain
   `${left} ${op} ${right}` concatenation

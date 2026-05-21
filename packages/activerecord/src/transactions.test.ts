@@ -2342,9 +2342,14 @@ describe("SchemaAdapter TM delegation", () => {
   // DDL savepoints are released eagerly (releaseSavepoint right after exec);
   // TM does not track them and never tries to release them again.
   it("transaction() routes SchemaAdapter through TM (spy on inner.withinNewTransaction)", async () => {
-    const { adapter: testAdapter } = createSidecarTestAdapter();
+    // Keep the wrapper for defineSchema/Model.adapter so the per-wrapper
+    // signature cache stays isolated across tests in this describe; spy on
+    // the shared real adapter via the sidecar — that's what the wrapper's
+    // withinNewTransaction routes to and what TM dispatches against.
+    const testAdapter = createTestAdapter();
     await defineSchema(testAdapter, { items: { name: "string" } });
-    const spy = vi.spyOn(testAdapter as any, "withinNewTransaction");
+    const { adapter: realAdapter } = createSidecarTestAdapter();
+    const spy = vi.spyOn(realAdapter as any, "withinNewTransaction");
     class Item extends Base {
       static {
         this.attribute("name", "string");

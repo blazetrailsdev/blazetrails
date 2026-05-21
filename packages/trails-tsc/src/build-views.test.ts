@@ -100,6 +100,17 @@ describe("runCli", () => {
     expect(runCli(["bogus"])).toBe(1);
   });
 
+  it("rejects a value-flag without a value", () => {
+    expect(runCli(["build", "--cwd"])).toBe(1);
+  });
+
+  it("catches buildViews errors and returns 1 instead of throwing", () => {
+    // outDir resolving outside cwd trips the safety guard; the CLI must
+    // surface that as a clean stderr message + non-zero exit, not a stack.
+    const cwd = mkScratch();
+    expect(runCli(["build", "--cwd", cwd, "--out", "/tmp/elsewhere"])).toBe(1);
+  });
+
   it("prints usage for --help and exits 0", () => {
     expect(runCli(["--help"])).toBe(0);
   });

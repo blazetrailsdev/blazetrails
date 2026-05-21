@@ -35,6 +35,15 @@ export function buildViews(opts: BuildViewsOptions = {}): BuildViewsResult {
   const outDir = path.resolve(cwd, opts.outDir ?? ".trails");
   const outViews = path.join(outDir, "views");
   const files = walkTse(viewsDir);
+  // Safety: refuse to wipe a mirror dir that escapes `cwd`. A mistaken
+  // `--out /` would otherwise resolve `outViews` to `/views` and recurse
+  // into shared system state. Require a non-empty relative segment.
+  const relFromCwd = path.relative(cwd, outViews);
+  if (relFromCwd === "" || relFromCwd.startsWith("..") || path.isAbsolute(relFromCwd)) {
+    throw new Error(
+      `trails-tsc: refusing to build into ${JSON.stringify(outViews)} — outDir must resolve under cwd ${JSON.stringify(cwd)}`,
+    );
+  }
   // Wipe the mirror dir so deleted .tse sources don't leave orphan shims
   // behind. The docs (plan §2.8) state the mirror "is regenerated on
   // every build"; keeping orphans would let stale `views-manifest.ts`

@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "trails-tsc": "dist/cli.js"
+    "trails-tsc-views": "./bin/trails-tsc-views.js"
   },
   "exports": {
     ".": {
@@ -24,7 +24,8 @@
     "typescript": "^5.0.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "license": "MIT"
 }

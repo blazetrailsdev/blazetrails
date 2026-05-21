@@ -1607,7 +1607,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       // re-EXPLAIN'd. Bind values pass through to pg as the values
       // array so `EXPLAIN` with parameters doesn't error with
       // "there is no parameter $1".
-      const pgBinds = binds.map((v) => temporalToBindString(v, "postgres"));
+      const pgBinds = binds.map((v) => this._bindForPg(v));
       const rewritten = this.rewriteBinds(sql, pgBinds);
       const result = await client.query(`${clause} ${rewritten}`, pgBinds);
       const printer = new ExplainPrettyPrinter();

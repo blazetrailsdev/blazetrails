@@ -1,0 +1,103 @@
+import { describe, expect, it } from "vitest";
+import ts from "typescript";
+import { createTsePlugin, virtualizeTse } from "./tse.js";
+
+describe("createTsePlugin", () => {
+  it("claims the .tse extension", () => {
+    const plugin = createTsePlugin();
+    expect(plugin.name).toBe("tse");
+    expect(plugin.extensions).toEqual([".tse"]);
+  });
+
+  it("virtualizes through the host hook", () => {
+    const plugin = createTsePlugin();
+    const out = plugin.virtualize("/x/show.html.tse", "<h1><%= 1 %></h1>");
+    expect(out?.ts).toContain("export default function render(");
+    expect(out?.ts).toContain('_ob.safeAppend("<h1>");');
+    expect(out?.ts).toContain("_ob.append(1);");
+  });
+});
+
+describe("virtualizeTse", () => {
+  it("defaults to Record<string, unknown> when no locals declared", () => {
+    const ts = virtualizeTse("<p>hi</p>");
+    expect(ts).toContain("locals: Record<string, unknown>");
+    expect(ts).not.toContain("const {");
+  });
+
+  it("destructures locals and types them as unknown when no types block", () => {
+    const ts = virtualizeTse("<%# locals: (user:, count: 0) %><%= user %>");
+    expect(ts).toContain("locals: { user: unknown; count?: unknown }");
+    expect(ts).toContain("const { user, count = 0 } = locals;");
+  });
+
+  it("lifts the types annotation verbatim", () => {
+    const ts = virtualizeTse(
+      "<%# locals: (user:) %><%! types: { user: { name: string } } !%><%= user.name %>",
+    );
+    expect(ts).toContain("locals: { user: { name: string } }");
+    expect(ts).toContain("const { user } = locals;");
+  });
+
+  it("splits locals on top-level commas only", () => {
+    const ts = virtualizeTse("<%# locals: (a: f(1, 2), b: [1, 2]) %>");
+    expect(ts).toContain("const { a = f(1, 2), b = [1, 2] } = locals;");
+  });
+
+  it("dispatches expression sites and preserves code chunks raw", () => {
+    const out = virtualizeTse("<% if (n > 0) { %><%= n %><%== raw %><% } %>");
+    expect(out).toContain("if (n > 0) {");
+    expect(out).toContain("_ob.append(n);");
+    expect(out).toContain("_ob.safeExprAppend(raw);");
+    expect(out).toContain("}");
+  });
+
+  it("emits TS that type-checks against the declared locals", () => {
+    const source =
+      "<%# locals: (user:) %><%! types: { user: { name: string } } !%>" +
+      "<h1>Hello <%= user.name %></h1>";
+    const out = virtualizeTse(source);
+    expect(diagnose(out)).toEqual([]);
+  });
+
+  it("reports a tsc error when an expression mismatches the locals type", () => {
+    const source =
+      "<%# locals: (user:) %><%! types: { user: { name: string } } !%>" + "<%= user.missingProp %>";
+    const out = virtualizeTse(source);
+    const diags = diagnose(out);
+    expect(diags.length).toBeGreaterThan(0);
+    expect(diags.join("\n")).toMatch(/missingProp/);
+  });
+});
+
+function diagnose(source: string): string[] {
+  const fileName = "/virtual/show.html.tse.ts";
+  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.ES2022, true);
+  const host: ts.CompilerHost = {
+    fileExists: (f) => f === fileName,
+    readFile: (f) => (f === fileName ? source : undefined),
+    getSourceFile: (f, lv) => (f === fileName ? sourceFile : ts.createSourceFile(f, "", lv, true)),
+    getDefaultLibFileName: () => "lib.d.ts",
+    writeFile: () => {},
+    getCurrentDirectory: () => "/",
+    getCanonicalFileName: (f) => f,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => "\n",
+  };
+  const program = ts.createProgram({
+    rootNames: [fileName],
+    options: {
+      noEmit: true,
+      noResolve: true,
+      types: [],
+      lib: [],
+      skipLibCheck: true,
+      strict: true,
+    },
+    host,
+  });
+  return program
+    .getSemanticDiagnostics(sourceFile)
+    .concat(program.getSyntacticDiagnostics(sourceFile))
+    .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
+}

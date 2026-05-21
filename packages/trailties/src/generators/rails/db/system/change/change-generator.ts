@@ -57,7 +57,7 @@ export class ChangeGenerator extends GeneratorBase {
         "config/database.js",
         "src/config/database.ts",
         "src/config/database.js",
-      ].find((p) => this.fileExists(p)) ?? "src/config/database.ts";
+      ].find((p) => this.fileExists(p)) ?? `src/config/database${this.ext()}`;
     this.writeOrUpdate(target, databaseConfigTs(this.database, this.appName));
   }
 
@@ -170,6 +170,12 @@ function dockerPackages(base: string[], extra: string | undefined): string {
 }
 
 function dockerPackagesRegex(base: string[], pick: (d: Database) => string | undefined): RegExp {
-  const alts = [...new Set(Database.all().map((d) => dockerPackages(base, pick(d))))];
+  // Sort by descending length so the longest match wins. JS regex alternation
+  // is first-match (not longest-match), so shorter prefixes like the
+  // base-only "build-essential git" would otherwise truncate a longer match
+  // like "build-essential git libpq-dev".
+  const alts = [...new Set(Database.all().map((d) => dockerPackages(base, pick(d))))].sort(
+    (a, b) => b.length - a.length,
+  );
   return new RegExp(alts.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
 }

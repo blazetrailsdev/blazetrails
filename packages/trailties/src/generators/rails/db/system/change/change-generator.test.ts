@@ -49,6 +49,7 @@ RUN apt-get update -qq && apt-get install --no-install-recommends -y curl libvip
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-db-change-"));
+  fs.writeFileSync(path.join(tmpDir, "tsconfig.json"), "{}");
   seedPackageJson();
   seedDockerfile();
 });
@@ -144,6 +145,24 @@ describe("ChangeGeneratorTest", () => {
   it("editPackageJson throws on unparseable JSON", () => {
     write("package.json", "{ this is not json");
     expect(() => run("mysql")).toThrow(/Could not parse .*package\.json/);
+  });
+
+  it("editDatabaseConfig fallback honors isTypeScript()", () => {
+    fs.rmSync(path.join(tmpDir, "tsconfig.json"));
+    run("postgresql");
+    expect(exists("src/config/database.js")).toBe(true);
+    expect(exists("src/config/database.ts")).toBe(false);
+  });
+
+  it("editDockerfile prefers longest-match alternation", () => {
+    // sqlite's build list ("build-essential git") is a prefix of pg's
+    // ("build-essential git libpq-dev"); first-match alternation would
+    // truncate. Verify the full line is replaced.
+    write("Dockerfile", "RUN apt-get install -y build-essential git libpq-dev\n");
+    run("mysql");
+    expect(read("Dockerfile")).toBe(
+      "RUN apt-get install -y build-essential default-libmysqlclient-dev git\n",
+    );
   });
 
   it("editDockerfile is a no-op when no DB package lines match", () => {

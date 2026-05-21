@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * `trails-tsc-views` CLI entrypoint. Phase 2c-a ships the `build`
- * subcommand only; `dev` (watch) is 2c-b and `init` is 2c-c.
+ * `trails-tsc-views` CLI entrypoint. Phase 2c-a shipped `build`;
+ * Phase 2c-b adds `dev` (watch mode). `init` is deferred to 2c-c.
  *
  * Named `trails-tsc-views` (not `trails-tsc`) because activerecord
  * already publishes a `trails-tsc` bin — its tsc-passthrough wrapper
@@ -12,8 +12,9 @@
 
 import { pathToFileURL } from "node:url";
 import { buildViews, type BuildViewsOptions } from "./build-views.js";
+import { watchViews, type WatchHandle } from "./watch-views.js";
 
-const USAGE = "usage: trails-tsc-views build [--cwd <dir>] [--views <dir>] [--out <dir>]\n";
+const USAGE = "usage: trails-tsc-views <build|dev> [--cwd <dir>] [--views <dir>] [--out <dir>]\n";
 
 const VALUE_FLAGS = new Set(["--cwd", "--views", "--out"]);
 
@@ -23,7 +24,7 @@ export function runCli(argv: readonly string[]): number {
     process.stdout.write(USAGE);
     return 0;
   }
-  if (cmd !== "build") {
+  if (cmd !== "build" && cmd !== "dev") {
     process.stderr.write(`trails-tsc-views: unknown command ${JSON.stringify(cmd)}\n${USAGE}`);
     return 1;
   }
@@ -45,15 +46,34 @@ export function runCli(argv: readonly string[]): number {
     process.stderr.write(`trails-tsc-views: unknown arg ${JSON.stringify(a)}\n${USAGE}`);
     return 1;
   }
-  try {
-    const { count } = buildViews(opts);
-    process.stdout.write(`trails-tsc-views: built ${count} view${count === 1 ? "" : "s"}\n`);
-    return 0;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`trails-tsc-views: ${msg}\n`);
-    return 1;
+  if (cmd === "build") {
+    try {
+      const { count } = buildViews(opts);
+      process.stdout.write(`trails-tsc-views: built ${count} view${count === 1 ? "" : "s"}\n`);
+      return 0;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`trails-tsc-views: ${msg}\n`);
+      return 1;
+    }
   }
+  // `dev`: process stays alive on the open fs.watch handle; SIGINT/SIGTERM close cleanly.
+  const handle: WatchHandle = watchViews({
+    ...opts,
+    onRebuild: ({ kind, trigger, result }) =>
+      process.stdout.write(
+        `trails-tsc-views: ${kind === "initial" ? "initial build" : `rebuilt (${trigger ?? "?"})`} — ${result.count} view${result.count === 1 ? "" : "s"}\n`,
+      ),
+    onError: (err, trigger) =>
+      process.stderr.write(`trails-tsc-views: ${trigger ?? "build"}: ${err.message}\n`),
+  });
+  const stop = (): void => {
+    handle.close();
+    process.exit(0);
+  };
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+  return 0;
 }
 
 // Skip auto-exec when imported (e.g. from tests). `import.meta.url` is the

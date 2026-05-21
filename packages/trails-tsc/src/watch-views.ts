@@ -1,0 +1,67 @@
+/** `trails-tsc-views dev` core — Phase 2c-b (plan §2). Full rebuild on each
+ * `.tse` event keeps deletes + renames working without per-file bookkeeping. */
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { buildViews, type BuildViewsOptions, type BuildViewsResult } from "./build-views.js";
+
+export interface WatchViewsOptions extends BuildViewsOptions {
+  onRebuild?: (event: {
+    kind: "initial" | "change";
+    trigger?: string;
+    result: BuildViewsResult;
+  }) => void;
+  onError?: (err: Error, trigger?: string) => void;
+  /** Coalesce-window in ms for bursts of fs events. Default 50. */
+  debounceMs?: number;
+}
+
+export interface WatchHandle {
+  close(): void;
+}
+
+export function watchViews(opts: WatchViewsOptions = {}): WatchHandle {
+  const cwd = opts.cwd ?? process.cwd();
+  const viewsDir = path.resolve(cwd, opts.viewsDir ?? "app/views");
+  const debounceMs = opts.debounceMs ?? 50;
+
+  const runBuild = (trigger?: string, kind: "initial" | "change" = "change"): void => {
+    try {
+      const result = buildViews(opts);
+      opts.onRebuild?.({ kind, trigger, result });
+    } catch (err) {
+      opts.onError?.(err instanceof Error ? err : new Error(String(err)), trigger);
+    }
+  };
+
+  runBuild(undefined, "initial");
+  // fs.watch needs an extant dir; create so `dev` works before any templates exist.
+  fs.mkdirSync(viewsDir, { recursive: true });
+
+  let pending: NodeJS.Timeout | null = null;
+  let lastTrigger: string | undefined;
+
+  const watcher = fs.watch(viewsDir, { recursive: true }, (_event, filename) => {
+    if (filename === null) return;
+    const name = typeof filename === "string" ? filename : String(filename);
+    if (!name.endsWith(".tse")) return;
+    lastTrigger = name.split(path.sep).join("/");
+    if (pending !== null) clearTimeout(pending);
+    pending = setTimeout(() => {
+      pending = null;
+      const trig = lastTrigger;
+      lastTrigger = undefined;
+      runBuild(trig);
+    }, debounceMs);
+  });
+
+  return {
+    close() {
+      if (pending !== null) {
+        clearTimeout(pending);
+        pending = null;
+      }
+      watcher.close();
+    },
+  };
+}

@@ -429,6 +429,173 @@ app/views/
 The mirror dir is the single source of truth for both tsc and bundler.
 `trails-tsc build` populates it; `trails-tsc dev` keeps it in sync.
 
+### 2.9 TypeScript-specific concerns
+
+Rails ERB has none of these — they exist because we're targeting tsc +
+editors + bundlers, not just a runtime interpreter. Each point below is
+load-bearing for "imports resolve, types flow, errors point at the right
+line" — without them the user experience falls apart even if the
+runtime is perfect.
+
+**Emitted artifacts per `.tse`.** For every
+`app/views/users/show.html.tse`, `trails-tsc build` writes:
+
+| File                                         | Purpose                                                           | Shipped in published package?         |
+| -------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------- |
+| `.trails/views/users/show.html.tse.ts`       | Typecheck shim — what tsc sees                                    | No (build artifact)                   |
+| `.trails/views/users/show.html.tse.js`       | Runtime module — what bundlers/Node import                        | Yes (or compiled further)             |
+| `.trails/views/users/show.html.tse.js.map`   | Maps `.tse.js` lines → `.tse` source (runtime stacktraces)        | Yes                                   |
+| `.trails/views/users/show.html.tse.d.ts`     | Declarations — what downstream consumers typecheck against        | **Yes — required for npm publishing** |
+| `.trails/views/users/show.html.tse.d.ts.map` | Maps `.d.ts` → `.tse` source ("Go to Definition" jumps to `.tse`) | Yes                                   |
+
+The `.tse.ts` is consumed only by the app's own `tsc` run. The `.d.ts`
+
+- `.d.ts.map` pair is what makes a published gem (e.g. a view-component
+  library on npm) usable without the consumer having to run
+  `trails-tsc build` themselves.
+
+**Module resolution: `import Show from "./show.html.tse"`.** Three
+strategies, in increasing order of magic:
+
+1. **`allowArbitraryExtensions: true`** (TS 5.0+) + sidecar
+   `show.html.d.tse.ts` declaration files. Vanilla tsc resolution; no
+   plugin needed. Verbose filenames, but it Just Works in any editor
+   that respects tsconfig.
+2. **`paths` mapping** — `"@views/*": [".trails/views/*"]` so imports
+   become `import Show from "@views/users/show.html.tse"` and resolve
+   to `.trails/views/users/show.html.tse.ts` at typecheck and
+   `.trails/views/users/show.html.tse.js` at runtime via Node's
+   `customConditions` / a bundler resolver.
+3. **TS language service plugin** — `@blazetrails/trails-tsc/ts-plugin`
+   registered in tsconfig under `compilerOptions.plugins`. The plugin
+   intercepts `.tse` imports, compiles them on the fly, and surfaces
+   diagnostics inline without the user having to run a build.
+
+**Default to (1) + (2) together.** The plugin (3) is an optional DX
+booster for in-editor live typecheck; recommended for app dev, not
+required for libraries.
+
+**Ambient declaration for bundlers/editors that haven't run the build:**
+
+```ts
+// @blazetrails/actionview/types.d.ts (shipped with the package)
+declare module "*.tse" {
+  import type { SafeString, RenderContext } from "@blazetrails/actionview";
+  const template: (context: RenderContext, locals: unknown) => SafeString;
+  export default template;
+}
+```
+
+This guarantees `import Show from "./show.html.tse"` typechecks (as
+`unknown` locals) even before `trails-tsc build` has run — important
+for a fresh clone, where tsc would otherwise error on the import before
+the build can succeed. Once the build runs, the more specific
+`.tse.d.ts` shadows the ambient fallback.
+
+**tsconfig.json the user adds:**
+
+```json
+{
+  "compilerOptions": {
+    "allowArbitraryExtensions": true,
+    "paths": {
+      "@views/*": [".trails/views/*"]
+    },
+    "plugins": [{ "name": "@blazetrails/trails-tsc/ts-plugin" }]
+  },
+  "include": ["src/**/*", ".trails/views/**/*"]
+}
+```
+
+`trails init` writes this; manual setup documented for migrations.
+
+**Source maps — three kinds, each mapping to `.tse`:**
+
+| Map                                      | Consumer                             | What it enables                                       |
+| ---------------------------------------- | ------------------------------------ | ----------------------------------------------------- |
+| `.tse.js.map`                            | Node, browsers, bundlers             | Runtime stack traces point at `.tse:line:col`         |
+| `.tse.d.ts.map`                          | tsc, editors                         | Hover/Go-to-Definition jumps to `.tse`, not `.tse.ts` |
+| `sourceMap` field on `Tse.call`'s return | `Template.Error#annotatedSourceCode` | Server-side error pages render `.tse` excerpts        |
+
+All three are the TS-side analogue of Rails' single `translate_location`
+mechanism. They have to be three because each consumer (Node, tsc,
+template renderer) has its own map format.
+
+**`RenderContext` is module-augmentable.** Helper packages extend it
+via declaration merging so `context.linkTo(...)` typechecks once
+`@blazetrails/actionview/helpers/url` is imported:
+
+```ts
+// @blazetrails/actionview/helpers/url/types.d.ts
+declare module "@blazetrails/actionview" {
+  interface RenderContext {
+    linkTo(name: string, path: string, options?: LinkToOptions): SafeString;
+    urlFor(target: UrlTarget): string;
+  }
+}
+```
+
+Same shape as ActiveRecord scope augmentation. Apps register custom
+helpers the same way.
+
+**`TemplateRegistry` is augmentable across packages.** The generated
+`views-manifest.ts` declares:
+
+```ts
+declare module "@blazetrails/actionview" {
+  interface TemplateRegistry {
+    "users/show.html": typeof import("./views/users/show.html.tse").default;
+    "users/show.json": typeof import("./views/users/show.html.tse").default;
+    // ... one entry per .tse file
+  }
+}
+```
+
+Engines (gems-equivalent) can ship their own manifest fragment so a
+parent app sees the union — matches Rails' multi-engine view-path lookup.
+
+**Strict-mode cleanliness.** Emitted `.tse.ts` and `.tse.js` must pass
+under `strict: true`, `noUncheckedIndexedAccess: true`, and
+`exactOptionalPropertyTypes: true`. Key consequences for the emitter:
+
+- Locals access must use `locals.name` with the declared type, not
+  `(locals as any).name`.
+- `<%# locals: {} %>` emits parameter type `Record<never, never>`
+  (excess-property check). Implicit `unknown` locals (no magic block)
+  emits `Record<string, unknown>` so indexed access is type-safe.
+- Output buffer must not be `undefined` at any point — guarantee by
+  construction (always assigned before first `safeAppend`).
+- Block helpers' callback types must be inferable from the helper
+  signature, not the call site (the emitter can't synthesize them).
+
+**`verbatimModuleSyntax` / `erasableSyntaxOnly`.** Emitted `.tse.ts`
+uses only erasable syntax (`import type` for types, no `enum`, no
+namespaces). Lets users with strict-strip configs (Bun, Deno, ts-blank-space)
+consume `.tse.ts` directly if they bypass our build.
+
+**`package.json#exports` for shipping `.tse` to npm:**
+
+```json
+{
+  "exports": {
+    "./views/*.tse": {
+      "types": "./.trails/views/*.tse.d.ts",
+      "default": "./.trails/views/*.tse.js"
+    }
+  }
+}
+```
+
+The conditional export ensures tsc reads the `.d.ts` and Node/bundlers
+read the `.js`. Without `types` first, tsc would fall back to inferring
+from the JS, losing locals typing.
+
+**Build ordering for CI.** Because `.tse.ts` is generated, CI must run
+`trails-tsc build` before `tsc --noEmit`. Documented in the generated
+GitHub Actions workflow + `pnpm prepare` hook. (Same constraint as
+gRPC-codegen or Prisma-client-generate flows — common pattern, just
+needs a callout so it doesn't surprise people.)
+
 ---
 
 ## 3. 1-for-1 API mapping
@@ -626,6 +793,29 @@ Rails main).
 - [ ] `<%! format: "..." !%>` override honored when present.
 - [ ] `escapeIgnoreList` consulted via parsed format, not filename string
       match.
+
+**TypeScript artifacts** (see §2.9):
+
+- [ ] `.tse.ts`, `.tse.js`, `.tse.js.map`, `.tse.d.ts`, `.tse.d.ts.map`
+      all emitted for every `.tse` source.
+- [ ] `.d.ts.map` makes Go-to-Definition jump to `.tse` (not `.tse.ts`).
+- [ ] `.tse.js.map` makes runtime stack traces report `.tse:line:col`.
+- [ ] Ambient `declare module "*.tse"` shipped in
+      `@blazetrails/actionview` so imports typecheck before first build.
+- [ ] Emitted `.tse.ts` clean under `strict`,
+      `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`.
+- [ ] Emitted `.tse.ts` uses only erasable syntax (passes
+      `verbatimModuleSyntax`).
+- [ ] `RenderContext` declared as an `interface` (augmentable), not a
+      `type` alias.
+- [ ] `TemplateRegistry` interface in `@blazetrails/actionview`;
+      generated manifest augments it via `declare module`.
+- [ ] `package.json#exports` for `*.tse` lists `"types"` before
+      `"default"` so tsc picks the `.d.ts`.
+- [ ] `tsconfig` template enables `allowArbitraryExtensions` and the
+      `@blazetrails/trails-tsc/ts-plugin` plugin.
+- [ ] `trails-tsc build` is a `pnpm prepare` dependency so fresh clones
+      typecheck without manual steps.
 
 When all boxes are checked and `api:compare` / `test:compare` show
 non-negative deltas, the corresponding implementation PR is mergeable.

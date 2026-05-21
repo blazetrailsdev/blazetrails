@@ -1111,10 +1111,7 @@ export function highPrecisionCurrentTimestamp(): Nodes.SqlLiteral {
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#type_casted_binds
  */
-export function typeCastedBinds(
-  binds: unknown[] | undefined,
-  typeCast?: (value: unknown) => unknown,
-): unknown[] {
+export function typeCastedBinds(binds: unknown[] | undefined): unknown[] {
   return (binds ?? []).map((b: any) => {
     // Rails: `ActiveModel::Attribute === value ? type_cast(value.value_for_database) : type_cast(value)`
     // valueForDatabase is a getter on real Attribute instances; handle both getter and
@@ -1126,7 +1123,7 @@ export function typeCastedBinds(
     } else {
       v = b && typeof b === "object" && "value" in b ? b.value : b;
     }
-    return typeCast ? typeCast(v) : temporalToBindString(v);
+    return temporalToBindString(v);
   });
 }
 

@@ -703,7 +703,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // Type-cast bind objects (QueryAttribute) → primitives, then run each
     // through `_bindForPg` for Temporal / BinaryData normalization before
     // pg sees them.
-    const bindArray = typeCastedBinds(binds, (v) => this._bindForPg(v));
+    const bindArray = typeCastedBinds(binds).map((v) => this._bindForPg(v));
     const rewritten = this.rewriteBinds(sql, bindArray);
     this._noticeReceiverSqlWarnings = [];
     const payload: Record<string, unknown> = {
@@ -1114,7 +1114,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     name: string,
     binds: unknown[],
   ): Promise<Result> {
-    const bindArray = typeCastedBinds(binds, (v) => this._bindForPg(v));
+    const bindArray = typeCastedBinds(binds).map((v) => this._bindForPg(v));
     const rewritten = this.rewriteBinds(sql, bindArray);
     this._noticeReceiverSqlWarnings = [];
     const payload: Record<string, unknown> = {

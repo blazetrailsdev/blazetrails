@@ -97,14 +97,11 @@ export class AuthenticationGenerator extends GeneratorBase {
   }
 
   private emit(file: string, name: string, ext: Ref | undefined, body: Method[]): void {
-    this.createFile(
-      file,
-      tsModule({ declarations: [tsClass({ name, ...(ext ? { extends: ext } : {}), body })] }),
-    );
+    const cls = tsClass({ name, ...(ext ? { extends: ext } : {}), body });
+    this.createFile(file, tsModule({ declarations: [cls] }));
   }
 
-  // Anchored on the class declaration (not a stray "}") and idempotent —
-  // Rails' inject_into_class isn't, but a duplicate TS `import` is a syntax error.
+  // Anchored on the class declaration; idempotent (a duplicate TS import would be a syntax error).
   private configureApplicationController(): void {
     const file = "src/app/controllers/application-controller.ts";
     if (!this.fileExists(file)) return;
@@ -113,31 +110,22 @@ export class AuthenticationGenerator extends GeneratorBase {
     if (src.includes("Authentication.includeInto(this)")) return;
     const m = src.match(/export\s+class\s+ApplicationController\b[^{]*\{/);
     if (!m || m.index === undefined) return;
-    const hasImport =
-      /import\s*\{[^}]*\bAuthentication\b[^}]*\}\s*from\s*["']\.\/concerns\/authentication\.js["']/.test(
-        src,
-      );
-    const prefix = hasImport
-      ? ""
-      : `import { Authentication } from "./concerns/authentication.js";\n`;
+    // Detect any existing `Authentication` named import, regardless of specifier.
+    const hasImport = /import\s*\{[^}]*\bAuthentication\b[^}]*\}\s*from\s*["'][^"']+["']/.test(src);
     const at = m.index + m[0].length;
-    src =
-      prefix +
-      src.slice(0, at) +
-      `\n  static {\n    Authentication.includeInto(this);\n  }` +
-      src.slice(at);
+    src = (hasImport ? "" : AUTH_IMPORT) + src.slice(0, at) + STATIC_INIT + src.slice(at);
     this.fs.writeFileSync(full, src);
     this.output(`      inject  ${file}`);
   }
 
-  // Each route checked independently so a partially-configured app still
-  // ends up with the missing one(s).
+  // Each route checked independently so a partial pre-existing config converges.
   private configureAuthenticationRoutes(): void {
     for (const f of ["src/config/routes.ts", "src/config/routes.js"]) {
       if (!this.fileExists(f)) continue;
       const src = this.fs.readFileSync(this.path.join(this.cwd, f), "utf-8");
       const lines: string[] = [];
-      if (!src.includes('router.resources("passwords"'))
+      // Match `param: "token"` so a token-less pre-existing declaration is still augmented.
+      if (!/router\.resources\("passwords"[^)]*param:\s*"token"/.test(src))
         lines.push(`  router.resources("passwords", { param: "token" });`);
       if (!src.includes('router.resource("session")')) lines.push(`  router.resource("session");`);
       if (lines.length) this.insertIntoFile(f, "// routes", lines.join("\n") + "\n");
@@ -146,8 +134,7 @@ export class AuthenticationGenerator extends GeneratorBase {
   }
 }
 
-// `includeInto` only wires hooks; full instance-method mixin semantics
-// arrive when actionpack ships its include() primitive.
+// includeInto only wires hooks; full mixin semantics arrive with actionpack.
 const AUTH_CONCERN_METHODS: Method[] = [
   tsMethod({
     name: "includeInto",
@@ -188,6 +175,9 @@ function stub(name: string, comment: string, opts: StubOpts = {}): Method {
 function asyncStub(name: string, comment: string, opts: StubOpts = {}): Method {
   return stub(name, comment, { ...opts, async: true });
 }
+
+const AUTH_IMPORT = `import { Authentication } from "./concerns/authentication.js";\n`;
+const STATIC_INIT = `\n  static {\n    Authentication.includeInto(this);\n  }`;
 
 const RESET_HTML = `<p>
   You can reset your password within the next 15 minutes on

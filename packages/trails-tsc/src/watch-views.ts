@@ -72,6 +72,10 @@ export function watchViews(opts: WatchViewsOptions = {}): WatchHandle {
   } catch {
     watcher = tryWatch(false);
   }
+  // `fs.watch` can emit `error` after creation (dir removed, perms
+  // revoked, EMFILE). Without a listener it becomes an unhandled
+  // exception that crashes `dev`. Surface it through `onError`.
+  watcher.on("error", (err) => opts.onError?.(err instanceof Error ? err : new Error(String(err))));
 
   return {
     close() {

@@ -95,7 +95,13 @@ export function init(modules: { typescript: typeof ts }): {
 
       host.getScriptSnapshot = (p) => {
         if (!p.endsWith(".tse")) return origGetSnapshot(p);
-        const raw = readTseSource(p, "utf8");
+        // Prefer the host's snapshot — in tsserver/IDE contexts it holds
+        // unsaved editor buffer text, which is the source of truth. Only
+        // fall back to filesystem when the host has no snapshot yet (e.g.
+        // first lookup before the file is opened in the editor).
+        const orig = origGetSnapshot(p);
+        const raw =
+          orig !== undefined ? orig.getText(0, orig.getLength()) : readTseSource(p, "utf8");
         return raw === undefined ? undefined : tsLib.ScriptSnapshot.fromString(virtualize(raw));
       };
 

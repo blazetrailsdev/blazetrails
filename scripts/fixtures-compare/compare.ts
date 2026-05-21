@@ -48,6 +48,10 @@ export function stripErb(text: string): { rendered: string; unsupported: boolean
   return { rendered, unsupported: /<%[=#]?[^%]*%>/.test(rendered) };
 }
 
+// Exported under a `*ForTest` alias so the test suite can pin parsing
+// fidelity (merge keys, `_fixture.ignore`, list-form auto-labels, `$LABEL`)
+// without going through `main()`. Internal callers still use `loadRailsYaml`.
+export { loadRailsYaml as loadRailsYamlForTest };
 // prettier-ignore
 function loadRailsYaml(file: string, basename: string): { ok: true; data: FixtureMap } | { ok: false; reason: Status } {
   const raw = readFileSync(file, "utf8");
@@ -78,15 +82,12 @@ function loadRailsYaml(file: string, basename: string): { ok: true; data: Fixtur
     });
     entries = flat;
   } else entries = Object.entries(parsed as Record<string, unknown>);
-  // Rails reserves `_fixture` (carries `model_class` / `ignore` metadata for
-  // `set_fixture_class`) and YAML anchor blocks like `DEFAULTS` (merged into
-  // rows via `<<: *DEFAULTS`); neither is a fixture row. The `_fixture.ignore`
-  // key further suppresses anchor blocks the user gave a non-DEFAULTS name
-  // (e.g. `_fixture: { ignore: DEAD_PARROT }`).
+  // `_fixture` is the only YAML metadata key Rails reserves at parse time
+  // (carries `model_class` / `ignore` for `set_fixture_class`). Anchor labels
+  // like `DEFAULTS` (`&NAME`) are *still real fixture rows* — Rails inserts
+  // them unless they're explicitly listed in `_fixture.ignore` (e.g.
+  // `_fixture: { ignore: DEAD_PARROT }` skips only the DEAD_PARROT anchor).
   const meta = (parsed as Record<string, unknown>)._fixture;
-  // Only `_fixture` is a YAML metadata key; `DEFAULTS` and other anchor
-  // labels (`&NAME`) are still real fixture rows that Rails inserts unless
-  // they're listed in `_fixture.ignore` (e.g. `ignore: DEAD_PARROT`).
   const ignored = new Set<string>(["_fixture"]);
   if (meta && typeof meta === "object" && "ignore" in meta) {
     const ig = (meta as { ignore: unknown }).ignore;
@@ -230,17 +231,24 @@ export function schemaCheck(
  * polymorphic. HABTM keys (`treasures: diamond, sapphire`) populate a join table,
  * not a column on the host row. The TS side encodes the materialized FK columns
  * directly. Rewrite the Rails row to canonical TS shape so the per-attr diff
- * doesn't drown in shorthand-vs-canonical noise: drop association keys whose
- * `_id` counterpart isn't on either side (HABTM-like), and expand the rest.
+ * doesn't drown in shorthand-vs-canonical noise.
+ *
+ * Without schema (`columns === null`, i.e. table not yet ported in TEST_SCHEMA)
+ * we can't tell HABTM from a real column the TS side dropped, so we *preserve*
+ * unknown Rails keys verbatim — the downstream per-attr pass surfaces them as
+ * `missing-in-ts` drift instead of silently dropping them. Only when we have a
+ * column list AND the `_id` form is missing do we drop the key as HABTM-like.
  */
 // prettier-ignore
 export function canonicalizeRailsRow(railsRow: Row, tsRow: Row, columns: Set<string> | null): Row {
   const out: Row = {};
-  const knows = (k: string): boolean => columns ? columns.has(k) : k in tsRow;
+  const known = (k: string): boolean => columns ? columns.has(k) : k in tsRow;
+  const hasIdForm = (k: string): boolean =>
+    columns ? columns.has(`${k}_id`) : `${k}_id` in tsRow;
   for (const [k, v] of Object.entries(railsRow)) {
-    if (knows(k)) { out[k] = v; continue; } // prettier-ignore
-    const idKey = `${k}_id`;
-    if (knows(idKey)) {
+    if (known(k)) { out[k] = v; continue; } // prettier-ignore
+    if (hasIdForm(k)) {
+      const idKey = `${k}_id`;
       if (typeof v === "string") {
         const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(v);
         if (m) { out[idKey] = m[1]; out[`${k}_type`] = m[2]; }
@@ -248,9 +256,10 @@ export function canonicalizeRailsRow(railsRow: Row, tsRow: Row, columns: Set<str
       } else out[idKey] = v as Row[string];
       continue;
     }
-    // Drop: HABTM association (e.g. `treasures: diamond, sapphire`) or a
-    // belongs_to whose host model isn't in the schema yet. Either way the
-    // value isn't a column on this table — comparing it would falsely flag.
+    // With a schema: drop as HABTM / unknown association (won't be a column on
+    // this table). Without a schema: keep verbatim so the downstream attr-diff
+    // can surface "missing-in-ts: <k>" — silently dropping would mask drift.
+    if (!columns) out[k] = v;
   }
   return out;
 }

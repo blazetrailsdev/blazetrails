@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 // prettier-ignore
 import { stripErb, isRefLike, compareValue, compareFile, schemaCheck, canonicalizeRailsRow } from "./compare.js";
 import type { Schema } from "../../packages/activerecord/src/test-helpers/define-schema.js";
@@ -148,11 +148,59 @@ describe("canonicalizeRailsRow", () => {
   it("drops keys whose `_id` form isn't a column (HABTM / unknown assoc)", () => {
     expect(canonicalizeRailsRow({ treasures: "diamond, sapphire" }, {}, cols)).toEqual({});
   });
-  it("falls back to tsRow keys when no schema columns are available", () => {
+  it("falls back to tsRow keys when no schema columns are available, preserving unknown Rails keys", () => {
+    // Without schema we can't distinguish HABTM from a column the TS side
+    // dropped, so an unknown Rails key must survive to be flagged as
+    // `missing-in-ts` downstream — not silently dropped.
     expect(canonicalizeRailsRow({ pirate: "x" }, { pirate_id: 1 }, null)).toEqual({
       pirate_id: "x",
     });
-    expect(canonicalizeRailsRow({ pirate: "x" }, {}, null)).toEqual({});
+    expect(canonicalizeRailsRow({ company: "acme" }, {}, null)).toEqual({ company: "acme" });
+  });
+});
+
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { loadRailsYamlForTest } from "./compare.js";
+describe("loadRailsYaml (parsing fidelity)", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "fixtures-compare-"));
+  const write = (basename: string, contents: string): string => {
+    const p = join(tmp, `${basename}.yml`);
+    writeFileSync(p, contents);
+    return p;
+  };
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it("expands `<<: *ANCHOR` merge keys (yaml `merge: true`)", () => {
+    const r = loadRailsYamlForTest(
+      write("merge", "DEFAULTS: &D\n  color: red\nrow1:\n  <<: *D\n  name: x\n"),
+      "merge",
+    );
+    expect(r).toEqual({ ok: true, data: { DEFAULTS: { color: "red" }, row1: { color: "red", name: "x" } } }); // prettier-ignore
+  });
+
+  it("strips `_fixture` metadata and honors `_fixture.ignore`", () => {
+    const r = loadRailsYamlForTest(
+      write("ig", "_fixture:\n  ignore: SKIP_ME\nSKIP_ME:\n  x: 1\nkeep:\n  y: 2\n"),
+      "ig",
+    );
+    expect(r).toEqual({ ok: true, data: { keep: { y: 2 } } });
+  });
+
+  it("auto-labels list-form fixtures as `<basename>_<index>`", () => {
+    const r = loadRailsYamlForTest(write("list", "- name: Foo\n- name: Bar\n"), "list");
+    expect(r).toEqual({ ok: true, data: { list_0: { name: "Foo" }, list_1: { name: "Bar" } } });
+  });
+
+  it("interpolates `$LABEL` to the row name on scalar string values", () => {
+    const r = loadRailsYamlForTest(write("lab", "polly:\n  name: $LABEL\n  breed: $LABEL bird\n"), "lab"); // prettier-ignore
+    expect(r).toEqual({ ok: true, data: { polly: { name: "polly", breed: "polly bird" } } });
+  });
+
+  it("returns ERB-UNSUPPORTED for ERB other than the adapter_name stub", () => {
+    const r = loadRailsYamlForTest(write("erb", "<% 3.times do %>x: 1<% end %>\n"), "erb");
+    expect(r).toEqual({ ok: false, reason: "ERB-UNSUPPORTED" });
   });
 });
 

@@ -428,7 +428,7 @@ ceiling) and PR 7 (granted ceiling waiver — see entry).
 2. **Schema port lands as PR 0.5 (split into sibling PRs).**
    `vendor/rails/activerecord/test/schema/schema.rb` is 1462 LOC; the TS
    port is ~2200 LOC, well past the 300-LOC ceiling. Splits as
-   `0.5a` … `0.5h` (rough), sibling branches from `main` with
+   `0.5a` … `0.5g` (came in at 7 slots; original estimate was 6–8), sibling branches from `main` with
    non-overlapping table groups, merged in any order. The final
    split-suffix PR wires `test-schema.ts` into
    `setup-adapter-suite.ts`. Every fixture PR after that assumes the

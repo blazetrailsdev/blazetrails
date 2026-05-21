@@ -27,9 +27,18 @@ describe("DevcontainerGeneratorTest", () => {
     expect(exists(".devcontainer/Dockerfile")).toBe(true);
     expect(exists(".devcontainer/devcontainer.json")).toBe(true);
   });
+  it("test_active_storage_option_default", () => {
+    run();
+    expect(features()).toHaveProperty("ghcr.io/rails/devcontainer/features/activestorage");
+  });
   it("test_active_storage_option_skip", () => {
     run({ activeStorage: false });
     expect(features()).not.toHaveProperty("ghcr.io/rails/devcontainer/features/activestorage");
+  });
+  it("test_app_name_option_default", () => {
+    run();
+    expect(dc().name).toBe("rails_app");
+    expect(cm().name).toBe("rails_app");
   });
   it("test_app_name_option", () => {
     run({ appName: "my-TestApp_name" });
@@ -70,10 +79,18 @@ describe("DevcontainerGeneratorTest", () => {
     expect(features()).toHaveProperty("ghcr.io/rails/devcontainer/features/postgres-client");
     expect(dc().forwardPorts).toContain(5432);
   });
+  it("test_dev_option_default", () => {
+    run();
+    expect(dc().mounts).toBeUndefined();
+  });
   it("test_dev_option", () => {
     run({ dev: true });
     const m = (dc().mounts as Array<Record<string, string>>)[0];
     expect(m).toEqual({ type: "bind", source: TRAILS_DEV_PATH, target: TRAILS_DEV_PATH });
+  });
+  it("test_node_option_default", () => {
+    run();
+    expect(features()).not.toHaveProperty("ghcr.io/devcontainers/features/node:1");
   });
   it("test_node_option", () => {
     run({ node: true });
@@ -95,6 +112,11 @@ describe("DevcontainerGeneratorTest", () => {
     expect(services()["rails-app"].depends_on ?? []).not.toContain("redis");
     expect(services().redis).toBeUndefined();
     expect(dc().forwardPorts).not.toContain(6379);
+  });
+  it("test_kamal_option_default", () => {
+    run();
+    expect(features()).toHaveProperty("ghcr.io/devcontainers/features/docker-outside-of-docker:1");
+    expect(env().KAMAL_REGISTRY_PASSWORD).toBe("$KAMAL_REGISTRY_PASSWORD");
   });
   it("test_kamal_option_skip", () => {
     run({ kamal: false });

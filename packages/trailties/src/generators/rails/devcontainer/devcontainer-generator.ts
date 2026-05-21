@@ -1,7 +1,4 @@
 // Mirrors railties/lib/rails/generators/rails/devcontainer/devcontainer_generator.rb.
-// compose.yaml / devcontainer.json are emitted as JSON syntax (YAML 1.2
-// is a strict superset of JSON; Compose accepts it). Dockerfile is raw.
-
 import { GeneratorBase, type GeneratorOptions } from "../../base.js";
 import { Database, DATABASES, type DatabaseName } from "../../database.js";
 
@@ -52,7 +49,10 @@ export class DevcontainerGenerator extends GeneratorBase {
 
   run(): string[] {
     this.createFile(".devcontainer/devcontainer.json", this.devcontainerJson());
-    this.createFile(".devcontainer/Dockerfile", this.dockerfile());
+    this.createFile(
+      ".devcontainer/Dockerfile",
+      `ARG NODE_VERSION=${this.opts.nodeVersion}\nFROM mcr.microsoft.com/devcontainers/javascript-node:1-\${NODE_VERSION}\n`,
+    );
     this.createFile(".devcontainer/compose.yaml", this.composeYaml());
     this.gsubFile(
       "test/application_system_test_case.ts",
@@ -77,30 +77,41 @@ export class DevcontainerGenerator extends GeneratorBase {
   }
 
   private devcontainerJson(): string {
-    const { dev, appName } = this.opts;
-    const env = this.containerEnv();
+    const { appName, dev, systemTest, redis, activeStorage, node, kamal } = this.opts;
+    const features: JsonObject = { "ghcr.io/devcontainers/features/github-cli:1": {} };
+    if (activeStorage) features["ghcr.io/rails/devcontainer/features/activestorage"] = {};
+    if (node) features["ghcr.io/devcontainers/features/node:1"] = {};
+    if (kamal) features["ghcr.io/devcontainers/features/docker-outside-of-docker:1"] = {};
+    const includeDb =
+      this.opts.database !== "sqlite3" || this.opts.sqliteDriver === "better-sqlite3";
+    if (this.database.feature && includeDb) Object.assign(features, this.database.feature);
+
+    const env: Record<string, string> = {};
+    if (systemTest)
+      Object.assign(env, { CAPYBARA_SERVER_PORT: "45678", SELENIUM_HOST: "selenium" });
+    if (redis) env.REDIS_URL = "redis://redis:6379/1";
+    if (kamal) env.KAMAL_REGISTRY_PASSWORD = "$KAMAL_REGISTRY_PASSWORD";
+    if (this.database.service) env.DB_HOST = this.database.name;
+    const ports: number[] = [3000];
+    if (this.database.port) ports.push(this.database.port);
+    if (redis) ports.push(6379);
     const json: JsonObject = {
       name: appName,
       dockerComposeFile: "compose.yaml",
       service: "rails-app",
       workspaceFolder: "/workspaces/${localWorkspaceFolderBasename}",
-      features: this.features(),
+      features,
     };
     if (Object.keys(env).length > 0) json.containerEnv = env;
-    json.forwardPorts = this.forwardPorts();
+    json.forwardPorts = ports;
     if (dev) json.mounts = [{ type: "bind", source: TRAILS_DEV_PATH, target: TRAILS_DEV_PATH }];
     json.postCreateCommand = "bin/setup --skip-server";
     return JSON.stringify(json, null, 2) + "\n";
   }
 
-  private dockerfile(): string {
-    return `ARG NODE_VERSION=${this.opts.nodeVersion}\nFROM mcr.microsoft.com/devcontainers/javascript-node:1-\${NODE_VERSION}\n`;
-  }
-
   private composeYaml(): string {
     const { systemTest, redis, appName } = this.opts;
-    const dbName = this.database.name;
-    const dbService = this.database.service;
+    const { name: dbName, service: dbService, volume: dbVolume } = this.database;
     const deps: string[] = [];
     if (systemTest) deps.push("selenium");
     if (redis) deps.push("redis");
@@ -124,40 +135,9 @@ export class DevcontainerGenerator extends GeneratorBase {
     const yaml: JsonObject = { name: appName, services };
     const volumes: JsonObject = {};
     if (redis) volumes["redis-data"] = null;
-    if (this.database.volume) volumes[this.database.volume] = null;
+    if (dbVolume) volumes[dbVolume] = null;
     if (Object.keys(volumes).length > 0) yaml.volumes = volumes;
     return JSON.stringify(yaml, null, 2) + "\n";
-  }
-
-  private containerEnv(): Record<string, string> {
-    const env: Record<string, string> = {};
-    if (this.opts.systemTest) {
-      env.CAPYBARA_SERVER_PORT = "45678";
-      env.SELENIUM_HOST = "selenium";
-    }
-    if (this.opts.redis) env.REDIS_URL = "redis://redis:6379/1";
-    if (this.opts.kamal) env.KAMAL_REGISTRY_PASSWORD = "$KAMAL_REGISTRY_PASSWORD";
-    if (this.database.service) env.DB_HOST = this.database.name;
-    return env;
-  }
-
-  private features(): JsonObject {
-    const f: JsonObject = { "ghcr.io/devcontainers/features/github-cli:1": {} };
-    if (this.opts.activeStorage) f["ghcr.io/rails/devcontainer/features/activestorage"] = {};
-    if (this.opts.node) f["ghcr.io/devcontainers/features/node:1"] = {};
-    if (this.opts.kamal) f["ghcr.io/devcontainers/features/docker-outside-of-docker:1"] = {};
-    const dbf = this.database.feature;
-    const includeDb =
-      this.opts.database !== "sqlite3" || this.opts.sqliteDriver === "better-sqlite3";
-    if (dbf && includeDb) Object.assign(f, dbf);
-    return f;
-  }
-
-  private forwardPorts(): number[] {
-    const ports = [3000];
-    if (this.database.port) ports.push(this.database.port);
-    if (this.opts.redis) ports.push(6379);
-    return ports;
   }
 
   private systemTestConfiguration(): string {

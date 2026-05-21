@@ -30,8 +30,22 @@ import * as pgQuoting from "../connection-adapters/postgresql/quoting.js";
 import * as sqliteQuoting from "../connection-adapters/sqlite3/quoting.js";
 import { adapterType } from "../test-adapter.js";
 
-const _impl =
-  adapterType === "mysql" ? mysqlQuoting : adapterType === "postgres" ? pgQuoting : sqliteQuoting;
+function _selectImpl() {
+  switch (adapterType) {
+    case "mysql":
+      return mysqlQuoting;
+    case "postgres":
+      return pgQuoting;
+    case "sqlite":
+      return sqliteQuoting;
+    default: {
+      const _exhaustive: never = adapterType;
+      throw new Error(`quote-regex: unsupported adapterType ${String(_exhaustive)}`);
+    }
+  }
+}
+
+const _impl = _selectImpl();
 
 /** Active adapter's `quoteTableName(name)`. Handles dotted identifiers. */
 export const quoteTableName: (name: string) => string = _impl.quoteTableName;

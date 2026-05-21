@@ -165,7 +165,7 @@ describe("template-builder", () => {
     });
     expect(out).toContain(`// hand-rolled banner`);
     expect(out).toContain(`export interface Sub extends Base {`);
-    expect(out).toContain(`import { Base } from "./base.js";`);
+    expect(out).toContain(`import type { Base } from "./base.js";`);
     expect(parseTs(out).diagnostics).toEqual([]);
   });
 
@@ -193,6 +193,23 @@ describe("template-builder", () => {
     expect(out).toMatchSnapshot();
     expect(parseTs(out).diagnostics).toEqual([]);
     assertNoRubySource(out);
+  });
+
+  it("auto-imports type-only refs as 'import type' when never used as a value", () => {
+    const t = ref("Opts", "./opts.js");
+    const out = tsModule({
+      declarations: [tsInterface({ name: "I", body: [tsField("o", t)] })],
+    });
+    expect(out).toContain(`import type { Opts } from "./opts.js";`);
+  });
+
+  it("promotes a ref to a value import when any usage is in value position", () => {
+    const base = ref("Base", "./base.js");
+    const out = tsModule({
+      declarations: [tsClass({ name: "C", extends: base, body: [tsField("b", base)] })],
+    });
+    expect(out).toContain(`import { Base } from "./base.js";`);
+    expect(out).not.toContain(`import type`);
   });
 
   it("sanitizes JSDoc comments against terminator-injection", () => {

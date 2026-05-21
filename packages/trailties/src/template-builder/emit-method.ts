@@ -28,28 +28,37 @@ function emitJsDoc(comment: string): string {
   return `/**\n${lines.map((l) => `   * ${l}`).join("\n")}\n   */\n  `;
 }
 
-export function emitField(f: Field): { text: string; refs: Ref[] } {
+export interface EmitResult {
+  text: string;
+  valueRefs: Ref[];
+  typeRefs: Ref[];
+}
+
+export function emitField(f: Field): EmitResult {
   const t = emitType(f.type);
   const opt = f.nullable ? "?" : "";
   const init = f.initializer ? ` = ${f.initializer}` : "";
   const head = f.comment ? emitJsDoc(f.comment) : "";
-  return { text: `${head}${f.name}${opt}: ${t.text}${init};`, refs: t.refs };
+  return {
+    text: `${head}${f.name}${opt}: ${t.text}${init};`,
+    valueRefs: [],
+    typeRefs: t.refs,
+  };
 }
 
-export function emitMethod(m: Method): { text: string; refs: Ref[] } {
-  const refs: Ref[] = [];
+export function emitMethod(m: Method): EmitResult {
+  const typeRefs: Ref[] = [];
   const paramTexts = m.params.map((p) => {
     const t = emitType(p.type);
-    refs.push(...t.refs);
+    typeRefs.push(...t.refs);
     return `${p.name}: ${t.text}`;
   });
   let ret = "";
   if (m.returnType) {
     const t = emitType(m.returnType);
-    refs.push(...t.refs);
+    typeRefs.push(...t.refs);
     ret = `: ${t.text}`;
   }
-  refs.push(...m.body.refs);
   const indented = m.body.text
     .split("\n")
     .map((l) => (l ? `    ${l}` : ""))
@@ -57,6 +66,7 @@ export function emitMethod(m: Method): { text: string; refs: Ref[] } {
   const vis = m.visibility && m.visibility !== "public" ? `${m.visibility} ` : "";
   return {
     text: `  ${vis}${m.static ? "static " : ""}${m.async ? "async " : ""}${m.name}(${paramTexts.join(", ")})${ret} {\n${indented}\n  }`,
-    refs,
+    valueRefs: [...m.body.refs],
+    typeRefs,
   };
 }

@@ -7,7 +7,7 @@ export function tsImport<TNames extends string>(
 ): ImportResult<TNames> {
   const named: Record<string, string | "named"> = { ...names };
   const refs: Record<string, Ref> = {};
-  for (const alias in names) refs[alias] = ref(alias, from);
+  for (const alias of Object.keys(names)) refs[alias] = ref(alias, from);
   return { import: { from, named }, refs: refs as { [K in TNames]: Ref } };
 }
 

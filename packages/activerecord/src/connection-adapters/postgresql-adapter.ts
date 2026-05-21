@@ -1,5 +1,5 @@
 import pg from "pg";
-import { type Type, ValueType, ArgumentError, BinaryData } from "@blazetrails/activemodel";
+import { type Type, ValueType, ArgumentError } from "@blazetrails/activemodel";
 import {
   singularize,
   underscore,
@@ -2525,7 +2525,19 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * @internal
    */
   private _bindForPg(value: unknown): unknown {
-    if (value instanceof BinaryData) return this.typeCast(value);
+    // Duck-type BinaryData detection: instanceof would silently miss across
+    // module-identity splits (e.g. duplicated @blazetrails/activemodel copies
+    // in the dep tree), in which case the wrapper would slip past as a plain
+    // object and pg would JSON.stringify it. Checking the Uint8Array `bytes`
+    // shape directly is robust to that.
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      (value as { bytes?: unknown }).bytes instanceof Uint8Array &&
+      !(value instanceof Uint8Array)
+    ) {
+      return Buffer.from((value as { bytes: Uint8Array }).bytes);
+    }
     return temporalToBindString(value, "postgres");
   }
 

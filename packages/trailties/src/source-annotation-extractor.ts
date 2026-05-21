@@ -29,17 +29,10 @@ let directories: string[] = [...DEFAULT_DIRECTORIES];
 let tags: string[] = [...DEFAULT_TAGS];
 let extensions: Array<{ test: RegExp; builder: ExtensionBuilder }> = [];
 
-export function registerDirectories(...dirs: string[]): void {
-  directories.push(...dirs);
-}
-
-export function registerTags(...t: string[]): void {
-  tags.push(...t);
-}
-
-export function registerExtensions(exts: string[], builder: ExtensionBuilder): void {
-  extensions.push({ test: new RegExp(`\\.(${exts.join("|")})$`), builder });
-}
+export const registerDirectories = (...dirs: string[]): void => void directories.push(...dirs);
+export const registerTags = (...t: string[]): void => void tags.push(...t);
+export const registerExtensions = (exts: string[], builder: ExtensionBuilder): void =>
+  void extensions.push({ test: new RegExp(`\\.(${exts.join("|")})$`), builder });
 
 /** Test-only convenience: reset the directories/tags/extensions registries. */
 export function resetAnnotationRegistry(): void {
@@ -60,10 +53,8 @@ function registerDefaults(): void {
 registerDefaults();
 
 /**
- * Implements the logic behind the `trails notes` command. Ports
- * Rails::SourceAnnotationExtractor — only the regex-based PatternExtractor
- * path is implemented (no Prism/Ripper); a TS AST extractor that would
- * skip notes inside string literals is left for a follow-up.
+ * Ports Rails::SourceAnnotationExtractor. Regex-based PatternExtractor only;
+ * a string-literal-aware AST extractor is left for a follow-up.
  */
 export class SourceAnnotationExtractor {
   static async enumerate(
@@ -79,9 +70,7 @@ export class SourceAnnotationExtractor {
 
   async find(dirs: readonly string[]): Promise<Map<string, Annotation[]>> {
     const merged = new Map<string, Annotation[]>();
-    for (const dir of dirs) {
-      for (const [k, v] of await this.findIn(dir)) merged.set(k, v);
-    }
+    for (const dir of dirs) for (const [k, v] of await this.findIn(dir)) merged.set(k, v);
     return merged;
   }
 
@@ -107,9 +96,7 @@ export class SourceAnnotationExtractor {
 
   display(results: Map<string, Annotation[]>, options: AnnotationOptions = {}): string {
     let maxLine = 0;
-    for (const arr of results.values()) {
-      for (const a of arr) if (a.line > maxLine) maxLine = a.line;
-    }
+    for (const arr of results.values()) for (const a of arr) if (a.line > maxLine) maxLine = a.line;
     const indent = String(maxLine).length;
     const lines: string[] = [];
     for (const file of [...results.keys()].sort()) {

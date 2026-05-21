@@ -1,7 +1,6 @@
-// Port of `Rails::Application` from `railties/lib/rails/application.rb`.
-// PR 2.5c adds routesReloader/configFor/credentials/encrypted/
-// keyGenerator/messageVerifier. Skipped methods are listed in
-// docs/trailties-plan.md.
+// Port of `Rails::Application`. PR 2.5c adds routesReloader/configFor/
+// credentials/encrypted/keyGenerator/messageVerifier. Skipped methods
+// listed in docs/trailties-plan.md.
 import {
   dasherize,
   EncryptedFile,
@@ -108,12 +107,12 @@ export class Application extends Engine {
     return (this._routesReloader ??= new RoutesReloader());
   }
 
-  /** Explicit `config.secretKeyBase` wins, else `SECRET_KEY_BASE` env. */
+  /** `config.secretKeyBase` wins, else `SECRET_KEY_BASE` env. */
   secretKeyBase(): string | null {
     return cfgOf(this).secretKeyBase ?? getEnv("SECRET_KEY_BASE") ?? null;
   }
 
-  /** 1000 iterations match Rails for cookie/signed-id compatibility. */
+  /** 1000 iterations match Rails for cookie compatibility. */
   keyGenerator(secret: string | null = this.secretKeyBase()): CachingKeyGenerator {
     if (secret === null) throw new Error("Missing secret_key_base.");
     let gen = this._keyGenerators.get(secret);
@@ -124,8 +123,10 @@ export class Application extends Engine {
     return gen;
   }
 
+  /** Raw 64-byte derived key — Rails feeds `generate_key(salt)` bytes to
+   * HMAC, not hex; required for signed-cookie compatibility. */
   messageVerifier(name: string): MessageVerifier {
-    return new MessageVerifier(this.keyGenerator().generateKey(name, 32).toString("hex"));
+    return new MessageVerifier(this.keyGenerator().generateKey(name));
   }
 
   async credentials(): Promise<EncryptedFile> {
@@ -151,8 +152,7 @@ export class Application extends Engine {
     });
   }
 
-  /** Trails divergence: only `"database"` is supported — dynamic `import()`
-   * of `config/database.{ts,js}`. No YAML; import other configs directly. */
+  /** Trails: only `"database"` — dynamic `import()` of config/database.{ts,js}. */
   async configFor(name: string, opts: { env?: string } = {}): Promise<DatabaseConfig> {
     if (name !== "database") {
       throw new Error(`configFor: only "database" is supported in trailties (got "${name}").`);
@@ -160,18 +160,17 @@ export class Application extends Engine {
     return loadDatabaseConfig(opts.env ?? resolveEnv(), await this.requireRoot());
   }
 
-  /** @internal */
   private async requireRoot(): Promise<string> {
     return (await this.root()) ?? (await getFsAsync()).cwd();
   }
 }
 
-interface AppCfg {
+type AppCfg = {
   secretKeyBase?: string | null;
   credentials?: { contentPath?: string | null; keyPath?: string | null };
   requireMasterKey?: boolean;
-}
-const cfgOf = (app: Application): AppCfg => app.config as unknown as AppCfg;
+};
+const cfgOf = (app: Application): AppCfg => app.config as never;
 
 async function defaultCredentialPaths(
   root: string,

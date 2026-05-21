@@ -311,9 +311,8 @@ describe("Application::DefaultMiddlewareStack", () => {
   });
 });
 
-// Mirrors `railties/test/application/configuration_test.rb`
-// `test_key_generator`, `test_message_verifier`, and the
-// `routes_reloader` / `config_for` / `encrypted` / `credentials` cases.
+// Mirrors `railties/test/application/configuration_test.rb` cases for
+// key_generator / message_verifier / credentials / config_for / encrypted.
 describe("Application::Configuration (2.5c)", () => {
   it("credentials and secret_key_base default to null", () => {
     const c = new Configuration();
@@ -366,18 +365,18 @@ describe("Application key/message/credentials wiring", () => {
   });
 
   it("credentials prefers config/credentials/{env}.yml.enc + .key when present", async () => {
-    const base = "/app/config/credentials";
+    const b = "/app/config/credentials";
     installFs(
-      new Set(["/", "/app", "/app/config", base]),
-      new Set(["/app/config.ts", `${base}/development.yml.enc`, `${base}/development.key`]),
+      new Set(["/", "/app", "/app/config", b]),
+      new Set(["/app/config.ts", `${b}/development.yml.enc`, `${b}/development.key`]),
     );
     class A extends Application {}
     A.calledFrom("/app");
     Application.register(A);
     const file = await A.instance().credentials();
     expect([file.contentPath, file.keyPath]).toEqual([
-      `${base}/development.yml.enc`,
-      `${base}/development.key`,
+      `${b}/development.yml.enc`,
+      `${b}/development.key`,
     ]);
   });
 });

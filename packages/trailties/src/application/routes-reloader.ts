@@ -21,11 +21,12 @@ export class RoutesReloader {
   runAfterLoadPaths: () => void | Promise<void> = () => {};
 
   async reload(loader: (path: string) => void | Promise<void> = () => {}): Promise<void> {
-    for (const s of this.routeSets) {
-      s.disableClearAndFinalize = true;
-      s.clear?.();
-    }
+    // Rails' `ensure revert` in `def reload!` covers `clear!` too.
     try {
+      for (const s of this.routeSets) {
+        s.disableClearAndFinalize = true;
+        s.clear?.();
+      }
       for (const p of this.paths) await loader(p);
       await this.runAfterLoadPaths();
       for (const s of this.routeSets) s.finalize?.();

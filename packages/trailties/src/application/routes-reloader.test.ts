@@ -4,22 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onLoad, resetLoadHooks } from "@blazetrails/activesupport";
 import { RoutesReloader, type RouteSetLike } from "./routes-reloader.js";
 
-type Counted = RouteSetLike & { clearCalls: number; finalizeCalls: number; eagerLoadCalls: number };
-const makeRouteSet = (): Counted => ({
-  disableClearAndFinalize: false,
-  clearCalls: 0,
-  finalizeCalls: 0,
-  eagerLoadCalls: 0,
-  clear() {
-    (this as Counted).clearCalls += 1;
-  },
-  finalize() {
-    (this as Counted).finalizeCalls += 1;
-  },
-  eagerLoad() {
-    (this as Counted).eagerLoadCalls += 1;
-  },
-});
+type Counted = RouteSetLike & { calls: string[] };
+const makeRouteSet = (): Counted => {
+  const r: Counted = { disableClearAndFinalize: false, calls: [] };
+  r.clear = () => void r.calls.push("clear");
+  r.finalize = () => void r.calls.push("finalize");
+  r.eagerLoad = () => void r.calls.push("eagerLoad");
+  return r;
+};
 
 describe("RoutesReloader", () => {
   beforeEach(() => resetLoadHooks());
@@ -40,7 +32,7 @@ describe("RoutesReloader", () => {
     await r.reload((p) => void loaded.push(p));
     expect(loaded).toEqual(["/routes-a", "/routes-b"]);
     expect(after).toHaveBeenCalledOnce();
-    expect([a.clearCalls, a.finalizeCalls, a.eagerLoadCalls]).toEqual([1, 1, 1]);
+    expect(a.calls).toEqual(["clear", "finalize", "eagerLoad"]);
     expect(a.disableClearAndFinalize).toBe(false);
   });
 

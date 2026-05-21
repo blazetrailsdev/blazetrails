@@ -38,7 +38,11 @@ export interface BootstrapHost {
   config: BootstrapConfig;
 }
 
-export class Bootstrap extends Initializable {}
+export abstract class Bootstrap extends Initializable implements BootstrapHost {
+  abstract logger: Logger | null;
+  abstract cache: CacheStore | null;
+  abstract config: BootstrapConfig;
+}
 
 Bootstrap.initializer("load_environment_config", { group: "all" }, function () {
   // Empty placeholder. Rails loads `config/environments/*.rb` here; trailties

@@ -1,7 +1,8 @@
 /**
  * No-op Logger — discards all output while honoring the Logger interface
  * (level filtering, silence blocks, tagged logging). Used as a safe default
- * before applications wire up real logging (e.g. `Trails.logger` pre-init).
+ * before an application wires up real logging (e.g. as the fallback in
+ * `Application::Bootstrap`'s `:initialize_logger` initializer).
  *
  * `add` / `log` short-circuit to avoid formatter calls and
  * `Temporal.Now.instant()` allocations on the boot hot path; level

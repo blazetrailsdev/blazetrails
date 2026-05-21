@@ -77,7 +77,11 @@ jobs:
           # here affects all packages: workspace topology, root tooling
           # config, shared scripts, this workflow, composite actions.
           INFRA_RE='^(pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|tsconfig[^/]*\.json$|vitest[^/]*\.config\.ts$|scripts/|\.github/workflows/ci\.yml$|\.github/actions/)'
-          AR_PKGS_RE='^packages/(activerecord|arel|activemodel|activesupport|globalid|did-you-mean)/'
+          # AR consumes @blazetrails/trails-tsc at runtime via the tsc-wrapper
+          # CLI + type-virtualization modules (see packages/activerecord/src/
+          # tsc-wrapper, schema-columns-dump.test.ts), so trails-tsc changes
+          # can fail AR vitest suites — include it in the gate.
+          AR_PKGS_RE='^packages/(activerecord|arel|activemodel|activesupport|globalid|did-you-mean|trails-tsc)/'
           # actionpack_affected gates actionpack-tests. True for actionpack +
           # its runtime deps (actionview/activemodel/activesupport/rack/did-you-mean).
           AP_PKGS_RE='^packages/(actionpack|actionview|activemodel|activesupport|rack|did-you-mean)/'
@@ -87,7 +91,7 @@ jobs:
           # trailties_affected gates trailties-tests. Trailties consumes
           # actionpack/actionview/activerecord/rack/activesupport, so any of
           # their workspace upstreams also flips this on.
-          TRAILTIES_PKGS_RE='^packages/(trailties|actionpack|actionview|activerecord|arel|activemodel|activesupport|globalid|rack|did-you-mean)/'
+          TRAILTIES_PKGS_RE='^packages/(trailties|actionpack|actionview|activerecord|arel|activemodel|activesupport|globalid|rack|did-you-mean|trails-tsc)/'
           # trails_tsc_affected gates the virtualized DX type tests, which
           # are activerecord's only consumer of @blazetrails/trails-tsc.
           TRAILS_TSC_PKGS_RE='^packages/trails-tsc/'

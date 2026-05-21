@@ -172,12 +172,14 @@ function dockerPackages(base: string[], extra: string | undefined): string {
 }
 
 function dockerPackagesRegex(base: string[], pick: (d: Database) => string | undefined): RegExp {
-  // Sort by descending length so the longest match wins. JS regex alternation
-  // is first-match (not longest-match), so shorter prefixes like the
-  // base-only "build-essential git" would otherwise truncate a longer match
-  // like "build-essential git libpq-dev".
+  // Mirrors railties change_generator.rb: each alternation arm is wrapped in
+  // \b boundaries so the package list only matches as a whole word run
+  // (e.g. won't partial-match inside `build-essential git libfoo-dev` if the
+  // arm is `build-essential git`). Sort by descending length first because
+  // JS regex alternation is first-match, not longest-match.
   const alts = [...new Set(Database.all().map((d) => dockerPackages(base, pick(d))))].sort(
     (a, b) => b.length - a.length,
   );
-  return new RegExp(alts.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
+  const escaped = alts.map((s) => `\\b${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+  return new RegExp(escaped.join("|"), "g");
 }

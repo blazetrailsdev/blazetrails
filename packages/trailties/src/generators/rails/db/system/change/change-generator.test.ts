@@ -165,6 +165,14 @@ describe("ChangeGeneratorTest", () => {
     );
   });
 
+  it("editDockerfile does not match inside a longer word token", () => {
+    // \b boundaries (mirroring Rails change_generator.rb) prevent matching
+    // when a canonical token is the prefix of a longer word like "gitlab-cli".
+    write("Dockerfile", "RUN apt-get install -y build-essential gitlab-cli\n");
+    run("postgresql");
+    expect(read("Dockerfile")).toBe("RUN apt-get install -y build-essential gitlab-cli\n");
+  });
+
   it("editDockerfile is a no-op when no DB package lines match", () => {
     write("Dockerfile", "FROM node:22-slim\nRUN echo hello\n");
     const calls: string[] = [];

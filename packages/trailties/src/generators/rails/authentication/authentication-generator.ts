@@ -18,6 +18,7 @@ const APP_RECORD = ref("ApplicationRecord", "./application-record.js");
 const APP_CONTROLLER = ref("ApplicationController", "../application-controller.js");
 const APP_MAILER = ref("ApplicationMailer", "./application-mailer.js");
 const CURRENT_ATTRS = ref("ActiveSupport.CurrentAttributes");
+const PRIVATE = { visibility: "private" } as const;
 
 // Mirrors railties/lib/rails/generators/rails/authentication/authentication_generator.rb.
 export class AuthenticationGenerator extends GeneratorBase {
@@ -27,152 +28,95 @@ export class AuthenticationGenerator extends GeneratorBase {
 
   run(options: AuthenticationRunOptions = {}): string[] {
     const { api = false, skipMailer = false } = options;
-    this.createFile(
-      "src/app/models/session.ts",
-      buildClass("Session", APP_RECORD, [
-        stub("associations", "// belongsTo: User", { static: true }),
-      ]),
-    );
-    this.createFile(
-      "src/app/models/user.ts",
-      buildClass("User", APP_RECORD, [
-        stub("associations", "// hasSecurePassword; hasMany sessions, dependent: destroy", {
-          static: true,
-        }),
-        stub("normalizes", "// emailAddress → e.strip().toLowerCase()", { static: true }),
-      ]),
-    );
-    this.createFile(
-      "src/app/models/current.ts",
-      tsModule({
-        imports: [
-          { from: "@blazetrails/activesupport", named: { ActiveSupport: "ActiveSupport" } },
-        ],
-        declarations: [
-          tsClass({
-            name: "Current",
-            extends: CURRENT_ATTRS,
-            body: [stub("attributes", "// attribute :session", { static: true })],
-          }),
-        ],
-      }),
-    );
-
-    this.createFile(
-      "src/app/controllers/sessions-controller.ts",
-      buildClass("SessionsController", APP_CONTROLLER, [
-        asyncStub("new_", "// allowUnauthenticatedAccess only: [new_, create]"),
-        asyncStub("create", "// User.authenticateBy → startNewSessionFor → redirect"),
-        asyncStub("destroy", "// terminateSession → redirect to /session/new"),
-      ]),
-    );
-    this.createFile(
-      "src/app/controllers/concerns/authentication.ts",
-      tsModule({
-        declarations: [
-          tsClass({
-            name: "Authentication",
-            body: [
-              tsMethod({
-                name: "includeInto",
-                params: [{ name: "klass", type: "any" }],
-                static: true,
-                body: tsBody`klass.beforeAction?.("requireAuthentication");\nklass.helperMethod?.("authenticated");`,
-              }),
-              asyncStub("authenticated", "// resumeSession"),
-              asyncStub("requireAuthentication", "// resumeSession || requestAuthentication"),
-              asyncStub("resumeSession", "// Current.session ||= findSessionByCookie", {
-                visibility: "private",
-              }),
-              asyncStub("findSessionByCookie", "// Session.findBy(cookies.signed.sessionId)", {
-                visibility: "private",
-              }),
-              asyncStub("startNewSessionFor", "// user.sessions.createBang + cookie", {
-                visibility: "private",
-                param: "user",
-              }),
-              asyncStub("terminateSession", "// Current.session.destroy + cookies.delete", {
-                visibility: "private",
-              }),
-            ],
-          }),
-        ],
-      }),
-    );
-    this.createFile(
-      "src/app/controllers/passwords-controller.ts",
-      buildClass("PasswordsController", APP_CONTROLLER, [
-        asyncStub("new_", "// allowUnauthenticatedAccess"),
-        asyncStub("create", "// PasswordsMailer.reset(user).deliverLater"),
-        asyncStub("edit", "// setUserByToken"),
-        asyncStub("update", "// user.update(password, passwordConfirmation)"),
-        asyncStub("setUserByToken", "// User.findByPasswordResetTokenBang", {
-          visibility: "private",
-        }),
-      ]),
-    );
-
-    this.createFile(
-      "src/app/channels/application-cable/connection.ts",
-      tsModule({
-        declarations: [
-          tsClass({
-            name: "Connection",
-            body: [
-              stub("identifiedBy", "// currentUser", { static: true }),
-              asyncStub("connect", "// setCurrentUser || rejectUnauthorizedConnection"),
-              asyncStub("setCurrentUser", "// Session.findBy(cookies.signed.sessionId)", {
-                visibility: "private",
-              }),
-            ],
-          }),
-        ],
-      }),
-    );
-
-    if (!skipMailer) {
-      this.createFile(
-        "src/app/mailers/passwords-mailer.ts",
-        buildClass("PasswordsMailer", APP_MAILER, [
-          asyncStub("reset", '// mail subject: "Reset your password", to: user.emailAddress', {
-            param: "user",
-          }),
-        ]),
-      );
-      this.createFile(
-        "test/mailers/previews/passwords-mailer-preview.ts",
-        tsModule({
-          declarations: [
-            tsClass({
-              name: "PasswordsMailerPreview",
-              body: [stub("reset", "// TODO: preview PasswordsMailer.reset")],
-            }),
-          ],
-        }),
-      );
-      if (!api) {
-        this.createFile(
-          "src/app/views/passwords-mailer/reset.html.tse",
-          `<p>\n  You can reset your password within the next 15 minutes on\n  <%= linkTo("this password reset page", editPasswordUrl(user.passwordResetToken)) %>.\n</p>\n`,
-        );
-        this.createFile(
-          "src/app/views/passwords-mailer/reset.text.tse",
-          `You can reset your password within the next 15 minutes on this password reset page:\n<%= editPasswordUrl(user.passwordResetToken) %>\n`,
-        );
-      }
-    }
-
+    for (const [path, content] of this.emitSet(api, skipMailer)) this.createFile(path, content);
     this.configureApplicationController();
     this.configureAuthenticationRoutes();
     return this.getCreatedFiles();
   }
 
+  private emitSet(api: boolean, skipMailer: boolean): Array<[string, string]> {
+    const files: Array<[string, string]> = [
+      [
+        "src/app/models/session.ts",
+        classOnly("Session", APP_RECORD, [
+          stub("associations", "// belongsTo: User", { static: true }),
+        ]),
+      ],
+      [
+        "src/app/models/user.ts",
+        classOnly("User", APP_RECORD, [
+          stub("associations", "// hasSecurePassword; hasMany sessions, dependent: destroy", {
+            static: true,
+          }),
+          stub("normalizes", "// emailAddress → e.strip().toLowerCase()", { static: true }),
+        ]),
+      ],
+      ["src/app/models/current.ts", currentModel()],
+      [
+        "src/app/controllers/sessions-controller.ts",
+        classOnly("SessionsController", APP_CONTROLLER, [
+          asyncStub("new_", "// allowUnauthenticatedAccess only: [new_, create]"),
+          asyncStub("create", "// User.authenticateBy → startNewSessionFor → redirect"),
+          asyncStub("destroy", "// terminateSession → redirect to /session/new"),
+        ]),
+      ],
+      ["src/app/controllers/concerns/authentication.ts", authenticationConcern()],
+      [
+        "src/app/controllers/passwords-controller.ts",
+        classOnly("PasswordsController", APP_CONTROLLER, [
+          asyncStub("new_", "// allowUnauthenticatedAccess"),
+          asyncStub("create", "// PasswordsMailer.reset(user).deliverLater"),
+          asyncStub("edit", "// setUserByToken"),
+          asyncStub("update", "// user.update(password, passwordConfirmation)"),
+          asyncStub("setUserByToken", "// User.findByPasswordResetTokenBang", PRIVATE),
+        ]),
+      ],
+      // ActionCable stub — full Connection lands when actionable/actioncable is ported.
+      [
+        "src/app/channels/application-cable/connection.ts",
+        classOnly("Connection", undefined, [
+          stub("identifiedBy", "// currentUser", { static: true }),
+          asyncStub("connect", "// setCurrentUser || rejectUnauthorizedConnection"),
+          asyncStub("setCurrentUser", "// Session.findBy(cookies.signed.sessionId)", PRIVATE),
+        ]),
+      ],
+    ];
+    if (!skipMailer) {
+      files.push([
+        "src/app/mailers/passwords-mailer.ts",
+        classOnly("PasswordsMailer", APP_MAILER, [
+          asyncStub("reset", '// mail subject: "Reset your password", to: user.emailAddress', {
+            param: "user",
+          }),
+        ]),
+      ]);
+      files.push([
+        "test/mailers/previews/passwords-mailer-preview.ts",
+        classOnly("PasswordsMailerPreview", undefined, [
+          stub("reset", "// TODO: preview PasswordsMailer.reset"),
+        ]),
+      ]);
+      if (!api) {
+        files.push(["src/app/views/passwords-mailer/reset.html.tse", RESET_HTML]);
+        files.push(["src/app/views/passwords-mailer/reset.text.tse", RESET_TEXT]);
+      }
+    }
+    return files;
+  }
+
+  // Mirrors Rails' `inject_into_class "application_controller.rb",
+  // "ApplicationController", "  include Authentication\n"` — the mixin call
+  // lands inside the class body via a static initializer; the import joins
+  // the existing imports above the class.
   private configureApplicationController(): void {
-    if (!this.fileExists("src/app/controllers/application-controller.ts")) return;
-    this.appendToFile(
-      "src/app/controllers/application-controller.ts",
-      `\nimport { Authentication } from "./concerns/authentication.js";\nAuthentication.includeInto(ApplicationController);\n`,
+    const file = "src/app/controllers/application-controller.ts";
+    if (!this.fileExists(file)) return;
+    this.insertIntoFile(
+      file,
+      "export class ApplicationController",
+      `import { Authentication } from "./concerns/authentication.js";\n\n`,
     );
+    this.insertIntoFile(file, "\n}\n", `  static {\n    Authentication.includeInto(this);\n  }\n`);
   }
 
   private configureAuthenticationRoutes(): void {
@@ -190,8 +134,48 @@ export class AuthenticationGenerator extends GeneratorBase {
   }
 }
 
-function buildClass(name: string, ext: Ref, body: Method[]): string {
-  return tsModule({ declarations: [tsClass({ name, extends: ext, body })] });
+function classOnly(name: string, ext: Ref | undefined, body: Method[]): string {
+  return tsModule({ declarations: [tsClass({ name, ...(ext ? { extends: ext } : {}), body })] });
+}
+
+function currentModel(): string {
+  return tsModule({
+    imports: [{ from: "@blazetrails/activesupport", named: { ActiveSupport: "ActiveSupport" } }],
+    declarations: [
+      tsClass({
+        name: "Current",
+        extends: CURRENT_ATTRS,
+        body: [stub("attributes", "// attribute :session", { static: true })],
+      }),
+    ],
+  });
+}
+
+function authenticationConcern(): string {
+  return tsModule({
+    declarations: [
+      tsClass({
+        name: "Authentication",
+        body: [
+          tsMethod({
+            name: "includeInto",
+            params: [{ name: "klass", type: "any" }],
+            static: true,
+            body: tsBody`klass.beforeAction?.("requireAuthentication");\nklass.helperMethod?.("authenticated");`,
+          }),
+          asyncStub("authenticated", "// resumeSession"),
+          asyncStub("requireAuthentication", "// resumeSession || requestAuthentication"),
+          asyncStub("resumeSession", "// Current.session ||= findSessionByCookie", PRIVATE),
+          asyncStub("findSessionByCookie", "// Session.findBy(cookies.signed.sessionId)", PRIVATE),
+          asyncStub("startNewSessionFor", "// user.sessions.createBang + cookie", {
+            ...PRIVATE,
+            param: "user",
+          }),
+          asyncStub("terminateSession", "// Current.session.destroy + cookies.delete", PRIVATE),
+        ],
+      }),
+    ],
+  });
 }
 
 interface StubOpts {
@@ -221,3 +205,13 @@ function asyncStub(name: string, comment: string, opts: StubOpts = {}): Method {
     body: tsBody`${comment}`,
   });
 }
+
+const RESET_HTML = `<p>
+  You can reset your password within the next 15 minutes on
+  <%= linkTo("this password reset page", editPasswordUrl(user.passwordResetToken)) %>.
+</p>
+`;
+
+const RESET_TEXT = `You can reset your password within the next 15 minutes on this password reset page:
+<%= editPasswordUrl(user.passwordResetToken) %>
+`;

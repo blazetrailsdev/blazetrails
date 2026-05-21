@@ -1,6 +1,23 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`AuthenticationGenerator > matches snapshot for the authentication concern 1`] = `
+exports[`AuthenticationGenerator > matches snapshot for src/app/channels/application-cable/connection.ts 1`] = `
+"export class Connection {
+  static identifiedBy() {
+    // currentUser
+  }
+
+  async connect(): Promise<void> {
+    // setCurrentUser || rejectUnauthorizedConnection
+  }
+
+  private async setCurrentUser(): Promise<void> {
+    // Session.findBy(cookies.signed.sessionId)
+  }
+}
+"
+`;
+
+exports[`AuthenticationGenerator > matches snapshot for src/app/controllers/concerns/authentication.ts 1`] = `
 "export class Authentication {
   static includeInto(klass: any) {
     klass.beforeAction?.("requireAuthentication");
@@ -34,7 +51,34 @@ exports[`AuthenticationGenerator > matches snapshot for the authentication conce
 "
 `;
 
-exports[`AuthenticationGenerator > matches snapshot for the sessions controller 1`] = `
+exports[`AuthenticationGenerator > matches snapshot for src/app/controllers/passwords-controller.ts 1`] = `
+"import { ApplicationController } from "../application-controller.js";
+
+export class PasswordsController extends ApplicationController {
+  async new_(): Promise<void> {
+    // allowUnauthenticatedAccess
+  }
+
+  async create(): Promise<void> {
+    // PasswordsMailer.reset(user).deliverLater
+  }
+
+  async edit(): Promise<void> {
+    // setUserByToken
+  }
+
+  async update(): Promise<void> {
+    // user.update(password, passwordConfirmation)
+  }
+
+  private async setUserByToken(): Promise<void> {
+    // User.findByPasswordResetTokenBang
+  }
+}
+"
+`;
+
+exports[`AuthenticationGenerator > matches snapshot for src/app/controllers/sessions-controller.ts 1`] = `
 "import { ApplicationController } from "../application-controller.js";
 
 export class SessionsController extends ApplicationController {
@@ -53,7 +97,40 @@ export class SessionsController extends ApplicationController {
 "
 `;
 
-exports[`AuthenticationGenerator > matches snapshot for the user model 1`] = `
+exports[`AuthenticationGenerator > matches snapshot for src/app/mailers/passwords-mailer.ts 1`] = `
+"import { ApplicationMailer } from "./application-mailer.js";
+
+export class PasswordsMailer extends ApplicationMailer {
+  async reset(user: any): Promise<void> {
+    // mail subject: "Reset your password", to: user.emailAddress
+  }
+}
+"
+`;
+
+exports[`AuthenticationGenerator > matches snapshot for src/app/models/current.ts 1`] = `
+"import { ActiveSupport } from "@blazetrails/activesupport";
+
+export class Current extends ActiveSupport.CurrentAttributes {
+  static attributes() {
+    // attribute :session
+  }
+}
+"
+`;
+
+exports[`AuthenticationGenerator > matches snapshot for src/app/models/session.ts 1`] = `
+"import { ApplicationRecord } from "./application-record.js";
+
+export class Session extends ApplicationRecord {
+  static associations() {
+    // belongsTo: User
+  }
+}
+"
+`;
+
+exports[`AuthenticationGenerator > matches snapshot for src/app/models/user.ts 1`] = `
 "import { ApplicationRecord } from "./application-record.js";
 
 export class User extends ApplicationRecord {
@@ -63,6 +140,15 @@ export class User extends ApplicationRecord {
 
   static normalizes() {
     // emailAddress → e.strip().toLowerCase()
+  }
+}
+"
+`;
+
+exports[`AuthenticationGenerator > matches snapshot for test/mailers/previews/passwords-mailer-preview.ts 1`] = `
+"export class PasswordsMailerPreview {
+  reset() {
+    // TODO: preview PasswordsMailer.reset
   }
 }
 "

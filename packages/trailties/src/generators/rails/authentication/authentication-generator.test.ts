@@ -93,7 +93,18 @@ describe("AuthenticationGenerator", () => {
     makeGen().run();
     const ac = read("src/app/controllers/application-controller.ts");
     expect(ac).toContain('import { Authentication } from "./concerns/authentication.js";');
-    expect(ac).toContain("Authentication.includeInto(ApplicationController);");
+    expect(ac).toContain("Authentication.includeInto(this);");
+    // Mixin call lands inside the class body (Rails inject_into_class parity).
+    const classStart = ac.indexOf("export class ApplicationController");
+    const classEnd = ac.indexOf("}", classStart);
+    expect(ac.slice(classStart, classEnd)).toContain("Authentication.includeInto(this);");
+    // The post-injection file still parses cleanly.
+    expect(parseTs(ac).diagnostics).toEqual([]);
+  });
+
+  it("is a no-op when application-controller.ts is missing", () => {
+    fs.unlinkSync(path.join(tmpDir, "src/app/controllers/application-controller.ts"));
+    expect(() => makeGen().run()).not.toThrow();
   });
 
   it("configures authentication routes", () => {
@@ -103,18 +114,25 @@ describe("AuthenticationGenerator", () => {
     expect(routes).toContain('router.resource("session");');
   });
 
-  it("matches snapshot for the authentication concern", () => {
-    makeGen().run();
-    expect(read("src/app/controllers/concerns/authentication.ts")).toMatchSnapshot();
+  it("is a no-op when routes.ts is missing", () => {
+    fs.unlinkSync(path.join(tmpDir, "src/config/routes.ts"));
+    expect(() => makeGen().run()).not.toThrow();
   });
 
-  it("matches snapshot for the sessions controller", () => {
-    makeGen().run();
-    expect(read("src/app/controllers/sessions-controller.ts")).toMatchSnapshot();
-  });
-
-  it("matches snapshot for the user model", () => {
-    makeGen().run();
-    expect(read("src/app/models/user.ts")).toMatchSnapshot();
-  });
+  for (const rel of [
+    "src/app/models/session.ts",
+    "src/app/models/user.ts",
+    "src/app/models/current.ts",
+    "src/app/controllers/sessions-controller.ts",
+    "src/app/controllers/concerns/authentication.ts",
+    "src/app/controllers/passwords-controller.ts",
+    "src/app/channels/application-cable/connection.ts",
+    "src/app/mailers/passwords-mailer.ts",
+    "test/mailers/previews/passwords-mailer-preview.ts",
+  ]) {
+    it(`matches snapshot for ${rel}`, () => {
+      makeGen().run();
+      expect(read(rel)).toMatchSnapshot();
+    });
+  }
 });

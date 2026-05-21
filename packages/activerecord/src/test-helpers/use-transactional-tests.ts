@@ -3,9 +3,10 @@
  * Mirrors Rails' `self.use_transactional_tests = false` (per-test-class
  * in Rails; per-adapter here since adapters are the per-test-file unit
  * in trails). Written by `defineSchema(..., { useTransactionalTests })`,
- * read by the global `beforeEach` in `test-setup-ar.ts` (B6.3) and by
- * any future helper that needs to know whether transactional fixtures
- * are active. A WeakMap keeps the flag off the adapter's public surface
+ * read by `withTransactionalFixtures`'s `beforeAll` to decide whether to
+ * activate the BEGIN/ROLLBACK wrap for that file (and by any future
+ * helper that needs the same signal). A WeakMap keeps the flag off the
+ * adapter's public surface
  * (it's purely a test concern) and avoids leaking adapters across
  * test files.
  *

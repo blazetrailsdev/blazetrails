@@ -144,15 +144,17 @@ export class Application extends Engine {
     }));
   }
 
+  /** `contentPath` matches Rails' `encrypted(path, ...)` arg — absolute or
+   * root-relative; both flow through Rails.root.join / path.resolve. */
   async encrypted(
-    relativePath: string,
+    contentPath: string,
     opts: { keyPath?: string; envKey?: string } = {},
   ): Promise<EncryptedFile> {
-    const path = await getPathAsync();
+    const p = await getPathAsync();
     const root = await this.requireRoot();
     return new EncryptedFile({
-      contentPath: path.resolve(root, relativePath),
-      keyPath: path.resolve(root, opts.keyPath ?? "config/master.key"),
+      contentPath: p.resolve(root, contentPath),
+      keyPath: p.resolve(root, opts.keyPath ?? "config/master.key"),
       envKey: opts.envKey ?? "RAILS_MASTER_KEY",
       raiseIfMissingKey: this.config.requireMasterKey,
     });

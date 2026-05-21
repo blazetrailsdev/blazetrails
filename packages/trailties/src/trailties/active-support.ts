@@ -63,10 +63,6 @@ export interface ActiveSupportConfig {
   disallowedDeprecationWarnings?: (string | RegExp | "all")[];
 }
 
-export interface TrailtieConfig {
-  activeSupport?: ActiveSupportConfig;
-}
-
 /**
  * Trailtie wiring for ActiveSupport.
  *
@@ -77,7 +73,7 @@ export class Trailtie extends BaseRailtie {
     registerRailtie(this);
 
     // Mirrors `config.active_support = ActiveSupport::OrderedOptions.new`.
-    (Trailtie.config as TrailtieConfig).activeSupport ??= {};
+    this.config["activeSupport"] ??= {};
 
     this.initializer("active_support.deprecator", () => {
       BaseRailtie.deprecators["activeSupport"] = deprecator;
@@ -96,7 +92,7 @@ export class Trailtie extends BaseRailtie {
     // (ordering + DeprecatorsProxy) and is a follow-up on PR 2.7a, not a
     // local patch here.
     this.initializer("active_support.deprecation_behavior", () => {
-      const cfg = (Trailtie.config as TrailtieConfig).activeSupport ?? {};
+      const cfg = (Trailtie.config["activeSupport"] as ActiveSupportConfig | undefined) ?? {};
       const all = Object.values(BaseRailtie.deprecators).filter((d): d is Deprecation => d != null);
       if (cfg.reportDeprecations === false) {
         for (const d of all) {
@@ -118,7 +114,8 @@ export class Trailtie extends BaseRailtie {
     });
 
     this.initializer("active_support.set_hash_digest_class", () => {
-      const klass = (Trailtie.config as TrailtieConfig).activeSupport?.hashDigestClass;
+      const klass = (Trailtie.config["activeSupport"] as ActiveSupportConfig | undefined)
+        ?.hashDigestClass;
       if (klass) {
         Digest.hashDigestClass = klass;
       }

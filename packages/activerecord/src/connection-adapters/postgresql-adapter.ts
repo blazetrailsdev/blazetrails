@@ -2514,14 +2514,19 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Normalize a single bind value before handing it to node-postgres.
    *
    * BinaryData wrappers (produced by `Type::Binary::Data`-shape serializers
-   * like `EncryptedAttributeType` on binary columns) are unwrapped via
-   * `typeCast` to a Buffer so pg binds them as bytea; pg has no built-in
-   * coercion for BinaryData and would `JSON.stringify` it otherwise,
-   * corrupting bytes 128–255 (the PG-only encryption binary round-trip
-   * failure surfaced by Phase 9b-1). Other values flow through
-   * `temporalToBindString` for Temporal / infinity sentinel handling.
+   * like `EncryptedAttributeType` on binary columns) are unwrapped to a
+   * Buffer so pg binds them as bytea; pg has no built-in coercion for
+   * BinaryData and would `JSON.stringify` it otherwise, corrupting bytes
+   * 128–255 (the PG-only encryption binary round-trip failure surfaced
+   * by Phase 9b-1). Other values flow through `temporalToBindString` for
+   * Temporal / infinity sentinel handling.
    *
    * Mirrors Rails' `type_casted_binds` calling `type_cast` per value.
+   * Detection is duck-typed (`bytes: Uint8Array`) rather than delegating
+   * to `this.typeCast` so the gate survives split module identity in the
+   * dep tree (`pgTypeCast`'s `instanceof BinaryData` check would silently
+   * miss when the encryption module and the adapter resolve different
+   * copies of `@blazetrails/activemodel`).
    * @internal
    */
   private _bindForPg(value: unknown): unknown {

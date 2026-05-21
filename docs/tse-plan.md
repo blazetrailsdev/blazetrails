@@ -291,7 +291,9 @@ behavior. Pure source → emit pipeline. Rails analogue: `erubi` gem.
 - `JsEmitter` — AST → `{ code: string, sourceMap: RawSourceMap }`.
   Produces the runtime module.
 - `TsEmitter` — AST → typecheck shim with declared locals signature.
-- `DtsEmitter` — AST → `.d.ts` + `.d.ts.map` for publishing.
+- _(No DtsEmitter — `.d.ts` + `.d.ts.map` are produced by invoking
+  the TypeScript compiler API on the emitted `.tse.ts` with
+  `declarationMap: true`. See §6.3.)_
 - `parseFilename(path) → { name, format, handler }`.
 - `parseMagicComments(source) → { locals, format, sourceWithoutMagic }`.
 - No I/O. No file watching. Everything is `(string, options) → string`-ish.
@@ -1256,18 +1258,53 @@ non-negative deltas, the corresponding implementation PR is mergeable.
 
 ---
 
-## 6. Open questions
+## 6. Resolved decisions (2026-05-21)
 
-1. _(resolved 2026-05-21: helpers live on the `RenderContext` interface;
+1. **Helper binding.** Helpers live on the `RenderContext` interface;
    render provides a typed instance; templates call `context.foo(...)`.
-   See §2.10.2.)_
-2. _(resolved 2026-05-21: partials dispatch via `context.render({ partial,
-locals })` with overloaded type signature — typed locals for known
-   names, string-form fallback for dynamic. See §2.10.6.)_
-3. **Streaming.** Rails uses fibers + `Flow`. We've planned async
-   generators (Phase 3d). The TSE compiler doesn't need to know — the
-   handler returns a SafeString, streaming is the renderer's problem.
-   Confirm during Phase 3d that no TSE syntax has to change.
-4. **Source-map format.** Inline base64 in `.tse.js` vs sidecar
-   `.tse.js.map`. Sidecar plays nicer with bundlers; inline survives
-   transitive copy steps. Default to sidecar, allow inline via build flag.
+   See §2.10.2.
+2. **Partials.** Dispatch via `context.render({ partial, locals })`
+   with overloaded type signature — typed locals for known names,
+   string-form fallback for dynamic. See §2.10.6.
+3. **`.d.ts.map` production.** trails-tsc writes the `.tse.ts` shim and
+   then invokes the TypeScript compiler API programmatically to emit
+   `.d.ts` + `.d.ts.map` from it (with `declarationMap: true`). tsc
+   owns the map format. Go-to-Definition jumps `.d.ts` → `.tse.ts` →
+   `.tse` via the chain (tsc's `.d.ts.map` + our `.tse.ts → .tse`
+   sourcemap composed by bundlers/editors). No hand-rolled VLQ.
+4. **Diagnostics primary path.** Emitted `.d.ts` is the source of
+   truth — tsc (CI + editor) consumes them. The TS language service
+   plugin is an optional DX enhancer that adds live-update without
+   a rebuild; it does NOT introduce a second diagnostic code path.
+   CI and editor surface the same errors.
+5. **`js` / `css` format escaping.** Matches Rails exactly: `<%= %>`
+   html-escapes via `append()` like other non-text formats; authors
+   call `context.j(value)` for JS-string escaping. Same XSS surface
+   and idioms as Rails.
+6. **Source-map format.** Default to sidecar `.tse.js.map`; allow
+   inline base64 via a `--inline-source-maps` build flag for
+   transitive-copy scenarios.
+
+---
+
+## 7. Open questions
+
+1. **Dev-time reload mechanism.** `trails-tsc dev` re-emits `.tse.js`
+   on file change, but the running server's reload story (Node
+   `--watch` + import-cache bust vs bundler-driven HMR vs server
+   framework hook) is **deferred to Phase 3 (renderer)**. Implementers
+   should not block on this for Phase 2c — the build CLI ships the
+   watch + emit half; the consume-side story is a Phase 3 deliverable
+   bundled with renderer work.
+2. **Compile-time error UX format.** When `<% expr %>` is invalid TS,
+   the diagnostic format (terminal pretty-print vs editor squiggles
+   vs CI annotation) needs a unified shape. Decision will live in
+   `trails-tsc/cli/diagnostics.ts` during Phase 2c implementation.
+3. **Typed `yield` section names.** `RenderContext#yield(section?)`
+   currently returns `SafeString` for any section name. Layout-to-
+   template binding info would let us type legal names per layout,
+   but the renderer doesn't surface that at type level today. Future
+   enhancement.
+4. **Streaming emit shape.** Phase 3d will need a second compiled
+   export (`stream` as `async function*`) alongside `default`.
+   Confirmed deferred (see §2.10.7); not blocking Phase 2.

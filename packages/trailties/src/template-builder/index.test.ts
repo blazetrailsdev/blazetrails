@@ -287,6 +287,14 @@ describe("template-builder", () => {
     expect(parseTs(out).diagnostics).toEqual([]);
   });
 
+  it("rejects inferType without an initializer", () => {
+    expect(() =>
+      tsModule({
+        declarations: [tsClass({ name: "C", body: [tsField("v", "string", { inferType: true })] })],
+      }),
+    ).toThrow(/inferType requires an initializer/);
+  });
+
   it("assertNoRubySource flags Ruby class/module/def lines", () => {
     expect(() => assertNoRubySource("class User < Base\nend")).toThrow();
     expect(() => assertNoRubySource("module Foo\nend")).toThrow();

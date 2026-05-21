@@ -35,6 +35,11 @@ export interface EmitResult {
 }
 
 export function emitField(f: Field): EmitResult {
+  if (f.inferType && !f.initializer) {
+    throw new Error(
+      `tsField "${f.name}": inferType requires an initializer (otherwise the emitted property has no type).`,
+    );
+  }
   const t = emitType(f.type);
   const suffix = f.nullable ? "?" : f.definite ? "!" : "";
   const init = f.initializer ? ` = ${f.initializer}` : "";

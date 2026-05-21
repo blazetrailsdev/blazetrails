@@ -34,7 +34,10 @@ export interface Field {
   initializer?: string;
   comment?: string;
   static?: boolean;
-  /** Omit the `: type` annotation. Useful when the initializer is self-typed. */
+  /**
+   * Omit the `: type` annotation; rely on the initializer for typing.
+   * Requires `initializer` — `emitField` throws otherwise.
+   */
   inferType?: boolean;
 }
 export interface MethodParam {

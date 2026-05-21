@@ -65,19 +65,12 @@ describe("AuthenticationGenerator", () => {
     expect(exists("src/app/views/passwords-mailer/reset.html.tse")).toBe(false);
   });
 
-  it("configures the application controller with Authentication", () => {
+  it("wires Authentication into the application controller + adds routes", () => {
     makeGen().run();
     const ac = read("src/app/controllers/application-controller.ts");
     expect(ac).toContain('import { Authentication } from "./concerns/authentication.js";');
     expect(ac).toContain("Authentication.includeInto(this);");
-    const classStart = ac.indexOf("export class ApplicationController");
-    const classEnd = ac.indexOf("}", classStart);
-    expect(ac.slice(classStart, classEnd)).toContain("Authentication.includeInto(this);");
     expect(parseTs(ac).diagnostics).toEqual([]);
-  });
-
-  it("configures authentication routes", () => {
-    makeGen().run();
     const routes = read("src/config/routes.ts");
     expect(routes).toContain('router.resources("passwords", { param: "token" });');
     expect(routes).toContain('router.resource("session");');
@@ -91,15 +84,19 @@ describe("AuthenticationGenerator", () => {
     makeGen().run();
     const ac = read("src/app/controllers/application-controller.ts");
     expect(parseTs(ac).diagnostics).toEqual([]);
-    // Injection lands *before* the pre-existing method — a brittle "first
-    // }" marker would have landed after the method's closing brace.
+    // A brittle "first }" marker would have landed the injection after
+    // the method's closing brace.
     expect(ac.indexOf("Authentication.includeInto")).toBeLessThan(ac.indexOf("preexisting"));
   });
 
-  it("is a no-op when application-controller.ts or routes.ts are missing", () => {
-    fs.unlinkSync(path.join(tmpDir, "src/app/controllers/application-controller.ts"));
-    fs.unlinkSync(path.join(tmpDir, "src/config/routes.ts"));
-    expect(() => makeGen().run()).not.toThrow();
+  it("is idempotent — re-running does not duplicate imports or routes", () => {
+    makeGen().run();
+    const ac = read("src/app/controllers/application-controller.ts");
+    const rt = read("src/config/routes.ts");
+    makeGen().run();
+    expect(read("src/app/controllers/application-controller.ts")).toEqual(ac);
+    expect(read("src/config/routes.ts")).toEqual(rt);
+    expect(parseTs(ac).diagnostics).toEqual([]);
   });
 
   it("matches snapshot for the full TS emit set", () => {

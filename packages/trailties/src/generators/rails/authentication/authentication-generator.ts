@@ -101,14 +101,14 @@ export class AuthenticationGenerator extends GeneratorBase {
     );
   }
 
-  // Mirrors Rails' `inject_into_class` — anchors on the class declaration
-  // so the mixin call lands inside ApplicationController even when the
-  // class already has a body.
+  // Rails' inject_into_class re-injects on every run; we skip the second
+  // pass because a duplicate TS `import` declaration is a syntax error.
   private configureApplicationController(): void {
     const file = "src/app/controllers/application-controller.ts";
     if (!this.fileExists(file)) return;
     const full = this.path.join(this.cwd, file);
     let src = this.fs.readFileSync(full, "utf-8");
+    if (src.includes("Authentication.includeInto(this)")) return;
     const classRe = /export\s+class\s+ApplicationController\b[^{]*\{/;
     const m = src.match(classRe);
     if (!m || m.index === undefined) return;
@@ -124,6 +124,8 @@ export class AuthenticationGenerator extends GeneratorBase {
   private configureAuthenticationRoutes(): void {
     for (const f of ["src/config/routes.ts", "src/config/routes.js"]) {
       if (!this.fileExists(f)) continue;
+      const full = this.path.join(this.cwd, f);
+      if (this.fs.readFileSync(full, "utf-8").includes('router.resource("session")')) return;
       this.insertIntoFile(
         f,
         "// routes",

@@ -39,9 +39,9 @@ PR T1–T5 below.
 | Structure      | `tsModule({ imports, declarations })` typed record       |
 | Declarations   | `tsClass` / `tsInterface` / `tsField` / `tsMethod`       |
 | Symbols        | `Ref` (branded `{ kind: "ref"; name; from? }`) only      |
-| Interpolation  | `type\`...\``and`tsBody\`...\`` tagged templates         |
+| Interpolation  | `` type`...` `` and `` tsBody`...` `` tagged templates   |
 | Imports        | Deduplicated centrally by `tsModule` from collected refs |
-| Method bodies  | `tsBody\`...\`` (dedent + ref-carrying)                  |
+| Method bodies  | `` tsBody`...` `` (dedent + ref-carrying)                |
 | Escape hatches | `{ kind: "raw"; text }` declarations, bounded            |
 | YAML output    | Separate `yamlBuilder` — quoting + scalar disambig only  |
 | JSON output    | `JSON.stringify(value, null, 2)`                         |
@@ -136,8 +136,7 @@ export function assertNoRubySource(text: string): void;
   (which returns refs reachable from the import block) or an explicit
   `ref("Name", "package")`. This is the load-bearing constraint that
   blocks the Ruby-emission failure mode.
-- **`Type` and `Body` carry refs.** `type\`Array<${userRef}>\``and`tsBody\`return new ${userRef}();\``propagate refs to`tsModule`'s
-  import collector.
+- **`Type` and `Body` carry refs.** `` type`Array<${userRef}>` `` and `` tsBody`return new ${userRef}();` `` propagate refs to `tsModule`'s import collector.
 - **`tsModule` resolves imports.** Walks every `Ref` in declarations,
   collects the implied imports, dedupes, sorts, and emits the import
   block. Generators never write `import` lines manually.
@@ -145,7 +144,7 @@ export function assertNoRubySource(text: string): void;
   express (license headers, top-level literals). Each `raw` usage in a
   generator gets a justifying code comment.
 - **`tsMethod.body` is `tsBody`, not a string.** Plain strings rejected
-  at the type level; trivial one-liner literals lifted to `tsBody\`...\``
+  at the type level; trivial one-liner literals lifted to `` tsBody`...` ``
   by convention.
 
 ## Test contract (per generator, mandatory)
@@ -180,7 +179,7 @@ PR T1 lands alone; T2–T5 parallelize off T1.
   - Ref propagation through `type` and `tsBody`.
   - `tsBody` dedent behavior.
   - Hand-built module snapshot golden.
-  - **Compile-error assertion**: `tsClass({ extends: "ApplicationRecord" })` fails to typecheck, asserted via `expectTypeOf`.
+  - **Compile-error assertion**: a `*.test-d.ts` (or `dx-tests/`-style) file invokes `tsClass({ extends: "ApplicationRecord" })` with a `// @ts-expect-error` comment on the offending line. The file is included in the `test:types` / `trails-tsc` typecheck pass; CI fails if the error stops being emitted.
 
 ### PR T2 — Migrate model / migration / resource-route generators (~150 LOC)
 

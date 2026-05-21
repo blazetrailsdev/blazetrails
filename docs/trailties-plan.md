@@ -16,10 +16,11 @@ current state.
 
 0. **All TS-source generator output flows through `@blazetrails/trailties/templates`.**
    No raw-string `createFile` for `.ts` files; no `.rb`/`.erb` strings
-   anywhere. See `docs/trailties-generators-rethink.md` for the locked
+   anywhere. See `docs/trailties-template-builder.md` for the locked
    Option B design and PR T1 below for the builder PR. Per-generator
-   tests must include (a) snapshot, (b) `ts.createSourceFile`
-   parse-without-diagnostics, (c) `assertNoRubySource`.
+   tests must include (a) snapshot, (b) `parseTs` (the
+   parse-without-diagnostics helper exported from T1), (c)
+   `assertNoRubySource`.
 1. **No `node:*` imports** in `packages/trailties/src/` except `bin.ts`.
    Repository rule; enforce locally with
    `! grep -r 'from "node:' packages/trailties/src/ | grep -v bin.ts`.
@@ -119,7 +120,7 @@ Every PR must pass:
 
 ## Phase 1 — Leaves (open items)
 
-> **Generator output is governed by `docs/trailties-generators-rethink.md`
+> **Generator output is governed by `docs/trailties-template-builder.md`
 > (Option B: typed tagged-template emitters).** Every PR that produces app
 > source code must build it through `@blazetrails/trailties/templates`'s
 > `tsModule` / `tsClass` / `tsImport` / `tsField` / `tsMethod` / `tsBody`
@@ -130,7 +131,7 @@ Every PR must pass:
 
 **Blocked by:** none. Lands first.
 
-**Source:** new. See `docs/trailties-generators-rethink.md` for the full API.
+**Source:** new. See `docs/trailties-template-builder.md` for the full API.
 
 **Node/TS fit:** pure TS. No new runtime deps (hard rule 4).
 
@@ -140,7 +141,7 @@ Every PR must pass:
 - `Ref` (branded `{ kind: "ref"; name: string; from?: string }`), `type` tagged template, `tsImport` family (named / default / type-only), `tsField`, `tsMethod`, `tsBody` (dedent + ref-carrying tagged template), `tsClass`, `tsInterface`, `tsModule`.
 - `tsModule` is the sole record→source resolver. It walks every `Ref` in declarations, dedupes imports, and emits the final file as one string.
 - `yamlBuilder` ships in the same module for devcontainer YAML (quoting + scalar disambiguation only; not a full YAML lib).
-- Unit tests cover: import dedup, default+named in same import, type-only, ref propagation through `type` / `tsBody`, dedent behavior, snapshot golden for a hand-built module, **`extends: "ApplicationRecord"` fails to typecheck** (compile-error assertion via `expectTypeOf`).
+- Unit tests cover: import dedup, default+named in same import, type-only, ref propagation through `type` / `tsBody`, dedent behavior, snapshot golden for a hand-built module, **`extends: "ApplicationRecord"` fails to typecheck** (compile-error assertion via `// @ts-expect-error` in a `*.test-d.ts` file, executed by the existing `test:types` pass).
 
 **Acceptance:**
 
@@ -198,7 +199,7 @@ Resolves the YAML carve-out from open question pre-existing in
 `trailties-plan.md` PR 1.14c-3 entry: emit a fresh `compose.yaml` per
 database config via `yamlBuilder`, not by mutating an existing file.
 Generators must never reuse the TS emitter for non-TS content (hard
-rule from rethink Q3).
+rule from template-builder spec Q3).
 
 - `packages/trailties/src/generators/rails/devcontainer/devcontainer-generator.ts`
 - `update_devcontainer_db_host` / `update_devcontainer_db_feature` /

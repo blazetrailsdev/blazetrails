@@ -6,7 +6,7 @@ interface Opts {
   environment?: string;
 }
 
-function buildFile(opts: Opts): EncryptedFile {
+export function buildFile(opts: Opts): EncryptedFile {
   const env = opts.environment;
   const contentPath = env ? `config/credentials/${env}.yml.enc` : "config/credentials.yml.enc";
   const keyPath = env ? `config/credentials/${env}.key` : "config/master.key";

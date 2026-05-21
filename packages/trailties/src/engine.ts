@@ -124,9 +124,11 @@ export class Engine extends Trailtie {
 
   /** `Engine#routes(&block)` — undefined when no `routeSetClass` is set. */
   routes(block?: (this: unknown) => void): unknown {
-    const cfg = this.config;
-    if (!cfg.routeSetClass) return undefined;
-    if (!this._routes) this._routes = new cfg.routeSetClass(cfg);
+    if (!this._routes) {
+      const cfg = this.config;
+      if (!cfg.routeSetClass) return undefined;
+      this._routes = new cfg.routeSetClass(cfg);
+    }
     const r = this._routes as { append?: (b: (this: unknown) => void) => void };
     if (block) r.append?.(block);
     return this._routes;

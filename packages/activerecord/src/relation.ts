@@ -3758,6 +3758,23 @@ export class Relation<T extends Base> {
     return `"${name.replace(/"/g, '""')}"`;
   }
 
+  /**
+   * Rails `Relation#order_column`. Routes ORDER BY column resolution through
+   * `arelColumn` with a quoted-identifier fallback for unknown columns, so
+   * an `UnqualifiedColumn` node is never constructed for ORDER BY — Rails
+   * reserves that node for UPDATE-set semantics (see arel/visitors/mysql.rb,
+   * which delegates `UnqualifiedColumn` to the inner attribute and would
+   * re-qualify the column).
+   * @internal
+   */
+  private _orderColumn(field: string): unknown {
+    return this.arelColumn(
+      field,
+      (attrName: string) =>
+        new Nodes.SqlLiteral(this._quoteBareColumn(attrName), { retryable: true }),
+    );
+  }
+
   private _applyOrderToManager(manager: SelectManager, table: Table): void {
     // Raw order clauses (from inOrderOf)
     for (const rawClause of this._rawOrderClauses) {
@@ -3783,7 +3800,7 @@ export class Relation<T extends Base> {
             if (rawCol.includes(".")) {
               manager.order(new Nodes.SqlLiteral(trimmed));
             } else if (!this._fromClause.isEmpty() && !this._isKnownColumn(rawCol)) {
-              const lit = new Nodes.SqlLiteral(this._quoteBareColumn(rawCol), { retryable: true });
+              const lit = this._orderColumn(rawCol) as Nodes.Node;
               manager.order(dir === "DESC" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
             } else {
               const node = table.get(rawCol);
@@ -3796,11 +3813,7 @@ export class Relation<T extends Base> {
             // everything else (positional "1", NULLS FIRST, commas, etc.) is raw SQL.
             if (/^[A-Za-z_$][\w$]*$/.test(trimmed)) {
               if (!this._fromClause.isEmpty() && !this._isKnownColumn(trimmed)) {
-                manager.order(
-                  new Nodes.Ascending(
-                    new Nodes.SqlLiteral(this._quoteBareColumn(trimmed), { retryable: true }),
-                  ),
-                );
+                manager.order(new Nodes.Ascending(this._orderColumn(trimmed) as Nodes.Node));
               } else {
                 manager.order(new Nodes.Ascending(table.get(trimmed)));
               }
@@ -3817,7 +3830,7 @@ export class Relation<T extends Base> {
           const lit = new Nodes.SqlLiteral(col);
           manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
         } else if (!this._fromClause.isEmpty() && !this._isKnownColumn(col)) {
-          const lit = new Nodes.SqlLiteral(this._quoteBareColumn(col), { retryable: true });
+          const lit = this._orderColumn(col) as Nodes.Node;
           manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
         } else {
           manager.order(dir === "desc" ? table.get(col).desc() : table.get(col).asc());

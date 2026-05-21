@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { ModelHelpers, normalizeModelName } from "./model-helpers.js";
+import { GeneratorError } from "./generated-attribute.js";
 
 describe("normalizeModelName", () => {
   beforeEach(() => {
@@ -18,5 +19,12 @@ describe("normalizeModelName", () => {
 
     ModelHelpers.skipWarn = false;
     expect(normalizeModelName("posts", { forcePlural: true })).toBe("posts");
+  });
+
+  it("raises GeneratorError on inflection-impossible names", () => {
+    // "WIFI" trips the activesupport inflector's underscore round-trip
+    // (`underscore("WIFI")` → "wifi" but `underscore("WIFIs")` → "wif_is"),
+    // which is exactly Rails' inflection_impossible? check.
+    expect(() => normalizeModelName("WIFI")).toThrow(GeneratorError);
   });
 });

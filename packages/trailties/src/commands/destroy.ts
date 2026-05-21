@@ -62,10 +62,16 @@ export function destroyCommand(): Command {
       const migrationsDir = path.join(cwd, "db", "migrations");
       if (!fs.existsSync(migrationsDir)) return;
 
-      const dashed = dasherize(name);
+      // Anchor on `^<timestamp>[_-]<name>\.(ts|js)$` so a name like
+      // `create_posts` does not also match `..._add_create_posts_flag.ts`.
+      // Escape first so regex metacharacters in the user-supplied name
+      // can't widen the match.
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const dashed = dasherize(escaped);
       const underscored = dashed.replace(/-/g, "_");
+      const pattern = new RegExp(`^\\d+[_-](${dashed}|${underscored})\\.(ts|js)$`);
       for (const f of fs.readdirSync(migrationsDir)) {
-        if (f.includes(dashed) || f.includes(underscored)) {
+        if (pattern.test(f)) {
           removeFile(cwd, `db/migrations/${f}`);
         }
       }

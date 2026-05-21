@@ -77,9 +77,9 @@ jobs:
           # here affects all packages: workspace topology, root tooling
           # config, shared scripts, this workflow, composite actions.
           INFRA_RE='^(pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|tsconfig[^/]*\.json$|vitest[^/]*\.config\.ts$|scripts/|\.github/workflows/ci\.yml$|\.github/actions/)'
-          AR_PKGS_RE='^packages/(activerecord|arel|activemodel|activesupport|globalid)/'
+          AR_PKGS_RE='^packages/(activerecord|arel|activemodel|activesupport|globalid|did-you-mean)/'
           # actionpack_affected gates actionpack-tests. True for actionpack +
-          # its runtime deps (actionview/activemodel/activesupport/rack).
+          # its runtime deps (actionview/activemodel/activesupport/rack/did-you-mean).
           AP_PKGS_RE='^packages/(actionpack|actionview|activemodel|activesupport|rack|did-you-mean)/'
           # actionview_affected gates actionview-tests. ActionView's only
           # workspace dependency is activesupport (see actionview/package.json).
@@ -352,17 +352,22 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-pnpm
-      - run: pnpm install --frozen-lockfile
-      # Package may not exist on the base ref yet; skip cleanly so the gate
-      # can land independent of the package PR.
-      - name: Run tse-compiler tests
+      # Package may not exist on the base ref yet; short-circuit before
+      # paying for pnpm setup + install. Remove this guard once #2190 lands.
+      - id: present
         run: |
           if [ -d packages/tse-compiler ]; then
-            pnpm vitest run packages/tse-compiler
+            echo "ok=true" >> "$GITHUB_OUTPUT"
           else
-            echo "packages/tse-compiler not present on this ref — skipping"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "packages/tse-compiler not present on this ref — skipping setup + tests"
           fi
+      - if: steps.present.outputs.ok == 'true'
+        uses: ./.github/actions/setup-pnpm
+      - if: steps.present.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.present.outputs.ok == 'true'
+        run: pnpm vitest run packages/tse-compiler
 
   sqlite-tests:
     name: SQLite Tests

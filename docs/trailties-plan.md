@@ -21,9 +21,14 @@ current state.
    tests must include (a) snapshot, (b) `parseTs` (the
    parse-without-diagnostics helper exported from T1), (c)
    `assertNoRubySource`.
-1. **No `node:*` imports** in `packages/trailties/src/` except `bin.ts`.
-   Repository rule; enforce locally with
-   `! grep -r 'from "node:' packages/trailties/src/ | grep -v bin.ts`.
+1. **No NEW `node:*` imports** in `packages/trailties/src/` except `bin.ts`.
+   The existing tree (`migration-loader.ts`, `commands/console.ts`,
+   `generators/controller-generator.ts`, `server/*`, …) still holds
+   ~25 violations from before this rule landed — scheduled for the
+   1.12c async-fs sweep (open question #5). New code routes through
+   `getFs()` / `getPath()` / `getChildProcess()` adapters from
+   `@blazetrails/activesupport`. To check what you're about to add:
+   `! git diff origin/main...HEAD -- 'packages/trailties/src/**/*.ts' ':!**/bin.ts' | grep '^+.*from "node:'`.
 2. **No `process.*` references** in `packages/trailties/src/` after PR 0.3.
    Enforced by ESLint via `blazetrails/no-process-bypass`. Use the
    `processAdapter` snapshot for `env` / `cwd` / `stdout`.

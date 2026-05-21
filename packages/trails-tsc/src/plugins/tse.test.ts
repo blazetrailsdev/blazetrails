@@ -39,7 +39,7 @@ describe("virtualizeTse", () => {
     // parameter is a type error. (Inline a Record alias because the
     // diagnose helper runs with `lib: []`.)
     const probe =
-      "type Record<K extends keyof never, V> = { [P in K]: V };\n" +
+      "type Record<K extends keyof any, V> = { [P in K]: V };\n" +
       out +
       "\nrender({} as RenderContext, { extra: 1 });";
     expect(diagnose(probe).join("\n")).toMatch(/not assignable|extra/i);
@@ -73,14 +73,17 @@ describe("virtualizeTse", () => {
     expect(() => virtualizeTse("<%# locals: (user) %>")).toThrow(TseLocalsSignatureError);
   });
 
-  it("reports a LineDelta covering the header so diagnostics remap back to .tse", () => {
+  it("reports LineDeltas covering header and footer so diagnostics remap back to .tse", () => {
     const { ts, deltas } = virtualizeTseWithDeltas("<h1><%= 1 %></h1>");
-    expect(deltas).toHaveLength(1);
-    expect(deltas[0]?.insertedAtLine).toBe(-1);
-    // The header runs from the file start up to (and including) the
-    // `const _ob = …` line. The body should start immediately after.
-    const headerLines = ts.split("\n").slice(0, deltas[0]!.lineCount);
-    expect(headerLines.at(-1)).toContain("const _ob");
+    expect(deltas).toHaveLength(2);
+    const [head, foot] = deltas;
+    expect(head?.insertedAtLine).toBe(-1);
+    const lines = ts.split("\n");
+    expect(lines[head!.lineCount - 1]).toContain("const _ob");
+    // Footer delta starts at the line after the body and covers the
+    // trailing `return _ob;` + `}` + trailing newline.
+    expect(lines[foot!.insertedAtLine]).toContain("return _ob");
+    expect(foot?.insertedAtLine).toBe(head!.lineCount + 3); // 3 body nodes: text, expr, text
   });
 
   it("dispatches expression sites and preserves code chunks raw", () => {

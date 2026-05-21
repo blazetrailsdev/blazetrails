@@ -152,12 +152,18 @@ export function virtualizeTseWithDeltas(source: string): VirtualizeTseResult {
   for (const node of ast.nodes) body.push(emitNode(node));
   const footer = ["  return _ob;", "}", ""];
 
-  // Single LineDelta covers the prepended header so `remapDiagnostics`
-  // surfaces tsc errors at the user's `.tse` coordinates. Per-node
-  // line-precise mapping is a follow-up tied to tse-compiler token spans.
+  // Two LineDeltas: one for the prepended header, one for the trailing
+  // footer (return + `}`). Without the footer delta, tsc errors landing
+  // at the closing brace would mis-remap to nonexistent `.tse` lines.
+  // Per-node line-precise mapping inside the body is a follow-up tied
+  // to tse-compiler emitting token spans.
   const ts = [...header, ...body, ...footer].join("\n");
   const headerLineCount = header.join("\n").split("\n").length;
-  const deltas: LineDelta[] = [{ insertedAtLine: -1, lineCount: headerLineCount }];
+  const footerLineCount = footer.join("\n").split("\n").length;
+  const deltas: LineDelta[] = [
+    { insertedAtLine: -1, lineCount: headerLineCount },
+    { insertedAtLine: headerLineCount + body.length, lineCount: footerLineCount },
+  ];
   return { ts, deltas };
 }
 

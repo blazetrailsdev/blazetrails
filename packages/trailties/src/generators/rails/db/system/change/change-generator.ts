@@ -82,6 +82,13 @@ export class ChangeGenerator extends GeneratorBase {
     this.writeOrUpdate("package.json", JSON.stringify(pkg, null, 2) + "\n");
   }
 
+  // Mirrors railties change_generator.rb's exact-string gsub against
+  // all_docker_bases_regex / all_docker_builds_regex: matches only the
+  // package lists `dockerPackages(...)` would emit for a known database.
+  // Trailties' current AppGenerator Dockerfile (app-generator.ts) doesn't
+  // emit those lines today, so on a default-generated app this is a no-op
+  // until AppGenerator's Dockerfile is aligned with the Database registry
+  // (tracked under PR 1.14d in docs/trailties-plan.md).
   editDockerfile(): void {
     if (!this.fileExists("Dockerfile")) return;
     const fullPath = this.path.join(this.cwd, "Dockerfile");

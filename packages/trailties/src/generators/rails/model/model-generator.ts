@@ -7,20 +7,11 @@ import { normalizeModelName, type ModelHelpersOptions } from "../../model-helper
 // `Base` is @blazetrails/activerecord's public model base.
 export interface ModelGeneratorOptions extends NamedBaseOptions, ModelHelpersOptions {}
 
-const TS_TYPES: Record<string, string> = {
-  integer: "number",
-  float: "number",
-  decimal: "number",
-  boolean: "boolean",
-  date: "Date",
-  datetime: "Date",
-  timestamp: "Date",
-  time: "Date",
-  references: "number",
-  belongs_to: "number",
-  binary: "Uint8Array",
-  digest: "string",
-};
+// prettier-ignore
+const TS_TYPES: Record<string, string> = { integer: "number", float: "number",
+  decimal: "number", boolean: "boolean", date: "Date", datetime: "Date",
+  timestamp: "Date", time: "Date", references: "number", belongs_to: "number",
+  binary: "Uint8Array", digest: "string" };
 
 export class ModelGenerator extends NamedBase {
   constructor(options: ModelGeneratorOptions) {

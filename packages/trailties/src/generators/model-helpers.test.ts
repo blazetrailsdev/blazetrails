@@ -6,11 +6,15 @@ describe("normalizeModelName", () => {
     ModelHelpers.skipWarn = false;
   });
 
-  it("singularizes plurals, honors forcePlural, sets skipWarn", () => {
+  it("singularizes plurals and warns once, honors forcePlural, suppresses subsequent warns", () => {
     const messages: string[] = [];
     expect(normalizeModelName("posts", {}, (m) => messages.push(m))).toBe("post");
     expect(messages[0]).toContain("'posts' was recognized as a plural");
     expect(ModelHelpers.skipWarn).toBe(true);
+
+    const more: string[] = [];
+    expect(normalizeModelName("comments", {}, (m) => more.push(m))).toBe("comment");
+    expect(more).toEqual([]);
 
     ModelHelpers.skipWarn = false;
     expect(normalizeModelName("posts", { forcePlural: true })).toBe("posts");

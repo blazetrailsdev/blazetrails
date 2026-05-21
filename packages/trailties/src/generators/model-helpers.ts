@@ -2,17 +2,19 @@ import { pluralize, singularize, underscore } from "@blazetrails/activesupport";
 import { GeneratorError } from "./generated-attribute.js";
 
 // Mirrors railties/lib/rails/generators/model_helpers.rb. Trailties
-// generators call normalizeModelName() from their constructor.
+// generators call normalizeModelName() from their constructor. Warning
+// strings are kept verbatim from Rails so `pnpm api:compare` can match.
 // prettier-ignore
-export const PLURAL_MODEL_NAME_WARN_MESSAGE = "[WARNING] The model name '%s' was recognized as a plural, using the singular '%s' instead. Override with --force-plural or setup custom inflection rules for this noun before running the generator.";
+const PLURAL_WARN = "[WARNING] The model name '%s' was recognized as a plural, using the singular '%s' instead. Override with --force-plural or setup custom inflection rules for this noun before running the generator.";
 // prettier-ignore
-export const IRREGULAR_MODEL_NAME_WARN_MESSAGE = "[WARNING] Rails cannot recover singular form from its plural form '%s'.\nPlease setup custom inflection rules for this noun before running the generator in config/initializers/inflections.rb.\n";
+const IRREGULAR_WARN = "[WARNING] Rails cannot recover singular form from its plural form '%s'.\nPlease setup custom inflection rules for this noun before running the generator in config/initializers/inflections.rb.\n";
 // prettier-ignore
-export const INFLECTION_IMPOSSIBLE_ERROR_MESSAGE = "Rails cannot recover the underscored form from its camelcase form '%s'.\nPlease use an underscored name instead, either '%s' or '%s'.\nOr setup custom inflection rules for this noun before running the generator in config/initializers/inflections.rb.\n";
+const IMPOSSIBLE_ERR = "Rails cannot recover the underscored form from its camelcase form '%s'.\nPlease use an underscored name instead, either '%s' or '%s'.\nOr setup custom inflection rules for this noun before running the generator in config/initializers/inflections.rb.\n";
 
 export class ModelHelpers {
   static skipWarn = false;
 }
+
 export interface ModelHelpersOptions {
   forcePlural?: boolean;
 }
@@ -26,17 +28,15 @@ export function normalizeModelName(
   let cur = name;
   if (isPlural(cur) && !options.forcePlural) {
     const s = singularize(cur);
-    if (!ModelHelpers.skipWarn) say(fmt(PLURAL_MODEL_NAME_WARN_MESSAGE, cur, s));
+    if (!ModelHelpers.skipWarn) say(fmt(PLURAL_WARN, cur, s));
     cur = s;
   }
   if (isInflectionImpossible(cur)) {
     const o1 = underscore(singularize(cur));
     const o2 = singularize(underscore(pluralize(cur)));
-    throw new GeneratorError(fmt(INFLECTION_IMPOSSIBLE_ERROR_MESSAGE, cur, o1, o2));
+    throw new GeneratorError(fmt(IMPOSSIBLE_ERR, cur, o1, o2));
   }
-  if (isIrregular(cur) && !ModelHelpers.skipWarn) {
-    say(fmt(IRREGULAR_MODEL_NAME_WARN_MESSAGE, pluralize(cur)));
-  }
+  if (isIrregular(cur) && !ModelHelpers.skipWarn) say(fmt(IRREGULAR_WARN, pluralize(cur)));
   ModelHelpers.skipWarn = true;
   return cur;
 }

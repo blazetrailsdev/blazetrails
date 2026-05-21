@@ -21,8 +21,11 @@ export function applyResourceHelpers(
   options: ResourceHelpersOptions = {},
   say: SayFn = () => {},
 ): ResourceHelpersInfo {
+  // Rails: super (ModelHelpers#initialize) normalizes once, then
+  // `self.name = options[:model_name]` swaps without re-running the
+  // pluralize-warn path; `assign_names!` only re-derives file/class paths.
   const initial = normalizeModelName(rawName, options, say);
-  const name = options.modelName ? normalizeModelName(options.modelName, options, say) : initial;
+  const name = options.modelName ?? initial;
   const controllerName = pluralize(initial);
   const parts = controllerName.includes("/")
     ? controllerName.split("/")

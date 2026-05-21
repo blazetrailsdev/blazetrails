@@ -77,7 +77,9 @@ jobs:
           # here affects all packages: workspace topology, root tooling
           # config, shared scripts, this workflow, composite actions.
           INFRA_RE='^(pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|tsconfig[^/]*\.json$|vitest[^/]*\.config\.ts$|scripts/|\.github/workflows/ci\.yml$|\.github/actions/)'
-          # AR consumes @blazetrails/trails-tsc at runtime via the tsc-wrapper
+          # AR workspace deps: arel/activemodel/activesupport/globalid/
+          # did-you-mean (per packages/activerecord/package.json). Also
+          # consumes @blazetrails/trails-tsc at runtime via the tsc-wrapper
           # CLI + type-virtualization modules (see packages/activerecord/src/
           # tsc-wrapper, schema-columns-dump.test.ts), so trails-tsc changes
           # can fail AR vitest suites — include it in the gate.
@@ -92,12 +94,15 @@ jobs:
           # actionpack/actionview/activerecord/rack/activesupport, so any of
           # their workspace upstreams also flips this on.
           TRAILTIES_PKGS_RE='^packages/(trailties|actionpack|actionview|activerecord|arel|activemodel|activesupport|globalid|rack|did-you-mean|trails-tsc)/'
-          # trails_tsc_affected gates the virtualized DX type tests, which
-          # are activerecord's only consumer of @blazetrails/trails-tsc.
+          # trails_tsc_affected gates the virtualized DX type tests.
+          # Workspace consumers of @blazetrails/trails-tsc today: activerecord
+          # (tsc-wrapper + type-virtualization) and scripts/guides-typecheck;
+          # AR consumption is the reason trails-tsc is also in AR_PKGS_RE.
           TRAILS_TSC_PKGS_RE='^packages/trails-tsc/'
-          # tse_compiler_affected gates tse-compiler-tests. Own package +
-          # activesupport (its only workspace dep).
-          TSE_COMPILER_PKGS_RE='^packages/(tse-compiler|activesupport)/'
+          # tse_compiler_affected gates tse-compiler-tests. The package has
+          # no workspace dependencies today (no activesupport import), so
+          # the gate matches the package path only.
+          TSE_COMPILER_PKGS_RE='^packages/tse-compiler/'
           force_all_affected() {
             echo "activerecord_affected=true" >> "$GITHUB_OUTPUT"
             echo "actionpack_affected=true"   >> "$GITHUB_OUTPUT"
@@ -132,7 +137,9 @@ jobs:
             else
               echo "docs_only=true" >> "$GITHUB_OUTPUT"
             fi
-            # On push to main / schedule / workflow_dispatch always run everything.
+            # On push to main / schedule / workflow_dispatch force every
+            # package gate true. Downstream jobs still honor docs_only, so a
+            # docs-only push to main still short-circuits the matrix.
             case "${{ github.event_name }}" in
               push|schedule|workflow_dispatch)
                 force_all_affected

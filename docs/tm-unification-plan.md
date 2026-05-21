@@ -125,7 +125,7 @@ all-ANSI SQL. Each adapter is its own PR; bundling risks a CI failure
 that's hard to triage.
 
 **9b-1 — activate PG `arelVisitor` delegation — closed (#2139).** The
-gate at `test-adapter.ts:715` now passes both `sqlite` and `postgres`.
+gate at `test-adapter.ts:716` now passes both `sqlite` and `postgres`.
 Smaller surface than 9a (3 files, +41/-27). 3 PG-bytea encryption
 tests skipped pending a `type.serialize` follow-up; that work is
 tracked in 9b-2d below.
@@ -135,13 +135,13 @@ prerequisite arel fix and the gate flip proper:
 
 - **9b-2a — `Table.star` → `Attribute` — closed (#2144).** First
   attempt (#2141, closed) surfaced 56 MariaDB failures rooted in
-  mixed-quote SQL: `Table.star` was a pre-baked ANSI `SqlLiteral` at
-  `packages/arel/src/table.ts:197` that bypassed the adapter visitor.
+  mixed-quote SQL: `Table.star` in `packages/arel/src/table.ts` was
+  a pre-baked ANSI `SqlLiteral` that bypassed the adapter visitor.
   Rails uses `table[Arel.star]` (an `Attribute`) so the visitor
   handles dialect quoting. #2144 restored that shape; SQLite/PG
   unchanged, MySQL now emits backticks via the visitor.
 - **9b-2b — gate flip + assertion sweep — in flight (#2155).** Drops
-  the adapter conditional from `test-adapter.ts:715` so all three
+  the adapter conditional from `test-adapter.ts:716` so all three
   adapters delegate. Sweep of ~50 hardcoded `'"name"'` assertions in
   `relation.test.ts` via a `Q(...)` helper that rewrites to backticks
   on MySQL. Split-out fixes already merged (each surfaced as the

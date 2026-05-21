@@ -211,7 +211,7 @@ const COLUMN_TYPE_MAP_MYSQL: Record<PrimitiveColumnSpec, string> = {
 // type names — they store as TEXT/BLOB under the hood while preserving the
 // declared type for schema reflection (so the type registry resolves to
 // SQLiteDateTimeType/DateType/TimeType/JsonType on load). `binary` inherits
-// from MYSQL (BLOB).
+// from `COLUMN_TYPE_MAP_MYSQL` (BLOB).
 /** @internal */
 const COLUMN_TYPE_MAP_SQLITE: Record<PrimitiveColumnSpec, string> = {
   ...COLUMN_TYPE_MAP_MYSQL,

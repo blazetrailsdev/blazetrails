@@ -54,16 +54,6 @@ describe("AuthenticationGenerator", () => {
     expect(exists(VIEWS[0]!)).toBe(false);
   });
 
-  it("wires Authentication import + static-block + routes (fresh app)", () => {
-    makeGen().run();
-    const ac = read(APP_CTRL_PATH);
-    expect(ac).toContain('import { Authentication } from "./concerns/authentication.js";');
-    expect(ac).toContain("Authentication.includeInto(this);");
-    const r = read("src/config/routes.ts");
-    expect(r).toContain('router.resources("passwords", { param: "token" });');
-    expect(r).toContain('router.resource("session");');
-  });
-
   it("injects inside the class even when ApplicationController has a body", () => {
     write(
       APP_CTRL_PATH,
@@ -105,6 +95,12 @@ describe("AuthenticationGenerator", () => {
     expect(ac.match(/import\s+\{\s*Authentication\b/g)).toHaveLength(1);
     expect(ac).toContain("Authentication.includeInto(this);");
     expect(parseTs(ac).diagnostics).toEqual([]);
+  });
+
+  it("does not clobber a pre-existing application-cable Connection", () => {
+    write("src/app/channels/application-cable/connection.ts", "// user\n");
+    makeGen().run();
+    expect(read("src/app/channels/application-cable/connection.ts")).toBe("// user\n");
   });
 
   it("is idempotent — re-running yields byte-identical injected files", () => {

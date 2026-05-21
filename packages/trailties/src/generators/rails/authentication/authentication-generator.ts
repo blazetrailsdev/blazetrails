@@ -65,11 +65,13 @@ export class AuthenticationGenerator extends GeneratorBase {
         asyncStub("setUserByToken", "// User.findByPasswordResetTokenBang", PRIVATE),
       ],
     );
-    this.emit("src/app/channels/application-cable/connection.ts", "Connection", undefined, [
-      stub("identifiedBy", "// currentUser", { static: true }),
-      asyncStub("connect", "// setCurrentUser || rejectUnauthorizedConnection"),
-      asyncStub("setCurrentUser", "// Session.findBy(cookies.signed.sessionId)", PRIVATE),
-    ]);
+    // Don't clobber AppGenerator's Connection (or user customizations).
+    if (!this.fileExists("src/app/channels/application-cable/connection.ts"))
+      this.emit("src/app/channels/application-cable/connection.ts", "Connection", undefined, [
+        stub("identifiedBy", "// currentUser", { static: true }),
+        asyncStub("connect", "// setCurrentUser || rejectUnauthorizedConnection"),
+        asyncStub("setCurrentUser", "// Session.findBy(cookies.signed.sessionId)", PRIVATE),
+      ]);
 
     if (!skipMailer) {
       this.emit("src/app/mailers/passwords-mailer.ts", "PasswordsMailer", APP_MAILER, [

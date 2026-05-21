@@ -117,11 +117,12 @@ export class Tse implements TemplateHandler {
 }
 
 /**
- * Minimal format → MIME map used only by the {@link Tse#render} convenience
- * adapter to bridge `RenderContext.format` (a Rails format token like
- * `"html"`) into the `template.type` the Rails handler protocol expects.
- * The real lookup lives in `LookupContext` / `Mime::Type`; this is a
- * stopgap until `Template` is wired through.
+ * Normalize a `template.type` input into a MIME string. Rails compares the
+ * `escape_ignore_list` (default `["text/plain"]`) against `Template#type`,
+ * which already returns a MIME string. Trails' `Template#type` currently
+ * returns the format token (e.g. `"html"`) until `Mime::Type` lands, so we
+ * widen the input here: pass-through for MIMEs, map known tokens to MIME.
+ * Unknown tokens pass through unchanged so they still miss the ignore list.
  *
  * @internal
  */

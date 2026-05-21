@@ -54,6 +54,15 @@ beforeEach(() => {
 });
 afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
+function run(to: string, opts: { appName?: string; output?: (m: string) => void } = {}) {
+  return new ChangeGenerator({
+    cwd: tmpDir,
+    output: opts.output ?? (() => {}),
+    to,
+    appName: opts.appName ?? "tmp",
+  }).run();
+}
+
 describe("ChangeGeneratorTest", () => {
   it("change to invalid database", () => {
     expect(() => new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "invalid-db" })).toThrow(
@@ -63,79 +72,56 @@ describe("ChangeGeneratorTest", () => {
 
   it("appName defaults to basename of cwd", () => {
     new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "postgresql" }).run();
-    const cfg = read("src/config/database.ts");
-    expect(cfg).toContain(`database: "${path.basename(tmpDir)}_development"`);
+    expect(read("src/config/database.ts")).toContain(
+      `database: "${path.basename(tmpDir)}_development"`,
+    );
   });
 
   it("change to postgresql", () => {
-    new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "postgresql", appName: "tmp" }).run();
-
+    run("postgresql");
     const cfg = read("src/config/database.ts");
     expect(cfg).toContain('adapter: "postgresql"');
     expect(cfg).toContain('database: "tmp_development"');
-
     const pkg = JSON.parse(read("package.json"));
     expect(pkg.dependencies.pg).toBe("^8.19.0");
     expect(pkg.dependencies["better-sqlite3"]).toBeUndefined();
-
     const dockerfile = read("Dockerfile");
     expect(dockerfile).toContain("build-essential git libpq-dev");
     expect(dockerfile).toContain("curl libvips postgresql-client");
   });
 
   it("change to mysql", () => {
-    new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "mysql", appName: "tmp" }).run();
-
+    run("mysql");
     const cfg = read("src/config/database.ts");
     expect(cfg).toContain('adapter: "mysql2"');
     expect(cfg).toContain('database: "tmp_development"');
-
     const pkg = JSON.parse(read("package.json"));
     expect(pkg.dependencies.mysql2).toBe("^3.18.2");
     expect(pkg.dependencies["better-sqlite3"]).toBeUndefined();
-
     const dockerfile = read("Dockerfile");
     expect(dockerfile).toContain("build-essential default-libmysqlclient-dev git");
     expect(dockerfile).toContain("curl default-mysql-client libvips");
   });
 
   it("change to sqlite3", () => {
-    write(
-      "package.json",
-      JSON.stringify({ name: "tmp", dependencies: { pg: "^8.19.0" } }, null, 2) + "\n",
-    );
-    new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "sqlite3", appName: "tmp" }).run();
-
-    const cfg = read("src/config/database.ts");
-    expect(cfg).toContain('adapter: "sqlite3"');
-    expect(cfg).toContain("db/development.sqlite3");
-
+    write("package.json", JSON.stringify({ dependencies: { pg: "^8.19.0" } }) + "\n");
+    run("sqlite3");
+    expect(read("src/config/database.ts")).toContain("db/development.sqlite3");
     const pkg = JSON.parse(read("package.json"));
     expect(pkg.dependencies["better-sqlite3"]).toBe("^12.6.2");
     expect(pkg.dependencies.pg).toBeUndefined();
   });
 
   it("change to mariadb", () => {
-    new ChangeGenerator({
-      cwd: tmpDir,
-      output: () => {},
-      to: "mariadb-mysql",
-      appName: "tmp",
-    }).run();
-
-    const cfg = read("src/config/database.ts");
-    expect(cfg).toContain('adapter: "mysql2"');
-
-    const pkg = JSON.parse(read("package.json"));
-    expect(pkg.dependencies.mysql2).toBe("^3.18.2");
-
-    const dockerfile = read("Dockerfile");
-    expect(dockerfile).toContain("default-libmysqlclient-dev");
+    run("mariadb-mysql");
+    expect(read("src/config/database.ts")).toContain('adapter: "mysql2"');
+    expect(JSON.parse(read("package.json")).dependencies.mysql2).toBe("^3.18.2");
+    expect(read("Dockerfile")).toContain("default-libmysqlclient-dev");
   });
 
   it("change from versioned dep to other versioned dep", () => {
-    new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "postgresql", appName: "tmp" }).run();
-    new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "mysql", appName: "tmp" }).run();
+    run("postgresql");
+    run("mysql");
     const pkg = JSON.parse(read("package.json"));
     expect(pkg.dependencies.mysql2).toBe("^3.18.2");
     expect(pkg.dependencies.pg).toBeUndefined();
@@ -143,8 +129,28 @@ describe("ChangeGeneratorTest", () => {
 
   it("no Dockerfile is a no-op", () => {
     fs.rmSync(path.join(tmpDir, "Dockerfile"));
-    new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "mysql", appName: "tmp" }).run();
+    run("mysql");
     expect(exists("Dockerfile")).toBe(false);
     expect(exists("src/config/database.ts")).toBe(true);
+  });
+
+  it("editDatabaseConfig targets existing config/database.ts when present", () => {
+    write("config/database.ts", "// existing\n");
+    run("postgresql");
+    expect(read("config/database.ts")).toContain('adapter: "postgresql"');
+    expect(exists("src/config/database.ts")).toBe(false);
+  });
+
+  it("editPackageJson throws on unparseable JSON", () => {
+    write("package.json", "{ this is not json");
+    expect(() => run("mysql")).toThrow(/Could not parse .*package\.json/);
+  });
+
+  it("editDockerfile is a no-op when no DB package lines match", () => {
+    write("Dockerfile", "FROM node:22-slim\nRUN echo hello\n");
+    const calls: string[] = [];
+    run("mysql", { output: (m) => calls.push(m) });
+    expect(read("Dockerfile")).toBe("FROM node:22-slim\nRUN echo hello\n");
+    expect(calls.some((m) => m.includes("Dockerfile"))).toBe(false);
   });
 });

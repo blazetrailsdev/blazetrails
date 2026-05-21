@@ -49,7 +49,15 @@ export class ChangeGenerator extends GeneratorBase {
   }
 
   editDatabaseConfig(): void {
-    const target = "src/config/database.ts";
+    // Candidate order matches the runtime loader in trailties/src/database.ts
+    // so editing prefers the active config; fall back to src/config when none exist.
+    const target =
+      [
+        "config/database.ts",
+        "config/database.js",
+        "src/config/database.ts",
+        "src/config/database.js",
+      ].find((p) => this.fileExists(p)) ?? "src/config/database.ts";
     const content = databaseConfigTs(this.database, this.appName);
     const full = this.path.join(this.cwd, target);
     this.fs.mkdirSync(this.path.dirname(full), { recursive: true });
@@ -64,8 +72,11 @@ export class ChangeGenerator extends GeneratorBase {
     let pkg: { dependencies?: Record<string, string> } & Record<string, unknown>;
     try {
       pkg = JSON.parse(raw);
-    } catch {
-      return;
+    } catch (e) {
+      throw new Error(
+        `Could not parse ${fullPath}: ${(e as Error).message}. Fix the file and re-run.`,
+        { cause: e },
+      );
     }
     const deps = (pkg.dependencies ?? {}) as Record<string, string>;
     for (const d of Database.all()) delete deps[d.pkgDependency.name];
@@ -79,14 +90,17 @@ export class ChangeGenerator extends GeneratorBase {
   editDockerfile(): void {
     if (!this.fileExists("Dockerfile")) return;
     const fullPath = this.path.join(this.cwd, "Dockerfile");
-    let content = this.fs.readFileSync(fullPath, "utf-8");
-    content = gsub(content, allDockerBasesRegex(), dockerBasePackages(this.database.basePackage));
-    content = gsub(
-      content,
-      allDockerBuildsRegex(),
-      dockerBuildPackages(this.database.buildPackage),
+    const before = this.fs.readFileSync(fullPath, "utf-8");
+    let after = before.replace(
+      dockerPackagesRegex(BASE_PACKAGES, (d) => d.basePackage),
+      dockerPackages(BASE_PACKAGES, this.database.basePackage),
     );
-    this.fs.writeFileSync(fullPath, content);
+    after = after.replace(
+      dockerPackagesRegex(BUILD_PACKAGES, (d) => d.buildPackage),
+      dockerPackages(BUILD_PACKAGES, this.database.buildPackage),
+    );
+    if (after === before) return;
+    this.fs.writeFileSync(fullPath, after);
     this.output(`     update  Dockerfile`);
   }
 
@@ -123,32 +137,11 @@ function databaseConfigTs(database: Database, appName: string): string {
   ].join("\n");
 }
 
-function dockerBasePackages(databasePackage: string | undefined): string {
-  const set = databasePackage ? [databasePackage, ...BASE_PACKAGES].sort() : [...BASE_PACKAGES];
-  return set.join(" ");
+function dockerPackages(base: string[], extra: string | undefined): string {
+  return (extra ? [extra, ...base].sort() : [...base]).join(" ");
 }
 
-function dockerBuildPackages(databasePackage: string | undefined): string {
-  const set = databasePackage ? [databasePackage, ...BUILD_PACKAGES].sort() : [...BUILD_PACKAGES];
-  return set.join(" ");
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function altRegex(values: string[]): RegExp {
-  return new RegExp([...new Set(values)].map(escapeRegex).join("|"), "g");
-}
-
-function allDockerBasesRegex(): RegExp {
-  return altRegex(Database.all().map((d) => dockerBasePackages(d.basePackage)));
-}
-
-function allDockerBuildsRegex(): RegExp {
-  return altRegex(Database.all().map((d) => dockerBuildPackages(d.buildPackage)));
-}
-
-function gsub(haystack: string, pattern: RegExp, replacement: string): string {
-  return haystack.replace(pattern, replacement);
+function dockerPackagesRegex(base: string[], pick: (d: Database) => string | undefined): RegExp {
+  const alts = [...new Set(Database.all().map((d) => dockerPackages(base, pick(d))))];
+  return new RegExp(alts.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
 }

@@ -26,7 +26,13 @@ export class OutputFlow {
   append(key: string, value: unknown): void {
     if (value == null) return;
     const current = this.get(key);
-    const piece: string | SafeBuffer = value instanceof SafeBuffer ? value : toS(value);
+    // Rails: `@content[key] << value.to_s`. SafeBuffer and OutputBuffer
+    // both report html_safe via `to_s`, so they append verbatim; plain
+    // strings escape through SafeBuffer#concat.
+    let piece: string | SafeBuffer;
+    if (value instanceof SafeBuffer) piece = value;
+    else if (value instanceof OutputBuffer) piece = value.toString();
+    else piece = toS(value);
     this.content.set(key, current.concat(piece));
   }
 

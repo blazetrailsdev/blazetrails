@@ -1,10 +1,8 @@
 // Mirrors railties/lib/rails/generators/rails/devcontainer/devcontainer_generator.rb.
 import { GeneratorBase, type GeneratorOptions } from "../../base.js";
 import { Database, DATABASES, type DatabaseName } from "../../database.js";
-
 export const TRAILS_DEV_PATH = "/workspaces/trails";
 export type SqliteDriver = "better-sqlite3" | "node-sqlite" | "expo-sqlite";
-
 export interface DevcontainerGeneratorOptions extends GeneratorOptions {
   appName?: string;
   database?: DatabaseName;
@@ -29,9 +27,8 @@ export class DevcontainerGenerator extends GeneratorBase {
   constructor(options: DevcontainerGeneratorOptions) {
     super(options);
     const database = options.database ?? "sqlite3";
-    if (!(DATABASES as readonly string[]).includes(database)) {
+    if (!(DATABASES as readonly string[]).includes(database))
       throw new Error(`Unknown database: ${database}`);
-    }
     this.opts = {
       appName: options.appName ?? "rails_app",
       database,
@@ -64,7 +61,7 @@ export class DevcontainerGenerator extends GeneratorBase {
       "src/config/database.ts",
       /host:\s*"localhost"/g,
       'host: process.env.DB_HOST ?? "localhost"',
-      this.opts.database === "postgresql",
+      this.opts.database !== "sqlite3",
     );
     return this.getCreatedFiles();
   }

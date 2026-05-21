@@ -52,7 +52,11 @@ export function watchViews(opts: WatchViewsOptions = {}): WatchHandle {
     // emit a null filename. We can't filter by extension, but the cheap
     // full rebuild remains correct — schedule with an unknown trigger so
     // deletes/renames on those hosts still propagate.
-    if (filename !== null) {
+    if (filename === null) {
+      // Unknown trigger — overwrite any stale value from a prior event
+      // so the rebuild message doesn't misattribute the source.
+      lastTrigger = undefined;
+    } else {
       const name = typeof filename === "string" ? filename : String(filename);
       if (!name.endsWith(".tse")) return;
       lastTrigger = name.split(path.sep).join("/");

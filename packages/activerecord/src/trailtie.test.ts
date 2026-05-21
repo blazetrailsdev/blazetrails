@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { Trailtie } from "./trailtie.js";
+import { Trailtie, type ActiveRecordConfig } from "./trailtie.js";
 import { Railtie as BaseRailtie } from "@blazetrails/activesupport";
 import { deprecator } from "./deprecator.js";
 
@@ -27,5 +27,22 @@ describe("RailtieTest", () => {
   it("runInitializers registers the ActiveRecord deprecator", () => {
     Trailtie.runInitializers();
     expect(deprecators["activeRecord"]).toBe(deprecator());
+  });
+
+  it("seeds config.activeRecord with the Rails default OrderedOptions block", () => {
+    const cfg = Trailtie.config["activeRecord"] as ActiveRecordConfig;
+    expect(cfg.useSchemaCacheDump).toBe(true);
+    expect(cfg.checkSchemaCacheDumpVersion).toBe(true);
+    expect(cfg.maintainTestSchema).toBe(true);
+    expect(cfg.hasManyInversing).toBe(false);
+    expect(cfg.queryLogTagsEnabled).toBe(false);
+    expect(cfg.queryLogTags).toEqual(["application"]);
+    expect(cfg.queryLogTagsFormat).toBe("legacy");
+    expect(cfg.cacheQueryLogTags).toBe(false);
+    expect(cfg.raiseOnAssignToAttrReadonly).toBe(false);
+    expect(cfg.belongsToRequiredValidatesForeignKey).toBe(true);
+    expect(cfg.generateSecureTokenOn).toBe("create");
+    expect(cfg.encryption).toEqual({});
+    expect(cfg.queues).toEqual({});
   });
 });

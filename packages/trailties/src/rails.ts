@@ -6,6 +6,7 @@ import type { CacheStore, Logger } from "@blazetrails/activesupport";
 import { Application } from "./application.js";
 import { BacktraceCleaner } from "./backtrace-cleaner.js";
 import type { Configuration } from "./application/configuration.js";
+import type { InitializerGroup } from "./initializable.js";
 import { VERSION } from "./version.js";
 
 let _application: Application | null = null;
@@ -75,11 +76,11 @@ export const Trails = {
 
   /** Rails: `delegate :initialize!, to: :application`. Throws when no app
    * is registered, matching Rails' `NoMethodError` on `nil.initialize!`. */
-  async initialize(group?: string): Promise<Application> {
+  async initialize(group: InitializerGroup = "default"): Promise<Application> {
     const app = Trails.application;
     if (!app)
       throw new Error("Trails.application is not set — register an Application subclass first.");
-    return app.initialize(group as Parameters<Application["initialize"]>[0]);
+    return app.initialize(group);
   },
 
   /** Rails: `delegate :initialized?, to: :application`. */

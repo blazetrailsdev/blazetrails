@@ -1,15 +1,8 @@
 /**
- * TSE virtualization plugin. Maps `.tse` source files to a typed TS
- * function so tsc can type-check `<%= expr %>` and `<% code %>` blocks
- * against the locals declared in `<%# locals: (...) %>` / refined by
- * `<%! types: { ... } !%>`.
- *
- * Phase 2b scope: a single virtualized TS string per file (the
- * `.tse.ts` body). On-disk `.tse.d.ts` / `.tse.js` emission is Phase
- * 2c (build CLI). The body declares `RenderContext` and `SafeString`
- * inline so this plugin has no actionview dependency.
- *
- * Plan: docs/tse-plan.md §2 + §4 (Phase 2b).
+ * TSE virtualization plugin. Maps `.tse` sources to a typed TS render
+ * function so tsc can check `<%= expr %>` / `<% code %>` against the
+ * declared locals. Plan: docs/tse-plan.md §2 + §4 (Phase 2b).
+ * On-disk `.tse.d.ts` / `.tse.js` emission is Phase 2c (build CLI).
  */
 
 import { parse, type TseAst } from "@blazetrails/tse-compiler";
@@ -22,17 +15,11 @@ interface LocalEntry {
   defaultExpr: string | null;
 }
 
-/**
- * Parse the body of `<%# locals: (...) %>` into entries. The grammar
- * matches Rails' kwarg form: `name:` (required) and `name: default`
- * (optional). Defaults can contain commas inside parens/brackets/braces
- * and string/template literals, so we split on top-level commas only,
- * tracking bracket depth and quote state. Generics (`Foo<A, B>`) are
- * NOT recognized — angle brackets are ambiguous with `<` comparisons
- * without a full TS scanner; same class of pragmatic limit as Erubi's
- * regex lexer (plan §2.10.1). Template authors with generic defaults
- * should bind via a name (`const x = foo<A, B>(); … count: x`).
- */
+// Parse `<%# locals: (...) %>` body into entries. Splits on top-level
+// commas only, tracking brackets and quote/template-literal state.
+// Generics in defaults (`Foo<A, B>`) are not recognized — angle brackets
+// alias with `<` comparisons without a full TS scanner; same class of
+// pragmatic limit as Erubi's regex lexer (plan §2.10.1).
 function parseLocalsSignature(sig: string): LocalEntry[] {
   if (sig === "**nil" || sig.trim() === "") return [];
   const parts: string[] = [];
@@ -165,12 +152,9 @@ export function virtualizeTseWithDeltas(source: string): VirtualizeTseResult {
   for (const node of ast.nodes) body.push(emitNode(node));
   const footer = ["  return _ob;", "}", ""];
 
-  // The entire header is prepended scaffolding the user didn't write;
-  // report it as a single LineDelta at the head of the virtualized
-  // file so `remapDiagnostics` subtracts it when surfacing tsc errors
-  // at `.tse` coordinates. Body lines are 1:1 with `<%= %>`/`<% %>`
-  // tokens; per-node line-precise mapping is a follow-up tied to
-  // tse-compiler emitting token spans.
+  // Single LineDelta covers the prepended header so `remapDiagnostics`
+  // surfaces tsc errors at the user's `.tse` coordinates. Per-node
+  // line-precise mapping is a follow-up tied to tse-compiler token spans.
   const ts = [...header, ...body, ...footer].join("\n");
   const headerLineCount = header.join("\n").split("\n").length;
   const deltas: LineDelta[] = [{ insertedAtLine: -1, lineCount: headerLineCount }];

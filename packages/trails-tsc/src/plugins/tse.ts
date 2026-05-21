@@ -1,8 +1,10 @@
 /**
- * TSE virtualization plugin. Maps `.tse` sources to a typed TS render
+ * TSE virtualization plugin — the in-memory tsc-virtualization half of
+ * Phase 2b (plan §2 / §4). Maps `.tse` sources to a typed TS render
  * function so tsc can check `<%= expr %>` / `<% code %>` against the
- * declared locals. Plan: docs/tse-plan.md §2 + §4 (Phase 2b).
- * On-disk `.tse.d.ts` / `.tse.js` emission is Phase 2c (build CLI).
+ * declared locals. This PR covers the virtualizing `TscPlugin` only;
+ * on-disk `.tse.d.ts` / `.tse.js` emission, the views-manifest writer,
+ * and the build CLI are Phase 2c.
  */
 
 import { parse, type TseAst } from "@blazetrails/tse-compiler";
@@ -13,6 +15,30 @@ export class TseLocalsSignatureError extends Error {}
 interface LocalEntry {
   name: string;
   defaultExpr: string | null;
+}
+
+// Words reserved in ES strict mode + module context — every one of
+// these would crash the emitted `const { <name> } = locals;` /
+// `void <name>;`. Strict mode is implicit in ESM, which is what
+// trails-tsc emits.
+// prettier-ignore
+const RESERVED_NAMES = new Set([
+  "break", "case", "catch", "class", "const", "continue", "debugger",
+  "default", "delete", "do", "else", "enum", "export", "extends", "false",
+  "finally", "for", "function", "if", "import", "in", "instanceof", "new",
+  "null", "return", "super", "switch", "this", "throw", "true", "try",
+  "typeof", "var", "void", "while", "with", "yield", "implements",
+  "interface", "let", "package", "private", "protected", "public",
+  "static", "await", "async",
+]);
+
+function isUsableLocalName(name: string): boolean {
+  // Syntactic shape: must look like a TS identifier (rejects empty,
+  // digit-led, punctuation). `ts.createSourceFile` is the bullet-proof
+  // check because it covers Unicode identifier rules, but we keep it
+  // cheap with a guard regex first.
+  if (!/^[A-Za-z_$][\w$]*$/u.test(name)) return false;
+  return !RESERVED_NAMES.has(name);
 }
 
 // Parse `<%# locals: (...) %>` body into entries. Splits on top-level
@@ -87,7 +113,11 @@ function parseLocalsSignature(sig: string): LocalEntry[] {
       );
     }
     const name = trimmed.slice(0, colon).trim();
-    if (!/^[A-Za-z_$][\w$]*$/.test(name)) {
+    // Identifier shape + reserved-word rejection. The bullet-proof
+    // check is "would `const { <name> } = x;` parse cleanly?" — let TS
+    // answer it for us via createSourceFile diagnostics. Caches keyed
+    // by name keep this cheap across many entries.
+    if (!isUsableLocalName(name)) {
       throw new TseLocalsSignatureError(
         `invalid local name ${JSON.stringify(name)} in locals signature ${JSON.stringify(sig)}`,
       );

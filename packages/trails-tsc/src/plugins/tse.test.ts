@@ -139,6 +139,11 @@ describe("virtualizeTse", () => {
     expect(() => virtualizeTse("<%# locals: (1bad: 1) %>")).toThrow(/invalid local name/);
   });
 
+  it("rejects TS reserved words as local names", () => {
+    expect(() => virtualizeTse("<%# locals: (default: 1) %>")).toThrow(/invalid local name/);
+    expect(() => virtualizeTse("<%# locals: (await: 1) %>")).toThrow(/invalid local name/);
+  });
+
   it("dispatches expression sites and preserves code chunks raw", () => {
     const out = virtualizeTse("<% if (n > 0) { %><%= n %><%== raw %><% } %>");
     expect(out).toContain("if (n > 0) {");

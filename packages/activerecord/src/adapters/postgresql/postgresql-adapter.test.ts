@@ -21,7 +21,9 @@ import {
 } from "../../errors.js";
 import { withSecondAdapter } from "../../test-helpers/second-connection.js";
 
-// Run `fn` with `ext` guaranteed disabled; restore prior state on exit.
+// Run `fn` with `ext` guaranteed disabled; restore the pre-state (enabled
+// or disabled) on exit even if `fn` throws before tearing down whatever it
+// created.
 async function withExtensionDisabled(
   adapter: PostgreSQLAdapter,
   ext: string,
@@ -29,7 +31,9 @@ async function withExtensionDisabled(
 ): Promise<void> {
   const wasEnabled = await adapter.extensionEnabled(ext);
   const ensureDisabled = wasEnabled ? () => adapter.disableExtension(ext) : async () => {};
-  const restore = wasEnabled ? () => adapter.enableExtension(ext) : async () => {};
+  const restore = wasEnabled
+    ? () => adapter.enableExtension(ext)
+    : () => adapter.disableExtension(ext);
   await ensureDisabled();
   try {
     await fn();
@@ -39,7 +43,8 @@ async function withExtensionDisabled(
 }
 
 // Same as withExtensionDisabled but inverted: `ext` is guaranteed enabled
-// inside `fn` (and restored to disabled afterwards if it started that way).
+// inside `fn` and its pre-state (enabled or disabled) is restored on exit
+// even if `fn` throws before touching the extension itself.
 async function withExtensionEnabled(
   adapter: PostgreSQLAdapter,
   ext: string,
@@ -47,7 +52,9 @@ async function withExtensionEnabled(
 ): Promise<void> {
   const wasEnabled = await adapter.extensionEnabled(ext);
   const ensureEnabled = wasEnabled ? async () => {} : () => adapter.enableExtension(ext);
-  const restore = wasEnabled ? () => adapter.enableExtension(ext) : async () => {};
+  const restore = wasEnabled
+    ? () => adapter.enableExtension(ext)
+    : () => adapter.disableExtension(ext);
   await ensureEnabled();
   try {
     await fn();

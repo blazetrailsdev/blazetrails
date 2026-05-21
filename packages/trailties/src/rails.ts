@@ -5,6 +5,7 @@ import { EnvironmentInquirer, getEnv } from "@blazetrails/activesupport";
 import type { CacheStore, Logger } from "@blazetrails/activesupport";
 import { Application } from "./application.js";
 import { BacktraceCleaner } from "./backtrace-cleaner.js";
+import type { Configuration } from "./application/configuration.js";
 import { VERSION } from "./version.js";
 
 let _application: Application | null = null;
@@ -13,8 +14,12 @@ let _logger: Logger | null = null;
 let _env: EnvironmentInquirer | undefined;
 let _backtraceCleaner: BacktraceCleaner | undefined;
 
+function resolveDefaultEnv(): string {
+  return getEnv("TRAILS_ENV") ?? getEnv("NODE_ENV") ?? "development";
+}
+
 /**
- * Trails-renamed `Rails` module. Exposed as a frozen object literal with
+ * Trails-renamed `Rails` module. Exposed as an object literal with
  * accessors because TS has no module-singleton pattern. Mutations flow
  * through explicit setters (`Trails.application = app`,
  * `Trails.env = "test"`).
@@ -52,23 +57,34 @@ export const Trails = {
   },
 
   /** Rails: `Rails.configuration` → `application.config`. */
-  get configuration() {
-    const app = Trails.application;
-    return app ? app.config : null;
+  get configuration(): Configuration | null {
+    return Trails.application?.config ?? null;
   },
 
   /**
-   * Rails: `@_env ||= ActiveSupport::EnvironmentInquirer.new(...)`. Checks
-   * `TRAILS_ENV`, `RAILS_ENV`, then `RACK_ENV`, defaulting to
-   * `"development"`.
+   * Rails: `@_env ||= ActiveSupport::EnvironmentInquirer.new(...)`.
+   * Trails env precedence: `TRAILS_ENV`, then `NODE_ENV`, defaulting to
+   * `"development"` — matches `resolveEnv()` in `database.ts`.
    */
   get env(): EnvironmentInquirer {
-    return (_env ??= new EnvironmentInquirer(
-      getEnv("TRAILS_ENV") ?? getEnv("RAILS_ENV") ?? getEnv("RACK_ENV") ?? "development",
-    ));
+    return (_env ??= new EnvironmentInquirer(resolveDefaultEnv()));
   },
   set env(value: string | EnvironmentInquirer) {
     _env = typeof value === "string" ? new EnvironmentInquirer(value) : value;
+  },
+
+  /** Rails: `delegate :initialize!, to: :application`. Throws when no app
+   * is registered, matching Rails' `NoMethodError` on `nil.initialize!`. */
+  async initialize(group?: string): Promise<Application> {
+    const app = Trails.application;
+    if (!app)
+      throw new Error("Trails.application is not set — register an Application subclass first.");
+    return app.initialize(group as Parameters<Application["initialize"]>[0]);
+  },
+
+  /** Rails: `delegate :initialized?, to: :application`. */
+  initialized(): boolean {
+    return Trails.application?.initialized() ?? false;
   },
 
   get backtraceCleaner(): BacktraceCleaner {
@@ -90,29 +106,26 @@ export const Trails = {
   },
 
   /**
-   * Rails: `Rails.groups(*groups)`. Combines `:default`, current env, the
-   * `RAILS_GROUPS` env var, and any extra group dependencies from the
-   * optional trailing options hash.
+   * Rails: `Rails.groups(*groups)`. Combines `"default"`, current env, the
+   * `TRAILS_GROUPS` env var, and option-hash keys whose value array
+   * includes the current env. Result is deduped, preserving insertion
+   * order.
    */
-  groups(...args: Array<string | symbol | Record<string, string[]>>): string[] {
+  groups(...args: Array<string | Record<string, string[]>>): string[] {
     const last = args[args.length - 1];
-    const opts =
-      last && typeof last === "object" && !Array.isArray(last)
-        ? (args.pop() as Record<string, string[]>)
-        : {};
+    const opts = last && typeof last === "object" ? (args.pop() as Record<string, string[]>) : {};
     const env = Trails.env.toString();
-    const out: string[] = ["default", env];
-    for (const g of args) out.push(String(g));
-    const envGroups = getEnv("RAILS_GROUPS");
+    const out: string[] = ["default", env, ...(args as string[])];
+    const envGroups = getEnv("TRAILS_GROUPS");
     if (envGroups) for (const g of envGroups.split(",")) if (g) out.push(g);
     for (const [k, envs] of Object.entries(opts)) {
-      if (envs.map(String).includes(env)) out.push(k);
+      if (envs.includes(env)) out.push(k);
     }
     return [...new Set(out)];
   },
-
-  /** @internal Test-only — drops the cached EnvironmentInquirer. */
-  _resetEnv(): void {
-    _env = undefined;
-  },
 };
+
+/** @internal Test-only — drops the cached EnvironmentInquirer. */
+export function _resetTrailsEnv(): void {
+  _env = undefined;
+}

@@ -31,6 +31,9 @@ import {
 } from "@blazetrails/actionpack";
 import { Engine } from "./engine.js";
 import { Trailtie } from "./trailtie.js";
+import { Trails } from "./rails.js";
+import { HelloWorldApp, buildRoutes } from "./__fixtures__/hello-world/app.js";
+import { bodyToString } from "@blazetrails/rack";
 
 const posixPath: PathAdapter = {
   join: (...p) => p.join("/").replace(/\/+/g, "/"),
@@ -206,19 +209,21 @@ describe("Application", () => {
 });
 
 describe("Trails.application integration (PR 2.6 hello-world fixture)", () => {
+  afterEach(() => {
+    Trails.application = null;
+  });
+
   it("initializes a registered Application subclass and serves a route through actionpack", async () => {
-    const { HelloWorldApp, buildRoutes } = await import("./__fixtures__/hello-world/app.js");
-    const { Trails } = await import("./rails.js");
     Application.register(HelloWorldApp);
     expect(Trails.application).toBeInstanceOf(HelloWorldApp);
-    await Trails.application!.initialize();
-    expect(Trails.application!.initialized()).toBe(true);
-    const routes = buildRoutes();
-    const { bodyToString } = await import("@blazetrails/rack");
-    const [status, , body] = await routes.call({ REQUEST_METHOD: "GET", PATH_INFO: "/hello" });
+    await Trails.initialize();
+    expect(Trails.initialized()).toBe(true);
+    const [status, , body] = await buildRoutes().call({
+      REQUEST_METHOD: "GET",
+      PATH_INFO: "/hello",
+    });
     expect(status).toBe(200);
     expect(await bodyToString(body)).toBe("hello world");
-    Trails.application = null;
   });
 });
 

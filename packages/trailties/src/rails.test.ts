@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EnvironmentInquirer, NullLogger } from "@blazetrails/activesupport";
-import { Trails } from "./rails.js";
+import { Trails, _resetTrailsEnv } from "./rails.js";
 import { Application } from "./application.js";
 import { BacktraceCleaner } from "./backtrace-cleaner.js";
 import { VERSION } from "./version.js";
@@ -9,12 +9,12 @@ beforeEach(() => {
   Trails.application = null;
   Trails.cache = null;
   Trails.logger = null;
-  Trails._resetEnv();
+  _resetTrailsEnv();
   Application.appClass = null;
 });
 afterEach(() => {
   Trails.application = null;
-  Trails._resetEnv();
+  _resetTrailsEnv();
   Application.appClass = null;
 });
 
@@ -49,9 +49,10 @@ describe("Trails", () => {
     expect(Trails.configuration).toBe(CApp.instance().config);
   });
 
-  it("Trails.env returns an EnvironmentInquirer defaulting to development", () => {
+  it("Trails.env returns an EnvironmentInquirer wrapping TRAILS_ENV/NODE_ENV", () => {
     expect(Trails.env).toBeInstanceOf(EnvironmentInquirer);
-    expect(Trails.env.is("development")).toBe(true);
+    // Vitest sets NODE_ENV=test by default; the fallback chain picks it up.
+    expect(["development", "test"]).toContain(Trails.env.toString());
   });
 
   it("Trails.env= accepts a string and wraps it in EnvironmentInquirer", () => {
@@ -85,5 +86,17 @@ describe("Trails", () => {
 
   it("Trails.root resolves to undefined when no app is registered", async () => {
     expect(await Trails.root()).toBeUndefined();
+  });
+
+  it("Trails.initialized() is false before initialize, true after", async () => {
+    class InitApp extends Application {}
+    Application.register(InitApp);
+    expect(Trails.initialized()).toBe(false);
+    await Trails.initialize();
+    expect(Trails.initialized()).toBe(true);
+  });
+
+  it("Trails.initialize() throws when no application is registered", async () => {
+    await expect(Trails.initialize()).rejects.toThrow(/Trails.application is not set/);
   });
 });

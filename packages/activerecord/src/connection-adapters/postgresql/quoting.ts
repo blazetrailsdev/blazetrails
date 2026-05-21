@@ -212,8 +212,13 @@ export function quoteDefaultExpression(
 
 export function typeCast(value: unknown): unknown {
   if (value instanceof BinaryData) {
-    return { value: value.toString(), format: 1 } satisfies BinaryBind;
+    // node-postgres binds Buffer as bytea natively (text-format hex literal).
+    // Returning a Buffer of the raw bytes preserves bytes 128–255 that the
+    // prior `value.toString()` path corrupted via UTF-8 decode — the source
+    // of the PG-only encryption binary round-trip failures.
+    return Buffer.from(value.bytes);
   }
+  if (value instanceof Uint8Array) return value;
   if (value instanceof XmlData || value instanceof BitData) {
     return value.toString();
   }

@@ -1,5 +1,5 @@
 import pg from "pg";
-import { type Type, ValueType, ArgumentError } from "@blazetrails/activemodel";
+import { type Type, ValueType, ArgumentError, BinaryData } from "@blazetrails/activemodel";
 import {
   singularize,
   underscore,
@@ -700,10 +700,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       fields: Array<{ name: string; dataTypeID: number }>;
       rows: unknown[][];
     }
-    // Type-cast bind objects (QueryAttribute) → primitives, then convert
-    // Temporal values to SQL strings before pg sees them.
-    const castBinds = typeCastedBinds(binds);
-    const bindArray = castBinds.map((v) => temporalToBindString(v, "postgres"));
+    // Type-cast bind objects (QueryAttribute) → primitives, then run each
+    // through `_bindForPg` for Temporal / BinaryData normalization before
+    // pg sees them.
+    const bindArray = typeCastedBinds(binds, (v) => this._bindForPg(v));
     const rewritten = this.rewriteBinds(sql, bindArray);
     this._noticeReceiverSqlWarnings = [];
     const payload: Record<string, unknown> = {
@@ -1114,8 +1114,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     name: string,
     binds: unknown[],
   ): Promise<Result> {
-    const castBinds = typeCastedBinds(binds);
-    const bindArray = castBinds.map((v) => temporalToBindString(v, "postgres"));
+    const bindArray = typeCastedBinds(binds, (v) => this._bindForPg(v));
     const rewritten = this.rewriteBinds(sql, bindArray);
     this._noticeReceiverSqlWarnings = [];
     const payload: Record<string, unknown> = {
@@ -1197,7 +1196,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   ): Promise<Record<string, unknown>[]> {
     this.checkIfWriteQuery(sql);
     await this.materializeTransactions();
-    binds = binds.map((v) => temporalToBindString(v, "postgres"));
+    binds = binds.map((v) => this._bindForPg(v));
     const rewritten = this.rewriteBinds(sql, binds);
     // payload.sql is the rewritten SQL (`$1` not `?`) so ExplainSubscriber
     // stores something that can be re-EXPLAIN'd on the same adapter
@@ -1240,7 +1239,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async executeMutation(sql: string, binds: unknown[] = [], name: string = "SQL"): Promise<number> {
     this.checkIfWriteQuery(sql);
     await this.materializeTransactions();
-    binds = binds.map((v) => temporalToBindString(v, "postgres"));
+    binds = binds.map((v) => this._bindForPg(v));
     const pgSql = this.rewriteBinds(sql, binds);
     this._noticeReceiverSqlWarnings = [];
     // payload.sql records the rewritten SQL — ExplainSubscriber captures
@@ -2509,6 +2508,25 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   override typeCast(value: unknown): unknown {
     return pgTypeCast(value);
+  }
+
+  /**
+   * Normalize a single bind value before handing it to node-postgres.
+   *
+   * BinaryData wrappers (produced by `Type::Binary::Data`-shape serializers
+   * like `EncryptedAttributeType` on binary columns) are unwrapped via
+   * `typeCast` to a Buffer so pg binds them as bytea; pg has no built-in
+   * coercion for BinaryData and would `JSON.stringify` it otherwise,
+   * corrupting bytes 128–255 (the PG-only encryption binary round-trip
+   * failure surfaced by Phase 9b-1). Other values flow through
+   * `temporalToBindString` for Temporal / infinity sentinel handling.
+   *
+   * Mirrors Rails' `type_casted_binds` calling `type_cast` per value.
+   * @internal
+   */
+  private _bindForPg(value: unknown): unknown {
+    if (value instanceof BinaryData) return this.typeCast(value);
+    return temporalToBindString(value, "postgres");
   }
 
   /**

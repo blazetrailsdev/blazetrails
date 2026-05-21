@@ -4,7 +4,7 @@
  * Returns the appropriate adapter based on environment variables:
  *   - PG_TEST_URL    → PostgreSQLAdapter (wrapped in TestAdapterFixtures)
  *   - MYSQL_TEST_URL → Mysql2Adapter (wrapped in TestAdapterFixtures)
- *   - (default)      → SQLite3Adapter (:memory:)
+ *   - (default)      → SQLite3Adapter (:memory:) (wrapped in TestAdapterFixtures)
  *
  * For real database adapters, a single shared connection pool is reused
  * across all test adapters to avoid exhausting database connections.

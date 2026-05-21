@@ -105,7 +105,7 @@ packages/thor/
   README.md
 ```
 
-Filenames are `snake_case.rb → kebab-case.ts` per the project convention (matches `core_ext/hash_with_indifferent_access.rb` → `hash-with-indifferent-access.ts` elsewhere). Carve-outs (`runner.ts`, `rake-compat.ts`, `line-editor/*`, `shell/html.ts`, `shell/lcs-diff.ts`, `shell/{column,table,wrapped}-printer.ts`, `shell/terminal.ts`, `core-ext/hash-with-indifferent-access.ts`) do **not** get TS files — their absence is what api:compare reads via the unported list.
+Filenames are `snake_case.rb → kebab-case.ts` per the project convention (matches `active_support/hash_with_indifferent_access.rb` → `packages/activesupport/src/hash-with-indifferent-access.ts` — the project flattens Rails' `core_ext/` subdirectory). Carve-outs (`runner.ts`, `rake-compat.ts`, `line-editor/*`, `shell/html.ts`, `shell/lcs-diff.ts`, `shell/{column,table,wrapped}-printer.ts`, `shell/terminal.ts`, `core-ext/hash-with-indifferent-access.ts`) do **not** get TS files — their absence is what api:compare reads via the unported list.
 
 ### Known risks
 
@@ -249,7 +249,9 @@ Thor's gemspec has **zero runtime gem deps** (dev-only `bundler`). Stdlib reache
 | `rake` / `rake/dsl_definition`                                          | `Thor::RakeCompat` only                        | unported (see carve-outs above)                                                                                                              |
 | `erb`                                                                   | `actions/template`, `actions/inject_into_file` | `@blazetrails/tse-compiler` (see [tse-plan.md](tse-plan.md))                                                                                 |
 
-**Hard rule: `@blazetrails/thor` must not import `node:fs`, `node:fs/promises`, `node:path`, `node:process`, or `node:child_process` directly.** Activesupport's adapter layer is the project's portability seam — it's what lets activerecord run in the browser sandbox, what lets the test suite swap in a memfs, and what `bin/trails` future-proofs against Bun/Deno. Thor is a CLI-only package today, but the same discipline applies: every other Rails-mirroring package routes through these adapters, and `api:compare` / lint-deps will flag direct `node:fs` imports.
+**Hard rule: `@blazetrails/thor` must not import `node:fs`, `node:fs/promises`, `node:path`, `node:process`, or `node:child_process` directly.** Activesupport's adapter layer is the project's portability seam — it's what lets activerecord run in the browser sandbox, what lets the test suite swap in a memfs, and what `bin/trails` future-proofs against Bun/Deno. Thor is a CLI-only package today, but the same discipline applies: every other Rails-mirroring package routes through these adapters.
+
+Enforcement note: `scripts/api-compare/lint-deps.ts` only checks cross-`@blazetrails/*` workspace imports — it does **not** lint Node builtin imports today. Until an ESLint rule (or a `lint-builtins.ts` companion) is added to the lint surface, this rule is **policy enforced at review time**. A bootstrap-track sub-PR can wire up the lint as soon as a Rails-mirroring package needs it — Thor will be the first.
 
 ERB pipeline is already solved: `@blazetrails/tse-compiler`'s compiler-only entry point (`compileJs(source) → { code, sourceMap }`) is exactly the surface `actions/template` needs. We use it with a stripped-down `RenderContext` (just `outputBuffer`, no view helpers) — no separate ERB renderer required.
 
@@ -264,10 +266,10 @@ Follow the per-package gate pattern already established for `trailties`, `trails
 +     thor_affected: ${{ steps.filter.outputs.thor_affected }}
 
 # inside the filter step
-+     # thor_affected gates thor-tests. Thor is a leaf workspace package
-+     # (no internal deps beyond activesupport, which is already covered
-+     # by the broader infra gate).
-+     THOR_PKGS_RE='^packages/(thor|activesupport)/'
++     # thor_affected gates thor-tests. Thor's workspace deps are
++     # activesupport (fs / process adapters) and tse-compiler (ERB),
++     # so changes in either of them also flip thor_affected.
++     THOR_PKGS_RE='^packages/(thor|activesupport|tse-compiler)/'
 -     TRAILTIES_PKGS_RE='^packages/(trailties|actionpack|actionview|activerecord|arel|activemodel|activesupport|globalid|rack|did-you-mean|trails-tsc)/'
 +     TRAILTIES_PKGS_RE='^packages/(trailties|thor|actionpack|actionview|activerecord|arel|activemodel|activesupport|globalid|rack|did-you-mean|trails-tsc)/'
 

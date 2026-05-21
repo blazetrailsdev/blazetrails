@@ -1,0 +1,69 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AuthenticationGenerator > matches snapshot for the authentication concern 1`] = `
+"export class Authentication {
+  static includeInto(klass: any) {
+    klass.beforeAction?.("requireAuthentication");
+    klass.helperMethod?.("authenticated");
+  }
+
+  async authenticated(): Promise<void> {
+    // resumeSession
+  }
+
+  async requireAuthentication(): Promise<void> {
+    // resumeSession || requestAuthentication
+  }
+
+  private async resumeSession(): Promise<void> {
+    // Current.session ||= findSessionByCookie
+  }
+
+  private async findSessionByCookie(): Promise<void> {
+    // Session.findBy(cookies.signed.sessionId)
+  }
+
+  private async startNewSessionFor(user: any): Promise<void> {
+    // user.sessions.createBang + cookie
+  }
+
+  private async terminateSession(): Promise<void> {
+    // Current.session.destroy + cookies.delete
+  }
+}
+"
+`;
+
+exports[`AuthenticationGenerator > matches snapshot for the sessions controller 1`] = `
+"import { ApplicationController } from "../application-controller.js";
+
+export class SessionsController extends ApplicationController {
+  async new_(): Promise<void> {
+    // allowUnauthenticatedAccess only: [new_, create]
+  }
+
+  async create(): Promise<void> {
+    // User.authenticateBy → startNewSessionFor → redirect
+  }
+
+  async destroy(): Promise<void> {
+    // terminateSession → redirect to /session/new
+  }
+}
+"
+`;
+
+exports[`AuthenticationGenerator > matches snapshot for the user model 1`] = `
+"import { ApplicationRecord } from "./application-record.js";
+
+export class User extends ApplicationRecord {
+  static associations() {
+    // hasSecurePassword; hasMany sessions, dependent: destroy
+  }
+
+  static normalizes() {
+    // emailAddress → e.strip().toLowerCase()
+  }
+}
+"
+`;

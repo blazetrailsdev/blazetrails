@@ -24,16 +24,16 @@ export class User extends ApplicationRecord {
 }
 
 // === src/app/models/current.ts ===
-import { ActiveSupport } from "@blazetrails/activesupport";
+import { CurrentAttributes } from "@blazetrails/activesupport";
 
-export class Current extends ActiveSupport.CurrentAttributes {
+export class Current extends CurrentAttributes {
   static attributes() {
     // attribute :session
   }
 }
 
 // === src/app/controllers/sessions-controller.ts ===
-import { ApplicationController } from "../application-controller.js";
+import { ApplicationController } from "./application-controller.js";
 
 export class SessionsController extends ApplicationController {
   async new_(): Promise<void> {
@@ -82,7 +82,7 @@ export class Authentication {
 }
 
 // === src/app/controllers/passwords-controller.ts ===
-import { ApplicationController } from "../application-controller.js";
+import { ApplicationController } from "./application-controller.js";
 
 export class PasswordsController extends ApplicationController {
   async new_(): Promise<void> {

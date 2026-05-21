@@ -55,15 +55,12 @@ describe("AuthenticationGenerator", () => {
     }
   });
 
-  it("skips mailer pieces when --skip-mailer is set", () => {
+  it("skips mailer pieces on --skip-mailer; api keeps mailer but drops views", () => {
     makeGen().run({ skipMailer: true });
     expect(exists("src/app/mailers/passwords-mailer.ts")).toBe(false);
     expect(exists("src/app/views/passwords-mailer/reset.html.tse")).toBe(false);
     expect(exists("test/mailers/previews/passwords-mailer-preview.ts")).toBe(false);
-  });
-
-  it("omits views in api mode but keeps the mailer class", () => {
-    makeGen().run({ api: true });
+    new AuthenticationGenerator({ cwd: tmpDir, output: () => {} }).run({ api: true });
     expect(exists("src/app/mailers/passwords-mailer.ts")).toBe(true);
     expect(exists("src/app/views/passwords-mailer/reset.html.tse")).toBe(false);
   });
@@ -84,6 +81,19 @@ describe("AuthenticationGenerator", () => {
     const routes = read("src/config/routes.ts");
     expect(routes).toContain('router.resources("passwords", { param: "token" });');
     expect(routes).toContain('router.resource("session");');
+  });
+
+  it("injects the mixin inside the class even when ApplicationController has a body", () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "src/app/controllers/application-controller.ts"),
+      `import { ActionController } from "@blazetrails/actionpack";\n\nexport class ApplicationController extends ActionController.Base {\n  async preexisting(): Promise<void> { return; }\n}\n`,
+    );
+    makeGen().run();
+    const ac = read("src/app/controllers/application-controller.ts");
+    expect(parseTs(ac).diagnostics).toEqual([]);
+    // Injection lands *before* the pre-existing method — a brittle "first
+    // }" marker would have landed after the method's closing brace.
+    expect(ac.indexOf("Authentication.includeInto")).toBeLessThan(ac.indexOf("preexisting"));
   });
 
   it("is a no-op when application-controller.ts or routes.ts are missing", () => {

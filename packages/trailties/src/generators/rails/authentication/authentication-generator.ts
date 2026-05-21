@@ -15,9 +15,9 @@ export interface AuthenticationRunOptions {
 }
 
 const APP_RECORD = ref("ApplicationRecord", "./application-record.js");
-const APP_CONTROLLER = ref("ApplicationController", "../application-controller.js");
+const APP_CONTROLLER = ref("ApplicationController", "./application-controller.js");
 const APP_MAILER = ref("ApplicationMailer", "./application-mailer.js");
-const CURRENT_ATTRS = ref("ActiveSupport.CurrentAttributes");
+const CURRENT_ATTRS = ref("CurrentAttributes", "@blazetrails/activesupport");
 const PRIVATE = { visibility: "private" } as const;
 
 // Mirrors railties/lib/rails/generators/rails/authentication/authentication_generator.rb.
@@ -37,13 +37,20 @@ export class AuthenticationGenerator extends GeneratorBase {
       }),
       stub("normalizes", "// emailAddress → e.strip().toLowerCase()", { static: true }),
     ]);
-    this.createFile("src/app/models/current.ts", currentModel());
+    this.emit("src/app/models/current.ts", "Current", CURRENT_ATTRS, [
+      stub("attributes", "// attribute :session", { static: true }),
+    ]);
     this.emit("src/app/controllers/sessions-controller.ts", "SessionsController", APP_CONTROLLER, [
       asyncStub("new_", "// allowUnauthenticatedAccess only: [new_, create]"),
       asyncStub("create", "// User.authenticateBy → startNewSessionFor → redirect"),
       asyncStub("destroy", "// terminateSession → redirect to /session/new"),
     ]);
-    this.createFile("src/app/controllers/concerns/authentication.ts", authenticationConcern());
+    this.emit(
+      "src/app/controllers/concerns/authentication.ts",
+      "Authentication",
+      undefined,
+      AUTH_CONCERN_METHODS,
+    );
     this.emit(
       "src/app/controllers/passwords-controller.ts",
       "PasswordsController",
@@ -94,79 +101,58 @@ export class AuthenticationGenerator extends GeneratorBase {
     );
   }
 
-  // Mirrors Rails' `inject_into_class "application_controller.rb",
-  // "ApplicationController", "  include Authentication\n"` — the mixin call
-  // lands inside the class body via a static initializer; the import joins
-  // the existing imports above the class.
+  // Mirrors Rails' `inject_into_class` — anchors on the class declaration
+  // so the mixin call lands inside ApplicationController even when the
+  // class already has a body.
   private configureApplicationController(): void {
     const file = "src/app/controllers/application-controller.ts";
     if (!this.fileExists(file)) return;
-    this.insertIntoFile(
-      file,
-      "export class ApplicationController",
-      `import { Authentication } from "./concerns/authentication.js";\n\n`,
-    );
-    this.insertIntoFile(file, "\n}\n", `  static {\n    Authentication.includeInto(this);\n  }\n`);
+    const full = this.path.join(this.cwd, file);
+    let src = this.fs.readFileSync(full, "utf-8");
+    const classRe = /export\s+class\s+ApplicationController\b[^{]*\{/;
+    const m = src.match(classRe);
+    if (!m || m.index === undefined) return;
+    src =
+      `import { Authentication } from "./concerns/authentication.js";\n` +
+      src.slice(0, m.index + m[0].length) +
+      `\n  static {\n    Authentication.includeInto(this);\n  }` +
+      src.slice(m.index + m[0].length);
+    this.fs.writeFileSync(full, src);
+    this.output(`      inject  ${file}`);
   }
 
   private configureAuthenticationRoutes(): void {
-    const routesFile = this.fileExists("src/config/routes.ts")
-      ? "src/config/routes.ts"
-      : this.fileExists("src/config/routes.js")
-        ? "src/config/routes.js"
-        : null;
-    if (!routesFile) return;
-    this.insertIntoFile(
-      routesFile,
-      "// routes",
-      `  router.resources("passwords", { param: "token" });\n  router.resource("session");\n`,
-    );
+    for (const f of ["src/config/routes.ts", "src/config/routes.js"]) {
+      if (!this.fileExists(f)) continue;
+      this.insertIntoFile(
+        f,
+        "// routes",
+        `  router.resources("passwords", { param: "token" });\n  router.resource("session");\n`,
+      );
+      return;
+    }
   }
 }
 
-function currentModel(): string {
-  return tsModule({
-    imports: [{ from: "@blazetrails/activesupport", named: { ActiveSupport: "ActiveSupport" } }],
-    declarations: [
-      tsClass({
-        name: "Current",
-        extends: CURRENT_ATTRS,
-        body: [stub("attributes", "// attribute :session", { static: true })],
-      }),
-    ],
-  });
-}
-
-function authenticationConcern(): string {
-  // The Authentication "concern" is emitted as a class with static helpers.
-  // `Authentication.includeInto(klass)` wires the `requireAuthentication`
-  // beforeAction + `authenticated` helper hook; full instance-method mixin
-  // semantics arrive when actionpack ships its include() primitive.
-  return tsModule({
-    declarations: [
-      tsClass({
-        name: "Authentication",
-        body: [
-          tsMethod({
-            name: "includeInto",
-            params: [{ name: "klass", type: "any" }],
-            static: true,
-            body: tsBody`klass.beforeAction?.("requireAuthentication");\nklass.helperMethod?.("authenticated");`,
-          }),
-          asyncStub("authenticated", "// resumeSession"),
-          asyncStub("requireAuthentication", "// resumeSession || requestAuthentication"),
-          asyncStub("resumeSession", "// Current.session ||= findSessionByCookie", PRIVATE),
-          asyncStub("findSessionByCookie", "// Session.findBy(cookies.signed.sessionId)", PRIVATE),
-          asyncStub("startNewSessionFor", "// user.sessions.createBang + cookie", {
-            ...PRIVATE,
-            param: "user",
-          }),
-          asyncStub("terminateSession", "// Current.session.destroy + cookies.delete", PRIVATE),
-        ],
-      }),
-    ],
-  });
-}
+// `includeInto` only wires hooks; full instance-method mixin semantics
+// arrive when actionpack ships its include() primitive.
+const AUTH_CONCERN_METHODS: Method[] = [
+  tsMethod({
+    name: "includeInto",
+    params: [{ name: "klass", type: "any" }],
+    static: true,
+    body: tsBody`klass.beforeAction?.("requireAuthentication");\nklass.helperMethod?.("authenticated");`,
+  }),
+  asyncStub("authenticated", "// resumeSession"),
+  asyncStub("requireAuthentication", "// resumeSession || requestAuthentication"),
+  asyncStub("resumeSession", "// Current.session ||= findSessionByCookie", PRIVATE),
+  asyncStub("findSessionByCookie", "// Session.findBy(cookies.signed.sessionId)", PRIVATE),
+  asyncStub("startNewSessionFor", "// user.sessions.createBang + cookie", {
+    ...PRIVATE,
+    param: "user",
+  }),
+  asyncStub("terminateSession", "// Current.session.destroy + cookies.delete", PRIVATE),
+];
 
 interface StubOpts {
   static?: boolean;
@@ -187,8 +173,9 @@ function stub(name: string, comment: string, opts: StubOpts = {}): Method {
   });
 }
 
-const asyncStub = (name: string, comment: string, opts: StubOpts = {}): Method =>
-  stub(name, comment, { ...opts, async: true });
+function asyncStub(name: string, comment: string, opts: StubOpts = {}): Method {
+  return stub(name, comment, { ...opts, async: true });
+}
 
 const RESET_HTML = `<p>
   You can reset your password within the next 15 minutes on

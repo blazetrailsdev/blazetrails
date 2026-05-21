@@ -195,10 +195,18 @@ describe("loadRailsYaml (parsing fidelity)", () => {
 
   it("keeps list-form entries with array/scalar single-key values (not misclassified as labeled)", () => {
     // `- tags: [a, b]` is one bare list-form row, not a labeled `tags:` omap
-    // entry. Tightened looksLabeled predicate must require a non-null, non-
-    // array object before treating an entry as labeled.
+    // entry. Without the `--- !omap` doc tag, array entries always auto-label
+    // regardless of shape.
     const r = loadRailsYamlForTest(write("listarr", "- tags:\n    - a\n    - b\n  name: x\n"), "listarr"); // prettier-ignore
     expect(r).toEqual({ ok: true, data: { listarr_0: { tags: ["a", "b"], name: "x" } } });
+  });
+
+  it("honors `_fixture.ignore` inside a `!omap` document (entry, not top-level key)", () => {
+    const r = loadRailsYamlForTest(
+      write("omig", "--- !omap\n- _fixture:\n    ignore: SKIP\n- SKIP:\n    x: 1\n- keep:\n    y: 2\n"), // prettier-ignore
+      "omig",
+    );
+    expect(r).toEqual({ ok: true, data: { keep: { y: 2 } } });
   });
 
   it("auto-labels single-key list-form rows even when the value is a nested object", () => {

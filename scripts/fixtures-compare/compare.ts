@@ -91,7 +91,10 @@ function loadRailsYaml(file: string, basename: string): { ok: true; data: Fixtur
   // like `DEFAULTS` (`&NAME`) are *still real fixture rows* — Rails inserts
   // them unless they're explicitly listed in `_fixture.ignore` (e.g.
   // `_fixture: { ignore: DEAD_PARROT }` skips only the DEAD_PARROT anchor).
-  const meta = (parsed as Record<string, unknown>)._fixture;
+  // For array-shaped (`!omap`) documents `_fixture` shows up as an entry,
+  // not a top-level key; pull from `entries` so omap fixtures honor `ignore`.
+  const meta = entries.find(([k]) => k === "_fixture")?.[1]
+    ?? (parsed as Record<string, unknown>)._fixture;
   const ignored = new Set<string>(["_fixture"]);
   if (meta && typeof meta === "object" && "ignore" in meta) {
     const ig = (meta as { ignore: unknown }).ignore;

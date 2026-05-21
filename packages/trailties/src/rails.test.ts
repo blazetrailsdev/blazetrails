@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { EnvironmentInquirer, NullLogger } from "@blazetrails/activesupport";
+import { EnvironmentInquirer, NullLogger, setEnv } from "@blazetrails/activesupport";
 import { Trails, _resetTrailsEnv } from "./rails.js";
 import { Application } from "./application.js";
 import { BacktraceCleaner } from "./backtrace-cleaner.js";
@@ -49,10 +49,19 @@ describe("Trails", () => {
     expect(Trails.configuration).toBe(CApp.instance().config);
   });
 
-  it("Trails.env returns an EnvironmentInquirer wrapping TRAILS_ENV/NODE_ENV", () => {
-    expect(Trails.env).toBeInstanceOf(EnvironmentInquirer);
-    // Vitest sets NODE_ENV=test by default; the fallback chain picks it up.
-    expect(["development", "test"]).toContain(Trails.env.toString());
+  it("Trails.env returns an EnvironmentInquirer wrapping TRAILS_ENV (NOT NODE_ENV)", () => {
+    // `resolveEnv()` in database.ts deliberately ignores NODE_ENV.
+    // Set TRAILS_ENV explicitly via the processAdapter so this assertion
+    // is decoupled from vitest's default `NODE_ENV=test`.
+    setEnv("TRAILS_ENV", "staging");
+    try {
+      _resetTrailsEnv();
+      expect(Trails.env).toBeInstanceOf(EnvironmentInquirer);
+      expect(Trails.env.toString()).toBe("staging");
+    } finally {
+      setEnv("TRAILS_ENV", undefined);
+      _resetTrailsEnv();
+    }
   });
 
   it("Trails.env= accepts a string and wraps it in EnvironmentInquirer", () => {

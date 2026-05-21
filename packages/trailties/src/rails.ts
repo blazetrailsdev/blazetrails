@@ -6,6 +6,7 @@ import type { CacheStore, Logger } from "@blazetrails/activesupport";
 import { Application } from "./application.js";
 import { BacktraceCleaner } from "./backtrace-cleaner.js";
 import type { Configuration } from "./application/configuration.js";
+import { resolveEnv } from "./database.js";
 import type { InitializerGroup } from "./initializable.js";
 import { VERSION } from "./version.js";
 
@@ -14,10 +15,6 @@ let _cache: CacheStore | null = null;
 let _logger: Logger | null = null;
 let _env: EnvironmentInquirer | undefined;
 let _backtraceCleaner: BacktraceCleaner | undefined;
-
-function resolveDefaultEnv(): string {
-  return getEnv("TRAILS_ENV") ?? getEnv("NODE_ENV") ?? "development";
-}
 
 /**
  * Trails-renamed `Rails` module. Exposed as an object literal with
@@ -64,11 +61,14 @@ export const Trails = {
 
   /**
    * Rails: `@_env ||= ActiveSupport::EnvironmentInquirer.new(...)`.
-   * Trails env precedence: `TRAILS_ENV`, then `NODE_ENV`, defaulting to
-   * `"development"` — matches `resolveEnv()` in `database.ts`.
+   * Delegates to `resolveEnv()` in `database.ts` for a single source of
+   * truth — reads `TRAILS_ENV`, defaults to `"development"`. Deliberately
+   * does NOT fall back to `NODE_ENV` (see `database.ts:resolveEnv` for
+   * the rationale: JS ecosystem treats `NODE_ENV` as a build-time hint,
+   * not a runtime selector).
    */
   get env(): EnvironmentInquirer {
-    return (_env ??= new EnvironmentInquirer(resolveDefaultEnv()));
+    return (_env ??= new EnvironmentInquirer(resolveEnv()));
   },
   set env(value: string | EnvironmentInquirer) {
     _env = typeof value === "string" ? new EnvironmentInquirer(value) : value;

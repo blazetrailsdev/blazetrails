@@ -69,8 +69,8 @@ describe("TouchLaterTest", () => {
     await new Promise((r) => setTimeout(r, 5));
     await inv.touch();
     const after = inv.updated_at;
-    expect(before).toBeDefined();
-    expect(after).toBeDefined();
+    expect(before).toBeInstanceOf(Temporal.Instant);
+    expect(after).toBeInstanceOf(Temporal.Instant);
     // updated_at should have changed
     expect((after as Temporal.Instant).epochMilliseconds).toBeGreaterThanOrEqual(
       (before as Temporal.Instant).epochMilliseconds,

@@ -118,7 +118,7 @@ function paramsMethod(singular: string, attrs: string[], ts: boolean): Method {
   return tsMethod({
     name: `${singular}Params`,
     params: [],
-    returnType: ts ? "Record<string, unknown>" : undefined,
+    returnType: ts ? "unknown" : undefined,
     body: tsBody`${list}`,
   });
 }
@@ -146,7 +146,7 @@ function crudMethods(
     mk("new_", `this.render({ action: "new", locals: { ${singular}: {} } });`, ts),
     mk(
       "create",
-      `// const ${singular} = await ${model}.create(${params});\nvoid ${params};\nthis.redirectTo("/${plural}");`,
+      `// const ${singular} = await ${model}.create(${params});\nthis.redirectTo("/${plural}");`,
       ts,
     ),
     mk(
@@ -156,7 +156,7 @@ function crudMethods(
     ),
     mk(
       "update",
-      `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.update(${params});\nvoid ${params};\nthis.redirectTo("/${plural}/" + this.params.get("id"));`,
+      `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.update(${params});\nthis.redirectTo("/${plural}/" + this.params.get("id"));`,
       ts,
     ),
     mk(
@@ -195,7 +195,7 @@ function apiCrudMethods(
     ),
     mk(
       "update",
-      `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.update(${params});\nvoid ${params};\nthis.renderJson({ id: this.params.get("id") });`,
+      `// const ${singular} = await ${model}.find(this.params.get("id"));\n// await ${singular}.update(${params});\nthis.renderJson({ id: this.params.get("id") });`,
       ts,
     ),
     mk(

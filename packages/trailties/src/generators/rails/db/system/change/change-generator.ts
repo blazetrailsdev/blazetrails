@@ -65,7 +65,7 @@ export class ChangeGenerator extends GeneratorBase {
     if (!this.fileExists("package.json")) return;
     const fullPath = this.path.join(this.cwd, "package.json");
     const raw = this.fs.readFileSync(fullPath, "utf-8");
-    let pkg: { dependencies?: Record<string, string> } & Record<string, unknown>;
+    let pkg: { dependencies?: unknown } & Record<string, unknown>;
     try {
       pkg = JSON.parse(raw);
     } catch (e) {
@@ -74,7 +74,17 @@ export class ChangeGenerator extends GeneratorBase {
         { cause: e },
       );
     }
-    const deps = (pkg.dependencies ?? {}) as Record<string, string>;
+    if (pkg === null || typeof pkg !== "object" || Array.isArray(pkg)) {
+      throw new Error(`Expected ${fullPath} to be a JSON object.`);
+    }
+    const rawDeps = pkg.dependencies;
+    if (
+      rawDeps !== undefined &&
+      (rawDeps === null || typeof rawDeps !== "object" || Array.isArray(rawDeps))
+    ) {
+      throw new Error(`Expected ${fullPath} "dependencies" to be an object.`);
+    }
+    const deps = (rawDeps ?? {}) as Record<string, string>;
     for (const d of Database.all()) delete deps[d.pkgDependency.name];
     const target = this.database.pkgDependency;
     deps[target.name] = target.version;
@@ -106,8 +116,12 @@ export class ChangeGenerator extends GeneratorBase {
   }
 
   private writeOrUpdate(relativePath: string, content: string): void {
-    const existed = this.fileExists(relativePath);
     const full = this.path.join(this.cwd, relativePath);
+    const existed = this.fileExists(relativePath);
+    if (existed && this.fs.readFileSync(full, "utf-8") === content) {
+      this.output(`   identical  ${relativePath}`);
+      return;
+    }
     this.fs.mkdirSync(this.path.dirname(full), { recursive: true });
     this.fs.writeFileSync(full, content);
     if (existed) {

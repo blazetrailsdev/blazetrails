@@ -9,7 +9,8 @@ below without proposing a plan-doc change first.
 
 Closed PRs and their findings have been folded into the followup sections
 below or dropped if subsumed by later work — `git log` is the historical
-record.
+record. In-flight PRs are not tracked here; check `gh pr list` for
+current state.
 
 ## Hard rules
 
@@ -109,7 +110,7 @@ Every PR must pass:
 | 2   | Where does the activesupport `Trailtie` live (in trailties subdir vs activesupport itself)?                                                | PR 2.7a       |
 | 3   | What does `Rails.version` return — trailties `package.json` version or tracked Rails upstream version?                                     | PR 2.6        |
 | 5   | Convert remaining sync `readdir`/`readFile`/`writeFile` callers to async; promote optional `FsAdapter` async surface to required?          | PR 1.12c      |
-| 6   | Should `Engine#paths()` THROW (Rails-faithful) when `calledFrom` is unset? (Currently returns `Root(null)` per 2.2a/b deviation.)          | revisit       |
+| 6   | Should `Engine#paths()` THROW (Rails-faithful) when `calledFrom` is unset? (Currently returns `Root(null)` per 2.2a/b deviation.)          | PR 2.5c       |
 | 7   | Migration filename separator: align `MigrationGenerator` to Rails `_` (preferred) or broaden helper regexes to accept `_` and `-`?         | PR 1.12c      |
 | 8   | Generated apps' package-manager: `--package-manager <pm>` flag on `trails new` vs runtime detection in generated `bin/setup`?              | PR 1.14d      |
 | 9   | Generated apps' SQLite driver: `--sqlite-driver` flag; default stays `better-sqlite3` until `node-sqlite` is in Node LTS. Confirm default. | PR 1.14d      |
@@ -170,19 +171,24 @@ controller-template prose. Same snapshot + parse + no-Ruby tests as T2.
 - `packages/trailties/src/generators/scaffold-generator.ts`
 - Relocate both into `packages/trailties/src/generators/rails/` Rails layout
   in the same PR; the migration to the builder is the natural moment.
+- **Factor out** `emitControllerClass(...)` and a `controllerPathHelpers`
+  module — consumed by T4 (authentication) and PR 1.14b-cont (helper /
+  controller / scaffold_controller). Either factor-out lands here or the
+  consumers fall back to T1 primitives.
 
-### PR T4 — AuthenticationGenerator on the builder (~200 LOC) — supersedes PR #2182
+### PR T4 — AuthenticationGenerator on the builder (~200 LOC)
 
-**Blocked by:** PR T3 (controller-template prose helpers).
+**Blocked by:** PR T1 (builder). Soft-blocked by PR T3 for the
+`emitControllerClass` helper; if T3 ships without factoring, T4 inlines
+the controller emit via T1 primitives.
 
-**Status:** PR #2182 (1.14c-2 first draft) is blocked from merge — it
-emits `.rb` files. Treat the 2182 diff as a reference for _what_ to emit,
-not _how_. Rebuild on the builder.
+**Source:** `vendor/rails/railties/lib/rails/generators/rails/authentication/`.
 
 - `packages/trailties/src/generators/rails/authentication/authentication-generator.ts`
 - Snapshots for all 7 generated files.
 - Mandatory `assertNoRubySource` over the full emit set (`app/models/{user,session,current}`, `app/controllers/{sessions,passwords,concerns/authentication}`, `app/mailers/passwords_mailer`, etc.).
 - Mailer pieces gated on actionmailer existence — emit a `--skip-mailer` flag honoring the existing pattern.
+- Skipped from Rails: `enable_bcrypt` (Ruby Bundler), `add_migrations` (needs `MigrationGenerator.generate` shell-out — open question #8 territory), `hook_for :test_framework`, `hook_for :template_engine, as: :authentication`.
 
 ### PR T5 — DevcontainerGenerator (~250 LOC) — supersedes prior PR 1.14c-3 scope
 
@@ -207,7 +213,7 @@ rule from rethink Q3).
 
 ### PR 1.10c — Trails-native template DSL (~150–250 LOC, optional)
 
-**Blocked by:** none.
+**Blocked by:** PR T1 (`assertNoRubySource` helper used by `initializer()`).
 
 **Node/TS fit:** clean — all four operations are file edits via the existing `FsAdapter` async surface and the established marker-insert pattern (`// routes` marker is already wired in `controller-generator.ts:148`, `scaffold-generator.ts:80`, and the new `generators/rails/resource-route/`).
 
@@ -225,8 +231,6 @@ rule from rethink Q3).
 - `initializer(filename, content)` → writes to `src/config/initializers/`. Content **must** be produced via the T1 `tsModule` builder; raw-string content fails the `assertNoRubySource` check that ships in T1.
 
 **Open:** call file `trails-actions.ts` (new) or keep on `GeneratorBase` alongside the existing `generate` queue. Recommend a separate file to keep `actions.ts` as the Rails-shape mirror, so `api:compare` stays clean.
-
-**Blocked by (revised):** PR T1 (`assertNoRubySource` helper used by `initializer()`).
 
 ### PR 1.12b-2 — `actions/create_migration.rb` port (~80–100 LOC)
 
@@ -269,19 +273,20 @@ rule from rethink Q3).
 
 ### PR 1.14b-cont — helper / controller / scaffold_controller generators (~250 LOC)
 
-**Blocked by:** PR T3 (controller/scaffold migration to the builder — gives us the shared controller-template prose helpers).
+**Blocked by:** PR T1 (builder). Soft-blocked by PR T3 for the
+`emitControllerClass` factor-out — if T3 ships it, 1.14b-cont consumes
+it; if not, this PR inlines via T1 primitives.
 
 **Source:** `vendor/rails/railties/lib/rails/generators/rails/{helper,controller,scaffold_controller}/`. PR 1.14b deferred these because the trailties side had no canonical "controller template surface."
 
-**Node/TS fit:** straightforward — compose the builder helpers landed in T3.
+**Node/TS fit:** straightforward — compose the builder helpers landed in T1 (and reuse T3's if available).
 
 **Dependencies:**
 
 - `paths.controllers` / `paths.helpers` resolution from `Engine#paths()` (shipped in 2.2b).
-- Builder helpers `tsClass`/`tsMethod`/`tsBody` (T1) and the controller-template prose shapes factored out in T3.
+- Builder primitives `tsClass`/`tsMethod`/`tsBody` (T1).
 
-> **PR 1.14c-2 (authentication) is superseded by PR T4 above.** Do not
-> reopen #2182 directly — rebuild via T4 once T3 lands.
+> **PR 1.14c-2 (authentication) is replaced by PR T4 above.**
 
 > **PR 1.14c-3 (devcontainer) is superseded by PR T5 above.** YAML carve-out
 > resolved: `yamlBuilder` ships in T1, `compose.yaml` emitted fresh per
@@ -299,7 +304,7 @@ rule from rethink Q3).
 
 ### PR 1.14d — `AppGenerator` extends `AppBase` (~250–350 LOC, may split)
 
-**Blocked by:** PR 1.12c (`AppBase` — shipped via #2176) and PR T3 (builder prose helpers).
+**Blocked by:** PR 1.12c (`AppBase`). Soft-blocked by PR T3 for shared prose helpers (falls back to T1 primitives if T3 ships without factoring).
 
 **Node/TS fit:** mechanical refactor of existing `packages/trailties/src/generators/app-generator.ts` (~900 LOC of raw-string emit) onto the builder. The bulk of the diff is the raw-string-to-builder migration; size may force a split into:
 
@@ -348,7 +353,7 @@ rule from rethink Q3).
 
 **Source:** `vendor/rails/railties/lib/rails/application/routes_reloader.rb` (83 LOC), parts of `application.rb` (config_for, credentials, key_generator, message_verifier).
 
-**Node/TS fit:** `routes_reloader.rb` is a thin wrapper around route file reloading. In trailties, "reload" maps to re-importing the route module via dynamic `import()` with a cache-bust query (`?t=${Date.now()}`) — Vite's HMR handles dev; production no-ops. `config_for` is dynamic `import()` of `config/<name>.ts` reading the `Trails.env` key.
+**Node/TS fit:** `routes_reloader.rb` is a thin wrapper around route file reloading. In trailties, "reload" maps to re-importing the route module via dynamic `import()` with a cache-bust query (`?t=${Date.now()}`) — Vite's HMR handles dev; production no-ops. `config_for` is dynamic `import()` of `config/<name>.ts` reading the env key. Because `Trails` (PR 2.6) is downstream of 2.5c, this PR's `config_for` resolves the env via the `processAdapter` snapshot (`processAdapter.env.TRAILS_ENV ?? processAdapter.env.NODE_ENV ?? "development"`); when 2.6 lands it swaps to `Trails.env`.
 
 **Dependencies:**
 
@@ -366,7 +371,7 @@ rule from rethink Q3).
 - Re-add `implements BootstrapHost` on `Application` class (dropped in 2.5a — see #2173 findings).
 - Splice `Finisher.initializersFor(this)` into `Application#initializers`. Supply host methods Finisher needs: `routes.prepend`, `routes.defineMountedHelper`, `reloader.toPrepare`, `reloader.prepareBang`, `env.isDevelopment`, `ensureGeneratorTemplatesAdded`, `buildMiddlewareStack`, `appendInternalRoute`.
 - Restore config fields trimmed from 2.5b: `precompileFilterParameters`, `filterRedirect`, `contentSecurityPolicyNonceGenerator`, `contentSecurityPolicyNonceDirectives`, `domTestingDefaultHtmlVersion`.
-- Wire `editEncryptedFile` (in `encrypted-file-editor.ts`) through `Trails.application.encrypted(...)` once `Trails` global ships — currently constructs `EncryptedFile` directly from CLI flags. Note: requires PR 2.6 to land first, so this wiring slot may move to a small 2.6-followup.
+- `editEncryptedFile` (in `encrypted-file-editor.ts`) stays constructed directly from CLI flags in 2.5c; wiring through `Trails.application.encrypted(...)` is a small 2.6-followup since `Trails` is downstream.
 
 **Proposed re-ordering:** if `EncryptedConfiguration` is not shipped before 2.5c, split into:
 
@@ -505,7 +510,7 @@ Sized work that doesn't belong to a single open PR. Bundle into the most relevan
 
 ### Trailties code quality / fidelity
 
-- **Async-fs rollout** (open question #5): the `FsAdapter.readdir`/`readFile`/`writeFile` async surfaces ship today. Convert remaining sync callers (`migration-loader.ts`, `commands/destroy.ts`, `commands/console.ts`, `source-annotation-extractor.ts`, all of `generators/base.ts`). Will ripple through every generator subclass — bundle into 1.12c (see split proposal).
+- **Async-fs rollout** — scoped into PR 1.12c (or its 1.12c-b split). Tracked there, not here. Note for the implementer: callers to convert are `migration-loader.ts`, `commands/destroy.ts`, `commands/console.ts`, `source-annotation-extractor.ts`, all of `generators/base.ts`.
 - **Port 8 verbatim `Rails::Command::NotesTest` cases** (~120–150 LOC, test-only PR): into `source-annotation-extractor.test.ts`. Dropped from PR 1.4 to fit ceiling. Test names from `vendor/rails/railties/test/commands/notes_test.rb`.
 - **`ParserExtractor` port** (unscheduled): AST-based extractor that skips notes inside string literals. Current trails port is regex-only. Likely a `typescript` compiler API pass over `.ts`/`.tsx`.
 - **CodeStatistics polish** (small): ~15 LOC golden test of `toString()` exact column widths + alignment; ~10 LOC extend TS method regex to count bare class-method shorthand (with safe exclude list); ~5 LOC render `NaN` ratio like Rails when `code === 0`.
@@ -591,5 +596,12 @@ Browser `processAdapter` + virtual-fs `fsAdapter`, packaged as `@blazetrails/act
 
 ## Tracking
 
-- Primary signal: `pnpm tsx scripts/api-compare/compare.ts --package trailties` (after `pnpm tsx scripts/api-compare/extract-ts-api.ts`).
-- Final acceptance: PR 2.6's integration test passes — hello-world fixture imports `Trails`, calls `await Trails.application.initialize()`, serves a route through `actionpack`.
+- **Primary signal:** `pnpm tsx scripts/api-compare/compare.ts --package trailties` (after `pnpm tsx scripts/api-compare/extract-ts-api.ts`). Tracks Ruby↔TS surface coverage; "misplaced" means tests exist but in the wrong file per Rails layout.
+- **Generator regression signal:** `pnpm vitest run packages/trailties/src/generators` — every generator must pass its snapshot + `parseTs` + `assertNoRubySource` triple (per Hard rule 0).
+- **Final acceptance:** PR 2.6's integration test passes — hello-world fixture imports `Trails`, calls `await Trails.application.initialize()`, serves a route through `actionpack`.
+
+## Conventions for amending this doc
+
+- When a PR ships, replace its "open" entry with a one-line "shipped (#NNNN)" header and fold any deferred work into the relevant followup section or into the next open PR's scope. Don't accumulate gravestones.
+- New cross-cutting work that doesn't belong to a single PR goes under "Cross-cutting followups from merged PRs" with the smallest practical sizing estimate.
+- Open questions get added to the table with a "Decide before" target PR; remove rows when the answer locks into "Decisions already made."

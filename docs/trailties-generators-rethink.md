@@ -75,7 +75,7 @@ export function tsImportType(from: string, names: Import["named"]): Import;
 
 export interface Field {
   name: string;
-  type: Type | Ref | string; // string only for primitives ("string", "number", "boolean", "Date", "Uint8Array")
+  type: Type | Ref | string; // string only for globally-available types (primitives, plus Date/Uint8Array/Promise/etc.)
   nullable?: boolean;
   initializer?: string;
   comment?: string;
@@ -135,7 +135,7 @@ export function assertNoRubySource(text: string): void;
   is a type error. The only ways to obtain a `Ref` are `tsImport(...)`
   (which returns refs reachable from the import block) or an explicit
   `ref("Name", "package")`. This is the load-bearing constraint that
-  blocks the PR-2182 failure mode.
+  blocks the Ruby-emission failure mode.
 - **`Type` and `Body` carry refs.** `type\`Array<${userRef}>\``and`tsBody\`return new ${userRef}();\``propagate refs to`tsModule`'s
   import collector.
 - **`tsModule` resolves imports.** Walks every `Ref` in declarations,
@@ -167,8 +167,7 @@ without CI failing.
 
 ## Migration PRs
 
-PR T1 lands alone; T2–T5 parallelize off T1. PR #2182 stays blocked
-until T4 supersedes it.
+PR T1 lands alone; T2–T5 parallelize off T1.
 
 ### PR T1 — Builder infrastructure (~250 LOC)
 
@@ -207,7 +206,6 @@ until T4 supersedes it.
 ### PR T4 — AuthenticationGenerator on the builder (~200 LOC)
 
 **Blocked by:** PR T3.
-**Supersedes:** PR #2182.
 
 - `packages/trailties/src/generators/rails/authentication/authentication-generator.ts`
 - Snapshots for all 7 emitted files (`app/models/{user,session,current}`,
@@ -215,8 +213,9 @@ until T4 supersedes it.
   `app/mailers/passwords_mailer`).
 - Mailer pieces gated on actionmailer existence; honor a `--skip-mailer`
   flag.
-- ApplicationCable connection emit gated on actioncable presence
-  (existing pattern from #2182, ported through the builder).
+- ApplicationCable connection emit gated on actioncable presence:
+  emit only when an `app/channels/application_cable` directory exists
+  (approximates Rails' `defined?(ActionCable::Engine)` gate).
 - Mandatory `assertNoRubySource` across the full emit set.
 
 ### PR T5 — DevcontainerGenerator (~250 LOC)
@@ -241,11 +240,13 @@ until T4 supersedes it.
    disambiguation only); `JSON.stringify(..., null, 2)` for JSON;
    Dockerfile stays raw strings. The TS builder is never reused for
    non-TS content.
-4. **`.tts` / `.tse` for generators** — not shipping. Re-evaluate only
-   if a generator template simultaneously meets: (a) >150 LOC of
-   structural builder calls, (b) >30% of that content is heavy-prose
-   interpolation, and (c) snapshot tests stop catching regressions.
-   Until all three trigger, `.tts` does not exist as a planned artifact.
+4. **`.tts` / `.tse` for generators** — not shipping. Re-evaluate when
+   any of these is observed in practice: (a) a generator's builder
+   emit exceeds ~150 LOC of structural calls and is materially harder
+   to read than a templated form, (b) authors repeatedly bypass the
+   builder via `{ kind: "raw" }` for prose, or (c) snapshot drift
+   stops catching real regressions. None of these trip today; revisit
+   the day one does.
 5. **No legacy templates** — `packages/trailties/src/templates/` is
    empty in the tree; PR T1 starts on a blank canvas.
 

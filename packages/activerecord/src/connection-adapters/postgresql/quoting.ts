@@ -213,10 +213,18 @@ export function quoteDefaultExpression(
 export function typeCast(value: unknown): unknown {
   if (value instanceof BinaryData) {
     // node-postgres binds Buffer as bytea natively (text-format hex literal).
-    // Returning a Buffer of the raw bytes preserves bytes 128–255 that the
-    // prior `value.toString()` path corrupted via UTF-8 decode — the source
-    // of the PG-only encryption binary round-trip failures.
-    return Buffer.from(value.bytes);
+    // Returning a Buffer over the existing ArrayBuffer preserves bytes
+    // 128–255 that the prior `value.toString()` path corrupted via UTF-8
+    // decode — the source of the PG-only encryption binary round-trip
+    // failures — without allocating a copy for potentially large
+    // encrypted payloads. Note: Rails' PG adapter returns
+    // `{ value: value.to_s, format: 1 }` here; that bind-param hash is a
+    // pg-ruby contract (binary format mode), and node-postgres does not
+    // honor it (a `{value, format}` object is JSON-stringified into
+    // garbage). The Rails-equivalent functional behavior in this driver
+    // is a bare Buffer.
+    const u8 = value.bytes;
+    return Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength);
   }
   if (value instanceof Uint8Array) return value;
   if (value instanceof XmlData || value instanceof BitData) {

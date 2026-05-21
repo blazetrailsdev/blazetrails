@@ -61,13 +61,8 @@ export function contentFor(
     let opts = options;
     let body: unknown = content;
     if (block) {
-      if (
-        content !== undefined &&
-        typeof content === "object" &&
-        content !== null &&
-        options === undefined
-      ) {
-        opts = content as { flush?: boolean };
+      if (options === undefined && isPlainOptions(content)) {
+        opts = content;
       }
       body = capture.call(this, block);
     }
@@ -82,6 +77,13 @@ export function contentFor(
   }
   const stored = this.viewFlow.get(name);
   return isPresent(stored.toString()) ? stored : null;
+}
+
+/** Mirrors Ruby's `Hash === value` for the options-vs-content disambiguation. */
+function isPlainOptions(value: unknown): value is { flush?: boolean } {
+  return (
+    typeof value === "object" && value !== null && Object.getPrototypeOf(value) === Object.prototype
+  );
 }
 
 /**

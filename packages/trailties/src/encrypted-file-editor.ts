@@ -1,7 +1,6 @@
-// Shared edit/show flow for `credentials` and `encrypted`. Ports
-// Rails::Command::Helpers::Editor. Divergences: no .gitignore append, no
-// validate! warning (needs EncryptedConfiguration, PR 1.6-pre-b), editor
-// split is whitespace not Shellwords.
+// Shared edit/show for `credentials`/`encrypted`. Ports Editor helper.
+// Divergences: no .gitignore append, no validate! (needs EncryptedConfiguration),
+// editor split is whitespace not Shellwords, no parent-dir mkdir (follow-up).
 import {
   EncryptedFile,
   MissingContentError,
@@ -45,6 +44,7 @@ export async function editEncryptedFile(file: EncryptedFile, invocation: string)
   } catch (e) {
     if (e instanceof MissingKeyError) stdout.write(`${e.message}\n`);
     else stdout.write(`Couldn't decrypt ${file.contentPath}. Perhaps you passed the wrong key?\n`);
+    setExitCode(1);
   }
 }
 

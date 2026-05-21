@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { writeFileSync } from "node:fs";
 import { EncryptedFile } from "@blazetrails/activesupport/encrypted-file";
 import { getFsAsync, getPathAsync } from "@blazetrails/activesupport/fs-adapter";
 import { getOsAsync } from "@blazetrails/activesupport";
@@ -50,9 +49,10 @@ describe("encrypted-file-editor", () => {
 
   it("edit generates a key file on first run and re-encrypts editor output", async () => {
     setEnv("EDITOR", "fake");
+    const fs = await getFsAsync();
     registerChildProcessAdapter("write", {
       spawnSync: (_c, args) => (
-        writeFileSync(args[args.length - 1], "hello\n"),
+        fs.writeFileSync(args[args.length - 1], "hello\n"),
         { status: 0, signal: null, stdout: "", stderr: "" }
       ),
     });

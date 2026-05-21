@@ -4,9 +4,9 @@
  *
  * Diverges from Rails:
  * - `tableNamePrefix` is an explicit option (replaces `isolate_namespace`).
- * - `paths()` is async because `Root` defaults walk no fs, but consumers
- *   often want the resolved root injected; constructing with a `null` root
- *   is allowed (matches 2.2a `Engine#paths()` tolerance).
+ * - Constructing with a `null` root is allowed (matches 2.2a
+ *   `Engine#paths()` tolerance); `Engine#paths()` injects the resolved
+ *   root via `setRoot()` once known.
  * - `routeSetClass` is held as an opaque constructor; the real
  *   `ActionDispatch::Routing::RouteSet` wiring lands with PR 2.5.
  */

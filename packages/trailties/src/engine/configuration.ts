@@ -61,7 +61,7 @@ export class EngineConfiguration extends RailtieConfiguration {
     paths.add("app/views");
     paths.add("lib", { loadPath: true });
     paths.add("lib/assets", { glob: "*" });
-    paths.add("lib/tasks", { glob: "**/*.rake" });
+    paths.add("lib/tasks", { glob: "**/*.{ts,js}" });
     paths.add("config");
     paths.add("config/initializers", { glob: "**/*.{ts,js}" });
     paths.add("config/locales", { glob: "**/*.{ts,js,json}" });

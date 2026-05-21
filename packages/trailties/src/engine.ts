@@ -11,7 +11,6 @@ type EngineHost = { _calledFrom?: string; _isolated?: boolean };
 const host = (k: typeof Engine): EngineHost => k as unknown as EngineHost;
 
 export class Engine extends Trailtie {
-  protected _engineConfig?: EngineConfiguration;
   private _railtiesCollection?: Trailties;
   private _allLoadPathsCache?: string[];
   private _routes?: unknown;
@@ -83,14 +82,17 @@ export class Engine extends Trailtie {
     return from === undefined ? undefined : await klass.findRoot(from);
   }
 
-  /** Lazily-constructed engine configuration. Mirrors `Engine#config`. */
-  engineConfig(): EngineConfiguration {
-    if (!this._engineConfig) this._engineConfig = new EngineConfiguration(null);
-    return this._engineConfig;
+  /** Mirrors `Engine#config` — overrides `Trailtie#config` to return
+   * an `EngineConfiguration` so `middleware`, `paths`, `tableNamePrefix`,
+   * etc. are reachable through the single `config` surface. */
+  override get config(): EngineConfiguration {
+    if (!(this._config instanceof EngineConfiguration))
+      this._config = new EngineConfiguration(null);
+    return this._config as EngineConfiguration;
   }
 
   tableNamePrefix(): string | null {
-    return this.engineConfig().tableNamePrefix ?? this.defaultTableNamePrefix();
+    return this.config.tableNamePrefix ?? this.defaultTableNamePrefix();
   }
 
   /** Implicit fallback when `tableNamePrefix` is unset but `isolated` is on. */
@@ -102,7 +104,7 @@ export class Engine extends Trailtie {
    * `EngineConfiguration#paths` so the `Root` instance carries the
    * expanded root for subsequent `expanded`/`existent` calls. */
   async paths(): Promise<Root> {
-    const cfg = this.engineConfig();
+    const cfg = this.config;
     if (cfg.root === null) {
       const resolved = await this.root();
       if (resolved !== undefined) cfg.setRoot(resolved);
@@ -122,7 +124,7 @@ export class Engine extends Trailtie {
 
   /** `Engine#routes(&block)` — undefined when no `routeSetClass` is set. */
   routes(block?: (this: unknown) => void): unknown {
-    const cfg = this.engineConfig();
+    const cfg = this.config;
     if (!cfg.routeSetClass) return undefined;
     if (!this._routes) this._routes = new cfg.routeSetClass(cfg);
     const r = this._routes as { append?: (b: (this: unknown) => void) => void };
@@ -137,7 +139,7 @@ export class Engine extends Trailtie {
   async allLoadPaths(addAutoloadPathsToLoadPath = true): Promise<string[]> {
     if (this._allLoadPathsCache) return this._allLoadPathsCache;
     const paths = await this.paths();
-    const cfg = this.engineConfig();
+    const cfg = this.config;
     const out = [...(await paths.loadPaths())];
     if (addAutoloadPathsToLoadPath) {
       for (const p of cfg.allAutoloadPaths()) out.push(p);

@@ -185,7 +185,7 @@ describe("Engine", () => {
     it("returns the explicit option when set", () => {
       class ShopEngine extends Engine {}
       Trailtie.register(ShopEngine);
-      ShopEngine.instance().engineConfig().tableNamePrefix = "shop_";
+      ShopEngine.instance().config.tableNamePrefix = "shop_";
       expect(ShopEngine.instance().tableNamePrefix()).toBe("shop_");
     });
 
@@ -202,13 +202,11 @@ describe("Engine", () => {
     class B extends Engine {}
     Trailtie.register(A);
     Trailtie.register(B);
-    const before = A.instance().engineConfig().eagerLoadNamespaces.length;
-    A.instance().engineConfig().eagerLoadNamespaces.push("ANs");
-    B.instance().engineConfig().eagerLoadNamespaces.push("BNs");
-    expect(A.instance().engineConfig().eagerLoadNamespaces).toBe(
-      B.instance().engineConfig().eagerLoadNamespaces,
-    );
-    expect(A.instance().engineConfig().eagerLoadNamespaces.length).toBe(before + 2);
+    const before = A.instance().config.eagerLoadNamespaces.length;
+    A.instance().config.eagerLoadNamespaces.push("ANs");
+    B.instance().config.eagerLoadNamespaces.push("BNs");
+    expect(A.instance().config.eagerLoadNamespaces).toBe(B.instance().config.eagerLoadNamespaces);
+    expect(A.instance().config.eagerLoadNamespaces.length).toBe(before + 2);
   });
 
   it("routes lazily instantiates routeSetClass, append-buffers blocks, and hasRoutes flips", () => {
@@ -222,7 +220,7 @@ describe("Engine", () => {
     class MountedEngine extends Engine {}
     Trailtie.register(MountedEngine);
     expect(MountedEngine.instance().hasRoutes()).toBe(false);
-    MountedEngine.instance().engineConfig().routeSetClass = FakeRouteSet;
+    MountedEngine.instance().config.routeSetClass = FakeRouteSet;
     const r1 = MountedEngine.instance().routes(() => {});
     expect(r1).toBeInstanceOf(FakeRouteSet);
     expect(MountedEngine.instance().routes(() => {})).toBe(r1);

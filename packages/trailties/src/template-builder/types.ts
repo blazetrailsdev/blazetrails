@@ -30,8 +30,12 @@ export interface Field {
   name: string;
   type: FieldType;
   nullable?: boolean;
+  definite?: boolean;
   initializer?: string;
   comment?: string;
+  static?: boolean;
+  /** Omit the `: type` annotation. Useful when the initializer is self-typed. */
+  inferType?: boolean;
 }
 export interface MethodParam {
   name: string;

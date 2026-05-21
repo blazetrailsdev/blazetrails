@@ -4,11 +4,9 @@ exports[`MigrationGeneratorTest > emits valid TS (snapshot + parse + no-Ruby) 1`
 "import { Migration } from "@blazetrails/activerecord";
 
 export class AddTitleToPosts extends Migration {
-  static version: string = "20260521120000";
+  static version = "20260521120000";
 
-  async change(): Promise<void> {
-
-  }
+  async change(): Promise<void> {}
 }
 "
 `;

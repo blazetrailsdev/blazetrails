@@ -23,7 +23,11 @@ export function emitMigrationSource(className: string, timestamp: string): strin
         name: className,
         extends: refs.Migration,
         body: [
-          tsField("static version", "string", { initializer: `"${timestamp}"` }),
+          tsField("version", "string", {
+            static: true,
+            inferType: true,
+            initializer: `"${timestamp}"`,
+          }),
           tsMethod({
             name: "change",
             async: true,

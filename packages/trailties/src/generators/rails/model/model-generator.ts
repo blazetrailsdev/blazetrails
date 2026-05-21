@@ -20,7 +20,7 @@ export function emitModelSource(className: string, fields: Array<[string, string
       tsClass({
         name: className,
         extends: refs.Base,
-        body: fields.map(([name, type]) => tsField(`${name}!`, type)),
+        body: fields.map(([name, type]) => tsField(name, type, { definite: true })),
       }),
     ],
   });

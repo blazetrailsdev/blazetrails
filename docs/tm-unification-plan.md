@@ -7,8 +7,10 @@ once-per-file schema setup with transactional fixtures.
 
 Phases 1–4, 7, 8 are closed. Phase 5 (universal `defineSchema`) is
 complete. Phase 6 mechanical bulk migration is complete; the
-remainder is sized per-file surgery. Phase 9a is merged for SQLite;
-Phase 9b extends it to PG/MySQL and deletes `SchemaAdapter`.
+remainder is sized per-file surgery. Phase 9a (SQLite visitor) is
+merged. Phase 9b-1 (PG visitor) is merged. Phase 9b-2 is in flight:
+9b-2a (arel `Table.star` fix) merged, 9b-2b (MySQL gate flip +
+assertion sweep) in review.
 
 For closed-phase narrative and the original Path 1/Path 2 fallback
 diagnosis, see the merged PRs cited in each phase header and the
@@ -122,18 +124,51 @@ the dormant fallback in `relation.ts:3614-3619` emitted generic
 all-ANSI SQL. Each adapter is its own PR; bundling risks a CI failure
 that's hard to triage.
 
-**9b-1 — activate PG `arelVisitor` delegation.** Flip the gate at
-`test-adapter.ts:718` to also pass `postgres`. Audit
-`Visitors::PostgreSQL` against
-`vendor/rails/.../arel/visitors/postgresql.rb` for parity. Triage
-surfaced failures: fix the visitor where it diverges from Rails; gate
-test assertions where they hardcode dormant-fallback output.
-Estimated ~200-300 LOC.
+**9b-1 — activate PG `arelVisitor` delegation — closed (#2139).** The
+gate at `test-adapter.ts:715` now passes both `sqlite` and `postgres`.
+Smaller surface than 9a (3 files, +41/-27). 3 PG-bytea encryption
+tests skipped pending a `type.serialize` follow-up; that work is
+tracked in 9b-2d below.
 
-**9b-2 — activate MySQL `arelVisitor` delegation.** Same pattern.
-MariaDB CI is the canary; expect identifier-quote-style assertion
-fails since the dormant fallback emits ANSI `"` quotes but
-`Visitors::MySQL` emits backticks. Estimated ~150-250 LOC.
+**9b-2 — activate MySQL `arelVisitor` delegation.** Split into a
+prerequisite arel fix and the gate flip proper:
+
+- **9b-2a — `Table.star` → `Attribute` — closed (#2144).** First
+  attempt (#2141, closed) surfaced 56 MariaDB failures rooted in
+  mixed-quote SQL: `Table.star` was a pre-baked ANSI `SqlLiteral` at
+  `packages/arel/src/table.ts:197` that bypassed the adapter visitor.
+  Rails uses `table[Arel.star]` (an `Attribute`) so the visitor
+  handles dialect quoting. #2144 restored that shape; SQLite/PG
+  unchanged, MySQL now emits backticks via the visitor.
+- **9b-2b — gate flip + assertion sweep — in flight (#2155).** Drops
+  the adapter conditional from `test-adapter.ts:715` so all three
+  adapters delegate. Sweep of ~50 hardcoded `'"name"'` assertions in
+  `relation.test.ts` via a `Q(...)` helper that rewrites to backticks
+  on MySQL. Split-out fixes already merged (each surfaced as the
+  sweep proceeded):
+  - **#2156** — `JoinDependency` identifier quoting routed through
+    adapter helpers (LEFT OUTER JOIN clauses were hardcoded ANSI;
+    same bug family as #2141 in a different code path).
+  - **#2157** — `Relation#_applyOrderToManager` swapped `UnqualifiedColumn(table.get(col))` for `SqlLiteral(adapter.quoteColumnName(col))` to fix subquery-alias ORDER BY of unknown columns (MySQL's `UnqualifiedColumn` visitor override re-qualified). Tactical fix, not Rails-shaped — see 9b-2c.
+
+**9b-2c — Rails-shape #2157's ORDER BY path — ~30-50 LOC followup.**
+Rails' `preprocess_order_args` (`active_record/relation/query_methods.rb`)
+routes unknown columns through
+`arel_column(field) { |name| connection.quote_table_name(name) }`.
+The yield returns a bare-quoted identifier, so Rails never constructs
+an `UnqualifiedColumn` for ORDER BY — that node is reserved for
+UPDATE-set semantics. #2157's fix emits equivalent SQL but bypasses
+`arel_column`. Mirror that path so node construction matches Rails.
+([[project_pr2157_followup_arel_column_path]])
+
+**9b-2d — PG-bytea encryption `type.serialize` followup — ~30 LOC.**
+3 encryption tests remain skipped on PG bytea after #2139. Route
+`EncryptedAttribute` writes through `type.serialize` before reaching
+`adapter.quote()`. Same root cause as 9a's SQLite encryption skips —
+#2132 fixed those at the `quote()` layer (`Type::Binary::Data`
+branch). The PG-bytea case needs the parallel fix at the
+type-serialize layer, not at `quote()`. Likely also resolves any
+MySQL BLOB skips 9b-2b surfaces.
 
 **9b-3 + 9b-4 — delete the dormant-visitor fallback and
 `SchemaAdapter`.** Bundled because the fallback deletion is small (~50

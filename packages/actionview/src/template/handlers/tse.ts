@@ -1,3 +1,4 @@
+import { chomp } from "@blazetrails/activesupport";
 import { compileJs, type EmitJsOptions, type EmitResult } from "@blazetrails/tse-compiler";
 import type { RenderContext, TemplateHandler } from "../handlers.js";
 
@@ -89,7 +90,7 @@ export class Tse implements TemplateHandler {
    */
   call(template: TseTemplate, source: string): string {
     const ctor = this.constructor as typeof Tse;
-    const prepared = ctor.stripTrailingNewlines ? source.replace(/(\r\n|\r|\n)$/, "") : source;
+    const prepared = ctor.stripTrailingNewlines ? chomp(source) : source;
     // Rails compares `template.type` (a MIME string like "text/html") against
     // `escape_ignore_list`. Trails' `Template#type` currently returns the
     // format token ("html") until `Mime::Type` lands — normalize both forms

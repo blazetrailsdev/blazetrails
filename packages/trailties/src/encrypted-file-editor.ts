@@ -42,8 +42,12 @@ function displayEditorHint(): void {
 }
 
 async function ensureKeyFile(file: EncryptedFile): Promise<void> {
-  if (await file.isKey()) return;
+  // Read fs directly rather than calling `file.isKey()`, which memoizes
+  // the (negative) result and would prevent the freshly-written key from
+  // being seen later in this same edit pass. Env-var keys still win at
+  // read time, so checking the file alone is fine.
   const fs = await getFsAsync();
+  if (await fs.exists!(file.keyPath)) return;
   const key = EncryptedFile.generateKey();
   await fs.writeFile!(file.keyPath, `${key}\n`, { mode: 0o600 });
 }

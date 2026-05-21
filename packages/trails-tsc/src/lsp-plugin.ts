@@ -43,13 +43,19 @@ export function init(modules: { typescript: typeof ts }): {
   // host doesn't implement `getScriptKind`. Without this, our wrapper
   // would mask every non-.tse file as `Unknown` — breaking .ts/.tsx
   // diagnostics in any host that relied on TS's default inference.
+  // Covers the families tsserver itself recognizes (`.d.ts`, `.mts`,
+  // `.cts`, `.mjs`, `.cjs` included) so the fallback doesn't degrade
+  // diagnostics for non-`.tse` files on hosts without `getScriptKind`.
   const inferKindFromExt = (p: string): ts.ScriptKind => {
-    const e = p.slice(p.lastIndexOf(".")).toLowerCase();
-    return e === ".ts"
+    const lower = p.toLowerCase();
+    if (lower.endsWith(".d.ts") || lower.endsWith(".d.mts") || lower.endsWith(".d.cts"))
+      return tsLib.ScriptKind.TS;
+    const e = lower.slice(lower.lastIndexOf("."));
+    return e === ".ts" || e === ".mts" || e === ".cts"
       ? tsLib.ScriptKind.TS
       : e === ".tsx"
         ? tsLib.ScriptKind.TSX
-        : e === ".js"
+        : e === ".js" || e === ".mjs" || e === ".cjs"
           ? tsLib.ScriptKind.JS
           : e === ".jsx"
             ? tsLib.ScriptKind.JSX
@@ -106,7 +112,10 @@ function listTseFiles(dir: string): string[] {
     if (entry.isDirectory()) out.push(...listTseFiles(full));
     else if (entry.isFile() && entry.name.endsWith(".tse")) out.push(full);
   }
-  return out;
+  // Sort for stable order across platforms/filesystems — tsserver
+  // re-walks `getExternalFiles` periodically, and an order-only diff
+  // would otherwise churn the project graph.
+  return out.sort();
 }
 
 export default init;

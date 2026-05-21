@@ -42,10 +42,15 @@ export function watchViews(opts: WatchViewsOptions = {}): WatchHandle {
   let lastTrigger: string | undefined;
 
   const watcher = fs.watch(viewsDir, { recursive: true }, (_event, filename) => {
-    if (filename === null) return;
-    const name = typeof filename === "string" ? filename : String(filename);
-    if (!name.endsWith(".tse")) return;
-    lastTrigger = name.split(path.sep).join("/");
+    // Some platforms/filesystems (older Windows, certain network mounts)
+    // emit a null filename. We can't filter by extension, but the cheap
+    // full rebuild remains correct — schedule with an unknown trigger so
+    // deletes/renames on those hosts still propagate.
+    if (filename !== null) {
+      const name = typeof filename === "string" ? filename : String(filename);
+      if (!name.endsWith(".tse")) return;
+      lastTrigger = name.split(path.sep).join("/");
+    }
     if (pending !== null) clearTimeout(pending);
     pending = setTimeout(() => {
       pending = null;

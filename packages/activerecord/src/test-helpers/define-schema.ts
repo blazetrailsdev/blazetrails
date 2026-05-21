@@ -229,7 +229,12 @@ const COLUMN_TYPE_MAP_SQLITE: Record<PrimitiveColumnSpec, string> = {
  *
  * @internal
  */
-const _appliedSchemaSignatures = new WeakMap<DatabaseAdapter, Map<string, string>>();
+// Strong-ref Map (not WeakMap): we need enumeration for the global
+// `clearAppliedSchemaSignatures()` form. Test adapters are long-lived by
+// design — `_sharedAdapter` in test-adapter.ts is a module singleton, and
+// raw adapter-cluster adapters live for the test file's duration — so
+// holding them strongly here is a non-issue.
+const _appliedSchemaSignatures = new Map<DatabaseAdapter, Map<string, string>>();
 
 /**
  * Snapshot the per-adapter signature cache. Paired with
@@ -258,7 +263,6 @@ export function _restoreAppliedSchemaSignaturesForAdapter(
   snapshot: Map<string, string>,
 ): void {
   _appliedSchemaSignatures.set(adapter, new Map(snapshot));
-  _trackedAdapters.add(adapter);
 }
 
 /**
@@ -274,23 +278,12 @@ export function _restoreAppliedSchemaSignaturesForAdapter(
 export function clearAppliedSchemaSignatures(adapter?: DatabaseAdapter): void {
   if (adapter) {
     _appliedSchemaSignatures.delete(adapter);
-    _trackedAdapters.delete(adapter);
-    return;
+  } else {
+    // Snapshots taken via `_snapshotAppliedSchemaSignaturesForAdapter` are
+    // independent Map copies, so callers holding a snapshot can still restore.
+    _appliedSchemaSignatures.clear();
   }
-  // Snapshots taken via `_snapshotAppliedSchemaSignaturesForAdapter` are
-  // independent Map copies, so callers holding a snapshot can still restore.
-  for (const a of _trackedAdapters) _appliedSchemaSignatures.delete(a);
-  _trackedAdapters.clear();
 }
-
-/**
- * Strong-ref set of adapters with cache entries. The WeakMap above is the
- * authoritative store; this set just lets `clearAppliedSchemaSignatures()`
- * with no argument iterate every entry, since WeakMap isn't enumerable.
- *
- * @internal
- */
-const _trackedAdapters = new Set<DatabaseAdapter>();
 
 /** @internal */
 function getCache(adapter: DatabaseAdapter): Map<string, string> {
@@ -298,7 +291,6 @@ function getCache(adapter: DatabaseAdapter): Map<string, string> {
   if (!cache) {
     cache = new Map();
     _appliedSchemaSignatures.set(adapter, cache);
-    _trackedAdapters.add(adapter);
   }
   return cache;
 }

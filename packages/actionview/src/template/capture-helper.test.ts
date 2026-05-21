@@ -9,9 +9,9 @@ import {
   provide,
   withOutputBuffer,
   type CaptureHelperHost,
-} from "./capture-helper.js";
-import { contentTag } from "./tag-helper.js";
-import { raw } from "./output-safety-helper.js";
+} from "../helpers/capture-helper.js";
+import { contentTag } from "../helpers/tag-helper.js";
+import { raw } from "../helpers/output-safety-helper.js";
 
 interface Host extends CaptureHelperHost {
   capture: typeof capture;
@@ -40,7 +40,7 @@ describe("CaptureHelperTest", () => {
     av = makeHost();
   });
 
-  it("test_capture_captures_the_temporary_output_buffer_in_its_block", () => {
+  it("capture captures the temporary output buffer in its block", () => {
     expect(av.outputBuffer!.isEmpty()).toBe(true);
     const string = av.capture(() => {
       av.outputBuffer!.concat("foo");
@@ -50,33 +50,33 @@ describe("CaptureHelperTest", () => {
     expect(string?.toString()).toBe("foobar");
   });
 
-  it("test_capture_captures_the_value_returned_by_the_block_if_the_temporary_buffer_is_blank", () => {
+  it("capture captures the value returned by the block if the temporary buffer is blank", () => {
     const string = av.capture((a: string, b: string) => a + b, "foo", "bar");
     expect(string?.toString()).toBe("foobar");
   });
 
-  it("test_capture_returns_nil_if_the_returned_value_is_not_a_string", () => {
+  it("capture returns nil if the returned value is not a string", () => {
     expect(av.capture(() => 1)).toBeNull();
   });
 
-  it("test_capture_escapes_html", () => {
+  it("capture escapes html", () => {
     const string = av.capture(() => "<em>bar</em>");
     expect(string?.toString()).toBe("&lt;em&gt;bar&lt;/em&gt;");
   });
 
-  it("test_capture_doesnt_escape_twice", () => {
+  it("capture doesnt escape twice", () => {
     const string = av.capture(() => raw("&lt;em&gt;bar&lt;/em&gt;"));
     expect(string?.toString()).toBe("&lt;em&gt;bar&lt;/em&gt;");
   });
 
-  it("test_capture_does_not_reassign_buffer", () => {
+  it("capture does not reassign buffer", () => {
     const original = av.outputBuffer;
     av.capture(() => {
       expect(av.outputBuffer).toBe(original);
     });
   });
 
-  it("test_content_for_used_for_read", () => {
+  it("content for used for read", () => {
     av.contentFor("foo", "foo");
     expect(av.contentFor("foo")?.toString()).toBe("foo");
 
@@ -84,21 +84,21 @@ describe("CaptureHelperTest", () => {
     expect(av.contentFor("bar")?.toString()).toBe("bar");
   });
 
-  it("test_content_for_with_multiple_calls", () => {
+  it("content for with multiple calls", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", "foo");
     av.contentFor("title", "bar");
     expect(av.contentFor("title")?.toString()).toBe("foobar");
   });
 
-  it("test_content_for_with_multiple_calls_and_flush", () => {
+  it("content for with multiple calls and flush", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", "foo");
     av.contentFor("title", "bar", { flush: true });
     expect(av.contentFor("title")?.toString()).toBe("bar");
   });
 
-  it("test_content_for_with_block", () => {
+  it("content for with block", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", undefined, undefined, () => {
       av.outputBuffer!.concat("foo");
@@ -108,28 +108,28 @@ describe("CaptureHelperTest", () => {
     expect(av.contentFor("title")?.toString()).toBe("foobar");
   });
 
-  it("test_content_for_with_block_and_multiple_calls_with_flush", () => {
+  it("content for with block and multiple calls with flush", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", undefined, undefined, () => "foo");
     av.contentFor("title", undefined, { flush: true }, () => "bar");
     expect(av.contentFor("title")?.toString()).toBe("bar");
   });
 
-  it("test_content_for_with_block_and_multiple_calls_with_flush_nil_content", () => {
+  it("content for with block and multiple calls with flush nil content", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", undefined, undefined, () => "foo");
     av.contentFor("title", null, { flush: true }, () => "bar");
     expect(av.contentFor("title")?.toString()).toBe("bar");
   });
 
-  it("test_content_for_with_block_and_multiple_calls_without_flush", () => {
+  it("content for with block and multiple calls without flush", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", undefined, undefined, () => "foo");
     av.contentFor("title", undefined, { flush: false }, () => "bar");
     expect(av.contentFor("title")?.toString()).toBe("foobar");
   });
 
-  it("test_content_for_with_whitespace_block", () => {
+  it("content for with whitespace block", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", "foo");
     av.contentFor("title", undefined, undefined, () => {
@@ -140,7 +140,7 @@ describe("CaptureHelperTest", () => {
     expect(av.contentFor("title")?.toString()).toBe("foobar");
   });
 
-  it("test_content_for_with_whitespace_block_and_flush", () => {
+  it("content for with whitespace block and flush", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", "foo");
     av.contentFor("title", undefined, { flush: true }, () => {
@@ -151,7 +151,7 @@ describe("CaptureHelperTest", () => {
     expect(av.contentFor("title")?.toString()).toBe("bar");
   });
 
-  it("test_content_for_returns_nil_when_writing", () => {
+  it("content for returns nil when writing", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     expect(av.contentFor("title", "foo")).toBeNull();
     expect(
@@ -183,18 +183,18 @@ describe("CaptureHelperTest", () => {
     expect(av.contentFor("title")?.toString()).toBe("bar");
   });
 
-  it("test_content_for_returns_nil_when_content_missing", () => {
+  it("content for returns nil when content missing", () => {
     expect(av.contentFor("some_missing_key")).toBeNull();
   });
 
-  it("test_content_for_question_mark", () => {
+  it("content for question mark", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", "title");
     expect(av.contentForQuestion("title")).toBe(true);
     expect(av.contentForQuestion("something_else")).toBe(false);
   });
 
-  it("test_content_for_should_be_html_safe_after_flush_empty", () => {
+  it("content for should be html safe after flush empty", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.contentFor("title", undefined, undefined, () => contentTag("p", "title"));
     expect(av.contentFor("title")!.htmlSafe).toBe(true);
@@ -203,7 +203,7 @@ describe("CaptureHelperTest", () => {
     expect(av.contentFor("title")!.htmlSafe).toBe(true);
   });
 
-  it("test_provide", () => {
+  it("provide", () => {
     expect(av.contentForQuestion("title")).toBe(false);
     av.provide("title", "hi");
     expect(av.contentForQuestion("title")).toBe(true);
@@ -217,7 +217,7 @@ describe("CaptureHelperTest", () => {
     expect(av.contentFor("title")?.toString()).toBe("hi<p>title</p>");
   });
 
-  it("test_with_output_buffer_swaps_the_output_buffer_given_no_argument", () => {
+  it("with output buffer swaps the output buffer given no argument", () => {
     expect(av.outputBuffer!.isEmpty()).toBe(true);
     const buffer = av.withOutputBuffer(null, () => {
       av.outputBuffer!.concat(".");
@@ -226,7 +226,7 @@ describe("CaptureHelperTest", () => {
     expect(av.outputBuffer!.isEmpty()).toBe(true);
   });
 
-  it("test_with_output_buffer_swaps_the_output_buffer_with_an_argument", () => {
+  it("with output buffer swaps the output buffer with an argument", () => {
     expect(av.outputBuffer!.isEmpty()).toBe(true);
     const buffer = new OutputBuffer(".");
     av.withOutputBuffer(buffer, () => {
@@ -236,7 +236,7 @@ describe("CaptureHelperTest", () => {
     expect(av.outputBuffer!.isEmpty()).toBe(true);
   });
 
-  it("test_with_output_buffer_restores_the_output_buffer", () => {
+  it("with output buffer restores the output buffer", () => {
     const buffer = new OutputBuffer();
     av.outputBuffer = buffer;
     av.withOutputBuffer(null, () => {
@@ -245,7 +245,12 @@ describe("CaptureHelperTest", () => {
     expect(buffer).toBe(av.outputBuffer);
   });
 
-  it("test_with_output_buffer_does_not_assume_there_is_an_output_buffer", () => {
+  it.skip("with output buffer sets proper encoding", () => {
+    // SKIPPED: TS strings are always UTF-16 — no per-string encoding
+    // to swap, so Rails' force_encoding propagation has no analogue.
+  });
+
+  it("with output buffer does not assume there is an output buffer", () => {
     expect(av.outputBuffer!.isEmpty()).toBe(true);
     expect(
       av
@@ -255,7 +260,7 @@ describe("CaptureHelperTest", () => {
     ).toBe("");
   });
 
-  it("test_ignore_the_block_return_if_its_the_buffer", () => {
+  it("ignore the block return if its the buffer", () => {
     av.outputBuffer!.safeConcat("something");
     const string = av.capture(() => {
       av.outputBuffer!.concat("foo");

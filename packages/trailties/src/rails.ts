@@ -156,7 +156,9 @@ export class Trails {
   }
 }
 
-/** @internal Test-only — drops the cached EnvironmentInquirer. */
+/** @internal Test-only — drops cached module-private singletons that
+ * leak across vitest tests (EnvironmentInquirer, BacktraceCleaner). */
 export function _resetTrailsEnv(): void {
   _env = undefined;
+  _backtraceCleaner = undefined;
 }

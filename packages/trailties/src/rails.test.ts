@@ -14,6 +14,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   Trails.application = null;
+  Trails.cache = null;
+  Trails.logger = null;
   _resetTrailsEnv();
   Application.appClass = null;
 });

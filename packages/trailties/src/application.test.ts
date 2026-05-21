@@ -254,6 +254,13 @@ describe("Application::Configuration", () => {
     expect(c.requireMasterKey).toBe(false);
   });
 
+  it("paths() appends the application-only 'public' entry on top of EngineConfiguration", () => {
+    // Rails: application/configuration.rb#paths adds public, tmp, log, etc.
+    // Trails only ports `public` today (the rest follow in PR 2.7-followups).
+    const c = new Configuration();
+    expect(c.paths().get("public")).toBeDefined();
+  });
+
   it("config.enable_reloading is !config.cache_classes", () => {
     const c = new Configuration();
     c.cacheClasses = true;

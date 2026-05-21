@@ -31,7 +31,8 @@ export class ChangeGenerator extends GeneratorBase {
       );
     }
     this.to = options.to as DatabaseName;
-    this.appName = options.appName ?? "app";
+    // Mirrors railties' AppName module: derive from destination_root basename.
+    this.appName = options.appName ?? this.path.basename(this.cwd);
   }
 
   get database(): Database {

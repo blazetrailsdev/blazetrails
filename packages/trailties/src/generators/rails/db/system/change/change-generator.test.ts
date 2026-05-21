@@ -57,8 +57,14 @@ afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 describe("ChangeGeneratorTest", () => {
   it("change to invalid database", () => {
     expect(() => new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "invalid-db" })).toThrow(
-      /Invalid value for --to option/,
+      /Invalid value for --to option\. Supported preconfigurations are: mysql, postgresql, sqlite3, mariadb-mysql\./,
     );
+  });
+
+  it("appName defaults to basename of cwd", () => {
+    new ChangeGenerator({ cwd: tmpDir, output: () => {}, to: "postgresql" }).run();
+    const cfg = read("src/config/database.ts");
+    expect(cfg).toContain(`database: "${path.basename(tmpDir)}_development"`);
   });
 
   it("change to postgresql", () => {

@@ -79,6 +79,20 @@ describe("Template::Handlers::Tse", () => {
     expect(captured[1]).toBe("hello\n");
   });
 
+  it("stripTrailingNewlines chomps \\n, \\r\\n, and lone \\r like Ruby String#chomp", () => {
+    const captured: string[] = [];
+    Tse.implementation = ((source: string) => {
+      captured.push(source);
+      return { code: "", localsSignature: null, typesAnnotation: null };
+    }) as TseImplementation;
+    Tse.stripTrailingNewlines = true;
+
+    new Tse().call({ type: "text/html" }, "a\n");
+    new Tse().call({ type: "text/html" }, "b\r\n");
+    new Tse().call({ type: "text/html" }, "c\r");
+    expect(captured).toEqual(["a", "b", "c"]);
+  });
+
   it("delegates compilation to the swappable implementation", () => {
     const calls: Array<{ source: string; escapeIgnore: boolean | undefined }> = [];
     Tse.implementation = ((source, options) => {

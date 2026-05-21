@@ -4,7 +4,7 @@
 
 Early on, `packages/trailties` was wired up with [`commander`](https://www.npmjs.com/package/commander) so a `trails` binary could exist quickly. Rails uses [Thor](https://github.com/rails/thor) — `Rails::Command::Base` (in `railties/lib/rails/command/base.rb`) is a thin wrapper over `Thor::Group`, and every `bin/rails <command>` resolves to a Thor command class.
 
-Project ethos is Rails-source fidelity (see `CLAUDE.md`). `commander` diverges from Thor's surface — different option DSL, different help formatting, different subcommand routing — and `api:compare` will flag every Thor method that doesn't exist on our side. Since nothing depends on trailties' CLI today, there's no back-compat cost to switching.
+Project ethos is Rails-source fidelity (see [CLAUDE.md](../CLAUDE.md)). `commander` diverges from Thor's surface — different option DSL, different help formatting, different subcommand routing — and `api:compare` will flag every Thor method that doesn't exist on our side. Since nothing depends on trailties' CLI today, there's no back-compat cost to switching.
 
 ## Scope
 
@@ -12,7 +12,7 @@ Thor `v1.3.2` (Rails' pinned version per `Gemfile.lock`) is 6,275 LOC in `lib/`,
 
 Two layers:
 
-1. **`@blazetrails/thor`** — a new package mirroring `rails/thor`. Full port over time, wired into `api:compare` and `test:compare` from day one so coverage is graded continuously. Surface: `Thor`, `Thor::Group`, options DSL (`classOption`, `argument`, `methodOption`), subcommand dispatch, `Thor::Shell` (`say`, `sayStatus`, `ask`, `yes?`), actions (`createFile`, `template`, `insertIntoFile`), and `--help` rendering.
+1. **`@blazetrails/thor`** — a new package mirroring `rails/thor`. Full port over time, wired into `api:compare` and `test:compare` from day one so coverage is graded continuously. Surface: `Thor`, `Thor.Group`, options DSL (`classOption`, `argument`, `methodOption`), subcommand dispatch, `Thor.Shell` (`say`, `sayStatus`, `ask`, `isYes`), actions (`createFile`, `template`, `insertIntoFile`), and `--help` rendering.
 
 2. **`Rails::Command::Base` port** in `trailties/src/command/base.ts`, mirroring `railties/lib/rails/command/base.rb`. Per-command files (db, generate, server, …) extend it. Already in trailties' api:compare scope via `vendor/sources.ts`.
 

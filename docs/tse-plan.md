@@ -184,7 +184,13 @@ metadata, not part of the handler — `Template::Handlers::ERB` processes
 all of them the same way. Format selection happens upstream in
 `LookupContext` based on `Accept:` / `respond_to`.
 
-TSE adopts the same triple: `<name>.<format>.tse`.
+TSE adopts the **full Rails grammar**, not just the minimum triple.
+The minimum convention is `<name>.<format>.tse`; optional locale and
+variant segments are also supported with the same parsing rules as
+Rails (see §2.10.4 for the full grammar, registered-token lists, and
+disambiguation). Examples in the table below show the common
+`<name>.<format>.tse` shape, but `show.en.html+phone.tse` and other
+locale/variant combinations are equally valid.
 
 | File                                           | Format | Handler | Rails analogue                            |
 | ---------------------------------------------- | ------ | ------- | ----------------------------------------- |
@@ -339,26 +345,37 @@ direct port of that boundary.
 
 ### 2.4 Syntax (1-for-1 with ERB, plus one extension)
 
-| TSE                               | ERB                            | Meaning                                      |
-| --------------------------------- | ------------------------------ | -------------------------------------------- |
-| `<% stmt %>`                      | `<% stmt %>`                   | TS statement, no output                      |
-| `<%= expr %>`                     | `<%= expr %>`                  | Output expr, HTML-escape unless `SafeString` |
-| `<%== expr %>`                    | `<%== expr %>`                 | Output expr, never escape                    |
-| `<%- stmt -%>`                    | `<%- stmt -%>`                 | Statement + trim surrounding whitespace      |
-| `<%= expr -%>`                    | `<%= expr -%>`                 | Output + trim trailing newline               |
-| `<%# comment %>`                  | `<%# comment %>`               | Dropped                                      |
-| `<%% / %%>`                       | `<%% / %%>`                    | Literal `<%` / `%>`                          |
-| `<%= helper do %>...<% end %>`    | `<%= helper do %>...<% end %>` | Block-form output expression — see below     |
-| `<%# locals: { name: string } %>` | `<%# locals: (name:) %>`       | Strict locals — see 2.5                      |
-| `<%! types: { name: string } !%>` | _(none)_                       | TSE-only — extended locals type spec         |
+| TSE                                               | ERB                                | Meaning                                                             |
+| ------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
+| `<% stmt %>`                                      | `<% stmt %>`                       | TS statement, no output                                             |
+| `<%= expr %>`                                     | `<%= expr %>`                      | Output expr, HTML-escape unless `SafeString`                        |
+| `<%== expr %>`                                    | `<%== expr %>`                     | Output expr, never escape                                           |
+| `<%- stmt -%>`                                    | `<%- stmt -%>`                     | Statement + trim surrounding whitespace                             |
+| `<%= expr -%>`                                    | `<%= expr -%>`                     | Output + trim trailing newline                                      |
+| `<%# comment %>`                                  | `<%# comment %>`                   | Dropped                                                             |
+| `<%% / %%>`                                       | `<%% / %%>`                        | Literal `<%` / `%>`                                                 |
+| `<%= helper do %>...<% end %>`                    | `<%= helper do %>...<% end %>`     | Block-form output expression — see below                            |
+| `<%# locals: (name:, count: 0) %>`                | `<%# locals: (name:, count: 0) %>` | Rails-style names + defaults — drives runtime binding               |
+| `<%! types: { name: string; count?: number } !%>` | _(none)_                           | TSE-only — optional TS types for tsc (coexists with `locals:` line) |
 
-The two locals forms are equivalent at runtime; the `<%! !%>` form is a
-**brand-new opener** with no ERB analogue. The lexer recognizes `<%!`
-specifically and closes on `!%>` rather than `%>` (see §2.10.1 for the
-single-place divergence in the otherwise Erubi-identical scanner).
-`<%! !%>` accepts arbitrary TS type syntax (generics, unions, imported
-types) while `<%# locals: %>` is restricted to a single TS object
-literal for parser simplicity. Pick one per file.
+**Locals declaration is hybrid** (matches the decision in
+[actionview-100-percent.md §3](actionview-100-percent.md)): the
+Rails-style names line is the canonical form — `<%# locals: (name:, count: 0) %>` —
+and **drives runtime binding** (the compiled function's parameter
+list, arity, and defaults). The `<%! types: { ... } !%>` block is
+**optional and coexists** with the names line; when present, it
+sharpens the locals parameter's TS type for tsc. When absent, locals
+parameter type defaults to `Record<string, unknown>`.
+
+```tse
+<%# locals: (user:, count: 0) %>
+<%! types: { user: User; count?: number } !%>
+```
+
+The `<%! !%>` form is a **brand-new opener** with no ERB analogue.
+The lexer recognizes `<%!` specifically and closes on `!%>` rather
+than `%>` (see §2.10.1 for the single-place divergence in the
+otherwise Erubi-identical scanner).
 
 **Block-form `<%= %>`.** Same as Rails' `BLOCK_EXPR`. When `expr` ends
 in `do |args|` or `{`, the emitter passes the block body as a final
@@ -400,12 +417,28 @@ Source-side, the magic comment is matched by
 
 TSE mirrors this at two layers:
 
-- **Compile time** (the primary enforcement): the trails-tsc plugin emits
-  `.tse.ts` whose default export is
+- **Compile time** (the primary enforcement, with caveats): the
+  trails-tsc plugin emits `.tse.ts` whose default export is
   `(context: RenderContext, locals: { name: string }): SafeString`. tsc
-  rejects calls that omit `name`, pass the wrong type, or pass excess
-  properties (TS' excess-property check is the structural equivalent of
-  Ruby's "unknown kwarg" `ArgumentError`).
+  rejects calls that omit `name` or pass the wrong type.
+
+  **TS excess-property caveat.** TypeScript's excess-property check
+  fires reliably **only for fresh object literals at the call site** —
+  `render({ partial: ..., locals: { name: "x", extra: 1 } })` errors,
+  but if `locals` is constructed and stored in a variable
+  (`const l = { name: "x", extra: 1 }; render({ partial, locals: l })`)
+  the excess property is accepted because TS widens the variable's
+  type. This is weaker than Ruby's `ArgumentError` for unknown kwargs.
+
+  Mitigations the emitter applies:
+  1. The generated render-call helper accepts `locals` typed as an
+     **exact object type** built via a `NoExtraKeys<T>` helper that
+     uses conditional types to reject extra keys structurally (works
+     against variables, not just literals).
+  2. Users writing partial calls inline benefit from normal
+     excess-property checking automatically.
+  3. The runtime check below catches what slips through.
+
 - **Runtime** (defense in depth, for dynamically-built `locals`): the
   emitted `.tse.js` checks declared keys against `locals` and throws
   `ActionView.Template.Error` subclass `StrictLocalsMismatch` on
@@ -985,19 +1018,19 @@ have Y" should match behavior, not just signature.
 
 ### 3.1 Handler protocol
 
-| Rails                                                          | TSE                                                                     |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `Template::Handlers.register_template_handler(:tse, TSE)`      | `Template.Handlers.register("tse", Tse)`                                |
-| `Template::Handlers::ERB#call(template, source) → String`      | `Tse.call(template, source): { code: string, sourceMap: RawSourceMap }` |
-| `Template::Handlers::ERB#supports_streaming? → true`           | `Tse.supportsStreaming = true`                                          |
-| `Template::Handlers::ERB#handles_encoding? → true`             | `Tse.handlesEncoding = true` (TS is UTF-8; mostly cosmetic)             |
-| `Template::Handlers::ERB#translate_location(spot, bt, source)` | `Tse.translateLocation(spot, frame, source)` — uses sourceMap consumer  |
-| `Template::Handlers::ERB.erb_implementation` (class attr)      | `Tse.emitter` (replaceable)                                             |
-| `Template::Handlers::ERB.erb_trim_mode = "-"`                  | `Tse.trimMode = "-"` (only `-` supported, matches Rails)                |
-| `Template::Handlers::ERB.escape_ignore_list = ["text/plain"]`  | `Tse.escapeIgnoreList = ["text/plain"]`                                 |
-| `Template::Handlers::ERB.strip_trailing_newlines = false`      | `Tse.stripTrailingNewlines = false`                                     |
-| `ActionView::Base.annotate_rendered_view_with_filenames`       | `ActionView.Base.annotateRenderedViewWithFilenames`                     |
-| `default_format` (e.g. `:html`)                                | `Tse.defaultFormat = "html"`                                            |
+| Rails                                                          | TSE                                                                                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `Template::Handlers.register_template_handler(:tse, TSE)`      | `TemplateHandlers.registerTemplateHandler("tse", new TseHandler())` ([existing API](../packages/actionview/src/template/handlers.ts)) |
+| `Template::Handlers::ERB#call(template, source) → String`      | `Tse.call(template, source): { code: string, sourceMap: RawSourceMap }`                                                               |
+| `Template::Handlers::ERB#supports_streaming? → true`           | `Tse.supportsStreaming = true`                                                                                                        |
+| `Template::Handlers::ERB#handles_encoding? → true`             | `Tse.handlesEncoding = true` (TS is UTF-8; mostly cosmetic)                                                                           |
+| `Template::Handlers::ERB#translate_location(spot, bt, source)` | `Tse.translateLocation(spot, frame, source)` — uses sourceMap consumer                                                                |
+| `Template::Handlers::ERB.erb_implementation` (class attr)      | `Tse.emitter` (replaceable)                                                                                                           |
+| `Template::Handlers::ERB.erb_trim_mode = "-"`                  | `Tse.trimMode = "-"` (only `-` supported, matches Rails)                                                                              |
+| `Template::Handlers::ERB.escape_ignore_list = ["text/plain"]`  | `Tse.escapeIgnoreList = ["text/plain"]`                                                                                               |
+| `Template::Handlers::ERB.strip_trailing_newlines = false`      | `Tse.stripTrailingNewlines = false`                                                                                                   |
+| `ActionView::Base.annotate_rendered_view_with_filenames`       | `ActionView.Base.annotateRenderedViewWithFilenames`                                                                                   |
+| `default_format` (e.g. `:html`)                                | `Tse.defaultFormat = "html"`                                                                                                          |
 
 Difference: our `call` returns `{code, sourceMap}` instead of a bare
 string. Rails embeds source-map info as Ruby comments + relies on
@@ -1022,14 +1055,14 @@ both fields.
 
 ### 3.3 Magic comments
 
-| Rails                                                         | TSE                                                              |
-| ------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `<%# locals: (name:, count: 0) %>` (strict, defaults allowed) | `<%# locals: { name: string; count?: number } %>`                |
-| `<%# locals: () %>` → `**nil` (no kwargs allowed)             | `<%# locals: {} %>` → `Record<never, never>` (empty exact)       |
-| `<%# frozen_string_literal: true %>`                          | _no analogue_ — TS strings are immutable                         |
-| `<%# encoding: utf-8 %>`                                      | _no analogue_ — UTF-8 only                                       |
-| n/a                                                           | `<%! types: { ... } !%>` — extended (imports + generics allowed) |
-| n/a                                                           | `<%! format: "json" !%>` — override filename-derived format      |
+| Rails                                                         | TSE                                                                                             |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `<%# locals: (name:, count: 0) %>` (strict, defaults allowed) | `<%# locals: (name:, count: 0) %>` + optional `<%! types: { name: string; count?: number } !%>` |
+| `<%# locals: () %>` → `**nil` (no kwargs allowed)             | `<%# locals: () %>` → no kwargs allowed (locals param `Record<never, never>`)                   |
+| `<%# frozen_string_literal: true %>`                          | _no analogue_ — TS strings are immutable                                                        |
+| `<%# encoding: utf-8 %>`                                      | _no analogue_ — UTF-8 only                                                                      |
+| n/a                                                           | `<%! types: { ... } !%>` — extended (imports + generics allowed)                                |
+| n/a                                                           | `<%! format: "json" !%>` — override filename-derived format                                     |
 
 Parsing rule (mirrors Rails' `Template#strict_locals!`): the magic
 comment is matched by a regex (`/<%#\s+locals:\s+(\{[^}]*\})\s+%>/` for
@@ -1171,12 +1204,18 @@ item it claims to cover. The checklist is split into two parts:
 
 **Strict locals** (`lib/action_view/template.rb`, `strict_locals!`):
 
-- [ ] Regex `<%# locals: { ... } %>` matched and stripped from source
-      before lex.
-- [ ] Empty `<%# locals: {} %>` enforces "no extra keys" via
-      `Record<never, never>` (or excess-property check).
-- [ ] Defaults: `<%# locals: { name?: string } %>` → optional param;
-      missing pass-through.
+- [ ] Rails-style `<%# locals: (name:, count: 0) %>` matched via the
+      same regex Rails uses (`/\#\s+locals:\s+\((.*)\)/`) and stripped
+      from source before lex.
+- [ ] Optional `<%! types: { ... } !%>` block parsed separately,
+      sharpens the locals param type, coexists with the names line.
+- [ ] Empty `<%# locals: () %>` enforces "no extra keys" — locals param
+      typed `Record<never, never>` and runtime check rejects any keys.
+- [ ] Defaults from the names line (`count: 0`) emit as TS default
+      params in the compiled function signature.
+- [ ] `NoExtraKeys<T>` helper applied to `locals` parameter so excess
+      properties are rejected even for variable-typed argument values
+      (not just object literals — see §2.5 caveat).
 - [ ] Runtime `StrictLocalsMismatch` thrown when
       `raiseOnStrictLocalsMismatch` is on and `Object.keys(locals)`
       doesn't match declared set.

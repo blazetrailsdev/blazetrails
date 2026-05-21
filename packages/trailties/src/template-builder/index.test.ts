@@ -66,6 +66,29 @@ describe("template-builder", () => {
     expect(out).toContain(`return u;`);
   });
 
+  it("preserves explicit renamed imports when refs also reference the same module", () => {
+    const r = ref("LocalName", "y");
+    const out = tsModule({
+      imports: [{ from: "y", named: { LocalName: "Original" } }],
+      declarations: [
+        tsClass({
+          name: "C",
+          body: [
+            tsMethod({ name: "f", params: [], returnType: "void", body: tsBody`new ${r}();` }),
+          ],
+        }),
+      ],
+    });
+    expect(out).toContain(`import { Original as LocalName } from "y";`);
+    expect(out.match(/from "y"/g) ?? []).toHaveLength(1);
+  });
+
+  it("tsImportDefault preserves the default name as the refs key type", () => {
+    const d = tsImportDefault("./foo.js", "Foo");
+    // Compile-time: d.refs.Foo is Ref; runtime: shape is correct.
+    expect(d.refs.Foo).toBeDefined();
+  });
+
   it("supports tsInterface extends and raw declarations", () => {
     const base = ref("Base", "./base.js");
     const out = tsModule({

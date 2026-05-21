@@ -11,7 +11,9 @@
     "./vite": {
       "types": "./dist/server/vite-plugin.d.ts",
       "default": "./dist/server/vite-plugin.js"
-    }
+    },
+    "./template-builder": "./dist/template-builder/index.js",
+    "./template-builder/testing": "./dist/template-builder/testing.js"
   },
   "files": [
     "dist",
@@ -24,5 +26,13 @@
     "@blazetrails/actionpack": "workspace:*",
     "commander": "^14.0.0",
     "vite": "^7.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   }
 }

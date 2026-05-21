@@ -15,10 +15,13 @@ export function tsImport<TNames extends string>(
   return { import: { from, named }, refs: refs as { [K in TNames]: Ref } };
 }
 
-export function tsImportDefault(from: string, name: string): ImportResult<string> {
+export function tsImportDefault<TName extends string>(
+  from: string,
+  name: TName,
+): ImportResult<TName> {
   return {
     import: { from, default: name },
-    refs: { [name]: ref(name, from) } as Record<string, Ref>,
+    refs: { [name]: ref(name, from) } as { [K in TName]: Ref },
   };
 }
 
@@ -43,6 +46,9 @@ export function emitImport(imp: Import): string {
         return a === o ? a : `${o} as ${a}`;
       });
     parts.push(`{ ${entries.join(", ")} }`);
+  }
+  if (!parts.length) {
+    throw new Error(`Import from "${imp.from}" has no default or named bindings`);
   }
   return `${imp.typeOnly ? "import type" : "import"} ${parts.join(", ")} from "${imp.from}";`;
 }

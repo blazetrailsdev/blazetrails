@@ -21,12 +21,17 @@ export function tsModule(src: ModuleSource): string {
       declTexts.push((d as RawDecl).text);
     }
   }
+  const explicit = src.imports ?? [];
+  const explicitValueFroms = new Set(explicit.filter((i) => !i.typeOnly).map((i) => i.from));
   const fromRefs: Import[] = [];
   for (const r of refs) {
     const m = refMeta(r);
-    if (m.from) fromRefs.push({ from: m.from, named: { [m.name]: m.name } });
+    if (m.from && !explicitValueFroms.has(m.from)) {
+      fromRefs.push({ from: m.from, named: { [m.name]: m.name } });
+    }
   }
-  const merged = mergeImports([...(src.imports ?? []), ...fromRefs]);
+  // Auto-collected refs come first so explicit src.imports wins on merge.
+  const merged = mergeImports([...fromRefs, ...explicit]);
   const importBlock = merged.map(emitImport).join("\n");
   const pre = src.preamble ? `${src.preamble}\n\n` : "";
   const imp = importBlock ? `${importBlock}\n\n` : "";

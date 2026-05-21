@@ -242,7 +242,7 @@ function hasTopLevelComma(s: string): boolean {
 }
 
 function resolveColumnNameMatcher(adapter: any): RegExp {
-  // Walk adapter → inner (SchemaAdapter wraps the real adapter) to find a
+  // Walk adapter → inner (TestAdapterFixtures wraps the real adapter) to find a
   // static columnNameMatcher on the concrete adapter class.
   let a = adapter;
   while (a) {
@@ -2315,7 +2315,7 @@ export class Relation<T extends Base> {
       const binaryBytes = this._binaryByteLength(b);
       if (binaryBytes !== null) return `<${binaryBytes} bytes of binary data>`;
       if (typeof adapter.typeCast !== "function") {
-        // Match the "throw loudly" contract the SchemaAdapter /
+        // Match the "throw loudly" contract the TestAdapterFixtures /
         // QueryCacheAdapter wrappers use — a silent fallback would
         // make EXPLAIN output depend on whether the adapter
         // happens to implement `typeCast`, and nothing we ship does
@@ -3622,7 +3622,7 @@ export class Relation<T extends Base> {
    * Returns the adapter's SELECT visitor when one is defined, or null.
    *
    * Real adapters (PG, SQLite, MySQL) expose `arelVisitor` — use it to get
-   * dialect-correct quoting. SchemaAdapter (test wrapper) returns undefined,
+   * dialect-correct quoting. TestAdapterFixtures (test wrapper) returns undefined,
    * so callers fall back to manager.toSql() / node.toSql() (global registry
    * visitor = ANSI double-quotes), which avoids MySQL backticks in toSql()
    * output and DML execution in MariaDB's default non-ANSI mode.

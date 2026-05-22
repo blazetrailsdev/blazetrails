@@ -60,7 +60,11 @@ def parse_file(path)
     closes -= 1 if line =~ /^\s*def\s+\w+\s*=/ && !line.include?(" end")
 
     if (m = line.match(/^class\s+(\w+(?:::\w+)*)(?:\s*<\s*([\w:]+))?/))
-      depth += [opens - closes, 1].max
+      # Apply the net delta from this line (class keyword already counted in opens).
+      # Clamp to at least depth+1 so `class Foo; end` (opens==closes==1) still
+      # records a unique depth for the class before popping it.
+      net = opens - closes
+      depth += net >= 1 ? net : 1
       cls = { name: m[1], parent: m[2], tableName: nil,
               associations: [], validations: [], scopes: [], callbacks: [], attributes: [] }
       stack << { cls: cls, depth: depth }

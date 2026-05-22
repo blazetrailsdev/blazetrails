@@ -584,7 +584,7 @@ interface ModelResult {
 }
 
 function loadRubyModelsManifest(): RubyFileEntry[] {
-  const out = execSync(`ruby ${RUBY_EXTRACTOR}`, { encoding: "utf8" });
+  const out = execSync(`ruby "${RUBY_EXTRACTOR}"`, { encoding: "utf8" });
   return JSON.parse(out) as RubyFileEntry[];
 }
 
@@ -619,11 +619,13 @@ function compareModelClass(ruby: RubyClass, tsContent: string): ModelResult {
   }
   for (const v of ruby.validations) {
     const attr = v.attributes[0];
-    if (attr && tsContent.includes(`"${attr}"`)) r.valsMatched++;
+    const vpat = attr ? new RegExp(`this\\.validates?\\s*\\(\\s*["']${attr}["']`, "i") : null;
+    if (vpat && vpat.test(tsContent)) r.valsMatched++;
     else r.notes.push(`val-missing: ${v.kind} ${v.attributes.join(",")}`);
   }
   for (const s of ruby.scopes) {
-    if (tsContent.includes(`"${s.name}"`)) r.scopesMatched++;
+    const spat = new RegExp(`this\\.scope\\s*\\(\\s*["']${s.name}["']`, "i");
+    if (spat.test(tsContent)) r.scopesMatched++;
     else r.notes.push(`scope-missing: ${s.name}`);
   }
   const anyDiff =

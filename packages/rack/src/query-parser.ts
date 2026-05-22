@@ -90,10 +90,10 @@ export class QueryParser {
     qs: string | null | undefined,
     separator?: string | null,
   ): Record<string, string | string[] | null> {
-    if (!qs) return {};
+    if (!qs) return Object.create(null);
     const str = this.checkQueryString(qs, separator);
     const sep = separator ? (COMMON_SEP[separator] ?? escapedSepRe(separator)) : DEFAULT_SEP;
-    const result: Record<string, string | string[] | null> = {};
+    const result: Record<string, string | string[] | null> = Object.create(null);
 
     for (const p of str.split(sep)) {
       if (!p) continue;
@@ -106,7 +106,7 @@ export class QueryParser {
         k = unescape(p.substring(0, eqIdx));
         v = unescape(p.substring(eqIdx + 1));
       }
-      if (k in result) {
+      if (Object.hasOwn(result, k)) {
         const cur = result[k];
         if (Array.isArray(cur)) {
           cur.push(v as string);
@@ -142,8 +142,10 @@ export class QueryParser {
         this._normalizeParams(params, k, v, 0);
       }
     } catch (e) {
-      if (e instanceof TypeError && !(e instanceof ParameterTypeError)) {
-        throw new InvalidParameterError(e.message);
+      // Mirror Rails' `rescue ArgumentError`: wrap decoding errors (URIError from
+      // decodeURIComponent) and unexpected TypeErrors as InvalidParameterError.
+      if ((e instanceof URIError || e instanceof TypeError) && !(e instanceof ParameterTypeError)) {
+        throw new InvalidParameterError((e as Error).message);
       }
       throw e;
     }

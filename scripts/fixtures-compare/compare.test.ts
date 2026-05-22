@@ -352,18 +352,15 @@ describe("compareFile", () => {
     const other = await compareFile("not_on_the_list.yml", empty, empty, "ERB-UNSUPPORTED");
     expect(other.status).toBe("ERB-UNSUPPORTED");
   });
-  it("falls back to MISSING when an allow-listed file has no TS counterpart", async () => {
-    // The TS side is the source of truth for allow-listed files; if it's
-    // been deleted we must surface MISSING rather than silently passing.
-    const r = await compareFile("erb_allowed_ghost.yml", empty, empty, "ERB-UNSUPPORTED");
-    // Not in ERB_ALLOW_LIST, so stays ERB-UNSUPPORTED. Use a real entry:
-    const ghost = { ...r }; // ensure assertion below isn't conflated
-    expect(ghost.status).toBe("ERB-UNSUPPORTED");
-    // Allow-listed name without a TS file → MISSING.
-    const r2 = await compareFile("mixins.yml", empty, empty, "ERB-UNSUPPORTED");
-    // mixins.ts exists in the repo, so this asserts the happy path:
-    expect(r2.status).toBe("ERB-ALLOWED");
-    expect(r2.tsBase).toBe("mixins.ts");
+  it("records `tsBase` on the ERB-ALLOWED result so a deleted TS counterpart can be caught", async () => {
+    // ERB-ALLOWED files are the TS-as-source-of-truth bucket; the
+    // promotion in compareFile only succeeds when the TS counterpart
+    // exists (else falls back to MISSING). Asserting on `tsBase` makes
+    // that contract visible: if mixins.ts is removed from the tree, this
+    // resolves to null and the status branch flips to MISSING.
+    const r = await compareFile("mixins.yml", empty, empty, "ERB-UNSUPPORTED");
+    expect(r.status).toBe("ERB-ALLOWED");
+    expect(r.tsBase).toBe("mixins.ts");
   });
 });
 

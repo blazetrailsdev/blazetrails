@@ -11,6 +11,7 @@ import {
 import { isStiSubclass, getStiBase, isBaseClass, baseClass } from "./inheritance.js";
 import { encryptionHooks } from "./encryption-hooks.js";
 import { isWrappedType } from "./encryption/wrapped-type.js";
+import { FakePool } from "./connection-adapters/schema-cache.js";
 
 /**
  * Schema metadata for ActiveRecord models — table name, primary key,
@@ -842,15 +843,16 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   const table = schemaHost.tableName;
   // Resolve a target for schemaCache lookups. Prefer `.pool` because some
   // wrapper adapters (e.g. TestAdapterFixtures) expose their unwrapped inner
-  // adapter through this getter. But if `.pool` is an actual ConnectionPool
-  // (has `withConnection`), skip it and use the adapter directly: on
-  // lone-connection pools (SQLite :memory: + size 1) the connection is
-  // already permanently checked out to startingAdapter, so asking the pool
-  // for another connection would deadlock.
+  // adapter through this getter. If `.pool` is an actual ConnectionPool
+  // (has `withConnection`), wrap startingAdapter in a FakePool — mirroring
+  // Rails' BoundSchemaReflection.for_lone_connection. On lone-connection
+  // pools (SQLite :memory: + size 1) the connection is already permanently
+  // checked out, so calling pool.withConnection would deadlock; FakePool
+  // yields the connection we already hold.
   const candidate = startingAdapter.pool ?? startingAdapter;
   const pool =
     candidate && typeof (candidate as { withConnection?: unknown }).withConnection === "function"
-      ? startingAdapter
+      ? new FakePool(startingAdapter)
       : candidate;
 
   if (typeof cache.dataSourceExists === "function") {

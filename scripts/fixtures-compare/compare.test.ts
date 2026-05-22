@@ -442,4 +442,14 @@ describe("compareModelClass", () => {
     const r = compareModelClass(ruby, ts);
     expect(r.valsMatched).toBe(1);
   });
+
+  it("matches validates_uniqueness_of to validatesUniqueness (no 'Of')", () => {
+    const ruby: RubyClass = {
+      ...emptyClass(),
+      validations: [{ kind: "validates_uniqueness_of", attributes: ["email"], options: {} }],
+    };
+    expect(compareModelClass(ruby, `this.validatesUniqueness("email");`).valsMatched).toBe(1);
+    // Must NOT match the wrong name
+    expect(compareModelClass(ruby, `this.validatesUniquenessOf("email");`).valsMatched).toBe(0);
+  });
 });

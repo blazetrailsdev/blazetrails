@@ -530,15 +530,17 @@ async function main(): Promise<void> {
 // ---- Models pass ----
 
 // Rails shorthand validation macros that map to named TS helpers rather than
-// the generic this.validates(). Only list the ones actually implemented in
-// packages/activerecord/src/validations.ts — the rest fall through to validates.
+// the generic this.validates(). Helpers are implemented in:
+//   packages/activemodel/src/model.ts      — presence/absence/length/size/numericality
+//   packages/activerecord/src/validations.ts — uniqueness (validatesUniqueness, no "Of")
+//                                             + validatesAssociated
 const VALIDATION_KIND_TO_TS: Record<string, string> = {
   validates_presence_of: "validatesPresenceOf",
   validates_absence_of: "validatesAbsenceOf",
   validates_length_of: "validatesLengthOf",
   validates_size_of: "validatesSizeOf",
   validates_numericality_of: "validatesNumericalityOf",
-  validates_uniqueness_of: "validatesUniquenessOf",
+  validates_uniqueness_of: "validatesUniqueness", // exported as validatesUniqueness (no "Of")
   validates_associated: "validatesAssociated",
 };
 

@@ -56,8 +56,9 @@ def parse_file(path)
     # Inline `if`/`unless` modifiers (trailing) don't open a block.
     opens -= line.scan(/\s+(?:if|unless)\s+/).count if line !~ /^\s*(?:if|unless)\b/
     closes = line.scan(/\bend\b/).count
-    # single-line `def foo = ...` has no end
-    closes -= 1 if line =~ /^\s*def\s+\w+\s*=/ && !line.include?(" end")
+    # Ruby 3 single-line `def foo = expr` opens `def` but has no `end`.
+    # Cancel the `def` from opens (not closes) so net delta stays 0.
+    opens -= 1 if line =~ /^\s*def\s+\w[\w?!]*\s*=/ && !line.include?(" end")
 
     if (m = line.match(/^class\s+(\w+(?:::\w+)*)(?:\s*<\s*([\w:]+))?/))
       # Enter the class body at depth+1, then apply remaining tokens on this line.
@@ -103,7 +104,10 @@ def parse_file(path)
   classes
 end
 
+abort "extract-ruby-models: MODELS_DIR not found: #{MODELS_DIR}\nRun `pnpm vendor:fetch` first." unless Dir.exist?(MODELS_DIR)
+
 files = Dir.glob(File.join(MODELS_DIR, "**", "*.rb")).sort
+abort "extract-ruby-models: no .rb files found under #{MODELS_DIR}" if files.empty?
 result = []
 files.each do |f|
   rel = f.delete_prefix(File.join(ROOT, "vendor/rails/activerecord/") + "/")

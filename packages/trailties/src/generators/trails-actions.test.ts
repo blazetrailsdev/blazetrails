@@ -76,6 +76,13 @@ describe("TrailsActions", () => {
       expect(json.dependencies["left-pad"]).toBe("*");
     });
 
+    it("rejects prototype-pollution package names", async () => {
+      files.set("/app/package.json", JSON.stringify({ name: "app" }, null, 2) + "\n");
+      await expect(makeGen().pkg("__proto__")).rejects.toThrow(/invalid package name/);
+      await expect(makeGen().pkg("constructor")).rejects.toThrow(/invalid package name/);
+      await expect(makeGen().pkg("prototype")).rejects.toThrow(/invalid package name/);
+    });
+
     it("throws a clear error when package.json is not a JSON object", async () => {
       files.set("/app/package.json", "[]\n");
       await expect(makeGen().pkg("left-pad")).rejects.toThrow(
@@ -110,6 +117,17 @@ describe("TrailsActions", () => {
       await makeGen().route(`router.resources("posts");`);
       expect(files.get("/app/src/config/routes.ts")).toBe(
         `export function drawRoutes(router: any): void {\n  router.resources("posts");\n  // routes\n}\n`,
+      );
+    });
+
+    it("ignores marker substrings that aren't standalone lines", async () => {
+      files.set(
+        "/app/src/config/routes.ts",
+        `// inline mention of // routes in a leading comment\nexport function drawRoutes(router: any): void {\n  // routes\n}\n`,
+      );
+      await makeGen().route(`router.resources("posts");`);
+      expect(files.get("/app/src/config/routes.ts")).toBe(
+        `// inline mention of // routes in a leading comment\nexport function drawRoutes(router: any): void {\n  router.resources("posts");\n  // routes\n}\n`,
       );
     });
 

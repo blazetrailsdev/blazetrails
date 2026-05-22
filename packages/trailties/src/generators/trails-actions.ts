@@ -39,6 +39,9 @@ export async function pkg(
     throw new Error(`package.json must be a JSON object, got ${actual}`);
   }
   const json = parsed as Record<string, unknown>;
+  if (name === "__proto__" || name === "constructor" || name === "prototype") {
+    throw new Error(`invalid package name ${JSON.stringify(name)}`);
+  }
   const key = opts.dev ? "devDependencies" : "dependencies";
   const existing = json[key];
   if (
@@ -48,7 +51,12 @@ export async function pkg(
     const actual = existing === null ? "null" : Array.isArray(existing) ? "array" : typeof existing;
     throw new Error(`package.json "${key}" must be an object, got ${actual}`);
   }
-  const deps = (existing as Record<string, string> | undefined) ?? {};
+  // Null-prototype target so a hostile name can't reach Object.prototype
+  // even if the explicit reject above is ever bypassed.
+  const deps: Record<string, string> = Object.assign(
+    Object.create(null) as Record<string, string>,
+    (existing as Record<string, string> | undefined) ?? {},
+  );
   deps[name] = version;
   json[key] = deps;
   await fs.writeFile!(pkgPath, JSON.stringify(json, null, 2) + "\n");
@@ -135,18 +143,20 @@ async function insertAtMarker(
   const path = await getPathAsync();
   const full = path.join(host.cwd, relPath);
   const existing = await fs.readFile!(full, "utf-8");
-  // Use the LAST occurrence so previously inserted blocks that happen to
-  // contain the marker string don't shadow the real one. Since each call
-  // inserts ABOVE the marker, the original marker is always last in file.
-  const idx = existing.lastIndexOf(marker);
-  if (idx === -1) {
+  // Match the marker as a full line (`^<indent><marker>$`, multiline) so a
+  // user-supplied block containing the marker substring inside other code
+  // can't shadow the real marker line. Take the LAST match — every
+  // insertion goes ABOVE the marker, so the original marker line is always
+  // last in file.
+  const re = new RegExp(`^([\\t ]*)${escapeRegExp(marker)}[\\t ]*$`, "gm");
+  let match: RegExpExecArray | null;
+  let last: RegExpExecArray | null = null;
+  while ((match = re.exec(existing)) !== null) last = match;
+  if (!last) {
     throw new Error(`marker ${JSON.stringify(marker)} not found in ${relPath}`);
   }
-  // Indent the inserted block to match the marker's own indentation, then
-  // splice it onto the line above the marker so the marker stays put for
-  // subsequent insertions.
-  const lineStart = existing.lastIndexOf("\n", idx - 1) + 1;
-  const indent = existing.slice(lineStart, idx);
+  const lineStart = last.index;
+  const indent = last[1];
   const block = insertion
     .split("\n")
     .map((line) => (line.length === 0 ? line : indent + line))
@@ -154,6 +164,10 @@ async function insertAtMarker(
   const text = block.endsWith("\n") ? block : block + "\n";
   const updated = existing.slice(0, lineStart) + text + existing.slice(lineStart);
   await fs.writeFile!(full, updated);
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function summarize(s: string): string {

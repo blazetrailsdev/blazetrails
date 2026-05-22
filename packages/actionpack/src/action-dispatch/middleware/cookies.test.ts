@@ -280,6 +280,24 @@ describe("SignedCookieJar serialized API", () => {
     expect(jar.signed.get("user_id")).toBe(45);
   });
 
+  it("honors a custom serializer from request env for round-trip", () => {
+    const custom: CookieSerializer = {
+      dump: (v) => `!${String(v)}!`,
+      load: (s) => s.slice(1, -1),
+      dumped: (s) => s.startsWith("!") && s.endsWith("!"),
+    };
+    const jar = CookieJar.build(
+      {
+        env: { "action_dispatch.cookies_serializer": custom },
+        cookies: {},
+        cookiesAppOptions: { secret: "x".repeat(32) },
+      },
+      {},
+    );
+    jar.signed.set("k", "abc");
+    expect(jar.signed.get("k")).toBe("abc");
+  });
+
   it("returns undefined when verification fails", () => {
     const seeded = CookieJar.build(
       { env: {}, cookies: {}, cookiesAppOptions: { secret: "x".repeat(32) } },

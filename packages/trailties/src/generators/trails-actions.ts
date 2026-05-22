@@ -35,7 +35,14 @@ export async function pkg(
   const raw = await fs.readFile!(pkgPath, "utf-8");
   const json = JSON.parse(raw) as Record<string, unknown>;
   const key = opts.dev ? "devDependencies" : "dependencies";
-  const deps = (json[key] as Record<string, string>) ?? {};
+  const existing = json[key];
+  if (
+    existing !== undefined &&
+    (existing === null || typeof existing !== "object" || Array.isArray(existing))
+  ) {
+    throw new Error(`package.json "${key}" must be an object, got ${typeof existing}`);
+  }
+  const deps = (existing as Record<string, string> | undefined) ?? {};
   deps[name] = version;
   json[key] = deps;
   await fs.writeFile!(pkgPath, JSON.stringify(json, null, 2) + "\n");
@@ -69,6 +76,11 @@ export async function environment(
   options: EnvironmentOptions = {},
 ): Promise<void> {
   assertNoRubySource(tsCode);
+  if (options.env !== undefined && !/^[a-z0-9_-]+$/i.test(options.env)) {
+    throw new Error(
+      `environment name must match /^[a-z0-9_-]+$/i, got ${JSON.stringify(options.env)}`,
+    );
+  }
   const relPath = options.env
     ? `src/config/environments/${options.env}.ts`
     : "src/config/application.ts";

@@ -76,6 +76,14 @@ describe("TrailsActions", () => {
       expect(json.dependencies["left-pad"]).toBe("*");
     });
 
+    it("throws a clear error when dependencies is not an object", async () => {
+      files.set(
+        "/app/package.json",
+        JSON.stringify({ name: "app", dependencies: "oops" }, null, 2) + "\n",
+      );
+      await expect(makeGen().pkg("left-pad")).rejects.toThrow(/must be an object/);
+    });
+
     it("with dev option targets devDependencies", async () => {
       files.set("/app/package.json", JSON.stringify({ name: "app" }, null, 2) + "\n");
       await makeGen().pkg("vitest", "^3.0.0", { dev: true });
@@ -113,6 +121,15 @@ describe("TrailsActions", () => {
       await makeGen().environment(`logLevel: "debug",`);
       expect(files.get("/app/src/config/application.ts")).toBe(
         `export const app = {\n  config: {\n    logLevel: "debug",\n    // config\n  },\n};\n`,
+      );
+    });
+
+    it("rejects env names containing path separators or traversal segments", async () => {
+      await expect(makeGen().environment(`x: 1,`, { env: "../evil" })).rejects.toThrow(
+        /environment name must match/,
+      );
+      await expect(makeGen().environment(`x: 1,`, { env: "prod/extra" })).rejects.toThrow(
+        /environment name must match/,
       );
     });
 

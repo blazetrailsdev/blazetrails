@@ -138,7 +138,7 @@ export class AcceptList {
     const seen = new Set<string>();
     const out: MimeType[] = [];
     for (const item of list) {
-      const looked = MimeType.lookup(item.name) ?? new MimeType(item.name, item.name);
+      const looked = lookupForParse(item.name);
       if (!seen.has(looked.toString())) {
         seen.add(looked.toString());
         out.push(looked);

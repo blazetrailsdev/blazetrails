@@ -190,12 +190,30 @@ function _establishPooledTestPool(): Promise<
       adapterName = "postgresql";
       configuration = { adapter: adapterName, url: PG_TEST_URL };
       const { PostgreSQLAdapter } = await import("./connection-adapters/postgresql-adapter.js");
-      adapterFactory = () => new PostgreSQLAdapter(PG_TEST_URL) as unknown as DatabaseAdapter;
+      // Rails adapters own a single backend connection; the outer
+      // ConnectionPool does the multiplexing. Constrain the driver pool to
+      // max: 1 so each pooled-adapter slot corresponds to exactly one PG
+      // server connection (otherwise pool-size N × pg.Pool default 10 can
+      // exhaust CI connection limits).
+      adapterFactory = () =>
+        new PostgreSQLAdapter({
+          connectionString: PG_TEST_URL,
+          max: 1,
+        }) as unknown as DatabaseAdapter;
     } else if (MYSQL_TEST_URL) {
       adapterName = "mysql2";
       configuration = { adapter: adapterName, url: MYSQL_TEST_URL };
       const { Mysql2Adapter } = await import("./connection-adapters/mysql2-adapter.js");
-      adapterFactory = () => new Mysql2Adapter(MYSQL_TEST_URL) as unknown as DatabaseAdapter;
+      // See PG branch: constrain mysql2 driver pool to one physical
+      // connection per adapter so the outer ConnectionPool stays the
+      // single source of multiplexing (matches Rails' one-connection-
+      // per-adapter shape).
+      adapterFactory = () =>
+        new Mysql2Adapter({
+          uri: MYSQL_TEST_URL,
+          connectionLimit: 1,
+          flags: ["FOUND_ROWS"],
+        }) as unknown as DatabaseAdapter;
     } else {
       adapterName = "sqlite3";
       const database = _pooledSqliteDatabase();

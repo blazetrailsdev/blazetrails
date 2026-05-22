@@ -222,20 +222,76 @@ const COLUMN_TYPE_MAP_SQLITE: Record<PrimitiveColumnSpec, string> = {
 };
 
 /**
- * Per-adapter cache of the last-applied normalized table signatures. Lets
+ * Per-database cache of the last-applied normalized table signatures. Lets
  * `defineSchema` skip DDL when an identical schema is requested again —
  * the Phase 6 hoist (`defineSchema` in `beforeAll` instead of `beforeEach`)
  * relies on this being a no-op when nothing changed.
  *
+ * Keyed by {@link databaseIdentity} so distinct adapter instances that
+ * target the same underlying DB (e.g. multiple pool-leased adapters over
+ * one SQLite shared-cache URI or one PG connection URL) share one cache
+ * entry. Without this, file A's `defineSchema({foo})` would populate
+ * adapter X's cache; file B's adapter Y would see an empty cache and
+ * attempt `CREATE TABLE foo` against the live DB.
+ *
  * @internal
  */
-// WeakMap so short-lived adapter wrappers (createTestAdapter() returns a
-// fresh wrapper per call, and withTransactionalFixtures skips the global
-// reset between tests) don't accumulate. The no-arg clear below rebinds
-// the WeakMap rather than enumerating — outstanding snapshots from
-// `_snapshotAppliedSchemaSignaturesForAdapter` are independent Map copies
-// so callers holding a snapshot can still restore.
-let _appliedSchemaSignatures = new WeakMap<DatabaseAdapter, Map<string, string>>();
+let _appliedSchemaSignatures = new Map<string, Map<string, string>>();
+
+/**
+ * Stable per-adapter unique key for adapters whose underlying DB cannot
+ * be identified by a stringable connection target — notably SQLite
+ * `:memory:` (each adapter IS a separate DB) and any adapter that
+ * doesn't expose a recognizable config field. Pinned via WeakMap so the
+ * mapping disappears when the adapter is GC'd.
+ *
+ * @internal
+ */
+const _adapterUniqueIds = new WeakMap<DatabaseAdapter, string>();
+let _adapterIdCounter = 0;
+function _adapterUniqueId(adapter: DatabaseAdapter): string {
+  let id = _adapterUniqueIds.get(adapter);
+  if (!id) {
+    id = `adapter#${++_adapterIdCounter}`;
+    _adapterUniqueIds.set(adapter, id);
+  }
+  return id;
+}
+
+/**
+ * Derive a string identity for the underlying database an adapter is
+ * connected to. Adapters sharing the same DB return the same key;
+ * adapters whose DB cannot be identified fall back to a per-instance
+ * unique key (preserves the legacy "one adapter = one cache" behavior).
+ *
+ * Reads private fields by name on purpose — defineSchema is test-only
+ * infrastructure and there is no public surface for "which DB are you
+ * connected to" on AbstractAdapter today.
+ *
+ * @internal
+ */
+export function databaseIdentity(adapter: DatabaseAdapter): string {
+  const a = adapter as unknown as Record<string, unknown>;
+  if (adapter.adapterName === "sqlite") {
+    const fn = a["_filename"];
+    if (typeof fn === "string" && fn !== ":memory:" && fn !== "") return `sqlite:${fn}`;
+    return _adapterUniqueId(adapter);
+  }
+  if (adapter.adapterName === "postgres") {
+    const opts = a["_pgPoolOptions"] as { connectionString?: unknown } | undefined;
+    const cs = opts?.connectionString;
+    if (typeof cs === "string" && cs !== "") return `postgres:${cs}`;
+    return _adapterUniqueId(adapter);
+  }
+  if (adapter.adapterName === "mysql") {
+    const pc = a["_poolConfig"] as { uri?: unknown } | undefined;
+    if (typeof pc?.uri === "string" && pc.uri !== "") return `mysql:${pc.uri}`;
+    const db = a["_database"];
+    if (typeof db === "string" && db !== "") return `mysql:db=${db}`;
+    return _adapterUniqueId(adapter);
+  }
+  return _adapterUniqueId(adapter);
+}
 
 /**
  * Snapshot the per-adapter signature cache. Paired with
@@ -254,7 +310,7 @@ let _appliedSchemaSignatures = new WeakMap<DatabaseAdapter, Map<string, string>>
 export function _snapshotAppliedSchemaSignaturesForAdapter(
   adapter: DatabaseAdapter,
 ): Map<string, string> {
-  const cache = _appliedSchemaSignatures.get(adapter);
+  const cache = _appliedSchemaSignatures.get(databaseIdentity(adapter));
   return cache ? new Map(cache) : new Map();
 }
 
@@ -263,7 +319,7 @@ export function _restoreAppliedSchemaSignaturesForAdapter(
   adapter: DatabaseAdapter,
   snapshot: Map<string, string>,
 ): void {
-  _appliedSchemaSignatures.set(adapter, new Map(snapshot));
+  _appliedSchemaSignatures.set(databaseIdentity(adapter), new Map(snapshot));
 }
 
 /**
@@ -278,18 +334,19 @@ export function _restoreAppliedSchemaSignaturesForAdapter(
  */
 export function clearAppliedSchemaSignatures(adapter?: DatabaseAdapter): void {
   if (adapter) {
-    _appliedSchemaSignatures.delete(adapter);
+    _appliedSchemaSignatures.delete(databaseIdentity(adapter));
   } else {
-    _appliedSchemaSignatures = new WeakMap();
+    _appliedSchemaSignatures = new Map();
   }
 }
 
 /** @internal */
 function getCache(adapter: DatabaseAdapter): Map<string, string> {
-  let cache = _appliedSchemaSignatures.get(adapter);
+  const key = databaseIdentity(adapter);
+  let cache = _appliedSchemaSignatures.get(key);
   if (!cache) {
     cache = new Map();
-    _appliedSchemaSignatures.set(adapter, cache);
+    _appliedSchemaSignatures.set(key, cache);
   }
   return cache;
 }

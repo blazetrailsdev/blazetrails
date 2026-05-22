@@ -1,4 +1,5 @@
-import { escapePath } from "../utils.js";
+import { getFs } from "@blazetrails/activesupport";
+import { ArgumentError, escapePath } from "../utils.js";
 import { UploadedFile } from "./uploaded-file.js";
 
 export const MULTIPART_BOUNDARY = "AaB03x";
@@ -21,7 +22,7 @@ export class Generator {
 
   constructor(params: unknown, first: boolean = true) {
     if (first && (params === null || typeof params !== "object" || Array.isArray(params))) {
-      throw new Error("ArgumentError: value must be a Hash");
+      throw new ArgumentError("value must be a Hash");
     }
     this._params = params as Params;
     this._first = first;
@@ -83,8 +84,11 @@ export class Generator {
 
   /** @internal */
   private contentForTempfile(io: UploadedFile, file: UploadedFile, name: string): string {
-    const content = String(io.read());
-    const length = file.path !== undefined ? Buffer.byteLength(content, "binary") : null;
+    const raw = io.read();
+    const content = typeof raw === "string" ? raw : raw.toString("binary");
+    // Rails uses `File.stat(file.path).size` so the length reflects on-disk
+    // bytes rather than the (possibly re-encoded) string we just read.
+    const length = file.path !== undefined ? getFs().statSync(file.path).size : null;
     const filename = `; filename="${escapePath(file.originalFilename)}"`;
     const lenLine = length !== null ? `content-length: ${length}\r\n` : "";
     return (

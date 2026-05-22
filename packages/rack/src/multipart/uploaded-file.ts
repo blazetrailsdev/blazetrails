@@ -54,7 +54,9 @@ export class UploadedFile {
       this.originalFilename = opts.filename ?? "";
     } else {
       if (!path || !getFs().existsSync(path)) {
-        throw new Error(`${path} file does not exist`);
+        // Mirrors Ruby's `raise "#{path} file does not exist"` — Rails emits
+        // an empty path prefix when nil, so use "" instead of "null".
+        throw new Error(`${path ?? ""} file does not exist`);
       }
       this.originalFilename = opts.filename ?? getPath().basename(path);
       const content = getFs().readFileSync(path, binary ? "latin1" : "utf-8");

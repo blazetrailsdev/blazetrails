@@ -206,7 +206,11 @@ function _establishPooledTestPool(): Promise<
 
     const handler = new ConnectionHandler();
     _pooledHandler = handler;
-    const config = new HashConfig("test", "pooled", configuration);
+    // Name = "primary" so HashConfig#isPrimary() reports true and the
+    // pool's SchemaReflection resolves to the conventional
+    // `db/schema_cache.json` path (matches Rails' primary test connection
+    // shape; non-primary configs would hash to `db/<name>_schema_cache.json`).
+    const config = new HashConfig("test", "primary", configuration);
     return handler.establishConnection(config, {
       owner: "PooledTestAdapter",
       adapterFactory,

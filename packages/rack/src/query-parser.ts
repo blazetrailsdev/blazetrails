@@ -26,8 +26,12 @@ export class QueryLimitError extends RangeError {
   }
 }
 
-export const ParamsTooDeepError = QueryLimitError;
-export type ParamsTooDeepError = QueryLimitError;
+export class ParamsTooDeepError extends QueryLimitError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ParamsTooDeepError";
+  }
+}
 
 export class Params extends Object {
   [key: string]: any;
@@ -181,7 +185,7 @@ export class QueryParser {
   }
 
   private _normalizeParams(params: any, name: string, v: string | null, depth: number): void {
-    if (depth >= this.paramDepthLimit) throw new QueryLimitError("param depth limit exceeded");
+    if (depth >= this.paramDepthLimit) throw new ParamsTooDeepError("param depth limit exceeded");
     if (!name) return;
     if (DANGEROUS_KEYS.has(name)) return;
 
@@ -238,7 +242,7 @@ export class QueryParser {
     v: string | null,
     depth: number,
   ): void {
-    if (depth >= this.paramDepthLimit) throw new QueryLimitError("param depth limit exceeded");
+    if (depth >= this.paramDepthLimit) throw new ParamsTooDeepError("param depth limit exceeded");
     if (DANGEROUS_KEYS.has(prefix)) return;
 
     if (keys.length === 0) {
@@ -250,7 +254,7 @@ export class QueryParser {
     const restKeys = keys.slice(1);
 
     if (firstKey === "") {
-      if (!(prefix in params)) params[prefix] = [];
+      if (!Object.hasOwn(params, prefix)) params[prefix] = [];
       const arr = params[prefix];
       if (!Array.isArray(arr)) {
         throw new ParameterTypeError(
@@ -268,7 +272,7 @@ export class QueryParser {
       return;
     }
 
-    if (!(prefix in params)) params[prefix] = Object.create(null);
+    if (!Object.hasOwn(params, prefix)) params[prefix] = Object.create(null);
     const container = params[prefix];
     if (typeof container === "string" || container === null) {
       throw new ParameterTypeError(`expected Hash (got String) for param \`${prefix}'`);
@@ -286,7 +290,7 @@ export class QueryParser {
     let current = lastItem;
     for (let i = 0; i < keys.length; i++) {
       if (keys[i] === "") return false;
-      if (keys[i] in current) {
+      if (Object.hasOwn(current, keys[i])) {
         if (i === keys.length - 1) return true;
         current = current[keys[i]];
         if (typeof current !== "object" || current === null || Array.isArray(current)) return true;

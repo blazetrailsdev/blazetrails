@@ -1926,6 +1926,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // DISCARD ALL drops server-side prepared statements — reset the
     // local pool so a later PREPARE name (a1, a2, ...) doesn't collide.
     this._statementPool?.reset();
+    // DISCARD ALL also resets session-level GUCs (standard_conforming_
+    // strings, intervalstyle, client_min_messages, custom variables) —
+    // mark the connection unconfigured so the next acquire re-runs
+    // _maybeConfigureConnection. Matches Rails' reset!, which calls
+    // attempt_configure_connection via super (abstract_adapter.rb:729).
+    this._connectionConfigured = false;
     super.resetBang();
   }
 

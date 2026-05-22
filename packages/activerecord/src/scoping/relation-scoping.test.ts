@@ -2,11 +2,12 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { afterAll, describe, it, expect, beforeAll } from "vitest";
 import { Base, Range, RecordNotFound } from "../index.js";
 
 import { adapterType } from "../test-adapter.js";
-import { defineSchema } from "../test-helpers/define-schema.js";
+import { clearAppliedSchemaSignatures, defineSchema } from "../test-helpers/define-schema.js";
+import { dropAllTables } from "../test-helpers/drop-all-tables.js";
 import { setupHandlerSuite } from "../test-helpers/setup-handler-suite.js";
 import {
   withTransactionalFixtures,
@@ -57,6 +58,11 @@ beforeAll(async () => {
   }) as unknown as TransactionalFixturesAdapter;
 });
 withTransactionalFixtures(() => _txAdapter!);
+afterAll(async () => {
+  const adapter = Base.adapter;
+  await dropAllTables(adapter);
+  clearAppliedSchemaSignatures(adapter);
+});
 
 describe("RelationScopingTest", () => {
   function makeDeveloper() {

@@ -12,9 +12,8 @@ import { defineSchema } from "../test-helpers/define-schema.js";
 import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
-let _adapter: SidecarAdapter = createSidecarTestAdapter().adapter;
+const _adapter: SidecarAdapter = createSidecarTestAdapter().adapter;
 beforeAll(async () => {
-  ({ adapter: _adapter } = createSidecarTestAdapter());
   const authorCols = { name: "string" as const };
   const postCols = {
     title: "string" as const,

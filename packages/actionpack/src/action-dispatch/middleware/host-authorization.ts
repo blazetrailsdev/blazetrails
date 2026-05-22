@@ -8,11 +8,7 @@
 import type { RackEnv, RackResponse } from "@blazetrails/rack";
 import { bodyFromString } from "@blazetrails/rack";
 import { Request } from "../http/request.js";
-
-/** @internal Minimal logger surface used by {@link DefaultResponseApp}. */
-export interface HostAuthorizationLogger {
-  error(message: string): void;
-}
+import type { Logger } from "./debug-exceptions.js";
 
 /** @internal */
 export const PORT_REGEX = "(?::\\d+)";
@@ -356,10 +352,10 @@ export class DefaultResponseApp {
   }
 
   /** @internal */
-  private availableLogger(request: Request): HostAuthorizationLogger | null {
-    const explicit = request.logger as HostAuthorizationLogger | undefined;
+  private availableLogger(request: Request): Logger | null {
+    const explicit = request.logger as Logger | undefined;
     if (explicit && typeof explicit.error === "function") return explicit;
-    const rack = request.env["rack.logger"] as HostAuthorizationLogger | undefined;
+    const rack = request.env["rack.logger"] as Logger | undefined;
     if (rack && typeof rack.error === "function") return rack;
     return null;
   }

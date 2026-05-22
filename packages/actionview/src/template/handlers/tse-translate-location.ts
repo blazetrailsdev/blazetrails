@@ -62,19 +62,35 @@ export function sourceLines(source: string): string[] {
   return source.split(/(?<=\n)/);
 }
 
-const LINE_TAG_RE = /<%(?:-)?(?:==|=|#)?([\s\S]*?)(?:-)?%>/g;
+const LINE_TAG_RE = /<%%|%%>|<%(?:-)?(?:==|=|#)?([\s\S]*?)(?:-)?%>/g;
 
 /** `ERB::Util.tokenize` parity for a single source line: CODE for `<% … %>`
- *  contents, TEXT for everything else. Empty TEXT segments are skipped. */
+ *  contents, TEXT for everything else. Recognizes Rails' `<%%` / `%%>` escapes
+ *  (the literal-`<%` / literal-`%>` forms) and folds them into the
+ *  surrounding TEXT — matching the main TSE lexer in
+ *  `@blazetrails/tse-compiler/src/lexer.ts`. Empty TEXT segments are skipped. */
 export function tokenizeLine(line: string): SourceToken[] {
   const tokens: SourceToken[] = [];
+  let textBuf = "";
   let last = 0;
+  const flushText = (): void => {
+    if (textBuf.length > 0) tokens.push({ kind: "TEXT", value: textBuf });
+    textBuf = "";
+  };
   for (const m of line.matchAll(LINE_TAG_RE)) {
-    if (m.index! > last) tokens.push({ kind: "TEXT", value: line.slice(last, m.index!) });
-    tokens.push({ kind: "CODE", value: m[1] });
+    textBuf += line.slice(last, m.index!);
     last = m.index! + m[0].length;
+    if (m[0] === "<%%") {
+      textBuf += "<%";
+    } else if (m[0] === "%%>") {
+      textBuf += "%>";
+    } else {
+      flushText();
+      tokens.push({ kind: "CODE", value: m[1] });
+    }
   }
-  if (last < line.length) tokens.push({ kind: "TEXT", value: line.slice(last) });
+  textBuf += line.slice(last);
+  flushText();
   return tokens;
 }
 

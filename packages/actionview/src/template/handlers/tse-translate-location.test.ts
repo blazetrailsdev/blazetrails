@@ -31,6 +31,15 @@ describe("tokenizeLine", () => {
   it("returns an empty token list for a line with no tags and no text", () => {
     expect(tokenizeLine("")).toEqual([]);
   });
+
+  it("treats `<%%` / `%%>` as literal TEXT, not as code-tag delimiters", () => {
+    expect(tokenizeLine("a <%% b %%> c")).toEqual([{ kind: "TEXT", value: "a <% b %> c" }]);
+    expect(tokenizeLine("<%% <%= x %> %%>")).toEqual([
+      { kind: "TEXT", value: "<% " },
+      { kind: "CODE", value: " x " },
+      { kind: "TEXT", value: " %>" },
+    ]);
+  });
 });
 
 describe("findOffset", () => {

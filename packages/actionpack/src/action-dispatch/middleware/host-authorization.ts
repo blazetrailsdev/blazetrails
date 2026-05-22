@@ -307,14 +307,16 @@ export class DefaultResponseApp {
     const request = new Request(env);
     const format = request.xhr ? "text/plain" : "text/html";
     this.logError(request);
-    return this.response(format, this.responseBody(request));
+    return this.response(format, this.responseBody(request, format));
   }
 
   /** @internal */
-  private responseBody(request: Request): string {
+  private responseBody(request: Request, format: string): string {
     if (!request.env["action_dispatch.show_detailed_exceptions"]) return "";
     const blocked = (request.env["action_dispatch.blocked_hosts"] as string[]) ?? [];
-    return renderBlockedHostBody(blocked);
+    return format === "text/plain"
+      ? renderBlockedHostText(blocked)
+      : renderBlockedHostHtml(blocked);
   }
 
   /** @internal */
@@ -351,30 +353,45 @@ export class DefaultResponseApp {
 }
 
 /**
- * Render a minimal HTML body listing the blocked hosts. In Rails this is
- * rendered through `DebugView` + the `rescues/blocked_host` template; the
- * ActionView template stack isn't ported yet, so we emit equivalent
- * structural HTML inline.
+ * Render the blocked-host HTML body. Mirrors Rails'
+ * `templates/rescues/blocked_host.html.erb` line-for-line — the ActionView
+ * template stack isn't ported yet, so the .erb is reproduced inline.
  *
  * @internal
  */
-function renderBlockedHostBody(hosts: string[]): string {
-  const items = hosts.map((h) => `    <li>${escapeHtml(h)}</li>`).join("\n");
+function renderBlockedHostHtml(hosts: string[]): string {
+  const joined = escapeHtml(hosts.join(", "));
+  const lines = hosts.map((host) => `    config.hosts << "${escapeHtml(host)}"`).join("\n");
   return [
-    "<!DOCTYPE html>",
-    '<html lang="en">',
-    "<head>",
-    '  <meta charset="utf-8" />',
-    "  <title>Blocked Host</title>",
-    "</head>",
-    "<body>",
-    "  <h1>Blocked host</h1>",
-    "  <p>To allow requests to these hosts, add them to <code>config.hosts</code>.</p>",
-    "  <ul>",
-    items,
-    "  </ul>",
-    "</body>",
-    "</html>",
+    "<header>",
+    `  <h1>Blocked hosts: ${joined}</h1>`,
+    "</header>",
+    '<main role="main" id="container">',
+    "  <h2>To allow requests to these hosts, make sure they are valid hostnames (containing only numbers, letters, dashes and dots), then add the following to your environment configuration:</h2>",
+    "  <pre>",
+    lines,
+    "  </pre>",
+    '  <p>For more details view: <a href="https://guides.rubyonrails.org/configuring.html#actiondispatch-hostauthorization">the Host Authorization guide</a></p>',
+    "</main>",
+  ].join("\n");
+}
+
+/**
+ * Render the blocked-host plain-text body. Mirrors Rails'
+ * `templates/rescues/blocked_host.text.erb`.
+ *
+ * @internal
+ */
+function renderBlockedHostText(hosts: string[]): string {
+  const lines = hosts.map((host) => `  config.hosts << "${host}"`).join("\n");
+  return [
+    `Blocked hosts: ${hosts.join(", ")}`,
+    "",
+    "To allow requests to these hosts, make sure they are valid hostnames (containing only numbers, letters, dashes and dots), then add the following to your environment configuration:",
+    "",
+    lines,
+    "",
+    "For more details on host authorization view: https://guides.rubyonrails.org/configuring.html#actiondispatch-hostauthorization",
   ].join("\n");
 }
 

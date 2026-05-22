@@ -46,14 +46,15 @@ Rack pieces that unblock work tracked in
 | `mock_request` (1) / `mock_response` (3)                        | AD `testing/integration.rb` tail (3 methods); IntegrationTest harness.                  |
 | `utils` `escape`/`escapePath` (already ✓)                       | AD `routing/redirection.rackEscape` parity (TS-side only; ~30 LOC there).               |
 
-**Out of scope for this gem** — Rack 3.x extracted these into separate
-gems we do not vendor today:
+**Out of scope for this gem:**
 
-- `Rack::Session::*` (now `rack-session` gem) — AD's
-  `Session::Abstract::Persisted` blocker is not solved here.
+- `Rack::Session::*` (now `rack-session` gem in Rack 3) — AD's
+  `Session::Abstract::Persisted` blocker is **not** solved here; needs a
+  separate `@blazetrails/rack-session` package.
 - `Rack::Handler::*` server adapters — Node has its own HTTP layer.
-- `Rack::Files` / `Rack::Static` are present but TS side targets serverless
-  static asset pipelines; treat as low priority.
+- `Rack::Files` / `Rack::Static` / `Rack::Directory` / `Rack::Reloader` —
+  static file middleware and Ruby-specific reloader; deferred (see
+  [Indefinite defers](#indefinite-defers)).
 
 ---
 

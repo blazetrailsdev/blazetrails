@@ -76,7 +76,7 @@ export class Parser {
   static parse(
     io: { read(size: number): string | null },
     contentLength: number | null,
-    contentType: string,
+    contentType: string | null | undefined,
     tmpfile: ((filename: string, ct: string) => any) | null,
     bufsize: number,
     qp: QueryParser,

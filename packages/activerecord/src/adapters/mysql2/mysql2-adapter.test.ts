@@ -30,9 +30,6 @@ import {
 import { AbstractMysqlAdapter } from "../../connection-adapters/abstract-mysql-adapter.js";
 import { Result } from "../../result.js";
 
-// MariaDB does not include mismatched FK details in error messages.
-const itUnlessMariaDb = isMariaDb ? it.skip : it;
-
 // Fabricated-error translate_exception checks. These don't touch a live
 // MySQL server (they feed Object.assign(new Error(...), { errno/code })
 // straight into translateException), so they live outside describeIfMysql
@@ -293,7 +290,8 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(error.cause).toBeInstanceOf(Error);
     });
 
-    itUnlessMariaDb(
+    // Rails: `skip "MariaDB does not return mismatched foreign key in error message" if @conn.mariadb?`
+    it.skipIf(isMariaDb)(
       "errors for multiple fks on mismatched types for pk table in alter table",
       async () => {
         // Add matching FK first (cars.id is BIGINT, engines.id is BIGINT — OK)

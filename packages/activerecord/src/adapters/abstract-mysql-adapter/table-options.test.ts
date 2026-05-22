@@ -13,11 +13,12 @@ import {
   MYSQL_TEST_URL,
 } from "./test-helper.js";
 
-// NO_TABLE_OPTIONS sql_mode was deprecated in MySQL 5.7.22, removed in 8+,
-// and never supported by MariaDB. Probed at module load via mysqlVersion.
-const supportsNoTableOptions =
-  !isMariaDb && mysqlVersion !== "" && new Version(mysqlVersion.replace(/-.*$/, "")).lt("5.7.22");
-const itIfNoTableOptions = supportsNoTableOptions ? it : it.skip;
+// Rails: `skip "..." if @connection.database_version >= "5.7.22"`. We add
+// MariaDB to the skip list since MariaDB never supported NO_TABLE_OPTIONS.
+// Probed at module load so the conditional can sit on it.skipIf instead of
+// inside the test body (which the lint rule forbids).
+const skipNoTableOptions =
+  isMariaDb || mysqlVersion === "" || new Version(mysqlVersion.replace(/-.*$/, "")).gte("5.7.22");
 
 const dumpTable = (adapter: Mysql2Adapter, tableName: string) =>
   SchemaDumper.dumpTableSchema(adapter as unknown as SchemaSource, tableName);
@@ -104,7 +105,7 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(output).toMatch(/PARTITION BY HASH/);
     });
 
-    itIfNoTableOptions("schema dump works with NO_TABLE_OPTIONS sql mode", async () => {
+    it.skipIf(skipNoTableOptions)("schema dump works with NO_TABLE_OPTIONS sql mode", async () => {
       const oldMode = await adapter.showVariable("sql_mode");
       expect(oldMode).not.toBeNull();
       await adapter.execute(`SET @@SESSION.sql_mode='${oldMode!},NO_TABLE_OPTIONS'`);

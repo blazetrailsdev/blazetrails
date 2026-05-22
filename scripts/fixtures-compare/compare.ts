@@ -67,13 +67,15 @@ function fixtureIdValue(label: string): number {
   return ((crc ^ 0xffffffff) >>> 0) % FIXTURE_MAX_ID;
 }
 
-// Evaluate a tiny arithmetic expression containing only integers, +-*/(),
-// whitespace, and the single loop-var name. Anything outside that grammar is
-// returned verbatim wrapped back in `<%= %>` so the residual ERB check can
-// flag it. Used only inside loop bodies on vendored Rails YAML.
+// Evaluate a tiny arithmetic expression containing only integers, `+ - * ( )`,
+// whitespace, and the single loop-var name. `/` is intentionally excluded:
+// Ruby integer division truncates toward -∞, JS `/` is float division, and
+// silently disagreeing on a fixture id would be worse than falling back to
+// ERB_SKIP_SENTINEL. Outside-grammar expressions return verbatim wrapped back
+// in `<%= %>` so the residual ERB check flags them.
 function evalExpr(expr: string, varName: string, value: number): string {
   const e = expr.trim();
-  if (!new RegExp(`^[\\d\\s+\\-*/()${varName}]+$`).test(e)) return `<%= ${expr} %>`;
+  if (!new RegExp(`^[\\d\\s+\\-*()${varName}]+$`).test(e)) return `<%= ${expr} %>`;
   try {
     return String(new Function(varName, `"use strict"; return (${e});`)(value));
   } catch {
@@ -414,13 +416,15 @@ export async function compareFile(yamlBase: string, yamlByTable: Map<string, Fix
       anyDiff = true;
     }
     for (const attr of new Set([...Object.keys(railsRow), ...Object.keys(tsRow)])) {
-      if (railsRow[attr] === ERB_SKIP_SENTINEL) { r.attrsSkipped++; continue; } // prettier-ignore
       r.attrsTotal++;
       if (!(attr in tsRow) || !(attr in railsRow)) {
         r.notes.push(`${attr in tsRow ? "extra" : "missing"}-in-ts: ${rowName}.${attr}`);
         anyDiff = true;
         continue;
       }
+      // Sentinel skip only after presence check: a Rails-side sentinel must
+      // still flag missing-in-ts when the TS row drops the attribute entirely.
+      if (railsRow[attr] === ERB_SKIP_SENTINEL) { r.attrsSkipped++; r.attrsTotal--; continue; } // prettier-ignore
       if (attr === "id") { if (tsRow.id === railsRow.id) r.attrsMatched++; continue; } // prettier-ignore
       if (compareValue(tsRow[attr], railsRow[attr], `${rowName}.${attr}`, idIndex, r.notes))
         r.attrsMatched++; // prettier-ignore

@@ -55,6 +55,12 @@ describe("stripErb ERB expanders", () => {
     const out = stripErb("<% 65536.times do |i| %>r_<%= i %>:\n  id: <%= i %>\n<% end %>");
     expect(out.unsupported).toBe(true);
   });
+  it("falls back to sentinel on `/` (Ruby integer-div vs JS float-div mismatch)", () => {
+    // Ruby `5/2 = 2` (truncate toward -∞); JS `5/2 = 2.5`. Silently producing
+    // 2.5 in a fixture id would diverge from Rails — fall through to sentinel.
+    const { rendered } = stripErb("<% 1.times do |i| %>k: <%= 5/2 %>;<% end %>");
+    expect(rendered).toBe("k: __ERB_SKIP__;");
+  });
   it("sentinelizes residual opaque `<%= ... %>` (e.g. 2.weeks.ago.to_fs)", () => {
     const out = stripErb("c: <%= 2.weeks.ago.to_fs(:db) %>");
     expect(out.unsupported).toBe(false);
@@ -165,18 +171,36 @@ describe("compareFile + schema integration", () => {
 
   it("counts attrs whose Rails value is the ERB skip sentinel without flagging DIFF", async () => {
     // Mirrors what stripErb does for `<%= 2.weeks.ago... %>`: the Rails
-    // value parses as the sentinel string; the per-attr diff skips it.
+    // value parses as the sentinel string; the per-attr diff skips it
+    // (and excludes it from attrsTotal so the % stays accurate).
+    // authors.ts:david doesn't carry `name` — pick `author_address_id`,
+    // which it does have, so the presence check passes and the sentinel
+    // skip path runs. Without the presence check, this would have
+    // matched as 0===0 noise; with it, attrsSkipped is the right signal.
     const rowsWithSentinel = new Map([
-      ["authors", { david: { id: 1, name: "David", created_on: "__ERB_SKIP__" } }],
+      ["authors", { david: { id: 1, author_address_id: "__ERB_SKIP__" } }],
     ]);
     const r = await compareFile("authors.yml", rowsWithSentinel, new Map(), undefined, {
-      authors: { name: "string", created_on: "datetime" },
+      authors: { author_address_id: "integer" },
     });
-    // Other authors.ts rows will surface as extra-row-in-ts (Rails map only
-    // has david) — the assertion is specifically that the sentinel attribute
-    // increments attrsSkipped instead of registering as a value diff.
     expect(r.attrsSkipped).toBe(1);
-    expect(r.notes.some((n) => /value-differs:.*created_on/.test(n))).toBe(false);
+    expect(r.notes.some((n) => /missing-in-ts: david\.author_address_id/.test(n))).toBe(false);
+  });
+
+  it("still flags missing-in-ts when the TS row drops a sentinel-valued attr", async () => {
+    // Sentinel skip must not mask real fixture drift: if Rails carries the
+    // attribute (even as opaque ERB) and TS dropped it, that's a port gap.
+    // `bogus_only` is a column in the supplied schema so canonicalizeRailsRow
+    // preserves it; TS authors.ts doesn't have it → must surface as
+    // missing-in-ts rather than silently incrementing attrsSkipped.
+    const rowsSentinelMissingInTs = new Map([
+      ["authors", { david: { id: 1, bogus_only: "__ERB_SKIP__" } }],
+    ]);
+    const r = await compareFile("authors.yml", rowsSentinelMissingInTs, new Map(), undefined, {
+      authors: { bogus_only: "string" },
+    });
+    expect(r.attrsSkipped).toBe(0);
+    expect(r.notes.some((n) => /missing-in-ts: david\.bogus_only/.test(n))).toBe(true);
   });
 
   it("flips status to DIFF and counts extras when the TS row uses an undeclared column", async () => {

@@ -25,7 +25,7 @@ export class Comment extends Base {
       counterCache: "children_count",
       inverseOf: "children",
     });
-    this.attribute("label", "string");
+    this.enum("label", { default: 0, child: 1 });
   }
 
   static whatAreYou() {
@@ -60,7 +60,8 @@ export class CommentThatAutomaticallyAltersPostBody extends Comment {
       foreignKey: "post_id",
     });
     this.afterSave(async function (this: any) {
-      await this.post.then((p: any) => p.update({ body: "Automatically altered" }));
+      const post = this.post;
+      if (post) await post.update({ body: "Automatically altered" });
     });
   }
 }

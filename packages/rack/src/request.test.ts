@@ -665,6 +665,11 @@ describe("RackRequestTest", () => {
   it("extract referrer correctly", () => {
     const req = makeReq("/", { HTTP_REFERER: "http://example.com/page" });
     expect(req.referrer).toBe("http://example.com/page");
+    expect(req.referer).toBe("http://example.com/page");
+
+    const req2 = makeReq("/");
+    expect(req2.referer).toBeNull();
+    expect(req2.referrer).toBeNull();
   });
 
   it("extract user agent correctly", () => {
@@ -1387,14 +1392,6 @@ describe("RackRequestTest", () => {
     expect(new Request({ REQUEST_METHOD: "TRACE" }).isLink()).toBe(false);
     expect(new Request({ REQUEST_METHOD: "UNLINK" }).isUnlink()).toBe(true);
     expect(new Request({ REQUEST_METHOD: "UNLINK" }).isLink()).toBe(false);
-  });
-
-  it("extract referrer correctly", () => {
-    const req = makeReq("/", { HTTP_REFERER: "/some/path" });
-    expect(req.referer).toBe("/some/path");
-
-    const req2 = makeReq("/");
-    expect(req2.referer).toBeNull();
   });
 
   it("return the logger from the env", () => {

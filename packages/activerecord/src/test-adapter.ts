@@ -269,6 +269,29 @@ export async function createPooledTestAdapter(): Promise<{
   return { adapter, fixtures: new SidecarFixtures(adapter), pool };
 }
 
+/**
+ * Phase D dispatcher: returns the pooled adapter when the active backend can
+ * lease independent connections, otherwise the singleton sidecar. Test files
+ * call this so they don't have to branch on driver/adapter.
+ *
+ * SQLite falls back to the sidecar because AR's test setup registers
+ * better-sqlite3, which compiles with `SQLITE_OMIT_SHARED_CACHE` — pooling
+ * would hand each lease a private in-memory DB. See the
+ * `project_sqlite_shared_cache_spike` memory entry; node:sqlite would
+ * support pooling but isn't registered in the AR test environment today.
+ * PG and MySQL always route through the pool.
+ *
+ * @internal
+ */
+export async function createPooledTestAdapterOrFallback(): Promise<{
+  adapter: SidecarAdapter;
+  fixtures: SidecarFixtures;
+}> {
+  if (adapterType === "sqlite") return createSidecarTestAdapter();
+  const { adapter, fixtures } = await createPooledTestAdapter();
+  return { adapter, fixtures };
+}
+
 /** @internal — for the smoke test only. */
 export function _resetPooledTestAdapterForTests(): void {
   if (_pooledHandler) {

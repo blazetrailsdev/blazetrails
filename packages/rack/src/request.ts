@@ -274,8 +274,12 @@ export class Request {
     return `${this.scriptName}${this.pathInfo}${qs ? "?" + qs : ""}`;
   }
 
+  get referer(): string | null {
+    return this.env["HTTP_REFERER"] ?? null;
+  }
+
   get referrer(): string | null {
-    return this.env["HTTP_REFERER"] || null;
+    return this.referer;
   }
 
   get userAgent(): string | null {
@@ -659,10 +663,6 @@ export class Request {
   }
   isUnlink(): boolean {
     return this.requestMethod === UNLINK;
-  }
-
-  get referer(): string | null {
-    return this.env["HTTP_REFERER"] ?? null;
   }
 
   get logger(): any {

@@ -1,6 +1,7 @@
 import type { DatabaseAdapter } from "../adapter.js";
 import { SchemaStatements } from "../connection-adapters/abstract/schema-statements.js";
 import { setUseTransactionalTests } from "./use-transactional-tests.js";
+import { Base } from "../base.js";
 
 export type PrimitiveColumnSpec =
   | "string"
@@ -436,7 +437,41 @@ function adapterKnownTables(adapter: DatabaseAdapter): Set<string> | null {
   return candidate instanceof Set ? (candidate as Set<string>) : null;
 }
 
+export async function defineSchema(schema: Schema, opts?: DefineSchemaOpts): Promise<void>;
 export async function defineSchema(
+  adapter: DatabaseAdapter,
+  schema: Schema,
+  opts?: DefineSchemaOpts,
+): Promise<void>;
+export async function defineSchema(
+  adapterOrSchema: DatabaseAdapter | Schema,
+  schemaOrOpts?: Schema | DefineSchemaOpts,
+  opts?: DefineSchemaOpts,
+): Promise<void> {
+  let adapter: DatabaseAdapter;
+  let schema: Schema;
+  let resolvedOpts: DefineSchemaOpts | undefined;
+
+  // Discriminate: if the first arg has an `adapterName` string property it's
+  // a DatabaseAdapter; otherwise it's a Schema (plain object with table names).
+  if (
+    adapterOrSchema !== null &&
+    typeof adapterOrSchema === "object" &&
+    typeof (adapterOrSchema as DatabaseAdapter).adapterName === "string"
+  ) {
+    adapter = adapterOrSchema as DatabaseAdapter;
+    schema = schemaOrOpts as Schema;
+    resolvedOpts = opts;
+  } else {
+    adapter = Base.adapter;
+    schema = adapterOrSchema as Schema;
+    resolvedOpts = schemaOrOpts as DefineSchemaOpts | undefined;
+  }
+
+  return _defineSchemaImpl(adapter, schema, resolvedOpts);
+}
+
+async function _defineSchemaImpl(
   adapter: DatabaseAdapter,
   schema: Schema,
   opts?: DefineSchemaOpts,

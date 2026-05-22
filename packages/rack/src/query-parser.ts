@@ -122,7 +122,7 @@ export class QueryParser {
 
   parseNestedQuery(qs: string | null | undefined, separator?: string | null): Record<string, any> {
     const params = this.makeParams();
-    if (!qs) return params.toParamsHash();
+    if (!qs) return Object.create(null);
 
     try {
       const str = this.checkQueryString(qs, separator);
@@ -148,7 +148,7 @@ export class QueryParser {
       throw e;
     }
 
-    return params.toParamsHash();
+    return Object.assign(Object.create(null), params);
   }
 
   normalizeParams(params: any, name: string, v: string | null, _depth?: number): void {

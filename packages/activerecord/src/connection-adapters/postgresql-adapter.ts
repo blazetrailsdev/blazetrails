@@ -884,39 +884,62 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   private async _doAcquire(): Promise<pg.Client> {
-    if (this._rawConnection == null) {
-      const client = new pg.Client(this._pgClientOptions!);
+    // Snapshot the connection into a local so a concurrent
+    // disconnectBang / discardBang / reconnect that nulls
+    // _rawConnection between awaits can't smuggle null into the
+    // configure/drain calls or the final return.
+    let client = this._rawConnection;
+    if (client == null) {
+      client = new pg.Client(this._pgClientOptions!);
       await client.connect();
-      // Guard against a close() / disconnectBang() / discardBang() /
-      // reconnect() that raced with the in-flight connect(): if the
-      // adapter was torn down between the await above and this point,
-      // do NOT publish `client` as `_rawConnection` — tear it down
-      // instead so we don't leak a live socket onto a closed adapter.
-      if (this._closed || this._pgClientOptions == null) {
+      // Guard against a close / disconnect / discard / reconnect
+      // that raced with the in-flight connect(). If the adapter was
+      // torn down between the await above and this point, do NOT
+      // publish `client` — tear it down instead so we don't leak a
+      // live socket onto a closed adapter.
+      if (this._closed || this._pgClientOptions == null || this._rawConnection != null) {
         client.end().catch(() => {});
-        throw new Error("PostgreSQLAdapter: connection is closed");
+        if (this._closed || this._pgClientOptions == null) {
+          throw new Error("PostgreSQLAdapter: connection is closed");
+        }
+        // Another caller raced ahead and already published a
+        // connection — use theirs instead of ours.
+        client = this._rawConnection!;
+      } else {
+        // Suppress unhandled error events from the idle connection
+        // (e.g. server-side FATAL from pg_terminate_backend). Without
+        // this listener node emits an uncaughtException.
+        client.on("error", () => {});
+        this._rawConnection = client;
       }
-      // Suppress unhandled error events from the idle connection (e.g.
-      // server-side FATAL from pg_terminate_backend). Without this
-      // listener node emits an uncaughtException.
-      client.on("error", () => {});
-      this._rawConnection = client;
     }
     try {
-      await this._maybeConfigureConnection(this._rawConnection);
-      await this._maybeDrainOrphanedPreparedStatements(this._rawConnection);
+      await this._maybeConfigureConnection(client);
+      // Re-check teardown after every await: a concurrent reconnect
+      // can null _rawConnection while configure is in flight.
+      if (this._closed || this._rawConnection !== client) {
+        throw new Error("PostgreSQLAdapter: connection is closed");
+      }
+      await this._maybeDrainOrphanedPreparedStatements(client);
+      if (this._closed || this._rawConnection !== client) {
+        throw new Error("PostgreSQLAdapter: connection is closed");
+      }
     } catch (error) {
-      // Configure/drain failure leaves the connection in an unknown
-      // state — tear it down so the next caller reconnects cleanly.
-      const dead = this._rawConnection;
-      this._rawConnection = null;
-      this._connectionConfigured = false;
-      this._statementPool?.detach();
-      this._statementPool = null;
-      dead?.end().catch(() => {});
+      // Configure/drain failure (or mid-flight teardown) leaves the
+      // connection in an unknown state — tear it down so the next
+      // caller reconnects cleanly. Only touch shared state if this
+      // local snapshot is still the published connection; otherwise
+      // a concurrent reconnect already swapped in a new one.
+      if (this._rawConnection === client) {
+        this._rawConnection = null;
+        this._connectionConfigured = false;
+        this._statementPool?.detach();
+        this._statementPool = null;
+      }
+      client.end().catch(() => {});
       throw error;
     }
-    return this._rawConnection;
+    return client;
   }
 
   /**

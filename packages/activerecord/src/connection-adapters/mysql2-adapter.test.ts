@@ -25,14 +25,26 @@ async function checkMysql(): Promise<void> {
   let conn: Awaited<ReturnType<typeof mysql.createConnection>> | undefined;
   try {
     conn = await mysql.createConnection({ uri: MYSQL_TEST_URL });
-    const [exprRows] = await conn.query(
-      `SELECT 1 FROM information_schema.columns WHERE table_schema='information_schema' AND table_name='STATISTICS' AND column_name='EXPRESSION' LIMIT 1`,
-    );
-    const [modeRows] = await conn.query("SELECT @@SESSION.sql_mode AS m");
-    const mode = String((modeRows as Array<{ m: string }>)[0]?.m ?? "");
+    await conn.query("SELECT 1");
     mysqlAvailable = true;
-    mysqlHasExprIndexes = (exprRows as Array<unknown>).length > 0;
-    mysqlRejectsZeroDate = mode.includes("NO_ZERO_DATE") || mode.includes("TRADITIONAL");
+    // Capability probes are best-effort; a failure here (e.g. restricted
+    // information_schema) leaves the defaults (false) without forcing
+    // the whole suite to skip.
+    try {
+      const [exprRows] = await conn.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_schema='information_schema' AND table_name='STATISTICS' AND column_name='EXPRESSION' LIMIT 1`,
+      );
+      mysqlHasExprIndexes = (exprRows as Array<unknown>).length > 0;
+    } catch {
+      /* leave mysqlHasExprIndexes = false */
+    }
+    try {
+      const [modeRows] = await conn.query("SELECT @@SESSION.sql_mode AS m");
+      const mode = String((modeRows as Array<{ m: string }>)[0]?.m ?? "");
+      mysqlRejectsZeroDate = mode.includes("NO_ZERO_DATE") || mode.includes("TRADITIONAL");
+    } catch {
+      /* leave mysqlRejectsZeroDate = false */
+    }
   } catch {
     /* MySQL unavailable — describeIfMysql will skip everything. */
   } finally {

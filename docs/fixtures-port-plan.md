@@ -61,8 +61,10 @@ either parseable by the compare script or covered by an explicit
 allow-list. From #2208, #2214, #2227 findings:
 
 6. **Closed by #2247.** `stripErb` now reverses
-   `<%= FixtureSet.identify(:label) %>` and the literal-array form of
-   `<%= composite_identify(:label, [:a, :b])[:key] %>` to the
+   `<%= ActiveRecord::FixtureSet.identify(:label) %>` and the literal-
+   array form of
+   `<%= ActiveRecord::FixtureSet.composite_identify(:label, [:a, :b])[:key] %>`
+   to the
    `fixtureId()`-equivalent integer (`CRC32 % MAX_ID` and
    `(crc32(label) << index) % MAX_ID` respectively, mirroring
    `fixtures.rb#identify` / `#composite_identify`). All 12

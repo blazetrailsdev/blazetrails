@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 // prettier-ignore
-import { stripErb, isRefLike, compareValue, compareFile, schemaCheck, canonicalizeRailsRow } from "./compare.js";
+import { stripErb, isRefLike, compareValue, compareFile, schemaCheck, canonicalizeRailsRow, ERB_SKIP_SENTINEL } from "./compare.js";
 import type { Schema } from "../../packages/activerecord/src/test-helpers/define-schema.js";
 
 // prettier-ignore
@@ -33,7 +33,7 @@ describe("stripErb ERB expanders", () => {
     // declared `[:a, :b]` array, the file should still parse — that single
     // attr becomes an erb-skip rather than blowing up the whole file.
     const out = stripErb("k: <%= ActiveRecord::FixtureSet.composite_identify(:order_1, [:shop_id, :id])[:ghost] %>"); // prettier-ignore
-    expect(out.rendered).toBe("k: __ERB_SKIP__");
+    expect(out.rendered).toBe(`k: ${ERB_SKIP_SENTINEL}`);
     expect(out.unsupported).toBe(false);
   });
   it("expands `(lo..hi).each do |v|` loops with <%= v %> body interpolation", () => {
@@ -59,12 +59,12 @@ describe("stripErb ERB expanders", () => {
     // Ruby `5/2 = 2` (truncate toward -∞); JS `5/2 = 2.5`. Silently producing
     // 2.5 in a fixture id would diverge from Rails — fall through to sentinel.
     const { rendered } = stripErb("<% 1.times do |i| %>k: <%= 5/2 %>;<% end %>");
-    expect(rendered).toBe("k: __ERB_SKIP__;");
+    expect(rendered).toBe(`k: ${ERB_SKIP_SENTINEL};`);
   });
   it("sentinelizes residual opaque `<%= ... %>` (e.g. 2.weeks.ago.to_fs)", () => {
     const out = stripErb("c: <%= 2.weeks.ago.to_fs(:db) %>");
     expect(out.unsupported).toBe(false);
-    expect(out.rendered).toBe("c: __ERB_SKIP__");
+    expect(out.rendered).toBe(`c: ${ERB_SKIP_SENTINEL}`);
   });
 });
 
@@ -178,7 +178,7 @@ describe("compareFile + schema integration", () => {
     // skip path runs. Without the presence check, this would have
     // matched as 0===0 noise; with it, attrsSkipped is the right signal.
     const rowsWithSentinel = new Map([
-      ["authors", { david: { id: 1, author_address_id: "__ERB_SKIP__" } }],
+      ["authors", { david: { id: 1, author_address_id: ERB_SKIP_SENTINEL } }],
     ]);
     const r = await compareFile("authors.yml", rowsWithSentinel, new Map(), undefined, {
       authors: { author_address_id: "integer" },
@@ -194,7 +194,7 @@ describe("compareFile + schema integration", () => {
     // preserves it; TS authors.ts doesn't have it → must surface as
     // missing-in-ts rather than silently incrementing attrsSkipped.
     const rowsSentinelMissingInTs = new Map([
-      ["authors", { david: { id: 1, bogus_only: "__ERB_SKIP__" } }],
+      ["authors", { david: { id: 1, bogus_only: ERB_SKIP_SENTINEL } }],
     ]);
     const r = await compareFile("authors.yml", rowsSentinelMissingInTs, new Map(), undefined, {
       authors: { bogus_only: "string" },

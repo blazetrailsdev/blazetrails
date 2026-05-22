@@ -6,8 +6,7 @@
  * `action_dispatch/middleware/actionable_exceptions.rb` 1:1.
  */
 
-import { ActionableError } from "@blazetrails/activesupport";
-import { cattrAccessor } from "@blazetrails/activesupport";
+import { ActionableError, cattrAccessor } from "@blazetrails/activesupport";
 import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
 import { bodyFromString } from "@blazetrails/rack";
 import { LOCATION } from "../constants.js";

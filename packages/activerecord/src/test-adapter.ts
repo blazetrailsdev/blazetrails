@@ -167,6 +167,20 @@ let _pooledPoolPromise: Promise<
   import("./connection-adapters/abstract/connection-pool.js").ConnectionPool
 > | null = null;
 
+/**
+ * Resolve the active SQLite driver name (better-sqlite3 / node-sqlite /
+ * expo-sqlite). Returns undefined if no driver is registered or resolution
+ * fails — caller defaults to the standard pool size.
+ */
+async function _activeSqliteDriverName(): Promise<string | undefined> {
+  try {
+    const { getSqlite } = await import("@blazetrails/activesupport/sqlite-adapter");
+    return getSqlite().name;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Per-worker SQLite shared-cache database name (Phase A0 spike: prefer named form). */
 function _pooledSqliteDatabase(): string {
   const workerId = process.env.VITEST_POOL_ID ?? process.env.VITEST_WORKER_ID ?? "1";
@@ -218,6 +232,15 @@ function _establishPooledTestPool(): Promise<
       adapterName = "sqlite3";
       const database = _pooledSqliteDatabase();
       configuration = { adapter: adapterName, database };
+      // Drivers with SQLITE_OMIT_SHARED_CACHE compiled in (better-sqlite3)
+      // or no URI-mode access (expo-sqlite) can't share an in-memory DB
+      // across connections. Pool size 1 sidesteps the requirement — with
+      // one connection there's nothing to share. The pool's lease queue
+      // still serializes concurrent writes and `adapter.pool` is non-null.
+      const driverName = await _activeSqliteDriverName();
+      if (driverName === "better-sqlite3" || driverName === "expo-sqlite") {
+        (configuration as Record<string, unknown>).pool = 1;
+      }
       const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
       adapterFactory = () => new SQLite3Adapter(database) as unknown as DatabaseAdapter;
     }

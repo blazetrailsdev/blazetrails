@@ -50,6 +50,10 @@ describe("createPooledTestAdapter (Phase B smoke)", () => {
     const tableName = "pooled_smoke_pin_rollback";
     await asExec(setupAdapter).exec(`DROP TABLE IF EXISTS ${tableName}`);
     await asExec(setupAdapter).exec(`CREATE TABLE ${tableName} (id INTEGER PRIMARY KEY)`);
+    // Release the setup lease so a pool-size-1 driver (better-sqlite3 /
+    // expo-sqlite under the corrected Phase D shared-cache strategy) can
+    // acquire the single connection for pinning inside the exec context.
+    pool.releaseConnection();
     try {
       await withExecutionContext(async () => {
         // Pin first, THEN check out so the pinned connection is the one we
@@ -67,10 +71,12 @@ describe("createPooledTestAdapter (Phase B smoke)", () => {
         }
       });
 
-      const after = await setupAdapter.execute(`SELECT count(*) AS c FROM ${tableName}`);
+      const verifyAdapter = pool.leaseConnection();
+      const after = await verifyAdapter.execute(`SELECT count(*) AS c FROM ${tableName}`);
       expect(Number((after[0] as { c: number }).c)).toBe(0);
     } finally {
-      await asExec(setupAdapter).exec(`DROP TABLE IF EXISTS ${tableName}`);
+      const cleanupAdapter = pool.leaseConnection();
+      await asExec(cleanupAdapter).exec(`DROP TABLE IF EXISTS ${tableName}`);
     }
   });
 

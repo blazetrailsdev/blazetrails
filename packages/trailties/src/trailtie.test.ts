@@ -77,6 +77,12 @@ describe("Trailtie", () => {
     expect(ran).toContain("child_tie");
   });
 
+  const RUNNERS = {
+    generators: "runGeneratorsBlocks",
+    console: "runConsoleBlocks",
+    server: "runServerBlocks",
+    runner: "runRunnerBlocks",
+  } as const;
   for (const kind of ["generators", "console", "server", "runner"] as const) {
     it(`${kind} block is executed when MyApp.load_${kind} is called`, () => {
       let ran = false;
@@ -85,32 +91,46 @@ describe("Trailtie", () => {
       T[kind](() => {
         ran = true;
       });
-      const runner = {
-        generators: "runGeneratorsBlocks",
-        console: "runConsoleBlocks",
-        server: "runServerBlocks",
-        runner: "runRunnerBlocks",
-      }[kind] as keyof Trailtie;
-      (T.instance()[runner] as (a: unknown) => void).call(T.instance(), {});
+      (T.instance()[RUNNERS[kind]] as (a: unknown) => void).call(T.instance(), {});
       expect(ran).toBe(true);
     });
   }
 
-  it("Configuration lifecycle hooks register and run", () => {
-    const order: string[] = [];
-    new Configuration().beforeInitialize(() => order.push("before"));
-    new Configuration().afterInitialize(() => order.push("after"));
-    Configuration.runHook("beforeInitialize");
-    Configuration.runHook("afterInitialize");
-    expect(order).toContain("before");
-    expect(order).toContain("after");
+  it("non-rake block defined in superclass of railtie is also executed", () => {
+    const ran: string[] = [];
+    class P extends Trailtie {}
+    Trailtie.register(P);
+    P.console(() => ran.push("p"));
+    class C extends P {}
+    Trailtie.register(C);
+    C.instance().runConsoleBlocks({});
+    expect(ran).toEqual(["p"]);
   });
 
-  it("Configurable seals a class against further subclassing", () => {
+  const HOOKS = [
+    "beforeConfiguration",
+    "beforeInitialize",
+    "beforeEagerLoad",
+    "afterInitialize",
+    "afterRoutesLoaded",
+  ] as const;
+  for (const hook of HOOKS) {
+    it(`Configuration#${hook} block runs when ${hook} hook fires`, () => {
+      const seen: unknown[] = [];
+      new Configuration()[hook]((arg) => seen.push(arg));
+      Configuration.runHook(hook, "marker");
+      expect(seen).toContain("marker");
+    });
+  }
+
+  it("Configurable seals a class — single and multi-level inheritance", () => {
     class SealedTie extends Trailtie {}
     sealAgainstInheritance(SealedTie);
-    class ShouldFail extends SealedTie {}
-    expect(() => Trailtie.register(ShouldFail)).toThrow(/cannot inherit from a SealedTie/);
+    class Direct extends SealedTie {}
+    class Mid extends SealedTie {}
+    class Deep extends Mid {}
+    expect(() => Trailtie.register(Direct)).toThrow(/cannot inherit from a SealedTie/);
+    expect(() => Trailtie.register(Deep)).toThrow(/cannot inherit from a SealedTie/);
   });
 
   it("returns registered subclasses sorted by load order, excluding abstract entries", () => {

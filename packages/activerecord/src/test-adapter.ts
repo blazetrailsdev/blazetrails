@@ -147,6 +147,105 @@ export function createSidecarTestAdapter(): {
   return { adapter: _sharedAdapter, fixtures: new SidecarFixtures(_sharedAdapter) };
 }
 
+// --- Phase B: pooled test adapter -------------------------------------------
+//
+// Connection-pool-backed test adapter. Wires through PoolConfig +
+// ConnectionHandler so tests can lease + pin a real connection per test,
+// matching Rails' `setup_transactional_fixtures` pattern at
+// `vendor/rails/activerecord/lib/active_record/test_fixtures.rb:172-184`.
+//
+// Coexists with `_sharedAdapter` / `createSidecarTestAdapter()`; consumer
+// migration and shared-singleton deletion are follow-up PRs.
+
+let _pooledHandler:
+  | import("./connection-adapters/abstract/connection-handler.js").ConnectionHandler
+  | null = null;
+let _pooledPool: import("./connection-adapters/abstract/connection-pool.js").ConnectionPool | null =
+  null;
+
+/** Per-worker SQLite shared-cache database name (Phase A0 spike: prefer named form). */
+function _pooledSqliteDatabase(): string {
+  const workerId = process.env.VITEST_POOL_ID ?? process.env.VITEST_WORKER_ID ?? "1";
+  return `file:trails_test_${workerId}?mode=memory&cache=shared`;
+}
+
+async function _establishPooledTestPool(): Promise<
+  import("./connection-adapters/abstract/connection-pool.js").ConnectionPool
+> {
+  if (_pooledPool) return _pooledPool;
+  const { ConnectionHandler } =
+    await import("./connection-adapters/abstract/connection-handler.js");
+  const { HashConfig } = await import("./database-configurations/hash-config.js");
+
+  let adapterName: string;
+  let configuration: Record<string, unknown>;
+  let adapterFactory: () => DatabaseAdapter;
+
+  if (PG_TEST_URL) {
+    adapterName = "postgresql";
+    configuration = { adapter: adapterName, url: PG_TEST_URL };
+    const { PostgreSQLAdapter } = await import("./connection-adapters/postgresql-adapter.js");
+    adapterFactory = () => new PostgreSQLAdapter(PG_TEST_URL) as unknown as DatabaseAdapter;
+  } else if (MYSQL_TEST_URL) {
+    adapterName = "mysql2";
+    configuration = { adapter: adapterName, url: MYSQL_TEST_URL };
+    const { Mysql2Adapter } = await import("./connection-adapters/mysql2-adapter.js");
+    adapterFactory = () => new Mysql2Adapter(MYSQL_TEST_URL) as unknown as DatabaseAdapter;
+  } else {
+    adapterName = "sqlite3";
+    const database = _pooledSqliteDatabase();
+    configuration = { adapter: adapterName, database };
+    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+    adapterFactory = () => new SQLite3Adapter(database) as unknown as DatabaseAdapter;
+  }
+
+  _pooledHandler = new ConnectionHandler();
+  const config = new HashConfig("test", "pooled", configuration);
+  _pooledPool = _pooledHandler.establishConnection(config, {
+    owner: "PooledTestAdapter",
+    adapterFactory,
+  });
+  return _pooledPool;
+}
+
+/**
+ * Phase B factory: returns a {@link DatabaseAdapter} leased from a real
+ * connection pool, plus a fresh {@link SidecarFixtures} handle. Mirrors
+ * Rails' transactional-fixtures wiring (`Base.connection_handler.connection_pool_list(:writing)`
+ * → `pool.pin_connection!` → `pool.lease_connection`).
+ *
+ * The pool itself is exposed so callers can call
+ * `pool.pinConnectionBang(false)` / `pool.unpinConnectionBang()` per test
+ * to mirror Rails' `pin_connection!(lock_threads)` lifecycle. Consumer
+ * migration and the `withTransactionalFixtures` pool-integration land in
+ * follow-up PRs (Phase C).
+ *
+ * Additive only: existing `createTestAdapter()` / `createSidecarTestAdapter()`
+ * continue to return the `_sharedAdapter` singleton.
+ *
+ * @internal
+ */
+export async function createPooledTestAdapter(): Promise<{
+  adapter: SidecarAdapter;
+  fixtures: SidecarFixtures;
+  pool: import("./connection-adapters/abstract/connection-pool.js").ConnectionPool;
+}> {
+  const pool = await _establishPooledTestPool();
+  const adapter = pool.leaseConnection() as SidecarAdapter;
+  return { adapter, fixtures: new SidecarFixtures(adapter), pool };
+}
+
+/** @internal — for the smoke test only. */
+export function _resetPooledTestAdapterForTests(): void {
+  if (_pooledHandler) {
+    try {
+      _pooledHandler.clearAllConnectionsBang();
+    } catch {}
+  }
+  _pooledHandler = null;
+  _pooledPool = null;
+}
+
 /**
  * Clean up test data by dropping all tables in the shared adapter.
  */

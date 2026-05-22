@@ -23,7 +23,8 @@
 >   (CPK FK + extra `number`), `dead_parrots.yml` / `live_parrots.yml`
 >   (HABTM `treasures`), `developers.yml` (`shared_computers` HABTM),
 >   `sponsors.yml` (extra `club_id`), `peoples_treasures.yml`
->   (`rich_person_id → people` needs a `FK_OVERRIDES` entry).
+>   (TS row's `michael` label doesn't match the row CRC32 the Rails YAML
+>   resolves `rich_person_id` to — fixture-side label or id reconcile).
 > - **PR 7a** — ~1.9k LOC waiver port of `fixtures_test.rb` (1847 LOC),
 >   `test_fixtures_test.rb`, `encryption/encrypted_fixtures_test.rb`.
 > - **PR 7b** — ~30 LOC strict-fail flip + remove 4 exclusions from

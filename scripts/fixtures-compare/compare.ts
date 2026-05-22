@@ -30,13 +30,15 @@ type Status = "MATCH" | "MISSING" | "DIFF" | "ERB-UNSUPPORTED" | "ERB-ALLOWED" |
 // statically, with the original ERB intent preserved in a header comment).
 export const ERB_ALLOW_LIST = new Set<string>(["mixins", "paragraphs", "citations"]);
 
-// Per-table FK-column → target-table override map. Convention covers most
-// cases (column `foo_id` resolves to TS `ref("foos", …)`); declare an
-// override here when the column name doesn't match the target table — e.g.
-// `rich_person_id` on `peoples_treasures` points at `people`, not
-// `rich_people`. Consulted by canonicalizeRailsRow when rewriting
-// `assoc: label` shorthand into the `<col>_id` form so the per-attr diff
-// can resolve the FK through the right table's id index.
+// Per-table assoc-shorthand → FK-column override map. Mirrors Rails
+// `fixtures.rb#replace_belongs_to_keys`, which rewrites `pirate: blackbeard`
+// to `pirate_id` via the model's belongs_to reflection. We don't have the
+// reflection, so the convention `<assoc>_id` covers the common case and
+// this table holds explicit overrides for assocs whose FK column doesn't
+// follow it (e.g. a `creator:` shorthand in YAML that targets a `captain_id`
+// column on the TS row). Keys are the YAML association names; values are
+// the materialized FK column on the row. No entries shipped yet —
+// follow-up DIFF-reconcile PRs populate as needed.
 export const FK_OVERRIDES: Readonly<Record<string, Readonly<Record<string, string>>>> = {};
 
 // Per-table enum-symbol → integer map for `enum :status, [:proposed, …]`

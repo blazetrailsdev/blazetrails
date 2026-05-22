@@ -937,7 +937,7 @@ function havingBang(
   if (opts == null || (typeof opts === "string" && opts.trim() === "")) return this;
 
   if (typeof opts === "string") {
-    const sql = rest.length > 0 ? this._modelClass.sanitizeSqlArray(opts as string, ...rest) : opts;
+    const sql = rest.length > 0 ? this._modelClass.sanitizeSqlArray(opts, ...rest) : opts;
     this._havingClause.predicates.push(new Nodes.SqlLiteral(sql));
     return this;
   }

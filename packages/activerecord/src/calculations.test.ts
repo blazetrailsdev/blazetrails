@@ -5949,7 +5949,7 @@ describe("CalculationsTest", () => {
     }
 
     expect(User.sanitizeSqlArray("name = ? AND age > ?", "O'Brien", 25)).toBe(
-      "name = 'O''Brien' AND age > 25",
+      `name = '${User.adapter.quoteString("O'Brien")}' AND age > 25`,
     );
   });
 

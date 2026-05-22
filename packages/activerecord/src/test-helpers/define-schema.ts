@@ -519,8 +519,13 @@ async function _defineSchemaImpl(
     }
     const columns = columnsOf(raw);
     const pk = primaryKeyOf(raw);
+    // ifNotExists only when neither branch above ran: the cache is empty and
+    // the adapter has no `.tables` Set, so we can't confirm the table is absent.
+    // Under a shared pooled adapter, another file may have already created it.
+    // When stillExists was true we just dropped the table; when cachedSig was
+    // set we know the table is gone — both cases need no guard.
     const createOpts: { id?: boolean; primaryKey?: string[]; ifNotExists?: boolean } = {
-      ifNotExists: true,
+      ...(!stillExists && cachedSig === undefined && { ifNotExists: true }),
     };
     if (pk === false) createOpts.id = false;
     else if (Array.isArray(pk)) {

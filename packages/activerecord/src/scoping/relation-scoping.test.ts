@@ -19,27 +19,31 @@ beforeAll(async () => {
     salary: "integer" as const,
     author: "string" as const,
   };
-  await defineSchema(_adapter, {
-    developers: { name: "string", salary: "integer" },
-    posts: { title: "string", author: "string", published: "boolean" },
-    ro_posts: postCols,
-    dro_posts: postCols,
-    sf_posts: postCols,
-    sff_posts: postCols,
-    sfl_posts: postCols,
-    sc_posts: postCols,
-    sds_posts: postCols,
-    sfa_posts: postCols,
-    scnt_posts: postCols,
-    sj_posts: postCols,
-    nrs_posts: postCols,
-    ann_posts: postCols,
-    ann_unscoped_posts: postCols,
-    animals: { type: "string", name: "string" },
-    cats: { type: "string", name: "string" },
-    dogs: { type: "string", name: "string" },
-    categories: { name: "string" },
-  });
+  await defineSchema(
+    _adapter,
+    {
+      developers: { name: "string", salary: "integer" },
+      posts: { title: "string", author: "string", published: "boolean" },
+      ro_posts: postCols,
+      dro_posts: postCols,
+      sf_posts: postCols,
+      sff_posts: postCols,
+      sfl_posts: postCols,
+      sc_posts: postCols,
+      sds_posts: postCols,
+      sfa_posts: postCols,
+      scnt_posts: postCols,
+      sj_posts: postCols,
+      nrs_posts: postCols,
+      ann_posts: postCols,
+      ann_unscoped_posts: postCols,
+      animals: { type: "string", name: "string" },
+      cats: { type: "string", name: "string" },
+      dogs: { type: "string", name: "string" },
+      categories: { name: "string" },
+    },
+    { dropExisting: true },
+  );
 });
 withTransactionalFixtures(() => _adapter);
 function freshAdapter(): DatabaseAdapter {

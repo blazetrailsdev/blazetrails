@@ -13,22 +13,26 @@ import type { DatabaseAdapter } from "../adapter.js";
 let _adapter: SidecarAdapter;
 beforeAll(async () => {
   ({ adapter: _adapter } = await createPooledTestAdapter());
-  await defineSchema(_adapter, {
-    posts: {
-      title: "string",
-      published: "boolean",
-      featured: "boolean",
-      status: "string",
-      views: "integer",
-      author_id: "integer",
-      active: "boolean",
+  await defineSchema(
+    _adapter,
+    {
+      posts: {
+        title: "string",
+        published: "boolean",
+        featured: "boolean",
+        status: "string",
+        views: "integer",
+        author_id: "integer",
+        active: "boolean",
+      },
+      animals: { name: "string", type: "string" },
+      dogs: { name: "string", type: "string" },
+      articles: { title: "string", status: "string" },
+      products: { name: "string", price: "integer", active: "boolean" },
+      users: { name: "string", age: "integer", active: "boolean", role: "string" },
     },
-    animals: { name: "string", type: "string" },
-    dogs: { name: "string", type: "string" },
-    articles: { title: "string", status: "string" },
-    products: { name: "string", price: "integer", active: "boolean" },
-    users: { name: "string", age: "integer", active: "boolean", role: "string" },
-  });
+    { dropExisting: true },
+  );
 });
 withTransactionalFixtures(() => _adapter);
 function freshAdapter(): DatabaseAdapter {

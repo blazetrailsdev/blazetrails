@@ -448,6 +448,13 @@ describe("buildIdIndex (implicit-id fallback)", () => {
     expect(idx.get("t")?.get(1)).toEqual(["a"]);
     expect([...(idx.get("t")?.keys() ?? [])]).toEqual([1]);
   });
+  it("skips rows whose explicit `id:` isn't numeric (string PKs, CPK tables)", () => {
+    // A row with `id: "abc"` lives in a non-numeric PK space — it must NOT
+    // fall through to the CRC32 fallback (would mis-index FK lookups) and
+    // can't go into the numeric Map either. Skip cleanly.
+    const idx = buildIdIndexForTest(new Map([["t", { a: { id: "abc", name: "x" } }]]));
+    expect([...(idx.get("t")?.keys() ?? [])]).toEqual([]);
+  });
 });
 
 describe("canonicalizeRailsRow + FK_OVERRIDES", () => {

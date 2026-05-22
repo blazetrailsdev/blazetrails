@@ -249,10 +249,13 @@ function buildIdIndex(yamls: Map<string, FixtureMap>): Map<string, Map<number, s
       // omits an explicit `id:` — `ActiveRecord::FixtureSet.identify(label)`
       // (CRC32 % MAX_ID). Numeric FK references in *other* fixtures
       // (`<%= identify(:george) %>`) round-trip to that implicit id, so the
-      // reverse lookup must include it. Explicit `id:` always wins over the
-      // CRC32 fallback.
-      const id = typeof row.id === "number" ? row.id : fixtureIdValue(name);
-      inner.set(id, [...(inner.get(id) ?? []), name]);
+      // reverse lookup must include it. CRC32 fallback ONLY when `id` is
+      // absent — an explicit non-numeric id (string PKs, CPK tables) means
+      // the row genuinely doesn't live in the numeric-id space, so leaving
+      // it unindexed is correct.
+      const id =
+        row.id === undefined ? fixtureIdValue(name) : typeof row.id === "number" ? row.id : null;
+      if (id !== null) inner.set(id, [...(inner.get(id) ?? []), name]);
     }
     idx.set(table, inner);
   }
@@ -379,7 +382,7 @@ export function compareValue(tsVal: unknown, railsVal: unknown, attr: string, id
     const mapped = /^\w+$/.test(sym) ? resolveEnumSymbol(table, col, sym) : undefined;
     if (mapped === tsVal) return true;
     if (symMatch && mapped === undefined) {
-      notes.push(`enum-unmapped: ${attr}: ts=${tsVal} rails=${JSON.stringify(railsVal)} (add ENUM_MAPS["${table}"].${col})`); // prettier-ignore
+      notes.push(`enum-unmapped: ${attr}: ts=${tsVal} rails=${JSON.stringify(railsVal)} (add to ENUM_MAPS: ${table}.${col}.${sym} = ${tsVal})`); // prettier-ignore
       if (attrsSkipped) attrsSkipped.n++;
       return true;
     }

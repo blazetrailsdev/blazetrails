@@ -455,6 +455,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * physical connection — tracked by a boolean flag that resets on
    * reconnect. Called (and awaited) inside _acquireFreshClient so errors
    * propagate and misconfigured connections are never handed to user code.
+   *
+   * Note: the notice listener is NOT attached here. node-pg's
+   * client.on("notice", ...) accumulates listeners, whereas Rails uses
+   * libpq's set_notice_receiver which is a single-slot replacement.
+   * resetBang flips _connectionConfigured back to false to re-run the
+   * SET queries after DISCARD ALL; re-attaching the notice listener
+   * here would compound on every reset. The listener is attached once
+   * per pg.Client lifecycle in _doAcquire instead.
    */
   private async _maybeConfigureConnection(client: pg.Client): Promise<void> {
     if (this._connectionConfigured) return;
@@ -473,16 +481,22 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       }
     }
     this._connectionConfigured = true;
-    // Mirrors Rails: postgresql_adapter.rb `unless ActiveRecord.db_warnings_action.nil?`.
-    if ((this.constructor as typeof PostgreSQLAdapter).dbWarningsAction !== "ignore") {
-      client.on("notice", (msg: { severity?: string; message?: string; code?: string }) => {
-        this._noticeReceiverSqlWarnings.push({
-          level: msg.severity,
-          message: msg.message,
-          code: msg.code,
-        });
+  }
+
+  /**
+   * Attach the per-connection notice listener that feeds
+   * `_noticeReceiverSqlWarnings`. Called once per pg.Client lifecycle
+   * from _doAcquire (matches Rails' single-slot set_notice_receiver).
+   */
+  private _attachNoticeListener(client: pg.Client): void {
+    if ((this.constructor as typeof PostgreSQLAdapter).dbWarningsAction === "ignore") return;
+    client.on("notice", (msg: { severity?: string; message?: string; code?: string }) => {
+      this._noticeReceiverSqlWarnings.push({
+        level: msg.severity,
+        message: msg.message,
+        code: msg.code,
       });
-    }
+    });
   }
 
   /**
@@ -919,6 +933,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         // (e.g. server-side FATAL from pg_terminate_backend). Without
         // this listener node emits an uncaughtException.
         newClient.on("error", () => {});
+        // Attach the notice listener exactly once per pg.Client. We
+        // can't do this inside _maybeConfigureConnection because
+        // resetBang resets _connectionConfigured to re-run the SET
+        // queries after DISCARD ALL; re-running configure on the same
+        // client would otherwise accumulate notice listeners on every
+        // reset (node-pg's EventEmitter, unlike libpq's
+        // set_notice_receiver, doesn't replace).
+        this._attachNoticeListener(newClient);
         this._rawConnection = newClient;
         client = newClient;
       }

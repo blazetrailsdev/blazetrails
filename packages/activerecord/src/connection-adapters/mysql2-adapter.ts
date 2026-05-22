@@ -148,28 +148,32 @@ class Mysql2StatementPool extends MysqlStatementPool {
  * connection — no inner pool layer.
  */
 export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapter {
-  // Cached liveness state — updated by activeAsync() pings and reset by
-  // disconnectBang()/reconnectBang(). The sync `active` getter can't issue a
-  // real network ping, so we track the last known result here.
+  // Cached liveness state — true until a failure is observed (ping fail,
+  // disconnect, permanent close). Does not require _client to be non-null:
+  // a freshly-constructed adapter has no connection yet but is considered
+  // active (matching Rails, where @raw_connection is set before the adapter
+  // is handed to callers). Set false by disconnectBang(); restored to true
+  // by reconnectBang() and by successful activeAsync().
   private _activeState = true;
 
   override get active(): boolean {
-    return this._client != null && this._activeState;
+    return !this._permanentlyClosed && !this._isFakeConnection && this._activeState;
   }
 
   /**
    * Async liveness probe — checks socket health via a real `ping` call on the
-   * persistent connection. Updates the cached `_activeState` so the sync
-   * `active` getter reflects the result. Mirrors Rails' `active?` which calls
-   * `mysql_ping` on the raw connection.
+   * persistent connection, lazily establishing it if needed. Updates the cached
+   * `_activeState` so the sync `active` getter reflects the result. Mirrors
+   * Rails' `active?` which calls `mysql_ping` on the raw connection.
    */
   async activeAsync(): Promise<boolean> {
-    if (!this._client) {
+    if (this._permanentlyClosed || this._isFakeConnection) {
       this._activeState = false;
       return false;
     }
     try {
-      await this._client.ping();
+      const conn = await this._ensureClient();
+      await conn.ping();
       this._activeState = true;
       return true;
     } catch {
@@ -424,6 +428,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // constructor path: `new Mysql2Adapter(fake_conn, logger, nil, config)`).
     if (fake) {
       this._isFakeConnection = true;
+      this._activeState = false;
     }
     // Connection is created lazily on first _ensureClient() call.
   }
@@ -1356,24 +1361,19 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
 
   // Advisory locks are connection-scoped. With a single persistent connection
   // the lock session is always this._client — no separate connection needed.
-  private _advisoryLockHeld = false;
+  // Mirrors Rails' AbstractAdapter#get_advisory_lock / #release_advisory_lock:
+  // no client-side lock tracking, just issue the SQL and return the result.
 
   async getAdvisoryLock(lockId: number | bigint | string): Promise<boolean> {
     const conn = await this._ensureClient();
     const [rows] = await conn.query("SELECT GET_LOCK(?, 0) AS locked", [String(lockId)]);
-    const locked = (rows as Record<string, unknown>[])[0]?.locked === 1;
-    if (locked) this._advisoryLockHeld = true;
-    return locked;
+    return (rows as Record<string, unknown>[])[0]?.locked === 1;
   }
 
   async releaseAdvisoryLock(lockId: number | bigint | string): Promise<boolean> {
-    if (!this._advisoryLockHeld || !this._client) return false;
-    // Propagate driver errors — only return false when RELEASE_LOCK reports
-    // the lock was not held by this session (result = 0 or NULL).
+    if (!this._client) return false;
     const [rows] = await this._client.query("SELECT RELEASE_LOCK(?) AS unlocked", [String(lockId)]);
-    const unlocked = (rows as Record<string, unknown>[])[0]?.unlocked === 1;
-    if (unlocked) this._advisoryLockHeld = false;
-    return unlocked;
+    return (rows as Record<string, unknown>[])[0]?.unlocked === 1;
   }
 
   /**
@@ -1382,12 +1382,13 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * re-established lazily on the next query.
    */
   override reconnectBang(): void {
-    if (this._permanentlyClosed) throw new Error("Mysql2Adapter: connection is closed");
+    if (this._permanentlyClosed) throw new Error("Mysql2Adapter: client is permanently closed");
     this.disconnectBang();
-    // _activeState is set to true optimistically; activeAsync() will correct
-    // it if the reconnect attempt fails. Matches Rails' reconnect! which
-    // calls connect (lazy) after disconnect!.
     this._activeState = true;
+    // Kick off connection eagerly so verify/ping paths find a live connection
+    // promptly. Mirrors Rails' reconnect! which calls connect (not lazy) after
+    // disconnect!. Errors are surfaced on the next awaited call via _ensureClient.
+    this._ensureClient().catch(() => {});
   }
 
   /**
@@ -1399,7 +1400,6 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     this._activeState = false;
     this._connectGeneration++;
     super.disconnectBang();
-    this._advisoryLockHeld = false;
     this._inTransaction = false;
     this._stmtPool?.detach();
     this._stmtPool = null;
@@ -1416,7 +1416,6 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   async close(): Promise<void> {
     this._permanentlyClosed = true;
     this._connectGeneration++;
-    this._advisoryLockHeld = false;
     this._inTransaction = false;
     this._stmtPool?.detach();
     this._stmtPool = null;
@@ -1631,7 +1630,13 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       typeCast: composedTypeCast,
     });
 
-    await conn.query(initSql);
+    try {
+      await conn.query(initSql);
+    } catch (err) {
+      // Init SQL failed — close the socket so it isn't leaked, then rethrow.
+      conn.end().catch(() => {});
+      throw err;
+    }
     return conn;
   }
 

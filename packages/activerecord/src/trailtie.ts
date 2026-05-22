@@ -45,9 +45,7 @@ export const JobRuntime = { instrument };
  * Shape of `config.activeRecord` — mirrors the
  * `ActiveSupport::OrderedOptions` block at the top of Rails' railtie.rb.
  */
-export interface ActiveRecordEncryptionConfig {
-  [key: string]: unknown;
-}
+export type ActiveRecordEncryptionConfig = Parameters<typeof EncryptionConfigurable.configure>[0];
 
 export interface ActiveRecordConfig {
   encryption: ActiveRecordEncryptionConfig;
@@ -93,6 +91,32 @@ function defaultActiveRecordConfig(): ActiveRecordConfig {
   };
 }
 
+// onLoad callbacks are module-level consts so that repeated
+// `Trailtie.runInitializers()` calls (common in tests) register the same
+// callback reference with `{ once: true }`, preventing the hook registry
+// from growing unboundedly.
+const setTimeZoneAwareAttributes = (base: typeof Base): void => {
+  base.timeZoneAwareAttributes = true;
+};
+
+const pushTimestamptzToTimeZoneAwareTypes = (base: typeof Base): void => {
+  if (!base.timeZoneAwareTypes.includes("timestamptz")) {
+    base.timeZoneAwareTypes.push("timestamptz");
+  }
+};
+
+const onPostgresqlAdapterLoadedPushTimestamptz = (): void => {
+  onLoad("active_record", { once: true }, pushTimestamptzToTimeZoneAwareTypes);
+};
+
+const setSqlite3StrictStringsByDefault = (adapter: typeof SQLite3Adapter): void => {
+  adapter.strictStringsByDefault = true;
+};
+
+const setPostgresqlDecodeDates = (adapter: typeof PostgreSQLAdapter): void => {
+  adapter.decodeDates = true;
+};
+
 export class Trailtie extends BaseRailtie {
   static {
     registerRailtie(this);
@@ -105,9 +129,7 @@ export class Trailtie extends BaseRailtie {
 
     this.initializer("active_record.initialize_timezone", () => {
       // Rails: `ActiveSupport.on_load(:active_record) { self.time_zone_aware_attributes = true }`.
-      onLoad("active_record", (base: typeof Base) => {
-        base.timeZoneAwareAttributes = true;
-      });
+      onLoad("active_record", { once: true }, setTimeZoneAwareAttributes);
     });
 
     this.initializer("active_record.postgresql_time_zone_aware_types", () => {
@@ -116,15 +138,13 @@ export class Trailtie extends BaseRailtie {
       //     on_load(:active_record) { Base.time_zone_aware_types << :timestamptz }
       //   end
       // No config gate — Rails pushes unconditionally when the PG adapter is
-      // loaded. We add an `includes` check so multiple `runInitializers`
-      // calls in tests stay idempotent (Rails' `<<` would duplicate).
-      onLoad("active_record_postgresqladapter", () => {
-        onLoad("active_record", (base: typeof Base) => {
-          if (!base.timeZoneAwareTypes.includes("timestamptz")) {
-            base.timeZoneAwareTypes.push("timestamptz");
-          }
-        });
-      });
+      // loaded. We add an `includes` check so the consumer is safely
+      // idempotent (Rails' `<<` would duplicate on hypothetical re-runs).
+      onLoad(
+        "active_record_postgresqladapter",
+        { once: true },
+        onPostgresqlAdapterLoadedPushTimestamptz,
+      );
     });
 
     this.initializer("active_record.copy_schema_cache_config", () => {
@@ -138,9 +158,7 @@ export class Trailtie extends BaseRailtie {
       // gated on `on_load(:active_record_sqlite3adapter)`.
       const cfg = this.config["activeRecord"] as ActiveRecordConfig;
       if (cfg.sqlite3AdapterStrictStringsByDefault) {
-        onLoad("active_record_sqlite3adapter", (adapter: typeof SQLite3Adapter) => {
-          adapter.strictStringsByDefault = true;
-        });
+        onLoad("active_record_sqlite3adapter", { once: true }, setSqlite3StrictStringsByDefault);
       }
     });
 
@@ -149,9 +167,7 @@ export class Trailtie extends BaseRailtie {
       // gated on `on_load(:active_record_postgresqladapter)`.
       const cfg = this.config["activeRecord"] as ActiveRecordConfig;
       if (cfg.postgresqlAdapterDecodeDates) {
-        onLoad("active_record_postgresqladapter", (adapter: typeof PostgreSQLAdapter) => {
-          adapter.decodeDates = true;
-        });
+        onLoad("active_record_postgresqladapter", { once: true }, setPostgresqlDecodeDates);
       }
     });
 
@@ -167,9 +183,7 @@ export class Trailtie extends BaseRailtie {
       const cfg = this.config["activeRecord"] as ActiveRecordConfig;
       const enc = cfg.encryption;
       if (enc && Object.keys(enc).length > 0) {
-        EncryptionConfigurable.configure(
-          enc as Parameters<typeof EncryptionConfigurable.configure>[0],
-        );
+        EncryptionConfigurable.configure(enc);
       }
     });
   }

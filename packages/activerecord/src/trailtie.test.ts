@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { Trailtie, type ActiveRecordConfig } from "./trailtie.js";
 import { Base } from "./base.js";
-import { Railtie as BaseRailtie } from "@blazetrails/activesupport";
+import { Railtie as BaseRailtie, resetLoadHooks, runLoadHooks } from "@blazetrails/activesupport";
 import { SchemaReflection } from "./connection-adapters/schema-cache.js";
 import { SQLite3Adapter } from "./connection-adapters/sqlite3-adapter.js";
 import { PostgreSQLAdapter } from "./connection-adapters/postgresql-adapter.js";
@@ -19,6 +19,7 @@ describe("RailtieTest", () => {
   let savedCheckSchemaCacheDumpVersion: boolean;
   let savedStrictStrings: boolean;
   let savedDecodeDates: boolean;
+  let savedEncryptionSupportUnencryptedData: boolean;
 
   beforeEach(() => {
     savedSubclasses = [...BaseRailtie.subclasses];
@@ -29,6 +30,15 @@ describe("RailtieTest", () => {
     savedCheckSchemaCacheDumpVersion = SchemaReflection.checkSchemaCacheDumpVersion;
     savedStrictStrings = SQLite3Adapter.strictStringsByDefault;
     savedDecodeDates = PostgreSQLAdapter.decodeDates;
+    savedEncryptionSupportUnencryptedData = EncryptionConfigurable.config.supportUnencryptedData;
+
+    // Simulate a fresh app boot for each test: clear the load-hook registry
+    // and re-emit the load events that base.ts / the adapter files would
+    // fire at module-import time in a real app.
+    resetLoadHooks();
+    runLoadHooks("active_record", Base);
+    runLoadHooks("active_record_postgresqladapter", PostgreSQLAdapter);
+    runLoadHooks("active_record_sqlite3adapter", SQLite3Adapter);
   });
 
   afterEach(() => {
@@ -41,6 +51,7 @@ describe("RailtieTest", () => {
     SchemaReflection.checkSchemaCacheDumpVersion = savedCheckSchemaCacheDumpVersion;
     SQLite3Adapter.strictStringsByDefault = savedStrictStrings;
     PostgreSQLAdapter.decodeDates = savedDecodeDates;
+    EncryptionConfigurable.config.supportUnencryptedData = savedEncryptionSupportUnencryptedData;
     for (const key of Object.keys(deprecators)) {
       delete deprecators[key];
     }
@@ -123,6 +134,5 @@ describe("RailtieTest", () => {
     cfg.encryption = { supportUnencryptedData: true };
     Trailtie.runInitializers();
     expect(EncryptionConfigurable.config.supportUnencryptedData).toBe(true);
-    EncryptionConfigurable.config.supportUnencryptedData = false;
   });
 });

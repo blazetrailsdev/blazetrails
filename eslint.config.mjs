@@ -289,6 +289,7 @@ export default defineConfig(
     plugins: { vitest },
     rules: {
       "vitest/no-conditional-tests": "error",
+      "vitest/no-conditional-in-test": "error",
     },
   },
 

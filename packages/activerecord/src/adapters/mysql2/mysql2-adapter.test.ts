@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   describeIfMysql,
+  isMariaDb,
   Mysql2Adapter,
   MYSQL_TEST_URL,
   withDbWarningsAction,
@@ -28,6 +29,9 @@ import {
 } from "../../errors.js";
 import { AbstractMysqlAdapter } from "../../connection-adapters/abstract-mysql-adapter.js";
 import { Result } from "../../result.js";
+
+// MariaDB does not include mismatched FK details in error messages.
+const itUnlessMariaDb = isMariaDb ? it.skip : it;
 
 // Fabricated-error translate_exception checks. These don't touch a live
 // MySQL server (they feed Object.assign(new Error(...), { errno/code })
@@ -289,31 +293,30 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(error.cause).toBeInstanceOf(Error);
     });
 
-    it("errors for multiple fks on mismatched types for pk table in alter table", async () => {
-      // MariaDB does not include mismatched FK details in error message
-      const isMariaDb = adapter.isMariadb();
-      if (isMariaDb) return;
+    itUnlessMariaDb(
+      "errors for multiple fks on mismatched types for pk table in alter table",
+      async () => {
+        // Add matching FK first (cars.id is BIGINT, engines.id is BIGINT — OK)
+        await adapter.executeMutation(
+          "ALTER TABLE `engines` ADD COLUMN `car_id` BIGINT, ADD CONSTRAINT `fk_car` FOREIGN KEY (`car_id`) REFERENCES `cars` (`id`)",
+        );
 
-      // Add matching FK first (cars.id is BIGINT, engines.id is BIGINT — OK)
-      await adapter.executeMutation(
-        "ALTER TABLE `engines` ADD COLUMN `car_id` BIGINT, ADD CONSTRAINT `fk_car` FOREIGN KEY (`car_id`) REFERENCES `cars` (`id`)",
-      );
+        // Then add mismatched FK (old_cars.id is INT but old_car_id is BIGINT)
+        const error = await adapter
+          .executeMutation(
+            "ALTER TABLE `engines` ADD CONSTRAINT `fk_old_car` FOREIGN KEY (`old_car_id`) REFERENCES `old_cars` (`id`)",
+          )
+          .then(() => null)
+          .catch((e) => e);
 
-      // Then add mismatched FK (old_cars.id is INT but old_car_id is BIGINT)
-      const error = await adapter
-        .executeMutation(
-          "ALTER TABLE `engines` ADD CONSTRAINT `fk_old_car` FOREIGN KEY (`old_car_id`) REFERENCES `old_cars` (`id`)",
-        )
-        .then(() => null)
-        .catch((e) => e);
-
-      expect(error).toBeInstanceOf(MismatchedForeignKey);
-      expect(error.message).toMatch(
-        /Column `old_car_id` on table `engines` does not match column `id` on `old_cars`/,
-      );
-      expect(error.message).toMatch(/which has type `int/i);
-      expect(error.cause).toBeInstanceOf(Error);
-    });
+        expect(error).toBeInstanceOf(MismatchedForeignKey);
+        expect(error.message).toMatch(
+          /Column `old_car_id` on table `engines` does not match column `id` on `old_cars`/,
+        );
+        expect(error.message).toMatch(/which has type `int/i);
+        expect(error.cause).toBeInstanceOf(Error);
+      },
+    );
 
     it("errors for bigint fks on integer pk table in create table", async () => {
       // foos.old_car_id is BIGINT but old_cars.id is INT

@@ -7,7 +7,7 @@
  * @internal stub - real impl in Phase 1c
  */
 
-import type { TemplateResolver } from "./template-resolver.js";
+import type { TemplateResolver } from "./resolver/resolver.js";
 
 export class PathRegistry {
   /** @internal stub - real impl in Phase 1c */

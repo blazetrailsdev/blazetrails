@@ -63,14 +63,17 @@ export class Sendfile {
   private mapAccelPath(env: Record<string, any>, path: string): string | undefined {
     const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const literal = (replacement: string) => () => replacement;
-    const internalMapping = this.mappings.find(([internal]) =>
-      new RegExp("^" + escape(internal)).test(path),
-    );
-    if (internalMapping) {
-      return path.replace(
-        new RegExp("^" + escape(internalMapping[0])),
-        literal(internalMapping[1]),
+    if (this.mappings.length > 0) {
+      const internalMapping = this.mappings.find(([internal]) =>
+        new RegExp("^" + escape(internal)).test(path),
       );
+      if (internalMapping) {
+        return path.replace(
+          new RegExp("^" + escape(internalMapping[0])),
+          literal(internalMapping[1]),
+        );
+      }
+      return undefined;
     }
     const headerMapping = env["HTTP_X_ACCEL_MAPPING"];
     if (headerMapping) {

@@ -25,20 +25,24 @@ export class Recursive {
 
   /** @internal */
   async _call(env: Record<string, any>): Promise<[number, Record<string, string>, any]> {
-    const scriptName: string = env[SCRIPT_NAME] || "";
-    const include = (newEnv: Record<string, any>, path: string) =>
-      this.include(newEnv, path, scriptName);
-    try {
-      return await this.app({ ...env, [RACK_RECURSIVE_INCLUDE]: include });
-    } catch (e) {
-      if (e instanceof ForwardRequest) {
-        const fwd = new URL(e.url, "http://localhost");
-        const merged: Record<string, any> = { ...env, ...(e.env || {}) };
-        merged[PATH_INFO] = fwd.pathname;
-        merged[QUERY_STRING] = fwd.search ? fwd.search.substring(1) : "";
-        return this.call(merged);
+    let currentEnv = env;
+    while (true) {
+      const scriptName: string = currentEnv[SCRIPT_NAME] || "";
+      const include = (newEnv: Record<string, any>, path: string) =>
+        this.include(newEnv, path, scriptName);
+      try {
+        return await this.app({ ...currentEnv, [RACK_RECURSIVE_INCLUDE]: include });
+      } catch (e) {
+        if (e instanceof ForwardRequest) {
+          const fwd = new URL(e.url, "http://localhost");
+          const merged: Record<string, any> = { ...currentEnv, ...(e.env || {}) };
+          merged[PATH_INFO] = fwd.pathname;
+          merged[QUERY_STRING] = fwd.search ? fwd.search.substring(1) : "";
+          currentEnv = merged;
+        } else {
+          throw e;
+        }
       }
-      throw e;
     }
   }
 

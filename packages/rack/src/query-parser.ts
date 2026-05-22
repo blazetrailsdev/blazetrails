@@ -174,7 +174,7 @@ export class QueryParser {
     }
     // Mirror Ruby's qs.count(sep.is_a?(String) ? sep : '&'):
     // count separator chars without materializing a match array (avoids ~4MB allocation).
-    const sepChars = typeof sep === "string" ? sep : "&";
+    const sepChars = sep || "&";
     const sepRe = new RegExp(`[${sepChars.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}]`, "g");
     let paramCount = 0;
     while (sepRe.exec(qs) !== null) paramCount++;

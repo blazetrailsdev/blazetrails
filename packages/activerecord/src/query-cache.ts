@@ -450,11 +450,11 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     );
   }
 
-  quoteTableNameForAssignment(_table: string, attr: string): string {
+  quoteTableNameForAssignment(table: string, attr: string): string {
     const inner = this.inner as { quoteTableNameForAssignment?: (t: string, a: string) => string };
     if (typeof inner.quoteTableNameForAssignment === "function")
-      return inner.quoteTableNameForAssignment(_table, attr);
-    return this.quoteColumnName(attr);
+      return inner.quoteTableNameForAssignment(table, attr);
+    return this.quoteTableName(`${table}.${attr}`);
   }
 
   castBoundValue(value: unknown): unknown {

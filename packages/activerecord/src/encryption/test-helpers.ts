@@ -283,7 +283,7 @@ export function makeEncryptedBookWithDowncaseName(adapter: DatabaseAdapter) {
     static {
       this._tableName = "encrypted_books";
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { default: "<untitled>" });
       this.adapter = adapter;
       this.encrypts("name", { deterministic: true, downcase: true });
     }
@@ -295,7 +295,7 @@ export function makeEncryptedBookThatIgnoresCase(adapter: DatabaseAdapter) {
     static {
       this._tableName = "encrypted_books";
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { default: "<untitled>" });
       this.attribute("original_name", "string");
       this.adapter = adapter;
       this.encrypts("name", { deterministic: true, ignoreCase: true });
@@ -459,7 +459,7 @@ export function makeMsgPackTextBook(adapter: DatabaseAdapter) {
     static {
       this._tableName = "encrypted_books";
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { default: "<untitled>" });
       this.adapter = adapter;
       this.encrypts("name", { messageSerializer: new MessagePackMessageSerializer() });
     }
@@ -475,7 +475,7 @@ export function makeUnencryptedBook(adapter: DatabaseAdapter) {
     static {
       this._tableName = "encrypted_books";
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { default: "<untitled>" });
       this.adapter = adapter;
     }
   } as any;
@@ -490,7 +490,7 @@ export function makeEncryptedBookWithUniquenessValidation(adapter: DatabaseAdapt
     static {
       this._tableName = "encrypted_books";
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { default: "<untitled>" });
       this.adapter = adapter;
       this.validatesUniqueness("name");
       this.encrypts("name", { deterministic: true });
@@ -544,7 +544,7 @@ export function makeEncryptedBookNormalizedFirst(adapter: DatabaseAdapter) {
     static {
       this._tableName = "encrypted_books";
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { default: "<untitled>" });
       this.attribute("logo", "binary");
       this.adapter = adapter;
       this.normalizes("name", _downcaseLikeRails);
@@ -565,7 +565,7 @@ export function makeEncryptedBookNormalizedSecond(adapter: DatabaseAdapter) {
     static {
       this._tableName = "encrypted_books";
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { default: "<untitled>" });
       this.attribute("logo", "binary");
       this.adapter = adapter;
       this.encrypts("name");

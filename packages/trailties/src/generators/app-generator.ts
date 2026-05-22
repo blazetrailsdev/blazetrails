@@ -282,6 +282,7 @@ export const app = {
   name: "${name}",
   config: {
     database: databaseConfig,
+    // config
   },
   routes: drawRoutes,
 };

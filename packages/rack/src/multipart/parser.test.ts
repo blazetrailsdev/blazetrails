@@ -11,7 +11,7 @@ import {
 import { QueryParser } from "../query-parser.js";
 
 const qp = QueryParser.makeDefault(100);
-const noopIo = { read: () => null as string | null };
+const noopIo = { read: (_size: number) => null as string | null };
 
 describe("Rack::Multipart::Parser", () => {
   it("returns nil if the content type is not multipart", () => {

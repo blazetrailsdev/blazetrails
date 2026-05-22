@@ -273,27 +273,16 @@ function _stripUrlCredentials(s: string): string {
 }
 
 /**
- * Unwrap any `innerAdapter` chain so wrapper shapes like
- * `TestAdapterFixtures` resolve to the real underlying adapter. The
- * wrapper holds adapter-config fields on its inner, so identity
- * derivation must descend through it.
- *
- * @internal
- */
-function _unwrapAdapter(adapter: DatabaseAdapter): DatabaseAdapter {
-  let cur: DatabaseAdapter = adapter;
-  for (let i = 0; i < 8; i++) {
-    const inner = (cur as unknown as { innerAdapter?: DatabaseAdapter }).innerAdapter;
-    if (!inner || inner === cur) return cur;
-    cur = inner;
-  }
-  return cur;
-}
-
-/**
  * Derive a string identity for the underlying database an adapter is
  * connected to, or `null` when no stringable identity is available
  * (callers fall back to the {@link _fallbackSchemaSignatures} WeakMap).
+ *
+ * Does NOT unwrap `innerAdapter` chains: wrappers like
+ * `TestAdapterFixtures` carry their own per-wrapper `tables: Set<string>`
+ * that `defineSchema` reads via `adapterKnownTables`, so sharing one
+ * cache entry across wrappers would desync the cache from the per-wrapper
+ * "tables I know about" view and cause cross-file table leakage. Only
+ * raw adapters (pool-leased `SidecarAdapter`, etc.) share by DB identity.
  *
  * Reads private fields by name on purpose — defineSchema is test-only
  * infrastructure and there is no public surface for "which DB are you
@@ -304,8 +293,11 @@ function _unwrapAdapter(adapter: DatabaseAdapter): DatabaseAdapter {
  * @internal
  */
 function databaseIdentity(adapter: DatabaseAdapter): string | null {
-  const real = _unwrapAdapter(adapter);
+  const real = adapter;
   const a = real as unknown as Record<string, unknown>;
+  // Wrapper shapes (e.g. TestAdapterFixtures with an `innerAdapter` field)
+  // intentionally don't share — see fn docstring.
+  if ((a as { innerAdapter?: unknown }).innerAdapter !== undefined) return null;
   if (real.adapterName === "sqlite") {
     const fn = a["_filename"];
     if (typeof fn === "string" && fn !== ":memory:" && fn !== "") return `sqlite:${fn}`;
@@ -346,7 +338,7 @@ function _cacheFor(adapter: DatabaseAdapter, create: boolean): Map<string, strin
     }
     return cache;
   }
-  const real = _unwrapAdapter(adapter);
+  const real = adapter;
   let cache = _fallbackSchemaSignatures.get(real);
   if (!cache && create) {
     cache = new Map();
@@ -386,7 +378,7 @@ export function _restoreAppliedSchemaSignaturesForAdapter(
   if (key !== null) {
     _appliedSchemaSignatures.set(key, new Map(snapshot));
   } else {
-    _fallbackSchemaSignatures.set(_unwrapAdapter(adapter), new Map(snapshot));
+    _fallbackSchemaSignatures.set(adapter, new Map(snapshot));
   }
 }
 
@@ -408,7 +400,7 @@ export function clearAppliedSchemaSignatures(adapter?: DatabaseAdapter): void {
     if (key !== null) {
       _appliedSchemaSignatures.delete(key);
     } else {
-      _fallbackSchemaSignatures.delete(_unwrapAdapter(adapter));
+      _fallbackSchemaSignatures.delete(adapter);
     }
   } else {
     _appliedSchemaSignatures = new Map();

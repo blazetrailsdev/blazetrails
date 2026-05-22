@@ -69,4 +69,46 @@ describe("PostgreSQLAdapter#withClient (single persistent connection)", () => {
     observed = await adapter.withClient(async (client) => client);
     expect(observed).toBe(persistentClient);
   });
+
+  it("serializes the initial connect so concurrent callers share one pg.Client", async () => {
+    // Repro for the race Copilot flagged: two concurrent _acquireFreshClient
+    // callers can both see _rawConnection == null and each open a pg.Client.
+    // The shared `_acquiring` promise must converge them on a single open.
+    adapter = new PostgreSQLAdapter({ host: "localhost", port: 1 }) as unknown as PrivatePgAdapter;
+
+    let openCount = 0;
+    let resolveConnect: (() => void) | null = null;
+    const connectGate = new Promise<void>((r) => {
+      resolveConnect = r;
+    });
+    const fakeClient = {
+      query: async () => ({ rows: [], fields: [] }),
+      connect: async () => {
+        openCount++;
+        await connectGate;
+      },
+      end: async () => {},
+      on: () => fakeClient,
+    };
+    // Stub pg.Client so each `new pg.Client()` returns our fake and
+    // we count how many times connect() runs. Cast through `unknown` —
+    // vi.spyOn doesn't infer constructor signatures, and we want a
+    // plain factory here, not a class.
+    const pgModule = (await import("pg")).default;
+    vi.spyOn(pgModule, "Client" as never).mockImplementation((() => fakeClient) as never);
+    // Bypass _maybeConfigureConnection's SET queries.
+    vi.spyOn(
+      adapter as unknown as { _maybeConfigureConnection: () => Promise<void> },
+      "_maybeConfigureConnection",
+    ).mockResolvedValue(undefined);
+
+    const calls = Array.from({ length: 5 }, () => adapter._acquireFreshClient());
+    // Release the gate after all 5 callers are queued behind _acquiring.
+    await Promise.resolve();
+    resolveConnect!();
+    const clients = await Promise.all(calls);
+
+    expect(openCount).toBe(1);
+    for (const c of clients) expect(c).toBe(fakeClient);
+  });
 });

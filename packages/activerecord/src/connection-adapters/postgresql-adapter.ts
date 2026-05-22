@@ -264,6 +264,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // Backs the `active` getter so a torn-down adapter reports inactive
   // even before the next lazy acquire would notice the missing connection.
   private _closed = false;
+  // In-flight connect/configure promise. Concurrent _acquireFreshClient
+  // callers converge on this so we never open two pg.Clients in
+  // parallel — mirrors Rails' @lock.synchronize around connect (Rails
+  // postgresql_adapter.rb:349, abstract_adapter.rb:984).
+  private _acquiring: Promise<pg.Client> | null = null;
   // Accumulates PG NOTICE/WARNING messages fired during the current query.
   // Cleared before each query; processed by _flushWarnings after.
   private _noticeReceiverSqlWarnings: Array<{
@@ -856,13 +861,31 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * session once and drains any orphaned server-side prepared
    * statements left by a prior PSCE event. All checkouts go through
    * here so configure/drain guarantees hold for every code path.
+   *
+   * Concurrent callers that hit the slow path (uncached connect, or
+   * pre-configure window) converge on a shared `_acquiring` promise
+   * so only one pg.Client is ever opened per adapter lifecycle.
+   * Mirrors Rails' @lock.synchronize around connect.
    */
   private async _acquireFreshClient(): Promise<pg.Client> {
     if (this._closed || this._pgClientOptions == null) {
       throw new Error("PostgreSQLAdapter: connection is closed");
     }
+    // Fast path: connection already opened and configured, no drain pending.
+    if (this._rawConnection && this._connectionConfigured && !this._needsDeallocateAll) {
+      return this._rawConnection;
+    }
+    if (!this._acquiring) {
+      this._acquiring = this._doAcquire().finally(() => {
+        this._acquiring = null;
+      });
+    }
+    return this._acquiring;
+  }
+
+  private async _doAcquire(): Promise<pg.Client> {
     if (this._rawConnection == null) {
-      const client = new pg.Client(this._pgClientOptions);
+      const client = new pg.Client(this._pgClientOptions!);
       await client.connect();
       // Suppress unhandled error events from the idle connection (e.g.
       // server-side FATAL from pg_terminate_backend). Without this
@@ -881,7 +904,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this._connectionConfigured = false;
       this._statementPool?.detach();
       this._statementPool = null;
-      dead.end().catch(() => {});
+      dead?.end().catch(() => {});
       throw error;
     }
     return this._rawConnection;

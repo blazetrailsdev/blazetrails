@@ -1,4 +1,5 @@
 import { RACK_INPUT } from "./constants.js";
+import { platform } from "@blazetrails/activesupport/process-adapter";
 
 export class RewindableInput {
   private _io: any;
@@ -99,10 +100,7 @@ export class RewindableInput {
 
   /** @internal */
   private isFilesystemHasPosixSemantics(): boolean {
-    // In Node.js, non-Windows platforms have POSIX unlink semantics.
-    // We use a runtime check via globalThis to avoid direct process.platform reference.
-    const g = globalThis as any;
-    return typeof g.process !== "undefined" && g.process.platform !== "win32";
+    return platform() !== "win32";
   }
 }
 

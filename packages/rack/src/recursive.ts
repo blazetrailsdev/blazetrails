@@ -35,7 +35,7 @@ export class Recursive {
         const fwd = new URL(e.url, "http://localhost");
         const merged: Record<string, any> = { ...env, ...(e.env || {}) };
         merged[PATH_INFO] = fwd.pathname;
-        if (fwd.search) merged[QUERY_STRING] = fwd.search.substring(1);
+        merged[QUERY_STRING] = fwd.search ? fwd.search.substring(1) : "";
         return this.call(merged);
       }
       throw e;

@@ -154,12 +154,14 @@ const ENCRYPTION_SCHEMA: Schema = {
     title: { type: "string", limit: 1024 },
     body: { type: "string", limit: 1024 },
   },
-  encrypted_books: { name: { type: "string", limit: 1024, default: "<untitled>" } },
-  encrypted_book_with_downcase_names: { name: { type: "string", limit: 1024 } },
-  encrypted_book_ignore_cases: {
-    name: { type: "string", limit: 1024 },
+  // Rails consolidates EncryptedBook, EncryptedBookThatIgnoresCase, and the
+  // other EncryptedBook* variants onto a single `encrypted_books` table.
+  encrypted_books: {
+    name: { type: "string", limit: 1024, default: "<untitled>" },
     original_name: { type: "string", limit: 1024 },
+    logo: "binary",
   },
+  encrypted_book_with_downcase_names: { name: { type: "string", limit: 1024 } },
   // EncryptedAuthor enforces AUTHOR_NAME_LIMIT at the AR attribute layer
   // (plaintext); the column itself needs room for ciphertext.
   encrypted_authors: { name: { type: "string", limit: 1024 } },
@@ -289,9 +291,10 @@ export function makeEncryptedBookWithDowncaseName(adapter: DatabaseAdapter) {
   } as any;
 }
 
-export function makeEncryptedBookIgnoreCase(adapter: DatabaseAdapter) {
-  return class EncryptedBookIgnoreCase extends Base {
+export function makeEncryptedBookThatIgnoresCase(adapter: DatabaseAdapter) {
+  return class EncryptedBookThatIgnoresCase extends Base {
     static {
+      this._tableName = "encrypted_books";
       this.attribute("id", "integer");
       this.attribute("name", "string");
       this.attribute("original_name", "string");
@@ -459,6 +462,98 @@ export function makeMsgPackTextBook(adapter: DatabaseAdapter) {
       this.attribute("name", "string");
       this.adapter = adapter;
       this.encrypts("name", { messageSerializer: new MessagePackMessageSerializer() });
+    }
+  } as any;
+}
+
+/**
+ * UnencryptedBook: shares the encrypted_books table but declares no encryption.
+ * Mirrors Rails' book_encrypted.rb / UnencryptedBook.
+ */
+export function makeUnencryptedBook(adapter: DatabaseAdapter) {
+  return class UnencryptedBook extends Base {
+    static {
+      this._tableName = "encrypted_books";
+      this.attribute("id", "integer");
+      this.attribute("name", "string");
+      this.adapter = adapter;
+    }
+  } as any;
+}
+
+/**
+ * EncryptedBookWithUniquenessValidation: name is encrypted deterministically
+ * and validates uniqueness. Mirrors Rails' EncryptedBookWithUniquenessValidation.
+ */
+export function makeEncryptedBookWithUniquenessValidation(adapter: DatabaseAdapter) {
+  return class EncryptedBookWithUniquenessValidation extends Base {
+    static {
+      this._tableName = "encrypted_books";
+      this.attribute("id", "integer");
+      this.attribute("name", "string");
+      this.adapter = adapter;
+      this.validatesUniqueness("name");
+      this.encrypts("name", { deterministic: true });
+    }
+  } as any;
+}
+
+/**
+ * EncryptedBookAttribute: declares `name` as a `:date` attribute, then encrypts it.
+ * Mirrors Rails' EncryptedBookAttribute (attribute :name, :date + encrypts :name).
+ */
+export function makeEncryptedBookAttribute(adapter: DatabaseAdapter) {
+  return class EncryptedBookAttribute extends Base {
+    static {
+      this._tableName = "encrypted_books";
+      this.attribute("id", "integer");
+      this.attribute("name", "date");
+      this.adapter = adapter;
+      this.encrypts("name");
+    }
+  } as any;
+}
+
+/**
+ * EncryptedBookNormalizedFirst: declares normalizes before encrypts on both
+ * `name` and `logo`. Mirrors Rails' EncryptedBookNormalizedFirst — exercises
+ * normalize-then-encrypt order.
+ */
+export function makeEncryptedBookNormalizedFirst(adapter: DatabaseAdapter) {
+  const toLower = (v: unknown) => (v == null ? v : String(v).toLowerCase());
+  return class EncryptedBookNormalizedFirst extends Base {
+    static {
+      this._tableName = "encrypted_books";
+      this.attribute("id", "integer");
+      this.attribute("name", "string");
+      this.attribute("logo", "binary");
+      this.adapter = adapter;
+      this.normalizes("name", toLower);
+      this.encrypts("name");
+      this.normalizes("logo", toLower);
+      this.encrypts("logo");
+    }
+  } as any;
+}
+
+/**
+ * EncryptedBookNormalizedSecond: declares encrypts before normalizes on both
+ * `name` and `logo`. Mirrors Rails' EncryptedBookNormalizedSecond — exercises
+ * encrypt-then-normalize order.
+ */
+export function makeEncryptedBookNormalizedSecond(adapter: DatabaseAdapter) {
+  const toLower = (v: unknown) => (v == null ? v : String(v).toLowerCase());
+  return class EncryptedBookNormalizedSecond extends Base {
+    static {
+      this._tableName = "encrypted_books";
+      this.attribute("id", "integer");
+      this.attribute("name", "string");
+      this.attribute("logo", "binary");
+      this.adapter = adapter;
+      this.encrypts("name");
+      this.normalizes("name", toLower);
+      this.encrypts("logo");
+      this.normalizes("logo", toLower);
     }
   } as any;
 }

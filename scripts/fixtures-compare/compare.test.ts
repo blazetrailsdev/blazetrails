@@ -28,6 +28,14 @@ describe("stripErb ERB expanders", () => {
     expect(out.rendered).toBe("k: 997509437");
     expect(out.unsupported).toBe(false);
   });
+  it("sentinelizes `composite_identify` when the accessor key isn't in the literal key list", () => {
+    // Defensive: if a Rails fixture ever asked for an accessor not in the
+    // declared `[:a, :b]` array, the file should still parse — that single
+    // attr becomes an erb-skip rather than blowing up the whole file.
+    const out = stripErb("k: <%= ActiveRecord::FixtureSet.composite_identify(:order_1, [:shop_id, :id])[:ghost] %>"); // prettier-ignore
+    expect(out.rendered).toBe("k: __ERB_SKIP__");
+    expect(out.unsupported).toBe(false);
+  });
   it("expands `(lo..hi).each do |v|` loops with <%= v %> body interpolation", () => {
     const { rendered, unsupported } = stripErb("<% (1..3).each do |i| %>row_<%= i %>: { id: <%= i %> }\n<% end %>"); // prettier-ignore
     expect(rendered.trim()).toBe("row_1: { id: 1 }\nrow_2: { id: 2 }\nrow_3: { id: 3 }");

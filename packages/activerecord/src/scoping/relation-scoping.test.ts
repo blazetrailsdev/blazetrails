@@ -2,14 +2,18 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  *
- * TODO: migrate to createPooledTestAdapter() after the PG withClient race
- * fix lands. NestedRelationScopingTest > "merge inner scope has priority"
- * issues Promise.all concurrent writes; under a pinned TX the PG adapter's
- * withClient (postgresql-adapter.ts withClient / _acquireFreshClient) can
- * fan a single logical TX across multiple pg.PoolClients, producing
- * 08P01 / 25P02 races. See the closed prior batch-1 attempts #2250 and
- * #2253 for the exact failure mode. Pool-layer pin lookup is already
- * centralized (#2258); the remaining work is in the PG adapter.
+ * TODO: two blockers remain before migrating to createPooledTestAdapter():
+ *
+ * 1. SQLite cross-file pool collision: all scoping files share the same
+ *    singleton pool in a vitest run; multiple defineSchema() calls collide on
+ *    "table posts already exists". Needs IF NOT EXISTS or per-file pool
+ *    isolation (not dropExisting — #2256 supersedes that).
+ *
+ * 2. PG 25P02 race NOT fully closed: NestedRelationScopingTest > "merge inner
+ *    scope has priority" still hits "current transaction is aborted" under
+ *    Promise.all concurrent writes inside a pinned TX. #2258 + #2262 were
+ *    necessary but not sufficient. Prior attempts: #2250, #2253; proof
+ *    attempt: #2265 (reverted after CI confirmed both failures still present).
  */
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { Base, Range, RecordNotFound } from "../index.js";

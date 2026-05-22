@@ -17,6 +17,7 @@ import { Result } from "./result.js";
 // surface (e.g. `.cache: QueryCacheStore`) doesn't leak the generic
 // `Store` symbol into the generated `.d.ts`.
 import { Store as QueryCacheStore } from "./connection-adapters/abstract/query-cache.js";
+import { sanitizeAsSqlComment as abstractSanitizeAsSqlComment } from "./connection-adapters/abstract/quoting.js";
 
 // Deep-import convenience: consumers doing
 // `import { ... } from "@blazetrails/activerecord/query-cache.js"`
@@ -466,10 +467,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
   sanitizeAsSqlComment(value: unknown): string {
     const inner = this.inner as { sanitizeAsSqlComment?: (v: unknown) => string };
     if (typeof inner.sanitizeAsSqlComment === "function") return inner.sanitizeAsSqlComment(value);
-    let comment = String(value);
-    comment = comment.replace(/^\s*\/\*\+?\s?/, "").replace(/\s?\*\/\s*$/, "");
-    comment = comment.replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
-    return comment;
+    return abstractSanitizeAsSqlComment(value);
   }
 
   get arelVisitor(): Visitors.ToSql | undefined {

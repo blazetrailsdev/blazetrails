@@ -32,6 +32,7 @@ import {
 import { Base } from "./base.js";
 import { Visitors } from "@blazetrails/arel";
 import { DatabaseStatements } from "./connection-adapters/abstract/database-statements.js";
+import { sanitizeAsSqlComment as abstractSanitizeAsSqlComment } from "./connection-adapters/abstract/quoting.js";
 import { include } from "@blazetrails/activesupport";
 import { isWriteQuerySql } from "./connection-adapters/sql-classification.js";
 import type { Result } from "./result.js";
@@ -673,10 +674,7 @@ class TestAdapterFixtures implements DatabaseAdapter {
   sanitizeAsSqlComment(value: unknown): string {
     const inner = this.inner as { sanitizeAsSqlComment?: (v: unknown) => string };
     if (typeof inner.sanitizeAsSqlComment === "function") return inner.sanitizeAsSqlComment(value);
-    let comment = String(value);
-    comment = comment.replace(/^\s*\/\*\+?\s?/, "").replace(/\s?\*\/\s*$/, "");
-    comment = comment.replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
-    return comment;
+    return abstractSanitizeAsSqlComment(value);
   }
 
   get arelVisitor(): Visitors.ToSql | undefined {

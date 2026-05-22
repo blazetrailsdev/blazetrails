@@ -922,7 +922,10 @@ export class Mapper {
       if (!redirectEndpoint) {
         throw new Error(`Mapper#redirect token ${endpoint} has no registered Redirect endpoint`);
       }
-      this.redirectInstances.delete(endpoint);
+      // Keep the entry: Rails' `redirect(...)` returns a Redirect instance
+      // the caller can reuse across multiple route definitions, so the token
+      // has to stay resolvable for subsequent addRoute calls. Route sets are
+      // built once at boot, so the working-set is bounded by the DSL.
     }
     if (options.redirect) {
       redirectTarget = options.redirect;

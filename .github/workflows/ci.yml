@@ -272,13 +272,17 @@ jobs:
   prettier:
     name: Prettier
     needs: changes
-    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 30
+    # Prettier doesn't need the workspace installed. Skip `pnpm install`
+    # entirely and run prettier directly via `npx`. Pinned version must
+    # match `prettier` in package.json (and pnpm-lock.yaml) — bump together.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm format:check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npx --yes prettier@3.8.1 --check .
 
   guides-typecheck:
     name: Guides Code Type Check

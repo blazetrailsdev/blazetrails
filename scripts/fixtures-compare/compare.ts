@@ -529,6 +529,19 @@ async function main(): Promise<void> {
 
 // ---- Models pass ----
 
+// Rails shorthand validation macros that map to named TS helpers rather than
+// the generic this.validates(). Only list the ones actually implemented in
+// packages/activerecord/src/validations.ts — the rest fall through to validates.
+const VALIDATION_KIND_TO_TS: Record<string, string> = {
+  validates_presence_of: "validatesPresenceOf",
+  validates_absence_of: "validatesAbsenceOf",
+  validates_length_of: "validatesLengthOf",
+  validates_size_of: "validatesSizeOf",
+  validates_numericality_of: "validatesNumericalityOf",
+  validates_uniqueness_of: "validatesUniquenessOf",
+  validates_associated: "validatesAssociated",
+};
+
 const MODELS_TS_DIR = path.join(ROOT, "packages/activerecord/src/test-helpers/models");
 const RUBY_EXTRACTOR = path.join(HERE, "extract-ruby-models.rb");
 
@@ -619,8 +632,14 @@ export function compareModelClass(ruby: RubyClass, tsContent: string): ModelResu
   }
   for (const v of ruby.validations) {
     const attr = v.attributes[0];
-    const vpat = attr ? new RegExp(`this\\.validates\\s*\\(\\s*["']${attr}["']`, "i") : null;
-    if (vpat && vpat.test(tsContent)) r.valsMatched++;
+    // Check both the named shorthand helper (if implemented) and the generic validates().
+    const tsMethod = VALIDATION_KIND_TO_TS[v.kind] ?? "validates";
+    const vpat = attr ? new RegExp(`this\\.${tsMethod}\\s*\\(\\s*["']${attr}["']`, "i") : null;
+    const genericPat =
+      attr && tsMethod !== "validates"
+        ? new RegExp(`this\\.validates\\s*\\(\\s*["']${attr}["']`, "i")
+        : null;
+    if (vpat && (vpat.test(tsContent) || genericPat?.test(tsContent))) r.valsMatched++;
     else r.notes.push(`val-missing: ${v.kind} ${v.attributes.join(",")}`);
   }
   for (const s of ruby.scopes) {

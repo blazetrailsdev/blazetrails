@@ -421,4 +421,25 @@ describe("compareModelClass", () => {
     expect(r.valsMatched).toBe(0);
     expect(r.status).toBe("DIFF");
   });
+
+  it("matches validates_presence_of to validatesPresenceOf shorthand", () => {
+    const ruby: RubyClass = {
+      ...emptyClass(),
+      validations: [{ kind: "validates_presence_of", attributes: ["title"], options: {} }],
+    };
+    const ts = `this.validatesPresenceOf("title");`;
+    const r = compareModelClass(ruby, ts);
+    expect(r.valsMatched).toBe(1);
+    expect(r.status).toBe("MATCH");
+  });
+
+  it("also accepts generic validates() for validates_presence_of (fallback)", () => {
+    const ruby: RubyClass = {
+      ...emptyClass(),
+      validations: [{ kind: "validates_presence_of", attributes: ["title"], options: {} }],
+    };
+    const ts = `this.validates("title", { presence: true });`;
+    const r = compareModelClass(ruby, ts);
+    expect(r.valsMatched).toBe(1);
+  });
 });

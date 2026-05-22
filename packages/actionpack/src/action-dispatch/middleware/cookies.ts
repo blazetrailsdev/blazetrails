@@ -103,11 +103,7 @@ export class CookieJar implements Iterable<[string, string]> {
    * @internal
    */
   static build(
-    request:
-      | (RequestCookieMethodsHost & { cookiesAppOptions?: CookieJarOptions })
-      | { cookiesAppOptions?: CookieJarOptions }
-      | null
-      | undefined,
+    request: RequestCookieMethodsHost | { cookiesAppOptions?: CookieJarOptions } | null | undefined,
     cookies: Record<string, string>,
   ): CookieJar {
     // Rails: `jar = new(req); jar.update(cookies); jar` — the request stores

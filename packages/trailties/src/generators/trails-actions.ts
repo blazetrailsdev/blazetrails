@@ -17,6 +17,12 @@ export interface PkgOptions {
   dev?: boolean;
 }
 
+/**
+ * Add a package to the application's `package.json`. The trails analogue of
+ * railties' `gem` action — `version` defaults to `"*"`, and `{ dev: true }`
+ * targets `devDependencies` instead of `dependencies`. Re-adding an existing
+ * name overwrites its version.
+ */
 export async function pkg(
   this: TrailsActionsHost,
   name: string,
@@ -36,7 +42,14 @@ export async function pkg(
   this.output(`         pkg  ${name}`);
 }
 
+/**
+ * Insert TS source at the `// routes` marker in `src/config/routes.ts`.
+ * The trails analogue of railties' `route` action — caller supplies valid
+ * TS; the marker is left in place so subsequent `route()` calls append
+ * below the prior insertion.
+ */
 export async function route(this: TrailsActionsHost, tsCode: string): Promise<void> {
+  assertNoRubySource(tsCode);
   await insertAtMarker(this, "src/config/routes.ts", "// routes", tsCode);
   this.output(`       route  ${summarize(tsCode)}`);
 }
@@ -45,11 +58,17 @@ export interface EnvironmentOptions {
   env?: string;
 }
 
+/**
+ * Insert TS source at the `// config` marker in `src/config/application.ts`,
+ * or in `src/config/environments/$env.ts` when `env` is passed. The trails
+ * analogue of railties' `environment` action.
+ */
 export async function environment(
   this: TrailsActionsHost,
   tsCode: string,
   options: EnvironmentOptions = {},
 ): Promise<void> {
+  assertNoRubySource(tsCode);
   const relPath = options.env
     ? `src/config/environments/${options.env}.ts`
     : "src/config/application.ts";
@@ -57,11 +76,21 @@ export async function environment(
   this.output(` environment  ${summarize(tsCode)}`);
 }
 
+/**
+ * Write a new file under `src/config/initializers/`. The trails analogue of
+ * railties' `initializer` action — `content` must be valid TS produced via
+ * the `tsModule` builder (the `assertNoRubySource` check rejects raw Ruby
+ * source like `class … end`). `filename` is a plain leaf name; path
+ * separators and `..` segments are rejected.
+ */
 export async function initializer(
   this: TrailsActionsHost,
   filename: string,
   content: string,
 ): Promise<void> {
+  if (filename.includes("/") || filename.includes("\\") || filename.split(/[/\\]/).includes("..")) {
+    throw new Error(`initializer filename must be a leaf name, got ${JSON.stringify(filename)}`);
+  }
   assertNoRubySource(content);
   const fs = await getFsAsync();
   const path = await getPathAsync();

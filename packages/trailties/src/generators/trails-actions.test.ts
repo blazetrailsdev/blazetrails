@@ -147,5 +147,23 @@ describe("TrailsActions", () => {
         /Ruby-like source/,
       );
     });
+
+    it("rejects filenames containing path separators or .. segments", async () => {
+      await expect(makeGen().initializer("../evil.ts", "export {};")).rejects.toThrow(/leaf name/);
+      await expect(makeGen().initializer("nested/x.ts", "export {};")).rejects.toThrow(/leaf name/);
+    });
+  });
+
+  it("route and environment reject Ruby-shape source", async () => {
+    files.set(
+      "/app/src/config/routes.ts",
+      `export function drawRoutes(r: any): void {\n  // routes\n}\n`,
+    );
+    files.set(
+      "/app/src/config/application.ts",
+      `export const app = {\n  config: {\n    // config\n  },\n};\n`,
+    );
+    await expect(makeGen().route("class Foo\nend")).rejects.toThrow(/Ruby-like source/);
+    await expect(makeGen().environment("class Foo\nend")).rejects.toThrow(/Ruby-like source/);
   });
 });

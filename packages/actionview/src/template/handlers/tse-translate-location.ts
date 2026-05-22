@@ -15,10 +15,12 @@
  *   diverges in absolute column counts but the relative deltas this method
  *   computes are still correct.
  * - Ruby's `ERB::Util.tokenize(line)` yields `[:CODE | :TEXT, str]` pairs
- *   where CODE is the *contents* of `<% %>` (no delimiters). Our tokenizer
- *   matches that shape so the find-offset scan against compiled code lines
- *   up — compiled `<%= name %>` emits `_ob.append(name);`, which contains
- *   the CODE substring `" name "` literally.
+ *   where CODE is the *contents* of `<% %>` (no delimiters), whitespace
+ *   preserved. Our compiler trims tag bodies (`parser.ts`), so the
+ *   anchoring tokenizer here also trims CODE — `<%= name %>` becomes
+ *   `_ob.append(name);` in compiled output, and the CODE anchor is `"name"`.
+ *   This is a TSE-specific divergence from Erubi, which keeps whitespace on
+ *   both sides; the alignment property `find_offset` relies on is preserved.
  */
 
 export class LocationParsingError extends Error {
@@ -101,9 +103,14 @@ export function tokenizeLine(line: string): SourceToken[] {
     // `<%- ... %>`: strip preceding `[ \t]*` from the TEXT buffer, matching
     // the lexer in @blazetrails/tse-compiler/src/lexer.ts.
     if (m[2] === "-") textBuf = textBuf.replace(/[ \t]*$/, "");
-    // `<% ... -%>`: the lexer's full semantics also consume a following
-    // `\r?\n`, but `translate_location` only sees one source line at a time,
-    // so the cross-line case isn't reachable here.
+    // `<% ... -%>`: consume the following `[ \t]*\r?\n` from the source so
+    // the post-tag TEXT token doesn't keep a newline the compiler dropped.
+    // Mirrors the trimRight branch in the lexer. `sourceLines` keeps `\n`
+    // attached to each line, so this case IS reachable per-line.
+    if (m[5] === "-") {
+      const tail = /^[ \t]*\r?\n/.exec(line.slice(last));
+      if (tail !== null) last += tail[0].length;
+    }
     if (m[1] !== undefined) {
       // `<%! ... !%>` typesMagic — compiler drops it, so do we.
       flushText();

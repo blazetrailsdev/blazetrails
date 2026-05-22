@@ -28,6 +28,15 @@ describe("tokenizeLine", () => {
     expect(tokenizeLine("<%- x -%>")).toEqual([{ kind: "CODE", value: "x" }]);
   });
 
+  it("consumes following `[ \\t]*\\r?\\n` after a `-%>` tag (trim-right parity with the lexer)", () => {
+    expect(tokenizeLine("<%= x -%>\n")).toEqual([{ kind: "CODE", value: "x" }]);
+    expect(tokenizeLine("a <%= x -%>  \nb")).toEqual([
+      { kind: "TEXT", value: "a " },
+      { kind: "CODE", value: "x" },
+      { kind: "TEXT", value: "b" },
+    ]);
+  });
+
   it("strips trailing `[ \\t]*` from preceding TEXT when a `<%-` tag opens", () => {
     expect(tokenizeLine("hi   \t<%- x %> after")).toEqual([
       { kind: "TEXT", value: "hi" },

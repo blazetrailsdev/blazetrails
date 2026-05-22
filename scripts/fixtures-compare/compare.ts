@@ -583,7 +583,7 @@ interface RubyFileEntry {
   classes: RubyClass[];
 }
 
-type ModelStatus = "MATCH" | "MISSING" | "MISSING-CLASS" | "DIFF";
+type ModelStatus = "MATCH" | "MISSING" | "DIFF";
 
 interface ModelResult {
   rubyFile: string;
@@ -658,7 +658,7 @@ export function compareModelClass(ruby: RubyClass, tsContent: string): ModelResu
 function formatModelLine(r: ModelResult): string {
   const ruby = path.basename(r.rubyFile).padEnd(36);
   const ts = (r.tsFile ? path.relative(MODELS_TS_DIR, r.tsFile) : "(missing)").padEnd(32);
-  if (r.status === "MISSING" || r.status === "MISSING-CLASS") {
+  if (r.status === "MISSING") {
     return `${ruby}${ts}${r.status}`;
   }
   const pct =
@@ -682,7 +682,9 @@ function runModelsPass(filter: string | null): void {
   try {
     manifest = loadRubyModelsManifest();
   } catch (e) {
-    console.error("models:compare: failed to run Ruby extractor:", (e as Error).message);
+    const err = e as Error & { stderr?: Buffer };
+    const detail = err.stderr?.toString().trim() || err.message;
+    console.error("models:compare: failed to run Ruby extractor:", detail);
     process.exit(1);
   }
 
@@ -727,9 +729,7 @@ function runModelsPass(filter: string | null): void {
     }
   }
 
-  const missing = results.filter(
-    (r) => r.status === "MISSING" || r.status === "MISSING-CLASS",
-  ).length;
+  const missing = results.filter((r) => r.status === "MISSING").length;
   const matched = results.filter((r) => r.status === "MATCH").length;
   const diff = results.filter((r) => r.status === "DIFF").length;
   console.log(`\n${results.length} files — match=${matched} diff=${diff} missing=${missing}`);

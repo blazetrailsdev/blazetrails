@@ -531,7 +531,12 @@ export async function compareFile(yamlBase: string, yamlByTable: Map<string, Fix
   const tsBase = existsSync(tsFile) ? `${kebab(snake)}.ts` : null;
   const r: FileResult = { yamlBase, tsBase, status: "MATCH", rowsMatched: 0, rowsTotal: 0, attrsMatched: 0, attrsTotal: 0, attrsSkipped: 0, schemaPorted: false, schemaExtras: 0, notes: [] }; // prettier-ignore
   if (prelimFailure) {
-    r.status = prelimFailure === "ERB-UNSUPPORTED" && ERB_ALLOW_LIST.has(snake) ? "ERB-ALLOWED" : prelimFailure; // prettier-ignore
+    // For ERB-ALLOWED files the TS side is the source of truth, so confirm
+    // the TS counterpart actually exists before silently promoting — if
+    // mixins.ts is deleted we want MISSING to surface, not a clean pass.
+    if (prelimFailure === "ERB-UNSUPPORTED" && ERB_ALLOW_LIST.has(snake)) {
+      r.status = tsBase ? "ERB-ALLOWED" : "MISSING";
+    } else r.status = prelimFailure;
     return r;
   }
   const railsRows = yamlByTable.get(snake)!;

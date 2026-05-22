@@ -1,11 +1,13 @@
 # activerecord — type audit
 
 > **Status (2026-05-22):** Waves 1–3 shipped:
+>
 > - W1a #1500, W1c #1519/#1522 (deferred remainder)
 > - W2a #1502, W2b, W2c #1506, W2d+e #1507
 > - W3a #1518, W3b+c #1524
 >
 > **Remaining (~250 LOC total, bundleable):**
+>
 > - W1b — variadic rest overloads (~100 LOC, low risk; relation.ts:822, 941 still `as any`)
 > - Small follow-ups bundle (~150 LOC): `Errors<TBase>` PR D
 >   (nested-error.ts), Validations mixin tightening, BiasableQueue module

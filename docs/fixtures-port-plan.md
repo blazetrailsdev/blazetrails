@@ -9,6 +9,7 @@
 > Loader (`defineFixtures`/`useFixtures`/`ref`/`fixtureId`) live.
 >
 > **Remaining (blocks PR 7 strict-fail flip):**
+>
 > - Compare-script enhancements (~150 LOC): enum-symbol comparator (~40),
 >   HABTM key handling (~30), custom FK override map (~30),
 >   datetime/YAML tolerance (~50).

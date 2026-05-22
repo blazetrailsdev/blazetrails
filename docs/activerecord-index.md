@@ -21,18 +21,17 @@ sequencing, see `~/.btwhooks/data/github/blazetrailsdev/trails/audits/`
 
 ### Phase 1 — Test-infra critical path (active)
 
-Owner: [`connection-pooled-test-adapter-plan.md`](connection-pooled-test-adapter-plan.md)
-+ [`tm-unification-plan.md`](tm-unification-plan.md). This is the live
-focus and the gate for most test:compare un-skips.
+Owner: [`connection-pooled-test-adapter-plan.md`](connection-pooled-test-adapter-plan.md) and [`tm-unification-plan.md`](tm-unification-plan.md). This is the live focus and the gate for most test:compare un-skips.
 
 - **Pool Phase D sweep** — migrate all `createTestAdapter()` consumers
   to `createPooledTestAdapter()`. 1 batch in flight (#2250 / #2253);
   expect 4–8 batches total at ~200–300 LOC each. **Main gate.**
-- **TM Phase 9b-1** — PG `arelVisitor` activation (~200–300 LOC).
+
+* **TM Phase 9b-1** — PG `arelVisitor` activation (~200–300 LOC).
   Runs in parallel with pool Phase D (visitor layer, not adapter-factory).
-- **TM Phase 9b-2** — MySQL `arelVisitor` activation (~150–250 LOC).
+* **TM Phase 9b-2** — MySQL `arelVisitor` activation (~150–250 LOC).
   Blocked on Arel `Table.star` (see memory `project_tm_phase9b2_blocked_on_table_star`).
-- **TM Phase 6 savepoint-tolerance fix** (~50–100 LOC) — unlocks the
+* **TM Phase 6 savepoint-tolerance fix** (~50–100 LOC) — unlocks the
   `dependent:` cluster.
 
 ### Phase 2 — Test-infra collapse (after Phase 1)
@@ -79,8 +78,7 @@ un-skipping; both run in parallel once gated).
 - **Phase D — Loader gap PRs + Tier 2 → 1 promotion** (4 loader PRs +
   4 batch PRs).
 - **Phase E — Tier 3 surgery** (per-file bespoke, ~10–20 small PRs).
-- **Phase F — `blazetrails/prefer-fixtures` lint rule + CLAUDE.md
-  update + retire `defineSchema()` per-file usage.
+- **Phase F** — `blazetrails/prefer-fixtures` lint rule + CLAUDE.md update + retire `defineSchema()` per-file usage.
 
 Total ~30–45 PRs, ~2–4 weeks Phase C steady-state once pool E lands.
 

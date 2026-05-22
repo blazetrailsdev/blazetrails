@@ -5,7 +5,7 @@
 > (#2202/#2206/#2211/#2219/#2230/#2242/#2245) and recent un-skip work
 > (#2229 batch 63 caseInsensitiveComparison, #2240 EncryptedBook variants)
 > are not yet reflected. Re-run `pnpm test:compare --cached --json
-> --package activerecord` before triaging; the 6568/7885 number below is
+--package activerecord` before triaging; the 6568/7885 number below is
 > stale.
 >
 > Phase ordering / cross-doc dependencies live in
@@ -13,6 +13,7 @@
 > batch list; the index owns the sequencing.
 >
 > **Known to strip on next refresh:**
+>
 > - Batch 63 caseInsensitiveComparison async fix — closed by #2229.
 > - Batch 28b (AliasTracker) — partially shipped (#670/#1869/#1850);
 >   remaining is ~80 LOC for 2 BLOCKED tests + Rails-canonical alias
@@ -101,31 +102,31 @@ Categories: `marshal`, `yaml`, `psych`, `gvl`, `fork`, `rake`, `pty`, `dbconsole
 
 ## BLOCKED vocabulary
 
-| Category                   | Meaning                                                                                                                                                                                                                                                               |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BLOCKED: STI`             | Single-table inheritance routing                                                                                                                                                                                                                                      |
-| `BLOCKED: associations`    | Specific association feature (specify which: habtm / inverse / through / ...)                                                                                                                                                                                         |
-| `BLOCKED: encryption`      | Encryption subsystem gap                                                                                                                                                                                                                                              |
-| `BLOCKED: schema`          | Schema introspection / dumper / definition gap                                                                                                                                                                                                                        |
-| `BLOCKED: transactions`    | Transaction / savepoint / isolation gap                                                                                                                                                                                                                               |
-| `BLOCKED: query-cache`     | Query cache behavior                                                                                                                                                                                                                                                  |
-| `BLOCKED: load-async`      | Async query / future result — likely permanent → `unported-files.ts`                                                                                                                                                                                                  |
-| `BLOCKED: GVL`             | Ruby thread / GVL — likely permanent → `unported-files.ts`                                                                                                                                                                                                            |
-| `BLOCKED: serialization`   | Ruby Marshal / YAML round-trip — likely permanent → `unported-files.ts`                                                                                                                                                                                               |
-| `BLOCKED: rake`            | Rake / dbconsole shell-out — likely permanent → `unported-files.ts`                                                                                                                                                                                                   |
-| `BLOCKED: fixture`         | Test needs a fixture set ported to TS. **Stays BLOCKED (not PERMANENT-SKIP).** TS-native fixture infrastructure shipped via `defineFixtures` / `useFixtures`; per-cluster fixture data folds into cluster work.                                                       |
-| `BLOCKED: migration`       | Migration runner feature                                                                                                                                                                                                                                              |
-| `BLOCKED: connection-pool` | Connection pool / handler / pool config gap                                                                                                                                                                                                                           |
-| `BLOCKED: relation`        | Relation API gap (specify which: where / scope / batches / ...)                                                                                                                                                                                                       |
-| `BLOCKED: i18n`            | I18n message / translation gap                                                                                                                                                                                                                                        |
-| `BLOCKED: validation`      | Validator behavior gap (specify which: uniqueness / length / numericality / ...)                                                                                                                                                                                      |
-| `BLOCKED: type`            | Type cast / serialize / deserialize gap (specify which Type)                                                                                                                                                                                                          |
-| `BLOCKED: adapter-pg`      | PostgreSQL-specific adapter gap                                                                                                                                                                                                                                       |
-| `BLOCKED: adapter-mysql`   | MySQL-specific adapter gap                                                                                                                                                                                                                                            |
-| `BLOCKED: adapter-sqlite`  | SQLite-specific adapter gap                                                                                                                                                                                                                                           |
-| `BLOCKED: range`           | pg/range type behavior                                                                                                                                                                                                                                                |
-| `BLOCKED: store`           | `Base.store` / `store_accessor` DSL — per-key getters/setters over a hash-typed column (hstore/json/yaml)                                                                                                                                                             |
-| `BLOCKED: unknown`         | Could not categorize from context; needs human triage                                                                                                                                                                                                                 |
+| Category                   | Meaning                                                                                                                                                                                                         |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BLOCKED: STI`             | Single-table inheritance routing                                                                                                                                                                                |
+| `BLOCKED: associations`    | Specific association feature (specify which: habtm / inverse / through / ...)                                                                                                                                   |
+| `BLOCKED: encryption`      | Encryption subsystem gap                                                                                                                                                                                        |
+| `BLOCKED: schema`          | Schema introspection / dumper / definition gap                                                                                                                                                                  |
+| `BLOCKED: transactions`    | Transaction / savepoint / isolation gap                                                                                                                                                                         |
+| `BLOCKED: query-cache`     | Query cache behavior                                                                                                                                                                                            |
+| `BLOCKED: load-async`      | Async query / future result — likely permanent → `unported-files.ts`                                                                                                                                            |
+| `BLOCKED: GVL`             | Ruby thread / GVL — likely permanent → `unported-files.ts`                                                                                                                                                      |
+| `BLOCKED: serialization`   | Ruby Marshal / YAML round-trip — likely permanent → `unported-files.ts`                                                                                                                                         |
+| `BLOCKED: rake`            | Rake / dbconsole shell-out — likely permanent → `unported-files.ts`                                                                                                                                             |
+| `BLOCKED: fixture`         | Test needs a fixture set ported to TS. **Stays BLOCKED (not PERMANENT-SKIP).** TS-native fixture infrastructure shipped via `defineFixtures` / `useFixtures`; per-cluster fixture data folds into cluster work. |
+| `BLOCKED: migration`       | Migration runner feature                                                                                                                                                                                        |
+| `BLOCKED: connection-pool` | Connection pool / handler / pool config gap                                                                                                                                                                     |
+| `BLOCKED: relation`        | Relation API gap (specify which: where / scope / batches / ...)                                                                                                                                                 |
+| `BLOCKED: i18n`            | I18n message / translation gap                                                                                                                                                                                  |
+| `BLOCKED: validation`      | Validator behavior gap (specify which: uniqueness / length / numericality / ...)                                                                                                                                |
+| `BLOCKED: type`            | Type cast / serialize / deserialize gap (specify which Type)                                                                                                                                                    |
+| `BLOCKED: adapter-pg`      | PostgreSQL-specific adapter gap                                                                                                                                                                                 |
+| `BLOCKED: adapter-mysql`   | MySQL-specific adapter gap                                                                                                                                                                                      |
+| `BLOCKED: adapter-sqlite`  | SQLite-specific adapter gap                                                                                                                                                                                     |
+| `BLOCKED: range`           | pg/range type behavior                                                                                                                                                                                          |
+| `BLOCKED: store`           | `Base.store` / `store_accessor` DSL — per-key getters/setters over a hash-typed column (hstore/json/yaml)                                                                                                       |
+| `BLOCKED: unknown`         | Could not categorize from context; needs human triage                                                                                                                                                           |
 
 Cross-file consolidation pass:
 

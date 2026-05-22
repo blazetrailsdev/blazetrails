@@ -11,15 +11,15 @@ a separate plan doc"). This is that doc.
 
 ## Decisions (locked in 2026-05-22)
 
-| # | Decision | Rationale |
-|---|---|---|
-| 1 | **Scope:** every AR test whose Rails counterpart calls `fixtures(:foo)` | Mirrors Rails byte-for-byte; eliminates the inline-seed surface where TM Phase 6 hazards keep tripping |
-| 2 | **Aggressiveness:** per file, rewrite BOTH setup AND test body to mirror the Rails counterpart | Drives `test:compare` matches as a side effect; setup-only would leave assertions diverged |
-| 3 | **Sequencing:** Phase B canary blocks on pool epic Phase E | Pinned-connection-per-test is the natural home for `setup_fixtures`-shaped load-once-per-worker; doing this before would either preserve the AsyncContext sidecar across the conversion or be reworked when E lands |
-| 4 | **Batching:** by loader-readiness tier, not by test-directory cluster | A test-directory sweep would block on whichever file hits the worst loader gap; tiering ships clean files first and unblocks the rest with surgical loader PRs |
-| 5 | **DIFF / ERB-UNSUPPORTED fixtures don't block consumers** | If a test only references the rows that ARE comparable in `fixtures:compare`, the file is adoptable now; fixtures-port PR 7b (strict-fail) is independent |
-| 6 | **Files whose Rails counterpart inlines `Model.create` (no fixtures)** stay out of scope for adoption | The Phase F lint rule keys on `test:compare` membership AND Rails fixture usage; non-fixture-using counterparts aren't penalized |
-| 7 | **`useFixtures` runs once per worker, not per test, post-pool E** | Matches Rails `setup_fixtures` semantics; tests roll back their writes via `withTransactionalFixtures`, fixture data remains. Implementation hook lands as Spike S1 below. |
+| #   | Decision                                                                                              | Rationale                                                                                                                                                                                                           |
+| --- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Scope:** every AR test whose Rails counterpart calls `fixtures(:foo)`                               | Mirrors Rails byte-for-byte; eliminates the inline-seed surface where TM Phase 6 hazards keep tripping                                                                                                              |
+| 2   | **Aggressiveness:** per file, rewrite BOTH setup AND test body to mirror the Rails counterpart        | Drives `test:compare` matches as a side effect; setup-only would leave assertions diverged                                                                                                                          |
+| 3   | **Sequencing:** Phase B canary blocks on pool epic Phase E                                            | Pinned-connection-per-test is the natural home for `setup_fixtures`-shaped load-once-per-worker; doing this before would either preserve the AsyncContext sidecar across the conversion or be reworked when E lands |
+| 4   | **Batching:** by loader-readiness tier, not by test-directory cluster                                 | A test-directory sweep would block on whichever file hits the worst loader gap; tiering ships clean files first and unblocks the rest with surgical loader PRs                                                      |
+| 5   | **DIFF / ERB-UNSUPPORTED fixtures don't block consumers**                                             | If a test only references the rows that ARE comparable in `fixtures:compare`, the file is adoptable now; fixtures-port PR 7b (strict-fail) is independent                                                           |
+| 6   | **Files whose Rails counterpart inlines `Model.create` (no fixtures)** stay out of scope for adoption | The Phase F lint rule keys on `test:compare` membership AND Rails fixture usage; non-fixture-using counterparts aren't penalized                                                                                    |
+| 7   | **`useFixtures` runs once per worker, not per test, post-pool E**                                     | Matches Rails `setup_fixtures` semantics; tests roll back their writes via `withTransactionalFixtures`, fixture data remains. Implementation hook lands as Spike S1 below.                                          |
 
 ## Prerequisites (must land before Phase B)
 
@@ -44,16 +44,16 @@ a separate plan doc"). This is that doc.
 Generate `docs/fixtures-adoption-inventory.md` (committed, regenerated
 each Phase). One row per AR test file with a Rails counterpart. Columns:
 
-| Column | Source |
-|---|---|
-| `ts-file` | `find packages/activerecord/src -name '*.test.ts'` |
-| `rails-counterpart` | `scripts/api-compare/test-mapping.json` (existing) |
-| `rails-fixtures-used` | Parse `fixtures :foo, :bar` from the Ruby file via a small script under `scripts/fixtures-adoption/` |
-| `fixture-readiness` | `pnpm fixtures:compare --json`: MATCH / DIFF / ERB-UNSUPPORTED per fixture; aggregate worst per file |
-| `loader-blocked-by` | Cross-reference rails-fixtures-used against the open loader-gap list (string-PK / enum / NOT NULL timestamp / composite-FK) |
-| `current-setup` | grep classification: `inline-create` / `defineSchema` / `withTransactionalFixtures` / `mixed` |
-| `tm-phase6-hazard` | grep for inline DDL, dependent: \[destroy\|nullify\|restrict\], engineered-id assertions |
-| `tier` | derived: 1 / 2 / 3 / 4 (rules below) |
+| Column                | Source                                                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `ts-file`             | `find packages/activerecord/src -name '*.test.ts'`                                                                          |
+| `rails-counterpart`   | `scripts/api-compare/test-mapping.json` (existing)                                                                          |
+| `rails-fixtures-used` | Parse `fixtures :foo, :bar` from the Ruby file via a small script under `scripts/fixtures-adoption/`                        |
+| `fixture-readiness`   | `pnpm fixtures:compare --json`: MATCH / DIFF / ERB-UNSUPPORTED per fixture; aggregate worst per file                        |
+| `loader-blocked-by`   | Cross-reference rails-fixtures-used against the open loader-gap list (string-PK / enum / NOT NULL timestamp / composite-FK) |
+| `current-setup`       | grep classification: `inline-create` / `defineSchema` / `withTransactionalFixtures` / `mixed`                               |
+| `tm-phase6-hazard`    | grep for inline DDL, dependent: \[destroy\|nullify\|restrict\], engineered-id assertions                                    |
+| `tier`                | derived: 1 / 2 / 3 / 4 (rules below)                                                                                        |
 
 **Tier rules:**
 
@@ -73,6 +73,7 @@ inventory script under `scripts/fixtures-adoption/` + the generated
 `package.json`. The script is idempotent; rerun after every batch.
 
 **Success criteria:**
+
 - Inventory committed; tier counts settle the Phase C–E sizing
 - Script runs in <30s on a warm checkout
 - 100% of AR test files in `packages/activerecord/src/**/*.test.ts`
@@ -89,6 +90,7 @@ Top candidate from manual look: a small file under `relation/` or
 `finder-respond-to.test.ts`; final pick comes from Phase A inventory.
 
 **Per-PR deliverables:**
+
 - Spike S1 is already merged (separate PR per Prerequisites)
 - Inline `Model.create` / `defineSchema` setup deleted from the canary file
 - Top-of-file `const { authors, posts } = useFixtures({...})`
@@ -99,6 +101,7 @@ Top candidate from manual look: a small file under `relation/` or
   shape for batch PRs to reference
 
 **Success criteria:**
+
 - `test:compare` shows the canary file's match-rate increased; no
   regressions elsewhere
 - Local `pnpm vitest run <canary-file>` green on sqlite3 + PG + MySQL
@@ -121,10 +124,11 @@ that defeats Decision 2.
 **Within Phase C, batch order is by Rails-counterpart cluster** so a
 single reviewer can trace pattern reuse across a coherent slice:
 `associations/`, `validations/`, `relation/`, `persistence/`,
-`scoping/`, etc. This is a *secondary* ordering — Tier 1 status is the
+`scoping/`, etc. This is a _secondary_ ordering — Tier 1 status is the
 gate, cluster is just batch-packing.
 
 **Per-PR checklist (codified in PR template if useful):**
+
 - [ ] All files in batch are Tier 1 per latest `inventory.md`
 - [ ] Each file's diff = setup-block delete + body rewrite; no new
       helpers (if a gap shows up, ship it standalone first)
@@ -133,6 +137,7 @@ gate, cluster is just batch-packing.
 - [ ] No `withTransactionalFixtures` rollback failures observed locally
 
 **Stop-and-fix triggers** (block the batch):
+
 - Loader gap surfaces that Phase A missed → file moves to Tier 2;
   open a loader PR
 - `test:compare` regression in a file outside the batch (cross-file
@@ -147,16 +152,17 @@ Each open loader gap from `fixtures-port-plan.md` becomes a pair of
 PRs: the loader fix + the Tier 2 → 1 batch it unlocks. Shipped in this
 order to keep diffs small:
 
-| Loader gap | Loader PR | Unlocks (Tier 2 → 1 batch) |
-|---|---|---|
-| `resolveDeclaredPk` string-PK | ~20 LOC | `subscribers`, `string-key-objects` consumers |
-| NOT NULL `created_at`/`updated_at` auto-stamp | ~30–50 LOC | `people` consumers |
-| Enum-aware insert | ~40 LOC | `parrots`, `memberships` consumers |
-| `ref()` key-path for composite FK | ~50 LOC | CPK cluster consumers |
-| `belongs_to`-reflection FK resolver | ~80–150 LOC | **Defer.** Cosmetic; doesn't gate any test |
-| Registry rollback widening | ~5 LOC | Bundle into the next adjacent loader PR; too small to ship alone |
+| Loader gap                                    | Loader PR   | Unlocks (Tier 2 → 1 batch)                                       |
+| --------------------------------------------- | ----------- | ---------------------------------------------------------------- |
+| `resolveDeclaredPk` string-PK                 | ~20 LOC     | `subscribers`, `string-key-objects` consumers                    |
+| NOT NULL `created_at`/`updated_at` auto-stamp | ~30–50 LOC  | `people` consumers                                               |
+| Enum-aware insert                             | ~40 LOC     | `parrots`, `memberships` consumers                               |
+| `ref()` key-path for composite FK             | ~50 LOC     | CPK cluster consumers                                            |
+| `belongs_to`-reflection FK resolver           | ~80–150 LOC | **Defer.** Cosmetic; doesn't gate any test                       |
+| Registry rollback widening                    | ~5 LOC      | Bundle into the next adjacent loader PR; too small to ship alone |
 
 **Phase D success criteria:**
+
 - After all four prioritized loader PRs land, Tier 2 count is 0
 - Each batch PR cites the loader PR it depends on
 - `inventory.md` re-runs cleanly between each pair
@@ -206,6 +212,7 @@ pattern has been reused across 20+ batch PRs:
    for assertion mutations within a test body, not setup.
 
 **Phase F success criteria:**
+
 - Lint rule active on `main`; CI green
 - 0 `Model.create` inside `beforeAll`/`beforeEach` in non-allowlisted
   files
@@ -213,12 +220,14 @@ pattern has been reused across 20+ batch PRs:
 ## Sizing estimate (derivation, not magic numbers)
 
 Inputs (verified against the worktree):
+
 - 490 total AR test files (`find packages/activerecord/src -name '*.test.ts' | wc -l`)
 - 159 already on `withTransactionalFixtures` / `defineSchema`
 - 122 fixtures translated (fixtures-port-plan)
 - 94 fixtures currently MATCH under `fixtures:compare`
 
 Rough projection (refined in Phase A):
+
 - **~120–150 files** have Rails counterparts using fixtures (estimate
   from test:compare mapping density; Phase A makes this exact)
 - **~70–90 Tier 1** at start (clean fixtures + no loader gap) → ~12–18
@@ -241,7 +250,7 @@ the canary pattern is settled.
    in the Phase F CLAUDE.md update; add a lint hint if it ever changes.
 2. **`test:compare` regression during partial conversion.** A file
    half-converted (setup-only, body not yet aligned to Rails) can
-   score *worse* on `test:compare` than the pre-conversion version
+   score _worse_ on `test:compare` than the pre-conversion version
    because TS-only assertions hide what's missing. Mitigate: Decision
    2 (no setup-only conversions); each file ships fully or not at all.
 3. **Pool E slippage blocks Phase B.** If pool epic Phase D drags

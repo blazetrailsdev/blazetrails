@@ -316,12 +316,12 @@ boundary.
 route several AR types to VARCHAR even though both adapters have
 native columns. #2197 fixed `binary`; 4 downgrades remain:
 
-| Type | MySQL native | SQLite native | Bug surface |
-|---|---|---|---|
-| `date` | DATE | date | MySQL+SQLite |
-| `time` | TIME | time | MySQL+SQLite |
-| `datetime` | DATETIME (correct on MySQL) | datetime | SQLite only |
-| `json` | JSON (5.7+) | json (3.38+) | MySQL+SQLite |
+| Type       | MySQL native                | SQLite native | Bug surface  |
+| ---------- | --------------------------- | ------------- | ------------ |
+| `date`     | DATE                        | date          | MySQL+SQLite |
+| `time`     | TIME                        | time          | MySQL+SQLite |
+| `datetime` | DATETIME (correct on MySQL) | datetime      | SQLite only  |
+| `json`     | JSON (5.7+)                 | json (3.38+)  | MySQL+SQLite |
 
 Each downgrade may be papering over a serialize-path bug (like the
 `binary` case was — the fixture column type was wrong, not the AR
@@ -378,16 +378,16 @@ disappears.
 
 Path 3 was originally proposed as "keep the wrapper, delete the ~30
 pure-delegation methods." But auditing the 18 `.innerAdapter` callers
-shows the deviation is the *wrapper itself*, not the delegations:
+shows the deviation is the _wrapper itself_, not the delegations:
 
-| Group | Count | What it reaches for | Path-3 effect | Path-2 effect |
-|---|---|---|---|---|
-| 1 — `transactionManager` | ~4 | Getter not exposed on wrapper | Adds reach-in | Gone (real adapter has it) |
-| 2 — schema dumper / PG-only methods | 9 | Type mismatch + `addExclusionConstraint`/etc | Adds reach-in | Gone (real adapter has them) |
-| 3 — raw `execQuery`/`exec` | 4 | Pure cosmetic noise; wrapper already delegates | Could just delete the token | Gone |
-| 4 — helper unwrap in `with-transactional-fixtures.ts` | 3 | Bridges wrapped/unwrapped | Stays | Gone (nothing to unwrap) |
+| Group                                                 | Count | What it reaches for                            | Path-3 effect               | Path-2 effect                |
+| ----------------------------------------------------- | ----- | ---------------------------------------------- | --------------------------- | ---------------------------- |
+| 1 — `transactionManager`                              | ~4    | Getter not exposed on wrapper                  | Adds reach-in               | Gone (real adapter has it)   |
+| 2 — schema dumper / PG-only methods                   | 9     | Type mismatch + `addExclusionConstraint`/etc   | Adds reach-in               | Gone (real adapter has them) |
+| 3 — raw `execQuery`/`exec`                            | 4     | Pure cosmetic noise; wrapper already delegates | Could just delete the token | Gone                         |
+| 4 — helper unwrap in `with-transactional-fixtures.ts` | 3     | Bridges wrapped/unwrapped                      | Stays                       | Gone (nothing to unwrap)     |
 
-Path 3 *worsens* the deviation — deleting delegation methods forces
+Path 3 _worsens_ the deviation — deleting delegation methods forces
 more callers into `.innerAdapter` reach-in. Path 2 eliminates the
 deviation entirely.
 
@@ -404,6 +404,7 @@ sidecar.
 #### Sizing
 
 Path 2 is a bigger surface than path 3:
+
 - Reshape `createTestAdapter()` return type
 - Update 18 `.innerAdapter` callers (group 1-3 above) to access the
   real adapter directly; the 3 helper-internal sites (group 4) become
@@ -413,6 +414,7 @@ Path 2 is a bigger surface than path 3:
 - Migrate the three load-bearing concerns into the sidecar object
 
 Probably 2-3 PRs to land safely:
+
 - (a) Add the sidecar shape alongside the existing wrapper; new
   consumers use sidecar
 - (b) Migrate the 18 `.innerAdapter` callers to the new shape

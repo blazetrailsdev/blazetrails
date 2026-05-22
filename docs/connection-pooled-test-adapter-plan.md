@@ -22,7 +22,7 @@ removes the underlying need for that patch.
 - `setup_fixtures` (line 125) — calls
   `pool.pin_connection!(lock_threads)` for each handler's pool
 - `pin_connection!` — locks the pool so every checkout returns the
-  *same* connection for the test's duration
+  _same_ connection for the test's duration
 - `lock_threads` parameter — when `true`, also acquires a thread lock
   (single-threaded test). Defaults from `run_in_transaction?` and
   the test's `use_transactional_tests` flag.
@@ -73,6 +73,7 @@ test's duration; the underlying SQLite/PG/MySQL driver isolates that
 connection's TX state from any other chain.
 
 After this lands:
+
 - The `AsyncContext`-based TX visibility filter in `SidecarFixtures`
   is **unnecessary** — `currentTransaction()`/`inTransaction`/
   `openTransactions` can return the inner adapter's state directly
@@ -102,15 +103,17 @@ Key intersections:
 
 2. **`useFixtures` and test-data loading.** Fixtures-port PR 8 (proof-
    of-concept conversion) demonstrates the post-port test shape:
+
    ```ts
    const { authors } = useFixtures({ authors: [Author, authorFixtureData] });
    // test body uses authors("david")
    ```
+
    Under the pool, two strategies:
    - **(a) Load fixtures once per worker into the shared DB state,
      each test's TX-wrap sees them and ROLLBACKs only its own
      changes.** Matches Rails' transactional fixtures. Requires the
-     pool to *pin* one connection per test (so the TX-wrap can roll
+     pool to _pin_ one connection per test (so the TX-wrap can roll
      back without losing fixture data) and the worker's fixture-load
      phase to happen BEFORE any test pins.
    - **(b) Reload fixtures per-test on each new pool checkout.** Slow.
@@ -178,6 +181,7 @@ The SQLite question is the main wrinkle. PG/MySQL pool fine.
 ### Phase A — Audit shared-adapter dependencies (~50 LOC docs)
 
 Inventory:
+
 1. Tests that explicitly rely on `_sharedAdapter` singleton semantics
    (e.g. set state in one `it()` and read it in another — fragile
    pattern, should be rare)
@@ -195,6 +199,7 @@ managed pool. Existing `createTestAdapter()` keeps its singleton
 behavior. Tests opt in.
 
 Pool semantics:
+
 - For PG/MySQL: a real `connectionPool` (the trails equivalent of
   Rails' `ConnectionPool`). Each test checks out, runs, returns.
 - For SQLite: open question (see "What we'd give up"). Default to
@@ -224,6 +229,7 @@ inventory) need explicit migration.
 ### Phase E — Delete `_sharedAdapter`, `AsyncContext` filter, manual TX depth
 
 Final cleanup. After all tests are on the pool:
+
 - Delete `_sharedAdapter` module state
 - Delete `_txLockStorage`/`_txLockHeld`/`_txVisible` from
   `SidecarFixtures`
@@ -269,8 +275,8 @@ Each phase is independently shippable. Phase A doesn't ship code.
    Phase A.
 
 4. **CI worker config** — trails' AR test workers (`--poolOptions.
-   forks.singleFork=true` for SQLite local, `--poolOptions.forks.
-   forks=4` for PG/MariaDB CI) interact with connection limits.
+forks.singleFork=true` for SQLite local, `--poolOptions.forks.
+forks=4` for PG/MariaDB CI) interact with connection limits.
    Pool size needs sizing per CI worker count.
 
 ## Resolved investigation notes
@@ -382,12 +388,12 @@ duration. `pinConnectionBang(false)` pins that single connection;
 
 **Phase D driver → pool config:**
 
-| Driver | Pool size | Source |
-|---|---|---|
-| `node:sqlite` | 5 (default, configurable) | Existing `dbConfig.pool` |
-| `better-sqlite3` | 1 (forced) | Shared-cache blocker |
-| `expo-sqlite` | 1 (forced) | Shared-cache blocker |
-| PG, MySQL | 5 (default, configurable) | Existing `dbConfig.pool` |
+| Driver           | Pool size                 | Source                   |
+| ---------------- | ------------------------- | ------------------------ |
+| `node:sqlite`    | 5 (default, configurable) | Existing `dbConfig.pool` |
+| `better-sqlite3` | 1 (forced)                | Shared-cache blocker     |
+| `expo-sqlite`    | 1 (forced)                | Shared-cache blocker     |
+| PG, MySQL        | 5 (default, configurable) | Existing `dbConfig.pool` |
 
 Pool size defaults to 5 (matches Rails — see
 `database-config.ts:158`). Configurable via existing
@@ -424,7 +430,7 @@ self-contained smoke test that:
 1. Opens N connections to `file::memory:?cache=shared` via the
    `better-sqlite3` driver
 2. Connection 1 runs `CREATE TABLE t (id INTEGER); INSERT INTO t
-   VALUES (1)`
+VALUES (1)`
 3. Connection 2 runs `SELECT * FROM t` — expects to see the row
 4. Connection 2 runs `BEGIN; INSERT INTO t VALUES (2); ROLLBACK`
 5. Connection 1 runs `SELECT count(*) FROM t` — expects 1 (the
@@ -465,6 +471,7 @@ end
 ```
 
 trails parity confirmed:
+
 - `ActiveRecord::Base.connection_handler` → trails `Base.connectionHandler`
 - `connection_pool_list(:writing)` → trails
   `ConnectionHandler#connectionPoolList(role)` at

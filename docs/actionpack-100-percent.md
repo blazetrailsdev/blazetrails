@@ -122,10 +122,13 @@ common.
 - ~20 — `permissionsPolicy` / `permissionsPolicy=` accessors on `Request`
   (env-backed under `action_dispatch.permissions_policy`).
 
-### S3 — Flash + ETag wiring (Tier 2, ~200–250 LOC) — AD + AC
+### S3 — Flash + ETag + LogSubscriber bundle (~100–150 LOC) — AD + AC
 
-Bundles three related files. After this story, `metal/flash.rb` →100%,
-`metal/etag_with_flash.rb` →100%, and `log_subscriber.rb` →100%.
+Bundles three small-surface files into one fidelity-sweep PR. After this
+story, `metal/flash.rb` →100%, `metal/etag_with_flash.rb` →100%, and
+`log_subscriber.rb` →100%. Total LOC budget is intentionally under the
+~250 ceiling — pair with the DoubleRenderError consolidation below to fill
+to ~150 LOC.
 
 - ~10 — wire `Flash::RequestMethods` into `Request` and add a `resetSession`
   wrapper that chains to the original then calls the flash hook.
@@ -141,18 +144,32 @@ Bundles three related files. After this story, `metal/flash.rb` →100%,
   is already ported; this is just plumbing.
 - ~15 — `log_subscriber.rb` last method + wire `LogSubscriber.attachTo("action_controller")`
   via the trailtie (Rails wires this in `action_controller/railtie.rb`).
-  Determine appropriate log levels for `startProcessing`/`processAction`/`halted`.
-
-**Note:** Two `DoubleRenderError` classes exist (abstract-controller vs
-action-controller). `instanceof` against the parent works; identity does not.
-Consolidate as a small cleanup commit inside this PR or leave for S8.
+  Determine appropriate log levels for `startProcessing` / `processAction` /
+  `halted`. **Note on the namespace string:** `"action_controller"` is the
+  AS::Notifications event channel — a cross-package wire identifier shared
+  with `@blazetrails/activesupport` subscribers, not a JS-side identifier.
+  Keep snake_case to match the existing AS::Notifications surface (audit
+  trail in MEMORY [feedback_camelcase_only]; this is the documented
+  cross-package channel exception). Flipping to `"actionController"` would
+  require an activesupport-wide subscriber audit and is out of scope here.
+- ~20 — **Consolidate DoubleRenderError.** Two classes exist:
+  `abstract-controller/rendering.ts:20` and `action-controller/base.ts:949`,
+  both `extends AbstractControllerError`. `instanceof` against the parent
+  works; identity does not. Delete the `action-controller/base.ts` body
+  and switch `action-controller/index.ts:11` to re-export from
+  `../abstract-controller/rendering.js`.
 
 ### S4 — `metal/strong_parameters.rb` reopen (Tier 2, ~250 LOC) — AC
 
 Branch `actioncontroller-leaves-b` (PR #2101, closed for CI capacity, not
-merged) holds +24 methods on strong_parameters. The branch is rebased onto
-main and immediately mergeable per #2098 findings — reopen with a fresh PR,
-verify CI passes, ship.
+merged) holds +24 methods on strong_parameters. As of fetch on 2026-05-22
+the branch has 2 commits ahead of `origin/main`
+(`feat(actionpack): permitted_scalar_filter copies multi-parameter keys`
+and `feat(actionpack): strong-parameters Rails-private surface to 100%`).
+Before reopening, run `git fetch origin actioncontroller-leaves-b &&
+git log --oneline origin/main..origin/actioncontroller-leaves-b` and
+rebase if main has moved beyond the merge-base. Then reopen with a fresh
+PR, verify CI, ship.
 
 - ~250 — `strong_parameters.rb` 65/89 → 89/89.
 
@@ -182,12 +199,18 @@ implementing the followup.
 
 Closes `metal/http_authentication.rb` 13/33 → 33/33 across **two** PRs.
 
-- **S6a (~250)**: `Basic` module — 6 methods + privates.
-- **S6b (~250)**: `Digest` + `Token` modules — 14 methods combined.
+- **S6a (~250)**: `Basic` surface — 6 methods + privates.
+- **S6b (~250)**: `Digest` + `Token` surfaces — 14 methods combined.
 
 Rails source: `actionpack/lib/action_controller/metal/http_authentication.rb`.
-Bundle each module's privates with its public surface; do NOT split a single
-module across PRs (review thrash).
+
+**Porting shape:** Rails' three submodules port to sibling files
+`metal/http-authentication/basic.ts`, `digest.ts`, `token.ts`, each
+exporting `this`-typed functions that mix into the host Controller via
+the `static fooBar = fooBar` pattern (CLAUDE.md). Do NOT inline as
+instance methods on a class literal. Bundle each module's privates with
+its public surface; do NOT split a single module across PRs (review
+thrash).
 
 ### S7 — `test_case.rb` TestRequest/TestResponse split — AC
 
@@ -332,7 +355,8 @@ fidelity-sweep PR.
   `ActionableError.action` (~15). Only port if a real failure surfaces;
   current `_actions` copy-on-write covers single-level inheritance (#2246).
 - `middleware/public_exceptions` — relocate inline `toXml` / `escapeXml`
-  once activemodel ships `to_xml` (~30–50); optional iconv hookup in
+  once activemodel ships `toXml` (Rails `to_xml`; trails port lands
+  camelCase) (~30–50); optional iconv hookup in
   `normalizeCharset()` (~20).
 - `middleware/session/abstract_store` — `privateId` + comparison helpers on
   `SessionId` (~10); add `cookieJar` accessor to `Request` (~20).
@@ -344,11 +368,15 @@ fidelity-sweep PR.
   documenting the gap or porting a real UA library.
 - `processAction args` — optional ESLint rule for rest-param signature on
   overrides (~30, non-urgent).
-- `request/session.ts loadBang` — `id_was_initialized` tracking + `_idWas`
-  update inside `loadBang` (~30); `Session#inspect` (~10); `Session::Options`
-  inner class + delegate `id`/`options` (~40). #2077 followups.
-- `middleware/stack.ts` — port `MiddlewareStack::Middleware` inner class +
-  `InstrumentationProxy`; rewire stack methods (~80). #2077 followup.
+- `request/session.ts loadBang` — `_idWasInitialized` tracking + `_idWas`
+  update inside `loadBang` (~30); `Session#inspect` (~10); port Rails'
+  `Session::Options` as a sibling `SessionOptions` class exported alongside
+  `Session`, with `Session#id` / `Session#options` delegating to it (~40).
+  #2077 followups.
+- `middleware/stack.ts` — port Rails' `MiddlewareStack::Middleware` inner
+  class as a sibling `MiddlewareStackEntry` (or nested static on
+  `MiddlewareStack`) plus `InstrumentationProxy`; rewire stack methods
+  (~80). #2077 followup.
 - `testing/test-request.ts` — Rails-faithful setters (notably
   `requestMethod=` upcase), `create` factory (~30, deps-on Trailtie). #2077.
 - `routing/inspector` — `RouteWrapper.sourceLocation` (~20) — thread a
@@ -376,8 +404,9 @@ Priority order (parallelizable):
 ### S17 — Journey follow-ups (~215 LOC) — AD
 
 - ~80 — GTG symbol char-class widening based on requirement regex
-  (`transition_table.ts` Builder consults `Pattern.requirements`). Unblocks
-  SKIPPED named-character-classes test for `filename: /(.+)/`. **Leaf.**
+  (`transition_table.ts` Builder consults `Pattern.requirements`). **Leaf**
+  (no upstream blocker). Ship the unskip of the SKIPPED named-character-classes
+  test for `filename: /(.+)/` in the same PR.
 - ~80 — Real dispatcher registry; replace throwing-stub `app` in bridge.
   **depends-on ActionController.**
 - ~30 — Swap `RouterRequest` / `RoutableApp` / `FormatterHost` interim
@@ -444,7 +473,7 @@ Future-wired stubs blocked on unported targets (`Response.defaultCharset` /
   no `stale?` conditional integration.
 - **`Renderer.withDefaults`:** merges defaults but does not recompute the
   Rack env.
-- **`permissionsPolicy` DSL:** registers a `before_action` that mutates a
+- **`permissionsPolicy` DSL:** registers a `beforeAction` that mutates a
   fresh directives object; until `Request#permissionsPolicy` + response
   middleware lands, modified directives don't round-trip into the header.
 - **`RateLimiting`:** no global `Rails.cache`; DSL falls back to a

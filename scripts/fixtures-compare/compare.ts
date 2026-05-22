@@ -23,7 +23,13 @@ type FixtureMap = Record<string, Row>;
 type Status = "MATCH" | "MISSING" | "DIFF" | "ERB-UNSUPPORTED" | "YAML-PARSE-ERR" | "TS-IMPORT-ERR" | "TS-EXPORT-MISSING";
 
 // prettier-ignore
-interface FileResult { yamlBase: string; tsBase: string | null; status: Status; rowsMatched: number; rowsTotal: number; attrsMatched: number; attrsTotal: number; schemaPorted: boolean; schemaExtras: number; notes: string[]; }
+interface FileResult { yamlBase: string; tsBase: string | null; status: Status; rowsMatched: number; rowsTotal: number; attrsMatched: number; attrsTotal: number; attrsSkipped: number; schemaPorted: boolean; schemaExtras: number; notes: string[]; }
+
+// Sentinel substituted for opaque `<%= ... %>` output expressions we can't
+// reduce (e.g. `<%= 2.weeks.ago.to_fs(:db) %>`, `<%= binary(...) %>`). The
+// per-attr diff treats Rails values equal to this token as skipped — keeps
+// the rest of the file comparable instead of dropping it as ERB-UNSUPPORTED.
+export const ERB_SKIP_SENTINEL = "__ERB_SKIP__";
 
 function parseArgs(argv: string[]): { pkg: string; filter: string | null } {
   let pkg = "activerecord";
@@ -43,9 +49,91 @@ function parseArgs(argv: string[]): { pkg: string; filter: string | null } {
 
 const kebab = (s: string): string => s.replace(/_/g, "-");
 
+// CRC32 mirror of define-fixtures.ts#fixtureId. Duplicated (not imported) so
+// the compare script stays standalone — no cross-package import for ~10 LOC.
+const FIXTURE_MAX_ID = 2 ** 30 - 1;
+const CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[i] = c;
+  }
+  return t;
+})();
+function fixtureIdValue(label: string): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < label.length; i++) crc = CRC32_TABLE[(crc ^ label.charCodeAt(i)) & 0xff]! ^ (crc >>> 8); // prettier-ignore
+  return ((crc ^ 0xffffffff) >>> 0) % FIXTURE_MAX_ID;
+}
+
+// Evaluate a tiny arithmetic expression containing only integers, +-*/(),
+// whitespace, and the single loop-var name. Anything outside that grammar is
+// returned verbatim wrapped back in `<%= %>` so the residual ERB check can
+// flag it. Used only inside loop bodies on vendored Rails YAML.
+function evalExpr(expr: string, varName: string, value: number): string {
+  const e = expr.trim();
+  if (!new RegExp(`^[\\d\\s+\\-*/()${varName}]+$`).test(e)) return `<%= ${expr} %>`;
+  try {
+    return String(new Function(varName, `"use strict"; return (${e});`)(value));
+  } catch {
+    // prettier-ignore
+    return `<%= ${expr} %>`;
+  }
+}
+
+// `<% (1..N).each do |v| %>...<% end %>` and `<% N.times do |v| %>...<% end %>`.
+// Body's `<%= v %>` / `<%= v+1 %>` and `#{v}` interpolations get substituted.
+function expandLoops(text: string): string {
+  const re = /<%\s*(?:\((\d+)\.\.(\d+)\)\.each|(\d+)\.times)\s+do\s*\|\s*(\w+)\s*\|\s*%>([\s\S]*?)<%\s*end\s*%>/g; // prettier-ignore
+  return text.replace(re, (orig, lo, hi, n, v, body) => {
+    const start = lo !== undefined ? Number(lo) : 0;
+    const end = lo !== undefined ? Number(hi) : Number(n) - 1;
+    // Cap: paragraphs.yml (1001) + citations.yml (65536) expand to
+    // multi-MB YAML and parse-stall the script. Leave them as
+    // ERB-UNSUPPORTED stragglers — PR 7b allow-list candidates.
+    if (end - start + 1 > 200) return orig;
+    const out: string[] = [];
+    for (let i = start; i <= end; i++) {
+      let b = body.replace(/<%=\s*([^%]+?)\s*%>/g, (_m: string, expr: string) => evalExpr(expr, v, i)); // prettier-ignore
+      b = b.replace(/#\{([^}]+)\}/g, (_m: string, expr: string) => evalExpr(expr, v, i));
+      out.push(b);
+    }
+    return out.join("");
+  });
+}
+
+// `<%= ActiveRecord::FixtureSet.identify(:label[, :type]) %>` and
+// `<%= ActiveRecord::FixtureSet.composite_identify(:label, [:a, :b])[:key] %>`.
+// Mirrors fixtures.rb#identify (CRC32 % MAX_ID) and #composite_identify
+// (`(identify(label) << index) % MAX_ID`). BigInt avoids 32-bit overflow.
+function expandIdentify(text: string): string {
+  text = text.replace(
+    /<%=\s*ActiveRecord::FixtureSet\.identify\(:(\w+)(?:,\s*:\w+)?\)\s*%>/g,
+    (_, label) => String(fixtureIdValue(label)),
+  );
+  return text.replace(
+    /<%=\s*ActiveRecord::FixtureSet\.composite_identify\(:(\w+),\s*\[([^\]]+)\]\)\[:(\w+)\]\s*%>/g,
+    (_, label, keysSrc, accessor) => {
+      const keys = (keysSrc as string).split(",").map((k) => k.trim().replace(/^:/, ""));
+      const idx = keys.indexOf(accessor);
+      if (idx < 0) return ERB_SKIP_SENTINEL;
+      const shifted = (BigInt(fixtureIdValue(label)) << BigInt(idx)) % BigInt(FIXTURE_MAX_ID);
+      return String(shifted);
+    },
+  );
+}
+
 export function stripErb(text: string): { rendered: string; unsupported: boolean } {
-  const rendered = text.replace(/<%=\s*ActiveRecord::Base\.connection\.adapter_name\s*%>/g, "SQLite"); // prettier-ignore
-  return { rendered, unsupported: /<%[=#]?[^%]*%>/.test(rendered) };
+  let r = text.replace(/<%=\s*ActiveRecord::Base\.connection\.adapter_name\s*%>/g, "SQLite");
+  r = expandLoops(r);
+  r = expandIdentify(r);
+  // Any remaining `<%= ... %>` output is opaque (`2.weeks.ago.to_fs(:db)`,
+  // `binary(...)`, `Cpk::Order.primary_key` lookups) — sentinelize so YAML
+  // parses and the per-attr diff can skip just that attribute.
+  r = r.replace(/<%=[\s\S]*?%>/g, ERB_SKIP_SENTINEL);
+  // Non-output `<%`/`<%#` tags (unhandled control flow) still mark whole file.
+  return { rendered: r, unsupported: /<%[#]?[\s\S]*?%>/.test(r) };
 }
 
 // Exported under a `*ForTest` alias so the test suite can pin parsing
@@ -278,7 +366,7 @@ export async function compareFile(yamlBase: string, yamlByTable: Map<string, Fix
   const snake = yamlBase.replace(/\.yml$/, "");
   const tsFile = path.join(TS_DIR, `${kebab(snake)}.ts`);
   const tsBase = existsSync(tsFile) ? `${kebab(snake)}.ts` : null;
-  const r: FileResult = { yamlBase, tsBase, status: "MATCH", rowsMatched: 0, rowsTotal: 0, attrsMatched: 0, attrsTotal: 0, schemaPorted: false, schemaExtras: 0, notes: [] }; // prettier-ignore
+  const r: FileResult = { yamlBase, tsBase, status: "MATCH", rowsMatched: 0, rowsTotal: 0, attrsMatched: 0, attrsTotal: 0, attrsSkipped: 0, schemaPorted: false, schemaExtras: 0, notes: [] }; // prettier-ignore
   if (prelimFailure) { r.status = prelimFailure; return r; } // prettier-ignore
   const railsRows = yamlByTable.get(snake)!;
   r.rowsTotal = Object.keys(railsRows).length;
@@ -326,6 +414,7 @@ export async function compareFile(yamlBase: string, yamlByTable: Map<string, Fix
       anyDiff = true;
     }
     for (const attr of new Set([...Object.keys(railsRow), ...Object.keys(tsRow)])) {
+      if (railsRow[attr] === ERB_SKIP_SENTINEL) { r.attrsSkipped++; continue; } // prettier-ignore
       r.attrsTotal++;
       if (!(attr in tsRow) || !(attr in railsRow)) {
         r.notes.push(`${attr in tsRow ? "extra" : "missing"}-in-ts: ${rowName}.${attr}`);
@@ -367,7 +456,9 @@ function formatLine(r: FileResult): string {
     r.yamlBase.padEnd(32) +
     (r.tsBase ?? "(missing)").padEnd(28) +
     `rows: ${r.rowsMatched}/${r.rowsTotal}`.padEnd(14) +
-    `attrs: ${r.attrsMatched}/${r.attrsTotal}`.padEnd(16) +
+    `attrs: ${r.attrsMatched}/${r.attrsTotal}${r.attrsSkipped ? ` (+${r.attrsSkipped} erb-skip)` : ""}`.padEnd(
+      16,
+    ) +
     pct.padEnd(6) +
     sch.padEnd(20) +
     r.status

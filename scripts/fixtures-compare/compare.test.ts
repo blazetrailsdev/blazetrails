@@ -11,8 +11,47 @@ const cmp = (ts: unknown, rails: unknown, notes: string[] = []) =>
 
 it("stripErb stubs adapter_name; flags other tags as unsupported", () => {
   expect(stripErb("a <%= ActiveRecord::Base.connection.adapter_name %> b")).toEqual({ rendered: "a SQLite b", unsupported: false }); // prettier-ignore
-  expect(stripErb("<% 3.times do %>x<% end %>").unsupported).toBe(true);
+  expect(stripErb("<% 3.times do |z| %>x<% end %>").unsupported).toBe(false);
+  expect(stripErb("<% [[1,2],[3,4]].each do |s| %>x<% end %>").unsupported).toBe(true);
   expect(stripErb("id: 1").unsupported).toBe(false);
+});
+
+describe("stripErb ERB expanders", () => {
+  it("expands `<%= FixtureSet.identify(:label) %>` to its CRC32 value (mirrors fixtureId)", () => {
+    const out = stripErb("pirate_id: <%= ActiveRecord::FixtureSet.identify(:blackbeard) %>");
+    // Stable, deterministic — pin the actual computed value.
+    expect(out.rendered).toBe("pirate_id: 959118195");
+    expect(out.unsupported).toBe(false);
+  });
+  it("expands `composite_identify(:l, [:a, :b])[:b]` per (identify<<index) % MAX_ID", () => {
+    const out = stripErb("k: <%= ActiveRecord::FixtureSet.composite_identify(:order_1, [:shop_id, :id])[:id] %>"); // prettier-ignore
+    expect(out.rendered).toBe("k: 997509437");
+    expect(out.unsupported).toBe(false);
+  });
+  it("expands `(lo..hi).each do |v|` loops with <%= v %> body interpolation", () => {
+    const { rendered, unsupported } = stripErb("<% (1..3).each do |i| %>row_<%= i %>: { id: <%= i %> }\n<% end %>"); // prettier-ignore
+    expect(rendered.trim()).toBe("row_1: { id: 1 }\nrow_2: { id: 2 }\nrow_3: { id: 3 }");
+    expect(unsupported).toBe(false);
+  });
+  it("expands `N.times do |v|` loops; evaluates simple arithmetic in body", () => {
+    const { rendered } = stripErb("<% 2.times do |i| %>x<%= i+10 %>=<%= i*i %>;<% end %>");
+    expect(rendered).toBe("x10=0;x11=1;");
+  });
+  it("interpolates `#{v}` inside loop bodies", () => {
+    const { rendered } = stripErb("<% 2.times do |i| %>n=#{i+1};<% end %>");
+    expect(rendered).toBe("n=1;n=2;");
+  });
+  it("skips loops above the row-count cap so YAML parsing doesn't stall", () => {
+    // citations.yml expands 65536 rows in Rails. We leave it as
+    // ERB-UNSUPPORTED rather than spend seconds parsing megabytes.
+    const out = stripErb("<% 65536.times do |i| %>r_<%= i %>:\n  id: <%= i %>\n<% end %>");
+    expect(out.unsupported).toBe(true);
+  });
+  it("sentinelizes residual opaque `<%= ... %>` (e.g. 2.weeks.ago.to_fs)", () => {
+    const out = stripErb("c: <%= 2.weeks.ago.to_fs(:db) %>");
+    expect(out.unsupported).toBe(false);
+    expect(out.rendered).toBe("c: __ERB_SKIP__");
+  });
 });
 
 it("isRefLike only accepts shapes with both string fields", () => {
@@ -114,6 +153,22 @@ describe("compareFile + schema integration", () => {
     const r = await compareFile("authors.yml", rows(), new Map(), undefined, {});
     expect(r.schemaPorted).toBe(false);
     expect(r.schemaExtras).toBe(0);
+  });
+
+  it("counts attrs whose Rails value is the ERB skip sentinel without flagging DIFF", async () => {
+    // Mirrors what stripErb does for `<%= 2.weeks.ago... %>`: the Rails
+    // value parses as the sentinel string; the per-attr diff skips it.
+    const rowsWithSentinel = new Map([
+      ["authors", { david: { id: 1, name: "David", created_on: "__ERB_SKIP__" } }],
+    ]);
+    const r = await compareFile("authors.yml", rowsWithSentinel, new Map(), undefined, {
+      authors: { name: "string", created_on: "datetime" },
+    });
+    // Other authors.ts rows will surface as extra-row-in-ts (Rails map only
+    // has david) — the assertion is specifically that the sentinel attribute
+    // increments attrsSkipped instead of registering as a value diff.
+    expect(r.attrsSkipped).toBe(1);
+    expect(r.notes.some((n) => /value-differs:.*created_on/.test(n))).toBe(false);
   });
 
   it("flips status to DIFF and counts extras when the TS row uses an undeclared column", async () => {

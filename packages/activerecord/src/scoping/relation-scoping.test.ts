@@ -1,6 +1,10 @@
 /**
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
+ *
+ * TODO: migrate to createPooledTestAdapter() after the PG withClient fix lands
+ * (Promise.all in NestedRelationScopingTest hits Bug 2 on the wrapper-revert path).
+ * Tracked in memory: project_pool_epic_phase_d_followups.md (Issue 2).
  */
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { Base, Range, RecordNotFound } from "../index.js";

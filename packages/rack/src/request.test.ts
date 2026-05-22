@@ -356,10 +356,8 @@ describe("RackRequestTest", () => {
 
   it("should use the query_parser for query parsing", () => {
     const req = makeReq("/?foo=bar&baz=qux");
-    // queryParser() drives GET parsing
     expect(req.GET).toEqual({ foo: "bar", baz: "qux" });
-    // parseQuery delegates to queryParser
-    expect((req as any).parseQuery("a=1&b=2")).toEqual({ a: "1", b: "2" });
+    expect(req.parseQuery("a=1&b=2")).toEqual({ a: "1", b: "2" });
   });
 
   it("does not use semi-colons as separators for query strings in GET", () => {

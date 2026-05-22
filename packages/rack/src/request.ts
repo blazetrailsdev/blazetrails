@@ -42,7 +42,7 @@ import {
   HTTP_X_FORWARDED_PROTO,
   HTTP_X_FORWARDED_SCHEME,
 } from "./constants.js";
-import { parseNestedQuery, forwardedValues, getDefaultQueryParser, QueryParser } from "./utils.js";
+import { forwardedValues, getDefaultQueryParser, QueryParser } from "./utils.js";
 import * as MediaTypeModule from "./media-type.js";
 import { parseMultipart as multipartExtract } from "./multipart.js";
 
@@ -314,7 +314,7 @@ export class Request {
     if (this.env[RACK_REQUEST_QUERY_STRING] === qs && this.env[RACK_REQUEST_QUERY_HASH]) {
       return this.env[RACK_REQUEST_QUERY_HASH];
     }
-    const parsed = parseNestedQuery(qs);
+    const parsed = this.parseQuery(qs, "&");
     this.env[RACK_REQUEST_QUERY_STRING] = qs;
     this.env[RACK_REQUEST_QUERY_HASH] = parsed;
     return parsed;
@@ -339,7 +339,7 @@ export class Request {
 
     // Multipart data (form-data, related, mixed, etc.)
     if (mt.startsWith("multipart/")) {
-      const parsed = multipartExtract(this.env) || {};
+      const parsed = this.parseMultipart();
       this.env[RACK_REQUEST_FORM_HASH] = parsed;
       this.env[RACK_REQUEST_FORM_INPUT] = input;
       return parsed;
@@ -358,7 +358,7 @@ export class Request {
     // Safari sends \0 for empty forms
     if (body === "\0") body = "";
 
-    const parsed = parseNestedQuery(body);
+    const parsed = this.parseQuery(body);
     this.env[RACK_REQUEST_FORM_HASH] = parsed;
     this.env[RACK_REQUEST_FORM_VARS] = body;
     this.env[RACK_REQUEST_FORM_INPUT] = input;
@@ -658,53 +658,45 @@ export class Request {
     return this.env[SERVER_NAME] ?? null;
   }
 
-  /** @internal */
   fetchHeader(name: string): any;
-  /** @internal */
   fetchHeader(name: string, block: () => any): any;
-  /** @internal */
   fetchHeader(name: string, block?: () => any): any {
     if (name in this.env) return this.env[name];
     if (block) return block();
     return undefined;
   }
 
-  /** @internal */
   eachHeader(callback: (key: string, value: any) => void): void {
     for (const [k, v] of Object.entries(this.env)) {
       callback(k, v);
     }
   }
 
-  /** @internal */
   get hostAuthority(): string | null {
     return this.env[HTTP_HOST] ?? null;
   }
 
-  /** @internal */
   isParseableData(): boolean {
     const mt = this.mediaType;
     return mt !== null && PARSEABLE_DATA_MEDIA_TYPES.includes(mt);
   }
 
-  /** @internal */
   get path(): string {
     return this.scriptName + this.pathInfo;
   }
 
-  /** @internal */
   valuesAt(...keys: string[]): any[] {
     const p = this.params;
     return keys.map((k) => p[k]);
   }
 
   /** @internal */
-  protected defaultSession(): Record<string, any> {
+  defaultSession(): Record<string, any> {
     return {};
   }
 
   /** @internal */
-  protected parseHttpAcceptHeader(header: string | null | undefined): Array<[string, number]> {
+  parseHttpAcceptHeader(header: string | null | undefined): Array<[string, number]> {
     const parts = (header ?? "").split(",");
     const result: Array<[string, number]> = [];
     for (const part of parts) {
@@ -723,22 +715,22 @@ export class Request {
   }
 
   /** @internal */
-  protected queryParser(): QueryParser {
+  queryParser(): QueryParser {
     return getDefaultQueryParser();
   }
 
   /** @internal */
-  protected parseQuery(qs: string, separator = "&"): Record<string, any> {
-    return parseNestedQuery(qs, separator);
+  parseQuery(qs: string, separator = "&"): Record<string, any> {
+    return this.queryParser().parseNestedQuery(qs, separator);
   }
 
   /** @internal */
-  protected parseMultipart(): Record<string, any> {
+  parseMultipart(): Record<string, any> {
     return multipartExtract(this.env) || {};
   }
 
   /** @internal */
-  protected expandParamPairs(pairs: Array<[string, any]>): Record<string, any> {
+  expandParamPairs(pairs: Array<[string, any]>): Record<string, any> {
     const parser = this.queryParser();
     const params = parser.makeParams();
     for (const [k, v] of pairs) {
@@ -748,7 +740,7 @@ export class Request {
   }
 
   /** @internal */
-  protected rejectTrustedIpAddresses(ipAddresses: string[]): string[] {
+  rejectTrustedIpAddresses(ipAddresses: string[]): string[] {
     return ipAddresses.filter((ip) => !this.trustedProxy(ip));
   }
 }

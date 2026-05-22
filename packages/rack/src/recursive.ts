@@ -14,7 +14,6 @@ export class ForwardRequest extends Error {
 
 export class Recursive {
   private app: RackApp;
-  private scriptName = "";
 
   constructor(app: RackApp) {
     this.app = app;
@@ -26,8 +25,9 @@ export class Recursive {
 
   /** @internal */
   async _call(env: Record<string, any>): Promise<[number, Record<string, string>, any]> {
-    this.scriptName = env[SCRIPT_NAME] || "";
-    const include = (newEnv: Record<string, any>, path: string) => this.include(newEnv, path);
+    const scriptName: string = env[SCRIPT_NAME] || "";
+    const include = (newEnv: Record<string, any>, path: string) =>
+      this.include(newEnv, path, scriptName);
     try {
       return await this.app({ ...env, [RACK_RECURSIVE_INCLUDE]: include });
     } catch (e) {
@@ -42,9 +42,9 @@ export class Recursive {
   async include(
     env: Record<string, any>,
     path: string,
+    scriptName = "",
   ): Promise<[number, Record<string, string>, any]> {
-    const scriptName = this.scriptName;
-    if (!(path.startsWith(scriptName + "/") || path === scriptName || scriptName === "")) {
+    if (scriptName !== "" && !(path.startsWith(scriptName + "/") || path === scriptName)) {
       throw new Error(`can only include below ${scriptName}, not ${path}`);
     }
     const url = new URL(path, "http://localhost");

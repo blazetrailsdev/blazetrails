@@ -89,11 +89,12 @@ export class Sendfile {
 
   /** @internal */
   private mapAccelPath(env: Record<string, any>, path: string): string | undefined {
+    const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const internalMapping = this.mappings.find(([internal]) =>
-      new RegExp(internal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(path),
+      new RegExp(escape(internal)).test(path),
     );
     if (internalMapping) {
-      return path.replace(new RegExp(internalMapping[0]), internalMapping[1]);
+      return path.replace(new RegExp(escape(internalMapping[0])), internalMapping[1]);
     }
     const headerMapping = env["HTTP_X_ACCEL_MAPPING"];
     if (headerMapping) {

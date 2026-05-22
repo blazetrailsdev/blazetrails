@@ -310,11 +310,7 @@ function makeSerializedHost(
 
 /** @internal */
 function normalizeSerializedInput(input: unknown): SerializedSetOptions {
-  if (
-    input !== null &&
-    typeof input === "object" &&
-    "value" in (input as Record<string, unknown>)
-  ) {
+  if (input !== null && typeof input === "object" && Object.hasOwn(input as object, "value")) {
     return { ...(input as SerializedSetOptions) };
   }
   return { value: input };

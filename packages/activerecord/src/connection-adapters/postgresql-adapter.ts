@@ -887,6 +887,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (this._rawConnection == null) {
       const client = new pg.Client(this._pgClientOptions!);
       await client.connect();
+      // Guard against a close() / disconnectBang() / discardBang() /
+      // reconnect() that raced with the in-flight connect(): if the
+      // adapter was torn down between the await above and this point,
+      // do NOT publish `client` as `_rawConnection` — tear it down
+      // instead so we don't leak a live socket onto a closed adapter.
+      if (this._closed || this._pgClientOptions == null) {
+        client.end().catch(() => {});
+        throw new Error("PostgreSQLAdapter: connection is closed");
+      }
       // Suppress unhandled error events from the idle connection (e.g.
       // server-side FATAL from pg_terminate_backend). Without this
       // listener node emits an uncaughtException.
@@ -1355,12 +1364,22 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       return this._transactionManager.commitTransaction();
     }
     if (!this._client) throw new Error("No active transaction");
-    await this._client.query("COMMIT");
-    // PG prepared statements are session-scoped, not transaction-scoped
-    // (COMMIT/ROLLBACK don't drop them) — keep the StatementPool
-    // attached. Mirrors Rails: clear only on disconnect.
-    this._client = null;
-    this._inTransaction = false;
+    try {
+      await this._client.query("COMMIT");
+    } catch (e) {
+      // Connection-level error (08P01, broken socket, etc.) leaves the
+      // single pg.Client unusable. Tear down so the next caller gets a
+      // fresh connection — mirrors the pool-discard safety net the
+      // pre-collapse design got for free via PoolClient.release(err).
+      if (PostgreSQLAdapter._isConnectionError(e)) this.reconnect();
+      throw e;
+    } finally {
+      // PG prepared statements are session-scoped, not transaction-scoped
+      // (COMMIT/ROLLBACK don't drop them) — keep the StatementPool
+      // attached. Mirrors Rails: clear only on disconnect.
+      this._client = null;
+      this._inTransaction = false;
+    }
   }
 
   async commitDbTransaction(): Promise<void> {
@@ -1387,6 +1406,16 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (!this._client) throw new Error("No active transaction");
     try {
       await this._client.query("ROLLBACK");
+    } catch (e) {
+      // Connection-level error — closing the socket implicitly aborts
+      // the server-side TX. Swallow and reconnect so the next caller
+      // gets a fresh client. Mirrors the pre-collapse pool-discard
+      // safety net (PoolClient.release(err) discarded broken sockets).
+      if (PostgreSQLAdapter._isConnectionError(e)) {
+        this.reconnect();
+        return;
+      }
+      throw e;
     } finally {
       this._client = null;
       this._inTransaction = false;
@@ -1403,6 +1432,16 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (!this._client) throw new Error("No active transaction");
     try {
       await this._client.query("ROLLBACK");
+    } catch (e) {
+      // ROLLBACK on a poisoned socket (e.g. 08P01 after the cancel
+      // race) — tear down and reconnect; closing the socket implicitly
+      // aborts the server-side TX. Mirrors the pool-discard safety net
+      // the pre-collapse design got via PoolClient.release(err).
+      if (PostgreSQLAdapter._isConnectionError(e)) {
+        this.reconnect();
+        return;
+      }
+      throw e;
     } finally {
       // See commit() — ROLLBACK doesn't drop server-side prepared
       // statements, so we keep the StatementPool attached for the
@@ -1410,6 +1449,26 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this._client = null;
       this._inTransaction = false;
     }
+  }
+
+  /**
+   * True when an error indicates the pg.Client's socket is no longer
+   * usable for further queries — covers node-postgres' "Client has
+   * encountered a connection error and is not queryable", PG protocol
+   * desync (SQLSTATE 08P01), and connection-class SQLSTATEs (08xxx).
+   */
+  private static _isConnectionError(err: unknown): boolean {
+    const e = err as { code?: string; message?: string } | null | undefined;
+    if (!e) return false;
+    if (typeof e.code === "string" && e.code.startsWith("08")) return true;
+    const msg = typeof e.message === "string" ? e.message : "";
+    if (!msg) return false;
+    return (
+      msg.includes("Client has encountered a connection error") ||
+      msg.includes("invalid frontend message type") ||
+      msg.includes("Connection terminated") ||
+      msg.includes("client has already ended")
+    );
   }
 
   // Mirrors: DatabaseStatements#exec_restart_db_transaction (database_statements.rb:83)

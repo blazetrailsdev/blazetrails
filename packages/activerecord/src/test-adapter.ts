@@ -232,13 +232,15 @@ function _establishPooledTestPool(): Promise<
       adapterName = "sqlite3";
       const database = _pooledSqliteDatabase();
       configuration = { adapter: adapterName, database };
-      // Drivers with SQLITE_OMIT_SHARED_CACHE compiled in (better-sqlite3)
-      // or no URI-mode access (expo-sqlite) can't share an in-memory DB
-      // across connections. Pool size 1 sidesteps the requirement — with
-      // one connection there's nothing to share. The pool's lease queue
-      // still serializes concurrent writes and `adapter.pool` is non-null.
+      // better-sqlite3 is built with SQLITE_OMIT_SHARED_CACHE, so its
+      // connections can't share an in-memory DB. Pool size 1 sidesteps
+      // the requirement — with one connection there's nothing to share.
+      // (expo-sqlite would belong here too, but SQLite3Adapter currently
+      // requires a driver with openSync; expo-sqlite is async-only and
+      // can't construct today — re-add to this branch when the async
+      // adapter path lands.)
       const driverName = await _activeSqliteDriverName();
-      if (driverName === "better-sqlite3" || driverName === "expo-sqlite") {
+      if (driverName === "better-sqlite3") {
         (configuration as Record<string, unknown>).pool = 1;
       }
       const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");

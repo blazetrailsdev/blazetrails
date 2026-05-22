@@ -72,11 +72,19 @@ describe("createPooledTestAdapter (Phase B smoke)", () => {
       });
 
       const verifyAdapter = pool.leaseConnection();
-      const after = await verifyAdapter.execute(`SELECT count(*) AS c FROM ${tableName}`);
-      expect(Number((after[0] as { c: number }).c)).toBe(0);
+      try {
+        const after = await verifyAdapter.execute(`SELECT count(*) AS c FROM ${tableName}`);
+        expect(Number((after[0] as { c: number }).c)).toBe(0);
+      } finally {
+        pool.releaseConnection();
+      }
     } finally {
       const cleanupAdapter = pool.leaseConnection();
-      await asExec(cleanupAdapter).exec(`DROP TABLE IF EXISTS ${tableName}`);
+      try {
+        await asExec(cleanupAdapter).exec(`DROP TABLE IF EXISTS ${tableName}`);
+      } finally {
+        pool.releaseConnection();
+      }
     }
   });
 

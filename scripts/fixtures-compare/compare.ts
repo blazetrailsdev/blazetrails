@@ -72,7 +72,8 @@ function fixtureIdValue(label: string): number {
 // Ruby integer division truncates toward -∞, JS `/` is float division, and
 // silently disagreeing on a fixture id would be worse than falling back to
 // ERB_SKIP_SENTINEL. Outside-grammar expressions return verbatim wrapped back
-// in `<%= %>` so the residual ERB check flags them.
+// in `<%= %>` so `stripErb`'s final `<%= ... %>` → ERB_SKIP_SENTINEL pass
+// turns them into per-attribute skips (rather than file-level unsupported).
 function evalExpr(expr: string, varName: string, value: number): string {
   const e = expr.trim();
   if (!new RegExp(`^[\\d\\s+\\-*()${varName}]+$`).test(e)) return `<%= ${expr} %>`;
@@ -461,7 +462,7 @@ function formatLine(r: FileResult): string {
     (r.tsBase ?? "(missing)").padEnd(28) +
     `rows: ${r.rowsMatched}/${r.rowsTotal}`.padEnd(14) +
     `attrs: ${r.attrsMatched}/${r.attrsTotal}${r.attrsSkipped ? ` (+${r.attrsSkipped} erb-skip)` : ""}`.padEnd(
-      16,
+      30,
     ) +
     pct.padEnd(6) +
     sch.padEnd(20) +

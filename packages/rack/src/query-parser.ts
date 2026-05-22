@@ -43,6 +43,10 @@ const COMMON_SEP: Record<string, RegExp> = {
   "&": /& */,
 };
 
+function escapedSepRe(sep: string): RegExp {
+  return new RegExp(`[${sep.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}] *`);
+}
+
 const BYTESIZE_LIMIT = 4194304;
 const PARAMS_LIMIT = 4096;
 
@@ -84,7 +88,7 @@ export class QueryParser {
   ): Record<string, string | string[] | null> {
     if (!qs) return {};
     const str = this.checkQueryString(qs, separator);
-    const sep = separator ? (COMMON_SEP[separator] ?? new RegExp(`[${separator}] *`)) : DEFAULT_SEP;
+    const sep = separator ? (COMMON_SEP[separator] ?? escapedSepRe(separator)) : DEFAULT_SEP;
     const result: Record<string, string | string[] | null> = {};
 
     for (const p of str.split(sep)) {
@@ -165,10 +169,11 @@ export class QueryParser {
       );
     }
     // Mirror Ruby's qs.count(sep.is_a?(String) ? sep : '&'):
-    // count occurrences of any character in the separator string, defaulting to '&'.
+    // count separator chars without materializing a match array (avoids ~4MB allocation).
     const sepChars = typeof sep === "string" ? sep : "&";
     const sepRe = new RegExp(`[${sepChars.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}]`, "g");
-    const paramCount = (qs.match(sepRe) || []).length;
+    let paramCount = 0;
+    while (sepRe.exec(qs) !== null) paramCount++;
     if (paramCount >= this.paramsLimit) {
       throw new QueryLimitError(
         `total number of query parameters (${paramCount + 1}) exceeds limit (${this.paramsLimit})`,

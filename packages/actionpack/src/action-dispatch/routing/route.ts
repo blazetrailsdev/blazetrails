@@ -41,6 +41,14 @@ export interface RouteOptions {
   except?: ResourceAction | ResourceAction[];
   ip?: string | RegExp;
   redirect?: string | RedirectOptions | RedirectFunction;
+  /**
+   * Preconstructed redirect endpoint, supplied by {@link Mapper.redirect}
+   * when the DSL builds a `Redirect`/`PathRedirect`/`OptionRedirect` via
+   * the {@link redirect} factory. When present this primes
+   * {@link Route.redirectEndpoint} so dispatch and `resolveRedirect`
+   * delegate to the same instance the mapper constructed.
+   */
+  redirectEndpoint?: Redirect;
   pathNames?: { new?: string; edit?: string };
   anchor?: boolean;
   shallow?: boolean;
@@ -121,7 +129,8 @@ export class Route {
     this.defaults = options.defaults ?? {};
     this.constraints = options.constraints ?? {};
     this.ip = options.ip ?? /(?:)/;
-    this.redirectTarget = options.redirect;
+    this.redirectTarget = options.redirect ?? deriveRedirectTarget(options.redirectEndpoint);
+    if (options.redirectEndpoint) this._redirectEndpoint = options.redirectEndpoint;
     this.anchor = options.anchor !== false;
     this.internal = options.internal === true;
     this.app = options.app;
@@ -446,6 +455,26 @@ export class Route {
     const url = `http://${host}${path}`;
     return { url, status };
   }
+}
+
+/**
+ * Recover a {@link Route.redirectTarget}-shaped value from a preconstructed
+ * {@link Redirect} endpoint so {@link Route.isRedirect} and
+ * {@link Route.resolveRedirect} keep working when {@link Mapper.redirect}
+ * threads the instance through `redirectEndpoint:` instead of the raw target.
+ *
+ * @internal
+ */
+function deriveRedirectTarget(
+  endpoint: Redirect | undefined,
+): string | RedirectOptions | RedirectFunction | undefined {
+  if (!endpoint) return undefined;
+  if (endpoint instanceof PathRedirect) return endpoint.template;
+  if (endpoint instanceof OptionRedirect) {
+    return { ...endpoint.options, status: endpoint.status } as RedirectOptions;
+  }
+  const block = endpoint.block;
+  return (params, request) => block(params, request as unknown as Request);
 }
 
 /**

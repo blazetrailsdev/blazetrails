@@ -37,7 +37,7 @@ export class ConditionalGet {
   private fresh(env: Record<string, any>, headers: Record<string, string>): boolean {
     const noneMatch = env["HTTP_IF_NONE_MATCH"];
     if (noneMatch) {
-      return headers[ETAG] === noneMatch;
+      return this.isEtagMatches(noneMatch, headers);
     }
 
     const modifiedSince = env["HTTP_IF_MODIFIED_SINCE"];

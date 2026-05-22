@@ -72,15 +72,7 @@ export class Deflater {
     headers: Record<string, any>,
     body: any,
   ): boolean {
-    const STATUS_WITH_NO_ENTITY_BODY: Record<number, true> = {
-      100: true,
-      101: true,
-      102: true,
-      103: true,
-      204: true,
-      304: true,
-    };
-    if (STATUS_WITH_NO_ENTITY_BODY[status]) return false;
+    if ((status >= 100 && status < 200) || status === 204 || status === 304) return false;
     const cc = headers["cache-control"] || "";
     if (/\bno-transform\b/.test(cc)) return false;
     const ce = headers["content-encoding"];

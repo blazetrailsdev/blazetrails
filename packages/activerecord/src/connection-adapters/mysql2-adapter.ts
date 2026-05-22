@@ -189,6 +189,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   // Serializes concurrent lazy-connect calls so only one createConnection
   // is in flight at a time.
   private _connectingPromise: Promise<mysql.Connection> | null = null;
+  // Incremented by disconnectBang()/close() so an in-flight _connectingPromise
+  // can detect that the disconnect happened before it resolved and discard the
+  // new connection instead of installing it.
+  private _connectGeneration = 0;
   // Set by close() to distinguish permanent teardown from disconnectBang(),
   // which is reconnectable. _ensureClient() refuses to lazy-reconnect after close().
   private _permanentlyClosed = false;
@@ -511,15 +515,21 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     if (this._client) return this._client;
     if (this._connectingPromise) return this._connectingPromise;
     if (this._permanentlyClosed) throw new Error("Mysql2Adapter: connection is closed");
-    if (this._isFakeConnection) throw new Error("Mysql2Adapter: fake connection has no pool");
+    if (this._isFakeConnection) throw new Error("Mysql2Adapter: fake connection has no client");
+    const gen = this._connectGeneration;
     this._connectingPromise = Mysql2Adapter._createClient(
       this._poolConfig,
       this._buildInitSql(),
     ).then(
       (conn) => {
+        this._connectingPromise = null;
+        if (this._connectGeneration !== gen) {
+          // disconnectBang()/close() happened while we were connecting — discard.
+          conn.end().catch(() => {});
+          throw new ConnectionNotEstablished("Mysql2Adapter: connection was closed during connect");
+        }
         this._client = conn;
         this._stmtPool = null;
-        this._connectingPromise = null;
         this._activeState = true;
         return conn;
       },
@@ -770,7 +780,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     if (this._transactionManager.openTransactions > 0) {
       return this._transactionManager.commitTransaction();
     }
-    if (!this._client) throw new Error("No active transaction");
+    if (!this._inTransaction || !this._client) throw new Error("No active transaction");
     await this._client.query("COMMIT");
     this._inTransaction = false;
   }
@@ -790,7 +800,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 
   async rollbackDbTransaction(): Promise<void> {
-    if (!this._client) throw new Error("No active transaction");
+    if (!this._inTransaction || !this._client) throw new Error("No active transaction");
     await this._client.query("ROLLBACK");
     this._inTransaction = false;
   }
@@ -1357,16 +1367,13 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 
   async releaseAdvisoryLock(lockId: number | bigint | string): Promise<boolean> {
-    if (!this._client) return false;
-    try {
-      const [rows] = await this._client.query("SELECT RELEASE_LOCK(?) AS unlocked", [
-        String(lockId),
-      ]);
-      this._advisoryLockHeld = false;
-      return (rows as Record<string, unknown>[])[0]?.unlocked === 1;
-    } catch {
-      return false;
-    }
+    if (!this._advisoryLockHeld || !this._client) return false;
+    // Propagate driver errors — only return false when RELEASE_LOCK reports
+    // the lock was not held by this session (result = 0 or NULL).
+    const [rows] = await this._client.query("SELECT RELEASE_LOCK(?) AS unlocked", [String(lockId)]);
+    const unlocked = (rows as Record<string, unknown>[])[0]?.unlocked === 1;
+    if (unlocked) this._advisoryLockHeld = false;
+    return unlocked;
   }
 
   /**
@@ -1390,6 +1397,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    */
   override disconnectBang(): void {
     this._activeState = false;
+    this._connectGeneration++;
     super.disconnectBang();
     this._advisoryLockHeld = false;
     this._inTransaction = false;
@@ -1407,6 +1415,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    */
   async close(): Promise<void> {
     this._permanentlyClosed = true;
+    this._connectGeneration++;
     this._advisoryLockHeld = false;
     this._inTransaction = false;
     this._stmtPool?.detach();

@@ -123,6 +123,14 @@ describe("Trailtie", () => {
     });
   }
 
+  it("Configurable seal sees through an anonymous intermediate class", () => {
+    class AnonSealed extends Trailtie {}
+    sealAgainstInheritance(AnonSealed);
+    const Anon = class extends AnonSealed {};
+    class Grand extends Anon {}
+    expect(() => Trailtie.register(Grand)).toThrow(/cannot inherit from a AnonSealed/);
+  });
+
   it("Configurable seals a class — single and multi-level inheritance", () => {
     class SealedTie extends Trailtie {}
     sealAgainstInheritance(SealedTie);

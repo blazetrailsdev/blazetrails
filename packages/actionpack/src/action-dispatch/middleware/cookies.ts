@@ -353,7 +353,7 @@ export class SignedCookieJar {
 
   get(key: string): unknown {
     const raw = this.jar.get(key);
-    if (!raw) return undefined;
+    if (raw === undefined) return undefined;
     const verified = this.verify(raw);
     if (verified === undefined) return undefined;
     try {
@@ -410,7 +410,7 @@ export class EncryptedCookieJar {
 
   get(key: string): unknown {
     const raw = this.jar.get(key);
-    if (!raw) return undefined;
+    if (raw === undefined) return undefined;
     const decrypted = this.decrypt(raw);
     if (decrypted === undefined) return undefined;
     try {

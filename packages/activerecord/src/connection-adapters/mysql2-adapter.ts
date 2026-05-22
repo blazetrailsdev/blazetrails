@@ -203,6 +203,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   // reference so close() can await it.
   private _connectGeneration = 0;
   private _connectingPromiseGen = -1;
+  // Tracks the in-flight _client.end() from disconnectBang() so close() can
+  // await full socket teardown even though _client was already nulled.
+  private _endingClient: Promise<void> | null = null;
   // Set by close() to distinguish permanent teardown from disconnectBang(),
   // which is reconnectable. _ensureClient() refuses to lazy-reconnect after close().
   private _permanentlyClosed = false;
@@ -815,8 +818,11 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       return this._transactionManager.commitTransaction();
     }
     if (!this._inTransaction || !this._client) throw new Error("No active transaction");
-    await this._client.query("COMMIT");
-    this._inTransaction = false;
+    try {
+      await this._client.query("COMMIT");
+    } finally {
+      this._inTransaction = false;
+    }
   }
 
   async commitDbTransaction(): Promise<void> {
@@ -835,8 +841,11 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
 
   async rollbackDbTransaction(): Promise<void> {
     if (!this._inTransaction || !this._client) throw new Error("No active transaction");
-    await this._client.query("ROLLBACK");
-    this._inTransaction = false;
+    try {
+      await this._client.query("ROLLBACK");
+    } finally {
+      this._inTransaction = false;
+    }
   }
 
   /**
@@ -1436,7 +1445,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     this._stmtPool?.detach();
     this._stmtPool = null;
     if (this._client) {
-      this._client.end().catch(() => {});
+      // Chain onto any in-flight teardown so repeated disconnect/reconnect
+      // cycles don't lose earlier end() promises.
+      const ending = this._client.end().catch(() => {});
+      this._endingClient = this._endingClient ? this._endingClient.then(() => ending) : ending;
       this._client = null;
     }
   }
@@ -1455,13 +1467,19 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       await this._client.end();
       this._client = null;
     }
+    // Await any in-flight end() from disconnectBang()/reconnectBang() so
+    // callers (e.g. afterEach) can be sure all sockets are drained.
+    if (this._endingClient) {
+      await this._endingClient;
+      this._endingClient = null;
+    }
     // If a connection is still being established, wait for it then close.
     if (this._connectingPromise) {
       try {
         const conn = await this._connectingPromise;
         await conn.end();
       } catch {
-        // ignore — connection may have failed
+        // ignore — connection may have failed or was discarded by gen-mismatch
       }
       this._connectingPromise = null;
     }
@@ -1676,17 +1694,6 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       throw err;
     }
     return conn;
-  }
-
-  /**
-   * @deprecated Use `_createClient` instead. Kept for any external callers
-   * that reference `newClient` by name; will be removed in a future cleanup.
-   * @internal
-   */
-  static newClient(config: mysql.PoolOptions & MysqlAdapterOptions, initSql: string): never {
-    throw new Error(
-      "Mysql2Adapter.newClient is removed — use Mysql2Adapter._createClient (async) instead",
-    );
   }
 
   /**

@@ -1,5 +1,14 @@
 # Connection-pooled test adapter — Rails-parity epic
 
+> **Status (2026-05-22):** Phase A0 spike resolved; Phase B/C shipped
+> (#2242/#2245). Phase D sweep in flight (batch 1: #2250/#2253; expect
+> 4–8 more batches). Phase E open (gated on D). Phase F open; bundles
+> with TM Phase 9b-4 per
+> [`activerecord-index.md`](activerecord-index.md).
+>
+> Future-tense narratives below predate Phase B/C; treat them as design
+> reference. Live phase state lives in the index.
+
 Epic to retire `_sharedAdapter` (the module-level singleton currently
 shared across every test in a worker) in favor of a connection-pool-
 backed test adapter that mirrors Rails' `ConnectionPool#pin_connection!`

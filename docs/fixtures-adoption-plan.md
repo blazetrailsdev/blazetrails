@@ -13,13 +13,13 @@ a separate plan doc"). This is that doc.
 
 | #   | Decision                                                                                              | Rationale                                                                                                                                                                                                           |
 | --- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Scope:** every AR test whose Rails counterpart calls `fixtures(:foo)`                               | Mirrors Rails byte-for-byte; eliminates the inline-seed surface where TM Phase 6 hazards keep tripping                                                                                                              |
+| 1   | **Scope:** every AR test whose Rails counterpart calls `fixtures(:foo)`                               | Mirrors Rails line-for-line where Rails has a counterpart; eliminates the inline-seed surface where TM Phase 6 hazards keep tripping                                                                                |
 | 2   | **Aggressiveness:** per file, rewrite BOTH setup AND test body to mirror the Rails counterpart        | Drives `test:compare` matches as a side effect; setup-only would leave assertions diverged                                                                                                                          |
 | 3   | **Sequencing:** Phase B canary blocks on pool epic Phase E                                            | Pinned-connection-per-test is the natural home for `setup_fixtures`-shaped load-once-per-worker; doing this before would either preserve the AsyncContext sidecar across the conversion or be reworked when E lands |
 | 4   | **Batching:** by loader-readiness tier, not by test-directory cluster                                 | A test-directory sweep would block on whichever file hits the worst loader gap; tiering ships clean files first and unblocks the rest with surgical loader PRs                                                      |
 | 5   | **DIFF / ERB-UNSUPPORTED fixtures don't block consumers**                                             | If a test only references the rows that ARE comparable in `fixtures:compare`, the file is adoptable now; fixtures-port PR 7b (strict-fail) is independent                                                           |
 | 6   | **Files whose Rails counterpart inlines `Model.create` (no fixtures)** stay out of scope for adoption | The Phase F lint rule keys on `test:compare` membership AND Rails fixture usage; non-fixture-using counterparts aren't penalized                                                                                    |
-| 7   | **`useFixtures` runs once per worker, not per test, post-pool E**                                     | Matches Rails `setup_fixtures` semantics; tests roll back their writes via `withTransactionalFixtures`, fixture data remains. Implementation hook lands as Spike S1 below.                                          |
+| 7   | **`useFixtures` runs once per worker, not per test, post-pool E**                                     | Matches Rails `setup_fixtures` semantics; tests roll back their writes via `withTransactionalFixtures`, fixture data remains. Implementation hook lands as Spike S1 (Prerequisites, below).                         |
 
 ## Prerequisites (must land before Phase B)
 
@@ -113,10 +113,10 @@ Top candidate from manual look: a small file under `relation/` or
 Mechanical conversion. Bundle 3–8 small Tier 1 files OR one large
 Tier 1 file per PR, targeting the 300-LOC ceiling.
 
-**Ceiling escape valve.** Byte-for-byte body rewrites (Decision 2)
+**Ceiling escape valve.** Rails-mirrored body rewrites (Decision 2)
 can push a single file over 300 LOC on their own — particularly the
 large association and relation files. When that happens: ship the
-file alone, note "ceiling waiver — byte-for-byte body port"
+file alone, note "ceiling waiver — Rails-mirrored body port"
 in the PR body. Same precedent as fixtures-port PR 7a (~1.9k LOC,
 documented waiver). Do NOT trim the body rewrite to fit ceiling;
 that defeats Decision 2.

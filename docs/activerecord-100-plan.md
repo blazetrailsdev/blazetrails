@@ -1,12 +1,9 @@
 # ActiveRecord post-100% — fidelity tracker
 
-> **Status update 2026-05-22** — `activerecord 4969/4969 methods (100%)`.
-> Inline batch list below is dated 2026-05-16; the pool epic
-> (#2202/#2206/#2211/#2219/#2230/#2242/#2245) and recent un-skip work
-> (#2229 batch 63 caseInsensitiveComparison, #2240 EncryptedBook variants)
-> are not yet reflected. Re-run `pnpm test:compare --cached --json
---package activerecord` before triaging; the 6568/7885 number below is
-> stale.
+> **Status update 2026-05-22** — Inline batch list below is dated
+> 2026-05-16; the pool epic (#2202/#2206/#2211/#2219/#2230/#2242/#2245)
+> and recent un-skip work (#2229 batch 63 caseInsensitiveComparison,
+> #2240 EncryptedBook variants) are not yet reflected in the body.
 >
 > Phase ordering / cross-doc dependencies live in
 > [`activerecord-index.md`](activerecord-index.md). This doc owns the
@@ -23,7 +20,7 @@
 > - Batch 138 connectsTo / Person fixture — may be partially superseded
 >   by fixture-port PRs #2208/#2227/#2228.
 
-**Snapshot 2026-05-16:** `activerecord 4956/4958 methods (100% rounded) | files: 275/275 | inheritance: 210/210 (100%) | activemodel 621/621 (100%)`. Public surface is closed; the 2 outstanding methods are residual privates. test:compare currently at **6568/7885 tests (83.3%)**, 1296 skipped.
+**Snapshot 2026-05-22:** `activerecord 4969/4969 methods (100%)`. Public surface closed. test:compare at **6669/7870 (84.7%)**, 1193 skipped.
 
 The api:compare scoreboard is **closed**. Everything below is post-100% Rails-fidelity work — test:compare un-skips driven by audit clusters plus accumulated fidelity polish. PRs target ~250 LOC (CLAUDE.md hard ceiling 300; range 220–280).
 

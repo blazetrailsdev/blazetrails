@@ -7,16 +7,12 @@ once-per-file schema setup with transactional fixtures.
 
 > **Status (2026-05-22):** Phases 1–8 closed. Phase 9a merged.
 > Phase 9b: 9b-1 (PG) and 9b-2a–e (MySQL incl. Table.star) merged
-> 2026-05-20→21. 9b-3 (delete dormant fallback) is the only remaining
-> Phase 9 item and is **blocked / needs re-evaluation** — memory
-> `project_phase9b3_fallback_is_not_dormant` says the
-> `Relation#_arelVisitor` fallback is live production code for HABTM
-> join models with `null _adapter`, not dormant as the doc claims.
-> Don't delete it without resolving that.
+> 2026-05-20→21. **9b-3 closed misdesigned (#2189) — fallback stays per
+> Rails parity** (live production code for HABTM join models with
+> `null _adapter`). Don't reopen as "delete the fallback."
 >
-> 9b-4 (rename `SchemaAdapter`) has shipped as a rename only; the
-> actual delete is collapsed with **pool epic Phase F** — see
-> [`connection-pooled-test-adapter-plan.md`](connection-pooled-test-adapter-plan.md).
+> 9b-4 (`SchemaAdapter` delete) is collapsed with **pool epic Phase F**
+> — see [`connection-pooled-test-adapter-plan.md`](connection-pooled-test-adapter-plan.md).
 > Path 2 (sidecar) work tracks there too: 2a #2202, 2b #2206, 2c-2
 > batch 1 #2219, batch 2 #2230. (#2236 reverted by #2239.)
 >

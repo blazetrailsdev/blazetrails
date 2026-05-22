@@ -12,7 +12,7 @@ sequencing, see `~/.btwhooks/data/github/blazetrailsdev/trails/audits/`
 ## Current state
 
 - **api:compare**: 4969/4969 (100%) — public surface closed.
-- **test:compare**: ~84% (7863/7872 at 2026-05-18 snapshot; ~6 days stale).
+- **test:compare**: 6669/7870 (84.7%), 1193 skipped (2026-05-22, cached).
 - **Type-audit**: Waves 1–3 shipped; W1b + small follow-ups + W4 remain.
 - **Test infra**: pool epic active (Phase B/C shipped, D in flight); TM
   unification Phase 9b in progress; fixtures port data-complete.
@@ -37,13 +37,14 @@ Owner: [`connection-pooled-test-adapter-plan.md`](connection-pooled-test-adapter
 ### Phase 2 — Test-infra collapse (after Phase 1)
 
 - **Pool Phase E** — delete `_sharedAdapter`, AsyncContext filter,
-  `_manualTxDepth`, `_txLockStorage` (~150 LOC net delete).
-- **Bundled: TM Phase 9b-3 + 9b-4 + Pool Phase F** — re-evaluate the
-  "dormant fallback" claim (memory `project_phase9b3_fallback_is_not_dormant`
-  says it's live for HABTM join models), delete `SchemaAdapter`, move
-  DDL tracking to `AbstractAdapter` `onDdl?` hook, delete sidecar.
+  `_manualTxDepth`, `_txLockStorage` (~150 LOC net delete). Gated on Phase D.
+- **TM Phase 9b-4 + Pool Phase F (bundled)** — delete `SchemaAdapter`,
+  move DDL tracking to `AbstractAdapter` `onDdl?` hook, delete sidecar.
   End state: `createTestAdapter()` returns a real adapter from the pool
   with `pinConnectionBang`. ~400 LOC net delete.
+- TM Phase 9b-3 (delete dormant fallback) is **closed-don't-reopen**
+  per #2189 — the fallback is Rails-parity live code for HABTM join
+  models. Not part of this phase.
 
 ### Phase 3 — Fixtures port strict-flip
 
@@ -63,7 +64,7 @@ run in parallel with Phase 1/2.
 Owner: [`fixtures-adoption-plan.md`](fixtures-adoption-plan.md). Migrates
 the existing AR test suite from inline `defineSchema()` + `Model.create`
 seeding to `useFixtures([...])` against the 122 ported fixtures.
-Byte-for-byte body rewrites against Rails counterparts, so this drives
+Rails-mirrored body rewrites against Rails counterparts, so this drives
 `test:compare` match-rate as a side effect (orthogonal to Phase 4
 un-skipping; both run in parallel once gated).
 
@@ -89,7 +90,7 @@ batches + strategy + BLOCKED vocab) + [`activerecord-test-compare-100.md`](activ
 (per-file tracker).
 
 Unblocked once Phase 1 lands (most skipped tests need the pooled adapter
-to run cleanly). Top-10 highest-skip files account for ~430 of ~1244
+to run cleanly). Top-10 highest-skip files account for ~430 of 1193
 remaining skips — prioritize their underlying implementation batches:
 
 - `associations/eager.test.ts` (70) — Batch B6.4d2 / Phase 5 migration

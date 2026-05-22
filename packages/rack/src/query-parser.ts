@@ -122,9 +122,7 @@ export class QueryParser {
 
     try {
       const str = this.checkQueryString(qs, separator);
-      const sep = separator
-        ? (COMMON_SEP[separator] ?? new RegExp(`[${separator}] *`))
-        : DEFAULT_SEP;
+      const sep = separator ? (COMMON_SEP[separator] ?? escapedSepRe(separator)) : DEFAULT_SEP;
 
       for (const p of str.split(sep)) {
         if (!p) continue;

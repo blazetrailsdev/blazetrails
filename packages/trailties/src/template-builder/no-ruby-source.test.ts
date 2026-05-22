@@ -38,6 +38,14 @@ describe("assertNoRubySource", () => {
     expect(() => assertNoRubySource("export class Foo<T> {\n  x: T;\n}\n")).not.toThrow();
   });
 
+  it("does not flag TS class with whitespace-padded generic brackets", () => {
+    expect(() => assertNoRubySource("export class Foo< T > {}\n")).not.toThrow();
+  });
+
+  it("does not flag TS class with constrained generic", () => {
+    expect(() => assertNoRubySource("class Foo<T extends Bar> {}\n")).not.toThrow();
+  });
+
   it("does not flag TS class with extends clause", () => {
     expect(() => assertNoRubySource("class Foo extends Bar {}\n")).not.toThrow();
   });

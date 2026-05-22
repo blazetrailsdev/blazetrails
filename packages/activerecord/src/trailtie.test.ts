@@ -92,8 +92,8 @@ describe("RailtieTest", () => {
   it("runInitializers adds timestamptz to time_zone_aware_types once the postgresql adapter is loaded", () => {
     Base.timeZoneAwareTypes = ["datetime", "time"];
     Trailtie.runInitializers();
-    // PostgreSQLAdapter import above fired `runLoadHooks("active_record_postgresqladapter")`
-    // already, so the nested on_load fires synchronously.
+    // beforeEach re-emits `runLoadHooks("active_record_postgresqladapter", ...)`
+    // and `("active_record", ...)`, so the nested on_load fires synchronously.
     expect(Base.timeZoneAwareTypes).toContain("timestamptz");
   });
 
@@ -121,12 +121,14 @@ describe("RailtieTest", () => {
     expect(PostgreSQLAdapter.decodeDates).toBe(true);
   });
 
-  it("does not assign PostgreSQLAdapter.decodeDates when flag is absent (preserves class default)", () => {
+  it("does not assign PostgreSQLAdapter.decodeDates when flag is absent (preserves prior value)", () => {
     const cfg = Trailtie.config["activeRecord"] as ActiveRecordConfig;
     delete cfg.postgresqlAdapterDecodeDates;
-    PostgreSQLAdapter.decodeDates = true;
+    // Use a non-default value so a faulty initializer that always assigns
+    // `true` would visibly overwrite this.
+    PostgreSQLAdapter.decodeDates = false;
     Trailtie.runInitializers();
-    expect(PostgreSQLAdapter.decodeDates).toBe(true);
+    expect(PostgreSQLAdapter.decodeDates).toBe(false);
   });
 
   it("runInitializers forwards config.encryption to Encryption.Configurable", () => {

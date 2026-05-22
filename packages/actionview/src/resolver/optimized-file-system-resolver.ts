@@ -4,8 +4,8 @@
  * Rails' default filesystem resolver. Caches `find` lookup results keyed
  * by `(name, prefix, format, extensions)` so repeated lookups don't
  * re-`stat` the filesystem on every render. Call `clearCache()` to
- * invalidate (or `ActionView::LookupContext.clear()` which walks
- * `PathRegistry`).
+ * invalidate (or `DetailsKey.clear()` which walks `PathRegistry` and
+ * calls `clearCache()` on every live resolver).
  */
 
 import type { Template } from "../template.js";

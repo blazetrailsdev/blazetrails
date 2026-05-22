@@ -1,18 +1,27 @@
 /**
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
+ *
+ * TODO: migrate to createPooledTestAdapter() after the PG withClient race
+ * fix lands. NestedRelationScopingTest > "merge inner scope has priority"
+ * issues Promise.all concurrent writes; under a pinned TX the PG adapter's
+ * withClient (postgresql-adapter.ts withClient / _acquireFreshClient) can
+ * fan a single logical TX across multiple pg.PoolClients, producing
+ * 08P01 / 25P02 races. See the closed prior batch-1 attempts #2250 and
+ * #2253 for the exact failure mode. Pool-layer pin lookup is already
+ * centralized (#2258); the remaining work is in the PG adapter.
  */
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { Base, Range, RecordNotFound } from "../index.js";
 
-import { createPooledTestAdapter, type SidecarAdapter } from "../test-adapter.js";
+import { createTestAdapter, type TestDatabaseAdapter } from "../test-adapter.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
 import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
-let _adapter: SidecarAdapter;
+let _adapter: TestDatabaseAdapter;
 beforeAll(async () => {
-  ({ adapter: _adapter } = await createPooledTestAdapter());
+  _adapter = createTestAdapter();
   const postCols = {
     title: "string" as const,
     published: "boolean" as const,

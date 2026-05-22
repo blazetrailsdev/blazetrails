@@ -65,12 +65,11 @@ export function javascriptTag(
   let content: unknown;
 
   if (resolvedBlock) {
-    const isPlainOpts =
+    const isHash =
       contentOrOptions != null &&
       typeof contentOrOptions === "object" &&
-      !(contentOrOptions instanceof SafeBuffer) &&
-      !Array.isArray(contentOrOptions);
-    opts = isPlainOpts
+      Object.getPrototypeOf(contentOrOptions) === Object.prototype;
+    opts = isHash
       ? { ...(contentOrOptions as Record<string, unknown>) }
       : typeof htmlOptions === "object" && htmlOptions !== null
         ? { ...(htmlOptions as Record<string, unknown>) }

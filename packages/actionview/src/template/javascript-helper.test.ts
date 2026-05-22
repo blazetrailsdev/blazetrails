@@ -26,8 +26,8 @@ describe("JavaScriptHelperTest", () => {
     );
     expect(escapeJavascript("backslash\\test").toString()).toBe("backslash\\\\test");
     expect(escapeJavascript("don't </close> tags").toString()).toBe("don\\'t <\\/close> tags");
-    expect(escapeJavascript("unicode   newline").toString()).toBe("unicode &#x2028; newline");
-    expect(escapeJavascript("unicode   newline").toString()).toBe("unicode &#x2029; newline");
+    expect(escapeJavascript("unicode \u2028 newline").toString()).toBe("unicode &#x2028; newline");
+    expect(escapeJavascript("unicode \u2029 newline").toString()).toBe("unicode &#x2029; newline");
 
     expect(j("don't </close> tags").toString()).toBe("don\\'t <\\/close> tags");
   });

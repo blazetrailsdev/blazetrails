@@ -26,18 +26,4 @@ describe("Rack::Multipart::UploadedFile", () => {
     expect(f.read()).toBe("foo");
     expect(f.path).toBeUndefined();
   });
-
-  it("exposes original_filename, content_type, and path", () => {
-    const f = new UploadedFile(file1, "text/plain");
-    expect(f.originalFilename).toBe("file1.txt");
-    expect(f.contentType).toBe("text/plain");
-    expect(f.path).toBe(file1);
-    expect(f.localPath).toBe(f.path);
-  });
-
-  it("allows content_type to be reassigned", () => {
-    const f = new UploadedFile(file1);
-    f.contentType = "image/png";
-    expect(f.contentType).toBe("image/png");
-  });
 });

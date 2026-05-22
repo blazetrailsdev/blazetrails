@@ -114,7 +114,7 @@ export class MockResponse extends Response {
     }
 
     if (attrs["max-age"]) {
-      attrs.expires = new Date(Date.now() + parseInt(attrs["max-age"]) * 1000);
+      attrs.expires = new Date(Date.now() + parseInt(attrs["max-age"], 10) * 1000);
     } else if (attrs.expires) {
       attrs.expires = new Date(attrs.expires);
     }

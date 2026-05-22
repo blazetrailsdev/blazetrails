@@ -385,6 +385,12 @@ describe("datetime / serialized-YAML tolerance", () => {
     // typically still carries the string form.
     expect(cmp("2003-07-16 14:28:11", new Date("2003-07-16T14:28:11Z"))[0]).toBe(true);
   });
+  it("handles bare date-only scalars (YYYY-MM-DD) as midnight UTC, not as NaN", () => {
+    // Regression: appending `Z` to a date-only string produces invalid ISO
+    // (`2024-01-01Z` → Date.parse NaN). Normalize to midnight UTC first.
+    expect(cmp("2024-01-01", "2024-01-01")[0]).toBe(true);
+    expect(cmp("2024-01-01", new Date("2024-01-01T00:00:00Z"))[0]).toBe(true);
+  });
 });
 
 describe("enum-symbol comparator", () => {
@@ -453,6 +459,16 @@ describe("canonicalizeRailsRow + FK_OVERRIDES", () => {
   it("threads the `table` arg without changing default behavior when no override is registered", () => {
     expect(canonicalizeRailsRow({ pirate: "x" }, { pirate_id: 1 }, null, "some_table")).toEqual({
       pirate_id: "x",
+    });
+  });
+  it("preserves polymorphic `name (Type)` split on the convention path", () => {
+    // Rails fixtures.rb#replace_belongs_to_keys emits both <col> and
+    // <assoc>_type for polymorphic associations. The shared parser keeps
+    // that behavior on the standard `<assoc>_id` path.
+    const cols = new Set(["pirate_id", "pirate_type"]);
+    expect(canonicalizeRailsRow({ pirate: "blackbeard (Pirate)" }, {}, cols)).toEqual({
+      pirate_id: "blackbeard",
+      pirate_type: "Pirate",
     });
   });
 });

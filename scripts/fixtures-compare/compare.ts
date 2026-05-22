@@ -282,8 +282,14 @@ function normalizeDatetime(v: unknown): number | null {
   // Normalize: T-separator and force UTC when no offset is present. Rails
   // fixtures without a TZ marker mean "UTC" (that's how AR's adapters
   // store timestamps); JS `Date` would otherwise treat them as local time
-  // and the comparison would be host-dependent.
+  // and the comparison would be host-dependent. Date-only scalars
+  // (`YYYY-MM-DD`) get midnight-UTC so `Date.parse` doesn't choke on the
+  // bare `YYYY-MM-DDZ` shape it considers invalid.
   let iso = v.replace(" ", "T");
+  // Date-only check is strict (must be exactly `YYYY-MM-DD`) so lowercase
+  // `t` separators from `yaml` lib's !!timestamp output aren't mistaken
+  // for date-only and double-appended.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) iso += "T00:00:00";
   if (!/[zZ]|[+\-]\d{2}:?\d{2}$/.test(iso)) iso += "Z";
   const t = Date.parse(iso);
   return Number.isFinite(t) ? t : null;
@@ -475,20 +481,26 @@ export function canonicalizeRailsRow(railsRow: Row, tsRow: Row, columns: Set<str
     columns ? columns.has(`${k}_id`) : Object.hasOwn(tsRow, `${k}_id`);
   for (const [k, v] of Object.entries(railsRow)) {
     if (known(k)) { out[k] = v; continue; } // prettier-ignore
+    // Rails' `replace_belongs_to_keys` also handles polymorphic shorthand —
+    // `assoc: label (Type)` splits into `<col>` + `<assoc>_type`. Shared
+    // between the convention path and FK_OVERRIDES so an override on a
+    // polymorphic belongs_to doesn't drop the `_type` column.
+    const assignAssoc = (assocKey: string, fkCol: string): void => {
+      if (typeof v === "string") {
+        const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(v);
+        if (m) { out[fkCol] = m[1]; out[`${assocKey}_type`] = m[2]; }
+        else out[fkCol] = v;
+      } else out[fkCol] = v as Row[string];
+    };
     // FK_OVERRIDES lets a fixture declare `assoc → column` when the shorthand
     // doesn't follow the `<assoc>_id` convention (e.g. `creator → captain_id`).
     const overrideCol = overrides[k];
     if (overrideCol && (columns ? columns.has(overrideCol) : Object.hasOwn(tsRow, overrideCol))) {
-      out[overrideCol] = v as Row[string];
+      assignAssoc(k, overrideCol);
       continue;
     }
     if (hasIdForm(k)) {
-      const idKey = `${k}_id`;
-      if (typeof v === "string") {
-        const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(v);
-        if (m) { out[idKey] = m[1]; out[`${k}_type`] = m[2]; }
-        else out[idKey] = v;
-      } else out[idKey] = v as Row[string];
+      assignAssoc(k, `${k}_id`);
       continue;
     }
     // With a schema: drop as HABTM / unknown association (won't be a column on
@@ -567,7 +579,7 @@ export async function compareFile(yamlBase: string, yamlByTable: Map<string, Fix
       if (attr === "id") { if (tsRow.id === railsRow.id) r.attrsMatched++; continue; } // prettier-ignore
       const skipCounter = { n: 0 };
       const ok = compareValue(tsRow[attr], railsRow[attr], `${rowName}.${attr}`, idIndex, r.notes, snake, skipCounter); // prettier-ignore
-      if (skipCounter.n > 0) { r.attrsSkipped += skipCounter.n; r.attrsTotal--; continue; } // prettier-ignore
+      if (skipCounter.n > 0) { r.attrsSkipped += skipCounter.n; r.attrsTotal -= skipCounter.n; continue; } // prettier-ignore
       if (ok) r.attrsMatched++;
       else anyDiff = true;
     }
@@ -601,7 +613,7 @@ function formatLine(r: FileResult): string {
     r.yamlBase.padEnd(32) +
     (r.tsBase ?? "(missing)").padEnd(28) +
     `rows: ${r.rowsMatched}/${r.rowsTotal}`.padEnd(14) +
-    `attrs: ${r.attrsMatched}/${r.attrsTotal}${r.attrsSkipped ? ` (+${r.attrsSkipped} erb-skip)` : ""}`.padEnd(
+    `attrs: ${r.attrsMatched}/${r.attrsTotal}${r.attrsSkipped ? ` (+${r.attrsSkipped} skipped)` : ""}`.padEnd(
       30,
     ) +
     pct.padEnd(6) +

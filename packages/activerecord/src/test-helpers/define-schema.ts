@@ -239,58 +239,120 @@ const COLUMN_TYPE_MAP_SQLITE: Record<PrimitiveColumnSpec, string> = {
 let _appliedSchemaSignatures = new Map<string, Map<string, string>>();
 
 /**
- * Stable per-adapter unique key for adapters whose underlying DB cannot
- * be identified by a stringable connection target — notably SQLite
- * `:memory:` (each adapter IS a separate DB) and any adapter that
- * doesn't expose a recognizable config field. Pinned via WeakMap so the
- * mapping disappears when the adapter is GC'd.
+ * Fallback cache for adapters whose underlying DB cannot be identified
+ * by a stringable connection target — notably SQLite `:memory:` (each
+ * adapter IS a separate DB) and any adapter that doesn't expose a
+ * recognizable config field. WeakMap-keyed so entries vanish when the
+ * adapter is GC'd, avoiding unbounded growth across many short-lived
+ * adapters.
  *
  * @internal
  */
-const _adapterUniqueIds = new WeakMap<DatabaseAdapter, string>();
-let _adapterIdCounter = 0;
-function _adapterUniqueId(adapter: DatabaseAdapter): string {
-  let id = _adapterUniqueIds.get(adapter);
-  if (!id) {
-    id = `adapter#${++_adapterIdCounter}`;
-    _adapterUniqueIds.set(adapter, id);
+let _fallbackSchemaSignatures = new WeakMap<DatabaseAdapter, Map<string, string>>();
+
+/**
+ * Strip any `user:password@` userinfo from a URL-style connection string
+ * so the cache key doesn't retain credentials in heap. Non-URLs (e.g.
+ * `host=... dbname=...` key/value form) pass through unchanged — we don't
+ * try to parse those.
+ *
+ * @internal
+ */
+function _stripUrlCredentials(s: string): string {
+  try {
+    const u = new URL(s);
+    if (u.username || u.password) {
+      u.username = "";
+      u.password = "";
+      return u.toString();
+    }
+    return s;
+  } catch {
+    return s;
   }
-  return id;
+}
+
+/**
+ * Unwrap any `innerAdapter` chain so wrapper shapes like
+ * `TestAdapterFixtures` resolve to the real underlying adapter. The
+ * wrapper holds adapter-config fields on its inner, so identity
+ * derivation must descend through it.
+ *
+ * @internal
+ */
+function _unwrapAdapter(adapter: DatabaseAdapter): DatabaseAdapter {
+  let cur: DatabaseAdapter = adapter;
+  for (let i = 0; i < 8; i++) {
+    const inner = (cur as unknown as { innerAdapter?: DatabaseAdapter }).innerAdapter;
+    if (!inner || inner === cur) return cur;
+    cur = inner;
+  }
+  return cur;
 }
 
 /**
  * Derive a string identity for the underlying database an adapter is
- * connected to. Adapters sharing the same DB return the same key;
- * adapters whose DB cannot be identified fall back to a per-instance
- * unique key (preserves the legacy "one adapter = one cache" behavior).
+ * connected to, or `null` when no stringable identity is available
+ * (callers fall back to the {@link _fallbackSchemaSignatures} WeakMap).
  *
  * Reads private fields by name on purpose — defineSchema is test-only
  * infrastructure and there is no public surface for "which DB are you
- * connected to" on AbstractAdapter today.
+ * connected to" on AbstractAdapter today. Strips URL credentials so the
+ * cache key doesn't retain `user:password@...` from `PG_TEST_URL` /
+ * `MYSQL_TEST_URL`.
  *
  * @internal
  */
-export function databaseIdentity(adapter: DatabaseAdapter): string {
-  const a = adapter as unknown as Record<string, unknown>;
-  if (adapter.adapterName === "sqlite") {
+function databaseIdentity(adapter: DatabaseAdapter): string | null {
+  const real = _unwrapAdapter(adapter);
+  const a = real as unknown as Record<string, unknown>;
+  if (real.adapterName === "sqlite") {
     const fn = a["_filename"];
     if (typeof fn === "string" && fn !== ":memory:" && fn !== "") return `sqlite:${fn}`;
-    return _adapterUniqueId(adapter);
+    return null;
   }
-  if (adapter.adapterName === "postgres") {
+  if (real.adapterName === "postgres") {
     const opts = a["_pgPoolOptions"] as { connectionString?: unknown } | undefined;
     const cs = opts?.connectionString;
-    if (typeof cs === "string" && cs !== "") return `postgres:${cs}`;
-    return _adapterUniqueId(adapter);
+    if (typeof cs === "string" && cs !== "") return `postgres:${_stripUrlCredentials(cs)}`;
+    return null;
   }
-  if (adapter.adapterName === "mysql") {
+  if (real.adapterName === "mysql") {
     const pc = a["_poolConfig"] as { uri?: unknown } | undefined;
-    if (typeof pc?.uri === "string" && pc.uri !== "") return `mysql:${pc.uri}`;
+    if (typeof pc?.uri === "string" && pc.uri !== "")
+      return `mysql:${_stripUrlCredentials(pc.uri)}`;
     const db = a["_database"];
     if (typeof db === "string" && db !== "") return `mysql:db=${db}`;
-    return _adapterUniqueId(adapter);
+    return null;
   }
-  return _adapterUniqueId(adapter);
+  return null;
+}
+
+/**
+ * Resolve the signature cache for `adapter`, creating it if missing.
+ * Adapters with a stringable DB identity share one Map across all
+ * sibling adapters pointing at the same DB; the rest get a per-instance
+ * WeakMap entry (auto-GC'd with the adapter).
+ *
+ * @internal
+ */
+function _cacheFor(adapter: DatabaseAdapter, create: boolean): Map<string, string> | undefined {
+  const key = databaseIdentity(adapter);
+  if (key !== null) {
+    let cache = _appliedSchemaSignatures.get(key);
+    if (!cache && create) {
+      cache = new Map();
+      _appliedSchemaSignatures.set(key, cache);
+    }
+    return cache;
+  }
+  const real = _unwrapAdapter(adapter);
+  let cache = _fallbackSchemaSignatures.get(real);
+  if (!cache && create) {
+    cache = new Map();
+    _fallbackSchemaSignatures.set(real, cache);
+  }
+  return cache;
 }
 
 /**
@@ -311,7 +373,7 @@ export function databaseIdentity(adapter: DatabaseAdapter): string {
 export function _snapshotAppliedSchemaSignaturesForAdapter(
   adapter: DatabaseAdapter,
 ): Map<string, string> {
-  const cache = _appliedSchemaSignatures.get(databaseIdentity(adapter));
+  const cache = _cacheFor(adapter, false);
   return cache ? new Map(cache) : new Map();
 }
 
@@ -320,7 +382,12 @@ export function _restoreAppliedSchemaSignaturesForAdapter(
   adapter: DatabaseAdapter,
   snapshot: Map<string, string>,
 ): void {
-  _appliedSchemaSignatures.set(databaseIdentity(adapter), new Map(snapshot));
+  const key = databaseIdentity(adapter);
+  if (key !== null) {
+    _appliedSchemaSignatures.set(key, new Map(snapshot));
+  } else {
+    _fallbackSchemaSignatures.set(_unwrapAdapter(adapter), new Map(snapshot));
+  }
 }
 
 /**
@@ -337,21 +404,21 @@ export function _restoreAppliedSchemaSignaturesForAdapter(
  */
 export function clearAppliedSchemaSignatures(adapter?: DatabaseAdapter): void {
   if (adapter) {
-    _appliedSchemaSignatures.delete(databaseIdentity(adapter));
+    const key = databaseIdentity(adapter);
+    if (key !== null) {
+      _appliedSchemaSignatures.delete(key);
+    } else {
+      _fallbackSchemaSignatures.delete(_unwrapAdapter(adapter));
+    }
   } else {
     _appliedSchemaSignatures = new Map();
+    _fallbackSchemaSignatures = new WeakMap();
   }
 }
 
 /** @internal */
 function getCache(adapter: DatabaseAdapter): Map<string, string> {
-  const key = databaseIdentity(adapter);
-  let cache = _appliedSchemaSignatures.get(key);
-  if (!cache) {
-    cache = new Map();
-    _appliedSchemaSignatures.set(key, cache);
-  }
-  return cache;
+  return _cacheFor(adapter, true)!;
 }
 
 /** @internal */

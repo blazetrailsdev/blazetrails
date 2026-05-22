@@ -254,7 +254,7 @@ export class HostAuthorization {
     const request = new Request(env);
     const blocked = this.blockedHosts(request);
 
-    if (blocked.length === 0 || this.isExcluded(request)) {
+    if (blocked.length === 0 || this.isExcluded(env)) {
       this.markAsAuthorized(env, request);
       return this.app(env);
     }
@@ -279,17 +279,30 @@ export class HostAuthorization {
     return out;
   }
 
-  /** @internal */
-  private isExcluded(request: Request): boolean {
-    return Boolean(this.exclude?.(request.env));
+  /** @internal Rails passes the Request to `exclude`; we hand back the original env (pre-Request clone) so mutations are visible to downstream middleware. */
+  private isExcluded(env: RackEnv): boolean {
+    return Boolean(this.exclude?.(env));
   }
 
   /** @internal Sets `action_dispatch.authorized_host` from `Request#rawHostWithPort` (port stripped). */
   private markAsAuthorized(env: RackEnv, request: Request): void {
-    const raw = request.rawHostWithPort;
-    const authorized = raw.startsWith("[") ? raw.replace(/\]:\d+$/, "]") : raw.replace(/:\d+$/, "");
-    env["action_dispatch.authorized_host"] = authorized;
+    env["action_dispatch.authorized_host"] = stripPort(request.rawHostWithPort);
   }
+}
+
+/**
+ * Strip a trailing `:port` from `host` without corrupting unbracketed
+ * IPv6 literals. IPv6 addresses with a port arrive bracketed
+ * (`[::1]:3000`); an unbracketed multi-colon string is the IPv6 address
+ * itself with no port suffix.
+ *
+ * @internal
+ */
+function stripPort(host: string): string {
+  if (host.startsWith("[")) return host.replace(/\]:\d+$/, "]");
+  const colons = (host.match(/:/g) ?? []).length;
+  if (colons > 1) return host;
+  return host.replace(/:\d+$/, "");
 }
 
 /**

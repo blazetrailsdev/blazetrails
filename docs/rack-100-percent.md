@@ -38,14 +38,13 @@ ones.** Treat test:compare 100% as "right shape, wrong depth."
 Rack pieces that unblock work tracked in
 [actionpack-100-percent.md](actionpack-100-percent.md):
 
-| Rack gap                                  | Unblocks in actionpack                                                                  |
-| ----------------------------------------- | --------------------------------------------------------------------------------------- |
-| `multipart/uploaded_file` (6 methods)     | `actiondispatch http/param_builder` UploadedFile adapter (~30 LOC).                     |
-| `multipart/parser` + `multipart` (30)     | `actiondispatch http/param_builder` rack-multipart → AD multipart bridge.               |
-| `request.parse_multipart` + friends       | Same.                                                                                   |
-| `query_parser` (12)                       | AD param parsing tests (~57 missing test:compare cases under Request/Response cluster). |
-| `mock_request` (1) / `mock_response` (3)  | AD `testing/integration.rb` tail (3 methods); IntegrationTest harness.                  |
-| `utils` `escape`/`escapePath` (already ✓) | AD `routing/redirection.rackEscape` parity (TS-side only; ~30 LOC there).               |
+| Rack gap                                                        | Unblocks in actionpack                                                                  |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `multipart/uploaded_file` + `multipart/parser` + `multipart.rb` | `actiondispatch http/param_builder` UploadedFile adapter + rack-multipart bridge.       |
+| `request.parseMultipart` + `request.parseQuery`                 | Same multipart chain; query parsing unblocks AD Request param tests.                    |
+| `query_parser` (12)                                             | AD param parsing tests (~57 missing test:compare cases under Request/Response cluster). |
+| `mock_request` (1) / `mock_response` (3)                        | AD `testing/integration.rb` tail (3 methods); IntegrationTest harness.                  |
+| `utils` `escape`/`escapePath` (already ✓)                       | AD `routing/redirection.rackEscape` parity (TS-side only; ~30 LOC there).               |
 
 **Out of scope for this gem** — Rack 3.x extracted these into separate
 gems we do not vendor today:
@@ -63,18 +62,19 @@ gems we do not vendor today:
 `body_proxy`, `config`, `content_length`, `content_type`, `head`, `lint`,
 `logger`, `mime`, `runtime`, `tempfile_reaper`. Leave alone.
 
-## Files at 0% — full ports needed (8)
+## Files at 0% — full ports needed (5)
 
 | File                         | Methods | Size estimate | Notes / blockers                                                                                                                                      |
 | ---------------------------- | ------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth/abstract/request.rb`   | 8       | ~60 LOC       | Wraps a `Rack::Request` with `authorization`/`credentials` accessors. Leaf.                                                                           |
-| `auth/basic.rb`              | 3       | ~40 LOC       | Subclass of `Auth::AbstractHandler`. Depends on `auth/abstract/request`.                                                                              |
+| `auth/basic.rb`              | 3       | ~40 LOC       | Subclass of `Auth::AbstractHandler`. Bundle with `auth/abstract/request`.                                                                             |
 | `multipart/parser.rb`        | 25      | ~400 LOC      | **Largest single file**. State-machine parser. Split: state machine + handlers in PR-a (~250), buffering helpers + boundary detection in PR-b (~250). |
 | `multipart/generator.rb`     | 6       | ~80 LOC       | Symmetrical to parser; for mock requests. Leaf.                                                                                                       |
 | `multipart/uploaded_file.rb` | 6       | ~50 LOC       | Tempfile wrapper. **Direct AD blocker.** Leaf.                                                                                                        |
 | `query_parser.rb`            | 12      | ~150 LOC      | Class extracted from `Utils` in Rack 3. Used by `Request`. Mostly mechanical port.                                                                    |
-| `reloader.rb`                | 7       | ~80 LOC       | Mtime-based file reloader. Likely indefinite-defer for Node (no Ruby `$LOADED_FEATURES`). Document & exclude.                                         |
-| `version.rb`                 | 1       | ~5 LOC        | Just `release` constant. Trivial.                                                                                                                     |
+| `version.rb`                 | 1       | ~5 LOC        | Just `release` constant. Trivial — bundle with tail cleanup.                                                                                          |
+
+`reloader.rb` (7 misses, 0%) is excluded — see [Indefinite defers](#indefinite-defers) below.
 
 ## Partial files (≥1 miss, sorted by miss count)
 
@@ -83,12 +83,12 @@ gems we do not vendor today:
 | `request.rb`                                                                                                                                                                                            | 61%    | 34     | Biggest behavioral gap. Split into 3: **forwarded-headers** (forwardedFor/Port/Authority/Scheme + priorities, ~120), **predicates+accessors** (isLink/Trace/Unlink, referer, logger, contentCharset, hostname, serverName, ~80), **internals** (parseHttpAcceptHeader, parseQuery, parseMultipart, splitHeader/Authority, expandParamPairs, wrapIpv6, rejectTrustedIpAddresses, defaultSession, ~150). |
 | `null_logger.rb`                                                                                                                                                                                        | 44%    | 18     | Logger interface stubs (`debugBang`, `errorBang`, level/progname/formatter accessors, `add`, `log`, `reopen`). ~80 LOC, one PR.                                                                                                                                                                                                                                                                        |
 | `utils.rb`                                                                                                                                                                                              | 81%    | 8      | All module-level config attrs (`defaultQueryParser=`, `multipartTotalPartLimit=`, `multipartFileLimit=`, `paramDepthLimit=`). ~60 LOC. Bundle with `query_parser` port.                                                                                                                                                                                                                                |
-| `directory.rb`                                                                                                                                                                                          | 27%    | 8      | Directory listing middleware. Likely defer — we don't ship this for serverless deploys. Document.                                                                                                                                                                                                                                                                                                      |
+| `directory.rb`                                                                                                                                                                                          | 27%    | 8      | Deferred — see [Indefinite defers](#indefinite-defers).                                                                                                                                                                                                                                                                                                                                                |
 | `response.rb`                                                                                                                                                                                           | 87%    | 8      | `isForbidden`, `isInclude`, `setCookieHeader=`, `doNotCacheBang`, `cacheBang`, `bufferedBodyBang`, `append`. ~80 LOC. Leaf.                                                                                                                                                                                                                                                                            |
 | `multipart.rb`                                                                                                                                                                                          | 29%    | 5      | `toParamsHash`, `makeParams`, `normalizeParams`, `extractMultipart`, `buildMultipart`. Bundle with parser/generator PR.                                                                                                                                                                                                                                                                                |
 | `show_exceptions.rb`                                                                                                                                                                                    | 50%    | 4      | `isAcceptsHtml`, `dumpException`, `pretty`, `h`. ~60 LOC.                                                                                                                                                                                                                                                                                                                                              |
-| `files.rb`                                                                                                                                                                                              | 50%    | 4      | `get`, `fail`, `mimeType`, `filesize`. Defer alongside directory.rb if we don't ship static file middleware.                                                                                                                                                                                                                                                                                           |
-| `static.rb`                                                                                                                                                                                             | 43%    | 4      | `isAddIndexRoot`, `overwriteFilePath`, `routeFile`, `applicableRules`. Same defer call.                                                                                                                                                                                                                                                                                                                |
+| `files.rb`                                                                                                                                                                                              | 50%    | 4      | Deferred — see [Indefinite defers](#indefinite-defers).                                                                                                                                                                                                                                                                                                                                                |
+| `static.rb`                                                                                                                                                                                             | 43%    | 4      | Deferred — see [Indefinite defers](#indefinite-defers).                                                                                                                                                                                                                                                                                                                                                |
 | `builder.rb`                                                                                                                                                                                            | 69%    | 4      | `call`, `generateMap`, `loadFile`, `app`. ~50 LOC. Leaf.                                                                                                                                                                                                                                                                                                                                               |
 | `mock_response.rb`                                                                                                                                                                                      | 73%    | 3      | `match`, `parseCookiesFromHeader`, `identifyCookieAttributes`. ~50 LOC.                                                                                                                                                                                                                                                                                                                                |
 | `etag.rb`                                                                                                                                                                                               | 40%    | 3      | `isEtagStatus`, `isSkipCaching`, `digestBody`. ~40 LOC.                                                                                                                                                                                                                                                                                                                                                |
@@ -118,49 +118,66 @@ Outcome: baseline rose 52.5% → 60% with no port work; both files at 100%.
 
 ## Suggested PR slots (sized to ~250 LOC, ≤300 LOC ceiling)
 
-Order roughly by leverage and unblocking:
+Order roughly by leverage and unblocking. **12 slots, ~2.3k LOC total.**
+(Slot 0 — extractor fix #2257 — shipped 2026-05-22 and lifted the baseline
+to 60%; left out of the count per forward-only convention.)
 
-1. ~~**Extractor fix — `module_function` propagation**~~ — **shipped in #2257**
-   (54 LOC). Closed content_length/content_type at 100% and lifted baseline
-   to 60%.
-2. **`multipart/uploaded_file` + `multipart/generator`** (~200 LOC). Directly
-   unblocks `actiondispatch http/param_builder` UploadedFile adapter.
-3. **`multipart/parser` part A — state machine + parse/result/dequote**
+1. **`multipart/uploaded_file` + `multipart/generator`** (~200 LOC).
+   Directly unblocks `actiondispatch http/param_builder` UploadedFile
+   adapter.
+2. **`multipart/parser` part A — state machine + parse/result/dequote**
    (~250 LOC).
-4. **`multipart/parser` part B — boundary, encoding, mime handlers, limits**
+3. **`multipart/parser` part B — boundary, encoding, mime handlers, limits**
    (~250 LOC).
-5. **`multipart.rb` + tail integration** (~150 LOC). Glues parser/generator
+4. **`multipart.rb` + tail integration** (~150 LOC). Glues parser/generator
    into `Rack::Multipart` facade. Closes AD param_builder dependency.
-6. **`query_parser` + `utils` config attrs** (~250 LOC). Class extraction
-   that `Request` depends on.
-7. **`request.rb` part A — forwarded headers + priorities** (~150 LOC).
-8. **`request.rb` part B — predicates and accessors** (~120 LOC).
-9. **`request.rb` part C — parse internals + multipart bridge** (~200 LOC).
-   Depends on slots 3–6.
-10. **`null_logger` 100% + small auth pair** (`auth/abstract/request` +
-    `auth/basic`, ~200 LOC).
-11. **`response.rb` 100% + `mock_response` + small leaves bundle**
-    (response 80 + mock_response 50 + builder 50 + tail leaves ~80 ≈ 260
-    LOC).
-12. **Tail leaves cleanup** — etag, show_exceptions, headers,
-    method_override, deflater, etc., bundled to ~250 LOC.
-13. **`version.release` + decide-and-document static/files/directory/reloader
-    deferrals** (~50 LOC + plan-doc updates).
+5. **`query_parser` + `utils.rb` config attrs** (~250 LOC). Class
+   extraction that `Request` depends on, plus the 8 module-level
+   accessors on `Rack::Utils` (`defaultQueryParser=`, `paramDepthLimit=`,
+   `multipartTotalPartLimit=`, `multipartFileLimit=` + getters).
+6. **`request.rb` part A — forwarded headers + priorities** (~150 LOC).
+7. **`request.rb` part B — predicates and accessors** (~120 LOC).
+8. **`request.rb` part C — parse internals + multipart bridge** (~200 LOC).
+   Depends on slots 2–5.
+9. **`null_logger` 100% + small auth pair** (`auth/abstract/request` +
+   `auth/basic`, ~200 LOC).
+10. **`response.rb` 100%** (~80 LOC). Standalone leaf, 8 methods.
+11. **3-miss leaves bundle** — `builder.rb`, `etag.rb`,
+    `show_exceptions.rb`, `headers.rb`, `mock_response.rb` (~250 LOC).
+    Bounded scope: only files with ≥3 misses.
+12. **2-miss + 1-miss leaves + version + misplaced cleanup** —
+    `events`, `urlmap`, `recursive`, `rewindable_input`, plus the eleven
+    1-miss leaves (`cascade`, `common_logger`, `conditional_get`,
+    `deflater`, `lock`, `media_type`, `method_override`, `sendfile`,
+    `show_status`, `mock_request`, `auth/abstract/handler`), plus
+    `version.release`, plus the 1 misplaced-method fix
+    (`auth/abstract/handler.rb`). ~200 LOC mechanical.
 
-After slots 1–12 land, we should be at or very close to 100% with only
-documented deferrals remaining.
+After all 12 slots land, only documented [indefinite defers](#indefinite-defers)
+remain.
+
+**Cross-package follow-up** (not a rack slot): audit
+activesupport/activemodel/actionpack api-compare diffs after #2257 for
+similar `module_function` and sclass `attr_accessor` shifts; tracked in
+the relevant package plan docs as they surface.
 
 ---
 
 ## Indefinite defers (do not port)
 
-Pending confirmation, candidates:
+Decisions taken here are reflected in the partial-files table above;
+formal exclusion goes in `scripts/api-compare/unported-files.ts` as part
+of slot 11 or 12.
 
-- `reloader.rb` — Ruby `$LOADED_FEATURES` semantics; Node has no analog.
-- `directory.rb`, `files.rb`, `static.rb` — directory/static file
-  middleware; serverless deploys handle this at the platform layer.
-  **Decision needed** — flag and either port or formally exclude in
-  `scripts/api-compare/unported-files.ts`.
+- `reloader.rb` (7 misses) — Ruby `$LOADED_FEATURES` semantics; Node has
+  no analog. **Decision: defer indefinitely.**
+- `directory.rb` (8), `files.rb` (4), `static.rb` (4) — directory/static
+  file middleware; serverless deploys handle this at the platform layer
+  and we don't ship the equivalent. **Decision: defer indefinitely**
+  pending an explicit product case.
+
+If any of these come back into scope, add the LOC budget to the slot
+list above and re-baseline.
 
 ---
 

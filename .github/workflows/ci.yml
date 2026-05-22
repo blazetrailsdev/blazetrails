@@ -5,10 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    # Per-adapter parity labels opt in specific suites without a new commit:
+    # Labels opt in specific suites without needing a new commit:
     #   run-parity-sqlite   — schema + query parity (SQLite fixtures)
     #   run-parity-postgres — Postgres-specific parity (future)
     #   run-parity-mysql    — MySQL/MariaDB-specific parity (future)
+    #   website             — force the Website build on a PR that doesn't
+    #                         touch packages/website/
+    #   release             — implies `website` (release PRs need the site
+    #                         built); reserve other release-only suites here
     types: [opened, synchronize, reopened, labeled]
   schedule:
     # Weekly post-merge sweep so slow regressions can't hide between
@@ -46,6 +50,7 @@ jobs:
       unit_tests_affected: ${{ steps.filter.outputs.unit_tests_affected }}
       guides_affected: ${{ steps.filter.outputs.guides_affected }}
       website_affected: ${{ steps.filter.outputs.website_affected }}
+      website_label: ${{ steps.filter.outputs.website_label }}
       parity_sqlite: ${{ steps.filter.outputs.parity_sqlite }}
       parity_postgres: ${{ steps.filter.outputs.parity_postgres }}
       parity_mysql: ${{ steps.filter.outputs.parity_mysql }}
@@ -124,12 +129,12 @@ jobs:
           #   grep -rhE "from ['\"]@blazetrails/[a-z-]+" packages/website/docs/guides
           GUIDES_PKGS_RE='^(packages/(activerecord|activemodel|activesupport|arel|globalid|did-you-mean|trails-tsc)/|packages/website/docs/guides/)'
           # website_affected gates the Website build (SvelteKit + typedoc +
-          # VitePress). Typedoc entry packages live in
-          # packages/website/typedoc.json: arel, activemodel, activerecord,
-          # activesupport, rack, actionpack. ActionView is currently absent
-          # from typedoc but pulled in by actionpack types, so include it.
-          # Trailties is not built by typedoc and is intentionally omitted.
-          WEBSITE_PKGS_RE='^packages/(website|arel|activemodel|activerecord|activesupport|rack|actionpack|actionview|globalid|did-you-mean|trails-tsc)/'
+          # VitePress). Scoped narrowly to packages/website/ — package-source
+          # changes alone don't trigger it. To run the site build on a PR
+          # that touches package sources, apply the `website` label (or the
+          # `release` label, which always runs it). The job is also
+          # exercised post-merge by push-to-main.
+          WEBSITE_PKGS_RE='^packages/website/'
           force_all_affected() {
             echo "activerecord_affected=true" >> "$GITHUB_OUTPUT"
             echo "actionpack_affected=true"   >> "$GITHUB_OUTPUT"
@@ -211,6 +216,22 @@ jobs:
                 ;;
             esac
           fi
+          # Website label opt-in. The Website job otherwise gates only on
+          # packages/website/ paths, so PRs that need a site preview (or
+          # release PRs that must build the production site) can apply the
+          # `website` or `release` label to force the job on.
+          case "${{ github.event_name }}" in
+            pull_request)
+              if echo "$PR_LABELS" | jq -e 'any(.[]; .name == "website" or .name == "release")' >/dev/null; then
+                echo "website_label=true"  >> "$GITHUB_OUTPUT"
+              else
+                echo "website_label=false" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            *)
+              echo "website_label=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
           # Per-adapter parity gates. Each suite is expensive (~15-20 CI
           # minutes across 7 jobs), so plain PRs skip all parity. Run on:
           #   - push to main / schedule / workflow_dispatch → all adapters
@@ -538,7 +559,8 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
-      needs.changes.outputs.website_affected == 'true'
+      (needs.changes.outputs.website_affected == 'true' ||
+       needs.changes.outputs.website_label == 'true')
     # Stays on hosted: SvelteKit + VitePress + typedoc build is too slow
     # on the self-hosted box and ties up a runner slot that cheaper jobs
     # could use. Hosted parallelism is free.
@@ -909,6 +931,7 @@ jobs:
           UNIT_TESTS_AFFECTED: ${{ needs.changes.outputs.unit_tests_affected }}
           GUIDES_AFFECTED: ${{ needs.changes.outputs.guides_affected }}
           WEBSITE_AFFECTED: ${{ needs.changes.outputs.website_affected }}
+          WEBSITE_LABEL: ${{ needs.changes.outputs.website_label }}
           PARITY_SQLITE: ${{ needs.changes.outputs.parity_sqlite }}
           PARITY_POSTGRES: ${{ needs.changes.outputs.parity_postgres }}
           PARITY_MYSQL: ${{ needs.changes.outputs.parity_mysql }}
@@ -965,7 +988,11 @@ jobs:
                   [ "$GUIDES_AFFECTED" = "false" ] && continue
                   ;;
                 website)
-                  [ "$WEBSITE_AFFECTED" = "false" ] && continue
+                  # Legitimate skip when website_affected is false AND no
+                  # website/release label opted the job in.
+                  if [ "$WEBSITE_AFFECTED" = "false" ] && [ "$WEBSITE_LABEL" != "true" ]; then
+                    continue
+                  fi
                   ;;
                 dx-type-tests)
                   # Legitimate skip when neither activerecord nor trailties paths changed.
@@ -985,7 +1012,7 @@ jobs:
                   [ "$any_parity" = "false" ] && continue
                   ;;
               esac
-              echo "Unexpectedly skipped job: $job (docs_only=$DOCS_ONLY ar_affected=$AR_AFFECTED ap_affected=$AP_AFFECTED av_affected=$AV_AFFECTED rack_affected=$RACK_AFFECTED trailties_affected=$TRAILTIES_AFFECTED trails_tsc_affected=$TRAILS_TSC_AFFECTED tse_compiler_affected=$TSE_COMPILER_AFFECTED unit_tests_affected=$UNIT_TESTS_AFFECTED guides_affected=$GUIDES_AFFECTED website_affected=$WEBSITE_AFFECTED parity_sqlite=$PARITY_SQLITE parity_postgres=$PARITY_POSTGRES parity_mysql=$PARITY_MYSQL)"
+              echo "Unexpectedly skipped job: $job (docs_only=$DOCS_ONLY ar_affected=$AR_AFFECTED ap_affected=$AP_AFFECTED av_affected=$AV_AFFECTED rack_affected=$RACK_AFFECTED trailties_affected=$TRAILTIES_AFFECTED trails_tsc_affected=$TRAILS_TSC_AFFECTED tse_compiler_affected=$TSE_COMPILER_AFFECTED unit_tests_affected=$UNIT_TESTS_AFFECTED guides_affected=$GUIDES_AFFECTED website_affected=$WEBSITE_AFFECTED website_label=$WEBSITE_LABEL parity_sqlite=$PARITY_SQLITE parity_postgres=$PARITY_POSTGRES parity_mysql=$PARITY_MYSQL)"
               unexpected=1
             done < <(echo "$NEEDS_JSON" | jq -r 'to_entries[] | "\(.key) \(.value.result)"')
           fi

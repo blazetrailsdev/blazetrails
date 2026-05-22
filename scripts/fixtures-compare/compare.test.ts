@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 // prettier-ignore
-import { stripErb, isRefLike, compareValue, compareFile, schemaCheck, canonicalizeRailsRow, ERB_SKIP_SENTINEL, tsModelPath, compareModelClass } from "./compare.js";
+import { stripErb, isRefLike, compareValue, compareFile, schemaCheck, canonicalizeRailsRow, ERB_SKIP_SENTINEL, tsModelPath, compareModelClass, buildIdIndexForTest, loadRailsYamlForTest } from "./compare.js";
 import type { RubyClass } from "./compare.js";
 import type { Schema } from "../../packages/activerecord/src/test-helpers/define-schema.js";
 
@@ -250,7 +250,6 @@ describe("canonicalizeRailsRow", () => {
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadRailsYamlForTest } from "./compare.js";
 describe("loadRailsYaml (parsing fidelity)", () => {
   const tmp = mkdtempSync(join(tmpdir(), "fixtures-compare-"));
   const write = (basename: string, contents: string): string => {
@@ -426,7 +425,6 @@ describe("enum-symbol comparator", () => {
   });
 });
 
-import { buildIdIndexForTest } from "./compare.js";
 describe("buildIdIndex (implicit-id fallback)", () => {
   // Mirrors Rails' `ActiveRecord::FixtureSet.identify(label)` so numeric FK
   // references in *other* fixtures resolve to label-only rows. Highest-impact

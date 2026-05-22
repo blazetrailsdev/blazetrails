@@ -1037,7 +1037,7 @@ export class Parameters {
   /** Rails `permit_any_in_parameters(params)`. @internal */
   permitAnyInParameters(params: Parameters): Parameters {
     const sanitized = new Parameters();
-    for (const [k, v] of Object.entries(params._data)) {
+    params.each((k, v) => {
       if (isPermittedScalar(v)) {
         sanitized._data[k] = v;
       } else if (Array.isArray(v)) {
@@ -1045,7 +1045,7 @@ export class Parameters {
       } else if (v instanceof Parameters) {
         sanitized._data[k] = this.permitAnyInParameters(v);
       }
-    }
+    });
     return sanitized;
   }
 

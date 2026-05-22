@@ -33,7 +33,12 @@ export async function pkg(
   const path = await getPathAsync();
   const pkgPath = path.join(this.cwd, "package.json");
   const raw = await fs.readFile!(pkgPath, "utf-8");
-  const json = JSON.parse(raw) as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(raw);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    const actual = parsed === null ? "null" : Array.isArray(parsed) ? "array" : typeof parsed;
+    throw new Error(`package.json must be a JSON object, got ${actual}`);
+  }
+  const json = parsed as Record<string, unknown>;
   const key = opts.dev ? "devDependencies" : "dependencies";
   const existing = json[key];
   if (
@@ -130,7 +135,10 @@ async function insertAtMarker(
   const path = await getPathAsync();
   const full = path.join(host.cwd, relPath);
   const existing = await fs.readFile!(full, "utf-8");
-  const idx = existing.indexOf(marker);
+  // Use the LAST occurrence so previously inserted blocks that happen to
+  // contain the marker string don't shadow the real one. Since each call
+  // inserts ABOVE the marker, the original marker is always last in file.
+  const idx = existing.lastIndexOf(marker);
   if (idx === -1) {
     throw new Error(`marker ${JSON.stringify(marker)} not found in ${relPath}`);
   }

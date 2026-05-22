@@ -76,6 +76,13 @@ describe("TrailsActions", () => {
       expect(json.dependencies["left-pad"]).toBe("*");
     });
 
+    it("throws a clear error when package.json is not a JSON object", async () => {
+      files.set("/app/package.json", "[]\n");
+      await expect(makeGen().pkg("left-pad")).rejects.toThrow(
+        /package.json must be a JSON object, got array/,
+      );
+    });
+
     it("throws a clear error when dependencies is not an object", async () => {
       files.set(
         "/app/package.json",
@@ -103,6 +110,18 @@ describe("TrailsActions", () => {
       await makeGen().route(`router.resources("posts");`);
       expect(files.get("/app/src/config/routes.ts")).toBe(
         `export function drawRoutes(router: any): void {\n  router.resources("posts");\n  // routes\n}\n`,
+      );
+    });
+
+    it("targets the original marker even when prior insertions contain the marker string", async () => {
+      files.set(
+        "/app/src/config/routes.ts",
+        `export function drawRoutes(router: any): void {\n  // routes\n}\n`,
+      );
+      await makeGen().route(`// routes (user note)\nrouter.resources("posts");`);
+      await makeGen().route(`router.resources("comments");`);
+      expect(files.get("/app/src/config/routes.ts")).toBe(
+        `export function drawRoutes(router: any): void {\n  // routes (user note)\n  router.resources("posts");\n  router.resources("comments");\n  // routes\n}\n`,
       );
     });
 

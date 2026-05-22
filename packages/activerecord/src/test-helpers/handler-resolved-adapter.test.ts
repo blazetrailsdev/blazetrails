@@ -15,6 +15,7 @@ import { Base } from "../base.js";
 import { defineSchema } from "./define-schema.js";
 import { dropAllTables } from "./drop-all-tables.js";
 import { clearAppliedSchemaSignatures } from "./define-schema.js";
+import { bootstrapTestHandler } from "./bootstrap-test-handler.js";
 
 class HandlerResolvedPost extends Base {
   static {
@@ -28,8 +29,11 @@ class HandlerResolvedPost extends Base {
 
 describe("handler-resolved adapter (Phase D-0)", () => {
   beforeAll(async () => {
-    // No adapter arg — resolves via Base.connectionHandler established in
-    // test-setup-ar.ts. This is the new Rails-shape call pattern.
+    // Bootstrap the handler for this test file. Opt-in (not global) so that
+    // tests expecting "no adapter configured" aren't affected.
+    await bootstrapTestHandler();
+    // No adapter arg — resolves via Base.connectionHandler. This is the
+    // new Rails-shape call pattern that D-1..N test files will use.
     await defineSchema({ handler_resolved_posts: { title: "string" } });
   });
 
@@ -39,7 +43,7 @@ describe("handler-resolved adapter (Phase D-0)", () => {
     clearAppliedSchemaSignatures(adapter);
   });
 
-  it("Base.isConnectedQ() is true after worker bootstrap", () => {
+  it("isConnectedQ() is true after bootstrapTestHandler()", () => {
     expect(Base.isConnectedQ()).toBe(true);
   });
 

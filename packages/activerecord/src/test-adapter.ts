@@ -160,8 +160,12 @@ export function createSidecarTestAdapter(): {
 let _pooledHandler:
   | import("./connection-adapters/abstract/connection-handler.js").ConnectionHandler
   | null = null;
-let _pooledPool: import("./connection-adapters/abstract/connection-pool.js").ConnectionPool | null =
-  null;
+// Memoizes the in-flight initialization so concurrent callers (Promise.all,
+// parallel test bodies in the same worker) all await the same pool instead
+// of racing to establish two ConnectionHandlers and leaking one.
+let _pooledPoolPromise: Promise<
+  import("./connection-adapters/abstract/connection-pool.js").ConnectionPool
+> | null = null;
 
 /** Per-worker SQLite shared-cache database name (Phase A0 spike: prefer named form). */
 function _pooledSqliteDatabase(): string {
@@ -169,43 +173,51 @@ function _pooledSqliteDatabase(): string {
   return `file:trails_test_${workerId}?mode=memory&cache=shared`;
 }
 
-async function _establishPooledTestPool(): Promise<
+function _establishPooledTestPool(): Promise<
   import("./connection-adapters/abstract/connection-pool.js").ConnectionPool
 > {
-  if (_pooledPool) return _pooledPool;
-  const { ConnectionHandler } =
-    await import("./connection-adapters/abstract/connection-handler.js");
-  const { HashConfig } = await import("./database-configurations/hash-config.js");
+  if (_pooledPoolPromise) return _pooledPoolPromise;
+  _pooledPoolPromise = (async () => {
+    const { ConnectionHandler } =
+      await import("./connection-adapters/abstract/connection-handler.js");
+    const { HashConfig } = await import("./database-configurations/hash-config.js");
 
-  let adapterName: string;
-  let configuration: Record<string, unknown>;
-  let adapterFactory: () => DatabaseAdapter;
+    let adapterName: string;
+    let configuration: Record<string, unknown>;
+    let adapterFactory: () => DatabaseAdapter;
 
-  if (PG_TEST_URL) {
-    adapterName = "postgresql";
-    configuration = { adapter: adapterName, url: PG_TEST_URL };
-    const { PostgreSQLAdapter } = await import("./connection-adapters/postgresql-adapter.js");
-    adapterFactory = () => new PostgreSQLAdapter(PG_TEST_URL) as unknown as DatabaseAdapter;
-  } else if (MYSQL_TEST_URL) {
-    adapterName = "mysql2";
-    configuration = { adapter: adapterName, url: MYSQL_TEST_URL };
-    const { Mysql2Adapter } = await import("./connection-adapters/mysql2-adapter.js");
-    adapterFactory = () => new Mysql2Adapter(MYSQL_TEST_URL) as unknown as DatabaseAdapter;
-  } else {
-    adapterName = "sqlite3";
-    const database = _pooledSqliteDatabase();
-    configuration = { adapter: adapterName, database };
-    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
-    adapterFactory = () => new SQLite3Adapter(database) as unknown as DatabaseAdapter;
-  }
+    if (PG_TEST_URL) {
+      adapterName = "postgresql";
+      configuration = { adapter: adapterName, url: PG_TEST_URL };
+      const { PostgreSQLAdapter } = await import("./connection-adapters/postgresql-adapter.js");
+      adapterFactory = () => new PostgreSQLAdapter(PG_TEST_URL) as unknown as DatabaseAdapter;
+    } else if (MYSQL_TEST_URL) {
+      adapterName = "mysql2";
+      configuration = { adapter: adapterName, url: MYSQL_TEST_URL };
+      const { Mysql2Adapter } = await import("./connection-adapters/mysql2-adapter.js");
+      adapterFactory = () => new Mysql2Adapter(MYSQL_TEST_URL) as unknown as DatabaseAdapter;
+    } else {
+      adapterName = "sqlite3";
+      const database = _pooledSqliteDatabase();
+      configuration = { adapter: adapterName, database };
+      const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+      adapterFactory = () => new SQLite3Adapter(database) as unknown as DatabaseAdapter;
+    }
 
-  _pooledHandler = new ConnectionHandler();
-  const config = new HashConfig("test", "pooled", configuration);
-  _pooledPool = _pooledHandler.establishConnection(config, {
-    owner: "PooledTestAdapter",
-    adapterFactory,
+    const handler = new ConnectionHandler();
+    _pooledHandler = handler;
+    const config = new HashConfig("test", "pooled", configuration);
+    return handler.establishConnection(config, {
+      owner: "PooledTestAdapter",
+      adapterFactory,
+    });
+  })().catch((err) => {
+    // Drop the memoized promise on failure so a follow-up call can retry
+    // instead of permanently resolving every caller to the rejection.
+    _pooledPoolPromise = null;
+    throw err;
   });
-  return _pooledPool;
+  return _pooledPoolPromise;
 }
 
 /**
@@ -243,7 +255,7 @@ export function _resetPooledTestAdapterForTests(): void {
     } catch {}
   }
   _pooledHandler = null;
-  _pooledPool = null;
+  _pooledPoolPromise = null;
 }
 
 /**

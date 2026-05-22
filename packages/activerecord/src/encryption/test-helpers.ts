@@ -514,19 +514,21 @@ export function makeEncryptedBookAttribute(adapter: DatabaseAdapter) {
   } as any;
 }
 
-// Mirrors Rails' `->(value) { value.to_s.downcase }` lambda used by both
-// EncryptedBookNormalizedFirst/Second. Binary inputs are decoded as
-// Latin-1 (byte-preserving 1:1 mapping for bytes 128–255), lowercased,
-// then re-encoded back to Uint8Array so the cast type of a `:binary`
-// attribute is preserved through normalization (normalizes runs after
-// type casting and writes back via writeCastValue).
-const _latin1Decoder = new TextDecoder("latin1");
+// Mirrors Ruby's `value.to_s.downcase` on an ASCII-8BIT string: only ASCII
+// A–Z bytes are lowercased; bytes > 0x7F are preserved bit-for-bit (Ruby's
+// downcase on a binary string does not perform Unicode case folding).
+// For our `logo: binary` attribute the cast type yields a Uint8Array,
+// so we lowercase bytes directly and return a Uint8Array to preserve the
+// binary cast type through normalization (which writes back via
+// writeCastValue after casting).
 function _downcaseLikeRails(v: unknown): unknown {
   if (v == null) return v;
   if (v instanceof Uint8Array) {
-    const lower = _latin1Decoder.decode(v).toLowerCase();
-    const out = new Uint8Array(lower.length);
-    for (let i = 0; i < lower.length; i++) out[i] = lower.charCodeAt(i) & 0xff;
+    const out = new Uint8Array(v.length);
+    for (let i = 0; i < v.length; i++) {
+      const b = v[i]!;
+      out[i] = b >= 0x41 && b <= 0x5a ? b + 0x20 : b;
+    }
     return out;
   }
   return String(v).toLowerCase();

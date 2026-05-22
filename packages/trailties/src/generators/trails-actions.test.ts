@@ -169,6 +169,12 @@ describe("TrailsActions", () => {
       await expect(makeGen().initializer("../evil.ts", "export {};")).rejects.toThrow(/leaf name/);
       await expect(makeGen().initializer("nested/x.ts", "export {};")).rejects.toThrow(/leaf name/);
     });
+
+    it("rejects empty, ., and .. filenames", async () => {
+      await expect(makeGen().initializer("", "export {};")).rejects.toThrow(/leaf name/);
+      await expect(makeGen().initializer(".", "export {};")).rejects.toThrow(/leaf name/);
+      await expect(makeGen().initializer("..", "export {};")).rejects.toThrow(/leaf name/);
+    });
   });
 
   it("route and environment reject Ruby-shape source", async () => {

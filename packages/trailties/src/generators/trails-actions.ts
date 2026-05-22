@@ -6,7 +6,7 @@
 // files in a trails app; they have no Ruby counterpart.
 
 import { getFsAsync, getPathAsync } from "@blazetrails/activesupport";
-import { assertNoRubySource } from "../template-builder/testing.js";
+import { assertNoRubySource } from "../template-builder/no-ruby-source.js";
 
 export interface TrailsActionsHost {
   cwd: string;
@@ -40,7 +40,8 @@ export async function pkg(
     existing !== undefined &&
     (existing === null || typeof existing !== "object" || Array.isArray(existing))
   ) {
-    throw new Error(`package.json "${key}" must be an object, got ${typeof existing}`);
+    const actual = existing === null ? "null" : Array.isArray(existing) ? "array" : typeof existing;
+    throw new Error(`package.json "${key}" must be an object, got ${actual}`);
   }
   const deps = (existing as Record<string, string> | undefined) ?? {};
   deps[name] = version;
@@ -100,7 +101,13 @@ export async function initializer(
   filename: string,
   content: string,
 ): Promise<void> {
-  if (filename.includes("/") || filename.includes("\\") || filename.split(/[/\\]/).includes("..")) {
+  if (
+    filename === "" ||
+    filename === "." ||
+    filename === ".." ||
+    filename.includes("/") ||
+    filename.includes("\\")
+  ) {
     throw new Error(`initializer filename must be a leaf name, got ${JSON.stringify(filename)}`);
   }
   assertNoRubySource(content);

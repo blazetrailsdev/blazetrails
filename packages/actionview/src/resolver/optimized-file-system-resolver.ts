@@ -3,9 +3,10 @@
  *
  * Rails' default filesystem resolver. Caches `find` lookup results keyed
  * by `(name, prefix, format, extensions)` so repeated lookups don't
- * re-`stat` the filesystem on every render. Call `clearCache()` to
- * invalidate (or `DetailsKey.clear()` which walks `PathRegistry` and
- * calls `clearCache()` on every live resolver).
+ * re-`stat` the filesystem on every render. Call `clearCache()` on the
+ * resolver to invalidate. Process-wide invalidation via `DetailsKey.clear()`
+ * walking `PathRegistry` is pending the PathRegistry follow-up — today
+ * the registry is a stub and only per-resolver `clearCache()` takes effect.
  */
 
 import type { Template } from "../template.js";

@@ -72,7 +72,7 @@ describe("PostgreSQLAdapter#withClient (single persistent connection)", () => {
     expect(observed).toBe(persistentClient);
   });
 
-  it("resetBang barrier: concurrent _acquireFreshClient waits until DISCARD ALL resolves", async () => {
+  it("resetBang barrier: real _acquireFreshClient waits until DISCARD ALL resolves", async () => {
     adapter = new PostgreSQLAdapter({ host: "localhost", port: 1 }) as unknown as PrivatePgAdapter;
 
     const order: string[] = [];
@@ -90,27 +90,37 @@ describe("PostgreSQLAdapter#withClient (single persistent connection)", () => {
         }
         return { rows: [], fields: [] };
       }),
+      end: async () => {},
+      on: () => fakeClient,
     };
+    // Pre-seed the connection so _acquireFreshClient takes the fast path
+    // after the barrier (avoids real network I/O).
     adapter._rawConnection = fakeClient;
 
-    // Bypass acquire/configure — queries should go straight to the mock.
-    vi.spyOn(adapter, "_acquireFreshClient").mockImplementation(async () => {
-      // Honour the barrier, then return the fake client.
-      if (adapter._inFlightReset) await adapter._inFlightReset;
-      order.push("acquire-done");
-      return fakeClient;
-    });
+    // Stub the configure/drain helpers so the slow path doesn't hit the
+    // network if the fast path guard is re-evaluated after the await.
+    vi.spyOn(
+      adapter as unknown as { _maybeConfigureConnection: () => Promise<void> },
+      "_maybeConfigureConnection",
+    ).mockResolvedValue(undefined);
+
+    // Pre-mark configured so the fast path (no configure, no drain) is
+    // taken once the barrier clears.
+    (adapter as unknown as { _connectionConfigured: boolean })._connectionConfigured = true;
 
     // Fire resetBang (sync) — sets _inFlightReset before returning.
     adapter.resetBang();
     expect(adapter._inFlightReset).not.toBeNull();
 
-    // Concurrent acquire — must queue behind the in-flight reset.
-    const acquirePromise = adapter._acquireFreshClient();
+    // Concurrent acquire using the REAL _acquireFreshClient — must queue
+    // behind the in-flight reset.
+    const acquirePromise = adapter._acquireFreshClient().then((c) => {
+      order.push("acquire-done");
+      return c;
+    });
 
-    // Nothing should be acquired yet while DISCARD ALL is pending.
-    await Promise.resolve();
-    await Promise.resolve();
+    // Yield several microtask ticks; DISCARD ALL gate holds everything up.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
     expect(order).toEqual(["discard-start"]);
 
     // Release DISCARD ALL — the acquire should now proceed.

@@ -294,8 +294,10 @@ jobs:
     name: Prettier
     needs: changes
     # Prettier doesn't need the workspace installed. Skip `pnpm install`
-    # entirely and run prettier directly via `npx`. Pinned version must
-    # match `prettier` in package.json (and pnpm-lock.yaml) — bump together.
+    # entirely and run prettier directly via `npx`. The version below MUST
+    # equal the exact pin in root `package.json` devDependencies; the
+    # `prettier` entry there is intentionally pinned (no `^`) so CI and
+    # local `pnpm format` can never drift.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

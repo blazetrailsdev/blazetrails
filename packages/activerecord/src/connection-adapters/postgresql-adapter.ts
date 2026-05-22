@@ -891,7 +891,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
     // Serialize behind any in-flight reset (ROLLBACK + DISCARD ALL) so no
     // query can interleave between the two commands resetBang fires.
-    if (this._inFlightReset) await this._inFlightReset;
+    while (this._inFlightReset) await this._inFlightReset;
     // Re-check after the yield: a concurrent close/disconnect/discard
     // may have run while we were waiting for the reset to complete.
     if (this._closed || this._pgClientOptions == null) {
@@ -2033,7 +2033,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this.verifiedBang();
       return;
     }
-    if (this._inFlightReset) await this._inFlightReset;
+    while (this._inFlightReset) await this._inFlightReset;
     // Re-check after the yield: a concurrent disconnect/close/discard
     // may have nulled _rawConnection while we were waiting.
     const conn = this._rawConnection;

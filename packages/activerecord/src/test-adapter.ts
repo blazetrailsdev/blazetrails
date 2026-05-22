@@ -657,6 +657,28 @@ class TestAdapterFixtures implements DatabaseAdapter {
     return this.inner.quotedFalse();
   }
 
+  quoteTableNameForAssignment(_table: string, attr: string): string {
+    const inner = this.inner as { quoteTableNameForAssignment?: (t: string, a: string) => string };
+    if (typeof inner.quoteTableNameForAssignment === "function")
+      return inner.quoteTableNameForAssignment(_table, attr);
+    return this.quoteColumnName(attr);
+  }
+
+  castBoundValue(value: unknown): unknown {
+    const inner = this.inner as { castBoundValue?: (v: unknown) => unknown };
+    if (typeof inner.castBoundValue === "function") return inner.castBoundValue(value);
+    return value;
+  }
+
+  sanitizeAsSqlComment(value: unknown): string {
+    const inner = this.inner as { sanitizeAsSqlComment?: (v: unknown) => string };
+    if (typeof inner.sanitizeAsSqlComment === "function") return inner.sanitizeAsSqlComment(value);
+    let comment = String(value);
+    comment = comment.replace(/^\s*\/\*\+?\s?/, "").replace(/\s?\*\/\s*$/, "");
+    comment = comment.replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
+    return comment;
+  }
+
   get arelVisitor(): Visitors.ToSql | undefined {
     // Phase 9b-2b: all three adapters now delegate. The dormant
     // `new Visitors.ToSql` fallback in `Relation#_arelVisitor` is dead

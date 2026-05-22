@@ -450,6 +450,28 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     );
   }
 
+  quoteTableNameForAssignment(_table: string, attr: string): string {
+    const inner = this.inner as { quoteTableNameForAssignment?: (t: string, a: string) => string };
+    if (typeof inner.quoteTableNameForAssignment === "function")
+      return inner.quoteTableNameForAssignment(_table, attr);
+    return this.quoteColumnName(attr);
+  }
+
+  castBoundValue(value: unknown): unknown {
+    const inner = this.inner as { castBoundValue?: (v: unknown) => unknown };
+    if (typeof inner.castBoundValue === "function") return inner.castBoundValue(value);
+    return value;
+  }
+
+  sanitizeAsSqlComment(value: unknown): string {
+    const inner = this.inner as { sanitizeAsSqlComment?: (v: unknown) => string };
+    if (typeof inner.sanitizeAsSqlComment === "function") return inner.sanitizeAsSqlComment(value);
+    let comment = String(value);
+    comment = comment.replace(/^\s*\/\*\+?\s?/, "").replace(/\s?\*\/\s*$/, "");
+    comment = comment.replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
+    return comment;
+  }
+
   get arelVisitor(): Visitors.ToSql | undefined {
     return (this.inner as { arelVisitor?: Visitors.ToSql }).arelVisitor;
   }

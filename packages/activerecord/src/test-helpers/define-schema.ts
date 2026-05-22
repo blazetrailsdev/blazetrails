@@ -417,5 +417,36 @@ export async function defineSchema(
       }
     });
     cache.set(table, newSig);
+    await warmSchemaCacheFor(adapter, table);
+  }
+}
+
+/**
+ * Warm the adapter's schema cache for `table` so that
+ * `columnForAttribute()` resolves columns for `defineSchema`-created
+ * tables under the bare sidecar adapter. The legacy `TestAdapterFixtures`
+ * wrapper masked this gap by lazy-loading on first access through paths
+ * that already had a connection in hand; the bare adapter exposes it
+ * because `columnForAttribute` → `schemaCache.columnsHash(pool, name)`
+ * misses on a never-introspected table and PG's
+ * `caseInsensitiveComparison` then silently drops the `LOWER()` wrap.
+ *
+ * Skips quietly when the adapter doesn't expose a schema cache (raw
+ * connections in low-level adapter tests) or when the warmup fails
+ * (in-memory SQLite tables that don't survive a pool's `withConnection`
+ * boundary, etc.) — caching is a performance/correctness aid here, not
+ * a hard requirement.
+ *
+ * @internal
+ */
+async function warmSchemaCacheFor(adapter: DatabaseAdapter, table: string): Promise<void> {
+  const sc = (adapter as { schemaCache?: { add(pool: unknown, name: string): Promise<void> } })
+    .schemaCache;
+  if (!sc || typeof sc.add !== "function") return;
+  const pool = (adapter as { pool?: unknown }).pool ?? adapter;
+  try {
+    await sc.add(pool, table);
+  } catch {
+    // Best-effort — see JSDoc.
   }
 }

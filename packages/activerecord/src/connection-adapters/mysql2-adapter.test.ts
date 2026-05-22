@@ -22,19 +22,21 @@ let mysqlHasExprIndexes = false;
 let mysqlRejectsZeroDate = false;
 
 async function checkMysql(): Promise<void> {
+  let conn: Awaited<ReturnType<typeof mysql.createConnection>> | undefined;
   try {
-    const conn = await mysql.createConnection({ uri: MYSQL_TEST_URL });
+    conn = await mysql.createConnection({ uri: MYSQL_TEST_URL });
     const [exprRows] = await conn.query(
       `SELECT 1 FROM information_schema.columns WHERE table_schema='information_schema' AND table_name='STATISTICS' AND column_name='EXPRESSION' LIMIT 1`,
     );
     const [modeRows] = await conn.query("SELECT @@SESSION.sql_mode AS m");
     const mode = String((modeRows as Array<{ m: string }>)[0]?.m ?? "");
-    await conn.end();
     mysqlAvailable = true;
     mysqlHasExprIndexes = (exprRows as Array<unknown>).length > 0;
     mysqlRejectsZeroDate = mode.includes("NO_ZERO_DATE") || mode.includes("TRADITIONAL");
   } catch {
     /* MySQL unavailable — describeIfMysql will skip everything. */
+  } finally {
+    await conn?.end().catch(() => {});
   }
 }
 

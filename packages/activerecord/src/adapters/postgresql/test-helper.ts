@@ -11,14 +11,15 @@ let pgAvailable = false;
 let pgServerVersionNum = 0;
 
 async function checkPg(): Promise<{ available: boolean; serverVersionNum: number }> {
+  const client = new pg.Client({ connectionString: PG_TEST_URL });
   try {
-    const client = new pg.Client({ connectionString: PG_TEST_URL });
     await client.connect();
     const res = await client.query<{ v: string }>("SHOW server_version_num");
-    await client.end();
     return { available: true, serverVersionNum: Number(res.rows[0]?.v ?? 0) };
   } catch {
     return { available: false, serverVersionNum: 0 };
+  } finally {
+    await client.end().catch(() => {});
   }
 }
 

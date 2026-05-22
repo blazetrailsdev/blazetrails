@@ -7,18 +7,35 @@
  */
 
 import { ActionableError } from "@blazetrails/activesupport";
+import { cattrAccessor } from "@blazetrails/activesupport";
 import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
 import { bodyFromString } from "@blazetrails/rack";
 import { LOCATION } from "../constants.js";
 import { Request } from "../http/request.js";
 
 export class ActionableExceptions {
-  static endpoint = "/rails/actions";
+  /**
+   * Endpoint that actionable-exception forms POST back to. Declared via
+   * {@link cattrAccessor} so apps can override it per-class through the
+   * Rails-shaped `cattr_accessor :endpoint` setter without disturbing the
+   * parent (Rails: `ActionDispatch::ActionableExceptions.endpoint = "..."`).
+   */
+  static endpoint: string;
 
   private app: RackApp;
 
   constructor(app: RackApp) {
     this.app = app;
+  }
+
+  static {
+    cattrAccessor(
+      ActionableExceptions as unknown as Record<string, unknown> & { new (): unknown },
+      "endpoint",
+      {
+        default: "/rails/actions",
+      },
+    );
   }
 
   async call(env: RackEnv): Promise<RackResponse> {

@@ -27,7 +27,7 @@ Current (2026-05-22):
 
 abstractcontroller api-surface is closed. Remaining gaps live in
 ActionDispatch (8 partial files) and ActionController (9 partial files,
-mostly `base.rb` mixin chain + `test_case.rb` + http_authentication).
+mostly `base.rb` mixin chain + `test_case.rb` + `metal/http_authentication.rb`).
 
 ---
 
@@ -284,8 +284,8 @@ Pair with:
 
 - ~20 — wire `ALLOWED_HOSTS_IN_DEVELOPMENT` into a trailties Railtie default
   config (currently exported but consumers must pass manually).
-- ~10 — widen `exclude` to accept Request (`(envOrRequest: RackEnv | Request)
-=> boolean`) or switch fully to Request.
+- ~10 — widen `exclude` to accept Request (signature
+  `(envOrRequest: RackEnv | Request) => boolean`) or switch fully to Request.
 
 ### S13 — DidYouMean reopen sweep (~80 LOC across packages) — cross-package
 
@@ -471,9 +471,9 @@ Future-wired stubs blocked on unported targets (`Response.defaultCharset` /
   whitespace on a non-first forwarded entry is preserved (#2244 c2/c3).
 - **`buildBacktrace`** returns raw stack lines instead of remapping
   template frames through `ActionView::PathRegistry` (#2081).
-- **`isTemplateError`** uses string name-match instead of `instanceof
-ActionView::Template::Error` (avoids actionpack→actionview dependency
-  inversion).
+- **`isTemplateError`** uses string name-match instead of
+  `instanceof ActionView::Template::Error` (avoids actionpack→actionview
+  dependency inversion).
 - **`ShowExceptions`** mutates env directly and restores in `finally`;
   Rails dups env (`env.dup`). Equivalent return value but diverges if
   `exceptionsApp` keeps a reference.
@@ -511,9 +511,16 @@ CLAUDE.md constraints:
 
 - camelCase only — no snake_case identifiers (including Rails payload keys).
 - PR ≤ 300 LOC (excl. lockfiles, snapshots).
-- Mixin methods use the `this`-typed function pattern: `export function
-foo(this: HostInterface, …)` then `static foo = foo`. Do NOT inline the
-  body in `base.ts`.
+- Mixin methods use the `this`-typed function pattern:
+
+  ```ts
+  export function foo(this: HostInterface, ...) { ... }
+  // then on the host class:
+  static foo = foo;
+  ```
+
+  Do NOT inline the body in `base.ts`.
+
 - For class-attached mixin methods, **use declared class fields inside the
   class body** — `declare module "./X" { interface … }` declaration merging
   is NOT picked up by the api:compare extractor (#2137).

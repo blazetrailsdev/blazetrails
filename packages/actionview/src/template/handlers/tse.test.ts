@@ -121,17 +121,43 @@ describe("Template::Handlers::Tse", () => {
     expect(code).toMatch(/_ob\.append\(name\)/);
   });
 
-  it("exposes supportsStreaming as a class-level boolean", () => {
-    expect(Tse.supportsStreaming).toBe(true);
-  });
+  describe("translateLocation", () => {
+    it("anchors a compiled spot to the source-line column (Rails parity)", () => {
+      const source = "<h1>hi</h1>\n<%= name %>\n";
+      const spot = {
+        snippet: "_ob.append( name );",
+        firstLineno: 2,
+        lastLineno: 2,
+        firstColumn: 12,
+        lastColumn: 16,
+      };
+      const out = new Tse().translateLocation(spot, { lineno: 2 }, source);
+      expect(out).not.toBeNull();
+      expect(out!.scriptLines).toEqual(["<h1>hi</h1>\n", "<%= name %>\n"]);
+      expect(out!.firstLineno).toBe(2);
+    });
 
-  it("exposes handlesEncoding as a class-level boolean", () => {
-    expect(Tse.handlesEncoding).toBe(true);
-  });
+    it("returns null when backtrace lineno is past EOF", () => {
+      const spot = {
+        snippet: "_ob.append(x);",
+        firstLineno: 1,
+        lastLineno: 1,
+        firstColumn: 0,
+        lastColumn: 1,
+      };
+      expect(new Tse().translateLocation(spot, { lineno: 99 }, "a\nb\n")).toBeNull();
+    });
 
-  it("translateLocation returns the frame unchanged (stub)", () => {
-    const frame = { file: "show.html.tse", line: 4, column: 2 };
-    expect(Tse.translateLocation(null, frame, "<%= 1 %>")).toBe(frame);
+    it("returns null when the snippet can't be anchored against source tokens", () => {
+      const spot = {
+        snippet: "totally-unrelated",
+        firstLineno: 1,
+        lastLineno: 1,
+        firstColumn: 0,
+        lastColumn: 1,
+      };
+      expect(new Tse().translateLocation(spot, { lineno: 1 }, "<%= name %>")).toBeNull();
+    });
   });
 
   it("registers against the .tse extension via Template::Handlers", () => {

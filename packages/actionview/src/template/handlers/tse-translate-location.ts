@@ -1,0 +1,163 @@
+/**
+ * Port of `ActionView::Template::Handlers::ERB#translate_location` (and its
+ * private `find_offset` / `offset_source_tokens` helpers). Maps a compiled-JS
+ * spot back to the originating `.tse` source position by anchoring the
+ * compiled snippet against per-line tokens of the source.
+ *
+ * Algorithm preserved 1:1 from Rails (`erb.rb` lines 43–161). Key shape
+ * differences from the Ruby original:
+ *
+ * - Ruby's `String#lines` keeps the trailing line-separator; we mirror that
+ *   with a `split(/(?<=\n)/)`.
+ * - Ruby uses `StringScanner` over byte offsets; JS strings are UTF-16 code
+ *   units, so positions here are code-unit indices. ASCII-only source (the
+ *   common case for templates) round-trips identically. Multi-byte content
+ *   diverges in absolute column counts but the relative deltas this method
+ *   computes are still correct.
+ * - Ruby's `ERB::Util.tokenize(line)` yields `[:CODE | :TEXT, str]` pairs
+ *   where CODE is the *contents* of `<% %>` (no delimiters). Our tokenizer
+ *   matches that shape so the find-offset scan against compiled code lines
+ *   up — compiled `<%= name %>` emits `_ob.append(name);`, which contains
+ *   the CODE substring `" name "` literally.
+ */
+
+export class LocationParsingError extends Error {
+  override name = "LocationParsingError";
+}
+
+/** Minimal shape needed from a JS backtrace location. Matches the property
+ *  V8/Node expose on `CallSite` / parsed stack frames. */
+export interface BacktraceLocation {
+  lineno: number;
+}
+
+/** Mirrors the `ErrorHighlight::Spot` hash Rails mutates in place. Field
+ *  names are camelCased; semantics are 1:1 with Ruby. `scriptLines` is
+ *  written by `translateLocation` on success. */
+export interface Spot {
+  snippet: string;
+  firstLineno: number;
+  lastLineno: number;
+  firstColumn: number;
+  lastColumn: number;
+  scriptLines?: string[];
+}
+
+interface SourceToken {
+  kind: "CODE" | "TEXT";
+  value: string;
+}
+
+interface OffsetToken {
+  kind: "CODE" | "TEXT" | "EOS";
+  value: string;
+  offset: number;
+}
+
+/** `String#lines` parity — split on `\n` while keeping the separator on each
+ *  line. `"a\nb\nc"` → `["a\n", "b\n", "c"]`. An empty source yields `[]`,
+ *  matching Ruby. */
+export function sourceLines(source: string): string[] {
+  if (source.length === 0) return [];
+  return source.split(/(?<=\n)/);
+}
+
+const LINE_TAG_RE = /<%(?:-)?(?:==|=|#)?([\s\S]*?)(?:-)?%>/g;
+
+/** `ERB::Util.tokenize` parity for a single source line: CODE for `<% … %>`
+ *  contents, TEXT for everything else. Empty TEXT segments are skipped. */
+export function tokenizeLine(line: string): SourceToken[] {
+  const tokens: SourceToken[] = [];
+  let last = 0;
+  for (const m of line.matchAll(LINE_TAG_RE)) {
+    if (m.index! > last) tokens.push({ kind: "TEXT", value: line.slice(last, m.index!) });
+    tokens.push({ kind: "CODE", value: m[1] });
+    last = m.index! + m[0].length;
+  }
+  if (last < line.length) tokens.push({ kind: "TEXT", value: line.slice(last) });
+  return tokens;
+}
+
+/** Annotate each CODE/TEXT token with its byte offset within the source line,
+ *  appending an EOS sentinel. Mirrors `offset_source_tokens` in `erb.rb`. */
+function offsetSourceTokens(tokens: SourceToken[]): OffsetToken[] {
+  const result: OffsetToken[] = [];
+  let offset = 0;
+  for (const t of tokens) {
+    result.push({ kind: t.kind, value: t.value, offset });
+    offset += t.value.length;
+  }
+  result.push({ kind: "EOS", value: "", offset });
+  return result;
+}
+
+/**
+ * `find_offset` parity. Walks `compiled` with a position cursor, anchoring on
+ * consecutive source-token pairs. When the current CODE token's span covers
+ * `errorColumn` in the compiled snippet, returns the equivalent source-line
+ * column.
+ */
+export function findOffset(
+  compiled: string,
+  sourceTokens: SourceToken[],
+  errorColumn: number,
+): number {
+  const tokens = offsetSourceTokens(sourceTokens);
+  let pos = 0;
+
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const { kind: name, value: str, offset } = tokens[i];
+    const next = tokens[i + 1];
+    let matchedStr = false;
+
+    while (pos < compiled.length) {
+      if (matchedStr && next.value.length > 0 && compiled.startsWith(next.value, pos)) {
+        break;
+      } else if (str.length > 0 && compiled.startsWith(str, pos)) {
+        matchedStr = true;
+        if (name === "CODE" && pos <= errorColumn && pos + str.length >= errorColumn) {
+          return errorColumn - pos + offset;
+        }
+        pos += str.length;
+      } else {
+        pos += 1;
+      }
+    }
+  }
+
+  throw new LocationParsingError("Couldn't find code snippet");
+}
+
+/**
+ * Map a compiled-JS `spot` back to its originating `.tse` source location.
+ * Mutates `spot` in place (matching Rails) and returns it; returns `null` if
+ * the backtrace line is past EOF or `find_offset` can't anchor.
+ *
+ * Mirrors `Template::Handlers::ERB#translate_location`.
+ */
+export function translateLocation(
+  spot: Spot,
+  backtraceLocation: BacktraceLocation,
+  source: string,
+): Spot | null {
+  try {
+    const lines = sourceLines(source);
+    if (lines.length < backtraceLocation.lineno) return null;
+    const tokens = tokenizeLine(lines[backtraceLocation.lineno - 1]);
+    const newFirstColumn = findOffset(spot.snippet, tokens, spot.firstColumn);
+
+    const linenoDelta = spot.firstLineno - backtraceLocation.lineno;
+    spot.firstLineno -= linenoDelta;
+    spot.lastLineno -= linenoDelta;
+
+    const columnDelta = spot.firstColumn - newFirstColumn;
+    spot.firstColumn -= columnDelta;
+    spot.lastColumn -= columnDelta;
+    spot.scriptLines = lines;
+
+    return spot;
+  } catch (e) {
+    if (e instanceof LocationParsingError) return null;
+    throw e;
+  }
+}

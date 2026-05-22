@@ -1,6 +1,17 @@
 import { chomp } from "@blazetrails/activesupport";
 import { compileJs, type EmitJsOptions, type EmitResult } from "@blazetrails/tse-compiler";
 import type { RenderContext, TemplateHandler } from "../handlers.js";
+import {
+  translateLocation as translateLocationImpl,
+  type BacktraceLocation,
+  type Spot,
+} from "./tse-translate-location.js";
+
+export {
+  LocationParsingError,
+  type BacktraceLocation,
+  type Spot,
+} from "./tse-translate-location.js";
 
 /**
  * Minimal shape `Tse#call` needs from a template. Mirrors the subset of
@@ -71,36 +82,28 @@ export class Tse implements TemplateHandler {
     return new this().call(template, source);
   }
 
-  /**
-   * Streaming render protocol marker. Mirrors
-   * `Template::Handlers::ERB.supports_streaming?` — Rails defines this on the
-   * class. Trails exposes both forms: the static boolean for class-level
-   * checks and the instance method for prototype-dispatch callers.
-   */
-  static readonly supportsStreaming = true as const;
-
-  /** Mirrors `Template::Handlers::ERB.handles_encoding?` (class-level). */
-  static readonly handlesEncoding = true as const;
-
+  /** Mirrors `Template::Handlers::ERB#supports_streaming?` — instance
+   *  method, per Rails. */
   supportsStreaming(): boolean {
     return true;
   }
 
+  /** Mirrors `Template::Handlers::ERB#handles_encoding?` — instance method. */
   handlesEncoding(): boolean {
     return true;
   }
 
   /**
-   * Translate a stack-frame spot in compiled JS back to a source location in
-   * the `.tse` template. Rails uses this with `ErrorHighlight` to point the
-   * developer at the failing expression. Trails' source-map infrastructure
-   * (Phase 2c) already produces `.tse.js.map`; until a structured
-   * ErrorHighlight equivalent lands, this is a pass-through stub returning
-   * `frame` unchanged. Mirrors
-   * `Template::Handlers::ERB.translate_location(spot, backtrace_location, source)`.
+   * Translate a `ErrorHighlight`-shaped spot back to a source-line/column
+   * inside the `.tse` template. Mirrors
+   * `Template::Handlers::ERB#translate_location(spot, backtrace_location, source)`
+   * 1:1 — the algorithm is delegated to {@link translateLocationImpl}, which
+   * ports `find_offset` / `offset_source_tokens` from `erb.rb`. Returns the
+   * mutated spot on success, `null` if the line is past EOF or the snippet
+   * can't be anchored.
    */
-  static translateLocation<T>(_spot: unknown, frame: T, _source: string): T {
-    return frame;
+  translateLocation(spot: Spot, backtraceLocation: BacktraceLocation, source: string): Spot | null {
+    return translateLocationImpl(spot, backtraceLocation, source);
   }
 
   /**

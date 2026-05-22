@@ -30,6 +30,34 @@ describe("assertNoRubySource", () => {
     expect(() => assertNoRubySource("module Foo\nend")).toThrow(/Ruby-like source/);
   });
 
+  it("flags Ruby def self.method", () => {
+    expect(() => assertNoRubySource("def self.greet\nend")).toThrow(/Ruby-like source/);
+  });
+
+  it("flags Ruby def with bang suffix", () => {
+    expect(() => assertNoRubySource("def greet!\nend")).toThrow(/Ruby-like source/);
+  });
+
+  it("flags Ruby def with predicate suffix", () => {
+    expect(() => assertNoRubySource("def greet?\nend")).toThrow(/Ruby-like source/);
+  });
+
+  it("flags Ruby def with setter suffix", () => {
+    expect(() => assertNoRubySource("def name=(v)\nend")).toThrow(/Ruby-like source/);
+  });
+
+  it("flags Ruby class with trailing comment", () => {
+    expect(() => assertNoRubySource("class Foo # a comment\nend")).toThrow(/Ruby-like source/);
+  });
+
+  it("flags Ruby class with inline semicolon", () => {
+    expect(() => assertNoRubySource("class Foo; end")).toThrow(/Ruby-like source/);
+  });
+
+  it("flags Ruby module with inline semicolon", () => {
+    expect(() => assertNoRubySource("module Foo; end")).toThrow(/Ruby-like source/);
+  });
+
   it("does not flag TS class with body", () => {
     expect(() => assertNoRubySource("export class Foo {\n  x = 1;\n}\n")).not.toThrow();
   });

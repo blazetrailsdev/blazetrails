@@ -8,12 +8,19 @@
 // Foo<T> {`, Ruby uses `class Foo`, `class Foo < Bar`, or `class Foo::Bar`.
 // Match the Ruby trailers (`< Parent`, `::Ns`, or EOL) explicitly so TS's
 // `{`/`<T>` openers don't trip the check.
-// The parent in `class Foo < Bar` can be a plain const (`Bar`), a top-level
-// `::Bar`, or a namespaced `A::B::C`. Require the inheritance trailer to
-// run to end-of-line (optional trailing `# comment`) so whitespace-padded
-// TS generics like `class Foo< T > {` are not mistaken for Ruby `<`.
+// `def` branch is intentionally loose — `def\s+\w+` catches `def greet`,
+// `def self.greet` (via the `self` token), and bang/predicate/setter names
+// (`def greet!`, `def greet?`, `def greet=`), since `\w+` matches the
+// identifier and the trailing punctuation is unconstrained.
+//
+// `class`/`module` branch: the parent in `class Foo < Bar` can be `Bar`,
+// `::Bar`, or `A::B::C`. The inheritance trailer must run to end-of-line
+// so whitespace-padded TS generics like `class Foo< T > {` are not
+// mistaken for Ruby. After a bare class/module name we also accept `;`
+// (inline `; end`) and `#` (trailing comment), neither of which appears
+// after a TS class declaration token.
 const RUBY_RE =
-  /^\s*(?:def\s+\w+|(?:class|module)\s+[A-Z]\w*(?:::\w+)*\s*(?:$|<\s+(?:::)?[A-Z]\w*(?:::\w+)*\s*(?:#.*)?$))/m;
+  /^\s*(?:def\s+\w+|(?:class|module)\s+[A-Z]\w*(?:::\w+)*\s*(?:$|[;#]|<\s+(?:::)?[A-Z]\w*(?:::\w+)*\s*(?:#.*)?$))/m;
 
 export function assertNoRubySource(text: string): void {
   const m = text.match(RUBY_RE);

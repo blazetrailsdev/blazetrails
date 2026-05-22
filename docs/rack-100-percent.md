@@ -1,7 +1,7 @@
 # @blazetrails/rack — Road to 100%
 
 Mirror of `rack/rack` v3.1.14 vendored at
-`scripts/api-compare/.rails-source/rack/lib/rack/`.
+`vendor/rack/lib/rack/`.
 
 Forward-only — completed slots live in git. Refresh counts:
 
@@ -63,7 +63,7 @@ Rack pieces that unblock work tracked in
 `body_proxy`, `config`, `content_length`, `content_type`, `head`, `lint`,
 `logger`, `mime`, `runtime`, `tempfile_reaper`. Leave alone.
 
-## Files at 0% — full ports needed (5)
+## Files at 0% — full ports needed (7)
 
 | File                         | Methods | Size estimate | Notes / blockers                                                                                                                                      |
 | ---------------------------- | ------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -188,7 +188,7 @@ list above and re-baseline.
 git fetch origin main
 scripts/start-worktree.sh rack-<slot>
 cd ~/github/blazetrailsdev/worktrees/rack-<slot>
-less scripts/api-compare/.rails-source/rack/lib/rack/<file>.rb
+less vendor/rack/lib/rack/<file>.rb
 $EDITOR packages/rack/src/<file>.ts
 $EDITOR packages/rack/src/<file>.test.ts
 pnpm vitest run packages/rack/src/<file>.test.ts

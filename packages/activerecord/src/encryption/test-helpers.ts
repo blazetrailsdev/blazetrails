@@ -521,11 +521,14 @@ export function makeEncryptedBookAttribute(adapter: DatabaseAdapter) {
  */
 export function makeEncryptedBookNormalizedFirst(adapter: DatabaseAdapter) {
   // Mirrors Rails' `->(value) { value.to_s.downcase }`. In Ruby, a binary
-  // string responds to .to_s as itself; for our `logo: binary` attribute the
-  // cast type yields a Uint8Array/Buffer, which we decode as UTF-8 to match.
+  // (ASCII-8BIT) string responds to .to_s as itself. For our `logo: binary`
+  // attribute the cast type yields a Uint8Array/Buffer; decode it as
+  // Latin-1 (byte-preserving 1:1 mapping) so arbitrary bytes 128–255 round
+  // through `.toLowerCase()` intact — matches the codebase's Latin-1
+  // binary round-tripping (EncryptedAttributeType.databaseTypeToText).
   const toLower = (v: unknown) => {
     if (v == null) return v;
-    if (v instanceof Uint8Array) return new TextDecoder().decode(v).toLowerCase();
+    if (v instanceof Uint8Array) return new TextDecoder("latin1").decode(v).toLowerCase();
     return String(v).toLowerCase();
   };
   return class EncryptedBookNormalizedFirst extends Base {
@@ -550,11 +553,14 @@ export function makeEncryptedBookNormalizedFirst(adapter: DatabaseAdapter) {
  */
 export function makeEncryptedBookNormalizedSecond(adapter: DatabaseAdapter) {
   // Mirrors Rails' `->(value) { value.to_s.downcase }`. In Ruby, a binary
-  // string responds to .to_s as itself; for our `logo: binary` attribute the
-  // cast type yields a Uint8Array/Buffer, which we decode as UTF-8 to match.
+  // (ASCII-8BIT) string responds to .to_s as itself. For our `logo: binary`
+  // attribute the cast type yields a Uint8Array/Buffer; decode it as
+  // Latin-1 (byte-preserving 1:1 mapping) so arbitrary bytes 128–255 round
+  // through `.toLowerCase()` intact — matches the codebase's Latin-1
+  // binary round-tripping (EncryptedAttributeType.databaseTypeToText).
   const toLower = (v: unknown) => {
     if (v == null) return v;
-    if (v instanceof Uint8Array) return new TextDecoder().decode(v).toLowerCase();
+    if (v instanceof Uint8Array) return new TextDecoder("latin1").decode(v).toLowerCase();
     return String(v).toLowerCase();
   };
   return class EncryptedBookNormalizedSecond extends Base {

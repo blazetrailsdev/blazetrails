@@ -12,6 +12,7 @@ import {
   AdapterTimeout,
   ConnectionFailed,
   ConnectionNotEstablished,
+  DatabaseConnectionError,
   MismatchedForeignKey,
   NoDatabaseError,
   NotImplementedError,
@@ -524,10 +525,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       },
       (err) => {
         this._connectingPromise = null;
-        if (this.isNoDatabaseError(err)) {
-          throw NoDatabaseError.dbError(this._database ?? "unknown");
-        }
-        throw err;
+        throw translateConnectError(err, this._database, this._poolConfig);
       },
     );
     return this._connectingPromise;
@@ -1810,6 +1808,38 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     }
 
     return `SET ${namesPart}time_zone = '+00:00', ${sessionClauses}`;
+  }
+}
+
+/**
+ * Translate a connection-establishment error to the matching Rails exception.
+ * Mirrors `Mysql2Adapter.new_client`'s rescue block — maps specific MySQL
+ * errnos to typed AR errors so callers get the same exception hierarchy as
+ * Rails.
+ * @internal
+ */
+function translateConnectError(
+  err: unknown,
+  database: string | undefined,
+  config: mysql.PoolOptions & MysqlAdapterOptions,
+): Error {
+  if (!(err instanceof Error)) return new Error(String(err));
+  const errno = (err as { errno?: number }).errno;
+  switch (errno) {
+    case 1049: // ER_BAD_DB_ERROR
+      return NoDatabaseError.dbError(database ?? "unknown");
+    case 1044: // ER_DBACCESS_DENIED_ERROR
+    case 1045: // ER_ACCESS_DENIED_ERROR
+      return DatabaseConnectionError.usernameError(
+        (config.user as string | undefined) ?? "unknown",
+      );
+    case 2003: // ER_CONN_HOST_ERROR
+    case 2005: // ER_UNKNOWN_HOST_ERROR
+      return DatabaseConnectionError.hostnameError(
+        (config.host as string | undefined) ?? "unknown",
+      );
+    default:
+      return new ConnectionNotEstablished(err.message, { cause: err });
   }
 }
 

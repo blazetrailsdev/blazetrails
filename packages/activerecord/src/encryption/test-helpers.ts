@@ -167,11 +167,10 @@ const ENCRYPTION_SCHEMA: Schema = {
   encrypted_book_with_custom_compressors: { name: { type: "string", limit: 1024 } },
   book_that_will_fail_to_encrypt_names: { name: { type: "string", limit: 1024 } },
   encrypted_traffic_light_with_store_states: { state: "text" },
-  // Rails maps EncryptedBookWithBinary onto `encrypted_books` (`t.binary :logo`).
-  // The single shared table now consolidates these too; per-class tables
-  // below stay for variants whose attribute set diverges (serialized JSON,
-  // message-pack) or that we haven't yet rebased onto `encrypted_books`.
-  encrypted_book_with_binaries: { logo: "binary" },
+  // Per-class tables remain for variants whose castType for `logo` diverges
+  // from BLOB on SQLite (the serialized variants store JSON text; the
+  // message-pack variant stores raw binary like Rails but isolates its
+  // serializer assertions from the shared table).
   encrypted_book_with_serialized_first_binaries: { logo: "text" },
   encrypted_book_with_serialized_second_binaries: { logo: "text" },
   encrypted_book_with_binary_message_pack_serializeds: { logo: "binary" },
@@ -387,6 +386,7 @@ export function makeEncryptedTrafficLightWithStoreState(adapter: DatabaseAdapter
 export function makeEncryptedBookWithBinary(adapter: DatabaseAdapter) {
   return class EncryptedBookWithBinary extends Base {
     static {
+      this._tableName = "encrypted_books";
       this.attribute("id", "integer");
       this.attribute("logo", "binary");
       this.adapter = adapter;

@@ -410,4 +410,21 @@ describe("defineSchema", () => {
       ).resolves.toBeDefined();
     });
   });
+
+  describe("IF NOT EXISTS idempotency", () => {
+    // Regression: under a shared pooled adapter, File B's defineSchema reaches
+    // createTable with an empty signature cache (different adapter instance) but
+    // the table already exists in the shared DB. Without IF NOT EXISTS the second
+    // call throws "table already exists". Simulate by clearing the cache between
+    // two defineSchema calls without dropping the table.
+    it("does not throw when the table already exists and the cache was cleared", async () => {
+      const { adapter: raw } = createSidecarTestAdapter();
+      const spec = { sprockets: { name: "string" as ColumnSpec } };
+      await defineSchema(raw, spec);
+      // Simulate File B: cache is gone, but the table is still in the DB.
+      clearAppliedSchemaSignatures(raw);
+
+      await expect(defineSchema(raw, spec)).resolves.toBeUndefined();
+    });
+  });
 });

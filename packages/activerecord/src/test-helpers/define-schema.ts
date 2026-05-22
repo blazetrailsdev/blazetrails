@@ -519,7 +519,9 @@ async function _defineSchemaImpl(
     }
     const columns = columnsOf(raw);
     const pk = primaryKeyOf(raw);
-    const createOpts: { id?: boolean; primaryKey?: string[] } = {};
+    const createOpts: { id?: boolean; primaryKey?: string[]; ifNotExists?: boolean } = {
+      ifNotExists: true,
+    };
     if (pk === false) createOpts.id = false;
     else if (Array.isArray(pk)) {
       createOpts.primaryKey = pk;

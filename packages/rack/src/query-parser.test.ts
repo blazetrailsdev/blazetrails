@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { QueryParser } from "./query-parser.js";
+import { QueryParser, QueryLimitError } from "./query-parser.js";
 
 it("can normalize values with missing values", () => {
   const queryParser = QueryParser.makeDefault(8);
@@ -13,9 +13,9 @@ it("accepts bytesize_limit to specify maximum size of query string to parse", ()
   expect(queryParser.parseQuery("a=a")).toEqual({ a: "a" });
   expect(queryParser.parseNestedQuery("a=a")).toEqual({ a: "a" });
   expect(queryParser.parseNestedQuery("a=a", "&")).toEqual({ a: "a" });
-  expect(() => queryParser.parseQuery("a=aa")).toThrow();
-  expect(() => queryParser.parseNestedQuery("a=aa")).toThrow();
-  expect(() => queryParser.parseNestedQuery("a=aa", "&")).toThrow();
+  expect(() => queryParser.parseQuery("a=aa")).toThrowError(QueryLimitError);
+  expect(() => queryParser.parseNestedQuery("a=aa")).toThrowError(QueryLimitError);
+  expect(() => queryParser.parseNestedQuery("a=aa", "&")).toThrowError(QueryLimitError);
 });
 
 it("accepts params_limit to specify maximum number of query parameters to parse", () => {
@@ -23,7 +23,7 @@ it("accepts params_limit to specify maximum number of query parameters to parse"
   expect(queryParser.parseQuery("a=a&b=b")).toEqual({ a: "a", b: "b" });
   expect(queryParser.parseNestedQuery("a=a&b=b")).toEqual({ a: "a", b: "b" });
   expect(queryParser.parseNestedQuery("a=a&b=b", "&")).toEqual({ a: "a", b: "b" });
-  expect(() => queryParser.parseQuery("a=a&b=b&c=c")).toThrow();
-  expect(() => queryParser.parseNestedQuery("a=a&b=b&c=c", "&")).toThrow();
-  expect(() => queryParser.parseQuery("b[]=a&b[]=b&b[]=c")).toThrow();
+  expect(() => queryParser.parseQuery("a=a&b=b&c=c")).toThrowError(QueryLimitError);
+  expect(() => queryParser.parseNestedQuery("a=a&b=b&c=c", "&")).toThrowError(QueryLimitError);
+  expect(() => queryParser.parseQuery("b[]=a&b[]=b&b[]=c")).toThrowError(QueryLimitError);
 });

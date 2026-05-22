@@ -51,6 +51,7 @@ export {
   InvalidParameterError,
   ParameterTypeError,
   ParamsTooDeepError,
+  QueryLimitError,
   QueryParser,
   getDefaultQueryParser,
   setDefaultQueryParser,

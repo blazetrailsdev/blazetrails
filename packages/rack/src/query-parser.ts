@@ -157,14 +157,18 @@ export class QueryParser {
     return new QueryParser(this.paramsClass, paramDepthLimit, this.bytesizeLimit, this.paramsLimit);
   }
 
-  private checkQueryString(qs: string, _sep: string | null | undefined): string {
+  private checkQueryString(qs: string, sep: string | null | undefined): string {
     const bytesize = new TextEncoder().encode(qs).length;
     if (bytesize > this.bytesizeLimit) {
       throw new QueryLimitError(
         `total query size (${bytesize}) exceeds limit (${this.bytesizeLimit})`,
       );
     }
-    const paramCount = (qs.match(/&/g) || []).length;
+    // Mirror Ruby's qs.count(sep.is_a?(String) ? sep : '&'):
+    // count occurrences of any character in the separator string, defaulting to '&'.
+    const sepChars = typeof sep === "string" ? sep : "&";
+    const sepRe = new RegExp(`[${sepChars.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}]`, "g");
+    const paramCount = (qs.match(sepRe) || []).length;
     if (paramCount >= this.paramsLimit) {
       throw new QueryLimitError(
         `total number of query parameters (${paramCount + 1}) exceeds limit (${this.paramsLimit})`,

@@ -49,4 +49,13 @@ export class FlashTypeRegistry {
     }
     return remaining;
   }
+
+  /** Rails `Flash::ClassMethods#action_methods` — filters flash type names out of the controller's public action set. @internal */
+  actionMethods(superMethods: Set<string>): Set<string> {
+    const result = new Set(superMethods);
+    for (const type of this._types) {
+      result.delete(type);
+    }
+    return result;
+  }
 }

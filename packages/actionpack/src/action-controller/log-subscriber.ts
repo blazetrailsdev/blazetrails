@@ -13,6 +13,11 @@ import {
 } from "@blazetrails/activesupport";
 
 export class LogSubscriber extends BaseLogSubscriber {
+  /** Rails `ActionController::LogSubscriber#logger` — delegates to `Base.logger`. @internal */
+  override get logger() {
+    return LogSubscriber.logger;
+  }
+
   startProcessing(event: Event): void {
     const { controller, action, format } = event.payload as {
       controller: string;

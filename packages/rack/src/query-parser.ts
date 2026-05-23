@@ -288,7 +288,7 @@ export class QueryParser {
 
   /** @internal */
   private isParamsHashType(obj: any): boolean {
-    return obj instanceof this.paramsClass;
+    return typeof obj === "object" && obj !== null && !Array.isArray(obj);
   }
 
   /** @internal */

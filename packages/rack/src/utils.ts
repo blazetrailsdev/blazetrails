@@ -48,6 +48,7 @@ export function setMultipartTotalPartLimit(v: number): void {
 export function defaultQueryParser(): QueryParser;
 /** @internal */
 export function defaultQueryParser(parser: QueryParser): void;
+/** @internal */
 export function defaultQueryParser(parser?: QueryParser): QueryParser | void {
   if (parser !== undefined) {
     _defaultQueryParser = parser;
@@ -60,6 +61,7 @@ export function defaultQueryParser(parser?: QueryParser): QueryParser | void {
 export function multipartTotalPartLimit(): number;
 /** @internal */
 export function multipartTotalPartLimit(v: number): void;
+/** @internal */
 export function multipartTotalPartLimit(v?: number): number | void {
   if (v !== undefined) {
     _multipartTotalPartLimit = v;
@@ -72,6 +74,7 @@ export function multipartTotalPartLimit(v?: number): number | void {
 export function multipartFileLimit(): number;
 /** @internal */
 export function multipartFileLimit(v: number): void;
+/** @internal */
 export function multipartFileLimit(v?: number): number | void {
   if (v !== undefined) {
     _multipartFileLimit = v;

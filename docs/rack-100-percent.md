@@ -98,11 +98,11 @@ documented for completeness):
 
 ## Remaining partial files
 
-| File           | %   | Miss | Notes / slot                                                                                                                                                  |
-| -------------- | --- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `directory.rb` | 27% | 8    | `get`, `checkBadRequest`, `checkForbidden`, `listDirectory`, `stat`, `listPath`, `entityNotFound`, `filesizeFormat`. Async fs via activesupport. See slot 13. |
-| `files.rb`     | 50% | 4    | `get`, `fail`, `mimeType`, `filesize`. Range-serving (BaseIterator/Iterator) via async fs. See slot 13.                                                       |
-| `static.rb`    | 43% | 4    | `isAddIndexRoot`, `overwriteFilePath`, `routeFile`, `applicableRules`. Pure routing + header-rule logic; delegates to `Files`. See slot 14.                   |
+| File           | %   | Miss | Notes / slot                                                                                                                                                           |
+| -------------- | --- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `directory.rb` | 27% | 8    | `get`, `checkBadRequest`, `checkForbidden`, `listDirectory`, `stat`, `listPath`, `entityNotFound`, `filesizeFormat`. fs via `@blazetrails/activesupport`. See slot 13. |
+| `files.rb`     | 50% | 4    | `get`, `fail`, `mimeType`, `filesize`. Range-serving (BaseIterator/Iterator) via `@blazetrails/activesupport` fs. See slot 13.                                         |
+| `static.rb`    | 43% | 4    | `isAddIndexRoot`, `overwriteFilePath`, `routeFile`, `applicableRules`. Pure routing + header-rule logic; delegates to `Files`. See slot 14.                            |
 
 `reloader.rb` (7 misses, 0%) is intentionally unported — see [Indefinite defers](#indefinite-defers).
 
@@ -128,11 +128,12 @@ Slots 0–12 are shipped. Two remain.
 
 13. **`files.rb` 100% + `directory.rb` 100%** (~250 LOC). `Files` serves
     static files with range support (BaseIterator/Iterator); `Directory`
-    renders an HTML index for directory entries. Both use async fs via
-    `@blazetrails/activesupport`. `Directory` depends on `Files`.
+    renders an HTML index for directory entries. Both use the
+    `@blazetrails/activesupport` fs abstraction (`getFs()`). `Directory`
+    depends on `Files`.
 14. **`static.rb` 100%** (~80 LOC). Middleware wrapper around `Files`;
-    pure URL-prefix routing + per-rule HTTP header injection. No direct
-    fs access — depends on slot 13 landing first.
+    pure URL-prefix routing + per-rule HTTP header injection. Any fs
+    access goes through `getFs()` — depends on slot 13 landing first.
 
 After slots 13–14 land, only `reloader.rb` (indefinitely deferred) remains.
 

@@ -1647,13 +1647,8 @@ describe("TestRoutingMapper", () => {
     expect(m!.params["controllers"]).toBe("foo");
   });
 
-  it("websocket", () => {
-    // connect verb not supported in TS routing
-    const routes = new RouteSet();
-    routes.draw((r) => {
-      r.get("/chat", { to: "chat#connect", as: "chat" });
-    });
-    expect(routes.recognize("GET", "/chat")).not.toBeNull();
+  it.skip("websocket", () => {
+    // connect verb not supported — Rails uses `connect "chat/live"` which has no TS equivalent
   });
 
   it("bookmarks", () => {
@@ -1697,13 +1692,8 @@ describe("TestRoutingMapper", () => {
     expect(routes.pathFor("pagemark_show")).toBe("/pagemark");
   });
 
-  it("admin", () => {
-    // IP-based constraint routing — only test non-IP paths resolve correctly
-    const routes = new RouteSet();
-    routes.draw((r) => {
-      r.get("admin/passwords", { to: "queenbee#passwords" });
-    });
-    expect(routes.recognize("GET", "/admin/passwords")!.route.action).toBe("passwords");
+  it.skip("admin", () => {
+    // IP-based object constraint routing (IpRestrictor) not ported — constraint call() not applied during recognition
   });
 
   it("global", () => {

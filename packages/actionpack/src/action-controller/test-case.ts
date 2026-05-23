@@ -34,6 +34,7 @@
  */
 
 import { camelize, getCrypto } from "@blazetrails/activesupport";
+import { buildNestedQuery } from "@blazetrails/rack";
 import { Request } from "../action-dispatch/http/request.js";
 import { Response } from "../action-dispatch/http/response.js";
 import { TestRequest as AbstractTestRequest } from "../action-dispatch/testing/test-request.js";
@@ -434,10 +435,8 @@ export class TestCase {
 export class TestRequest extends AbstractTestRequest {
   /** @internal Custom param parsers keyed by MIME type symbol. */
   private _customParamParsers: Record<string, (raw: string) => unknown> = {
-    xml: (raw) => {
-      // Rails: Hash.from_xml(raw_post)["hash"] — no XML parser in TS; return raw.
-      return raw;
-    },
+    // Rails: Hash.from_xml(raw_post)["hash"] — no XML parser available; return empty hash.
+    xml: (_raw) => ({}),
   };
 
   /** @internal Mirrors Rails `ActionController::TestRequest.new_session`. */
@@ -455,6 +454,8 @@ export class TestRequest extends AbstractTestRequest {
   static create(controllerClass?: unknown): TestRequest {
     const env: Record<string, unknown> = {};
     env["rack.request.cookie_hash"] = {};
+    const session = TestRequest.newSession();
+    env["rack.session"] = session;
     const req = new TestRequest({ ...TestRequest.defaultEnv(), ...env });
     req._testControllerClass = controllerClass ?? null;
     return req;
@@ -509,14 +510,14 @@ export class TestRequest extends AbstractTestRequest {
 
     if (this.isGet) {
       if (!this.getHeader("QUERY_STRING")) {
-        this.queryString = toQueryString(nonPathParameters);
+        this.queryString = buildNestedQuery(nonPathParameters);
       }
     } else {
       if (shouldMultipart(nonPathParameters)) {
         this.contentType = multipartContentType();
         // Multipart body building requires Rack::Test::Utils; encode as url-form fallback
         // so CONTENT_LENGTH and rack.input are always present for the controller.
-        const data = toQueryString(nonPathParameters);
+        const data = buildNestedQuery(nonPathParameters);
         const encoded = new TextEncoder().encode(data);
         this.setHeader("CONTENT_LENGTH", String(encoded.byteLength));
         this.setHeader("rack.input", data);
@@ -531,14 +532,14 @@ export class TestRequest extends AbstractTestRequest {
         if (ct.includes("application/json")) {
           data = JSON.stringify(nonPathParameters);
         } else if (ct.includes("application/xml")) {
-          data = toQueryString(nonPathParameters);
+          data = buildNestedQuery(nonPathParameters);
         } else if (ct.includes("application/x-www-form-urlencoded")) {
-          data = toQueryString(nonPathParameters);
+          data = buildNestedQuery(nonPathParameters);
         } else {
           // Rails: registers a custom parser so the controller sees the raw params hash
           const mimeSymbol = ct.split(";")[0].trim().replace(/\//g, "_").replace(/-/g, "_");
           this._customParamParsers[mimeSymbol] = () => nonPathParameters;
-          data = toQueryString(nonPathParameters);
+          data = buildNestedQuery(nonPathParameters);
         }
 
         const encoded = new TextEncoder().encode(data);
@@ -580,27 +581,8 @@ function shouldMultipart(params: Record<string, unknown>): boolean {
   return Object.values(params).some(check);
 }
 
-const MULTIPART_BOUNDARY = "----RackMultipart";
-
 function multipartContentType(): string {
-  return `multipart/form-data; boundary=${MULTIPART_BOUNDARY}`;
-}
-
-function toQueryString(params: Record<string, unknown>, prefix = ""): string {
-  const parts: string[] = [];
-  for (const [key, value] of Object.entries(params)) {
-    const fullKey = prefix ? `${prefix}[${key}]` : key;
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      parts.push(toQueryString(value as Record<string, unknown>, fullKey));
-    } else if (Array.isArray(value)) {
-      for (const item of value) {
-        parts.push(`${encodeURIComponent(`${fullKey}[]`)}=${encodeURIComponent(String(item))}`);
-      }
-    } else {
-      parts.push(`${encodeURIComponent(fullKey)}=${encodeURIComponent(String(value ?? ""))}`);
-    }
-  }
-  return parts.join("&");
+  return `multipart/form-data; boundary=----RackMultipart`;
 }
 
 export class LiveTestResponse extends Response {

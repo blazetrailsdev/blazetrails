@@ -6,19 +6,18 @@
  * @see https://api.rubyonrails.org/classes/ActionController/EtagWithFlash.html
  */
 
+// Rails: `etag { flash if request.respond_to?(:flash) && !flash.empty? }`
+// The flash object is passed to the ETagger which calls `to_param`-style
+// serialization. `toSessionValue` (the session-storable representation)
+// matches what Rails serializes — not `toHash`, which excludes flash.now
+// entries and would fail to bust caches on flash.now changes.
 export function flashEtagger(request: {
   flash?: {
     empty?: boolean;
-    toJSON?(): unknown;
     toSessionValue?(): unknown;
-    toHash?(): unknown;
   };
 }): unknown | undefined {
   const flash = request.flash;
   if (!flash || flash.empty) return undefined;
-
-  if (flash.toJSON) return flash.toJSON();
-  if (flash.toSessionValue) return flash.toSessionValue();
-  if (flash.toHash) return flash.toHash();
-  return flash;
+  return flash.toSessionValue ? flash.toSessionValue() : flash;
 }

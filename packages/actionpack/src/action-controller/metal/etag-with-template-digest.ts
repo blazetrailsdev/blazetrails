@@ -24,10 +24,7 @@ export function isIncludeContent(status: number): boolean {
   return _includeContent(status);
 }
 
-/**
- * Rails `ConditionalGet#http_cache_forever` — re-exposed via include chain.
- * @internal
- */
+/** Rails `ConditionalGet#http_cache_forever` — re-exposed via include chain. */
 export function httpCacheForever(
   this: ConditionalGetHost,
   options: { public?: boolean } = {},
@@ -36,10 +33,7 @@ export function httpCacheForever(
   return _httpCacheForever.call(this, options, block);
 }
 
-/**
- * Rails `ConditionalGet#no_store` — re-exposed via include chain.
- * @internal
- */
+/** Rails `ConditionalGet#no_store` — re-exposed via include chain. */
 export function noStore(this: ConditionalGetHost): void {
   return _noStore.call(this);
 }

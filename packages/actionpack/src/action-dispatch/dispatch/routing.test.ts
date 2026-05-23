@@ -1652,7 +1652,7 @@ describe("TestRoutingMapper", () => {
     routes.draw((r) => {
       r.connect("chat/live", { to: "chat#live" });
     });
-    // HTTP/1.1 upgrade path (GET with upgrade headers) and CONNECT both match
+    // connect() maps via ["GET", "CONNECT"] — any GET matches, not just upgrade requests
     expect(routes.recognize("GET", "/chat/live")!.route.action).toBe("live");
     expect(routes.recognize("CONNECT", "/chat/live")!.route.action).toBe("live");
   });

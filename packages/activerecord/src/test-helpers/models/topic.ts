@@ -58,8 +58,8 @@ export class Topic extends Base {
     this.afterCreate(async function (this: Topic) {
       await this.afterCreateForTransaction();
     });
-    this.afterInitialize(async function (this: Topic) {
-      await this.setEmailAddress();
+    this.afterInitialize(function (this: Topic) {
+      this.setEmailAddress();
     });
     this.afterTouch(async function (this: any) {
       this.afterTouchCalled = (this.afterTouchCalled ?? 0) + 1;
@@ -89,8 +89,8 @@ export class Topic extends Base {
   }
 
   /** @internal */
-  private async setEmailAddress() {
-    if (!(this as any).isPersisted() && !(this as any).willSaveChangeTo("author_email_address")) {
+  private setEmailAddress() {
+    if (!this.isPersisted() && !this.willSaveChangeToAttribute("author_email_address")) {
       this.writeAttribute("author_email_address", "test@test.com");
     }
   }

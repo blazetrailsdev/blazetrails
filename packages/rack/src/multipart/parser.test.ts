@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "node:url";
 import {
   Parser,
   BoundaryTooLongError,
@@ -21,7 +22,7 @@ import {
 const qp = QueryParser.makeDefault(100);
 const noopIo = { read: (_size: number) => null as string | null };
 const fixDir = path.join(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   "..",
   "..",
   "test",

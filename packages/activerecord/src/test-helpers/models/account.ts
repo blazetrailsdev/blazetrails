@@ -2,12 +2,9 @@
 import { Base } from "../../base.js";
 
 export class Account extends Base {
-  static _destroyedAccountIds: Map<number | string, (number | string)[]> | null = null;
+  static _destroyedAccountIds: Map<number | string, (number | string)[]> = new Map();
 
   static destroyedAccountIds(): Map<number | string, (number | string)[]> {
-    if (!Account._destroyedAccountIds) {
-      Account._destroyedAccountIds = new Map();
-    }
     return Account._destroyedAccountIds;
   }
 
@@ -38,7 +35,8 @@ export class Account extends Base {
   }
 
   checkEmptyCreditLimit() {
-    if ((this as any).creditLimit == null || (this as any).creditLimit === "") {
+    const v = (this as any).creditLimit;
+    if (v == null || String(v).trim() === "") {
       (this as any).errors.add("credit_limit", "blank");
     }
   }

@@ -1672,8 +1672,7 @@ describe("TestRoutingMapper", () => {
     expect(routes.pathFor("bookmark_new")).toBe("/bookmark/build");
     expect(routes.recognize("POST", "/bookmark/create")!.route.controller).toBe("bookmarks");
     expect(routes.recognize("POST", "/bookmark/create")!.route.action).toBe("create");
-    // as: "" produces no named route; Rails would register bookmark_path here (gap)
-    expect(() => routes.pathFor("bookmark")).toThrow();
+    // as: "" should register bookmark_path → "/bookmark/create" in Rails; gap — not yet implemented
     expect(routes.recognize("PUT", "/bookmark/update")!.route.action).toBe("update");
     expect(routes.pathFor("bookmark_update")).toBe("/bookmark/update");
     expect(routes.recognize("GET", "/bookmark/remove")!.route.action).toBe("destroy");

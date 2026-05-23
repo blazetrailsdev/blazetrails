@@ -167,7 +167,9 @@ export class Route {
     if (this.controller) reqs.controller = this.controller;
     if (this.action) reqs.action = this.action;
     Object.assign(reqs, this.defaults);
-    Object.assign(reqs, this.constraints);
+    // Rails: `path.requirements` — path-capture constraints only.
+    // Request constraints (subdomain, ip, …) are not included.
+    Object.assign(reqs, this.pathConstraints);
     return reqs;
   }
 

@@ -516,9 +516,9 @@ export class RouteSet {
 
   /**
    * Rails: `def from_requirements(requirements)` — lookup intended for
-   * Language Server tooling. Matches the first route whose `defaults`
-   * (Trails's analog of Rails's `route.requirements`) is shallow-equal
-   * to the supplied hash — same shape Rails compares via `Hash#==`.
+   * Language Server tooling. Matches the first route whose `requirements`
+   * (defaults merged with path constraints) is shallow-equal to the supplied
+   * hash — same shape Rails compares via `Hash#==`.
    */
   fromRequirements(requirements: Record<string, unknown>): Route | undefined {
     // Rails: `routes.find { |route| route.requirements == requirements }`.

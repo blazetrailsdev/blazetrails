@@ -4,7 +4,7 @@ import { Base } from "../../base.js";
 export class Human extends Base {
   static _tableName = "humans";
 
-  addCallbackCalled: boolean = false;
+  declare addCallbackCalled: boolean;
 
   static {
     this.hasOne("face", { inverseOf: "human" });

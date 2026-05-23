@@ -1560,13 +1560,6 @@ describe("TestRoutingMapper", () => {
     expect(m!.params.path).toBe("2024/01/hello");
   });
 
-  it("optional scoped root", () => {
-    const route = new Route("GET", "(/:locale)/posts", "posts", "index");
-    expect(route.match("GET", "/posts")).not.toBeNull();
-    expect(route.match("GET", "/en/posts")).not.toBeNull();
-    expect(route.match("GET", "/en/posts")!.params.locale).toBe("en");
-  });
-
   it("optional scoped root hierarchy", () => {
     const r1 = new Route("GET", "(/:locale)/posts", "posts", "index");
     const r2 = new Route("GET", "(/:locale)/posts/:id", "posts", "show");

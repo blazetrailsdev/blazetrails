@@ -167,7 +167,7 @@ export class Route {
     // Merge defaults first so controller/action from dedicated fields win.
     Object.assign(reqs, this.defaults);
     // Rails: `path.requirements` — path-capture constraints only.
-    Object.assign(reqs, this.pathConstraints);
+    Object.assign(reqs, this.pathConstraints as Record<string, string | RegExp>);
     if (this.controller) reqs.controller = this.controller;
     if (this.action) reqs.action = this.action;
     return reqs;

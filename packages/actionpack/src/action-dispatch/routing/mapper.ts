@@ -201,13 +201,14 @@ export class Mapper {
     }
 
     if (allowed.has("create")) {
-      this.routes.push(new Route("POST", basePath, controller, "create"));
+      this.routes.push(new Route("POST", basePath, controller, "create", { constraints }));
     }
 
     if (allowed.has("new")) {
       this.routes.push(
         new Route("GET", `${basePath}/${newPath}`, controller, "new", {
           name: routeName(`new_${singular}`),
+          constraints,
         }),
       );
     }
@@ -483,9 +484,11 @@ export class Mapper {
     }
     const frame = [...this.scopeStack].reverse().find((f) => f.resource);
     const newSegment = frame?.resourcePathNames?.new ?? "new";
-    // memberPath = /prefix/:id — strip the trailing /:id to get the collection base
-    const memberPath = frame?.memberPath ?? this.currentPrefix();
-    const basePath = memberPath.replace(/\/:[^/]+$/, "");
+    // Use frame.path (= nested-children scope, e.g. /posts/:post_id/comments/:comment_id)
+    // so that shallow resources still produce the full nested path for the new action.
+    // memberPath is the shallow path (/comments/:id) and would give the wrong base.
+    const framePath = frame?.path ?? this.currentPrefix();
+    const basePath = framePath.replace(/\/:[^/]+$/, "");
     const newPath = `${basePath}/${newSegment}`;
     this.scopeStack.push({
       path: newPath,
@@ -916,16 +919,11 @@ export class Mapper {
       options = args.pop() as Record<string, unknown>;
     }
     for (const klass of (args as unknown[]).flat()) {
+      const typed = klass as { modelName?: { name?: string }; name?: string };
       const key =
-        klass != null && typeof klass === "object"
-          ? ((klass as { modelName?: { name?: string }; name?: string }).modelName?.name ??
-            (klass as { name?: string }).name ??
-            String(klass))
-          : typeof klass === "function"
-            ? ((klass as { modelName?: { name?: string }; name?: string }).modelName?.name ??
-              (klass as { name?: string }).name ??
-              String(klass))
-            : String(klass);
+        klass != null && (typeof klass === "object" || typeof klass === "function")
+          ? typed.modelName?.name || typed.name || String(klass)
+          : String(klass);
       this._polymorphicMappings.set(key, { options, block });
     }
   }

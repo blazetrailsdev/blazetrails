@@ -356,10 +356,6 @@ export class Post extends Base {
     if (message == null) return Post._log;
     Post._log.push([message, side, newRecord]);
   }
-
-  firstComment() {
-    return (this as any).super_firstComment?.body;
-  }
 }
 
 export class SpecialPost extends Post {}
@@ -536,7 +532,7 @@ export class PostWithDestroyCallback extends Base {
     this.inheritanceColumn = "disabled";
     this._tableName = "posts";
     this.beforeDestroy(async function (this: any) {
-      if (this.id === 1) throw new Error("abort");
+      if (this.id === 1) throw "abort";
     });
   }
 }

@@ -35,7 +35,7 @@ export class Post extends Base {
     this.scope("containingTheLetterA", (q: any) => q.where("body LIKE '%a%'"));
     this.scope("titledWithAnApostrophe", (q: any) => q.where("title LIKE '%''%'"));
     this.scope("rankedByComments", (q: any) =>
-      q.order(q._modelClass.arelTable["commentsCount"].desc()),
+      q.order(q._modelClass.arelTable.get("commentsCount").desc()),
     );
     this.scope("orderedByPostId", (q: any) => q.order("posts.post_id ASC"));
     this.scope("limitBy", (q: any, l: number) => q.limit(l));

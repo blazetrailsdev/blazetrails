@@ -1,24 +1,37 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { Base } from "./index.js";
-import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
-import { defineSchema } from "./test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
-
-let adapter: TestDatabaseAdapter;
-
+import { defineSchema, clearAppliedSchemaSignatures } from "./test-helpers/define-schema.js";
+import {
+  withTransactionalFixtures,
+  type TransactionalFixturesAdapter,
+} from "./test-helpers/with-transactional-fixtures.js";
+import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
+setupHandlerSuite();
+let _txAdapter: TransactionalFixturesAdapter | null = null;
 beforeAll(async () => {
-  adapter = createTestAdapter();
-  await defineSchema(adapter, { events: { start_date: "date" } });
+  await defineSchema({ events: { start_date: "date" } });
+  const raw = Base.adapter;
+  _txAdapter = new Proxy(raw, {
+    get(target, prop) {
+      if (prop === "pool") return null;
+      return Reflect.get(target, prop, target);
+    },
+  }) as unknown as TransactionalFixturesAdapter;
 });
-withTransactionalFixtures(() => adapter);
+withTransactionalFixtures(() => _txAdapter!);
+afterAll(async () => {
+  const adapter = Base.adapter;
+  await dropAllTables(adapter);
+  clearAppliedSchemaSignatures(adapter);
+});
 
 describe("DateTest", () => {
   it("date with time value", async () => {
     class Event extends Base {
       static {
         this.attribute("start_date", "date");
-        this.adapter = adapter;
       }
     }
     const e = await Event.create({ start_date: "2024-01-15" });
@@ -30,7 +43,6 @@ describe("DateTest", () => {
     class Event extends Base {
       static {
         this.attribute("start_date", "date");
-        this.adapter = adapter;
       }
     }
     const e = await Event.create({ start_date: "2024-01-15" });

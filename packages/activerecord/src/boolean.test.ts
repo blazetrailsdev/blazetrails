@@ -2,20 +2,33 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Base } from "./index.js";
-
-import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
-import { defineSchema } from "./test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
-
-let adapter: TestDatabaseAdapter;
-
+import { defineSchema, clearAppliedSchemaSignatures } from "./test-helpers/define-schema.js";
+import {
+  withTransactionalFixtures,
+  type TransactionalFixturesAdapter,
+} from "./test-helpers/with-transactional-fixtures.js";
+import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
+setupHandlerSuite();
+let _txAdapter: TransactionalFixturesAdapter | null = null;
 beforeAll(async () => {
-  adapter = createTestAdapter();
-  await defineSchema(adapter, { topics: { title: "string", approved: "boolean" } });
+  await defineSchema({ topics: { title: "string", approved: "boolean" } });
+  const raw = Base.adapter;
+  _txAdapter = new Proxy(raw, {
+    get(target, prop) {
+      if (prop === "pool") return null;
+      return Reflect.get(target, prop, target);
+    },
+  }) as unknown as TransactionalFixturesAdapter;
 });
-withTransactionalFixtures(() => adapter);
+withTransactionalFixtures(() => _txAdapter!);
+afterAll(async () => {
+  const adapter = Base.adapter;
+  await dropAllTables(adapter);
+  clearAppliedSchemaSignatures(adapter);
+});
 
 describe("BooleanTest", () => {
   function makeModel() {
@@ -23,7 +36,6 @@ describe("BooleanTest", () => {
       static {
         this.attribute("title", "string");
         this.attribute("approved", "boolean");
-        this.adapter = adapter;
       }
     }
     return { Topic };

@@ -5,21 +5,35 @@
  * JSON.stringify, where) with big_integer attributes. Runs on SQLite3
  * by default (no DB); runs on PG/MySQL when *_TEST_URL env vars are set.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Base } from "./index.js";
-import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
-import { defineSchema } from "./test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
+import { defineSchema, clearAppliedSchemaSignatures } from "./test-helpers/define-schema.js";
+import {
+  withTransactionalFixtures,
+  type TransactionalFixturesAdapter,
+} from "./test-helpers/with-transactional-fixtures.js";
+import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 
-const BIG = 2n ** 62n; // 4611686018427387904 — above Number.MAX_SAFE_INTEGER
-
-let adapter: TestDatabaseAdapter;
-
+const BIG = 2n ** 62n;
+setupHandlerSuite();
+let _txAdapter: TransactionalFixturesAdapter | null = null; // 4611686018427387904 — above Number.MAX_SAFE_INTEGER
 beforeAll(async () => {
-  adapter = createTestAdapter();
-  await defineSchema(adapter, { metrics: { score: "big_integer", label: "string" } });
+  await defineSchema({ metrics: { score: "big_integer", label: "string" } });
+  const raw = Base.adapter;
+  _txAdapter = new Proxy(raw, {
+    get(target, prop) {
+      if (prop === "pool") return null;
+      return Reflect.get(target, prop, target);
+    },
+  }) as unknown as TransactionalFixturesAdapter;
 });
-withTransactionalFixtures(() => adapter);
+withTransactionalFixtures(() => _txAdapter!);
+afterAll(async () => {
+  const adapter = Base.adapter;
+  await dropAllTables(adapter);
+  clearAppliedSchemaSignatures(adapter);
+});
 
 describe("bigint model round-trip (all adapters)", () => {
   function makeModel() {
@@ -27,7 +41,6 @@ describe("bigint model round-trip (all adapters)", () => {
       static {
         this.attribute("score", "big_integer");
         this.attribute("label", "string");
-        this.adapter = adapter;
       }
     }
     return Metric;

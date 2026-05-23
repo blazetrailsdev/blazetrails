@@ -1,19 +1,33 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Base } from "./index.js";
-import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
-import { defineSchema } from "./test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
-
-let adapter: TestDatabaseAdapter;
-
+import { defineSchema, clearAppliedSchemaSignatures } from "./test-helpers/define-schema.js";
+import {
+  withTransactionalFixtures,
+  type TransactionalFixturesAdapter,
+} from "./test-helpers/with-transactional-fixtures.js";
+import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
+setupHandlerSuite();
+let _txAdapter: TransactionalFixturesAdapter | null = null;
 beforeAll(async () => {
-  adapter = createTestAdapter();
-  await defineSchema(adapter, {
+  await defineSchema({
     parents: { name: "string" },
     children: { name: "string" },
   });
+  const raw = Base.adapter;
+  _txAdapter = new Proxy(raw, {
+    get(target, prop) {
+      if (prop === "pool") return null;
+      return Reflect.get(target, prop, target);
+    },
+  }) as unknown as TransactionalFixturesAdapter;
 });
-withTransactionalFixtures(() => adapter);
+withTransactionalFixtures(() => _txAdapter!);
+afterAll(async () => {
+  const adapter = Base.adapter;
+  await dropAllTables(adapter);
+  clearAppliedSchemaSignatures(adapter);
+});
 
 describe("InheritedTest", () => {
   it("super before filter attributes", async () => {
@@ -21,7 +35,6 @@ describe("InheritedTest", () => {
     class Parent extends Base {
       static {
         this.attribute("name", "string");
-        this.adapter = adapter;
         this.beforeCreate(function () {
           log.push("parent_before");
         });
@@ -45,7 +58,6 @@ describe("InheritedTest", () => {
     class Parent extends Base {
       static {
         this.attribute("name", "string");
-        this.adapter = adapter;
         this.afterCreate(function () {
           log.push("parent_after");
         });

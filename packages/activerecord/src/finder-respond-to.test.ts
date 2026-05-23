@@ -1,22 +1,37 @@
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Base, RecordNotFound } from "./index.js";
-import { createTestAdapter, type TestDatabaseAdapter } from "./test-adapter.js";
-import { defineSchema } from "./test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "./test-helpers/with-transactional-fixtures.js";
-
-let adapter: TestDatabaseAdapter;
+import { defineSchema, clearAppliedSchemaSignatures } from "./test-helpers/define-schema.js";
+import {
+  withTransactionalFixtures,
+  type TransactionalFixturesAdapter,
+} from "./test-helpers/with-transactional-fixtures.js";
+import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
+import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 let Topic: typeof Base;
+setupHandlerSuite();
+let _txAdapter: TransactionalFixturesAdapter | null = null;
 
 beforeAll(async () => {
-  adapter = createTestAdapter();
   // `status` is added dynamically by one test below; declare it up front so
   // a later test's INSERT doesn't trigger ALTER ADD COLUMN inside the
   // transactional fixture (MariaDB implicit-commits on DDL).
-  await defineSchema(adapter, {
+  await defineSchema({
     topics: { title: "string", author_name: "string", status: "string" },
   });
+  const raw = Base.adapter;
+  _txAdapter = new Proxy(raw, {
+    get(target, prop) {
+      if (prop === "pool") return null;
+      return Reflect.get(target, prop, target);
+    },
+  }) as unknown as TransactionalFixturesAdapter;
 });
-withTransactionalFixtures(() => adapter);
+withTransactionalFixtures(() => _txAdapter!);
+afterAll(async () => {
+  const adapter = Base.adapter;
+  await dropAllTables(adapter);
+  clearAppliedSchemaSignatures(adapter);
+});
 
 // Recreate the model per test so a test that mutates the class (adds an
 // attribute, primes a finder cache, etc.) can't leak into later tests.
@@ -25,7 +40,6 @@ beforeEach(() => {
     static {
       this.attribute("title", "string");
       this.attribute("author_name", "string");
-      this.adapter = adapter;
     }
   };
 });

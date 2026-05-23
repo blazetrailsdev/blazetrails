@@ -530,8 +530,7 @@ export class TestRequest extends AbstractTestRequest {
       if (shouldMultipart(nonPathParameters)) {
         const { body, boundary } = buildMultipartBody(nonPathParameters);
         this.setHeader("CONTENT_TYPE", `multipart/form-data; boundary=${boundary}`);
-        const encoded = new TextEncoder().encode(body);
-        this.setHeader("CONTENT_LENGTH", String(encoded.byteLength));
+        this.setHeader("CONTENT_LENGTH", String(Buffer.byteLength(body, "binary")));
         this.setHeader("rack.input", body);
         // Multipart isn't parsed by the formatted-parameter path; pre-populate the
         // cache so params/requestParameters expose the uploaded files directly.

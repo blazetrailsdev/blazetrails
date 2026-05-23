@@ -18,7 +18,7 @@ export class Account extends Base {
 
     this.aliasAttribute("availableCredit", "credit_limit");
 
-    this.scope("open", (q: any) => q.where(["firm_name = ?", "37signals"]));
+    this.scope("open", (q: any) => q.where("firm_name = ?", "37signals"));
     this.scope("available", (q: any) => q.open());
 
     this.beforeDestroy(function (this: Account) {
@@ -43,7 +43,7 @@ export class Account extends Base {
 
   ensureGoodCredit() {
     if (!((this as any).creditLimit > 10_000)) {
-      (this as any).errors.add("creditLimit", "too low");
+      (this as any).errors.add("credit_limit", "too low");
     }
   }
 

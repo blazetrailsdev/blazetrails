@@ -33,7 +33,7 @@ hasSecureToken(User, "authToken", { length: 36 });
 export class UserWithNotification extends User {
   static {
     this.afterCreate(async function () {
-      await (Notification as any).create({ message: "A new user has been created." });
+      await Notification.create({ message: "A new user has been created." });
     });
   }
 }

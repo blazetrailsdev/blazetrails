@@ -4,7 +4,9 @@ import { Base } from "../../base.js";
 export class PostWithPrefetchedPk extends (Base as any) {
   static _tableName = "posts";
 
-  static prefetchPrimaryKey = true;
+  static isPrefetchPrimaryKey(): boolean {
+    return true;
+  }
 
   static nextSequenceValue() {
     return 123456;

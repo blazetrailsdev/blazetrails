@@ -62,11 +62,11 @@ export class Firm extends Company {
   static {
     this.toParam("name");
 
-    (this as any).hasMany("clients", {
+    this.hasMany("clients", {
       scope: (q: any) => q.order("id"),
       dependent: "destroy",
-      beforeRemove: "logBeforeRemove",
-      afterRemove: "logAfterRemove",
+      beforeRemove: (owner: any, record: any) => (owner as Firm).logBeforeRemove(record),
+      afterRemove: (owner: any, record: any) => (owner as Firm).logAfterRemove(record),
     });
     this.hasMany("unsortedClients", { className: "Client" });
     this.hasMany("unsortedClientsWithSymbol", { className: "Client" });
@@ -343,7 +343,9 @@ export class Client extends Company {
         Client.destroyedClientIds.get(firmId)!.push(this.id as number);
       }
     });
-    (this as any).beforeDestroy("overwriteToRaise");
+    this.beforeDestroy(function (this: Client) {
+      this.overwriteToRaise();
+    });
   }
 
   static RaisedOnSave = class extends Error {};

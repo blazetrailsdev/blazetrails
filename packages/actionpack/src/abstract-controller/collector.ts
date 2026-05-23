@@ -98,7 +98,7 @@ const COLLECTOR_HANDLER: ProxyHandler<Collector> = {
  * a no-op for us — the Proxy already picks up any MIME registered later.
  * Kept as a Rails-named entry point so `api:compare` matches and so
  * `MimeType.register_callback`-style wiring has a target to call. The
- * mime arg is validated (lookup must succeed) to surface typos early.
+ * mime arg is validated via `MimeType.isRegistered` to surface typos early.
  *
  * @internal
  */

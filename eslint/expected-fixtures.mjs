@@ -73,6 +73,16 @@ export function trailsToRailsRel(absOrRelPath) {
 }
 
 /**
+ * Inverse of `trailsToRailsRel`: Rails-cases-relative path
+ * (e.g. `associations/eager_test.rb`) → trails-src-relative path
+ * (e.g. `associations/eager.test.ts`). Used by the baseline builder so
+ * the two mappings can't drift.
+ */
+export function railsToTrailsRel(railsRel) {
+  return railsRel.replace(/_test\.rb$/, ".test.ts").replace(/_/g, "-");
+}
+
+/**
  * Repo-relative path for exclude-list lookup. Accepts both absolute
  * filenames (ESLint's normal contract) and already-relative paths, so it
  * stays in lockstep with `trailsToRailsRel`'s `(?:^|\/)packages/...` match.

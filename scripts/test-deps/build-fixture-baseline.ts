@@ -17,23 +17,17 @@ import * as path from "node:path";
 import { parser } from "typescript-eslint";
 
 import type { FileDeps } from "./rails-test-deps.js";
-import { collectUseFixturesKeys } from "../../eslint/expected-fixtures.mjs";
 
 const ROOT = path.resolve(__dirname, "../..");
 const DEPS_PATH = path.join(ROOT, "scripts/test-deps/output/activerecord-test-deps.json");
 const OUT_PATH = path.join(ROOT, "eslint/expected-fixtures-exclude.json");
 const AR_SRC = path.join(ROOT, "packages/activerecord/src");
 
-// activerecord scope only — no path segments in AR tests resolve to the
-// `railtie→trailtie` aliases in scripts/api-compare/conventions.ts, and AR
-// has no erb→tse mappings. Naive kebab↔snake is sufficient here. If the
-// rule is ever widened to actionpack/actionview/trailties, switch to the
-// shared `rubyToConventionTs` from scripts/test-compare/test-compare.ts.
-function railsToTrailsRel(railsRel: string): string {
-  return railsRel.replace(/_test\.rb$/, ".test.ts").replace(/_/g, "-");
-}
-
-function main(): void {
+async function main(): Promise<void> {
+  // Dynamic import avoids the CJS-style top-level / static-`.mjs`-import
+  // interop fragility that tsx exposes under module: Node16.
+  const { collectUseFixturesKeys, railsToTrailsRel } =
+    await import("../../eslint/expected-fixtures.mjs");
   if (!fs.existsSync(DEPS_PATH)) {
     console.error(`Deps JSON not found: ${DEPS_PATH}\nRun: pnpm test:deps`);
     process.exit(1);
@@ -59,11 +53,12 @@ function main(): void {
       foundCall = r.found;
       keys = r.keys;
     } catch (err) {
-      // Parse failures shouldn't silently bucket the file into excluded —
-      // that would let an upstream API mistake (e.g. wrong parser entrypoint)
-      // pass review by emitting a same-shaped baseline. Surface and fail.
+      // Parse failure: bail entirely rather than write a partial baseline.
+      // A silently-included file here would let an upstream API mistake
+      // (e.g. wrong parser entrypoint) emit a same-shaped JSON that passes
+      // review by coincidence.
       console.error(`[baseline] failed to parse ${trailsRel}:`, err);
-      process.exitCode = 1;
+      process.exit(1);
     }
     const hasAllKeys = foundCall && entry.fixtures.every((k) => keys.has(k));
     if (!hasAllKeys) excluded.push(path.posix.join("packages/activerecord/src", trailsRel));

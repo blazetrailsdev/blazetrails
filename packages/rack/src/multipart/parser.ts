@@ -203,7 +203,6 @@ export class Collector {
   }
   onMimeFinish(_i: number) {}
 
-  /** @internal */
   private checkPartLimits() {
     const fl = getMultipartFileLimit(),
       pl = getMultipartTotalPartLimit();

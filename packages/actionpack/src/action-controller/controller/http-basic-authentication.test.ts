@@ -141,9 +141,9 @@ describe("HttpBasicAuthenticationTest", () => {
     // Rails: Base64("George") — no colon, password is "" (absent)
     const noColon = `Basic ${Buffer.from("George").toString("base64")}`;
     const c = makeController(noColon);
-    // Mirrors DummyController#no_password: authenticate_with_http_basic returning [username, password]
-    const result = authenticateWithHttpBasic.call(c, (user, pass) => ({ user, pass }));
-    expect(result).toEqual({ user: "George", pass: "" });
+    // Mirrors DummyController#no_password: authenticate_with_http_basic { |u, p| [u, p] }
+    const result = authenticateWithHttpBasic.call(c, (user, pass) => [user, pass]);
+    expect(result).toEqual(["George", ""]);
     expect(c.status).toBe(200);
   });
 

@@ -355,7 +355,13 @@ export class Parser {
     return null;
   }
   /** @internal */ private normalizeFilename(fn: string): string {
-    if (!/%(?![0-9a-fA-F]{2})/.test(fn)) fn = unescapePath(fn);
+    if (!/%(?![0-9a-fA-F]{2})/.test(fn)) {
+      try {
+        fn = unescapePath(fn);
+      } catch {
+        /* keep as-is for malformed UTF-8 sequences */
+      }
+    }
     return fn.split(/[/\\]/).at(-1) ?? "";
   }
   /** @internal */ private tagMultipartEncoding(

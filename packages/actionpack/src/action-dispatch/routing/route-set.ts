@@ -522,11 +522,8 @@ export class RouteSet {
    */
   fromRequirements(requirements: Record<string, unknown>): Route | undefined {
     // Rails: `routes.find { |route| route.requirements == requirements }`.
-    // Trails Route stores requirements as `defaults` (merged controller +
-    // action + path constraints); the field name diverges but the semantic
-    // is the same — the matching shape for `{ controller, action }` lookups.
     return this.routes.find((r) =>
-      shallowEqual(r.defaults, requirements as Record<string, string>),
+      shallowEqual(r.requirements, requirements as Record<string, string | RegExp>),
     );
   }
 
@@ -701,9 +698,11 @@ export class RouteSet {
     if (name && !ROUTE_NAME_RE.test(name)) {
       throw new Error(`Invalid route name: '${name}'`);
     }
-    // Rails raises on duplicate names; trails' Mapper currently emits the
-    // singular form for both `index` and `show` on `resources`, so we
-    // tolerate the collision until Mapper catches up.
+    if (name && this.namedRoutes.has(name)) {
+      throw new Error(
+        `Invalid route name, already in use: '${name}' You may have defined two routes with the same name using the :as option, or you may be overriding a route already defined by a resource.`,
+      );
+    }
     this.routes.push(route);
     if (name) this.namedRoutes.set(name, route);
     this._journeyRouter = null;

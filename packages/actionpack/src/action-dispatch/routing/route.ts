@@ -158,6 +158,20 @@ export class Route {
   }
 
   /**
+   * Rails: `def requirements` (journey/route.rb:95-99). Returns the merged
+   * defaults and path constraints, excluding the catch-all `/.+?/m` sentinel.
+   * Used by `RouteSet#fromRequirements` for Language Server tooling lookups.
+   */
+  get requirements(): Record<string, string | RegExp> {
+    const reqs: Record<string, string | RegExp> = {};
+    if (this.controller) reqs.controller = this.controller;
+    if (this.action) reqs.action = this.action;
+    Object.assign(reqs, this.defaults);
+    Object.assign(reqs, this.constraints);
+    return reqs;
+  }
+
+  /**
    * The {@link Redirect} endpoint built from {@link redirectTarget}, used by
    * `RouteSet#call` as the production redirect dispatch path. Lazy so the
    * `Redirect` classes (which pull in `Request`/`Response`) aren't constructed

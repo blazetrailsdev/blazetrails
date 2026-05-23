@@ -16,6 +16,7 @@ export class Topic extends Base {
     );
     this.scope("byLifo", (q: any) => q.where({ author_name: "lifo" }));
     this.scope("replied", (q: any) => q.where("replies_count > 0"));
+    // "true"/"false" are reserved words; call via bracket notation: Topic["true"]()
     this.scope("true", (q: any) => q.where({ approved: true }));
     this.scope("false", (q: any) => q.where({ approved: false }));
     this.scope("scopeWithLambda", (q: any) => q.all());
@@ -68,7 +69,7 @@ export class Topic extends Base {
 
   afterTouchCalled = 0;
 
-  parent() {
+  async parent() {
     return Topic.find(this.readAttribute("parent_id") as number);
   }
 

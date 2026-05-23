@@ -20,7 +20,7 @@ import {
  * `ConditionalGet` which includes `Head`.
  * @internal
  */
-export function isIncludeContent(status: number): boolean {
+export function includeContent(status: number): boolean {
   return _includeContent(status);
 }
 

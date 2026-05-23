@@ -26,10 +26,8 @@ export class ShardedBlogPost extends Base {
     this.belongsTo("parent", { polymorphic: true });
     this.belongsTo("blog", { className: "ShardedBlog" });
     this.hasMany("comments", { className: "ShardedComment" });
-    this.hasMany("deleteComments", {
-      className: "ShardedComment",
-      dependent: "deleteAll" as any,
-    });
+    // Rails: dependent: :delete_all — "deleteAll" not yet in AssociationOptions.dependent type
+    this.hasMany("deleteComments", { className: "ShardedComment", dependent: "delete" });
     this.hasMany("children", { className: "ShardedBlogPost", as: "parent" });
 
     this.hasMany("blogPostTags", { className: "ShardedBlogPostTag" });
@@ -37,8 +35,8 @@ export class ShardedBlogPost extends Base {
 
     this.hasMany("commentsWithCompositePk", {
       className: "ShardedComment",
-      primaryKey: ["blog_id", "id"] as any,
-      foreignKey: ["blog_id", "blog_post_id"] as any,
+      primaryKey: ["blog_id", "id"],
+      foreignKey: ["blog_id", "blog_post_id"],
     });
 
     this.hasMany("commentsWithInverse", {
@@ -57,8 +55,8 @@ export class ShardedBlogPostWithRevision extends Base {
 
     this.hasMany("comments", {
       className: "ShardedComment",
-      primaryKey: ["blog_id", "id"] as any,
-      foreignKey: ["blog_id", "blog_post_id"] as any,
+      primaryKey: ["blog_id", "id"],
+      foreignKey: ["blog_id", "blog_post_id"],
     });
   }
 }
@@ -78,8 +76,8 @@ export class ShardedComment extends Base {
     });
     this.belongsTo("blogPostWithInverse", {
       className: "ShardedBlogPost",
-      foreignKey: ["blog_id", "blog_post_id"] as any,
-      primaryKey: ["blog_id", "id"] as any,
+      foreignKey: ["blog_id", "blog_post_id"],
+      primaryKey: ["blog_id", "id"],
       inverseOf: "commentsWithInverse",
     });
     this.belongsTo("blog", { className: "ShardedBlog" });

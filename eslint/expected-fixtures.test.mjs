@@ -81,7 +81,7 @@ describe("trailsToRailsRel", () => {
 });
 
 // collectUseFixturesKeys is exercised indirectly by the RuleTester cases
-// below (matching/extra/missing key scenarios all route through it).
+// below (matching/extra/missing/nested/union scenarios all route through it).
 void collectUseFixturesKeys;
 
 describe("expected-fixtures rule", () => {
@@ -104,6 +104,16 @@ describe("expected-fixtures rule", () => {
           name: "extra keys allowed",
           filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
           code: `const fx = useFixtures({ customers: [C, {}], "warehouse-things": [W, {}], extras: [E, {}] });\n`,
+        },
+        {
+          name: "useFixtures inside describe block",
+          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+          code: `describe("X", () => { const fx = useFixtures({ customers: [C, {}], "warehouse-things": [W, {}] }); });\n`,
+        },
+        {
+          name: "multiple useFixtures calls union their keys",
+          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+          code: `describe("A", () => { useFixtures({ customers: [C, {}] }); });\ndescribe("B", () => { useFixtures({ "warehouse-things": [W, {}] }); });\n`,
         },
         {
           name: "rails file with no fixtures → no-op",

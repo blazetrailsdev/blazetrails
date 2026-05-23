@@ -115,3 +115,9 @@ export * from "./session.js";
 export * from "./student.js";
 export * from "./translation.js";
 export * from "./treaty.js";
+// Cluster 16: customer / contact / organization
+export * from "./contact.js";
+export * from "./contract.js";
+export * from "./customer.js";
+export * from "./customer-carrier.js";
+export * from "./organization.js";

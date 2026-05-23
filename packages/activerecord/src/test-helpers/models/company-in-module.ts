@@ -2,9 +2,10 @@
 // Ruby modules flattened to prefixed exports (TypeScript namespaces banned by lint rule).
 import { registerModel } from "../../associations.js";
 import { Base } from "../../base.js";
+import { Company } from "./company.js";
 
-// MyApplication::Business::Company
-export class MyAppBusinessCompany extends Base {}
+// MyApplication::Business::Company < ::Company
+export class MyAppBusinessCompany extends Company {}
 
 // MyApplication::Business::Firm
 export class MyAppBusinessFirm extends MyAppBusinessCompany {
@@ -53,6 +54,7 @@ export class MyAppBusinessClientContact extends Base {}
 // MyApplication::Business::Developer
 export class MyAppBusinessDeveloper extends Base {
   static {
+    this._tableName = "developers";
     this.hasAndBelongsToMany("projects");
     this.validates("name", { length: { in: [3, 20] } });
   }
@@ -61,6 +63,7 @@ export class MyAppBusinessDeveloper extends Base {
 // MyApplication::Business::Project
 export class MyAppBusinessProject extends Base {
   static {
+    this._tableName = "projects";
     this.hasAndBelongsToMany("developers");
   }
 }
@@ -108,6 +111,7 @@ export class MyAppBillingNestedFirm extends Base {
 // MyApplication::Billing::Account
 export class MyAppBillingAccount extends Base {
   static {
+    this._tableName = "accounts";
     const opts = { foreignKey: "firm_id" };
     this.belongsTo("firm", { ...opts, className: "MyApplication::Business::Firm" });
     this.belongsTo("qualifiedBillingFirm", {
@@ -121,15 +125,15 @@ export class MyAppBillingAccount extends Base {
     });
     this.belongsTo("nestedUnqualifiedBillingFirm", { ...opts, className: "Nested::Firm" });
 
-    (this as any).validate(async function (this: MyAppBillingAccount) {
-      await (this as any).checkEmptyCreditLimit();
+    this.validate(async function (this: MyAppBillingAccount) {
+      await this.checkEmptyCreditLimit();
     });
   }
 
   private async checkEmptyCreditLimit(): Promise<void> {
     const creditCard = this.readAttribute("credit_card");
     if (creditCard == null || creditCard === "") {
-      (this as any).errors.add("credit_card", "blank");
+      this.errors.add("credit_card", "blank");
     }
   }
 }

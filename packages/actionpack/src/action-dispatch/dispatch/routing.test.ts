@@ -1647,8 +1647,14 @@ describe("TestRoutingMapper", () => {
     expect(m!.params["controllers"]).toBe("foo");
   });
 
-  it.skip("websocket", () => {
-    // connect verb not supported — Rails uses `connect "chat/live"` which has no TS equivalent
+  it("websocket", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.connect("chat/live", { to: "chat#live" });
+    });
+    // HTTP/1.1 upgrade path (GET with upgrade headers) and CONNECT both match
+    expect(routes.recognize("GET", "/chat/live")!.route.action).toBe("live");
+    expect(routes.recognize("CONNECT", "/chat/live")!.route.action).toBe("live");
   });
 
   it("bookmarks", () => {

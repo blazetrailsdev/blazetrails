@@ -201,7 +201,7 @@ function secureCompare(a: string, b: string): 0 | 1 {
 
 export interface DigestRequestLike {
   authorization?: string | null;
-  keyGenerator: { generateKey(salt: string): string };
+  keyGenerator: { generateKey(salt: string, keySize?: number): Buffer | string };
   httpAuthSalt: string;
   getHeader(name: string): string | undefined | null;
 }
@@ -326,7 +326,8 @@ export function digestAuthenticationRequest(
 }
 
 export function secretToken(request: DigestRequestLike): string {
-  return request.keyGenerator.generateKey(request.httpAuthSalt);
+  const key = request.keyGenerator.generateKey(request.httpAuthSalt);
+  return Buffer.isBuffer(key) ? key.toString("binary") : key;
 }
 
 export function nonce(secretKey: string, time?: number): string {
@@ -353,18 +354,14 @@ export function opaque(secretKey: string): string {
   return md5Hex(secretKey);
 }
 
-export function authenticateOrRequestWithHttpDigest<T>(
+export function authenticateOrRequestWithHttpDigest(
   this: DigestControllerHost,
   realm = "Application",
   message: string | null | undefined,
-  passwordProcedure: (username: string) => T,
-): T | false {
-  const result = authenticateWithHttpDigest.call(
-    this as DigestControllerHost,
-    realm,
-    passwordProcedure as unknown as (u: string) => string | null | undefined,
-  );
-  if (result) return result as T;
+  passwordProcedure: (username: string) => string | null | undefined,
+): boolean {
+  const result = authenticateWithHttpDigest.call(this, realm, passwordProcedure);
+  if (result) return result;
   requestHttpDigestAuthentication.call(this, realm, message);
   return false;
 }
@@ -373,10 +370,10 @@ export function authenticateWithHttpDigest(
   this: DigestControllerHost,
   realm = "Application",
   passwordProcedure: (username: string) => string | null | undefined,
-): string | null | undefined {
-  if (!this.request.authorization) return undefined;
-  if (!validateDigestResponse(this.request, realm, passwordProcedure)) return undefined;
-  return passwordProcedure(decodeCredentialsHeader(this.request).username ?? "");
+): boolean {
+  return !!(
+    this.request.authorization && validateDigestResponse(this.request, realm, passwordProcedure)
+  );
 }
 
 export function requestHttpDigestAuthentication(

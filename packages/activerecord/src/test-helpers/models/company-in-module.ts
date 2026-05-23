@@ -9,10 +9,17 @@ export class MyAppBusinessCompany extends Base {}
 // MyApplication::Business::Firm
 export class MyAppBusinessFirm extends MyAppBusinessCompany {
   static {
-    this.hasMany("clients", { scope: (q: any) => q.order("id"), dependent: "destroy" });
+    // foreignKey explicit throughout: JS class name MyAppBusinessFirm would derive
+    // my_app_business_firm_id, but Rails demodulizes MyApplication::Business::Firm → firm_id.
+    this.hasMany("clients", {
+      scope: (q: any) => q.order("id"),
+      foreignKey: "firm_id",
+      dependent: "destroy",
+    });
     this.hasMany("clientsSortedDesc", {
       scope: (q: any) => q.order("id DESC"),
       className: "Client",
+      foreignKey: "firm_id",
     });
     this.hasMany("clientsOfFirm", {
       scope: (q: any) => q.order("id"),
@@ -22,9 +29,11 @@ export class MyAppBusinessFirm extends MyAppBusinessCompany {
     this.hasMany("clientsLikeMs", {
       scope: (q: any) => q.where("name = 'Microsoft'").order("id"),
       className: "Client",
+      foreignKey: "firm_id",
     });
     this.hasOne("account", {
       className: "MyApplication::Billing::Account",
+      foreignKey: "firm_id",
       dependent: "destroy",
     });
   }
@@ -120,7 +129,7 @@ export class MyAppBillingAccount extends Base {
   private async checkEmptyCreditLimit(): Promise<void> {
     const creditCard = this.readAttribute("credit_card");
     if (creditCard == null || creditCard === "") {
-      (this as any).errors.add("creditCard", "blank");
+      (this as any).errors.add("credit_card", "blank");
     }
   }
 }

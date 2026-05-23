@@ -23,7 +23,7 @@ export class Company extends AbstractCompany {
     this.hasMany("contracts");
     this.hasMany("developers", { through: "contracts" });
     this.hasMany("specialContracts", {
-      scope: (q: any) => q.includes("specialDeveloper").where({ "developers.id": { not: null } }),
+      scope: (q: any) => q.includes("specialDeveloper").whereNot({ "developers.id": null }),
     });
     this.hasMany("specialDevelopers", { through: "specialContracts" });
     this.hasMany("comments", { foreignKey: "company" });
@@ -48,7 +48,9 @@ export class NamespacedCompany extends Company {}
 
 export class NamespacedFirm extends Company {
   static {
-    this.hasMany("clients", { className: "Namespaced::Client" });
+    // foreignKey explicit: JS class name NamespacedFirm would derive namespaced_firm_id,
+    // but Rails demodulizes Namespaced::Firm → firm_id.
+    this.hasMany("clients", { className: "Namespaced::Client", foreignKey: "firm_id" });
   }
 }
 

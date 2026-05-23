@@ -12,9 +12,9 @@ export class EncryptedFirstTrafficLight extends Base {
   static _tableName = "traffic_lights";
 
   static {
-    this.encrypts("state");
     this.serialize("state", { type: "Array" });
     this.serialize("long_state", { type: "Array" });
+    this.encrypts("state");
   }
 }
 

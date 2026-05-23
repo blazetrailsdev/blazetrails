@@ -474,8 +474,16 @@ export class TestRequest extends AbstractTestRequest {
     return env;
   }
 
+  get queryString(): string {
+    return super.queryString;
+  }
+
   set queryString(string: string) {
     this.setHeader("QUERY_STRING", string);
+  }
+
+  get contentType(): string | undefined {
+    return super.contentType;
   }
 
   set contentType(type: string) {
@@ -522,6 +530,9 @@ export class TestRequest extends AbstractTestRequest {
         const encoded = new TextEncoder().encode(body);
         this.setHeader("CONTENT_LENGTH", String(encoded.byteLength));
         this.setHeader("rack.input", body);
+        // Multipart isn't parsed by the formatted-parameter path; pre-populate the
+        // cache so params/requestParameters expose the uploaded files directly.
+        this.env["action_dispatch.request.request_parameters"] = nonPathParameters;
       } else {
         if (!this.getHeader("CONTENT_TYPE")) {
           this.setHeader("CONTENT_TYPE", "application/x-www-form-urlencoded");
@@ -602,7 +613,7 @@ function buildMultipartBody(params: Record<string, unknown>): { body: string; bo
         `--${boundary}\r\n` +
           `content-disposition: form-data; name="${prefix}"; filename="${value.originalFilename}"\r\n` +
           `content-type: ${value.contentType}\r\n\r\n` +
-          value.read() +
+          value.read().toString("binary") +
           "\r\n",
       );
     } else if (Array.isArray(value)) {

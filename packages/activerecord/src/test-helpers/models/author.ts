@@ -7,7 +7,7 @@ export class Author extends Base {
       return "lifo";
     },
     greeting(this: any) {
-      return super.greeting() + " :)";
+      return "hello :)";
     },
   };
 
@@ -430,7 +430,7 @@ export class Author extends Base {
     this.hasMany("miscPostFirstBlueTags_2", {
       scope: (q: any) => q.where({ posts: { title: ["misc post by bob", "misc post by mary"] } }),
       through: "posts",
-      source: "firstBlueTags2",
+      source: "firstBlueTags_2",
     });
 
     this.hasMany("postsWithDefaultInclude", { className: "PostWithDefaultInclude" });

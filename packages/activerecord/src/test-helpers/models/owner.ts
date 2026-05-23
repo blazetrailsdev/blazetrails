@@ -3,7 +3,7 @@ import { Base } from "../../base.js";
 import { acceptsNestedAttributesFor } from "../../nested-attributes.js";
 
 export class Owner extends Base {
-  private _blocks: Array<(owner: Owner) => void> = [];
+  private _blocks: Array<(owner: Owner) => void | Promise<void>> = [];
 
   static {
     this._primaryKey = "owner_id";
@@ -30,19 +30,20 @@ export class Owner extends Base {
     });
   }
 
-  get blocks(): Array<(owner: Owner) => void> {
+  get blocks(): Array<(owner: Owner) => void | Promise<void>> {
     return this._blocks;
   }
 
-  onAfterCommit(block: (owner: Owner) => void) {
+  onAfterCommit(block: (owner: Owner) => void | Promise<void>) {
     this._blocks.push(block);
   }
 
   async executeBlocks() {
-    for (const block of this._blocks) {
-      block(this);
-    }
+    const blocks = this._blocks;
     this._blocks = [];
+    for (const block of blocks) {
+      await block(this);
+    }
   }
 }
 

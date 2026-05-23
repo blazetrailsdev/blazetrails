@@ -158,18 +158,18 @@ export class Route {
   }
 
   /**
-   * Rails: `def requirements` (journey/route.rb:95-99). Returns the merged
-   * defaults and path constraints, excluding the catch-all `/.+?/m` sentinel.
-   * Used by `RouteSet#fromRequirements` for Language Server tooling lookups.
+   * Rails: `def requirements` (journey/route.rb:95-99). Returns defaults merged
+   * with path-capture constraints. Used by `RouteSet#fromRequirements`.
    */
   get requirements(): Record<string, string | RegExp> {
-    const reqs: Record<string, string | RegExp> = {};
-    if (this.controller) reqs.controller = this.controller;
-    if (this.action) reqs.action = this.action;
+    // Null-prototype so a constraint keyed `__proto__` becomes an own property.
+    const reqs: Record<string, string | RegExp> = Object.create(null);
+    // Merge defaults first so controller/action from dedicated fields win.
     Object.assign(reqs, this.defaults);
     // Rails: `path.requirements` — path-capture constraints only.
-    // Request constraints (subdomain, ip, …) are not included.
     Object.assign(reqs, this.pathConstraints);
+    if (this.controller) reqs.controller = this.controller;
+    if (this.action) reqs.action = this.action;
     return reqs;
   }
 

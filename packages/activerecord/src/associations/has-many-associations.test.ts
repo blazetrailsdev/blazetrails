@@ -2301,7 +2301,7 @@ describe("HasManyAssociationsTest", () => {
   beforeAll(async () => {
     adapter = await setupHmAdapter();
   });
-  withTransactionalFixtures(() => adapter);
+  withTransactionalFixtures(() => adapter, { invalidateSchemaCache: false });
 
   // -- Scoped queries --
 

@@ -50,8 +50,8 @@ Subdir layout is preserved (`cpk/book.rb` → `models/cpk/book.ts`).
 ## Verification
 
 ```
-pnpm fixtures:compare --models            # full list
-pnpm fixtures:compare --models --incomplete  # only MISSING/DIFF
+pnpm fixtures:compare --models            # full models list (fixtures output unchanged)
+pnpm fixtures:compare --models --incomplete  # only MISSING/DIFF models (fixtures output unchanged)
 ```
 
 MISSING/DIFF soft-fail until PR 9 flips to hard-fail (runtime errors and script failures still exit non-zero).

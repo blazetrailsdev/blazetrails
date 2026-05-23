@@ -32,8 +32,10 @@ mechanical step is adding the four files to
 
 Touch opportunistically when working in `request.rb` cookie/forwarded-time,
 `mock_response` cookie attribute parsing, `etag`/`conditional_get` HTTP-date
-helpers, and `multipart` tempfile timestamps. Prefer `Temporal.Instant` /
-`Temporal.ZonedDateTime` over `new Date(...)` in new code.
+helpers, and `multipart` tempfile timestamps. Import `Temporal` from the
+polyfill re-export (`import { Temporal } from "@blazetrails/activesupport/temporal"`)
+— not the global — and prefer `Temporal.Instant` / `Temporal.ZonedDateTime`
+over `new Date(...)` in new code.
 
 ---
 

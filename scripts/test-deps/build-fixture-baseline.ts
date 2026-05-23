@@ -14,7 +14,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { parse } from "@typescript-eslint/parser";
+import { parser } from "typescript-eslint";
 
 import type { FileDeps } from "./rails-test-deps.js";
 import { collectUseFixturesKeys } from "../../eslint/expected-fixtures.mjs";
@@ -54,7 +54,7 @@ function main(): void {
     let foundCall = false;
     let keys = new Set<string>();
     try {
-      const ast = parse(src, { loc: true, range: true });
+      const ast = parser.parse(src, { loc: true, range: true });
       const r = collectUseFixturesKeys(ast);
       foundCall = r.found;
       keys = r.keys;

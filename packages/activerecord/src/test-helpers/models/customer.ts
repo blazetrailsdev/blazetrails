@@ -52,11 +52,11 @@ export class GpsLocation {
   }
 
   get latitude(): string {
-    return this.gpsLocation.split("x")[0];
+    return this.gpsLocation.split("x")[0] ?? "";
   }
 
   get longitude(): string {
-    return this.gpsLocation.split("x")[1];
+    return this.gpsLocation.split("x")[1] ?? "";
   }
 
   isEqual(other: GpsLocation): boolean {

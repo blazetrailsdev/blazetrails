@@ -39,8 +39,7 @@ export class Contract extends Base {
 
 export class NewContract extends Contract {
   static {
-    this._tableName = "contracts";
-    this.validates("companyId", { presence: true });
+    this.validates("company_id", { presence: true });
   }
 }
 

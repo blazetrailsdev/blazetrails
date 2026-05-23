@@ -346,17 +346,15 @@ function transform(sf: SourceFile, info: SidecarPatternInfo, helpersRel: string)
   const insertBeforeStmt =
     info.scope === "module" ? info.beforeAllStmt : (info.describeStmt ?? info.beforeAllStmt);
 
-  // For scope=describe, the beforeAll stays inside the describe but we need a
-  // module-level beforeAll for defineSchema. Extract the defineSchema schema arg text
-  // before we mutate the tree.
-  const schemaArgText = info.defineSchemaCall.getArguments()[1]?.getFullText() ?? "{}";
-
   // 2) Remove adapter init statement from beforeAll body
   info.adapterInitStmt.remove();
   details.push(`removed ({ ${info.adapterVarName} } = createSidecarTestAdapter()) statement`);
 
-  // 3) Rewrite defineSchema(adapter, X) → defineSchema(X)
+  // 3) Rewrite defineSchema(adapter, X[, opts]) → defineSchema(X[, opts])
+  //    Capture the updated call text *after* removing the adapter arg so all
+  //    remaining args (schema, optional opts) are preserved verbatim.
   info.defineSchemaCall.removeArgument(0);
+  const defineSchemaCallText = info.defineSchemaCall.getText();
   details.push(`rewrote defineSchema(${info.adapterVarName}, ...) → defineSchema(...)`);
 
   // 4) For scope=describe: the beforeAll (now only containing defineSchema) is inside the
@@ -400,7 +398,7 @@ function transform(sf: SourceFile, info: SidecarPatternInfo, helpersRel: string)
       sf.insertStatements(idx, [
         `setupHandlerSuite();`,
         `useHandlerTransactionalFixtures();`,
-        `beforeAll(async () => {\n  await defineSchema(${schemaArgText});\n});`,
+        `beforeAll(async () => {\n  await ${defineSchemaCallText};\n});`,
       ]);
       details.push(
         "inserted setupHandlerSuite(), useHandlerTransactionalFixtures(), beforeAll at module level",
@@ -416,7 +414,7 @@ function transform(sf: SourceFile, info: SidecarPatternInfo, helpersRel: string)
     sf.addStatements([
       `setupHandlerSuite();`,
       `useHandlerTransactionalFixtures();`,
-      `beforeAll(async () => {\n  await defineSchema(${schemaArgText});\n});`,
+      `beforeAll(async () => {\n  await ${defineSchemaCallText};\n});`,
     ]);
     details.push("appended setupHandlerSuite(), useHandlerTransactionalFixtures(), beforeAll");
   } else {

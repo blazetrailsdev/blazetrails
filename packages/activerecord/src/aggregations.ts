@@ -89,7 +89,9 @@ function readerMethod(
       if (cache.has(name)) return cache.get(name);
       const args = mapping.map(([modelAttr]) => this.readAttribute(modelAttr));
       if (args.every((a) => a === null || a === undefined)) return null;
-      const obj = Object.freeze(constructorFn ? constructorFn(...args) : new klass(...args));
+      const built = constructorFn ? constructorFn(...args) : new klass(...args);
+      if (built == null) return null;
+      const obj = Object.freeze(built);
       cache.set(name, obj);
       return obj;
     },

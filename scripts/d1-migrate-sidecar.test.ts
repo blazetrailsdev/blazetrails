@@ -19,10 +19,18 @@ import { migrateText } from "./d1-migrate-sidecar.js";
 const ROOT = resolve(import.meta.dirname, "..");
 
 function mergeBase(): string {
-  return execFileSync("git", ["merge-base", "HEAD", "origin/main"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  }).trim();
+  for (const ref of ["origin/main", "main"]) {
+    try {
+      return execFileSync("git", ["merge-base", "HEAD", ref], {
+        cwd: ROOT,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    } catch {
+      // ref not available; try next
+    }
+  }
+  throw new Error("could not resolve merge-base: neither origin/main nor main found");
 }
 
 function gitShow(ref: string, path: string): string {

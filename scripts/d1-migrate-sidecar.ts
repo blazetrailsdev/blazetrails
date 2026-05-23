@@ -363,13 +363,8 @@ function transform(sf: SourceFile, info: SidecarPatternInfo, helpersRel: string)
   //    describe. We move it to module level by removing it from the describe and inserting
   //    a new module-level one. For scope=module it stays in place.
   if (info.scope === "describe") {
-    // Get the current text of the (now-modified) beforeAll body for defineSchema
-    const modifiedBeforeAllText = `beforeAll(async () => {\n  await defineSchema(${schemaArgText});\n});`;
-    // Remove beforeAll from inside the describe
     info.beforeAllStmt.remove();
     details.push("removed beforeAll from inside describe");
-    // Insert module-level beforeAll after the setup calls (we'll insert setup calls next)
-    // We'll collect all insertions and do them at once after we know the insertion index.
   }
 
   // 5) Remove the adapter variable declaration

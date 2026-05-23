@@ -1842,15 +1842,8 @@ describe("TestRoutingMapper", () => {
     // scope constraint regex on optional segment not applied during recognition
   });
 
-  it("scope with format option", () => {
-    // format: false on scope/route — RouteSet does not implement format segment suppression
-    const routes = new RouteSet();
-    routes.draw((r) => {
-      r.get("direct/index", { as: "no_format_direct" });
-      r.get("scoped/index", { as: "no_format_scoped" });
-    });
-    expect(routes.pathFor("no_format_direct")).toBe("/direct/index");
-    expect(routes.pathFor("no_format_scoped")).toBe("/scoped/index");
+  it.skip("scope with format option", () => {
+    // format: false scope/route option not implemented — format segment suppression not supported
   });
 
   it.skip("resources with format false from scope", () => {

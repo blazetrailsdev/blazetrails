@@ -218,8 +218,8 @@ Pair with:
 
 - ~20 — wire `ALLOWED_HOSTS_IN_DEVELOPMENT` into a trailties Railtie
   default config.
-- ~10 — widen `exclude` to accept Request (`(envOrRequest: RackEnv |
-Request) => boolean`).
+- ~10 — widen `exclude` to accept Request (signature
+  `(envOrRequest: RackEnv | Request) => boolean`).
 
 ### S13 — DidYouMean reopen sweep — cross-package (~80 LOC)
 
@@ -249,8 +249,8 @@ Track inside the individual P-slots below rather than as one mega-story.
 
 ### S15 — Smaller leaves (any-time fillers) — AD/AC
 
-Per MEMORY [feedback_no_tiny_prs] / [feedback_bundle_to_pr_ceiling]:
-bundle to ~250 LOC, never ship standalone.
+Bundle to ~250 LOC; never ship as a standalone tiny PR (review-cycle data
+shows <30-LOC fidelity PRs consume disproportionate Copilot/human bandwidth).
 
 - `routing/endpoint` — `engine()` returns false (~5). **depends-on Engine.**
 - `middleware/actionable_exceptions` — prototype-chain walk in
@@ -486,7 +486,9 @@ findings under `~/.btwhooks/data/github/blazetrailsdev/trails/<pr>/post-pr/`.
   `globalThis` for constant lookup; accepts String|Class only.
 - **`render` guard:** `this.performed` instead of `responseBody`.
 - **camelCase scriptNamer keys:** `Mapper._mountedScriptNamers` keyed on
-  camelCase (CLAUDE.md "camelCase only").
+  camelCase, matching the project-wide convention (api:compare expects
+  Ruby snake_case method names to be ported as TS camelCase, including
+  Rails payload keys).
 
 ### ActionDispatch
 

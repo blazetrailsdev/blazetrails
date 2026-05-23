@@ -55,9 +55,10 @@ export class BaseIterator {
 
   /** @internal */
   private multipartHeading(range: [number, number]): string {
+    const ct = this.options.mimeType ? `content-type: ${this.options.mimeType}\r\n` : "";
     return (
       `\r\n--${MULTIPART_BOUNDARY}\r\n` +
-      `content-type: ${this.options.mimeType}\r\n` +
+      ct +
       `content-range: bytes ${range[0]}-${range[1]}/${this.options.size}\r\n\r\n`
     );
   }
@@ -111,7 +112,12 @@ export class Files {
       return this.fail(405, "Method Not Allowed", { allow: ALLOW_HEADER });
     }
 
-    const pathInfo = decodeURIComponent(env["PATH_INFO"] || "/");
+    let pathInfo: string;
+    try {
+      pathInfo = decodeURIComponent(env["PATH_INFO"] || "/");
+    } catch {
+      return this.fail(400, "Bad Request");
+    }
     if (!this.validPath(pathInfo)) return this.fail(400, "Bad Request");
 
     const cleanPath = pathInfo;
@@ -150,9 +156,9 @@ export class Files {
 
     const lastModified = stat.mtime.toUTCString();
     const ifModSince = env["HTTP_IF_MODIFIED_SINCE"];
-    if (ifModSince && new Date(ifModSince) >= stat.mtime) return [304, {}, []]; // boundary: HTTP-date vs mtime
-
     const headers: Record<string, string> = { "last-modified": lastModified };
+
+    if (ifModSince && new Date(ifModSince) >= stat.mtime) return [304, headers, []]; // boundary: HTTP-date vs mtime
     const mime = this.mimeType(path, this.defaultMime);
     if (mime) headers[CONTENT_TYPE] = mime;
     Object.assign(headers, this.headers);
@@ -232,7 +238,7 @@ export class Files {
     for (const spec of m[1].split(",").map((s) => s.trim())) {
       if (spec.startsWith("-")) {
         const len = parseInt(spec.slice(1));
-        if (isNaN(len)) return null;
+        if (isNaN(len) || len <= 0) return null;
         result.push([Math.max(0, size - len), size - 1]);
       } else if (spec.endsWith("-")) {
         const start = parseInt(spec);

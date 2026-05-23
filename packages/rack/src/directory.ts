@@ -127,7 +127,12 @@ export class Directory {
 
   async get(env: Record<string, any>): Promise<[number, Record<string, any>, any]> {
     const scriptName = env["SCRIPT_NAME"] || "";
-    const pathInfo = decodeURIComponent(env["PATH_INFO"] || "/");
+    let pathInfo: string;
+    try {
+      pathInfo = decodeURIComponent(env["PATH_INFO"] || "/");
+    } catch {
+      return this.checkBadRequest("\0")!;
+    }
 
     const clientError = this.checkBadRequest(pathInfo) || this.checkForbidden(pathInfo);
     if (clientError) return clientError;

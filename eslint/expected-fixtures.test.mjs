@@ -63,6 +63,10 @@ beforeAll(() => {
   fs.writeFileSync(EXCLUDE_PATH, JSON.stringify(["packages/activerecord/src/excluded.test.ts"]));
 });
 afterAll(restore);
+// Belt-and-suspenders: cover Ctrl-C / watch-mode reloads between beforeAll
+// and afterAll. One of the snapshotted files (EXCLUDE_PATH) is committed,
+// so a leaked test fixture could be staged by mistake.
+process.on("exit", restore);
 
 describe("trailsToRailsRel", () => {
   it("maps kebab-case basenames to snake_case rails paths", () => {
@@ -92,7 +96,17 @@ describe("expected-fixtures rule", () => {
         parser: (await import("typescript-eslint")).parser,
       },
     });
-    tester.run("expected-fixtures", rule, {
+    try {
+      runCases(tester);
+    } finally {
+      // If tester.run threw mid-test, still restore on the way out.
+      restore();
+    }
+  });
+});
+
+function runCases(tester) {
+  tester.run("expected-fixtures", rule, {
       valid: [
         {
           name: "matching useFixtures call (string + identifier keys)",
@@ -145,5 +159,4 @@ describe("expected-fixtures rule", () => {
         },
       ],
     });
-  });
-});
+}

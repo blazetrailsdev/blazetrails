@@ -14,13 +14,21 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { parse } from "@typescript-eslint/parser";
+
 import type { FileDeps } from "./rails-test-deps.js";
+import { collectUseFixturesKeys } from "../../eslint/expected-fixtures.mjs";
 
 const ROOT = path.resolve(__dirname, "../..");
 const DEPS_PATH = path.join(ROOT, "scripts/test-deps/output/activerecord-test-deps.json");
 const OUT_PATH = path.join(ROOT, "eslint/expected-fixtures-exclude.json");
 const AR_SRC = path.join(ROOT, "packages/activerecord/src");
 
+// activerecord scope only — no path segments in AR tests resolve to the
+// `railtie→trailtie` aliases in scripts/api-compare/conventions.ts, and AR
+// has no erb→tse mappings. Naive kebab↔snake is sufficient here. If the
+// rule is ever widened to actionpack/actionview/trailties, switch to the
+// shared `rubyToConventionTs` from scripts/test-compare/test-compare.ts.
 function railsToTrailsRel(railsRel: string): string {
   return railsRel.replace(/_test\.rb$/, ".test.ts").replace(/_/g, "-");
 }
@@ -43,13 +51,17 @@ function main(): void {
     if (!fs.existsSync(full)) continue;
     ported++;
     const src = fs.readFileSync(full, "utf8");
-    const hasCall = /\buseFixtures\s*\(/.test(src);
-    const hasAllKeys =
-      hasCall &&
-      entry.fixtures.every((k) => {
-        const escaped = k.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-        return new RegExp(`(?:^|[\\s{,])(?:${escaped}|["'\`]${escaped}["'\`])\\s*:`).test(src);
-      });
+    let foundCall = false;
+    let keys = new Set<string>();
+    try {
+      const ast = parse(src, { loc: true, range: true });
+      const r = collectUseFixturesKeys(ast);
+      foundCall = r.found;
+      keys = r.keys;
+    } catch {
+      // Parse failure → treat as failing (excluded).
+    }
+    const hasAllKeys = foundCall && entry.fixtures.every((k) => keys.has(k));
     if (!hasAllKeys) excluded.push(path.posix.join("packages/activerecord/src", trailsRel));
   }
   excluded.sort();

@@ -19,8 +19,9 @@ export class DestroyAsyncParentSoftDelete extends Base {
     return (this as any).deleted;
   }
 
-  destroy() {
-    (this as any).update({ deleted: true });
-    return (this as any).runCallbacks("destroy", () => {});
+  async destroy(): Promise<this | false> {
+    await (this as any).update({ deleted: true });
+    await (this as any).runCallbacks("destroy", () => {});
+    return this;
   }
 }

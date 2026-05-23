@@ -9,7 +9,9 @@
  *   - module-level `let adapter` declaration with `createTestAdapter()` initialization
  *     inside a `beforeAll`
  *   - `defineSchema(adapter, { ... })` called once inside that same `beforeAll`
- *   - optional `withTransactionalFixtures(() => adapter)` at module level
+ *   - optional pre-existing `withTransactionalFixtures(() => adapter)` at
+ *     module level (if absent, the codemod inserts the handler-resolved form
+ *     — every transformed file ends up calling `withTransactionalFixtures`)
  *   - `this.adapter = adapter` inside class static blocks
  *
  * Anything more exotic (sidecar adapters, `defineSchema` inside `it()`, adapter
@@ -17,7 +19,8 @@
  * with a logged reason so it can be handled manually.
  *
  * Usage:
- *   pnpm tsx scripts/d1-migrate.ts [--dry-run] [--write] <file>...
+ *   pnpm tsx scripts/d1-migrate.ts <file>...           # dry-run (default; prints plan)
+ *   pnpm tsx scripts/d1-migrate.ts --write <file>...   # apply changes to disk
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -370,14 +373,20 @@ function transform(sf: SourceFile, info: PatternInfo, helpersRel: string): strin
   ensureImport(`${helpersRel}/setup-handler-suite.js`, ["setupHandlerSuite"]);
   ensureImport(`${helpersRel}/drop-all-tables.js`, ["dropAllTables"]);
 
-  // 2) Remove module-level `let adapter` declaration
-  const adapterVarStmts = sf.getVariableStatements().filter((s) => {
-    if (s.getDeclarationKind() !== "let") return false;
-    return s.getDeclarations().some((d) => d.getName() === info.adapterVarName);
-  });
-  for (const s of adapterVarStmts) {
-    s.remove();
-    details.push(`removed "let ${info.adapterVarName}" declaration`);
+  // 2) Remove the matching declarator from any module-level `let` statement.
+  // If the statement combines multiple declarations (e.g. `let adapter: ..., other = ...`),
+  // only the adapter declarator is removed; the statement itself is dropped only if it
+  // becomes empty.
+  for (const stmt of [...sf.getVariableStatements()]) {
+    if (stmt.wasForgotten() || stmt.getDeclarationKind() !== "let") continue;
+    for (const decl of [...stmt.getDeclarations()]) {
+      if (decl.getName() === info.adapterVarName) {
+        // ts-morph removes the parent VariableStatement automatically when
+        // its last declarator is dropped, so no extra cleanup is needed.
+        decl.remove();
+        details.push(`removed "let ${info.adapterVarName}" declarator`);
+      }
+    }
   }
 
   // 3) Replace beforeAll body: replace `adapter = createTestAdapter()` and rewrite defineSchema
@@ -561,12 +570,20 @@ export function migrateText(text: string, filePath: string): string | { skip: st
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
-  const write = args.includes("--write") || !dryRun;
+  const write = args.includes("--write");
+  if (dryRun && write) {
+    console.error("error: --dry-run and --write are mutually exclusive");
+    process.exit(2);
+  }
   const files = args.filter((a) => !a.startsWith("--"));
   if (files.length === 0) {
-    console.error("usage: d1-migrate [--dry-run] [--write] <file>...");
+    console.error(
+      "usage: d1-migrate <file>...               # dry-run (default)\n" +
+        "       d1-migrate --write <file>...       # apply changes",
+    );
     process.exit(1);
   }
+  if (!write) console.error("(dry-run — pass --write to apply changes)");
   const project = new Project({
     skipAddingFilesFromTsConfig: true,
     compilerOptions: { target: 99 },

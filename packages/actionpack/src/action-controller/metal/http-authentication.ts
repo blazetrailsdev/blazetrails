@@ -1,9 +1,9 @@
 /**
- * ActionController::HttpAuthentication — Rails-fidelity Basic auth helpers
+ * ActionController::HttpAuthentication — Basic, Digest, and Token auth helpers
  * ported from `actionpack/lib/action_controller/metal/http_authentication.rb`.
- * Digest + Token live under the `BasicAuth`/`TokenAuth`/`DigestAuth` re-exports
- * pending P17b / P17c.
  */
+
+import { getCrypto } from "@blazetrails/activesupport";
 
 export {
   BasicAuth,
@@ -193,4 +193,197 @@ function secureCompare(a: string, b: string): 0 | 1 {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0 ? 1 : 0;
+}
+
+// ============================================================================
+// HttpAuthentication::Digest
+// ============================================================================
+
+export interface DigestRequestLike {
+  authorization?: string | null;
+  keyGenerator: { generateKey(salt: string): string };
+  httpAuthSalt: string;
+  getHeader(name: string): string | undefined | null;
+}
+export interface DigestControllerLike {
+  headers: Record<string, string>;
+  status: number | string;
+  responseBody: string | string[] | Buffer | null | undefined;
+  request: DigestRequestLike;
+}
+export type DigestCredentials = Record<string, string | undefined>;
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface DigestControllerHost extends DigestControllerLike {}
+
+const md5Hex = (data: string) => getCrypto().createHash("md5").update(data).digest("hex");
+
+export function digestAuthenticate(
+  request: DigestRequestLike,
+  realm: string,
+  passwordProcedure: (username: string) => string | null | undefined,
+): boolean {
+  return !!(request.authorization && validateDigestResponse(request, realm, passwordProcedure));
+}
+
+export function validateDigestResponse(
+  request: DigestRequestLike,
+  realm: string,
+  passwordProcedure: (username: string) => string | null | undefined,
+): boolean {
+  const sk = digestSecretToken(request);
+  const creds = decodeCredentialsHeader(request);
+  if (
+    !digestValidateNonce(sk, request, creds.nonce ?? null) ||
+    realm !== creds.realm ||
+    digestOpaque(sk) !== creds.opaque
+  )
+    return false;
+  const password = passwordProcedure(creds.username ?? "");
+  if (!password) return false;
+  const method =
+    (request.getHeader("rack.methodoverride.original_method") ??
+      request.getHeader("REQUEST_METHOD")) ||
+    "GET";
+  const uri = creds.uri ?? "";
+  return [true, false].some((q) =>
+    [true, false].some(
+      (isHa1) =>
+        digestExpectedResponse(method, q ? `${uri}?` : uri, creds, password, isHa1) ===
+        creds.response,
+    ),
+  );
+}
+
+export function digestExpectedResponse(
+  httpMethod: string,
+  uri: string,
+  credentials: DigestCredentials,
+  password: string,
+  passwordIsHa1 = true,
+): string {
+  const ha1 = passwordIsHa1 ? password : digestHa1(credentials, password);
+  const ha2 = md5Hex(`${httpMethod.toUpperCase()}:${uri}`);
+  return md5Hex(
+    [ha1, credentials.nonce, credentials.nc, credentials.cnonce, credentials.qop, ha2].join(":"),
+  );
+}
+
+export function digestHa1(credentials: DigestCredentials, password: string): string {
+  return md5Hex(`${credentials.username}:${credentials.realm}:${password}`);
+}
+
+export function encodeDigestCredentials(
+  httpMethod: string,
+  credentials: DigestCredentials,
+  password: string,
+  passwordIsHa1: boolean,
+): string {
+  const c: DigestCredentials = { ...credentials };
+  c.response = digestExpectedResponse(httpMethod, c.uri ?? "", c, password, passwordIsHa1);
+  return (
+    "Digest " +
+    Object.entries(c)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}='${v}'`)
+      .join(", ")
+  );
+}
+
+export function decodeCredentialsHeader(request: DigestRequestLike): DigestCredentials {
+  return decodeDigestCredentials(request.authorization ?? "");
+}
+
+export function decodeDigestCredentials(header: string): DigestCredentials {
+  const result: DigestCredentials = {};
+  header
+    .replace(/^Digest\s+/, "")
+    .split(",")
+    .forEach((pair) => {
+      const eq = pair.indexOf("=");
+      if (eq === -1) return;
+      result[pair.slice(0, eq).trim()] = pair
+        .slice(eq + 1)
+        .trim()
+        .replace(/^"|"$/g, "")
+        .replace(/'/g, "");
+    });
+  return result;
+}
+
+export function digestAuthenticationHeader(controller: DigestControllerLike, realm: string): void {
+  const sk = digestSecretToken(controller.request);
+  controller.headers["WWW-Authenticate"] =
+    `Digest realm="${realm}", qop="auth", algorithm=MD5, nonce="${digestNonce(sk)}", opaque="${digestOpaque(sk)}"`;
+}
+
+export function digestAuthenticationRequest(
+  controller: DigestControllerLike,
+  realm: string,
+  message?: string | null,
+): void {
+  digestAuthenticationHeader(controller, realm);
+  controller.status = 401;
+  controller.responseBody = message ?? "HTTP Digest: Access denied.\n";
+}
+
+export function digestSecretToken(request: DigestRequestLike): string {
+  return request.keyGenerator.generateKey(request.httpAuthSalt);
+}
+
+export function digestNonce(secretKey: string, time?: number): string {
+  const t = time ?? Math.floor(Date.now() / 1000);
+  return Buffer.from(`${t}:${md5Hex(`${t}:${secretKey}`)}`).toString("base64");
+}
+
+export function digestValidateNonce(
+  secretKey: string,
+  _request: DigestRequestLike,
+  value: string | null | undefined,
+  secondsToTimeout = 5 * 60,
+): boolean {
+  if (value == null) return false;
+  const t = parseInt(Buffer.from(value, "base64").toString("utf-8").split(":")[0]!, 10);
+  return (
+    !isNaN(t) &&
+    digestNonce(secretKey, t) === value &&
+    Math.abs(t - Math.floor(Date.now() / 1000)) <= secondsToTimeout
+  );
+}
+
+export function digestOpaque(secretKey: string): string {
+  return md5Hex(secretKey);
+}
+
+export function authenticateOrRequestWithHttpDigest<T>(
+  this: DigestControllerHost,
+  realm = "Application",
+  message: string | null | undefined,
+  passwordProcedure: (username: string) => T,
+): T | false {
+  const result = authenticateWithHttpDigest.call(
+    this as DigestControllerHost,
+    realm,
+    passwordProcedure as unknown as (u: string) => string | null | undefined,
+  );
+  if (result) return result as T;
+  requestHttpDigestAuthentication.call(this, realm, message);
+  return false;
+}
+
+export function authenticateWithHttpDigest(
+  this: DigestControllerHost,
+  realm = "Application",
+  passwordProcedure: (username: string) => string | null | undefined,
+): string | null | undefined {
+  if (!this.request.authorization) return undefined;
+  if (!validateDigestResponse(this.request, realm, passwordProcedure)) return undefined;
+  return passwordProcedure(decodeCredentialsHeader(this.request).username ?? "");
+}
+
+export function requestHttpDigestAuthentication(
+  this: DigestControllerHost,
+  realm = "Application",
+  message: string | null | undefined = null,
+): void {
+  digestAuthenticationRequest(this, realm, message);
 }

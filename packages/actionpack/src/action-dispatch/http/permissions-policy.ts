@@ -128,6 +128,10 @@ export class PermissionsPolicy {
     }
   }
 
+  initializeCopy(other: PermissionsPolicy): void {
+    this.directives = new Map(Array.from(other.directives.entries()).map(([k, v]) => [k, [...v]]));
+  }
+
   build(context?: unknown): string {
     return this.buildDirectives(context)
       .filter((v): v is string => v !== null)

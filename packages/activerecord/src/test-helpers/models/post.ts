@@ -348,13 +348,19 @@ export class Post extends Base {
     return this.where({ id: author.posts.pluck("id") });
   }
 
-  static resetLog() {
-    Post._log = [];
+  static resetLog(this: typeof Post) {
+    this._log = [];
   }
 
-  static log(message?: any, side?: any, newRecord?: any): Array<[any, any, any]> | undefined {
-    if (message == null) return Post._log;
-    Post._log.push([message, side, newRecord]);
+  static log(
+    this: typeof Post,
+    message?: any,
+    side?: any,
+    newRecord?: any,
+  ): Array<[any, any, any]> {
+    if (message == null) return this._log;
+    this._log.push([message, side, newRecord]);
+    return this._log;
   }
 }
 

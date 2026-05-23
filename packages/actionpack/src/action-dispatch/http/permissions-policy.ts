@@ -16,33 +16,7 @@ const MAPPINGS: Record<string, string> = {
   none: "'none'",
 };
 
-/** @internal */
-const DIRECTIVES: Record<string, string> = {
-  accelerometer: "accelerometer",
-  ambientLightSensor: "ambient-light-sensor",
-  autoplay: "autoplay",
-  camera: "camera",
-  displayCapture: "display-capture",
-  encryptedMedia: "encrypted-media",
-  fullscreen: "fullscreen",
-  geolocation: "geolocation",
-  gyroscope: "gyroscope",
-  hid: "hid",
-  idleDetection: "idle-detection",
-  keyboardMap: "keyboard-map",
-  magnetometer: "magnetometer",
-  microphone: "microphone",
-  midi: "midi",
-  payment: "payment",
-  pictureInPicture: "picture-in-picture",
-  screenWakeLock: "screen-wake-lock",
-  serial: "serial",
-  syncXhr: "sync-xhr",
-  usb: "usb",
-  webShare: "web-share",
-};
-
-export type PolicySource = string | ((...args: unknown[]) => string);
+export type PolicySource = string | ((context: unknown) => string);
 
 export class PermissionsPolicy {
   /** @internal */
@@ -128,8 +102,10 @@ export class PermissionsPolicy {
     }
   }
 
-  initializeCopy(other: PermissionsPolicy): void {
+  /** @internal */
+  initializeCopy(other: PermissionsPolicy): this {
     this.directives = new Map(Array.from(other.directives.entries()).map(([k, v]) => [k, [...v]]));
+    return this;
   }
 
   build(context?: unknown): string {
@@ -182,7 +158,7 @@ export class PermissionsPolicy {
       if (context == null) {
         throw new Error(`Missing context for the dynamic permissions policy source: ${source}`);
       }
-      return (source as (ctx: unknown) => string)(context);
+      return source(context);
     }
     throw new Error(`Unexpected permissions policy source: ${JSON.stringify(source)}`);
   }

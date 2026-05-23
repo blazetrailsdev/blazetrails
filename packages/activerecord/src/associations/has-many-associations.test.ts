@@ -445,7 +445,7 @@ const UNIVERSAL_HM_SCHEMA: Schema = {
   r_containers: { name: "string" },
 } as const;
 
-async function setupHmAdapter(): Promise<DatabaseAdapter> {
+async function setupHmAdapter(): Promise<TestDatabaseAdapter> {
   const a = createTestAdapter();
   await defineSchema(a, UNIVERSAL_HM_SCHEMA);
   return a;
@@ -2296,11 +2296,12 @@ describe("HasManyAssociationsTest", () => {
 });
 
 describe("HasManyAssociationsTest", () => {
-  let adapter: DatabaseAdapter;
+  let adapter: TestDatabaseAdapter;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     adapter = await setupHmAdapter();
   });
+  withTransactionalFixtures(() => adapter);
 
   // -- Scoped queries --
 

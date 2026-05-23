@@ -22,10 +22,6 @@ describe("pickTemplateForEtag", () => {
   it("returns undefined when no options and no actionName", () => {
     expect(pickTemplateForEtag(undefined, {})).toBeUndefined();
   });
-
-  it("returns undefined when options is undefined and controller has no actionName", () => {
-    expect(pickTemplateForEtag(undefined, {})).toBeUndefined();
-  });
 });
 
 describe("lookupAndDigestTemplate", () => {

@@ -111,7 +111,7 @@ export class PublicExceptions {
 
     if (found && file != null) {
       const html = getFs().readFileSync(file, "utf8");
-      const htmlType = MimeType.lookup("html") ?? new MimeType("text/html", "html");
+      const htmlType = MimeType.lookup("html");
       return this.renderFormat(status, htmlType, html);
     }
     return [404, { [X_CASCADE]: "pass" }, emptyBody()];

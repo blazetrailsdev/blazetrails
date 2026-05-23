@@ -48,7 +48,7 @@ describe("TestCollector", () => {
       c.js();
       expect("js" in c).toBe(true);
     } finally {
-      if (!MimeType.lookup("js")) {
+      if (!MimeType.isRegistered("js")) {
         MimeType.register("text/javascript", "js", ["application/javascript"], ["js"]);
       }
     }

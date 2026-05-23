@@ -53,13 +53,12 @@ export class Static {
     return Array.isArray(this.urls) && this.urls.some((url) => path.indexOf(url) === 0);
   }
 
-  /** @internal */
-  private canServe(path: string): boolean {
+  canServe(path: string): boolean {
     return this.routeFile(path) || this.overwriteFilePath(path);
   }
 
   async call(env: Record<string, any>): Promise<[number, Record<string, any>, any]> {
-    const path = env["PATH_INFO"] as string;
+    const path = (env["PATH_INFO"] || "/") as string;
     const actualPath = cleanPathInfo(unescapePath(path));
 
     if (!this.canServe(actualPath)) {

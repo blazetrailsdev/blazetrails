@@ -1,9 +1,9 @@
 /**
  * Snapshot tests for the D-1 sidecar migration codemod.
  *
- * Reads the pre-codemod file from HEAD (the merge commit before this PR applied
- * the transformation), runs migrateText, and asserts functional equivalence
- * with the current working-tree file.
+ * Reads the pre-codemod file from HEAD~1 (the parent commit, on main, before
+ * this PR applied the transformation), runs migrateText, and asserts functional
+ * equivalence with the current working-tree file.
  *
  * Two representative files are tested — one from each structural variant:
  *   - coders/json.test.ts   → Group A (module-level adapter/beforeAll)
@@ -68,7 +68,7 @@ function normalize(text: string): string {
 describe("d1-migrate-sidecar codemod", () => {
   it("Group A: transforms module-level sidecar pattern (json.test.ts)", () => {
     const repoPath = "packages/activerecord/src/coders/json.test.ts";
-    const before = gitShow("HEAD", repoPath);
+    const before = gitShow("HEAD~1", repoPath);
     const abs = resolve(ROOT, repoPath);
     const expected = readFileSync(abs, "utf8");
     const out = migrateText(before, abs);
@@ -78,7 +78,7 @@ describe("d1-migrate-sidecar codemod", () => {
 
   it("Group B: transforms describe-scoped sidecar pattern (absence-validation.test.ts)", () => {
     const repoPath = "packages/activerecord/src/validations/absence-validation.test.ts";
-    const before = gitShow("HEAD", repoPath);
+    const before = gitShow("HEAD~1", repoPath);
     const abs = resolve(ROOT, repoPath);
     const expected = readFileSync(abs, "utf8");
     const out = migrateText(before, abs);

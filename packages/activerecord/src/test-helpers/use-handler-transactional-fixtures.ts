@@ -21,8 +21,9 @@ import {
  *      non-pooled BEGIN/ROLLBACK path on the single leased connection —
  *      the pooled pin path requires a second free connection and deadlocks
  *      under pool size 1 (see [[project_pool_epic_d_handler_sqlite_constraint]]).
- *   2. Registers `withTransactionalFixtures(() => proxied)` so every test
- *      runs inside an outer transaction that is rolled back at file exit.
+ *   2. Registers `withTransactionalFixtures(() => proxied)`, which opens a
+ *      per-test transaction in `beforeEach` and rolls it back in `afterEach`
+ *      so each test sees a clean DB without re-running DDL.
  *   3. Drops all tables + clears applied-schema signatures in `afterAll`
  *      so the next file in the worker can re-`defineSchema` from a clean
  *      slate.

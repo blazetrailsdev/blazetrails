@@ -40,7 +40,6 @@ import {
   type SourceFile,
   type CallExpression,
   type ExpressionStatement,
-  type ImportDeclaration,
   type VariableDeclaration,
   type Block,
 } from "ts-morph";
@@ -99,7 +98,6 @@ interface SidecarPatternInfo {
   defineSchemaCall: CallExpression;
   /** The `withTransactionalFixtures(() => adapter)` statement (if present) */
   withTxFixturesStmt: ExpressionStatement | null;
-  testAdapterImport: ImportDeclaration;
   /**
    * For "describe" scope: the describe ExpressionStatement so we can insert
    * setupHandlerSuite() before it at module level.
@@ -116,18 +114,11 @@ function analyze(sf: SourceFile): SidecarPatternInfo | { skip: string } {
   }
 
   // Must import createSidecarTestAdapter
-  let testAdapterImport: ImportDeclaration | undefined;
-  for (const imp of sf.getImportDeclarations()) {
-    const spec = imp.getModuleSpecifierValue();
-    if (spec.endsWith("/test-adapter.js")) {
-      const named = imp.getNamedImports().map((n) => n.getName());
-      if (named.includes("createSidecarTestAdapter")) {
-        testAdapterImport = imp;
-        break;
-      }
-    }
-  }
-  if (!testAdapterImport) return { skip: "no createSidecarTestAdapter import" };
+  const hasSidecarImport = sf.getImportDeclarations().some((imp) => {
+    if (!imp.getModuleSpecifierValue().endsWith("/test-adapter.js")) return false;
+    return imp.getNamedImports().some((n) => n.getName() === "createSidecarTestAdapter");
+  });
+  if (!hasSidecarImport) return { skip: "no createSidecarTestAdapter import" };
 
   // Find where the sidecar call lives to determine scope
   const sidecarCall = findCallInNode(sf, (c) => callNameMatches(c, "createSidecarTestAdapter"));
@@ -316,7 +307,6 @@ function analyze(sf: SourceFile): SidecarPatternInfo | { skip: string } {
     adapterInitStmt,
     defineSchemaCall,
     withTxFixturesStmt,
-    testAdapterImport,
     describeStmt,
   };
 }
@@ -534,12 +524,7 @@ export function migrateText(text: string, filePath: string): string | { skip: st
 
 async function main() {
   const args = process.argv.slice(2);
-  const dryRun = args.includes("--dry-run");
   const write = args.includes("--write");
-  if (dryRun && write) {
-    console.error("error: --dry-run and --write are mutually exclusive");
-    process.exit(2);
-  }
   const files = args.filter((a) => !a.startsWith("--"));
   if (files.length === 0) {
     console.error(

@@ -345,7 +345,7 @@ export class Post extends Base {
   }
 
   static writtenBy(author: any) {
-    return this.where({ id: author.posts.pluck("id") });
+    return this.where({ id: author.posts.select("id") });
   }
 
   static resetLog(this: typeof Post) {
@@ -474,8 +474,10 @@ export class SpecialPostWithDefaultScope extends Base {
     this.inheritanceColumn = "disabled";
     this._tableName = "posts";
     this.defaultScope((q: any) => q.where({ id: [1, 5, 6] }));
-    this.scope("unscopedAll", (q: any) => q.unscoped(() => q.all()));
-    this.scope("authorless", (q: any) => q.unscoped(() => q.where({ author_id: 0 })));
+    this.scope("unscopedAll", (q: any) => q._modelClass.unscoped(() => q._modelClass.all()));
+    this.scope("authorless", (q: any) =>
+      q._modelClass.unscoped(() => q._modelClass.where({ author_id: 0 })),
+    );
   }
 }
 

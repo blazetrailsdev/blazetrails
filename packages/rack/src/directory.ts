@@ -12,10 +12,10 @@ const DIR_PAGE_FOOTER = `</table>
 `;
 
 const FILESIZE_FORMAT: [string, number][] = [
-  ["%.1fT", 1 << 40],
-  ["%.1fG", 1 << 30],
-  ["%.1fM", 1 << 20],
-  ["%.1fK", 1 << 10],
+  ["%.1fT", 2 ** 40],
+  ["%.1fG", 2 ** 30],
+  ["%.1fM", 2 ** 20],
+  ["%.1fK", 2 ** 10],
 ];
 
 function escapeHtml(s: string): string {

@@ -156,9 +156,11 @@ export function formats(this: MimeNegotiationHost): MimeType[] {
   } else if ((extType = formatFromPathExtension.call(this))) {
     v = [extType];
   } else if (this.xhr) {
-    v = [MimeType.lookup("js")];
+    const js = MimeType.lookupByExtension("js");
+    v = js ? [js] : [];
   } else {
-    v = [MimeType.lookup("html")];
+    const html = MimeType.lookupByExtension("html");
+    v = html ? [html] : [];
   }
   v = v.filter((f) => f.symbol || f.ref() === "*/*");
   this.setHeader(FORMATS_KEY, v);

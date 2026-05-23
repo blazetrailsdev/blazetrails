@@ -102,7 +102,7 @@ export class AcceptList {
     list.sort((a, b) => a.compare(b));
 
     let textXmlIdx = AcceptList.findItemByName(list, "text/xml");
-    const xml = MimeType.lookup("xml");
+    const xml = MimeType.lookupByExtension("xml");
     let appXmlIdx = xml ? AcceptList.findItemByName(list, xml.toString()) : null;
 
     if (textXmlIdx !== null && appXmlIdx !== null) {

@@ -38,6 +38,7 @@ import { Request } from "../action-dispatch/http/request.js";
 import { Response } from "../action-dispatch/http/response.js";
 import { TestRequest as AbstractTestRequest } from "../action-dispatch/testing/test-request.js";
 import type { ParameterParsers } from "../action-dispatch/http/parameters.js";
+import { UploadedFile } from "../action-dispatch/http/upload.js";
 import { Parameters } from "./metal/strong-parameters.js";
 import { FlashHash } from "../action-dispatch/middleware/flash.js";
 import type { Metal } from "./metal.js";
@@ -444,14 +445,19 @@ export class TestRequest extends AbstractTestRequest {
     return new TestSession();
   }
 
+  /** @internal Mirrors Rails `@controller_class` ivar. */
+  private _testControllerClass: unknown = null;
+
   /**
    * Mirrors Rails `ActionController::TestRequest.create(controller_class)`.
    * Builds a fresh request with default env and a new session.
    */
-  static create(_controllerClass?: unknown): TestRequest {
+  static create(controllerClass?: unknown): TestRequest {
     const env: Record<string, unknown> = {};
     env["rack.request.cookie_hash"] = {};
-    return new TestRequest({ ...TestRequest.defaultEnv(), ...env });
+    const req = new TestRequest({ ...TestRequest.defaultEnv(), ...env });
+    req._testControllerClass = controllerClass ?? null;
+    return req;
   }
 
   /**
@@ -494,19 +500,26 @@ export class TestRequest extends AbstractTestRequest {
       if (queryStringKeys.includes(key)) {
         nonPathParameters[key] = value;
       } else {
-        const paramValue = Array.isArray(value) ? value.map((v) => String(v)) : String(value ?? "");
-        pathParameters[key] = Array.isArray(paramValue) ? paramValue.join(",") : paramValue;
+        // Rails: value.is_a?(Array) ? value.map(&:to_param) : value.to_param
+        pathParameters[key] = Array.isArray(value)
+          ? (value.map((v) => String(v ?? "")) as unknown as string)
+          : String(value ?? "");
       }
     }
 
-    if (this.method === "GET" || this.method === "HEAD") {
+    if (this.isGet) {
       if (!this.getHeader("QUERY_STRING")) {
         this.queryString = toQueryString(nonPathParameters);
       }
     } else {
       if (shouldMultipart(nonPathParameters)) {
         this.contentType = multipartContentType();
-        // multipart body encoding not fully implemented; leave body empty
+        // Multipart body building requires Rack::Test::Utils; encode as url-form fallback
+        // so CONTENT_LENGTH and rack.input are always present for the controller.
+        const data = toQueryString(nonPathParameters);
+        const encoded = new TextEncoder().encode(data);
+        this.setHeader("CONTENT_LENGTH", String(encoded.byteLength));
+        this.setHeader("rack.input", data);
       } else {
         if (!this.getHeader("CONTENT_TYPE")) {
           this.setHeader("CONTENT_TYPE", "application/x-www-form-urlencoded");
@@ -519,7 +532,12 @@ export class TestRequest extends AbstractTestRequest {
           data = JSON.stringify(nonPathParameters);
         } else if (ct.includes("application/xml")) {
           data = toQueryString(nonPathParameters);
+        } else if (ct.includes("application/x-www-form-urlencoded")) {
+          data = toQueryString(nonPathParameters);
         } else {
+          // Rails: registers a custom parser so the controller sees the raw params hash
+          const mimeSymbol = ct.split(";")[0].trim().replace(/\//g, "_").replace(/-/g, "_");
+          this._customParamParsers[mimeSymbol] = () => nonPathParameters;
           data = toQueryString(nonPathParameters);
         }
 
@@ -533,7 +551,8 @@ export class TestRequest extends AbstractTestRequest {
       this.setHeader("PATH_INFO", generatedPath);
     }
     if (!this.getHeader("ORIGINAL_FULLPATH")) {
-      this.setHeader("ORIGINAL_FULLPATH", generatedPath);
+      // Rails uses fullpath here (path + query string) not just the generated path
+      this.setHeader("ORIGINAL_FULLPATH", this.fullpath);
     }
 
     pathParameters["controller"] = controllerPath;
@@ -548,12 +567,12 @@ export class TestRequest extends AbstractTestRequest {
   }
 }
 
-/** @internal Returns true if any value in params is a file-upload object. */
+/** @internal Mirrors Rails ENCODER#should_multipart? — true if any param is an UploadedFile. */
 function shouldMultipart(params: Record<string, unknown>): boolean {
   const check = (value: unknown): boolean => {
     if (Array.isArray(value)) return value.some(check);
+    if (value instanceof UploadedFile) return true;
     if (value !== null && typeof value === "object") {
-      if ("name" in value && "content" in value) return true;
       return Object.values(value as object).some(check);
     }
     return false;

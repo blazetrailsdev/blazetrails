@@ -8,14 +8,14 @@ export class Sponsor extends Base {
     this.belongsTo("sponsor", { polymorphic: true });
     this.belongsTo("thing", {
       polymorphic: true,
-      // foreign_type: "sponsorable_type" — not yet in AssociationOptions
+      foreignType: "sponsorable_type",
       foreignKey: "sponsorable_id",
-    } as any);
+    });
     this.belongsTo("sponsorableWithConditions", {
       scope: (q: any) => q.where({ name: "Ernie" }),
       polymorphic: true,
-      // foreign_type: "sponsorable_type" — not yet in AssociationOptions
+      foreignType: "sponsorable_type",
       foreignKey: "sponsorable_id",
-    } as any);
+    });
   }
 }

@@ -154,7 +154,10 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
    * loadBelongsTo which reads `${underscore(assocName)}_type`.
    */
   private foreignTypeName(): string {
-    return `${underscore(this.reflection.name)}_type`;
+    return (
+      (this.reflection.options.foreignType as string | undefined) ??
+      `${underscore(this.reflection.name)}_type`
+    );
   }
 
   /**

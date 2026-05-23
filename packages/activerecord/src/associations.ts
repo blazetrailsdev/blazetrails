@@ -124,6 +124,10 @@ export interface AssociationOptions {
    * `class_name.foreign_key` default. Mirrors Rails'
    * `has_and_belongs_to_many :tags, association_foreign_key: ...`. */
   associationForeignKey?: string;
+  /** Overrides the column used to store the polymorphic type string.
+   * Mirrors Rails' `belongs_to :thing, polymorphic: true, foreign_type: "sponsorable_type"`.
+   * When absent the default is `${associationName}_type`. */
+  foreignType?: string;
   /** When true, records loaded through this association are marked
    * strict-loading, causing further lazy loads on them to raise.
    *

@@ -142,7 +142,7 @@ association-rich but compact.
 
 ---
 
-### PR 16 — customer / contact / organization / user cluster (~300 LOC)
+### PR 16 — customer / contact / organization cluster (~300 LOC)
 
 ~300 TS LOC total.
 

@@ -120,6 +120,7 @@ describe("HttpBasicAuthenticationTest", () => {
     );
     expect(result).toBe(false);
     expect(c.status).toBe(401);
+    expect(c.responseBody).toBe("Authentication Failed\n");
     expect(c.headers["WWW-Authenticate"]).toBe('Basic realm="SuperSecret"');
   });
 

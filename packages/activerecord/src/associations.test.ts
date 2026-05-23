@@ -195,6 +195,44 @@ describe("BelongsToAssociations", () => {
     expect(loaded).toBeNull();
   });
 
+  it("polymorphic belongs_to with foreignType reads overridden type column", async () => {
+    await defineSchema(adapter, {
+      things: { name: "string" },
+      ft_sponsors: { sponsorable_id: "integer", sponsorable_type: "string" },
+    });
+    class FtThing extends Base {
+      static {
+        this._tableName = "things";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class FtSponsor extends Base {
+      static {
+        this._tableName = "ft_sponsors";
+        this.attribute("sponsorable_id", "integer");
+        this.attribute("sponsorable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(FtThing);
+    registerModel(FtSponsor);
+
+    const thing = await FtThing.create({ name: "Widget" });
+    const sponsor = await FtSponsor.create({
+      sponsorable_id: thing.id,
+      sponsorable_type: "FtThing",
+    });
+    // foreignType overrides the type column: reads sponsorable_type instead of thing_type
+    const loaded = await loadBelongsTo(sponsor, "thing", {
+      polymorphic: true,
+      foreignType: "sponsorable_type",
+      foreignKey: "sponsorable_id",
+    });
+    expect(loaded).not.toBeNull();
+    expect((loaded as any).name).toBe("Widget");
+  });
+
   // Rails: test_belongs_to_counter_cache (definition only)
   it("test_belongs_to_registers_counter_cache_option", () => {
     class Reply extends Base {

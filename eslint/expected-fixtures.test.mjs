@@ -107,56 +107,56 @@ describe("expected-fixtures rule", () => {
 
 function runCases(tester) {
   tester.run("expected-fixtures", rule, {
-      valid: [
-        {
-          name: "matching useFixtures call (string + identifier keys)",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `const fx = useFixtures({ customers: [C, {}], "warehouse-things": [W, {}] });\n`,
-        },
-        {
-          name: "extra keys allowed",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `const fx = useFixtures({ customers: [C, {}], "warehouse-things": [W, {}], extras: [E, {}] });\n`,
-        },
-        {
-          name: "useFixtures inside describe block",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("X", () => { const fx = useFixtures({ customers: [C, {}], "warehouse-things": [W, {}] }); });\n`,
-        },
-        {
-          name: "multiple useFixtures calls union their keys",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("A", () => { useFixtures({ customers: [C, {}] }); });\ndescribe("B", () => { useFixtures({ "warehouse-things": [W, {}] }); });\n`,
-        },
-        {
-          name: "rails file with no fixtures → no-op",
-          filename: path.join(ROOT, "packages/activerecord/src/no-fixtures.test.ts"),
-          code: `// nothing\n`,
-        },
-        {
-          name: "excluded files are skipped",
-          filename: path.join(ROOT, "packages/activerecord/src/excluded.test.ts"),
-          code: `// no useFixtures call but excluded\n`,
-        },
-        {
-          name: "non-activerecord paths ignored",
-          filename: path.join(ROOT, "packages/arel/src/foo.test.ts"),
-          code: `// nothing\n`,
-        },
-      ],
-      invalid: [
-        {
-          name: "missing useFixtures entirely",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `// no fixtures here\n`,
-          errors: [{ messageId: "missing" }],
-        },
-        {
-          name: "useFixtures present but missing a key",
-          filename: path.join(ROOT, "packages/activerecord/src/associations/eager.test.ts"),
-          code: `const fx = useFixtures({ posts: [P, {}] });\n`,
-          errors: [{ messageId: "incomplete" }],
-        },
-      ],
-    });
+    valid: [
+      {
+        name: "matching useFixtures call (string + identifier keys)",
+        filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+        code: `const fx = useFixtures({ customers: [C, {}], "warehouse-things": [W, {}] });\n`,
+      },
+      {
+        name: "extra keys allowed",
+        filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+        code: `const fx = useFixtures({ customers: [C, {}], "warehouse-things": [W, {}], extras: [E, {}] });\n`,
+      },
+      {
+        name: "useFixtures inside describe block",
+        filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+        code: `describe("X", () => { const fx = useFixtures({ customers: [C, {}], "warehouse-things": [W, {}] }); });\n`,
+      },
+      {
+        name: "multiple useFixtures calls union their keys",
+        filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+        code: `describe("A", () => { useFixtures({ customers: [C, {}] }); });\ndescribe("B", () => { useFixtures({ "warehouse-things": [W, {}] }); });\n`,
+      },
+      {
+        name: "rails file with no fixtures → no-op",
+        filename: path.join(ROOT, "packages/activerecord/src/no-fixtures.test.ts"),
+        code: `// nothing\n`,
+      },
+      {
+        name: "excluded files are skipped",
+        filename: path.join(ROOT, "packages/activerecord/src/excluded.test.ts"),
+        code: `// no useFixtures call but excluded\n`,
+      },
+      {
+        name: "non-activerecord paths ignored",
+        filename: path.join(ROOT, "packages/arel/src/foo.test.ts"),
+        code: `// nothing\n`,
+      },
+    ],
+    invalid: [
+      {
+        name: "missing useFixtures entirely",
+        filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+        code: `// no fixtures here\n`,
+        errors: [{ messageId: "missing" }],
+      },
+      {
+        name: "useFixtures present but missing a key",
+        filename: path.join(ROOT, "packages/activerecord/src/associations/eager.test.ts"),
+        code: `const fx = useFixtures({ posts: [P, {}] });\n`,
+        errors: [{ messageId: "incomplete" }],
+      },
+    ],
+  });
 }

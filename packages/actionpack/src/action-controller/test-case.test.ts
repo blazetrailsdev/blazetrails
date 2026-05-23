@@ -150,6 +150,7 @@ describe("ActionController::TestRequest helpers", () => {
     req.assignParameters(null, "posts", "create", { title: "Hello" }, "/posts", ["title"]);
     const body = req.getHeader("rack.input") ?? "";
     expect(body).toContain("title=Hello");
+    expect(req.requestParameters).toMatchObject({ title: "Hello" });
   });
 
   it("assignParameters builds real multipart body when params include an UploadedFile", () => {
@@ -161,7 +162,7 @@ describe("ActionController::TestRequest helpers", () => {
     expect(ct).toContain("multipart/form-data");
     expect(ct).toContain("boundary=");
     const body = req.getHeader("rack.input") ?? "";
-    expect(body).toContain("hello.txt");
+    expect(body).toContain(`name="upload"; filename="hello.txt"`);
   });
 
   it("assignParameters registers custom parser for unknown content types, wired into requestParameters", () => {

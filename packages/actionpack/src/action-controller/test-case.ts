@@ -35,7 +35,6 @@
 
 import { camelize, getCrypto } from "@blazetrails/activesupport";
 import { buildNestedQuery } from "@blazetrails/rack";
-import { MultipartParser } from "../../../rack/src/multipart.js";
 import { Request } from "../action-dispatch/http/request.js";
 import { Response } from "../action-dispatch/http/response.js";
 import { TestRequest as AbstractTestRequest } from "../action-dispatch/testing/test-request.js";
@@ -518,7 +517,7 @@ export class TestRequest extends AbstractTestRequest {
       }
     } else {
       if (shouldMultipart(nonPathParameters)) {
-        const { body, boundary } = MultipartParser.buildMultipartBody(nonPathParameters);
+        const { body, boundary } = buildMultipartBody(nonPathParameters);
         this.setHeader("CONTENT_TYPE", `multipart/form-data; boundary=${boundary}`);
         const encoded = new TextEncoder().encode(body);
         this.setHeader("CONTENT_LENGTH", String(encoded.byteLength));
@@ -582,14 +581,7 @@ export class TestRequest extends AbstractTestRequest {
   override get requestParameters(): Record<string, unknown> {
     const cached = this.env["action_dispatch.request.request_parameters"];
     if (cached && typeof cached === "object") return cached as Record<string, unknown>;
-    const fallback = (): Record<string, unknown> => {
-      const raw = this.rawPost;
-      if (!raw) return {};
-      const ct = ((this.env["CONTENT_TYPE"] as string) || "").toLowerCase();
-      return ct.includes("application/x-www-form-urlencoded")
-        ? ({} as Record<string, unknown>)
-        : {};
-    };
+    const fallback = (): Record<string, unknown> => this.fallbackRequestParameters();
     const params = this.parseFormattedParameters(this.paramsParsers(), fallback);
     const normalized = RequestUtils.normalizeEncodeParams(params as ParamValue) as Record<
       string,
@@ -598,6 +590,33 @@ export class TestRequest extends AbstractTestRequest {
     this.env["action_dispatch.request.request_parameters"] = normalized;
     return normalized;
   }
+}
+
+/** @internal Mirrors Rails Rack::Test::Utils.build_multipart — encodes params with file uploads. */
+function buildMultipartBody(params: Record<string, unknown>): { body: string; boundary: string } {
+  const boundary = "AaB03x";
+  const parts: string[] = [];
+  function addParts(prefix: string, value: unknown): void {
+    if (value instanceof UploadedFile) {
+      parts.push(
+        `--${boundary}\r\n` +
+          `content-disposition: form-data; name="${prefix}"; filename="${value.originalFilename}"\r\n` +
+          `content-type: ${value.contentType}\r\n\r\n` +
+          value.read() +
+          "\r\n",
+      );
+    } else if (Array.isArray(value)) {
+      for (const item of value) addParts(`${prefix}[]`, item);
+    } else if (value !== null && typeof value === "object") {
+      for (const [k, v] of Object.entries(value)) addParts(`${prefix}[${k}]`, v);
+    } else {
+      parts.push(
+        `--${boundary}\r\ncontent-disposition: form-data; name="${prefix}"\r\n\r\n${String(value ?? "")}\r\n`,
+      );
+    }
+  }
+  for (const [k, v] of Object.entries(params)) addParts(k, v);
+  return { body: parts.join("") + `--${boundary}--\r\n`, boundary };
 }
 
 /** @internal Mirrors Rails ENCODER#should_multipart? — true if any param is an UploadedFile. */

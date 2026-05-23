@@ -1,5 +1,6 @@
 // vendor/rails/activerecord/test/models/company_in_module.rb
 // Ruby modules flattened to prefixed exports (TypeScript namespaces banned by lint rule).
+import { registerModel } from "../../associations.js";
 import { Base } from "../../base.js";
 
 // MyApplication::Business::Company
@@ -123,3 +124,26 @@ export class MyAppBillingAccount extends Base {
     }
   }
 }
+
+// Register Ruby-module-qualified names so cross-namespace className resolution works.
+registerModel("MyApplication::Business::Company", MyAppBusinessCompany);
+registerModel("MyApplication::Business::Firm", MyAppBusinessFirm);
+registerModel("MyApplication::Business::Client", MyAppBusinessClient);
+registerModel("MyApplication::Business::Client::Contact", MyAppBusinessClientContact);
+registerModel("MyApplication::Business::Developer", MyAppBusinessDeveloper);
+registerModel("MyApplication::Business::Project", MyAppBusinessProject);
+registerModel("MyApplication::Business::Prefixed::Company", MyAppBusinessPrefixedCompany);
+registerModel("MyApplication::Business::Prefixed::Firm", MyAppBusinessPrefixedFirm);
+registerModel(
+  "MyApplication::Business::Prefixed::Nested::Company",
+  MyAppBusinessPrefixedNestedCompany,
+);
+registerModel("MyApplication::Business::Suffixed::Company", MyAppBusinessSuffixedCompany);
+registerModel("MyApplication::Business::Suffixed::Firm", MyAppBusinessSuffixedFirm);
+registerModel(
+  "MyApplication::Business::Suffixed::Nested::Company",
+  MyAppBusinessSuffixedNestedCompany,
+);
+registerModel("MyApplication::Billing::Firm", MyAppBillingFirm);
+registerModel("MyApplication::Billing::Nested::Firm", MyAppBillingNestedFirm);
+registerModel("MyApplication::Billing::Account", MyAppBillingAccount);

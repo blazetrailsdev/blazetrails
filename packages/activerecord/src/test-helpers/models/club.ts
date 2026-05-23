@@ -29,7 +29,7 @@ export class Club extends Base {
 
     this.scope("general", (q: any) =>
       q
-        .leftJoins("category")
+        .leftOuterJoins("category")
         .where({ categories: { name: "General" } })
         .unscope("limit"),
     );

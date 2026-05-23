@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { Notifications } from "@blazetrails/activesupport";
 import {
   SubclassNotFound,
@@ -24,7 +24,11 @@ import {
 import { DeleteRestrictionError } from "./errors.js";
 import { assertQueriesCount, assertNoQueries } from "../testing/query-assertions.js";
 
-import { createTestAdapter, type TestDatabaseAdapter } from "../test-adapter.js";
+import {
+  createTestAdapter,
+  resetTestAdapterState,
+  type TestDatabaseAdapter,
+} from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 import { defineSchema, type Schema } from "../test-helpers/define-schema.js";
 import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
@@ -7912,6 +7916,13 @@ describe("HasManyAssociationsTest", () => {
   // This test creates its own adapter with inline DDL and must live outside the
   // withTransactionalFixtures block above: on MariaDB, DDL auto-commits any open
   // transaction, which would destroy the outer BEGIN and cause SAVEPOINT errors in afterEach.
+  // afterAll resets state so sti_posts doesn't leak into subsequent describes that
+  // push shouldSkipGlobalReset (withTransactionalFixtures), which would suppress the
+  // global beforeEach reset.
+  afterAll(async () => {
+    await resetTestAdapterState();
+  });
+
   it("sti subselect count", async () => {
     const a = createTestAdapter();
     await defineSchema(a, {

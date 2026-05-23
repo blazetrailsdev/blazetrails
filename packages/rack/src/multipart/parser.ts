@@ -364,7 +364,7 @@ export class Parser {
     _n: string,
     _b: any,
   ) {}
-  /** @internal */ private findEncoding(enc: string): string {
+  /** @internal */ private findEncoding(enc: string | null | undefined): string {
     return enc ?? "UTF-8";
   }
   /** @internal */ private handleEmptyContentBang(c: string | null | undefined) {

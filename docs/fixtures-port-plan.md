@@ -57,7 +57,7 @@ pnpm fixtures:compare --models            # full list
 pnpm fixtures:compare --models --incomplete  # only MISSING/DIFF
 ```
 
-Exit 0 always (soft-fail) until PR 9 flips to hard-fail.
+MISSING/DIFF soft-fail until PR 9 flips to hard-fail (runtime errors and script failures still exit non-zero).
 
 ---
 

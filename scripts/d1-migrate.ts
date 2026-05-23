@@ -225,21 +225,6 @@ function checkAdapterRefs(
     }
     // Allowed: dropAllTables(adapter) inside the afterAll we will remove
     if (afterAllToRemove) {
-      let ancestor: Node | undefined = ref.getParent();
-      while (ancestor) {
-        if (ancestor === afterAllToRemove) {
-          ancestor = undefined;
-          break;
-        }
-        ancestor = ancestor.getParent();
-      }
-      if (
-        ancestor === undefined &&
-        ref.getFirstAncestorByKind(SyntaxKind.ExpressionStatement) === afterAllToRemove
-      ) {
-        continue;
-      }
-      // Re-check: walk up ref to see if afterAllToRemove is an ancestor
       let cur: Node | undefined = ref.getParent();
       let underAfterAll = false;
       while (cur) {

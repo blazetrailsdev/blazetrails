@@ -217,8 +217,13 @@ function checkAdapterRefs(
       const lhs = parent.getLeft();
       if (lhs.isKind(SyntaxKind.PropertyAccessExpression)) {
         const pae = lhs as any;
-        // Covers both `this.adapter = adapter` (static blocks) and `ClassName.adapter = adapter`
-        if (pae.getName() === "adapter") {
+        const obj = pae.getExpression();
+        // Only allow `this.adapter` (static blocks) or `ClassName.adapter` (Identifier.adapter).
+        // Reject casts, arbitrary expressions, nested property accesses, etc.
+        if (
+          pae.getName() === "adapter" &&
+          (obj.isKind(SyntaxKind.ThisKeyword) || obj.isKind(SyntaxKind.Identifier))
+        ) {
           continue;
         }
       }
@@ -639,6 +644,9 @@ function transform(sf: SourceFile, info: PatternInfo, helpersRel: string): strin
     if (!lhs.isKind(SyntaxKind.PropertyAccessExpression)) return;
     const pae = lhs as any;
     if (pae.getName() !== "adapter") return;
+    // Only remove class-level wiring: `this.adapter` (static blocks) or `ClassName.adapter`.
+    const obj = pae.getExpression();
+    if (!obj.isKind(SyntaxKind.ThisKeyword) && !obj.isKind(SyntaxKind.Identifier)) return;
     if (expr.getRight().getText() !== info.adapterVarName) return;
     d.remove();
     details.push("removed .adapter = adapter assignment");

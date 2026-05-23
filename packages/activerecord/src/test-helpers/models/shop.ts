@@ -5,7 +5,11 @@ export class ShopCollection extends Base {
   static {
     this.tableName = "collections";
 
-    this.hasMany("products", { className: "ShopProduct", dependent: "nullify" });
+    this.hasMany("products", {
+      className: "ShopProduct",
+      foreignKey: "collection_id",
+      dependent: "nullify",
+    });
   }
 }
 
@@ -13,7 +17,7 @@ export class ShopProductType extends Base {
   static {
     this.tableName = "product_types";
 
-    this.hasMany("products", { className: "ShopProduct" });
+    this.hasMany("products", { className: "ShopProduct", foreignKey: "type_id" });
   }
 }
 
@@ -21,7 +25,11 @@ export class ShopProduct extends Base {
   static {
     this.tableName = "products";
 
-    this.hasMany("variants", { className: "ShopVariant", dependent: "delete" });
+    this.hasMany("variants", {
+      className: "ShopVariant",
+      foreignKey: "product_id",
+      dependent: "delete",
+    });
     this.belongsTo("type", { className: "ShopProductType" });
   }
 }

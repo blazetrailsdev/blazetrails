@@ -2,7 +2,5 @@
 import { Base } from "../../base.js";
 
 export class StringKeyObject extends Base {
-  static {
-    this._primaryKey = "id";
-  }
+  static _primaryKey = "id";
 }

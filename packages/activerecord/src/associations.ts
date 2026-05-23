@@ -817,7 +817,7 @@ export async function loadBelongsTo(
   // Polymorphic: use the _type column to determine the target model
   let className: string;
   if (options.polymorphic) {
-    const typeCol = `${underscore(assocName)}_type`;
+    const typeCol = options.foreignType ?? `${underscore(assocName)}_type`;
     const typeName = record._readAttribute(typeCol) as string | null;
     if (!typeName) return null;
     className = typeName;

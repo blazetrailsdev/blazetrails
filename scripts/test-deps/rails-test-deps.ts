@@ -1,15 +1,19 @@
 /**
  * Extract per-file model/fixture dependencies from Rails activerecord tests.
  *
- * Scans vendor/rails/activerecord/test/cases/**\/*.rb and records, for each
- * test file:
+ * Scans vendor/rails/activerecord/test/cases/**\/*_test.rb and records, for
+ * each test file:
  *   - requires:         `require "models/<path>"` model imports
- *   - fixtures:         `fixtures :a, :b, "warehouse-things"` (flattened
- *                       across all classes in the file, multi-line aware)
+ *   - fixtures:         `fixtures :a, :b, "warehouse-things"` declarations
+ *                       (flattened across all classes in the file,
+ *                       multi-line aware)
  *   - setFixtureClass:  `set_fixture_class items: Book` mappings
+ *   - tests:            per-test (`def test_x` and `test "..." do`) map of
+ *                       `{ fixtureSet: [recordNames] }` based on
+ *                       `fixtureSet(:record)` accessor calls in the body
  *
  * Output: scripts/test-deps/output/activerecord-test-deps.json + a console
- * summary. Consumed by a downstream ESLint rule that lints the trails-side
+ * summary. Consumed by a downstream ESLint rule that lints trails-side
  * ports against the canonical Rails dep set.
  */
 import * as fs from "node:fs";
@@ -20,16 +24,24 @@ const CASES_DIR = path.join(ROOT, "vendor/rails/activerecord/test/cases");
 const OUT_DIR = path.join(__dirname, "output");
 const OUT_FILE = path.join(OUT_DIR, "activerecord-test-deps.json");
 
-interface TestRecord {
+export interface TestRecord {
   fixtures: Record<string, string[]>;
 }
 
-interface FileDeps {
+export interface FileDeps {
   requires: string[];
   fixtures: string[];
   setFixtureClass: Record<string, string>;
   tests: Record<string, TestRecord>;
 }
+
+const REQUIRE_RE = /^\s*require\s+["']models\/([^"']+)["']/;
+const FIXTURES_START_RE = /^\s*fixtures\s+(.+)$/;
+const SET_FIXTURE_CLASS_RE = /^\s*set_fixture_class\s+(.+)$/;
+const SYM_OR_STR = /(?::([a-zA-Z_]\w*)|["']([^"']+)["'])/g;
+const PAIR_RE = /([a-zA-Z_]\w*)\s*:\s*([A-Z][\w:]*)/g;
+const DEF_TEST_RE = /^(\s*)def\s+(test_[a-zA-Z0-9_?!]*)/;
+const TEST_BLOCK_RE = /^(\s*)test\s+["']([^"']+)["']\s+do\b/;
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -39,14 +51,6 @@ function walk(dir: string, acc: string[] = []): string[] {
   }
   return acc;
 }
-
-const REQUIRE_RE = /^\s*require\s+["']models\/([^"']+)["']/;
-const FIXTURES_START_RE = /^\s*fixtures\s+(.+)$/;
-const SET_FIXTURE_CLASS_RE = /^\s*set_fixture_class\s+(.+)$/;
-const SYM_OR_STR = /(?::([a-zA-Z_][\w]*)|["']([^"']+)["'])/g;
-const PAIR_RE = /([a-zA-Z_][\w]*)\s*:\s*([A-Z][\w:]*)/g;
-const DEF_TEST_RE = /^(\s*)def\s+(test_[a-zA-Z0-9_?!]*)/;
-const TEST_BLOCK_RE = /^(\s*)test\s+["']([^"']+)["']\s+do\b/;
 
 function parseFixtureList(
   initial: string,
@@ -78,8 +82,32 @@ function normalizeTestName(label: string): string {
   return "test_" + label.trim().replace(/\s+/g, "_").replace(/[^\w]/g, "");
 }
 
-function parseFile(file: string): FileDeps {
-  const src = fs.readFileSync(file, "utf8");
+/**
+ * Pull all `:symbol` record names out of the argument list following a
+ * fixture-accessor call (e.g. `customers(:david, :mary)` → ["david","mary"]).
+ * Stops at the matching `)`, handling nested parens conservatively.
+ */
+function collectRecordArgs(src: string, openParenIdx: number): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  for (let i = openParenIdx; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") {
+      depth--;
+      if (depth === 0) return out;
+    } else if (ch === ":" && depth === 1) {
+      const m = src.slice(i + 1).match(/^([a-zA-Z_]\w*)/);
+      if (m) {
+        out.push(m[1]);
+        i += m[1].length;
+      }
+    }
+  }
+  return out;
+}
+
+export function parseSource(src: string): FileDeps {
   const lines = src.split("\n");
   const deps: FileDeps = { requires: [], fixtures: [], setFixtureClass: {}, tests: {} };
   const fxSet = new Set<string>();
@@ -109,14 +137,16 @@ function parseFile(file: string): FileDeps {
     }
     const dt = line.match(DEF_TEST_RE);
     if (dt) {
-      const end = findBodyEnd(lines, i, dt[1].length);
-      testRanges.push({ name: dt[2], start: i + 1, end });
+      testRanges.push({ name: dt[2], start: i + 1, end: findBodyEnd(lines, i, dt[1].length) });
       continue;
     }
     const tb = line.match(TEST_BLOCK_RE);
     if (tb) {
-      const end = findBodyEnd(lines, i, tb[1].length);
-      testRanges.push({ name: normalizeTestName(tb[2]), start: i + 1, end });
+      testRanges.push({
+        name: normalizeTestName(tb[2]),
+        start: i + 1,
+        end: findBodyEnd(lines, i, tb[1].length),
+      });
     }
   }
 
@@ -125,15 +155,19 @@ function parseFile(file: string): FileDeps {
 
   if (fxSet.size > 0 && testRanges.length > 0) {
     const fxAlt = [...fxSet]
-      .map((n) => n.replace(/[-]/g, "\\-").replace(/[^\w-]/g, ""))
+      .map((n) => n.replace(/[^\w-]/g, ""))
       .filter((n) => n.length > 0)
+      .map((n) => n.replace(/-/g, "\\-"))
       .join("|");
-    const callRe = new RegExp(`\\b(${fxAlt})\\s*\\(\\s*:([a-zA-Z_]\\w*)`, "g");
+    const callRe = new RegExp(`\\b(${fxAlt})\\s*\\(`, "g");
     for (const r of testRanges) {
       const body = lines.slice(r.start, r.end).join("\n");
       const used: Record<string, Set<string>> = {};
       for (const m of body.matchAll(callRe)) {
-        (used[m[1]] ??= new Set()).add(m[2]);
+        const records = collectRecordArgs(body, m.index! + m[0].length - 1);
+        if (records.length === 0) continue;
+        const bucket = (used[m[1]] ??= new Set());
+        for (const rec of records) bucket.add(rec);
       }
       if (Object.keys(used).length === 0) continue;
       const out: Record<string, string[]> = {};
@@ -143,6 +177,10 @@ function parseFile(file: string): FileDeps {
   }
 
   return deps;
+}
+
+export function parseFile(file: string): FileDeps {
+  return parseSource(fs.readFileSync(file, "utf8"));
 }
 
 function main(): void {
@@ -189,4 +227,4 @@ function main(): void {
   console.log(`\nWrote ${path.relative(ROOT, OUT_FILE)}`);
 }
 
-main();
+if (require.main === module) main();

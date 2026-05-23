@@ -198,6 +198,7 @@ export default defineConfig({
             "scripts/parity/**/*.test.ts",
             "scripts/d1-migrate.test.ts",
             "scripts/test-deps/*.test.ts",
+            "eslint/*.test.mjs",
             "vendor/*.test.ts",
           ],
           exclude: ["packages/activerecord/**", ...SHARED_EXCLUDE],

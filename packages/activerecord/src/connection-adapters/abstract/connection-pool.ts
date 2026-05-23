@@ -577,14 +577,17 @@ export class ConnectionPool implements ReapablePool {
   }
 
   async unpinConnectionBang(): Promise<boolean> {
-    // Prefer the pool-level fixture pin if present (set by
-    // `pinConnectionBang({ fixture: true })`); otherwise fall back to the
-    // per-context Map. This lets test-fixture beforeEach/afterEach pairs
-    // work even when vitest places them in different AsyncLocalStorage
-    // contexts.
+    // Prefer the per-context pin when one exists for the current execution
+    // context — that's the Rails-shape request-isolation case and the caller
+    // is unpinning *their* pin, not the fixture-wide one. Fall back to the
+    // pool-level fixture pin only when no context pin is registered. Without
+    // this priority order, an unpin call from a context that owns a per-
+    // context pin would silently roll back the fixture pin instead, leaving
+    // the context pin in place for a double-rollback on the next call.
     const ctxId = executionContextId();
-    const fromFixture = this._fixturePin;
-    const pin = fromFixture ?? this._pinnedConnections.get(ctxId);
+    const contextPin = this._pinnedConnections.get(ctxId);
+    const fromFixture = contextPin ? null : this._fixturePin;
+    const pin = contextPin ?? fromFixture;
     if (!pin) {
       throw new Error(`There isn't a pinned connection ${this.inspect()}`);
     }

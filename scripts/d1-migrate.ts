@@ -395,8 +395,11 @@ function transform(sf: SourceFile, info: PatternInfo, helpersRel: string): strin
   beforeAllArrow.setIsAsync(true);
 
   // 4) Insert `setupHandlerSuite(); useHandlerTransactionalFixtures();` before beforeAll.
-  // The helper encapsulates the Proxy(pool=null) + withTransactionalFixtures + afterAll
-  // teardown that every D-1 file would otherwise duplicate inline.
+  // The helper encapsulates the withTransactionalFixtures registration and the
+  // afterAll dropAllTables + clearAppliedSchemaSignatures teardown. Pool-level
+  // fixture pinning (handled inside ConnectionPool#pinConnectionBang under
+  // `{ fixture: true }`) is what makes the cross-context beforeEach/afterEach
+  // pairing work — no per-file proxy or _txAdapter declaration needed.
   const beforeAllIdx = info.beforeAllStmt.getChildIndex();
   sf.insertStatements(beforeAllIdx, [`setupHandlerSuite();`, `useHandlerTransactionalFixtures();`]);
   ensureImport(`${helpersRel}/use-handler-transactional-fixtures.js`, [

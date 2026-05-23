@@ -11,7 +11,7 @@
  *   - `let adapter` at module level, initialized in a module-level `beforeAll`
  *   - `defineSchema(adapter, {...})` inside that `beforeAll`
  *   - optional `withTransactionalFixtures(() => adapter)` at module level
- *   - `this.adapter = adapter` inside class static blocks
+ *   - `this.adapter = adapter` inside class static blocks, or `ClassName.adapter = adapter`
  *
  * **Describe-level** (`scope: "describe"`):
  *   - exactly one top-level `describe(name, () => { ... })` with `let adapter`

@@ -149,9 +149,11 @@ describe("d1-migrate codemod", () => {
     expect(out).toContain("defineSchema({ foos:");
     expect(out).not.toContain("createTestAdapter");
     expect(out).not.toContain("let adapter");
-    // helpers inserted inside describe block, before the describe closing brace
+    // helpers must be inserted inside the describe block, not at module scope
+    const describeIdx = out.indexOf('describe("Foo"');
     const setupIdx = out.indexOf("setupHandlerSuite()");
     const beforeAllIdx = out.indexOf("beforeAll(");
+    expect(describeIdx).toBeLessThan(setupIdx);
     expect(setupIdx).toBeLessThan(beforeAllIdx);
   });
 

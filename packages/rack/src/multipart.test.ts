@@ -760,8 +760,8 @@ it("buildMultipart returns null when no UploadedFile present and first=true", ()
 
 it("buildMultipart returns flattened params hash when first=false", () => {
   const result = buildMultipart({ name: "Larry" }, false) as Record<string, unknown>;
-  expect(typeof result).toBe("object");
-  expect(result).not.toBeNull();
+  // Generator.flattenedParams() brackets keys when first=false: "[name]" => "Larry"
+  expect(result).toEqual({ "[name]": "Larry" });
 });
 
 it("ParamList.makeParams returns a new ParamList", () => {

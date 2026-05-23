@@ -617,8 +617,9 @@ export class MultipartParser {
 }
 
 /**
- * Accumulator for multipart form data, conforming to the QueryParser API.
- * Mirrors Rack::Multipart::ParamList.
+ * Accumulator for multipart form data.
+ * Mirrors Rack::Multipart::ParamList — toParamsHash() returns an array of
+ * [key, value] pairs (not a Record), matching the Ruby implementation.
  */
 export class ParamList {
   private _pairs: [string, unknown][] = [];

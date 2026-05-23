@@ -181,34 +181,22 @@ function analyze(sf: SourceFile): SidecarPatternInfo | { skip: string } {
   let adapterDecl: VariableDeclaration | undefined;
   let adapterVarName: string | undefined;
 
-  if (scope === "module") {
-    for (const stmt of sf.getVariableStatements()) {
-      if (stmt.getDeclarationKind() !== "let") continue;
-      for (const decl of stmt.getDeclarations()) {
-        const typeText = decl.getTypeNode()?.getText() ?? "";
-        if (/SidecarAdapter/.test(typeText) && !decl.getInitializer()) {
-          adapterDecl = decl;
-          adapterVarName = decl.getName();
-          break;
-        }
+  const scopeStatements: Node[] =
+    scope === "module" ? sf.getStatements() : (beforeAllParent as Block).getStatements();
+
+  for (const stmt of scopeStatements) {
+    if (!stmt.isKind(SyntaxKind.VariableStatement)) continue;
+    const vs = stmt.asKindOrThrow(SyntaxKind.VariableStatement);
+    if (vs.getDeclarationKind() !== "let") continue;
+    for (const decl of vs.getDeclarations()) {
+      const typeText = decl.getTypeNode()?.getText() ?? "";
+      if (/SidecarAdapter/.test(typeText) && !decl.getInitializer()) {
+        adapterDecl = decl;
+        adapterVarName = decl.getName();
+        break;
       }
-      if (adapterDecl) break;
     }
-  } else {
-    // Search inside the describe block
-    const describeArrowBody = beforeAllParent as Block;
-    for (const stmt of describeArrowBody.getVariableStatements()) {
-      if (stmt.getDeclarationKind() !== "let") continue;
-      for (const decl of stmt.getDeclarations()) {
-        const typeText = decl.getTypeNode()?.getText() ?? "";
-        if (/SidecarAdapter/.test(typeText) && !decl.getInitializer()) {
-          adapterDecl = decl;
-          adapterVarName = decl.getName();
-          break;
-        }
-      }
-      if (adapterDecl) break;
-    }
+    if (adapterDecl) break;
   }
 
   if (!adapterDecl || !adapterVarName) {
@@ -231,6 +219,76 @@ function analyze(sf: SourceFile): SidecarPatternInfo | { skip: string } {
   if (!firstArg || firstArg.getText() !== adapterVarName) {
     return {
       skip: `defineSchema first arg is "${firstArg?.getText()}" not "${adapterVarName}" — unexpected shape`,
+    };
+  }
+
+  // Reference scan: ensure the adapter variable is only used in supported contexts.
+  // Supported: defineSchema first arg, the createSidecarTestAdapter assignment,
+  // withTransactionalFixtures arrow body, this.adapter = adapter, ClassName.adapter = adapter.
+  // Anything else (e.g. dropAllTables(adapter), adapter.execute()) requires manual migration.
+  const adapterRefs = sf.getDescendantsOfKind(SyntaxKind.Identifier).filter((id) => {
+    if (id.getText() !== adapterVarName) return false;
+    const parent = id.getParent();
+    if (!parent) return false;
+    // Skip the declaration itself
+    if (Node.isVariableDeclaration(parent) && parent.getNameNode() === id) return false;
+    // Skip property-access *names* (e.g. the `.adapter` in `this.adapter`)
+    if (parent.isKind(SyntaxKind.PropertyAccessExpression) && (parent as any).getNameNode() === id)
+      return false;
+    // Skip import/export specifier names
+    if (
+      parent.isKind(SyntaxKind.ImportSpecifier) ||
+      parent.isKind(SyntaxKind.ExportSpecifier) ||
+      parent.isKind(SyntaxKind.NamedImports)
+    )
+      return false;
+    return true;
+  });
+
+  for (const ref of adapterRefs) {
+    const parent = ref.getParent();
+    if (!parent) continue;
+    // Allowed: defineSchema(adapter, ...)
+    if (parent === defineSchemaCall) continue;
+    // Allowed: the entire adapterInitStmt (createSidecarTestAdapter destructuring assignment)
+    if (adapterInitStmt.getDescendants().includes(ref as any)) continue;
+    // Allowed: `adapter = createSidecarTestAdapter()` assignment in beforeAll
+    if (
+      Node.isBinaryExpression(parent) &&
+      parent.getOperatorToken().getKind() === SyntaxKind.EqualsToken &&
+      parent.getLeft() === ref
+    ) {
+      const rhs = parent.getRight();
+      if (
+        rhs.isKind(SyntaxKind.CallExpression) &&
+        callNameMatches(rhs as CallExpression, "createSidecarTestAdapter")
+      )
+        continue;
+    }
+    // Allowed: arrow body of withTransactionalFixtures, e.g. `() => adapter`
+    if (Node.isArrowFunction(parent) && parent.getBody() === ref) {
+      const arrowParent = parent.getParent();
+      if (
+        arrowParent &&
+        Node.isCallExpression(arrowParent) &&
+        callNameMatches(arrowParent, "withTransactionalFixtures")
+      )
+        continue;
+    }
+    // Allowed: `this.adapter = adapter` or `ClassName.adapter = adapter`
+    if (
+      Node.isBinaryExpression(parent) &&
+      parent.getOperatorToken().getKind() === SyntaxKind.EqualsToken &&
+      parent.getRight() === ref
+    ) {
+      const lhs = parent.getLeft();
+      if (lhs.isKind(SyntaxKind.PropertyAccessExpression)) {
+        const pae = lhs as any;
+        if (pae.getName() === "adapter") continue;
+      }
+    }
+    return {
+      skip: `adapter variable "${adapterVarName}" used in unsupported context: ${parent.getKindName()} -> ${parent.getText().slice(0, 80)}`,
     };
   }
 

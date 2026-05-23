@@ -655,8 +655,11 @@ export function extractMultipart(
  * Build a multipart body from a params hash.
  * Mirrors Rack::Multipart.build_multipart.
  */
-export function buildMultipart(params: unknown, first: boolean = true): string | null {
-  return new Generator(params, first).dump() as string | null;
+export function buildMultipart(
+  params: unknown,
+  first: boolean = true,
+): string | Record<string, unknown> | null {
+  return new Generator(params, first).dump();
 }
 
 // Convenience top-level

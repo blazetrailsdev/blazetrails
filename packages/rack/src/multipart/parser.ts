@@ -49,6 +49,30 @@ const EMPTY: MultipartInfo = { params: null, tmpFiles: [] };
 Object.freeze(EMPTY.tmpFiles);
 Object.freeze(EMPTY);
 
+// ── BoundedIO ─────────────────────────────────────────────────────────────────
+
+/** @internal */
+export class BoundedIO {
+  private cursor = 0;
+  constructor(
+    private io: { read(n: number): string | null },
+    private contentLength: number,
+  ) {}
+
+  /** @internal */
+  read(size: number, _outbuf?: string): string | null {
+    if (this.cursor >= this.contentLength) return null;
+    const left = this.contentLength - this.cursor;
+    const str = this.io.read(left < size ? left : size);
+    if (str) {
+      this.cursor += str.length;
+    } else {
+      throw new EmptyContentError("bad content body");
+    }
+    return str;
+  }
+}
+
 // ── StringScanner equivalent ──────────────────────────────────────────────────
 
 class SBuf {
@@ -115,7 +139,8 @@ class SBuf {
 
 // ── Collector ─────────────────────────────────────────────────────────────────
 
-class Part {
+/** @internal */
+export class Part {
   isFile = false;
   constructor(
     public body: any,
@@ -144,16 +169,22 @@ class Part {
   }
 }
 
-class Collector {
+/** @internal */
+export class Collector {
   private parts: Part[] = [];
   private openFiles = 0;
   constructor(private tf: ((f: string, ct: string) => any) | null) {}
+
+  /** @internal */
   each(cb: (p: Part) => void) {
     this.parts.forEach(cb);
   }
+
   files() {
     return this.parts.filter((p) => p.isFile);
   }
+
+  /** @internal */
   onMimeHead(
     i: number,
     head: string,
@@ -169,6 +200,21 @@ class Collector {
       this.openFiles++;
     }
     this.parts[i] = p;
+    this.checkPartLimits();
+  }
+
+  /** @internal */
+  onMimeBody(i: number, c: string) {
+    const p = this.parts[i];
+    if (typeof p.body === "string") p.body += c;
+    else if (typeof p.body?.write === "function") p.body.write(c);
+  }
+
+  /** @internal */
+  onMimeFinish(_i: number) {}
+
+  /** @internal */
+  private checkPartLimits() {
     const fl = getMultipartFileLimit(),
       pl = getMultipartTotalPartLimit();
     if (fl > 0 && this.openFiles >= fl) {
@@ -180,12 +226,6 @@ class Collector {
       throw new MultipartTotalPartLimitError();
     }
   }
-  onMimeBody(i: number, c: string) {
-    const p = this.parts[i];
-    if (typeof p.body === "string") p.body += c;
-    else if (typeof p.body?.write === "function") p.body.write(c);
-  }
-  onMimeFinish(_i: number) {}
 }
 
 // ── Parser ────────────────────────────────────────────────────────────────────
@@ -229,8 +269,9 @@ export class Parser {
     if (!b) return EMPTY;
     if (b.length > 70)
       throw new BoundaryTooLongError(`multipart boundary size too large (${b.length} characters)`);
+    const boundedIo = cl != null ? new BoundedIO(io, cl) : io;
     const p = new Parser(b, tmpfile, bufsize, qp);
-    p.parse(io);
+    p.parse(boundedIo);
     return p.result();
   }
 

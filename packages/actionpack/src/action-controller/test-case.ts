@@ -519,6 +519,9 @@ export class TestRequest extends AbstractTestRequest {
       }
     }
 
+    // Clear any request-parameters cache established before the body was wired in.
+    delete this.env["action_dispatch.request.request_parameters"];
+
     if (this.requestMethod === "GET") {
       if (!this.getHeader("QUERY_STRING")) {
         this.queryString = buildNestedQuery(nonPathParameters);
@@ -561,9 +564,6 @@ export class TestRequest extends AbstractTestRequest {
         this.setHeader("rack.input", data);
       }
     }
-
-    // Clear any request-parameters cache established before the body was wired in.
-    delete this.env["action_dispatch.request.request_parameters"];
 
     if (!this.getHeader("PATH_INFO")) {
       this.setHeader("PATH_INFO", generatedPath);

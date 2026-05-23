@@ -163,6 +163,7 @@ describe("ActionController::TestRequest helpers", () => {
     expect(ct).toContain("boundary=");
     const body = req.getHeader("rack.input") ?? "";
     expect(body).toContain(`name="upload"; filename="hello.txt"`);
+    expect(req.requestParameters["upload"]).toBeInstanceOf(UploadedFile);
   });
 
   it("assignParameters registers custom parser for unknown content types, wired into requestParameters", () => {

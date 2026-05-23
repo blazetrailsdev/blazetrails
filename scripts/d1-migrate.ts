@@ -332,14 +332,12 @@ function analyzeDescribeLevel(
   testAdapterImport: ImportDeclaration,
 ): PatternInfo | { skip: string } {
   // Find top-level describe calls
-  const topDescribes = sf
-    .getStatements()
-    .filter(
-      (s): s is ExpressionStatement =>
-        s.isKind(SyntaxKind.ExpressionStatement) &&
-        callNameMatches(s.getExpressionIfKind(SyntaxKind.CallExpression)!, "describe"),
-    );
-  if (topDescribes.length === 0) return { skip: "no module-level adapter let declaration" };
+  const topDescribes = sf.getStatements().filter((s): s is ExpressionStatement => {
+    if (!s.isKind(SyntaxKind.ExpressionStatement)) return false;
+    const call = s.getExpressionIfKind(SyntaxKind.CallExpression);
+    return !!call && callNameMatches(call, "describe");
+  });
+  if (topDescribes.length === 0) return { skip: "no top-level describe" };
 
   // Only handle the single-describe case for now; multiple describes with
   // distinct adapters need manual migration.
@@ -364,7 +362,7 @@ function analyzeDescribeLevel(
         }
       }
     }
-    return { skip: "no module-level adapter let declaration" };
+    return { skip: "multiple top-level describes (no describe-level adapters found)" };
   }
 
   const describeStmt = topDescribes[0];
@@ -392,7 +390,7 @@ function analyzeDescribeLevel(
       }
     }
   }
-  if (!adapterVarName) return { skip: "no module-level adapter let declaration" };
+  if (!adapterVarName) return { skip: "no describe-level adapter let declaration" };
 
   // Must have exactly one createTestAdapter() call inside the describe (in beforeAll)
   const ctaCalls: CallExpression[] = [];

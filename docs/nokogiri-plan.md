@@ -270,9 +270,9 @@ source entry.
   `jdom-engine.test.ts`, `rexml-engine.test.ts`, `xml-mini-engine.test.ts`
   with `it.skip` only).
 - Tests: parse XML → traverse → read attributes → verify errors on
-  malformed input; matching Rails test names verbatim from
-  `nokogiri/test/xml/{test_document,test_node}.rb` for the methods we
-  expose.
+  malformed input. Test names should describe Nokogiri-equivalent behavior
+  but don't need to match upstream verbatim (we don't vendor Nokogiri's
+  test suite).
 
 ### PR 2 — SAX (~150 LOC)
 
@@ -282,19 +282,6 @@ source entry.
 - Tests: streaming parse producing the same hash as the DOM path (mirror
   Rails' `XmlMini_NokogiriSAX` `HashBuilder` pattern); CDATA-block
   ordering test; entity decoding test.
-
-## Integration points
-
-After both PRs land:
-
-- **activesupport** `xml-mini/nokogiri-engine.ts` imports `XML.Document` /
-  `parseXml`; carries the `toHash` traversal locally (not in the
-  nokogiri package — see "Consumers" note).
-- **activesupport** `xml-mini/nokogiri-sax-engine.ts` imports `SAX.Parser`
-  / `SAX.Document`.
-- **actionpack** `assertions.ts` re-exports `htmlDocument()` using
-  `XML.Document.parse()`, closing the gap documented inline in
-  `assertions.ts`.
 
 ## Future expansion (actiontext)
 
@@ -331,7 +318,7 @@ PR 1:
 - [ ] `XML` / `SAX` (`SAX` empty in PR 1) namespace barrel in `index.ts`
 - [ ] `actionpack/.../assertions.ts` `htmlDocument()` wired (closes gap at line 9)
 - [ ] `activesupport/src/xml-mini/nokogiri-engine.ts` written with `toHash` traversal
-- [ ] Rails-verbatim test names
+- [ ] Tests cover parse → traverse → attrs → malformed-input errors
 
 PR 2:
 

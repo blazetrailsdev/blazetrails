@@ -12,7 +12,7 @@ describe("SessionTest", () => {
     session = new IntegrationTest();
   });
 
-  it("test_https_bang_works_and_sets_truth_by_default", () => {
+  it("https bang works and sets truth by default", () => {
     expect(session.isHttps()).toBe(false);
     session.httpsBang();
     expect(session.isHttps()).toBe(true);
@@ -20,17 +20,17 @@ describe("SessionTest", () => {
     expect(session.isHttps()).toBe(false);
   });
 
-  it("test_host!", () => {
+  it("host!", () => {
     expect(session.host).not.toBe("glu.ttono.us");
     session.host = "rubyonrails.com";
     expect(session.host).toBe("rubyonrails.com");
   });
 
-  it("test_follow_redirect_raises_when_no_redirect", async () => {
+  it("follow redirect raises when no redirect", async () => {
     await expect(session.followRedirect()).rejects.toThrow();
   });
 
-  it("test_get", async () => {
+  it("get", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -39,7 +39,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("GET", path, { params, headers });
   });
 
-  it("test_get_with_env_and_headers", async () => {
+  it("get with env and headers", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -49,7 +49,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("GET", path, { params, headers, env });
   });
 
-  it("test_post", async () => {
+  it("post", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -58,7 +58,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("POST", path, { params, headers });
   });
 
-  it("test_patch", async () => {
+  it("patch", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -67,7 +67,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("PATCH", path, { params, headers });
   });
 
-  it("test_put", async () => {
+  it("put", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -76,7 +76,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("PUT", path, { params, headers });
   });
 
-  it("test_delete", async () => {
+  it("delete", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -85,7 +85,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("DELETE", path, { params, headers });
   });
 
-  it("test_head", async () => {
+  it("head", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -94,7 +94,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("HEAD", path, { params, headers });
   });
 
-  it("test_xml_http_request_get", async () => {
+  it("xml http request get", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -103,7 +103,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("GET", path, { params, headers, xhr: true });
   });
 
-  it("test_xml_http_request_post", async () => {
+  it("xml http request post", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -112,7 +112,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("POST", path, { params, headers, xhr: true });
   });
 
-  it("test_xml_http_request_patch", async () => {
+  it("xml http request patch", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -121,7 +121,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("PATCH", path, { params, headers, xhr: true });
   });
 
-  it("test_xml_http_request_put", async () => {
+  it("xml http request put", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -130,7 +130,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("PUT", path, { params, headers, xhr: true });
   });
 
-  it("test_xml_http_request_delete", async () => {
+  it("xml http request delete", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -139,7 +139,7 @@ describe("SessionTest", () => {
     expect(spy).toHaveBeenCalledWith("DELETE", path, { params, headers, xhr: true });
   });
 
-  it("test_xml_http_request_head", async () => {
+  it("xml http request head", async () => {
     const spy = vi.spyOn(session, "process").mockResolvedValue(0);
     const path = "/index";
     const params = { q: "blah" };
@@ -159,19 +159,19 @@ describe("IntegrationTestTest", () => {
     test = new IntegrationTest();
   });
 
-  it("test_opens_new_session", () => {
+  it("opens new session", () => {
     const session1 = test.openSession();
     const session2 = test.openSession();
     expect(session1).not.toBe(session2);
   });
 
-  it("test_child_session_assertions_bubble_up_to_root", () => {
+  it("child session assertions bubble up to root", () => {
     const assertionsBefore = test.assertions;
     test.openSession().assertions += 1;
     expect(test.assertions - assertionsBefore).toBe(1);
   });
 
-  it.skip("test_does_not_prevent_method_missing_passing_up_to_ancestors", () => {
+  it.skip("does not prevent method missing passing up to ancestors", () => {
     // Ruby-specific: method_missing has no TypeScript equivalent.
   });
 });
@@ -211,7 +211,7 @@ describe("MetalIntegrationTest", () => {
     t.registerController("poller", PollerController);
   });
 
-  it("test_successful_get", async () => {
+  it("successful get", async () => {
     await t.get("/success");
     t.assertResponse(200);
     t.assertResponse("success");
@@ -219,18 +219,18 @@ describe("MetalIntegrationTest", () => {
     expect(t.responseBody).toBe("Hello World!");
   });
 
-  it("test_failed_get", async () => {
+  it("failed get", async () => {
     await t.get("/failure");
     t.assertResponse(404);
     t.assertResponse("not_found");
     expect(t.responseBody).toBe("");
   });
 
-  it.skip("test_generate_url_without_controller", () => {
+  it.skip("generate url without controller", () => {
     // Requires url_for with SharedTestRoutes wired — not yet ported.
   });
 
-  it("test_pass_headers", async () => {
+  it("pass headers", async () => {
     await t.get("/success", {
       headers: { Referer: "http://www.example.com/foo", Host: "http://nohost.com" },
     });
@@ -238,7 +238,7 @@ describe("MetalIntegrationTest", () => {
     expect(t.request.env["HTTP_REFERER"]).toBe("http://www.example.com/foo");
   });
 
-  it("test_pass_headers_and_env", async () => {
+  it("pass headers and env", async () => {
     await t.get("/success", {
       headers: { "X-Test-Header": "value" },
       env: { HTTP_REFERER: "http://test.com/", HTTP_HOST: "http://test.com" },
@@ -248,7 +248,7 @@ describe("MetalIntegrationTest", () => {
     expect(t.request.env["HTTP_X_TEST_HEADER"]).toBe("value");
   });
 
-  it("test_pass_env", async () => {
+  it("pass env", async () => {
     await t.get("/success", {
       env: { HTTP_REFERER: "http://test.com/", HTTP_HOST: "http://test.com" },
     });
@@ -256,7 +256,7 @@ describe("MetalIntegrationTest", () => {
     expect(t.request.env["HTTP_REFERER"]).toBe("http://test.com/");
   });
 
-  it("test_ignores_common_ports_in_host", async () => {
+  it("ignores common ports in host", async () => {
     await t.get("http://test.com");
     expect(t.request.env["HTTP_HOST"]).toBe("test.com");
 
@@ -264,7 +264,7 @@ describe("MetalIntegrationTest", () => {
     expect(t.request.env["HTTP_HOST"]).toBe("test.com");
   });
 
-  it("test_keeps_uncommon_ports_in_host", async () => {
+  it("keeps uncommon ports in host", async () => {
     await t.get("http://test.com:123");
     expect(t.request.env["HTTP_HOST"]).toBe("test.com:123");
 

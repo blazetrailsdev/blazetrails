@@ -1,4 +1,4 @@
-import { XmlDocument as LibXmlDocument, XmlParseError, ParseOption } from "libxml2-wasm";
+import { XmlDocument as LibXmlDocument, XmlParseError } from "libxml2-wasm";
 import { XmlNode } from "./node.js";
 
 export interface XmlError {
@@ -22,9 +22,7 @@ export class XmlDocument {
   static parse(data: string): XmlDocument {
     const errors: XmlError[] = [];
     try {
-      const doc = LibXmlDocument.fromString(data, {
-        option: ParseOption.XML_PARSE_RECOVER,
-      });
+      const doc = LibXmlDocument.fromString(data);
       return new XmlDocument(doc, errors);
     } catch (e) {
       if (e instanceof XmlParseError) {

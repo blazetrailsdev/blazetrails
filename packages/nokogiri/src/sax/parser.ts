@@ -4,7 +4,7 @@ import {
   XmlText,
   XmlCData,
   XmlTreeNode,
-  ParseOption,
+  XmlParseError,
 } from "libxml2-wasm";
 import { SaxDocument } from "./document.js";
 
@@ -12,9 +12,18 @@ export class SaxParser {
   constructor(private readonly handler: SaxDocument) {}
 
   parse(data: string): void {
-    const doc = LibXmlDocument.fromString(data, {
-      option: ParseOption.XML_PARSE_RECOVER,
-    });
+    let doc: LibXmlDocument;
+    try {
+      doc = LibXmlDocument.fromString(data);
+    } catch (e) {
+      if (e instanceof XmlParseError) {
+        for (const detail of e.details) {
+          this.handler.error(detail.message);
+        }
+        return;
+      }
+      throw e;
+    }
     try {
       this.handler.startDocument();
       this._walk(doc.root);

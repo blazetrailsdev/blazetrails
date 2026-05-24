@@ -33,8 +33,10 @@ describe("Nokogiri::XML::Document", () => {
     doc = XmlDocument.parse('<root lang="en" version="1"/>');
     const attrs = doc.root.attributeNodes;
     expect(attrs).toHaveLength(2);
-    expect(attrs[0].nodeName).toBe("lang");
-    expect(attrs[0].value).toBe("en");
+    const lang = attrs.find((a) => a.nodeName === "lang");
+    expect(lang?.value).toBe("en");
+    const version = attrs.find((a) => a.nodeName === "version");
+    expect(version?.value).toBe("1");
   });
 
   it("text node reports isText and content", () => {

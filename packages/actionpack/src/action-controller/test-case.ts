@@ -398,14 +398,10 @@ export class TestCase {
       env["HTTP_X_REQUESTED_WITH"] = "XMLHttpRequest";
     }
 
-    this.request = new Request(this.scrubEnvBang(env));
+    this.request = new Request(env);
     this.response = this.buildResponse();
 
-    if (params) {
-      (this.request as any).parameters = Object.fromEntries(
-        Object.entries(params).map(([k, v]) => [k, String(v)]),
-      );
-    }
+    if (params) (this.request as any).parameters = { ...params };
 
     this.controller = new this._controllerClass();
 
@@ -414,7 +410,9 @@ export class TestCase {
     }
 
     (this.request as any).env["action_dispatch.request.path_parameters"] = {
-      controller: this._controllerClass.name.replace(/Controller$/, "").toLowerCase(),
+      controller: (
+        this._controllerClass as unknown as typeof import("./metal.js").Metal
+      ).controllerPath(),
       action,
     };
 

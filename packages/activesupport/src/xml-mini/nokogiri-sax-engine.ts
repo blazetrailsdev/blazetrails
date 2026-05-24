@@ -17,10 +17,10 @@ class NokogiriSaxHandler extends SaxDocument {
     this._stack.push({ name, hash });
   }
 
-  override endElement(name: string): void {
+  override endElement(_name: string): void {
     const frame = this._stack.pop()!;
     if (this._stack.length === 0) {
-      this.result = { [name]: frame.hash };
+      this.result = { [frame.name]: frame.hash };
     } else {
       const parent = this._stack[this._stack.length - 1];
       const key = frame.name;

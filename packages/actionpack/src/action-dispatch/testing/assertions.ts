@@ -16,11 +16,12 @@ import * as routing from "./assertions/routing.js";
 
 /** @internal */
 export function htmlDocument(body: string, mimeType?: string) {
-  if (mimeType === undefined || mimeType.endsWith("xml")) {
+  const mediaType = mimeType?.split(";")[0].trim();
+  if (mediaType === undefined || mediaType.endsWith("xml")) {
     return XML.Document.parse(body);
   }
   throw new Error(
-    `htmlDocument: HTML parsing (rails-dom-testing) is not yet implemented; got mime type "${mimeType}"`,
+    `htmlDocument: HTML parsing (rails-dom-testing) is not yet implemented; got mime type "${mediaType}"`,
   );
 }
 

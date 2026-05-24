@@ -15,8 +15,13 @@ import * as response from "./assertions/response.js";
 import * as routing from "./assertions/routing.js";
 
 /** @internal */
-export function htmlDocument(body: string, _mimeType?: string) {
-  return XML.Document.parse(body);
+export function htmlDocument(body: string, mimeType?: string) {
+  if (mimeType === undefined || mimeType.endsWith("xml")) {
+    return XML.Document.parse(body);
+  }
+  throw new Error(
+    `htmlDocument: HTML parsing (rails-dom-testing) is not yet implemented; got mime type "${mimeType}"`,
+  );
 }
 
 export type { AssertionResponseHost, AssertionResponseLike } from "./assertions/response.js";

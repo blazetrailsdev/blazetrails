@@ -32,12 +32,22 @@ parser. If streaming SAX on truly large documents becomes a need, we can
 add htmlparser2 as an optional second engine later.
 
 **`dispose()` requirement.** libxml2-wasm allocates in WASM linear memory;
-every `XmlDocument` must be `dispose()`d or it leaks. Our wrapper handles
-this internally — `parseXml()` parses, walks, and disposes in one call,
-returning plain JS data. Consumers never see the WASM document. For
-`XML.Document.parse()` (actionpack assertions), the wrapper holds the WASM
-document and exposes a `dispose()` / `Symbol.dispose` so callers can use
-`using doc = XML.Document.parse(body)`.
+every `XmlDocument` must be `dispose()`d or it leaks. Both `parseXml()`
+and `XML.Document.parse()` return an `XmlDocument` that the caller must
+dispose. The portable pattern is `try/finally` + explicit `.dispose()`:
+
+```ts
+const doc = parseXml(data);
+try {
+  // traverse doc.root…
+} finally {
+  doc.dispose();
+}
+```
+
+`SaxParser.parse()` handles disposal internally — it parses, walks the
+tree emitting callbacks, and disposes before returning. Consumers of the
+SAX path never see the WASM document.
 
 **ESM + top-level await.** libxml2-wasm initializes its WASM module via
 top-level await on import. Our package re-exports through a lazy init
@@ -68,7 +78,7 @@ packages/nokogiri/
     xml/
       document.ts         # XmlDocument — wraps libxml2-wasm XmlDocument
       node.ts             # XmlNode — wraps libxml2-wasm node types
-      parse.ts            # parseXml() — parse, walk, dispose in one shot
+      parse.ts            # parseXml() — convenience parse with lazy WASM init
     sax/
       document.ts         # SaxDocument — handler base class
       parser.ts           # SaxParser — DOM-walk emitting SAX callbacks
@@ -111,12 +121,11 @@ Wraps `libxml2-wasm`'s `XmlDocument.fromString()`. Holds a reference to
 the WASM document for traversal; must be disposed after use.
 
 ```ts
-class XmlDocument implements Disposable {
+class XmlDocument {
   static parse(data: string): XmlDocument;
   root: XmlNode;
   errors: ReadonlyArray<XmlError>;
   dispose(): void;
-  [Symbol.dispose](): void;
 }
 
 interface XmlError {
@@ -283,14 +292,14 @@ grows significantly (actiontext expansion), revisit.
 
 - New package: `packages/nokogiri/` with `package.json`,
   `tsconfig.json`, `vitest.config.ts`.
-- `XmlDocument.parse` with error collection + `dispose()` / `Symbol.dispose`.
+- `XmlDocument.parse` with error collection + `dispose()`.
 - `XmlNode` wrapper: `name`, `isElement()`, `isText()`, `isCdata()`,
   `content`, `children`, `attributeNodes`.
 - `parseXml(data)` convenience function with lazy WASM init.
 - `SaxDocument` base class with all 7 callbacks.
 - `SaxParser` DOM-walk emitter.
-- Wire into actionpack `assertions.ts` `htmlDocument()` (closes gap
-  documented at line 9).
+- Wire into `actionpack/src/action-dispatch/testing/assertions.ts`
+  `htmlDocument()` (closes TODO at assertions.ts:9).
 - Wire into activesupport `xml-mini/nokogiri-engine.ts` with `toHash`
   traversal.
 - Wire into activesupport `xml-mini/nokogiri-sax-engine.ts`.
@@ -334,7 +343,7 @@ breaking the v1 XML API.
 - [ ] `SaxDocument` base class with all 7 callbacks
 - [ ] `SaxParser(handler).parse(data)` via DOM-walk
 - [ ] `XML` / `SAX` namespace barrel in `index.ts`
-- [ ] `actionpack/.../assertions.ts` `htmlDocument()` wired (closes gap at line 9)
+- [ ] `actionpack/src/action-dispatch/testing/assertions.ts` `htmlDocument()` wired (closes TODO at assertions.ts:9)
 - [ ] `activesupport/src/xml-mini/nokogiri-engine.ts` written with `toHash` traversal
 - [ ] `activesupport/src/xml-mini/nokogiri-sax-engine.ts` written
 - [ ] Tests: DOM parse/traverse/errors + SAX hash parity + CDATA
@@ -351,9 +360,9 @@ breaking the v1 XML API.
   configuration. Our lazy init pattern mitigates this — the WASM module
   is only loaded on first parse call, not on package import.
 - **`dispose()` discipline.** If a consumer forgets to dispose, WASM memory
-  leaks silently. `SaxParser.parse()` and `parseXml()` handle dispose
-  internally. `XML.Document.parse()` requires the caller to dispose —
-  document this prominently and prefer `using` syntax in examples.
+  leaks silently. `SaxParser.parse()` handles dispose internally.
+  `parseXml()` and `XML.Document.parse()` require the caller to dispose —
+  document this prominently and show `try/finally` + `.dispose()` in examples.
 - **libxml2-wasm maintenance.** Single maintainer (jameslan). Mitigated by:
   the WASM binary is a compiled artifact of a stable C library (libxml2),
   so even without upstream JS updates the core parser remains correct.

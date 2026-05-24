@@ -666,6 +666,8 @@ describe("FilterTest", () => {
     const c2 = await run(new FT_AnomalousYetValidConditionController(), "showWithoutAction");
     expect((c2 as any).ranFilter).toBeUndefined();
     expect((c2 as any).ranClassAction).toBeUndefined();
+    expect((c2 as any).ranProcAction1).toBeUndefined();
+    expect((c2 as any).ranProcAction2).toBeUndefined();
   });
 
   it("running conditional options", async () => {

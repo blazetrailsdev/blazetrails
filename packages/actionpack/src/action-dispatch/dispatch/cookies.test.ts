@@ -381,42 +381,66 @@ describe("CookiesTest", () => {
     const jar = CookieJar.parse("user_name=Joe");
     jar.delete("user_name");
     expect(jar.get("user_name")).toBeUndefined();
+    const headers = jar.getSetCookieHeaders();
+    expect(headers[0]).toContain("user_name=");
+    expect(headers[0]).toContain("max-age=0");
+    expect(headers[0]).toContain("expires=Thu, 01 Jan 1970 00:00:00 GMT");
   });
 
   it("deleting cookie post", () => {
     const jar = CookieJar.parse("user_name=Joe");
     jar.delete("user_name");
     expect(jar.get("user_name")).toBeUndefined();
+    const headers = jar.getSetCookieHeaders();
+    expect(headers[0]).toContain("user_name=");
+    expect(headers[0]).toContain("max-age=0");
+    expect(headers[0]).toContain("expires=Thu, 01 Jan 1970 00:00:00 GMT");
   });
 
   it("deleting cookie patch", () => {
     const jar = CookieJar.parse("user_name=Joe");
     jar.delete("user_name");
     expect(jar.get("user_name")).toBeUndefined();
+    const headers = jar.getSetCookieHeaders();
+    expect(headers[0]).toContain("user_name=");
+    expect(headers[0]).toContain("max-age=0");
+    expect(headers[0]).toContain("expires=Thu, 01 Jan 1970 00:00:00 GMT");
   });
 
   it("deleting cookie put", () => {
     const jar = CookieJar.parse("user_name=Joe");
     jar.delete("user_name");
     expect(jar.get("user_name")).toBeUndefined();
+    const headers = jar.getSetCookieHeaders();
+    expect(headers[0]).toContain("user_name=");
+    expect(headers[0]).toContain("max-age=0");
+    expect(headers[0]).toContain("expires=Thu, 01 Jan 1970 00:00:00 GMT");
   });
 
   it("deleting cookie delete", () => {
     const jar = CookieJar.parse("user_name=Joe");
     jar.delete("user_name");
     expect(jar.get("user_name")).toBeUndefined();
+    const headers = jar.getSetCookieHeaders();
+    expect(headers[0]).toContain("user_name=");
+    expect(headers[0]).toContain("max-age=0");
+    expect(headers[0]).toContain("expires=Thu, 01 Jan 1970 00:00:00 GMT");
   });
 
   it("deleting cookie head", () => {
     const jar = CookieJar.parse("user_name=Joe");
     jar.delete("user_name");
     expect(jar.get("user_name")).toBeUndefined();
+    const headers = jar.getSetCookieHeaders();
+    expect(headers[0]).toContain("user_name=");
+    expect(headers[0]).toContain("max-age=0");
+    expect(headers[0]).toContain("expires=Thu, 01 Jan 1970 00:00:00 GMT");
   });
 
   it("signed cookie using default serializer", () => {
     const secret = "b3c631c314c0bbca50c1b2843150fe33";
     const jar = new CookieJar({ secret });
-    jar.signed.set("user_id", 45 as any);
+    jar.signed.set("user_id", 45);
     expect(jar.signed.get("user_id")).toBe(45);
   });
 
@@ -428,7 +452,7 @@ describe("CookiesTest", () => {
       cookiesAppOptions: { secret },
     };
     const jar = CookieJar.build(mockRequest as any, {});
-    jar.signed.set("user_id", 45 as any);
+    jar.signed.set("user_id", 45);
     expect(jar.signed.get("user_id")).toBe(45);
   });
 
@@ -445,7 +469,7 @@ describe("CookiesTest", () => {
       cookiesAppOptions: { secret },
     };
     const jar = CookieJar.build(mockRequest as any, {});
-    jar.signed.set("user_id", "45" as any);
+    jar.signed.set("user_id", "45");
     expect(jar.signed.get("user_id")).toBe("45 was dumped and loaded");
   });
 
@@ -513,7 +537,7 @@ describe("CookiesTest", () => {
 
   it("raise data overflow", () => {
     const jar = new CookieJar({ secret: "b3c631c314c0bbca50c1b2843150fe33" });
-    expect(() => jar.signed.set("foo", "bye!".repeat(1024) as any)).toThrow(/overflowed/);
+    expect(() => jar.signed.set("foo", "bye!".repeat(1024))).toThrow(/overflowed/);
   });
 
   it("tampered cookies", () => {

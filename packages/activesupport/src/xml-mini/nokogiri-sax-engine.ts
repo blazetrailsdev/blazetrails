@@ -6,6 +6,7 @@ type XmlHash = Record<string, unknown>;
 
 class NokogiriSaxHandler extends SaxDocument {
   private readonly _stack: Array<{ name: string; hash: XmlHash }> = [];
+  private readonly _errors: string[] = [];
   result: XmlHash = {};
 
   override startElement(name: string, attrs: ReadonlyArray<[string, string]>): void {
@@ -44,6 +45,14 @@ class NokogiriSaxHandler extends SaxDocument {
     this._appendContent(text);
   }
 
+  override error(message: string): void {
+    this._errors.push(message);
+  }
+
+  get parseErrors(): ReadonlyArray<string> {
+    return this._errors;
+  }
+
   private _appendContent(text: string): void {
     const frame = this._stack[this._stack.length - 1];
     if (!frame) return;
@@ -55,6 +64,9 @@ class NokogiriSaxHandler extends SaxDocument {
 export function parseXmlToHashSax(data: string): XmlHash {
   const handler = new NokogiriSaxHandler();
   new SAX.Parser(handler).parse(data);
+  if (handler.parseErrors.length > 0) {
+    throw new Error(handler.parseErrors[0]);
+  }
   return handler.result;
 }
 

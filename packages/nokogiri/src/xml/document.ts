@@ -10,8 +10,8 @@ export interface XmlError {
 
 export class XmlDocument {
   readonly errors: ReadonlyArray<XmlError>;
-  private readonly _doc: LibXmlDocument | null;
-  private readonly _root: XmlNode | null;
+  private _doc: LibXmlDocument | null;
+  private _root: XmlNode | null;
 
   private constructor(doc: LibXmlDocument | null, errors: XmlError[]) {
     this._doc = doc;
@@ -36,11 +36,13 @@ export class XmlDocument {
   }
 
   get root(): XmlNode {
-    if (this._root === null) throw new Error("Document has no root (parse failed)");
+    if (this._root === null) throw new Error("Document has no root (parse failed or disposed)");
     return this._root;
   }
 
   dispose(): void {
     this._doc?.dispose();
+    this._doc = null;
+    this._root = null;
   }
 }

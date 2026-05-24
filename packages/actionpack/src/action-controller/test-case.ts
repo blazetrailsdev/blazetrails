@@ -446,18 +446,6 @@ export class TestCase {
     return [...generatedExtras[1], "controller", "action"];
   }
 
-  /** Mirrors Rails `TestCase::Behavior#setup_controller_request_and_response`. */
-  setupControllerRequestAndResponse(): void {
-    if (this._controllerClass) this.controller = new this._controllerClass();
-    this.request = new Request({
-      HTTP_HOST: "test.host",
-      SERVER_NAME: "test.host",
-      SERVER_PORT: "80",
-      "rack.session": {},
-    });
-    this.response = this.buildResponse();
-  }
-
   /** @internal Mirrors Rails `TestCase::Behavior#build_response`. */
   buildResponse(): Response {
     return new Response();

@@ -53,6 +53,7 @@ import * as urlForMod from "../routing/url-for.js";
 import * as polymorphicRoutes from "../routing/polymorphic-routes.js";
 import type { UrlForRoutes } from "../routing/url-for.js";
 import { RequestEncoder } from "./request-encoder.js";
+import { buildNestedQuery } from "@blazetrails/rack";
 import type { UploadedFile } from "../http/upload.js";
 
 type ControllerClass = new () => Metal;
@@ -806,7 +807,7 @@ export class IntegrationTest {
     let queryString = qIdx >= 0 ? path.slice(qIdx + 1) : "";
     // Rails serializes GET/HEAD params into the query string (via _process_path).
     if (options.params && (method === "GET" || method === "HEAD")) {
-      const extra = new URLSearchParams(options.params as Record<string, string>).toString();
+      const extra = buildNestedQuery(options.params as Record<string, unknown>);
       if (extra) queryString = queryString ? `${queryString}&${extra}` : extra;
     }
     // Match route on pathname only.

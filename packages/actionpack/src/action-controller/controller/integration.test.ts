@@ -1,10 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { IntegrationTest } from "../../action-dispatch/testing/integration.js";
 import { Base } from "../base.js";
 
 // ==========================================================================
 // SessionTest
 // ==========================================================================
+afterEach(() => vi.restoreAllMocks());
+
 describe("SessionTest", () => {
   let session: IntegrationTest;
 

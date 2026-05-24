@@ -807,7 +807,7 @@ export class IntegrationTest {
     // Rails serializes GET/HEAD params into the query string (via _process_path).
     if (options.params && (method === "GET" || method === "HEAD")) {
       const extra = new URLSearchParams(options.params as Record<string, string>).toString();
-      queryString = queryString ? `${queryString}&${extra}` : extra;
+      if (extra) queryString = queryString ? `${queryString}&${extra}` : extra;
     }
     // Match route on pathname only.
     const matched = this.routes.recognize(method, pathInfo);

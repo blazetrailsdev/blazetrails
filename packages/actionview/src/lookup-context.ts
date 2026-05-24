@@ -740,9 +740,13 @@ export class LookupContext {
   private allCandidatePaths(): string[] {
     const seen = new Set<string>();
     for (const resolver of this.resolvers) {
-      const paths = resolver.allTemplatePaths?.();
-      if (paths) {
-        for (const p of paths) seen.add(p);
+      try {
+        const paths = resolver.allTemplatePaths?.();
+        if (paths) {
+          for (const p of paths) seen.add(p);
+        }
+      } catch {
+        // best-effort — don't let enumeration errors mask the MissingTemplate
       }
     }
     return Array.from(seen);

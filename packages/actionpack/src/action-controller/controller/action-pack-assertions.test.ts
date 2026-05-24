@@ -101,8 +101,8 @@ describe("ActionPackAssertionsControllerTest", () => {
 
   it("get request", async () => {
     await expect(tc.get("raiseExceptionOnGet")).rejects.toThrow("get");
-    await tc.post("raiseExceptionOnGet");
-    expect(tc.responseBody).toContain("POST");
+    await tc.get("raiseExceptionOnPost");
+    expect(tc.responseBody).toContain("GET");
   });
 
   it("post request", async () => {

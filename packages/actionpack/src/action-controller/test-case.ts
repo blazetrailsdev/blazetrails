@@ -442,9 +442,15 @@ export class TestCase {
     return new Response();
   }
 
+  /** @internal Mirrors Rails `TestCase::Behavior#wrap_execution`. */
+  wrapExecution(fn: () => Promise<void>): Promise<void> {
+    return fn();
+  }
   /** @internal Mirrors Rails `TestCase::Behavior#process_controller_response`. */
   private async processControllerResponse(action: string, _xhr: boolean): Promise<void> {
-    await this.controller.dispatch(action, this.request, this.response);
+    await this.wrapExecution(() =>
+      this.controller.dispatch(action, this.request, this.response).then(() => {}),
+    );
     if ("session" in this.controller) Object.assign(this.session, (this.controller as any).session);
   }
 
@@ -460,6 +466,7 @@ export class TestCase {
     }
     delete env["CONTENT_LENGTH"];
     delete env["RAW_POST_DATA"];
+    env["rack.input"] = "";
     return env;
   }
 }

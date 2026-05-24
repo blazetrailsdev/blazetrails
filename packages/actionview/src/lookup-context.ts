@@ -128,7 +128,7 @@ export class MissingTemplate extends Error {
     scored.sort((a, b) => a.score - b.score);
     const top = scored
       .slice(0, 6)
-      .map(({ c }) => (this.partial ? c.replace(/\/_([^/]*)$/, "/$1") : c));
+      .map(({ c }) => (this.partial ? c.replace(/_([^/]+)$/, "$1") : c));
 
     this.#cachedCorrections = top;
     return this.#cachedCorrections;

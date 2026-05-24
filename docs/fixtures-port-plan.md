@@ -388,6 +388,18 @@ the duplicate block.
 `Account.destroyedAccountIds()` and its callback hard-code `Account._destroyedAccountIds`
 instead of `this._destroyedAccountIds`. Change to `this` so subclass overrides work.
 
+**destroy() override type mismatch (#2338 / PR 22)**
+`destroy-async-parent-soft-delete.ts` and `dl-keyed-belongs-to-soft-delete.ts` override
+`destroy()` synchronously, returning `boolean | Promise<boolean>` instead of `Promise<this | false>`.
+Make each override `async`, `await` the inner `update`/`runCallbacks` calls, and return
+`this` on success or `false` on failure so callers that `await record.destroy()` work correctly.
+
+**invoice.ts beforeSave lazy-load (#2329 / PR 16)**
+`invoice.ts` sums `lineItems.map(...)` in a `beforeSave` callback without awaiting the
+association load. If `lineItems` hasn't been eager-loaded, `balance` silently computes as 0.
+Make the callback `async` and `await this.lineItems.load()` (or `await this.lineItems`)
+before summing.
+
 ---
 
 ### PR 9 (final) — flip `models:compare` to hard-fail

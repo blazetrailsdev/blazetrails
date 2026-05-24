@@ -86,12 +86,13 @@ export class MissingTemplate extends Error {
     public readonly searchedPaths: string[],
     candidatePaths: readonly string[] = [],
   ) {
+    const templatePath = controller ? `${controller}/${action}` : action;
     super(
-      `Missing template ${controller}/${action} with format "${format}". ` +
+      `Missing template ${templatePath} with format "${format}". ` +
         `Searched in: ${searchedPaths.length > 0 ? searchedPaths.join(", ") : "(no resolvers)"}`,
     );
     this.name = "MissingTemplate";
-    this.path = `${controller}/${action}`;
+    this.path = controller ? `${controller}/${action}` : action;
     this.paths = searchedPaths;
     this.prefixes = controller ? [controller] : [];
     this.partial = action.startsWith("_");

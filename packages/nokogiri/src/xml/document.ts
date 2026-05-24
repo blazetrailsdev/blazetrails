@@ -45,4 +45,8 @@ export class XmlDocument {
     this._doc = null;
     this._root = null;
   }
+
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
 }

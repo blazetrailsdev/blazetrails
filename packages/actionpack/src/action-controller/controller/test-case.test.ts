@@ -617,11 +617,11 @@ describe("TestCaseTest (ported)", () => {
     expect(tc.response.status).toBe(200);
   });
 
-  it("process with flash now", async () => {
+  it.skip("process with flash now", async () => {
     // flash.now not yet implemented in FlashHash
   });
 
-  it("process delete flash", async () => {
+  it.skip("process delete flash", async () => {
     // flash persistence between requests not yet implemented
   });
 
@@ -637,11 +637,11 @@ describe("TestCaseTest (ported)", () => {
     expect(tc.session["foo"]).toBe("baz");
   });
 
-  it("session is cleared from controller after reset session", async () => {
+  it.skip("session is cleared from controller after reset session", async () => {
     // resetSession() does not clear controller.session plain object; skip until wired
   });
 
-  it("session is cleared from request after reset session", async () => {
+  it.skip("session is cleared from request after reset session", async () => {
     // resetSession() does not clear request.session visible to TestCase; skip until wired
   });
 
@@ -674,7 +674,7 @@ describe("TestCaseTest (ported)", () => {
     expect(tc.responseBody).toBe("192.0.0.1");
   });
 
-  it("header properly reset after remote http request", async () => {
+  it.skip("header properly reset after remote http request", async () => {
     // scrub_env! not called post-request; headers persist on tc.request — skip
   });
 
@@ -794,7 +794,7 @@ describe("TestCaseTest (ported)", () => {
     expect(tc.responseBody).toBe("1");
   });
 
-  it("parsed body without as option", async () => {
+  it.skip("parsed body without as option", async () => {
     // body: {hash} auto-serialization not supported; use explicit JSON string
   });
 

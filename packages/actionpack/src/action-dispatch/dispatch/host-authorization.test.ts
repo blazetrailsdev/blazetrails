@@ -289,7 +289,7 @@ function buildApp(
     responseApp?: (env: RackEnv) => Promise<RackResponse>;
   } = {},
 ) {
-  const h = (Array.isArray(hosts) ? hosts : hosts != null ? [hosts] : []) as HostPermission[];
+  const h: HostPermission[] = hosts == null ? [] : Array.isArray(hosts) ? hosts : [hosts];
   return new HostAuthorization(successApp, { hosts: h, ...opts });
 }
 

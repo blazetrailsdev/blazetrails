@@ -43,28 +43,21 @@ describe("virtualizeTse", () => {
     expect(ts).not.toContain("const {");
   });
 
-  it("types empty `<%# locals: () %>` as Record<string, never> (Rails **nil parity)", () => {
-    // `Record<never, never>` collapses to `{}`; `Record<string, never>`
-    // actually rejects any provided key. See plan §2.5 / §2.9.
+  it("types empty `<%# locals: () %>` as NoExtraKeys<Record<string, never>> (Rails **nil parity)", () => {
     const out = virtualizeTse("<%# locals: () %><p>hi</p>");
-    expect(out).toContain("locals: Record<string, never>");
-    // Confirm via tsc: passing `{ extra: 1 }` to a `Record<string, never>`
-    // parameter is a type error. (Inline a Record alias because the
-    // diagnose helper runs with `lib: []`.)
-    const probe =
-      "type Record<K extends keyof any, V> = { [P in K]: V };\n" +
-      out +
-      "\nrender({} as RenderContext, { extra: 1 });";
+    expect(out).toContain("locals: NoExtraKeys<Record<string, never>>");
+    // Confirm via tsc: passing `{ extra: 1 }` is a type error.
+    const probe = out + "\nrender({} as RenderContext, { extra: 1 });";
     expect(diagnose(probe).join("\n")).toMatch(/not assignable|extra/i);
   });
 
   it("destructures locals and types them as unknown when no types block", () => {
     const ts = virtualizeTse("<%# locals: (user:, count: 0) %><%= user %>");
-    expect(ts).toContain("locals: { user: unknown; count?: unknown }");
+    expect(ts).toContain("locals: NoExtraKeys<{ user: unknown; count?: unknown }>");
     expect(ts).toContain("const { user, count = 0 } = locals;");
   });
 
-  it("lifts the types annotation verbatim", () => {
+  it("lifts the types annotation verbatim (no NoExtraKeys wrapper when types block present)", () => {
     const ts = virtualizeTse(
       "<%# locals: (user:) %><%! types: { user: { name: string } } !%><%= user.name %>",
     );
@@ -131,7 +124,7 @@ describe("virtualizeTse", () => {
   it("accepts mixed named kwargs + `**nil` sentinel (Rails parity)", () => {
     const out = virtualizeTse("<%# locals: (user:, **nil) %><%= user %>");
     expect(out).toContain("const { user } = locals;");
-    expect(out).toContain("locals: { user: unknown }");
+    expect(out).toContain("locals: NoExtraKeys<{ user: unknown }>");
   });
 
   it("throws on an empty / invalid local name", () => {
@@ -183,6 +176,19 @@ describe("virtualizeTse", () => {
     expect(() => virtualizeTse("<%= forEach(items, (item) => { %>no closer")).toThrow(
       /block-expr.*never closed/,
     );
+  });
+
+  it("wraps named locals type in NoExtraKeys so variable-typed excess keys are rejected", () => {
+    // Normal TS excess-property check only fires on inline object literals.
+    // NoExtraKeys<T> rejects excess keys even for pre-built variables.
+    const out = virtualizeTse("<%# locals: (count:) %><%= count %>");
+    expect(out).toContain("locals: NoExtraKeys<{ count: unknown }>");
+    // Variable with excess key — without NoExtraKeys this would pass tsc.
+    const probe =
+      out +
+      "\nconst l: { count: number; extra: string } = { count: 1, extra: 'x' };" +
+      "\nrender({} as RenderContext, l);";
+    expect(diagnose(probe).join("\n")).toMatch(/not assignable|extra/i);
   });
 
   it("emits TS that type-checks against the declared locals", () => {

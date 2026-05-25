@@ -5,6 +5,16 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./strict-locals": {
+      "import": "./dist/strict-locals.js",
+      "types": "./dist/strict-locals.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc"
   },

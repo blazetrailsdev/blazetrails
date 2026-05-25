@@ -69,10 +69,11 @@ export function buildViews(opts: BuildViewsOptions = {}): BuildViewsResult {
   // entries silently typecheck against templates the user already removed.
   fs.rmSync(outViews, { recursive: true, force: true });
   fs.mkdirSync(outViews, { recursive: true });
-  // Map deduplicates: two formats of the same partial (e.g. _user.html.tse
-  // and _user.json.tse) share one registry key. First-encountered wins;
-  // conflicting types from different formats are an app-level concern.
-  const registryMap = new Map<string, string>();
+  // Collect all format-specific locals types per partial key so that
+  // _user.html.tse and _user.json.tse with different locals both
+  // contribute to the registry entry. The emitted type is an intersection
+  // of all format types, requiring callers to satisfy every format's locals.
+  const registryMap = new Map<string, string[]>();
   for (const rel of files) {
     const src = fs.readFileSync(path.join(viewsDir, rel), "utf8");
     const shim = virtualizeTse(src);
@@ -83,12 +84,16 @@ export function buildViews(opts: BuildViewsOptions = {}): BuildViewsResult {
     fs.writeFileSync(outBase + ".js", js);
     const ast = parse(src);
     const registryKey = partialRegistryKey(rel);
-    if (registryKey !== null && ast.localsSignature !== null && !registryMap.has(registryKey)) {
+    if (registryKey !== null && ast.localsSignature !== null) {
       const locals = parseLocalsSignature(ast.localsSignature);
-      registryMap.set(registryKey, localsParamType(ast, locals));
+      const existing = registryMap.get(registryKey) ?? [];
+      registryMap.set(registryKey, [...existing, localsParamType(ast, locals)]);
     }
   }
-  const registryEntries = Array.from(registryMap, ([key, localsType]) => ({ key, localsType }));
+  const registryEntries = Array.from(registryMap, ([key, types]) => ({
+    key,
+    localsType: types.length === 1 ? types[0]! : types.map((t) => `(${t})`).join(" & "),
+  }));
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, "views-manifest.ts"), emitManifest(files));
   fs.writeFileSync(

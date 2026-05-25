@@ -12,5 +12,5 @@
       "@blazetrails/tse-compiler": ["../../tse-compiler/src/index.ts"]
     }
   },
-  "include": ["./**/*.test-d.ts"]
+  "include": ["./**/*.test-d.ts", "../types/tse-modules.d.ts"]
 }

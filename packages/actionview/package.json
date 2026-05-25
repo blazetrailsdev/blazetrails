@@ -17,13 +17,17 @@
     "./*": {
       "types": "./dist/*.d.ts",
       "default": "./dist/*.js"
+    },
+    "./tse-modules": {
+      "types": "./types/tse-modules.d.ts"
     }
   },
   "scripts": {
     "build": "tsc"
   },
   "files": [
-    "dist"
+    "dist",
+    "types"
   ],
   "license": "MIT",
   "dependencies": {

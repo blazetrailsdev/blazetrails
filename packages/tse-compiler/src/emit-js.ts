@@ -34,8 +34,8 @@ export function compileJs(source: string, options: EmitJsOptions = {}): EmitResu
   };
 }
 
-/** Matches `<% } %>` / `<% }) %>` closers that can terminate an open blockExpr. */
-const BLOCK_CLOSE_RE = /^\s*\}\s*\)?\s*;?\s*$/;
+/** Matches `<% } %>` / `<% }) %>` / `<% })) %>` closers that can terminate an open blockExpr. */
+const BLOCK_CLOSE_RE = /^\s*\}\)*\s*;?\s*$/;
 
 /** Arrow-function blockExpr: `(x) => {` or `() => {`. Function form (`function(x) {`) does NOT match. */
 const ARROW_BLOCK_RE = /=>\s*\{\s*$/;

@@ -131,11 +131,14 @@ describe("AppGenerator", () => {
     expect(gitignore).toContain("/.trails/");
   });
 
-  it("tsconfig includes .trails and has no rootDir so augmentation participates in type-check", async () => {
+  it("tsconfig includes .trails alongside src so augmentation participates in type-check", async () => {
     await makeGen().run();
     const tsconfig = JSON.parse(fs.readFileSync(appPath("tsconfig.json"), "utf-8"));
     expect(tsconfig.include).toContain(".trails");
-    expect(tsconfig.compilerOptions.rootDir).toBeUndefined();
+    expect(tsconfig.include).toContain("src");
+    // rootDir: "src" keeps dist layout stable (dist/config/... not dist/src/config/...)
+    // .d.ts files in .trails are exempt from rootDir constraints so both coexist.
+    expect(tsconfig.compilerOptions.rootDir).toBe("src");
   });
 
   it("configures postgres database", async () => {

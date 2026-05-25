@@ -98,7 +98,7 @@ describe("buildViews", () => {
     expect(fs.existsSync(path.join(cwd, "build/.gen/views-manifest.ts"))).toBe(true);
   });
 
-  it("emits template-registry-augmentation.ts keyed by Rails partial name", () => {
+  it("emits template-registry-augmentation.d.ts keyed by Rails partial name", () => {
     const cwd = mkScratch();
     // partial: _user.html.tse → "users/user" (strips `_` prefix and format ext)
     write(
@@ -114,7 +114,7 @@ describe("buildViews", () => {
     buildViews({ cwd });
 
     const aug = fs.readFileSync(
-      path.join(cwd, ".trails/template-registry-augmentation.ts"),
+      path.join(cwd, ".trails/template-registry-augmentation.d.ts"),
       "utf8",
     );
     expect(aug).toContain("export {};");
@@ -140,7 +140,7 @@ describe("buildViews", () => {
     buildViews({ cwd });
 
     const aug = fs.readFileSync(
-      path.join(cwd, ".trails/template-registry-augmentation.ts"),
+      path.join(cwd, ".trails/template-registry-augmentation.d.ts"),
       "utf8",
     );
     expect(aug).toContain("export {};");

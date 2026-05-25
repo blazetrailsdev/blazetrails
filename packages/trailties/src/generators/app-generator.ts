@@ -104,6 +104,7 @@ export class AppGenerator extends AppBase {
             strict: true,
             esModuleInterop: true,
             skipLibCheck: true,
+            rootDir: "src",
             outDir: "dist",
           },
           include: ["src", ".trails"],

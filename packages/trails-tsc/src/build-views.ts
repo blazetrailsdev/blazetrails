@@ -97,7 +97,7 @@ export function buildViews(opts: BuildViewsOptions = {}): BuildViewsResult {
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, "views-manifest.ts"), emitManifest(files));
   fs.writeFileSync(
-    path.join(outDir, "template-registry-augmentation.ts"),
+    path.join(outDir, "template-registry-augmentation.d.ts"),
     emitRegistryAugmentation(registryEntries),
   );
   return { count: files.length, files };

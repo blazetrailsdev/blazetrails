@@ -283,6 +283,7 @@ function analyzeTsDepUsage(
 
     const methodMap = new Map<string, TsMethodDepInfo>();
     visitMethodDeclarations(sourceFile, (name, methodNode, anchor) => {
+      const refs = new Set<string>();
       const uses = methodUsesDepImport(
         methodNode,
         importedNames,
@@ -290,17 +291,8 @@ function analyzeTsDepUsage(
         dep,
         sourceFile,
         anchor,
-        {
-          checker,
-          taintedSymbols,
-        },
-      );
-      const refs = collectMethodDepRefs(
-        methodNode,
-        importedNames,
-        knownIds,
-        taintedSymbols,
-        checker,
+        { checker, taintedSymbols },
+        refs,
       );
       const existing = methodMap.get(name);
       if (existing === undefined || uses) methodMap.set(name, { uses, refs });
@@ -412,6 +404,7 @@ export function methodUsesDepImport(
   sourceFile: ts.SourceFile,
   anchor: ts.Node = node,
   transitive?: TransitiveContext,
+  collectRefs?: Set<string>,
 ): boolean {
   if (!transitive?.skipIgnoreAnnotation && hasLintDepsIgnore(anchor, dep, sourceFile)) return true;
   let found = false;
@@ -423,23 +416,41 @@ export function methodUsesDepImport(
   //     these DON'T count because they have no runtime effect;
   //   - runtime references — always count.
   const check = (n: ts.Node, inSignatureType: boolean) => {
-    if (found) return;
+    if (found && !collectRefs) return;
+
+    // Resolve namespace property accesses: Nodes.OuterJoin → "OuterJoin"
+    if (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression)) {
+      if (importedNames.has(n.expression.text)) {
+        found = true;
+        collectRefs?.add(n.name.text);
+        if (!collectRefs) return;
+      }
+    }
+
     if (ts.isIdentifier(n)) {
       if (!isDeclarationName(n)) {
-        const inType = isWithinTypeNode(n);
-        if (!inType || inSignatureType) {
-          if (importedNames.has(n.text) || knownIdentifiers.has(n.text)) {
-            found = true;
-            return;
-          }
-          if (transitive && transitive.taintedSymbols.size > 0) {
-            const sym = transitive.checker.getSymbolAtLocation(n);
-            if (sym) {
-              const resolved =
-                sym.flags & ts.SymbolFlags.Alias ? transitive.checker.getAliasedSymbol(sym) : sym;
-              if (transitive.taintedSymbols.has(resolved)) {
-                found = true;
-                return;
+        // Skip namespace identifiers that are the left side of a property
+        // access — the property access handler above captures the leaf.
+        if (collectRefs && ts.isPropertyAccessExpression(n.parent) && n.parent.expression === n) {
+          // don't record the namespace import itself as a ref
+        } else {
+          const inType = isWithinTypeNode(n);
+          if (!inType || inSignatureType) {
+            if (importedNames.has(n.text) || knownIdentifiers.has(n.text)) {
+              found = true;
+              collectRefs?.add(n.text);
+              if (!collectRefs) return;
+            }
+            if (transitive && transitive.taintedSymbols.size > 0) {
+              const sym = transitive.checker.getSymbolAtLocation(n);
+              if (sym) {
+                const resolved =
+                  sym.flags & ts.SymbolFlags.Alias ? transitive.checker.getAliasedSymbol(sym) : sym;
+                if (transitive.taintedSymbols.has(resolved)) {
+                  found = true;
+                  collectRefs?.add(resolved.name);
+                  if (!collectRefs) return;
+                }
               }
             }
           }
@@ -447,10 +458,6 @@ export function methodUsesDepImport(
       }
     }
     ts.forEachChild(n, (c) => {
-      // Descending from a function-like into any non-body child means
-      // we're entering signature territory (typeParameters, parameters,
-      // return type). Once we're in signature territory we stay there
-      // for the whole subtree.
       const childInSig =
         inSignatureType || (ts.isFunctionLike(n) && c !== (n as ts.FunctionLikeDeclaration).body);
       check(c, childInSig);
@@ -458,44 +465,6 @@ export function methodUsesDepImport(
   };
   check(node, false);
   return found;
-}
-
-function collectMethodDepRefs(
-  node: ts.Node,
-  importedNames: Set<string>,
-  knownIdentifiers: Set<string>,
-  taintedSymbols: Set<ts.Symbol>,
-  checker: ts.TypeChecker,
-): Set<string> {
-  const refs = new Set<string>();
-  const visit = (n: ts.Node) => {
-    if (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression)) {
-      if (importedNames.has(n.expression.text)) {
-        refs.add(n.name.text);
-        return;
-      }
-    }
-    if (ts.isIdentifier(n) && !isDeclarationName(n)) {
-      const parent = n.parent;
-      if (ts.isPropertyAccessExpression(parent) && parent.expression === n) {
-        return;
-      }
-      if (importedNames.has(n.text) || knownIdentifiers.has(n.text)) {
-        refs.add(n.text);
-      } else if (taintedSymbols.size > 0) {
-        const sym = checker.getSymbolAtLocation(n);
-        if (sym) {
-          const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
-          if (taintedSymbols.has(resolved)) {
-            refs.add(resolved.name);
-          }
-        }
-      }
-    }
-    ts.forEachChild(n, visit);
-  };
-  visit(node);
-  return refs;
 }
 
 function isDeclarationName(id: ts.Identifier): boolean {
@@ -553,7 +522,6 @@ interface RefMismatch {
   rubyRefs: string[];
   tsRefs: string[];
   missingInTs: string[];
-  extraInTs: string[];
 }
 
 interface Compliant {
@@ -645,6 +613,8 @@ function crossReference(rubyMethods: RubyDepMethod[], tsDepMap: TsDepMap): Cross
       rubyModule: rm.rubyModule,
     };
 
+    // Method name matching a Ruby depRef class name counts as implementing
+    // that protocol (e.g., serializeCastValue → ActiveModel::Type::SerializeCastValue).
     const implementsProtocol =
       !info.uses &&
       rm.depRefs.some((ref) => {
@@ -665,20 +635,12 @@ function crossReference(rubyMethods: RubyDepMethod[], tsDepMap: TsDepMap): Cross
           const camel = snakeToCamel(r).toLowerCase();
           return !tsSet.has(lower) && !tsSet.has(camel) && !tsSet.has("_" + camel);
         });
-        const rubySet = new Set(
-          rubyNormalized.flatMap((r) => {
-            const camel = snakeToCamel(r).toLowerCase();
-            return [r.toLowerCase(), camel, "_" + camel];
-          }),
-        );
-        const extraInTs = tsRefNames.filter((r) => !rubySet.has(r.toLowerCase()));
         if (missingInTs.length > 0) {
           refMismatches.push({
             ...entry,
             rubyRefs: rubyNormalized,
             tsRefs: tsRefNames,
             missingInTs,
-            extraInTs,
           });
         }
       }

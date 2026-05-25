@@ -24,6 +24,7 @@ import type { SchemaCache } from "./connection-adapters/schema-cache.js";
 import {
   clearAppliedSchemaSignatures,
   restoreCanonicalSchemaSignatures,
+  restoreCanonicalSchemaSignaturesUnlessAdapter,
 } from "./test-helpers/define-schema.js";
 import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import { SidecarFixtures } from "./test-helpers/sidecar-fixtures.js";
@@ -326,7 +327,11 @@ export async function resetTestAdapterState(): Promise<void> {
   // `connection-adapters/**`) also accumulate entries; under the sidecar
   // shape the wrapper isolation that used to mask this is gone.
   clearAppliedSchemaSignatures();
-  restoreCanonicalSchemaSignatures();
+  if (_sharedAdapter) {
+    restoreCanonicalSchemaSignaturesUnlessAdapter(_sharedAdapter);
+  } else {
+    restoreCanonicalSchemaSignatures();
+  }
   clearDdlTrackers();
   Base._modelsByName.clear();
 }

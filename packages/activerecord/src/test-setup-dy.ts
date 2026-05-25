@@ -24,3 +24,8 @@ setCanonicalSchemaPreload(Base.adapter, TEST_SCHEMA);
 // handler-path files reinstall it cleanly via setupHandlerSuite() →
 // bootstrapTestHandler().
 Base.removeConnection();
+// Also clear the cached checkout: Base.adapter caches a pool-leased
+// connection in Base._adapter; subclasses without their own _adapter
+// resolve through the prototype chain and would inherit the MySQL/PG
+// adapter from this preload on MariaDB/PG CI workers.
+(Base as unknown as { _adapter: null })._adapter = null;

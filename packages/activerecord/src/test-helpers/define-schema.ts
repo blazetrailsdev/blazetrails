@@ -304,7 +304,7 @@ function databaseIdentity(adapter: DatabaseAdapter): string | null {
     return null;
   }
   if (real.adapterName === "postgres") {
-    const opts = a["_pgPoolOptions"] as { connectionString?: unknown } | undefined;
+    const opts = a["_pgClientOptions"] as { connectionString?: unknown } | undefined;
     const cs = opts?.connectionString;
     if (typeof cs === "string" && cs !== "") return `postgres:${_stripUrlCredentials(cs)}`;
     return null;
@@ -453,6 +453,28 @@ export function restoreCanonicalSchemaSignatures(): void {
   if (_canonicalPreloadKey !== null) {
     _appliedSchemaSignatures.set(_canonicalPreloadKey, new Map(_canonicalPreloadSigs));
   } else if (_canonicalPreloadAdapter) {
+    _fallbackSchemaSignatures.set(_canonicalPreloadAdapter, new Map(_canonicalPreloadSigs));
+  }
+}
+
+/**
+ * Like {@link restoreCanonicalSchemaSignatures} but skips the restore when
+ * `adapter` resolves to the same DB identity as the canonical preload.  Used
+ * by `resetTestAdapterState` after `dropAllTables(_sharedAdapter)`: if the
+ * shared adapter points at the canonical DB, the canonical tables no longer
+ * exist, so restoring their signatures would make the fast-path lie and skip
+ * DDL for tables that were just dropped.
+ *
+ * @internal
+ */
+export function restoreCanonicalSchemaSignaturesUnlessAdapter(adapter: DatabaseAdapter): void {
+  if (!_canonicalPreloadSigs) return;
+  if (_canonicalPreloadKey !== null) {
+    const adapterKey = databaseIdentity(adapter);
+    if (adapterKey !== null && adapterKey === _canonicalPreloadKey) return;
+    _appliedSchemaSignatures.set(_canonicalPreloadKey, new Map(_canonicalPreloadSigs));
+  } else if (_canonicalPreloadAdapter) {
+    if (adapter === _canonicalPreloadAdapter) return;
     _fallbackSchemaSignatures.set(_canonicalPreloadAdapter, new Map(_canonicalPreloadSigs));
   }
 }

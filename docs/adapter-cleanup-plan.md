@@ -5,102 +5,92 @@ caching. Every site should resolve the adapter through the class getter
 (`Model.adapter` → pool checkout) at point-of-use, matching Rails'
 `klass.connection` semantics.
 
-This is scoped as story-sized PRs (~150–250 LOC each).
+**Why now:** Raw field reads bypass the pool getter, which means they return
+`null` if the getter was never called (silent bug in lazy-init paths), and
+construction-time caching freezes a stale adapter reference across
+`connectedTo()` role switches. Both are latent correctness issues that will
+surface as pool/multi-DB support matures. Cleaning these up also removes
+`as any` casts that hide type errors.
+
+**Done-when:** `grep -rn '\._adapter\b' packages/activerecord/src/ | grep -v test | grep -v '__'`
+returns only `base.ts` (the backing field), `connection-handling.ts` (the
+teardown path), and adapter-internal files (migration, schema-migration,
+internal-metadata). No `as any` casts remain for adapter access.
+
+Three PRs, each ~150–250 LOC.
 
 ---
 
-## Story 1 — Relation arel-visitor: kill raw `._adapter` reads
+## PR 1 — Leaf bypasses: raw field reads + fallback chains
 
-**Files:** `relation.ts`  
-**Lines:** 3615, 3628, 3634  
-**Problem:** `(this._modelClass as any)._adapter` bypasses the getter; returns
-null if getter never fired.  
-**Fix:** Replace with `this._modelClass.adapter` (the getter). Remove the `as any`
-casts. The `_arelVisitor()` helper and `get _visitor()` should both go through
-the public getter.  
-**LOC:** ~30
+Bundle of all sites that read `._adapter` directly or use fallback chains
+instead of the getter. No behavioral change — every site already has a
+working getter path; these just remove the bypass/fallback.
 
----
+**Scope:**
 
-## Story 2 — Preloader association: remove `._adapter` cache-key read
+| Site                         | File                                    | Pattern                                        | Fix                                                             |
+| ---------------------------- | --------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------- |
+| Relation arel-visitor        | `relation.ts`                           | `(this._modelClass as any)._adapter`           | `this._modelClass.adapter` — remove `as any` casts              |
+| Preloader cache key          | `associations/preloader/association.ts` | `klass._adapter`                               | `klass.adapter` — local variable for repeated access            |
+| QueryMethods column matcher  | `relation/query-methods.ts`             | `.adapter ?? ._adapter` double-fallback        | Single `host._modelClass.adapter`; fix host type constraint     |
+| Uniqueness validator         | `validations/uniqueness.ts`             | `klass.adapter ?? klass.connection ?? null`    | Single `klass.adapter` call; delete dead fallback               |
+| primary-key quotedPrimaryKey | `attribute-methods/primary-key.ts`      | `{ adapter?: DatabaseAdapter }` in `this` type | Remove from host type; resolve via `this.adapter` (Base getter) |
 
-**Files:** `associations/preloader/association.ts`  
-**Line:** 385  
-**Problem:** `klass._adapter` used as a dedup key for `LoaderQuery` cache.  
-**Fix:** Use `klass.adapter` (getter). If the concern is performance of
-repeated getter calls, assign to a local at the top of the method.  
-**LOC:** ~15
+**Type fixes:** Where `as any` casts exist because the type doesn't expose
+`.adapter`, widen the constraint to `typeof Base` (or the appropriate
+connection-owning interface). This may touch type declarations in
+`relation.ts` and `query-methods.ts`.
 
----
+**Verify:** `pnpm vitest run packages/activerecord/src/relation.test.ts packages/activerecord/src/associations/nested-through-preloader.test.ts packages/activerecord/src/validations.test.ts`
 
-## Story 3 — QueryMethods: remove double-fallback adapter resolution
-
-**Files:** `relation/query-methods.ts`  
-**Line:** 148  
-**Problem:** `(host._modelClass as any)?.adapter ?? (host._modelClass as any)?._adapter`
-— two-level bypass with `as any`.  
-**Fix:** Single call to `host._modelClass.adapter`. If the type doesn't expose
-it, fix the type constraint on the host (should be `typeof Base`).  
-**LOC:** ~20
+**LOC estimate:** ~150
 
 ---
 
-## Story 4 — InsertAll: fetch connection at execution, not construction
+## PR 2 — InsertAll: lazy connection resolution
 
-**Files:** `insert-all.ts`  
-**Lines:** 67, 73, and all `this._connection` usages (~15 sites)  
-**Problem:** `model.adapter` stored at construction; stale if connection swaps.  
-**Fix:** Store model class ref instead. Add a private `get _connection()` that
-calls `this._model.adapter` at point-of-use. Replace `this._connection` reads
-with the getter.  
-**LOC:** ~80
+`InsertAll` stores `model.adapter` at construction time and reuses it across
+all operations. If the connection swaps between construction and execution
+(e.g., `connected_to` role switching), the stored reference is stale.
 
----
+**Fix:**
 
-## Story 5 — JoinDependency: resolve adapter at use, not construction
+- Store the model class ref (`this._model: typeof Base`) instead of the adapter.
+- Add `private get _connection() { return this._model.adapter; }`.
+- Replace all `this._connection` reads (~15 sites) with the getter.
+- Delete the `connection` constructor parameter.
 
-**Files:** `associations/join-dependency.ts`  
-**Lines:** 140–168, plus all `this._adapter` usages  
-**Problem:** Adapter frozen at construction time.  
-**Fix:** Same pattern as Story 4 — store the base model class, add a private
-getter that resolves through `baseModel.adapter` when quoting is needed.
-Remove `_resolveAdapter` static helper.  
-**LOC:** ~60
+**Verify:** `pnpm vitest run packages/activerecord/src/insert-all.test.ts`
+
+**LOC estimate:** ~100
 
 ---
 
-## Story 6 — Uniqueness validator: drop `adapter ?? connection` double-path
+## PR 3 — JoinDependency: lazy connection resolution
 
-**Files:** `validations/uniqueness.ts`  
-**Line:** 303  
-**Problem:** `klass.adapter ?? klass.connection ?? null` — the fallback chain
-suggests uncertainty about which path is live.  
-**Fix:** Single `klass.adapter` call (the getter IS the connection path).
-Remove dead `klass.connection` reference if it exists.  
-**LOC:** ~10
+Same pattern as PR 2. `JoinDependency` resolves and freezes an adapter at
+construction for quoting. Rails' `JoinDependency` calls `connection` at the
+point of use (within `make_constraints` / `build_join_tree`).
 
----
+**Fix:**
 
-## Story 7 — primary-key.ts: remove adapter from type signature
+- Store `this._baseModel: typeof Base` instead of `this._adapter`.
+- Add `private get _adapter() { return this._baseModel.adapter; }`.
+- Remove `_resolveAdapter` static helper.
+- All existing `this._adapter` usage sites (~8) continue working via the
+  getter with no call-site changes.
 
-**Files:** `attribute-methods/primary-key.ts`  
-**Lines:** 199–205  
-**Problem:** `this: PrimaryKeyHost & { adapter?: DatabaseAdapter }` — the
-`adapter` constraint is in the host type signature. Rails' `quoted_primary_key`
-calls `connection.quote_column_name`.  
-**Fix:** Remove `adapter` from the host type. Resolve via `this.adapter` (Base
-getter). Ensure `PrimaryKeyHost` extends or is constrained to `typeof Base`.  
-**LOC:** ~20
+**Verify:** `pnpm vitest run packages/activerecord/src/associations/join-dependency-quoting.test.ts packages/activerecord/src/associations/join-dependency-through-aliasing.test.ts`
+
+**LOC estimate:** ~80
 
 ---
 
 ## Ordering
 
-Stories 1–3 and 6–7 are independent leaf fixes (no API change, just internal
-resolution path). Ship in any order or bundle adjacent ones.
-
-Stories 4–5 are slightly larger refactors that change how objects hold
-references. Ship after 1–3 to reduce concurrent churn in `relation.ts`.
+PR 1 first (no structural change, just resolution-path cleanup). PRs 2–3 are
+independent of each other and can ship in parallel after PR 1.
 
 ## Non-goals (this plan)
 

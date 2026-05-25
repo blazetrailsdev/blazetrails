@@ -1,4 +1,4 @@
-import { SafeBuffer, htmlSafe } from "@blazetrails/activesupport";
+import { SafeBuffer, htmlSafe, camelize } from "@blazetrails/activesupport";
 import { OutputBuffer } from "./buffers.js";
 import type { TemplateLocals, TemplateRegistry } from "./template-registry.js";
 
@@ -145,6 +145,8 @@ export class TseRenderContextImpl implements TseRenderContext {
     this._contentBuffers.set(name, existing ? existing.concat(captured) : captured);
   }
 
+  render<K extends keyof TemplateRegistry>(options: PartialOptions<K>): SafeBuffer;
+  render(options: DynamicPartialOptions): SafeBuffer;
   render(options: DynamicPartialOptions): SafeBuffer {
     const { partial, locals = {}, collection, as, spacerTemplate } = options;
     const localName = as ?? deriveLocalName(partial);
@@ -178,7 +180,7 @@ export class TseRenderContextImpl implements TseRenderContext {
     spacerTemplate?: string,
   ): SafeBuffer {
     const results: SafeBuffer[] = [];
-    const counterName = `${localName}Counter`;
+    const counterName = `${camelize(localName, false)}Counter`;
 
     for (let i = 0; i < collection.length; i++) {
       const item = collection[i];
@@ -191,9 +193,10 @@ export class TseRenderContextImpl implements TseRenderContext {
     }
 
     if (spacerTemplate !== undefined && results.length > 1) {
+      const spacerLocalName = deriveLocalName(spacerTemplate);
       const interleaved: SafeBuffer[] = [];
       for (let i = 0; i < results.length; i++) {
-        if (i > 0) interleaved.push(this._renderPartial(spacerTemplate, "", {}));
+        if (i > 0) interleaved.push(this._renderPartial(spacerTemplate, spacerLocalName, {}));
         interleaved.push(results[i]);
       }
       return interleaved.reduce((acc, s) => acc.concat(s), htmlSafe(""));

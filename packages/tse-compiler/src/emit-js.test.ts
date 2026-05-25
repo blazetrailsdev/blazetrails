@@ -25,20 +25,23 @@ describe("compileJs", () => {
     expect(compileJs("<% const x = 1 %>").code).toContain("const x = 1;");
   });
 
-  it("emits block-expr without closing paren, closed by matching code closer", () => {
-    // `_ob.append(` stays open; `})` from template closes arrow body + forEach;
-    // emitter appends `);` to close the append call → `}));`
+  it("emits block-expr with capture wrapper so inner writes go to capture buffer", () => {
+    // `_ob.append(` and `forEach(` stay open; `context.capture(() => {` wraps
+    // inner content so inner writes use `context.outputBuffer` (the swapped buf).
+    // `})` from template closes the capture arrow + `context.capture(`.
+    // Emitter appends `));` to close `forEach(` and `_ob.append(` → `})));`.
     const src = "<%= forEach(items, (item) => { %><li><%= item %></li><% }) %>";
     const { code } = compileJs(src);
     expect(code).toBe(
       [
         "export default function render(context, locals) {",
         "  const _ob = context.outputBuffer;",
-        "  _ob.append(forEach(items, (item) => {",
-        '  _ob.safeAppend("<li>");',
-        "  _ob.append(item);",
-        '  _ob.safeAppend("</li>");',
-        "  }));",
+        "  _ob.append(forEach(items, (item) =>",
+        "  context.capture(() => {",
+        '  context.outputBuffer.safeAppend("<li>");',
+        "  context.outputBuffer.append(item);",
+        '  context.outputBuffer.safeAppend("</li>");',
+        "  })));",
         "  return _ob;",
         "}",
         "",
@@ -50,9 +53,10 @@ describe("compileJs", () => {
     const src = "<%= outer((x) => { %><%= inner((y) => { %><% }) %><% }) %>";
     const { code } = compileJs(src);
     const lines = code.split("\n");
-    expect(lines).toContain("  _ob.append(outer((x) => {");
-    expect(lines).toContain("  _ob.append(inner((y) => {");
-    expect(lines.filter((l) => l === "  }));")).toHaveLength(2);
+    expect(lines).toContain("  _ob.append(outer((x) =>");
+    // inner blockExpr uses context.outputBuffer since it is inside outer capture
+    expect(lines).toContain("  context.outputBuffer.append(inner((y) =>");
+    expect(lines.filter((l) => l === "  })));")).toHaveLength(2);
   });
 
   it("does not close blockExpr on inner code braces", () => {
@@ -61,10 +65,10 @@ describe("compileJs", () => {
     const src = "<%= forEach(items, (item) => { %><% if (x) { %><%= item %><% } %><% }) %>";
     const { code } = compileJs(src);
     const lines = code.split("\n");
-    expect(lines).toContain("  _ob.append(forEach(items, (item) => {");
+    expect(lines).toContain("  _ob.append(forEach(items, (item) =>");
     expect(lines.some((l) => l.includes("if (x) {"))).toBe(true);
-    expect(lines).toContain("  }));");
-    expect(lines.filter((l) => l === "  }));")).toHaveLength(1);
+    expect(lines).toContain("  })));");
+    expect(lines.filter((l) => l === "  })));")).toHaveLength(1);
   });
 
   it("tracks } else { as net-zero brace delta so the blockExpr closer is recognised", () => {
@@ -72,8 +76,8 @@ describe("compileJs", () => {
       "<%= forEach(items, (item) => { %><% if (x) { %><%= item %><% } else { %><%= other %><% } %><% }) %>";
     const { code } = compileJs(src);
     const lines = code.split("\n");
-    expect(lines).toContain("  _ob.append(forEach(items, (item) => {");
-    expect(lines.filter((l) => l === "  }));")).toHaveLength(1);
+    expect(lines).toContain("  _ob.append(forEach(items, (item) =>");
+    expect(lines.filter((l) => l === "  })));")).toHaveLength(1);
   });
 
   it("throws a clear error when a blockExpr is never closed", () => {
@@ -85,8 +89,8 @@ describe("compileJs", () => {
   it("respects escapeIgnore for block-expr", () => {
     const src = "<%= fn((x) => { %><% }) %>";
     const { code } = compileJs(src, { escapeIgnore: true });
-    expect(code).toContain("_ob.safeExprAppend(fn((x) => {");
-    expect(code).toContain("}));");
+    expect(code).toContain("_ob.safeExprAppend(fn((x) =>");
+    expect(code).toContain("})));");
   });
 
   describe("preamble / postamble", () => {

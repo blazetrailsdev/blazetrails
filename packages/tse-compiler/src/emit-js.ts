@@ -53,20 +53,33 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
   const innerDepths: number[] = [];
   for (const node of ast.nodes) {
     if (node.kind === "blockExpr") {
+      // Strip trailing `{` so the helper call ends with `=>` for the capture wrapper.
+      const callExpr = node.value
+        .trim()
+        .replace(/\s*\{\s*$/, "")
+        .trimEnd();
+      const bufRef = innerDepths.length > 0 ? "context.outputBuffer" : "_ob";
       innerDepths.push(0);
-      lines.push(`  _ob.${exprAppend}(${node.value.trim()}`);
+      lines.push(`  ${bufRef}.${exprAppend}(${callExpr}`);
+      lines.push(`  context.capture(() => {`);
     } else if (node.kind === "code" && innerDepths.length > 0) {
       const innerDepth = innerDepths[innerDepths.length - 1]!;
       if (BLOCK_CLOSE_RE.test(node.value) && innerDepth === 0) {
         innerDepths.pop();
         const t = node.value.trim();
-        lines.push(`  ${t.endsWith(";") ? t.slice(0, -1) : t});`);
+        const tClean = t.endsWith(";") ? t.slice(0, -1) : t;
+        // Need to close: context.capture(, helper(, and bufRef.exprAppend( — 3 total.
+        // The template's closer t may already contain some `)` (e.g. `})`).
+        const closingParensInT = (tClean.match(/\)/g) ?? []).length;
+        const suffix = ")".repeat(3 - closingParensInT) + ";";
+        lines.push(`  ${tClean}${suffix}`);
       } else {
         innerDepths[innerDepths.length - 1]! += netBraceDepth(node.value);
-        lines.push("  " + emitNode(node, exprAppend));
+        lines.push("  " + emitNode(node, exprAppend, "context.outputBuffer"));
       }
     } else {
-      lines.push("  " + emitNode(node, exprAppend));
+      const bufRef = innerDepths.length > 0 ? "context.outputBuffer" : "_ob";
+      lines.push("  " + emitNode(node, exprAppend, bufRef));
     }
   }
   if (innerDepths.length > 0) {
@@ -79,19 +92,19 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
   return lines.join("\n") + "\n";
 }
 
-function emitNode(node: TseNode, exprAppend: string): string {
+function emitNode(node: TseNode, exprAppend: string, bufRef: string): string {
   switch (node.kind) {
     case "text":
-      return `_ob.safeAppend(${JSON.stringify(node.value)});`;
+      return `${bufRef}.safeAppend(${JSON.stringify(node.value)});`;
     case "code": {
       const t = node.value.trimEnd();
       return node.value + (t.endsWith(";") || t.endsWith("{") || t.endsWith("}") ? "" : ";");
     }
     case "expr":
-      return `_ob.${exprAppend}(${node.value});`;
+      return `${bufRef}.${exprAppend}(${node.value});`;
     case "rawExpr":
-      return `_ob.safeExprAppend(${node.value});`;
+      return `${bufRef}.safeExprAppend(${node.value});`;
     case "blockExpr":
-      return `_ob.${exprAppend}(${node.value}`;
+      return `${bufRef}.${exprAppend}(${node.value}`;
   }
 }

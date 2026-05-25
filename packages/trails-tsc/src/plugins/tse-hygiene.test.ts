@@ -1,120 +1,59 @@
 import { describe, expect, it } from "vitest";
 import ts from "typescript";
 import { virtualizeTse } from "./tse.js";
+import { diagnose } from "./tse-diagnose.js";
 
-/**
- * Compile emitted `.tse.ts` under the strictest flags to catch hygiene
- * regressions: `strict`, `noUncheckedIndexedAccess`,
- * `exactOptionalPropertyTypes`, and `verbatimModuleSyntax`.
- */
-function diagnoseStrict(source: string): string[] {
-  const fileName = "/virtual/show.html.tse.ts";
-  const stubSrc = [
-    "export interface TemplateRegistry {}",
-    "export type TemplateLocals<T> = T;",
-    "export type NoExtraKeys<T> = T & { [K in Exclude<string, keyof T>]?: never };",
-  ].join("\n");
-  const stubPath = "/stub/module.d.ts";
-  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.ES2022, true);
-  const stubFile = ts.createSourceFile(stubPath, stubSrc, ts.ScriptTarget.ES2022, true);
-  const defaultHost = ts.createCompilerHost({});
-  const host: ts.CompilerHost = {
-    ...defaultHost,
-    fileExists: (f) => f === fileName || f === stubPath || defaultHost.fileExists(f),
-    readFile: (f) => (f === fileName ? source : f === stubPath ? stubSrc : defaultHost.readFile(f)),
-    getSourceFile: (f, lv, onError) => {
-      if (f === fileName) return sourceFile;
-      if (f === stubPath) return stubFile;
-      return defaultHost.getSourceFile(f, lv, onError);
-    },
-    resolveModuleNames: (moduleNames, containingFile, _, __, opts) => {
-      const real = defaultHost.resolveModuleNames;
-      const results = real
-        ? real.call(defaultHost, moduleNames, containingFile, _, __, opts)
-        : moduleNames.map(() => undefined);
-      return results.map((r, i) => {
-        if (r) return r;
-        void moduleNames[i];
-        return { resolvedFileName: stubPath, isExternalLibraryImport: true };
-      });
-    },
-  };
-  const program = ts.createProgram({
-    rootNames: [fileName],
-    options: {
-      noEmit: true,
-      types: [],
-      skipLibCheck: true,
-      strict: true,
-      noUncheckedIndexedAccess: true,
-      exactOptionalPropertyTypes: true,
-      verbatimModuleSyntax: true,
-      module: ts.ModuleKind.ES2022,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      target: ts.ScriptTarget.ES2022,
-    },
-    host,
-  });
-  return program
-    .getSemanticDiagnostics(sourceFile)
-    .concat(program.getSyntacticDiagnostics(sourceFile))
-    .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
-}
+const STRICT_OPTIONS: ts.CompilerOptions = {
+  noUncheckedIndexedAccess: true,
+  exactOptionalPropertyTypes: true,
+  verbatimModuleSyntax: true,
+  module: ts.ModuleKind.ES2022,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  target: ts.ScriptTarget.ES2022,
+};
+
+const FIXTURES: Record<string, string> = {
+  "no locals": "<h1>Hello</h1>",
+  "strict locals empty": "<%# locals: () %><p>no extras</p>",
+  "strict locals with defaults":
+    "<%# locals: (user:, count: 0) %><h1><%= user %></h1><p><%= count %></p>",
+  "partial render": "<%= context.render({ partial: 'users/show', locals: { user: 'test' } }) %>",
+  capture: "<%= context.capture(() => { %><li>inside</li><% }) %>",
+  contentFor: "<% context.contentFor('nav', () => { %><nav>hi</nav><% }); %>",
+  raw: "<%= context.raw('<b>bold</b>') %>",
+  yield: "<%= context.yield() %><%= context.yield('sidebar') %>",
+  "code block with for loop":
+    "<% const items = [1, 2, 3]; %><% for (const item of items) { %><li><%= item %></li><% } %>",
+  "types annotation":
+    "<%# locals: (user:) %><%! types: { user: { name: string } } !%><h1><%= user.name %></h1>",
+  "raw expression": "<%== '<b>unescaped</b>' %>",
+  "nested blockExpr":
+    "<% const outer = (fn: () => void) => fn(); const inner = (fn: () => void) => fn(); %>" +
+    "<%= outer(() => { %><%= inner(() => { %><p>nested</p><% }) %><% }) %>",
+  "collection render (block body)":
+    "<%= context.render({ partial: 'items/item' }) %><% const x = 1; %>",
+};
 
 function assertClean(name: string, source: string) {
   it(name, () => {
-    const ts = virtualizeTse(source);
-    const diags = diagnoseStrict(ts);
+    const out = virtualizeTse(source);
+    const diags = diagnose(out, { extraCompilerOptions: STRICT_OPTIONS });
     expect(
       diags,
-      `Emitted .tse.ts for "${name}" has diagnostics:\n${diags.join("\n")}\n\nEmitted:\n${ts}`,
+      `Emitted .tse.ts for "${name}" has diagnostics:\n${diags.join("\n")}\n\nEmitted:\n${out}`,
     ).toEqual([]);
   });
 }
 
 describe("emitter hygiene — strict flags", () => {
-  assertClean("no locals", "<h1>Hello</h1>");
-
-  assertClean("strict locals empty", "<%# locals: () %><p>no extras</p>");
-
-  assertClean(
-    "strict locals with defaults",
-    "<%# locals: (user:, count: 0) %><h1><%= user %></h1><p><%= count %></p>",
-  );
-
-  assertClean(
-    "partial render",
-    "<%= context.render({ partial: 'users/show', locals: { user: 'test' } }) %>",
-  );
-
-  assertClean("capture", "<%= context.capture(() => { %><li>inside</li><% }) %>");
-
-  assertClean("contentFor", "<% context.contentFor('nav', () => { %><nav>hi</nav><% }); %>");
-
-  assertClean("raw", "<%= context.raw('<b>bold</b>') %>");
-
-  assertClean("yield", "<%= context.yield() %><%= context.yield('sidebar') %>");
-
-  assertClean(
-    "code block with for loop",
-    "<% const items = [1, 2, 3]; %><% for (const item of items) { %><li><%= item %></li><% } %>",
-  );
-
-  assertClean(
-    "types annotation",
-    "<%# locals: (user:) %><%! types: { user: { name: string } } !%><h1><%= user.name %></h1>",
-  );
+  for (const [name, source] of Object.entries(FIXTURES)) {
+    assertClean(name, source);
+  }
 });
 
 describe("emitter hygiene — erasable syntax only", () => {
-  it("emitted output contains no enum, import =, or namespace declarations", () => {
-    const templates = [
-      "<h1>Hello</h1>",
-      "<%# locals: (user:, count: 0) %><%= user %>",
-      "<%# locals: () %><p>empty</p>",
-      "<%= context.capture(() => { %><li>hi</li><% }) %>",
-    ];
-    for (const source of templates) {
+  it("emitted output contains no enum, import =, or namespace", () => {
+    for (const source of Object.values(FIXTURES)) {
       const out = virtualizeTse(source);
       expect(out).not.toMatch(/\benum\s+/);
       expect(out).not.toMatch(/\bimport\s*=/);

@@ -24,6 +24,25 @@ describe("TableTest", () => {
     expect(join).toBeInstanceOf(Nodes.RightOuterJoin);
   });
 
+  describe("createJoin with On constraint", () => {
+    it("should produce LEFT OUTER JOIN … ON SQL", () => {
+      const onClause = new Nodes.On(users.get("id").eq(posts.get("user_id")));
+      const join = users.createJoin(posts, onClause, Nodes.OuterJoin);
+      const mgr = users.project(star);
+      mgr.appendJoinNode(join as Nodes.OuterJoin);
+      const sql = mgr.toSql();
+      expect(sql).toContain("LEFT OUTER JOIN");
+      expect(sql).toContain("ON");
+    });
+
+    it("should accept As nodes in the select list", () => {
+      const mgr = users.project(users.get("id").as("t0_r0"), users.get("name").as("t0_r1"));
+      const sql = mgr.toSql();
+      expect(sql).toContain("AS t0_r0");
+      expect(sql).toContain("AS t0_r1");
+    });
+  });
+
   describe("skip", () => {
     it("should add an offset", () => {
       const mgr = users.project(star);

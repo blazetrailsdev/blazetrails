@@ -918,31 +918,48 @@ function rebindTableReferences(
   fromTableName: string,
   toTable: Table,
 ): Nodes.Node {
+  if (node instanceof Nodes.Attribute) {
+    const rel = node.relation;
+    if (rel instanceof Table && rel.name === fromTableName && !rel.tableAlias) {
+      return toTable.get(node.name);
+    }
+    return node;
+  }
   if (node instanceof Nodes.And) {
     return new Nodes.And(
       node.children.map((c) => rebindTableReferences(c, fromTableName, toTable)),
     );
   }
-  if (node instanceof Nodes.Equality || node instanceof Nodes.NotEqual) {
-    const left = rebindAttr(node.left, fromTableName, toTable);
-    const right = rebindAttr(node.right, fromTableName, toTable);
-    return new (node.constructor as any)(left, right);
+  // Nary nodes (Or) — have children array
+  if ("children" in node && Array.isArray((node as any).children)) {
+    const Ctor = node.constructor as any;
+    if (node instanceof Nodes.And) return node; // already handled above
+    const rebound = (node as any).children.map((c: Nodes.Node) =>
+      rebindTableReferences(c, fromTableName, toTable),
+    );
+    return new Ctor(rebound);
   }
-  if (node instanceof Nodes.In || node instanceof Nodes.NotIn) {
-    const left = rebindAttr(node.left, fromTableName, toTable);
-    return new (node.constructor as any)(left, node.right);
+  // Unary nodes (Grouping, Not, etc.) — have expr
+  if ("expr" in node && (node as any).expr instanceof Nodes.Node) {
+    const Ctor = node.constructor as any;
+    return new Ctor(rebindTableReferences((node as any).expr, fromTableName, toTable));
+  }
+  // Binary nodes (Equality, In, GreaterThan, Matches, etc.) — have left/right
+  if ("left" in node && "right" in node) {
+    const bin = node as any;
+    const left =
+      bin.left instanceof Nodes.Node
+        ? rebindTableReferences(bin.left, fromTableName, toTable)
+        : bin.left;
+    const right =
+      bin.right instanceof Nodes.Node
+        ? rebindTableReferences(bin.right, fromTableName, toTable)
+        : bin.right;
+    if (left === bin.left && right === bin.right) return node;
+    const Ctor = node.constructor as any;
+    return new Ctor(left, right);
   }
   return node;
-}
-
-function rebindAttr(value: unknown, fromTableName: string, toTable: Table): unknown {
-  if (value instanceof Nodes.Attribute) {
-    const rel = value.relation;
-    if (rel instanceof Table && rel.name === fromTableName && !rel.tableAlias) {
-      return toTable.get(value.name);
-    }
-  }
-  return value;
 }
 
 /** @internal */

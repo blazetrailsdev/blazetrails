@@ -1,18 +1,22 @@
-import { SafeBuffer, htmlSafe, camelize } from "@blazetrails/activesupport";
+import { SafeBuffer, htmlSafe } from "@blazetrails/activesupport";
 import { OutputBuffer } from "./buffers.js";
 import type { TemplateLocals, TemplateRegistry } from "./template-registry.js";
 
 /**
  * Options for `render()` with a statically-typed partial name.
  * Mirrors Rails' `render partial:, locals:, collection:, as:, spacer_template:`.
+ * `locals` is required when the registered partial has required properties,
+ * optional when all properties are optional (matching the `.tse` virtualized shim).
  */
 export type PartialOptions<K extends keyof TemplateRegistry> = {
   partial: K;
-  locals?: TemplateLocals<TemplateRegistry[K]>;
   collection?: readonly unknown[];
   as?: string;
   spacerTemplate?: string;
-};
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+} & ({} extends TemplateLocals<TemplateRegistry[K]>
+  ? { locals?: TemplateLocals<TemplateRegistry[K]> }
+  : { locals: TemplateLocals<TemplateRegistry[K]> });
 
 /**
  * Options for `render()` with a dynamic partial name (string, not a literal
@@ -180,10 +184,12 @@ export class TseRenderContextImpl implements TseRenderContext {
     spacerTemplate?: string,
   ): SafeBuffer {
     const buf = new OutputBuffer();
-    const counterName = `${camelize(localName, false)}Counter`;
+    const counterName = `${localName}_counter`;
+    const iterationName = `${localName}_iteration`;
     const spacerLocalName = spacerTemplate !== undefined ? deriveLocalName(spacerTemplate) : "";
+    const total = collection.length;
 
-    for (let i = 0; i < collection.length; i++) {
+    for (let i = 0; i < total; i++) {
       if (i > 0 && spacerTemplate !== undefined) {
         buf.safeAppend(this._renderPartial(spacerTemplate, spacerLocalName, {}).toString());
       }
@@ -191,6 +197,7 @@ export class TseRenderContextImpl implements TseRenderContext {
         ...extraLocals,
         [localName]: collection[i],
         [counterName]: i,
+        [iterationName]: { index: i, size: total, first: i === 0, last: i === total - 1 },
       };
       buf.safeAppend(this._renderPartial(partial, localName, locals).toString());
     }

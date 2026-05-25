@@ -202,22 +202,30 @@ describe("TseRenderContextImpl", () => {
       expect(spy.calls[1].locals).toEqual({});
     });
 
-    it("collection: calls _renderPartial per element with element + camelCase counter", () => {
+    it("collection: calls _renderPartial per element with element, counter, and iteration", () => {
       spy.render({ partial: "users/user", collection: ["Alice", "Bob"] });
       expect(spy.calls).toHaveLength(2);
-      expect(spy.calls[0].locals).toMatchObject({ user: "Alice", userCounter: 0 });
-      expect(spy.calls[1].locals).toMatchObject({ user: "Bob", userCounter: 1 });
+      expect(spy.calls[0].locals).toMatchObject({
+        user: "Alice",
+        user_counter: 0,
+        user_iteration: { index: 0, first: true, last: false },
+      });
+      expect(spy.calls[1].locals).toMatchObject({
+        user: "Bob",
+        user_counter: 1,
+        user_iteration: { index: 1, first: false, last: true },
+      });
     });
 
     it("collection: as: overrides local name and counter key", () => {
       spy.render({ partial: "shared/item", collection: ["x"], as: "entry" });
-      expect(spy.calls[0].locals).toMatchObject({ entry: "x", entryCounter: 0 });
+      expect(spy.calls[0].locals).toMatchObject({ entry: "x", entry_counter: 0 });
     });
 
     it("collection: merges extra locals; strips _prefix and extension from localName", () => {
       spy.render({ partial: "shared/_form.html", collection: [{}], locals: { role: "admin" } });
       expect(spy.calls[0].localName).toBe("form");
-      expect(spy.calls[0].locals).toMatchObject({ role: "admin", form: {}, formCounter: 0 });
+      expect(spy.calls[0].locals).toMatchObject({ role: "admin", form: {}, form_counter: 0 });
     });
 
     it("collection: empty → no calls, returns empty SafeBuffer", () => {

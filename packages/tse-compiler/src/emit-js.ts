@@ -19,6 +19,12 @@ export interface EmitResult {
   typesAnnotation: string | null;
 }
 
+/**
+ * Compile a `.tse` template source to an ES module. The generated
+ * `render(context, locals)` function requires `context` to implement
+ * `TseRenderContext` from `@blazetrails/actionview` (provides `outputBuffer`
+ * and `capture`).
+ */
 export function compileJs(source: string, options: EmitJsOptions = {}): EmitResult {
   const ast = parse(source);
   return {
@@ -31,7 +37,7 @@ export function compileJs(source: string, options: EmitJsOptions = {}): EmitResu
 /** Matches `<% } %>` / `<% }) %>` closers that can terminate an open blockExpr. */
 const BLOCK_CLOSE_RE = /^\s*\}\s*\)?\s*;?\s*$/;
 
-/** Arrow-function blockExpr: `(x) => {` or `=> {`. Function form (`function(x) {`) does NOT match. */
+/** Arrow-function blockExpr: `(x) => {` or `() => {`. Function form (`function(x) {`) does NOT match. */
 const ARROW_BLOCK_RE = /=>\s*\{\s*$/;
 
 /** Net change in `{}`-brace depth for a code tag value. Counts `{` as +1 and

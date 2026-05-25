@@ -160,6 +160,7 @@ describe("buildViews", () => {
     expect(shim).toContain("render<K extends keyof TemplateRegistry>");
     expect(shim).toContain("partial: K;");
     expect(shim).toContain("locals?: TemplateLocals<TemplateRegistry[K]>");
+    expect(shim).toContain("partial: Exclude<string, keyof TemplateRegistry>");
   });
 });
 

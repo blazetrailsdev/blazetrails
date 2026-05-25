@@ -1,6 +1,6 @@
 /**
  * Open interface — augment via `declare module "@blazetrails/actionview"`
- * to register partial-name → locals-type mappings. `trails-tsc build`
+ * to register partial-name → locals-type mappings. `trails-tsc-views build`
  * writes the augmentation automatically.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type

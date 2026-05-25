@@ -226,7 +226,7 @@ const PREAMBLE = [
   "    partial: K;",
   "    locals?: TemplateLocals<TemplateRegistry[K]>;",
   "  }): SafeString;",
-  "  render(options: { partial: string; locals?: Record<string, unknown> }): SafeString;",
+  "  render(options: { partial: Exclude<string, keyof TemplateRegistry>; locals?: Record<string, unknown> }): SafeString;",
   "  [key: string]: unknown;",
   "}",
   "",

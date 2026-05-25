@@ -77,7 +77,7 @@ export function tokenize(source: string): Token[] {
       tokens.push({ kind, value: m[4], trimLeft, trimRight, srcLine: line(m.index) });
       if (trimRight) last += (/^[ \t]*\r?\n/.exec(source.slice(last))?.[0] ?? "").length;
     }
-    bufStartOffset = last;
+    if (buf.length === 0) bufStartOffset = last;
   }
   buf += source.slice(last);
   flush();

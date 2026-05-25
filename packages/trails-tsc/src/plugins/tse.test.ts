@@ -179,8 +179,7 @@ describe("virtualizeTse", () => {
   });
 
   it("wraps named locals type in NoExtraKeys so variable-typed excess keys are rejected", () => {
-    // Normal TS excess-property check only fires on inline object literals.
-    // NoExtraKeys<T> rejects excess keys even for pre-built variables.
+    // Without NoExtraKeys, a pre-built variable with excess keys would pass tsc.
     const out = virtualizeTse("<%# locals: (count:) %><%= count %>");
     expect(out).toContain("locals: NoExtraKeys<{ count: unknown }>");
     // Variable with excess key — without NoExtraKeys this would pass tsc.

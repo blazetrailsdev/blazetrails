@@ -12,12 +12,7 @@ export interface EmitJsOptions {
   preamble?: string;
   /** Injected immediately before `return _ob` — Rails `:postamble` analogue. */
   postamble?: string;
-  /**
-   * When true, emit a runtime strict-locals check that throws
-   * `StrictLocalsMismatch` if `locals` contains keys not declared in the
-   * `<%# locals: () %>` magic comment.
-   * Default: true when a `locals:` signature is present.
-   */
+  /** Default true when a `locals:` signature is present. */
   raiseOnStrictLocalsMismatch?: boolean;
 }
 

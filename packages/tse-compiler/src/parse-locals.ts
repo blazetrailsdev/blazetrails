@@ -25,12 +25,6 @@ function isUsableLocalName(name: string): boolean {
   return !RESERVED_NAMES.has(name);
 }
 
-/**
- * Parse the content of a `<%# locals: (...) %>` magic comment body.
- * `sig` is the raw string inside the outer parens — e.g. `"user:, count: 0"`.
- * Returns an empty array for `**nil` / empty body.
- * Throws `LocalsSignatureError` on malformed input.
- */
 export function parseLocalsSignature(sig: string): LocalEntry[] {
   if (sig === "**nil" || sig.trim() === "") return [];
   const CLOSERS: Record<string, string> = { "(": ")", "[": "]", "{": "}" };

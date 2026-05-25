@@ -16,9 +16,8 @@ import {
 } from "@blazetrails/tse-compiler";
 import type { LineDelta, TscPlugin, VirtualizeOutput } from "../plugin.js";
 
-// Re-export for consumers that import from this module.
 export { parseLocalsSignature };
-// Backward-compat alias for the error class.
+// TseLocalsSignatureError is the name this module previously used.
 export { LocalsSignatureError as TseLocalsSignatureError };
 
 export function localsParamType(ast: TseAst, locals: LocalEntry[]): string {
@@ -108,9 +107,7 @@ function emitNode(node: TseAst["nodes"][number]): string {
 const PREAMBLE = [
   "/* virtualized from .tse — phase 2b trails-tsc plugin */",
   'import type { TemplateRegistry, TemplateLocals } from "@blazetrails/actionview";',
-  // NoExtraKeys<T>: rejects excess keys even for variable-typed arguments.
-  // TS excess-property checks only fire on object literals; this mapped type
-  // closes that gap by making every non-declared key map to `never`.
+  // Closes the TS excess-property check gap for variable-typed arguments.
   "type NoExtraKeys<T> = T & { [K in Exclude<string, keyof T>]?: never };",
   "interface SafeString { readonly __safeStringBrand: unique symbol }",
   "interface OutputBuffer extends SafeString {",

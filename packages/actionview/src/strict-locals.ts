@@ -1,29 +1,7 @@
-/**
- * Strict-locals type helper and runtime error.
- * Mirrors Rails `ActionView::Template::StrictLocalsError` (raised when the
- * compiled template receives keys not declared in `<%# locals: (...) %>`).
- */
-
-/**
- * Makes a type exact: excess keys beyond those declared in `T` map to `never`,
- * so TypeScript rejects objects with undeclared keys even when passed as
- * variables (not just inline object literals, where the normal excess-property
- * check fires automatically).
- *
- * @example
- * type Locals = NoExtraKeys<{ count: number }>;
- * const l = { count: 1, extra: 2 };
- * render({ partial: "…", locals: l }); // TS error: extra not in declared locals
- */
+/** Rejects excess keys even for variable-typed arguments (closes the TS excess-property check gap). */
 export type NoExtraKeys<T> = T & { [K in Exclude<string, keyof T>]?: never };
 
-/**
- * Thrown at runtime by a compiled `.tse` module when `locals` contains keys
- * that were not declared in the `<%# locals: (...) %>` magic comment and
- * `raiseOnStrictLocalsMismatch` is enabled (default: true in development).
- *
- * Rails analogue: `ActionView::Template::StrictLocalsError`.
- */
+/** Mirrors Rails `ActionView::Template::StrictLocalsError`. */
 export class StrictLocalsMismatch extends Error {
   readonly extraKeys: readonly string[];
   readonly allowedKeys: readonly string[];

@@ -80,6 +80,18 @@ describe("compileJs", () => {
     expect(lines.filter((l) => l === "  })));")).toHaveLength(1);
   });
 
+  it("closes correctly when the blockExpr has no wrapping helper call (zero callExpr parens)", () => {
+    // `(x) => {` leaves 0 unclosed parens in callExpr, so only 2 emitter-owned
+    // parens need closing (bufRef.append + context.capture), not 3.
+    const src = "<%= (x) => { %><span><%= x %></span><% } %>";
+    const { code } = compileJs(src);
+    const lines = code.split("\n");
+    expect(lines).toContain("  _ob.append((x) =>");
+    expect(lines).toContain("  context.capture(() => {");
+    // Closer `}` has 0 existing `)`, so suffix = "));" → "}))" → "}));"
+    expect(lines).toContain("  }));");
+  });
+
   it("throws a clear error for function-form blockExpr (arrow syntax required)", () => {
     // function(x) { cannot be capture-wrapped correctly — the closer only closes
     // context.capture(() => {, leaving the function body { unclosed (invalid JS).

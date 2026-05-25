@@ -45,6 +45,18 @@ function netBraceDepth(code: string): number {
   return depth;
 }
 
+/** Net unclosed `(` parens in `code`. Used to compute how many `)` the close
+ * tag must supply beyond the two emitter-owned parens (`bufRef.append(` and
+ * `context.capture(`). */
+function netUnclosedParens(code: string): number {
+  let depth = 0;
+  for (const ch of code) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+  }
+  return Math.max(0, depth);
+}
+
 function emit(ast: TseAst, options: EmitJsOptions): string {
   const exprAppend = options.escapeIgnore === true ? "safeExprAppend" : "append";
   const lines = [
@@ -54,6 +66,8 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
   if (options.preamble) lines.push("  " + options.preamble);
   // Stack: one entry per open blockExpr, tracking net unclosed `{` inside it.
   const innerDepths: number[] = [];
+  // Parallel stack: unclosed `(` parens left open by each blockExpr's callExpr.
+  const innerCallExprParens: number[] = [];
   for (const node of ast.nodes) {
     const insideBlock = innerDepths.length > 0;
     const bufRef = insideBlock ? "context.outputBuffer" : "_ob";
@@ -70,18 +84,20 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
       // Strip trailing `{` so the helper call ends with `=>` for the capture wrapper.
       const callExpr = trimmed.replace(/\s*\{\s*$/, "").trimEnd();
       innerDepths.push(0);
+      innerCallExprParens.push(netUnclosedParens(callExpr));
       lines.push(`  ${bufRef}.${exprAppend}(${callExpr}`);
       lines.push("  context.capture(() => {");
     } else if (node.kind === "code" && insideBlock) {
       const innerDepth = innerDepths[innerDepths.length - 1]!;
       if (BLOCK_CLOSE_RE.test(node.value) && innerDepth === 0) {
         innerDepths.pop();
+        const callExprParens = innerCallExprParens.pop()!;
         const t = node.value.trim();
         const tClean = t.endsWith(";") ? t.slice(0, -1) : t;
-        // Close: context.capture(, helper(, and bufRef.exprAppend( — 3 total.
-        // Template's closer may already contain `)` characters (e.g. `})`).
+        // 2 emitter-owned parens (bufRef.append + context.capture) plus whatever
+        // the callExpr left open, minus any `)` already in the template's closer.
         const closingParensInT = (tClean.match(/\)/g) ?? []).length;
-        const suffix = ")".repeat(Math.max(0, 3 - closingParensInT)) + ";";
+        const suffix = ")".repeat(Math.max(0, 2 + callExprParens - closingParensInT)) + ";";
         lines.push(`  ${tClean}${suffix}`);
       } else {
         innerDepths[innerDepths.length - 1]! += netBraceDepth(node.value);

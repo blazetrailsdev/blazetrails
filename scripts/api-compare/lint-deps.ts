@@ -295,7 +295,12 @@ function analyzeTsDepUsage(
         refs,
       );
       const existing = methodMap.get(name);
-      if (existing === undefined || uses) methodMap.set(name, { uses, refs });
+      if (existing === undefined) {
+        methodMap.set(name, { uses, refs });
+      } else {
+        existing.uses = existing.uses || uses;
+        for (const r of refs) existing.refs.add(r);
+      }
     });
     if (methodMap.size > 0) result.set(relPath, methodMap);
   }
@@ -448,7 +453,6 @@ export function methodUsesDepImport(
                   sym.flags & ts.SymbolFlags.Alias ? transitive.checker.getAliasedSymbol(sym) : sym;
                 if (transitive.taintedSymbols.has(resolved)) {
                   found = true;
-                  collectRefs?.add(resolved.name);
                   if (!collectRefs) return;
                 }
               }
@@ -626,7 +630,7 @@ function crossReference(rubyMethods: RubyDepMethod[], tsDepMap: TsDepMap): Cross
     if (info.uses || implementsProtocol) {
       compliant.push(entry);
 
-      if (rm.depRefs.length > 0) {
+      if (rm.depRefs.length > 0 && info.refs.size > 0) {
         const rubyNormalized = rm.depRefs
           .map(normalizeRubyRef)
           .filter((r): r is string => r !== null);

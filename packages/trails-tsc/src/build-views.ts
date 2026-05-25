@@ -15,8 +15,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import ts from "typescript";
-import { compileJs, parse } from "@blazetrails/tse-compiler";
-import { virtualizeTse, parseLocalsSignature, localsParamType } from "./plugins/tse.js";
+import { compileJs, parse, generateSourceMap, type LineMapping } from "@blazetrails/tse-compiler";
+import { virtualizeTseWithDeltas, parseLocalsSignature, localsParamType } from "./plugins/tse.js";
 
 export interface BuildViewsOptions {
   cwd?: string;
@@ -78,13 +78,24 @@ export function buildViews(opts: BuildViewsOptions = {}): BuildViewsResult {
   const shimPaths: string[] = [];
   for (const rel of files) {
     const src = fs.readFileSync(path.join(viewsDir, rel), "utf8");
-    const shim = virtualizeTse(src);
+    const { ts: shim, deltas } = virtualizeTseWithDeltas(src);
     const jsFileName = rel + ".js";
-    const sourceFileName = path.basename(rel);
+    const srcAbsPath = path.join(viewsDir, rel);
+    const mapAbsDir = path.dirname(path.join(outViews, rel));
+    const sourceFileName = path.relative(mapAbsDir, srcAbsPath).split(path.sep).join("/");
     const result = compileJs(src, { fileName: jsFileName, sourceFileName });
     const outBase = path.join(outViews, rel);
     fs.mkdirSync(path.dirname(outBase), { recursive: true });
-    fs.writeFileSync(outBase + ".ts", shim);
+    const shimWithUrl = shim + `//# sourceMappingURL=${path.basename(rel)}.ts.map\n`;
+    fs.writeFileSync(outBase + ".ts", shimWithUrl);
+    const shimMap = deltasToSourceMap(
+      path.basename(rel) + ".ts",
+      sourceFileName,
+      src,
+      shim,
+      deltas,
+    );
+    fs.writeFileSync(outBase + ".ts.map", JSON.stringify(shimMap));
     const jsCode = result.sourceMap
       ? result.code + `//# sourceMappingURL=${path.basename(rel)}.js.map\n`
       : result.code;
@@ -184,6 +195,32 @@ function emitRegistryAugmentation(entries: Array<{ key: string; localsType: stri
   }
   lines.push("  }", "}", "");
   return lines.join("\n");
+}
+
+function deltasToSourceMap(
+  file: string,
+  sourceFile: string,
+  sourceContent: string,
+  shimText: string,
+  deltas: readonly import("./plugin.js").LineDelta[],
+): import("@blazetrails/tse-compiler").RawSourceMap {
+  const totalLines = shimText.split("\n").length;
+  const mappings: LineMapping[] = [];
+  for (let vLine = 0; vLine < totalLines; vLine++) {
+    let srcLine: number | null = vLine;
+    for (let i = deltas.length - 1; i >= 0; i--) {
+      const d = deltas[i]!;
+      const injStart = d.insertedAtLine;
+      const injEnd = d.insertedAtLine + d.lineCount;
+      if (srcLine > injEnd) srcLine -= d.lineCount;
+      else if (srcLine > injStart && srcLine <= injEnd) {
+        srcLine = null;
+        break;
+      }
+    }
+    if (srcLine !== null) mappings.push({ genLine: vLine, srcLine });
+  }
+  return generateSourceMap(file, sourceFile, sourceContent, mappings);
 }
 
 function emitDeclarations(shimPaths: readonly string[]): void {

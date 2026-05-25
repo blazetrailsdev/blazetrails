@@ -26,12 +26,21 @@ export class TseSyntaxError extends Error {}
 const TAG_RE = /<%%|%%>|<%!([\s\S]*?)!%>|<%(-)?(==|=|#)?([\s\S]*?)(-)?%>/g;
 const KIND: Record<string, TokenKind> = { "=": "expr", "==": "rawExpr", "#": "comment" };
 
-function lineAt(source: string, offset: number): number {
-  let n = 0;
-  for (let i = 0; i < offset; i++) {
-    if (source.charCodeAt(i) === 10) n++;
+function buildLineIndex(source: string): (offset: number) => number {
+  const lineStarts = [0];
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
   }
-  return n;
+  return (offset: number): number => {
+    let lo = 0;
+    let hi = lineStarts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >>> 1;
+      if (lineStarts[mid]! <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
 }
 
 const text = (value: string, srcLine: number): Token => ({
@@ -44,11 +53,12 @@ const text = (value: string, srcLine: number): Token => ({
 
 export function tokenize(source: string): Token[] {
   const tokens: Token[] = [];
+  const lineAt = buildLineIndex(source);
   let buf = "";
   let last = 0;
   let bufStartOffset = 0;
   const flush = (): void => {
-    if (buf.length > 0) tokens.push(text(buf, lineAt(source, bufStartOffset)));
+    if (buf.length > 0) tokens.push(text(buf, lineAt(bufStartOffset)));
     buf = "";
   };
 
@@ -65,7 +75,7 @@ export function tokenize(source: string): Token[] {
         value: m[1],
         trimLeft: false,
         trimRight: false,
-        srcLine: lineAt(source, m.index),
+        srcLine: lineAt(m.index),
       });
     } else {
       const trimLeft = m[2] === "-";
@@ -75,7 +85,7 @@ export function tokenize(source: string): Token[] {
       const baseKind = KIND[m[3] ?? ""] ?? "code";
       const kind: TokenKind =
         baseKind === "expr" && BLOCK_EXPR_RE.test(m[4] ?? "") ? "blockExpr" : baseKind;
-      tokens.push({ kind, value: m[4], trimLeft, trimRight, srcLine: lineAt(source, m.index) });
+      tokens.push({ kind, value: m[4], trimLeft, trimRight, srcLine: lineAt(m.index) });
       if (trimRight) last += (/^[ \t]*\r?\n/.exec(source.slice(last))?.[0] ?? "").length;
     }
     bufStartOffset = last;

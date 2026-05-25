@@ -40,16 +40,14 @@ export function generateSourceMap(
   const lineSegments: string[] = [];
   let prevGenLine = 0;
   let prevSrcLine = 0;
-  let prevSrcIdx = 0;
 
   for (const m of sorted) {
     while (prevGenLine < m.genLine) {
       lineSegments.push("");
       prevGenLine++;
     }
-    const seg =
-      encodeVlq(0) + encodeVlq(0 - prevSrcIdx) + encodeVlq(m.srcLine - prevSrcLine) + encodeVlq(0);
-    prevSrcIdx = 0;
+    // Segment: col 0, source index 0 (delta), source line (delta), source col 0
+    const seg = encodeVlq(0) + encodeVlq(0) + encodeVlq(m.srcLine - prevSrcLine) + encodeVlq(0);
     prevSrcLine = m.srcLine;
     lineSegments.push(seg);
     prevGenLine++;

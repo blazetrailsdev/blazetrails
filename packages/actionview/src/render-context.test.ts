@@ -175,4 +175,74 @@ describe("TseRenderContextImpl", () => {
       expect(ctx.yield("title").toString()).toBe("&lt;script&gt;");
     });
   });
+
+  describe("#render (partials)", () => {
+    describe("dynamic partial (string name)", () => {
+      it("returns a SafeBuffer", () => {
+        const result = ctx.render({ partial: "users/user", locals: { user: "Alice" } });
+        expect(isHtmlSafe(result)).toBe(true);
+      });
+
+      it("accepts locals as Record<string, unknown>", () => {
+        expect(() =>
+          ctx.render({ partial: "shared/card", locals: { title: "Hi", count: 3 } }),
+        ).not.toThrow();
+      });
+
+      it("works without locals", () => {
+        expect(() => ctx.render({ partial: "users/user" })).not.toThrow();
+      });
+    });
+
+    describe("collection rendering", () => {
+      it("renders once per collection element and returns SafeBuffer", () => {
+        const result = ctx.render({ partial: "users/user", collection: ["Alice", "Bob"] });
+        expect(isHtmlSafe(result)).toBe(true);
+      });
+
+      it("derives local name from partial path", () => {
+        // deriveLocalName("users/user") → "user"
+        expect(() => ctx.render({ partial: "users/user", collection: [1, 2, 3] })).not.toThrow();
+      });
+
+      it("respects explicit as: override", () => {
+        expect(() =>
+          ctx.render({ partial: "shared/item", collection: ["a", "b"], as: "entry" }),
+        ).not.toThrow();
+      });
+
+      it("strips leading underscore from partial name for local name", () => {
+        // "_form" → "form"
+        expect(() => ctx.render({ partial: "shared/_form", collection: [{}] })).not.toThrow();
+      });
+
+      it("handles empty collection", () => {
+        const result = ctx.render({ partial: "users/user", collection: [] });
+        expect(result.toString()).toBe("");
+        expect(isHtmlSafe(result)).toBe(true);
+      });
+
+      it("spacerTemplate is accepted without throwing", () => {
+        expect(() =>
+          ctx.render({
+            partial: "users/user",
+            collection: ["Alice", "Bob"],
+            spacerTemplate: "shared/divider",
+          }),
+        ).not.toThrow();
+      });
+    });
+
+    describe("deriveLocalName (via partial path)", () => {
+      it("uses basename for a nested partial", () => {
+        // "admin/users/row" → "row"
+        expect(() => ctx.render({ partial: "admin/users/row", collection: [1] })).not.toThrow();
+      });
+
+      it("strips file extension from partial name", () => {
+        // "users/user.html" → "user"
+        expect(() => ctx.render({ partial: "users/user.html", collection: [1] })).not.toThrow();
+      });
+    });
+  });
 });

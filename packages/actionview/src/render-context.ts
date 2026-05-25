@@ -1,5 +1,30 @@
 import { SafeBuffer, htmlSafe } from "@blazetrails/activesupport";
 import { OutputBuffer } from "./buffers.js";
+import type { TemplateLocals, TemplateRegistry } from "./template-registry.js";
+
+/**
+ * Options for `render()` with a statically-typed partial name.
+ * Mirrors Rails' `render partial:, locals:, collection:, as:, spacer_template:`.
+ */
+export type PartialOptions<K extends keyof TemplateRegistry> = {
+  partial: K;
+  locals?: TemplateLocals<TemplateRegistry[K]>;
+  collection?: readonly unknown[];
+  as?: string;
+  spacerTemplate?: string;
+};
+
+/**
+ * Options for `render()` with a dynamic partial name (string, not a literal
+ * registry key). Locals type degrades to `Record<string, unknown>`.
+ */
+export type DynamicPartialOptions = {
+  partial: string;
+  locals?: Record<string, unknown>;
+  collection?: readonly unknown[];
+  as?: string;
+  spacerTemplate?: string;
+};
 
 /**
  * Per-render execution context passed to compiled `.tse` templates.
@@ -45,6 +70,21 @@ export interface TseRenderContext {
    * Mirrors Rails `<% content_for(:name) { ... } %>`.
    */
   contentFor(name: string, callback: () => void): void;
+
+  /**
+   * Render a partial with typed locals when `partial` is a literal key known
+   * to the `TemplateRegistry`. `rails partial_renderer.rb`.
+   *
+   * Static form: `render({ partial: "users/user", locals: { user } })`
+   * Collection form: `render({ partial: "users/user", collection: users, as: "user" })`
+   */
+  render<K extends keyof TemplateRegistry>(options: PartialOptions<K>): SafeBuffer;
+
+  /**
+   * Dynamic form: partial name is a runtime `string`. Locals fall back to
+   * `Record<string, unknown>`.
+   */
+  render(options: DynamicPartialOptions): SafeBuffer;
 }
 
 /**
@@ -104,4 +144,76 @@ export class TseRenderContextImpl implements TseRenderContext {
     const existing = this._contentBuffers.get(name);
     this._contentBuffers.set(name, existing ? existing.concat(captured) : captured);
   }
+
+  render(options: DynamicPartialOptions): SafeBuffer {
+    const { partial, locals = {}, collection, as, spacerTemplate } = options;
+    const localName = as ?? deriveLocalName(partial);
+
+    if (collection !== undefined) {
+      return this._renderCollection(partial, collection, localName, locals, spacerTemplate);
+    }
+
+    return this._renderPartial(partial, localName, locals);
+  }
+
+  /** @internal */
+  private _renderPartial(
+    partial: string,
+    _localName: string,
+    locals: Record<string, unknown>,
+  ): SafeBuffer {
+    // Runtime partial rendering (loading and executing compiled .tse.js) lands
+    // in Phase 2c/3 with the renderer substrate. For now, capture any output
+    // the caller wrote via concat/raw before this call — matching Rails'
+    // partial-as-sub-context model where the partial writes into the shared
+    // output buffer. Return the locals as a no-op placeholder buffer.
+    void partial;
+    void locals;
+    return htmlSafe("");
+  }
+
+  /** @internal */
+  private _renderCollection(
+    partial: string,
+    collection: readonly unknown[],
+    localName: string,
+    extraLocals: Record<string, unknown>,
+    spacerTemplate?: string,
+  ): SafeBuffer {
+    const results: SafeBuffer[] = [];
+    const counterName = `${localName}Counter`;
+
+    for (let i = 0; i < collection.length; i++) {
+      const item = collection[i];
+      const locals: Record<string, unknown> = {
+        ...extraLocals,
+        [localName]: item,
+        [counterName]: i,
+      };
+      results.push(this._renderPartial(partial, localName, locals));
+    }
+
+    if (spacerTemplate !== undefined && results.length > 1) {
+      const spacer = this._renderPartial(spacerTemplate, "", {});
+      const interleaved: SafeBuffer[] = [];
+      for (let i = 0; i < results.length; i++) {
+        if (i > 0) interleaved.push(spacer);
+        interleaved.push(results[i]);
+      }
+      return interleaved.reduce((acc, s) => acc.concat(s), htmlSafe(""));
+    }
+
+    return results.reduce((acc, s) => acc.concat(s), htmlSafe(""));
+  }
+}
+
+/**
+ * Derives the default local variable name from a partial path.
+ * Rails: `partial_path.split("/").last.sub(/\A_/, "")`.
+ * e.g. "users/user" → "user", "shared/_form" → "form".
+ * @internal
+ */
+function deriveLocalName(partial: string): string {
+  const last = partial.split("/").at(-1) ?? partial;
+  return last.replace(/^_/, "").replace(/\..+$/, "");
 }

@@ -24,8 +24,10 @@ export function compileJs(source: string, options: EmitJsOptions = {}): EmitResu
   };
 }
 
-/** Matches `<% } %>` / `<% }) %>` closers that terminate an open blockExpr. */
+/** Matches `<% } %>` / `<% }) %>` closers that can terminate an open blockExpr. */
 const BLOCK_CLOSE_RE = /^\s*\}\s*\)?\s*;?\s*$/;
+/** Matches code tags that open a nested brace inside a blockExpr body. */
+const INNER_OPEN_RE = /\{\s*$/;
 
 function emit(ast: TseAst, options: EmitJsOptions): string {
   const exprAppend = options.escapeIgnore === true ? "safeExprAppend" : "append";
@@ -33,15 +35,23 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
     "export default function render(context, locals) {",
     "  const _ob = context.outputBuffer;",
   ];
-  let blockDepth = 0;
+  // Stack: one entry per open blockExpr, tracking unclosed code `{` inside it.
+  const innerDepths: number[] = [];
   for (const node of ast.nodes) {
     if (node.kind === "blockExpr") {
-      blockDepth++;
+      innerDepths.push(0);
       lines.push(`  _ob.${exprAppend}(${node.value.trim()}`);
-    } else if (node.kind === "code" && blockDepth > 0 && BLOCK_CLOSE_RE.test(node.value)) {
-      blockDepth--;
-      const t = node.value.trim();
-      lines.push(`  ${t.endsWith(";") ? t.slice(0, -1) : t});`);
+    } else if (node.kind === "code" && innerDepths.length > 0) {
+      const innerDepth = innerDepths[innerDepths.length - 1]!;
+      if (BLOCK_CLOSE_RE.test(node.value) && innerDepth === 0) {
+        innerDepths.pop();
+        const t = node.value.trim();
+        lines.push(`  ${t.endsWith(";") ? t.slice(0, -1) : t});`);
+      } else {
+        if (INNER_OPEN_RE.test(node.value)) innerDepths[innerDepths.length - 1]!++;
+        else if (BLOCK_CLOSE_RE.test(node.value)) innerDepths[innerDepths.length - 1]!--;
+        lines.push("  " + emitNode(node, exprAppend));
+      }
     } else {
       lines.push("  " + emitNode(node, exprAppend));
     }

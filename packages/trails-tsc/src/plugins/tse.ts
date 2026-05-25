@@ -153,18 +153,27 @@ function destructureLines(locals: LocalEntry[]): string[] {
 }
 
 const BLOCK_CLOSE_RE = /^\s*\}\s*\)?\s*;?\s*$/;
+const INNER_OPEN_RE = /\{\s*$/;
 
 function emitNodes(nodes: TseAst["nodes"]): string[] {
   const lines: string[] = [];
-  let blockDepth = 0;
+  // Stack: one entry per open blockExpr, tracking unclosed code `{` inside it.
+  const innerDepths: number[] = [];
   for (const node of nodes) {
     if (node.kind === "blockExpr") {
-      blockDepth++;
+      innerDepths.push(0);
       lines.push(`  _ob.append(${node.value.trim()}`);
-    } else if (node.kind === "code" && blockDepth > 0 && BLOCK_CLOSE_RE.test(node.value)) {
-      blockDepth--;
-      const t = node.value.trim();
-      lines.push(`  ${t.endsWith(";") ? t.slice(0, -1) : t});`);
+    } else if (node.kind === "code" && innerDepths.length > 0) {
+      const innerDepth = innerDepths[innerDepths.length - 1]!;
+      if (BLOCK_CLOSE_RE.test(node.value) && innerDepth === 0) {
+        innerDepths.pop();
+        const t = node.value.trim();
+        lines.push(`  ${t.endsWith(";") ? t.slice(0, -1) : t});`);
+      } else {
+        if (INNER_OPEN_RE.test(node.value)) innerDepths[innerDepths.length - 1]!++;
+        else if (BLOCK_CLOSE_RE.test(node.value)) innerDepths[innerDepths.length - 1]!--;
+        lines.push(emitNode(node));
+      }
     } else {
       lines.push(emitNode(node));
     }

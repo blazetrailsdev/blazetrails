@@ -55,6 +55,18 @@ describe("compileJs", () => {
     expect(lines.filter((l) => l === "  }));")).toHaveLength(2);
   });
 
+  it("does not close blockExpr on inner code braces", () => {
+    // `<% if (x) { %>...<% } %>` inside a blockExpr body must not consume the
+    // blockExpr closer — the inner `}` increments/decrements innerDepth only.
+    const src = "<%= forEach(items, (item) => { %><% if (x) { %><%= item %><% } %><% }) %>";
+    const { code } = compileJs(src);
+    const lines = code.split("\n");
+    expect(lines).toContain("  _ob.append(forEach(items, (item) => {");
+    expect(lines.some((l) => l.includes("if (x) {"))).toBe(true);
+    expect(lines).toContain("  }));");
+    expect(lines.filter((l) => l === "  }));")).toHaveLength(1);
+  });
+
   it("respects escapeIgnore for block-expr", () => {
     const src = "<%= fn((x) => { %><% }) %>";
     const { code } = compileJs(src, { escapeIgnore: true });

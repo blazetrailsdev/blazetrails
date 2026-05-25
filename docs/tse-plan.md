@@ -1138,14 +1138,14 @@ each phase has a fidelity bar to hit.
 
 ### Package ownership per phase
 
-| Phase | Status                    | New package or file?                                                  | Owning package             | Depends on              |
-| ----- | ------------------------- | --------------------------------------------------------------------- | -------------------------- | ----------------------- |
-| 0a    | closed (#1943)            | extract trails-tsc                                                    | `@blazetrails/trails-tsc`  | activerecord (existing) |
-| 0b    | closed (#1941 + existing) | SafeString / OutputBuffer                                             | activesupport / actionview | —                       |
-| 2a-0  | closed (#2190)            | **new** `@blazetrails/tse-compiler` (lexer, AST, JS/TS/d.ts emitters) | `tse-compiler`             | activesupport           |
-| 2a-1  | closed (#2200)            | `Tse` handler class                                                   | `actionview`               | tse-compiler            |
-| 2b    | closed (#2201)            | `tse` plugin (file I/O + manifest writes)                             | `trails-tsc`               | tse-compiler            |
-| 2c    | closed (#2222, #2223, #2232) | build CLI + watch + TS language service plugin                     | `trails-tsc`               | tse-compiler            |
+| Phase | Status                       | New package or file?                                                  | Owning package             | Depends on              |
+| ----- | ---------------------------- | --------------------------------------------------------------------- | -------------------------- | ----------------------- |
+| 0a    | closed (#1943)               | extract trails-tsc                                                    | `@blazetrails/trails-tsc`  | activerecord (existing) |
+| 0b    | closed (#1941 + existing)    | SafeString / OutputBuffer                                             | activesupport / actionview | —                       |
+| 2a-0  | closed (#2190)               | **new** `@blazetrails/tse-compiler` (lexer, AST, JS/TS/d.ts emitters) | `tse-compiler`             | activesupport           |
+| 2a-1  | closed (#2200)               | `Tse` handler class                                                   | `actionview`               | tse-compiler            |
+| 2b    | closed (#2201)               | `tse` plugin (file I/O + manifest writes)                             | `trails-tsc`               | tse-compiler            |
+| 2c    | closed (#2222, #2223, #2232) | build CLI + watch + TS language service plugin                        | `trails-tsc`               | tse-compiler            |
 
 All infrastructure phases are complete. Remaining work is fidelity
 stories (§5) and packaging (§5, stories 5.9–5.13).
@@ -1165,15 +1165,15 @@ A story is mergeable when:
 
 ### Completed stories
 
-| Story | Title | PR |
-| ----- | ----- | -- |
-| 5.1 | Handler: annotate-rendered-view-with-filenames | #2366 |
-| 5.2 | Compiler: BLOCK_EXPR no-paren-wrap | #2364 |
-| 5.3 | Strict locals: emit + enforce signature | #2368 |
-| 5.4 | OutputBuffer: Rails-faithful shape + method names | #2363 |
-| 5.6 | RenderContext: capture / concat / raw + block-form helpers | #2367 |
-| 5.7 | Layouts and yield | #2369 |
-| 5.12 | TemplateRegistry augmentation + typed render overload | #2365 |
+| Story | Title                                                      | PR    |
+| ----- | ---------------------------------------------------------- | ----- |
+| 5.1   | Handler: annotate-rendered-view-with-filenames             | #2366 |
+| 5.2   | Compiler: BLOCK_EXPR no-paren-wrap                         | #2364 |
+| 5.3   | Strict locals: emit + enforce signature                    | #2368 |
+| 5.4   | OutputBuffer: Rails-faithful shape + method names          | #2363 |
+| 5.6   | RenderContext: capture / concat / raw + block-form helpers | #2367 |
+| 5.7   | Layouts and yield                                          | #2369 |
+| 5.12  | TemplateRegistry augmentation + typed render overload      | #2365 |
 
 ---
 
@@ -1275,13 +1275,15 @@ independent, no file overlap — bundled to hit the PR ceiling.
 ### Post-merge follow-ups (from findings)
 
 **From #2365 (Story 5.12 — TemplateRegistry):**
+
 - ~50 LOC: semantic diagnosis tests for the render conditional generic
   (required locals for known partials, optional when `{} extends
-  LocalsType`, wrong-shape rejection) — currently string-match only.
+LocalsType`, wrong-shape rejection) — currently string-match only.
 - ~30 LOC: multi-format intersection type (same partial as `.html.tse`
-  + `.json.tse`) has no `buildViews` integration test.
+  - `.json.tse`) has no `buildViews` integration test.
 
 **From #2367 (Story 5.6 — RenderContext):**
+
 - ~4 LOC: `packages/actionview/src/helpers/output-safety-helper.ts`
   `raw()` has the same `String(outputBuffer)` coercion bug fixed in
   `TseRenderContextImpl.raw` — `OutputBuffer.toString()` returns a

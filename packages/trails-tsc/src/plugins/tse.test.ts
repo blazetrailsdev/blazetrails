@@ -146,6 +146,15 @@ describe("virtualizeTse", () => {
     expect(() => virtualizeTse("<%# locals: (arguments:) %>")).toThrow(/invalid local name/);
   });
 
+  it("rejects emitter-reserved names that would produce duplicate-declaration SyntaxErrors", () => {
+    // These are render() parameters or internal bindings in the emitted output.
+    expect(() => virtualizeTse("<%# locals: (context:) %>")).toThrow(/invalid local name/);
+    expect(() => virtualizeTse("<%# locals: (locals:) %>")).toThrow(/invalid local name/);
+    expect(() => virtualizeTse("<%# locals: (_ob:) %>")).toThrow(/invalid local name/);
+    expect(() => virtualizeTse("<%# locals: (__allowedKeys:) %>")).toThrow(/invalid local name/);
+    expect(() => virtualizeTse("<%# locals: (__extraKeys:) %>")).toThrow(/invalid local name/);
+  });
+
   it("dispatches expression sites and preserves code chunks raw", () => {
     const out = virtualizeTse("<% if (n > 0) { %><%= n %><%== raw %><% } %>");
     expect(out).toContain("if (n > 0) {");
@@ -223,7 +232,8 @@ function diagnose(source: string): string[] {
   // resolves to an empty module rather than producing TS2307.
   // Minimal stand-in for @blazetrails/actionview so import type { TemplateRegistry, TemplateLocals }
   // resolves without TS2307 or "has no exported member" errors.
-  const stubSrc = "export interface TemplateRegistry {} export type TemplateLocals<T> = T;";
+  const stubSrc =
+    "export interface TemplateRegistry {} export type TemplateLocals<T> = T; export type NoExtraKeys<T> = T & { [K in Exclude<string, keyof T>]?: never };";
   const stubPath = "/stub/module.d.ts";
   const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.ES2022, true);
   const stubFile = ts.createSourceFile(stubPath, stubSrc, ts.ScriptTarget.ES2022, true);

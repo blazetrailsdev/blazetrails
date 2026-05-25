@@ -106,9 +106,7 @@ function emitNode(node: TseAst["nodes"][number]): string {
 
 const PREAMBLE = [
   "/* virtualized from .tse — phase 2b trails-tsc plugin */",
-  'import type { TemplateRegistry, TemplateLocals } from "@blazetrails/actionview";',
-  // Closes the TS excess-property check gap for variable-typed arguments.
-  "type NoExtraKeys<T> = T & { [K in Exclude<string, keyof T>]?: never };",
+  'import type { TemplateRegistry, TemplateLocals, NoExtraKeys } from "@blazetrails/actionview";',
   "interface SafeString { readonly __safeStringBrand: unique symbol }",
   "interface OutputBuffer extends SafeString {",
   "  safeAppend(s: string): void;",

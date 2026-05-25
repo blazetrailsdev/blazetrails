@@ -23,9 +23,19 @@ const RESERVED_NAMES = new Set([
   "eval", "arguments",
 ]);
 
+// Names used as parameters or internal bindings in the generated render function.
+// Declaring a local with any of these names would produce a duplicate-declaration
+// SyntaxError or shadow the binding in a way that breaks the emitted code.
+// prettier-ignore
+const EMITTER_RESERVED = new Set([
+  "context", "locals", "_ob",       // render() parameters / output-buffer binding
+  "__allowedKeys", "__extraKeys",    // strict-locals check bindings
+]);
+
 function isUsableLocalName(name: string): boolean {
   if (!/^[A-Za-z_$][\w$]*$/u.test(name)) return false;
-  return !RESERVED_NAMES.has(name);
+  if (RESERVED_NAMES.has(name)) return false;
+  return !EMITTER_RESERVED.has(name);
 }
 
 export function parseLocalsSignature(sig: string): LocalEntry[] {

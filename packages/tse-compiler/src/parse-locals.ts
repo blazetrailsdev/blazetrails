@@ -17,7 +17,8 @@ const RESERVED_NAMES = new Set([
   "null", "return", "super", "switch", "this", "throw", "true", "try",
   "typeof", "var", "void", "while", "with", "yield", "implements",
   "interface", "let", "package", "private", "protected", "public",
-  "static", "await", "async",
+  "static", "await",
+  // async is a contextual keyword, not reserved — `const { async } = x;` is valid.
   // Restricted identifiers in strict mode — `const { eval } = x;` is a syntax error in ESM.
   "eval", "arguments",
 ]);

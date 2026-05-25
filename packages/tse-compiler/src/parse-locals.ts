@@ -18,6 +18,8 @@ const RESERVED_NAMES = new Set([
   "typeof", "var", "void", "while", "with", "yield", "implements",
   "interface", "let", "package", "private", "protected", "public",
   "static", "await", "async",
+  // Restricted identifiers in strict mode — `const { eval } = x;` is a syntax error in ESM.
+  "eval", "arguments",
 ]);
 
 function isUsableLocalName(name: string): boolean {

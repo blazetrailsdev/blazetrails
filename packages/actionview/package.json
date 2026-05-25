@@ -7,12 +7,16 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./strict-locals": {
-      "import": "./dist/strict-locals.js",
-      "types": "./dist/strict-locals.d.ts"
+      "types": "./dist/strict-locals.d.ts",
+      "default": "./dist/strict-locals.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
     }
   },
   "scripts": {

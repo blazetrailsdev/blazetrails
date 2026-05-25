@@ -135,6 +135,9 @@ describe("virtualizeTse", () => {
   it("rejects TS reserved words as local names", () => {
     expect(() => virtualizeTse("<%# locals: (default: 1) %>")).toThrow(/invalid local name/);
     expect(() => virtualizeTse("<%# locals: (await: 1) %>")).toThrow(/invalid local name/);
+    // eval/arguments are restricted in strict mode — `const { eval } = x;` is a syntax error in ESM.
+    expect(() => virtualizeTse("<%# locals: (eval:) %>")).toThrow(/invalid local name/);
+    expect(() => virtualizeTse("<%# locals: (arguments:) %>")).toThrow(/invalid local name/);
   });
 
   it("dispatches expression sites and preserves code chunks raw", () => {

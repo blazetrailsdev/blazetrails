@@ -1272,29 +1272,6 @@ independent, no file overlap — bundled to hit the PR ceiling.
 
 ---
 
-### Post-merge follow-ups (from findings)
-
-**From #2365 (Story 5.12 — TemplateRegistry):**
-
-- ~50 LOC: semantic diagnosis tests for the render conditional generic
-  (required locals for known partials, optional when `{} extends
-LocalsType`, wrong-shape rejection) — currently string-match only.
-- ~30 LOC: multi-format intersection type (same partial as `.html.tse`
-  - `.json.tse`) has no `buildViews` integration test.
-
-**From #2367 (Story 5.6 — RenderContext):**
-
-- ~4 LOC: `packages/actionview/src/helpers/output-safety-helper.ts`
-  `raw()` has the same `String(outputBuffer)` coercion bug fixed in
-  `TseRenderContextImpl.raw` — `OutputBuffer.toString()` returns a
-  non-primitive `SafeBuffer`, breaking `String()` coercion.
-  Pre-existing.
-- ~30–50 LOC: `packages/trails-tsc/src/plugins/tse.ts` virtualizer
-  does not enforce the `TseRenderContext` contract on the compiled
-  render function's `context` parameter.
-
----
-
 ## 6. Resolved decisions (2026-05-21)
 
 1. **Helper binding.** Helpers live on the `RenderContext` interface;

@@ -2479,7 +2479,7 @@ export class Relation<T extends Base> {
         pendingLeftOuter,
         Nodes.OuterJoin,
       );
-      for (const node of jd.joinConstraints([])) manager.appendJoinNode(node as any);
+      for (const node of jd.joinConstraints([])) manager.appendJoinNode(node);
     }
     for (const node of joinNodes) manager.appendJoinNode(node);
   }
@@ -3435,7 +3435,7 @@ export class Relation<T extends Base> {
 
     for (const node of jd.nodes) {
       if (node.arelJoin) {
-        manager.appendJoinNode(node.arelJoin as any);
+        manager.appendJoinNode(node.arelJoin);
       } else {
         manager.appendStringJoin(node.joinSql);
       }
@@ -3466,7 +3466,7 @@ export class Relation<T extends Base> {
         idSubquery.distinct();
         for (const node of jd.nodes) {
           if (node.arelJoin) {
-            idSubquery.appendJoinNode(node.arelJoin as any);
+            idSubquery.appendJoinNode(node.arelJoin);
           } else {
             idSubquery.appendStringJoin(node.joinSql);
           }

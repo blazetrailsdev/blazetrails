@@ -37,7 +37,7 @@ export interface JoinNode {
   assocName: string;
   assocType: "hasMany" | "hasOne" | "belongsTo";
   joinSql: string;
-  arelJoin: Nodes.Node | null;
+  arelJoin: Nodes.Join | null;
   /** The immediate association name (without parent prefix) */
   immediateAssocName: string;
   /** Dotted parent path, or null if directly on the base model */
@@ -302,7 +302,12 @@ export class JoinDependency {
     if (assocDef.options.scope && typeof assocDef.options.scope === "function") {
       const scopeRel = assocDef.options.scope((targetModel as any)._allForPreload());
       if (scopeRel?._whereClause && !scopeRel._whereClause.isEmpty()) {
-        const scopeAst = scopeRel._whereClause.ast;
+        let scopeAst: Nodes.Node = scopeRel._whereClause.ast;
+        // When the target table was aliased (collision), the scope's AST
+        // references the unaliased table. Rebind attributes to the aliased table.
+        if (effectiveName !== targetTable!) {
+          scopeAst = rebindTableReferences(scopeAst, targetTable!, targetArelTable);
+        }
         predicate =
           predicate instanceof Nodes.And
             ? new Nodes.And([...predicate.children, scopeAst])
@@ -441,8 +446,8 @@ export class JoinDependency {
     joinsToAdd: JoinDependency[],
     _aliasTracker?: any,
     _references?: string[],
-  ): Nodes.Node[] {
-    const toJoinNode = (n: JoinNode): Nodes.Node =>
+  ): Nodes.Join[] {
+    const toJoinNode = (n: JoinNode): Nodes.Join =>
       n.arelJoin ?? new Nodes.StringJoin(arelSql(n.joinSql));
     const joins = this._nodes.map(toJoinNode);
     for (const oj of joinsToAdd) {
@@ -906,6 +911,38 @@ export class JoinDependency {
     this._nodes.push(node);
     return node;
   }
+}
+
+function rebindTableReferences(
+  node: Nodes.Node,
+  fromTableName: string,
+  toTable: Table,
+): Nodes.Node {
+  if (node instanceof Nodes.And) {
+    return new Nodes.And(
+      node.children.map((c) => rebindTableReferences(c, fromTableName, toTable)),
+    );
+  }
+  if (node instanceof Nodes.Equality || node instanceof Nodes.NotEqual) {
+    const left = rebindAttr(node.left, fromTableName, toTable);
+    const right = rebindAttr(node.right, fromTableName, toTable);
+    return new (node.constructor as any)(left, right);
+  }
+  if (node instanceof Nodes.In || node instanceof Nodes.NotIn) {
+    const left = rebindAttr(node.left, fromTableName, toTable);
+    return new (node.constructor as any)(left, node.right);
+  }
+  return node;
+}
+
+function rebindAttr(value: unknown, fromTableName: string, toTable: Table): unknown {
+  if (value instanceof Nodes.Attribute) {
+    const rel = value.relation;
+    if (rel instanceof Table && rel.name === fromTableName && !rel.tableAlias) {
+      return toTable.get(value.name);
+    }
+  }
+  return value;
 }
 
 /** @internal */

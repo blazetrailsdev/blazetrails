@@ -95,7 +95,7 @@ export class TseRenderContextImpl implements TseRenderContext {
   }
 
   yield(section?: string): SafeBuffer {
-    if (!section) return this._defaultYield;
+    if (section === undefined) return this._defaultYield;
     return this._contentBuffers.get(section) ?? htmlSafe("");
   }
 

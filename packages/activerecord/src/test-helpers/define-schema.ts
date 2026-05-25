@@ -604,13 +604,6 @@ async function _defineSchemaImpl(
     if (cachedSig === newSig && stillExists) {
       continue;
     }
-    // Resolve DB identity for adapter OR its inner adapter (wrappers like
-    // TestAdapterFixtures return null from databaseIdentity but their inner
-    // adapter IS the real connection).
-    const inner = (adapter as unknown as { innerAdapter?: DatabaseAdapter }).innerAdapter;
-    const resolvedAdapterKey = _canonicalPreloadSigs
-      ? (databaseIdentity(adapter) ?? (inner ? databaseIdentity(inner) : null))
-      : null;
     // Whether canonical sigs are still live in the global cache. After
     // resetTestAdapterState → clearAppliedSchemaSignatures, they're gone —
     // meaning tables may have been dropped. The immutable snapshot
@@ -624,10 +617,16 @@ async function _defineSchemaImpl(
     // D-Y fast-path: adapter IS the canonical DB, canonical sigs are still
     // live (tables not dropped), and the test spec is a subset of what's
     // already there — skip DDL and keep the canonical signature.
+    //
+    // Only for NON-wrapper adapters (handler-path tests). Wrappers are
+    // old-path tests that define custom schemas; even when the test columns
+    // are a subset, the canonical table may have extra NOT NULL columns the
+    // test doesn't populate.
     if (canonicalSigsLive && _canonicalPreloadSigs && isCanonicalSubset(table, raw)) {
+      const adapterKey = databaseIdentity(adapter);
       const isSameDb =
-        resolvedAdapterKey !== null
-          ? resolvedAdapterKey === _canonicalPreloadKey
+        adapterKey !== null
+          ? adapterKey === _canonicalPreloadKey
           : adapter === _canonicalPreloadAdapter;
       if (isSameDb) {
         const canonicalSig = _canonicalPreloadSigs.get(table);
@@ -637,19 +636,16 @@ async function _defineSchemaImpl(
         }
       }
     }
-    // Canonical preload created this table in the DB but the test needs a
-    // non-subset schema (isCanonicalSubset was false or isSameDb was false).
-    // The wrapper's `tables` Set doesn't track canonical tables, so
-    // `stillExists` is false — but the table IS in the DB.  Promote to
-    // stillExists so the drop-and-recreate path fires.
-    if (
-      !stillExists &&
-      canonicalSigsLive &&
-      _canonicalPreloadSigs?.has(table) &&
-      _canonicalPreloadKey !== null &&
-      resolvedAdapterKey === _canonicalPreloadKey
-    ) {
-      stillExists = true;
+    // Canonical preload created this table in the DB but the test needs
+    // different columns. The wrapper's `tables` Set doesn't track canonical
+    // tables, so `stillExists` is false — but the table IS in the DB.
+    // Resolve through innerAdapter to detect same-DB wrappers.
+    if (!stillExists && canonicalSigsLive && _canonicalPreloadSigs?.has(table)) {
+      const inner = (adapter as unknown as { innerAdapter?: DatabaseAdapter }).innerAdapter;
+      const adapterKey = databaseIdentity(adapter) ?? (inner ? databaseIdentity(inner) : null);
+      if (adapterKey !== null && adapterKey === _canonicalPreloadKey) {
+        stillExists = true;
+      }
     }
     if (stillExists) {
       await ss.dropTable(table, { ifExists: true });

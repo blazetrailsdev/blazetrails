@@ -208,11 +208,12 @@ export class TseRenderContextImpl implements TseRenderContext {
 
 /**
  * Derives the default local variable name from a partial path.
- * Rails: `partial_path.split("/").last.sub(/\A_/, "")`.
- * e.g. "users/user" → "user", "shared/_form" → "form".
+ * Mirrors Rails `AbstractRenderer#local_variable`:
+ * take basename, strip optional leading `_`, strip trailing `.\w+` extension segments.
+ * e.g. "users/user" → "user", "shared/_form.html" → "form", "a/_b.en.html" → "b".
  * @internal
  */
 function deriveLocalName(partial: string): string {
   const last = partial.split("/").at(-1) ?? partial;
-  return last.replace(/^_/, "").replace(/\..+$/, "");
+  return last.replace(/^_/, "").replace(/(\.[\w]+)+$/, "");
 }

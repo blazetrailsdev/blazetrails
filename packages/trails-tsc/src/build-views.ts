@@ -80,7 +80,7 @@ export function buildViews(opts: BuildViewsOptions = {}): BuildViewsResult {
   for (const rel of files) {
     const src = fs.readFileSync(path.join(viewsDir, rel), "utf8");
     const { ts: shim, deltas } = virtualizeTseWithDeltas(src);
-    const jsFileName = rel + ".js";
+    const jsFileName = path.basename(rel) + ".js";
     const srcAbsPath = path.join(viewsDir, rel);
     const mapAbsDir = path.dirname(path.join(outViews, rel));
     const sourceFileName = path.relative(mapAbsDir, srcAbsPath).split(path.sep).join("/");

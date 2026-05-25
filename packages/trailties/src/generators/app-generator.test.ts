@@ -137,7 +137,7 @@ describe("AppGenerator", () => {
     const pkg = JSON.parse(fs.readFileSync(appPath("package.json"), "utf-8"));
     const tseExport = pkg.exports["./*.tse"];
     expect(tseExport).toBeDefined();
-    expect(tseExport.types).toBe("./.trails/views/*.tse.d.ts");
+    expect(tseExport.types).toBe("./.trails/views/*.tse.ts");
     expect(tseExport.default).toBe("./.trails/views/*.tse.js");
     const keys = Object.keys(tseExport);
     expect(keys.indexOf("types")).toBeLessThan(keys.indexOf("default"));
@@ -153,7 +153,7 @@ describe("AppGenerator", () => {
     expect(tsconfig.compilerOptions.rootDir).toBe("src");
     expect(tsconfig.compilerOptions.allowArbitraryExtensions).toBe(true);
     expect(tsconfig.compilerOptions.plugins).toEqual([
-      { name: "@blazetrails/trails-tsc/ts-plugin" },
+      { name: "@blazetrails/trails-tsc/ts-plugin", viewsDir: "src/app/views" },
     ]);
   });
 

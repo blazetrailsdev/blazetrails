@@ -1246,9 +1246,9 @@ from "./show.html.tse"` typechecks before any `.tse.d.ts` is
 - [x] `tsconfig` starter template enables
       `allowArbitraryExtensions` and lists
       `@blazetrails/trails-tsc/ts-plugin` under `compilerOptions.plugins`.
-- [x] `trails-tsc build` runs from `pnpm prepare` (and the equivalent
-      lifecycle for npm/yarn) so a fresh clone typechecks without a
-      manual build step.
+- [x] `trails-tsc-views build` runs from `pnpm prepare` (and the
+      equivalent lifecycle for npm/yarn) so a fresh clone typechecks
+      without a manual build step.
 
 ### Story 5.14 — Post-merge follow-up bundle (~130 LOC)
 

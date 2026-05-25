@@ -61,7 +61,7 @@ export class AppGenerator extends AppBase {
           type: "module",
           exports: {
             "./*.tse": {
-              types: "./.trails/views/*.tse.d.ts",
+              types: "./.trails/views/*.tse.ts",
               default: "./.trails/views/*.tse.js",
             },
           },
@@ -113,7 +113,7 @@ export class AppGenerator extends AppBase {
             allowArbitraryExtensions: true,
             rootDir: "src",
             outDir: "dist",
-            plugins: [{ name: "@blazetrails/trails-tsc/ts-plugin" }],
+            plugins: [{ name: "@blazetrails/trails-tsc/ts-plugin", viewsDir: "src/app/views" }],
           },
           include: ["src", ".trails/template-registry-augmentation.d.ts"],
         },

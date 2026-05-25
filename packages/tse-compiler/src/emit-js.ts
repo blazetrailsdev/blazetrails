@@ -52,17 +52,18 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
   // Stack: one entry per open blockExpr, tracking net unclosed `{` inside it.
   const innerDepths: number[] = [];
   for (const node of ast.nodes) {
+    const insideBlock = innerDepths.length > 0;
+    const bufRef = insideBlock ? "context.outputBuffer" : "_ob";
     if (node.kind === "blockExpr") {
       // Strip trailing `{` so the helper call ends with `=>` for the capture wrapper.
       const callExpr = node.value
         .trim()
         .replace(/\s*\{\s*$/, "")
         .trimEnd();
-      const bufRef = innerDepths.length > 0 ? "context.outputBuffer" : "_ob";
       innerDepths.push(0);
       lines.push(`  ${bufRef}.${exprAppend}(${callExpr}`);
-      lines.push(`  context.capture(() => {`);
-    } else if (node.kind === "code" && innerDepths.length > 0) {
+      lines.push("  context.capture(() => {");
+    } else if (node.kind === "code" && insideBlock) {
       const innerDepth = innerDepths[innerDepths.length - 1]!;
       if (BLOCK_CLOSE_RE.test(node.value) && innerDepth === 0) {
         innerDepths.pop();
@@ -78,7 +79,6 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
         lines.push("  " + emitNode(node, exprAppend, "context.outputBuffer"));
       }
     } else {
-      const bufRef = innerDepths.length > 0 ? "context.outputBuffer" : "_ob";
       lines.push("  " + emitNode(node, exprAppend, bufRef));
     }
   }

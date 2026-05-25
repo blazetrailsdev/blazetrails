@@ -19,7 +19,7 @@ describe("TseRenderContextImpl", () => {
 
       expect(captured.toString()).toBe("inner");
       expect(isHtmlSafe(captured)).toBe(true);
-      expect(ctx.outputBuffer.toString().toString()).toBe("outer-beforeouter-after");
+      expect(ctx.outputBuffer.toStr()).toBe("outer-beforeouter-after");
     });
 
     it("restores the previous buffer even when the callback throws", () => {
@@ -45,19 +45,19 @@ describe("TseRenderContextImpl", () => {
       ctx.outputBuffer.safeAppend("e");
 
       expect(outer.toString()).toBe("bd");
-      expect(ctx.outputBuffer.toString().toString()).toBe("ae");
+      expect(ctx.outputBuffer.toStr()).toBe("ae");
     });
   });
 
   describe("#concat", () => {
     it("appends to the active buffer with HTML escaping", () => {
       ctx.concat("<script>");
-      expect(ctx.outputBuffer.toString().toString()).toBe("&lt;script&gt;");
+      expect(ctx.outputBuffer.toStr()).toBe("&lt;script&gt;");
     });
 
     it("appends SafeBuffer content without escaping", () => {
       ctx.concat(htmlSafe("<b>safe</b>"));
-      expect(ctx.outputBuffer.toString().toString()).toBe("<b>safe</b>");
+      expect(ctx.outputBuffer.toStr()).toBe("<b>safe</b>");
     });
 
     it("writes to the capture buffer when called inside capture", () => {
@@ -65,7 +65,7 @@ describe("TseRenderContextImpl", () => {
         ctx.concat("hello");
       });
       expect(result.toString()).toBe("hello");
-      expect(ctx.outputBuffer.toString().toString()).toBe("");
+      expect(ctx.outputBuffer.toStr()).toBe("");
     });
   });
 
@@ -88,13 +88,12 @@ describe("TseRenderContextImpl", () => {
       const parent = new TseRenderContextImpl();
       parent.outputBuffer.safeAppend("parent-before");
 
-      // Simulate a partial receiving the parent's outputBuffer
       const child = new TseRenderContextImpl(parent.outputBuffer);
       child.outputBuffer.safeAppend("child");
 
       parent.outputBuffer.safeAppend("parent-after");
 
-      expect(parent.outputBuffer.toString().toString()).toBe("parent-beforechildparent-after");
+      expect(parent.outputBuffer.toStr()).toBe("parent-beforechildparent-after");
     });
   });
 });

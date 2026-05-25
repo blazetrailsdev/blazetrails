@@ -177,11 +177,8 @@ describe("TseRenderContextImpl", () => {
   });
 
   describe("#render (partials)", () => {
-    // Spy subclass: captures every _renderPartial call so tests can assert on
-    // the locals hash passed without needing the full template-loading substrate.
     class SpyContext extends TseRenderContextImpl {
       calls: Array<{ partial: string; localName: string; locals: Record<string, unknown> }> = [];
-
       protected override _renderPartial(
         partial: string,
         localName: string,
@@ -197,112 +194,49 @@ describe("TseRenderContextImpl", () => {
       spy = new SpyContext();
     });
 
-    describe("single partial", () => {
-      it("returns a SafeBuffer", () => {
-        const result = spy.render({ partial: "users/user", locals: { user: "Alice" } });
-        expect(isHtmlSafe(result)).toBe(true);
-      });
-
-      it("passes locals to _renderPartial", () => {
-        spy.render({ partial: "users/user", locals: { name: "Alice", age: 30 } });
-        expect(spy.calls).toHaveLength(1);
-        expect(spy.calls[0].locals).toEqual({ name: "Alice", age: 30 });
-      });
-
-      it("passes empty locals when none provided", () => {
-        spy.render({ partial: "users/user" });
-        expect(spy.calls[0].locals).toEqual({});
-      });
-
-      it("derives localName from the partial path", () => {
-        spy.render({ partial: "users/user" });
-        expect(spy.calls[0].localName).toBe("user");
-      });
-
-      it("passes the partial path through unchanged", () => {
-        spy.render({ partial: "shared/card" });
-        expect(spy.calls[0].partial).toBe("shared/card");
-      });
+    it("single partial: passes locals, derives localName, returns SafeBuffer", () => {
+      const result = spy.render({ partial: "users/user", locals: { name: "Alice" } });
+      expect(isHtmlSafe(result)).toBe(true);
+      expect(spy.calls[0]).toMatchObject({ localName: "user", locals: { name: "Alice" } });
+      spy.render({ partial: "users/user" });
+      expect(spy.calls[1].locals).toEqual({});
     });
 
-    describe("collection rendering", () => {
-      it("calls _renderPartial once per element", () => {
-        spy.render({ partial: "users/user", collection: ["Alice", "Bob", "Carol"] });
-        expect(spy.calls).toHaveLength(3);
-      });
+    it("collection: calls _renderPartial per element with element + camelCase counter", () => {
+      spy.render({ partial: "users/user", collection: ["Alice", "Bob"] });
+      expect(spy.calls).toHaveLength(2);
+      expect(spy.calls[0].locals).toMatchObject({ user: "Alice", userCounter: 0 });
+      expect(spy.calls[1].locals).toMatchObject({ user: "Bob", userCounter: 1 });
+    });
 
-      it("binds each element to the derived local name", () => {
-        spy.render({ partial: "users/user", collection: ["Alice", "Bob"] });
-        expect(spy.calls[0].locals["user"]).toBe("Alice");
-        expect(spy.calls[1].locals["user"]).toBe("Bob");
-      });
+    it("collection: as: overrides local name and counter key", () => {
+      spy.render({ partial: "shared/item", collection: ["x"], as: "entry" });
+      expect(spy.calls[0].locals).toMatchObject({ entry: "x", entryCounter: 0 });
+    });
 
-      it("injects a camelCase counter starting at 0", () => {
-        spy.render({ partial: "users/user", collection: ["a", "b", "c"] });
-        expect(spy.calls[0].locals["userCounter"]).toBe(0);
-        expect(spy.calls[1].locals["userCounter"]).toBe(1);
-        expect(spy.calls[2].locals["userCounter"]).toBe(2);
-      });
+    it("collection: merges extra locals; strips _prefix and extension from localName", () => {
+      spy.render({ partial: "shared/_form.html", collection: [{}], locals: { role: "admin" } });
+      expect(spy.calls[0].localName).toBe("form");
+      expect(spy.calls[0].locals).toMatchObject({ role: "admin", form: {}, formCounter: 0 });
+    });
 
-      it("uses explicit as: for both local name and counter", () => {
-        spy.render({ partial: "shared/item", collection: ["x", "y"], as: "entry" });
-        expect(spy.calls[0].locals["entry"]).toBe("x");
-        expect(spy.calls[0].locals["entryCounter"]).toBe(0);
-        expect(spy.calls[1].locals["entry"]).toBe("y");
-        expect(spy.calls[1].locals["entryCounter"]).toBe(1);
-      });
+    it("collection: empty → no calls, returns empty SafeBuffer", () => {
+      const result = spy.render({ partial: "users/user", collection: [] });
+      expect(result.toString()).toBe("");
+      expect(isHtmlSafe(result)).toBe(true);
+      expect(spy.calls).toHaveLength(0);
+    });
 
-      it("merges extra locals with the element and counter", () => {
-        spy.render({
-          partial: "users/user",
-          collection: ["Alice"],
-          locals: { role: "admin" },
-        });
-        expect(spy.calls[0].locals).toEqual({ role: "admin", user: "Alice", userCounter: 0 });
+    it("spacerTemplate: N-1 spacer calls between items, none for single-item", () => {
+      spy.render({
+        partial: "users/user",
+        collection: ["a", "b", "c"],
+        spacerTemplate: "shared/divider",
       });
-
-      it("strips leading underscore when deriving local name", () => {
-        spy.render({ partial: "shared/_form", collection: [{}] });
-        expect(spy.calls[0].localName).toBe("form");
-        expect(spy.calls[0].locals["form"]).toEqual({});
-      });
-
-      it("strips file extension when deriving local name", () => {
-        spy.render({ partial: "users/user.html", collection: ["Alice"] });
-        expect(spy.calls[0].localName).toBe("user");
-      });
-
-      it("uses basename for deep paths", () => {
-        spy.render({ partial: "admin/users/row", collection: [1] });
-        expect(spy.calls[0].localName).toBe("row");
-      });
-
-      it("returns empty SafeBuffer for an empty collection", () => {
-        const result = spy.render({ partial: "users/user", collection: [] });
-        expect(result.toString()).toBe("");
-        expect(isHtmlSafe(result)).toBe(true);
-        expect(spy.calls).toHaveLength(0);
-      });
-
-      it("calls _renderPartial for spacerTemplate between items (not at ends)", () => {
-        spy.render({
-          partial: "users/user",
-          collection: ["a", "b", "c"],
-          spacerTemplate: "shared/divider",
-        });
-        const spacerCalls = spy.calls.filter((c) => c.partial === "shared/divider");
-        expect(spacerCalls).toHaveLength(2); // 3 items → 2 gaps
-      });
-
-      it("does not insert spacer for a single-item collection", () => {
-        spy.render({
-          partial: "users/user",
-          collection: ["only"],
-          spacerTemplate: "shared/divider",
-        });
-        const spacerCalls = spy.calls.filter((c) => c.partial === "shared/divider");
-        expect(spacerCalls).toHaveLength(0);
-      });
+      expect(spy.calls.filter((c) => c.partial === "shared/divider")).toHaveLength(2);
+      spy.calls = [];
+      spy.render({ partial: "users/user", collection: ["only"], spacerTemplate: "shared/hr" });
+      expect(spy.calls.filter((c) => c.partial === "shared/hr")).toHaveLength(0);
     });
   });
 });

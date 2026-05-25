@@ -92,6 +92,23 @@ describe("parseFilename", () => {
     });
   });
 
+  it("two-letter name is NOT consumed as locale when no format is present", () => {
+    expect(parseFilename("en.tse", FORMATS)).toEqual({
+      name: "en",
+      locale: null,
+      format: "html",
+      variant: null,
+      handler: "tse",
+    });
+    expect(parseFilename("en", FORMATS)).toEqual({
+      name: "en",
+      locale: null,
+      format: "html",
+      variant: null,
+      handler: null,
+    });
+  });
+
   it("locale region variant", () => {
     expect(parseFilename("show.en-US.html.tse", FORMATS)).toEqual({
       name: "show",

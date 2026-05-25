@@ -52,9 +52,10 @@ export function parseFilename(path: string, knownFormats: Set<string>): ParsedFi
     }
   }
 
-  // Check if the next token is a locale.
+  // Locale only appears before the format token (Rails: `action.locale.format.handler`).
+  // Without a resolved format, the preceding token is part of the name — don't consume it.
   let locale: string | null = null;
-  if (tokens.length >= 1 && LOCALE_RE.test(tokens[tokens.length - 1]!)) {
+  if (format !== null && tokens.length >= 1 && LOCALE_RE.test(tokens[tokens.length - 1]!)) {
     locale = tokens.pop()!;
   }
 

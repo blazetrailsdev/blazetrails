@@ -97,6 +97,59 @@ describe("buildViews", () => {
     expect(fs.existsSync(path.join(cwd, "build/.gen/views/home.html.tse.js"))).toBe(true);
     expect(fs.existsSync(path.join(cwd, "build/.gen/views-manifest.ts"))).toBe(true);
   });
+
+  it("emits template-registry-augmentation.ts for templates with a locals directive", () => {
+    const cwd = mkScratch();
+    write(
+      cwd,
+      "app/views/users/_user.html.tse",
+      "<%# locals: (name:, role: 'guest') %><%= name %>",
+    );
+    write(cwd, "app/views/posts/index.html.tse", "no locals directive");
+
+    buildViews({ cwd });
+
+    const aug = fs.readFileSync(
+      path.join(cwd, ".trails/template-registry-augmentation.ts"),
+      "utf8",
+    );
+    expect(aug).toContain('declare module "@blazetrails/actionview"');
+    expect(aug).toContain("interface TemplateRegistry");
+    expect(aug).toContain('"users/_user.html"');
+    expect(aug).toContain("name: unknown");
+    expect(aug).toContain("role?: unknown");
+    // no-locals-directive template is absent
+    expect(aug).not.toContain("posts/index");
+    expect(aug).toContain("AUTO-GENERATED");
+  });
+
+  it("emits an empty augmentation when no templates have a locals directive", () => {
+    const cwd = mkScratch();
+    write(cwd, "app/views/home.html.tse", "plain template");
+
+    buildViews({ cwd });
+
+    const aug = fs.readFileSync(
+      path.join(cwd, ".trails/template-registry-augmentation.ts"),
+      "utf8",
+    );
+    expect(aug).toContain('declare module "@blazetrails/actionview"');
+    expect(aug).toContain("interface TemplateRegistry {");
+    expect(aug).toContain("AUTO-GENERATED");
+  });
+
+  it("tse virtual shim includes TemplateRegistry import and render overloads", () => {
+    const cwd = mkScratch();
+    write(cwd, "app/views/users/_user.html.tse", "<%= name %>");
+
+    buildViews({ cwd });
+
+    const shim = fs.readFileSync(path.join(cwd, ".trails/views/users/_user.html.tse.ts"), "utf8");
+    expect(shim).toContain('import type { TemplateRegistry } from "@blazetrails/actionview"');
+    expect(shim).toContain("render<K extends keyof TemplateRegistry>");
+    expect(shim).toContain("partial: K;");
+    expect(shim).toContain("locals?: TemplateRegistry[K];");
+  });
 });
 
 describe("runCli", () => {

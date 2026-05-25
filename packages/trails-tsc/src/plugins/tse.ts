@@ -46,7 +46,7 @@ function isUsableLocalName(name: string): boolean {
 // Generics in defaults (`Foo<A, B>`) are not recognized — angle brackets
 // alias with `<` comparisons without a full TS scanner; same class of
 // pragmatic limit as Erubi's regex lexer (plan §2.10.1).
-function parseLocalsSignature(sig: string): LocalEntry[] {
+export function parseLocalsSignature(sig: string): LocalEntry[] {
   if (sig === "**nil" || sig.trim() === "") return [];
   const CLOSERS: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
   const parts: string[] = [];
@@ -128,7 +128,7 @@ function parseLocalsSignature(sig: string): LocalEntry[] {
   return entries;
 }
 
-function localsParamType(ast: TseAst, locals: LocalEntry[]): string {
+export function localsParamType(ast: TseAst, locals: LocalEntry[]): string {
   if (ast.typesAnnotation !== null) return ast.typesAnnotation;
   // No `<%# locals: %>` at all → permissive default.
   if (ast.localsSignature === null) return "Record<string, unknown>";
@@ -213,6 +213,7 @@ function emitNode(node: TseAst["nodes"][number]): string {
 
 const PREAMBLE = [
   "/* virtualized from .tse — phase 2b trails-tsc plugin */",
+  'import type { TemplateRegistry } from "@blazetrails/actionview";',
   "interface SafeString { readonly __safeStringBrand: unique symbol }",
   "interface OutputBuffer extends SafeString {",
   "  safeAppend(s: string): void;",
@@ -221,6 +222,11 @@ const PREAMBLE = [
   "}",
   "interface RenderContext {",
   "  readonly outputBuffer: OutputBuffer;",
+  "  render<K extends keyof TemplateRegistry>(options: {",
+  "    partial: K;",
+  "    locals?: TemplateRegistry[K];",
+  "  }): SafeString;",
+  "  render(options: { partial: string; locals?: Record<string, unknown> }): SafeString;",
   "  [key: string]: unknown;",
   "}",
   "",

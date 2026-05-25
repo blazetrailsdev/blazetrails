@@ -52,10 +52,11 @@ export function parseFilename(path: string, knownFormats: Set<string>): ParsedFi
     }
   }
 
-  // Locale only appears before the format token (Rails: `action.locale.format.handler`).
-  // Without a resolved format, the preceding token is part of the name — don't consume it.
+  // Locale may appear with or without an explicit format (Rails: `action.locale.format.handler`
+  // or `action.locale.handler`). Guard: require at least one remaining token for the name so
+  // a bare two-letter filename (`en.tse`) doesn't produce an empty name.
   let locale: string | null = null;
-  if (format !== null && tokens.length >= 1 && LOCALE_RE.test(tokens[tokens.length - 1]!)) {
+  if (tokens.length >= 2 && LOCALE_RE.test(tokens[tokens.length - 1]!)) {
     locale = tokens.pop()!;
   }
 

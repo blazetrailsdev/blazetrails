@@ -107,10 +107,13 @@ Rails' `Aliases::Table#column_aliases` returns `t[column.name].as(column.alias)`
 (Arel nodes). Ours returns raw `AliasMap` data objects that get formatted into
 SQL strings.
 
-### Gap 8 — AliasTracker as a separate class
+### Gap 8 — AliasTracker not wired into JoinDependency
 
-Rails has `AliasTracker` (tracks collisions, truncates long aliases, handles
-`references`). Ours is an inline `_usedTableNames: Set<string>`.
+`AliasTracker` already exists at `associations/alias-tracker.ts` with collision
+counts, `aliasedTableFor`, and alias truncation. But the main `JoinDependency`
+class ignores it, using an inline `_usedTableNames: Set<string>` instead.
+The gap is wiring the existing tracker into `JoinDependency`'s table-resolution
+path (and passing it to `JoinAssociation#joinConstraints` as the 4th arg).
 
 ### Gap 9 — Extra columns in `instantiate`
 
@@ -133,7 +136,15 @@ with:
    visitor) for backward compat during migration
 
 Delete: `_adapter`, `_resolveAdapter`, `_quoteString`, `_qt`, `_qc`, abstract
-quoting imports, the PLACEHOLDER string-replace pattern, `_addStiConstraint`.
+quoting imports, the PLACEHOLDER string-replace pattern.
+
+**STI note:** `_addStiConstraint` is NOT deleted in this PR. Rails applies STI
+type constraints via `default_scope` on the STI subclass, which flows through
+`reflection.joinScope()` → `klassJoinScope()` → `buildScope()` → `klass.all()`.
+Verify that our `buildScope` propagates the STI default scope before removing
+`_addStiConstraint`. If it doesn't, add explicit STI predicate injection to
+`joinScope` first. Only delete `_addStiConstraint` once the test suite confirms
+STI IN-list predicates still appear in the Arel output.
 
 **Test migration:** Update `join-dependency-quoting.test.ts` — assertions change
 from checking raw SQL strings with adapter-specific quotes to checking that the
@@ -214,19 +225,13 @@ time.
    `makeJoinConstraints`, `makeConstraints`, `walk`, `build`, `findReflection`)
 5. Delete `join-dependency-quoting.test.ts` (replaced in PR 1)
 
-### PR 8 (stretch) — AliasTracker extraction (~150 LOC)
+### PR 8 (stretch) — Wire existing AliasTracker into JoinDependency (~150 LOC)
 
-Extract alias tracking to a standalone class:
-
-```ts
-class AliasTracker {
-  private aliases: Map<string, number>;
-  aliasedTableFor(table: Table, tableName?: string): Table { ... }
-}
-```
-
-Handles: collision counting, long-name truncation, `references` integration.
-Passed to `JoinAssociation#joinConstraints` as the 4th arg (matching Rails).
+`AliasTracker` already exists at `associations/alias-tracker.ts`. Replace the
+inline `_usedTableNames: Set<string>` with an `AliasTracker` instance. Pass it
+to `JoinAssociation#joinConstraints` as the 4th arg (matching Rails' signature).
+Use `aliasedTableFor()` to resolve aliased tables instead of manual collision
+checks.
 
 ### PR 9 (stretch) — Extra columns in instantiate (~100 LOC)
 
@@ -254,10 +259,27 @@ model's attributes (mirrors Rails' `column_names` extraction in
    property (compile the Arel node) so callers don't all break at once. PR 7
    removes it after all callers are migrated.
 
+## Relationship to activerecord-100-plan.md
+
+This plan **supersedes** the following batches in `activerecord-100-plan.md`:
+
+- **Batch 28b** (JoinDependency AliasTracker port, ~280 LOC) — folded into
+  PRs 1–2 + PR 8 of this plan.
+- **Batch B35** (schema-qualified HABTM table aliasing, ~50 LOC) — the
+  `quoteSchemaQualified` helper becomes unnecessary once aliasing goes through
+  `AliasTracker.aliasedTableFor()` + Arel `Table({ as })`. Covered by PR 8.
+- **Batch B133** (polymorphic-source through-reflection, ~80 LOC) — the
+  `return null` guards at `join-dependency.ts:189–197,738` are deleted when
+  `_addThroughAssociation` is replaced by `JoinAssociation#joinConstraints`
+  which already handles polymorphic sources via `reflection.chain`. Covered by
+  PR 2.
+
+Once this plan lands, mark those batches as "superseded by join-dependency-arel-plan".
+
 ## Non-goals
 
 - Rewriting the reflection system
 - `InnerJoin` support for `joins()` (currently only `eager_load` uses
   JoinDependency; `joins()` goes through a different path)
-- Full `AliasTracker` feature parity with Rails' truncation/counter logic
-  (stretch PR covers the basics)
+- Full `AliasTracker` feature parity beyond what's already in
+  `alias-tracker.ts` (stretch PR wires the existing class, doesn't extend it)

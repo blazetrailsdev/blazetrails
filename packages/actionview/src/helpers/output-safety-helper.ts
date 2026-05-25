@@ -38,7 +38,6 @@ export function jsonEscape(value: unknown): string | SafeBuffer {
  */
 export function raw(stringish: unknown): SafeBuffer {
   if (stringish instanceof OutputBuffer) return stringish.toString();
-  if (stringish instanceof SafeBuffer) return stringish;
   return htmlSafe(String(stringish ?? ""));
 }
 

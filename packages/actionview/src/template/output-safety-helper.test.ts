@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { raw, safeJoin, toSentence } from "../helpers/output-safety-helper.js";
-import { htmlSafe, htmlEscape } from "@blazetrails/activesupport";
+import { SafeBuffer, htmlSafe, htmlEscape } from "@blazetrails/activesupport";
 import { OutputBuffer } from "../buffers.js";
 
 describe("OutputSafetyHelperTest", () => {
@@ -22,9 +22,11 @@ describe("OutputSafetyHelperTest", () => {
     expect(result.toString()).toBe("<b>hi</b>");
   });
 
-  it("raw passes through an existing SafeBuffer unchanged", () => {
-    const safe = htmlSafe("<b>ok</b>");
-    expect(raw(safe)).toBe(safe);
+  it("raw always returns an html-safe result even from an unsafe SafeBuffer", () => {
+    const unsafe = new SafeBuffer("<b>ok</b>");
+    const result = raw(unsafe);
+    expect(result.htmlSafe).toBe(true);
+    expect(result.toString()).toBe("<b>ok</b>");
   });
 
   it("safe_join should html_escape any items, including the separator, if they are not html_safe", () => {

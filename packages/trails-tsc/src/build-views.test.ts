@@ -162,6 +162,7 @@ describe("buildViews", () => {
     expect(shim).toContain("render<P extends string>");
     expect(shim).toContain("P extends keyof TemplateRegistry");
     expect(shim).toContain("{ partial: P } &");
+    expect(shim).toContain("{} extends TemplateLocals<TemplateRegistry[P]>");
     expect(shim).toContain("{ locals: TemplateLocals<TemplateRegistry[P]> }");
   });
 });

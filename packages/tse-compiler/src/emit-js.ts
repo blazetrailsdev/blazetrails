@@ -26,8 +26,17 @@ export function compileJs(source: string, options: EmitJsOptions = {}): EmitResu
 
 /** Matches `<% } %>` / `<% }) %>` closers that can terminate an open blockExpr. */
 const BLOCK_CLOSE_RE = /^\s*\}\s*\)?\s*;?\s*$/;
-/** Matches code tags that open a nested brace inside a blockExpr body. */
-const INNER_OPEN_RE = /\{\s*$/;
+
+/** Net change in `{}`-brace depth for a code tag value. Counts `{` as +1 and
+ * `}` as -1 so that `} else {` correctly resolves to 0, not +1. */
+function netBraceDepth(code: string): number {
+  let depth = 0;
+  for (const ch of code) {
+    if (ch === "{") depth++;
+    else if (ch === "}") depth--;
+  }
+  return depth;
+}
 
 function emit(ast: TseAst, options: EmitJsOptions): string {
   const exprAppend = options.escapeIgnore === true ? "safeExprAppend" : "append";
@@ -35,7 +44,7 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
     "export default function render(context, locals) {",
     "  const _ob = context.outputBuffer;",
   ];
-  // Stack: one entry per open blockExpr, tracking unclosed code `{` inside it.
+  // Stack: one entry per open blockExpr, tracking net unclosed `{` inside it.
   const innerDepths: number[] = [];
   for (const node of ast.nodes) {
     if (node.kind === "blockExpr") {
@@ -48,13 +57,17 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
         const t = node.value.trim();
         lines.push(`  ${t.endsWith(";") ? t.slice(0, -1) : t});`);
       } else {
-        if (INNER_OPEN_RE.test(node.value)) innerDepths[innerDepths.length - 1]!++;
-        else if (BLOCK_CLOSE_RE.test(node.value)) innerDepths[innerDepths.length - 1]!--;
+        innerDepths[innerDepths.length - 1]! += netBraceDepth(node.value);
         lines.push("  " + emitNode(node, exprAppend));
       }
     } else {
       lines.push("  " + emitNode(node, exprAppend));
     }
+  }
+  if (innerDepths.length > 0) {
+    throw new Error(
+      `TSE: ${innerDepths.length} block-expr tag(s) were never closed — missing <% } %> or <% }) %>`,
+    );
   }
   lines.push("  return _ob;", "}");
   return lines.join("\n") + "\n";

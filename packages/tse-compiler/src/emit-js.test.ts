@@ -67,6 +67,21 @@ describe("compileJs", () => {
     expect(lines.filter((l) => l === "  }));")).toHaveLength(1);
   });
 
+  it("tracks } else { as net-zero brace delta so the blockExpr closer is recognised", () => {
+    const src =
+      "<%= forEach(items, (item) => { %><% if (x) { %><%= item %><% } else { %><%= other %><% } %><% }) %>";
+    const { code } = compileJs(src);
+    const lines = code.split("\n");
+    expect(lines).toContain("  _ob.append(forEach(items, (item) => {");
+    expect(lines.filter((l) => l === "  }));")).toHaveLength(1);
+  });
+
+  it("throws a clear error when a blockExpr is never closed", () => {
+    expect(() => compileJs("<%= forEach(items, (item) => { %>missing closer")).toThrow(
+      /block-expr.*never closed/,
+    );
+  });
+
   it("respects escapeIgnore for block-expr", () => {
     const src = "<%= fn((x) => { %><% }) %>";
     const { code } = compileJs(src, { escapeIgnore: true });

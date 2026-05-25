@@ -153,11 +153,19 @@ function destructureLines(locals: LocalEntry[]): string[] {
 }
 
 const BLOCK_CLOSE_RE = /^\s*\}\s*\)?\s*;?\s*$/;
-const INNER_OPEN_RE = /\{\s*$/;
+
+function netBraceDepth(code: string): number {
+  let depth = 0;
+  for (const ch of code) {
+    if (ch === "{") depth++;
+    else if (ch === "}") depth--;
+  }
+  return depth;
+}
 
 function emitNodes(nodes: TseAst["nodes"]): string[] {
   const lines: string[] = [];
-  // Stack: one entry per open blockExpr, tracking unclosed code `{` inside it.
+  // Stack: one entry per open blockExpr, tracking net unclosed `{` inside it.
   const innerDepths: number[] = [];
   for (const node of nodes) {
     if (node.kind === "blockExpr") {
@@ -170,13 +178,17 @@ function emitNodes(nodes: TseAst["nodes"]): string[] {
         const t = node.value.trim();
         lines.push(`  ${t.endsWith(";") ? t.slice(0, -1) : t});`);
       } else {
-        if (INNER_OPEN_RE.test(node.value)) innerDepths[innerDepths.length - 1]!++;
-        else if (BLOCK_CLOSE_RE.test(node.value)) innerDepths[innerDepths.length - 1]!--;
+        innerDepths[innerDepths.length - 1]! += netBraceDepth(node.value);
         lines.push(emitNode(node));
       }
     } else {
       lines.push(emitNode(node));
     }
+  }
+  if (innerDepths.length > 0) {
+    throw new Error(
+      `TSE: ${innerDepths.length} block-expr tag(s) were never closed — missing <% } %> or <% }) %>`,
+    );
   }
   return lines;
 }

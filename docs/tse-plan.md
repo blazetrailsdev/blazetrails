@@ -1198,13 +1198,12 @@ Rails ref: `actionview/lib/action_view/template/resolver.rb` +
 registered defaults in `mime-types.ts`. `parseFilename` (in
 tse-compiler) should accept a `Set<string>` of known format symbols
 as a parameter — the caller (actionview handler or trails-tsc plugin)
-passes `Mime.SET.symbols` at call time so tse-compiler stays
-actionpack-free.
+passes `new Set(MimeType.SET.symbols)` at call time so tse-compiler
+stays actionpack-free.
 
 - [ ] `parseFilename` consumes a format-token set instead of
-      blind dot-splitting — `show.en.html+phone.tse` resolves
-      `{ name: "show", locale: "en", format: "html", variant: "phone",
-handler: "tse" }`.
+      blind dot-splitting — e.g. `show.en.html+phone.tse` resolves to
+      `{ name: "show", locale: "en", format: "html", variant: "phone", handler: "tse" }`.
 - [ ] Missing format in the filename defaults to `"html"` (per Rails'
       `Template#format` fallback).
 - [ ] `<%! format: "json" !%>` magic block overrides the filename-

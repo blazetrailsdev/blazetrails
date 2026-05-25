@@ -14,6 +14,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import ts from "typescript";
 import { compileJs, parse } from "@blazetrails/tse-compiler";
 import { virtualizeTse, parseLocalsSignature, localsParamType } from "./plugins/tse.js";
 
@@ -74,14 +75,24 @@ export function buildViews(opts: BuildViewsOptions = {}): BuildViewsResult {
   // contribute to the registry entry. The emitted type is an intersection
   // of all format types, requiring callers to satisfy every format's locals.
   const registryMap = new Map<string, string[]>();
+  const shimPaths: string[] = [];
   for (const rel of files) {
     const src = fs.readFileSync(path.join(viewsDir, rel), "utf8");
     const shim = virtualizeTse(src);
-    const js = compileJs(src).code;
+    const jsFileName = rel + ".js";
+    const sourceFileName = path.basename(rel);
+    const result = compileJs(src, { fileName: jsFileName, sourceFileName });
     const outBase = path.join(outViews, rel);
     fs.mkdirSync(path.dirname(outBase), { recursive: true });
     fs.writeFileSync(outBase + ".ts", shim);
-    fs.writeFileSync(outBase + ".js", js);
+    const jsCode = result.sourceMap
+      ? result.code + `//# sourceMappingURL=${path.basename(rel)}.js.map\n`
+      : result.code;
+    fs.writeFileSync(outBase + ".js", jsCode);
+    if (result.sourceMap) {
+      fs.writeFileSync(outBase + ".js.map", JSON.stringify(result.sourceMap));
+    }
+    shimPaths.push(outBase + ".ts");
     const ast = parse(src);
     const registryKey = partialRegistryKey(rel);
     if (registryKey !== null && ast.localsSignature !== null) {
@@ -90,6 +101,7 @@ export function buildViews(opts: BuildViewsOptions = {}): BuildViewsResult {
       registryMap.set(registryKey, [...existing, localsParamType(ast, locals)]);
     }
   }
+  emitDeclarations(shimPaths);
   const registryEntries = Array.from(registryMap, ([key, types]) => ({
     key,
     localsType: types.length === 1 ? types[0]! : types.map((t) => `(${t})`).join(" & "),
@@ -172,6 +184,24 @@ function emitRegistryAugmentation(entries: Array<{ key: string; localsType: stri
   }
   lines.push("  }", "}", "");
   return lines.join("\n");
+}
+
+function emitDeclarations(shimPaths: readonly string[]): void {
+  if (shimPaths.length === 0) return;
+  const options: ts.CompilerOptions = {
+    declaration: true,
+    declarationMap: true,
+    emitDeclarationOnly: true,
+    skipLibCheck: true,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ESNext,
+    strict: false,
+    noEmit: false,
+  };
+  const host = ts.createCompilerHost(options, true);
+  const program = ts.createProgram([...shimPaths], options, host);
+  program.emit();
 }
 
 function emitManifest(files: readonly string[]): string {

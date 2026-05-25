@@ -179,30 +179,23 @@ export class TseRenderContextImpl implements TseRenderContext {
     extraLocals: Record<string, unknown>,
     spacerTemplate?: string,
   ): SafeBuffer {
-    const results: SafeBuffer[] = [];
+    const buf = new OutputBuffer();
     const counterName = `${camelize(localName, false)}Counter`;
+    const spacerLocalName = spacerTemplate !== undefined ? deriveLocalName(spacerTemplate) : "";
 
     for (let i = 0; i < collection.length; i++) {
-      const item = collection[i];
+      if (i > 0 && spacerTemplate !== undefined) {
+        buf.safeAppend(this._renderPartial(spacerTemplate, spacerLocalName, {}).toString());
+      }
       const locals: Record<string, unknown> = {
         ...extraLocals,
-        [localName]: item,
+        [localName]: collection[i],
         [counterName]: i,
       };
-      results.push(this._renderPartial(partial, localName, locals));
+      buf.safeAppend(this._renderPartial(partial, localName, locals).toString());
     }
 
-    if (spacerTemplate !== undefined && results.length > 1) {
-      const spacerLocalName = deriveLocalName(spacerTemplate);
-      const interleaved: SafeBuffer[] = [];
-      for (let i = 0; i < results.length; i++) {
-        if (i > 0) interleaved.push(this._renderPartial(spacerTemplate, spacerLocalName, {}));
-        interleaved.push(results[i]);
-      }
-      return interleaved.reduce((acc, s) => acc.concat(s), htmlSafe(""));
-    }
-
-    return results.reduce((acc, s) => acc.concat(s), htmlSafe(""));
+    return buf.toString();
   }
 }
 

@@ -158,10 +158,8 @@ describe("buildViews", () => {
       'import type { TemplateRegistry, TemplateLocals } from "@blazetrails/actionview"',
     );
     expect(shim).toContain("render<P extends string>");
-    expect(shim).toContain("partial: P;");
-    expect(shim).toContain(
-      "P extends keyof TemplateRegistry ? TemplateLocals<TemplateRegistry[P]>",
-    );
+    expect(shim).toContain("P extends keyof TemplateRegistry");
+    expect(shim).toContain("{ partial: P; locals: TemplateLocals<TemplateRegistry[P]> }");
   });
 });
 

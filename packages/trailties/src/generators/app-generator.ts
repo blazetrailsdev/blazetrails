@@ -76,6 +76,7 @@ export class AppGenerator extends AppBase {
             "@blazetrails/activesupport": "*",
             "@blazetrails/rack": "*",
             "@blazetrails/actionpack": "*",
+            "@blazetrails/actionview": "*",
             "@blazetrails/trailties": "*",
             [dep.name]: dep.version,
           },

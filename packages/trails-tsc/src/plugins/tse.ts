@@ -152,6 +152,26 @@ function destructureLines(locals: LocalEntry[]): string[] {
   return [`  const { ${pieces.join(", ")} } = locals;`, voids];
 }
 
+const BLOCK_CLOSE_RE = /^\s*\}\s*\)?\s*;?\s*$/;
+
+function emitNodes(nodes: TseAst["nodes"]): string[] {
+  const lines: string[] = [];
+  let blockDepth = 0;
+  for (const node of nodes) {
+    if (node.kind === "blockExpr") {
+      blockDepth++;
+      lines.push(`  _ob.append(${node.value.trim()}`);
+    } else if (node.kind === "code" && blockDepth > 0 && BLOCK_CLOSE_RE.test(node.value)) {
+      blockDepth--;
+      const t = node.value.trim();
+      lines.push(`  ${t.endsWith(";") ? t.slice(0, -1) : t});`);
+    } else {
+      lines.push(emitNode(node));
+    }
+  }
+  return lines;
+}
+
 function emitNode(node: TseAst["nodes"][number]): string {
   switch (node.kind) {
     case "text":
@@ -165,6 +185,8 @@ function emitNode(node: TseAst["nodes"][number]): string {
       return `  _ob.append(${node.value});`;
     case "rawExpr":
       return `  _ob.safeExprAppend(${node.value});`;
+    case "blockExpr":
+      return `  _ob.append(${node.value}`;
   }
 }
 
@@ -208,7 +230,7 @@ export function virtualizeTseWithDeltas(source: string): VirtualizeTseResult {
   ];
   for (const line of destructureLines(locals)) header.push(line);
   const body: string[] = [];
-  for (const node of ast.nodes) body.push(emitNode(node));
+  for (const line of emitNodes(ast.nodes)) body.push(line);
   const footer = ["  return _ob;", "}", ""];
 
   // Two LineDeltas: one for the prepended header, one for the trailing

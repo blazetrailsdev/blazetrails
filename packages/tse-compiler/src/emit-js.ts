@@ -24,13 +24,28 @@ export function compileJs(source: string, options: EmitJsOptions = {}): EmitResu
   };
 }
 
+/** Matches `<% } %>` / `<% }) %>` closers that terminate an open blockExpr. */
+const BLOCK_CLOSE_RE = /^\s*\}\s*\)?\s*;?\s*$/;
+
 function emit(ast: TseAst, options: EmitJsOptions): string {
   const exprAppend = options.escapeIgnore === true ? "safeExprAppend" : "append";
   const lines = [
     "export default function render(context, locals) {",
     "  const _ob = context.outputBuffer;",
   ];
-  for (const node of ast.nodes) lines.push("  " + emitNode(node, exprAppend));
+  let blockDepth = 0;
+  for (const node of ast.nodes) {
+    if (node.kind === "blockExpr") {
+      blockDepth++;
+      lines.push(`  _ob.${exprAppend}(${node.value.trim()}`);
+    } else if (node.kind === "code" && blockDepth > 0 && BLOCK_CLOSE_RE.test(node.value)) {
+      blockDepth--;
+      const t = node.value.trim();
+      lines.push(`  ${t.endsWith(";") ? t.slice(0, -1) : t});`);
+    } else {
+      lines.push("  " + emitNode(node, exprAppend));
+    }
+  }
   lines.push("  return _ob;", "}");
   return lines.join("\n") + "\n";
 }
@@ -47,5 +62,7 @@ function emitNode(node: TseNode, exprAppend: string): string {
       return `_ob.${exprAppend}(${node.value});`;
     case "rawExpr":
       return `_ob.safeExprAppend(${node.value});`;
+    case "blockExpr":
+      return `_ob.${exprAppend}(${node.value}`;
   }
 }

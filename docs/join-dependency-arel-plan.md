@@ -1,174 +1,263 @@
-# JoinDependency → Arel AST Plan
+# JoinDependency → Full Rails Fidelity Plan
 
-## Problem
+## Status quo
 
-Our `JoinDependency` builds raw SQL strings (`joinSql` on each `JoinNode`) and
-needs adapter-aware quoting at construction time. Rails' `JoinDependency` builds
-an Arel AST and never touches the adapter — quoting happens later when the
-visitor compiles the AST.
+We have two parallel implementations:
 
-**Our approach:**
+1. **`join-dependency.ts`** (the 900-line main class) — builds raw SQL strings,
+   uses `_adapter`/`_qt()`/`_qc()`/`_quoteString()` for quoting at construction
+   time, stores `joinSql: string` on each `JoinNode`.
+
+2. **`join-dependency/join-association.ts`** (already exists) — proper
+   Rails-shaped `JoinAssociation` class that walks `reflection.chain`, calls
+   `reflection.joinScope()`, extracts `scope._whereClause.ast`, and returns
+   `OuterJoin(table, On(predicates))` Arel nodes.
+
+The main `JoinDependency` class **ignores** the existing `JoinAssociation` and
+does everything inline with raw SQL. The goal is to wire the existing Arel-based
+classes into the main flow and close all remaining fidelity gaps.
+
+## Rails architecture (reference)
 
 ```
-JoinDependency.addAssociation()
-  → manually builds "LEFT OUTER JOIN t ON t.fk = s.pk" strings
-  → needs _adapter, _qt(), _qc(), _quoteString() at construction time
-  → joinConstraints() wraps strings in StringJoin nodes
-  → _buildEagerJoinManager() reads node.joinSql as raw SQL
+JoinDependency
+  @join_root: JoinBase (tree root, has children: JoinAssociation[])
+  @join_type: OuterJoin (or InnerJoin for joins vs eager_load)
+
+  #join_constraints → walks tree, delegates to JoinAssociation#join_constraints
+  #instantiate → walks tree, uses association(name).target= / loaded!
+  #apply_column_aliases → lazy proc: relation._select!(-> { aliases.columns })
+  #aliases → Aliases struct with column_aliases returning Arel As nodes
+
+JoinAssociation < JoinPart
+  #join_constraints(foreign_table, foreign_klass, join_type, alias_tracker)
+    → reflection.chain iteration
+    → reflection.join_scope(table, foreign_table, foreign_klass)
+    → scope.arel.constraints → On node → join_type.new(table, On(nodes))
+  #readonly? / #strict_loading? — from reflection.scope
+
+JoinBase < JoinPart
+  Root node; delegates column_names, primary_key, instantiate
+
+AliasTracker
+  Separate class tracking table name → count; aliased_table_for returns
+  Table.new(name, as: alias) on collision.
 ```
 
-**Rails' approach:**
+## What we already have (verified)
 
-```
-JoinDependency#join_constraints
-  → delegates to JoinAssociation#join_constraints
-  → calls reflection.join_scope(table, foreign_table, foreign_klass)
-  → extracts scope.arel.constraints (Arel predicates)
-  → wraps in join_type.new(table, Arel::Nodes::On.new(predicates))
-  → returns Arel::Nodes::OuterJoin nodes
-```
-
-Key difference: Rails uses `reflection.join_scope()` which returns a Relation
-whose `.arel.constraints` are proper Arel predicates. We already have
-`reflection.joinScope()` (reflection.ts:129) that does the same thing — building
-`table.get(pk).eq(foreignTable.get(fk))` — but `JoinDependency` ignores it and
-hand-builds SQL instead.
-
-## What we already have
-
-- `Nodes.OuterJoin` (extends `Join extends Binary`) — packages/arel/src/nodes/outer-join.ts
-- `Nodes.On` (extends `Unary`) — packages/arel/src/nodes/unary.ts:23
-- `Table#createJoin(to, constraint, klass)` — packages/arel/src/table.ts:216
-- `Nodes.As` (extends `Binary`) — for column alias expressions
-- `SelectManager#appendJoinNode(node)` — packages/arel/src/select-manager.ts:649
+- `JoinAssociation` (join-dependency/join-association.ts) — `joinConstraints()`
+  using `reflection.joinScope()` + `scope._whereClause.ast` ✓
+- `JoinBase` (join-dependency/join-base.ts) — root node with children ✓
+- `JoinPart` (join-dependency/join-part.ts) — tree base class with
+  `each()`/`children` ✓
+- `Nodes.OuterJoin`, `Nodes.On`, `Nodes.As`, `Nodes.And` — all exist ✓
+- `Table({ as: "alias" })` + `tableAlias` property ✓
+- `SelectManager#appendJoinNode(node)` ✓
+- `SelectManager#constraints` → `Node[]` ✓
 - `reflection.joinScope(table, foreignTable, foreignKlass)` — builds Arel
-  predicates via `table.get(pk).eq(foreignTable.get(fk))` + polymorphic type +
-  scope merging
+  predicates ✓
 
-## Target state
+## Fidelity gaps (ordered by priority)
 
-`JoinDependency` uses `reflection.joinScope()` to get Arel predicates, wraps
-them in `OuterJoin(table, On(predicates))`, and returns those nodes. The
-`_adapter` field and all manual quoting helpers are deleted.
+### Gap 1 — Main JoinDependency doesn't use JoinAssociation (Arel wiring)
+
+The `addAssociation()` / `_addThroughAssociation()` methods hand-build SQL
+instead of creating `JoinAssociation` instances and calling their
+`joinConstraints()`. This is the core structural gap.
+
+### Gap 2 — No tree structure in the main flow
+
+Rails' `JoinDependency` stores a `@join_root` tree (`JoinBase` with
+`JoinAssociation` children, recursively). Ours uses a flat `_nodes: JoinNode[]`
+array. The tree enables:
+
+- `walk()` deduplication (shared prefix = single join)
+- Parent→child traversal in `construct()` (hydration)
+- `reflections` computed from tree walk
+
+### Gap 3 — Hydration doesn't wire association proxies
+
+Rails' `construct()` calls `ar_parent.association(name).target=` and
+`other.loaded!` so that `post.comments` after eager-load goes through the
+association proxy (enables `loaded?` checks, inverse assignment, etc.). Ours
+returns a raw `{ parents, associations }` map.
+
+### Gap 4 — No `walk()` deduplication
+
+When multiple eager-loads share a common prefix (e.g., `comments.author` and
+`comments.likes`), Rails reuses the existing `comments` join. Our
+`joinConstraints(joinsToAdd)` concatenates blindly, potentially duplicating
+intermediate joins.
+
+### Gap 5 — `readonly?` / `strict_loading?` propagation
+
+Rails' `JoinAssociation` checks `reflection.scope` and calls `model.readonly!` /
+`model.strict_loading!` on instantiated children. Our `JoinAssociation` has
+the fields but they're always false; the hydration path doesn't read them.
+
+### Gap 6 — Lazy `apply_column_aliases`
+
+Rails uses `relation._select!(-> { aliases.columns })` (a lambda evaluated at
+query-build time). Ours eagerly computes SQL strings via `buildSelectSql()`.
+
+### Gap 7 — `Aliases#column_aliases` returns Arel `As` nodes
+
+Rails' `Aliases::Table#column_aliases` returns `t[column.name].as(column.alias)`
+(Arel nodes). Ours returns raw `AliasMap` data objects that get formatted into
+SQL strings.
+
+### Gap 8 — AliasTracker as a separate class
+
+Rails has `AliasTracker` (tracks collisions, truncates long aliases, handles
+`references`). Ours is an inline `_usedTableNames: Set<string>`.
+
+### Gap 9 — Extra columns in `instantiate`
+
+Rails handles non-`tN_rN` columns in the result set (raw selects), merging them
+into the parent's attributes. Our hydration ignores them.
 
 ## PR sequence
 
-### PR 1 — JoinAssociation class + reflection-based join building (~250 LOC)
+### PR 1 — Wire JoinAssociation into addAssociation (~250 LOC)
 
-Extract a `JoinAssociation` class (mirrors Rails' `JoinDependency::JoinAssociation`):
+Replace the manual SQL construction in `addAssociation()` (non-through path)
+with:
+
+1. Resolve reflection via `reflectOnAssociation()`
+2. Create aliased `Table` when collision detected (`new Table(name, { as: tN })`)
+3. Create `JoinAssociation(reflection)` and call
+   `joinAssociation.joinConstraints(sourceTable, sourceKlass, OuterJoin)`
+4. Store the resulting `Nodes.OuterJoin` on `JoinNode` as `arelJoin`
+5. Keep `joinSql` temporarily (computed by compiling the Arel node via the
+   visitor) for backward compat during migration
+
+Delete: `_adapter`, `_resolveAdapter`, `_quoteString`, `_qt`, `_qc`, abstract
+quoting imports, the PLACEHOLDER string-replace pattern, `_addStiConstraint`.
+
+**Test migration:** Update `join-dependency-quoting.test.ts` — assertions change
+from checking raw SQL strings with adapter-specific quotes to checking that the
+Arel node structure is correct (e.g., `node.arelJoin` is an `OuterJoin` with
+the right `On` predicate). The quoting test becomes a visitor-output test.
+
+### PR 2 — Through-association path via JoinAssociation (~250 LOC)
+
+Replace `_addThroughAssociation` with `JoinAssociation#joinConstraints` which
+already handles `reflection.chain` (multi-hop throughs). The existing
+implementation walks the chain and builds joins for each hop.
+
+**Test migration:** Update `join-dependency-through-aliasing.test.ts` to assert
+on Arel node structure / visitor output rather than `node.joinSql` strings.
+
+### PR 3 — Tree structure: use JoinBase/JoinAssociation tree (~200 LOC)
+
+Replace flat `_nodes: JoinNode[]` with `_joinRoot: JoinBase` (tree of
+`JoinPart` nodes). `addAssociation` pushes `JoinAssociation` as children of the
+appropriate parent node. `addNestedAssociation` walks/builds the tree.
+
+This enables:
+
+- Natural parent→child traversal
+- Foundation for `walk()` deduplication
+- `reflections` from `join_root.drop(1).map(r => r.reflection)`
+
+### PR 4 — `walk()` deduplication (~150 LOC)
+
+Implement `walk(left, right, join_type)` — when two `JoinDependency` instances
+share a subtree, reuse existing table aliases:
 
 ```ts
-class JoinAssociation {
-  reflection: AbstractReflection;
-  table: Table; // aliased Arel::Table for this join target
-
-  joinConstraints(
-    foreignTable: Table,
-    foreignKlass: typeof Base,
-    joinType: typeof OuterJoin,
-  ): Join[] {
-    const scope = this.reflection.joinScope(this.table, foreignTable, foreignKlass);
-    const arel = scope.arel();
-    const predicates = arel.constraints; // Arel::Nodes::And or single predicate
-    return [new joinType(this.table, new On(predicates))];
-  }
+private walk(left: JoinPart, right: JoinPart, joinType: JoinType): Nodes.Node[] {
+  const [intersection, missing] = partition(right.children, rc =>
+    left.children.find(lc => rc.match(lc))
+  );
+  const joins = intersection.flatMap(([l, r]) => { r.table = l.table; return this.walk(l, r, joinType); });
+  return joins.concat(missing.flatMap(([_, n]) => this.makeConstraints(left, n, joinType)));
 }
 ```
 
-This is the core behavioral change. The reflection already builds the correct
-predicates; we just need to extract them and wrap in `OuterJoin`.
+### PR 5 — Hydration via association proxies (~200 LOC)
 
-Scope handling comes for free — `reflection.joinScope()` already merges
-association scopes via `joinScopes()` → `scope(rel)`. No regex parsing needed.
-
-### PR 2 — Wire JoinAssociation into JoinDependency (~250 LOC)
-
-Replace `addAssociation`'s manual SQL building with `JoinAssociation` creation:
-
-- Resolve target model + table (keep existing logic)
-- Create aliased `Table` when collision detected (replaces `_usedTableNames`
-  string tracking)
-- Create `JoinAssociation` with the reflection
-- Call `joinAssociation.joinConstraints(sourceTable, sourceKlass, OuterJoin)`
-- Store the resulting `Nodes.OuterJoin` on JoinNode (new field `arelJoin`)
-
-Delete: `_adapter`, `_resolveAdapter`, `_quoteString`, `_qt`, `_qc`,
-abstract quoting imports, the PLACEHOLDER string-replace pattern,
-`_addStiConstraint`.
-
-Keep: alias tracking (collision detection), through-association routing,
-`JoinNode` struct (but `joinSql: string` → `arelJoin: Nodes.OuterJoin`).
-
-### PR 3 — Through-association Arel path (~200 LOC)
-
-Refactor `_addThroughAssociation` to use `reflection.chain` (the reflection
-chain already exists — reflection.ts has `.chain` and `joinScopes`). Rails
-iterates `reflection.chain` in `JoinAssociation#join_constraints` to build
-multi-hop through joins. Mirror that:
+Rewrite `construct()` to mirror Rails:
 
 ```ts
-for (const [refl, table] of chain.reverse()) {
-  const scope = refl.joinScope(table, foreignTable, foreignKlass);
-  joins.push(new OuterJoin(table, new On(scope.arel().constraints)));
-  foreignTable = table;
-  foreignKlass = refl.klass;
+const other = arParent.association(node.reflection.name);
+other.loaded = true; // marks collection as loaded
+if (node.reflection.collection) {
+  other.target.push(model);
+} else {
+  other.target = model;
+}
+if (node.isReadonly()) model.readonly = true;
+if (node.isStrictLoading()) model.strictLoading = true;
+```
+
+This wires `readonly?` and `strict_loading?` propagation (Gap 5) at the same
+time.
+
+### PR 6 — Arel select aliases + lazy apply_column_aliases (~150 LOC)
+
+1. `Aliases#columnAliases(node)` returns `table.get(col.name).as(col.alias)`
+   (Arel `As` nodes) instead of raw data
+2. `applyColumnAliases(relation)` uses `relation._select!(lambda)` for lazy
+   evaluation
+3. Delete `buildSelectSql()` — callers use the Arel alias nodes
+
+### PR 7 — Callers + cleanup (~150 LOC)
+
+1. `_buildEagerJoinManager()` (relation.ts:3434) — migrate from
+   `appendStringJoin(node.joinSql)` to `appendJoinNode(node.arelJoin)`
+2. `joinConstraints()` — returns stored Arel nodes directly (no `StringJoin`
+   wrapping)
+3. Delete `joinSql` from `JoinNode` interface
+4. Delete dead helper functions at bottom of file (`joinRoot`,
+   `makeJoinConstraints`, `makeConstraints`, `walk`, `build`, `findReflection`)
+5. Delete `join-dependency-quoting.test.ts` (replaced in PR 1)
+
+### PR 8 (stretch) — AliasTracker extraction (~150 LOC)
+
+Extract alias tracking to a standalone class:
+
+```ts
+class AliasTracker {
+  private aliases: Map<string, number>;
+  aliasedTableFor(table: Table, tableName?: string): Table { ... }
 }
 ```
 
-This replaces all the manual FK/PK string-building for through associations,
-including the polymorphic source_type handling and recursive through resolution.
+Handles: collision counting, long-name truncation, `references` integration.
+Passed to `JoinAssociation#joinConstraints` as the 4th arg (matching Rails).
 
-### PR 4 — Callers: SelectManager integration (~150 LOC)
+### PR 9 (stretch) — Extra columns in instantiate (~100 LOC)
 
-Update the two call sites:
+Handle non-`tN_rN` columns in result rows, merging them into the parent
+model's attributes (mirrors Rails' `column_names` extraction in
+`JoinDependency#instantiate`).
 
-1. **`joinConstraints()`** — currently wraps `joinSql` strings in `StringJoin`.
-   After PR 2, returns stored `Nodes.OuterJoin` directly. Callers already use
-   `manager.appendJoinNode()` which accepts `Join` nodes.
-
-2. **`_buildEagerJoinManager()`** (relation.ts:3434) — currently reads
-   `node.joinSql` via `manager.appendStringJoin()`. Change to
-   `manager.appendJoinNode(node.arelJoin)`.
-
-3. **`buildSelectSql()` → `selectAliases(): Nodes.As[]`** — return
-   `table[column].as(aliasName)` nodes instead of SQL strings. Pass to
-   `manager.project(...aliases)`.
-
-4. **`applyColumnAliases()`** — same pattern, push `Nodes.As` via
-   `relation._select!`.
-
-### PR 5 — Cleanup (~100 LOC)
-
-- Delete dead helper functions at bottom of file (`joinRoot`,
-  `makeJoinConstraints`, `makeConstraints`, `walk`, `build`, `findReflection`)
-- Remove `StringJoin` usage from eager-load paths
-- Delete `joinSql` from `JoinNode` interface
+## Total: ~1600 LOC across 7 core + 2 stretch PRs
 
 ## Risks / blockers
 
-1. **`reflection.joinScope()` completeness** — currently handles direct FK
-   predicates + polymorphic type + scopes. STI type constraints may need
-   adding (check if `klassJoinScope` already applies the STI WHERE via
-   `default_scope` on the STI subclass — Rails does this automatically).
+1. **STI type constraints in `joinScope`** — verify `klassJoinScope` applies
+   STI WHERE via the subclass's `default_scope`. If not, add STI predicate
+   injection to `joinScope` (~10 LOC).
 
-2. **Aliased Table construction** — Rails uses `alias_tracker.aliased_table_for`
-   which returns `Arel::Table.new(name, as: alias)`. Verify our `Table`
-   constructor accepts an alias parameter, or add one (~5 LOC in arel package).
+2. **`reflection.chain` completeness for multi-hop throughs** — verify the
+   chain is fully populated for nested `:through` associations. If gaps exist,
+   that's a prerequisite reflection fix.
 
-3. **Through-association reflection chain** — verify `reflection.chain` returns
-   the full chain for multi-hop throughs. If incomplete, that's a prerequisite
-   fix.
+3. **`scope._whereClause.ast` availability** — already confirmed working in the
+   existing `JoinAssociation`. The plan uses this path (not
+   `scope.arel().constraints`).
 
-4. **`scope.arel().constraints`** — verify our Relation exposes Arel predicates
-   through this path. The `whereClause.ast` should work as the constraint node.
+4. **Backward compat during migration** — PRs 1–2 keep `joinSql` as a computed
+   property (compile the Arel node) so callers don't all break at once. PR 7
+   removes it after all callers are migrated.
 
 ## Non-goals
 
-- Refactoring instantiation/hydration (`construct`, `instantiateFromRows`) —
-  orthogonal to join building.
-- Extracting `AliasTracker` to a separate class — can follow later.
-- Changing `addNestedAssociation` control flow — only the leaf construction
-  changes.
-- Tree structure (`JoinBase` with children) — our flat node list works fine;
-  the tree is only needed for Rails' `walk()` deduplication which we don't need
-  yet.
+- Rewriting the reflection system
+- `InnerJoin` support for `joins()` (currently only `eager_load` uses
+  JoinDependency; `joins()` goes through a different path)
+- Full `AliasTracker` feature parity with Rails' truncation/counter logic
+  (stretch PR covers the basics)

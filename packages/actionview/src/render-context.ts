@@ -191,7 +191,7 @@ export class TseRenderContextImpl implements TseRenderContext {
 
     for (let i = 0; i < total; i++) {
       if (i > 0 && spacerTemplate !== undefined) {
-        buf.safeAppend(this._renderPartial(spacerTemplate, spacerLocalName, {}).toString());
+        buf.safeAppend(this._renderPartial(spacerTemplate, spacerLocalName, {}));
       }
       const locals: Record<string, unknown> = {
         ...extraLocals,
@@ -199,7 +199,7 @@ export class TseRenderContextImpl implements TseRenderContext {
         [counterName]: i,
         [iterationName]: { index: i, size: total, first: i === 0, last: i === total - 1 },
       };
-      buf.safeAppend(this._renderPartial(partial, localName, locals).toString());
+      buf.safeAppend(this._renderPartial(partial, localName, locals));
     }
 
     return buf.toString();

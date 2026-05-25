@@ -41,6 +41,8 @@ describe("virtualizeTse", () => {
     const ts = virtualizeTse("<p>hi</p>");
     expect(ts).toContain("locals: Record<string, unknown>");
     expect(ts).not.toContain("const {");
+    // NoExtraKeys is not imported when unused — avoids noUnusedLocals diagnostics.
+    expect(ts).not.toContain("NoExtraKeys");
   });
 
   it("types empty `<%# locals: () %>` as NoExtraKeys<Record<string, never>> (Rails **nil parity)", () => {

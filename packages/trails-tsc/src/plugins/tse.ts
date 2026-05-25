@@ -104,28 +104,33 @@ function emitNode(node: TseAst["nodes"][number]): string {
   }
 }
 
-const PREAMBLE = [
-  "/* virtualized from .tse — phase 2b trails-tsc plugin */",
-  'import type { TemplateRegistry, TemplateLocals, NoExtraKeys } from "@blazetrails/actionview";',
-  "interface SafeString { readonly __safeStringBrand: unique symbol }",
-  "interface OutputBuffer extends SafeString {",
-  "  safeAppend(s: string): void;",
-  "  append(value: unknown): void;",
-  "  safeExprAppend(value: unknown): void;",
-  "}",
-  "interface RenderContext {",
-  "  readonly outputBuffer: OutputBuffer;",
-  "  render<P extends string>(options: { partial: P } & (",
-  "    P extends keyof TemplateRegistry",
-  "      ? {} extends TemplateLocals<TemplateRegistry[P]>",
-  "        ? { locals?: TemplateLocals<TemplateRegistry[P]> }",
-  "        : { locals: TemplateLocals<TemplateRegistry[P]> }",
-  "      : { locals?: Record<string, unknown> }",
-  "  )): SafeString;",
-  "  [key: string]: unknown;",
-  "}",
-  "",
-].join("\n");
+function buildPreamble(needsNoExtraKeys: boolean): string {
+  const actionviewImports = needsNoExtraKeys
+    ? "TemplateRegistry, TemplateLocals, NoExtraKeys"
+    : "TemplateRegistry, TemplateLocals";
+  return [
+    "/* virtualized from .tse — phase 2b trails-tsc plugin */",
+    `import type { ${actionviewImports} } from "@blazetrails/actionview";`,
+    "interface SafeString { readonly __safeStringBrand: unique symbol }",
+    "interface OutputBuffer extends SafeString {",
+    "  safeAppend(s: string): void;",
+    "  append(value: unknown): void;",
+    "  safeExprAppend(value: unknown): void;",
+    "}",
+    "interface RenderContext {",
+    "  readonly outputBuffer: OutputBuffer;",
+    "  render<P extends string>(options: { partial: P } & (",
+    "    P extends keyof TemplateRegistry",
+    "      ? {} extends TemplateLocals<TemplateRegistry[P]>",
+    "        ? { locals?: TemplateLocals<TemplateRegistry[P]> }",
+    "        : { locals: TemplateLocals<TemplateRegistry[P]> }",
+    "      : { locals?: Record<string, unknown> }",
+    "  )): SafeString;",
+    "  [key: string]: unknown;",
+    "}",
+    "",
+  ].join("\n");
+}
 
 export interface VirtualizeTseResult {
   ts: string;
@@ -140,9 +145,10 @@ export function virtualizeTseWithDeltas(source: string): VirtualizeTseResult {
   const ast = parse(source);
   const locals = ast.localsSignature === null ? [] : parseLocalsSignature(ast.localsSignature);
   const localsType = localsParamType(ast, locals);
+  const needsNoExtraKeys = localsType.includes("NoExtraKeys");
 
   const header: string[] = [
-    PREAMBLE,
+    buildPreamble(needsNoExtraKeys),
     "export default function render(",
     "  context: RenderContext,",
     `  locals: ${localsType},`,

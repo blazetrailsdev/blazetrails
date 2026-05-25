@@ -28,6 +28,7 @@ export interface ActionViewConfig {
   imageDecoding: string | null;
   applyStylesheetMediaDefault: boolean;
   prependContentExfiltrationPrevention: boolean;
+  annotateRenderedViewWithFilenames: boolean;
 }
 
 export function defaultActionViewConfig(): ActionViewConfig {
@@ -39,6 +40,7 @@ export function defaultActionViewConfig(): ActionViewConfig {
     imageDecoding: null,
     applyStylesheetMediaDefault: true,
     prependContentExfiltrationPrevention: false,
+    annotateRenderedViewWithFilenames: false,
   };
 }
 

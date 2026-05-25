@@ -131,6 +131,13 @@ describe("AppGenerator", () => {
     expect(gitignore).toContain("/.trails/");
   });
 
+  it("tsconfig includes .trails and has no rootDir so augmentation participates in type-check", async () => {
+    await makeGen().run();
+    const tsconfig = JSON.parse(fs.readFileSync(appPath("tsconfig.json"), "utf-8"));
+    expect(tsconfig.include).toContain(".trails");
+    expect(tsconfig.compilerOptions.rootDir).toBeUndefined();
+  });
+
   it("configures postgres database", async () => {
     await makeGen("postgres").run();
     const pkg = JSON.parse(fs.readFileSync(appPath("package.json"), "utf-8"));

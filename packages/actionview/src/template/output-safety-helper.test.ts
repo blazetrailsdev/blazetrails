@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { raw, safeJoin, toSentence } from "../helpers/output-safety-helper.js";
 import { htmlSafe, htmlEscape } from "@blazetrails/activesupport";
+import { OutputBuffer } from "../buffers.js";
 
 describe("OutputSafetyHelperTest", () => {
   it("raw returns the safe string", () => {
@@ -11,6 +12,19 @@ describe("OutputSafetyHelperTest", () => {
 
   it("raw handles nil values correctly", () => {
     expect(raw(null).toString()).toBe("");
+  });
+
+  it("raw returns SafeBuffer from OutputBuffer without String() coercion", () => {
+    const buf = new OutputBuffer();
+    buf.safeAppend("<b>hi</b>");
+    const result = raw(buf);
+    expect(result.htmlSafe).toBe(true);
+    expect(result.toString()).toBe("<b>hi</b>");
+  });
+
+  it("raw passes through an existing SafeBuffer unchanged", () => {
+    const safe = htmlSafe("<b>ok</b>");
+    expect(raw(safe)).toBe(safe);
   });
 
   it("safe_join should html_escape any items, including the separator, if they are not html_safe", () => {

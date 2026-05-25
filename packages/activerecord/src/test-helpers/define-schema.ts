@@ -600,17 +600,25 @@ async function _defineSchemaImpl(
     const raw = schema[table];
     const newSig = tableSignature(raw);
     const cachedSig = cache.get(table);
-    const stillExists = known ? known.has(table) : cachedSig !== undefined;
+    let stillExists = known ? known.has(table) : cachedSig !== undefined;
     if (cachedSig === newSig && stillExists) {
       continue;
     }
+    // Resolve DB identity for adapter OR its inner adapter (wrappers like
+    // TestAdapterFixtures return null from databaseIdentity but their inner
+    // adapter IS the real connection).
+    const resolvedAdapterKey = _canonicalPreloadSigs
+      ? (() => {
+          const inner = (adapter as unknown as { innerAdapter?: DatabaseAdapter }).innerAdapter;
+          return databaseIdentity(adapter) ?? (inner ? databaseIdentity(inner) : null);
+        })()
+      : null;
     // D-Y fast-path: adapter IS the canonical DB and the test spec is a subset
     // of what's already there — skip DDL and keep the canonical signature.
     if (_canonicalPreloadSigs && isCanonicalSubset(table, raw)) {
-      const adapterKey = databaseIdentity(adapter);
       const isSameDb =
-        adapterKey !== null
-          ? adapterKey === _canonicalPreloadKey
+        resolvedAdapterKey !== null
+          ? resolvedAdapterKey === _canonicalPreloadKey
           : adapter === _canonicalPreloadAdapter;
       if (isSameDb) {
         const canonicalSig = _canonicalPreloadSigs.get(table);
@@ -619,6 +627,19 @@ async function _defineSchemaImpl(
           continue;
         }
       }
+    }
+    // Canonical preload created this table in the DB but the test needs a
+    // non-subset schema (isCanonicalSubset was false or isSameDb was false).
+    // The wrapper's `tables` Set doesn't track canonical tables, so
+    // `stillExists` is false — but the table IS in the DB.  Promote to
+    // stillExists so the drop-and-recreate path fires.
+    if (
+      !stillExists &&
+      _canonicalPreloadSigs?.has(table) &&
+      _canonicalPreloadKey !== null &&
+      resolvedAdapterKey === _canonicalPreloadKey
+    ) {
+      stillExists = true;
     }
     if (stillExists) {
       await ss.dropTable(table, { ifExists: true });

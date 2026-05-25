@@ -260,29 +260,28 @@ describe("virtualizeTse", () => {
       );
       const diags = diagnose(out, registryStub);
       expect(diags.length).toBeGreaterThan(0);
+      expect(diags.join("\n")).toMatch(/not assignable|wrong/i);
     });
   });
 
   describe("TseRenderContext method signatures on context param", () => {
-    it("accepts context.capture() calls", () => {
-      const out = virtualizeTse("<%= context.capture(() => {}) %>");
+    it("accepts context.capture/raw/yield calls", () => {
+      const out = virtualizeTse(
+        "<%= context.capture(() => {}) %><%= context.raw('hi') %><%= context.yield() %>",
+      );
       expect(diagnose(out)).toEqual([]);
     });
 
-    it("accepts context.raw() calls", () => {
-      const out = virtualizeTse("<%= context.raw('hello') %>");
+    it("accepts context.concat and context.contentFor calls", () => {
+      const out = virtualizeTse("<% context.concat('x'); context.contentFor('nav', () => {}); %>");
       expect(diagnose(out)).toEqual([]);
     });
 
-    it("accepts context.yield() calls", () => {
-      const out = virtualizeTse("<%= context.yield() %>");
-      expect(diagnose(out)).toEqual([]);
-    });
-
-    it("rejects context.nonExistentMethod() — index signature returns unknown", () => {
+    it("rejects calls on index-signature properties (unknown is not callable)", () => {
       const out = virtualizeTse("<%= context.nonExistentMethod() %>");
       const diags = diagnose(out);
       expect(diags.length).toBeGreaterThan(0);
+      expect(diags.join("\n")).toMatch(/not callable|is of type 'unknown'/i);
     });
   });
 });

@@ -766,6 +766,7 @@ export class JoinDependency {
         throughAlias,
         throughEffective,
         throughModel,
+        throughAssocDef,
         parentAssocName,
       );
     }
@@ -804,6 +805,7 @@ export class JoinDependency {
       throughAlias,
       throughEffective,
       throughModel,
+      throughAssocDef,
       parentAssocName,
     );
   }
@@ -823,6 +825,7 @@ export class JoinDependency {
     throughAlias: string,
     throughEffective: string,
     throughModel: typeof Base,
+    throughAssocDef: any,
     parentAssocName?: string,
   ): JoinNode | null {
     // Association scope predicates (Arel-based, no regex)
@@ -890,7 +893,7 @@ export class JoinDependency {
       assocName: throughNodeName,
       immediateAssocName: `_through_${assocDef.options.through}`,
       parentPath: parentAssocName ?? null,
-      assocType: "hasMany",
+      assocType: throughAssocDef.type === "hasOne" ? "hasOne" : "hasMany",
       joinSql: "",
       arelJoin: throughArelJoin,
     });

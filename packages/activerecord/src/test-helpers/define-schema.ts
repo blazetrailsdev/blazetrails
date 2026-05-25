@@ -636,16 +636,12 @@ async function _defineSchemaImpl(
         }
       }
     }
-    // Canonical preload created this table in the DB but the test needs
-    // different columns. The wrapper's `tables` Set doesn't track canonical
-    // tables, so `stillExists` is false — but the table IS in the DB.
-    // Resolve through innerAdapter to detect same-DB wrappers.
+    // Canonical preload may have created this table in the DB. The
+    // wrapper's `tables` Set doesn't track canonical tables, so
+    // `stillExists` may be false even though the table exists. Promote
+    // so the drop-and-recreate path fires.
     if (!stillExists && canonicalSigsLive && _canonicalPreloadSigs?.has(table)) {
-      const inner = (adapter as unknown as { innerAdapter?: DatabaseAdapter }).innerAdapter;
-      const adapterKey = databaseIdentity(adapter) ?? (inner ? databaseIdentity(inner) : null);
-      if (adapterKey !== null && adapterKey === _canonicalPreloadKey) {
-        stillExists = true;
-      }
+      stillExists = true;
     }
     if (stillExists) {
       await ss.dropTable(table, { ifExists: true });

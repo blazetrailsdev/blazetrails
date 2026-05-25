@@ -80,14 +80,12 @@ describe("compileJs", () => {
     expect(lines.filter((l) => l === "  })));")).toHaveLength(1);
   });
 
-  it("handles function-form blockExpr without stripping the {", () => {
-    // `function(x) {` is NOT an arrow; the `{` must be kept so generated JS is valid.
-    const src = "<%= helper(function(x) { %><li><%= x %></li><% }) %>";
-    const { code } = compileJs(src);
-    const lines = code.split("\n");
-    expect(lines).toContain("  _ob.append(helper(function(x) {");
-    expect(lines).toContain("  context.capture(() => {");
-    expect(lines).toContain("  })));");
+  it("throws a clear error for function-form blockExpr (arrow syntax required)", () => {
+    // function(x) { cannot be capture-wrapped correctly — the closer only closes
+    // context.capture(() => {, leaving the function body { unclosed (invalid JS).
+    expect(() => compileJs("<%= helper(function(x) { %><li><%= x %></li><% }) %>")).toThrow(
+      /block-expr.*arrow syntax/,
+    );
   });
 
   it("throws a clear error when a blockExpr is never closed", () => {

@@ -54,37 +54,34 @@ function emit(ast: TseAst, options: EmitJsOptions): string {
   if (options.preamble) lines.push("  " + options.preamble);
   // Stack: one entry per open blockExpr, tracking net unclosed `{` inside it.
   const innerDepths: number[] = [];
-  // Parallel stack: true = arrow form (capture-wrapped), false = function/do form.
-  const innerIsArrow: boolean[] = [];
   for (const node of ast.nodes) {
     const insideBlock = innerDepths.length > 0;
     const bufRef = insideBlock ? "context.outputBuffer" : "_ob";
     if (node.kind === "blockExpr") {
       const trimmed = node.value.trim();
-      const isArrow = ARROW_BLOCK_RE.test(trimmed);
-      innerDepths.push(0);
-      innerIsArrow.push(isArrow);
-      if (isArrow) {
-        // Strip trailing `{` so the helper call ends with `=>` for the capture wrapper.
-        const callExpr = trimmed.replace(/\s*\{\s*$/, "").trimEnd();
-        lines.push(`  ${bufRef}.${exprAppend}(${callExpr}`);
-        lines.push("  context.capture(() => {");
-      } else {
-        // function(…) { or do form — emit the `{` verbatim; inner content uses context.outputBuffer.
-        lines.push(`  ${bufRef}.${exprAppend}(${trimmed}`);
-        lines.push("  context.capture(() => {");
+      if (!ARROW_BLOCK_RE.test(trimmed)) {
+        // function(…) { and `do` forms cannot be capture-wrapped correctly — the
+        // emitted closer only closes `context.capture(() => {`, leaving the
+        // function body `{` unclosed and producing invalid JS. Arrow syntax is required.
+        throw new Error(
+          `TSE: block-expr tag must use arrow syntax (e.g. \`(x) => {\`); function/do forms are not supported. Got: \`${trimmed}\``,
+        );
       }
+      // Strip trailing `{` so the helper call ends with `=>` for the capture wrapper.
+      const callExpr = trimmed.replace(/\s*\{\s*$/, "").trimEnd();
+      innerDepths.push(0);
+      lines.push(`  ${bufRef}.${exprAppend}(${callExpr}`);
+      lines.push("  context.capture(() => {");
     } else if (node.kind === "code" && insideBlock) {
       const innerDepth = innerDepths[innerDepths.length - 1]!;
       if (BLOCK_CLOSE_RE.test(node.value) && innerDepth === 0) {
         innerDepths.pop();
-        innerIsArrow.pop();
         const t = node.value.trim();
         const tClean = t.endsWith(";") ? t.slice(0, -1) : t;
         // Close: context.capture(, helper(, and bufRef.exprAppend( — 3 total.
         // Template's closer may already contain `)` characters (e.g. `})`).
         const closingParensInT = (tClean.match(/\)/g) ?? []).length;
-        const suffix = ")".repeat(3 - closingParensInT) + ";";
+        const suffix = ")".repeat(Math.max(0, 3 - closingParensInT)) + ";";
         lines.push(`  ${tClean}${suffix}`);
       } else {
         innerDepths[innerDepths.length - 1]! += netBraceDepth(node.value);

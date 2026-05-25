@@ -607,15 +607,24 @@ async function _defineSchemaImpl(
     // Resolve DB identity for adapter OR its inner adapter (wrappers like
     // TestAdapterFixtures return null from databaseIdentity but their inner
     // adapter IS the real connection).
+    const inner = (adapter as unknown as { innerAdapter?: DatabaseAdapter }).innerAdapter;
     const resolvedAdapterKey = _canonicalPreloadSigs
-      ? (() => {
-          const inner = (adapter as unknown as { innerAdapter?: DatabaseAdapter }).innerAdapter;
-          return databaseIdentity(adapter) ?? (inner ? databaseIdentity(inner) : null);
-        })()
+      ? (databaseIdentity(adapter) ?? (inner ? databaseIdentity(inner) : null))
       : null;
-    // D-Y fast-path: adapter IS the canonical DB and the test spec is a subset
-    // of what's already there — skip DDL and keep the canonical signature.
-    if (_canonicalPreloadSigs && isCanonicalSubset(table, raw)) {
+    // Whether canonical sigs are still live in the global cache. After
+    // resetTestAdapterState → clearAppliedSchemaSignatures, they're gone —
+    // meaning tables may have been dropped. The immutable snapshot
+    // (_canonicalPreloadSigs) survives, but we must not fast-path off it
+    // when the tables no longer exist. Also disabled when dropExisting
+    // was requested — those tables were explicitly dropped above.
+    const canonicalSigsLive =
+      !opts?.dropExisting &&
+      _canonicalPreloadKey !== null &&
+      _appliedSchemaSignatures.has(_canonicalPreloadKey);
+    // D-Y fast-path: adapter IS the canonical DB, canonical sigs are still
+    // live (tables not dropped), and the test spec is a subset of what's
+    // already there — skip DDL and keep the canonical signature.
+    if (canonicalSigsLive && _canonicalPreloadSigs && isCanonicalSubset(table, raw)) {
       const isSameDb =
         resolvedAdapterKey !== null
           ? resolvedAdapterKey === _canonicalPreloadKey
@@ -635,6 +644,7 @@ async function _defineSchemaImpl(
     // stillExists so the drop-and-recreate path fires.
     if (
       !stillExists &&
+      canonicalSigsLive &&
       _canonicalPreloadSigs?.has(table) &&
       _canonicalPreloadKey !== null &&
       resolvedAdapterKey === _canonicalPreloadKey

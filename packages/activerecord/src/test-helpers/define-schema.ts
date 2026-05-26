@@ -577,9 +577,9 @@ async function _defineSchemaImpl(
     if (cachedSig === newSig && stillExists) {
       continue;
     }
-    // D-Z: always drop the specific conflicting table before recreating.
-    // Eliminates the need for afterAll(dropAllTables) — defineSchema is
-    // self-healing regardless of leftover state from prior files.
+    // D-Z: always drop the specific table before recreating. Together with
+    // dropAllTables clearing the signature cache, this eliminates the need
+    // for afterAll(dropAllTables) in useHandlerTransactionalFixtures.
     await ss.dropTable(table, { ifExists: true });
     const columns = columnsOf(raw);
     const pk = primaryKeyOf(raw);

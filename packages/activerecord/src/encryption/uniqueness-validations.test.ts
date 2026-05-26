@@ -73,8 +73,8 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
         this._tableName = "encrypted_books";
         this.attribute("id", "integer");
         this.attribute("name", "string", { default: "<untitled>" });
-        this.encrypts("name", { deterministic: true, downcase: true });
         this.validatesUniqueness("name");
+        this.encrypts("name", { deterministic: true, downcase: true });
       }
     }
 
@@ -105,7 +105,7 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
     }
 
     await UnencryptedBook.create({ name: "dune" });
-    const dup = await EncryptedBookWithDowncaseName.create({ name: "dune" });
+    const dup = await EncryptedBookWithDowncaseName.create({ name: "DUNE" });
     expect(dup.errors.count).toBe(1);
   });
 
@@ -117,12 +117,8 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
         this._tableName = "encrypted_books";
         this.attribute("id", "integer");
         this.attribute("name", "string", { default: "<untitled>" });
-        this.encrypts("name", {
-          deterministic: true,
-          downcase: true,
-          supportUnencryptedData: false,
-        });
         this.validatesUniqueness("name");
+        this.encrypts("name", { deterministic: true, supportUnencryptedData: false });
       }
     }
 
@@ -140,7 +136,7 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
   });
 
   it("uniqueness validations work when mixing encrypted an unencrypted data and unencrypted data is opted in per-attribute", async () => {
-    Configurable.config.supportUnencryptedData = false;
+    Configurable.config.supportUnencryptedData = true;
 
     class EncryptedBookWithUnencryptedDataOptedIn extends Base {
       static {
@@ -148,11 +144,7 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
         this.attribute("id", "integer");
         this.attribute("name", "string", { default: "<untitled>" });
         this.validatesUniqueness("name");
-        this.encrypts("name", {
-          deterministic: true,
-          downcase: true,
-          supportUnencryptedData: true,
-        });
+        this.encrypts("name", { deterministic: true, supportUnencryptedData: true });
       }
     }
 
@@ -178,8 +170,8 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
         this._tableName = "encrypted_books";
         this.attribute("id", "integer");
         this.attribute("name", "string", { default: "<untitled>" });
-        this.encrypts("name", { deterministic: true, downcase: false });
         this.validatesUniqueness("name");
+        this.encrypts("name", { deterministic: true, downcase: false });
       }
     }
 
@@ -197,13 +189,13 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
         this._tableName = "encrypted_books";
         this.attribute("id", "integer");
         this.attribute("name", "string", { default: "<untitled>" });
-        this.encrypts("name", { deterministic: true });
         this.validatesUniqueness("name");
+        this.encrypts("name", { deterministic: true });
       }
     }
 
-    await EncryptedBookWithUniquenessValidation.create({ name: "Dune" });
-    const dup = await EncryptedBookWithUniquenessValidation.create({ name: "Dune" });
+    await EncryptedBookWithUniquenessValidation.create({ name: "dune" });
+    const dup = await EncryptedBookWithUniquenessValidation.create({ name: "dune" });
     expect(dup.errors.count).toBe(1);
   });
 });

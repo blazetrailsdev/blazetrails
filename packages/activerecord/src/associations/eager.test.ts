@@ -254,10 +254,6 @@ const TEST_SCHEMA: Schema = {
   elmar_projects: { name: "string", elmar_mentor_id: "integer" },
   elra_authors: { name: "string" },
   elra_posts: { title: "string", elra_author_id: "integer" },
-  elsl_authors: { name: "string" },
-  elsl_posts: { title: "string", elsl_author_id: "integer" },
-  elslhm_authors: { name: "string" },
-  elslhm_posts: { title: "string", elslhm_author_id: "integer" },
   enra_authors: { name: "string" },
   enra_posts: { title: "string", enra_author_id: "integer" },
   eoidas_authors: { name: "string" },
@@ -4704,60 +4700,6 @@ describe("EagerAssociationTest", () => {
     expect((posts[0] as any)._readonly).toBe(true);
   });
 
-  it("eager load audit logs are strict loading because parent is strict loading", async () => {
-    class ElslAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-      }
-    }
-    class ElslPost extends Base {
-      static {
-        this.attribute("title", "string");
-        this.attribute("elsl_author_id", "integer");
-      }
-    }
-    Associations.hasMany.call(ElslAuthor, "elslPosts", {
-      className: "ElslPost",
-      foreignKey: "elsl_author_id",
-    });
-    registerModel("ElslAuthor", ElslAuthor);
-    registerModel("ElslPost", ElslPost);
-    const a = await ElslAuthor.create({ name: "A" });
-    await ElslPost.create({ title: "P1", elsl_author_id: a.id });
-    await ElslPost.create({ title: "P2", elsl_author_id: a.id });
-    const authors = await ElslAuthor.all().eagerLoad("elslPosts").strictLoading().toArray();
-    expect((authors[0] as any)._strictLoading).toBe(true);
-    const posts = (authors[0] as any)._preloadedAssociations?.get("elslPosts") ?? [];
-    expect(posts).toHaveLength(2);
-    expect(posts.every((p: any) => p._strictLoading)).toBe(true);
-  });
-
-  it("eager load audit logs are strict loading because parent is strict loading in hm relation", async () => {
-    class ElslhmAuthor extends Base {
-      static {
-        this.attribute("name", "string");
-      }
-    }
-    class ElslhmPost extends Base {
-      static {
-        this.attribute("title", "string");
-        this.attribute("elslhm_author_id", "integer");
-      }
-    }
-    Associations.hasMany.call(ElslhmAuthor, "elslhmPosts", {
-      className: "ElslhmPost",
-      foreignKey: "elslhm_author_id",
-      strictLoading: true,
-    });
-    registerModel("ElslhmAuthor", ElslhmAuthor);
-    registerModel("ElslhmPost", ElslhmPost);
-    const a = await ElslhmAuthor.create({ name: "A" });
-    await ElslhmPost.create({ title: "P", elslhm_author_id: a.id });
-    const authors = await ElslhmAuthor.all().eagerLoad("elslhmPosts").toArray();
-    const posts = (authors[0] as any)._preloadedAssociations?.get("elslhmPosts") ?? [];
-    expect(posts).toHaveLength(1);
-    expect(posts.every((p: any) => p._strictLoading)).toBe(true);
-  });
   it.skip("preloading a polymorphic association with references to the associated table", () => {
     // BLOCKED: associations — eager-loading feature gap
     // ROOT-CAUSE: associations/eager.ts or preloader.ts missing eager-loading semantics

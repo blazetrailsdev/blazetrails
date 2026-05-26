@@ -415,7 +415,6 @@ export function clearAppliedSchemaSignatures(adapter?: DatabaseAdapter): void {
 // ---------------------------------------------------------------------------
 
 /** @internal */
-/** @internal */
 let _canonicalPreloadKey: string | null = null;
 /** @internal */
 let _canonicalPreloadAdapter: DatabaseAdapter | null = null;

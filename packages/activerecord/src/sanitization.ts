@@ -235,8 +235,8 @@ interface QuoterHost {
  * `adapter` is checked first because a direct adapter assignment
  * (`this.adapter = x`) short-circuits the pool entirely. When no direct
  * assignment exists, `Base.adapter` checks out a connection from the pool
- * and caches it on the class (`_adapter`); the checkout is released when
- * the pool's `releaseConnection` is called (not automatically).
+ * and caches it on the class (`_adapter`); it remains checked out until
+ * explicitly checked in or the pool is disconnected.
  * `connection()` is tried second for callers that have no adapter path but do
  * have an active pool lease (rare). Only `ConnectionNotDefined` triggers
  * fallback; other errors propagate. @internal

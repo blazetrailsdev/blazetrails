@@ -4977,10 +4977,19 @@ describe("CalculationsTest", () => {
 
     const existing = await User.create({ name: "Claim" });
     await Base.adapter.executeMutation(`CREATE UNIQUE INDEX users_name_idx ON users (name)`);
-
-    const retried = await User.createOrFindBy({ name: "Claim" });
-    expect(retried.id).toBe(existing.id);
-    expect(await User.all().count()).toBe(1);
+    try {
+      const retried = await User.createOrFindBy({ name: "Claim" });
+      expect(retried.id).toBe(existing.id);
+      expect(await User.all().count()).toBe(1);
+    } finally {
+      try {
+        const a = Base.adapter;
+        const ss = a.schemaStatements ? a.schemaStatements() : null;
+        if (ss) await ss.removeIndex("users", { name: "users_name_idx" });
+      } catch {
+        /* index may already be rolled back */
+      }
+    }
   });
 
   // Rails: test "lock! reloads with FOR UPDATE"

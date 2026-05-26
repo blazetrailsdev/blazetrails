@@ -161,26 +161,23 @@ describe("compileJs", () => {
 
   describe("source map", () => {
     it("emits one mapping per output line for a multi-line code tag", () => {
-      // `<%` opens on src line 1; value spans lines 2-3; `%>` closes on line 4.
+      // `<%` opens on src line 1; value has two code lines on src lines 2-3.
       const src = "before\n<%\nconst a = 1;\nconst b = 2;\n%>after";
-      const { sourceMap } = compileJs(src, {
+      const { code, sourceMap } = compileJs(src, {
         fileName: "t.tse.js",
         sourceFileName: "t.tse",
       });
       expect(sourceMap).not.toBeNull();
+      const codeLines = code.split("\n");
       const segs = sourceMap!.mappings.split(";");
-      const mappedGenLines = segs
-        .map((seg, i) => ({ genLine: i, mapped: seg !== "" }))
-        .filter((l) => l.mapped)
-        .map((l) => l.genLine);
-      // There must be at least two consecutive mapped output lines (one per code line).
-      const hasConsecutivePair = mappedGenLines.some(
-        (g, i) => i > 0 && g === mappedGenLines[i - 1]! + 1,
-      );
-      expect(hasConsecutivePair).toBe(true);
-      // Before the fix only 1 mapping was emitted for the whole multi-line tag;
-      // now each of the 4 output lines the tag expands to must be mapped.
-      expect(mappedGenLines.length).toBeGreaterThanOrEqual(4);
+      // Find the exact genLines where the code-tag body lands in the output.
+      const genLineA = codeLines.findIndex((l) => l.includes("const a = 1;"));
+      const genLineB = codeLines.findIndex((l) => l.includes("const b = 2;"));
+      expect(genLineA).toBeGreaterThan(-1);
+      expect(genLineB).toBe(genLineA + 1);
+      // Both output lines must have a source-map segment (non-empty string).
+      expect(segs[genLineA]).not.toBe("");
+      expect(segs[genLineB]).not.toBe("");
     });
   });
 

@@ -28,7 +28,9 @@ type LastSegment<P extends string> = P extends `${string}/${infer L}` ? L : P;
 type StripLeadingUnderscore<S extends string> = S extends `_${infer R}` ? R : S;
 type BeforeFirstDot<S extends string> = S extends `${infer B}.${string}` ? B : S;
 type DeriveLocalName<P extends string> = BeforeFirstDot<StripLeadingUnderscore<LastSegment<P>>>;
-type CollectionAutoKeysFor<A extends string> = A | `${A}_counter` | `${A}_iteration`;
+type CollectionAutoKeysFor<A extends string> = string extends A
+  ? never
+  : A | `${A}_counter` | `${A}_iteration`;
 type CollectionLocals<
   P extends keyof TemplateRegistry,
   A extends string = DeriveLocalName<P>,

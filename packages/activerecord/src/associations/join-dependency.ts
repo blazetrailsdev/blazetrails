@@ -305,10 +305,10 @@ export class JoinDependency {
     const parts = path.split(".");
     if (parts.length === 1) return this.addAssociation(parts[0]);
 
-    // Snapshot state so we can roll back on failure
     const snapshotNodes = this._nodes.length;
     const snapshotAliases = this._aliases.length;
     const snapshotNextIndex = this._nextTableIndex;
+    const snapshotUsedTableNames = new Set(this._usedTableNames);
 
     let currentModel = this._baseModel as any;
     let currentAlias = this._baseAlias;
@@ -326,6 +326,7 @@ export class JoinDependency {
         this._nodes.length = snapshotNodes;
         this._aliases.length = snapshotAliases;
         this._nextTableIndex = snapshotNextIndex;
+        this._usedTableNames = snapshotUsedTableNames;
         return null;
       }
       lastNode = node;

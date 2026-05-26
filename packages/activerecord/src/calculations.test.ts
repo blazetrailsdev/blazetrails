@@ -6591,7 +6591,8 @@ describe("CalculationsTest", () => {
   });
 
   // Rails guide: find_each with order: :desc (Rails 7.1)
-  it("findEach supports order option", async () => {
+  // MySQL: createTable() is DDL that auto-commits, breaking transactional fixtures.
+  it.skipIf(adapterType === "mysql")("findEach supports order option", async () => {
     class User extends Base {
       static {
         this._tableName = "users";

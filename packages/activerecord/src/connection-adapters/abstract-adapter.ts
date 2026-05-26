@@ -415,7 +415,7 @@ export class AbstractAdapter implements Quoting {
 
   constructor() {
     // Mirrors Rails abstract_adapter.rb:155 — @visitor = arel_visitor
-    this._visitor = this._buildArelVisitor();
+    this._visitor = this.arelVisitor();
   }
 
   protected _visitor!: Visitors.ToSql;
@@ -1111,27 +1111,22 @@ export class AbstractAdapter implements Quoting {
     return (this.pool as any)?.connectionDescriptor ?? null;
   }
 
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter — `attr_reader :visitor`
+   */
   get visitor(): Visitors.ToSql {
     return this._visitor;
   }
 
   /**
-   * Returns the cached Arel visitor for this adapter's SQL dialect.
+   * Factory — builds a new Arel visitor for this adapter's SQL dialect.
+   * Subclasses override to return dialect-specific visitors.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#arel_visitor
    *
    * @internal
    */
-  get arelVisitor(): Visitors.ToSql {
-    return this._visitor;
-  }
-
-  /**
-   * Builds a new Arel visitor. Subclasses override to return dialect-specific visitors.
-   *
-   * @internal
-   */
-  protected _buildArelVisitor(): Visitors.ToSql {
+  arelVisitor(): Visitors.ToSql {
     return new Visitors.ToSql(this);
   }
 

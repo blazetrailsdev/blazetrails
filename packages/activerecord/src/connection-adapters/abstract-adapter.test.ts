@@ -213,7 +213,7 @@ describe("per-adapter visitor isolation", () => {
     override get adapterName() {
       return "sqlite" as const;
     }
-    protected override _buildArelVisitor() {
+    override arelVisitor() {
       return new Visitors.SQLite(this);
     }
   }
@@ -225,7 +225,7 @@ describe("per-adapter visitor isolation", () => {
     override get adapterName() {
       return "mysql" as const;
     }
-    protected override _buildArelVisitor() {
+    override arelVisitor() {
       return new Visitors.MySQL(this);
     }
   }
@@ -234,17 +234,15 @@ describe("per-adapter visitor isolation", () => {
     const sqlite = new SqliteAdapter();
     const mysql = new MysqlAdapter();
 
-    expect(sqlite.arelVisitor).toBeInstanceOf(Visitors.SQLite);
-    expect(mysql.arelVisitor).toBeInstanceOf(Visitors.MySQL);
-    expect(sqlite.visitor).toBe(sqlite.arelVisitor);
-    expect(mysql.visitor).toBe(mysql.arelVisitor);
+    expect(sqlite.visitor).toBeInstanceOf(Visitors.SQLite);
+    expect(mysql.visitor).toBeInstanceOf(Visitors.MySQL);
   });
 
   it("constructing a second adapter does not overwrite the first adapter's visitor", () => {
     const sqlite = new SqliteAdapter();
-    const visitorBefore = sqlite.arelVisitor;
+    const visitorBefore = sqlite.visitor;
     new MysqlAdapter();
-    expect(sqlite.arelVisitor).toBe(visitorBefore);
-    expect(sqlite.arelVisitor).toBeInstanceOf(Visitors.SQLite);
+    expect(sqlite.visitor).toBe(visitorBefore);
+    expect(sqlite.visitor).toBeInstanceOf(Visitors.SQLite);
   });
 });

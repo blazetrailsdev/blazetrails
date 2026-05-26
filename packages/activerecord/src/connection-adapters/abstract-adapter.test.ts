@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { Visitors } from "@blazetrails/arel";
 import { TypeMap } from "../type/type-map.js";
 import {
   BooleanType,
@@ -201,5 +202,49 @@ describe("DatabaseStatements#insert id extraction", () => {
     adapter.lastInsertedId = customLastInserted;
     expect(await adapter.insert("INSERT INTO t VALUES (1)")).toBe(77);
     expect(customLastInserted).toHaveBeenCalled();
+  });
+});
+
+describe("per-adapter visitor isolation", () => {
+  class SqliteAdapter extends AbstractAdapter {
+    static get adapterName() {
+      return "SQLite" as const;
+    }
+    override get adapterName() {
+      return "sqlite" as const;
+    }
+    protected override _buildArelVisitor() {
+      return new Visitors.SQLite(this);
+    }
+  }
+
+  class MysqlAdapter extends AbstractAdapter {
+    static get adapterName() {
+      return "MySQL" as const;
+    }
+    override get adapterName() {
+      return "mysql" as const;
+    }
+    protected override _buildArelVisitor() {
+      return new Visitors.MySQL(this);
+    }
+  }
+
+  it("each adapter caches its own dialect-specific visitor", () => {
+    const sqlite = new SqliteAdapter();
+    const mysql = new MysqlAdapter();
+
+    expect(sqlite.arelVisitor).toBeInstanceOf(Visitors.SQLite);
+    expect(mysql.arelVisitor).toBeInstanceOf(Visitors.MySQL);
+    expect(sqlite.visitor).toBe(sqlite.arelVisitor);
+    expect(mysql.visitor).toBe(mysql.arelVisitor);
+  });
+
+  it("constructing a second adapter does not overwrite the first adapter's visitor", () => {
+    const sqlite = new SqliteAdapter();
+    const visitorBefore = sqlite.arelVisitor;
+    new MysqlAdapter();
+    expect(sqlite.arelVisitor).toBe(visitorBefore);
+    expect(sqlite.arelVisitor).toBeInstanceOf(Visitors.SQLite);
   });
 });

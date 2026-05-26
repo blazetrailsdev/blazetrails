@@ -453,6 +453,7 @@ export function methodUsesDepImport(
                   sym.flags & ts.SymbolFlags.Alias ? transitive.checker.getAliasedSymbol(sym) : sym;
                 if (transitive.taintedSymbols.has(resolved)) {
                   found = true;
+                  collectRefs?.add(n.text);
                   if (!collectRefs) return;
                 }
               }
@@ -553,10 +554,16 @@ interface CrossReferenceResult {
 
 const RUBY_NAMESPACE_ROOTS = new Set(["Arel", "ActiveModel", "ActiveRecord", "ActiveSupport"]);
 
+const RUBY_METHOD_REFS = new Set(["arel_table", "arel_column", "resolve_arel_attribute"]);
+
+const RUBY_MIXIN_REFS = new Set(["Predications", "Expressions"]);
+
 function normalizeRubyRef(ref: string): string | null {
   const parts = ref.split("::");
   const leaf = parts.pop() ?? ref;
   if (RUBY_NAMESPACE_ROOTS.has(leaf)) return null;
+  if (RUBY_METHOD_REFS.has(ref)) return null;
+  if (RUBY_MIXIN_REFS.has(leaf)) return null;
   return leaf;
 }
 
@@ -639,7 +646,12 @@ function crossReference(rubyMethods: RubyDepMethod[], tsDepMap: TsDepMap): Cross
         const missingInTs = rubyNormalized.filter((r) => {
           const lower = r.toLowerCase();
           const camel = snakeToCamel(r).toLowerCase();
-          return !tsSet.has(lower) && !tsSet.has(camel) && !tsSet.has("_" + camel);
+          return (
+            !tsSet.has(lower) &&
+            !tsSet.has(camel) &&
+            !tsSet.has("_" + camel) &&
+            !tsSet.has("_" + lower)
+          );
         });
         if (missingInTs.length > 0) {
           refMismatches.push({

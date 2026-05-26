@@ -36,10 +36,9 @@ export interface InsertAllOptions {
 
 export class InsertAll {
   readonly model: ModelClass;
-  private _connectionOverride: ModelClass["connection"] | null = null;
 
   get connection(): ModelClass["connection"] {
-    return this._connectionOverride ?? this.model.connection;
+    return this.model.connection;
   }
   readonly inserts: Record<string, unknown>[];
   readonly keys: Set<string>;
@@ -74,31 +73,8 @@ export class InsertAll {
   constructor(
     relation: Relation<any>,
     inserts: Record<string, unknown>[],
-    options?: InsertAllOptions,
-  );
-  /** @deprecated Pass inserts as the second argument; connection is resolved from the model. */
-  constructor(
-    relation: Relation<any>,
-    connection: ModelClass["connection"],
-    inserts: Record<string, unknown>[],
-    options?: InsertAllOptions,
-  );
-  constructor(
-    relation: Relation<any>,
-    insertsOrConnection: Record<string, unknown>[] | ModelClass["connection"],
-    insertsOrOptions?: Record<string, unknown>[] | InsertAllOptions,
-    legacyOptions?: InsertAllOptions,
+    options: InsertAllOptions = {},
   ) {
-    let inserts: Record<string, unknown>[];
-    let options: InsertAllOptions;
-    if (Array.isArray(insertsOrConnection)) {
-      inserts = insertsOrConnection;
-      options = (insertsOrOptions as InsertAllOptions) ?? {};
-    } else {
-      this._connectionOverride = insertsOrConnection;
-      inserts = (insertsOrOptions as Record<string, unknown>[]) ?? [];
-      options = legacyOptions ?? {};
-    }
     this.model = (relation as any)._modelClass as ModelClass;
     this.inserts = inserts.map((r) => ({ ...r }));
     this.updateOnly = options.updateOnly;

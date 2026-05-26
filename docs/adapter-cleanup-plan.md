@@ -8,8 +8,9 @@ property on models — models have `connection` (returns an
    on `_adapter`, wires arel visitors, used by ~165 call sites across ~34
    source files.
 2. `Base.connection` (from `connection-handling.ts`) — the newer pool-based
-   path. Delegates to `connectionPool().leaseConnection()`, used by ~6
-   source files.
+   path. Returns the pool's active connection or leases a new one
+   (`pool.activeConnection ?? pool.leaseConnection()`, with a
+   permanent-lease fast path), used by ~6 source files.
 
 The `adapter` getter, `_adapter` field, `DatabaseAdapter` interface, and
 `adapter.ts` barrel are all trails-isms. They must go.
@@ -21,8 +22,12 @@ when they disagree.
 
 **Done-when:**
 
-- `Base.adapter` getter, `_adapter` field, and `set adapter()` are deleted.
-- All call sites use `Base.connection` (the pool-based path).
+- `Base.adapter` getter and `_adapter` field are deleted.
+- `set adapter()` renamed to `set connection()` (deprecated, transitional —
+  full removal is a non-goal of this plan, see below).
+- All source call sites use `Base.connection` (the pool-based path).
+- Tests continue working via a `static get adapter()` compatibility alias
+  that forwards to `connection` (removed during Phase G fixture adoption).
 - `DatabaseAdapter` interface is deleted; all types use `AbstractAdapter`.
 - `adapter.ts` barrel is deleted; surviving exports relocate to
   `connection-adapters/`.
@@ -32,9 +37,11 @@ when they disagree.
 across ~182 test files, ~38 files import `DatabaseAdapter`.
 
 **Test strategy:** Tests reference `.adapter` extensively (~7000 sites
-across ~182 files). During implementation PRs, skip tests that break and
-list them in the PR body. The test sweep is a separate set of PRs at the
-end.
+across ~182 files). Rather than skipping tests during Phases 1–2, PR 1a
+adds a temporary `static get adapter()` compatibility alias that forwards
+to `connection`. This keeps CI green throughout. The alias is removed
+during Phase G (fixture adoption), which already touches these same files
+— no separate test sweep needed.
 
 ---
 
@@ -65,13 +72,15 @@ the setter entirely.
 **Scope:**
 
 - `base.ts`: delete `static get adapter()`, `_adapter` field,
-  `_wireArelVisitor`, `clearAdapterFromDescendants`.
+  `_wireArelVisitor` helper, and the inline descendant-invalidation loop
+  in `set adapter()`.
 - `base.ts`: rename `static set adapter()` → `static set connection()`,
   keep schema-invalidation logic intact. Mark `@internal` + add a
   `@deprecated Use establishConnection() instead` JSDoc.
+- `base.ts`: add `static get adapter()` compatibility alias that
+  forwards to `this.connection` (keeps ~7000 test sites working).
 - `connection-adapters/abstract-adapter.ts`: wire arel visitor in
   constructor (matching Rails).
-- Skip tests that break; list in PR body.
 
 **Verify:** `pnpm vitest run packages/activerecord/src/base.test.ts`
 
@@ -141,53 +150,55 @@ move to their Rails-natural homes:
 
 ---
 
-## Phase 3 — Test sweep (multiple PRs)
+## Phase G intersection — test files handled by fixture adoption
 
-~7000 `.adapter` references across ~182 test files. This is mechanical
-but too large for a single PR. Split by test directory / concern area,
-~250 LOC each.
+~7000 `.adapter` references across ~182 test files overlap almost
+entirely with the ~150-200 files Phase G (fixture adoption) already
+plans to rewrite. Phase G replaces inline `Model.create()` with
+`useFixtures()` and will rename `.adapter` → `.connection` in the same
+pass. No separate test sweep is needed here.
 
-Each PR:
+The compatibility alias (`static get adapter()`) bridges the gap:
+Phases 1–2 ship with CI green, then Phase G batches remove the alias
+usage file-by-file. The alias itself is deleted when the last Phase G
+batch lands.
 
-- `.adapter` → `.connection` in test setup, assertions, and helpers.
-- Mock adapters typed against `AbstractAdapter` instead of
-  `DatabaseAdapter`.
-- Un-skip any tests that were skipped during Phases 1–2.
-
-Exact PR count TBD — estimate 4–8 PRs depending on how references
-cluster. `createTestAdapter()` and other shared test helpers should be
-updated in the first Phase 3 PR so subsequent ones are pure renames.
+See: `docs/connection-pooled-test-adapter-plan.md` (Phase G sequencing),
+`docs/fixtures-port-plan.md` (fixture data source),
+memory `project-phase-g-fixture-adoption-epic` (sizing).
 
 ---
 
 ## Ordering
 
 ```
-              PR 1a (delete adapter getter)
+              PR 1a (collapse getters + compat alias)
              ╱                              ╲
 PR 1b (source call-site rename)    PR 2a (DatabaseAdapter → AbstractAdapter)
              ╲                              ╱
               PR 2b (delete adapter.ts)
                         ↓
-              PR 3.1 (test helpers + first batch)
+              Phase G batches (fixture adoption + .adapter→.connection in tests)
                         ↓
-              PR 3.2 … 3.N (remaining test batches)
+              Final: delete compatibility alias
 ```
 
-PR 1a is the only prerequisite — it creates `set connection()` and
-deletes `adapter`. After 1a lands, PRs 1b and 2a are independent (1b
-renames runtime call sites, 2a swaps type annotations) and can ship in
-parallel. PR 2b depends on both 1b and 2a (can't delete `adapter.ts`
-until nothing imports from it). Phase 3 depends on 2b (tests import
-`DatabaseAdapter` and use `.adapter` — both must be gone first).
+PR 1a is the only prerequisite — it creates `set connection()`,
+adds the `get adapter()` compatibility alias, and deletes the old
+getter/caching/wiring. After 1a lands, PRs 1b and 2a are independent
+(1b renames runtime call sites, 2a swaps type annotations) and can
+ship in parallel. PR 2b depends on both 1b and 2a (can't delete
+`adapter.ts` until nothing imports from it). Phase G depends on 2b
+and handles all test-file changes.
 
 All PRs branch from `main` (no stacking).
 
 ## Non-goals (this plan)
 
-- **Deleting `set connection()`** — requires converting ~6900 test sites
-  from `this.adapter = x` / `this.connection = x` to
-  `establishConnection()`. Separate initiative after this plan lands.
+- **Deleting `set connection()` and the `get adapter()` compat alias** —
+  requires converting ~6900 test sites to `establishConnection()`. The
+  compat alias is consumed by Phase G (fixture adoption); the setter
+  removal is a separate initiative after Phase G lands.
 - Renaming `connection-adapters/` directory or `AbstractAdapter` class
   (those already match Rails).
 - `withConnection { }` block semantics (future pool lifecycle work).

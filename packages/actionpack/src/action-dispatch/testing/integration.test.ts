@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { IntegrationTest } from "./integration.js";
 import { Base } from "../../action-controller/base.js";
 
@@ -530,6 +530,10 @@ describe("ActionDispatch::IntegrationTest", () => {
   // (ActionDispatch::Assertions#html_document, Integration::Runner)
   // =========================================================================
   describe("html_document", () => {
+    afterEach(() => {
+      app.reset();
+    });
+
     it("html_document parses XML response as XML::Document", async () => {
       await app.get("/posts/xml");
       const doc = app.htmlDocument;
@@ -553,6 +557,11 @@ describe("ActionDispatch::IntegrationTest", () => {
 
       app.assertResponse("success");
       expect(app.htmlDocument).not.toBe(previousHtmlDocument);
+    });
+
+    it("html_document throws for text/html responses (HTML parsing not yet implemented)", async () => {
+      await app.get("/posts/html");
+      expect(() => app.htmlDocument).toThrow("not yet implemented");
     });
   });
 

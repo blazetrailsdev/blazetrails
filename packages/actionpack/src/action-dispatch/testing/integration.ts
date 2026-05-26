@@ -385,7 +385,9 @@ export class IntegrationTest {
    * Lazy-cached parsed document for the last response body. Returns an
    * `XML::Document` when the response content-type ends with `xml`; throws
    * for other mime types (HTML parsing via rails-dom-testing is not yet
-   * implemented). Invalidated at the start of each new request.
+   * implemented). The previous document is **disposed** (libxml2-wasm memory
+   * freed) at the start of each new request and on `resetBang()` — do not
+   * hold references to a prior `htmlDocument` across requests.
    * Mirrors `ActionDispatch::Assertions#html_document`.
    */
   get htmlDocument(): XmlDocument {
@@ -526,6 +528,9 @@ export class IntegrationTest {
     );
     // Routes/controllers are shared with the parent (Rails dup is shallow
     // for object refs); per-request state is cleared by resetBang below.
+    // Null out _htmlDocument before resetBang so the parent's cached document
+    // isn't disposed — the shallow copy shares the same XmlDocument reference.
+    sess._htmlDocument = undefined;
     sess.resetBang();
     sess.rootSession = this.rootSession ?? this;
     block?.(sess);

@@ -2,12 +2,14 @@
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/uuid_test.rb
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from "vitest";
-import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
+import { describeIfPg, PostgreSQLAdapter } from "./test-helper.js";
 import { isValidUuid, normalizeUuid } from "../../connection-adapters/postgresql/oid/uuid.js";
 import { SchemaDumper } from "../../schema-dumper.js";
 import { SchemaStatements } from "../../connection-adapters/abstract/schema-statements.js";
 import { RecordNotFound } from "../../errors.js";
 import { defineSchema } from "../../test-helpers/define-schema.js";
+import { setupHandlerSuite } from "../../test-helpers/setup-handler-suite.js";
+import { Base } from "../../index.js";
 
 beforeAll(() => {
   vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
@@ -20,20 +22,22 @@ afterAll(() => {
 // The `uuid_data_type` table needs raw DDL because the `guid` column's
 // DEFAULT is `gen_random_uuid()` (from the `pgcrypto` extension set up
 // in beforeAll). defineSchema can express the `uuid` column type but
-// not the function-call default; defineSchema(adapter, {}) marks the
+// not the function-call default; defineSchema({}) marks the
 // file as TM-Phase-5 compliant.
+setupHandlerSuite();
+
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
 
   beforeAll(async () => {
-    const setup = new PostgreSQLAdapter(PG_TEST_URL);
+    const setup = Base.connection as PostgreSQLAdapter;
     await setup.exec(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
     await setup.close();
   });
 
   beforeEach(async () => {
-    adapter = new PostgreSQLAdapter(PG_TEST_URL);
-    await defineSchema(adapter, {});
+    adapter = Base.connection as PostgreSQLAdapter;
+    await defineSchema({});
     await adapter.exec(`DROP TABLE IF EXISTS uuid_data_type`);
     await adapter.exec(`
       CREATE TABLE uuid_data_type (
@@ -45,7 +49,6 @@ describeIfPg("PostgreSQLAdapter", () => {
   });
   afterEach(async () => {
     await adapter.exec(`DROP TABLE IF EXISTS uuid_data_type`);
-    await adapter.close();
   });
 
   describe("PostgreSQLUUIDTest", () => {
@@ -329,7 +332,7 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("uuid association", async () => {
-      const { Base, registerModel } = await import("../../index.js");
+      const { registerModel } = await import("../../index.js");
       await adapter.exec(`DROP TABLE IF EXISTS uuid_assoc_comments`);
       await adapter.exec(`DROP TABLE IF EXISTS uuid_assoc_posts`);
       await adapter.exec(`
@@ -349,7 +352,6 @@ describeIfPg("PostgreSQLAdapter", () => {
         class UuidAssocPost extends Base {
           static tableName = "uuid_assoc_posts";
           static {
-            this.adapter = adapter;
             this.hasMany("uuidAssocComments", {
               className: "UuidAssocComment",
               foreignKey: "uuid_assoc_post_id",
@@ -359,7 +361,6 @@ describeIfPg("PostgreSQLAdapter", () => {
         class UuidAssocComment extends Base {
           static tableName = "uuid_assoc_comments";
           static {
-            this.adapter = adapter;
             this.belongsTo("uuidAssocPost", {
               className: "UuidAssocPost",
               foreignKey: "uuid_assoc_post_id",
@@ -634,11 +635,9 @@ describeIfPg("PostgreSQLAdapter", () => {
         )
       `);
       try {
-        const { Base } = await import("../../index.js");
         class UuidUniq extends Base {
           static tableName = "uuid_uniqueness_validation_test";
           static {
-            this.adapter = adapter;
             this.validatesUniqueness("guid", { caseSensitive: false });
           }
         }
@@ -889,11 +888,10 @@ describeIfPg("PostgreSQLAdapter", () => {
           content text
         )
       `);
-      const { Base, registerModel } = await import("../../index.js");
+      const { registerModel } = await import("../../index.js");
       class UuidPostCls extends Base {
         static tableName = "pg_uuid_posts";
         static {
-          this.adapter = adapter;
           this.hasMany("uuidComments", {
             className: "UuidCommentInverse",
             foreignKey: "uuid_post_id",
@@ -904,7 +902,6 @@ describeIfPg("PostgreSQLAdapter", () => {
       class UuidCommentCls extends Base {
         static tableName = "pg_uuid_comments";
         static {
-          this.adapter = adapter;
           this.belongsTo("uuidPost", {
             className: "UuidPostInverse",
             foreignKey: "uuid_post_id",

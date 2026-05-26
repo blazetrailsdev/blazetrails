@@ -27,8 +27,9 @@ type RenderCollectionOptions<P extends string> = {
   collection: readonly unknown[];
   as?: string;
   spacerTemplate?: string;
-  locals?: Record<string, unknown>;
-};
+} & (P extends keyof TemplateRegistry
+  ? { locals?: Partial<TemplateLocals<TemplateRegistry[P]>> }
+  : { locals?: Record<string, unknown> });
 
 /**
  * Per-render execution context passed to compiled `.tse` templates.

@@ -67,4 +67,11 @@ describe("TseRenderContext#render — conditional generic (Story 5.8 + follow-up
     });
     expectTypeOf(r3).toMatchTypeOf<SafeBuffer>();
   });
+
+  it("collection renders with typed locals accept valid keys and reject unknown keys", () => {
+    ctx.render({ partial: "users/user", collection: ["a"], locals: { role: "admin" } });
+
+    // @ts-expect-error — 'bogus' is not a key on the registered locals type
+    ctx.render({ partial: "users/user", collection: ["a"], locals: { bogus: 1 } });
+  });
 });

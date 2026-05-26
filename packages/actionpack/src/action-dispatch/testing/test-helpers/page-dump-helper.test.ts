@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { tmpdir } from "os";
 import { join } from "path";
 import { readFile } from "fs/promises";
@@ -10,6 +10,8 @@ import {
 } from "./page-dump-helper.js";
 
 describe("ActionDispatch::TestHelpers::PageDumpHelper", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("save_page writes response body to the given path", async () => {
     const path = join(tmpdir(), `page-dump-test-${Date.now()}.html`);
     const host: PageDumpHelperHost = {
@@ -31,12 +33,14 @@ describe("ActionDispatch::TestHelpers::PageDumpHelper", () => {
   });
 
   it("html_dump_default_path generates a path under tmp/html_dump", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000000000000);
     const host: PageDumpHelperHost = {
       _testName: "my_test",
       response: { isRedirection: () => false, body: "" },
     };
     const path = htmlDumpDefaultPath.call(host);
-    expect(path).toMatch(/tmp\/html_dump\/my_test_\d+\.html$/);
+    expect(path).toMatch(/tmp\/html_dump\/my_test_1000000000000\.html$/);
   });
 
   it("html_dump_default_path uses test name in filename", () => {

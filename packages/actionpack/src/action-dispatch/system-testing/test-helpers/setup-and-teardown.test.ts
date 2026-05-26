@@ -1,9 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { beforeTeardown, afterTeardown, type SetupAndTeardownHost } from "./setup-and-teardown.js";
 
 describe("ActionDispatch::SystemTesting::TestHelpers::SetupAndTeardown", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("before_teardown calls take_failed_screenshot", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
     const host: SetupAndTeardownHost = {
       _testFailed: true,
       _screenshotCounter: undefined,
@@ -16,7 +18,6 @@ describe("ActionDispatch::SystemTesting::TestHelpers::SetupAndTeardown", () => {
     };
     await beforeTeardown.call(host);
     expect(host._screenshotCounter).toBe(1);
-    consoleSpy.mockRestore();
   });
 
   it("after_teardown closes the context and clears page", async () => {

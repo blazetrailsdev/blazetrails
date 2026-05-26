@@ -32,6 +32,7 @@ describe("ActionDispatch::SystemTesting::TestHelpers::ScreenshotHelper", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it("image path is saved in tmp directory", () => {

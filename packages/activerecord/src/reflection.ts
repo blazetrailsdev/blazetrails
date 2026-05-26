@@ -1617,6 +1617,16 @@ export class PolymorphicReflection extends AbstractReflection {
     return (this._reflection as any).className;
   }
 
+  override joinScope(table: Table, foreignTable: Table, foreignKlass: typeof Base): any {
+    const scope = super.joinScope(table, foreignTable, foreignKlass);
+    const typeCol = (this._previousReflection as any).foreignType;
+    const sourceType = (this._previousReflection as any).options?.sourceType;
+    if (typeCol && sourceType) {
+      return scope.where({ [typeCol]: sourceType });
+    }
+    return scope;
+  }
+
   scopeFor(relation: any, owner?: any): any {
     return (this._reflection as any).scopeFor?.(relation, owner) ?? relation;
   }

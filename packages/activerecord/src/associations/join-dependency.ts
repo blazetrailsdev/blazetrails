@@ -32,6 +32,8 @@ export interface JoinNode {
   assocName: string;
   assocType: "hasMany" | "hasOne" | "belongsTo";
   arelJoin: Nodes.Join | null;
+  /** Reflection for this association — used by hydration to wire association proxies. */
+  reflection: any | null;
   /** The immediate association name (without parent prefix) */
   immediateAssocName: string;
   /** Dotted parent path, or null if directly on the base model */
@@ -281,6 +283,7 @@ export class JoinDependency {
       parentPath: options?.parentAssocName ?? null,
       assocType,
       arelJoin,
+      reflection: reflection ?? null,
     };
 
     for (let i = 0; i < columns.length; i++) {
@@ -470,9 +473,10 @@ export class JoinDependency {
 
       const rawPk = parentAttrs[basePk];
       let parentKey: unknown;
+      let parent: any;
       if (!seenRawPks.has(rawPk)) {
         seenRawPks.add(rawPk);
-        const parent = this.constructModel(parentAttrs, null);
+        parent = this.constructModel(parentAttrs, null);
         parentKey = parent._readAttribute(basePk);
         rawToKey.set(rawPk, parentKey);
         parentMap.set(parentKey, parent);
@@ -480,9 +484,12 @@ export class JoinDependency {
         seenChildren.set(parentKey, new Map());
       } else {
         parentKey = rawToKey.get(rawPk)!;
+        parent = parentMap.get(parentKey);
       }
 
       for (const node of this._nodes) {
+        if (node.immediateAssocName.startsWith("_through_")) continue;
+
         const childAttrs: Record<string, unknown> = {};
         let hasNonNull = false;
         for (let i = 0; i < node.columns.length; i++) {
@@ -491,7 +498,10 @@ export class JoinDependency {
           if (val !== null && val !== undefined) hasNonNull = true;
         }
 
-        if (!hasNonNull) continue;
+        if (!hasNonNull) {
+          this._markAssociationLoaded(parent, node);
+          continue;
+        }
 
         const rawChildPk = childAttrs[(node.modelClass as any).primaryKey ?? "id"];
         const seen = seenChildren.get(parentKey)!;
@@ -501,6 +511,20 @@ export class JoinDependency {
         if (!seenPks.has(rawChildPk)) {
           seenPks.add(rawChildPk);
           const child = this.constructModel(childAttrs, node);
+
+          this._wireAssociationProxy(parent, node, child);
+
+          if (node.reflection?.strictLoading) {
+            (child as any)._strictLoading = true;
+          }
+          if (node.reflection?.scope) {
+            const scopeRel =
+              typeof node.reflection.scope === "function"
+                ? node.reflection.scope((node.modelClass as any)._allForPreload?.())
+                : null;
+            if (scopeRel?._readonly) (child as any)._readonly = true;
+          }
+
           const parentAssocs = assocMap.get(parentKey)!;
           if (!parentAssocs.has(node.assocName)) {
             parentAssocs.set(node.assocName, []);
@@ -561,6 +585,51 @@ export class JoinDependency {
   private constructModel(attrs: Record<string, unknown>, node: JoinNode | null): any {
     const modelClass = node ? node.modelClass : this._baseModel;
     return (modelClass as any)._instantiate(attrs);
+  }
+
+  /**
+   * @internal
+   * Wire a child model into the parent's association proxy.
+   * Mirrors Rails' `construct_model` setting `other.target` and `other.loaded`.
+   */
+  private _wireAssociationProxy(parent: any, node: JoinNode, child: any): void {
+    if (typeof parent.association !== "function") return;
+    try {
+      const proxy = parent.association(node.immediateAssocName);
+      if (!proxy) return;
+      const isCollection = node.assocType === "hasMany";
+      if (isCollection) {
+        if (!proxy.loaded) {
+          proxy.loaded = true;
+          proxy.target = [];
+        }
+        if (Array.isArray(proxy.target)) {
+          proxy.target.push(child);
+        }
+      } else {
+        proxy.target = child;
+        proxy.loaded = true;
+      }
+    } catch {
+      // Association not defined — fall back to legacy path
+    }
+  }
+
+  /**
+   * @internal
+   * Mark an association as loaded (empty) when the join row is all-null.
+   */
+  private _markAssociationLoaded(parent: any, node: JoinNode): void {
+    if (typeof parent.association !== "function") return;
+    try {
+      const proxy = parent.association(node.immediateAssocName);
+      if (!proxy || proxy.loaded) return;
+      const isCollection = node.assocType === "hasMany";
+      proxy.loaded = true;
+      proxy.target = isCollection ? [] : null;
+    } catch {
+      // Association not defined
+    }
   }
 
   private _buildBaseAliases(): void {
@@ -743,6 +812,8 @@ export class JoinDependency {
         parentPath: parentAssocName ?? null,
         assocType: throughAssocDef.type === "hasOne" ? "hasOne" : "hasMany",
         arelJoin: throughArelJoin,
+        reflection: null,
+        isThroughNode: true,
       };
       this._nodes.push(throughNode);
       this._pushTreeNode(throughNode);
@@ -954,10 +1025,19 @@ export class JoinDependency {
       parentPath: parentAssocName ?? null,
       assocType: throughAssocDef.type === "hasOne" ? "hasOne" : "hasMany",
       arelJoin: throughArelJoin,
+      reflection: null,
+      isThroughNode: true,
     };
     this._nodes.push(throughNode);
     this._pushTreeNode(throughNode);
 
+    const targetReflection = reflectOnAssociation(
+      parentAssocName
+        ? ((this._nodes.find((n) => n.assocName === parentAssocName)?.modelClass ??
+            this._baseModel) as any)
+        : (this._baseModel as any),
+      assocDef.name,
+    );
     const node: JoinNode = {
       tableIndex: targetTableIndex,
       tableAlias: targetAlias,
@@ -970,6 +1050,7 @@ export class JoinDependency {
       parentPath: parentAssocName ?? null,
       assocType: assocDef.type === "hasAndBelongsToMany" ? "hasMany" : assocDef.type,
       arelJoin: targetArelJoin,
+      reflection: targetReflection ?? null,
     };
     this._nodes.push(node);
     this._pushTreeNode(node);

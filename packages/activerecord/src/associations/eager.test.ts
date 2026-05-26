@@ -1946,6 +1946,12 @@ describe("EagerAssociationTest", () => {
     expect(posts).toHaveLength(2);
     const titles = posts.map((p: any) => p.title).sort();
     expect(titles).toEqual(["P1", "P2"]);
+
+    // Association proxy must be marked loaded (hydration via proxy)
+    const assocProxy = (authors[0] as any).association("ejPosts");
+    expect(assocProxy.loaded).toBe(true);
+    expect(Array.isArray(assocProxy.target)).toBe(true);
+    expect(assocProxy.target).toHaveLength(2);
   });
   it("eager association loading with explicit join belongs to", async () => {
     class EjBtAuthor extends Base {
@@ -1976,6 +1982,12 @@ describe("EagerAssociationTest", () => {
     const loaded = (posts2[0] as any)._preloadedAssociations?.get("ejBtAuthor");
     expect(loaded).not.toBeNull();
     expect(loaded.name).toBe("BtAuthor");
+
+    // Association proxy must be marked loaded (belongsTo hydration via proxy)
+    const btProxy = (posts2[0] as any).association("ejBtAuthor");
+    expect(btProxy.loaded).toBe(true);
+    expect(btProxy.target).not.toBeNull();
+    expect(btProxy.target.name).toBe("BtAuthor");
   });
   it("eager association loading with explicit join has one", async () => {
     class EjHoUser extends Base {
@@ -2006,6 +2018,12 @@ describe("EagerAssociationTest", () => {
     const profile = (users[0] as any)._preloadedAssociations?.get("ejHoProfile");
     expect(profile).not.toBeNull();
     expect(profile.bio).toBe("HoBio");
+
+    // Association proxy must be marked loaded (hasOne hydration via proxy)
+    const hoProxy = (users[0] as any).association("ejHoProfile");
+    expect(hoProxy.loaded).toBe(true);
+    expect(hoProxy.target).not.toBeNull();
+    expect(hoProxy.target.bio).toBe("HoBio");
   });
   it("eager association loading with explicit join habtm", async () => {
     class EjHabtmPost extends Base {

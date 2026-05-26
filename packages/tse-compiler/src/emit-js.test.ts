@@ -175,9 +175,10 @@ describe("compileJs", () => {
       const genLineB = codeLines.findIndex((l) => l.includes("const b = 2;"));
       expect(genLineA).toBeGreaterThan(-1);
       expect(genLineB).toBe(genLineA + 1);
-      // Both output lines must have a source-map segment (non-empty string).
-      expect(segs[genLineA]).not.toBe("");
-      expect(segs[genLineB]).not.toBe("");
+      // Both output lines must have a defined, non-empty source-map segment.
+      expect(segs.length).toBeGreaterThan(genLineB);
+      expect(segs[genLineA]).toBeTruthy();
+      expect(segs[genLineB]).toBeTruthy();
     });
 
     it("maps each code-tag output line to its actual source line (not the opener line)", () => {

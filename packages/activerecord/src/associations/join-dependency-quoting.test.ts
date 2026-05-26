@@ -79,14 +79,19 @@ describe("JoinDependency Arel node construction", () => {
       }
     }
     class Car extends Vehicle {}
+    class ElectricCar extends Car {}
     enableSti(Vehicle);
     registerSubclass(Car);
+    registerSubclass(ElectricCar);
     Vehicle.adapter = adapter;
     Car.adapter = adapter;
+    ElectricCar.adapter = adapter;
     (Vehicle as any)._associations = [];
     (Car as any)._associations = [];
+    (ElectricCar as any)._associations = [];
     registerModel(Vehicle);
     registerModel(Car);
+    registerModel(ElectricCar);
 
     Associations.hasMany.call(Owner, "cars", { className: "Car", foreignKey: "owner_id" });
 
@@ -101,10 +106,10 @@ describe("JoinDependency Arel node construction", () => {
     expect(and).toBeInstanceOf(Nodes.And);
     expect(and.children).toHaveLength(2);
 
-    // First child: STI type equality (from klass.all() default scope)
-    const typeEq = and.children[0] as Nodes.Equality;
-    expect(typeEq).toBeInstanceOf(Nodes.Equality);
-    expect((typeEq.left as any).name).toBe("type");
+    // First child: STI IN-list (Car has descendant ElectricCar, so klass.all() produces IN)
+    const inNode = and.children[0] as Nodes.In;
+    expect(inNode).toBeInstanceOf(Nodes.In);
+    expect((inNode.left as any).name).toBe("type");
 
     // Second child: FK equality
     const eq = and.children[1] as Nodes.Equality;

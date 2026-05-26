@@ -24,6 +24,7 @@ describe("JoinDependency walk() deduplication", () => {
   class Comment extends Base {
     static {
       this.attribute("post_id", "integer");
+      this.attribute("author_id", "integer");
       this.attribute("body", "string");
     }
   }
@@ -49,7 +50,7 @@ describe("JoinDependency walk() deduplication", () => {
     }
 
     Associations.hasMany.call(Post, "comments", { className: "Comment" });
-    Associations.belongsTo.call(Comment, "author", { className: "Author", foreignKey: "post_id" });
+    Associations.belongsTo.call(Comment, "author", { className: "Author" });
     Associations.hasMany.call(Comment, "likes", { className: "Like" });
   });
 

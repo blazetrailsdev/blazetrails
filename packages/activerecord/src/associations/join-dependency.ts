@@ -531,15 +531,6 @@ export class JoinDependency {
     return predicate;
   }
 
-  /** @internal */
-  private _injectStiConstraint(join: Nodes.Join, model: typeof Base, arelTable: Table): Nodes.Join {
-    const inheritanceCol = getInheritanceColumn(model);
-    if (!inheritanceCol || !isStiSubclass(model)) return join;
-    const on = (join as any).right as Nodes.On;
-    const pred = this._addStiConstraintArel(on.expr as Nodes.Node, model, arelTable);
-    return new (join.constructor as any)((join as any).left, new Nodes.On(pred));
-  }
-
   instantiateFromRows(
     rows: Record<string, unknown>[],
     strictLoadingValue?: boolean,

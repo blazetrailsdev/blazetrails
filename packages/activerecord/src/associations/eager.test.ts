@@ -235,6 +235,8 @@ const TEST_SCHEMA: Schema = {
   eager_twice_owners: { name: "string" },
   eager_twice_targets: { label: "string" },
   eager_widgets: { name: "string" },
+  ej_em_authors: { name: "string" },
+  ej_em_posts: { title: "string", ej_em_author_id: "integer" },
   ej_authors: { name: "string" },
   ej_bt_authors: { name: "string" },
   ej_bt_posts: { title: "string", ej_bt_author_id: "integer" },
@@ -2027,6 +2029,36 @@ describe("EagerAssociationTest", () => {
     expect(hoProxy.loaded).toBe(true);
     expect(hoProxy.target).not.toBeNull();
     expect(hoProxy.target.bio).toBe("HoBio");
+  });
+  it("eager association loading with explicit join marks empty association loaded", async () => {
+    class EjEmAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class EjEmPost extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("ej_em_author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    Associations.hasMany.call(EjEmAuthor, "ejEmPosts", {
+      className: "EjEmPost",
+      foreignKey: "ej_em_author_id",
+    });
+    registerModel(EjEmAuthor);
+    registerModel(EjEmPost);
+
+    await EjEmAuthor.create({ name: "NoPostsAuthor" });
+
+    const authors = await EjEmAuthor.all().eagerLoad("ejEmPosts").toArray();
+    expect(authors).toHaveLength(1);
+    const proxy = (authors[0] as any)._associationInstances.get("ejEmPosts");
+    expect(proxy).toBeDefined();
+    expect(proxy.loaded).toBe(true);
+    expect(proxy.target).toEqual([]);
   });
   it("eager association loading with explicit join habtm", async () => {
     class EjHabtmPost extends Base {

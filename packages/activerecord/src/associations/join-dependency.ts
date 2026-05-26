@@ -202,13 +202,16 @@ export class JoinDependency {
       if (assocDef.options.through) {
         this._nextTableIndex--;
         if (reflection && reflection.isThroughReflection()) {
-          return this._addThroughViaJoinAssociation(
+          const snapshotIndex = this._nextTableIndex;
+          const result = this._addThroughViaJoinAssociation(
             assocDef,
             reflection,
             modelClass,
             sourceAlias,
             options?.parentAssocName,
           );
+          if (result) return result;
+          this._nextTableIndex = snapshotIndex;
         }
         return this._addThroughAssociation(
           assocDef,
@@ -983,16 +986,16 @@ export class JoinDependency {
     // Rebind ON predicates when tables were aliased (scope/STI predicates
     // from klass.all() reference the unaliased table name).
     for (let i = 0; i < joins.length; i++) {
-      const join = joins[i] as Nodes.Join;
-      const leftTable = join.left as Table;
-      const tableName = leftTable.name;
-      const entry = chainTables.find(
-        (ct) => ct.tableName === tableName && ct.effectiveName !== tableName,
-      );
-      if (entry) {
-        const on = join.right as Nodes.On;
+      const chainIdx = chain.length - 1 - i;
+      const entry = chainTables[chainIdx];
+      if (entry.effectiveName !== entry.tableName) {
+        const on = (joins[i] as Nodes.Join).right as Nodes.On;
         if (on instanceof Nodes.On) {
-          const rebound = rebindTableReferences(on.expr as Nodes.Node, tableName, entry.table);
+          const rebound = rebindTableReferences(
+            on.expr as Nodes.Node,
+            entry.tableName,
+            entry.table,
+          );
           if (rebound !== on.expr) {
             joins[i] = new this._joinType(entry.table, new Nodes.On(rebound));
           }
@@ -1051,9 +1054,8 @@ export class JoinDependency {
         this._pushTreeNode(node);
         targetNode = node;
       } else {
-        const throughName = chain[chainIdx].activeRecord
-          ? `_through_${chain[chainIdx].name}`
-          : `_through_${entry.tableName}`;
+        const reflName = chain[chainIdx].name ?? entry.tableName;
+        const throughName = `_through_${reflName}`;
         const throughNodeName = parentAssocName ? `${parentAssocName}.${throughName}` : throughName;
         const refl = chain[chainIdx];
         const node: JoinNode = {
@@ -1066,7 +1068,7 @@ export class JoinDependency {
           assocName: throughNodeName,
           immediateAssocName: throughName,
           parentPath: parentAssocName ?? null,
-          assocType: refl.isCollection?.() === false ? "hasOne" : "hasMany",
+          assocType: ((refl as any)._reflection ?? refl).macro === "hasOne" ? "hasOne" : "hasMany",
           arelJoin,
           reflection: null,
           isThroughNode: true,

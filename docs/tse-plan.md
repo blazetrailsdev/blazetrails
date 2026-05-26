@@ -1,10 +1,23 @@
 # TSE — Trails Server Embedded templates
 
-All §5 implementation stories are complete. This doc tracks remaining
-follow-ups and open questions. For design reference (ERB internals,
-TSE architecture, API mapping tables), see git history.
+All implementation stories are complete. This doc tracks remaining
+follow-ups. For design reference (ERB internals, TSE architecture,
+API mapping tables), see git history.
 
-## Completed stories
+## Completed work
+
+### Infrastructure phases
+
+| Phase | Title                                          | PR(s)               |
+| ----- | ---------------------------------------------- | ------------------- |
+| 0a    | Extract trails-tsc                             | #1943               |
+| 0b    | SafeString / OutputBuffer                      | #1941               |
+| 2a-0  | tse-compiler package (lexer, AST, emitters)    | #2190               |
+| 2a-1  | Tse handler class                              | #2200               |
+| 2b    | tse plugin (virtualization + manifest)         | #2201               |
+| 2c    | Build CLI + watch + TS language service plugin | #2222, #2223, #2232 |
+
+### Fidelity stories
 
 | Story | Title                                                      | PR    |
 | ----- | ---------------------------------------------------------- | ----- |
@@ -25,7 +38,7 @@ TSE architecture, API mapping tables), see git history.
 
 ## Post-merge follow-ups
 
-Collected from post-merge findings across all §5 PRs. Grouped by area.
+Collected from post-merge findings across all story PRs. Grouped by area.
 
 **Type safety / DX sharpening**
 
@@ -49,19 +62,3 @@ Collected from post-merge findings across all §5 PRs. Grouped by area.
 **Sync / maintenance**
 
 - [ ] Virtualizer inline `RenderContext` interface (in `tse.ts` `buildPreamble`) must stay in sync with `TseRenderContext` in `render-context.ts` manually. No automated check exists yet.
-
-## Open questions
-
-1. **Dev-time reload mechanism.** `trails-tsc dev` re-emits `.tse.js`
-   on file change, but the running server's reload story (Node
-   `--watch` + import-cache bust vs bundler-driven HMR vs server
-   framework hook) is **deferred to Phase 3 (renderer)**.
-2. **Compile-time error UX format.** When `<% expr %>` is invalid TS,
-   the diagnostic format (terminal pretty-print vs editor squiggles
-   vs CI annotation) needs a unified shape.
-3. **Typed `yield` section names.** `RenderContext#yield(section?)`
-   currently returns `SafeString` for any section name. Layout-to-
-   template binding info would let us type legal names per layout,
-   but the renderer doesn't surface that at type level today.
-4. **Streaming emit shape.** Phase 3d will need a second compiled
-   export (`stream` as `async function*`) alongside `default`.

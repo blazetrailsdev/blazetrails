@@ -437,7 +437,8 @@ export class JoinDependency {
 
     const joins = intersection.flatMap(([l, r]) => {
       if (r instanceof JoinTreeNode) {
-        (r as JoinTreeNode).table = l.table as string;
+        const lt = l.table;
+        (r as JoinTreeNode).table = typeof lt === "string" ? lt : (lt.tableAlias ?? lt.name);
       }
       return this.walk(l, r, joinType);
     });

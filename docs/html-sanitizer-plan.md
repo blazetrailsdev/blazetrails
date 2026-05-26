@@ -46,8 +46,8 @@ engine later means rewriting one file.
 - Runtime: `sanitize-html` (^2.x)
 - Dev: `@types/sanitize-html`
 - Consumers: `@blazetrails/actionview` declares `@blazetrails/html-sanitizer`
-  as a **direct runtime dep**, matching Rails' `actionpack.gemspec`
-  (`s.add_dependency "rails-html-sanitizer", "~> 1.7"`). No conditional
+  as a **direct runtime dep**, matching Rails' `actionview.gemspec`
+  (`s.add_dependency "rails-html-sanitizer", "~> 1.6"`). No conditional
   loading; `SanitizeHelper` imports the package normally. The ~30 KB cost
   is negligible vs. the ergonomic win of `pnpm install` resolving it
   automatically and parity with Rails' install graph.

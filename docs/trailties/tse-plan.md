@@ -488,14 +488,14 @@ _ob.safeExprAppend(expr); // to_s coercion, no HTML-escape
 
 Member-for-member:
 
-| Rails                      | TSE                           |
-| -------------------------- | ----------------------------- |
-| `OutputBuffer.new`         | `new OutputBuffer()`          |
-| `_buf.safe_append =`       | `_buf.safeAppend(...)`        |
-| `_buf.append =`            | `_buf.append(...)`            |
-| return `_buf` (SafeBuffer) | `_buf.toSafeString()`         |
-| `html_safe?`               | `value instanceof SafeString` |
-| `String#html_safe`         | `safe(value)` helper          |
+| Rails                      | TSE                                      |
+| -------------------------- | ---------------------------------------- |
+| `OutputBuffer.new`         | `new OutputBuffer()`                     |
+| `_buf.safe_append =`       | `_buf.safeAppend(...)`                   |
+| `_buf.append =`            | `_buf.append(...)`                       |
+| return `_buf` (SafeBuffer) | `_buf.toString()` (returns `SafeBuffer`) |
+| `html_safe?`               | `isHtmlSafe(value)`                      |
+| `String#html_safe`         | `safe(value)` helper                     |
 
 ### 2.7 Emit shape (typecheck)
 
@@ -752,7 +752,7 @@ templates compile to `context.helperName(...)` calls.
 ```ts
 // @blazetrails/actionview/render-context.ts
 export interface RenderContext {
-  readonly outputBuffer: OutputBuffer;
+  outputBuffer: OutputBuffer;
 
   // Capture / concat — see 2.10.3
   capture(callback: () => void): SafeString;
@@ -817,18 +817,17 @@ duration of the block, returning the captured string to the helper.
 TSE ports this directly.
 
 ```ts
-// in @blazetrails/actionview/output-buffer.ts
-class RenderContextImpl implements RenderContext {
-  capture(callback: () => void): SafeString {
-    const saved = this.outputBuffer;
-    const fresh = new OutputBuffer();
-    this.outputBuffer = fresh;
+// in @blazetrails/actionview/render-context.ts (TseRenderContext)
+class TseRenderContext implements RenderContext {
+  capture(callback: () => void): string {
+    const previous = this.outputBuffer;
+    this.outputBuffer = new OutputBuffer();
     try {
       callback();
+      return this.outputBuffer.toString();
     } finally {
-      this.outputBuffer = saved;
+      this.outputBuffer = previous;
     }
-    return fresh.toSafeString();
   }
   concat(value: unknown): void {
     this.outputBuffer.append(value);

@@ -167,37 +167,31 @@ describe("buildViews", () => {
       path.join(cwd, ".trails/template-registry-augmentation.d.ts"),
       "utf8",
     );
-    const stub = [
+    const localsType = aug.match(/"users\/user":\s*(.+);/)?.[1];
+    expect(localsType).toBeDefined();
+    const registryStub = [
       "export type NoExtraKeys<T> = T & { [K in Exclude<string, keyof T>]?: never };",
       "export type TemplateLocals<T> = T;",
-      // Inline the augmentation's interface body so the stub declares the merged type
-      ...aug.match(/["']users\/user["']:\s*.+/g)!.map((line) => line.replace(/^\s*/, "")),
-    ];
-    const registryStub = [
-      `export interface TemplateRegistry { ${stub.slice(2).join(" ")} }`,
-      stub[0],
-      stub[1],
+      `export interface TemplateRegistry { "users/user": ${localsType}; }`,
     ].join("\n");
 
-    const goodProbe = [
-      `import type { TemplateRegistry } from "@blazetrails/actionview";`,
-      'const fn = (r: TemplateRegistry["users/user"]) => r;',
-      'fn({ name: "x", role: "y", email: "z" } as any);',
-    ].join("\n");
-    expect(diagnose(goodProbe, { customStub: registryStub })).toEqual([]);
+    const check = (code: string) =>
+      diagnose(
+        `import type { TemplateRegistry } from "@blazetrails/actionview";\n` +
+          `type R = TemplateRegistry["users/user"];\n` +
+          code,
+        { customStub: registryStub },
+      );
 
-    const badProbe = [
-      `import type { TemplateRegistry } from "@blazetrails/actionview";`,
-      "type HasName = { name: unknown };",
-      "type HasEmail = { email: unknown };",
-      'type R = TemplateRegistry["users/user"];',
-      "type _CheckName = R extends HasName ? true : false;",
-      "type _CheckEmail = R extends HasEmail ? true : false;",
-      "const a: _CheckName = true;",
-      "const b: _CheckEmail = true;",
-      "void a; void b;",
-    ].join("\n");
-    expect(diagnose(badProbe, { customStub: registryStub })).toEqual([]);
+    // intersection requires `name` (shared) and `email` (json-only required)
+    expect(check("const a: R extends { name: unknown } ? 1 : 2 = 1; void a;")).toEqual([]);
+    expect(check("const a: R extends { email: unknown } ? 1 : 2 = 1; void a;")).toEqual([]);
+    // `role` is optional in html format — intersection preserves optionality
+    expect(check("const a: R extends { role: unknown } ? 1 : 2 = 2; void a;")).toEqual([]);
+    // missing `email` (required by json format) is a type error
+    expect(
+      check("const a: R extends { name: unknown } ? 1 : 2 = 2; void a;").length,
+    ).toBeGreaterThan(0);
   });
 
   it("emits an empty augmentation when no partials have a locals directive", () => {

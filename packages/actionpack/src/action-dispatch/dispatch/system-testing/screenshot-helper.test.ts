@@ -12,7 +12,7 @@ import {
   inlineBase64,
   supportsScreenshot,
   type ScreenshotHelperHost,
-} from "./screenshot-helper.js";
+} from "../../system-testing/test-helpers/screenshot-helper.js";
 
 function makeHost(testName: string): ScreenshotHelperHost & { metadata: Record<string, unknown> } {
   return { _testName: testName, _screenshotCounter: undefined, _testFailed: false, metadata: {} };
@@ -160,6 +160,13 @@ describe("ActionDispatch::SystemTesting::TestHelpers::ScreenshotHelper", () => {
       );
       consoleSpy.mockRestore();
     });
+  });
+
+  it("image path returns the absolute path from root", () => {
+    // imagePath is constructed from projectRoot() (process.cwd())
+    const path = imagePath.call(host);
+    expect(path).toContain("tmp/screenshots");
+    expect(path).toMatch(/tmp\/screenshots\/0_x\.png$/);
   });
 
   it("rack_test driver does not support screenshot", () => {

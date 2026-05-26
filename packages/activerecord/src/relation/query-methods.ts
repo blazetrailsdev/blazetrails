@@ -141,12 +141,13 @@ interface QueryMethodsHost {
 // ---------------------------------------------------------------------------
 
 function resolveOrderMatcher(host: QueryMethodsHost): RegExp {
-  // Resolve the concrete adapter's column-name-with-order matcher via the
-  // public getter (pool checkout path).
   try {
-    const adapter = host._modelClass.adapter;
-    const matcher = (adapter.constructor as any)?.columnNameWithOrderMatcher?.();
-    if (matcher) return matcher;
+    let adapter: any = host._modelClass.adapter;
+    while (adapter) {
+      const matcher = (adapter.constructor as any)?.columnNameWithOrderMatcher?.();
+      if (matcher) return matcher;
+      adapter = adapter.inner;
+    }
   } catch {
     // No adapter configured — fall back to abstract pattern.
   }

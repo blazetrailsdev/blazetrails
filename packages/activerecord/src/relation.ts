@@ -10,7 +10,7 @@ import {
 } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper } from "./base.js";
-import { RecordNotSaved, RecordNotUnique } from "./errors.js";
+import { ConnectionNotEstablished, RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { disallowRawSqlBang } from "./sanitization.js";
 import {
   columnNameMatcher as abstractColumnNameMatcher,
@@ -3611,12 +3611,13 @@ export class Relation<T extends Base> {
     }
   }
 
-  /** Resolve the adapter through the public getter, returning null for HABTM join models with no connection. */
+  /** Resolve the adapter through the public getter, returning null for HABTM join models with no established connection. */
   private _resolveAdapter(): DatabaseAdapter | null {
     try {
       return this._modelClass.adapter;
-    } catch {
-      return null;
+    } catch (e) {
+      if (e instanceof ConnectionNotEstablished) return null;
+      throw e;
     }
   }
 
@@ -3632,7 +3633,7 @@ export class Relation<T extends Base> {
    * get dialect-correct quoting. `TestAdapterFixtures` delegates
    * `arelVisitor` to its inner adapter, so wrapped real adapters resolve
    * through here the same as a bare adapter. Returns null when no
-   * adapter is set (e.g. HABTM join models whose adapter is null) or
+   * adapter is established (e.g. HABTM join models where adapter resolution throws) or
    * when the adapter is a mock/partial that doesn't define `arelVisitor`;
    * callers then fall back to `manager.toSql()` / `node.toSql()` (global
    * registry visitor = ANSI double-quotes).

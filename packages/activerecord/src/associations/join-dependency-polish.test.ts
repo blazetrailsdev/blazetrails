@@ -1,6 +1,6 @@
 /**
- * Tests for JoinBase.arelTable, joinType propagation in makeConstraints,
- * and readonlyValue propagation in instantiateFromRows.
+ * Tests for JoinBase.table (Arel Table node) and joinType propagation
+ * in makeConstraints.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel } from "../index.js";
@@ -10,7 +10,7 @@ import { JoinDependency } from "./join-dependency.js";
 import { JoinBase } from "./join-dependency/join-base.js";
 import { Nodes, Table } from "@blazetrails/arel";
 
-describe("JoinBase.arelTable", () => {
+describe("JoinBase.table", () => {
   let adapter: any;
 
   class Post extends Base {
@@ -26,11 +26,18 @@ describe("JoinBase.arelTable", () => {
     registerModel(Post);
   });
 
-  it("returns an Arel Table node", () => {
-    const joinBase = new JoinBase(Post);
-    const arelTable = joinBase.arelTable;
-    expect(arelTable).toBeInstanceOf(Table);
-    expect(arelTable.name).toBe(Post.tableName);
+  it("returns the Arel Table passed at construction", () => {
+    const arelTable = Post.arelTable;
+    const joinBase = new JoinBase(Post, arelTable);
+    expect(joinBase.table).toBe(arelTable);
+    expect(joinBase.table).toBeInstanceOf(Table);
+    expect(joinBase.table.name).toBe(Post.tableName);
+  });
+
+  it("is accessible via joinRoot on JoinDependency", () => {
+    const jd = new JoinDependency(Post);
+    expect(jd.joinRoot.table).toBeInstanceOf(Table);
+    expect(jd.joinRoot.table.name).toBe(Post.tableName);
   });
 });
 

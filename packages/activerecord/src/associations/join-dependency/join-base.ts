@@ -11,16 +11,15 @@ import type { Table } from "@blazetrails/arel";
 import { JoinPart } from "./join-part.js";
 
 export class JoinBase extends JoinPart {
-  constructor(baseKlass: typeof Base, children?: JoinPart[]) {
+  private readonly _table: Table;
+
+  constructor(baseKlass: typeof Base, table: Table, children?: JoinPart[]) {
     super(baseKlass, children);
+    this._table = table;
   }
 
-  get table(): string {
-    return this.baseKlass.tableName;
-  }
-
-  get arelTable(): Table {
-    return this.baseKlass.arelTable;
+  get table(): Table {
+    return this._table;
   }
 
   isMatch(other: JoinPart): boolean {

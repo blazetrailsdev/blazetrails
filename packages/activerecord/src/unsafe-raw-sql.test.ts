@@ -128,12 +128,8 @@ describe("UnsafeRawSqlTest", () => {
   });
 
   it("order: allows Arel.sql with binds", async () => {
-    const idsExpected = await Post.order(arelSql("REPLACE(title, 'Alpha', 'Zeta'), id")).pluck(
-      "id",
-    );
-    const ids = await Post.order([arelSql("REPLACE(title, ?, ?), id"), "Alpha", "Zeta"]).pluck(
-      "id",
-    );
+    const idsExpected = await Post.order(arelSql("REPLACE(title, 'misc', 'zzzz'), id")).pluck("id");
+    const ids = await Post.order([arelSql("REPLACE(title, ?, ?), id"), "misc", "zzzz"]).pluck("id");
     expect(ids).toEqual(idsExpected);
   });
 
@@ -261,9 +257,12 @@ describe("UnsafeRawSqlTest", () => {
   });
 
   it("pluck: always allows Arel", async () => {
+    const expectedValues = (await Post.pluck("title")).map((title: unknown) => [
+      title,
+      (title as string).length,
+    ]);
     const values = await Post.pluck("title", arelSql("length(title)"));
-    expect(values.length).toBeGreaterThan(0);
-    expect(Array.isArray(values[0])).toBe(true);
+    expect(values).toEqual(expectedValues);
   });
 
   it("pluck: disallows dangerous query method", async () => {

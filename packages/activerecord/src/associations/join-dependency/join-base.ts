@@ -10,8 +10,8 @@ import type { Base } from "../../base.js";
 import { JoinPart } from "./join-part.js";
 
 export class JoinBase extends JoinPart {
-  constructor(baseKlass: typeof Base) {
-    super(baseKlass);
+  constructor(baseKlass: typeof Base, children?: JoinPart[]) {
+    super(baseKlass, children);
   }
 
   get table(): string {

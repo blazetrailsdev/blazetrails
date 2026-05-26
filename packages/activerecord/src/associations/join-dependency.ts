@@ -20,6 +20,8 @@ import { Table, Nodes } from "@blazetrails/arel";
 import { modelRegistry } from "../associations.js";
 import { reflectOnAssociation } from "../reflection.js";
 import { getInheritanceColumn, isStiSubclass } from "../inheritance.js";
+import { JoinBase } from "./join-dependency/join-base.js";
+import { JoinPart } from "./join-dependency/join-part.js";
 
 export interface JoinNode {
   tableIndex: number;
@@ -119,18 +121,23 @@ export class JoinDependency {
   private _nextTableIndex = 1;
   private _nodes: JoinNode[] = [];
   private _aliases: AliasMap[] = [];
-  // Tracks real table names already in use to detect collisions.
-  // When a joined table's real name is unique, we skip the tN alias in SQL
-  // (matching Rails' AliasTracker which only aliases on collision).
   private _usedTableNames: Set<string>;
   private _arelTablesByIndex: Map<number, Table> = new Map();
+  /** @internal */
+  readonly _joinRoot: JoinBase;
+  private _treeNodesByPath: Map<string, JoinPart> = new Map();
 
   constructor(baseModel: typeof Base) {
     this._baseModel = baseModel;
     this._baseAlias = (baseModel as any).tableName;
     this._usedTableNames = new Set([this._baseAlias]);
     this._arelTablesByIndex.set(this._baseTableIndex, (baseModel as any).arelTable);
+    this._joinRoot = new JoinBase(baseModel);
     this._buildBaseAliases();
+  }
+
+  get joinRoot(): JoinBase {
+    return this._joinRoot;
   }
 
   get nodes(): JoinNode[] {
@@ -286,6 +293,7 @@ export class JoinDependency {
     }
 
     this._nodes.push(node);
+    this._pushTreeNode(node);
     return node;
   }
 
@@ -314,7 +322,7 @@ export class JoinDependency {
         parentAssocName: parentPath || undefined,
       });
       if (!node) {
-        // Roll back partial additions
+        this._rollbackTree(snapshotNodes);
         this._nodes.length = snapshotNodes;
         this._aliases.length = snapshotAliases;
         this._nextTableIndex = snapshotNextIndex;
@@ -347,20 +355,17 @@ export class JoinDependency {
   }
 
   get reflections(): any[] {
-    const modelByPath = new Map<string, any>();
-    return this._nodes
-      .map((node) => {
-        const parentModel = node.parentPath
-          ? (modelByPath.get(node.parentPath) ?? (this._baseModel as any))
-          : (this._baseModel as any);
-        const reflection = reflectOnAssociation(parentModel, node.immediateAssocName);
-        const nodePath = node.parentPath
-          ? `${node.parentPath}.${node.immediateAssocName}`
-          : node.immediateAssocName;
-        modelByPath.set(nodePath, node.modelClass as any);
-        return reflection;
-      })
-      .filter(Boolean);
+    const result: any[] = [];
+    this._joinRoot.eachChildren((part) => {
+      const node = part._joinNode;
+      if (!node) return;
+      const parentModel = node.parentPath
+        ? (this._treeNodesByPath.get(node.parentPath)?.baseKlass ?? (this._baseModel as any))
+        : (this._baseModel as any);
+      const reflection = reflectOnAssociation(parentModel, node.immediateAssocName);
+      if (reflection) result.push(reflection);
+    });
+    return result;
   }
 
   /**
@@ -372,9 +377,14 @@ export class JoinDependency {
     _aliasTracker?: any,
     _references?: string[],
   ): Nodes.Join[] {
-    const joins: Nodes.Join[] = this._nodes.map((n) => n.arelJoin!);
+    const joins: Nodes.Join[] = [];
+    this._joinRoot.eachChildren((part) => {
+      if (part._joinNode?.arelJoin) joins.push(part._joinNode.arelJoin);
+    });
     for (const oj of joinsToAdd) {
-      joins.push(...oj._nodes.map((n) => n.arelJoin!));
+      oj._joinRoot.eachChildren((part) => {
+        if (part._joinNode?.arelJoin) joins.push(part._joinNode.arelJoin);
+      });
     }
     return joins;
   }
@@ -395,11 +405,11 @@ export class JoinDependency {
   }
 
   each(callback: (node: JoinNode, index: number) => void): void {
-    this._nodes.forEach(callback);
+    this.nodes.forEach(callback);
   }
 
   [Symbol.iterator](): Iterator<JoinNode> {
-    return this._nodes[Symbol.iterator]();
+    return this.nodes[Symbol.iterator]();
   }
 
   static makeTree(associations: any): Record<PropertyKey, any> {
@@ -567,6 +577,36 @@ export class JoinDependency {
     }
   }
 
+  private _pushTreeNode(node: JoinNode): void {
+    const parentPath = node.parentPath;
+    const parent: JoinPart = parentPath
+      ? (this._treeNodesByPath.get(parentPath) ?? this._joinRoot)
+      : this._joinRoot;
+    const treePart = new JoinTreeNode(node.modelClass, node);
+    parent.children.push(treePart);
+    const fullPath = node.parentPath
+      ? `${node.parentPath}.${node.immediateAssocName}`
+      : node.immediateAssocName;
+    this._treeNodesByPath.set(fullPath, treePart);
+  }
+
+  private _rollbackTree(snapshotNodeCount: number): void {
+    const currentNodes = this._nodes;
+    for (let i = currentNodes.length - 1; i >= snapshotNodeCount; i--) {
+      const node = currentNodes[i];
+      const fullPath = node.parentPath
+        ? `${node.parentPath}.${node.immediateAssocName}`
+        : node.immediateAssocName;
+      this._treeNodesByPath.delete(fullPath);
+      const parentPath = node.parentPath;
+      const parent: JoinPart = parentPath
+        ? (this._treeNodesByPath.get(parentPath) ?? this._joinRoot)
+        : this._joinRoot;
+      const idx = parent.children.findIndex((c) => c._joinNode === node);
+      if (idx !== -1) parent.children.splice(idx, 1);
+    }
+  }
+
   private _addThroughAssociation(
     assocDef: any,
     modelClass: any,
@@ -650,7 +690,7 @@ export class JoinDependency {
       const throughNodeName = parentAssocName
         ? `${parentAssocName}._through_${assocDef.options.through}`
         : `_through_${assocDef.options.through}`;
-      this._nodes.push({
+      const throughNode: JoinNode = {
         tableIndex: throughTableIndex,
         tableAlias: throughAlias,
         tableName: throughTable,
@@ -662,7 +702,9 @@ export class JoinDependency {
         parentPath: parentAssocName ?? null,
         assocType: throughAssocDef.type === "hasOne" ? "hasOne" : "hasMany",
         arelJoin: throughArelJoin,
-      });
+      };
+      this._nodes.push(throughNode);
+      this._pushTreeNode(throughNode);
 
       const recursiveNode = this.addAssociation(sourceName, {
         fromModel: throughModel,
@@ -671,6 +713,7 @@ export class JoinDependency {
       });
 
       if (!recursiveNode) {
+        this._rollbackTree(snapshotNodes);
         this._nodes.length = snapshotNodes;
         this._aliases.length = snapshotAliases;
         this._nextTableIndex = snapshotNextIndex;
@@ -852,11 +895,10 @@ export class JoinDependency {
     const targetArelJoin = new Nodes.OuterJoin(targetArelTable, new Nodes.On(predicate));
     this._arelTablesByIndex.set(targetTableIndex, targetArelTable);
 
-    // Push intermediate through node
     const throughNodeName = parentAssocName
       ? `${parentAssocName}._through_${assocDef.options.through}`
       : `_through_${assocDef.options.through}`;
-    this._nodes.push({
+    const throughNode: JoinNode = {
       tableIndex: throughTableIndex,
       tableAlias: throughAlias,
       tableName: throughTable,
@@ -868,9 +910,10 @@ export class JoinDependency {
       parentPath: parentAssocName ?? null,
       assocType: throughAssocDef.type === "hasOne" ? "hasOne" : "hasMany",
       arelJoin: throughArelJoin,
-    });
+    };
+    this._nodes.push(throughNode);
+    this._pushTreeNode(throughNode);
 
-    // Push target node
     const node: JoinNode = {
       tableIndex: targetTableIndex,
       tableAlias: targetAlias,
@@ -884,8 +927,8 @@ export class JoinDependency {
       assocType: assocDef.type === "hasAndBelongsToMany" ? "hasMany" : assocDef.type,
       arelJoin: targetArelJoin,
     };
-
     this._nodes.push(node);
+    this._pushTreeNode(node);
     return node;
   }
 }
@@ -944,4 +987,15 @@ function rebindTableReferences(
     return clone;
   }
   return node;
+}
+
+class JoinTreeNode extends JoinPart {
+  constructor(baseKlass: typeof Base, joinNode: JoinNode) {
+    super(baseKlass);
+    this._joinNode = joinNode;
+  }
+
+  get table(): string {
+    return this._joinNode!.effectiveSqlName;
+  }
 }

@@ -2,19 +2,17 @@
 
 Goal: eliminate the `adapter` concept entirely. Rails has no "adapter"
 property on models — models have `connection` (returns an
-`AbstractAdapter`). Our codebase has **two parallel paths** that do the
-same thing:
+`AbstractAdapter`). Our codebase has **two parallel checkout paths**:
 
-1. `Base.adapter` (getter in `base.ts:1053`) — the old path. Caches a
-   checkout on `_adapter`, wires arel visitors, used by ~34 source files.
-2. `Base.connection` (from `connection-handling.ts:412`) — the newer
-   pool-based path. Delegates to `connectionPool().leaseConnection()`,
-   used by ~6 source files.
+1. `Base.adapter` (getter in `base.ts`) — the old path. Caches a checkout
+   on `_adapter`, wires arel visitors, used by ~165 call sites across ~34
+   source files.
+2. `Base.connection` (from `connection-handling.ts`) — the newer pool-based
+   path. Delegates to `connectionPool().leaseConnection()`, used by ~6
+   source files.
 
-These must collapse into a single `Base.connection` that subsumes the
-arel-wiring and caching from the old `adapter` getter. The
-`DatabaseAdapter` interface in `adapter.ts` also needs to go — it
-duplicates `AbstractAdapter` and is a trails-ism Rails doesn't have.
+The `adapter` getter, `_adapter` field, `DatabaseAdapter` interface, and
+`adapter.ts` barrel are all trails-isms. They must go.
 
 **Why now:** Phase D landed connection-handler resolution, but ~34 files
 still route through the old `adapter` getter instead of the pool-based
@@ -30,67 +28,74 @@ when they disagree.
   `connection-adapters/`.
 - No `as any` casts remain for connection access.
 
-**Test strategy:** Some tests reference `.adapter` directly or construct
-mock adapters against the `DatabaseAdapter` interface. During
-implementation, skip those tests with
-`it.skip("pending adapter→connection rename", ...)`. Each PR that skips
-tests must list them in the PR body. A final sweep PR un-skips and updates
-them all.
+**Scale:** ~165 `.adapter` call sites in ~34 source files, ~7000 references
+across ~182 test files, ~38 files import `DatabaseAdapter`.
+
+**Test strategy:** Tests reference `.adapter` extensively (~7000 sites
+across ~182 files). During implementation PRs, skip tests that break and
+list them in the PR body. The test sweep is a separate set of PRs at the
+end.
 
 ---
 
 ## Phase 1 — Collapse the two getters (2 PRs)
 
-### PR 1a — Delete `adapter` getter, wire call sites to `connection`
+### PR 1a — Delete `adapter` getter, relocate its side effects
 
-The `adapter` getter has two things `connection` doesn't:
+The `adapter` getter does two things `connection` doesn't. Neither belongs
+in `connection` — Rails' `connection` is a bare pool delegation
+(`connection_pool.lease_connection` / `.active_connection`, see
+`connection_handling.rb:274`).
 
 1. **Per-class caching on `_adapter`** — Rails doesn't cache on the model
-   class; `connection` delegates to `connection_pool.lease_connection` /
-   `.active_connection` every time. The caching is a trails-ism. Delete it.
+   class; `connection` delegates to the pool every time. Delete it.
 2. **Arel-visitor wiring (`_wireArelVisitor`)** — sets a global
-   `setToSqlVisitor` singleton after checkout. In Rails this happens in
-   `AbstractAdapter#initialize` (the adapter constructor), not in
-   `connection`. Move it to `AbstractAdapter` construction (or the pool's
-   post-checkout hook) so `connection` stays clean like Rails.
+   `setToSqlVisitor` singleton. In Rails this happens in
+   `AbstractAdapter#initialize` (`@visitor = arel_visitor`,
+   `abstract_adapter.rb:155`). Move it there.
+
+The setter (`set adapter()`) does real work: schema invalidation,
+descendant cache cascade, model registration. This logic needs a new home
+— likely `set connection()` on Base, since Rails doesn't have a
+`Base.connection =` setter but we need one for test convenience (the
+`Model.adapter = x` pattern is pervasive in tests). Flag it with
+`@internal` as a trails-ism.
 
 **Scope:**
 
 - `base.ts`: delete `static get adapter()`, `static set adapter()`,
-  `_adapter` field, `_wireArelVisitor`, and `clearAdapterFromDescendants`.
-- Move arel-visitor wiring into `AbstractAdapter` constructor (matching
-  Rails' `@visitor = arel_visitor` in `abstract_adapter.rb:155`).
-- `base.ts`: add `static set connection()` for the direct-assignment
-  path (`Model.connection = adapter` replaces `Model.adapter = adapter`).
+  `_adapter` field, `_wireArelVisitor`, `clearAdapterFromDescendants`.
+- `base.ts`: add `@internal static set connection()` carrying the
+  schema-invalidation logic from the old setter.
+- `connection-adapters/abstract-adapter.ts`: wire arel visitor in
+  constructor (matching Rails).
 - Skip tests that break; list in PR body.
 
 **Verify:** `pnpm vitest run packages/activerecord/src/base.test.ts`
 
 **LOC estimate:** ~200
 
-### PR 1b — Call-site migration: `.adapter` → `.connection`
+### PR 1b — Source call-site migration: `.adapter` → `.connection`
 
-Mechanical find-and-replace across all ~34 non-test source files. No
-behavioral change — every site now calls the unified `connection` getter.
+Mechanical rename across ~34 non-test source files (~165 call sites). No
+behavioral change — every site calls the same pool-checkout path.
 
 **Scope:**
 
-| Layer        | Files                                                                                                 | Pattern                                                      |
-| ------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Relation     | `relation.ts`, `relation/query-methods.ts`, `relation/calculations.ts`                                | `modelClass.adapter` → `modelClass.connection`               |
-| Associations | `preloader/association.ts`, `join-dependency.ts`, `association-scope.ts`, `collection-association.ts` | `klass.adapter` / `this._adapter` → lazy `connection` getter |
-| Persistence  | `persistence.ts`, `insert-all.ts`, `locking/pessimistic.ts`                                           | `ctor.adapter` → `ctor.connection`                           |
-| Querying     | `querying.ts`, `sanitization.ts`, `explain.ts`                                                        | `.adapter` → `.connection`                                   |
-| Validations  | `validations/uniqueness.ts`                                                                           | fallback chain → single `.connection`                        |
-| Schema       | `schema.ts`, `schema-dumper.ts`, `model-schema.ts`, `migration.ts`                                    | `.adapter` → `.connection`                                   |
-| Other        | `timestamp.ts`, `touch-later.ts`, `transactions.ts`, `suppressor.ts`, etc.                            | `.adapter` → `.connection`                                   |
+| Layer        | Files                                                                   | Pattern                                        |
+| ------------ | ----------------------------------------------------------------------- | ---------------------------------------------- |
+| Relation     | `relation.ts`, `query-methods.ts`, `calculations.ts`                    | `modelClass.adapter` → `modelClass.connection` |
+| Associations | `preloader/association.ts`, `association-scope.ts`, `collection-*.ts`   | `klass.adapter` → `klass.connection`           |
+| Persistence  | `persistence.ts`, `insert-all.ts`, `locking/pessimistic.ts`             | `ctor.adapter` → `ctor.connection`             |
+| Querying     | `querying.ts`, `sanitization.ts`, `explain.ts`                          | `.adapter` → `.connection`                     |
+| Validations  | `validations/uniqueness.ts`                                             | fallback chain → single `.connection`          |
+| Schema       | `schema.ts`, `schema-dumper.ts`, `model-schema.ts`, `migration.ts`      | `.adapter` → `.connection`                     |
+| Other        | `timestamp.ts`, `touch-later.ts`, `transactions.ts`, `suppressor.ts`, … | `.adapter` → `.connection`                     |
 
-Also fixes stale-reference patterns:
+Note: `InsertAll` has only 1 `.adapter` ref (already cleaned up).
+`JoinDependency` has 0 (cleaned up in #2387).
 
-- `InsertAll`: store model class, add `private get connection()`.
-- `JoinDependency`: store model class, add `private get connection()`.
-
-**Verify:** grep for remaining `.adapter` references; run affected test files.
+**Verify:** `grep -rn '\.adapter\b' packages/activerecord/src/ --include='*.ts' | grep -v test | grep -v connection-adapters | grep -v adapter.ts` returns zero.
 
 **LOC estimate:** ~250
 
@@ -100,15 +105,14 @@ Also fixes stale-reference patterns:
 
 ### PR 2a — Type constraints: `DatabaseAdapter` → `AbstractAdapter`
 
-Every type annotation, generic constraint, and parameter that references
-`DatabaseAdapter` switches to `AbstractAdapter` (the real Rails class).
+~38 files import `DatabaseAdapter`. Every type annotation, generic
+constraint, and parameter switches to `AbstractAdapter`.
 
 **Scope:**
 
-- `adapter.ts` exports `DatabaseAdapter` — all ~30 import sites switch.
-- Host interfaces on Relation, QueryMethods, etc. that declare
-  `adapter: DatabaseAdapter` → `connection: AbstractAdapter`.
-- `SchemaStatements`, `InsertAll`, `JoinDependency` constructor params.
+- Host interfaces on Relation, QueryMethods, etc.
+- Constructor params on `InsertAll`, `SchemaStatements`, etc.
+- `connection-handling.ts` return types.
 
 **Verify:** `pnpm test:types`
 
@@ -116,13 +120,15 @@ Every type annotation, generic constraint, and parameter that references
 
 ### PR 2b — Delete `adapter.ts`, relocate survivors
 
-- Move `AdapterName`, `adapterNameFromConfig` →
-  `connection-adapters/abstract-adapter.ts` (where Rails defines
-  `adapter_name`).
-- Move `TrailsAdapterOptions`, `SQLite3AdapterOptions`,
+`adapter.ts` exports more than just `DatabaseAdapter`. Surviving exports
+move to their Rails-natural homes:
+
+- `AdapterName`, `adapterNameFromConfig` →
+  `connection-adapters/abstract-adapter.ts` (Rails' `adapter_name`).
+- `TrailsAdapterOptions`, `SQLite3AdapterOptions`,
   `MysqlAdapterOptions`, `PostgreSQLAdapterOptions` →
   `connection-adapters/pool-config.ts` (connection-establishment config).
-- Move `ExplainOption`, `inspectExplainOption` →
+- `ExplainOption`, `inspectExplainOption` →
   `connection-adapters/abstract/database-statements.ts`.
 - Delete `adapter.ts`.
 - Update `index.ts` re-exports.
@@ -133,40 +139,43 @@ Every type annotation, generic constraint, and parameter that references
 
 ---
 
-## Phase 3 — Test sweep (1 PR)
+## Phase 3 — Test sweep (multiple PRs)
 
-### PR 3 — Un-skip and update tests
+~7000 `.adapter` references across ~182 test files. This is mechanical
+but too large for a single PR. Split by test directory / concern area,
+~250 LOC each.
 
-All tests skipped during Phases 1–2 are un-skipped and updated:
+Each PR:
 
-- `.adapter` → `.connection` in assertions and setup.
+- `.adapter` → `.connection` in test setup, assertions, and helpers.
 - Mock adapters typed against `AbstractAdapter` instead of
   `DatabaseAdapter`.
-- `createTestAdapter()` helper updated if it returns `DatabaseAdapter`.
+- Un-skip any tests that were skipped during Phases 1–2.
 
-**Verify:** `pnpm vitest run` on all previously-skipped files.
-
-**LOC estimate:** ~200
+Exact PR count TBD — estimate 4–8 PRs depending on how references
+cluster. `createTestAdapter()` and other shared test helpers should be
+updated in the first Phase 3 PR so subsequent ones are pure renames.
 
 ---
 
 ## Ordering
 
 ```
-PR 1a (collapse getters)
+PR 1a (delete adapter getter)
   ↓
-PR 1b (call-site migration) ── PR 2a (type constraints)
-  ↓                               ↓
-  │                            PR 2b (delete adapter.ts)
-  ↓                               ↓
-  └───────────── PR 3 (test sweep) ─┘
+PR 1b (source call-site rename)
+  ↓
+PR 2a (DatabaseAdapter → AbstractAdapter types) ── PR 3.1 (test helpers + first batch)
+  ↓                                                   ↓
+PR 2b (delete adapter.ts)                         PR 3.2 … 3.N (remaining test batches)
 ```
 
-PRs 1b and 2a can run in parallel (non-overlapping: 1b changes runtime
-call sites, 2a changes type annotations). PR 3 waits for everything else.
+PRs 1a → 1b → 2a are sequential (each depends on the prior). PR 2b
+depends on 2a. Phase 3 PRs can start after 1b lands (tests just need the
+runtime rename done) and run in parallel with Phase 2 as long as they
+don't touch type imports from `adapter.ts`.
 
-All PRs branch from `main` (no stacking). Each skips-then-lists affected
-tests; PR 3 is the single sweep that un-skips them all.
+All PRs branch from `main` (no stacking).
 
 ## Non-goals (this plan)
 

@@ -15,7 +15,7 @@
  * declare their tables up front.
  */
 
-import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
+import { IsolatedExecutionState } from "@blazetrails/activesupport";
 
 import { inspectExplainOption } from "./adapter.js";
 import type { AdapterName, DatabaseAdapter, ExplainOption } from "./adapter.js";
@@ -61,20 +61,7 @@ let _sharedAdapter: any = null;
 // `openTransactions` on the wrapper. Set while a `withinNewTransaction` body
 // is executing on this chain so callers in OUR chain see the inner adapter's
 // transaction state; callers from foreign chains see an empty wrapper.
-let _txLockHeld: AsyncContext<true> | null = null;
-let _txLockHeldAdapter: ReturnType<typeof getAsyncContext> | null = null;
-function _txLockStorage(): AsyncContext<true> {
-  // Recreate storage if ActiveSupport.asyncContextAdapter is swapped at
-  // runtime (matches the pattern in transactions.ts / core.ts /
-  // explain-registry.ts). Caching the first adapter forever would leak
-  // visibility state across browser-compat / DI swaps.
-  const asyncContext = getAsyncContext();
-  if (!_txLockHeld || _txLockHeldAdapter !== asyncContext) {
-    _txLockHeld = asyncContext.create<true>();
-    _txLockHeldAdapter = asyncContext;
-  }
-  return _txLockHeld;
-}
+const TX_LOCK_HELD_KEY = Symbol.for("ar_test_adapter_tx_lock_held");
 
 let _factory: () => TestAdapterFixtures;
 
@@ -405,7 +392,7 @@ class TestAdapterFixtures implements DatabaseAdapter {
    * caller manually opened a transaction on this wrapper instance.
    */
   private _txVisible(): boolean {
-    return _txLockStorage().getStore() === true || this._manualTxDepth > 0;
+    return IsolatedExecutionState.get<true>(TX_LOCK_HELD_KEY) === true || this._manualTxDepth > 0;
   }
 
   get schemaCache(): SchemaCache | undefined {
@@ -473,12 +460,14 @@ class TestAdapterFixtures implements DatabaseAdapter {
     // (#1669). The wrapper tags this async chain so _txVisible() can expose
     // transaction state to in-chain callers without leaking it across
     // foreign chains.
-    const storage = _txLockStorage();
     const run = () => inner.withinNewTransaction(opts, fn);
     const tm = inner.transactionManager as
       | { synchronize?<R>(fn: () => Promise<R> | R): Promise<R> }
       | undefined;
-    const wrapped = storage.getStore() === true ? run : () => storage.run(true, run);
+    const alreadyHeld = IsolatedExecutionState.get<true>(TX_LOCK_HELD_KEY) === true;
+    const wrapped = alreadyHeld
+      ? run
+      : () => IsolatedExecutionState.scope(TX_LOCK_HELD_KEY, true as const, run);
     if (tm?.synchronize) return tm.synchronize(wrapped);
     return wrapped();
   }

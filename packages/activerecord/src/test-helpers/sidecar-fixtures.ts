@@ -18,27 +18,11 @@
  * @internal
  */
 
-import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
+import { IsolatedExecutionState } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "../adapter.js";
 import { recordDdlTracking } from "./ddl-tracker.js";
 
-let _txLockHeld: AsyncContext<true> | null = null;
-let _txLockHeldAdapter: ReturnType<typeof getAsyncContext> | null = null;
-
-/**
- * Lazy async-context storage that tracks whether the current async chain
- * entered through a sidecar `withinNewTransaction`. Recreated when the
- * ActiveSupport asyncContextAdapter is swapped at runtime (DI / browser
- * compat), matching the pattern in `test-adapter.ts` and `transactions.ts`.
- */
-function _txLockStorage(): AsyncContext<true> {
-  const asyncContext = getAsyncContext();
-  if (!_txLockHeld || _txLockHeldAdapter !== asyncContext) {
-    _txLockHeld = asyncContext.create<true>();
-    _txLockHeldAdapter = asyncContext;
-  }
-  return _txLockHeld;
-}
+const TX_LOCK_HELD_KEY = Symbol.for("ar_sidecar_tx_lock_held");
 
 const CREATE_TABLE_RE = /CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:["`](\w+)["`]|(\w+))/i;
 const DROP_TABLE_RE = /DROP\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:["`](\w+)["`]|(\w+))/i;
@@ -86,7 +70,7 @@ export class SidecarFixtures {
    * sibling handles on the same chain is the intended behavior.
    */
   private _txVisible(): boolean {
-    return _txLockStorage().getStore() === true || this._manualTxDepth > 0;
+    return IsolatedExecutionState.get<true>(TX_LOCK_HELD_KEY) === true || this._manualTxDepth > 0;
   }
 
   async withinNewTransaction<T>(
@@ -97,10 +81,12 @@ export class SidecarFixtures {
       withinNewTransaction: (o: typeof opts, f: typeof fn) => Promise<T>;
       transactionManager?: { synchronize?<R>(fn: () => Promise<R> | R): Promise<R> };
     };
-    const storage = _txLockStorage();
     const run = () => adapter.withinNewTransaction(opts, fn);
     const tm = adapter.transactionManager;
-    const wrapped = storage.getStore() === true ? run : () => storage.run(true, run);
+    const alreadyHeld = IsolatedExecutionState.get<true>(TX_LOCK_HELD_KEY) === true;
+    const wrapped = alreadyHeld
+      ? run
+      : () => IsolatedExecutionState.scope(TX_LOCK_HELD_KEY, true as const, run);
     if (tm?.synchronize) return tm.synchronize(wrapped);
     return wrapped();
   }

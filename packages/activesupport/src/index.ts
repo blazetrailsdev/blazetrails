@@ -27,12 +27,7 @@ export type {
   DecipherAdapter,
 } from "./crypto-adapter.js";
 
-export {
-  registerAsyncContextAdapter,
-  getAsyncContext,
-  asyncContextAdapterConfig,
-} from "./async-context-adapter.js";
-export type { AsyncContext, AsyncContextAdapter } from "./async-context-adapter.js";
+export { registerAsyncContextAdapter, asyncContextAdapterConfig } from "./async-context-adapter.js";
 
 export { IsolatedExecutionState } from "./isolated-execution-state.js";
 

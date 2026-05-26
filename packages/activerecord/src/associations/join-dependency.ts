@@ -531,8 +531,11 @@ export class JoinDependency {
           if (nodeReadonly.get(node)) {
             (child as any)._readonly = true;
           }
-          if (nodeStrictLoading.get(node)) {
-            (child as any)._strictLoading = true;
+          if (
+            nodeStrictLoading.get(node) &&
+            typeof (child as any).strictLoadingBang === "function"
+          ) {
+            (child as any).strictLoadingBang();
           }
 
           const parentAssocs = assocMap.get(parentKey)!;

@@ -1947,11 +1947,12 @@ describe("EagerAssociationTest", () => {
     const titles = posts.map((p: any) => p.title).sort();
     expect(titles).toEqual(["P1", "P2"]);
 
-    // Association proxy must be marked loaded (hydration via proxy)
-    const assocProxy = (authors[0] as any).association("ejPosts");
-    expect(assocProxy.loaded).toBe(true);
-    expect(Array.isArray(assocProxy.target)).toBe(true);
-    expect(assocProxy.target).toHaveLength(2);
+    // Association proxy wired during hydration (not lazy-synced from _preloadedAssociations)
+    const proxyInstance = (authors[0] as any)._associationInstances.get("ejPosts");
+    expect(proxyInstance).toBeDefined();
+    expect(proxyInstance.loaded).toBe(true);
+    expect(Array.isArray(proxyInstance.target)).toBe(true);
+    expect(proxyInstance.target).toHaveLength(2);
   });
   it("eager association loading with explicit join belongs to", async () => {
     class EjBtAuthor extends Base {
@@ -1983,8 +1984,9 @@ describe("EagerAssociationTest", () => {
     expect(loaded).not.toBeNull();
     expect(loaded.name).toBe("BtAuthor");
 
-    // Association proxy must be marked loaded (belongsTo hydration via proxy)
-    const btProxy = (posts2[0] as any).association("ejBtAuthor");
+    // Association proxy wired during hydration (not lazy-synced from _preloadedAssociations)
+    const btProxy = (posts2[0] as any)._associationInstances.get("ejBtAuthor");
+    expect(btProxy).toBeDefined();
     expect(btProxy.loaded).toBe(true);
     expect(btProxy.target).not.toBeNull();
     expect(btProxy.target.name).toBe("BtAuthor");
@@ -2019,8 +2021,9 @@ describe("EagerAssociationTest", () => {
     expect(profile).not.toBeNull();
     expect(profile.bio).toBe("HoBio");
 
-    // Association proxy must be marked loaded (hasOne hydration via proxy)
-    const hoProxy = (users[0] as any).association("ejHoProfile");
+    // Association proxy wired during hydration (not lazy-synced from _preloadedAssociations)
+    const hoProxy = (users[0] as any)._associationInstances.get("ejHoProfile");
+    expect(hoProxy).toBeDefined();
     expect(hoProxy.loaded).toBe(true);
     expect(hoProxy.target).not.toBeNull();
     expect(hoProxy.target.bio).toBe("HoBio");

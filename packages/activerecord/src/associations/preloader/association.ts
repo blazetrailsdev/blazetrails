@@ -377,8 +377,12 @@ export class LoaderQuery {
     const klass = this.scope?._modelClass;
     if (klass == null) return "";
     const spec = klass.connectionSpecificationName ?? "";
-    const adapter = klass.adapter;
-    if (adapter == null) return spec;
+    let adapter: object;
+    try {
+      adapter = klass.adapter;
+    } catch {
+      return spec;
+    }
     let id = LoaderQuery._adapterIds.get(adapter);
     if (id == null) {
       id = ++LoaderQuery._idCounter;

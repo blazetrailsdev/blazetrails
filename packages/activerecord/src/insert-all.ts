@@ -36,9 +36,10 @@ export interface InsertAllOptions {
 
 export class InsertAll {
   readonly model: ModelClass;
+  private _connectionOverride: ModelClass["adapter"] | null = null;
 
   get connection(): ModelClass["adapter"] {
-    return this.model.adapter;
+    return this._connectionOverride ?? this.model.adapter;
   }
   readonly inserts: Record<string, unknown>[];
   readonly keys: Set<string>;
@@ -72,18 +73,29 @@ export class InsertAll {
 
   constructor(
     relation: Relation<any>,
+    inserts: Record<string, unknown>[],
+    options?: InsertAllOptions,
+  );
+  /** @deprecated Pass inserts as the second argument; connection is resolved from the model. */
+  constructor(
+    relation: Relation<any>,
+    connection: ModelClass["adapter"],
+    inserts: Record<string, unknown>[],
+    options?: InsertAllOptions,
+  );
+  constructor(
+    relation: Relation<any>,
     insertsOrConnection: Record<string, unknown>[] | ModelClass["adapter"],
     insertsOrOptions?: Record<string, unknown>[] | InsertAllOptions,
     legacyOptions?: InsertAllOptions,
   ) {
-    // Backwards-compat: old signature was (relation, connection, inserts, options).
-    // Detect by checking if the second arg is an array (new) or an adapter (old).
     let inserts: Record<string, unknown>[];
     let options: InsertAllOptions;
     if (Array.isArray(insertsOrConnection)) {
       inserts = insertsOrConnection;
       options = (insertsOrOptions as InsertAllOptions) ?? {};
     } else {
+      this._connectionOverride = insertsOrConnection;
       inserts = (insertsOrOptions as Record<string, unknown>[]) ?? [];
       options = legacyOptions ?? {};
     }

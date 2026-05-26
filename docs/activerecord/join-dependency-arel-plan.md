@@ -24,7 +24,7 @@ Items not captured in the existing PR slots above.
 - [x] ~200 LOC: `walk()` deduplication — shipped in #2405.
 - [ ] ~100 LOC: eliminate `_nodes` array — replace flat array with tree traversal once PR 3 tree structure is fully in use.
 - [ ] ~150 LOC: use real `JoinAssociation` nodes in tree (PR 3/5 follow-on).
-- [x] ~20 LOC: `JoinBase.table` should return an Arel `Table` node, not a string. — shipped in #2417 (as `arelTable` getter).
+- [x] ~20 LOC: `JoinBase.table` should return an Arel `Table` node, not a string. — shipped in #2417 (`table` now returns `Table` directly, matching Rails' `attr_reader :table`).
 
 **From #2384 (PR 4 — joinSql / dead helpers)**
 

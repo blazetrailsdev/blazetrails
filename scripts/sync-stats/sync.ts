@@ -2218,7 +2218,6 @@ async function main() {
       await syncPrLinkedIssues();
       console.log("\n=== Syncing PR timeline events ===");
       await syncPrTimelineEvents();
-      console.log("\n=== Syncing PR reactions ===");
       await syncPrReactions();
 
       console.log("\n=== Backfilling workflow runs (uncapped) ===");
@@ -2268,7 +2267,6 @@ async function main() {
       console.log("\n=== Syncing PR timeline events ===");
       await syncPrTimelineEvents();
 
-      console.log("\n=== Syncing PR reactions ===");
       await syncPrReactions();
     }
 

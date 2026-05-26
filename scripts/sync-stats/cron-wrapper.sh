@@ -63,6 +63,7 @@ if [ "$exit_code" -ne 0 ] && grep -qi "rate limit\|secondary rate\|abuse detecti
 
 Last 30 lines:
 $(tail -30 "$tmplog")"
+    exit_code=$retry_exit
   fi
 elif [ "$exit_code" -ne 0 ]; then
   send_alert "[stats-sync] failed (exit $exit_code)" \
@@ -83,3 +84,4 @@ if [ -f "$db" ] && command -v sqlite3 >/dev/null 2>&1; then
   " >> "$LOG"
 fi
 echo "" >> "$LOG"
+exit "${exit_code}"

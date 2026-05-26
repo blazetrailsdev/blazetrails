@@ -1026,18 +1026,6 @@ export class Base extends Model {
     }
   }
 
-  /**
-   * Get the database connection for this model.
-   *
-   * Returns the adapter from either:
-   * 1. Directly assigned adapter (via `Model.adapter = ...`)
-   * 2. Connection checked out from ConnectionHandler pool
-   *    (set up by `await establishConnection()`)
-   *
-   * Throws if no connection has been established.
-   *
-   * Mirrors: ActiveRecord::Base.connection
-   */
   /** @deprecated Use {@link connection} instead. Compatibility alias. */
   static get adapter(): DatabaseAdapter {
     return this.connection;

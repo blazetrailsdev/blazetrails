@@ -1,7 +1,7 @@
 /**
  * Mirrors Rails activerecord/test/cases/adapters/abstract_mysql_adapter/mysql_explain_test.rb
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { describeIfMysql, Mysql2Adapter } from "./test-helper.js";
 import { defineSchema } from "../../test-helpers/define-schema.js";
 import { setupHandlerSuite } from "../../test-helpers/setup-handler-suite.js";
@@ -11,7 +11,7 @@ setupHandlerSuite();
 
 describeIfMysql("Mysql2Adapter", () => {
   let adapter: Mysql2Adapter;
-  beforeEach(async () => {
+  beforeAll(() => {
     adapter = Base.connection as Mysql2Adapter;
   });
 

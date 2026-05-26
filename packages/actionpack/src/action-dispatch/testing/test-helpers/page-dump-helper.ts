@@ -1,4 +1,4 @@
-import { getFsAsync, getPath, getChildProcess } from "@blazetrails/activesupport";
+import { getFsAsync, getPath, getChildProcessAsync } from "@blazetrails/activesupport";
 
 export class InvalidResponse extends Error {}
 
@@ -33,7 +33,7 @@ export async function savePage(this: PageDumpHelperHost, path?: string): Promise
 /** @internal */
 export async function openFile(path: string): Promise<void> {
   try {
-    const cp = getChildProcess();
+    const cp = await getChildProcessAsync();
 
     const platform: string = (globalThis as any).process?.platform ?? "linux";
     if (platform === "darwin") {

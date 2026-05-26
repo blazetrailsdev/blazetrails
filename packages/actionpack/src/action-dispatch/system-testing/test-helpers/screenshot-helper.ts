@@ -29,7 +29,9 @@ export function takeScreenshot(
   incrementUnique.call(this);
   return (showingHtml ? saveHtml.call(this) : Promise.resolve())
     .then(() => saveImage.call(this))
-    .then(() => show(displayImage.call(this, { html: showingHtml, screenshotOutput: screenshot })));
+    .then((imageData) =>
+      show(displayImage.call(this, { html: showingHtml, screenshotOutput: screenshot, imageData })),
+    );
 }
 
 export async function takeFailedScreenshot(this: ScreenshotHelperHost): Promise<void> {
@@ -116,13 +118,13 @@ export async function saveHtml(this: ScreenshotHelperHost): Promise<void> {
 }
 
 /** @internal */
-export async function saveImage(this: ScreenshotHelperHost): Promise<void> {
+export async function saveImage(this: ScreenshotHelperHost): Promise<Buffer | undefined> {
   if (!this._page) return;
   const path = absoluteImagePath.call(this);
   const { join } = getPath();
   const fs = await getFsAsync();
   await fs.mkdir!(join(projectRoot(), screenshotsDir()), { recursive: true });
-  await this._page.screenshot({ path });
+  return this._page.screenshot({ path });
 }
 
 /** @internal */
@@ -138,7 +140,11 @@ export function outputType(): string {
 /** @internal */
 export function displayImage(
   this: ScreenshotHelperHost,
-  { html, screenshotOutput }: { html: boolean; screenshotOutput: string | null | undefined },
+  {
+    html,
+    screenshotOutput,
+    imageData,
+  }: { html: boolean; screenshotOutput: string | null | undefined; imageData?: Buffer },
 ): string {
   const imgPath = imagePath.call(this);
   let message = `[Screenshot Image]: ${imgPath}\n`;
@@ -150,7 +156,8 @@ export function displayImage(
   } else if (mode === "inline") {
     const { basename } = getPath();
     const name = inlineBase64(basename(imgPath));
-    message += `]1337;File=name=${name};height=400px;inline=1:<binary>\n`;
+    const image = imageData ? imageData.toString("base64") : "";
+    message += `]1337;File=name=${name};height=400px;inline=1:${image}\n`;
   }
   return message;
 }

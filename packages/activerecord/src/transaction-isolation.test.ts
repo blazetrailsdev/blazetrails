@@ -3,6 +3,7 @@ import { Base, TransactionIsolationError } from "./index.js";
 import { adapterType } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
+import { TEST_SCHEMA } from "./test-helpers/test-schema.js";
 import { describeIfPg, PG_TEST_URL } from "./adapters/postgresql/test-helper.js";
 
 // Runs when the adapter does NOT support transaction isolation (or is SQLite3).
@@ -10,7 +11,7 @@ import { describeIfPg, PG_TEST_URL } from "./adapters/postgresql/test-helper.js"
 describe("TransactionIsolationUnsupportedTest", () => {
   setupHandlerSuite();
   beforeAll(async () => {
-    await defineSchema({ tags: { name: "string" } });
+    await defineSchema({ tags: TEST_SCHEMA.tags });
   });
 
   it.skipIf(adapterType !== "sqlite")("setting the isolation level raises an error", async () => {
@@ -37,7 +38,7 @@ describe("TransactionIsolationUnsupportedTest", () => {
 describe("TransactionIsolationTest", () => {
   setupHandlerSuite();
   beforeAll(async () => {
-    await defineSchema({ tags: { name: "string" } });
+    await defineSchema({ tags: TEST_SCHEMA.tags });
   });
 
   it("setting isolation when joining a transaction raises an error", async () => {
@@ -91,10 +92,11 @@ describeIfPg("TransactionIsolationTest", () => {
   beforeAll(async () => {
     await Tag.establishConnection(PG_TEST_URL);
     await Tag2.establishConnection(PG_TEST_URL);
-    await defineSchema(Tag.adapter, { tags: { name: "string" } });
+    await defineSchema(Tag.adapter, { tags: TEST_SCHEMA.tags });
   });
 
   afterAll(async () => {
+    await Tag.destroyAll();
     await Tag.removeConnection();
     await Tag2.removeConnection();
   });

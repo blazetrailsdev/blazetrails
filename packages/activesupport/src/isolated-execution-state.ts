@@ -72,4 +72,17 @@ export const IsolatedExecutionState = {
   run<R>(fn: () => R): R {
     return ctx().run(new Map(), fn);
   },
+  /**
+   * Run `fn` inside a forked state Map where `key` is set to `value`.
+   * The outer context's value for `key` is restored when `fn` returns.
+   * Other keys are inherited (copy-on-write via Map spread).
+   *
+   * Mirrors Rails patterns like `IsolatedExecutionState[:current_transaction] = tx`
+   * inside a block that restores on exit.
+   */
+  scope<T, R>(key: string | symbol, value: T, fn: () => R): R {
+    const forked = new Map(store());
+    forked.set(key, value);
+    return ctx().run(forked, fn);
+  },
 };

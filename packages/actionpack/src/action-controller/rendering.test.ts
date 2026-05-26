@@ -593,7 +593,7 @@ describe("ActionController render edge cases", () => {
     expect(c.contentType).toContain("text/plain");
   });
 
-  it("render body sets octet-stream content type", async () => {
+  it("render body sets text/plain content type", async () => {
     class C extends Base {
       async index() {
         this.render({ body: "raw" });

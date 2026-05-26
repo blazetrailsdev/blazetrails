@@ -253,6 +253,15 @@ export class JoinDependency {
         (_refl, _remaining) => [targetArelTable, false],
       );
       arelJoin = joins[0] as Nodes.Join;
+      // When the target table was aliased (collision), scope/STI predicates from
+      // klass.all() reference the unaliased table. Rebind to the aliased table.
+      if (effectiveName !== targetTable!) {
+        const on = (arelJoin as any).right as Nodes.On;
+        const rebound = rebindTableReferences(on.expr as Nodes.Node, targetTable!, targetArelTable);
+        if (rebound !== on.expr) {
+          arelJoin = new this._joinType((arelJoin as any).left, new Nodes.On(rebound));
+        }
+      }
     } else {
       let predicate: Nodes.Node;
       if (isBelongsTo) {

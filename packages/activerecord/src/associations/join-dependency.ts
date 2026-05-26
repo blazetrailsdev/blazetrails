@@ -527,7 +527,6 @@ export class JoinDependency {
   instantiateFromRows(
     rows: Record<string, unknown>[],
     strictLoadingValue?: boolean,
-    readonlyValue?: boolean,
   ): {
     parents: any[];
     associations: Map<unknown, Map<string, any[]>>;
@@ -560,7 +559,7 @@ export class JoinDependency {
       let parent: any;
       if (!seenRawPks.has(rawPk)) {
         seenRawPks.add(rawPk);
-        parent = this.constructModel(parentAttrs, null, strictLoadingValue, readonlyValue);
+        parent = this.constructModel(parentAttrs, null, strictLoadingValue);
         parentKey = parent._readAttribute(basePk);
         rawToKey.set(rawPk, parentKey);
         parentMap.set(parentKey, parent);
@@ -679,13 +678,9 @@ export class JoinDependency {
     attrs: Record<string, unknown>,
     node: JoinNode | null,
     strictLoadingValue?: boolean,
-    readonlyValue?: boolean,
   ): any {
     const modelClass = node ? node.modelClass : this._baseModel;
     const model = (modelClass as any)._instantiate(attrs);
-    if (readonlyValue) {
-      model._readonly = true;
-    }
     if (strictLoadingValue && typeof model.strictLoadingBang === "function") {
       model.strictLoadingBang();
     }

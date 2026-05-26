@@ -56,7 +56,7 @@ Items not captured in the existing PR slots above.
 - [ ] ~200 LOC: nested eager-load proxy wiring — flat-node iteration only wires children to root parent. Needs recursive tree walk (depends on tree refactor).
 - [ ] ~50 LOC: readonly/strictLoading propagation tests.
 - [ ] ~30 LOC: cross-parent model cache for belongsTo dedup.
-- [x] ~5 LOC: Relation-level `_isReadonly` not propagated to parent records in eager-load join path. — shipped in #2417.
+- [x] ~5 LOC: Relation-level `_isReadonly` not propagated to parent records in eager-load join path. — non-issue: `_executeEagerLoad` returns to the caller which applies `_isReadonly` at line 1972 (same as Rails' `exec_queries`).
 
 ## Status quo
 

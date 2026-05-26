@@ -1,5 +1,3 @@
-import type { Browser, BrowserContext, LaunchOptions, Page } from "playwright";
-
 export type BrowserName = "chromium" | "firefox" | "webkit";
 
 export interface DriverOptions {
@@ -8,17 +6,31 @@ export interface DriverOptions {
   options?: Record<string, unknown>;
 }
 
-/** @internal */
-let playwrightModule: typeof import("playwright") | undefined;
+export interface PlaywrightBrowserContext {
+  newPage(): Promise<PlaywrightPage>;
+  close(): Promise<void>;
+}
 
-async function requirePlaywright(): Promise<typeof import("playwright")> {
+export interface PlaywrightPage {
+  goto(url: string, options?: Record<string, unknown>): Promise<unknown>;
+}
+
+export interface PlaywrightBrowser {
+  newContext(options?: Record<string, unknown>): Promise<PlaywrightBrowserContext>;
+  close(): Promise<void>;
+}
+
+/** @internal */
+let playwrightModule: Record<string, unknown> | undefined;
+
+async function requirePlaywright(): Promise<Record<string, unknown>> {
   if (playwrightModule) return playwrightModule;
   try {
     playwrightModule = await import("playwright");
     return playwrightModule;
   } catch {
     throw new Error(
-      "Playwright is required for system tests. Install it with: npm install playwright",
+      "Playwright is required for system tests. Install it with: pnpm add playwright",
     );
   }
 }
@@ -29,7 +41,7 @@ export class Driver {
   private _screenSize: [number, number];
   private _options: Record<string, unknown>;
   private _using: BrowserName;
-  private _browser: Browser | undefined;
+  private _browser: PlaywrightBrowser | undefined;
 
   constructor(driverType: string, options: DriverOptions = {}) {
     this._driverType = driverType;
@@ -93,16 +105,17 @@ export class Driver {
   /** @internal */
   private async registerPlaywright(): Promise<void> {
     const pw = await requirePlaywright();
-    const browserType = pw[this._using];
-    const launchOptions: LaunchOptions = { ...this._options } as LaunchOptions;
-    this._browser = await browserType.launch(launchOptions);
+    const browserType = pw[this._using] as {
+      launch(opts: Record<string, unknown>): Promise<PlaywrightBrowser>;
+    };
+    this._browser = await browserType.launch(this.browserOptions());
   }
 
   /** @internal */
   private setup(): void {}
 
   /** @internal */
-  async newContext(): Promise<BrowserContext> {
+  async newContext(): Promise<PlaywrightBrowserContext> {
     if (!this._browser) throw new Error("Driver not started. Call use() first.");
     return this._browser.newContext({
       viewport: { width: this._screenSize[0], height: this._screenSize[1] },
@@ -110,7 +123,7 @@ export class Driver {
   }
 
   /** @internal */
-  async newPage(): Promise<Page> {
+  async newPage(): Promise<PlaywrightPage> {
     const context = await this.newContext();
     return context.newPage();
   }

@@ -97,9 +97,10 @@ export interface TseRenderContext {
    * `TemplateRegistry`, locals are typed (and required when the registered
    * shape has required properties). A plain `string` falls back to
    * `Record<string, unknown>`. Collection renders (`collection:` present)
-   * make locals optional because Rails auto-injects the item, counter, and
-   * iteration locals; `spacerTemplate` is only accepted on collection
-   * renders. `rails partial_renderer.rb`.
+   * omit auto-injected keys (item, counter, iteration) from the locals
+   * requirement; remaining required keys must still be provided.
+   * `spacerTemplate` is only accepted on collection renders.
+   * `rails partial_renderer.rb`.
    *
    * Static form: `render({ partial: "users/user", locals: { user } })`
    * Collection form: `render({ partial: "users/user", collection: users, as: "user" })`

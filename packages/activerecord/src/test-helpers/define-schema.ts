@@ -430,7 +430,7 @@ let _canonicalPreloadSigs: Map<string, string> | null = null;
  *
  * @internal
  */
-export function setCanonicalSchemaPreload(adapter: DatabaseAdapter, schema: Schema): void {
+export function setCanonicalSchemaPreload(adapter: DatabaseAdapter): void {
   _canonicalPreloadKey = databaseIdentity(adapter);
   _canonicalPreloadAdapter = _canonicalPreloadKey === null ? adapter : null;
   const cache = _cacheFor(adapter, false);

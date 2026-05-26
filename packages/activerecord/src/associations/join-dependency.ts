@@ -486,7 +486,7 @@ export class JoinDependency {
       let parent: any;
       if (!seenRawPks.has(rawPk)) {
         seenRawPks.add(rawPk);
-        parent = this.constructModel(parentAttrs, null);
+        parent = this.constructModel(parentAttrs, null, strictLoadingValue);
         parentKey = parent._readAttribute(basePk);
         rawToKey.set(rawPk, parentKey);
         parentMap.set(parentKey, parent);
@@ -614,15 +614,14 @@ export class JoinDependency {
       const isCollection = node.assocType === "hasMany";
       if (isCollection) {
         if (!proxy.loaded) {
-          proxy.loaded = true;
           proxy.target = [];
+          proxy.loadedBang();
         }
         if (Array.isArray(proxy.target)) {
           proxy.target.push(child);
         }
       } else {
-        proxy.target = child;
-        proxy.loaded = true;
+        proxy.setTarget(child);
       }
       if (typeof proxy.setInverseInstance === "function") {
         proxy.setInverseInstance(child);
@@ -642,8 +641,7 @@ export class JoinDependency {
       const proxy = parent.association(node.immediateAssocName);
       if (!proxy || proxy.loaded) return;
       const isCollection = node.assocType === "hasMany";
-      proxy.loaded = true;
-      proxy.target = isCollection ? [] : null;
+      proxy.setTarget(isCollection ? [] : null);
     } catch {
       // Association not defined
     }
@@ -660,7 +658,7 @@ export class JoinDependency {
     if (typeof refl.scope === "function") {
       try {
         const scopeRel = refl.scope((node.modelClass as any)._allForPreload?.());
-        return !!scopeRel?._readonly;
+        return !!scopeRel?._isReadonly;
       } catch {
         return false;
       }

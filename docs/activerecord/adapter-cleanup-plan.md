@@ -164,7 +164,7 @@ usage file-by-file. The alias itself is deleted when the last Phase G
 batch lands.
 
 See: `docs/connection-pooled-test-adapter-plan.md` (Phase G sequencing),
-`docs/fixtures-port-plan.md` (fixture data source),
+the fixtures port (complete),
 memory `project-phase-g-fixture-adoption-epic` (sizing).
 
 ---

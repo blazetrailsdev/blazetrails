@@ -96,7 +96,7 @@ After this lands:
 
 ## Interaction with the fixtures port
 
-The fixtures port ([`fixtures-port-plan.md`](fixtures-port-plan.md)) is
+The fixtures port (fixtures port (complete)) is
 running in parallel and reshapes the test-data substrate trails uses.
 Key intersections:
 
@@ -515,7 +515,7 @@ short-circuits this entire chain.
 - [`tm-unification-plan.md`](tm-unification-plan.md) — Phase 9b + post-
   Phase-9 cleanup paths 1/2. The TX-visibility patch this epic
   retires is documented there.
-- [`fixtures-port-plan.md`](fixtures-port-plan.md) — the parallel
+- fixtures port (complete) — the parallel
   effort that moves schema and fixture data out of per-test setup
   into a canonical loader. See "Interaction with the fixtures port"
   above for sequencing and seam analysis.

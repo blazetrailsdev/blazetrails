@@ -148,7 +148,7 @@ gate, cluster is just batch-packing.
 
 ## Phase D — Loader gap PRs + Tier 2 → 1 promotion
 
-Each open loader gap from `fixtures-port-plan.md` becomes a pair of
+Each open loader gap from the fixtures port becomes a pair of
 PRs: the loader fix + the Tier 2 → 1 batch it unlocks. Shipped in this
 order to keep diffs small:
 
@@ -223,7 +223,7 @@ Inputs (verified against the worktree):
 
 - 490 total AR test files (`find packages/activerecord/src -name '*.test.ts' | wc -l`)
 - 159 already on `withTransactionalFixtures` / `defineSchema`
-- 122 fixtures translated (fixtures-port-plan)
+- 122 fixtures translated (fixtures port — complete)
 - 94 fixtures currently MATCH under `fixtures:compare`
 
 Rough projection (refined in Phase A):
@@ -271,7 +271,7 @@ the canary pattern is settled.
 
 ## Cross-references
 
-- [`fixtures-port-plan.md`](fixtures-port-plan.md) — the data substrate;
+- fixtures port (complete) — the data substrate;
   Loader gaps section feeds Phase D's pairings
 - [`connection-pooled-test-adapter-plan.md`](connection-pooled-test-adapter-plan.md)
   — Phase E gates this plan's Phase B

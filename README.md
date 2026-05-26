@@ -4,7 +4,7 @@ TypeScript packages that mirror the Ruby on Rails API.
 
 The goal is **100% API compatible with Rails**, with behavior matched **test for test** against the Rails source. If you can read the [Rails API docs](https://api.rubyonrails.org/), you already know how to use this — class names, method signatures, and behavior are designed to match Rails as closely as TypeScript allows, while adding the type safety that Ruby can't.
 
-> **Milestone — May 2026: ActiveRecord public API at 100%.** Every public method, class, and module from `activerecord/lib/active_record/**/*.rb` has a TypeScript counterpart (`api:compare` 4969/4969). Behavior parity (test-for-test) continues — see [`docs/activerecord-100-plan.md`](docs/activerecord-100-plan.md) for the post-100% Rails-fidelity work.
+> **Milestone — May 2026: ActiveRecord public API at 100%.** Every public method, class, and module from `activerecord/lib/active_record/**/*.rb` has a TypeScript counterpart (`api:compare` 4969/4969). Behavior parity (test-for-test) continues — see [`docs/activerecord/activerecord-100-plan.md`](docs/activerecord/activerecord-100-plan.md) for the post-100% Rails-fidelity work.
 
 ## Zero-declare models — `trails-tsc`
 
@@ -69,7 +69,7 @@ Re-run `trails-schema-dump` after each migration (or wire it into your
 migration script). Rails-bookkeeping tables (`schema_migrations`,
 `ar_internal_metadata`) are skipped by default.
 
-Attributes come from the schema. Associations, scopes, and enums come from the runtime calls in each class's static block. Override types as needed with `this.attribute("admin", "boolean")` — overrides always win over schema reflection. For editor support (autocomplete, hover, go-to-definition), the Phase-2 tsserver plugin is in flight; [docs/virtual-source-files-plan.md](docs/virtual-source-files-plan.md) tracks the rollout.
+Attributes come from the schema. Associations, scopes, and enums come from the runtime calls in each class's static block. Override types as needed with `this.attribute("admin", "boolean")` — overrides always win over schema reflection. For editor support (autocomplete, hover, go-to-definition), the Phase-2 tsserver plugin is in flight; [docs/infrastructure/virtual-source-files-plan.md](docs/infrastructure/virtual-source-files-plan.md) tracks the rollout.
 
 ## A bigger slice
 

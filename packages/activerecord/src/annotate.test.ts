@@ -1,34 +1,27 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { Base } from "./index.js";
-import { createTestAdapter } from "./test-adapter.js";
-import type { DatabaseAdapter } from "./adapter.js";
+import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
 
-let adapter: DatabaseAdapter;
-
-beforeAll(() => {
-  adapter = createTestAdapter();
-});
+setupHandlerSuite();
 
 describe("AnnotateTest", () => {
   it("annotate wraps content in an inline comment", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
-    const sql = Post.all().annotate("my-hint").toSql();
-    expect(sql).toContain("my-hint");
+    const sql = Post.all().annotate("foo").toSql();
+    expect(sql).toContain("foo");
   });
 
   it("annotate is sanitized", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
-    const sql = Post.all().annotate("safe-hint").toSql();
-    expect(sql).toContain("safe-hint");
+    const sql = Post.all().annotate("*/foo/*").toSql();
+    expect(sql).toContain("foo");
   });
 });

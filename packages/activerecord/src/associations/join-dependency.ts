@@ -452,7 +452,10 @@ export class JoinDependency {
     return predicate;
   }
 
-  instantiateFromRows(rows: Record<string, unknown>[]): {
+  instantiateFromRows(
+    rows: Record<string, unknown>[],
+    strictLoadingValue?: boolean,
+  ): {
     parents: any[];
     associations: Map<unknown, Map<string, any[]>>;
   } {
@@ -464,6 +467,13 @@ export class JoinDependency {
     const rawToKey = new Map<unknown, unknown>();
 
     const baseColumns = getModelColumns(this._baseModel);
+
+    const nodeReadonly = new Map<JoinNode, boolean>();
+    const nodeStrictLoading = new Map<JoinNode, boolean>();
+    for (const node of this._nodes) {
+      nodeReadonly.set(node, this._isNodeReadonly(node));
+      nodeStrictLoading.set(node, this._isNodeStrictLoading(node));
+    }
 
     for (const row of rows) {
       const parentAttrs: Record<string, unknown> = {};
@@ -510,19 +520,15 @@ export class JoinDependency {
 
         if (!seenPks.has(rawChildPk)) {
           seenPks.add(rawChildPk);
-          const child = this.constructModel(childAttrs, node);
+          const child = this.constructModel(childAttrs, node, strictLoadingValue);
 
           this._wireAssociationProxy(parent, node, child);
 
-          if (node.reflection?.strictLoading) {
-            (child as any)._strictLoading = true;
+          if (nodeReadonly.get(node)) {
+            (child as any)._readonly = true;
           }
-          if (node.reflection?.scope) {
-            const scopeRel =
-              typeof node.reflection.scope === "function"
-                ? node.reflection.scope((node.modelClass as any)._allForPreload?.())
-                : null;
-            if (scopeRel?._readonly) (child as any)._readonly = true;
+          if (nodeStrictLoading.get(node)) {
+            (child as any)._strictLoading = true;
           }
 
           const parentAssocs = assocMap.get(parentKey)!;
@@ -570,8 +576,8 @@ export class JoinDependency {
    *
    * Mirrors: ActiveRecord::Associations::JoinDependency#construct
    */
-  private construct(resultSet: Record<string, unknown>[], _strictLoadingValue?: boolean): any[] {
-    return this.instantiateFromRows(resultSet).parents;
+  private construct(resultSet: Record<string, unknown>[], strictLoadingValue?: boolean): any[] {
+    return this.instantiateFromRows(resultSet, strictLoadingValue).parents;
   }
 
   /**
@@ -582,9 +588,17 @@ export class JoinDependency {
    *
    * Mirrors: ActiveRecord::Associations::JoinDependency#construct_model
    */
-  private constructModel(attrs: Record<string, unknown>, node: JoinNode | null): any {
+  private constructModel(
+    attrs: Record<string, unknown>,
+    node: JoinNode | null,
+    strictLoadingValue?: boolean,
+  ): any {
     const modelClass = node ? node.modelClass : this._baseModel;
-    return (modelClass as any)._instantiate(attrs);
+    const model = (modelClass as any)._instantiate(attrs);
+    if (strictLoadingValue && typeof model.strictLoadingBang === "function") {
+      model.strictLoadingBang();
+    }
+    return model;
   }
 
   /**
@@ -610,6 +624,9 @@ export class JoinDependency {
         proxy.target = child;
         proxy.loaded = true;
       }
+      if (typeof proxy.setInverseInstance === "function") {
+        proxy.setInverseInstance(child);
+      }
     } catch {
       // Association not defined — fall back to legacy path
     }
@@ -630,6 +647,36 @@ export class JoinDependency {
     } catch {
       // Association not defined
     }
+  }
+
+  /**
+   * @internal
+   * Mirrors Rails' `JoinAssociation#readonly?` — checks if the reflection's
+   * scope marks the association as readonly.
+   */
+  private _isNodeReadonly(node: JoinNode): boolean {
+    const refl = node.reflection;
+    if (!refl) return false;
+    if (typeof refl.scope === "function") {
+      try {
+        const scopeRel = refl.scope((node.modelClass as any)._allForPreload?.());
+        return !!scopeRel?._readonly;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * @internal
+   * Mirrors Rails' `JoinAssociation#strict_loading?` — checks if the
+   * reflection has `strict_loading: true` in its options.
+   */
+  private _isNodeStrictLoading(node: JoinNode): boolean {
+    const refl = node.reflection;
+    if (!refl) return false;
+    return !!refl.strictLoading;
   }
 
   private _buildBaseAliases(): void {

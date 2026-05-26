@@ -1,41 +1,9 @@
-/**
- * Tests to increase Rails test coverage matching.
- * Test names are chosen to match Ruby test names from the Rails test suite.
- */
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { Base } from "./index.js";
-
-import { createTestAdapter } from "./test-adapter.js";
-import type { DatabaseAdapter } from "./adapter.js";
-
-// -- Helpers --
-function freshAdapter(): DatabaseAdapter {
-  return createTestAdapter();
-}
+import { describe, it, expect, afterEach, vi } from "vitest";
 
 describe("TimeTravelTest", () => {
-  let adapter: DatabaseAdapter;
-
-  beforeEach(() => {
-    adapter = freshAdapter();
-  });
-
   afterEach(() => {
     vi.useRealTimers();
   });
-
-  function makeTimestampedModel() {
-    class Topic extends Base {
-      static {
-        this._tableName = "topics";
-        this.attribute("title", "string");
-        this.attribute("created_at", "datetime");
-        this.attribute("updated_at", "datetime");
-        this.adapter = adapter;
-      }
-    }
-    return Topic;
-  }
 
   it("time helper travel", () => {
     const past = new Date("2004-11-24T01:04:44.000Z");

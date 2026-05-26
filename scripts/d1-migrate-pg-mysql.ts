@@ -29,14 +29,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  Project,
-  SyntaxKind,
-  Node,
-  type SourceFile,
-  type CallExpression,
-  type ExpressionStatement,
-} from "ts-morph";
+import { Project, type SourceFile } from "ts-morph";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..");
@@ -63,25 +56,13 @@ function relPathToIndex(filePath: string): string {
   return (rel + "/index.js").replace(/\\/g, "/");
 }
 
-function callNameMatches(call: CallExpression, name: string): boolean {
-  const expr = call.getExpression();
-  if (expr.isKind(SyntaxKind.Identifier)) return expr.getText() === name;
-  if (expr.isKind(SyntaxKind.PropertyAccessExpression)) {
-    return (expr as any).getName() === name;
-  }
-  return false;
-}
-
 type AdapterKind = "pg" | "mysql";
 
 interface PatternInfo {
   kind: AdapterKind;
   adapterType: string; // "PostgreSQLAdapter" | "Mysql2Adapter"
-  /** "beforeAll" or "beforeEach" — determines whether we add useHandlerTransactionalFixtures */
-  initHook: "beforeAll" | "beforeEach";
   hasWithTxFixtures: boolean;
   hasDefineSchema: boolean;
-  /** Whether the file has a freshAdapter() helper function */
   hasFreshAdapterFn: boolean;
 }
 
@@ -111,22 +92,11 @@ function analyze(sf: SourceFile): PatternInfo | { skip: string } {
     return { skip: "no this.adapter = adapter assignment" };
   }
 
-  // Determine init hook
-  const initHook: "beforeAll" | "beforeEach" =
-    /beforeAll\s*\(\s*async\s*\(\s*\)\s*=>\s*\{[^}]*adapter\s*=\s*(?:new |await freshAdapter)/.test(
-      text,
-    ) ||
-    /beforeAll\s*\(\s*async\s*\([^)]*\)\s*=>\s*\{[^}]*adapter\s*=\s*(?:new |await freshAdapter)/.test(
-      text,
-    )
-      ? "beforeAll"
-      : "beforeEach";
-
   const hasWithTxFixtures = /withTransactionalFixtures\s*\(/.test(text);
   const hasDefineSchema = /defineSchema\s*\(\s*adapter/.test(text);
   const hasFreshAdapterFn = /async function freshAdapter/.test(text);
 
-  return { kind, adapterType, initHook, hasWithTxFixtures, hasDefineSchema, hasFreshAdapterFn };
+  return { kind, adapterType, hasWithTxFixtures, hasDefineSchema, hasFreshAdapterFn };
 }
 
 export function migrateText(inputText: string, filePath: string): string | { skip: string } {
@@ -202,7 +172,7 @@ function transform(
     details.push("removed .close() calls");
   }
 
-  // 4) Remove `this.adapter = adapter` and `ClassName.adapter = adapter` assignments
+  // 4) Remove `this.adapter = adapter` assignments
   {
     let text = sf.getFullText();
     // Remove `this.adapter = adapter;` and `this.adapter = adapter as any;` statements

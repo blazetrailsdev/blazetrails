@@ -1,34 +1,40 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { Base } from "../index.js";
+import { Author } from "../test-helpers/models/author.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
 import { setupHandlerSuite } from "../test-helpers/setup-handler-suite.js";
 import { useHandlerTransactionalFixtures } from "../test-helpers/use-handler-transactional-fixtures.js";
+import { useFixtures } from "../test-helpers/use-fixtures.js";
+import { TEST_SCHEMA } from "../test-helpers/test-schema.js";
 
-vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
 setupHandlerSuite();
 useHandlerTransactionalFixtures();
 beforeAll(async () => {
-  await defineSchema({ authors: { name: "string" } });
+  await defineSchema({ authors: TEST_SCHEMA.authors });
+  await Author.loadSchema();
 });
 
-describe("StringTypeTest", () => {
-  afterAll(() => {
-    vi.unstubAllEnvs();
-  });
+const { authors } = useFixtures(
+  {
+    authors: [
+      Author,
+      {
+        sean: { name: "Sean" },
+      },
+    ],
+  },
+  () => Base.adapter,
+);
 
+describe("StringTypeTest", () => {
   it("string mutations are detected", async () => {
-    class Author extends Base {
-      static {
-        this.attribute("name", "string");
-      }
-    }
-    const author = await Author.create({ name: "Sean" });
+    const author = await Author.find(authors("sean").id);
     expect(author.changed).toBe(false);
 
     // JS strings are immutable; assignment goes through the setter rather than mutating in place.
     // nameChanged() fires via dirty-tracker change detection, not isChangedInPlace.
     author.name = String(author.name) + " Griffin";
-    expect((author as any).nameChanged()).toBe(true);
+    expect((author as any).attributeChanged("name")).toBe(true);
 
     await author.save();
     await author.reload();

@@ -1,7 +1,7 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { instant } from "@blazetrails/activesupport/testing/temporal-helpers";
 import { describe, it, expect, beforeAll } from "vitest";
-import { Base } from "./index.js";
+import { Base, StatementInvalid } from "./index.js";
 import { hexdigest } from "@blazetrails/activesupport";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
@@ -201,9 +201,7 @@ describe("CollectionCacheKeyTest", () => {
 
   it("cache_key with unknown timestamp column", async () => {
     await Developer.create({ name: "Alice" });
-    // Falls back to count-only key when column doesn't exist
-    const key = await Developer.all().cacheKey("published_at");
-    expect(key).toMatch(/^developers\/query-[0-9a-f]+-\d+$/);
+    await expect(Developer.all().cacheKey("published_at")).rejects.toThrow(StatementInvalid);
   });
 
   it("collection proxy provides a cache_key", async () => {

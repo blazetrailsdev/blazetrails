@@ -43,7 +43,6 @@ import {
   DeleteManager,
   Nodes,
   sql as arelSql,
-  setToSqlVisitor,
 } from "@blazetrails/arel";
 import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import type { Relation } from "./relation.js";
@@ -969,14 +968,6 @@ export class Base extends Model {
       return;
     }
     this._adapter = adapter;
-    // Re-wire the global arel visitor so Node#toSql() uses the correct
-    // dialect for the assigned adapter (e.g. SQLite strips FOR UPDATE).
-    const visitor = (adapter as { arelVisitor?: object }).arelVisitor;
-    if (visitor) {
-      setToSqlVisitor(
-        (visitor as object).constructor as new () => { compile(node: Nodes.Node): string },
-      );
-    }
     if (this !== Base && this.name) Base._modelsByName.set(this.name, this as typeof Base);
 
     // Full schema reset on adapter swap: drops schema-sourced defs and

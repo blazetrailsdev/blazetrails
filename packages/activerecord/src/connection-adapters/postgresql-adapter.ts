@@ -2377,7 +2377,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /** @internal */
-  get arelVisitor(): Visitors.ToSql {
+  protected override _buildArelVisitor(): Visitors.ToSql {
     return new Visitors.PostgreSQLWithBinds(this);
   }
 

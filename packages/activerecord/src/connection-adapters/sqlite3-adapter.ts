@@ -156,7 +156,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   /** @internal */
-  override get arelVisitor(): Visitors.ToSql {
+  protected override _buildArelVisitor(): Visitors.ToSql {
     return new Visitors.SQLite(this);
   }
 

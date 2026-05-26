@@ -7,7 +7,7 @@
 import { inspectExplainOption } from "./abstract/database-statements.js";
 import type { ExplainOption } from "./abstract/database-statements.js";
 import type { DatabaseAdapter } from "../adapter.js";
-import { type Nodes, Visitors, Collectors, setToSqlVisitor } from "@blazetrails/arel";
+import { type Nodes, Visitors, Collectors } from "@blazetrails/arel";
 import {
   ReadOnlyError,
   ActiveRecordError,
@@ -414,14 +414,10 @@ export class AbstractAdapter implements Quoting {
 
   constructor() {
     // Mirrors Rails abstract_adapter.rb:155 — @visitor = arel_visitor
-    const visitor = this.arelVisitor;
-    if (visitor) {
-      setToSqlVisitor(
-        (visitor as object).constructor as new () => { compile(node: Nodes.Node): string },
-      );
-    }
+    this._visitor = this._buildArelVisitor();
   }
 
+  protected _visitor!: Visitors.ToSql;
   protected _connection: AbstractAdapter | null = null;
   private _owner: string | null = null;
   private _inUse = false;
@@ -1119,14 +1115,22 @@ export class AbstractAdapter implements Quoting {
   }
 
   /**
-   * Returns the Arel visitor for this adapter's SQL dialect.
-   * Subclasses override to return MySQL/PostgreSQL visitors.
+   * Returns the cached Arel visitor for this adapter's SQL dialect.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#arel_visitor
    *
    * @internal
    */
   get arelVisitor(): Visitors.ToSql {
+    return this._visitor;
+  }
+
+  /**
+   * Builds a new Arel visitor. Subclasses override to return dialect-specific visitors.
+   *
+   * @internal
+   */
+  protected _buildArelVisitor(): Visitors.ToSql {
     return new Visitors.ToSql(this);
   }
 

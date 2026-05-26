@@ -539,6 +539,7 @@ describe("signedId / findSigned / findSignedBang", () => {
   beforeAll(async () => {
     await defineSchema(TEST_SCHEMA);
   });
+  beforeEach(() => setSignedIdVerifierSecret("blazetrails-test-secret"));
 
   it("generates a signed ID for a persisted record", async () => {
     class User extends Base {

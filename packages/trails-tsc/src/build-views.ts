@@ -225,7 +225,13 @@ function emitDeclarations(shimPaths: readonly string[]): void {
     module: ts.ModuleKind.ESNext,
     target: ts.ScriptTarget.ESNext,
   };
-  ts.createProgram([...shimPaths], opts, ts.createCompilerHost(opts, true)).emit();
+  const result = ts.createProgram([...shimPaths], opts, ts.createCompilerHost(opts, true)).emit();
+  if (result.emitSkipped) {
+    const msgs = result.diagnostics.map((d) =>
+      ts.flattenDiagnosticMessageText(d.messageText, "\n"),
+    );
+    throw new Error(`declaration emit failed:\n${msgs.join("\n")}`);
+  }
 }
 
 function emitManifest(files: readonly string[]): string {

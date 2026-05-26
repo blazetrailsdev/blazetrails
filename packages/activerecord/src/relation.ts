@@ -3617,7 +3617,7 @@ export class Relation<T extends Base> {
     }
   }
 
-  /** Resolve the adapter through the public getter, returning null for HABTM join models with no established connection. */
+  /** Resolve the connection through the public getter, returning null for HABTM join models with no established connection. */
   private _resolveAdapter(): DatabaseAdapter | null {
     try {
       return this._modelClass.connection;

@@ -1090,7 +1090,7 @@ export class Base extends Model {
   }
   declare static isConnectedQ: typeof ConnectionHandling.isConnectedQ;
   declare static isConnected: typeof ConnectionHandling.isConnected;
-  declare static connection: DatabaseAdapter;
+  declare static readonly connection: DatabaseAdapter;
   declare static isPrimaryClass: typeof ConnectionHandling.isPrimaryClass;
   declare static adapterClass: typeof ConnectionHandling.adapterClass;
   declare static removeConnection: typeof ConnectionHandling.removeConnection;

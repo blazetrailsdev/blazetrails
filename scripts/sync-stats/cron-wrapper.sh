@@ -10,7 +10,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ_DIR="${PROJ_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
-LOG_DIR="${LOG_DIR:-$HOME}"
+LOG_DIR="${LOG_DIR:-$HOME/github/blazetrailsdev}"
 EMAIL="${EMAIL:-}"
 
 if [ -z "$EMAIL" ]; then

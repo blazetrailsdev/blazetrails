@@ -210,8 +210,7 @@ export class Response {
 
   set contentType(value: string | undefined) {
     if (!value) {
-      delete this._headers["content-type"];
-      delete this._headers["Content-Type"];
+      this.deleteHeader(CONTENT_TYPE);
       return;
     }
     const newHeader = this.parseContentType(value);

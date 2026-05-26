@@ -55,18 +55,20 @@ in `connection` — Rails' `connection` is a bare pool delegation
    `abstract_adapter.rb:155`). Move it there.
 
 The setter (`set adapter()`) does real work: schema invalidation,
-descendant cache cascade, model registration. This logic needs a new home
-— likely `set connection()` on Base, since Rails doesn't have a
-`Base.connection =` setter but we need one for test convenience (the
-`Model.adapter = x` pattern is pervasive in tests). Flag it with
-`@internal` as a trails-ism.
+descendant cache cascade, model registration. It exists because ~6900
+test sites do `this.adapter = adapter` in `static {}` blocks — a
+trails-ism (Rails tests use `establish_connection`, never direct
+assignment). This plan renames it to `set connection()` as a transitional
+step; a future plan converts tests to `establishConnection` and deletes
+the setter entirely.
 
 **Scope:**
 
-- `base.ts`: delete `static get adapter()`, `static set adapter()`,
-  `_adapter` field, `_wireArelVisitor`, `clearAdapterFromDescendants`.
-- `base.ts`: add `@internal static set connection()` carrying the
-  schema-invalidation logic from the old setter.
+- `base.ts`: delete `static get adapter()`, `_adapter` field,
+  `_wireArelVisitor`, `clearAdapterFromDescendants`.
+- `base.ts`: rename `static set adapter()` → `static set connection()`,
+  keep schema-invalidation logic intact. Mark `@internal` + add a
+  `@deprecated Use establishConnection() instead` JSDoc.
 - `connection-adapters/abstract-adapter.ts`: wire arel visitor in
   constructor (matching Rails).
 - Skip tests that break; list in PR body.
@@ -183,6 +185,9 @@ All PRs branch from `main` (no stacking).
 
 ## Non-goals (this plan)
 
+- **Deleting `set connection()`** — requires converting ~6900 test sites
+  from `this.adapter = x` / `this.connection = x` to
+  `establishConnection()`. Separate initiative after this plan lands.
 - Renaming `connection-adapters/` directory or `AbstractAdapter` class
   (those already match Rails).
 - `withConnection { }` block semantics (future pool lifecycle work).

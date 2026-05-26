@@ -12,23 +12,14 @@ describe("ActionDispatch::SystemTestCase", () => {
     expect(SystemTestCase.driver!.name).toBe("playwright");
   });
 
-  it("servedBy sets host and port", () => {
+  it("servedBy accepts host and port", () => {
     expect(() => SystemTestCase.servedBy({ host: "localhost", port: 3000 })).not.toThrow();
   });
 
-  it("constructor defaults driver if not set", () => {
+  it("constructor defaults driver to playwright if not set", () => {
     SystemTestCase.driver = undefined;
     new SystemTestCase();
     expect(SystemTestCase.driver).toBeDefined();
-  });
-
-  it("page throws before setup", () => {
-    const testCase = new SystemTestCase();
-    expect(() => testCase.page).toThrow("No page available");
-  });
-
-  it("context throws before setup", () => {
-    const testCase = new SystemTestCase();
-    expect(() => testCase.context).toThrow("No browser context available");
+    expect(SystemTestCase.driver!.name).toBe("playwright");
   });
 });

@@ -1,11 +1,11 @@
-import type { Browser, BrowserContext, BrowserType, LaunchOptions, Page } from "playwright";
+import type { Browser, BrowserContext, LaunchOptions, Page } from "playwright";
 
 export type BrowserName = "chromium" | "firefox" | "webkit";
 
 export interface DriverOptions {
   using?: BrowserName;
   screenSize?: [number, number];
-  options?: LaunchOptions;
+  options?: Record<string, unknown>;
 }
 
 /** @internal */
@@ -27,17 +27,18 @@ export class Driver {
   readonly name: string;
   private _driverType: string;
   private _screenSize: [number, number];
-  private _options: LaunchOptions;
+  private _options: Record<string, unknown>;
   private _using: BrowserName;
   private _browser: Browser | undefined;
-  private _browserType: BrowserType | undefined;
 
   constructor(driverType: string, options: DriverOptions = {}) {
     this._driverType = driverType;
     this._using = options.using ?? "chromium";
     this._screenSize = options.screenSize ?? [1400, 1400];
-    this._options = options.options ?? {};
-    this.name = ((this._options as Record<string, unknown>).name as string) ?? driverType;
+    const opts = { ...(options.options ?? {}) };
+    this.name = (opts.name as string) ?? driverType;
+    delete opts.name;
+    this._options = opts;
   }
 
   async use(): Promise<void> {
@@ -45,35 +46,34 @@ export class Driver {
     this.setup();
   }
 
-  get browser(): BrowserType | undefined {
-    return this._browserType;
-  }
-
-  async close(): Promise<void> {
-    await this._browser?.close();
-    this._browser = undefined;
-  }
-
   /** @internal */
   private registerable(): boolean {
-    return this._driverType === "playwright";
+    return (["selenium", "cuprite", "rack_test", "playwright"] as string[]).includes(
+      this._driverType,
+    );
   }
 
   /** @internal */
   private async register(): Promise<void> {
-    await this.registerPlaywright();
+    switch (this._driverType) {
+      case "selenium":
+        this.registerSelenium();
+        break;
+      case "cuprite":
+        this.registerCuprite();
+        break;
+      case "rack_test":
+        this.registerRackTest();
+        break;
+      case "playwright":
+        await this.registerPlaywright();
+        break;
+    }
   }
 
   /** @internal */
-  private browserOptions(): LaunchOptions {
+  private browserOptions(): Record<string, unknown> {
     return { ...this._options };
-  }
-
-  /** @internal */
-  private async registerPlaywright(): Promise<void> {
-    const pw = await requirePlaywright();
-    this._browserType = pw[this._using];
-    this._browser = await this._browserType.launch(this.browserOptions());
   }
 
   /** @internal */
@@ -88,6 +88,16 @@ export class Driver {
   private registerRackTest(): void {
     throw new Error("RackTest is not supported. Use playwright.");
   }
+
+  /** @internal */
+  private async registerPlaywright(): Promise<void> {
+    const pw = await requirePlaywright();
+    const browserType = pw[this._using];
+    const screen = { width: this._screenSize[0], height: this._screenSize[1] };
+    const launchOptions: LaunchOptions = { ...this._options } as LaunchOptions;
+    this._browser = await browserType.launch(launchOptions);
+  }
+
   /** @internal */
   private setup(): void {}
 
@@ -103,5 +113,11 @@ export class Driver {
   async newPage(): Promise<Page> {
     const context = await this.newContext();
     return context.newPage();
+  }
+
+  /** @internal */
+  async close(): Promise<void> {
+    await this._browser?.close();
+    this._browser = undefined;
   }
 }

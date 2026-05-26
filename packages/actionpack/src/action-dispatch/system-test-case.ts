@@ -1,4 +1,3 @@
-import type { BrowserContext, Page } from "playwright";
 import { Driver, type BrowserName, type DriverOptions } from "./system-testing/driver.js";
 import { Server, type ServerApp } from "./system-testing/server.js";
 
@@ -20,11 +19,12 @@ export class SystemTestCase {
   private static _server: Server | undefined;
   private static _serverHost: string | undefined;
   private static _serverPort: number | undefined;
-  private _context: BrowserContext | undefined;
-  private _page: Page | undefined;
+  private _driverReady: Promise<void>;
 
   constructor() {
-    if (!SystemTestCase.driver) SystemTestCase.drivenBy("playwright");
+    const klass = this.constructor as typeof SystemTestCase;
+    if (!klass.driver) klass.drivenBy("playwright");
+    this._driverReady = klass.driver!.use();
   }
 
   static drivenBy(driver: string, options: DrivenByOptions = {}): void {
@@ -48,32 +48,8 @@ export class SystemTestCase {
     this._server = server;
   }
 
-  async setup(): Promise<void> {
-    const driver = (this.constructor as typeof SystemTestCase).driver;
-    if (!driver) throw new Error("No driver configured. Call drivenBy() first.");
-    await driver.use();
-    this._context = await driver.newContext();
-    this._page = await this._context.newPage();
-  }
-
-  async teardown(): Promise<void> {
-    await this._context?.close();
-    this._context = undefined;
-    this._page = undefined;
-  }
-
-  get page(): Page {
-    if (!this._page) throw new Error("No page available. Call setup() first.");
-    return this._page;
-  }
-
-  get context(): BrowserContext {
-    if (!this._context) throw new Error("No browser context available. Call setup() first.");
-    return this._context;
-  }
-
   /** @internal */
-  private urlHelpers(): Record<string, (...args: unknown[]) => string> | undefined {
+  private urlHelpers(): undefined {
     return undefined;
   }
 }

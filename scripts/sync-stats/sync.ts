@@ -29,28 +29,36 @@ class RateLimitExhaustedError extends Error {
 
 function checkRateLimitBudget() {
   if (ghCallCount > 0 && ghCallCount % 100 === 0) {
+    let out: string;
     try {
-      const out = execSync("gh api rate_limit --jq '.rate.remaining'", {
+      out = execSync("gh api rate_limit --jq '.rate.remaining'", {
         encoding: "utf-8",
         timeout: 10_000,
       }).trim();
-      const remaining = parseInt(out);
-      if (remaining <= RATE_LIMIT_RESERVE) {
-        throw new RateLimitExhaustedError(remaining);
-      }
-      console.log(`  [budget check] ${remaining} API calls remaining`);
     } catch (err) {
-      if (err instanceof RateLimitExhaustedError) throw err;
+      console.warn(`  [budget check] probe failed: ${err instanceof Error ? err.message : err}`);
+      return;
     }
+    const remaining = parseInt(out, 10);
+    if (Number.isNaN(remaining)) {
+      console.warn(`  [budget check] unparseable response: ${JSON.stringify(out)}`);
+      return;
+    }
+    if (remaining <= RATE_LIMIT_RESERVE) {
+      throw new RateLimitExhaustedError(remaining);
+    }
+    console.log(`  [budget check] ${remaining} API calls remaining`);
   }
 }
 
+// Set when a rate-limit error fires; subsequent gh() calls block at the top
+// of the loop until this time passes. Outlives a single gh() invocation so
+// later calls inherit the cooldown without re-tripping the limit.
 function gh(args: string): string {
   checkRateLimitBudget();
   const MAX_RETRIES = 5;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const now = Date.now();
-    const cooldownRemaining = rateLimitCooldownUntil - now;
+    const cooldownRemaining = rateLimitCooldownUntil - Date.now();
     if (cooldownRemaining > 0) {
       Atomics.wait(sleepBuf, 0, 0, cooldownRemaining);
     }
@@ -72,7 +80,6 @@ function gh(args: string): string {
         console.warn(
           `  Rate limited, cooling down ${backoffMs / 1000}s (retry ${attempt + 1}/${MAX_RETRIES})...`,
         );
-        Atomics.wait(sleepBuf, 0, 0, backoffMs);
         continue;
       }
       throw err;
@@ -1379,10 +1386,9 @@ async function syncPrTimelineEvents() {
 }
 
 async function syncPrReactions() {
-  // Skipped — no reactions on this repo, not worth the API calls.
-  await Base.adapter.executeMutation(
-    `UPDATE pull_requests SET reactions_synced = 1 WHERE reactions_synced = 0`,
-  );
+  // Skipped — no reactions on this repo, not worth the API calls. If reactions
+  // become relevant, restore the prior implementation from git history
+  // (#2433 removed it) and let the `reactions_synced=0` rows backfill.
 }
 
 async function syncWorkflowRuns(mode: "latest" | "refresh" | "backfill"): Promise<number> {

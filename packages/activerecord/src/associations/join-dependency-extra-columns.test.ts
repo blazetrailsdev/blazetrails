@@ -17,7 +17,7 @@ describe("JoinDependency extra columns in instantiate", () => {
   class Comment extends Base {
     static {
       this.attribute("id", "integer");
-      this.attribute("postId", "integer");
+      this.attribute("post_id", "integer");
       this.attribute("body", "string");
     }
   }

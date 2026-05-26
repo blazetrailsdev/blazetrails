@@ -610,7 +610,7 @@ export class JoinDependency {
     }
 
     for (const row of rows) {
-      const parentAttrs: Record<string, unknown> = {};
+      const parentAttrs: Record<string, unknown> = Object.create(null);
       for (let i = 0; i < baseColumns.length; i++) {
         parentAttrs[baseColumns[i]] = row[`t${this._baseTableIndex}_r${i}`];
       }

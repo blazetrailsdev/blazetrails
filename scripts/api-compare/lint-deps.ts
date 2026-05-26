@@ -557,7 +557,12 @@ const RUBY_NAMESPACE_ROOTS = new Set(["Arel", "ActiveModel", "ActiveRecord", "Ac
 // Ruby method calls that appear as depRefs (e.g. Rails calls `arel_table`
 // on a model). Not type/class references — the TS equivalent is a property
 // access on `this`, not an import from the dep package.
-const RUBY_METHOD_REFS = new Set(["arel_table", "arel_column", "resolve_arel_attribute"]);
+const RUBY_METHOD_REFS = new Set([
+  "arel_table",
+  "arel_attribute",
+  "arel_column",
+  "resolve_arel_attribute",
+]);
 
 // Ruby mixins whose methods are applied structurally at build time in the
 // dep package (e.g. `include(NodeExpression, Expressions)`). AR code calls

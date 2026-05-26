@@ -216,9 +216,9 @@ export class Response {
     }
     const newHeader = this.parseContentType(value);
     const prevHeader = this.parsedContentTypeHeader();
-    let charset = newHeader.charset || prevHeader.charset;
+    let charset = newHeader.charset || prevHeader.charset || this._charset;
     const mimeType = newHeader.mimeType ?? value;
-    if (!charset && !prevHeader.mimeType && mimeType.startsWith("text/")) {
+    if (!charset && mimeType.startsWith("text/")) {
       charset = (this.constructor as typeof Response).defaultCharset;
     }
     this.setContentType(mimeType, charset);

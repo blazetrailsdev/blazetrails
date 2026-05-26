@@ -125,7 +125,6 @@ export class JoinDependency {
   private _baseAlias: string;
   private _baseTableIndex = 0;
   private _nextTableIndex = 1;
-  private _nodes: JoinNode[] = [];
   private _aliases: AliasMap[] = [];
   private _usedTableNames: Set<string>;
   private _arelTablesByIndex: Map<number, Table> = new Map();
@@ -150,7 +149,13 @@ export class JoinDependency {
   }
 
   get nodes(): JoinNode[] {
-    return this._nodes;
+    const result: JoinNode[] = [];
+    this._joinRoot.each((part) => {
+      if (part !== this._joinRoot && part._joinNode) {
+        result.push(part._joinNode);
+      }
+    });
+    return result;
   }
 
   addAssociation(
@@ -329,7 +334,6 @@ export class JoinDependency {
       });
     }
 
-    this._nodes.push(node);
     this._pushTreeNode(node);
     return node;
   }
@@ -342,7 +346,7 @@ export class JoinDependency {
     const parts = path.split(".");
     if (parts.length === 1) return this.addAssociation(parts[0]);
 
-    const snapshotNodes = this._nodes.length;
+    const snapshotPaths = new Set(this._treeNodesByPath.keys());
     const snapshotAliases = this._aliases.length;
     const snapshotNextIndex = this._nextTableIndex;
     const snapshotUsedTableNames = new Set(this._usedTableNames);
@@ -359,8 +363,7 @@ export class JoinDependency {
         parentAssocName: parentPath || undefined,
       });
       if (!node) {
-        this._rollbackTree(snapshotNodes);
-        this._nodes.length = snapshotNodes;
+        this._rollbackTree(snapshotPaths);
         this._aliases.length = snapshotAliases;
         this._nextTableIndex = snapshotNextIndex;
         this._usedTableNames = snapshotUsedTableNames;
@@ -605,9 +608,10 @@ export class JoinDependency {
 
     const baseColumns = getModelColumns(this._baseModel);
 
+    const allNodes = this.nodes;
     const nodeReadonly = new Map<JoinNode, boolean>();
     const nodeStrictLoading = new Map<JoinNode, boolean>();
-    for (const node of this._nodes) {
+    for (const node of allNodes) {
       nodeReadonly.set(node, this._isNodeReadonly(node));
       nodeStrictLoading.set(node, this._isNodeStrictLoading(node));
     }
@@ -642,7 +646,7 @@ export class JoinDependency {
         parent = parentMap.get(parentKey);
       }
 
-      for (const node of this._nodes) {
+      for (const node of allNodes) {
         if (node.isThroughNode) continue;
 
         const childAttrs: Record<string, unknown> = {};
@@ -721,7 +725,7 @@ export class JoinDependency {
     const tables: Array<{ node: JoinNode | null; columns: AliasMap[] }> = [
       { node: null, columns: baseAliasMap },
     ];
-    for (const node of this._nodes) {
+    for (const node of this.nodes) {
       const nodeCols = this._aliases.filter((a) => a.tableIndex === node.tableIndex);
       tables.push({ node, columns: nodeCols });
     }
@@ -875,55 +879,22 @@ export class JoinDependency {
     this._treeNodesByPath.set(fullPath, treePart);
   }
 
-  private _rekeyTreeNode(
-    node: JoinNode,
-    oldImmediateName: string,
-    oldParentPath: string | null,
-  ): void {
-    const oldKey = oldParentPath ? `${oldParentPath}.${oldImmediateName}` : oldImmediateName;
-    const treePart = this._treeNodesByPath.get(oldKey);
-    if (!treePart) return;
-    this._treeNodesByPath.delete(oldKey);
-
-    const newKey = node.parentPath
-      ? `${node.parentPath}.${node.immediateAssocName}`
-      : node.immediateAssocName;
-    this._treeNodesByPath.set(newKey, treePart);
-
-    if (oldParentPath !== node.parentPath) {
-      const oldParent = this._resolveTreeParent(oldParentPath, "rekeyTreeNode(old)");
-      const idx = oldParent.children.indexOf(treePart);
-      if (idx !== -1) oldParent.children.splice(idx, 1);
-
-      const newParent = this._resolveTreeParent(node.parentPath, "rekeyTreeNode(new)");
-      newParent.children.push(treePart);
+  private _rollbackTree(snapshotPaths: Set<string>): void {
+    const toRemove: string[] = [];
+    for (const key of this._treeNodesByPath.keys()) {
+      if (!snapshotPaths.has(key)) toRemove.push(key);
     }
-  }
-
-  private _rollbackTree(snapshotNodeCount: number): void {
-    const currentNodes = this._nodes;
-    for (let i = currentNodes.length - 1; i >= snapshotNodeCount; i--) {
-      const node = currentNodes[i];
-      const fullPath = node.parentPath
-        ? `${node.parentPath}.${node.immediateAssocName}`
-        : node.immediateAssocName;
-      const mapped = this._treeNodesByPath.get(fullPath);
-      if (mapped && mapped._joinNode === node) {
-        this._treeNodesByPath.delete(fullPath);
-      }
-      const parent = this._resolveTreeParent(node.parentPath, "rollbackTree");
-      const idx = parent.children.findIndex((c) => c._joinNode === node);
+    for (const key of toRemove.reverse()) {
+      const part = this._treeNodesByPath.get(key)!;
+      this._treeNodesByPath.delete(key);
+      const lastDot = key.lastIndexOf(".");
+      const parentKey = lastDot === -1 ? null : key.slice(0, lastDot);
+      const parent = parentKey
+        ? (this._treeNodesByPath.get(parentKey) ?? this._joinRoot)
+        : this._joinRoot;
+      const idx = parent.children.indexOf(part);
       if (idx !== -1) parent.children.splice(idx, 1);
     }
-  }
-
-  private _resolveTreeParent(parentPath: string | null, caller: string): JoinPart {
-    if (!parentPath) return this._joinRoot;
-    const found = this._treeNodesByPath.get(parentPath);
-    if (!found) {
-      throw new Error(`JoinDependency tree (${caller}): parent path "${parentPath}" not found`);
-    }
-    return found;
   }
 
   private _addThroughViaJoinAssociation(
@@ -1058,7 +1029,6 @@ export class JoinDependency {
           reflection,
           isThroughNode: false,
         };
-        this._nodes.push(node);
         this._pushTreeNode(node);
         targetNode = node;
       } else {
@@ -1081,7 +1051,6 @@ export class JoinDependency {
           reflection: null,
           isThroughNode: true,
         };
-        this._nodes.push(node);
         this._pushTreeNode(node);
       }
     }
@@ -1152,7 +1121,7 @@ export class JoinDependency {
     if (sourceAssocDef.options?.through) {
       this._nextTableIndex--;
 
-      const snapshotNodes = this._nodes.length;
+      const snapshotPaths = new Set(this._treeNodesByPath.keys());
       const snapshotAliases = this._aliases.length;
       const snapshotNextIndex = this._nextTableIndex;
       const snapshotUsedTableNames = new Set(this._usedTableNames);
@@ -1187,7 +1156,6 @@ export class JoinDependency {
         reflection: null,
         isThroughNode: true,
       };
-      this._nodes.push(throughNode);
       this._pushTreeNode(throughNode);
 
       const recursiveNode = this.addAssociation(sourceName, {
@@ -1197,8 +1165,7 @@ export class JoinDependency {
       });
 
       if (!recursiveNode) {
-        this._rollbackTree(snapshotNodes);
-        this._nodes.length = snapshotNodes;
+        this._rollbackTree(snapshotPaths);
         this._aliases.length = snapshotAliases;
         this._nextTableIndex = snapshotNextIndex;
         this._usedTableNames = snapshotUsedTableNames;
@@ -1213,7 +1180,28 @@ export class JoinDependency {
       recursiveNode.immediateAssocName = assocDef.name;
       recursiveNode.parentPath = parentAssocName ?? null;
       recursiveNode.assocType = assocDef.type === "hasAndBelongsToMany" ? "hasMany" : assocDef.type;
-      this._rekeyTreeNode(recursiveNode, oldImmediateName, oldParentPath);
+
+      // Rekey tree node: update _treeNodesByPath to reflect renamed association
+      const oldKey = oldParentPath ? `${oldParentPath}.${oldImmediateName}` : oldImmediateName;
+      const treePart = this._treeNodesByPath.get(oldKey);
+      if (treePart) {
+        this._treeNodesByPath.delete(oldKey);
+        const newKey = recursiveNode.parentPath
+          ? `${recursiveNode.parentPath}.${recursiveNode.immediateAssocName}`
+          : recursiveNode.immediateAssocName;
+        this._treeNodesByPath.set(newKey, treePart);
+        if (oldParentPath !== recursiveNode.parentPath) {
+          const oldParent = oldParentPath
+            ? (this._treeNodesByPath.get(oldParentPath) ?? this._joinRoot)
+            : this._joinRoot;
+          const idx = oldParent.children.indexOf(treePart);
+          if (idx !== -1) oldParent.children.splice(idx, 1);
+          const newParent = recursiveNode.parentPath
+            ? (this._treeNodesByPath.get(recursiveNode.parentPath) ?? this._joinRoot)
+            : this._joinRoot;
+          newParent.children.push(treePart);
+        }
+      }
 
       return recursiveNode;
     }
@@ -1400,16 +1388,12 @@ export class JoinDependency {
       reflection: null,
       isThroughNode: true,
     };
-    this._nodes.push(throughNode);
     this._pushTreeNode(throughNode);
 
-    const targetReflection = reflectOnAssociation(
-      parentAssocName
-        ? ((this._nodes.find((n) => n.assocName === parentAssocName)?.modelClass ??
-            this._baseModel) as any)
-        : (this._baseModel as any),
-      assocDef.name,
-    );
+    const parentModel = parentAssocName
+      ? (this._treeNodesByPath.get(parentAssocName)?._joinNode?.modelClass ?? this._baseModel)
+      : this._baseModel;
+    const targetReflection = reflectOnAssociation(parentModel as any, assocDef.name);
     const node: JoinNode = {
       tableIndex: targetTableIndex,
       tableAlias: targetAlias,
@@ -1425,7 +1409,6 @@ export class JoinDependency {
       reflection: targetReflection ?? null,
       isThroughNode: false,
     };
-    this._nodes.push(node);
     this._pushTreeNode(node);
     return node;
   }

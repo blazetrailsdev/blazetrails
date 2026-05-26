@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
 import ts from "typescript";
 
-/**
- * Inline type stub that mirrors the actionview render conditional generic.
- * Self-contained so the test doesn't depend on module resolution.
- */
 const TYPE_STUB = `
-// --- TemplateRegistry ---
 export interface TemplateRegistry {}
 export type TemplateLocals<T> = [T] extends [never] ? Record<string, unknown> : T;
 
-// --- RenderOptions conditional generic ---
 type RenderSingleOptions<P extends string> = {
   partial: P;
   collection?: undefined;
@@ -35,7 +29,6 @@ export type RenderOptions<P extends string> = RenderSingleOptions<P> | RenderCol
 
 export declare function render<P extends string>(options: RenderOptions<P>): string;
 
-// --- Registry augmentation ---
 declare module "/stub/module" {
   interface TemplateRegistry {
     "users/user": { user: string; role?: string };
@@ -86,90 +79,55 @@ function getDiagnostics(source: string): ts.Diagnostic[] {
   ];
 }
 
-function diagnosticCodes(source: string): number[] {
+function codes(source: string): number[] {
   return getDiagnostics(source).map((d) => d.code);
 }
 
-function diagnosticMessages(source: string): string[] {
-  return getDiagnostics(source).map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
-}
+const IMPORT = 'import { render } from "/stub/module";';
 
 describe("render conditional generic — semantic diagnostics", () => {
-  it("known partial with required locals omitted produces TS error", () => {
-    const codes = diagnosticCodes(`
-      import { render } from "/stub/module";
-      render({ partial: "users/user" });
-    `);
-    expect(codes.length).toBeGreaterThan(0);
-    expect(codes.some((c) => c === 2345 || c === 2739)).toBe(true);
+  it("required locals omitted → TS2345", () => {
+    expect(codes(`${IMPORT} render({ partial: "users/user" });`)).toEqual([2345]);
   });
 
-  it("known partial with wrong locals shape produces TS error", () => {
-    const codes = diagnosticCodes(`
-      import { render } from "/stub/module";
-      render({ partial: "users/user", locals: { wrong: 1 } });
-    `);
-    expect(codes.length).toBeGreaterThan(0);
+  it("required locals incomplete (user missing) → TS2345", () => {
+    expect(
+      codes(`${IMPORT} render({ partial: "users/user", locals: { role: "admin" } });`),
+    ).toEqual([2345]);
   });
 
-  it("known partial with all-optional locals allows omitting locals", () => {
-    const diags = getDiagnostics(`
-      import { render } from "/stub/module";
-      render({ partial: "static/header" });
-    `);
-    expect(diags).toEqual([]);
+  it("excess property in locals → TS2353", () => {
+    expect(
+      codes(`${IMPORT} render({ partial: "users/user", locals: { user: "a", wrong: 1 } });`),
+    ).toEqual([2353]);
   });
 
-  it("known partial with correct locals produces no error", () => {
-    const diags = getDiagnostics(`
-      import { render } from "/stub/module";
-      render({ partial: "users/user", locals: { user: "Alice" } });
-    `);
-    expect(diags).toEqual([]);
+  it("all-optional locals — omitting locals is fine", () => {
+    expect(getDiagnostics(`${IMPORT} render({ partial: "static/header" });`)).toEqual([]);
   });
 
-  it("known partial with correct locals + optional field produces no error", () => {
-    const diags = getDiagnostics(`
-      import { render } from "/stub/module";
-      render({ partial: "users/user", locals: { user: "Alice", role: "admin" } });
-    `);
-    expect(diags).toEqual([]);
+  it("correct required + optional locals — no error", () => {
+    expect(
+      getDiagnostics(
+        `${IMPORT} render({ partial: "users/user", locals: { user: "Alice", role: "admin" } });`,
+      ),
+    ).toEqual([]);
   });
 
-  it("dynamic string-typed name falls back permissively (no error)", () => {
-    const diags = getDiagnostics(`
-      import { render } from "/stub/module";
-      const name: string = "x";
-      render({ partial: name });
-      render({ partial: name, locals: { anything: 42 } });
-    `);
-    expect(diags).toEqual([]);
+  it("correct required locals only — no error", () => {
+    expect(
+      getDiagnostics(`${IMPORT} render({ partial: "users/user", locals: { user: "Alice" } });`),
+    ).toEqual([]);
   });
 
-  it("known partial missing required 'user' in locals produces TS error", () => {
-    const codes = diagnosticCodes(`
-      import { render } from "/stub/module";
-      render({ partial: "users/user", locals: { role: "admin" } });
-    `);
-    expect(codes.length).toBeGreaterThan(0);
-  });
-
-  it("required-locals error has diagnostic code 2345 or 2739", () => {
-    const codes = diagnosticCodes(`
-      import { render } from "/stub/module";
-      render({ partial: "users/user" });
-    `);
-    const relevant = codes.filter((c) => c === 2345 || c === 2739);
-    expect(relevant.length).toBeGreaterThan(0);
-  });
-
-  it("wrong-shape error message references the missing property", () => {
-    const messages = diagnosticMessages(`
-      import { render } from "/stub/module";
-      render({ partial: "users/user", locals: { wrong: 1 } });
-    `);
-    const joined = messages.join("\n");
-    expect(joined.length).toBeGreaterThan(0);
-    expect(joined).toMatch(/user|wrong/i);
+  it("dynamic string name falls back permissively — no error", () => {
+    expect(
+      getDiagnostics(`
+        ${IMPORT}
+        const name: string = "x";
+        render({ partial: name });
+        render({ partial: name, locals: { anything: 42 } });
+      `),
+    ).toEqual([]);
   });
 });

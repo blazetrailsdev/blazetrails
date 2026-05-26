@@ -96,7 +96,7 @@ After this lands:
 
 ## Interaction with the fixtures port
 
-The fixtures port (fixtures port (complete)) is
+The fixtures port (complete) is
 running in parallel and reshapes the test-data substrate trails uses.
 Key intersections:
 

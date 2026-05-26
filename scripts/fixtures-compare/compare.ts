@@ -1,6 +1,6 @@
 // fixtures:compare — diff Rails activerecord/test/fixtures/*.yml against
 // packages/activerecord/src/test-helpers/fixtures/<kebab-name>.ts. Soft
-// failure only per docs/activerecord/the fixtures port (Decision 4); PR 7 flips
+// failure only per the fixtures port plan (Decision 4); PR 7 flips
 // to hard-fail. ERB stubs adapter_name to "SQLite"; other ERB → skipped.
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";

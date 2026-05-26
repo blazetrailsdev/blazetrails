@@ -360,7 +360,7 @@ type`, `export interface`.
 - `include(Base, …)` calls from `@blazetrails/activesupport` (recognized
   by callee identifier — they are the Ruby-`include` analog).
 - `this`-typed top-level `function` exports (the
-  [CLAUDE.md mixin pattern](../CLAUDE.md)) — these mirror Ruby instance
+  [CLAUDE.md mixin pattern](../../CLAUDE.md)) — these mirror Ruby instance
   methods, not file-scope functions.
 - JSDoc `@internal` markers (visibility analog).
 
@@ -550,7 +550,7 @@ need to swap, the fix is one range covering both.
 
 ## 6. Wave-based rollout
 
-Each PR sized to ≤300 LOC per [CLAUDE.md](../CLAUDE.md). Estimates are
+Each PR sized to ≤300 LOC per [CLAUDE.md](../../CLAUDE.md). Estimates are
 implementation LOC excluding generated JSON.
 
 | wave      | scope                                                                                                    |  est. LOC | notes                                                                                                                                                                                                                                                         |
@@ -654,5 +654,5 @@ reason="rails-source-is-itself-disordered"` is the escape hatch and
 - [eslint/nie-requires-annotation.mjs](../eslint/nie-requires-annotation.mjs)
   and [eslint/rails-private-jsdoc.mjs](../eslint/rails-private-jsdoc.mjs) —
   data-driven rule precedents; same plugin object, same RuleTester pattern.
-- [CLAUDE.md](../CLAUDE.md) — `this`-typed mixin convention; PR-size limit
+- [CLAUDE.md](../../CLAUDE.md) — `this`-typed mixin convention; PR-size limit
   driving the wave plan.

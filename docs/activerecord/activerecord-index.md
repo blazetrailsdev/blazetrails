@@ -137,8 +137,8 @@ Independent of test-infra work.
 
 ### Phase 7 — DX / packaging (independent)
 
-Owner: [`browser-compat-plan.md`](browser-compat-plan.md) +
-[`virtual-source-files-plan.md`](virtual-source-files-plan.md). No
+Owner: [`browser-compat-plan.md`](../infrastructure/browser-compat-plan.md) +
+[`virtual-source-files-plan.md`](../infrastructure/virtual-source-files-plan.md). No
 test-infra or AR-100 dependency.
 
 - **Browser-compat** (~65% complete):

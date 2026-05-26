@@ -566,6 +566,10 @@ describe("ActionDispatch::IntegrationTest", () => {
   });
 
   describe("document_root_element", () => {
+    afterEach(() => {
+      app.reset();
+    });
+
     it("document_root_element returns the root element", async () => {
       await app.get("/posts/xml");
       const root = app.documentRootElement;

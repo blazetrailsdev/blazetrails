@@ -22,11 +22,12 @@ export interface PlaywrightBrowser {
 
 /** @internal */
 let playwrightModule: Record<string, unknown> | undefined;
+const PLAYWRIGHT_MODULE = "playwright";
 
 async function requirePlaywright(): Promise<Record<string, unknown>> {
   if (playwrightModule) return playwrightModule;
   try {
-    playwrightModule = await import("playwright");
+    playwrightModule = (await import(PLAYWRIGHT_MODULE)) as Record<string, unknown>;
     return playwrightModule;
   } catch {
     throw new Error(

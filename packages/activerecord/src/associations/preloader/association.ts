@@ -370,8 +370,9 @@ export class LoaderQuery {
   }
 
   // Mirrors Rails' `scope.model.connection_specification_name` in
-  // Preloader::Association::LoaderQuery#hash/#eql?. Does not check out a DB
-  // connection — `connectionSpecificationName` is a plain string getter and
+  // Preloader::Association::LoaderQuery#hash/#eql?. The adapter getter may
+  // check out a connection on first call, but in practice the preloader runs
+  // after records are loaded so the adapter is already cached on the class.
   private _scopeAdapterId(): string {
     const klass = this.scope?._modelClass;
     if (klass == null) return "";

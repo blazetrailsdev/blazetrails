@@ -106,86 +106,88 @@ describe("OrderTest", () => {
     expect(results[0].title).toBe("a");
   });
 
-  it("order asc with hash", async () => {
-    class Post extends Base {
-      static {
-        this.attribute("name", "string");
-        this.attribute("price", "integer");
+  describe("hash syntax", () => {
+    it("order asc", async () => {
+      class Post extends Base {
+        static {
+          this.attribute("name", "string");
+          this.attribute("price", "integer");
+        }
       }
-    }
-    await Post.create({ name: "Charlie", price: 30 });
-    await Post.create({ name: "Alice", price: 10 });
-    await Post.create({ name: "Bob", price: 20 });
-    const result = await Post.all().order({ name: "asc" }).toArray();
-    expect(result[0].name).toBe("Alice");
-    expect(result[2].name).toBe("Charlie");
-  });
+      await Post.create({ name: "Charlie", price: 30 });
+      await Post.create({ name: "Alice", price: 10 });
+      await Post.create({ name: "Bob", price: 20 });
+      const result = await Post.all().order({ name: "asc" }).toArray();
+      expect(result[0].name).toBe("Alice");
+      expect(result[2].name).toBe("Charlie");
+    });
 
-  it("order desc with hash", async () => {
-    class Post extends Base {
-      static {
-        this.attribute("name", "string");
-        this.attribute("price", "integer");
+    it("order desc", async () => {
+      class Post extends Base {
+        static {
+          this.attribute("name", "string");
+          this.attribute("price", "integer");
+        }
       }
-    }
-    await Post.create({ name: "Charlie", price: 30 });
-    await Post.create({ name: "Alice", price: 10 });
-    await Post.create({ name: "Bob", price: 20 });
-    const result = await Post.all().order({ name: "desc" }).toArray();
-    expect(result[0].name).toBe("Charlie");
-    expect(result[2].name).toBe("Alice");
-  });
+      await Post.create({ name: "Charlie", price: 30 });
+      await Post.create({ name: "Alice", price: 10 });
+      await Post.create({ name: "Bob", price: 20 });
+      const result = await Post.all().order({ name: "desc" }).toArray();
+      expect(result[0].name).toBe("Charlie");
+      expect(result[2].name).toBe("Alice");
+    });
 
-  it("order by string column name", async () => {
-    class Post extends Base {
-      static {
-        this.attribute("name", "string");
-        this.attribute("price", "integer");
+    it("order by string column name", async () => {
+      class Post extends Base {
+        static {
+          this.attribute("name", "string");
+          this.attribute("price", "integer");
+        }
       }
-    }
-    await Post.create({ name: "Charlie", price: 30 });
-    await Post.create({ name: "Alice", price: 10 });
-    const result = await Post.all().order("name").toArray();
-    expect(result[0].name).toBe("Alice");
-  });
+      await Post.create({ name: "Charlie", price: 30 });
+      await Post.create({ name: "Alice", price: 10 });
+      const result = await Post.all().order("name").toArray();
+      expect(result[0].name).toBe("Alice");
+    });
 
-  it("reorder replaces existing order with data", async () => {
-    class Post extends Base {
-      static {
-        this.attribute("name", "string");
-        this.attribute("price", "integer");
+    it("reorder replaces existing order", async () => {
+      class Post extends Base {
+        static {
+          this.attribute("name", "string");
+          this.attribute("price", "integer");
+        }
       }
-    }
-    await Post.create({ name: "Charlie", price: 30 });
-    await Post.create({ name: "Alice", price: 10 });
-    await Post.create({ name: "Bob", price: 20 });
-    const result = await Post.all().order({ name: "asc" }).reorder({ name: "desc" }).toArray();
-    expect(result[0].name).toBe("Charlie");
-  });
+      await Post.create({ name: "Charlie", price: 30 });
+      await Post.create({ name: "Alice", price: 10 });
+      await Post.create({ name: "Bob", price: 20 });
+      const result = await Post.all().order({ name: "asc" }).reorder({ name: "desc" }).toArray();
+      expect(result[0].name).toBe("Charlie");
+    });
 
-  it("reverseOrder flips direction", async () => {
-    class Post extends Base {
-      static {
-        this.attribute("name", "string");
-        this.attribute("price", "integer");
+    it("reverseOrder flips direction", async () => {
+      class Post extends Base {
+        static {
+          this.attribute("name", "string");
+          this.attribute("price", "integer");
+        }
       }
-    }
-    await Post.create({ name: "Charlie", price: 30 });
-    await Post.create({ name: "Alice", price: 10 });
-    await Post.create({ name: "Bob", price: 20 });
-    const result = await Post.all().order({ price: "asc" }).reverseOrder().toArray();
-    expect(result[0].price).toBe(30);
-  });
+      await Post.create({ name: "Charlie", price: 30 });
+      await Post.create({ name: "Alice", price: 10 });
+      await Post.create({ name: "Bob", price: 20 });
+      const result = await Post.all().order({ price: "asc" }).reverseOrder().toArray();
+      expect(result[0].price).toBe(30);
+    });
 
-  it("multiple order columns", () => {
-    class Post extends Base {
-      static {
-        this.attribute("name", "string");
-        this.attribute("price", "integer");
+    it("multiple order columns", () => {
+      class Post extends Base {
+        static {
+          this.attribute("name", "string");
+          this.attribute("price", "integer");
+        }
       }
-    }
-    const sql = Post.all().order({ name: "asc" }, { price: "desc" }).toSql();
-    expect(sql).toContain("name");
-    expect(sql).toContain("price");
+      const sql = Post.all().order({ name: "asc" }, { price: "desc" }).toSql();
+      expect(sql).toContain("name");
+      expect(sql).toContain("price");
+    });
   });
 });

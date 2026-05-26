@@ -96,9 +96,10 @@ function analyzeFreshAdapterHelper(sf: SourceFile): FreshAdapterInfo | null {
       const vs = stmt.asKindOrThrow(SyntaxKind.VariableStatement);
       for (const decl of vs.getDeclarations()) {
         const init = decl.getInitializer();
-        if (init && Node.isArrowFunction(init)) {
+        if (init && Node.isArrowFunction(init) && /fresh.*adapter/i.test(decl.getName())) {
           funcName = decl.getName();
           funcBody = init.getBody();
+          break;
         }
       }
     }

@@ -66,7 +66,6 @@ export class InsertAll {
     inserts: Record<string, unknown>[],
     options: InsertAllOptions = {},
   ): Promise<number> {
-    const model = (relation as any)._modelClass as ModelClass;
     const ia = new InsertAll(relation, inserts, options);
     return ia.execute();
   }

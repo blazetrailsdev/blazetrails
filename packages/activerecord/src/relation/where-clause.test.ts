@@ -112,11 +112,28 @@ describe("ActiveRecord::Relation", () => {
         t.get("id").gteq(2),
         t.get("id").lt(1),
         t.get("id").lteq(2),
+        t.get("id").isNotDistinctFrom(1),
+        t.get("id").isDistinctFrom(2),
         new Nodes.SqlLiteral("sql literal"),
       ]);
-      const inverted = original.invert();
-      expect(inverted.predicates.length).toBe(1);
-      expect(inverted.predicates[0]).toBeInstanceOf(Nodes.Not);
+      const expected = new WhereClause([
+        new Nodes.Not(
+          new Nodes.And([
+            t.get("id").in([1, 2, 3]),
+            t.get("id").notIn([1, 2, 3]),
+            t.get("id").eq(1),
+            t.get("id").notEq(2),
+            t.get("id").gt(1),
+            t.get("id").gteq(2),
+            t.get("id").lt(1),
+            t.get("id").lteq(2),
+            t.get("id").isNotDistinctFrom(1),
+            t.get("id").isDistinctFrom(2),
+            new Nodes.Grouping(new Nodes.SqlLiteral("sql literal")),
+          ]),
+        ),
+      ]);
+      expect(eql(original.invert(), expected)).toBe(true);
     });
 
     it("except removes binary predicates referencing a given column", () => {
@@ -136,14 +153,23 @@ describe("ActiveRecord::Relation", () => {
         { length: 10 },
         (_, i) => new WhereClause([t.get(`id${i}`).eq(bindParam(i))]),
       );
-      const wc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].reduce((acc, i) => {
-        if (i === 2 || i === 6) return concat(acc, wcs[i].or(wcs[i + 1]));
-        if (i === 3 || i === 7) return acc;
-        return concat(acc, wcs[i]);
-      }, new WhereClause([]));
+      // wcs[0] + wcs[1] + wcs[2].or(wcs[3]) + wcs[4] + wcs[5] + wcs[6].or(wcs[7]) + wcs[8] + wcs[9]
+      const wc = [
+        wcs[1],
+        wcs[2].or(wcs[3]),
+        wcs[4],
+        wcs[5],
+        wcs[6].or(wcs[7]),
+        wcs[8],
+        wcs[9],
+      ].reduce((acc, c) => concat(acc, c), wcs[0]);
+      // wcs[0] + wcs[2].or(wcs[3]) + wcs[5] + wcs[6].or(wcs[7]) + wcs[9]
+      const expected = [wcs[2].or(wcs[3]), wcs[5], wcs[6].or(wcs[7]), wcs[9]].reduce(
+        (acc, c) => concat(acc, c),
+        wcs[0],
+      );
       const actual = wc.except("id1", "id2", "id4", "id7", "id8");
-      // id0, the or(wcs[2],wcs[3]) group, id5, the or(wcs[6],wcs[7]) group, id9 remain
-      expect(actual.predicates.length).toBeGreaterThan(0);
+      expect(eql(actual, expected)).toBe(true);
     });
 
     it("ast groups its predicates with AND", () => {
@@ -180,9 +206,10 @@ describe("ActiveRecord::Relation", () => {
       const t = table();
       const whereClause = new WhereClause([t.get("id").eq(bindParam(1))]);
       const otherClause = new WhereClause([t.get("name").eq(bindParam("Sean"))]);
-      const result = whereClause.or(otherClause);
-      expect(result.predicates.length).toBe(1);
-      expect(result.predicates[0]).toBeInstanceOf(Nodes.Grouping);
+      const expectedAst = new Nodes.Grouping(
+        new Nodes.Or([t.get("id").eq(bindParam(1)), t.get("name").eq(bindParam("Sean"))]),
+      );
+      expect(whereClause.or(otherClause).ast.toSql()).toBe(expectedAst.toSql());
     });
 
     it("or returns an empty where clause when either side is empty", () => {
@@ -202,11 +229,11 @@ describe("ActiveRecord::Relation", () => {
         t.get("id").eq(bindParam(1)),
         t.get("hair_color").eq(bindParam("black")),
       ]);
-      const result = a.or(b);
-      // common predicate (id=1) comes first, then the OR grouping
-      expect(result.predicates.length).toBe(2);
-      expect(result.predicates[0].eql(t.get("id").eq(bindParam(1)))).toBe(true);
-      expect(result.predicates[1]).toBeInstanceOf(Nodes.Grouping);
+      const common = new WhereClause([t.get("id").eq(bindParam(1))]);
+      const orClause = new WhereClause([t.get("name").eq(bindParam("Sean"))]).or(
+        new WhereClause([t.get("hair_color").eq(bindParam("black"))]),
+      );
+      expect(eql(a.or(b), concat(common, orClause))).toBe(true);
     });
 
     it("or can detect identical or as being a common condition", () => {
@@ -216,9 +243,10 @@ describe("ActiveRecord::Relation", () => {
       );
       const a = concat(commonOr, new WhereClause([t.get("id").eq(bindParam(1))]));
       const b = concat(commonOr, new WhereClause([t.get("foo").eq(bindParam("bar"))]));
-      const result = a.or(b);
-      // common (the shared OR) + new OR(id=1, foo=bar)
-      expect(result.predicates.length).toBe(2);
+      const newOr = new WhereClause([t.get("id").eq(bindParam(1))]).or(
+        new WhereClause([t.get("foo").eq(bindParam("bar"))]),
+      );
+      expect(eql(a.or(b), concat(commonOr, newOr))).toBe(true);
     });
 
     it("or will use only common conditions if one side only has common conditions", () => {

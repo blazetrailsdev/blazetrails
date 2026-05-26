@@ -29,7 +29,7 @@ beforeAll(async () => {
 
 describe("SerializationTest", () => {
   it("include root in json is false by default", () => {
-    expect((Contact as any).includeRootInJson).toBeFalsy();
+    expect((Base as any).includeRootInJson).toBeFalsy();
   });
 
   it("serialize should be reversible", async () => {

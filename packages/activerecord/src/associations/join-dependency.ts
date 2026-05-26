@@ -136,6 +136,7 @@ export class JoinDependency {
     this._buildBaseAliases();
   }
 
+  /** @internal */
   get joinRoot(): JoinBase {
     return this._joinRoot;
   }
@@ -356,7 +357,7 @@ export class JoinDependency {
 
   get reflections(): any[] {
     const result: any[] = [];
-    this._joinRoot.eachChildren((part) => {
+    this._joinRoot.eachChildren((_parent, part) => {
       const node = part._joinNode;
       if (!node) return;
       const parentModel = node.parentPath
@@ -378,11 +379,11 @@ export class JoinDependency {
     _references?: string[],
   ): Nodes.Join[] {
     const joins: Nodes.Join[] = [];
-    this._joinRoot.eachChildren((part) => {
+    this._joinRoot.eachChildren((_parent, part) => {
       if (part._joinNode?.arelJoin) joins.push(part._joinNode.arelJoin);
     });
     for (const oj of joinsToAdd) {
-      oj._joinRoot.eachChildren((part) => {
+      oj._joinRoot.eachChildren((_parent, part) => {
         if (part._joinNode?.arelJoin) joins.push(part._joinNode.arelJoin);
       });
     }

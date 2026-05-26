@@ -18,7 +18,8 @@ export class JoinBase extends JoinPart {
     return this.baseKlass.tableName;
   }
 
-  isMatch(otherKlass: typeof Base): boolean {
-    return this.baseKlass === otherKlass;
+  isMatch(other: JoinPart): boolean {
+    if (this === other) return true;
+    return super.isMatch(other) && this.baseKlass === other.baseKlass;
   }
 }

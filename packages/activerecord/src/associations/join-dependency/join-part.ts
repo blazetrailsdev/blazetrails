@@ -22,8 +22,8 @@ export abstract class JoinPart {
 
   abstract get table(): string;
 
-  isMatch(otherKlass: typeof Base): boolean {
-    return this.baseKlass === otherKlass;
+  isMatch(other: JoinPart): boolean {
+    return this.constructor === other.constructor;
   }
 
   each(fn: (part: JoinPart) => void): void {
@@ -33,9 +33,9 @@ export abstract class JoinPart {
     }
   }
 
-  eachChildren(fn: (part: JoinPart) => void): void {
+  eachChildren(fn: (parent: JoinPart, child: JoinPart) => void): void {
     for (const child of this.children) {
-      fn(child);
+      fn(this, child);
       child.eachChildren(fn);
     }
   }

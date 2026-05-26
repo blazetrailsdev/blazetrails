@@ -81,7 +81,7 @@ describe("JoinDependency nested hydration", () => {
     expect(a1).toBe(a2);
   });
 
-  it("readonly flag propagates to nested records when reflection scope marks readonly", () => {
+  it("nested records are not readonly by default when no reflection scope marks readonly", () => {
     const jd = new JoinDependency(Post);
     jd.addNestedAssociation("comments");
     const rows = [{ t0_r0: 1, t0_r1: "Post A", t1_r0: 10, t1_r1: "C1", t1_r2: 1, t1_r3: null }];

@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { buildViews } from "./build-views.js";
 import { runCli } from "./cli.js";
+import { diagnose } from "./plugins/tse-diagnose.js";
 
 function mkScratch(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "trails-tsc-build-"));
@@ -149,6 +150,54 @@ describe("buildViews", () => {
     );
     expect(aug).toContain('"users/user"');
     expect(aug).toMatch(/\(NoExtraKeys<\{[^}]+\}>\)\s*&\s*\(NoExtraKeys<\{[^}]+\}>\)/);
+  });
+
+  it("multi-format intersection augmentation satisfies tsc semantic check", () => {
+    const cwd = mkScratch();
+    write(
+      cwd,
+      "app/views/users/_user.html.tse",
+      "<%# locals: (name:, role: 'guest') %><%= name %>",
+    );
+    write(cwd, "app/views/users/_user.json.tse", "<%# locals: (name:, email:) %><%= name %>");
+
+    buildViews({ cwd });
+
+    const aug = fs.readFileSync(
+      path.join(cwd, ".trails/template-registry-augmentation.d.ts"),
+      "utf8",
+    );
+    const stub = [
+      "export type NoExtraKeys<T> = T & { [K in Exclude<string, keyof T>]?: never };",
+      "export type TemplateLocals<T> = T;",
+      // Inline the augmentation's interface body so the stub declares the merged type
+      ...aug.match(/["']users\/user["']:\s*.+/g)!.map((line) => line.replace(/^\s*/, "")),
+    ];
+    const registryStub = [
+      `export interface TemplateRegistry { ${stub.slice(2).join(" ")} }`,
+      stub[0],
+      stub[1],
+    ].join("\n");
+
+    const goodProbe = [
+      `import type { TemplateRegistry } from "@blazetrails/actionview";`,
+      'const fn = (r: TemplateRegistry["users/user"]) => r;',
+      'fn({ name: "x", role: "y", email: "z" } as any);',
+    ].join("\n");
+    expect(diagnose(goodProbe, { customStub: registryStub })).toEqual([]);
+
+    const badProbe = [
+      `import type { TemplateRegistry } from "@blazetrails/actionview";`,
+      "type HasName = { name: unknown };",
+      "type HasEmail = { email: unknown };",
+      'type R = TemplateRegistry["users/user"];',
+      "type _CheckName = R extends HasName ? true : false;",
+      "type _CheckEmail = R extends HasEmail ? true : false;",
+      "const a: _CheckName = true;",
+      "const b: _CheckEmail = true;",
+      "void a; void b;",
+    ].join("\n");
+    expect(diagnose(badProbe, { customStub: registryStub })).toEqual([]);
   });
 
   it("emits an empty augmentation when no partials have a locals directive", () => {

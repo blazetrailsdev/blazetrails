@@ -13,7 +13,8 @@ import type { JoinNode } from "../join-dependency.js";
 export abstract class JoinPart {
   readonly baseKlass: typeof Base;
   readonly children: JoinPart[] = [];
-  _joinNode: JoinNode | null = null;
+  /** @internal */
+  readonly _joinNode: JoinNode | null = null;
 
   constructor(baseKlass: typeof Base, children?: JoinPart[]) {
     this.baseKlass = baseKlass;

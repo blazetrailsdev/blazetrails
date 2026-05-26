@@ -123,8 +123,7 @@ export class JoinDependency {
   private _aliases: AliasMap[] = [];
   private _usedTableNames: Set<string>;
   private _arelTablesByIndex: Map<number, Table> = new Map();
-  /** @internal */
-  readonly _joinRoot: JoinBase;
+  private readonly _joinRoot: JoinBase;
   private _treeNodesByPath: Map<string, JoinPart> = new Map();
 
   constructor(baseModel: typeof Base) {
@@ -1030,12 +1029,14 @@ function rebindTableReferences(
 }
 
 class JoinTreeNode extends JoinPart {
+  override readonly _joinNode: JoinNode;
+
   constructor(baseKlass: typeof Base, joinNode: JoinNode) {
     super(baseKlass);
     this._joinNode = joinNode;
   }
 
   get table(): string {
-    return this._joinNode!.effectiveSqlName;
+    return this._joinNode.effectiveSqlName;
   }
 }

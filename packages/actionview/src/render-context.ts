@@ -27,9 +27,8 @@ type RenderCollectionOptions<P extends string> = {
   collection: readonly unknown[];
   as?: string;
   spacerTemplate?: string;
-} & (P extends keyof TemplateRegistry
-  ? { locals?: Partial<TemplateLocals<TemplateRegistry[P]>> & Record<string, unknown> }
-  : { locals?: Record<string, unknown> });
+  locals?: Record<string, unknown>;
+};
 
 /**
  * Per-render execution context passed to compiled `.tse` templates.
@@ -80,7 +79,10 @@ export interface TseRenderContext {
    * Render a partial. When `partial` is a literal key known to
    * `TemplateRegistry`, locals are typed (and required when the registered
    * shape has required properties). A plain `string` falls back to
-   * `Record<string, unknown>`. `rails partial_renderer.rb`.
+   * `Record<string, unknown>`. Collection renders (`collection:` present)
+   * make locals optional because Rails auto-injects the item, counter, and
+   * iteration locals; `spacerTemplate` is only accepted on collection
+   * renders. `rails partial_renderer.rb`.
    *
    * Static form: `render({ partial: "users/user", locals: { user } })`
    * Collection form: `render({ partial: "users/user", collection: users, as: "user" })`

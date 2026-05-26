@@ -225,12 +225,13 @@ function emitDeclarations(shimPaths: readonly string[]): void {
     module: ts.ModuleKind.ESNext,
     target: ts.ScriptTarget.ESNext,
   };
-  const result = ts.createProgram([...shimPaths], opts, ts.createCompilerHost(opts, true)).emit();
-  if (result.emitSkipped) {
-    const msgs = result.diagnostics.map((d) =>
-      ts.flattenDiagnosticMessageText(d.messageText, "\n"),
-    );
-    throw new Error(`declaration emit failed:\n${msgs.join("\n")}`);
+  const host = ts.createCompilerHost(opts, true);
+  const program = ts.createProgram([...shimPaths], opts, host);
+  const emitResult = program.emit();
+  if (emitResult.emitSkipped) {
+    const diagnostics = [...ts.getPreEmitDiagnostics(program), ...emitResult.diagnostics];
+    const formatted = ts.formatDiagnostics(ts.sortAndDeduplicateDiagnostics(diagnostics), host);
+    throw new Error(`declaration emit failed:\n${formatted}`);
   }
 }
 

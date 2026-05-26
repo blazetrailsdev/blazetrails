@@ -17,7 +17,7 @@
 
 ## Post-merge follow-ups (audited 2026-05-26)
 
-Completed items from the original PR 1–7b sequence.
+Items surfaced during the original PR 1–7b sequence. Checked items are shipped; unchecked items are open follow-ups folded into the F-series PRs below.
 
 - [x] ~200 LOC: `walk()` deduplication — shipped in #2405.
 - [ ] ~100 LOC: eliminate `_nodes` array — replace flat array with tree traversal once PR 3 tree structure is fully in use.

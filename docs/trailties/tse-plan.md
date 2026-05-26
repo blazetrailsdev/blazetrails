@@ -1018,19 +1018,19 @@ have Y" should match behavior, not just signature.
 
 ### 3.1 Handler protocol
 
-| Rails                                                          | TSE                                                                                                                                   |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `Template::Handlers.register_template_handler(:tse, TSE)`      | `TemplateHandlers.registerTemplateHandler("tse", new TseHandler())` ([existing API](../packages/actionview/src/template/handlers.ts)) |
-| `Template::Handlers::ERB#call(template, source) → String`      | `Tse.call(template, source): { code: string, sourceMap: RawSourceMap }`                                                               |
-| `Template::Handlers::ERB#supports_streaming? → true`           | `Tse.supportsStreaming = true`                                                                                                        |
-| `Template::Handlers::ERB#handles_encoding? → true`             | `Tse.handlesEncoding = true` (TS is UTF-8; mostly cosmetic)                                                                           |
-| `Template::Handlers::ERB#translate_location(spot, bt, source)` | `Tse.translateLocation(spot, frame, source)` — uses sourceMap consumer                                                                |
-| `Template::Handlers::ERB.erb_implementation` (class attr)      | `Tse.emitter` (replaceable)                                                                                                           |
-| `Template::Handlers::ERB.erb_trim_mode = "-"`                  | `Tse.trimMode = "-"` (only `-` supported, matches Rails)                                                                              |
-| `Template::Handlers::ERB.escape_ignore_list = ["text/plain"]`  | `Tse.escapeIgnoreList = ["text/plain"]`                                                                                               |
-| `Template::Handlers::ERB.strip_trailing_newlines = false`      | `Tse.stripTrailingNewlines = false`                                                                                                   |
-| `ActionView::Base.annotate_rendered_view_with_filenames`       | `ActionView.Base.annotateRenderedViewWithFilenames`                                                                                   |
-| `default_format` (e.g. `:html`)                                | `Tse.defaultFormat = "html"`                                                                                                          |
+| Rails                                                          | TSE                                                                                                                                      |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `Template::Handlers.register_template_handler(:tse, TSE)`      | `TemplateHandlers.registerTemplateHandler("tse", new TseHandler())` ([existing API](../../packages/actionview/src/template/handlers.ts)) |
+| `Template::Handlers::ERB#call(template, source) → String`      | `Tse.call(template, source): { code: string, sourceMap: RawSourceMap }`                                                                  |
+| `Template::Handlers::ERB#supports_streaming? → true`           | `Tse.supportsStreaming = true`                                                                                                           |
+| `Template::Handlers::ERB#handles_encoding? → true`             | `Tse.handlesEncoding = true` (TS is UTF-8; mostly cosmetic)                                                                              |
+| `Template::Handlers::ERB#translate_location(spot, bt, source)` | `Tse.translateLocation(spot, frame, source)` — uses sourceMap consumer                                                                   |
+| `Template::Handlers::ERB.erb_implementation` (class attr)      | `Tse.emitter` (replaceable)                                                                                                              |
+| `Template::Handlers::ERB.erb_trim_mode = "-"`                  | `Tse.trimMode = "-"` (only `-` supported, matches Rails)                                                                                 |
+| `Template::Handlers::ERB.escape_ignore_list = ["text/plain"]`  | `Tse.escapeIgnoreList = ["text/plain"]`                                                                                                  |
+| `Template::Handlers::ERB.strip_trailing_newlines = false`      | `Tse.stripTrailingNewlines = false`                                                                                                      |
+| `ActionView::Base.annotate_rendered_view_with_filenames`       | `ActionView.Base.annotateRenderedViewWithFilenames`                                                                                      |
+| `default_format` (e.g. `:html`)                                | `Tse.defaultFormat = "html"`                                                                                                             |
 
 Difference: our `call` returns `{code, sourceMap}` instead of a bare
 string. Rails embeds source-map info as Ruby comments + relies on
@@ -1215,7 +1215,7 @@ Collected from post-merge findings across all §5 PRs. Grouped by area.
 
 ---
 
-- [ ] ~30 LOC (#2407): `as` option on collection partial render should be a generic literal type narrowed to `CollectionAutoKeys` so mismatches are caught at compile time. Currently typed as `string`.
+- [x] ~30 LOC (#2407): `as` option on collection partial render narrowed to generic literal `CollectionAutoKeys` — shipped in #2412.
 - [x] ~4 LOC (#2367): `output-safety-helper.ts` `raw()` called `OutputBuffer.toString()` — functionally correct but obscured intent vs Rails' `stringish.to_s.html_safe`. Replaced with `htmlSafe(buf.toStr())` for clarity (#2416).
 
 ## 6. Resolved decisions (2026-05-21)

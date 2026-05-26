@@ -36,7 +36,10 @@ export interface InsertAllOptions {
 
 export class InsertAll {
   readonly model: ModelClass;
-  readonly connection: ModelClass["adapter"];
+
+  get connection(): ModelClass["adapter"] {
+    return this.model.adapter;
+  }
   readonly inserts: Record<string, unknown>[];
   readonly keys: Set<string>;
   /**
@@ -64,18 +67,16 @@ export class InsertAll {
     options: InsertAllOptions = {},
   ): Promise<number> {
     const model = (relation as any)._modelClass as ModelClass;
-    const ia = new InsertAll(relation, model.adapter, inserts, options);
+    const ia = new InsertAll(relation, inserts, options);
     return ia.execute();
   }
 
   constructor(
     relation: Relation<any>,
-    connection: ModelClass["adapter"],
     inserts: Record<string, unknown>[],
     options: InsertAllOptions = {},
   ) {
     this.model = (relation as any)._modelClass as ModelClass;
-    this.connection = connection;
     this.inserts = inserts.map((r) => ({ ...r }));
     this.updateOnly = options.updateOnly;
     this.uniqueBy = options.uniqueBy;
@@ -95,8 +96,8 @@ export class InsertAll {
           : options.returning;
     } else {
       const supportsReturning =
-        typeof (connection as any).supportsInsertReturning === "function"
-          ? (connection as any).supportsInsertReturning()
+        typeof (this.connection as any).supportsInsertReturning === "function"
+          ? (this.connection as any).supportsInsertReturning()
           : false;
       this.returning = supportsReturning ? this.primaryKeys() : false;
     }

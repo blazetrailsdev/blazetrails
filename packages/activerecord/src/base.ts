@@ -43,7 +43,6 @@ import {
   DeleteManager,
   Nodes,
   sql as arelSql,
-  setToSqlVisitor,
 } from "@blazetrails/arel";
 import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import type { Relation } from "./relation.js";
@@ -67,12 +66,7 @@ import {
   isBaseClass as _isBaseClass,
   ensureProperType as _ensureProperType,
 } from "./inheritance.js";
-import {
-  NotImplementedError,
-  RecordNotFound,
-  StaleObjectError,
-  ConnectionNotDefined,
-} from "./errors.js";
+import { NotImplementedError, RecordNotFound, StaleObjectError } from "./errors.js";
 import {
   AutosaveAssociation,
   flushPendingReplaces,
@@ -370,20 +364,6 @@ export function _setRelationCtor(ctor: new (modelClass: typeof Base) => any): vo
 /** @internal Called by relation.ts to register the scope proxy wrapper. */
 export function _setScopeProxyWrapper(wrapper: (rel: any) => any): void {
   _wrapWithScopeProxy = wrapper;
-}
-
-// Mirrors Rails' AbstractAdapter#arel_visitor — routes Node#toSql() through the
-// dialect-specific visitor (e.g. SQLite booleans as 1/0, no FOR UPDATE, etc.).
-// This is process-global: the last-assigned adapter's visitor wins, matching
-// Rails' single-connection-per-process assumption. Multi-adapter processes must
-// manage visitor selection themselves.
-function _wireArelVisitor(adapter: DatabaseAdapter): void {
-  const visitor = (adapter as { arelVisitor?: object }).arelVisitor;
-  if (visitor) {
-    setToSqlVisitor(
-      (visitor as object).constructor as new () => { compile(node: Nodes.Node): string },
-    );
-  }
 }
 
 /**
@@ -988,7 +968,6 @@ export class Base extends Model {
       return;
     }
     this._adapter = adapter;
-    _wireArelVisitor(adapter);
     if (this !== Base && this.name) Base._modelsByName.set(this.name, this as typeof Base);
 
     // Full schema reset on adapter swap: drops schema-sourced defs and
@@ -1054,31 +1033,9 @@ export class Base extends Model {
     // Fast path: directly assigned adapter (used by tests and simple setups)
     if (this._adapter) return this._adapter;
 
-    // Check for a model-specific pool first
-    const modelPool = this._connectionHandler.retrieveConnectionPool(this.name);
-    if (modelPool) {
-      this._adapter = modelPool.checkout();
-      _wireArelVisitor(this._adapter);
-      return this._adapter;
-    }
-
-    // Fall back to the connection class's pool — cache on the connection class
-    // so all its subclasses share one connection
-    const connectionClass = this.connectionClassForSelf();
-    const connPool = this._connectionHandler.retrieveConnectionPool(connectionClass.name);
-    if (connPool) {
-      if (!connectionClass._adapter) {
-        connectionClass._adapter = connPool.checkout();
-        _wireArelVisitor(connectionClass._adapter);
-      }
-      return connectionClass._adapter;
-    }
-
-    throw new ConnectionNotDefined(
-      `No connection pool for '${this.name}' found. ` +
-        `Call await ${this.name}.establishConnection() or set ${this.name}.adapter directly`,
-      { connectionName: this.name },
-    );
+    // Pool path — delegate to ConnectionHandling.connection which uses the
+    // pool's lease mechanism instead of caching on the model class.
+    return ConnectionHandling.connection.call(this);
   }
 
   static get connectionHandler(): ConnectionHandler {

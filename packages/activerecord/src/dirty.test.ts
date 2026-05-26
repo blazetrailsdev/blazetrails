@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import { Base } from "./index.js";
 import { TimeWithZone, getZone } from "@blazetrails/activesupport";
 import { Temporal } from "@blazetrails/activesupport/temporal";
@@ -980,14 +980,6 @@ describe("MutableAttributeAfterSave", () => {
   useHandlerTransactionalFixtures();
   beforeAll(async () => {
     await defineSchema({ json_models: { payload: "string" } });
-  });
-
-  beforeAll(async () => {
-    vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
-  });
-
-  afterAll(async () => {
-    vi.unstubAllEnvs();
   });
 
   it("mutable attribute is not dirty after changesApplied resets baseline", async () => {

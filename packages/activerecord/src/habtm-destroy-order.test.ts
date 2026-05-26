@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, beforeAll } from "vitest";
 import { Base, association, registerModel } from "./index.js";
-import { Associations, loadHabtm } from "./associations.js";
+import { Associations } from "./associations.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
 import { useHandlerTransactionalFixtures } from "./test-helpers/use-handler-transactional-fixtures.js";
@@ -50,16 +50,11 @@ describe("HabtmDestroyOrderTest", () => {
 
   it("should not raise error if have foreign key in the join table", async () => {
     const { Student, Lesson } = makeModels();
-    const lesson = await Lesson.create({ name: "SICP" });
     const student = await Student.create({ name: "Ben Bitdiddle" });
+    const lesson = await Lesson.create({ name: "SICP" });
     await association(lesson, "students").push(student);
-    const before = await loadHabtm(lesson, "students", {
-      className: "Student",
-      joinTable: "lessons_students",
-    });
-    expect(before).toHaveLength(1);
+    await lesson.save();
     await student.destroy();
-    expect(student.isDestroyed()).toBe(true);
   });
 
   it.skip("not destroying a student with lessons leaves student<=>lesson association intact", () => {

@@ -124,14 +124,16 @@ export class JoinDependency {
   private _usedTableNames: Set<string>;
   private _arelTablesByIndex: Map<number, Table> = new Map();
   private readonly _joinRoot: JoinBase;
+  private readonly _joinType: typeof Nodes.InnerJoin | typeof Nodes.OuterJoin;
   private _treeNodesByPath: Map<string, JoinPart> = new Map();
 
-  constructor(baseModel: typeof Base) {
+  constructor(baseModel: typeof Base, joinType?: typeof Nodes.InnerJoin | typeof Nodes.OuterJoin) {
     this._baseModel = baseModel;
     this._baseAlias = (baseModel as any).tableName;
     this._usedTableNames = new Set([this._baseAlias]);
     this._arelTablesByIndex.set(this._baseTableIndex, (baseModel as any).arelTable);
     this._joinRoot = new JoinBase(baseModel);
+    this._joinType = joinType ?? Nodes.OuterJoin;
     this._buildBaseAliases();
   }
 
@@ -370,19 +372,41 @@ export class JoinDependency {
    * @todo `_aliasTracker` is a stub — needs real `JoinDependency` alias-tracking
    *   (Rails' `AliasTracker`) to deconflict table aliases in complex multi-join queries.
    */
+  /**
+   * Mirrors: ActiveRecord::Associations::JoinDependency#join_type
+   *
+   * The default join type used when building this dependency's constraints.
+   * OuterJoin for eager_load, InnerJoin for joins.
+   *
+   * @internal
+   */
+  get joinType(): typeof Nodes.InnerJoin | typeof Nodes.OuterJoin {
+    return this._joinType;
+  }
+
   joinConstraints(
     joinsToAdd: JoinDependency[],
     _aliasTracker?: any,
     _references?: string[],
   ): Nodes.Join[] {
-    const joins: Nodes.Join[] = [];
-    this._joinRoot.eachChildren((_parent, part) => {
-      if (part._joinNode?.arelJoin) joins.push(part._joinNode.arelJoin);
-    });
+    const joins = this.makeJoinConstraints(this._joinRoot, this._joinType);
+
     for (const oj of joinsToAdd) {
-      joins.push(...this.walk(this._joinRoot, oj._joinRoot, Nodes.OuterJoin));
+      if (this._joinRoot.isMatch(oj._joinRoot)) {
+        joins.push(...this.walk(this._joinRoot, oj._joinRoot, oj._joinType));
+      } else {
+        joins.push(...this.makeJoinConstraints(oj._joinRoot, oj._joinType));
+      }
     }
     return joins;
+  }
+
+  /** @internal */
+  private makeJoinConstraints(
+    joinRoot: JoinPart,
+    joinType: typeof Nodes.InnerJoin | typeof Nodes.OuterJoin,
+  ): Nodes.Join[] {
+    return joinRoot.children.flatMap((child) => this.makeConstraints(joinRoot, child, joinType));
   }
 
   /** @internal */
@@ -395,7 +419,7 @@ export class JoinDependency {
     const missing: JoinPart[] = [];
 
     for (const rc of right.children) {
-      const lc = left.children.find((l) => l.isMatch(rc));
+      const lc = left.children.find((l) => rc.isMatch(l));
       if (lc) {
         intersection.push([lc, rc]);
       } else {
@@ -403,20 +427,14 @@ export class JoinDependency {
       }
     }
 
-    const joins: Nodes.Join[] = [];
-
-    for (const [l, r] of intersection) {
+    const joins = intersection.flatMap(([l, r]) => {
       if (r instanceof JoinTreeNode) {
         (r as JoinTreeNode).table = l.table;
       }
-      joins.push(...this.walk(l, r, joinType));
-    }
+      return this.walk(l, r, joinType);
+    });
 
-    for (const n of missing) {
-      joins.push(...this.makeConstraints(left, n, joinType));
-    }
-
-    return joins;
+    return joins.concat(missing.flatMap((n) => this.makeConstraints(left, n, joinType)));
   }
 
   /** @internal */
@@ -430,10 +448,7 @@ export class JoinDependency {
     if (arelJoin) {
       joins.push(arelJoin);
     }
-    for (const grandchild of child.children) {
-      joins.push(...this.makeConstraints(child, grandchild, joinType));
-    }
-    return joins;
+    return joins.concat(child.children.flatMap((c) => this.makeConstraints(child, c, joinType)));
   }
 
   instantiate(resultSet: Record<string, unknown>[], strictLoadingValue?: boolean): any[] {

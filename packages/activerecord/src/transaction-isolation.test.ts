@@ -31,10 +31,10 @@ describe("TransactionIsolationUnsupportedTest", () => {
   });
 });
 
-// Rails: TransactionIsolationTest — guarded by supports_transaction_isolation? && !SQLite3.
-// The two tests below (isolation-when-joining + nested-transaction) are
-// adapter-agnostic: the framework-level isolation check fires before any DB
-// call, so any adapter is sufficient.
+// Rails: TransactionIsolationTest (joining/nested subtests).
+// Rails guards the full class with supports_transaction_isolation? && !SQLite3,
+// but these two subtests exercise a framework-level check that fires before any
+// DB call, so they pass on every adapter and provide broader coverage here.
 describe("TransactionIsolationTest", () => {
   setupHandlerSuite();
   beforeAll(async () => {
@@ -96,9 +96,12 @@ describeIfPg("TransactionIsolationTest", () => {
   });
 
   afterAll(async () => {
-    await Tag.destroyAll();
-    await Tag.removeConnection();
-    await Tag2.removeConnection();
+    try {
+      await Tag.destroyAll();
+    } finally {
+      Tag.removeConnection();
+      Tag2.removeConnection();
+    }
   });
 
   beforeEach(async () => {

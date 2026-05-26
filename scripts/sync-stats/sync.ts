@@ -61,7 +61,6 @@ function checkRateLimitBudget() {
       }).trim();
     } catch (err) {
       console.warn(`  [budget check] probe failed: ${err instanceof Error ? err.message : err}`);
-      lastGhCallAt = Date.now();
       return;
     } finally {
       lastGhCallAt = Date.now();

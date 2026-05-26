@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Wrapper for cron-triggered stats sync.
 # Runs --latest, retries once on rate-limit failure, emails on failure.
 #
@@ -64,6 +64,8 @@ if [ "$exit_code" -ne 0 ] && grep -qi "rate limit\|secondary rate\|abuse detecti
 Last 30 lines:
 $(tail -30 "$tmplog")"
     exit_code=$retry_exit
+  else
+    exit_code=0
   fi
 elif [ "$exit_code" -ne 0 ]; then
   send_alert "[stats-sync] failed (exit $exit_code)" \

@@ -9,6 +9,7 @@ import { MultiRange, Base } from "../../index.js";
 import { SchemaDumper } from "../../schema-dumper.js";
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { TimeWithZone, TimeZone, setZone, resetZone } from "@blazetrails/activesupport";
+import { defineSchema } from "../../test-helpers/define-schema.js";
 import { setupHandlerSuite } from "../../test-helpers/setup-handler-suite.js";
 
 beforeAll(() => {
@@ -30,6 +31,10 @@ const toFloat = (s: string) => parseFloat(s);
 const toBigInt = (s: string) => BigInt(s);
 
 setupHandlerSuite();
+
+beforeAll(async () => {
+  await defineSchema({});
+});
 
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;

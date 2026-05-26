@@ -193,13 +193,13 @@ function transform(
     details.push("replaced freshAdapter() with Base.connection cast");
   }
 
-  // 3) Remove `adapter.close()` calls
+  // 3) Remove `.close()` calls on any variable rewritten to Base.connection
+  //    (both `adapter` and ad-hoc names like `setup`)
   {
     let text = sf.getFullText();
-    // Remove standalone `await adapter.close();` lines
-    text = text.replace(/\s*await adapter\.close\(\);?\s*\n/g, "\n");
+    text = text.replace(/\s*await (?:adapter|setup)\.close\(\);?\s*\n/g, "\n");
     sf.replaceWithText(text);
-    details.push("removed adapter.close() calls");
+    details.push("removed .close() calls");
   }
 
   // 4) Remove `this.adapter = adapter` and `ClassName.adapter = adapter` assignments

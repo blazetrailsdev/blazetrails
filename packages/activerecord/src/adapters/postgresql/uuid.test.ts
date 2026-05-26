@@ -29,14 +29,9 @@ setupHandlerSuite();
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
 
-  beforeAll(async () => {
-    const setup = Base.connection as PostgreSQLAdapter;
-    await setup.exec(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
-    await setup.close();
-  });
-
   beforeEach(async () => {
     adapter = Base.connection as PostgreSQLAdapter;
+    await adapter.exec(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
     await defineSchema({});
     await adapter.exec(`DROP TABLE IF EXISTS uuid_data_type`);
     await adapter.exec(`

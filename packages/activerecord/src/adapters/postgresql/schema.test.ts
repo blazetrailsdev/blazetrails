@@ -5,6 +5,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { describeIfPg, pgSupportsNativePartitioning, PostgreSQLAdapter } from "./test-helper.js";
 import { StatementInvalid } from "../../errors.js";
 import { makeThingModels, makeThing5Model, makeSongAlbumModels } from "./schema-ar-models.js";
+import { defineSchema } from "../../test-helpers/define-schema.js";
 import { setupHandlerSuite } from "../../test-helpers/setup-handler-suite.js";
 import { Base } from "../../index.js";
 
@@ -115,6 +116,10 @@ async function teardownSchemas(adapter: PostgreSQLAdapter) {
 }
 
 setupHandlerSuite();
+
+beforeAll(async () => {
+  await defineSchema({});
+});
 
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;

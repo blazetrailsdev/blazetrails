@@ -602,7 +602,11 @@ async function _defineSchemaImpl(
     if (cachedSig === newSig && stillExists) {
       // D-Z: table persists across files. Reset auto-increment so tests
       // that depend on id=1 (e.g. toParam, findEach start/finish) work.
-      await _resetAutoIncrement(adapter, ss, table);
+      // Skip for tables without a default id PK (composite/false).
+      const pk = primaryKeyOf(raw);
+      if (pk === undefined) {
+        await _resetAutoIncrement(adapter, ss, table);
+      }
       continue;
     }
     // D-Z: always drop the specific table before recreating. Together with

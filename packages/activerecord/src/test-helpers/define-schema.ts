@@ -573,26 +573,17 @@ async function _defineSchemaImpl(
     const raw = schema[table];
     const newSig = tableSignature(raw);
     const cachedSig = cache.get(table);
-    let stillExists = known ? known.has(table) : cachedSig !== undefined;
+    const stillExists = known ? known.has(table) : cachedSig !== undefined;
     if (cachedSig === newSig && stillExists) {
       continue;
     }
-    // On PG/MySQL (shared DB), the canonical preload or a prior defineSchema
-    // call may have created this table with a different schema. Always drop
-    // before recreating. On SQLite :memory: (separate DB per adapter),
-    // _canonicalPreloadKey is null — safe to use IF NOT EXISTS.
-    if (_canonicalPreloadKey !== null) {
-      await ss.dropTable(table, { ifExists: true });
-      stillExists = true;
-    } else if (stillExists) {
-      await ss.dropTable(table, { ifExists: true });
-    } else if (cachedSig !== undefined) {
-      cache.delete(table);
-    }
+    // D-Z: always drop the specific conflicting table before recreating.
+    // Eliminates the need for afterAll(dropAllTables) — defineSchema is
+    // self-healing regardless of leftover state from prior files.
+    await ss.dropTable(table, { ifExists: true });
     const columns = columnsOf(raw);
     const pk = primaryKeyOf(raw);
-    const createOpts: { id?: boolean; primaryKey?: string[]; ifNotExists?: boolean } = {};
-    if (!stillExists && cachedSig === undefined) createOpts.ifNotExists = true;
+    const createOpts: { id?: boolean; primaryKey?: string[] } = {};
     if (pk === false) createOpts.id = false;
     else if (Array.isArray(pk)) {
       createOpts.primaryKey = pk;

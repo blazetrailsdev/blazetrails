@@ -91,7 +91,7 @@ describeIfPg("TransactionIsolationTest", () => {
   beforeAll(async () => {
     await Tag.establishConnection(PG_TEST_URL);
     await Tag2.establishConnection(PG_TEST_URL);
-    await defineSchema({ tags: { name: "string" } });
+    await defineSchema(Tag.adapter, { tags: { name: "string" } });
   });
 
   afterAll(async () => {

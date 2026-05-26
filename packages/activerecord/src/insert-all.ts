@@ -72,9 +72,21 @@ export class InsertAll {
 
   constructor(
     relation: Relation<any>,
-    inserts: Record<string, unknown>[],
-    options: InsertAllOptions = {},
+    insertsOrConnection: Record<string, unknown>[] | ModelClass["adapter"],
+    insertsOrOptions?: Record<string, unknown>[] | InsertAllOptions,
+    legacyOptions?: InsertAllOptions,
   ) {
+    // Backwards-compat: old signature was (relation, connection, inserts, options).
+    // Detect by checking if the second arg is an array (new) or an adapter (old).
+    let inserts: Record<string, unknown>[];
+    let options: InsertAllOptions;
+    if (Array.isArray(insertsOrConnection)) {
+      inserts = insertsOrConnection;
+      options = (insertsOrOptions as InsertAllOptions) ?? {};
+    } else {
+      inserts = (insertsOrOptions as Record<string, unknown>[]) ?? [];
+      options = legacyOptions ?? {};
+    }
     this.model = (relation as any)._modelClass as ModelClass;
     this.inserts = inserts.map((r) => ({ ...r }));
     this.updateOnly = options.updateOnly;

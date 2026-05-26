@@ -14,7 +14,7 @@ describe("ActionDispatch::SystemTesting::Server", () => {
       res.end("ok");
     });
     server = new Server();
-    await server.run(app as any);
+    await server.run(app);
     expect(server.port).toBeGreaterThan(0);
     expect(server.host).toBe("127.0.0.1");
   });
@@ -25,7 +25,7 @@ describe("ActionDispatch::SystemTesting::Server", () => {
       res.end("ok");
     });
     server = new Server();
-    await server.run(app as any);
+    await server.run(app);
     await server.stop();
     server = undefined;
   });

@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { SystemTestCase, DEFAULT_HOST } from "./system-test-case.js";
+import { Driver } from "./system-testing/driver.js";
 
 describe("ActionDispatch::SystemTestCase", () => {
   it("has DEFAULT_HOST constant", () => {
@@ -16,10 +17,13 @@ describe("ActionDispatch::SystemTestCase", () => {
     expect(() => SystemTestCase.servedBy({ host: "localhost", port: 3000 })).not.toThrow();
   });
 
-  it("constructor defaults driver to playwright if not set", () => {
+  it("constructor defaults driver to playwright and calls use", () => {
     SystemTestCase.driver = undefined;
+    const useSpy = vi.spyOn(Driver.prototype, "use").mockResolvedValue(undefined);
     new SystemTestCase();
     expect(SystemTestCase.driver).toBeDefined();
     expect(SystemTestCase.driver!.name).toBe("playwright");
+    expect(useSpy).toHaveBeenCalled();
+    useSpy.mockRestore();
   });
 });

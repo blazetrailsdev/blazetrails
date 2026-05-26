@@ -42,6 +42,7 @@ export class Driver {
   }
 
   async use(): Promise<void> {
+    if (this._browser) return;
     if (this.registerable()) await this.register();
     this.setup();
   }
@@ -93,7 +94,6 @@ export class Driver {
   private async registerPlaywright(): Promise<void> {
     const pw = await requirePlaywright();
     const browserType = pw[this._using];
-    const screen = { width: this._screenSize[0], height: this._screenSize[1] };
     const launchOptions: LaunchOptions = { ...this._options } as LaunchOptions;
     this._browser = await browserType.launch(launchOptions);
   }

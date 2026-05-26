@@ -10,7 +10,8 @@ export interface ServerHandle {
 }
 
 export interface ServerApp {
-  listen(port: number, host?: string, callback?: () => void): ServerHandle;
+  listen(port: number, host: string, callback: () => void): ServerHandle;
+  listen(...args: unknown[]): unknown;
 }
 
 export class Server {

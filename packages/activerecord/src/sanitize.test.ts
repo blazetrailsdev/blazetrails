@@ -60,8 +60,10 @@ describe("SanitizeTest", () => {
         this.attribute("title", "string");
       }
     }
-    const sql = Post.sanitizeSqlArray("title LIKE ?", "%hello%");
-    expect(sql).toContain("hello");
+    expect(Post.sanitizeSqlLike("100%")).toBe("100\\%");
+    expect(Post.sanitizeSqlLike("snake_cased_string")).toBe("snake\\_cased\\_string");
+    expect(Post.sanitizeSqlLike("C:\\Programs\\MsPaint")).toBe("C:\\\\Programs\\\\MsPaint");
+    expect(Post.sanitizeSqlLike("normal string 42")).toBe("normal string 42");
   });
 
   it("sanitize sql like with custom escape character", () => {
@@ -70,8 +72,11 @@ describe("SanitizeTest", () => {
         this.attribute("title", "string");
       }
     }
-    const result = Post.sanitizeSqlLike("100%", "!");
-    expect(result).toBe("100!%");
+    expect(Post.sanitizeSqlLike("100%", "!")).toBe("100!%");
+    expect(Post.sanitizeSqlLike("snake_cased_string", "!")).toBe("snake!_cased!_string");
+    expect(Post.sanitizeSqlLike("great!", "!")).toBe("great!!");
+    expect(Post.sanitizeSqlLike("C:\\Programs\\MsPaint", "!")).toBe("C:\\Programs\\MsPaint");
+    expect(Post.sanitizeSqlLike("normal string 42", "!")).toBe("normal string 42");
   });
 
   it("sanitize sql like with wildcard as escape character", () => {
@@ -80,9 +85,8 @@ describe("SanitizeTest", () => {
         this.attribute("title", "string");
       }
     }
-    const result = Post.sanitizeSqlLike("50%_off", "\\");
-    expect(result).toContain("\\%");
-    expect(result).toContain("\\_");
+    expect(Post.sanitizeSqlLike("1_000%", "_")).toBe("1__000_%");
+    expect(Post.sanitizeSqlLike("1_000%", "%")).toBe("1%_000%%");
   });
 
   it("sanitize sql like example use case", () => {
@@ -117,8 +121,11 @@ describe("SanitizeTest", () => {
         this.attribute("title", "string");
       }
     }
-    const sql = Post.sanitizeSqlArray("title = ?", "hello");
-    expect(sql).toContain("'hello'");
+    expect(() => Post.sanitizeSqlArray("")).not.toThrow();
+    expect(() => Post.sanitizeSqlArray("", "extra")).toThrow(/wrong number of bind variables/);
+    expect(() => Post.sanitizeSqlArray("?")).toThrow(/wrong number of bind variables/);
+    expect(() => Post.sanitizeSqlArray("?", 1)).not.toThrow();
+    expect(() => Post.sanitizeSqlArray("?", 1, 1)).toThrow(/wrong number of bind variables/);
   });
 
   it("named bind arity", () => {
@@ -177,9 +184,11 @@ describe("SanitizeTest", () => {
         this.attribute("title", "string");
       }
     }
-    const sql = Post.sanitizeSqlArray("title = ?", "it's");
-    expect(sql).toBeDefined();
-    expect(typeof sql).toBe("string");
+    const a = Base.adapter as unknown as { quote(v: unknown): string };
+    expect(Post.sanitizeSqlArray("name=?", "Bambi")).toBe(`name=${a.quote("Bambi")}`);
+    expect(Post.sanitizeSqlArray("name=?", "Bambi\nand\nThumper")).toBe(
+      `name=${a.quote("Bambi\nand\nThumper")}`,
+    );
   });
 
   it.skip("named bind with postgresql type casts", () => {

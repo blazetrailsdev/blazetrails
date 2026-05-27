@@ -184,7 +184,7 @@ describe("SanitizeTest", () => {
         this.attribute("title", "string");
       }
     }
-    const a = Post.adapter as unknown as { quote(v: unknown): string };
+    const a = Post.adapter;
     expect(Post.sanitizeSqlArray("name=?", "Bambi")).toBe(`name=${a.quote("Bambi")}`);
     expect(Post.sanitizeSqlArray("name=?", "Bambi\nand\nThumper")).toBe(
       `name=${a.quote("Bambi\nand\nThumper")}`,
@@ -266,7 +266,7 @@ describe("sanitizeSql", () => {
     class User extends Base {
       static _tableName = "users";
     }
-    const a = User.adapter as unknown as { quote(v: unknown): string };
+    const a = User.adapter;
     expect(User.sanitizeSqlArray("name = ?", "O'Brien")).toBe(`name = ${a.quote("O'Brien")}`);
   });
 
@@ -282,7 +282,7 @@ describe("sanitizeSql", () => {
     class User extends Base {
       static _tableName = "users";
     }
-    const a = User.adapter as unknown as { quote(v: unknown): string };
+    const a = User.adapter;
     expect(User.sanitizeSql(["name = ? AND age > ?", "Alice", 30])).toBe(
       `name = ${a.quote("Alice")} AND age > ${a.quote(30)}`,
     );
@@ -295,6 +295,16 @@ describe("sanitizeSql", () => {
     expect(() => Post.sanitizeSqlArray("title = ? AND body = ?", "hello")).toThrow(
       /wrong number of bind variables \(1 for 2\)/,
     );
+  });
+
+  it("sanitizeSqlArray raises on extra binds with no placeholders", () => {
+    class Post extends Base {
+      static _tableName = "posts";
+    }
+    expect(() => Post.sanitizeSqlArray("SELECT 1", "extra")).toThrow(
+      /wrong number of bind variables \(1 for 0\)/,
+    );
+    expect(() => Post.sanitizeSqlArray("SELECT 1")).not.toThrow();
   });
 
   it("sanitizeSql dispatches through this.sanitizeSqlArray (subclass override)", () => {
@@ -367,8 +377,7 @@ describe("sanitizeSql", () => {
       class Post extends Base {
         static _tableName = "posts";
       }
-      const qs = (v: unknown) =>
-        (Post.adapter as unknown as { quoteString(s: string): string }).quoteString(String(v));
+      const qs = (v: unknown) => Post.adapter.quoteString(String(v));
       const result = Post.sanitizeSqlArray("name='%s' and group_id='%s'", "foo'bar", 4);
       expect(result).toBe(`name='${qs("foo'bar")}' and group_id='${qs(4)}'`);
     });
@@ -404,7 +413,7 @@ describe("sanitizeSql", () => {
       class Post extends Base {
         static _tableName = "posts";
       }
-      const a = Post.adapter as unknown as { quote(v: unknown): string };
+      const a = Post.adapter;
       const result = Post.sanitizeSqlArray("id = :id AND status = :status", {
         id: 42,
         status: "active",

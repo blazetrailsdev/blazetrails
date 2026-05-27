@@ -71,6 +71,7 @@ function _sanitizeSqlArray(quoter: Quoter, template: string, binds: unknown[]): 
     return statement.replace(/%s/g, () => quoter.quoteString(String(values.shift() ?? "")));
   }
 
+  raiseIfBindArityMismatch(statement, 0, binds.length);
   return statement;
 }
 

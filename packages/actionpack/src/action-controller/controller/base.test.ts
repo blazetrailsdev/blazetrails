@@ -598,6 +598,9 @@ describe("ControllerClassTests", () => {
     expect(SuperAdminController.controllerName()).toBe("super_admin");
     expect(new SuperAdminController().controllerName()).toBe("super_admin");
   });
+
+  // pending: ActionView::RecordIdentifier (dom_id / dom_class) not yet ported.
+  it.skip("no deprecation when action view record identifier is included", () => {});
 });
 
 // ==========================================================================
@@ -629,6 +632,27 @@ describe("ControllerInstanceTests", () => {
     const c = new EmptyController();
     expect(c.inspect()).toMatch(/^#<EmptyController>$/);
   });
+
+  // pending: In Rails, SimpleController defines `def status` which shadows
+  // ActionController::Base's internal `status` method, and action_methods
+  // returns Set["status", "hello"]. In TS, `status` is a getter/setter
+  // accessor on Metal — TypeScript (TS2416/TS2426) disallows overriding an
+  // accessor with a regular method in a subclass, so the Rails pattern is
+  // not representable directly. Tracked as a TS accessor-shadowing gap.
+  it.skip("action methods with inherited shadowed internal method", () => {});
+
+  // pending: JS class naming does not support Object.const_set semantics.
+  // In Ruby, `Object.const_set("ExamplesController", klass)` gives the
+  // anonymous class a name; JS engines derive class names from variable
+  // bindings at parse time, so assigning to globalThis does not rename
+  // an already-created anonymous class.
+  it.skip("temporary anonymous controllers", () => {});
+
+  // pending: default headers are not yet applied inside dispatch().
+  // Rails wires DefaultHeaders via merge_default_headers in
+  // ActionDispatch::Response.create; our dispatch() commits _headers
+  // but does not call applyDefaultHeaders(). Tracked separately.
+  it.skip("response has default headers", () => {});
 });
 
 // ==========================================================================
@@ -653,6 +677,11 @@ describe("PerformActionTest", () => {
     await c.dispatch("arbitrary_action", makeRequest(), makeResponse());
     expect(c.body).toBe("Response for arbitrary_action");
   });
+
+  // pending: did_you_mean suggestions not implemented for ActionNotFound.
+  // Rails delegates to the did_you_mean gem via detailed_message; our
+  // AbstractController::ActionNotFound does not carry spelling suggestions.
+  it.skip("exceptions have suggestions for fix", () => {});
 });
 
 describe("withoutModules", () => {
@@ -671,40 +700,6 @@ describe("withoutModules", () => {
   it("ignores unknown names", () => {
     expect(Base.withoutModules("NotAModule")).toEqual(MODULES);
   });
-});
-
-// ==========================================================================
-// controller/base_test.rb — ControllerInstanceTests (remaining)
-// ==========================================================================
-describe("ControllerInstanceTests (remaining)", () => {
-  // pending: In Rails, SimpleController defines `def status` which shadows
-  // ActionController::Base's internal `status` method, and action_methods
-  // returns Set["status", "hello"]. In TS, `status` is a getter/setter
-  // accessor on Metal — TypeScript (TS2416/TS2426) disallows overriding an
-  // accessor with a regular method in a subclass, so the Rails pattern is
-  // not representable directly. Tracked as a TS accessor-shadowing gap.
-  it.skip("action methods with inherited shadowed internal method", () => {});
-
-  // pending: JS class naming does not support Object.const_set semantics.
-  // In Ruby, `Object.const_set("ExamplesController", klass)` gives the
-  // anonymous class a name; JS engines derive class names from variable
-  // bindings at parse time, so assigning to globalThis does not rename
-  // an already-created anonymous class.
-  it.skip("temporary anonymous controllers", () => {});
-
-  // pending: default headers are not yet applied inside dispatch().
-  // Rails wires DefaultHeaders via merge_default_headers in
-  // ActionDispatch::Response.create; our dispatch() commits _headers
-  // but does not call applyDefaultHeaders(). Tracked separately.
-  it.skip("response has default headers", () => {});
-
-  // pending: did_you_mean suggestions not implemented for ActionNotFound.
-  // Rails delegates to the did_you_mean gem via detailed_message; our
-  // AbstractController::ActionNotFound does not carry spelling suggestions.
-  it.skip("exceptions have suggestions for fix", () => {});
-
-  // pending: ActionView::RecordIdentifier (dom_id / dom_class) not yet ported.
-  it.skip("no deprecation when action view record identifier is included", () => {});
 });
 
 // ==========================================================================

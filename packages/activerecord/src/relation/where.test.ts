@@ -78,6 +78,18 @@ const SCHEMA: Schema = {
   btav_posts: { author_id: "integer" },
   btnr_authors: {},
   btnr_posts: { author_id: "integer" },
+  // wnil_* tables for "where with nil cpk association": cpk_orders uses auto-id
+  // + shop_id; cpk_books uses shop_id + order_id FK. Model-level CPK ["shop_id", "id"].
+  wnil_orders: { shop_id: "integer" },
+  wnil_books: { shop_id: "integer", order_id: "integer" },
+  // poly_* tables for polymorphic WHERE tests (SQL-shape; no DB fixtures needed)
+  poly_price_estimates: {
+    estimate_of_type: "string",
+    estimate_of_id: "integer",
+    price: "integer",
+  },
+  poly_treasures: { name: "string" },
+  poly_cars: { name: "string" },
   cpk_books: {
     columns: {
       author_id: "integer",
@@ -926,11 +938,40 @@ describe("WhereTest", () => {
     expect(result).toHaveLength(10);
   });
 
-  it.skip("where with nil cpk association", () => {
-    // BLOCKED: relation — WHERE clause feature gap (polymorphic / association / composite-PK)
-    // ROOT-CAUSE: relation/where-clause.ts#whereClauseFor missing association / polymorphic join
-    // SCOPE: ~100 LOC in relation/where-clause.ts + associations/; affects ~39 tests in where.test.ts
-    /* needs belongs_to with composite primary key — association infrastructure gap */
+  it("where with nil cpk association", async () => {
+    class WnilOrder extends Base {
+      static {
+        this._tableName = "wnil_orders";
+        this._primaryKey = ["shop_id", "id"];
+        this.attribute("shop_id", "integer");
+        this.hasMany("books", { className: "WnilBook", foreignKey: ["shop_id", "order_id"] });
+      }
+    }
+    class WnilBook extends Base {
+      static {
+        this._tableName = "wnil_books";
+        this.attribute("shop_id", "integer");
+        this.attribute("order_id", "integer");
+      }
+    }
+    registerModel("WnilOrder", WnilOrder);
+    registerModel("WnilBook", WnilBook);
+    Associations.belongsTo.call(WnilBook, "order", {
+      className: "WnilOrder",
+      foreignKey: ["shop_id", "order_id"],
+    });
+
+    const order = (await WnilOrder.create({ shop_id: 1 })) as InstanceType<typeof WnilOrder>;
+    const book = (await WnilBook.create({
+      shop_id: order.shop_id,
+      order_id: (order as any).id,
+    })) as InstanceType<typeof WnilBook>;
+    const found = await WnilBook.where({ order }).toArray();
+    expect(found.map((r: any) => r.id)).toContain((book as any).id);
+
+    await WnilBook.where({ id: (book as any).id }).updateAll({ shop_id: null, order_id: null });
+    const foundNil = await WnilBook.where({ order: null }).toArray();
+    expect(foundNil.map((r: any) => r.id)).toContain((book as any).id);
   });
   it("belongs to shallow where", () => {
     class BtsAuthor extends Base {
@@ -1038,8 +1079,34 @@ describe("WhereTest", () => {
     // SCOPE: ~100 LOC in relation/where-clause.ts + associations/; affects ~39 tests in where.test.ts
     /* needs belongs_to association with automatic JOIN */
   });
-  it.skip("polymorphic shallow where", () => {
-    /* polymorphic predicate building implemented (PolymorphicArrayValue); needs test fixture body */
+  it("polymorphic shallow where", () => {
+    class PolyTreasure extends Base {
+      static {
+        this._tableName = "poly_treasures";
+        this.attribute("name", "string");
+      }
+    }
+    class PolyPriceEstimate extends Base {
+      static {
+        this._tableName = "poly_price_estimates";
+        this.attribute("estimate_of_type", "string");
+        this.attribute("estimate_of_id", "integer");
+        this.attribute("price", "integer");
+      }
+    }
+    registerModel("PolyTreasure", PolyTreasure);
+    Associations.belongsTo.call(PolyPriceEstimate, "estimateOf", { polymorphic: true });
+
+    const treasure = new PolyTreasure();
+    (treasure as any).id = 1;
+
+    const expected = PolyPriceEstimate.where({
+      estimate_of_type: "PolyTreasure",
+      estimate_of_id: 1,
+    });
+    const actual = PolyPriceEstimate.where({ estimateOf: treasure });
+
+    expect(actual.toSql()).toEqual(expected.toSql());
   });
   it.skip("where not polymorphic id and type as nand", () => {
     /* needs polymorphic DB fixtures */
@@ -1050,11 +1117,63 @@ describe("WhereTest", () => {
   it.skip("polymorphic nested array where not", () => {
     /* needs polymorphic DB fixtures */
   });
-  it.skip("polymorphic array where multiple types", () => {
-    /* polymorphic predicate building implemented; needs multi-type fixture body */
+  it("polymorphic array where multiple types", () => {
+    class PolyMTreasure extends Base {
+      static {
+        this._tableName = "poly_treasures";
+        this.attribute("name", "string");
+      }
+    }
+    class PolyMCar extends Base {
+      static {
+        this._tableName = "poly_cars";
+        this.attribute("name", "string");
+      }
+    }
+    class PolyMPriceEstimate extends Base {
+      static {
+        this._tableName = "poly_price_estimates";
+        this.attribute("estimate_of_type", "string");
+        this.attribute("estimate_of_id", "integer");
+      }
+    }
+    registerModel("PolyMTreasure", PolyMTreasure);
+    registerModel("PolyMCar", PolyMCar);
+    Associations.belongsTo.call(PolyMPriceEstimate, "estimateOf", { polymorphic: true });
+
+    const treasure = new PolyMTreasure();
+    (treasure as any).id = 1;
+    const car = new PolyMCar();
+    (car as any).id = 2;
+
+    const sql = PolyMPriceEstimate.where({ estimateOf: [treasure, car] }).toSql();
+    expect(sql).toContain("PolyMTreasure");
+    expect(sql).toContain("PolyMCar");
   });
-  it.skip("polymorphic nested relation where", () => {
-    /* polymorphic predicate building implemented; needs relation fixture body */
+  it("polymorphic nested relation where", () => {
+    class PolyRTreasure extends Base {
+      static {
+        this._tableName = "poly_treasures";
+        this.attribute("name", "string");
+      }
+    }
+    class PolyRPriceEstimate extends Base {
+      static {
+        this._tableName = "poly_price_estimates";
+        this.attribute("estimate_of_type", "string");
+        this.attribute("estimate_of_id", "integer");
+      }
+    }
+    registerModel("PolyRTreasure", PolyRTreasure);
+    Associations.belongsTo.call(PolyRPriceEstimate, "estimateOf", { polymorphic: true });
+
+    const expected = PolyRPriceEstimate.where({
+      estimate_of_type: "PolyRTreasure",
+      estimate_of_id: PolyRTreasure.where({ id: [1, 2] }),
+    });
+    const actual = PolyRPriceEstimate.where({ estimateOf: PolyRTreasure.where({ id: [1, 2] }) });
+
+    expect(actual.toSql()).toEqual(expected.toSql());
   });
   it.skip("polymorphic sti shallow where", () => {
     // BLOCKED: relation — WHERE clause feature gap (polymorphic / association / composite-PK)

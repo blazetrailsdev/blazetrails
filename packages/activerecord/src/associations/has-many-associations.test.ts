@@ -5224,11 +5224,9 @@ describe("HasManyAssociationsTest", () => {
     registerModel(ArrAuthor);
     registerModel(ArrPost);
     const author = await ArrAuthor.create({ name: "Alice" });
-    const posts = await Promise.all([
-      ArrPost.create({ author_id: author.id, title: "A" }),
-      ArrPost.create({ author_id: author.id, title: "B" }),
-      ArrPost.create({ author_id: author.id, title: "C" }),
-    ]);
+    await ArrPost.create({ author_id: author.id, title: "A" });
+    await ArrPost.create({ author_id: author.id, title: "B" });
+    await ArrPost.create({ author_id: author.id, title: "C" });
     const loaded = await loadHasMany(author, "arr_posts", {
       className: "ArrPost",
       foreignKey: "author_id",

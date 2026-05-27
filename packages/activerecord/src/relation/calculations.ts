@@ -202,6 +202,21 @@ function prependCtes(rel: CalculationRelation, sql: string): string {
   return `WITH ${recursive ? "RECURSIVE " : ""}${cteDefs} ${sql}`;
 }
 
+function applyFromClause(rel: CalculationRelation, sql: string): string {
+  if (rel._fromClause.isEmpty()) return sql;
+  const raw = rel._fromClause.value;
+  const alias = rel._fromClause.name;
+  // Relation/Arel-node _fromClause values are compiled by buildArel() — not
+  // reachable from the aggregate path which builds its own manager from scratch.
+  // Guard against it to avoid producing "[object Object]" in SQL.
+  if (typeof raw !== "string") return sql;
+  const fromExpr = alias ? `${raw} ${alias}` : raw;
+  return sql.replace(
+    /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
+    () => `FROM ${fromExpr}`,
+  );
+}
+
 function isBigintColumn(rel: CalculationRelation, fn: AggFn, column: string): boolean {
   if (fn === "count" || fn === "average" || column === "*") return false;
   const table = rel._modelClass.arelTable as {
@@ -224,17 +239,7 @@ async function singleAggregate(
   rel._applyWheresToManager(manager, table);
 
   const colType = resolveColType(rel, column);
-  let aggSql = manager.toSql();
-  if (!rel._fromClause.isEmpty()) {
-    const raw = rel._fromClause.value;
-    const alias = rel._fromClause.name;
-    const fromExpr = alias ? `${raw} ${alias}` : String(raw);
-    aggSql = aggSql.replace(
-      /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
-      () => `FROM ${fromExpr}`,
-    );
-  }
-  const withSql = prependCtes(rel, aggSql);
+  const withSql = prependCtes(rel, applyFromClause(rel, manager.toSql()));
   const sql =
     isBigintColumn(rel, fn, column) && needsBigintCast(rel) ? wrapBigintAgg(withSql) : withSql;
   const opName = fn.charAt(0).toUpperCase() + fn.slice(1);
@@ -270,8 +275,7 @@ async function groupedAggregate(
   if (rel._offsetValue !== null) manager.skip(rel._offsetValue);
 
   const colType = resolveColType(rel, column);
-  const aggSql = manager.toSql();
-  const withSql = prependCtes(rel, aggSql);
+  const withSql = prependCtes(rel, applyFromClause(rel, manager.toSql()));
   const sql =
     isBigintColumn(rel, fn, column) && needsBigintCast(rel)
       ? wrapBigintAgg(withSql, true)
@@ -360,7 +364,7 @@ export async function performCount(
     const outerManager = innerTable.project(countNode.as("count"));
     outerManager.from(subqueryNode);
     const result = await this._modelClass.connection.selectAll(
-      outerManager.toSql(),
+      prependCtes(this, outerManager.toSql()),
       `${this._modelClass.name} Count`,
     );
     const rows = result.toArray() as Record<string, unknown>[];
@@ -376,7 +380,7 @@ export async function performCount(
     this._applyJoinsToManager(manager);
     this._applyWheresToManager(manager, table);
     const result = await this._modelClass.connection.selectAll(
-      manager.toSql(),
+      prependCtes(this, applyFromClause(this, manager.toSql())),
       `${this._modelClass.name} Count`,
     );
     const rows = result.toArray() as Record<string, unknown>[];
@@ -396,7 +400,7 @@ export async function performCount(
       const outerManager = table.project(countAll.as("count"));
       outerManager.from(new Nodes.SqlLiteral(`(${innerManager.toSql()}) AS subquery`));
       const result = await this._modelClass.connection.selectAll(
-        outerManager.toSql(),
+        prependCtes(this, outerManager.toSql()),
         `${this._modelClass.name} Count`,
       );
       const rows = result.toArray() as Record<string, unknown>[];
@@ -407,7 +411,7 @@ export async function performCount(
     this._applyJoinsToManager(manager);
     this._applyWheresToManager(manager, table);
     const result = await this._modelClass.connection.selectAll(
-      manager.toSql(),
+      prependCtes(this, applyFromClause(this, manager.toSql())),
       `${this._modelClass.name} Count`,
     );
     const rows = result.toArray() as Record<string, unknown>[];
@@ -418,19 +422,8 @@ export async function performCount(
   const manager = table.project(countAll.as("count"));
   this._applyJoinsToManager(manager);
   this._applyWheresToManager(manager, table);
-  let countSql = manager.toSql();
-  if (!this._fromClause.isEmpty()) {
-    const raw = this._fromClause.value;
-    const alias = this._fromClause.name;
-    const fromExpr = alias ? `${raw} ${alias}` : String(raw);
-    countSql = countSql.replace(
-      /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
-      () => `FROM ${fromExpr}`,
-    );
-  }
-  countSql = prependCtes(this, countSql);
   const result = await this._modelClass.connection.selectAll(
-    countSql,
+    prependCtes(this, applyFromClause(this, manager.toSql())),
     `${this._modelClass.name} Count`,
   );
   const rows = result.toArray() as Record<string, unknown>[];

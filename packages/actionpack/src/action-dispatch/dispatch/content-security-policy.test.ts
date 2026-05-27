@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { ContentSecurityPolicy, MAPPINGS } from "../content-security-policy.js";
 import { IntegrationTest } from "../testing/integration.js";
 import { Base } from "../../action-controller/base.js";
 import type { AbstractController } from "../../abstract-controller/base.js";
 import {
+  type CspRequestHost,
   contentSecurityPolicy as cspFromRequest,
   contentSecurityPolicyNonce as cspNonceFromRequest,
   contentSecurityPolicyNonceDirectives as cspNonceDirectivesFromRequest,
@@ -377,16 +378,17 @@ describe("ContentSecurityPolicyTest", () => {
 
 function resolvedCspHeader(app: IntegrationTest): string | null {
   if (app.response.status === 304) return null;
-  const req = app.request as never;
+  const req = app.request as unknown as CspRequestHost;
   const policy = cspFromRequest.call(req);
   if (!policy) return null;
   const nonce = cspNonceFromRequest.call(req) ?? undefined;
   const dirs = cspNonceDirectivesFromRequest.call(req) ?? undefined;
-  return policy.build(app.controller, nonce, dirs);
+  const context = app.controller ?? app.request;
+  return policy.build(context, nonce, dirs);
 }
 
 function resolvedCspReportOnly(app: IntegrationTest): boolean {
-  return !!cspReportOnlyFromRequest.call(app.request as never);
+  return !!cspReportOnlyFromRequest.call(app.request as unknown as CspRequestHost);
 }
 
 const NONCE_GENERATOR = () => "iyhD0Yc0W+c=";
@@ -477,7 +479,6 @@ function buildCspApp(globalPolicy: ContentSecurityPolicy | null) {
     r.get("/no-policy", { to: "csp#noPolicy" });
     r.get("/api", { to: "csp#api" });
     r.get("/not-modified", { to: "csp#notModified" });
-    r.get("/redirect", { to: "csp#redirect" });
   });
   app.registerController("csp", CspIntegrationController);
   return { app, globalPolicy };
@@ -498,6 +499,8 @@ describe("ContentSecurityPolicyIntegrationTest", () => {
   beforeAll(() => {
     ({ app } = buildCspApp(GLOBAL_CSP_POLICY));
   });
+
+  beforeEach(() => app.resetBang());
 
   it("generates content security policy header", async () => {
     await app.get("/", { env: cspEnv(GLOBAL_CSP_POLICY) });
@@ -566,6 +569,8 @@ describe("DisabledContentSecurityPolicyIntegrationTest", () => {
   beforeAll(() => {
     ({ app } = buildCspApp(null));
   });
+
+  beforeEach(() => app.resetBang());
 
   it("generates no content security policy by default", async () => {
     await app.get("/", { env: cspEnv(null) });
@@ -648,11 +653,11 @@ describe("NonceDirectiveContentSecurityPolicyIntegrationTest", () => {
       }),
     });
 
-    const req = app.request as never;
+    const req = app.request as unknown as CspRequestHost;
     const builtPolicy = cspFromRequest.call(req)!;
     const nonce = cspNonceFromRequest.call(req) ?? undefined;
     const dirs = cspNonceDirectivesFromRequest.call(req) ?? undefined;
-    const header = builtPolicy.build(app.controller, nonce, dirs);
+    const header = builtPolicy.build(app.controller ?? app.request, nonce, dirs);
     expect(header).toMatch(/script-src https: 'nonce-/);
     expect(header).not.toMatch(/style-src https: 'nonce-/);
   });

@@ -51,6 +51,8 @@ interface CalculationRelation {
   _isNone: boolean;
   _isDistinct: boolean;
   _groupColumns: string[];
+  _ctes: Array<{ name: string; sql: string; recursive: boolean }>;
+  _fromClause: { isEmpty(): boolean; value: any; name: string | null };
   _applyJoinsToManager(manager: any): void;
   _applyWheresToManager(manager: any, table: any): void;
   _applyOrderToManager(manager: any, table: any): void;
@@ -193,6 +195,13 @@ function wrapBigintAgg(innerSql: string, grouped = false): string {
   return `SELECT CAST("val" AS TEXT) AS "val" FROM (${innerSql}) AS "_bigint_agg"`;
 }
 
+function prependCtes(rel: CalculationRelation, sql: string): string {
+  if (rel._ctes.length === 0) return sql;
+  const recursive = rel._ctes.some((c) => c.recursive);
+  const cteDefs = rel._ctes.map((c) => `"${c.name}" AS (${c.sql})`).join(", ");
+  return `WITH ${recursive ? "RECURSIVE " : ""}${cteDefs} ${sql}`;
+}
+
 function isBigintColumn(rel: CalculationRelation, fn: AggFn, column: string): boolean {
   if (fn === "count" || fn === "average" || column === "*") return false;
   const table = rel._modelClass.arelTable as {
@@ -215,9 +224,19 @@ async function singleAggregate(
   rel._applyWheresToManager(manager, table);
 
   const colType = resolveColType(rel, column);
-  const innerSql = manager.toSql();
+  let aggSql = manager.toSql();
+  if (!rel._fromClause.isEmpty()) {
+    const raw = rel._fromClause.value;
+    const alias = rel._fromClause.name;
+    const fromExpr = alias ? `${raw} ${alias}` : String(raw);
+    aggSql = aggSql.replace(
+      /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
+      () => `FROM ${fromExpr}`,
+    );
+  }
+  const withSql = prependCtes(rel, aggSql);
   const sql =
-    isBigintColumn(rel, fn, column) && needsBigintCast(rel) ? wrapBigintAgg(innerSql) : innerSql;
+    isBigintColumn(rel, fn, column) && needsBigintCast(rel) ? wrapBigintAgg(withSql) : withSql;
   const opName = fn.charAt(0).toUpperCase() + fn.slice(1);
   const result = await rel._modelClass.connection.selectAll(
     sql,
@@ -251,11 +270,12 @@ async function groupedAggregate(
   if (rel._offsetValue !== null) manager.skip(rel._offsetValue);
 
   const colType = resolveColType(rel, column);
-  const innerSql = manager.toSql();
+  const aggSql = manager.toSql();
+  const withSql = prependCtes(rel, aggSql);
   const sql =
     isBigintColumn(rel, fn, column) && needsBigintCast(rel)
-      ? wrapBigintAgg(innerSql, true)
-      : innerSql;
+      ? wrapBigintAgg(withSql, true)
+      : withSql;
   const opName = fn.charAt(0).toUpperCase() + fn.slice(1);
   const queryResult = await rel._modelClass.connection.selectAll(
     sql,
@@ -398,8 +418,19 @@ export async function performCount(
   const manager = table.project(countAll.as("count"));
   this._applyJoinsToManager(manager);
   this._applyWheresToManager(manager, table);
+  let countSql = manager.toSql();
+  if (!this._fromClause.isEmpty()) {
+    const raw = this._fromClause.value;
+    const alias = this._fromClause.name;
+    const fromExpr = alias ? `${raw} ${alias}` : String(raw);
+    countSql = countSql.replace(
+      /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
+      () => `FROM ${fromExpr}`,
+    );
+  }
+  countSql = prependCtes(this, countSql);
   const result = await this._modelClass.connection.selectAll(
-    manager.toSql(),
+    countSql,
     `${this._modelClass.name} Count`,
   );
   const rows = result.toArray() as Record<string, unknown>[];

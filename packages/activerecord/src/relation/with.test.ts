@@ -165,17 +165,11 @@ describe("WithTest", () => {
     await Post.create({ title: "without", legacy_comments_count: 0 });
     const relation = Post.with({ posts_with_comments: Post.where("legacy_comments_count > 0") });
 
-    const totalCount = (await Post.all().toArray()).length;
-    const withCteCount = (await relation.from("posts_with_comments AS posts").toArray()).length;
-    const joinCount = (
-      await relation
-        .joins("JOIN posts_with_comments ON posts_with_comments.id = posts.id")
-        .toArray()
-    ).length;
-
-    expect(totalCount).toEqual(await Post.count());
-    expect(withCteCount).toEqual(1);
-    expect(joinCount).toEqual(1);
+    expect(await Post.count()).toEqual(await relation.count());
+    expect(await relation.from("posts_with_comments AS posts").count()).toEqual(1);
+    expect(
+      await relation.joins("JOIN posts_with_comments ON posts_with_comments.id = posts.id").count(),
+    ).toEqual(1);
   });
 
   it("with when called from active record scope", async () => {

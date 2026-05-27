@@ -1117,7 +1117,7 @@ describe("WhereTest", () => {
   it.skip("polymorphic nested array where not", () => {
     /* needs polymorphic DB fixtures */
   });
-  it("polymorphic array where multiple types", () => {
+  it("polymorphic array where multiple types", async () => {
     class PolyMTreasure extends Base {
       static {
         this._tableName = "poly_treasures";
@@ -1135,20 +1135,43 @@ describe("WhereTest", () => {
         this._tableName = "poly_price_estimates";
         this.attribute("estimate_of_type", "string");
         this.attribute("estimate_of_id", "integer");
+        this.attribute("price", "integer");
       }
     }
     registerModel("PolyMTreasure", PolyMTreasure);
     registerModel("PolyMCar", PolyMCar);
     Associations.belongsTo.call(PolyMPriceEstimate, "estimateOf", { polymorphic: true });
 
-    const treasure = new PolyMTreasure();
-    (treasure as any).id = 1;
-    const car = new PolyMCar();
-    (car as any).id = 2;
+    const treasure1 = (await PolyMTreasure.create({ name: "diamond" })) as InstanceType<
+      typeof PolyMTreasure
+    >;
+    const treasure2 = (await PolyMTreasure.create({ name: "sapphire" })) as InstanceType<
+      typeof PolyMTreasure
+    >;
+    const car = (await PolyMCar.create({ name: "honda" })) as InstanceType<typeof PolyMCar>;
+    const pe1 = (await PolyMPriceEstimate.create({
+      estimate_of_type: "PolyMTreasure",
+      estimate_of_id: (treasure1 as any).id,
+      price: 100,
+    })) as InstanceType<typeof PolyMPriceEstimate>;
+    const pe2 = (await PolyMPriceEstimate.create({
+      estimate_of_type: "PolyMTreasure",
+      estimate_of_id: (treasure2 as any).id,
+      price: 200,
+    })) as InstanceType<typeof PolyMPriceEstimate>;
+    const pe3 = (await PolyMPriceEstimate.create({
+      estimate_of_type: "PolyMCar",
+      estimate_of_id: (car as any).id,
+      price: 300,
+    })) as InstanceType<typeof PolyMPriceEstimate>;
 
-    const sql = PolyMPriceEstimate.where({ estimateOf: [treasure, car] }).toSql();
-    expect(sql).toContain("PolyMTreasure");
-    expect(sql).toContain("PolyMCar");
+    const expected = [(pe1 as any).id, (pe2 as any).id, (pe3 as any).id].sort();
+    const actual = (
+      await PolyMPriceEstimate.where({ estimateOf: [treasure1, treasure2, car] }).toArray()
+    )
+      .map((r: any) => r.id)
+      .sort();
+    expect(actual).toEqual(expected);
   });
   it("polymorphic nested relation where", () => {
     class PolyRTreasure extends Base {

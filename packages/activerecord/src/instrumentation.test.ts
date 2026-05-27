@@ -301,7 +301,7 @@ describe("InstrumentationTest", () => {
         this.attribute("name", "string");
       }
     }
-    const author = await Author.create({ name: "David" });
+    await Author.create({ name: "David" });
     let called = false;
     Notifications.subscribe("instantiation.active_record", () => {
       called = true;

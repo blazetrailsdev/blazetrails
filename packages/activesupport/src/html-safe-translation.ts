@@ -2,7 +2,7 @@
 import { I18n } from "./i18n.js";
 import { SafeBuffer, htmlEscape, isHtmlSafe } from "./core-ext/string/output-safety.js";
 
-const I18N_OPTION_NAMES = new Set(["locale", "default", "raise", "scope", "separator", "count"]);
+const I18N_OPTION_NAMES = new Set(["locale", "default", "raise", "scope", "separator"]);
 const HTML_KEY_PATTERN = /(?:_|\b)html$/;
 
 /** @internal */
@@ -28,9 +28,7 @@ export const HtmlSafeTranslation = {
 
       if (exception) {
         if (origRaise) {
-          throw I18n.translate(key, { ...options, raise: true } as Parameters<
-            typeof I18n.translate
-          >[1]);
+          I18n.translate(key, { ...options, raise: true } as Parameters<typeof I18n.translate>[1]);
         }
         return translation;
       }
@@ -56,6 +54,7 @@ function htmlEscapeTranslationOptions(options: Record<string, unknown>): Record<
       if (isHtmlSafe(value)) continue;
       options[name] = htmlEscape(value).toString();
     } else if (value != null && typeof value === "object" && "toString" in value) {
+      if (isHtmlSafe(value)) continue;
       options[name] = htmlEscape(String(value)).toString();
     }
   }

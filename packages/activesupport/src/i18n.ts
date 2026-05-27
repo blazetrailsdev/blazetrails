@@ -17,14 +17,14 @@ function dig(obj: TranslationHash, keys: string[]): TranslationValue | undefined
   return current;
 }
 
-const I18N_RESERVED_KEYS = new Set(["locale", "default", "raise", "scope", "separator", "count"]);
+const I18N_RESERVED_KEYS = new Set(["locale", "default", "raise", "scope", "separator"]);
 
 function interpolate(value: TranslationValue, options: TranslateOptions): TranslationValue {
   if (typeof value !== "string") return value;
   const hasInterpolation = value.includes("%{");
   if (!hasInterpolation) return value;
   return value.replace(/%\{(\w+)\}/g, (match, name) => {
-    if (name in options && !I18N_RESERVED_KEYS.has(name)) {
+    if (Object.hasOwn(options, name) && !I18N_RESERVED_KEYS.has(name)) {
       return String(options[name]);
     }
     return match;
@@ -289,7 +289,7 @@ class I18nModule {
     const keyStr = symbolToString(key);
     const result = this.backend.lookup(locale, keyStr);
     if (result !== undefined) return interpolate(result, options);
-    if (options.default !== undefined) return options.default;
+    if (options.default !== undefined) return interpolate(options.default, options);
     if (options.raise) throw new MissingTranslationData(locale, keyStr);
     return `Translation missing: ${locale}.${keyStr}`;
   }

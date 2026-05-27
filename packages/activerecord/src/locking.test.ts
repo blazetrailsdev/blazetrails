@@ -771,7 +771,7 @@ describe("PessimisticLockingTest", () => {
   });
 
   it("with lock configures transaction", async () => {
-    const adapter = Base.adapter as any;
+    const adapter = Base.connection as any;
     class Person extends Base {
       static {
         this._tableName = "people";

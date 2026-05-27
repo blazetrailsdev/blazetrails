@@ -39,7 +39,7 @@ export async function bootstrapTestHandler(): Promise<void> {
  * @internal
  */
 export function syncHandlerVisitor(): void {
-  const visitor = (Base.adapter as { visitor?: object }).visitor;
+  const visitor = (Base.connection as { visitor?: object }).visitor;
   if (visitor) {
     setToSqlVisitor(
       (visitor as object).constructor as new () => {

@@ -184,7 +184,7 @@ describe("SanitizeTest", () => {
         this.attribute("title", "string");
       }
     }
-    const a = Base.adapter as unknown as { quote(v: unknown): string };
+    const a = Post.adapter as unknown as { quote(v: unknown): string };
     expect(Post.sanitizeSqlArray("name=?", "Bambi")).toBe(`name=${a.quote("Bambi")}`);
     expect(Post.sanitizeSqlArray("name=?", "Bambi\nand\nThumper")).toBe(
       `name=${a.quote("Bambi\nand\nThumper")}`,
@@ -226,7 +226,7 @@ describe("SanitizeTest", () => {
       }
     }
     const sql = Post.sanitizeSqlArray("title = ? AND id = ?", "hello", 1);
-    const a = Base.adapter as unknown as {
+    const a = Post.adapter as unknown as {
       castBoundValue(v: unknown): unknown;
       quote(v: unknown): string;
     };
@@ -515,7 +515,7 @@ describe("sanitizeSql", () => {
         static _tableName = "posts";
       }
       const sql = Post.sanitizeSqlArray("active = ?", true);
-      const a = Base.adapter as unknown as {
+      const a = Post.adapter as unknown as {
         castBoundValue(v: unknown): unknown;
         quote(v: unknown): string;
       };

@@ -9431,6 +9431,11 @@ describe("PreloaderTest", () => {
 describe("OverridingAssociationsTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      oa_brokens: { name: "string", nonexistent_id: "integer" },
+    });
+  });
   it("habtm association redefinition callbacks should differ and not inherited", () => {
     class OAParent extends Base {
       static {
@@ -9626,9 +9631,6 @@ describe("OverridingAssociationsTest", () => {
     }
     Associations.belongsTo.call(OABroken, "nonexistent", { foreignKey: "nonexistent_id" });
     registerModel("OABroken", OABroken);
-    await defineSchema({
-      oa_brokens: { name: "string", nonexistent_id: "integer" },
-    });
     const record = await OABroken.create({ name: "test", nonexistent_id: 1 });
     await expect(
       loadBelongsTo(record, "nonexistent", { foreignKey: "nonexistent_id" }),

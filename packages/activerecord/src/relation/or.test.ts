@@ -76,15 +76,19 @@ describe("OrTest", () => {
   it("or with null left", async () => {
     const { User } = makeModel();
     await User.create({ name: "alice", score: 1 });
-    const results = await User.where({ name: "alice" }).toArray();
-    expect(results.length).toBe(1);
+    const expected = await User.where({ name: "alice" }).toArray();
+    const results = await User.none()
+      .or(User.where({ name: "alice" }))
+      .toArray();
+    expect(results.length).toBe(expected.length);
   });
 
   it("or with null right", async () => {
     const { User } = makeModel();
     await User.create({ name: "alice", score: 1 });
-    const results = await User.where({ name: "alice" }).toArray();
-    expect(results.length).toBe(1);
+    const expected = await User.where({ name: "alice" }).toArray();
+    const results = await User.where({ name: "alice" }).or(User.none()).toArray();
+    expect(results.length).toBe(expected.length);
   });
 
   it("or with large number", async () => {
@@ -106,10 +110,9 @@ describe("OrTest", () => {
 
   it("or with null both", async () => {
     const { User } = makeModel();
-    await User.create({ name: "alice", score: 1 });
-    await User.create({ name: "bob", score: 2 });
-    const results = await User.all().toArray();
-    expect(results.length).toBe(2);
+    const expected = await User.none().toArray();
+    const results = await User.none().or(User.none()).toArray();
+    expect(results).toEqual(expected);
   });
 
   it("or without left where", async () => {
@@ -131,18 +134,26 @@ describe("OrTest", () => {
 
   it("or with incompatible single value relations", () => {
     const { User } = makeModel();
-    const sql = User.where({ name: "a" })
-      .or(User.where({ score: 1 }))
-      .toSql();
-    expect(sql).toContain("OR");
+    expect(() =>
+      User.distinct()
+        .where({ name: "a" })
+        .or(User.where({ score: 1 }))
+        .toSql(),
+    ).toThrow(
+      "Relation passed to #or must be structurally compatible. Incompatible values: [:distinct]",
+    );
   });
 
   it("or with incompatible multi value relations", () => {
     const { User } = makeModel();
-    const sql = User.where({ name: "a" })
-      .or(User.where({ name: "b" }))
-      .toSql();
-    expect(sql).toContain("OR");
+    expect(() =>
+      User.order("name asc")
+        .where({ name: "a" })
+        .or(User.order("score desc").where({ name: "b" }))
+        .toSql(),
+    ).toThrow(
+      "Relation passed to #or must be structurally compatible. Incompatible values: [:order]",
+    );
   });
 
   it("or with unscope where", async () => {
@@ -225,9 +236,11 @@ describe("OrTest", () => {
 
   it("or with non relation object raises error", () => {
     const { User } = makeModel();
-    // or() with a non-relation should either throw or produce a valid query
-    const r = User.where({ name: "a" });
-    expect(r.toSql()).toContain("WHERE");
+    expect(() =>
+      User.where({ name: ["alice", "bob", "charlie"] }).or({ name: "Rails" } as any),
+    ).toThrow(
+      "You have passed object object to #or. Pass an ActiveRecord::Relation object instead.",
+    );
   });
 
   it("or with references inequality", () => {

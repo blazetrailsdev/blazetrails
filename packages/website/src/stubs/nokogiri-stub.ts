@@ -2,7 +2,7 @@
 const unavailable = (): never => {
   throw new Error("nokogiri not available in service worker");
 };
-export class XmlDocument {
+class XmlDocument {
   constructor() {
     unavailable();
   }
@@ -10,7 +10,7 @@ export class XmlDocument {
     return unavailable();
   }
 }
-export class XmlNode {
+class XmlNode {
   constructor() {
     unavailable();
   }

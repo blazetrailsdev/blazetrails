@@ -6,6 +6,9 @@ export class XmlDocument {
   constructor() {
     unavailable();
   }
+  static parse(_data: string): never {
+    return unavailable();
+  }
 }
 export class XmlNode {
   constructor() {

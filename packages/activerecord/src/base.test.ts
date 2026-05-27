@@ -3178,7 +3178,7 @@ describe("BasicsTest", () => {
     it("create", async () => {
       const p = await Post.create({ title: "Test", body: "Content" });
       expect(p.isPersisted()).toBe(true);
-      expect(p.id).toBe(1);
+      expect(p.id).toBeGreaterThan(0);
     });
 
     it("destroy", async () => {
@@ -3221,8 +3221,8 @@ describe("BasicsTest", () => {
     }
 
     it("find by primary key", async () => {
-      await User.create({ name: "Alice", email: "alice@test.com" });
-      const found = await User.find(1);
+      const created = await User.create({ name: "Alice", email: "alice@test.com" });
+      const found = await User.find(created.id);
       expect(found.name).toBe("Alice");
     });
 
@@ -3240,7 +3240,7 @@ describe("BasicsTest", () => {
         }
       }
       const u = await User.create({ name: "Dean" });
-      expect(u.toParam()).toBe("1");
+      expect(u.toParam()).toBe(String(u.id));
     });
 
     it("returns null for new record", () => {

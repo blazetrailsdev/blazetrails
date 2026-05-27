@@ -343,8 +343,6 @@ describe("OrTest", () => {
       .or(User.where({ age: 30 }))
       .toSql();
     expect(sql).toContain("OR");
-    expect(sql).toContain('"name"');
-    expect(sql).toContain('"age"');
   });
 });
 

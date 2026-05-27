@@ -2,18 +2,18 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { Base } from "../index.js";
 
-import { createSidecarTestAdapter, type SidecarAdapter } from "../test-adapter.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
-import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
-import type { DatabaseAdapter } from "../adapter.js";
+import { setupHandlerSuite } from "../test-helpers/setup-handler-suite.js";
+import { useHandlerTransactionalFixtures } from "../test-helpers/use-handler-transactional-fixtures.js";
 
-let _adapter: SidecarAdapter;
+setupHandlerSuite();
+useHandlerTransactionalFixtures();
+
 beforeAll(async () => {
-  ({ adapter: _adapter } = createSidecarTestAdapter());
-  await defineSchema(_adapter, {
+  await defineSchema({
     posts: {
       title: "string",
       body: "string",
@@ -24,26 +24,15 @@ beforeAll(async () => {
     users: { name: "string", age: "integer", role: "string", score: "integer" },
   });
 });
-withTransactionalFixtures(() => _adapter);
-function freshAdapter(): DatabaseAdapter {
-  return _adapter;
-}
 
 // ==========================================================================
 // OrTest — targets relation/or_test.rb
 // ==========================================================================
 describe("OrTest", () => {
-  let adapter: DatabaseAdapter;
-
-  beforeEach(() => {
-    adapter = freshAdapter();
-  });
-
   it("or combines two relations", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const r1 = Post.where({ title: "a" });
@@ -56,7 +45,6 @@ describe("OrTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const r1 = Post.where({ title: "a" });
@@ -66,17 +54,11 @@ describe("OrTest", () => {
 });
 
 describe("OrTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(() => {
-    adapter = freshAdapter();
-  });
-
   function makeModel() {
     class User extends Base {
       static {
         this.attribute("name", "string");
         this.attribute("score", "integer");
-        this.adapter = adapter;
       }
     }
     return { User };
@@ -297,11 +279,9 @@ describe("OrTest", () => {
 
 describe("TooManyOrTest", () => {
   it("too many or", () => {
-    const adapter = freshAdapter();
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     // Should not throw even with many OR conditions
@@ -316,13 +296,10 @@ describe("TooManyOrTest", () => {
 
 describe("OrTest", () => {
   it("combines two where clauses with OR", async () => {
-    const adapter = freshAdapter();
-
     class User extends Base {
       static {
         this.attribute("name", "string");
         this.attribute("age", "integer");
-        this.adapter = adapter;
       }
     }
 
@@ -359,12 +336,9 @@ describe("OrTest", () => {
 
 describe("OrTest", () => {
   it("triple or chains", async () => {
-    const adapter = freshAdapter();
-
     class User extends Base {
       static {
         this.attribute("name", "string");
-        this.adapter = adapter;
       }
     }
 
@@ -383,13 +357,10 @@ describe("OrTest", () => {
   });
 
   it("or with count", async () => {
-    const adapter = freshAdapter();
-
     class User extends Base {
       static {
         this.attribute("name", "string");
         this.attribute("age", "integer");
-        this.adapter = adapter;
       }
     }
 
@@ -406,14 +377,12 @@ describe("OrTest", () => {
 
 describe("OrTest", () => {
   it("combines two scoped relations with OR", async () => {
-    const adapter = freshAdapter();
     class User extends Base {
       static _tableName = "users";
     }
     User.attribute("id", "integer");
     User.attribute("name", "string");
     User.attribute("role", "string");
-    User.adapter = adapter;
     User.scope("admins", (rel: any) => rel.where({ role: "admin" }));
     User.scope("editors", (rel: any) => rel.where({ role: "editor" }));
 
@@ -431,8 +400,6 @@ describe("OrTest", () => {
 });
 
 describe("OrTest", () => {
-  let adapter: DatabaseAdapter;
-
   class User extends Base {
     static {
       this.attribute("name", "string");
@@ -440,15 +407,10 @@ describe("OrTest", () => {
     }
   }
 
-  beforeEach(async () => {
-    adapter = freshAdapter();
-    User.adapter = adapter;
+  it("or with relation", async () => {
     await User.create({ name: "Alice", age: 25 });
     await User.create({ name: "Bob", age: 30 });
     await User.create({ name: "Charlie", age: 35 });
-  });
-
-  it("or with relation", async () => {
     const result = await User.where({ name: "Alice" })
       .or(User.where({ name: "Charlie" }))
       .toArray();
@@ -466,6 +428,9 @@ describe("OrTest", () => {
   });
 
   it("or with count", async () => {
+    await User.create({ name: "Alice", age: 25 });
+    await User.create({ name: "Bob", age: 30 });
+    await User.create({ name: "Charlie", age: 35 });
     const count = await User.where({ age: 25 })
       .or(User.where({ age: 35 }))
       .count();
@@ -473,6 +438,9 @@ describe("OrTest", () => {
   });
 
   it("triple or chains", async () => {
+    await User.create({ name: "Alice", age: 25 });
+    await User.create({ name: "Bob", age: 30 });
+    await User.create({ name: "Charlie", age: 35 });
     const result = await User.where({ name: "Alice" })
       .or(User.where({ name: "Bob" }))
       .or(User.where({ name: "Charlie" }))
@@ -482,8 +450,6 @@ describe("OrTest", () => {
 });
 
 describe("OrTest", () => {
-  let adapter: DatabaseAdapter;
-
   class Post extends Base {
     static {
       this.attribute("title", "string");
@@ -492,11 +458,6 @@ describe("OrTest", () => {
       this.attribute("published", "boolean", { default: false });
     }
   }
-
-  beforeEach(() => {
-    adapter = freshAdapter();
-    Post.adapter = adapter;
-  });
 
   it("combines two relations with OR", async () => {
     await Post.create({ title: "First", author_id: 1 });
@@ -560,8 +521,6 @@ describe("OrTest", () => {
 });
 
 describe("OrTest", () => {
-  let adapter: DatabaseAdapter;
-
   class User extends Base {
     static {
       this.attribute("name", "string");
@@ -569,11 +528,6 @@ describe("OrTest", () => {
       this.attribute("age", "integer");
     }
   }
-
-  beforeEach(() => {
-    adapter = freshAdapter();
-    User.adapter = adapter;
-  });
 
   // Rails: test_or_with_two_relations
   it("or combines two relations", async () => {

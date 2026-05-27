@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import {
   configureEncryption,
   snapshotEncryptionConfig,
@@ -6,7 +6,12 @@ import {
   makeEncryptedBook,
   installEncryptionSchema,
 } from "./test-helpers.js";
-import { createPooledTestAdapter, type SidecarAdapter } from "../test-adapter.js";
+import {
+  createPooledTestAdapter,
+  _resetPooledTestAdapterForTests,
+  type SidecarAdapter,
+} from "../test-adapter.js";
+import { withTransactionalFixtures } from "../test-helpers/with-transactional-fixtures.js";
 
 describe("ActiveRecord::Encryption::ConcurrencyTest", () => {
   let adapter: SidecarAdapter;
@@ -17,6 +22,12 @@ describe("ActiveRecord::Encryption::ConcurrencyTest", () => {
     adapter = pooled.adapter;
     await installEncryptionSchema(adapter);
   });
+
+  afterAll(() => {
+    _resetPooledTestAdapterForTests();
+  });
+
+  withTransactionalFixtures(() => adapter);
 
   beforeEach(() => {
     configSnapshot = snapshotEncryptionConfig();

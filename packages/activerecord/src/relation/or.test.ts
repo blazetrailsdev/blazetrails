@@ -80,7 +80,7 @@ describe("OrTest", () => {
     const results = await User.none()
       .or(User.where({ name: "alice" }))
       .toArray();
-    expect(results.length).toBe(expected.length);
+    expect(results).toEqual(expected);
   });
 
   it("or with null right", async () => {
@@ -88,7 +88,7 @@ describe("OrTest", () => {
     await User.create({ name: "alice", score: 1 });
     const expected = await User.where({ name: "alice" }).toArray();
     const results = await User.where({ name: "alice" }).or(User.none()).toArray();
-    expect(results.length).toBe(expected.length);
+    expect(results).toEqual(expected);
   });
 
   it("or with large number", async () => {
@@ -110,9 +110,10 @@ describe("OrTest", () => {
 
   it("or with null both", async () => {
     const { User } = makeModel();
-    const expected = await User.none().toArray();
+    await User.create({ name: "alice", score: 1 });
+    await User.create({ name: "bob", score: 2 });
     const results = await User.none().or(User.none()).toArray();
-    expect(results).toEqual(expected);
+    expect(results).toEqual([]);
   });
 
   it("or without left where", async () => {

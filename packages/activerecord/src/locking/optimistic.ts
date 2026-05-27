@@ -222,7 +222,7 @@ export async function _updateRow(
   const baseConstraints = buildBaseConstraints(this, ctor);
   const updateConstraints = { ...baseConstraints, [col]: _lockValueForDatabase.call(this, col) };
 
-  attributeNames = [...attributeNames, col];
+  attributeNames = [...attributeNames.filter((n) => n !== col), col];
   this.writeAttribute(col, (Number(this.readAttribute(col)) || 0) + 1);
 
   try {

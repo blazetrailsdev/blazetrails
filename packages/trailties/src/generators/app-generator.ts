@@ -1,4 +1,4 @@
-import { tsClass, tsField, tsModule, tsRaw } from "../template-builder/index.js";
+import { ref, tsClass, tsField, tsModule, tsRaw } from "../template-builder/index.js";
 import { AppBase, type AppBaseOptions } from "./app-base.js";
 import { type DatabaseName } from "./database.js";
 
@@ -486,7 +486,11 @@ export const filterParameters = [
       tsModule({
         imports: [{ from: "@blazetrails/actionpack", named: { ActionController: "named" } }],
         declarations: [
-          tsRaw(`export class ApplicationController extends ActionController.Base {\n}`),
+          tsClass({
+            name: "ApplicationController",
+            extends: ref("ActionController.Base"),
+            body: [],
+          }),
         ],
       }),
     );
@@ -497,7 +501,9 @@ export const filterParameters = [
       "src/app/models/application-record.ts",
       tsModule({
         imports: [{ from: "@blazetrails/activerecord", named: { ActiveRecord: "named" } }],
-        declarations: [tsRaw(`export class ApplicationRecord extends ActiveRecord.Base {\n}`)],
+        declarations: [
+          tsClass({ name: "ApplicationRecord", extends: ref("ActiveRecord.Base"), body: [] }),
+        ],
       }),
     );
 

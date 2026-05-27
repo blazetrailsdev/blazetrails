@@ -4,6 +4,7 @@ exports[`AppGenerator > snapshots emitted TypeScript sources > application-contr
 "import { ActionController } from "@blazetrails/actionpack";
 
 export class ApplicationController extends ActionController.Base {
+
 }
 "
 `;
@@ -34,6 +35,7 @@ exports[`AppGenerator > snapshots emitted TypeScript sources > application-recor
 "import { ActiveRecord } from "@blazetrails/activerecord";
 
 export class ApplicationRecord extends ActiveRecord.Base {
+
 }
 "
 `;

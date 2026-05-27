@@ -140,9 +140,9 @@ function normalizeProtocol(proto: string | false): string {
   return `${p}://`;
 }
 
-// Matches Rack::Utils.escape: encodes spaces as + (form encoding for userinfo)
 /** @internal */
 function rackEscape(s: string): string {
+  // Matches Rack::Utils.escape: encodes !'()* and converts %20 → +
   return encodeURIComponent(s)
     .replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
     .replace(/%20/g, "+");

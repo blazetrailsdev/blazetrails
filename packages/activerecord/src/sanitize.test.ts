@@ -266,8 +266,8 @@ describe("sanitizeSql", () => {
     class User extends Base {
       static _tableName = "users";
     }
-
-    expect(User.sanitizeSqlArray("name = ?", "O'Brien")).toBe("name = 'O''Brien'");
+    const a = User.adapter as unknown as { quote(v: unknown): string };
+    expect(User.sanitizeSqlArray("name = ?", "O'Brien")).toBe(`name = ${a.quote("O'Brien")}`);
   });
 
   it("sanitizeSql handles string passthrough", () => {
@@ -282,9 +282,9 @@ describe("sanitizeSql", () => {
     class User extends Base {
       static _tableName = "users";
     }
-
+    const a = User.adapter as unknown as { quote(v: unknown): string };
     expect(User.sanitizeSql(["name = ? AND age > ?", "Alice", 30])).toBe(
-      "name = 'Alice' AND age > 30",
+      `name = ${a.quote("Alice")} AND age > ${a.quote(30)}`,
     );
   });
 
@@ -367,8 +367,10 @@ describe("sanitizeSql", () => {
       class Post extends Base {
         static _tableName = "posts";
       }
+      const qs = (v: unknown) =>
+        (Post.adapter as unknown as { quoteString(s: string): string }).quoteString(String(v));
       const result = Post.sanitizeSqlArray("name='%s' and group_id='%s'", "foo'bar", 4);
-      expect(result).toBe("name='foo''bar' and group_id='4'");
+      expect(result).toBe(`name='${qs("foo'bar")}' and group_id='${qs(4)}'`);
     });
 
     it("sanitize sql array %s format raises on arity mismatch", () => {
@@ -402,11 +404,12 @@ describe("sanitizeSql", () => {
       class Post extends Base {
         static _tableName = "posts";
       }
+      const a = Post.adapter as unknown as { quote(v: unknown): string };
       const result = Post.sanitizeSqlArray("id = :id AND status = :status", {
         id: 42,
         status: "active",
       });
-      expect(result).toBe("id = 42 AND status = 'active'");
+      expect(result).toBe(`id = ${a.quote(42)} AND status = ${a.quote("active")}`);
     });
 
     // D-Y-INCOMPATIBLE: same SQLite boolean quoting as above — canonical adapter

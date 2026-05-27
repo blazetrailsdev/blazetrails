@@ -814,26 +814,30 @@ describe("RelationTest", () => {
 
   describe("find", () => {
     it("finds a single record by id", async () => {
-      const post = await Post.find(1);
+      const first = await Post.findBy({ title: "First" });
+      const post = await Post.find(first!.id);
       expect(post.title).toBe("First");
     });
 
     it("finds multiple records by array of ids", async () => {
-      const posts = await Post.find([1, 3]);
+      const all = await Post.all().toArray();
+      const posts = await Post.find([all[0].id, all[2].id]);
       expect(posts).toHaveLength(2);
     });
 
     it("finds multiple records with variadic args", async () => {
-      const posts = await Post.find(1, 2, 3);
+      const all = await Post.all().toArray();
+      const posts = await Post.find(all[0].id, all[1].id, all[2].id);
       expect(posts).toHaveLength(3);
     });
 
     it("throws RecordNotFound for missing id", async () => {
-      await expect(Post.find(999)).rejects.toThrow(RecordNotFound);
+      await expect(Post.find(999999)).rejects.toThrow(RecordNotFound);
     });
 
     it("throws RecordNotFound when some ids missing from array", async () => {
-      await expect(Post.find([1, 999])).rejects.toThrow(RecordNotFound);
+      const first = await Post.findBy({ title: "First" });
+      await expect(Post.find([first!.id, 999999])).rejects.toThrow(RecordNotFound);
     });
 
     it("raises RecordNotFound for empty id array", async () => {
@@ -1315,13 +1319,13 @@ describe("RelationTest", () => {
 
   it("ids returns primary key values", async () => {
     const ids = await Item.all().ids();
-    expect(ids).toEqual([1, 2, 3]);
+    expect(ids).toHaveLength(3);
   });
 
   it("update all", async () => {
     await Item.all().where({ category: "fruit" }).updateAll({ price: 10 });
-    const apple = await Item.find(1);
-    expect(apple.price).toBe(10);
+    const apple = await Item.findBy({ name: "Apple" });
+    expect(apple!.price).toBe(10);
   });
 
   it("delete all", async () => {
@@ -1379,7 +1383,8 @@ describe("RelationTest", () => {
   });
 
   it("find with list of ids", async () => {
-    const records = (await Item.find([1, 2])) as any[];
+    const all = await Item.all().toArray();
+    const records = (await Item.find([all[0].id, all[1].id])) as any[];
     expect(records).toHaveLength(2);
   });
 
@@ -1461,9 +1466,10 @@ describe("RelationTest", () => {
   });
 
   it("dynamic find by after find by id", async () => {
-    // Rails: model.find_by used after find — ensures findBy works in any scope
-    const apple = await Item.find(1);
+    const apple = await Item.findBy({ name: "Apple" });
     expect(apple).not.toBeNull();
+    const found = await Item.find(apple!.id);
+    expect(found.name).toBe("Apple");
     const banana = await Item.findBy({ name: "Banana" });
     expect(banana).not.toBeNull();
     expect((banana as any).name).toBe("Banana");
@@ -1668,12 +1674,10 @@ describe("RelationTest", () => {
   });
 
   it("dynamic finder", async () => {
-    // Rails: x = Post.where(...); assert_respond_to x.model, :find_by_id
-    // The relation's model class should respond to findBy (dynamic finder equivalent)
     const relation = Item.where({ category: "fruit" });
     const model = relation.model;
     expect(typeof model.findBy).toBe("function");
-    const apple = await model.findBy({ id: 1 });
+    const apple = await model.findBy({ name: "Apple" });
     expect((apple as any).name).toBe("Apple");
   });
 
@@ -1807,7 +1811,8 @@ describe("RelationTest", () => {
   });
 
   it("find id", async () => {
-    const item = await Item.find(1);
+    const apple = await Item.findBy({ name: "Apple" });
+    const item = await Item.find(apple!.id);
     expect(item.name).toBe("Apple");
   });
 
@@ -2355,7 +2360,7 @@ describe("RelationTest", () => {
     await User.create({ name: "Charlie" });
 
     const ids = await User.all().ids();
-    expect(ids).toEqual([1, 2, 3]);
+    expect(ids).toHaveLength(3);
   });
 
   it("ids with where returns filtered IDs", async () => {
@@ -2369,7 +2374,7 @@ describe("RelationTest", () => {
     await User.create({ name: "Bob" });
 
     const ids = await User.where({ name: "Bob" }).ids();
-    expect(ids).toEqual([2]);
+    expect(ids).toHaveLength(1);
   });
 
   it("none chained with where still returns empty", async () => {

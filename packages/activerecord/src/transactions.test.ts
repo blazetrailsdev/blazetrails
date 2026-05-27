@@ -1881,7 +1881,7 @@ describe("TransactionTest", () => {
         this.attribute("content", "string");
       }
     }
-    const first = (await Post.create({ content: "One" })) as any;
+    const first = (await Post.create({ content: "Have a nice day" })) as any;
     let one: string, two: string, three: string;
 
     await Post.transaction(async () => {

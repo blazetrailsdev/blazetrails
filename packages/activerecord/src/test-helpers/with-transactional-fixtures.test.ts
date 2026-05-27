@@ -389,26 +389,38 @@ describe("concurrency isolation: two concurrent transaction chains stay independ
     const { fixtures: sidecarA } = createSidecarTestAdapter();
     const { fixtures: sidecarB } = createSidecarTestAdapter();
 
-    // Capture what chain B observes WHILE chain A is inside a transaction.
-    // Promise.all schedules both concurrently in the same microtask queue,
-    // exercising the AsyncContext boundary between the two branches.
+    // Coordinate so chain B reads state WHILE chain A holds an open transaction.
+    // Without coordination, chain B would read before chain A's async TM open,
+    // passing vacuously regardless of whether the filter is in place.
+    let signalBReady: () => void;
+    let signalADone: () => void;
+    const bReady = new Promise<void>((r) => {
+      signalBReady = r;
+    });
+    const aDone = new Promise<void>((r) => {
+      signalADone = r;
+    });
+
     let bObservedOpen = -1;
     let bObservedInTransaction = true;
-    let aRan = false;
 
     await Promise.all([
       sidecarA.withinNewTransaction({ joinable: false }, async () => {
-        aRan = true;
-        // Yield control so chain B runs after chain A is mid-transaction.
-        await Promise.resolve();
+        // Transaction is now open. Signal chain B to read.
+        signalBReady!();
+        // Hold the transaction open until chain B has read.
+        await aDone;
       }),
       (async () => {
+        // Wait until chain A is inside a live transaction before reading.
+        await bReady;
         bObservedOpen = sidecarB.openTransactions;
         bObservedInTransaction = sidecarB.inTransaction;
+        // Let chain A finish.
+        signalADone!();
       })(),
     ]);
 
-    expect(aRan).toBe(true);
     // Chain B must not have observed chain A's transaction state.
     expect(bObservedOpen).toBe(0);
     expect(bObservedInTransaction).toBe(false);

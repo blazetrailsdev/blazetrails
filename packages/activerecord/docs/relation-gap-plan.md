@@ -7,61 +7,84 @@
 
 ## Summary by cluster
 
-| Cluster                                                   | Tests | Root cause                                                                        |
-| --------------------------------------------------------- | ----- | --------------------------------------------------------------------------------- |
-| WHERE with associations/polymorphic/CPK                   | 31    | `PredicateBuilder#buildFromHash` doesn't expand association keys                  |
-| load_async / FutureResult                                 | 28    | Ruby-thread-only; PERMANENT-SKIP                                                  |
-| Scoping — Arel nodes in `order()` / `reverseOrder`        | 20    | `orderBang` pre-renders Arel nodes to raw strings; `reverseOrder` can't flip them |
-| Scoping — query cache + select narrowing                  | 8     | 6 need query cache (→ P12), 2 need select narrowing (→ R3b)                       |
-| Query cache                                               | 27    | Blocked on connection-pool (per-thread cache architecture)                        |
-| Hash-form select                                          | 23    | `arelColumnsFromHash` doesn't handle `{ expr => alias }`                          |
-| WhereChain `.associated`/`.missing` with enums            | 12    | Bypasses predicate builder; enum cast never applied                               |
-| lock / FOR UPDATE                                         | 7     | Lock clause not propagated to Arel SQL manager                                    |
-| Standalone relation (joins, eager, race, fixture)         | 8     | Parameterized joins (2), eager_load toSql (3 → assoc A5), race/fixture/Ruby (3)   |
-| Calculations with associations                            | 12    | Fixture-dependent + grouped association join                                      |
-| `inOrderOf`                                               | 4     | `field-ordered-values.ts` not implemented                                         |
-| Misc (batches, update-all, delegation, predicate-builder) | ~6    | Scattered single-test gaps                                                        |
+| Cluster                                                   | Tests | Root cause                                                                                          |
+| --------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------- |
+| WHERE with associations/polymorphic/CPK                   | 31    | `PredicateBuilder` handles basic case; edge cases missing (nested, CPK nil, cross-table, Arel star) |
+| load_async / FutureResult                                 | 28    | Ruby-thread-only; PERMANENT-SKIP                                                                    |
+| Scoping — Arel nodes in `order()` / `reverseOrder`        | 20    | `orderBang` pre-renders Arel nodes to raw strings; `reverseOrder` can't flip them                   |
+| Scoping — query cache + select narrowing                  | 8     | 6 need query cache (→ P12), 2 need select narrowing (→ R3b)                                         |
+| Query cache                                               | 27    | Blocked on connection-pool (per-thread cache architecture)                                          |
+| Hash-form select                                          | 23    | `arelColumnAliasesFromHash` handles basics; edge cases: raw-SQL keys, nil, reserved aliases         |
+| WhereChain `.associated`/`.missing` with enums            | 12    | Bypasses predicate builder; enum cast never applied                                                 |
+| lock / FOR UPDATE                                         | 7     | Lock clause not propagated to Arel SQL manager                                                      |
+| Standalone relation (joins, eager, race, fixture)         | 8     | Parameterized joins (2), eager_load toSql (3 → assoc A5), race/fixture/Ruby (3)                     |
+| Calculations with associations                            | 12    | Fixture-dependent + grouped association join                                                        |
+| `inOrderOf`                                               | 4     | Implemented in `relation.ts:959`; edge cases: expressions, associations, `filter: false`            |
+| Misc (batches, update-all, delegation, predicate-builder) | ~6    | Scattered single-test gaps                                                                          |
 
 ---
 
 ## Track 1: WHERE — association key expansion (unlocks ~31 tests)
 
-### PR R1: `PredicateBuilder` association-key expansion
+### PR R1: `PredicateBuilder` association-key edge cases
 
-**Problem:** `PredicateBuilder#buildFromHash` handles only plain column→value
-pairs. When Rails sees `where(author: record)` or
-`where(comments: relation)`, it walks the reflection chain, resolves the FK
-(and type column for polymorphic), and builds the predicate. Our builder has
-no such path — the `relation/where-clause.ts` file has no `whereClauseFor`
-equivalent, and `query-methods.ts:~1991` has a comment acknowledging the gap.
+**Problem:** `PredicateBuilder#buildFromHash` already handles the core
+association-key expansion path (`predicate-builder.ts:63–192`) including
+`isAssociatedWith`/`associatedTable`, polymorphic (via `PolymorphicArrayValue`),
+through, and non-polymorphic associations (via `AssociationQueryValue`).
+Basic `where(author: record)` works. The 31 skipped tests cover specific
+sub-cases that the existing expansion doesn't handle:
+
+- Cross-table joins: `where` with table name and target table already joined
+- Non-PK FK: `belongs_to` where with non-primary-key foreign key
+- Default scope propagation: `where` on association with `default_scope`
+- Strong parameters: `where` with `ActionController::Parameters`
+- Arel star: `where` with `Arel.star`
+- CPK nil: `where` with nil composite primary key association
+- Nested belongs_to: `belongs_to` nested where (2+ levels deep)
+- Polymorphic edge cases: nested, decorated, STI, array, collection (12 tests)
+- Type casting: `rational`/`duration` for string columns
+- Through association: `where` with through-association key
 
 **Files:**
 
-- `relation/predicate-builder.ts` — add `expandAssociationKey` branch in `buildFromHash`
-- `relation/where-clause.ts` — may need `whereClauseFor` or the expansion can live in predicate-builder
+- `relation/predicate-builder.ts:63–192` — extend existing `buildFromHashAssociation`
+  for nested, cross-table, non-PK FK, and Arel star cases
+- `relation/predicate-builder/association-query-value.ts` — CPK nil handling,
+  strong params coercion
 
-**Rails ref:** `relation/predicate_builder.rb:34–58` (`build_from_hash` association detection),
-`relation/predicate_builder/association_query_value.rb` (builds FK/type predicates)
+**Rails ref:** `relation/predicate_builder.rb:34–58`,
+`relation/predicate_builder/association_query_value.rb`,
+`relation/predicate_builder/polymorphic_array_value.rb`
 
 **Est:** ~150 LOC
 
-**Unlocks:** 31 tests in `where.test.ts` (association where, polymorphic where, CPK where)
+**Unlocks:** 31 tests in `where.test.ts`
 
 ---
 
 ## Track 2: Hash-form select (unlocks ~23 tests)
 
-### PR R2: `select()` hash argument — expression-to-alias mapping
+### PR R2: `select()` hash argument edge cases
 
-**Problem:** `arelColumnsFromHash` (query-methods.ts:1827–1842) handles
-`{ table: [col, col] }` form but throws `TypeError` for
-`{ "UPPER(title)": "title" }` (expression → alias). Rails builds an
-`Arel::Nodes::As` node wrapping a `SqlLiteral` with a quoted alias.
+**Problem:** `processSelectArgs` (query-methods.ts:1858) routes hash args
+to `arelColumnAliasesFromHash` (line 1873), which already handles nested
+object `{ table: { col: alias } }`, array `{ table: [col, col] }`, and
+string/symbol alias cases. The 23 skipped tests cover edge cases the
+existing handler doesn't cover:
+
+- Expression-to-alias: `{ "UPPER(title)": "title" }` where the key is
+  raw SQL, not a table name
+- `select(nil)` should clear the select list but `String(nil)` produces
+  the literal column name "null"
+- Reserved-word aliases: `{ expr: :from, title: :group }`
+- Non-existent field errors: `{ foo: :post_title }` should raise
 
 **Files:**
 
-- `relation/query-methods.ts:1827–1842` — `arelColumnsFromHash`
-- `relation/query-methods.ts:1858` — `processSelectArgs` dispatch
+- `relation/query-methods.ts:1873–1900` — `arelColumnAliasesFromHash` — extend
+  for raw-SQL keys and reserved-word aliases
+- `relation/query-methods.ts:1858` — `processSelectArgs` — add nil guard
 
 **Rails ref:** `relation/query_methods.rb` `arel_columns` hash branch
 
@@ -157,20 +180,24 @@ routing to work)
 
 ## Track 5: `inOrderOf` / field-ordered values (unlocks ~4 tests)
 
-### PR R5: Implement `Relation#inOrderOf`
+### PR R5: Extend `Relation#inOrderOf` for expressions, associations, `filter: false`
 
-**Problem:** `relation/field-ordered-values.ts` exists but the method is
-not wired or the implementation doesn't handle expressions and association
-joins.
+**Problem:** `inOrderOf` is already implemented inline in
+`relation.ts:959–1001` with active tests for basic usage (empty values,
+enums, string columns, composition). The 4 skipped tests cover edge cases:
+
+- Expression form: `inOrderOf(Arel.sql("..."), values)`
+- Association joins: `inOrderOf` on a column from a joined association
+- `filter: false` option: return all records, just reorder (don't filter)
 
 **Files:**
 
-- `relation/field-ordered-values.ts` — full implementation
-- `relation/query-methods.ts` — wire `inOrderOf` into the relation chain
+- `relation.ts:959–1001` — extend existing `inOrderOf` for expression
+  input and `filter: false` option
 
 **Rails ref:** `relation/query_methods.rb` `in_order_of`
 
-**Est:** ~80 LOC
+**Est:** ~40 LOC
 
 ---
 

@@ -223,7 +223,7 @@ generic `Error`, not the Rails-named `AssociationTypeMismatch` class.
 **Problem:** ~24 of 27 skips are `/* fixture-dependent */` — the has_one
 implementation is largely complete but tests lack data.
 
-**Depends on:** Phase G fixture adoption (see `project_phase_g_fixture_adoption_epic.md`)
+**Depends on:** Phase G fixture adoption (see `docs/activerecord/fixtures-adoption-plan.md`)
 
 **Est:** ~200 LOC (test bodies only)
 

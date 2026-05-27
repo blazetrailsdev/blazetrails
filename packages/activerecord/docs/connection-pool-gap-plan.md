@@ -32,29 +32,29 @@ adapter.test.ts also has 22 fixture-blocked, 10 transaction-blocked,
 
 ## Track 1: Adapter retry & reconnect (unlocks ~18 tests)
 
-### PR P1: `withRawConnection` retry/deadline knob
+### PR P1: `withRawConnection` retry behavior refinement
 
-**Problem:** `withRawConnection` has no `allowRetry` + `retryDeadline`
-implementation. Idempotent SELECTs should auto-retry on `ConnectionFailed`;
-non-retryable executes should surface the error. The `retryDeadline`
-expiration path is missing entirely.
+**Problem:** `withRawConnection` (`abstract-adapter.ts:1541–1601`) already
+implements `allowRetry`, `connectionRetries`, `retryDeadline`, reconnect
+handling, and retryable-error checks. The skeleton is complete. The skipped
+tests cover specific behavioral gaps on top of this:
+
+- Default `allowRetry: false` must surface `ConnectionFailed` (not swallow)
+- `retryDeadline` expiration must throw `ConnectionFailed` explicitly
+- Idempotent SELECT auto-retry needs integration with `finder-methods.ts`
+  marking idempotent queries as `allowRetry: true`
+- Non-retryable execute raises `ConnectionFailed`; _next_ idempotent query
+  must trigger reconnect (the "reconnect on next use" pattern)
 
 **Files:**
 
-- `connection-adapters/abstract-adapter.ts` — `withRawConnection` method
+- `connection-adapters/abstract-adapter.ts:1541–1601` — tighten error
+  surfacing and deadline expiration behavior
+- `relation/finder-methods.ts` — propagate `allowRetry: true` on idempotent finds
 
-**Rails ref:** `abstract_adapter.rb` `with_raw_connection` (retry loop,
-`allow_retry`, `deadline`, `materialize_transactions`)
+**Rails ref:** `abstract_adapter.rb` `with_raw_connection` error handling
 
-**Specific gaps (from ROOT-CAUSE comments):**
-
-- `allowRetry` + `retryDeadline` knob not implemented
-- Default `allowRetry: false` must surface `ConnectionFailed`
-- `retryDeadline` expiration must surface `ConnectionFailed`
-- Idempotent SELECT auto-retry on `ConnectionFailed`
-- Non-retryable execute raises `ConnectionFailed`; next idempotent query reconnects
-
-**Est:** ~150 LOC
+**Est:** ~100 LOC
 
 ---
 
@@ -181,22 +181,27 @@ are incomplete.
 
 ## Track 4: ConnectionHandler + multi-DB (unlocks ~22 tests)
 
-### PR P8: `establishConnection` role validation + `removeConnectionPool`
+### PR P8: `establishConnection` role validation + handler edge cases
 
-**Problem:** `ConnectionHandler` doesn't validate role names on
-`establishConnection`. `removeConnectionPool` is missing — needed for
-test cleanup and dynamic pool management. Raw-config auto-resolution path
-(hash → `HashConfig`) incomplete.
+**Problem:** `ConnectionHandler` already implements `removeConnectionPool`
+(`connection-handler.ts:185–195`) and wraps raw hash configs into
+`HashConfig` in `establishConnection` (lines 88–129). The 11 skipped
+tests cover specific edge cases:
+
+- Role name validation on `establishConnection` (reject invalid roles)
+- Pool-config-override path when re-establishing with different config
+- `connectedTo` multi-DB role lookup failures (role not found → clear error)
+- Handler clearing (`clearAllConnections!`, `flushIdleConnections!`) edge cases
 
 **Files:**
 
-- `connection-adapters/abstract/connection-handler.ts` — `establishConnection`,
-  add `removeConnectionPool`
+- `connection-adapters/abstract/connection-handler.ts:88–129` —
+  `establishConnection` role validation branch
 
-**Rails ref:** `connection_handler.rb` `establish_connection`,
-`remove_connection_pool`
+**Rails ref:** `connection_handler.rb` `establish_connection` (role validation),
+`clear_all_connections!`
 
-**Est:** ~80 LOC
+**Est:** ~60 LOC
 
 ---
 

@@ -40,8 +40,7 @@ export class TestRequest extends Request {
   }
 
   get host(): string {
-    const httpHost = this.env["HTTP_HOST"] as string | undefined;
-    return httpHost ? httpHost.replace(/:\d+$/, "") : "";
+    return super.host;
   }
 
   set host(host: string) {

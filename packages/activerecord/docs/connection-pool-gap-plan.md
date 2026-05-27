@@ -350,26 +350,52 @@ P8 → P11 (DatabaseSelector tests need handler)
 P2, P4, P5, P10, P12, P13, P14, P15 — all standalone
 ```
 
-## Priority order
+## Recommended priority
 
-| #   | PR  | Tests unlocked              | Depends on |
-| --- | --- | --------------------------- | ---------- |
-| 1   | P4  | 20 (config resolution)      | —          |
-| 2   | P1  | 12 (retry/reconnect core)   | —          |
-| 3   | P9  | 18 (multi-DB + swapping)    | P8         |
-| 4   | P8  | 11 (handler basics)         | —          |
-| 5   | P12 | 14 (query cache)            | —          |
-| 6   | P10 | 11 (ConnectionManagement)   | —          |
-| 7   | P6  | 9 (pool lifecycle)          | —          |
-| 8   | P2  | 6 (adapter lifecycle)       | —          |
-| 9   | P11 | 16 (DatabaseSelector tests) | P8         |
-| 10  | P5  | 7 (config edge cases)       | —          |
-| 11  | P3  | 6 (retryable queries)       | P1         |
-| 12  | P7  | 3 (pooled connections)      | P6         |
-| 13  | P13 | 4 (StandaloneConnection)    | —          |
-| 14  | P14 | 4 (leasing tests)           | —          |
-| 15  | P15 | 2 (prepared stmts toggle)   | —          |
+Ordered by: (1) no unsatisfied dependencies, (2) tests unlocked per LOC,
+(3) downstream unlock potential.
 
-**Total actionable:** ~143 tests across 15 PRs
-**Permanently skipped:** ~6 tests (GVL/fork — Ruby threads)
-**Cross-blocker:** ~13 tests also blocked on fixtures/schema/transactions
+### Tier 1 — high leverage, no dependencies (start here)
+
+| PR  | Tests | Est LOC | Why first                                                         |
+| --- | ----- | ------- | ----------------------------------------------------------------- |
+| P4  | 20    | ~100    | Highest unlock; config resolution is foundational for all pools   |
+| P8  | 11    | ~80     | Gates P9 (18 tests) + P11 (16 tests) = 34 downstream tests        |
+| P1  | 12    | ~150    | Retry/reconnect is user-visible reliability; gates P3             |
+| P10 | 11    | ~60     | ConnectionManagement middleware — best tests-per-LOC in this tier |
+
+### Tier 2 — gated on Tier 1, or moderate standalone
+
+| PR  | Tests | Est LOC | Depends on | Why                                                   |
+| --- | ----- | ------- | ---------- | ----------------------------------------------------- |
+| P9  | 18    | ~150    | P8         | Multi-DB + nested switching — largest gated PR        |
+| P12 | 14    | ~100    | —          | Query cache per-context; also unblocks relation tests |
+| P2  | 6     | ~120    | —          | Adapter lifecycle — correctness fix                   |
+| P6  | 9     | ~100    | —          | Pool lifecycle; gates P7                              |
+| P5  | 7     | ~60     | —          | Config edge cases — can bundle with P4                |
+
+### Tier 3 — gated on Tier 2 or low leverage
+
+| PR  | Tests | Est LOC | Depends on | Why                                                 |
+| --- | ----- | ------- | ---------- | --------------------------------------------------- |
+| P11 | 16    | ~200    | P8         | DatabaseSelector test bodies — high LOC, tests only |
+| P3  | 6     | ~60     | P1         | Retryable query classification                      |
+| P7  | 3     | ~80     | P6         | Pooled connection checkout/checkin                  |
+| P13 | 4     | ~40     | —          | StandaloneConnection — small, clean scope           |
+| P14 | 4     | ~60     | —          | Adapter leasing test bodies                         |
+| P15 | 2     | ~30     | —          | Prepared statements toggle — smallest PR            |
+
+### Recommended parallel lanes
+
+- **Lane A:** P8 → P9 → P11 (handler → multi-DB → DatabaseSelector)
+- **Lane B:** P1 → P3 (retry knob → retryable classification)
+- **Lane C:** P4 + P5 (config resolution — can be one PR)
+- **Lane D:** P10 + P12 (middleware + query cache — no overlap)
+- **Lane E:** P6 → P7 (pool lifecycle → pooled connections)
+
+**Coverage:** 162 tests total.
+
+- **Actionable:** ~143 tests across 15 PRs
+- **Permanently skipped:** ~6 tests (GVL/fork — Ruby threads)
+- **Cross-blocker:** ~13 tests also blocked on fixtures/schema/transactions
+  (see those respective plans when they exist)

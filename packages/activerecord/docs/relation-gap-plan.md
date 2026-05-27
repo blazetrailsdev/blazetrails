@@ -242,24 +242,46 @@ R3 ──→ R3b (select narrowing is tangential but same scoping area)
 R5, R6a, R6b, R6c (all standalone)
 ```
 
-## Priority order
+## Recommended priority
 
-| #   | PR  | Tests unlocked                 | Depends on |
-| --- | --- | ------------------------------ | ---------- |
-| 1   | R1  | 31 (where + associations)      | —          |
-| 2   | R3  | 28 (Arel order + reverse)      | —          |
-| 3   | R2  | 23 (hash select)               | —          |
-| 4   | R4  | 12 (associated/missing + enum) | R1         |
-| 5   | R6a | 7 (lock / FOR UPDATE)          | —          |
-| 6   | R5  | 4 (inOrderOf)                  | —          |
-| 7   | R6c | 2 (parameterized joins)        | —          |
-| 8   | R6b | 1 (having hash)                | —          |
-| 9   | R3b | 2 (select narrowing)           | R3         |
+Ordered by: (1) no unsatisfied dependencies, (2) tests unlocked per LOC,
+(3) downstream unlock potential.
+
+### Tier 1 — high leverage, no dependencies (start here)
+
+All three are independent and can run in parallel.
+
+| PR  | Tests | Est LOC | Why first                                                         |
+| --- | ----- | ------- | ----------------------------------------------------------------- |
+| R1  | 31    | ~150    | Highest unlock; gates R4; `where(author: record)` is table-stakes |
+| R3  | 28    | ~80     | Best tests-per-LOC ratio; Arel order is core query API            |
+| R2  | 23    | ~80     | Hash select is a commonly-hit DX gap                              |
+
+### Tier 2 — moderate leverage or gated
+
+| PR  | Tests | Est LOC | Depends on | Why                                         |
+| --- | ----- | ------- | ---------- | ------------------------------------------- |
+| R4  | 12    | ~60     | R1         | WhereChain enum — completes the WHERE track |
+| R6a | 7     | ~40     | —          | Lock is a user-visible query API gap        |
+| R5  | 4     | ~80     | —          | `inOrderOf` — standalone, clean scope       |
+
+### Tier 3 — small or low urgency
+
+| PR  | Tests | Est LOC | Depends on | Why                                           |
+| --- | ----- | ------- | ---------- | --------------------------------------------- |
+| R6c | 2     | ~40     | —          | Parameterized join strings                    |
+| R6b | 1     | ~30     | —          | Having hash form — bundle with R6c if desired |
+| R3b | 2     | ~60     | R3         | Select narrowing — niche, low urgency         |
+
+### Recommended parallel lanes
+
+- **Lane A:** R1 → R4 (WHERE association expansion → WhereChain enum)
+- **Lane B:** R3 → R3b (Arel order → select narrowing)
+- **Lane C:** R2 + R2b (hash select — standalone)
+- **Lane D:** R6a + R6b + R6c (bundle all three small standalone PRs into one)
 
 **Coverage:** 275 tests total.
 
 - **Actionable here:** ~110 tests across 9 PRs (R1–R6c)
 - **Cross-blocked:** ~47 tests (connection-pool P12, associations A5, Phase G fixtures)
 - **Permanently skipped:** ~36 tests (load_async, GVL/fork, SimpleDelegator)
-- **Absorbed into other PRs:** ~82 tests (reorder/reverseOrder → R3, lock → R6a,
-  scoping Arel → R3, relations.test.ts select → R2)

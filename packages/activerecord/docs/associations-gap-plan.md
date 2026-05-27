@@ -412,31 +412,62 @@ H1 (standalone)
 A4 + A5 → H2 (nested-through needs through-scope + JoinDependency)
 ```
 
-## Priority order
+## Recommended priority
 
-| #   | PR  | Tests unlocked                  | Depends on |
-| --- | --- | ------------------------------- | ---------- |
-| 1   | A1  | ~40 (preloader target)          | —          |
-| 2   | H1  | ~13 (association scope)         | —          |
-| 3   | C1  | ~15 (auto inverse)              | —          |
-| 4   | A3  | ~20 (polymorphic preload)       | —          |
-| 5   | B1  | ~15 (HMT build)                 | —          |
-| 6   | F1  | ~11 (HABTM join table)          | —          |
-| 7   | A2  | ~10 (scope/strict)              | —          |
-| 8   | B3  | ~15 (HMT delete)                | —          |
-| 9   | A4  | ~15 (through scope/STI)         | —          |
-| 10  | E1  | ~8 (callback abort)             | —          |
-| 11  | F2  | ~8 (HABTM extend + scope chain) | —          |
-| 12  | C2  | ~5 (inverse on push)            | C1         |
-| 13  | B2  | ~10 (HMT concat)                | B1         |
-| 14  | E2  | ~4 (create dedup)               | E1         |
-| 15  | D1  | ~3 (type mismatch)              | —          |
-| 16  | A5  | ~20 (nested eager_load)         | A1–A4      |
-| 17  | G1  | ~21 (has_one :through)          | A5         |
-| 18  | H2  | ~12 (nested-through edges)      | A4, A5     |
-| 19  | C3  | ~3 (preloader inverse)          | C1         |
-| 20  | D2  | ~24 (has_one fixtures)          | Phase G    |
+Ordered by: (1) no unsatisfied dependencies, (2) tests unlocked per LOC,
+(3) downstream unlock potential (how many later PRs does this gate?).
 
-**Coverage:** 339 tests total. ~310 accounted for above, ~18 permanent-skip
-(marshal, Ruby-only), ~10 scattered single-test gaps (counter cache,
-`belongsToRequiredByDefault`, nested attributes — see Track 9).
+### Tier 1 — high leverage, no dependencies (start here)
+
+These are independent of each other and can run in parallel.
+
+| PR  | Tests | Est LOC | Why first                                                         |
+| --- | ----- | ------- | ----------------------------------------------------------------- |
+| A1  | ~40   | ~80     | Highest single-PR unlock; fixes the core preloader contract       |
+| C1  | ~15   | ~20     | Smallest change, gates C2+C3; automatic inverse is table-stakes   |
+| A3  | ~20   | ~60     | Polymorphic preload is broken for every polymorphic association   |
+| B1  | ~15   | ~80     | HMT build is a user-visible API gap; gates B2+B3                  |
+| H1  | ~13   | ~150    | AssociationScope is the foundation for scoped eager/preload paths |
+
+### Tier 2 — high leverage, no dependencies but lower unlock ratio
+
+| PR  | Tests | Est LOC | Why                                                                |
+| --- | ----- | ------- | ------------------------------------------------------------------ |
+| F1  | ~11   | ~120    | HABTM join-table correctness (quoting, aliasing, timestamps)       |
+| A2  | ~10   | ~60     | `scope_for_association` + strict loading; completes preloader core |
+| B3  | ~15   | ~120    | HMT delete/remove — independent of B1 if needed                    |
+| A4  | ~15   | ~100    | Through-scope + STI grouping; gates A5, H2                         |
+| E1  | ~8    | ~100    | Callback abort semantics — correctness fix                         |
+
+### Tier 3 — gated on Tier 1/2
+
+| PR  | Tests | Est LOC | Depends on     | Why                                        |
+| --- | ----- | ------- | -------------- | ------------------------------------------ |
+| C2  | ~5    | ~40     | C1             | Inverse on push — completes inverse track  |
+| B2  | ~10   | ~100    | B1             | HMT concat — completes HMT write track     |
+| F2  | ~8    | ~80     | —              | HABTM extend + scope chain                 |
+| E2  | ~4    | ~80     | E1             | create() dedup — completes callback track  |
+| A5  | ~20   | ~150    | A1, A2, A3, A4 | Nested eager_load — hardest PR in the plan |
+
+### Tier 4 — gated on Tier 3 or external blockers
+
+| PR  | Tests | Est LOC | Depends on | Why                                       |
+| --- | ----- | ------- | ---------- | ----------------------------------------- |
+| G1  | ~21   | ~200    | A5         | has_one :through eager loading            |
+| H2  | ~12   | ~100    | A4, A5     | Nested-through edge cases                 |
+| C3  | ~3    | ~30     | C1         | Preloader inverse wiring                  |
+| D1  | ~3    | ~30     | —          | AssociationTypeMismatch error class       |
+| D2  | ~24   | ~200    | Phase G    | has_one fixture bodies — external blocker |
+
+### Recommended parallel lanes
+
+If running multiple agents, these lanes have zero file overlap:
+
+- **Lane A:** A1 → A2 → A5 (preloader core → eager_load)
+- **Lane B:** B1 → B2 → B3 (HMT writes)
+- **Lane C:** C1 → C2 (inverse_of)
+- **Lane D:** H1 (association scope — standalone)
+- **Lane E:** F1 (HABTM join table — standalone)
+
+**Coverage:** 339 tests total. ~18 permanent-skip (marshal, Ruby-only),
+~10 scattered single-test gaps (Track 9). All others accounted for above.

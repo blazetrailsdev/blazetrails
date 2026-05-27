@@ -211,24 +211,24 @@ function applyFromClause(rel: CalculationRelation, sql: string): string {
   if (rel._fromClause.isEmpty()) return sql;
   const raw = rel._fromClause.value;
   const alias = rel._fromClause.name;
-  // Compile the raw value: string stays as-is; Relation/Arel nodes expose toSql().
-  // This mirrors Rails' execute_simple_calculation which builds FROM via relation.arel
-  // (full buildArel path). We replicate that by compiling nodes here.
-  let fromSource: string;
+  // Mirror Relation#toSql's FROM-clause handling (relation.ts ~3550):
+  //   Nodes.Node  → compile via toSql(), no parens (e.g. SqlLiteral '"archived_topics"')
+  //   Relation    → wrap compiled SQL in parens as subquery + alias
+  //   string      → use as-is
+  let fromExpr: string;
   if (typeof raw === "string") {
-    fromSource = raw;
+    fromExpr = alias ? `${raw} ${_safeAlias(alias)}` : raw;
+  } else if (raw instanceof Nodes.Node) {
+    const compiled: string = raw.toSql();
+    fromExpr = alias ? `${compiled} ${_safeAlias(alias)}` : compiled;
   } else if (raw !== null && typeof (raw as any).toSql === "function") {
+    // Relation or other object with toSql() — treat as subquery.
     const subSql: string = (raw as any).toSql();
-    // Wrap sub-select in parens; use alias or a fallback.
     const safeName = alias ? _safeAlias(alias) : "subquery";
-    return sql.replace(
-      /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
-      () => `FROM (${subSql}) ${safeName}`,
-    );
+    fromExpr = `(${subSql}) ${safeName}`;
   } else {
     return sql;
   }
-  const fromExpr = alias ? `${fromSource} ${_safeAlias(alias)}` : fromSource;
   return sql.replace(
     /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
     () => `FROM ${fromExpr}`,
@@ -419,7 +419,9 @@ export async function performCount(
       this._applyWheresToManager(innerManager, table);
       const countAll = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
       const outerManager = table.project(countAll.as("count"));
-      outerManager.from(new Nodes.SqlLiteral(`(${innerManager.toSql()}) AS subquery`));
+      outerManager.from(
+        new Nodes.SqlLiteral(`(${applyFromClause(this, innerManager.toSql())}) AS subquery`),
+      );
       const result = await this._modelClass.connection.selectAll(
         prependCtes(this, outerManager.toSql()),
         `${this._modelClass.name} Count`,

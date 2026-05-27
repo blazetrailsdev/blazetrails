@@ -371,6 +371,8 @@ interface TransactionRecordSnapshot {
   frozen: boolean;
   id: unknown;
   previouslyNewRecord: boolean;
+
+  attributes: any;
 }
 
 /** @internal */
@@ -379,13 +381,21 @@ export function rememberTransactionRecordState(this: Base): void {
   // Initialize state once per outermost transaction, then increment level for
   // each savepoint. Mirrors Rails' @_start_transaction_state ||= {...}; level += 1.
   if (!r._startTransactionState) {
+    const snapshotAttrs = r._attributes.deepDup();
+    // Revert any pre-TX dirty changes so the snapshot holds DB baseline values.
+    // On rollback, _dirty.snapshot(state.attributes) will then establish the
+    // correct original baseline, and redetectChanges will show the right diff.
+    const dirtyChanges = r._dirty.changes as Record<string, [unknown, unknown]>;
+    for (const [name, [original]] of Object.entries(dirtyChanges)) {
+      snapshotAttrs.writeFromUser(name, original);
+    }
     r._startTransactionState = {
       newRecord: r._newRecord,
       destroyed: r._destroyed,
       frozen: r._attributes.isFrozen(),
       id: this.id,
       previouslyNewRecord: r._previouslyNewRecord,
-      attributes: r._attributes.deepDup(),
+      attributes: snapshotAttrs,
       level: 0,
     };
   }
@@ -425,9 +435,14 @@ export function restoreTransactionRecordState(
     r._attributes = r._attributes.deepDup();
   }
 
+  // Restore dirty tracking baseline to pre-transaction state while keeping
+  // current in-memory attribute values. Mirrors Rails' attribute map that
+  // rebuilds @attributes with snapshotted baseline + current values, so
+  // changes() reflects the diff between pre-TX and in-memory state.
+  r._dirty.snapshot(snapshot.attributes);
+  r._dirty.redetectChanges(r._attributes);
+
   // Restore the primary key if it was auto-assigned during insert.
-  // Guard prevents clobbering dirty-tracking state already established by
-  // _restoreTransactionRecordState (which calls redetectChanges before this).
   if (snapshot.newRecord && !Array.isArray(this.id)) {
     const ctor = this.constructor as typeof Base;
     const pk = ctor.primaryKey as string;

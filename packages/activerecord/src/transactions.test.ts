@@ -21,6 +21,7 @@ import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
 import { useHandlerTransactionalFixtures } from "./test-helpers/use-handler-transactional-fixtures.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import { SQLite3Adapter } from "./connection-adapters/sqlite3-adapter.js";
+import { AbstractAdapter } from "./index.js";
 
 const openAdapters: SQLite3Adapter[] = [];
 
@@ -1281,7 +1282,7 @@ describe("TransactionTest", () => {
     } catch {
       /* expected */
     }
-    expect(true).toBe(true);
+    expect(post.changes["title"]).toEqual(["original", "changed"]);
   });
 
   it("rollback dirty changes multiple saves", async () => {
@@ -1523,35 +1524,71 @@ describe("TransactionTest", () => {
     await defineSchema({ posts: { title: "string" } });
   });
 
-  it("rollback dirty changes even with raise during rollback removes from pool", () => {
-    expect(true).toBe(true);
+  it.skip("rollback dirty changes even with raise during rollback removes from pool", () => {
+    // Requires pool-level connection eviction triggered by blocking I/O failure
+    // — no equivalent low-level pool API in this environment.
   });
-  it("rollback dirty changes even with raise during rollback doesnt commit transaction", () => {
-    expect(true).toBe(true);
+  it.skip("rollback dirty changes even with raise during rollback doesnt commit transaction", () => {
+    // Same as above — pool internals not accessible.
   });
-  it("connection removed from pool when commit raises and rollback raises", () => {
-    expect(true).toBe(true);
+  it.skip("connection removed from pool when commit raises and rollback raises", () => {
+    // Pool connection eviction on dual raise — pool internals not accessible.
   });
-  it("connection removed from pool when begin raises after successfully beginning a transaction", () => {
-    expect(true).toBe(true);
+  it.skip("connection removed from pool when begin raises after successfully beginning a transaction", () => {
+    // Pool connection eviction — pool internals not accessible.
   });
-  it("connection removed from pool when thread killed in begin after successfully beginning a transaction", () => {
-    expect(true).toBe(true);
+  it.skip("connection removed from pool when thread killed in begin after successfully beginning a transaction", () => {
+    // Requires Ruby Thread.kill semantics — not available in JS.
   });
-  it("rollback dirty changes then retry save on new record with autosave association", () => {
-    expect(true).toBe(true);
+  it.skip("rollback dirty changes then retry save on new record with autosave association", () => {
+    // Autosave associations not yet ported.
   });
-  it("add to null transaction", () => {
-    expect(true).toBe(true);
+  it.skip("add to null transaction", () => {
+    // Calls private Ruby method send(:add_to_transaction) — not exposed.
   });
-  it("deprecation on ruby timeout outside inner transaction", () => {
-    expect(true).toBe(true);
+  it.skip("deprecation on ruby timeout outside inner transaction", () => {
+    // Requires Ruby catch/throw non-local exit — not available in JS.
   });
-  it("rolling back in a callback rollbacks before save", () => {
-    expect(true).toBe(true);
+  it("rolling back in a callback rollbacks before save", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("approved", "boolean");
+        this.beforeSave((record: any) => {
+          if (record.approved) throw new Rollback();
+        });
+      }
+    }
+    await defineSchema({ posts: { title: "string", approved: "boolean" } });
+    const first = await Post.create({ title: "First", approved: false });
+
+    await Post.transaction(async () => {
+      (first as any).approved = true;
+      await (first as any).save();
+    });
+
+    const reloaded = await Post.find(first.id);
+    expect((reloaded as any).approved).toBe(false);
   });
-  it("raising exception in nested transaction restore state in save", () => {
-    expect(true).toBe(true);
+  it("raising exception in nested transaction restore state in save", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.afterSave(() => {
+          throw new Error("Make the transaction rollback");
+        });
+      }
+    }
+    await defineSchema({ posts: { title: "string" } });
+    const post = Post.new({ title: "A new post" }) as any;
+
+    await expect(
+      Post.transaction(async () => {
+        await post.save();
+      }),
+    ).rejects.toThrow("Make the transaction rollback");
+
+    expect(post.isNewRecord()).toBe(true);
   });
   it("transaction state is cleared when record is persisted", async () => {
     class Post extends Base {
@@ -1562,47 +1599,260 @@ describe("TransactionTest", () => {
     const p = await Post.create({ title: "txn-state" });
     expect((p as any).isPersisted()).toBe(true);
   });
-  it("cancellation from before destroy rollbacks in destroy", () => {
-    expect(true).toBe(true);
+  it("cancellation from before destroy rollbacks in destroy", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.beforeDestroy(() => false);
+      }
+    }
+    await defineSchema({ posts: { title: "string" } });
+    const post = (await Post.create({ title: "to keep" })) as any;
+    const result = await post.destroy();
+    expect(result).toBeFalsy();
+    const reloaded = await Post.find(post.id);
+    expect(reloaded).toBeDefined();
   });
-  it("callback rollback in create with record invalid exception", () => {
-    expect(true).toBe(true);
+  it("callback rollback in create with record invalid exception", async () => {
+    const { RecordInvalid } = await import("./index.js");
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.afterCreate(function (this: any) {
+          throw new RecordInvalid(this);
+        });
+      }
+    }
+    await defineSchema({ posts: { title: "string" } });
+    const newPost = (await Post.create({ title: "A new post" })) as any;
+    expect(newPost.isPersisted()).toBe(false);
+    expect(newPost.id).toBeNull();
   });
-  it("callback rollback in create with rollback exception", () => {
-    expect(true).toBe(true);
+  it("callback rollback in create with rollback exception", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.afterCreate(() => {
+          throw new Rollback();
+        });
+      }
+    }
+    await defineSchema({ posts: { title: "string" } });
+    const newPost = (await Post.create({ title: "A new post" })) as any;
+    expect(newPost.isPersisted()).toBe(false);
+    expect(newPost.id).toBeNull();
   });
-  it("nested transaction with new transaction applies parent state on rollback", () => {
-    expect(true).toBe(true);
+  it("nested transaction with new transaction applies parent state on rollback", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+      }
+    }
+    await defineSchema({ posts: { title: "string" } });
+    const topicOne = Post.new({ title: "A new topic" }) as any;
+    const topicTwo = Post.new({ title: "Another new topic" }) as any;
+
+    await Post.transaction(async () => {
+      await topicOne.save();
+      await Post.transaction(
+        async () => {
+          await topicTwo.save();
+          expect(topicOne.isPersisted()).toBe(true);
+          expect(topicTwo.isPersisted()).toBe(true);
+        },
+        { requiresNew: true },
+      );
+      throw new Rollback();
+    });
+
+    expect(topicOne.isPersisted()).toBe(false);
+    expect(topicTwo.isPersisted()).toBe(false);
   });
-  it("nested transaction without new transaction applies parent state on rollback", () => {
-    expect(true).toBe(true);
+  it("nested transaction without new transaction applies parent state on rollback", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+      }
+    }
+    await defineSchema({ posts: { title: "string" } });
+    const topicOne = Post.new({ title: "A new topic" }) as any;
+    const topicTwo = Post.new({ title: "Another new topic" }) as any;
+
+    await Post.transaction(async () => {
+      await topicOne.save();
+      await Post.transaction(async () => {
+        await topicTwo.save();
+        expect(topicOne.isPersisted()).toBe(true);
+        expect(topicTwo.isPersisted()).toBe(true);
+      });
+      throw new Rollback();
+    });
+
+    expect(topicOne.isPersisted()).toBe(false);
+    expect(topicTwo.isPersisted()).toBe(false);
   });
-  it("double nested transaction applies parent state on rollback", () => {
-    expect(true).toBe(true);
+  it("double nested transaction applies parent state on rollback", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+      }
+    }
+    await defineSchema({ posts: { title: "string" } });
+    const topicOne = Post.new({ title: "A new topic" }) as any;
+    const topicTwo = Post.new({ title: "Another new topic" }) as any;
+    const topicThree = Post.new({ title: "Another new topic of course" }) as any;
+
+    await Post.transaction(async () => {
+      await topicOne.save();
+      await Post.transaction(async () => {
+        await topicTwo.save();
+        await Post.transaction(async () => {
+          await topicThree.save();
+        });
+      });
+      expect(topicOne.isPersisted()).toBe(true);
+      expect(topicTwo.isPersisted()).toBe(true);
+      expect(topicThree.isPersisted()).toBe(true);
+      throw new Rollback();
+    });
+
+    expect(topicOne.isPersisted()).toBe(false);
+    expect(topicTwo.isPersisted()).toBe(false);
+    expect(topicThree.isPersisted()).toBe(false);
   });
-  it("invalid keys for transaction", () => {
-    expect(true).toBe(true);
+  it.skip("invalid keys for transaction", () => {
+    // transaction() does not validate option keys — feature gap vs Rails.
   });
-  it("no savepoint in nested transaction without force", () => {
-    expect(true).toBe(true);
+  it("no savepoint in nested transaction without force", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.attribute("approved", "boolean");
+      }
+    }
+    await defineSchema({ posts: { title: "string", approved: "boolean" } });
+    const first = (await Post.create({ title: "First", approved: true })) as any;
+    const second = (await Post.create({ title: "Second", approved: true })) as any;
+
+    await Post.transaction(async () => {
+      first.approved = true;
+      second.approved = false;
+      await first.save();
+      await second.save();
+
+      try {
+        await Post.transaction(async () => {
+          first.approved = false;
+          await first.save();
+          throw new Error("rollback inner");
+        });
+      } catch {
+        // inner error rolls back outer (no savepoint)
+      }
+    });
+
+    expect(((await Post.find(first.id)) as any).approved).toBe(false);
+    expect(((await Post.find(second.id)) as any).approved).toBe(false);
   });
-  it("many savepoints", () => {
-    expect(true).toBe(true);
+  it("many savepoints", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("content", "string");
+      }
+    }
+    await defineSchema({ posts: { content: "string" } });
+    const first = (await Post.create({ content: "One" })) as any;
+    let one: string, two: string, three: string;
+
+    await Post.transaction(async () => {
+      first.content = "One";
+      await first.save();
+
+      try {
+        await Post.transaction(
+          async () => {
+            first.content = "Two";
+            await first.save();
+
+            try {
+              await Post.transaction(
+                async () => {
+                  first.content = "Three";
+                  await first.save();
+
+                  try {
+                    await Post.transaction(
+                      async () => {
+                        first.content = "Four";
+                        await first.save();
+                        throw new Error("roll back to Three");
+                      },
+                      { requiresNew: true },
+                    );
+                  } catch {
+                    /* expected */
+                  }
+
+                  three = ((await Post.find(first.id)) as any).content;
+                  throw new Error("roll back to Two");
+                },
+                { requiresNew: true },
+              );
+            } catch {
+              /* expected */
+            }
+
+            two = ((await Post.find(first.id)) as any).content;
+            throw new Error("roll back to One");
+          },
+          { requiresNew: true },
+        );
+      } catch {
+        /* expected */
+      }
+
+      one = ((await Post.find(first.id)) as any).content;
+    });
+
+    expect(one!).toBe("One");
+    expect(two!).toBe("Two");
+    expect(three!).toBe("Three");
   });
-  it("using named savepoints", () => {
-    expect(true).toBe(true);
+  it.skip("using named savepoints", () => {
+    // Direct connection savepoint manipulation interferes with transactional
+    // fixture SAVEPOINT; currentSavepointName counter offset differs.
   });
-  it("releasing named savepoints", () => {
-    expect(true).toBe(true);
+  it.skip("releasing named savepoints", () => {
+    // Same as "using named savepoints" — direct connection savepoint API.
   });
-  it("savepoints name", () => {
-    expect(true).toBe(true);
+  it.skip("savepoints name", () => {
+    // currentSavepointName counter starts at a different offset inside the
+    // fixture SAVEPOINT wrapper.
   });
-  it("rollback when thread killed", () => {
-    expect(true).toBe(true);
+  it.skip("rollback when thread killed", () => {
+    // Requires Ruby Thread.kill semantics — not available in JS.
   });
-  it("dont restore new record in subsequent transaction", () => {
-    expect(true).toBe(true);
+  it("dont restore new record in subsequent transaction", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+      }
+    }
+    await defineSchema({ posts: { title: "string" } });
+    const topic = Post.new() as any;
+
+    await Post.transaction(async () => {
+      await topic.save();
+      await topic.save();
+    });
+
+    await Post.transaction(async () => {
+      await topic.save();
+      throw new Rollback();
+    });
+
+    expect(topic.isPersisted()).toBe(true);
+    expect(topic.isNewRecord()).toBe(false);
   });
   it("assign custom primary key after rollback", async () => {
     const { Movie } = makeSQLiteMovie();
@@ -1651,50 +1901,69 @@ describe("TransactionTest", () => {
     movie.writeAttribute("movieid", null);
     expect(movie.movieid).toBeNull();
   });
-  it("sqlite add column in transaction", () => {
-    expect(true).toBe(true);
+  it.skip("sqlite add column in transaction", () => {
+    // DDL API (add_column) not exposed at the test layer.
   });
-  it("sqlite default transaction mode is immediate", () => {
-    expect(true).toBe(true);
+  it.skip("sqlite default transaction mode is immediate", () => {
+    // Requires assert_queries_match SQL monitoring — not available.
   });
-  it("mark transaction state as committed", () => {
-    expect(true).toBe(true);
+  it("mark transaction state as committed", async () => {
+    const { TransactionState } = await import("./connection-adapters/abstract/transaction.js");
+    const state = new TransactionState();
+    state.rollbackBang();
+    state.commitBang();
+    expect(state.committed).toBe(true);
   });
-  it("mark transaction state as rolledback", () => {
-    expect(true).toBe(true);
+  it("mark transaction state as rolledback", async () => {
+    const { TransactionState } = await import("./connection-adapters/abstract/transaction.js");
+    const state = new TransactionState();
+    state.commitBang();
+    state.rollbackBang();
+    expect(state.rolledBack).toBe(true);
   });
-  it("mark transaction state as nil", () => {
-    expect(true).toBe(true);
+  it.skip("mark transaction state as nil", () => {
+    // nullifyBang() returns void; Rails' nullify! returns nil. No boolean
+    // getter to assert against — nullified state is indistinguishable here.
   });
-  it("transaction rollback with primarykeyless tables", () => {
-    expect(true).toBe(true);
+  it.skip("transaction rollback with primarykeyless tables", () => {
+    // defineSchema does not support id: false / primarykeyless tables.
   });
-  it("unprepared statement materializes transaction", () => {
-    expect(true).toBe(true);
+  it.skip("unprepared statement materializes transaction", () => {
+    // Requires assert_queries_match SQL monitoring — not available.
   });
-  it("nested transactions skip excess savepoints", () => {
-    expect(true).toBe(true);
+  it.skip("nested transactions skip excess savepoints", () => {
+    // Requires capture_sql SQL monitoring — not available.
   });
-  it("prepared statement materializes transaction", () => {
-    expect(true).toBe(true);
+  it.skip("prepared statement materializes transaction", () => {
+    // Requires assert_queries_match SQL monitoring — not available.
   });
-  it("savepoint does not materialize transaction", () => {
-    expect(true).toBe(true);
+  it.skip("savepoint does not materialize transaction", () => {
+    // Requires assert_no_queries / SQL monitoring — not available.
   });
-  it("raising does not materialize transaction", () => {
-    expect(true).toBe(true);
+  it.skip("raising does not materialize transaction", () => {
+    // Requires assert_no_queries / SQL monitoring — not available.
   });
-  it("accessing raw connection materializes transaction", () => {
-    expect(true).toBe(true);
+  it.skip("accessing raw connection materializes transaction", () => {
+    // No rawConnection API exposed.
   });
-  it("accessing raw connection disables lazy transactions", () => {
-    expect(true).toBe(true);
+  it.skip("accessing raw connection disables lazy transactions", () => {
+    // No rawConnection API exposed.
   });
-  it("checking in connection reenables lazy transactions", () => {
-    expect(true).toBe(true);
+  it.skip("checking in connection reenables lazy transactions", () => {
+    // No rawConnection / check-in API exposed at this level.
   });
-  it("transactions can be manually materialized", () => {
-    expect(true).toBe(true);
+  it("transactions can be manually materialized", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+      }
+    }
+    await defineSchema({ posts: { title: "string" } });
+    await expect(
+      Post.transaction(async () => {
+        await (Post as any).leaseConnection().materializeTransactions();
+      }),
+    ).resolves.not.toThrow();
   });
 });
 
@@ -1702,11 +1971,11 @@ describe("TransactionTest", () => {
 // TransactionsWithTransactionalFixturesTest — from transactions_test.rb
 // ==========================================================================
 describe("TransactionsWithTransactionalFixturesTest", () => {
-  it("automatic savepoint in outer transaction", () => {
-    expect(true).toBe(true);
+  it.skip("automatic savepoint in outer transaction", () => {
+    // Requires loaded fixtures (topics(1)) — fixture loader not available.
   });
-  it("no automatic savepoint for inner transaction", () => {
-    expect(true).toBe(true);
+  it.skip("no automatic savepoint for inner transaction", () => {
+    // Requires loaded fixtures (topics(1)) — fixture loader not available.
   });
 });
 
@@ -1714,14 +1983,31 @@ describe("TransactionsWithTransactionalFixturesTest", () => {
 // TransactionUUIDTest — from transactions_test.rb
 // ==========================================================================
 describe("TransactionUUIDTest", () => {
-  it("the uuid is lazily computed", () => {
-    expect(true).toBe(true);
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({ posts: { title: "string" } });
   });
-  it("the uuid for regular transactions is generated and memoized", () => {
-    expect(true).toBe(true);
+
+  it.skip("the uuid is lazily computed", () => {
+    // Requires access to private instance variable @uuid — not accessible in TS.
   });
-  it("the uuid for null transactions is nil", () => {
-    expect(true).toBe(true);
+  it("the uuid for regular transactions is generated and memoized", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+      }
+    }
+    await Post.transaction(async () => {
+      const txn = Post.currentTransaction();
+      const uuid = txn.uuid();
+      expect(uuid).toMatch(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
+      expect(txn.uuid()).toBe(uuid);
+    });
+  });
+  it("the uuid for null transactions is nil", async () => {
+    const { Transaction } = await import("./transaction.js");
+    expect(Transaction.NULL_TRANSACTION.uuid()).toBeNull();
   });
 });
 
@@ -1729,11 +2015,11 @@ describe("TransactionUUIDTest", () => {
 // ConcurrentTransactionTest — from transactions_test.rb
 // ==========================================================================
 describe("ConcurrentTransactionTest", () => {
-  it("transaction per thread", () => {
-    expect(true).toBe(true);
+  it.skip("transaction per thread", () => {
+    // Requires Ruby Thread semantics — JS is single-threaded.
   });
-  it("transaction isolation  read committed", () => {
-    expect(true).toBe(true);
+  it.skip("transaction isolation  read committed", () => {
+    // Requires Ruby Thread semantics — JS is single-threaded.
   });
 });
 
@@ -1741,8 +2027,8 @@ describe("ConcurrentTransactionTest", () => {
 // after current transaction commit multidb nested transactions (standalone)
 // ==========================================================================
 describe("TransactionTest", () => {
-  it("after current transaction commit multidb nested transactions", () => {
-    expect(true).toBe(true);
+  it.skip("after current transaction commit multidb nested transactions", () => {
+    // Requires multi-database setup (ARUnit2Model) — not available.
   });
 });
 
@@ -2065,7 +2351,10 @@ describe("TransactionTest", () => {
       const { PreparedStatementCacheExpired } = await import("./errors.js");
       // After D-1 the TM's _connection is a pooled real adapter instance, not
       // _sharedAdapter. Spy on the prototype to catch any SQLite3Adapter call.
-      const spy = vi.spyOn(SQLite3Adapter.prototype as Required<DatabaseAdapter>, "clearCacheBang");
+      const spy = vi.spyOn(
+        AbstractAdapter.prototype as unknown as Required<DatabaseAdapter>,
+        "clearCacheBang",
+      );
       await expect(
         transaction(Account, async () => {
           throw new PreparedStatementCacheExpired("cached plan expired");
@@ -2075,7 +2364,10 @@ describe("TransactionTest", () => {
     });
 
     it("does not call clearCacheBang for unrelated errors", async () => {
-      const spy = vi.spyOn(SQLite3Adapter.prototype as Required<DatabaseAdapter>, "clearCacheBang");
+      const spy = vi.spyOn(
+        AbstractAdapter.prototype as unknown as Required<DatabaseAdapter>,
+        "clearCacheBang",
+      );
       await expect(
         transaction(Account, async () => {
           throw new Error("unrelated");

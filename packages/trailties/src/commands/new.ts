@@ -2,7 +2,11 @@ import { cwd as getCwd } from "@blazetrails/activesupport/process-adapter";
 import { Command } from "commander";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { AppGenerator } from "../generators/app-generator.js";
+import {
+  AppGenerator,
+  type PackageManager,
+  type SqliteDriver,
+} from "../generators/app-generator.js";
 import { getPackageManager, packageManagerInstall } from "../package-manager.js";
 
 export function newCommand(): Command {
@@ -12,6 +16,12 @@ export function newCommand(): Command {
     .description("Create a new trails application")
     .argument("<name>", "Application name")
     .option("-d, --database <type>", "Database adapter (sqlite, postgres, mysql)", "sqlite")
+    .option("--package-manager <pm>", "Package manager to use (pnpm, npm, yarn)", "pnpm")
+    .option(
+      "--sqlite-driver <driver>",
+      "SQLite driver (better-sqlite3, node-sqlite, expo-sqlite)",
+      "better-sqlite3",
+    )
     .option("--skip-git", "Skip git init")
     .option("--skip-install", "Skip dependency installation")
     .option("--skip-docker", "Skip Dockerfile creation")
@@ -22,6 +32,8 @@ export function newCommand(): Command {
         output: console.log,
         appPath: name,
         database: options.database,
+        packageManager: options.packageManager as PackageManager,
+        sqliteDriver: options.sqliteDriver as SqliteDriver,
         skipDocker: options.skipDocker,
       });
       await gen.run();

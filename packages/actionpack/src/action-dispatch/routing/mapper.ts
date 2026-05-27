@@ -994,8 +994,7 @@ export class Mapper {
         ? (() => {
             const cleaned = path.replace(/^\/+/, "").replace(/\(\.:format\)$/, "");
             const segs = cleaned.split("/").filter(Boolean);
-            if (segs.length === 0 || segs.some((s) => s.includes(":") || s.includes("(")))
-              return undefined;
+            if (segs.length === 0 || segs.some((s) => !/^\w+$/.test(s))) return undefined;
             return segs.join("_");
           })()
         : undefined;

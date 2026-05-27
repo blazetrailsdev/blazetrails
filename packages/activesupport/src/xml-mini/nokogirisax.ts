@@ -6,9 +6,10 @@ type XmlHash = Record<string, unknown>;
 async function loadNokogiri() {
   try {
     return await import("@blazetrails/nokogiri");
-  } catch {
+  } catch (e) {
     throw new Error(
       "@blazetrails/nokogiri is not installed. Add it as a dependency to use the Nokogiri SAX backend.",
+      { cause: e },
     );
   }
 }
@@ -69,7 +70,7 @@ export async function parse(data: string | null | undefined): Promise<XmlHash> {
       const content = current[CONTENT_KEY] as string | undefined;
       // Strip __content__ if blank and children were added, or if still the empty initial value.
       if (
-        (Object.keys(current).length > initialSize && (!content || content.trim() === "")) ||
+        (Object.keys(current).length > initialSize - 1 && (!content || content.trim() === "")) ||
         content === ""
       ) {
         delete current[CONTENT_KEY];

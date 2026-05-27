@@ -7,9 +7,10 @@ type XmlHash = Record<string, unknown>;
 async function loadNokogiri() {
   try {
     return await import("@blazetrails/nokogiri");
-  } catch {
+  } catch (e) {
     throw new Error(
       "@blazetrails/nokogiri is not installed. Add it as a dependency to use the Nokogiri XML backend.",
+      { cause: e },
     );
   }
 }

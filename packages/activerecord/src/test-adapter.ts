@@ -17,7 +17,10 @@
 
 import { inspectExplainOption } from "./adapter.js";
 import type { AdapterName, DatabaseAdapter, ExplainOption } from "./adapter.js";
-import type { TransactionManager } from "./connection-adapters/abstract/transaction.js";
+import {
+  NullTransaction,
+  type TransactionManager,
+} from "./connection-adapters/abstract/transaction.js";
 import type { SchemaCache } from "./connection-adapters/schema-cache.js";
 import {
   clearAppliedSchemaSignatures,
@@ -318,10 +321,9 @@ export async function resetTestAdapterState(): Promise<void> {
 /**
  * Thin wrapper around a real database adapter that:
  *   1. Routes transactions through the inner adapter's TM (Phase 1)
- *   2. Provides async-chain-aware visibility for `currentTransaction()`
- *   3. Patches SQLite-specific SQL incompatibilities (Phase 9 will move
+ *   2. Patches SQLite-specific SQL incompatibilities (Phase 9 will move
  *      these into SQLite3Adapter directly)
- *   4. Tracks CREATE/DROP TABLE for `defineSchema`'s cache invalidation
+ *   3. Tracks CREATE/DROP TABLE for `defineSchema`'s cache invalidation
  */
 type BooleanCapability =
   | "supportsIndexesInCreate"
@@ -442,7 +444,8 @@ class TestAdapterFixtures implements DatabaseAdapter {
   }
 
   currentTransaction() {
-    return (this.inner as any).currentTransaction?.();
+    const tx = (this.inner as any).currentTransaction?.();
+    return tx instanceof NullTransaction ? null : tx;
   }
 
   addTransactionRecord(record: unknown, ensureFinalize?: boolean) {

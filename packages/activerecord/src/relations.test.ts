@@ -5899,7 +5899,8 @@ describe("RelationTest", () => {
     const author = await RefAuthor.create({ name: "Dean" });
     await RefPost.create({ title: "First", ref_author_id: author.id });
 
-    const execSpy = vi.spyOn(Base.adapter as any, "execute");
+    const spyTarget = (Base.adapter as any).innerAdapter ?? Base.adapter;
+    const execSpy = vi.spyOn(spyTarget, "execute");
     execSpy.mockClear();
 
     const posts = await RefPost.all().includes("refAuthor").references("ref_authors").toArray();
@@ -5924,7 +5925,8 @@ describe("RelationTest", () => {
 
     await RefPost3.create({ title: "First" });
 
-    const execSpy = vi.spyOn(Base.adapter as any, "execute");
+    const spyTarget = (Base.adapter as any).innerAdapter ?? Base.adapter;
+    const execSpy = vi.spyOn(spyTarget, "execute");
     execSpy.mockClear();
 
     // references without includes — no promotion possible since there are

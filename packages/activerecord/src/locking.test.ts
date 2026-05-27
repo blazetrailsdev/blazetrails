@@ -371,7 +371,9 @@ describe("OptimisticLockingTest", () => {
       }
     }
     // Mirrors Rails: raw INSERT so lock_version and updated_at start as NULL in DB
-    await Base.connection.execute("INSERT INTO lock_without_defaults(title) VALUES('title1')");
+    await Base.connection.executeMutation(
+      "INSERT INTO lock_without_defaults(title) VALUES('title1')",
+    );
     const t1 = (await LockWithoutDefault.last())!;
     expect(t1.lock_version).toBe(0);
     await t1.touch();
@@ -408,10 +410,16 @@ describe("OptimisticLockingTest", () => {
         this.attribute("updated_at", "datetime");
       }
     }
-    const t1 = await LockWithoutDefault.create({ title: "title1" });
+    // Mirrors Rails: raw INSERT so lock_version starts as NULL in DB
+    await Base.connection.executeMutation(
+      "INSERT INTO lock_without_defaults(title) VALUES('title1')",
+    );
+    const t1 = (await LockWithoutDefault.last())!;
     const t2 = await LockWithoutDefault.find(t1.id);
     expect(t1.lock_version).toBe(0);
+    expect(t1.readAttributeBeforeTypeCast("lock_version")).toBeNull();
     expect(t2.lock_version).toBe(0);
+    expect(t2.readAttributeBeforeTypeCast("lock_version")).toBeNull();
     t1.title = "new title1";
     t2.title = "new title2";
     await t1.saveBang();
@@ -431,11 +439,17 @@ describe("OptimisticLockingTest", () => {
         this.attribute("updated_at", "datetime");
       }
     }
-    const t1 = await LockWithoutDefault.create({ title: "title1" });
+    // Mirrors Rails: raw INSERT so lock_version starts as NULL in DB
+    await Base.connection.executeMutation(
+      "INSERT INTO lock_without_defaults(title) VALUES('title1')",
+    );
+    const t1 = (await LockWithoutDefault.last())!;
     expect(t1.lock_version).toBe(0);
+    expect(t1.readAttributeBeforeTypeCast("lock_version")).toBeNull();
     // eslint-disable-next-line no-self-assign -- mirrors Rails: t1.lock_version = t1.lock_version
     t1.lock_version = t1.lock_version;
     expect(t1.lock_version).toBe(0);
+    expect(t1.readAttributeBeforeTypeCast("lock_version")).toBe(0);
     await t1.update({ title: "new title1" });
     expect(t1.lock_version).toBe(1);
     expect(t1.title).toBe("new title1");
@@ -450,11 +464,17 @@ describe("OptimisticLockingTest", () => {
         this.attribute("updated_at", "datetime");
       }
     }
-    const t1 = await LockWithoutDefault.create({ title: "title1" });
+    // Mirrors Rails: raw INSERT so lock_version starts as NULL in DB
+    await Base.connection.executeMutation(
+      "INSERT INTO lock_without_defaults(title) VALUES('title1')",
+    );
+    const t1 = (await LockWithoutDefault.last())!;
     expect(t1.lock_version).toBe(0);
+    expect(t1.readAttributeBeforeTypeCast("lock_version")).toBeNull();
     // eslint-disable-next-line no-self-assign -- mirrors Rails: t1.lock_version = t1.lock_version
     t1.lock_version = t1.lock_version;
     expect(t1.lock_version).toBe(0);
+    expect(t1.readAttributeBeforeTypeCast("lock_version")).toBe(0);
     await t1.destroyBang();
     expect(t1.isDestroyed()).toBe(true);
   });
@@ -488,10 +508,16 @@ describe("OptimisticLockingTest", () => {
         this.attribute("custom_lock_version", "integer");
       }
     }
-    const t1 = await LockCustom.create({ title: "title1" });
+    // Mirrors Rails: raw INSERT so custom_lock_version starts as NULL in DB
+    await Base.connection.executeMutation(
+      "INSERT INTO lock_without_defaults_cust(title) VALUES('title1')",
+    );
+    const t1 = (await LockCustom.last())!;
     const t2 = await LockCustom.find(t1.id);
     expect(t1.custom_lock_version).toBe(0);
+    expect(t1.readAttributeBeforeTypeCast("custom_lock_version")).toBeNull();
     expect(t2.custom_lock_version).toBe(0);
+    expect(t2.readAttributeBeforeTypeCast("custom_lock_version")).toBeNull();
     t1.title = "new title1";
     t2.title = "new title2";
     await t1.saveBang();
@@ -646,8 +672,13 @@ describe("OptimisticLockingWithSchemaChangeTest", () => {
         this.attribute("updated_at", "datetime");
       }
     }
-    const t1 = await LockWithoutDefault.create({ title: "title1" });
+    // Mirrors Rails: raw INSERT so lock_version starts as NULL in DB
+    await Base.connection.executeMutation(
+      "INSERT INTO lock_without_defaults(title) VALUES('title1')",
+    );
+    const t1 = (await LockWithoutDefault.last())!;
     expect(t1.lock_version).toBe(0);
+    expect(t1.readAttributeBeforeTypeCast("lock_version")).toBeNull();
     await t1.destroy();
     expect(t1.isDestroyed()).toBe(true);
   });

@@ -77,9 +77,10 @@ export async function touch(
 
   // Optimistic locking: include lock_version increment and stale-object check.
   const lockCol = ctor.lockingColumn;
-  let rawVersion: unknown;
+  let rawDbVersion: unknown;
   if (ctor.lockingEnabled) {
-    rawVersion = this.readAttribute(lockCol);
+    const rawVersion = this.readAttribute(lockCol);
+    rawDbVersion = this.readAttributeBeforeTypeCast(lockCol);
     const current = rawVersion == null ? 0 : Number(rawVersion) || 0;
     const next = current + 1;
     setPairs.push([table.get(lockCol) as InstanceType<typeof Nodes.Node>, new Nodes.Quoted(next)]);
@@ -92,10 +93,10 @@ export async function touch(
     .where((ctor as any)._buildPkWhereNode(this.id));
 
   if (ctor.lockingEnabled) {
-    if (rawVersion == null) {
+    if (rawDbVersion == null) {
       um.where(table.get(lockCol).isNull());
     } else {
-      um.where(table.get(lockCol).eq(Number(rawVersion) || 0));
+      um.where(table.get(lockCol).eq(Number(rawDbVersion) || 0));
     }
   }
 

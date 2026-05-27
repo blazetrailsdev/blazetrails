@@ -2601,6 +2601,17 @@ export class Base extends Model {
             }
           }
         }
+        // After INSERT, reset lock_version to a FromDatabase attribute carrying the
+        // actual serialized value (e.g. 0). This mirrors Rails' behavior: during INSERT
+        // @value_for_database is memoized to 0, so changes_applied! → forgetting_assignment
+        // produces from_database(0), not from_database(nil). Without this, freshly-created
+        // records are indistinguishable from NULL-in-DB records when building the WHERE
+        // clause for subsequent UPDATE/DELETE.
+        if (ctor.lockingEnabled) {
+          const lockCol = ctor.lockingColumn;
+          const writtenLockValue = attrs[lockCol] ?? null;
+          this._attributes.writeFromDatabase(lockCol, writtenLockValue);
+        }
       });
   }
 
@@ -2659,9 +2670,22 @@ export class Base extends Model {
     // "multiple assignments to same column" error on PostgreSQL.
     const lockCol = ctor.lockingColumn;
     let rawVersion: unknown;
+    let lockWhereValue: unknown;
     if (ctor.lockingEnabled) {
       rawVersion = this.readAttribute(lockCol);
       const currentVersion = rawVersion == null ? 0 : Number(rawVersion) || 0;
+      // Mirrors Rails _lock_value_for_database:
+      // - User explicitly changed lock_version (e.g. person.lock_version = 42):
+      //   use valueForDatabase so WHERE = 42. DB has 0 → StaleObjectError.
+      // - Normal auto-increment path: use originalValueForDatabase() so
+      //   NULL-in-DB records generate IS NULL, freshly-created records generate = 0.
+      // Must be read BEFORE mutating _attributes below.
+      const lockAttr = this._attributes.getAttribute(lockCol);
+      if (this.willSaveChangeToAttribute(lockCol)) {
+        lockWhereValue = lockAttr.valueForDatabase;
+      } else {
+        lockWhereValue = lockAttr.originalValueForDatabase();
+      }
       const lockIdx = declaredChanges.indexOf(lockCol);
       if (lockIdx !== -1) updateValues.splice(lockIdx, 1);
       this._attributes.set(lockCol, currentVersion + 1);
@@ -2673,10 +2697,10 @@ export class Base extends Model {
       .set(updateValues)
       .where(ctor._buildPkWhereNode(this.id));
     if (ctor.lockingEnabled) {
-      if (rawVersion == null) {
+      if (lockWhereValue == null) {
         um.where(table.get(lockCol).isNull());
       } else {
-        um.where(table.get(lockCol).eq(Number(rawVersion) || 0));
+        um.where(table.get(lockCol).eq(Number(lockWhereValue) || 0));
       }
     }
     _Persistence.applyDefaultAndGlobalConstraints(um as any, ctor);
@@ -2714,11 +2738,14 @@ export class Base extends Model {
         const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
         const lockCol = ctor.lockingColumn;
         if (ctor.lockingEnabled) {
-          const currentVersion = this.readAttribute(lockCol);
-          if (currentVersion == null) {
+          // Mirrors Rails _lock_value_for_database: use original DB value so NULL → IS NULL.
+          // originalValueForDatabase() traces through originalAttribute chain, so
+          // a self-assign before destroy still yields the original null.
+          const lockWhereValue = this._attributes.getAttribute(lockCol).originalValueForDatabase();
+          if (lockWhereValue == null) {
             dm.where(table.get(lockCol).isNull());
           } else {
-            dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
+            dm.where(table.get(lockCol).eq(Number(lockWhereValue) || 0));
           }
         }
         _Persistence.applyDefaultAndGlobalConstraints(dm as any, ctor);

@@ -15,7 +15,7 @@ import type { TemplateResolver } from "./resolver/resolver.js";
 type ClassLike = new (...args: unknown[]) => unknown;
 
 export class PathRegistry {
-  /** Hooks fired whenever a new FileSystemResolver is built via castFileSystemResolvers. */
+  /** @internal Hooks fired whenever a new FileSystemResolver is built via castFileSystemResolvers. */
   static readonly fileSystemResolverHooks: Array<() => void> = [];
 
   private static _fileSystemResolvers = new Map<string, FileSystemResolver>();

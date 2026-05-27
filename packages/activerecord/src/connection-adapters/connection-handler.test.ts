@@ -558,7 +558,7 @@ describe("ConnectionHandlerTest", () => {
     expect(() => handler.clearActiveConnectionsBang()).not.toThrow();
   });
 
-  it("retrieve connection pool strict mode raises with available roles listed in message", () => {
+  it("retrieve connection pool strict mode raises with role in message", () => {
     const config = new HashConfig("development", "primary", {
       adapter: "sqlite3",
       database: "dev.db",
@@ -570,6 +570,6 @@ describe("ConnectionHandlerTest", () => {
     });
     expect(() =>
       handler.retrieveConnectionPool("primary", { role: "reading", strict: true }),
-    ).toThrow(/No database connection/);
+    ).toThrow(/No database connection defined.*'reading' role/);
   });
 });

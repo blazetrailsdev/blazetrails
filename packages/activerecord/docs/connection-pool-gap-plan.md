@@ -17,7 +17,7 @@ cache. Many files are entirely stub test suites (every test skipped).
 | Query cache (per-context broadcast)    | 14    | `enableQueryCacheBang` broadcast + AsyncLocalStorage     |
 | Pool lifecycle (checkout/checkin/reap) | 12    | `removeConnectionForThread`, schema-cache on checkout    |
 | ConnectionManagement middleware        | 11    | Entire class missing                                     |
-| ConnectionHandler multi-DB             | 11    | Role validation, `removeConnectionPool`                  |
+| ConnectionHandler multi-DB             | 11    | Role validation, handler clearing edge cases             |
 | Multi-DB switching                     | 11    | `connectedTo` nested role+shard stack                    |
 | Connection swapping nested             | 7     | Nested switch verification                               |
 | Adapter leasing                        | 4     | Test harness gap (impl exists)                           |

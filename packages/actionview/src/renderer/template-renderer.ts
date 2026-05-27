@@ -39,6 +39,11 @@ export class TemplateRenderer extends AbstractRenderer {
     if (Object.prototype.hasOwnProperty.call(options, "html")) {
       return new HtmlTemplate(String(options.html ?? ""), (this.formats[0] as string) ?? "html");
     }
+    if (Object.prototype.hasOwnProperty.call(options, "file")) {
+      throw new Error(
+        "render file: is not supported. Use render template: with a template resolver instead.",
+      );
+    }
     if (Object.prototype.hasOwnProperty.call(options, "inline")) {
       return new InlineTemplate(String(options.inline ?? ""), options.type);
     }
@@ -50,7 +55,7 @@ export class TemplateRenderer extends AbstractRenderer {
       if (typeof tmpl === "object" && typeof (tmpl as RenderableTemplate).render === "function") {
         return tmpl as RenderableTemplate;
       }
-      return this.resolveTemplate(tmpl as string, options.prefixes ?? [], keys);
+      return this.findTemplateForName(tmpl as string, options.prefixes ?? [], keys);
     }
     throw new Error(
       "You invoked render but did not give any of :body, :file, :html, :inline, :partial, :plain, :renderable, or :template option.",
@@ -58,11 +63,89 @@ export class TemplateRenderer extends AbstractRenderer {
   }
 
   /** @internal */
-  private resolveTemplate(
+  private async renderTemplate(
+    context: ViewContext,
+    template: RenderableTemplate,
+    layoutName: RenderOptions["layout"],
+    locals: Record<string, unknown>,
+  ): Promise<RenderedTemplate> {
+    return this.renderWithLayout(context, template, layoutName, locals);
+  }
+
+  /** @internal */
+  private async renderWithLayout(
+    context: ViewContext,
+    template: RenderableTemplate,
+    path: RenderOptions["layout"],
+    locals: Record<string, unknown>,
+  ): Promise<RenderedTemplate> {
+    const layout =
+      path != null && path !== false
+        ? this.findLayout(path, Object.keys(locals), [(this.formats[0] as string) ?? "html"])
+        : null;
+
+    let body: string;
+    if (layout) {
+      const templateBody = await template.render(locals, context);
+      if (context.viewFlow) {
+        context.viewFlow.set("layout", templateBody);
+      }
+      body = await layout.render(locals, context);
+    } else {
+      body = await template.render(locals, context);
+    }
+    return this.buildRenderedTemplate(body, template);
+  }
+
+  /** @internal */
+  private findLayout(
+    layout: RenderOptions["layout"],
+    keys: string[],
+    formats: string[],
+  ): RenderableTemplate | null {
+    return this.resolveLayout(layout, keys, formats);
+  }
+
+  /** @internal */
+  private resolveLayout(
+    layout: RenderOptions["layout"],
+    keys: string[],
+    formats: string[],
+  ): RenderableTemplate | null {
+    if (typeof layout === "string") {
+      if (layout.startsWith("/")) {
+        throw new Error("Rendering layouts from an absolute path is not supported.");
+      }
+      // Try Rails-shape lookup first (PathSet resolvers).
+      const detailsWithFormats = { ...this.details, formats };
+      const found = this.lookupContext.findAll(
+        layout,
+        [],
+        false,
+        keys,
+        detailsWithFormats,
+      ) as RenderableTemplate[];
+      if (found.length > 0) return found[0]!;
+      // Fall back to 3-arg findLayout (TemplateResolver chain).
+      const format = formats[0] ?? "html";
+      const fromResolver = this.lookupContext.findLayout(layout, format);
+      return fromResolver as unknown as RenderableTemplate | null;
+    }
+    if (typeof layout === "function") {
+      const resolved = layout(this.lookupContext, this.formats as readonly string[], keys);
+      return resolved ? this.resolveLayout(resolved, keys, formats) : null;
+    }
+    // null / false / undefined — no layout
+    return null;
+  }
+
+  /** @internal */
+  private findTemplateForName(
     name: string,
     prefixes: readonly string[],
     keys: readonly string[],
   ): RenderableTemplate {
+    // Try Rails-shape PathSet resolvers first.
     const found = this.lookupContext.findAll(
       name,
       prefixes as string[],
@@ -72,7 +155,7 @@ export class TemplateRenderer extends AbstractRenderer {
     ) as RenderableTemplate[];
     if (found.length > 0) return found[0]!;
 
-    // Fall back to the simpler 3-arg resolver when Rails-shape finds nothing.
+    // Fall back to the 3-arg TemplateResolver chain.
     const lastSlash = name.lastIndexOf("/");
     const baseName = lastSlash >= 0 ? name.slice(lastSlash + 1) : name;
     const prefix = lastSlash >= 0 ? name.slice(0, lastSlash) : (prefixes[0] ?? "");
@@ -81,60 +164,6 @@ export class TemplateRenderer extends AbstractRenderer {
     if (template) return template as unknown as RenderableTemplate;
 
     throw new MissingTemplate(prefix, baseName, format, [], []);
-  }
-
-  /** @internal */
-  private async renderTemplate(
-    context: ViewContext,
-    template: RenderableTemplate,
-    layoutOption: RenderOptions["layout"],
-    locals: Record<string, unknown>,
-  ): Promise<RenderedTemplate> {
-    return this.renderWithLayout(context, template, layoutOption, locals);
-  }
-
-  /** @internal */
-  private async renderWithLayout(
-    context: ViewContext,
-    template: RenderableTemplate,
-    layoutOption: RenderOptions["layout"],
-    locals: Record<string, unknown>,
-  ): Promise<RenderedTemplate> {
-    const layout =
-      layoutOption != null && layoutOption !== false
-        ? this.findLayout(layoutOption, Object.keys(locals))
-        : null;
-
-    if (layout) {
-      const body = await template.render(locals, context);
-      if (context.viewFlow) {
-        context.viewFlow.set("layout", body);
-      }
-      const layoutBody = await layout.render(locals, context);
-      return this.buildRenderedTemplate(layoutBody, template);
-    }
-
-    const body = await template.render(locals, context);
-    return this.buildRenderedTemplate(body, template);
-  }
-
-  /** @internal */
-  private findLayout(
-    layout:
-      | string
-      | ((ctx: LookupContext, formats: readonly string[], keys: readonly string[]) => string),
-    keys: string[],
-  ): RenderableTemplate | null {
-    if (typeof layout === "function") {
-      const resolved = layout(this.lookupContext, this.formats as readonly string[], keys);
-      return resolved ? this.findLayout(resolved, keys) : null;
-    }
-    if (layout.startsWith("/")) {
-      throw new Error("Rendering layouts from an absolute path is not supported.");
-    }
-    const format = (this.formats[0] as string | undefined) ?? "html";
-    const found = this.lookupContext.findLayout(layout, format);
-    return found as unknown as RenderableTemplate | null;
   }
 }
 

@@ -27,7 +27,7 @@ export class Renderer {
 
   /**
    * Main render entry point shared by ActionView and ActionController.
-   * Returns the rendered body string.
+   * Returns a Promise resolving to the rendered body string.
    */
   async render(context: ViewContext, options: RenderOptions): Promise<string> {
     return (await this.renderToObject(context, options)).body;

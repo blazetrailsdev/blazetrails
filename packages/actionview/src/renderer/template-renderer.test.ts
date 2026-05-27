@@ -70,6 +70,12 @@ describe("TemplateRenderer", () => {
       expect(result.body).toBe("<b>bold</b>");
     });
 
+    it("renders inline: source directly", async () => {
+      const renderer = new TemplateRenderer(lc);
+      const result = await renderer.render(ctx, { inline: "<%= 1 + 1 %>" });
+      expect(result.body).toBe("<%= 1 + 1 %>");
+    });
+
     it("renders renderable: objects", async () => {
       const renderer = new TemplateRenderer(lc);
       const renderable = { renderIn: (_c: ViewContext) => "from renderable" };

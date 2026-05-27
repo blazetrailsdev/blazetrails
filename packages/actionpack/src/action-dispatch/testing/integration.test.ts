@@ -668,6 +668,14 @@ describe("ActionDispatch::IntegrationTest", () => {
       expect(app.request.env.SERVER_PORT).toBe("80");
     });
 
+    it("correctly handles unbracketed IPv6 address as SERVER_NAME with no port", async () => {
+      app.host = "::1";
+      await app.get("/no-such-route");
+      expect(app.status).toBe(404);
+      expect(app.request.env.SERVER_NAME).toBe("::1");
+      expect(app.request.env.SERVER_PORT).toBe("80");
+    });
+
     it("correctly parses SERVER_NAME and SERVER_PORT for IPv6 host on 404 path", async () => {
       app.host = "[::1]:3000";
       await app.get("/no-such-route");

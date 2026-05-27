@@ -93,6 +93,9 @@ function splitHostPort(host: string): [string, string | undefined] {
     const rest = host.slice(close + 1);
     return [host.slice(0, close + 1), rest.startsWith(":") ? rest.slice(1) : undefined];
   }
+  // Unbracketed multi-colon string is a bare IPv6 address with no port.
+  const colons = (host.match(/:/g) ?? []).length;
+  if (colons > 1) return [host, undefined];
   const idx = host.indexOf(":");
   return idx === -1 ? [host, undefined] : [host.slice(0, idx), host.slice(idx + 1)];
 }

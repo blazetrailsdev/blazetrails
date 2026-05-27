@@ -445,7 +445,7 @@ describe("sanitizeSql", () => {
         static _tableName = "posts";
       }
       const result = Post.sanitizeSqlArray("title = :title", { title: "It's a title" });
-      expect(result).toBe("title = 'It''s a title'");
+      expect(result).toBe(`title = ${Post.adapter.quote("It's a title")}`);
     });
 
     it("handles PostgreSQL type casts in named bind variable patterns", () => {

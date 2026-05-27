@@ -698,9 +698,6 @@ export class RouteSet {
     if (name && !ROUTE_NAME_RE.test(name)) {
       throw new Error(`Invalid route name: '${name}'`);
     }
-    if (name && this.namedRoutes.has(name)) {
-      throw new Error(`Invalid route name, already in use: '${name}'`);
-    }
     this.routes.push(route);
     if (name) this.namedRoutes.set(name, route);
     this._journeyRouter = null;

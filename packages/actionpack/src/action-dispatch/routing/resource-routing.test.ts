@@ -484,14 +484,13 @@ describe("Resource routing", () => {
       }
     });
 
-    it("duplicate named route throws", () => {
+    it("duplicate named route uses last-write-wins (Rails parity)", () => {
       const routes = new RouteSet();
-      expect(() => {
-        routes.draw((map) => {
-          map.get("/foo", { to: "pages#foo", as: "foo" });
-          map.get("/bar", { to: "pages#bar", as: "foo" });
-        });
-      }).toThrow(/already in use/);
+      routes.draw((map) => {
+        map.get("/foo", { to: "pages#foo", as: "foo" });
+        map.get("/bar", { to: "pages#bar", as: "foo" });
+      });
+      expect(routes.pathFor("foo", {})).toBe("/bar");
     });
   });
 });

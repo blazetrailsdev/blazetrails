@@ -3707,6 +3707,14 @@ describe("Associations", () => {
 describe("Associations: dependent", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      posts: { title: "string" },
+      comments: { body: "string", post_id: "integer" },
+      threads: { subject: "string" },
+      replies: { content: "string", thread_id: "integer" },
+    });
+  });
   it("dependent destroy destroys children", async () => {
     class Comment extends Base {
       static {
@@ -3724,10 +3732,6 @@ describe("Associations: dependent", () => {
 
     registerModel(Post);
     registerModel(Comment);
-    await defineSchema({
-      posts: { title: "string" },
-      comments: { body: "string", post_id: "integer" },
-    });
 
     const post = await Post.create({ title: "Hello" });
     await Comment.create({ body: "Nice", post_id: post.id });
@@ -3759,10 +3763,6 @@ describe("Associations: dependent", () => {
 
     registerModel(Thread);
     registerModel(Reply);
-    await defineSchema({
-      threads: { subject: "string" },
-      replies: { content: "string", thread_id: "integer" },
-    });
 
     const thread = await Thread.create({ subject: "Test" });
     await Reply.create({ content: "Reply 1", thread_id: thread.id });
@@ -4101,6 +4101,9 @@ describe("whereAssociated / whereMissing", () => {
 describe("destroyedByAssociation", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({ users: {} });
+  });
   it("is null by default", async () => {
     class User extends Base {
       static _tableName = "users";
@@ -4116,7 +4119,6 @@ describe("destroyedByAssociation", () => {
       static _tableName = "users";
     }
     User.attribute("id", "integer");
-    await defineSchema({ users: {} });
 
     const user = await User.create({});
     user.destroyedByAssociation = { name: "posts", type: "hasMany" };
@@ -4127,6 +4129,14 @@ describe("destroyedByAssociation", () => {
 describe("dependent: restrictWithException", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      d_posts: { title: "string" },
+      d_comments: { d_post_id: "integer", body: "string" },
+      d_articles: { title: "string" },
+      d_reviews: { d_article_id: "integer" },
+    });
+  });
   it("prevents deletion when associated records exist", async () => {
     class DComment extends Base {
       static _tableName = "d_comments";
@@ -4147,10 +4157,6 @@ describe("dependent: restrictWithException", () => {
       dependent: "restrictWithException",
       className: "DComment",
       foreignKey: "d_post_id",
-    });
-    await defineSchema({
-      d_posts: { title: "string" },
-      d_comments: { d_post_id: "integer", body: "string" },
     });
 
     const post = await DPost.create({ title: "Hello" });
@@ -4180,10 +4186,6 @@ describe("dependent: restrictWithException", () => {
       dependent: "restrictWithException",
       className: "DReview",
       foreignKey: "d_article_id",
-    });
-    await defineSchema({
-      d_articles: { title: "string" },
-      d_reviews: { d_article_id: "integer" },
     });
 
     const article = await DArticle.create({ title: "Hello" });

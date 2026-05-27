@@ -33,7 +33,7 @@ const MERGED_SCHEMA: Schema = {
   articles: { title: "string" },
   special_posts: { title: "string" },
   orders: {
-    shop_id: "integer",
+    shop_id: "string",
     order_num: "integer",
     total: "integer",
     status: "string",

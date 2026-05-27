@@ -201,23 +201,31 @@ describe("AppGenerator", () => {
   it("snapshots emitted TypeScript sources", async () => {
     await makeGen().run();
     const read = (...segs: string[]) => fs.readFileSync(appPath(...segs), "utf-8");
-    expect(read("src/app/controllers/application-controller.ts")).toMatchSnapshot();
-    expect(read("src/app/models/application-record.ts")).toMatchSnapshot();
-    expect(read("src/app/helpers/application-helper.ts")).toMatchSnapshot();
-    expect(read("src/app/jobs/application-job.ts")).toMatchSnapshot();
-    expect(read("src/app/mailers/application-mailer.ts")).toMatchSnapshot();
-    expect(read("src/app/channels/application-cable/connection.ts")).toMatchSnapshot();
-    expect(read("src/app/channels/application-cable/channel.ts")).toMatchSnapshot();
-    expect(read("src/config/application.ts")).toMatchSnapshot();
-    expect(read("src/config/routes.ts")).toMatchSnapshot();
-    expect(read("src/config/puma.ts")).toMatchSnapshot();
-    expect(read("src/config/cable.ts")).toMatchSnapshot();
-    expect(read("src/config/storage.ts")).toMatchSnapshot();
-    expect(read("src/config/environments/development.ts")).toMatchSnapshot();
-    expect(read("src/config/environments/test.ts")).toMatchSnapshot();
-    expect(read("src/config/environments/production.ts")).toMatchSnapshot();
-    expect(read("test/test-helper.ts")).toMatchSnapshot();
-    expect(read("config.ts")).toMatchSnapshot();
-    expect(read("vite.config.ts")).toMatchSnapshot();
+    expect(read("src/app/controllers/application-controller.ts")).toMatchSnapshot(
+      "application-controller.ts",
+    );
+    expect(read("src/app/models/application-record.ts")).toMatchSnapshot("application-record.ts");
+    expect(read("src/app/helpers/application-helper.ts")).toMatchSnapshot("application-helper.ts");
+    expect(read("src/app/jobs/application-job.ts")).toMatchSnapshot("application-job.ts");
+    expect(read("src/app/mailers/application-mailer.ts")).toMatchSnapshot("application-mailer.ts");
+    expect(read("src/app/channels/application-cable/connection.ts")).toMatchSnapshot(
+      "connection.ts",
+    );
+    expect(read("src/app/channels/application-cable/channel.ts")).toMatchSnapshot("channel.ts");
+    expect(read("src/config/application.ts")).toMatchSnapshot("config/application.ts");
+    expect(read("src/config/routes.ts")).toMatchSnapshot("config/routes.ts");
+    expect(read("src/config/puma.ts")).toMatchSnapshot("config/puma.ts");
+    expect(read("src/config/cable.ts")).toMatchSnapshot("config/cable.ts");
+    expect(read("src/config/storage.ts")).toMatchSnapshot("config/storage.ts");
+    expect(read("src/config/environments/development.ts")).toMatchSnapshot(
+      "environments/development.ts",
+    );
+    expect(read("src/config/environments/test.ts")).toMatchSnapshot("environments/test.ts");
+    expect(read("src/config/environments/production.ts")).toMatchSnapshot(
+      "environments/production.ts",
+    );
+    expect(read("test/test-helper.ts")).toMatchSnapshot("test-helper.ts");
+    expect(read("config.ts")).toMatchSnapshot("config.ts");
+    expect(read("vite.config.ts")).toMatchSnapshot("vite.config.ts");
   });
 });

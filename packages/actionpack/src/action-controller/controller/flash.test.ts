@@ -146,7 +146,7 @@ describe("FlashIntegrationTest", () => {
 
   it("flash usable in metal without helper", () => {
     const controller = new Base();
-    expect(typeof controller.alert).toBeDefined();
-    expect(typeof controller.notice).toBeDefined();
+    expect("alert" in controller).toBe(true);
+    expect("notice" in controller).toBe(true);
   });
 });

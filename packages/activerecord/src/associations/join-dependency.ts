@@ -825,14 +825,15 @@ export class JoinDependency {
    */
   private build(associations: Record<PropertyKey, any>, baseKlass: typeof Base): JoinAssociation[] {
     if (!associations || typeof associations !== "object") return [];
-    return Reflect.ownKeys(associations).map((name) => {
-      const right = associations[name];
-      const reflection = this.findReflection(baseKlass, String(name));
+    return Reflect.ownKeys(associations).map((key) => {
+      const right = associations[key];
+      const name = typeof key === "symbol" ? (key.description ?? String(key)) : String(key);
+      const reflection = this.findReflection(baseKlass, name);
       (reflection as any).checkValidityBang?.();
       (reflection as any).checkEagerLoadableBang?.();
 
       if (reflection.isPolymorphic?.()) {
-        throw new EagerLoadPolymorphicError(String(name));
+        throw new EagerLoadPolymorphicError(name);
       }
 
       return new JoinAssociation(reflection, this.build(right, reflection.klass));

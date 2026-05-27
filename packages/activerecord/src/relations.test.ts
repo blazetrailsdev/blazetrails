@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from "vitest";
 import { Base, Relation, Range, RecordNotFound, SoleRecordExceeded } from "./index.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
@@ -25,7 +25,7 @@ class Post extends Base {
   }
 }
 
-async function seedPosts() {
+async function seedPostsSchema() {
   await defineSchema({
     posts: {
       title: "string",
@@ -37,6 +37,9 @@ async function seedPosts() {
       published: "boolean",
     },
   });
+}
+
+async function seedPosts() {
   await Post.create({
     title: "First",
     body: "body1",
@@ -91,6 +94,7 @@ async function seedPosts() {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(seedPostsSchema);
   beforeEach(seedPosts);
 
   // ── where ──
@@ -805,6 +809,7 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(seedPostsSchema);
   beforeEach(seedPosts);
 
   describe("find", () => {
@@ -1097,7 +1102,7 @@ describe("RelationTest", () => {
     }
   }
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({
       articles: {
         title: "string",
@@ -1106,6 +1111,8 @@ describe("RelationTest", () => {
         views: "integer",
       },
     });
+  });
+  beforeEach(async () => {
     // Clear scopes between tests
     if (Object.prototype.hasOwnProperty.call(Article, "_scopes")) {
       Article._scopes = new Map();
@@ -1230,7 +1237,7 @@ describe("RelationTest", () => {
     }
   }
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({
       items: {
         name: "string",
@@ -1238,6 +1245,8 @@ describe("RelationTest", () => {
         category: "string",
       },
     });
+  });
+  beforeEach(async () => {
     await Item.create({ name: "Apple", price: 1, category: "fruit" });
     await Item.create({ name: "Banana", price: 2, category: "fruit" });
     await Item.create({ name: "Carrot", price: 3, category: "vegetable" });
@@ -2001,7 +2010,7 @@ describe("RelationTest", () => {
     }
   }
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({
       widgets: {
         name: "string",
@@ -2010,6 +2019,8 @@ describe("RelationTest", () => {
         active: { type: "boolean", default: true },
       },
     });
+  });
+  beforeEach(async () => {
     await Widget.create({ name: "A", color: "red", weight: 10, active: true });
     await Widget.create({ name: "B", color: "blue", weight: 20, active: true });
     await Widget.create({ name: "C", color: "red", weight: 30, active: false });
@@ -2209,6 +2220,15 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        age: "integer",
+        email: "string",
+        name: "string",
+      },
+    });
+  });
   it("where with multiple keys including null", async () => {
     class User extends Base {
       static {
@@ -2216,7 +2236,6 @@ describe("RelationTest", () => {
         this.attribute("email", "string");
       }
     }
-    await defineSchema({ users: { name: "string", email: "string" } });
 
     await User.create({ name: "Alice", email: "a@b.com" });
     await User.create({ name: "Bob" }); // email null
@@ -2232,7 +2251,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
@@ -2252,7 +2270,6 @@ describe("RelationTest", () => {
         this.attribute("age", "integer");
       }
     }
-    await defineSchema({ users: { name: "string", age: "integer" } });
 
     await User.create({ name: "Alice", age: 25 });
     await User.create({ name: "Bob", age: 30 });
@@ -2272,7 +2289,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     for (let i = 0; i < 5; i++) await User.create({ name: `U${i}` });
 
@@ -2286,7 +2302,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     for (let i = 0; i < 5; i++) await User.create({ name: `U${i}` });
 
@@ -2301,7 +2316,6 @@ describe("RelationTest", () => {
         this.attribute("email", "string");
       }
     }
-    await defineSchema({ users: { name: "string", email: "string" } });
 
     await User.create({ name: "Alice", email: "a@b.com" });
 
@@ -2318,7 +2332,6 @@ describe("RelationTest", () => {
         this.attribute("age", "integer");
       }
     }
-    await defineSchema({ users: { name: "string", age: "integer" } });
 
     await User.create({ name: "Alice", age: 25 });
     await User.create({ name: "Bob", age: 30 });
@@ -2336,7 +2349,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
@@ -2352,7 +2364,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
@@ -2367,7 +2378,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     await User.create({ name: "Alice" });
     // once none() is applied, additional conditions are irrelevant
@@ -2381,7 +2391,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     await User.create({ name: "Bob" });
     await User.create({ name: "Alice" });
@@ -2396,7 +2405,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     await User.create({ name: "Bob" });
     await User.create({ name: "Alice" });
@@ -2411,7 +2419,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     expect(await User.all().count()).toBe(0);
   });
@@ -2422,7 +2429,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     expect(await User.all().pluck("name")).toEqual([]);
   });
@@ -2434,7 +2440,6 @@ describe("RelationTest", () => {
         this.attribute("age", "integer");
       }
     }
-    await defineSchema({ users: { name: "string", age: "integer" } });
 
     await User.create({ name: "Alice", age: 25 });
     await User.create({ name: "Alice", age: 30 });
@@ -2452,7 +2457,6 @@ describe("RelationTest", () => {
         this.attribute("age", "integer");
       }
     }
-    await defineSchema({ users: { name: "string", age: "integer" } });
 
     await User.create({ name: "Bob", age: 30 });
     await User.create({ name: "Alice", age: 25 });
@@ -2465,6 +2469,14 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        age: "integer",
+        name: "string",
+      },
+    });
+  });
   it("pick returns first row's columns", async () => {
     class User extends Base {
       static {
@@ -2472,7 +2484,6 @@ describe("RelationTest", () => {
         this.attribute("age", "integer");
       }
     }
-    await defineSchema({ users: { name: "string", age: "integer" } });
     await User.create({ name: "Alice", age: 25 });
     await User.create({ name: "Bob", age: 30 });
     const result = await User.all().order("name").pick("name");
@@ -2485,7 +2496,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     expect(await User.all().pick("name")).toBe(null);
   });
 
@@ -2495,7 +2505,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "A" });
     await User.create({ name: "B" });
     await User.create({ name: "C" });
@@ -2509,7 +2518,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     const result = await User.all().none().first(2);
     expect(result).toEqual([]);
   });
@@ -2520,7 +2528,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "A" });
     await User.create({ name: "B" });
     await User.create({ name: "C" });
@@ -2534,7 +2541,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     const result = await User.all().none().last(2);
     expect(result).toEqual([]);
   });
@@ -2543,13 +2549,19 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+      },
+    });
+  });
   it("returns explain output", async () => {
     class User extends Base {
       static {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     const result = await User.all().explain();
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);
@@ -2559,6 +2571,15 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        active: "boolean",
+        age: "integer",
+        name: "string",
+      },
+    });
+  });
   it("union combines two relations", async () => {
     class User extends Base {
       static {
@@ -2566,7 +2587,6 @@ describe("RelationTest", () => {
         this.attribute("age", "integer");
       }
     }
-    await defineSchema({ users: { name: "string", age: "integer" } });
     await User.create({ name: "Alice", age: 20 });
     await User.create({ name: "Bob", age: 30 });
     await User.create({ name: "Charlie", age: 25 });
@@ -2583,7 +2603,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
     const all1 = User.all();
     const all2 = User.all();
@@ -2598,7 +2617,6 @@ describe("RelationTest", () => {
         this.attribute("active", "boolean");
       }
     }
-    await defineSchema({ users: { name: "string", active: "boolean" } });
     await User.create({ name: "Alice", active: true });
     await User.create({ name: "Bob", active: false });
 
@@ -2616,7 +2634,6 @@ describe("RelationTest", () => {
         this.attribute("active", "boolean");
       }
     }
-    await defineSchema({ users: { name: "string", active: "boolean" } });
     await User.create({ name: "Alice", active: true });
     await User.create({ name: "Bob", active: false });
 
@@ -2712,7 +2729,7 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({
       items: { name: "string", status: "string" },
     });
@@ -2736,7 +2753,7 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({
       items: { name: "string" },
     });
@@ -2767,7 +2784,7 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({
       items: { name: "string" },
     });
@@ -2861,13 +2878,19 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      items: {
+        name: "string",
+      },
+    });
+  });
   it("returns a human-readable string", async () => {
     class Item extends Base {
       static _tableName = "items";
     }
     Item.attribute("id", "integer");
     Item.attribute("name", "string");
-    await defineSchema({ items: { name: "string" } });
 
     const item = await Item.create({ name: "Widget" });
     const str = item.inspect();
@@ -2880,7 +2903,7 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({ items: { name: "string" } });
   });
 
@@ -2906,7 +2929,7 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({ items: { name: "string" } });
   });
 
@@ -2928,6 +2951,14 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      items: {
+        name: "string",
+        status: "string",
+      },
+    });
+  });
   it("returns a subset of attributes", async () => {
     class Item extends Base {
       static _tableName = "items";
@@ -2935,9 +2966,6 @@ describe("RelationTest", () => {
     Item.attribute("id", "integer");
     Item.attribute("name", "string");
     Item.attribute("status", "string");
-    await defineSchema({
-      items: { name: "string", status: "string" },
-    });
 
     const item = await Item.create({ name: "Widget", status: "active" });
     const sliced = item.slice("name", "status");
@@ -2949,6 +2977,14 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      items: {
+        name: "string",
+        status: "string",
+      },
+    });
+  });
   it("returns attribute values as an array", async () => {
     class Item extends Base {
       static _tableName = "items";
@@ -2956,9 +2992,6 @@ describe("RelationTest", () => {
     Item.attribute("id", "integer");
     Item.attribute("name", "string");
     Item.attribute("status", "string");
-    await defineSchema({
-      items: { name: "string", status: "string" },
-    });
 
     const item = await Item.create({ name: "Widget", status: "active" });
     const values = item.valuesAt("name", "status");
@@ -2969,13 +3002,19 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+      },
+    });
+  });
   it("reloads the record with a lock clause", async () => {
     class User extends Base {
       static _tableName = "users";
     }
     User.attribute("id", "integer");
     User.attribute("name", "string");
-    await defineSchema({ users: { name: "string" } });
 
     const user = await User.create({ name: "Alice" });
     // Update via raw SQL to simulate another process changing the data
@@ -2991,13 +3030,19 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+      },
+    });
+  });
   it("filters out matching records from loaded results", async () => {
     class User extends Base {
       static _tableName = "users";
     }
     User.attribute("id", "integer");
     User.attribute("name", "string");
-    await defineSchema({ users: { name: "string" } });
 
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
@@ -3012,6 +3057,14 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        email: "string",
+        name: "string",
+      },
+    });
+  });
   it("filters out records where column is null", async () => {
     class User extends Base {
       static _tableName = "users";
@@ -3019,9 +3072,6 @@ describe("RelationTest", () => {
     User.attribute("id", "integer");
     User.attribute("name", "string");
     User.attribute("email", "string");
-    await defineSchema({
-      users: { name: "string", email: "string" },
-    });
 
     await User.create({ name: "Alice", email: "alice@test.com" });
     await User.create({ name: "Bob" }); // email is null
@@ -3035,13 +3085,19 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+      },
+    });
+  });
   it("returns true when exactly one record matches", async () => {
     class User extends Base {
       static _tableName = "users";
     }
     User.attribute("id", "integer");
     User.attribute("name", "string");
-    await defineSchema({ users: { name: "string" } });
 
     await User.create({ name: "Alice" });
     expect(await User.all().isOne()).toBe(true);
@@ -3053,13 +3109,19 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+      },
+    });
+  });
   it("reload() re-queries the database", async () => {
     class User extends Base {
       static _tableName = "users";
     }
     User.attribute("id", "integer");
     User.attribute("name", "string");
-    await defineSchema({ users: { name: "string" } });
 
     await User.create({ name: "Alice" });
     const rel = User.all();
@@ -3117,6 +3179,13 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+      },
+    });
+  });
   it("returns the relation for chaining", async () => {
     class User extends Base {
       static {
@@ -3124,7 +3193,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     const rel = User.where({ name: "Alice" }).loadAsync();
     expect(rel).toBeDefined();
     await rel;
@@ -3134,6 +3202,14 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      invert_where_users: {
+        name: "string",
+        role: "string",
+      },
+    });
+  });
   it("swaps where and whereNot clauses", async () => {
     class InvertWhereUser extends Base {
       static {
@@ -3141,9 +3217,6 @@ describe("RelationTest", () => {
         this.attribute("role", "string");
       }
     }
-    await defineSchema({
-      invert_where_users: { name: "string", role: "string" },
-    });
     await InvertWhereUser.all().deleteAll();
     const alice = await InvertWhereUser.create({ name: "Alice", role: "admin" });
     const bob = await InvertWhereUser.create({ name: "Bob", role: "user" });
@@ -3194,6 +3267,14 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+        role: "string",
+      },
+    });
+  });
   it("spawn returns an independent copy of the relation", () => {
     class User extends Base {
       static {
@@ -3232,9 +3313,6 @@ describe("RelationTest", () => {
         this.attribute("role", "string");
       }
     }
-    await defineSchema({
-      users: { name: "string", role: "string" },
-    });
     const rel = User.where({ role: "admin" });
     const u = await rel.create({ name: "Bob" });
     expect(u.isPersisted()).toBe(true);
@@ -3340,6 +3418,14 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+        role: "string",
+      },
+    });
+  });
   it("groupByColumn groups records by column value", async () => {
     class User extends Base {
       static {
@@ -3348,9 +3434,6 @@ describe("RelationTest", () => {
         this.attribute("role", "string");
       }
     }
-    await defineSchema({
-      users: { name: "string", role: "string" },
-    });
     await User.create({ name: "Alice", role: "admin" });
     await User.create({ name: "Bob", role: "user" });
     await User.create({ name: "Carol", role: "admin" });
@@ -3366,7 +3449,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
     await User.create({ name: "Adam" });
     await User.create({ name: "Bob" });
@@ -3382,7 +3464,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
     const indexed = await User.where({}).indexBy("name");
@@ -3397,7 +3478,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
     const indexed = await User.where({}).indexBy((u: any) => String(u.name).toLowerCase());
@@ -3409,6 +3489,14 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        age: "integer",
+        name: "string",
+      },
+    });
+  });
   it("asyncCount returns the same as count", async () => {
     class User extends Base {
       static {
@@ -3416,7 +3504,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
     const count = await User.where({}).asyncCount();
@@ -3430,7 +3517,6 @@ describe("RelationTest", () => {
         this.attribute("age", "integer");
       }
     }
-    await defineSchema({ users: { age: "integer" } });
     await User.create({ age: 20 });
     await User.create({ age: 30 });
     const total = await User.where({}).asyncSum("age");
@@ -3444,7 +3530,6 @@ describe("RelationTest", () => {
         this.attribute("age", "integer");
       }
     }
-    await defineSchema({ users: { age: "integer" } });
     await User.create({ age: 20 });
     await User.create({ age: 30 });
     const min = await User.where({}).asyncMinimum("age");
@@ -3458,7 +3543,6 @@ describe("RelationTest", () => {
         this.attribute("age", "integer");
       }
     }
-    await defineSchema({ users: { age: "integer" } });
     await User.create({ age: 20 });
     await User.create({ age: 30 });
     const max = await User.where({}).asyncMaximum("age");
@@ -3472,7 +3556,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
     const names = await User.where({}).asyncPluck("name");
@@ -3483,6 +3566,13 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+      },
+    });
+  });
   it("size returns count without loading records", async () => {
     class User extends Base {
       static {
@@ -3490,7 +3580,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
     const rel = User.where({});
@@ -3504,7 +3593,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
     expect(await User.where({}).length()).toBe(1);
   });
@@ -3543,6 +3631,13 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+      },
+    });
+  });
   it("returns self when records exist", async () => {
     class User extends Base {
       static {
@@ -3550,7 +3645,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
 
     const rel = User.where({ name: "Alice" });
@@ -3565,7 +3659,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
 
     const rel = User.where({ name: "Nobody" });
     const result = await rel.presence();
@@ -3576,6 +3669,13 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({
+      users: {
+        name: "string",
+      },
+    });
+  });
   it("supports for-await-of", async () => {
     class User extends Base {
       static {
@@ -3583,7 +3683,6 @@ describe("RelationTest", () => {
         this.attribute("name", "string");
       }
     }
-    await defineSchema({ users: { name: "string" } });
     await User.create({ name: "Alice" });
     await User.create({ name: "Bob" });
 
@@ -3598,7 +3697,7 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({ items: { name: "string" } });
   });
 
@@ -3750,7 +3849,7 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({ users: { name: "string" } });
   });
 
@@ -3815,7 +3914,7 @@ describe("RelationTest", () => {
     }
   }
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({
       products: {
         name: "string",
@@ -3826,6 +3925,8 @@ describe("RelationTest", () => {
       items: { name: "string", category: "string" },
       trackeds: { name: "string" },
     });
+  });
+  beforeEach(async () => {
     await Product.create({
       name: "Apple",
       price: 1,
@@ -4091,7 +4192,7 @@ describe("RelationTest", () => {
     }
   }
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     await defineSchema({
       post2s: {
         title: "string",
@@ -4256,7 +4357,35 @@ describe("RelationTest", () => {
 describe("RelationTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
-  beforeEach(async () => {
+  beforeAll(async () => {
+    await defineSchema({
+      block_accounts: {
+        credit_limit: "integer",
+      },
+      foc_posts: {
+        title: "string",
+      },
+      focb_posts: {
+        title: "string",
+      },
+      focba_posts: {
+        title: "string",
+      },
+      json_posts: {
+        title: "string",
+      },
+      post2s: {
+        title: "string",
+      },
+      posts: {
+        title: "string",
+      },
+      strict_posts: {
+        title: "string",
+      },
+    });
+  });
+  beforeAll(async () => {
     await defineSchema({
       posts: {
         title: "string",
@@ -4467,7 +4596,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ json_posts: { title: "string" } });
     await JsonPost.create({ title: "hello" });
     const records = await JsonPost.all().toArray();
     expect(records.length).toBeGreaterThan(0);
@@ -5035,7 +5163,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ post2s: { title: "string" } });
     await Post.create({ title: "hello" });
     const result = await Post.findBy({ title: "hello" });
     expect(result).not.toBeNull();
@@ -5047,7 +5174,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ post2s: { title: "string" } });
     await Post.create({ title: "hello" });
     const result = await Post.findBy({ title: "hello" });
     expect(result).not.toBeNull();
@@ -5489,7 +5615,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" }, post2s: { title: "string" } });
     const result = await Post.all().firstOrCreate({ title: "unique" });
     expect(result).not.toBeNull();
     // calling again should find the existing record
@@ -5504,7 +5629,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ foc_posts: { title: "string" } });
     const p = await FocPost.where({ title: "first-or" }).firstOrCreate({ title: "first-or" });
     expect(p.isPersisted()).toBe(true);
   });
@@ -5515,7 +5639,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ focb_posts: { title: "string" } });
     const result = await FocbPost.all().firstOrCreateBang({ title: "bang-unique" });
     expect(result).not.toBeNull();
   });
@@ -5526,7 +5649,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ focba_posts: { title: "string" } });
     const p = await FocbaPost.where({ title: "valid-array" }).firstOrCreateBang({
       title: "valid-array",
     });
@@ -5623,7 +5745,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" }, post2s: { title: "string" } });
     const result = await Post.createOrFindBy({ title: "new post" });
     expect(result).not.toBeNull();
   });
@@ -5634,7 +5755,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" }, post2s: { title: "string" } });
     await Post.create({ title: "existing" });
     const result = await Post.createOrFindBy({ title: "existing" });
     expect(result).not.toBeNull();
@@ -5648,7 +5768,6 @@ describe("RelationTest", () => {
         this.validatesPresenceOf("title");
       }
     }
-    await defineSchema({ strict_posts: { title: "string" } });
     await expect(
       StrictPost.where({ title: "" }).createOrFindByBang({ title: "" }),
     ).rejects.toThrow();
@@ -6069,7 +6188,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" }, post2s: { title: "string" } });
     await Post.create({ title: "a" });
     const rel = Post.all();
     await rel.toArray();
@@ -6119,7 +6237,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" }, post2s: { title: "string" } });
     for (let i = 0; i < 15; i++) await Post.create({ title: `post ${i}` });
     const rel = Post.all();
     await rel.toArray(); // load it
@@ -6427,7 +6544,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" }, post2s: { title: "string" } });
     await Post.create({ title: "memo" });
     const result = await Post.where({ title: "memo" }).take();
     expect(result).not.toBeNull();
@@ -6439,7 +6555,6 @@ describe("RelationTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" }, post2s: { title: "string" } });
     await Post.create({ title: "findmemo" });
     const result = await Post.findBy({ title: "findmemo" });
     expect(result).not.toBeNull();
@@ -6685,7 +6800,6 @@ describe("RelationTest", () => {
         this.attribute("credit_limit", "integer");
       }
     }
-    await defineSchema({ block_accounts: { credit_limit: "integer" } });
     await Account.create({ credit_limit: 50 });
     await Account.create({ credit_limit: 100 });
     const records = await Account.all().toArray();
@@ -6744,7 +6858,6 @@ describe("RelationTest", () => {
           this.attribute("title", "string");
         }
       }
-      await defineSchema({ posts: { title: "string" }, post2s: { title: "string" } });
       const p = await Post.create({ title: "txn1" });
       expect((p as any).isPersisted()).toBe(true);
     });
@@ -6755,7 +6868,6 @@ describe("RelationTest", () => {
           this.attribute("title", "string");
         }
       }
-      await defineSchema({ posts: { title: "string" }, post2s: { title: "string" } });
       const p = await Post.create({ title: "txn2" });
       expect((p as any).isPersisted()).toBe(true);
     });

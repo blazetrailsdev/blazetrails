@@ -80,12 +80,10 @@ describe("SelectTest", () => {
     // SCOPE: ~50–100 LOC in relation/query-methods.ts; blocks all hash-form select tests below
   });
 
-  it("select with hash argument", () => {
-    // Rails tests hash-form select with alias + record load; we verify multi-column select SQL is correct.
-    const { Developer } = makeModel();
-    const sql = Developer.select("name", "salary").toSql();
-    expect(sql).toContain(quoteColumnName("name"));
-    expect(sql).toContain(quoteColumnName("salary"));
+  it.skip("select with hash argument", () => {
+    // BLOCKED: relation — hash-form select ({ "UPPER(title)" => :title, posts: { title: :post_title } }) not implemented
+    // ROOT-CAUSE: arelColumns in query-methods.ts does not handle hash arguments
+    // SCOPE: ~50–100 LOC in relation/query-methods.ts; blocks all hash-form select tests
   });
 
   it.skip("select with reserved words aliases", () => {
@@ -93,11 +91,9 @@ describe("SelectTest", () => {
     // (see "select with non field hash values")
   });
 
-  it("select with one level hash argument", () => {
-    // Rails tests hash-form select with record load; we verify single-column select SQL.
-    const { Developer } = makeModel();
-    const sql = Developer.select("name").toSql();
-    expect(sql).toContain(quoteColumnName("name"));
+  it.skip("select with one level hash argument", () => {
+    // BLOCKED: relation — hash-form select ({ "UPPER(title)" => :title, title: :post_title }) not implemented
+    // (see "select with non field hash values")
   });
 
   it.skip("select with not exists field", () => {
@@ -110,12 +106,10 @@ describe("SelectTest", () => {
     // (see "select with non field hash values")
   });
 
-  it("select with hash array value with not exists field", () => {
-    // Rails tests hash array select; we verify multi-column select SQL.
-    const { Developer } = makeModel();
-    const sql = Developer.select("name", "salary").toSql();
-    expect(sql).toContain(quoteColumnName("name"));
-    expect(sql).toContain(quoteColumnName("salary"));
+  it.skip("select with hash array value with not exists field", () => {
+    // BLOCKED: relation — hash-array select ({ posts: [:bar, :id] }) not implemented
+    // Rails: SELECT "posts"."bar", "posts"."id" FROM and then raises StatementInvalid
+    // (see "select with non field hash values")
   });
 
   it.skip("select with hash and table alias", () => {
@@ -128,18 +122,15 @@ describe("SelectTest", () => {
     // (see "select with non field hash values")
   });
 
-  it("select with hash argument without aliases", () => {
-    // Rails tests hash array select [ :title, "title as post_title" ]; we verify column appears in SQL.
-    const { Developer } = makeModel();
-    const sql = Developer.select("name").toSql();
-    expect(sql).toContain(quoteColumnName("name"));
+  it.skip("select with hash argument without aliases", () => {
+    // BLOCKED: relation — hash-form select ({ posts: [:title, "title as post_title"] }) not implemented
+    // (see "select with non field hash values")
   });
 
-  it("select with hash argument with few tables", () => {
-    // Rails tests hash select across joined tables; we verify multi-column select SQL.
-    const { Developer } = makeModel();
-    const sql = Developer.select("name", "salary").toSql();
-    expect(sql).toContain(quoteColumnName("salary"));
+  it.skip("select with hash argument with few tables", () => {
+    // BLOCKED: relation — hash-form select across joined tables not implemented
+    // Rails: Post.joins(:comments).select(:title, posts: { title: :post_title }, comments: { body: :comment_body })
+    // (see "select with non field hash values")
   });
 
   it("reselect", () => {
@@ -155,12 +146,10 @@ describe("SelectTest", () => {
     // (see "select with non field hash values")
   });
 
-  it("reselect with one level hash argument", () => {
-    // Rails tests hash reselect; we verify that reselect drops the previous column.
-    const { Developer } = makeModel();
-    const sql = Developer.select("name").reselect("salary").toSql();
-    expect(sql).not.toContain(quoteColumnName("name"));
-    expect(sql).toContain(quoteColumnName("salary"));
+  it.skip("reselect with one level hash argument", () => {
+    // BLOCKED: relation — hash-form reselect ({ title: :post_title }) not implemented
+    // Rails: Post.select(:title, :body).reselect(:title, title: :post_title).to_sql
+    // (see "select with non field hash values")
   });
 
   it("non select columns wont be loaded", async () => {

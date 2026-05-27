@@ -329,6 +329,7 @@ describe("LegacyRouteSetTests", () => {
 
   it("route with colon first", () => {
     rs.draw((r) => {
+      r.get("/:controller/:action/:id", { defaults: { action: "index" } } as any);
       r.get(":url", { to: "content#translate" });
     });
 
@@ -412,6 +413,7 @@ describe("LegacyRouteSetTests", () => {
   it("paths escaped", () => {
     rs.draw((r) => {
       r.get("file/*path", { to: "content#show_file", as: "path" });
+      r.get(":controller/:action/:id", {});
     });
 
     const results = rs.recognizePath("/file/hello+world/how+are+you%3F");
@@ -457,6 +459,7 @@ describe("LegacyRouteSetTests", () => {
   it("escapes newline character for dynamic path", () => {
     rs.draw((r) => {
       r.get("/dynamic/:dynamic_segment", { to: "subpath_books#show", as: "dynamic" });
+      r.get(":controller/:action/:id", {});
     });
 
     const results = rs.recognizePath("/dynamic/a%0Anewline");
@@ -467,6 +470,7 @@ describe("LegacyRouteSetTests", () => {
   it("escapes newline character for wildcard path", () => {
     rs.draw((r) => {
       r.get("/wildcard/*wildcard_segment", { to: "subpath_books#show", as: "wildcard" });
+      r.get(":controller/:action/:id", {});
     });
 
     const results = rs.recognizePath("/wildcard/a%0Anewline");

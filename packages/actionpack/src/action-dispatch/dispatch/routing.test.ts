@@ -2293,15 +2293,15 @@ describe("TestUrlGenerationErrors", () => {
   });
 
   it.skip("URL helpers raise a 'missing keys' error for a nil param with optimized helpers", () => {
-    // pending: optimized named-route helpers (product_path(nil) positional form) not ported
+    // pending: requires url_helpers optimized helper (product_path(nil) positional form) not ported
   });
 
   it.skip("URL helpers raise a 'constraint failure' error for a nil param with non-optimized helpers", () => {
-    // pending: url_helpers keyword-arg form (product_path(id: nil)) not ported
+    // pending: requires url_helpers non-optimized helper (product_path(id: nil) keyword form) not ported
   });
 
   it.skip("exceptions have suggestions for fix", () => {
-    // pending: DidYouMean integration (error.detailed_message) not ported
+    // pending: requires error.detailed_message (Ruby DidYouMean integration) — no JS equivalent
   });
 });
 
@@ -2497,18 +2497,38 @@ describe("TestHttpMethods", () => {
 });
 
 describe("TestUriPathEscaping", () => {
-  // Tests require url_helpers segment_path/splat_path and HTTP dispatch — not ported
-  it.skip("escapes slash in generated path segment", () => {
-    // pending: url_helpers (segment_path) not ported
+  it("escapes slash in generated path segment", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/:segment", { to: "test#show", as: "segment" });
+    });
+    expect(routes.pathFor("segment", { segment: "a b/c+d" })).toBe("/a%20b%2Fc+d");
   });
-  it.skip("unescapes recognized path segment", () => {
-    // pending: HTTP dispatch with path_parameters not ported
+
+  it("unescapes recognized path segment", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/:segment", { to: "test#show", as: "segment" });
+    });
+    const m = routes.recognize("GET", "/a%20b%2Fc+d");
+    expect(m?.params.segment).toBe("a b/c+d");
   });
-  it.skip("does not escape slash in generated path splat", () => {
-    // pending: url_helpers (splat_path) not ported
+
+  it("does not escape slash in generated path splat", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/*splat", { to: "test#show", as: "splat" });
+    });
+    expect(routes.pathFor("splat", { splat: "a b/c+d" })).toBe("/a%20b/c+d");
   });
-  it.skip("unescapes recognized path splat", () => {
-    // pending: HTTP dispatch with path_parameters not ported
+
+  it("unescapes recognized path splat", () => {
+    const routes = new RouteSet();
+    routes.draw((r) => {
+      r.get("/*splat", { to: "test#show", as: "splat" });
+    });
+    const m = routes.recognize("GET", "/a%20b/c+d");
+    expect(m?.params.splat).toBe("a b/c+d");
   });
 });
 

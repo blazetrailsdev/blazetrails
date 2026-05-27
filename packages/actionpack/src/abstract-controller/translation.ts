@@ -49,6 +49,11 @@ export function translate(
       ? HtmlSafeTranslation.translate(k, opts)
       : I18n.translate(k, opts as Parameters<typeof I18n.translate>[1]);
 
+  if (isHtmlKey && options.default !== undefined) {
+    const defs = Array.isArray(options.default) ? options.default : [options.default];
+    options = { ...options, default: defs.map((v) => htmlEscapeDefault(v)) };
+  }
+
   if (key.startsWith(".")) {
     const path = this.constructor.controllerPath().replace(/\//g, ".");
     const scopedKey = `${path}.${this.actionName}${key}`;
@@ -80,9 +85,6 @@ export function translate(
           const r = i18nTranslate(d.slice(1), passOptions);
           if (!isMissing(r)) return r;
         } else {
-          if (isHtmlKey) {
-            return htmlEscapeDefault(d);
-          }
           return d;
         }
       }

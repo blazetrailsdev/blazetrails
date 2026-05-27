@@ -202,15 +202,33 @@ function prependCtes(rel: CalculationRelation, sql: string): string {
   return `WITH ${recursive ? "RECURSIVE " : ""}${cteDefs} ${sql}`;
 }
 
+// Mirrors relation.ts _safeAlias: quote alias if it contains non-identifier chars.
+function _safeAlias(alias: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(alias) ? alias : `"${alias.replace(/"/g, '""')}"`;
+}
+
 function applyFromClause(rel: CalculationRelation, sql: string): string {
   if (rel._fromClause.isEmpty()) return sql;
   const raw = rel._fromClause.value;
   const alias = rel._fromClause.name;
-  // Relation/Arel-node _fromClause values are compiled by buildArel() — not
-  // reachable from the aggregate path which builds its own manager from scratch.
-  // Guard against it to avoid producing "[object Object]" in SQL.
-  if (typeof raw !== "string") return sql;
-  const fromExpr = alias ? `${raw} ${alias}` : raw;
+  // Compile the raw value: string stays as-is; Relation/Arel nodes expose toSql().
+  // This mirrors Rails' execute_simple_calculation which builds FROM via relation.arel
+  // (full buildArel path). We replicate that by compiling nodes here.
+  let fromSource: string;
+  if (typeof raw === "string") {
+    fromSource = raw;
+  } else if (raw !== null && typeof (raw as any).toSql === "function") {
+    const subSql: string = (raw as any).toSql();
+    // Wrap sub-select in parens; use alias or a fallback.
+    const safeName = alias ? _safeAlias(alias) : "subquery";
+    return sql.replace(
+      /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
+      () => `FROM (${subSql}) ${safeName}`,
+    );
+  } else {
+    return sql;
+  }
+  const fromExpr = alias ? `${fromSource} ${_safeAlias(alias)}` : fromSource;
   return sql.replace(
     /FROM\s+(?:"[^"]+"|[`][^`]+[`])(?:\.(?:"[^"]+"|[`][^`]+[`]))*/,
     () => `FROM ${fromExpr}`,
@@ -356,8 +374,11 @@ export async function performCount(
     if (this._offsetValue !== null) innerManager.skip(this._offsetValue);
     // Wrap inner query as Arel AST: Grouping (parens) + TableAlias.
     // Mirrors Rails: Arel::Nodes::TableAlias.new(Arel::Nodes::Grouping.new(inner), alias)
+    // Apply FROM override at SQL level before wrapping — innerManager builds from
+    // the base table but a from() override must redirect it to the CTE/subquery.
+    const innerSql = applyFromClause(this, innerManager.toSql());
     const subqueryNode = new Nodes.TableAlias(
-      new Nodes.Grouping(innerManager.ast),
+      new Nodes.Grouping(new Nodes.SqlLiteral(innerSql)),
       "subquery_for_count",
     );
     const countNode = new Nodes.NamedFunction("COUNT", [columnAlias]);

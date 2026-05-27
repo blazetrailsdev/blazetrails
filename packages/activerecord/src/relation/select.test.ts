@@ -170,7 +170,7 @@ describe("SelectTest", () => {
     await Developer.create({ name: "Alice", salary: 100 });
     const devs = await Developer.select("name").toArray();
     expect(devs.length).toBe(1);
-    expect((devs[0] as any).name).toBe("Alice");
+    expect(devs[0].readAttribute("name")).toBe("Alice");
   });
 
   it.skip("merging select from different model", () => {

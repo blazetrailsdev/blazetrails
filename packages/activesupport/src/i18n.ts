@@ -296,7 +296,8 @@ class I18nModule {
     if (options.scope) keyStr = `${options.scope}.${keyStr}`;
     const result = this.backend.lookup(locale, keyStr);
     if (result !== undefined) return interpolate(this._pluralize(result, options.count), options);
-    if (options.default !== undefined) return interpolate(this._pluralize(options.default, options.count), options);
+    if (options.default !== undefined)
+      return interpolate(this._pluralize(options.default, options.count), options);
     if (options.raise) throw new MissingTranslationData(locale, keyStr);
     return `Translation missing: ${locale}.${keyStr}`;
   }

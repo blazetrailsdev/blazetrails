@@ -20,10 +20,7 @@ export class NumberToCurrencyConverter extends NumberConverter<NumberToCurrencyO
 
   protected convert(): string {
     const opts = this.options;
-    const precision = (opts.precision ?? 2) as number;
     const unit = (opts.unit ?? "$") as string;
-    const separator = (opts.separator ?? ".") as string;
-    const delimiter = (opts.delimiter ?? ",") as string;
 
     const num = Number(this.number);
     if (!Number.isFinite(num)) return String(this.number);
@@ -31,11 +28,7 @@ export class NumberToCurrencyConverter extends NumberConverter<NumberToCurrencyO
     const isNegative = num < 0;
     const abs = Math.abs(num);
 
-    const numberStr = NumberToRoundedConverter.convert(abs, {
-      precision,
-      separator,
-      delimiter,
-    });
+    const numberStr = NumberToRoundedConverter.convert(abs, opts);
 
     let format: string;
     if (isNegative) {

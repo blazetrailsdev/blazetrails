@@ -14,7 +14,7 @@ export class NumberToHumanSizeConverter extends NumberConverter<NumberToHumanSiz
 
   protected convert(): string {
     const opts = this.options;
-    if (!Object.prototype.hasOwnProperty.call(this.opts, "stripInsignificantZeros")) {
+    if (!("stripInsignificantZeros" in opts)) {
       opts.stripInsignificantZeros = true;
     }
 

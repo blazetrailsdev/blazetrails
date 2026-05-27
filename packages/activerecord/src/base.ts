@@ -2669,10 +2669,10 @@ export class Base extends Model {
     // it will be replaced with the auto-incremented value to avoid a
     // "multiple assignments to same column" error on PostgreSQL.
     const lockCol = ctor.lockingColumn;
-    let rawVersion: unknown;
+    let lockAttributeWas: import("@blazetrails/activemodel").Attribute | null = null;
     let lockWhereValue: unknown;
     if (ctor.lockingEnabled) {
-      rawVersion = this.readAttribute(lockCol);
+      const rawVersion = this.readAttribute(lockCol);
       const currentVersion = rawVersion == null ? 0 : Number(rawVersion) || 0;
       // Mirrors Rails _lock_value_for_database:
       // - User explicitly changed lock_version (e.g. person.lock_version = 42):
@@ -2681,6 +2681,7 @@ export class Base extends Model {
       //   NULL-in-DB records generate IS NULL, freshly-created records generate = 0.
       // Must be read BEFORE mutating _attributes below.
       const lockAttr = this._attributes.getAttribute(lockCol);
+      lockAttributeWas = lockAttr; // snapshot for stale restore (mirrors Rails lock_attribute_was)
       if (this.willSaveChangeToAttribute(lockCol)) {
         lockWhereValue = lockAttr.valueForDatabase;
       } else {
@@ -2710,7 +2711,9 @@ export class Base extends Model {
       .execUpdate(umVisitor ? umVisitor.compile(um.ast) : um.toSql(), `${ctor.name} Update`)
       .then((affected) => {
         if (ctor.lockingEnabled && affected === 0) {
-          this._attributes.set(lockCol, rawVersion);
+          // Mirrors Rails _update_row rescue Exception: restore attribute snapshot so
+          // NULL-in-DB records don't lose their original null valueBeforeTypeCast.
+          if (lockAttributeWas !== null) this._attributes.set(lockCol, lockAttributeWas);
           throw new StaleObjectError(this, "update");
         }
       });

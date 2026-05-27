@@ -267,7 +267,8 @@ export async function _updateRecord(this: any): Promise<boolean> {
     // Mirror record_update_timestamps: use _skipTouch (Rails' @_touch_record flag)
     // and the shared currentTimeFromProperTimezone() helper (Temporal.Instant).
     const hasChanges = Object.keys(this.changes ?? {}).length > 0;
-    const wroteTimestamps = !this._skipTouch && ctor.recordTimestamps !== false && hasChanges;
+    const instanceRecordTs = this.recordTimestamps ?? ctor.recordTimestamps;
+    const wroteTimestamps = !this._skipTouch && instanceRecordTs !== false && hasChanges;
     if (wroteTimestamps) {
       const time = currentTimeFromProperTimezone();
       const updateAttrs = timestampAttributesForUpdateInModel.call(ctor);
@@ -286,7 +287,7 @@ export async function _updateRecord(this: any): Promise<boolean> {
     // Rails: Timestamp#_update_record writes once via record_update_timestamps;
     // super does not.
     const previousSkipTouch = this._skipTouch;
-    const skipInnerTouch = wroteTimestamps || ctor.recordTimestamps === false || !hasChanges;
+    const skipInnerTouch = wroteTimestamps || instanceRecordTs === false || !hasChanges;
     if (skipInnerTouch) this._skipTouch = true;
     try {
       await this._performUpdate();

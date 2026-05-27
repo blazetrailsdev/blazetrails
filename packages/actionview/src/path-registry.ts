@@ -25,7 +25,9 @@ export class PathRegistry {
   static getViewPaths(klass: ClassLike): TemplateResolver[] | undefined {
     if (this._viewPathsByClass.has(klass)) return this._viewPathsByClass.get(klass);
     const proto = Object.getPrototypeOf(klass) as ClassLike | null;
-    return proto && typeof proto === "function" ? this.getViewPaths(proto) : undefined;
+    return proto && typeof proto === "function" && proto !== Function.prototype
+      ? this.getViewPaths(proto)
+      : undefined;
   }
 
   /** @internal */

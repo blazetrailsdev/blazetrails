@@ -2870,6 +2870,9 @@ describe("BasicsTest", () => {
 describe("BasicsTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema(SCHEMA);
+  });
 
   class PostInner extends Base {
     static {
@@ -3067,6 +3070,9 @@ describe("BasicsTest", () => {
 describe("BasicsTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema(SCHEMA);
+  });
 
   // -- Table name inference --
   it("table name guesses", () => {

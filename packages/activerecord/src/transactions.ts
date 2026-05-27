@@ -435,22 +435,24 @@ export function restoreTransactionRecordState(
     r._attributes = r._attributes.deepDup();
   }
 
+  // Restore the primary key if it was auto-assigned during insert. Must happen
+  // before dirty snapshot/redetect so the restored pk is the current value when
+  // redetectChanges runs — otherwise a second redetect cannot clear the stale
+  // id entry left by the first pass (redetectChanges only sets, never deletes).
+  if (snapshot.newRecord && !Array.isArray(this.id)) {
+    const ctor = this.constructor as typeof Base;
+    const pk = ctor.primaryKey as string;
+    if (r._attributes.fetchValue(pk) !== snapshot.id) {
+      r._attributes.set(pk, snapshot.id);
+    }
+  }
+
   // Restore dirty tracking baseline to pre-transaction state while keeping
   // current in-memory attribute values. Mirrors Rails' attribute map that
   // rebuilds @attributes with snapshotted baseline + current values, so
   // changes() reflects the diff between pre-TX and in-memory state.
   r._dirty.snapshot(snapshot.attributes);
   r._dirty.redetectChanges(r._attributes);
-
-  // Restore the primary key if it was auto-assigned during insert.
-  if (snapshot.newRecord && !Array.isArray(this.id)) {
-    const ctor = this.constructor as typeof Base;
-    const pk = ctor.primaryKey as string;
-    if (r._attributes.fetchValue(pk) !== snapshot.id) {
-      r._attributes.set(pk, snapshot.id);
-      r._dirty.redetectChanges(r._attributes);
-    }
-  }
 
   // Re-apply the snapshot's frozen state *after* any internal restores.
   if (snapshot.frozen && !r._attributes.isFrozen()) {

@@ -1521,7 +1521,9 @@ describe("TransactionTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
   beforeAll(async () => {
-    await defineSchema({ posts: { title: "string" } });
+    // Superset schema so no DDL runs inside the per-test fixture transaction.
+    // On MySQL, DDL auto-commits and escapes the SAVEPOINT rollback wrapper.
+    await defineSchema({ posts: { title: "string", approved: "boolean", content: "string" } });
   });
 
   it.skip("rollback dirty changes even with raise during rollback removes from pool", () => {
@@ -1559,7 +1561,6 @@ describe("TransactionTest", () => {
         });
       }
     }
-    await defineSchema({ posts: { title: "string", approved: "boolean" } });
     const first = await Post.create({ title: "First", approved: false });
 
     await Post.transaction(async () => {
@@ -1579,7 +1580,6 @@ describe("TransactionTest", () => {
         });
       }
     }
-    await defineSchema({ posts: { title: "string" } });
     const post = Post.new({ title: "A new post" }) as any;
 
     await expect(
@@ -1606,7 +1606,6 @@ describe("TransactionTest", () => {
         this.beforeDestroy(() => false);
       }
     }
-    await defineSchema({ posts: { title: "string" } });
     const post = (await Post.create({ title: "to keep" })) as any;
     const result = await post.destroy();
     expect(result).toBeFalsy();
@@ -1623,7 +1622,6 @@ describe("TransactionTest", () => {
         });
       }
     }
-    await defineSchema({ posts: { title: "string" } });
     const newPost = (await Post.create({ title: "A new post" })) as any;
     expect(newPost.isPersisted()).toBe(false);
     expect(newPost.id).toBeNull();
@@ -1637,7 +1635,6 @@ describe("TransactionTest", () => {
         });
       }
     }
-    await defineSchema({ posts: { title: "string" } });
     const newPost = (await Post.create({ title: "A new post" })) as any;
     expect(newPost.isPersisted()).toBe(false);
     expect(newPost.id).toBeNull();
@@ -1648,7 +1645,6 @@ describe("TransactionTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" } });
     const topicOne = Post.new({ title: "A new topic" }) as any;
     const topicTwo = Post.new({ title: "Another new topic" }) as any;
 
@@ -1674,7 +1670,6 @@ describe("TransactionTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" } });
     const topicOne = Post.new({ title: "A new topic" }) as any;
     const topicTwo = Post.new({ title: "Another new topic" }) as any;
 
@@ -1697,7 +1692,6 @@ describe("TransactionTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" } });
     const topicOne = Post.new({ title: "A new topic" }) as any;
     const topicTwo = Post.new({ title: "Another new topic" }) as any;
     const topicThree = Post.new({ title: "Another new topic of course" }) as any;
@@ -1730,7 +1724,6 @@ describe("TransactionTest", () => {
         this.attribute("approved", "boolean");
       }
     }
-    await defineSchema({ posts: { title: "string", approved: "boolean" } });
     const first = (await Post.create({ title: "First", approved: true })) as any;
     const second = (await Post.create({ title: "Second", approved: true })) as any;
 
@@ -1760,7 +1753,6 @@ describe("TransactionTest", () => {
         this.attribute("content", "string");
       }
     }
-    await defineSchema({ posts: { content: "string" } });
     const first = (await Post.create({ content: "One" })) as any;
     let one: string, two: string, three: string;
 
@@ -1838,7 +1830,6 @@ describe("TransactionTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" } });
     const topic = Post.new() as any;
 
     await Post.transaction(async () => {
@@ -1958,7 +1949,6 @@ describe("TransactionTest", () => {
         this.attribute("title", "string");
       }
     }
-    await defineSchema({ posts: { title: "string" } });
     await expect(
       Post.transaction(async () => {
         await (Post as any).leaseConnection().materializeTransactions();

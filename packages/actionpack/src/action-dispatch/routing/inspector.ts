@@ -119,7 +119,8 @@ export class RouteWrapper {
   }
 
   get path(): string {
-    return this.route.path;
+    const p = this.route.path;
+    return this.route.formatted && !p.endsWith("/") ? `${p}(.:format)` : p;
   }
   get name(): string {
     return this.route.name ?? "";

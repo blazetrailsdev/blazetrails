@@ -204,7 +204,7 @@ describe("InstrumentationTest", () => {
     }
     let capturedName: string | undefined;
     Notifications.subscribe("sql.active_record", (event: any) => {
-      if (event.payload?.sql?.includes("SELECT")) capturedName = event.payload.name;
+      if (event.payload?.name === "Book Count") capturedName = event.payload.name;
     });
     await Book.count();
     expect(capturedName).toBe("Book Count");
@@ -219,7 +219,7 @@ describe("InstrumentationTest", () => {
     }
     let capturedName: string | undefined;
     Notifications.subscribe("sql.active_record", (event: any) => {
-      if (event.payload?.sql?.includes("SELECT")) capturedName = event.payload.name;
+      if (event.payload?.name === "Book Count") capturedName = event.payload.name;
     });
     await Book.group("status").count();
     expect(capturedName).toBe("Book Count");
@@ -251,7 +251,7 @@ describe("InstrumentationTest", () => {
     for (let i = 0; i < 10; i++) await Book.create({ name: "row count book 2" });
     let capturedRowCount: number | undefined;
     Notifications.subscribe("sql.active_record", (event: any) => {
-      if (event.payload?.sql?.includes("SELECT")) {
+      if (event.payload?.name === "Book Pluck") {
         capturedRowCount = event.payload.row_count;
       }
     });
@@ -353,7 +353,7 @@ describe("TransactionInSqlActiveRecordPayloadNonTransactionalTest", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
   beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
+    await defineSchema(TEST_SCHEMA, { useTransactionalTests: false });
   });
 
   afterEach(() => {

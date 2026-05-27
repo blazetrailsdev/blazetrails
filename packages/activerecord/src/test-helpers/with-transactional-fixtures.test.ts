@@ -373,3 +373,49 @@ describe("withTransactionalFixtures (pooled adapter)", () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+// Concurrency safety-net: two Base.transaction() calls running concurrently
+// from unrelated async chains must NOT observe each other's transaction state.
+//
+// Today this passes because SidecarFixtures._txVisible() gates
+// currentTransaction()/inTransaction/openTransactions behind the AsyncContext
+// flag set by withinNewTransaction(). After Phase E2/E3 delete the
+// AsyncContext filter, this test must STILL pass — the connection pool's
+// per-checkout serialization replaces the filter as the isolation mechanism.
+//
+// The test documents the invariant so regressions are caught immediately.
+describe("concurrency isolation: two concurrent transaction chains stay independent", () => {
+  it("chain B sees openTransactions=0 while chain A is mid-transaction", async () => {
+    const { fixtures: sidecarA } = createSidecarTestAdapter();
+    const { fixtures: sidecarB } = createSidecarTestAdapter();
+
+    // Capture what chain B observes WHILE chain A is inside a transaction.
+    // Promise.all schedules both concurrently in the same microtask queue,
+    // exercising the AsyncContext boundary between the two branches.
+    let bObservedOpen = -1;
+    let bObservedInTransaction = true;
+    let aRan = false;
+
+    await Promise.all([
+      sidecarA.withinNewTransaction({ joinable: false }, async () => {
+        aRan = true;
+        // Yield control so chain B runs after chain A is mid-transaction.
+        await Promise.resolve();
+      }),
+      (async () => {
+        bObservedOpen = sidecarB.openTransactions;
+        bObservedInTransaction = sidecarB.inTransaction;
+      })(),
+    ]);
+
+    expect(aRan).toBe(true);
+    // Chain B must not have observed chain A's transaction state.
+    expect(bObservedOpen).toBe(0);
+    expect(bObservedInTransaction).toBe(false);
+  });
+
+  it("currentTransaction() returns null for a chain outside any withinNewTransaction", () => {
+    const { fixtures } = createSidecarTestAdapter();
+    expect(fixtures.currentTransaction()).toBeNull();
+  });
+});

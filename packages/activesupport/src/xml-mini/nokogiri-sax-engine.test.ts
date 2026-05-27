@@ -3,48 +3,48 @@ import { parseXmlToHash } from "./nokogiri-engine.js";
 import { parseXmlToHashSax } from "./nokogiri-sax-engine.js";
 
 describe("NokogiriSAXEngineTest", () => {
-  it("produces same hash as DOM for simple element", () => {
+  it("produces same hash as DOM for simple element", async () => {
     const xml = "<root/>";
-    expect(parseXmlToHashSax(xml)).toEqual(parseXmlToHash(xml));
+    expect(await parseXmlToHashSax(xml)).toEqual(await parseXmlToHash(xml));
   });
 
-  it("produces same hash as DOM for element with attributes", () => {
+  it("produces same hash as DOM for element with attributes", async () => {
     const xml = '<root type="integer" name="foo"/>';
-    expect(parseXmlToHashSax(xml)).toEqual(parseXmlToHash(xml));
+    expect(await parseXmlToHashSax(xml)).toEqual(await parseXmlToHash(xml));
   });
 
-  it("produces same hash as DOM for element with text content", () => {
+  it("produces same hash as DOM for element with text content", async () => {
     const xml = "<root>hello world</root>";
-    expect(parseXmlToHashSax(xml)).toEqual(parseXmlToHash(xml));
+    expect(await parseXmlToHashSax(xml)).toEqual(await parseXmlToHash(xml));
   });
 
-  it("produces same hash as DOM for nested elements", () => {
+  it("produces same hash as DOM for nested elements", async () => {
     const xml = '<products><book type="novel"><title>Dune</title></book></products>';
-    expect(parseXmlToHashSax(xml)).toEqual(parseXmlToHash(xml));
+    expect(await parseXmlToHashSax(xml)).toEqual(await parseXmlToHash(xml));
   });
 
-  it("produces same hash as DOM for repeated elements", () => {
+  it("produces same hash as DOM for repeated elements", async () => {
     const xml = "<items><item>a</item><item>b</item></items>";
-    expect(parseXmlToHashSax(xml)).toEqual(parseXmlToHash(xml));
+    expect(await parseXmlToHashSax(xml)).toEqual(await parseXmlToHash(xml));
   });
 
-  it("children with simple cdata", () => {
+  it("children with simple cdata", async () => {
     const xml = "<root><![CDATA[cdata text]]></root>";
-    expect(parseXmlToHashSax(xml)).toEqual(parseXmlToHash(xml));
+    expect(await parseXmlToHashSax(xml)).toEqual(await parseXmlToHash(xml));
   });
 
-  it("children with text and cdata", () => {
+  it("children with text and cdata", async () => {
     const xml = "<root>before<![CDATA[middle]]>after</root>";
-    expect(parseXmlToHashSax(xml)).toEqual(parseXmlToHash(xml));
+    expect(await parseXmlToHashSax(xml)).toEqual(await parseXmlToHash(xml));
   });
 
-  it("decodes entities in content", () => {
+  it("decodes entities in content", async () => {
     const xml = "<root>&amp;&lt;&gt;</root>";
-    const result = parseXmlToHashSax(xml) as { root: { __content__: string } };
+    const result = (await parseXmlToHashSax(xml)) as { root: { __content__: string } };
     expect(result.root.__content__).toBe("&<>");
   });
 
-  it("throws on malformed xml", () => {
-    expect(() => parseXmlToHashSax("<root>")).toThrow();
+  it("throws on malformed xml", async () => {
+    await expect(parseXmlToHashSax("<root>")).rejects.toThrow();
   });
 });

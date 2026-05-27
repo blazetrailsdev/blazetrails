@@ -1,8 +1,18 @@
-import { XML, parseXml, type XmlNode } from "@blazetrails/nokogiri";
+import type { XmlNode } from "@blazetrails/nokogiri";
 
 const CONTENT_ROOT = "__content__";
 
 type XmlHash = Record<string, unknown>;
+
+async function loadNokogiri() {
+  try {
+    return await import("@blazetrails/nokogiri");
+  } catch {
+    throw new Error(
+      "@blazetrails/nokogiri is not installed. Add it as a dependency to use the Nokogiri XML backend.",
+    );
+  }
+}
 
 function nodeToHash(node: XmlNode): XmlHash {
   const hash: XmlHash = {};
@@ -38,7 +48,8 @@ function nodeToHash(node: XmlNode): XmlHash {
   return hash;
 }
 
-export function parseXmlToHash(data: string): XmlHash {
+export async function parseXmlToHash(data: string): Promise<XmlHash> {
+  const { parseXml } = await loadNokogiri();
   const doc = parseXml(data);
   try {
     if (doc.errors.length > 0) {
@@ -49,5 +60,3 @@ export function parseXmlToHash(data: string): XmlHash {
     doc.dispose();
   }
 }
-
-export { XML };

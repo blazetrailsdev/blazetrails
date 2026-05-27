@@ -253,6 +253,36 @@ describe("ChangeGeneratorTest", () => {
       expect(railsApp.depends_on).toBeUndefined();
     });
 
+    it("editDevcontainerJson throws on unparseable JSON", () => {
+      write(".devcontainer/devcontainer.json", "{ not json");
+      expect(() => run("postgresql")).toThrow(/Could not parse .*devcontainer\.json/);
+    });
+
+    it("editComposeYaml throws on unparseable JSON", () => {
+      seedDevcontainer("sqlite3", false);
+      write(".devcontainer/compose.yaml", "{ not json");
+      expect(() => run("postgresql")).toThrow(/Could not parse .*compose\.yaml/);
+    });
+
+    it("non-DB depends_on entries are preserved when swapping database", () => {
+      seedDevcontainer("postgres", true);
+      // Inject non-DB depends_on entries that the devcontainer generator may add.
+      const composePath = ".devcontainer/compose.yaml";
+      const compose = JSON.parse(read(composePath)) as {
+        services: Record<string, { depends_on?: string[]; [k: string]: unknown }>;
+        [k: string]: unknown;
+      };
+      (compose.services["rails-app"].depends_on ??= []).push("selenium", "redis");
+      write(composePath, JSON.stringify(compose, null, 2) + "\n");
+      run("mysql");
+      const cm = JSON.parse(read(composePath)) as Record<string, unknown>;
+      const railsApp = (cm.services as Record<string, Record<string, unknown>>)["rails-app"];
+      expect(railsApp.depends_on).toContain("mysql");
+      expect(railsApp.depends_on).toContain("selenium");
+      expect(railsApp.depends_on).toContain("redis");
+      expect(railsApp.depends_on).not.toContain("postgres");
+    });
+
     it("change from mysql to postgresql swaps service and feature", () => {
       seedDevcontainer("mysql", true);
       run("postgresql");

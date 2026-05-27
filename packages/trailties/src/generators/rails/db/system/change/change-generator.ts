@@ -143,7 +143,17 @@ export class ChangeGenerator extends GeneratorBase {
     const rel = ".devcontainer/devcontainer.json";
     if (!this.fileExists(rel)) return;
     const full = this.path.join(this.cwd, rel);
-    const json = JSON.parse(this.fs.readFileSync(full, "utf-8")) as Record<string, unknown>;
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(this.fs.readFileSync(full, "utf-8")) as Record<string, unknown>;
+    } catch (e) {
+      throw new Error(
+        `Could not parse ${full}: ${(e as Error).message}. Fix the file and re-run.`,
+        {
+          cause: e,
+        },
+      );
+    }
 
     // Mirrors edit_devcontainer_json: update DB_HOST and db feature entry.
     const env = (json.containerEnv ?? {}) as Record<string, string>;
@@ -176,11 +186,21 @@ export class ChangeGenerator extends GeneratorBase {
     const rel = ".devcontainer/compose.yaml";
     if (!this.fileExists(rel)) return;
     const full = this.path.join(this.cwd, rel);
-    const compose = JSON.parse(this.fs.readFileSync(full, "utf-8")) as {
+    let compose: {
       services: Record<string, Record<string, unknown>>;
       volumes?: Record<string, unknown>;
       [k: string]: unknown;
     };
+    try {
+      compose = JSON.parse(this.fs.readFileSync(full, "utf-8"));
+    } catch (e) {
+      throw new Error(
+        `Could not parse ${full}: ${(e as Error).message}. Fix the file and re-run.`,
+        {
+          cause: e,
+        },
+      );
+    }
     const { services } = compose;
     const volumes = compose.volumes ?? {};
     const railsApp = services["rails-app"] as

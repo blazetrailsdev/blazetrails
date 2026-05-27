@@ -189,7 +189,6 @@ export class CollectionRenderer extends AbstractRenderer {
       return this.renderCollectionWithPartial(collection, firstPath, context, block);
     }
     // Heterogeneous collection — render each item with its own derived partial.
-    const as = localVariable(firstPath, this.options as Record<string, unknown>);
     const baseLocals = { ...(this.options.locals ?? {}) };
     const iteration = new PartialIteration(collection.length);
     const parts: string[] = [];
@@ -201,8 +200,8 @@ export class CollectionRenderer extends AbstractRenderer {
       const locals = {
         ...baseLocals,
         [itemAs]: collection[i],
-        [`${as}_counter`]: iteration.index,
-        [`${as}_iteration`]: iteration,
+        [`${itemAs}_counter`]: iteration.index,
+        [`${itemAs}_iteration`]: iteration,
       };
       parts.push(await template.render(locals, context));
       iteration.iterate();

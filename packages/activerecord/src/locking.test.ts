@@ -700,7 +700,7 @@ describe("PessimisticLockingTest", () => {
       }
     }
     const person = await Person.create({ name: "Test" });
-    await expect(person.lockBang()).resolves.not.toThrow();
+    await person.lockBang();
   });
 
   it("lock raises when the record is dirty", async () => {
@@ -727,7 +727,7 @@ describe("PessimisticLockingTest", () => {
     }
     const frog = await Frog.create({ name: "Old Frog" });
     frog.name = "New Frog";
-    await expect(frog.saveBang()).resolves.not.toThrow();
+    await frog.saveBang();
   });
 
   it("with lock commits transaction", async () => {

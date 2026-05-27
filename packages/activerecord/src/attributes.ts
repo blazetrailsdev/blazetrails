@@ -124,12 +124,14 @@ export function defineAttribute(
  *
  * Mirrors: ActiveRecord::Attributes::ClassMethods#_default_attributes
  *
- * Seeds from `_attributeDefinitions` (all entries — the equivalent of Rails'
- * `columns_hash`) then replays user-declared `attribute()` calls from the
- * pending-modification queue. Schema entries are built with
- * `Attribute.fromDatabase`; direct `defineAttribute()` entries use
- * `withCastValue`/`withUserDefault`. Matches Rails' two-phase approach:
- * `columns_hash` seed → `apply_pending_attribute_modifications`.
+ * Seeds from `_attributeDefinitions` then replays user-declared `attribute()`
+ * calls from the pending-modification queue. Entries with an explicit default
+ * use `Attribute.fromDatabase` (schema) or `withUserDefault` (user-declared).
+ * Entries without a default use `Attribute.fromDatabase(null, type)` for all
+ * attributes — mirroring Rails' `columns_hash.transform_values { from_database }`.
+ * Using `fromDatabase` (rather than `withCastValue`) means the type's
+ * `deserialize(null)` is called, which is required for `LockingType` to return
+ * 0 instead of null for new records that have no lock column default.
  */
 export function _defaultAttributes(this: AnyClass): AttributeSet {
   // For STI subclasses, delegate to the STI base so cache invalidation

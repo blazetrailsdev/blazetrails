@@ -298,7 +298,7 @@ describe("ContentSecurityPolicyTest", () => {
   });
 
   // Rails: test_invalid_directive_source — non-string/non-proc raises.
-  it("invalid directive source raises", () => {
+  it("invalid directive source", () => {
     const policy = new ContentSecurityPolicy();
     expect(() => policy.defaultSrc(123 as unknown as string)).toThrow(/Invalid/);
   });
@@ -530,7 +530,7 @@ describe("ContentSecurityPolicyIntegrationTest", () => {
     ({ app } = buildCspApp(GLOBAL_CSP_POLICY));
   });
 
-  it("test_generates_content_security_policy_header", async () => {
+  it("generates content security policy header", async () => {
     await app.get("/", { env: cspEnv(GLOBAL_CSP_POLICY) });
     expect(app.response.status).toBe(200);
     const header = resolvedCspHeader(app);
@@ -538,13 +538,13 @@ describe("ContentSecurityPolicyIntegrationTest", () => {
     expect(resolvedCspReportOnly(app)).toBe(false);
   });
 
-  it("test_generates_inline_content_security_policy", async () => {
+  it("generates inline content security policy", async () => {
     await app.get("/inline", { env: cspEnv(GLOBAL_CSP_POLICY) });
     const header = resolvedCspHeader(app);
     expect(header).toBe("default-src https://example.com");
   });
 
-  it("test_generates_conditional_content_security_policy", async () => {
+  it("generates conditional content security policy", async () => {
     await app.get("/conditional", {
       env: cspEnv(GLOBAL_CSP_POLICY),
       params: { condition: "true" },
@@ -558,33 +558,33 @@ describe("ContentSecurityPolicyIntegrationTest", () => {
     expect(resolvedCspHeader(app)).toBe("default-src https://false.example.com");
   });
 
-  it("test_generates_report_only_content_security_policy", async () => {
+  it("generates report only content security policy", async () => {
     await app.get("/report-only", { env: cspEnv(GLOBAL_CSP_POLICY) });
     expect(resolvedCspHeader(app)).toBe("default-src 'self'; report-uri /violations");
     expect(resolvedCspReportOnly(app)).toBe(true);
   });
 
-  it("test_adds_nonce_to_script_src_content_security_policy", async () => {
+  it("adds nonce to script src content security policy", async () => {
     await app.get("/script-src", { env: cspEnv(GLOBAL_CSP_POLICY) });
     expect(resolvedCspHeader(app)).toBe("script-src 'self' 'nonce-iyhD0Yc0W+c='");
   });
 
-  it("test_adds_nonce_to_style_src_content_security_policy", async () => {
+  it("adds nonce to style src content security policy", async () => {
     await app.get("/style-src", { env: cspEnv(GLOBAL_CSP_POLICY) });
     expect(resolvedCspHeader(app)).toBe("style-src 'self' 'nonce-iyhD0Yc0W+c='");
   });
 
-  it("test_generates_no_content_security_policy", async () => {
+  it("generates no content security policy", async () => {
     await app.get("/no-policy", { env: cspEnv(GLOBAL_CSP_POLICY) });
     expect(resolvedCspHeader(app)).toBeNull();
   });
 
-  it("test_generates_api_security_policy", async () => {
+  it("generates api security policy", async () => {
     await app.get("/api", { env: cspEnv(GLOBAL_CSP_POLICY) });
     expect(resolvedCspHeader(app)).toBe("default-src 'none'; frame-ancestors 'none'");
   });
 
-  it("test_generates_no_content_security_policy_for_not_modified", async () => {
+  it("generates no content security policy for not modified", async () => {
     await app.get("/not-modified", { env: cspEnv(GLOBAL_CSP_POLICY) });
     expect(app.response.status).toBe(304);
     expect(resolvedCspHeader(app)).toBeNull();
@@ -598,20 +598,34 @@ describe("DisabledContentSecurityPolicyIntegrationTest", () => {
     ({ app } = buildCspApp(null));
   });
 
-  it("test_generates_no_content_security_policy_by_default", async () => {
+  it("generates no content security policy by default", async () => {
     await app.get("/", { env: cspEnv(null) });
     expect(resolvedCspHeader(app)).toBeNull();
   });
 
-  it("test_generates_content_security_policy_header_when_globally_disabled", async () => {
+  it("generates content security policy header when globally disabled", async () => {
     await app.get("/inline", { env: cspEnv(null) });
     // The before_action dupes a fresh policy when none is set on the request.
     expect(resolvedCspHeader(app)).toBe("default-src https://example.com");
   });
 });
 
-describe("DefaultContentSecurityPolicyIntegrationTest (full dispatch)", () => {
-  it("test_redirect_works_with_dynamic_sources", async () => {
+describe("DefaultContentSecurityPolicyIntegrationTest", () => {
+  it("adds nonce to script src content security policy only once", async () => {
+    const dynamicPolicy = new ContentSecurityPolicy((p) => {
+      p.defaultSrc(() => ":self");
+      p.scriptSrc(() => ":https");
+    });
+    const { app } = buildCspApp(dynamicPolicy);
+    await app.get("/", { env: cspEnv(dynamicPolicy) });
+    await app.get("/", { env: cspEnv(dynamicPolicy) });
+    expect(app.response.status).toBe(200);
+    expect(resolvedCspHeader(app)).toBe(
+      "default-src 'self'; script-src https: 'nonce-iyhD0Yc0W+c='",
+    );
+  });
+
+  it("redirect works with dynamic sources", async () => {
     const dynamicPolicy = new ContentSecurityPolicy((p) => {
       p.defaultSrc(() => ":self");
       p.scriptSrc(() => ":https");
@@ -641,7 +655,7 @@ describe("DefaultContentSecurityPolicyIntegrationTest (full dispatch)", () => {
 });
 
 describe("NonceDirectiveContentSecurityPolicyIntegrationTest", () => {
-  it("test_generate_nonce_only_specified_in_nonce_directives", async () => {
+  it("generate nonce only specified in nonce directives", async () => {
     const policy = new ContentSecurityPolicy((p) => {
       p.defaultSrc(() => ":self");
       p.scriptSrc(() => ":https");
@@ -676,7 +690,7 @@ describe("NonceDirectiveContentSecurityPolicyIntegrationTest", () => {
 });
 
 describe("HelpersContentSecurityPolicyIntegrationTest", () => {
-  it.skip("test_can_call_helper_methods_in_csp", () => {
+  it.skip("can call helper methods in csp", () => {
     // pending: trails does not yet expose a `helpers` proxy inside CSP blocks;
     // helper_method registration exists but the CSP before_action block
     // runs without a view-context binding.

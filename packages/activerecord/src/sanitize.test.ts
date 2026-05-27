@@ -282,9 +282,12 @@ describe("sanitizeSql", () => {
     class User extends Base {
       static _tableName = "users";
     }
-    const a = User.adapter;
+    const a = User.adapter as unknown as {
+      castBoundValue(v: unknown): unknown;
+      quote(v: unknown): string;
+    };
     expect(User.sanitizeSql(["name = ? AND age > ?", "Alice", 30])).toBe(
-      `name = ${a.quote("Alice")} AND age > ${a.quote(30)}`,
+      `name = ${a.quote(a.castBoundValue("Alice"))} AND age > ${a.quote(a.castBoundValue(30))}`,
     );
   });
 
@@ -413,12 +416,17 @@ describe("sanitizeSql", () => {
       class Post extends Base {
         static _tableName = "posts";
       }
-      const a = Post.adapter;
+      const a = Post.adapter as unknown as {
+        castBoundValue(v: unknown): unknown;
+        quote(v: unknown): string;
+      };
       const result = Post.sanitizeSqlArray("id = :id AND status = :status", {
         id: 42,
         status: "active",
       });
-      expect(result).toBe(`id = ${a.quote(42)} AND status = ${a.quote("active")}`);
+      expect(result).toBe(
+        `id = ${a.quote(a.castBoundValue(42))} AND status = ${a.quote(a.castBoundValue("active"))}`,
+      );
     });
 
     // D-Y-INCOMPATIBLE: same SQLite boolean quoting as above — canonical adapter

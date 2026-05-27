@@ -160,7 +160,10 @@ export function _defaultAttributes(this: AnyClass): AttributeSet {
           attrMap.set(name, base.withUserDefault(def.defaultValue));
         }
       } else {
-        attrMap.set(name, Attribute.withCastValue(name, null, def.type));
+        // Seed via fromDatabase(null, type), mirroring Rails'
+        // columns_hash.transform_values { Attribute.from_database(col.name, col.default, type) }.
+        // This matters for LockingType: deserialize(null) → 0, not null.
+        attrMap.set(name, Attribute.fromDatabase(name, null, def.type));
       }
     }
 

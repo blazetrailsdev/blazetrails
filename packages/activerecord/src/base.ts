@@ -2681,6 +2681,7 @@ export class Base extends Model {
       .execUpdate(umVisitor ? umVisitor.compile(um.ast) : um.toSql(), `${ctor.name} Update`)
       .then((affected) => {
         if (ctor.lockingEnabled && affected === 0) {
+          this._attributes.set(lockCol, rawVersion);
           throw new StaleObjectError(this, "update");
         }
       });

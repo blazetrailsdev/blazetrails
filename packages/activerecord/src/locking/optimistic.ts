@@ -56,12 +56,11 @@ export class LockingType extends ValueType<number> {
     this.name = subtype.name;
   }
 
-  // cast() intentionally does NOT coerce null → 0. Rails' LockingType also leaves cast()
-  // unchanged so that new records receiving an explicit nil get null, not 0. The nil → 0
-  // coercion was removed when hookAttributeType() was wired in #1366; serialize/deserialize
-  // still apply the coercion via toInt() to guard against StaleObjectError on persisted rows.
-  override cast(value: unknown): number | null {
-    return this._subtype.cast(value) as number | null;
+  // Rails' LockingType has no cast() override, but AR initializes new records via
+  // from_database (deserialize), so new records get 0, not nil. We coerce null → 0
+  // in cast() to match that observable behavior without changing the AR init path.
+  override cast(value: unknown): number {
+    return (this._subtype.cast(value) as number | null) ?? 0;
   }
 
   override deserialize(value: unknown): number {

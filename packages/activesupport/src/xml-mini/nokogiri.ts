@@ -16,11 +16,6 @@ async function loadNokogiri() {
 
 function nodeToHash(node: XmlNode): XmlHash {
   const hash: XmlHash = {};
-  const content: string[] = [];
-
-  for (const attr of node.attributeNodes) {
-    hash[attr.nodeName] = attr.value;
-  }
 
   for (const child of node.children) {
     if (child.isElement()) {
@@ -37,18 +32,30 @@ function nodeToHash(node: XmlNode): XmlHash {
         hash[key] = childHash;
       }
     } else if (child.isText() || child.isCdata()) {
-      content.push(child.content);
+      const existing = hash[CONTENT_ROOT];
+      hash[CONTENT_ROOT] = typeof existing === "string" ? existing + child.content : child.content;
     }
   }
 
-  if (content.length > 0) {
-    hash[CONTENT_ROOT] = content.join("");
+  // Strip whitespace-only content when child elements are present (mirrors Rails node.to_hash).
+  if (
+    Object.prototype.hasOwnProperty.call(hash, CONTENT_ROOT) &&
+    Object.keys(hash).length > 1 &&
+    (hash[CONTENT_ROOT] as string).trim() === ""
+  ) {
+    delete hash[CONTENT_ROOT];
+  }
+
+  // Attributes come after children/content (Rails node.to_hash order).
+  for (const attr of node.attributeNodes) {
+    hash[attr.nodeName] = attr.value;
   }
 
   return hash;
 }
 
-export async function parseXmlToHash(data: string): Promise<XmlHash> {
+export async function parse(data: string | null | undefined): Promise<XmlHash> {
+  if (!data) return {};
   const { parseXml } = await loadNokogiri();
   const doc = parseXml(data);
   try {

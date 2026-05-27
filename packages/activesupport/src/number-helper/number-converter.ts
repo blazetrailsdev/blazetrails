@@ -42,6 +42,7 @@ const DEFAULTS: Record<string, Record<string, unknown>> = {
         tb: "TB",
         pb: "PB",
         eb: "EB",
+        zb: "ZB",
       },
     },
     decimal_units: {

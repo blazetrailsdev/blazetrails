@@ -4,8 +4,9 @@
 // `package.json` instead, so `editDatabaseConfig` rewrites the TS module and
 // `editPackageJson` swaps the database dependency. Dockerfile rewriting
 // mirrors Rails when the Dockerfile carries db-specific apt packages.
-// Devcontainer file rewriting is deferred until trailties' devcontainer
-// generator (#2221) lands.
+// `editDevcontainerFiles` mirrors Rails' edit_devcontainer_json / edit_compose_yaml;
+// compose.yaml is read/written as JSON because DevcontainerGenerator serialises it
+// with JSON.stringify (JSON is valid YAML, so Docker Compose accepts it).
 
 import { GeneratorBase, type GeneratorOptions } from "../../../../base.js";
 import { Database, DATABASES, type DatabaseName } from "../../../../database.js";
@@ -162,7 +163,11 @@ export class ChangeGenerator extends GeneratorBase {
       if (d.featureName) delete features[d.featureName];
     }
     if (this.database.feature) Object.assign(features, this.database.feature);
-    json.features = features;
+    if (Object.keys(features).length > 0) {
+      json.features = features;
+    } else {
+      delete json.features;
+    }
 
     this.writeOrUpdate(rel, JSON.stringify(json, null, 2) + "\n");
   }

@@ -376,6 +376,9 @@ describe("withTransactionalFixtures (pooled adapter)", () => {
 
 // Concurrency safety-net: two Base.transaction() calls running concurrently
 // from unrelated async chains must NOT observe each other's transaction state.
+// Base.transaction() routes through withinNewTransaction()/TransactionManager,
+// so the test targets that mechanism directly — the invariant boundary is the
+// same whether callers go via Base.transaction() or withinNewTransaction().
 //
 // Today this passes because SidecarFixtures._txVisible() gates
 // currentTransaction()/inTransaction/openTransactions behind the AsyncContext

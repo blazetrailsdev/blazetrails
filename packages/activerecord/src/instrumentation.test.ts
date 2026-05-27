@@ -351,9 +351,8 @@ describe("TransactionInSqlActiveRecordPayloadTest", () => {
 
 describe("TransactionInSqlActiveRecordPayloadNonTransactionalTest", () => {
   setupHandlerSuite();
-  useHandlerTransactionalFixtures();
   beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA, { useTransactionalTests: false });
+    await defineSchema(TEST_SCHEMA);
   });
 
   afterEach(() => {

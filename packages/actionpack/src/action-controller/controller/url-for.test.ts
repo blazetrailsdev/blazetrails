@@ -125,11 +125,17 @@ describe("UrlForTest", () => {
   });
 
   it("without protocol", () => {
-    expect(urlFor({ host: "example.com", path: "/" })).toBe("http://example.com/");
+    expect(urlFor({ host: "example.com", protocol: "//", path: "/" })).toBe("//example.com/");
+    expect(urlFor({ host: "example.com", protocol: false, path: "/" })).toBe("//example.com/");
   });
 
   it("without protocol and with port", () => {
-    expect(urlFor({ host: "example.com", port: 3000, path: "/" })).toBe("http://example.com:3000/");
+    expect(urlFor({ host: "example.com", protocol: "//", port: 3000, path: "/" })).toBe(
+      "//example.com:3000/",
+    );
+    expect(urlFor({ host: "example.com", protocol: false, port: 3000, path: "/" })).toBe(
+      "//example.com:3000/",
+    );
   });
 
   it("user name and password", () => {
@@ -139,9 +145,14 @@ describe("UrlForTest", () => {
   });
 
   it("user name and password with escape codes", () => {
-    expect(urlFor({ host: "example.com", user: "a b", password: "c&d", path: "/" })).toBe(
-      "http://a%20b:c%26d@example.com/",
-    );
+    expect(
+      urlFor({
+        host: "www.basecamphq.com",
+        user: "openid.aol.com/nextangler",
+        password: "one two?",
+        path: "/c/a/i",
+      }),
+    ).toBe("http://openid.aol.com%2Fnextangler:one+two%3F@www.basecamphq.com/c/a/i");
   });
 
   it("trailing slash", () => {
@@ -207,8 +218,15 @@ describe("UrlForTest", () => {
   });
 
   it("using nil script name properly concats with original script name", () => {
-    const url = urlFor({ host: "example.com", path: "/posts" });
-    expect(url).toBe("http://example.com/posts");
+    // original_script_name is prepended when script_name is nil, mirroring route_set.rb
+    expect(
+      urlFor({
+        host: "www.basecamphq.com",
+        protocol: "https",
+        path: "/c/a/i",
+        original_script_name: "/subdir",
+      }),
+    ).toBe("https://www.basecamphq.com/subdir/c/a/i");
   });
 
   it("only path", () => {

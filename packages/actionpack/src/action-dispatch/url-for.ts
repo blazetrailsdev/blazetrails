@@ -19,6 +19,7 @@ export interface UrlOptions {
   password?: string;
   params?: Record<string, unknown>;
   script_name?: string;
+  original_script_name?: string;
 }
 
 export function urlFor(options: UrlOptions = {}): string {
@@ -73,7 +74,7 @@ export function urlFor(options: UrlOptions = {}): string {
   let portStr = "";
   if (options.port) {
     const port = typeof options.port === "string" ? parseInt(options.port, 10) : options.port;
-    const defaultPort = protocol === "https" ? 443 : 80;
+    const defaultPort = protocol === "https://" ? 443 : 80;
     if (port !== defaultPort) {
       portStr = `:${port}`;
     }
@@ -82,16 +83,19 @@ export function urlFor(options: UrlOptions = {}): string {
   let userInfo = "";
   if (options.user) {
     if (options.password) {
-      userInfo = `${encodeURIComponent(options.user)}:${encodeURIComponent(options.password)}@`;
+      userInfo = `${rackEscape(options.user)}:${rackEscape(options.password)}@`;
     } else {
-      userInfo = `${encodeURIComponent(options.user)}@`;
+      userInfo = `${rackEscape(options.user)}@`;
     }
   }
 
   const hostStr = host ?? "localhost";
-  const scriptName = options.script_name ?? "";
+  const scriptName =
+    options.original_script_name != null
+      ? options.original_script_name + (options.script_name ?? "")
+      : (options.script_name ?? "");
 
-  return `${protocol}://${userInfo}${hostStr}${portStr}${scriptName}${path}`;
+  return `${protocol}${userInfo}${hostStr}${portStr}${scriptName}${path}`;
 }
 
 /**
@@ -130,9 +134,18 @@ function rewriteDomain(host: string, domain: string, tldLength: number): string 
 /** @internal */
 function normalizeProtocol(proto: string | false): string {
   if (proto === false || proto === "//") return "//";
-  return String(proto)
+  const p = String(proto)
     .replace(/:\/\/$/, "")
     .replace(/:$/, "");
+  return `${p}://`;
+}
+
+// Matches Rack::Utils.escape: encodes spaces as + (form encoding for userinfo)
+/** @internal */
+function rackEscape(s: string): string {
+  return encodeURIComponent(s)
+    .replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+    .replace(/%20/g, "+");
 }
 
 /**

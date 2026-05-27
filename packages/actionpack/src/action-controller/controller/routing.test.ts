@@ -9,8 +9,8 @@
  * infrastructure not yet ported (NamedRouteCollection, full request-env
  * subdomain parsing); those tests are skipped below.
  *
- * Deferred to T-AC9 part 2: RouteSetTest, RackMountIntegrationTests.
- * Deferred to T-AC9 part 3: remaining LegacyRouteSetTests (named-route
+ * Deferred to T-AC9 part 2: RouteSetTest (large class).
+ * Deferred to T-AC9 part 3: RackMountIntegrationTests + remaining LegacyRouteSetTests (named-route
  * helpers, controller.url_for post-dispatch, subdomain constraint tests).
  */
 import { describe, it, expect, beforeEach } from "vitest";

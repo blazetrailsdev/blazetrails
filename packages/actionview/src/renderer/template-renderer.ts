@@ -45,7 +45,9 @@ export class TemplateRenderer extends AbstractRenderer {
       );
     }
     if (Object.prototype.hasOwnProperty.call(options, "inline")) {
-      return new InlineTemplate(String(options.inline ?? ""), options.type);
+      // Rails derives format from handler.default_format; without handlers, use lookupContext.formats.first.
+      const inlineFormat = (this.formats[0] as string | undefined) ?? null;
+      return new InlineTemplate(String(options.inline ?? ""), inlineFormat);
     }
     if (Object.prototype.hasOwnProperty.call(options, "renderable") && options.renderable) {
       return new RenderableWrapper(options.renderable);
@@ -206,14 +208,11 @@ class HtmlTemplate implements RenderableTemplate {
 
 class InlineTemplate implements RenderableTemplate {
   readonly identifier = "inline template";
-  readonly format: string | null;
 
   constructor(
     private readonly source: string,
-    type: string | undefined,
-  ) {
-    this.format = type ?? null;
-  }
+    readonly format: string | null,
+  ) {}
 
   async render(_locals: Record<string, unknown>, _context?: ViewContext): Promise<string> {
     return this.source;

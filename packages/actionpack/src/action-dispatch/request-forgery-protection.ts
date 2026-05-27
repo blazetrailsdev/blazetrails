@@ -280,9 +280,9 @@ export class RequestForgeryProtection {
 
   private normalizePath(path: string): string {
     // Extract just the pathname from full or protocol-relative URLs
-    if (/^https?:\/\/|^\/\//.test(path)) {
+    if (/^https?:\/\/|^\/\//i.test(path)) {
       try {
-        path = new URL(path.startsWith("//") ? `https:${path}` : path).pathname;
+        path = new URL(/^\/\//.test(path) ? `https:${path}` : path).pathname;
       } catch {
         // fall through and treat as path
       }

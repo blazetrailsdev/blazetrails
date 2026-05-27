@@ -1,5 +1,6 @@
 import { ref, tsClass, tsField, tsModule, tsRaw } from "../template-builder/index.js";
 import { AppBase, type AppBaseOptions } from "./app-base.js";
+import { GeneratorError } from "./generated-attribute.js";
 import { type DatabaseName } from "./database.js";
 
 // CLI-friendly DB aliases — `trails new -d sqlite|postgres|mysql` maps
@@ -13,6 +14,13 @@ const DB_ALIAS: Record<string, DatabaseName> = {
 export type AppDatabase = "sqlite" | "postgres" | "mysql" | DatabaseName;
 export type PackageManager = "pnpm" | "npm" | "yarn";
 export type SqliteDriver = "better-sqlite3" | "node-sqlite" | "expo-sqlite";
+
+export const VALID_PACKAGE_MANAGERS: readonly PackageManager[] = ["pnpm", "npm", "yarn"];
+export const VALID_SQLITE_DRIVERS: readonly SqliteDriver[] = [
+  "better-sqlite3",
+  "node-sqlite",
+  "expo-sqlite",
+];
 
 export interface AppGeneratorOptions extends Omit<AppBaseOptions, "database" | "appPath"> {
   appPath?: string;
@@ -33,6 +41,16 @@ export class AppGenerator extends AppBase {
     super({ ...options, appPath: options.appPath ?? options.cwd, database });
     this.packageManager = options.packageManager ?? "pnpm";
     this.sqliteDriver = options.sqliteDriver ?? "better-sqlite3";
+    if (!VALID_PACKAGE_MANAGERS.includes(this.packageManager)) {
+      throw new GeneratorError(
+        `Unknown package manager '${this.packageManager}'. Valid options: ${VALID_PACKAGE_MANAGERS.join(", ")}`,
+      );
+    }
+    if (!VALID_SQLITE_DRIVERS.includes(this.sqliteDriver)) {
+      throw new GeneratorError(
+        `Unknown SQLite driver '${this.sqliteDriver}'. Valid options: ${VALID_SQLITE_DRIVERS.join(", ")}`,
+      );
+    }
   }
 
   private pmInstall(): string {

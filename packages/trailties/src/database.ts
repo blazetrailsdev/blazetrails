@@ -440,8 +440,13 @@ export async function connectAdapter(config: DatabaseConfig): Promise<DatabaseAd
       try {
         getSqlite();
         driverPreregistered = true;
-      } catch {
-        // no driver registered yet — fall through to load better-sqlite3
+      } catch (err) {
+        // Only auto-import better-sqlite3 when no driver has been registered yet.
+        // Other errors (multiple drivers, AR_SQLITE_DRIVER points to unknown name)
+        // are real misconfigurations — rethrow them immediately.
+        if (!(err instanceof Error) || !err.message.startsWith("No SQLite driver registered")) {
+          throw err;
+        }
       }
       if (!driverPreregistered) {
         try {
@@ -449,8 +454,9 @@ export async function connectAdapter(config: DatabaseConfig): Promise<DatabaseAd
         } catch (cause) {
           throw new Error(
             "trailties needs the `better-sqlite3` package to open a SQLite database. " +
-              "Install it (`pnpm add better-sqlite3`) or register a custom SQLite driver " +
-              "via `registerSqliteDriver()` from `@blazetrails/activesupport/sqlite-adapter`.",
+              "Install it with your package manager (e.g. `npm add better-sqlite3`) or register " +
+              "a custom SQLite driver via `registerSqliteDriver()` from " +
+              "`@blazetrails/activesupport/sqlite-adapter`.",
             { cause },
           );
         }

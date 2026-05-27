@@ -4,13 +4,12 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import {
   AppGenerator,
+  VALID_PACKAGE_MANAGERS,
+  VALID_SQLITE_DRIVERS,
   type PackageManager,
   type SqliteDriver,
 } from "../generators/app-generator.js";
 import { getPackageManager, packageManagerInstall } from "../package-manager.js";
-
-const VALID_PACKAGE_MANAGERS: PackageManager[] = ["pnpm", "npm", "yarn"];
-const VALID_SQLITE_DRIVERS: SqliteDriver[] = ["better-sqlite3", "node-sqlite", "expo-sqlite"];
 
 export function newCommand(): Command {
   const cmd = new Command("new");

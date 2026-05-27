@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Mapper } from "../../routing/mapper.js";
 import { RouteSet } from "../../routing/route-set.js";
-import { ConsoleFormatter, RoutesInspector } from "../../routing/inspector.js";
+import { ConsoleFormatter, RoutesFormatter, RoutesInspector } from "../../routing/inspector.js";
 
 // =============================================================================
 // dispatch/routing/inspector_test.rb
@@ -30,15 +30,11 @@ describe("RoutesInspectorTest", () => {
 
   function draw(
     cb: (r: Mapper) => void,
-    opts: {
-      formatter?: InstanceType<(typeof ConsoleFormatter)[keyof typeof ConsoleFormatter]>;
-      grep?: string;
-      controller?: string;
-    } = {},
+    opts: { formatter?: RoutesFormatter; grep?: string; controller?: string } = {},
   ): string[] {
     set.draw(cb as Parameters<typeof set.draw>[0]);
     const { formatter = new ConsoleFormatter.Sheet(), ...filter } = opts;
-    return new RoutesInspector(set.getRoutes()).format(formatter as never, filter).split("\n");
+    return new RoutesInspector(set.getRoutes()).format(formatter, filter).split("\n");
   }
 
   it.skip("displaying routes for engines", () => {
@@ -279,6 +275,25 @@ describe("RoutesInspectorTest", () => {
   it.skip("route with proc handler", () => {
     // pending: `to: () => [...]` (lambda/proc endpoint) throws in Mapper#addRoute
     // because parseEndpoint receives a function instead of a string.
+  });
+
+  // Non-Rails tests: edge-cases for inferred route-name logic in mapper.ts.
+  it("digit-leading path segment does not produce an inferred name", () => {
+    // /123 would yield "123" which fails RouteSet#addRoute's /^[_a-z]\w*$/i guard.
+    const output = draw((r) => {
+      r.get("/123", { to: "pages#show" });
+    });
+    // No name inferred — Prefix column is blank (right-padded to header width).
+    expect(output[1]).toMatch(/^\s+GET\s/);
+  });
+
+  it("explicit as:'' does not trigger path-based name inference", () => {
+    // as:"" is an explicit (empty) name override in Rails; inference must not run.
+    const output = draw((r) => {
+      r.get("/health", { to: "health#show", as: "" });
+    });
+    // No helper name in the Prefix column.
+    expect(output[1]).toMatch(/^\s+GET\s/);
   });
 
   // Non-Rails test: verifies RouteWrapper#path suppresses (.:format) when

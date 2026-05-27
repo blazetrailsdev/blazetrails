@@ -146,14 +146,15 @@ stays blocked on a multi-quarter AV port. With it, those AP items move from
 
 - Real port at `src/template.ts` (~200 LOC).
 
-### 1c. `Resolver` / `FileSystemResolver` / `OptimizedFileSystemResolver` ⚠️ Partial
+### 1c. `Resolver` / `FileSystemResolver` / `OptimizedFileSystemResolver` / `PathRegistry` ✅ Shipped (#2454)
 
+- `PathRegistry` real impl shipped in #2454 (6/6 api:compare, 100%).
 - `FileSystemResolver` + `InMemoryResolver` exist at top-level
   `src/template-resolver.ts`.
 - **Still pending:** restructure under `src/resolver/` to match Rails;
   add `OptimizedFileSystemResolver` (Rails default; caches glob results).
-  `PathRegistry` is also still a Phase 0.5 stub (`allResolvers()` returns
-  `[]`) — fold real impl in here.
+  The structural mapping issue (template/resolver.rb → resolver/ subdirectory)
+  is an api:compare mapping gap, not a regression.
 
 ### 1d. `LookupContext` ✅ Shipped (#1994)
 
@@ -358,7 +359,7 @@ Note any mechanical rename in PR body per CLAUDE.md rule.
 ~~0a trails-tsc extract~~ ✅ → ~~0b SafeBuffer/OutputBuffer~~ ✅
 → ~~0c PathSet/TemplatePath~~ ✅ → ~~0.5 AP-unblocking stubs~~ ✅
 → ~~1a Handlers/Raw~~ ✅ → ~~1b Template~~ ✅
-→ **1c Resolver finish (OptimizedFileSystemResolver + restructure + PathRegistry real impl)**
+→ ~~1c PathRegistry real impl~~ ✅ → **1c Resolver finish (OptimizedFileSystemResolver + restructure)**
 → ~~1d LookupContext~~ ✅
 → **2a TSE runtime compiler → 2b trails-tsc TSE plugin → 2c build CLI** (critical path)
 → **3a–c Renderer/Template/Partial**
@@ -368,4 +369,4 @@ Note any mechanical rename in PR body per CLAUDE.md rule.
 → T3 helpers (as blockers clear) → 3d Streaming → 6 Digestor/DepTracker
 → 7 TestCase (Trailtie ✅).
 
-Critical path remaining: **Phase 1c finish → Phase 2 → Phase 3 → Phase 4.**
+Critical path remaining: **Phase 1c Resolver finish → Phase 2 → Phase 3 → Phase 4.**

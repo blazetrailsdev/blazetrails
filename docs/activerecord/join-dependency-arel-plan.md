@@ -22,12 +22,12 @@ All plan PRs (1–7b, F1–F6) have shipped.
 
 ### Already shipped (verified 2026-05-27)
 
-- [x] `PolymorphicReflection.isCollection()` delegation — exists at `reflection.ts:1028` and `:1144`
-- [x] `PolymorphicReflection#joinScopes` now passes `table` to `buildScope` — `reflection.ts:1624`
-- [x] `aliasTracker` wired into `JoinAssociation#joinConstraints` body — `join-association.ts:79`/`join-dependency.ts:275`
-- [x] `checkEagerLoadable!` called — `join-dependency.ts:173`
-- [x] `setInverseInstance` call ordering — `join-dependency.ts:877`
-- [x] readonly/strictLoading propagation — `join-association.ts:27-28`/`:184-188`
+- [x] `PolymorphicReflection.isCollection()` delegation — in `reflection.ts`
+- [x] `PolymorphicReflection#joinScopes` now passes `table` to `buildScope` — in `reflection.ts`
+- [x] `aliasTracker` wired into `JoinAssociation#joinConstraints` body — in `join-association.ts` / `join-dependency.ts`
+- [x] `checkEagerLoadable!` called — in `join-dependency.ts` `addAssociation`
+- [x] `setInverseInstance` call ordering — in `join-dependency.ts` `_wireAssociationProxy`
+- [x] readonly/strictLoading propagation — in `join-association.ts` `isReadonly` / `isStrictLoading`
 
 ## Non-goals
 

@@ -70,11 +70,13 @@ describe("TimestampTest", () => {
     const Post = makePost();
     const post = await Post.create({ title: "test" });
     const previousUpdatedAt = post.updated_at as Temporal.Instant | null;
+    expect(previousUpdatedAt).not.toBeNull();
     expect(Post.recordTimestamps).toBe(true);
 
     post.recordTimestamps = false;
     post.title = "Updated";
-    await post.save();
+    const result = await post.save();
+    expect(result).toBe(true);
 
     expect(post.updated_at).toEqual(previousUpdatedAt);
   });

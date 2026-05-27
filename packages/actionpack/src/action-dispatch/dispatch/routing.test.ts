@@ -2487,13 +2487,11 @@ describe("TestRelativeUrlRootGeneration", () => {
 });
 
 describe("TestHttpMethods", () => {
-  // Tests require HTTP dispatch with per-method route matching — not ported
-  it.skip("request method  can be matched", () => {
-    // pending: HTTP dispatch layer (RoutedRackApp) and dynamic per-verb route
-    // matching for all RFC HTTP methods (RFC2616/2518/3253/3648/3744/5323/4791/5789)
-    // not ported; also the dynamic test-name interpolation collapses to a single
-    // test:compare entry for all methods
-  });
+  // Rails generates ~30 tests dynamically: "request method #{method.underscore} can be matched"
+  // for every RFC HTTP method. test:compare cannot statically resolve Ruby interpolation, so
+  // none of these will appear in test:compare counts regardless of stub name.
+  // Requires RoutedRackApp HTTP dispatch — not ported.
+  it.skip("request method get can be matched", () => {});
 });
 
 describe("TestUriPathEscaping", () => {

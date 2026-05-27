@@ -347,8 +347,8 @@ when 3–4 target helpers gain the required setter surface.
 ## Activesupport wiring followups (needed for full boot)
 
 - **Bootstrap `:initialize_logger` upgrade** — wrap logger in `TaggedLogging`
-  - `BroadcastLogger`. Both shipped; wiring only. Blocked on B4
-    (`logFormatter` / `broadcastLogLevel` in `Application::Configuration`).
+  \+ `BroadcastLogger`. Both shipped; wiring only. Blocked on B4
+  (`logFormatter` / `broadcastLogLevel` in `Application::Configuration`).
 - **`:initialize_cache` `cacheFormatVersion`** — set `ActiveSupport.cacheFormatVersion`.
   Requires the field on activesupport's cache module (~20 LOC).
 - **`:initialize_error_reporter` initializer** — once `ActiveSupport.error` /

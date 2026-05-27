@@ -769,7 +769,7 @@ export class Mapper {
     },
   ): void {
     if (options.on !== undefined && !VALID_ON_OPTIONS.has(options.on)) {
-      throw new Error(`Unknown scope ${options.on} given to :on`);
+      throw new Error(`Unknown scope :${options.on} given to :on`);
     }
 
     const scopeTo = this._scope.get("to") as string | undefined;
@@ -942,6 +942,9 @@ export class Mapper {
   // --- internals ---
 
   private addRoute(verb: string, path: string, options: RouteOptions): void {
+    if (options.on !== undefined && !VALID_ON_OPTIONS.has(options.on)) {
+      throw new Error(`Unknown scope :${options.on} given to :on`);
+    }
     const fullPath = this.currentPrefix() + "/" + path.replace(/^\/+/, "");
     // Apply _scope controller/action/to defaults set via controller(...)/defaults(...)/scope(...).
     // Mirrors mapper.rb:1972-1980: scope[:to] and scope[:controller]+scope[:action] feed options[:to].

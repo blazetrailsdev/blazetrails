@@ -2301,7 +2301,7 @@ describe("TestUrlGenerationErrors", () => {
   });
 
   it.skip("exceptions have suggestions for fix", () => {
-    // pending: requires error.detailed_message (Ruby DidYouMean integration) — no JS equivalent
+    // pending: error.detailed_message (Ruby DidYouMean hook) not yet wired for UrlGenerationError
   });
 });
 

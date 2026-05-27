@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import {
   Base,
   transaction,
@@ -17,6 +17,8 @@ import {
 
 import { createSidecarTestAdapter, createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
+import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
+import { useHandlerTransactionalFixtures } from "./test-helpers/use-handler-transactional-fixtures.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import { SQLite3Adapter } from "./connection-adapters/sqlite3-adapter.js";
 
@@ -54,11 +56,6 @@ function makeSQLiteMovie() {
   return { Movie, adapter };
 }
 
-// -- Helpers --
-function freshAdapter(): DatabaseAdapter {
-  return createTestAdapter();
-}
-
 // Close all SQLite adapters after every test regardless of which describe block.
 afterEach(() => {
   for (const a of openAdapters.splice(0)) {
@@ -70,18 +67,16 @@ afterEach(() => {
 // TransactionTest — targets transactions_test.rb
 // ==========================================================================
 describe("TransactionTest", () => {
-  let adapter: DatabaseAdapter;
-
-  beforeEach(async () => {
-    adapter = freshAdapter();
-    await defineSchema(adapter, { topics: { title: "string" } });
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({ topics: { title: "string" } });
   });
 
   it("transaction commits on success", async () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     // Transaction requires adapter with beginTransaction support
@@ -93,7 +88,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await Topic.create({ title: "a" });
@@ -105,17 +99,16 @@ describe("TransactionTest", () => {
 // TransactionTest — targets transactions_test.rb
 // ==========================================================================
 describe("TransactionTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(async () => {
-    adapter = freshAdapter();
-    await defineSchema(adapter, { posts: { title: "string" } });
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({ posts: { title: "string" } });
   });
 
   it("blank?", async () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     // A new relation is not blank when records exist
@@ -127,7 +120,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const p = (await Post.create({ title: "original" })) as any;
@@ -147,7 +139,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await Post.create({ title: "in-tx" });
@@ -161,7 +152,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let created: any;
@@ -177,7 +167,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Post, async () => {
@@ -190,7 +179,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const p = (await Post.create({ title: "start" })) as any;
@@ -201,7 +189,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const p = (await Post.create({ title: "destroy-test" })) as any;
@@ -213,7 +200,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const p = (await Post.create({ title: "persisted" })) as any;
@@ -225,21 +211,24 @@ describe("TransactionTest", () => {
 // TransactionTest — more targets for transactions_test.rb
 // ==========================================================================
 describe("TransactionTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(async () => {
-    adapter = freshAdapter();
-    await defineSchema(adapter, {
+  setupHandlerSuite();
+  beforeAll(async () => {
+    await defineSchema({
       posts: { title: "string" },
       topics: { title: "string", approved: "boolean" },
       tx_posts: { title: "string" },
     });
+  });
+  beforeEach(async () => {
+    await Base.adapter.executeMutation("DELETE FROM posts");
+    await Base.adapter.executeMutation("DELETE FROM topics");
+    await Base.adapter.executeMutation("DELETE FROM tx_posts");
   });
 
   it("successful", async () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Post, async () => {
@@ -252,7 +241,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     try {
@@ -270,7 +258,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Post, async () => {
@@ -285,7 +272,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const p = new Post({ title: "before-tx" });
@@ -300,7 +286,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const p = (await Post.create({ title: "persisted" })) as any;
@@ -320,7 +305,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let caughtError = false;
@@ -338,7 +322,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let completed = false;
@@ -353,7 +336,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const p = new Post({ title: "no-id-yet" });
@@ -373,7 +355,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await Post.create({ title: "before" });
@@ -392,7 +373,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Post, async () => {
@@ -405,7 +385,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const p = (await Post.create({ title: "original" })) as any;
@@ -424,7 +403,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     try {
@@ -442,7 +420,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let afterCommitCalled = false;
@@ -458,7 +435,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Post, async () => {
@@ -473,7 +449,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let insideTransaction = false;
@@ -488,7 +463,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Post, async () => {
@@ -502,7 +476,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterCommit((record: any) => {
           log.push("committed:" + record.title);
         });
@@ -520,7 +493,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterCommit(() => {
           log.push("committed");
         });
@@ -537,7 +509,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterCommit(() => {
           log.push("first");
         });
@@ -555,7 +526,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterCommit(() => {
           log.push("committed");
         });
@@ -572,7 +542,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterRollback(
           (r: any) => {
             history.push("rollback:" + r.title);
@@ -593,7 +562,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterRollback(
           () => {
             history.push("rollback_on_update");
@@ -622,7 +590,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterRollback(
           () => {
             history.push("rollback_on_destroy");
@@ -651,7 +618,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterCommit(() => {
           log.push("a");
         });
@@ -672,7 +638,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterCommit((record: any) => {
           savedRecord = record;
         });
@@ -697,7 +662,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterRollback(() => {
           history.push("rolled_back");
         });
@@ -715,7 +679,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterDestroyCommit(() => {
           history.push("commit_on_destroy");
         });
@@ -742,7 +705,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterCommit(() => {
           history.push("committed");
         });
@@ -762,7 +724,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
         this.afterCommit(() => {
           log.push("committed");
         });
@@ -781,7 +742,6 @@ describe("TransactionTest", () => {
     class TxPost extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(TxPost, async () => {
@@ -820,7 +780,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let called = 0;
@@ -858,7 +817,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let called = 0;
@@ -1034,7 +992,6 @@ describe("TransactionTest", () => {
       static {
         this.attribute("title", "string");
         this.attribute("approved", "boolean");
-        this.adapter = adapter;
       }
     }
     const t1 = await Topic.create({ title: "First", approved: false });
@@ -1104,7 +1061,6 @@ describe("TransactionTest", () => {
     class Topic extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const topic = new Topic({ title: "test" });
@@ -1249,17 +1205,16 @@ describe("TransactionTest", () => {
 // TransactionTest2 — more targets for transactions_test.rb
 // ==========================================================================
 describe("TransactionTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(async () => {
-    adapter = freshAdapter();
-    await defineSchema(adapter, { posts: { title: "string" } });
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({ posts: { title: "string" } });
   });
 
   it("successful", async () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Post, async () => {
@@ -1272,7 +1227,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let threw = false;
@@ -1290,7 +1244,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Post, async () => {
@@ -1305,7 +1258,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = (await Post.create({ title: "to destroy" })) as any;
@@ -1317,7 +1269,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = (await Post.create({ title: "original" })) as any;
@@ -1337,7 +1288,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = (await Post.create({ title: "v1" })) as any;
@@ -1352,7 +1302,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     Post.validates("title", { presence: true });
@@ -1365,7 +1314,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = (await Post.create({ title: "test" })) as any;
@@ -1377,7 +1325,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post1 = (await Post.create({ title: "p1" })) as any;
@@ -1399,7 +1346,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     Post.validates("title", { presence: true });
@@ -1412,7 +1358,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = (await Post.create({ title: "created" })) as any;
@@ -1423,7 +1368,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     expect(Post.new({ title: "new" }).isNewRecord()).toBe(true);
@@ -1433,7 +1377,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     expect(((await Post.create({ title: "created" })) as any).isPersisted()).toBe(true);
@@ -1443,7 +1386,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = Post.new({ title: "no id" }) as any;
@@ -1456,7 +1398,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = (await Post.create({ title: "original" })) as any;
@@ -1468,7 +1409,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = (await Post.create({ title: "original" })) as any;
@@ -1480,7 +1420,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = (await Post.create({ title: "fresh" })) as any;
@@ -1492,7 +1431,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Post, async () => {
@@ -1505,7 +1443,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let called = false;
@@ -1520,7 +1457,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = Post.new({ title: "double" }) as any;
@@ -1533,7 +1469,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const post = (await Post.create({ title: "original" })) as any;
@@ -1546,7 +1481,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let committed = false;
@@ -1562,7 +1496,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     let threw = false;
@@ -1584,10 +1517,10 @@ describe("TransactionTest", () => {
 // TransactionTest3 — additional missing tests from transactions_test.rb
 // ==========================================================================
 describe("TransactionTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(async () => {
-    adapter = freshAdapter();
-    await defineSchema(adapter, { posts: { title: "string" } });
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({ posts: { title: "string" } });
   });
 
   it("rollback dirty changes even with raise during rollback removes from pool", () => {
@@ -1624,7 +1557,6 @@ describe("TransactionTest", () => {
     class Post extends Base {
       static {
         this.attribute("title", "string");
-        this.adapter = adapter;
       }
     }
     const p = await Post.create({ title: "txn-state" });
@@ -1815,7 +1747,8 @@ describe("TransactionTest", () => {
 });
 
 describe("TransactionTest", () => {
-  let adapter: DatabaseAdapter;
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
 
   class Account extends Base {
     static {
@@ -1824,10 +1757,8 @@ describe("TransactionTest", () => {
     }
   }
 
-  beforeEach(async () => {
-    adapter = freshAdapter();
-    Account.adapter = adapter;
-    await defineSchema(adapter, { accounts: { name: "string", balance: "integer" } });
+  beforeAll(async () => {
+    await defineSchema({ accounts: { name: "string", balance: "integer" } });
   });
 
   it("successful", async () => {
@@ -1903,10 +1834,10 @@ describe("TransactionTest", () => {
 });
 
 describe("TransactionTest", () => {
-  let adapter: DatabaseAdapter;
-  beforeEach(async () => {
-    adapter = freshAdapter();
-    await defineSchema(adapter, { accounts: { name: "string", balance: "integer" } });
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema({ accounts: { name: "string", balance: "integer" } });
   });
 
   it("successful transaction commits", async () => {
@@ -1914,7 +1845,6 @@ describe("TransactionTest", () => {
       static {
         this.attribute("name", "string");
         this.attribute("balance", "integer");
-        this.adapter = adapter;
       }
     }
     await transaction(Account, async () => {
@@ -1928,7 +1858,6 @@ describe("TransactionTest", () => {
     class Account extends Base {
       static {
         this.attribute("name", "string");
-        this.adapter = adapter;
       }
     }
     const log: string[] = [];
@@ -1945,7 +1874,6 @@ describe("TransactionTest", () => {
     class Account extends Base {
       static {
         this.attribute("name", "string");
-        this.adapter = adapter;
       }
     }
     const log: string[] = [];
@@ -1966,7 +1894,6 @@ describe("TransactionTest", () => {
     class Account extends Base {
       static {
         this.attribute("name", "string");
-        this.adapter = adapter;
       }
     }
     await transaction(Account, async () => {
@@ -1985,7 +1912,7 @@ describe("TransactionTest", () => {
 });
 
 describe("TransactionTest", () => {
-  let adapter: DatabaseAdapter;
+  setupHandlerSuite();
 
   class Account extends Base {
     static {
@@ -1994,10 +1921,11 @@ describe("TransactionTest", () => {
     }
   }
 
+  beforeAll(async () => {
+    await defineSchema({ accounts: { name: "string", balance: "integer" } });
+  });
   beforeEach(async () => {
-    adapter = freshAdapter();
-    Account.adapter = adapter;
-    await defineSchema(adapter, { accounts: { name: "string", balance: "integer" } });
+    await Base.adapter.executeMutation("DELETE FROM accounts");
   });
 
   it("successful", async () => {
@@ -2135,10 +2063,9 @@ describe("TransactionTest", () => {
 
     it("calls clearCacheBang and re-raises when the body throws the expired error", async () => {
       const { PreparedStatementCacheExpired } = await import("./errors.js");
-      // TM calls clearCacheBang on _connection (the real adapter) directly,
-      // so spy on the shared real adapter via the sidecar handle.
-      const { adapter: realAdapter } = createSidecarTestAdapter();
-      const spy = vi.spyOn(realAdapter as Required<DatabaseAdapter>, "clearCacheBang");
+      // After D-1 the TM's _connection is a pooled real adapter instance, not
+      // _sharedAdapter. Spy on the prototype to catch any SQLite3Adapter call.
+      const spy = vi.spyOn(SQLite3Adapter.prototype as Required<DatabaseAdapter>, "clearCacheBang");
       await expect(
         transaction(Account, async () => {
           throw new PreparedStatementCacheExpired("cached plan expired");
@@ -2148,8 +2075,7 @@ describe("TransactionTest", () => {
     });
 
     it("does not call clearCacheBang for unrelated errors", async () => {
-      const { adapter: realAdapter } = createSidecarTestAdapter();
-      const spy = vi.spyOn(realAdapter as Required<DatabaseAdapter>, "clearCacheBang");
+      const spy = vi.spyOn(SQLite3Adapter.prototype as Required<DatabaseAdapter>, "clearCacheBang");
       await expect(
         transaction(Account, async () => {
           throw new Error("unrelated");
@@ -2158,9 +2084,9 @@ describe("TransactionTest", () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    // The "after_failure_actions" tests above run on a SchemaAdapter, which
-    // (after Phase 1) takes the TM path. They cover the SchemaAdapter→TM
-    // delegation by spying on inner.clearCacheBang. The test below covers
+    // The "after_failure_actions" tests above run on the handler adapter (D-1),
+    // which takes the TM path. They cover SchemaAdapter→TM delegation by
+    // spying on SQLite3Adapter.prototype.clearCacheBang. The test below covers
     // the pure-TM path directly, against a hand-rolled TransactionManager
     // with no SchemaAdapter wrapper — guards against TM-internal regressions
     // independently of the wrapper.

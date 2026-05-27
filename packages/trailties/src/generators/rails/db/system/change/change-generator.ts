@@ -133,10 +133,80 @@ export class ChangeGenerator extends GeneratorBase {
   }
 
   editDevcontainerFiles(): void {
-    // Deferred: trailties' devcontainer generator (#2221) is in flight.
-    // Once its emission shape is known, this method will edit
-    // `.devcontainer/devcontainer.json` and `.devcontainer/compose.yaml`
-    // analogous to Rails' edit_devcontainer_json / edit_compose_yaml.
+    if (!this.fileExists(".devcontainer")) return;
+    this.editDevcontainerJson();
+    this.editComposeYaml();
+  }
+
+  private editDevcontainerJson(): void {
+    const rel = ".devcontainer/devcontainer.json";
+    if (!this.fileExists(rel)) return;
+    const full = this.path.join(this.cwd, rel);
+    const json = JSON.parse(this.fs.readFileSync(full, "utf-8")) as Record<string, unknown>;
+
+    // Mirrors edit_devcontainer_json: update DB_HOST and db feature entry.
+    const env = (json.containerEnv ?? {}) as Record<string, string>;
+    if (this.database.service) {
+      env.DB_HOST = this.database.name;
+    } else {
+      delete env.DB_HOST;
+    }
+    if (Object.keys(env).length > 0) {
+      json.containerEnv = env;
+    } else {
+      delete json.containerEnv;
+    }
+
+    const features = (json.features ?? {}) as Record<string, unknown>;
+    for (const d of Database.all()) {
+      if (d.featureName) delete features[d.featureName];
+    }
+    if (this.database.feature) Object.assign(features, this.database.feature);
+    json.features = features;
+
+    this.writeOrUpdate(rel, JSON.stringify(json, null, 2) + "\n");
+  }
+
+  private editComposeYaml(): void {
+    const rel = ".devcontainer/compose.yaml";
+    if (!this.fileExists(rel)) return;
+    const full = this.path.join(this.cwd, rel);
+    const compose = JSON.parse(this.fs.readFileSync(full, "utf-8")) as {
+      services: Record<string, Record<string, unknown>>;
+      volumes?: Record<string, unknown>;
+      [k: string]: unknown;
+    };
+    const { services } = compose;
+    const volumes = compose.volumes ?? {};
+    const railsApp = services["rails-app"] as
+      | { depends_on?: string[]; [k: string]: unknown }
+      | undefined;
+
+    for (const d of Database.all()) {
+      delete services[d.name];
+      if (d.volume) delete volumes[d.volume];
+      if (railsApp?.depends_on) {
+        railsApp.depends_on = railsApp.depends_on.filter((dep) => dep !== d.name);
+      }
+    }
+
+    if (this.database.service) {
+      services[this.database.name] = this.database.service as unknown as Record<string, unknown>;
+      if (this.database.volume) volumes[this.database.volume] = null;
+      if (railsApp) {
+        railsApp.depends_on = [this.database.name, ...(railsApp.depends_on ?? [])];
+      }
+    }
+
+    if (Object.keys(volumes).length > 0) {
+      compose.volumes = volumes;
+    } else {
+      delete compose.volumes;
+    }
+
+    if (railsApp?.depends_on?.length === 0) delete railsApp.depends_on;
+
+    this.writeOrUpdate(rel, JSON.stringify(compose, null, 2) + "\n");
   }
 }
 

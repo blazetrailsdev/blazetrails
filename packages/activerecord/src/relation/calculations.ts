@@ -42,6 +42,7 @@ interface CalculationRelation {
     name: string;
     connection: {
       adapterName: AdapterName;
+      visitor?: { compile(node: any): string };
       execute(sql: string): Promise<Record<string, unknown>[]>;
       selectAll(sql: string, name?: string | null): Promise<import("../result.js").Result>;
     };
@@ -219,7 +220,7 @@ function applyFromClause(rel: CalculationRelation, sql: string): string {
   if (typeof raw === "string") {
     fromExpr = alias ? `${raw} ${_safeAlias(alias)}` : raw;
   } else if (raw instanceof Nodes.Node) {
-    const compiled: string = raw.toSql();
+    const compiled: string = rel._modelClass.connection.visitor?.compile(raw) ?? raw.toSql();
     fromExpr = alias ? `${compiled} ${_safeAlias(alias)}` : compiled;
   } else if (raw !== null && typeof (raw as any).toSql === "function") {
     // Relation or other object with toSql() — treat as subquery.

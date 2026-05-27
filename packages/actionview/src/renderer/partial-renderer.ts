@@ -147,7 +147,12 @@ export class CollectionRenderer extends AbstractRenderer {
 
     let spacerBody = "";
     if (this.options.spacerTemplate) {
-      const spacerTmpl = findPartialTemplate(this.lookupContext, this.options.spacerTemplate);
+      const { prefix } = parsePartialPath(partial);
+      const spacerPath =
+        this.options.spacerTemplate.includes("/") || !prefix
+          ? this.options.spacerTemplate
+          : `${prefix}/${this.options.spacerTemplate}`;
+      const spacerTmpl = findPartialTemplate(this.lookupContext, spacerPath);
       spacerBody = await spacerTmpl.render({ ...baseLocals }, context);
     }
 
@@ -178,8 +183,31 @@ export class CollectionRenderer extends AbstractRenderer {
       return new RenderedTemplate("", null);
     }
     const contextPrefix = this.lookupContext.prefixes[0] ?? "";
-    const firstPath = partialPath(collection[0], context, contextPrefix);
-    return this.renderCollectionWithPartial(collection, firstPath, context, block);
+    const paths = collection.map((item) => partialPath(item, context, contextPrefix));
+    const firstPath = paths[0]!;
+    if (paths.every((p) => p === firstPath)) {
+      return this.renderCollectionWithPartial(collection, firstPath, context, block);
+    }
+    // Heterogeneous collection — render each item with its own derived partial.
+    const as = localVariable(firstPath, this.options as Record<string, unknown>);
+    const baseLocals = { ...(this.options.locals ?? {}) };
+    const iteration = new PartialIteration(collection.length);
+    const parts: string[] = [];
+    let lastTemplate: RenderableTemplate | null = null;
+    for (let i = 0; i < collection.length; i++) {
+      const template = findPartialTemplate(this.lookupContext, paths[i]!);
+      lastTemplate = template;
+      const itemAs = localVariable(paths[i]!, this.options as Record<string, unknown>);
+      const locals = {
+        ...baseLocals,
+        [itemAs]: collection[i],
+        [`${as}_counter`]: iteration.index,
+        [`${as}_iteration`]: iteration,
+      };
+      parts.push(await template.render(locals, context));
+      iteration.iterate();
+    }
+    return this.buildRenderedTemplate(parts.join(""), lastTemplate);
   }
 
   render(): RenderedTemplate {

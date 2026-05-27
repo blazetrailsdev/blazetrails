@@ -111,7 +111,7 @@ The `_sharedAdapter` singleton is replaced by a pinned single-connection pool;
 the behaviour is identical from the test's perspective.
 
 What E5 DOES remove: the `_sharedAdapter` module variable and the direct-adapter
-bypass. The new path is `pool.pinConnectionBang(false)` → `pool.leaseConnection()`
+bypass. The new path is `pool.leaseConnection()`
 for all drivers, with pool-size-1 doing the right thing implicitly for SQLite
 (single connection serializes all `Promise.all` branches through the pool's lease
 queue — no separate AsyncContext filter needed).
@@ -318,13 +318,16 @@ export async function createSidecarTestAdapter(): Promise<{
   fixtures: SidecarFixtures;
 }> {
   const pool = await _establishPooledTestPool();
-  pool.pinConnectionBang(false);
-  const adapter = (await pool.leaseConnection()) as SidecarAdapter;
+  const adapter = pool.leaseConnection() as SidecarAdapter; // synchronous
   return { adapter, fixtures: new SidecarFixtures(adapter) };
 }
 ```
 
 Note the signature becomes `async` — callers must `await createSidecarTestAdapter()`. Update all call sites.
+
+Pin/unpin lifecycle (`await pool.pinConnectionBang({ fixture: true })` /
+`await pool.unpinConnectionBang()`) belongs in `withTransactionalFixtures`, not the
+factory — matching the existing pattern in `with-transactional-fixtures.ts:218–233`.
 
 **Rewire `resetTestAdapterState()`** — replace `_sharedAdapter.schemaCache?.clear()` with pool-level clear:
 

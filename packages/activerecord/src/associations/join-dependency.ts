@@ -24,6 +24,7 @@ import { JoinBase } from "./join-dependency/join-base.js";
 import { JoinAssociation } from "./join-dependency/join-association.js";
 import { JoinPart } from "./join-dependency/join-part.js";
 import { AssociationNotFoundError, EagerLoadPolymorphicError } from "./errors.js";
+import { isAssociationCached } from "../associations.js";
 import { ConfigurationError } from "../errors.js";
 import { AliasTracker } from "./alias-tracker.js";
 
@@ -681,8 +682,8 @@ export class JoinDependency {
 
       if (
         child.assocType !== "hasMany" &&
-        typeof arParent.isAssociationCached === "function" &&
-        arParent.isAssociationCached(child.immediateAssocName)
+        arParent._associationInstances &&
+        isAssociationCached(arParent, child.immediateAssocName)
       ) {
         const model = arParent.association?.(child.immediateAssocName)?.target;
         this._constructRecursive(

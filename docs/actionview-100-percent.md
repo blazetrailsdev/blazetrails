@@ -81,14 +81,14 @@ pnpm tsx scripts/api-compare/compare.ts | awk '/actionview  —/,/^=/' | head -1
 
 ---
 
-Phases 0–2 (Foundations, AP-unblocking stubs, Template core, TSE compiler)
-are all shipped. See git log for details.
+Phases 0–2 core work (Foundations, AP-unblocking stubs, Template core, TSE
+compiler) is shipped. Remaining tails:
 
-**Phase 1c remaining:** restructure `src/template-resolver.ts` under
+**Phase 1c:** restructure `src/template-resolver.ts` under
 `src/resolver/` to match Rails; add `OptimizedFileSystemResolver` (caches
 glob results).
 
-**Phase 2c remaining:** watch mode (`trails-tsc-views dev`), manifest
+**Phase 2c:** watch mode (`trails-tsc-views dev`), manifest
 generation, `postinstall` hook in app templates, CLI unification with
 the AR `trails-tsc` bin.
 

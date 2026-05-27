@@ -316,7 +316,7 @@ Each story below is one Rails test file → one ~150–250 LOC PR. Read the
 Rails source first; preserve test names exactly (CLAUDE.md). Open ports in
 parallel unless they share a dependency.
 
-### Independent ports (sorted by size; do these in any order, in parallel)
+### Independent ports (do these in any order, in parallel)
 
 | Story  | Ruby file                                       |           Missing | Pkg | Depends-on | Notes                                                                                                                                                                                                                                     |
 | ------ | ----------------------------------------------- | ----------------: | --- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

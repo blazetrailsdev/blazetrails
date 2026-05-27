@@ -220,8 +220,8 @@ function applyFromClause(rel: CalculationRelation, sql: string): string {
   if (typeof raw === "string") {
     fromExpr = alias ? `${raw} ${_safeAlias(alias)}` : raw;
   } else if (raw instanceof Nodes.Node) {
-    const compiled: string = rel._modelClass.connection.visitor?.compile(raw) ?? raw.toSql();
-    fromExpr = alias ? `${compiled} ${_safeAlias(alias)}` : compiled;
+    // Alias is ignored — callers bake the alias into the node itself (mirrors relation.ts:3561-3565).
+    fromExpr = rel._modelClass.connection.visitor?.compile(raw) ?? raw.toSql();
   } else if (raw !== null && typeof (raw as any).toSql === "function") {
     // Relation or other object with toSql() — treat as subquery.
     const subSql: string = (raw as any).toSql();

@@ -1485,7 +1485,8 @@ describe("UniquenessValidationTest", () => {
   // requiring a live PG connection.
   it("awaits async adapter.caseInsensitiveComparison without leaking a Promise into where()", async () => {
     const adp = Base.adapter as any;
-    const orig = adp.caseInsensitiveComparison?.bind(adp);
+    const hadOwn = Object.prototype.hasOwnProperty.call(adp, "caseInsensitiveComparison");
+    const orig = adp.caseInsensitiveComparison;
     let wasAwaited = false;
     adp.caseInsensitiveComparison = async (attribute: any, value: unknown) => {
       await Promise.resolve();
@@ -1507,7 +1508,7 @@ describe("UniquenessValidationTest", () => {
       expect(wasAwaited).toBe(true);
       expect(t2.errors.on("title")).toBeTruthy();
     } finally {
-      if (orig) {
+      if (hadOwn) {
         adp.caseInsensitiveComparison = orig;
       } else {
         delete adp.caseInsensitiveComparison;

@@ -146,6 +146,14 @@ describe("SelectTest", () => {
     const sql = Post.select({ [Symbol("foo")]: Symbol("post_title") } as any).toSql();
     expect(sql).toMatch(new RegExp(`^SELECT ${q("foo")} AS ${q("post_title")} FROM`));
 
+    // Rails guards the raise with `skip if sqlite3_adapter_strict_strings_disabled?`
+    // (select_test.rb:53). That guard only matters when the SQLite adapter is
+    // configured with `strict: false`, which makes a double-quoted unknown
+    // identifier (`"foo"`) parse as a string literal instead of raising. Our
+    // SQLite test adapter has no strict-strings-disabled mode — it always runs
+    // with DQS off (CI confirms the "should this be a string literal in
+    // single-quotes?" error), so `"foo"` always errors. PG/MySQL raise too.
+    // The guard condition is therefore always false here; the throw is safe.
     await expect(
       Post.select({ [Symbol("foo")]: Symbol("post_title") } as any).take(),
     ).rejects.toThrow(StatementInvalid);
@@ -199,12 +207,6 @@ describe("SelectTest", () => {
   it.skip("select with hash argument with few tables", () => {
     // BLOCKED: relation — joins(:comments) + cross-table hash select not yet supported.
     // Rails: Post.joins(:comments).select(:title, posts: { title: :post_title }, comments: { body: :comment_body })
-  });
-
-  it.skip("select with hash argument with few tables", () => {
-    // BLOCKED: relation — hash-form select across joined tables not implemented
-    // Rails: Post.joins(:comments).select(:title, posts: { title: :post_title }, comments: { body: :comment_body })
-    // (see "select with non field hash values")
   });
 
   it("reselect", () => {

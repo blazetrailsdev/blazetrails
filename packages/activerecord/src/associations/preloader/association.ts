@@ -228,25 +228,22 @@ export class Association {
   private _associateRecordsToOwner(owner: Base, records: Base[]): void {
     if (this.isLoaded(owner)) return;
 
+    const association = (owner as any).association(this.reflection.name);
     const isCollection = (this.reflection as any).isCollection?.() ?? false;
     let value: Base | Base[] | null;
-    try {
-      const association = (owner as any).association(this.reflection.name);
-      if (isCollection) {
-        const currentTarget: Base[] = Array.isArray(association.target) ? association.target : [];
-        const notPersisted = currentTarget.filter(
-          (r) => (r as any).isNewRecord?.() ?? !(r as any).isPersisted?.(),
-        );
-        value = [...records, ...notPersisted];
-        association.setTarget(value);
-      } else {
-        value = records[0] ?? null;
-        association.setTarget(value);
-      }
-    } catch {
-      value = isCollection ? records : (records[0] ?? null);
+    if (isCollection) {
+      const currentTarget: Base[] = Array.isArray(association.target) ? association.target : [];
+      const notPersistedRecords = currentTarget.filter((r) => !(r as any).isPersisted());
+      value = [...records, ...notPersistedRecords];
+      association.setTarget(value);
+    } else {
+      value = records[0] ?? null;
+      association.setTarget(value);
     }
 
+    // Shadow-map bridge: many readers in `associations.ts` still consult
+    // `_preloadedAssociations`. Migrating them to read from the real proxy
+    // is a follow-up PR; keep the cache in sync for now.
     if (!(owner as any)._preloadedAssociations) {
       (owner as any)._preloadedAssociations = new Map();
     }

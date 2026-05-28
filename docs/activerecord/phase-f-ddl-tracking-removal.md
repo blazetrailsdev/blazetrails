@@ -37,21 +37,33 @@ pass as skipped.
 
 ### 2. Inventory — DDL methods in `abstract/schema-statements.ts`
 
-| Method                | Line | `clearDataSourceCacheBang` called? |
-| --------------------- | ---- | ---------------------------------- |
-| `createTable`         | 87   | No                                 |
-| `dropTable`           | 215  | **Yes** (line 226)                 |
-| `addColumn`           | 231  | No                                 |
-| `removeColumn`        | 242  | No                                 |
-| `renameColumn`        | 256  | No                                 |
-| `addIndex`            | 262  | No                                 |
-| `removeIndex`         | 275  | No                                 |
-| `changeColumn`        | 298  | No                                 |
-| `renameTable`         | 336  | No                                 |
-| `changeColumnDefault` | 383  | No                                 |
-| `changeColumnNull`    | 398  | No                                 |
-| `createJoinTable`     | 605  | No (delegates to `createTable`)    |
-| `dropJoinTable`       | 632  | **Yes** (delegates to `dropTable`) |
+| Method                | Line | `clearDataSourceCacheBang` called? | Rails parity                                                                                           |
+| --------------------- | ---- | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `createTable`         | 87   | No — **F2 gap**                    | Rails calls it in non-force branch (ss.rb:306)                                                         |
+| `dropTable`           | 215  | **Yes** (line 226)                 | Rails ss.rb:542 ✓                                                                                      |
+| `addColumn`           | 231  | No — **F2 gap**                    | Rails does not inline; schemaCache invalidated by higher-level callers. Low priority — see note below. |
+| `removeColumn`        | 242  | No — **F2 gap**                    | Same as addColumn.                                                                                     |
+| `renameColumn`        | 256  | No                                 | Rails does not inline either. Not in F2 scope.                                                         |
+| `addIndex`            | 262  | No — **F2 gap**                    | Same as addColumn.                                                                                     |
+| `removeIndex`         | 275  | No — **F2 gap**                    | Same as addColumn.                                                                                     |
+| `changeColumn`        | 298  | No — **F2 gap**                    | Same as addColumn.                                                                                     |
+| `renameTable`         | 336  | No — **F2 gap**                    | Rails clears **both** old and new name (ss.rb:—; adapter overrides in PG/MySQL/SQLite)                 |
+| `changeColumnDefault` | 383  | No                                 | Rails does not inline. Not in F2 scope.                                                                |
+| `changeColumnNull`    | 398  | No                                 | Rails does not inline. Not in F2 scope.                                                                |
+| `createJoinTable`     | 605  | No (delegates to `createTable`)    | Covered when F2 fixes `createTable`.                                                                   |
+| `dropJoinTable`       | 632  | **Yes** (delegates to `dropTable`) | ✓                                                                                                      |
+
+**Note on addColumn/removeColumn/addIndex/removeIndex/changeColumn:** Rails does
+not inline `clear_data_source_cache!` in these methods in the abstract base. The
+cache is invalidated by column-level lazy-load: the next `columns()` call
+re-fetches from the DB. However, stale cached column data during a migration
+step can cause silent bugs, and F2's safety-net tests will verify the desired
+behavior. The F2 author should decide per-method whether to follow Rails exactly
+(no inline call) or to add it defensively.
+
+**Note on renameTable:** All three adapter overrides (PG `schema_statements.rb:437-438`,
+MySQL `abstract_mysql_adapter.rb:333-334`, SQLite `sqlite3_adapter.rb:332-333`) clear
+**both the old and new table name**. F2 must add both calls.
 
 ### 3. Adapter-specific overrides
 

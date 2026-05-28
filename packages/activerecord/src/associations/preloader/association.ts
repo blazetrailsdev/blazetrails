@@ -309,7 +309,7 @@ export class Association {
   }
 
   private _buildScope(): any {
-    let scope = (this.klass as any)._allForPreload();
+    let scope = (this.klass as any).scopeForAssociation();
 
     const type = (this.reflection as any).type;
     if (type && !(this.reflection as any).isThroughReflection?.()) {
@@ -327,11 +327,11 @@ export class Association {
       if (scopeResult) scope = scopeResult;
     }
 
-    if (this._preloadScope) {
+    if (this._preloadScope && !this._preloadScope.isEmptyScope?.()) {
       scope = scope.merge(this._preloadScope);
     }
 
-    return scope;
+    return this._cascadeStrictLoading(scope);
   }
 
   /**

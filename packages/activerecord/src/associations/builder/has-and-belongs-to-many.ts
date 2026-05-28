@@ -158,6 +158,18 @@ export class HasAndBelongsToMany {
       model._associations = [...(model._associations ?? [])];
     }
 
+    // Mirrors Ruby's `define_method`/reflection overwrite semantics: a second
+    // `has_and_belongs_to_many :name` on the same class replaces the first
+    // rather than layering a duplicate (Rails stores reflections in a hash
+    // keyed by name — see associations.rb). Without this, re-declaring would
+    // append a second HABTM entry plus a second middle `has_many`, so adding
+    // one record would insert two join rows. Drop any prior definition for
+    // this association name and its derived middle name before re-building.
+    const priorMiddleName = [pluralize(model.name.toLowerCase()), name].sort().join("_");
+    model._associations = model._associations.filter(
+      (a: { name: string }) => a.name !== name && a.name !== priorMiddleName,
+    );
+
     const targetClassName = (options.className as string) ?? camelize(singularize(name));
     const joinTableName =
       (options.joinTable as string) ??

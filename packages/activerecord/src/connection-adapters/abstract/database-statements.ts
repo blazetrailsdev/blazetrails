@@ -75,7 +75,12 @@ export function inspectExplainOption(o: unknown): string {
 export interface DatabaseStatementsHost {
   preparedStatements?: boolean;
   execute?(sql: string, name?: string | null): Promise<unknown>;
-  selectAll?(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
+  selectAll?(
+    sql: string,
+    name?: string | null,
+    binds?: unknown[],
+    opts?: { allowRetry?: boolean },
+  ): Promise<Result>;
   /** @internal */
   internalExecute?(sql: string, name?: string, binds?: unknown[]): Promise<unknown>;
   /** @internal */
@@ -1415,8 +1420,12 @@ export const DatabaseStatements = {
     sql: string,
     name?: string | null,
     binds?: unknown[],
-    _options?: { prepare?: boolean; allowRetry?: boolean },
+    options?: { prepare?: boolean; allowRetry?: boolean },
   ): Promise<Result> {
+    // options.allowRetry is captured here and will flow to withRawConnection
+    // once pool integration lands (connection-pool track). Real adapters that
+    // override execQuery should forward allowRetry to their execute path.
+    void options;
     const rows = await this.execute(sql, binds, name ?? "SQL");
     return Result.fromRowHashes(rows);
   },

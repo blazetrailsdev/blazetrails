@@ -12,6 +12,7 @@ import {
 import { ConnectionDescriptor } from "./connection-adapters/abstract/connection-descriptor.js";
 import { PoolConfig } from "./connection-adapters/pool-config.js";
 import { HashConfig } from "./database-configurations/hash-config.js";
+import type { DatabaseConfigOptions } from "./database-configurations/database-config.js";
 
 function makeMiddleware(
   app: () => Promise<void>,
@@ -36,13 +37,15 @@ function makeMiddleware(
   };
 }
 
-function makePoolWithQCache(queryCache: unknown): ConnectionPool {
+function makePoolWithQCache(
+  queryCache: DatabaseConfigOptions["queryCache"] | undefined,
+): ConnectionPool {
   const dbConfig = new HashConfig("test", "primary", {
     adapter: "sqlite3",
     database: "test.db",
     pool: 2,
     reapingFrequency: null,
-    queryCache: queryCache as any,
+    queryCache,
   });
   const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
     adapterFactory: createTestAdapter,

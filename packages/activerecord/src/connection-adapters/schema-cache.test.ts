@@ -596,26 +596,51 @@ function makeMockAdapter(cache: SchemaCache) {
 }
 
 describe("DDL cache-invalidation safety-net", () => {
-  it("dropTable clears schema cache entry", async () => {
+  it("dropTable clears schema cache entry before DROP SQL", async () => {
     const cache = new SchemaCache();
     cache.setColumns("posts", [makeColumn("id", "integer")]);
     expect(cache.isCached("posts")).toBe(true);
 
-    const ss = new SchemaStatements(makeMockAdapter(cache) as any);
+    const order: string[] = [];
+    const adapter = makeMockAdapter(cache);
+    vi.spyOn(cache, "clearDataSourceCacheBang").mockImplementation((_pool, name) => {
+      order.push(`clear:${name}`);
+      cache.setColumns(name, []); // actually clear so isCached reflects it
+      (cache as any)._columns?.delete(name);
+    });
+    (adapter.executeMutation as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      order.push("sql");
+      return 0;
+    });
+
+    const ss = new SchemaStatements(adapter as any);
     await ss.dropTable("posts");
 
     expect(cache.isCached("posts")).toBe(false);
+    expect(order).toEqual(["clear:posts", "sql"]);
   });
 
-  it("dropJoinTable clears schema cache entry (via dropTable)", async () => {
+  it("dropJoinTable clears schema cache entry before DROP SQL (via dropTable)", async () => {
     const cache = new SchemaCache();
     cache.setColumns("accounts_people", [makeColumn("account_id", "integer")]);
     expect(cache.isCached("accounts_people")).toBe(true);
 
-    const ss = new SchemaStatements(makeMockAdapter(cache) as any);
+    const order: string[] = [];
+    const adapter = makeMockAdapter(cache);
+    vi.spyOn(cache, "clearDataSourceCacheBang").mockImplementation((_pool, name) => {
+      order.push(`clear:${name}`);
+      (cache as any)._columns?.delete(name);
+    });
+    (adapter.executeMutation as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      order.push("sql");
+      return 0;
+    });
+
+    const ss = new SchemaStatements(adapter as any);
     await ss.dropJoinTable("accounts", "people");
 
     expect(cache.isCached("accounts_people")).toBe(false);
+    expect(order).toEqual(["clear:accounts_people", "sql"]);
   });
 
   // BLOCKED: F2 — needs inline schemaCache.clearDataSourceCacheBang at

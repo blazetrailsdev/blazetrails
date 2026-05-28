@@ -20,6 +20,7 @@ import {
   LockWaitTimeout,
 } from "../errors.js";
 import { Notifications } from "@blazetrails/activesupport";
+import { disablePreparedStatements } from "../ar-config.js";
 import { Result, type ColumnTypes } from "../result.js";
 import { SchemaCache, SchemaReflection, BoundSchemaReflection } from "./schema-cache.js";
 import { stripSqlComments } from "./sql-classification.js";
@@ -676,7 +677,11 @@ export class AbstractAdapter implements Quoting {
         `preparedStatements must be a boolean; got ${typeof value}: ${String(value)}`,
       );
     }
-    this._preparedStatements = value;
+    // Mirrors Rails' `@prepared_statements = !ActiveRecord.disable_prepared_statements && ...`
+    // (abstract_adapter.rb:159). Every concrete adapter assigns
+    // `this.preparedStatements` from its config in the constructor, so honoring
+    // the global toggle here covers (re-)establishConnection uniformly.
+    this._preparedStatements = value && !disablePreparedStatements;
   }
 
   get active(): boolean {
@@ -684,6 +689,11 @@ export class AbstractAdapter implements Quoting {
   }
 
   lease(): void {
+    if (this._inUse) {
+      throw new ActiveRecordError(
+        "Cannot lease connection, it is already in use by a different thread.",
+      );
+    }
     this._inUse = true;
   }
 
@@ -1078,7 +1088,14 @@ export class AbstractAdapter implements Quoting {
   }
 
   close(): void {
-    this.expire();
+    // Mirrors Rails' `close` (abstract_adapter.rb:830): check the connection
+    // back in to its pool. Standalone adapters with no pool just expire.
+    const pool = this.pool as { checkin?: (conn: unknown) => void } | null;
+    if (pool && typeof pool.checkin === "function") {
+      pool.checkin(this);
+    } else {
+      this.expire();
+    }
   }
 
   requiresReloading(): boolean {
@@ -1148,10 +1165,12 @@ export class AbstractAdapter implements Quoting {
 
   stealBang(): void {
     if (!this._inUse) {
-      throw new Error("Cannot steal connection, it is not currently leased.");
+      throw new ActiveRecordError("Cannot steal connection, it is not currently leased.");
     }
+    // Mirrors Rails' `steal!` (abstract_adapter.rb:319): the connection stays
+    // in use; only the owning thread is reassigned. Do NOT call `lease()` — it
+    // raises when already leased.
     this._owner = null;
-    this.lease();
   }
 
   get secondsIdle(): number {

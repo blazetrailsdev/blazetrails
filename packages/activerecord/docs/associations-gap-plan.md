@@ -350,9 +350,10 @@ A4 #2559, B1 #2557, E1 #2567, F1 #2563, H1 #2556).
 
 **From #2559 (A4 through-scope + STI grouping):**
 
-- [ ] ~20 LOC docs: the original A4 entry's claims were inaccurate. STI
+- [x] Done (this PR): the original A4 entry's claims were inaccurate. STI
       source grouping is already handled by `Branch.preloadersForReflection`.
-      The "scope drop" overlaps A5 (JOIN branch). (Folded into this cleanup PR.)
+      The "scope drop" overlaps A5 (JOIN branch). The stale A4 entry was
+      dropped in this cleanup.
 - [ ] ~30 LOC audit: sweep `@internal` marker functions at the bottom of
       `preloader/association.ts` for references to nonexistent Relation
       properties (one was fixed by #2559 — `strictLoadingValue` was dead code).

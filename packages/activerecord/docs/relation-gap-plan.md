@@ -24,21 +24,6 @@
 
 ---
 
-## Track 2: Hash-form select (unlocks ~23 tests)
-
-### PR R2b: `select(nil)` clears the select list
-
-**Problem:** `select(nil)` is treated as `select("null")` — `String(nil)`
-produces the literal column name "null" instead of clearing the select list.
-
-**Files:**
-
-- `relation/query-methods.ts` — `select` / `processSelectArgs` nil guard
-
-**Est:** ~10 LOC (R2 hash-form select shipped #2562)
-
----
-
 ## Track 3: Arel nodes in `order()` + `reverseOrder` (unlocks ~28 tests)
 
 ### PR R3b: Scoping — select narrowing + `hasAttribute` from projected columns
@@ -122,13 +107,11 @@ decision before any implementation (see post-merge follow-ups from #2564).
 
 ## Dependency graph
 
-R1, R2, R3, R5, R6a, R6b shipped (#2566, #2562, #2551, #2569, #2564).
+R1, R2, R2b, R3, R5, R6a, R6b shipped (#2566, #2562, #2551, #2569, #2564).
 Remaining:
 
 ```
 R4 (WhereChain enum — R1 association-key expansion shipped #2566)
-
-R2b (select(nil) — standalone)
 
 R3b (select narrowing — same scoping area as shipped R3)
 
@@ -151,18 +134,17 @@ Ordered by: (1) no unsatisfied dependencies, (2) tests unlocked per LOC,
 | PR  | Tests | Est LOC | Depends on | Why                                                  |
 | --- | ----- | ------- | ---------- | ---------------------------------------------------- |
 | R6c | 2     | ~40     | —          | Parameterized join strings — deferred, design needed |
-| R2b | —     | ~10     | —          | `select(nil)` clears the select list                 |
 | R3b | 2     | ~60     | R3 ✓       | Select narrowing — niche, low urgency                |
 
 ### Recommended parallel lanes
 
 - **Lane A:** R4 (WhereChain enum — R1 association expansion shipped)
 - **Lane B:** R3b (select narrowing — R3 shipped)
-- **Lane C:** R2b (`select(nil)` — standalone)
 
 **Coverage:** 275 tests total.
 
-- **Actionable here:** ~110 tests across 9 PRs (R1–R6c)
+- **Remaining actionable here:** ~16 tests across 3 PRs (R4, R3b, R6c).
+  The shipped R1/R2/R2b/R3/R5/R6a/R6b work (~94 tests) is no longer counted.
 - **Cross-blocked:** ~47 tests (connection-pool P12, associations A5, Phase G fixtures)
 - **Permanently skipped:** ~36 tests (load_async, GVL/fork, SimpleDelegator)
 
@@ -183,8 +165,12 @@ R5 #2569, R6a+R6b #2564).
       Eliminates duplicate logic + divergent error message ("Relation has a
       non-reversible order" vs Rails' "Order ... cannot be reversed
       automatically").
-- The 3 `reorder replaces existing order` test names are NOT verbatim Rails
-  names. Pre-existing in our suite. Flag for test:compare matching.
+- The 3 `reorder replaces existing order` tests have no verbatim Rails
+  counterpart (Rails names this behavior `test_finding_with_reorder` /
+  `test_reorder_deduplication` in `relations_test.rb`). Pre-existing in our
+  suite. Don't rename in place — instead verify each maps to a real Rails
+  test and, where it does, align body + name to that counterpart so
+  test:compare matches; otherwise document the genuine test:compare gap.
 - `inspect()` at `relation.ts:1026` JSON.stringify's `_orderClauses` which
   may hold live `Nodes.Node` objects (partial stringify). Cosmetic only.
 
@@ -233,8 +219,12 @@ collection polymorphic relation`.
 - Type-system gaps: `where with rational for string column` (no JS
   Rational), `where with duration for string column` (ActiveSupport::Duration
   cast not wired).
-- [ ] Cleanup: Non-Rails-named legacy stubs in `src/relation/where.test.ts`
-      (lines ~252–498) need real Rails-matched names/bodies or removal.
+- [ ] Cleanup: the synthetic, non-Rails-named stubs in
+      `src/relation/where.test.ts` (lines ~252–498) are placeholders with no
+      Rails counterpart — they don't mirror `where_test.rb`. Replace each
+      with a properly Rails-mirrored test (verbatim name + body from the
+      real counterpart) so test:compare can match it, or remove the
+      placeholder. This is not a rename of existing Rails-mirrored tests.
 
 **From #2569 (R5 inOrderOf extensions):**
 

@@ -277,13 +277,6 @@ function _stripUrlCredentials(s: string): string {
  * connected to, or `null` when no stringable identity is available
  * (callers fall back to the {@link _fallbackSchemaSignatures} WeakMap).
  *
- * Does NOT unwrap `innerAdapter` chains: wrappers like
- * `TestAdapterFixtures` carry their own per-wrapper `tables: Set<string>`
- * that `defineSchema` reads via `adapterKnownTables`, so sharing one
- * cache entry across wrappers would desync the cache from the per-wrapper
- * "tables I know about" view and cause cross-file table leakage. Only
- * raw adapters (pool-leased `SidecarAdapter`, etc.) share by DB identity.
- *
  * Reads private fields by name on purpose — defineSchema is test-only
  * infrastructure and there is no public surface for "which DB are you
  * connected to" on AbstractAdapter today. Strips URL credentials so the
@@ -295,9 +288,6 @@ function _stripUrlCredentials(s: string): string {
 function databaseIdentity(adapter: DatabaseAdapter): string | null {
   const real = adapter;
   const a = real as unknown as Record<string, unknown>;
-  // Wrapper shapes (e.g. TestAdapterFixtures with an `innerAdapter` field)
-  // intentionally don't share — see fn docstring.
-  if ((a as { innerAdapter?: unknown }).innerAdapter !== undefined) return null;
   if (real.adapterName === "sqlite") {
     const fn = a["_filename"];
     if (typeof fn === "string" && fn !== ":memory:" && fn !== "") return `sqlite:${fn}`;

@@ -2,9 +2,9 @@
  * Shared test adapter factory.
  *
  * Returns the appropriate adapter based on environment variables:
- *   - PG_TEST_URL    → PostgreSQLAdapter (wrapped in TestAdapterFixtures)
- *   - MYSQL_TEST_URL → Mysql2Adapter (wrapped in TestAdapterFixtures)
- *   - (default)      → SQLite3Adapter (:memory:) (wrapped in TestAdapterFixtures)
+ *   - PG_TEST_URL    → PostgreSQLAdapter
+ *   - MYSQL_TEST_URL → Mysql2Adapter
+ *   - (default)      → SQLite3Adapter (shared-cache :memory:)
  *
  * For real database adapters, a single shared connection pool is reused
  * across all test adapters to avoid exhausting database connections.
@@ -15,13 +15,7 @@
  * declare their tables up front.
  */
 
-import { inspectExplainOption } from "./adapter.js";
-import type { AdapterName, DatabaseAdapter, ExplainOption } from "./adapter.js";
-import {
-  NullTransaction,
-  type TransactionManager,
-} from "./connection-adapters/abstract/transaction.js";
-import type { SchemaCache } from "./connection-adapters/schema-cache.js";
+import type { DatabaseAdapter } from "./adapter.js";
 import {
   clearAppliedSchemaSignatures,
   restoreCanonicalSchemaSignaturesUnlessAdapter,
@@ -29,12 +23,7 @@ import {
 import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import { SidecarFixtures } from "./test-helpers/sidecar-fixtures.js";
 import { Base } from "./base.js";
-import { Visitors } from "@blazetrails/arel";
-import { DatabaseStatements } from "./connection-adapters/abstract/database-statements.js";
-import { sanitizeAsSqlComment as abstractSanitizeAsSqlComment } from "./connection-adapters/abstract/quoting.js";
-import { include } from "@blazetrails/activesupport";
-import { isWriteQuerySql } from "./connection-adapters/sql-classification.js";
-import type { Result } from "./result.js";
+import type { TransactionManager } from "./connection-adapters/abstract/transaction.js";
 
 // process.env.PG_TEST_URL / MYSQL_TEST_URL are already worker-scoped by
 // test-setup-worker-db.ts (a setupFile that runs before this module loads).
@@ -145,20 +134,26 @@ function _establishPooledTestPool(): Promise<
 
 // Boot: initialize the pool eagerly so factory calls below are synchronous.
 const _pool = await _establishPooledTestPool();
-const _factory: () => TestAdapterFixtures = () =>
-  new TestAdapterFixtures(_pool.leaseConnection() as DatabaseAdapter);
+// Wrap each leased connection in a unique Proxy so test-only WeakMap keys
+// (e.g. useTransactionalTests set by defineSchema) are scoped per-call
+// rather than shared across all callers that hit the same pool-leased object
+// in context 0. All property accesses delegate transparently to the
+// underlying adapter; only the object identity differs.
+const _factory = (): DatabaseAdapter => new Proxy(_pool.leaseConnection() as DatabaseAdapter, {});
 
-/** DatabaseAdapter wrapper returned by {@link createTestAdapter}, with test-only accessors. */
-export interface TestDatabaseAdapter extends DatabaseAdapter {
-  readonly innerAdapter: DatabaseAdapter;
-}
+/**
+ * Type alias for the adapter returned by {@link createTestAdapter}. Retained
+ * for backward compatibility with test-file annotations; resolves to the
+ * plain {@link DatabaseAdapter} type — F5 deleted the wrapping class.
+ */
+export type TestDatabaseAdapter = DatabaseAdapter;
 
 /**
  * Create a fresh adapter for testing. Phase 7 removed the lazy auto-schema
  * machinery; E5 routes all adapters through the shared connection pool.
- * Every returned instance is a thin wrapper around a pool-leased connection.
+ * Every returned instance is a pool-leased connection.
  */
-export function createTestAdapter(): TestDatabaseAdapter {
+export function createTestAdapter(): DatabaseAdapter {
   return _factory();
 }
 
@@ -266,353 +261,3 @@ export async function resetTestAdapterState(): Promise<void> {
     { preventPermanentCheckout: true },
   );
 }
-
-/**
- * Thin wrapper around a real database adapter that:
- *   1. Routes transactions through the inner adapter's TM (Phase 1)
- *   2. Patches SQLite-specific SQL incompatibilities (Phase 9 will move
- *      these into SQLite3Adapter directly)
- *   3. Tracks CREATE/DROP TABLE for `defineSchema`'s cache invalidation
- */
-type BooleanCapability =
-  | "supportsIndexesInCreate"
-  | "supportsAdvisoryLocks"
-  | "supportsInsertConflictTarget";
-
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-interface TestAdapterFixtures {
-  selectAll(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
-  selectOne(
-    sql: string,
-    name?: string | null,
-    binds?: unknown[],
-  ): Promise<Record<string, unknown> | undefined>;
-  selectValue(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown>;
-  selectValues(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown[]>;
-  selectRows(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown[][]>;
-  execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
-  execInsert(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
-  execDelete(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
-  execUpdate(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
-  cacheableQuery(
-    klass: {
-      query?(sql: string): unknown;
-      partialQuery?(parts: unknown): unknown;
-      partialQueryCollector?(): unknown;
-    },
-    arel: unknown,
-  ): [unknown, unknown[]];
-}
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-class TestAdapterFixtures implements DatabaseAdapter {
-  get adapterName(): AdapterName {
-    return this.inner?.adapterName ?? "sqlite";
-  }
-
-  isNoDatabaseError(error: unknown): boolean {
-    return this.inner.isNoDatabaseError(error);
-  }
-
-  isPreventingWrites(): boolean {
-    return this.inner.isPreventingWrites();
-  }
-
-  private inner: DatabaseAdapter;
-
-  constructor(inner: DatabaseAdapter) {
-    this.inner = inner;
-  }
-
-  get schemaCache(): SchemaCache | undefined {
-    return this.inner?.schemaCache;
-  }
-
-  schemaStatements() {
-    if (!this.inner.schemaStatements) {
-      throw new Error(
-        `TestAdapterFixtures.schemaStatements: wrapped ${this.inner.adapterName} does not implement schemaStatements()`,
-      );
-    }
-    // Pass `this` so the inner adapter constructs its SchemaStatements
-    // around the wrapper — preserves visibility of executeMutation spies.
-    return this.inner.schemaStatements(this);
-  }
-
-  createTableDefinition(name: string, options: Record<string, unknown> = {}): unknown {
-    const inner = this.inner as unknown as {
-      createTableDefinition?(n: string, o: Record<string, unknown>): unknown;
-    };
-    if (typeof inner.createTableDefinition !== "function") {
-      throw new Error(
-        `TestAdapterFixtures.createTableDefinition: wrapped ${this.inner.adapterName} does not implement createTableDefinition()`,
-      );
-    }
-    return inner.createTableDefinition(name, options);
-  }
-
-  get pool(): unknown {
-    return this.inner;
-  }
-
-  /** Expose the underlying adapter for tests that need adapter-specific behavior (e.g. columnTypes). */
-  get innerAdapter(): DatabaseAdapter {
-    return this.inner;
-  }
-
-  async execute(sql: string, binds?: unknown[], name?: string): Promise<Record<string, unknown>[]> {
-    return this.inner.execute(sql, binds, name);
-  }
-
-  async executeMutation(sql: string, binds?: unknown[], name?: string): Promise<number> {
-    return this.inner.executeMutation(sql, binds, name);
-  }
-
-  async withinNewTransaction<T>(
-    opts: { isolation?: string | null; joinable?: boolean },
-    fn: (tx?: unknown) => Promise<T> | T,
-  ): Promise<T> {
-    const inner = this.inner as any;
-    const tm = inner.transactionManager as
-      | { synchronize?<R>(fn: () => Promise<R> | R): Promise<R> }
-      | undefined;
-    const run = () => inner.withinNewTransaction(opts, fn);
-    if (tm?.synchronize) return tm.synchronize(run);
-    return run();
-  }
-
-  currentTransaction() {
-    const tx = (this.inner as any).currentTransaction?.();
-    return tx instanceof NullTransaction ? null : tx;
-  }
-
-  addTransactionRecord(record: unknown, ensureFinalize?: boolean) {
-    return (this.inner as any).addTransactionRecord?.(record, ensureFinalize);
-  }
-
-  materializeTransactions() {
-    return (this.inner as any).materializeTransactions?.();
-  }
-
-  async beginTransaction(): Promise<void> {
-    await this.inner.beginTransaction();
-  }
-  async commit(): Promise<void> {
-    await this.inner.commit();
-  }
-  async rollback(): Promise<void> {
-    await this.inner.rollback();
-  }
-  async createSavepoint(name: string): Promise<void> {
-    return this.inner.createSavepoint(name);
-  }
-  async releaseSavepoint(name: string): Promise<void> {
-    return this.inner.releaseSavepoint(name);
-  }
-  async rollbackToSavepoint(name: string): Promise<void> {
-    return this.inner.rollbackToSavepoint(name);
-  }
-  clearCacheBang(): void {
-    this.inner.clearCacheBang?.();
-  }
-  get inTransaction(): boolean {
-    return this.inner.inTransaction;
-  }
-
-  get openTransactions(): number {
-    return this.inner.openTransactions ?? 0;
-  }
-
-  emptyInsertStatementValue(pk?: string | null): string {
-    return this.inner.emptyInsertStatementValue?.(pk) ?? "DEFAULT VALUES";
-  }
-
-  isWriteQuery(sql: string): boolean {
-    return this.inner.isWriteQuery?.(sql) ?? isWriteQuerySql(sql);
-  }
-
-  async exec(sql: string): Promise<void> {
-    await (this.inner as unknown as { exec(sql: string): Promise<void> }).exec(sql);
-  }
-
-  async explain(
-    sql: string,
-    binds: unknown[] = [],
-    options: ExplainOption[] = [],
-  ): Promise<string> {
-    const inner = this.inner as {
-      explain?: (sql: string, binds?: unknown[], options?: ExplainOption[]) => Promise<string>;
-    };
-    if (inner.explain) return inner.explain(sql, binds, options);
-    return `EXPLAIN not supported`;
-  }
-
-  buildExplainClause(options: ExplainOption[] = []): string {
-    const inner = this.inner as { buildExplainClause?: (options: ExplainOption[]) => string };
-    if (typeof inner.buildExplainClause === "function") {
-      return inner.buildExplainClause(options);
-    }
-    if (options.length === 0) return "EXPLAIN for:";
-    const parts = options.map((o) => {
-      if (typeof o === "string") return o.toUpperCase();
-      if (!o || typeof o !== "object" || typeof o.format !== "string") {
-        throw new TypeError(
-          `EXPLAIN option hash requires a string 'format'; got ${inspectExplainOption(o)}`,
-        );
-      }
-      return `FORMAT ${o.format.toUpperCase()}`;
-    });
-    return `EXPLAIN (${parts.join(", ")}) for:`;
-  }
-
-  quote(value: unknown): string {
-    const inner = this.inner as { quote?: (v: unknown) => string };
-    if (typeof inner.quote === "function") return inner.quote(value);
-    // `String(value)` is NOT a safe SQL literal for strings / Dates,
-    // and silently using it would produce broken or unsafe SQL. Throw
-    // loudly so the gap surfaces — every adapter we wrap in practice
-    // implements `quote()`.
-    throw new Error(
-      `TestAdapterFixtures.quote: wrapped ${(this.inner as { adapterName?: string }).adapterName ?? "adapter"} does not implement quote()`,
-    );
-  }
-
-  typeCast(value: unknown): unknown {
-    const inner = this.inner as { typeCast?: (v: unknown) => unknown };
-    if (typeof inner.typeCast === "function") return inner.typeCast(value);
-    throw new Error(
-      `TestAdapterFixtures.typeCast: wrapped ${(this.inner as { adapterName?: string }).adapterName ?? "adapter"} does not implement typeCast()`,
-    );
-  }
-
-  quoteIdentifier(name: string): string {
-    const inner = this.inner as { quoteIdentifier?: (n: string) => string };
-    if (typeof inner.quoteIdentifier === "function") return inner.quoteIdentifier(name);
-    throw new Error(
-      `TestAdapterFixtures.quoteIdentifier: wrapped ${(this.inner as { adapterName?: string }).adapterName ?? "adapter"} does not implement quoteIdentifier()`,
-    );
-  }
-
-  quoteTableName(name: string): string {
-    const inner = this.inner as { quoteTableName?: (n: string) => string };
-    if (typeof inner.quoteTableName === "function") return inner.quoteTableName(name);
-    throw new Error(
-      `TestAdapterFixtures.quoteTableName: wrapped ${(this.inner as { adapterName?: string }).adapterName ?? "adapter"} does not implement quoteTableName()`,
-    );
-  }
-
-  quoteColumnName(name: string): string {
-    const inner = this.inner as { quoteColumnName?: (n: string) => string };
-    if (typeof inner.quoteColumnName === "function") return inner.quoteColumnName(name);
-    throw new Error(
-      `TestAdapterFixtures.quoteColumnName: wrapped ${(this.inner as { adapterName?: string }).adapterName ?? "adapter"} does not implement quoteColumnName()`,
-    );
-  }
-
-  quoteDefaultExpression(value: unknown): string {
-    const inner = this.inner as { quoteDefaultExpression?: (v: unknown) => string };
-    if (typeof inner.quoteDefaultExpression === "function")
-      return inner.quoteDefaultExpression(value);
-    throw new Error(
-      `TestAdapterFixtures.quoteDefaultExpression: wrapped ${(this.inner as { adapterName?: string }).adapterName ?? "adapter"} does not implement quoteDefaultExpression()`,
-    );
-  }
-
-  quoteString(s: string): string {
-    const inner = this.inner as { quoteString?: (s: string) => string };
-    if (typeof inner.quoteString === "function") return inner.quoteString(s);
-    return s.replace(/\\/g, "\\\\").replace(/'/g, "''");
-  }
-
-  quotedBinary(value: unknown): string {
-    const inner = this.inner as { quotedBinary?: (v: unknown) => string };
-    if (typeof inner.quotedBinary === "function") return inner.quotedBinary(value);
-    throw new Error(
-      `TestAdapterFixtures.quotedBinary: wrapped ${(this.inner as { adapterName?: string }).adapterName ?? "adapter"} does not implement quotedBinary()`,
-    );
-  }
-
-  quotedTrue(): string {
-    return this.inner.quotedTrue();
-  }
-
-  quotedFalse(): string {
-    return this.inner.quotedFalse();
-  }
-
-  quoteTableNameForAssignment(table: string, attr: string): string {
-    const inner = this.inner as { quoteTableNameForAssignment?: (t: string, a: string) => string };
-    if (typeof inner.quoteTableNameForAssignment === "function")
-      return inner.quoteTableNameForAssignment(table, attr);
-    return this.quoteTableName(`${table}.${attr}`);
-  }
-
-  castBoundValue(value: unknown): unknown {
-    const inner = this.inner as { castBoundValue?: (v: unknown) => unknown };
-    if (typeof inner.castBoundValue === "function") return inner.castBoundValue(value);
-    return value;
-  }
-
-  sanitizeAsSqlComment(value: unknown): string {
-    const inner = this.inner as { sanitizeAsSqlComment?: (v: unknown) => string };
-    if (typeof inner.sanitizeAsSqlComment === "function") return inner.sanitizeAsSqlComment(value);
-    return abstractSanitizeAsSqlComment(value);
-  }
-
-  get visitor(): Visitors.ToSql | undefined {
-    return (this.inner as { visitor?: Visitors.ToSql }).visitor;
-  }
-
-  lookupCastTypeFromColumn(column: unknown): unknown {
-    return (this.inner as any).lookupCastTypeFromColumn?.(column);
-  }
-
-  async currentDatabase(): Promise<string> {
-    const inner = this.inner as { currentDatabase?: () => Promise<string> };
-    if (typeof inner.currentDatabase === "function") return inner.currentDatabase();
-    throw new Error(
-      `${this.inner.adapterName} adapter must implement currentDatabase() to support advisory-locked migrations`,
-    );
-  }
-
-  supportsIndexesInCreate(): boolean {
-    return this._delegateCapability("supportsIndexesInCreate");
-  }
-
-  supportsAdvisoryLocks(): boolean {
-    return this._delegateCapability("supportsAdvisoryLocks");
-  }
-
-  supportsInsertConflictTarget(): boolean {
-    return this._delegateCapability("supportsInsertConflictTarget");
-  }
-
-  /** Forward a boolean capability probe to the inner adapter; default false when absent. */
-  private _delegateCapability(name: BooleanCapability): boolean {
-    const probe = (this.inner as unknown as Record<string, unknown>)[name];
-    return typeof probe === "function" ? Boolean((probe as () => boolean).call(this.inner)) : false;
-  }
-
-  async getDatabaseVersion(): Promise<unknown> {
-    const inner = this.inner as { getDatabaseVersion?: () => Promise<unknown> };
-    return inner.getDatabaseVersion?.();
-  }
-
-  async getAdvisoryLock(lockId: number | bigint | string): Promise<boolean> {
-    const inner = this.inner as {
-      getAdvisoryLock?: (id: number | bigint | string) => Promise<boolean>;
-    };
-    return inner.getAdvisoryLock?.(lockId) ?? false;
-  }
-
-  async releaseAdvisoryLock(lockId: number | bigint | string): Promise<boolean> {
-    const inner = this.inner as {
-      releaseAdvisoryLock?: (id: number | bigint | string) => Promise<boolean>;
-    };
-    return inner.releaseAdvisoryLock?.(lockId) ?? false;
-  }
-
-  async cleanup(): Promise<void> {
-    await dropAllTables(this.inner);
-  }
-}
-include(TestAdapterFixtures, DatabaseStatements);

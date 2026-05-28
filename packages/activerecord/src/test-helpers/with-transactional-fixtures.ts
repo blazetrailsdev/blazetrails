@@ -19,20 +19,18 @@ interface TxnHost {
 
 /**
  * The helper accepts either the {@link TestDatabaseAdapter} produced by
- * {@link createTestAdapter} (whose `transactionManager` lives on the wrapped
- * `innerAdapter`) or a raw `DatabaseAdapter` constructed directly by a test
- * file (`new PostgreSQLAdapter(...)`, `new SQLite3Adapter(...)`, etc.) which
- * exposes `transactionManager` on itself via `AbstractAdapter`. Adapter-cluster
- * tests under `adapters/**` predominantly take the raw path. Not every
- * `DatabaseAdapter` shape in the repo carries `transactionManager` (e.g. the
- * `QueryCacheAdapter` wrapper in `query-cache.ts`), so the union narrows to
- * adapters that do — type-checking matches runtime behavior.
+ * {@link createTestAdapter} or a raw `DatabaseAdapter` constructed directly
+ * by a test file (`new PostgreSQLAdapter(...)`, `new SQLite3Adapter(...)`,
+ * etc.) which exposes `transactionManager` on itself via `AbstractAdapter`.
+ * Adapter-cluster tests under `adapters/**` predominantly take the raw path.
+ * Not every `DatabaseAdapter` shape in the repo carries `transactionManager`
+ * (e.g. the `QueryCacheAdapter` wrapper in `query-cache.ts`), so the union
+ * narrows to adapters that do — type-checking matches runtime behavior.
  */
 export type TransactionalFixturesAdapter = TestDatabaseAdapter | (DatabaseAdapter & TxnHost);
 
 function tm(adapter: TransactionalFixturesAdapter): TxnHost["transactionManager"] {
-  const wrapped = (adapter as Partial<TestDatabaseAdapter>).innerAdapter;
-  const host = (wrapped ?? adapter) as unknown as Partial<TxnHost>;
+  const host = adapter as unknown as Partial<TxnHost>;
   if (!host.transactionManager) {
     throw new Error(
       `withTransactionalFixtures: adapter ${(adapter as { adapterName?: string }).adapterName ?? "unknown"} ` +
@@ -59,28 +57,18 @@ function tm(adapter: TransactionalFixturesAdapter): TxnHost["transactionManager"
  * @internal
  */
 function clearSchemaCache(adapter: TransactionalFixturesAdapter): void {
-  const wrapped = (adapter as Partial<TestDatabaseAdapter>).innerAdapter;
-  const host = (wrapped ?? adapter) as DatabaseAdapter;
-  host.schemaCache?.clear();
-}
-
-function adapterAndInner(
-  adapter: TransactionalFixturesAdapter,
-): readonly [DatabaseAdapter, DatabaseAdapter | null] {
-  const wrapped = (adapter as Partial<TestDatabaseAdapter>).innerAdapter ?? null;
-  return [adapter as DatabaseAdapter, wrapped];
+  (adapter as DatabaseAdapter).schemaCache?.clear();
 }
 
 /**
- * Detect a pooled adapter (returned by `createPooledTestAdapter()`). The
- * pool back-reference is set by `ConnectionPool#newConnection` (via
- * `adoptConnection`) when a connection is adopted into the pool;
- * non-pooled adapters keep `AbstractAdapter#pool === null`.
+ * Detect a pooled adapter (returned by `createTestAdapter()` /
+ * `createPooledTestAdapter()`). The pool back-reference is set by
+ * `ConnectionPool#newConnection` (via `adoptConnection`) when a connection
+ * is adopted into the pool; non-pooled adapters keep
+ * `AbstractAdapter#pool === null`.
  */
 function pooledAdapterPool(adapter: TransactionalFixturesAdapter): ConnectionPool | null {
-  const wrapped = (adapter as Partial<TestDatabaseAdapter>).innerAdapter;
-  const host = (wrapped ?? adapter) as { pool?: unknown };
-  const pool = host.pool;
+  const pool = (adapter as { pool?: unknown }).pool;
   if (pool && typeof (pool as ConnectionPool).pinConnectionBang === "function") {
     return pool as ConnectionPool;
   }
@@ -170,13 +158,12 @@ export function withTransactionalFixtures(
 ): void {
   const { invalidateSchemaCache = true } = options;
   let active = true;
-  // Snapshots of defineSchema's per-adapter signature cache taken at the
+  // Snapshot of defineSchema's per-adapter signature cache taken at the
   // start of each test. On rollback we restore — preserving signatures for
   // tables created outside the test transaction (e.g. in `beforeAll`) while
   // discarding signatures for any `defineSchema(...)` that ran inside the
   // `it()` body (whose DDL was rolled back at the DB).
   let outerSig: Map<string, string> | null = null;
-  let innerSig: Map<string, string> | null = null;
 
   beforeAll(() => {
     active = getUseTransactionalTests(getAdapter());
@@ -194,9 +181,8 @@ export function withTransactionalFixtures(
 
   beforeEach(async () => {
     if (!active) return;
-    const [outer, inner] = adapterAndInner(getAdapter());
+    const outer = getAdapter() as DatabaseAdapter;
     outerSig = _snapshotAppliedSchemaSignaturesForAdapter(outer);
-    innerSig = inner ? _snapshotAppliedSchemaSignaturesForAdapter(inner) : null;
     const pool = pooledAdapterPool(getAdapter());
     if (pool) {
       // Mirrors Rails test_fixtures.rb:177-184 pin/lease lifecycle:
@@ -233,10 +219,8 @@ export function withTransactionalFixtures(
       while (t.openTransactions > 0) await t.rollbackTransaction();
     }
     if (invalidateSchemaCache) clearSchemaCache(getAdapter());
-    const [outer, inner] = adapterAndInner(getAdapter());
+    const outer = getAdapter() as DatabaseAdapter;
     if (outerSig) _restoreAppliedSchemaSignaturesForAdapter(outer, outerSig);
-    if (inner && innerSig) _restoreAppliedSchemaSignaturesForAdapter(inner, innerSig);
     outerSig = null;
-    innerSig = null;
   });
 }

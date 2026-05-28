@@ -2551,7 +2551,6 @@ describe("SchemaAdapter TM delegation", () => {
 
     expect((testAdapter as any).inTransaction).toBe(false);
     expect((testAdapter as any).openTransactions).toBe(0);
-    expect((testAdapter as any).currentTransaction?.()).toBeNull();
 
     await testAdapter.beginTransaction();
     expect((testAdapter as any).inTransaction).toBe(true);

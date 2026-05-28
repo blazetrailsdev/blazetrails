@@ -911,7 +911,6 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       throw new Error("No index name or column specified");
     }
     await this.executeMutation(`DROP INDEX IF EXISTS ${quoteColumnName(indexName)}`);
-    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
   }
 
   createSchemaDumper(source: SchemaSource, _options: unknown = {}): Sqlite3SchemaDumper {
@@ -984,11 +983,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   async renameTable(tableName: string, newName: string): Promise<void> {
+    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
+    this.schemaCache.clearDataSourceCacheBang(this.pool, newName);
     await this.executeMutation(
       `ALTER TABLE ${quoteTableName(tableName)} RENAME TO ${quoteTableName(newName)}`,
     );
-    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
-    this.schemaCache.clearDataSourceCacheBang(this.pool, newName);
   }
 
   async addColumn(
@@ -1005,7 +1004,6 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       sql += ` DEFAULT ${this.quoteDefault(options.default)}`;
     }
     await this.executeMutation(sql);
-    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
   }
 
   async removeColumn(tableName: string, columnName: string, _type?: string): Promise<void> {
@@ -1080,7 +1078,6 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     await this.executeMutation(
       `ALTER TABLE ${quoteTableName(tableName)} RENAME COLUMN ${quoteColumnName(columnName)} TO ${quoteColumnName(newColumnName)}`,
     );
-    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
   }
 
   async addTimestamps(tableName: string, options?: Record<string, unknown>): Promise<void> {

@@ -223,8 +223,8 @@ export class SchemaStatements {
     }
     const ifExists = options.ifExists ? " IF EXISTS" : "";
     for (const name of tableNames) {
-      await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qt(name)}`);
       this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, name);
+      await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qt(name)}`);
     }
   }
 
@@ -237,7 +237,6 @@ export class SchemaStatements {
     const addColumnDef = await this.buildAddColumnDefinition(tableName, columnName, type, options);
     if (!addColumnDef) return;
     await this.adapter.executeMutation(this.schemaCreation.accept(addColumnDef));
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, tableName);
   }
 
   async removeColumn(
@@ -252,14 +251,12 @@ export class SchemaStatements {
     await this.adapter.executeMutation(
       `ALTER TABLE ${this._qi(tableName)} DROP COLUMN ${this._qi(columnName)}`,
     );
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, tableName);
   }
 
   async renameColumn(tableName: string, oldName: string, newName: string): Promise<void> {
     await this.adapter.executeMutation(
       `ALTER TABLE ${this._qi(tableName)} RENAME COLUMN ${this._qi(oldName)} TO ${this._qi(newName)}`,
     );
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, tableName);
   }
 
   async addIndex(
@@ -273,7 +270,6 @@ export class SchemaStatements {
       options as Record<string, unknown>,
     );
     await this.adapter.executeMutation(this.schemaCreation.accept(createIndex));
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, tableName);
   }
 
   async removeIndex(
@@ -297,7 +293,6 @@ export class SchemaStatements {
     } else {
       await this.adapter.executeMutation(`DROP INDEX IF EXISTS ${this._qi(indexName)}`);
     }
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, tableName);
   }
 
   async changeColumn(
@@ -336,15 +331,12 @@ export class SchemaStatements {
         `ALTER TABLE ${table} ALTER COLUMN ${col} TYPE ${sqlType}${nullable}${defaultClause}`,
       );
     }
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, tableName);
   }
 
   async renameTable(oldName: string, newName: string): Promise<void> {
     await this.adapter.executeMutation(
       `ALTER TABLE ${this._qi(oldName)} RENAME TO ${this._qi(newName)}`,
     );
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, oldName);
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, newName);
   }
 
   async tableExists(tableName: string): Promise<boolean> {
@@ -401,7 +393,6 @@ export class SchemaStatements {
     await this.adapter.executeMutation(
       `ALTER TABLE ${this._qi(tableName)} ALTER COLUMN ${this._qi(columnName)} SET${clause || " DEFAULT NULL"}`,
     );
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, tableName);
   }
 
   async changeColumnNull(
@@ -420,7 +411,6 @@ export class SchemaStatements {
     await this.adapter.executeMutation(
       `ALTER TABLE ${this._qi(tableName)} ALTER COLUMN ${this._qi(columnName)} ${constraint}`,
     );
-    this.adapter.schemaCache?.clearDataSourceCacheBang(this.adapter.pool, tableName);
   }
 
   async addReference(

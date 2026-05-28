@@ -562,8 +562,16 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   async renameTable(tableName: string, newName: string): Promise<void> {
-    void tableName;
-    void newName;
+    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
+    this.schemaCache.clearDataSourceCacheBang(this.pool, newName);
+    await this._execMutation(
+      `RENAME TABLE ${this.quoteTableName(tableName)} TO ${this.quoteTableName(newName)}`,
+    );
+    await (
+      this as unknown as {
+        renameTableIndexes(oldName: string, newName: string): Promise<void>;
+      }
+    ).renameTableIndexes(tableName, newName);
   }
 
   async renameIndex(tableName: string, oldName: string, newName: string): Promise<void> {
@@ -628,7 +636,6 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       defaultOrChanges,
     );
     await this._execMutation(`ALTER TABLE ${this.quoteTableName(tableName)} ${fragment}`);
-    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
   }
 
   /**
@@ -747,7 +754,6 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   ): Promise<void> {
     const sql = `ALTER TABLE ${this.quoteTableName(tableName)} ${await this.changeColumnForAlter(tableName, columnName, type, options)}`;
     await this._execMutation(sql);
-    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
   }
 
   async buildChangeColumnDefinition(
@@ -803,7 +809,6 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     const createIndex = await this.buildCreateIndexDefinition(tableName, columnName, options);
     if (!createIndex) return;
     await this._execMutation(this.schemaStatements().schemaCreation.accept(createIndex));
-    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
   }
 
   /**

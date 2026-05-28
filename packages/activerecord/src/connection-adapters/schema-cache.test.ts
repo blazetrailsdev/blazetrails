@@ -730,56 +730,14 @@ describe("SchemaCache DDL invalidation", () => {
     await adapter.close();
   });
 
-  it("dropTable clears the cache after SQL", async () => {
+  it("dropTable clears cache before DROP TABLE", async () => {
     await adapter.dropTable("things");
     expect(adapter.schemaCache.isCached("things")).toBe(false);
   });
 
-  it("renameTable clears both old and new names after SQL", async () => {
+  it("renameTable clears both old and new names before ALTER TABLE RENAME", async () => {
     await adapter.renameTable("things", "stuff");
     expect(adapter.schemaCache.isCached("things")).toBe(false);
     expect(adapter.schemaCache.isCached("stuff")).toBe(false);
-  });
-
-  it("addColumn clears the cache after SQL", async () => {
-    await adapter.addColumn("things", "color", "string");
-    expect(adapter.schemaCache.isCached("things")).toBe(false);
-  });
-
-  it("removeColumn clears the cache after SQL", async () => {
-    await adapter.removeColumn("things", "name");
-    expect(adapter.schemaCache.isCached("things")).toBe(false);
-  });
-
-  it("renameColumn clears the cache after SQL", async () => {
-    await adapter.renameColumn("things", "name", "label");
-    expect(adapter.schemaCache.isCached("things")).toBe(false);
-  });
-
-  it("addIndex clears the cache after SQL", async () => {
-    await adapter.addIndex("things", ["name"]);
-    expect(adapter.schemaCache.isCached("things")).toBe(false);
-  });
-
-  it("removeIndex clears the cache after SQL", async () => {
-    await adapter.addIndex("things", ["name"]);
-    warmCache("things"); // re-warm after addIndex cleared it
-    await adapter.removeIndex("things", { column: "name" });
-    expect(adapter.schemaCache.isCached("things")).toBe(false);
-  });
-
-  it("changeColumn clears the cache after SQL", async () => {
-    await adapter.changeColumn("things", "count", "string");
-    expect(adapter.schemaCache.isCached("things")).toBe(false);
-  });
-
-  it("changeColumnDefault clears the cache after SQL", async () => {
-    await adapter.changeColumnDefault("things", "count", 0);
-    expect(adapter.schemaCache.isCached("things")).toBe(false);
-  });
-
-  it("changeColumnNull clears the cache after SQL", async () => {
-    await adapter.changeColumnNull("things", "name", false);
-    expect(adapter.schemaCache.isCached("things")).toBe(false);
   });
 });

@@ -15,6 +15,7 @@
  */
 
 import type { DatabaseAdapter } from "../adapter.js";
+import { NullTransaction } from "../connection-adapters/abstract/transaction.js";
 import { recordDdlTracking } from "./ddl-tracker.js";
 
 const CREATE_TABLE_RE = /CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:["`](\w+)["`]|(\w+))/i;
@@ -58,7 +59,8 @@ export class SidecarFixtures {
   }
 
   currentTransaction(): unknown {
-    return (this.adapter as { currentTransaction?: () => unknown }).currentTransaction?.();
+    const tx = (this.adapter as { currentTransaction?: () => unknown }).currentTransaction?.();
+    return tx instanceof NullTransaction ? null : tx;
   }
 
   get inTransaction(): boolean {

@@ -381,7 +381,7 @@ function orderBang(
     | Nodes.Node
     | string[]
     | [Nodes.Node, ...unknown[]]
-    | Map<Nodes.Node | string, "asc" | "desc">
+    | Map<Nodes.Node | string, "asc" | "desc" | "ASC" | "DESC">
   >
 ): any {
   let i = 0;
@@ -416,8 +416,12 @@ function orderBang(
     } else if (arg instanceof Nodes.Node) {
       // Preserve the Arel node identity (Ascending/Descending/Attribute/...) so
       // reverseOrderBang can flip it via .reverse()/.desc(), mirroring Rails'
-      // reverse_sql_order. _applyOrderToManager emits the node directly.
-      this._orderClauses.push(arg);
+      // reverse_sql_order. _applyOrderToManager emits the node directly. Skip blank
+      // SQL literals — Rails build_order's compact_blank drops them (SqlLiteral is
+      // a blank? String subclass).
+      const blankLiteral =
+        arg instanceof Nodes.SqlLiteral && String((arg as any).value ?? "").trim() === "";
+      if (!blankLiteral) this._orderClauses.push(arg);
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -459,7 +463,7 @@ function reorderBang(
     | Nodes.Node
     | string[]
     | [Nodes.Node, ...unknown[]]
-    | Map<Nodes.Node | string, "asc" | "desc">
+    | Map<Nodes.Node | string, "asc" | "desc" | "ASC" | "DESC">
   >
 ): any {
   this._orderClauses = [];
@@ -491,8 +495,12 @@ function reorderBang(
     } else if (arg instanceof Nodes.Node) {
       // Preserve the Arel node identity (Ascending/Descending/Attribute/...) so
       // reverseOrderBang can flip it via .reverse()/.desc(), mirroring Rails'
-      // reverse_sql_order. _applyOrderToManager emits the node directly.
-      this._orderClauses.push(arg);
+      // reverse_sql_order. _applyOrderToManager emits the node directly. Skip blank
+      // SQL literals — Rails build_order's compact_blank drops them (SqlLiteral is
+      // a blank? String subclass).
+      const blankLiteral =
+        arg instanceof Nodes.SqlLiteral && String((arg as any).value ?? "").trim() === "";
+      if (!blankLiteral) this._orderClauses.push(arg);
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -1093,6 +1101,18 @@ function optimizerHintsBang(this: QueryMethodsHost, ...hints: string[]): any {
 function reverseOrderBang(this: QueryMethodsHost): any {
   this._orderClauses = this._orderClauses.map((clause) => {
     if (clause instanceof Nodes.Node) {
+      // Arel::Nodes::SqlLiteral is a String subclass in Rails, so reverse_sql_order
+      // reverses it via the `when String` branch (flip trailing ASC↔DESC), not .desc.
+      if (clause instanceof Nodes.SqlLiteral) {
+        const raw = String((clause as any).value ?? "").trim();
+        if (isDoesNotSupportReverse(raw)) {
+          throw new IrreversibleOrderError(
+            `Order ${JSON.stringify(raw)} cannot be reversed automatically`,
+          );
+        }
+        const flipped = raw.replace(/\s+ASC$/i, " DESC").replace(/\s+DESC$/i, " ASC");
+        return new Nodes.SqlLiteral(flipped !== raw ? flipped : `${raw} DESC`);
+      }
       // Mirrors Rails reverse_sql_order: flip Arel::Nodes::Ordering subclasses
       // (Ascending/Descending/NullsFirst/NullsLast) via reverse(), and fall back
       // to desc() for bare expressions (Attribute, NodeExpression).

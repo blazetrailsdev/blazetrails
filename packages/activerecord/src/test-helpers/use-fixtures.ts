@@ -120,7 +120,10 @@ export function useFixtures(
   // active, falling back to this per-test seed otherwise. Deferred to a follow-up
   // PR to keep this one under the LOC ceiling. See docs/activerecord/fixtures-adoption-plan.md.
   beforeEach(async () => {
-    if (!fixtures) fixtures = await resolveFixtureNames(fixturesOrNames as readonly FixtureName[]);
+    // Resolve from the `keys` snapshot, not `fixturesOrNames`: a caller can mutate
+    // the (mutable-assignable) array after this call, which would otherwise seed a
+    // different set than the accessors built below from `keys`.
+    if (!fixtures) fixtures = await resolveFixtureNames(keys as readonly FixtureName[]);
     const adapter = getAdapter();
     for (const [key, [ModelClass, data]] of Object.entries(fixtures)) {
       const result = await defineFixtures(adapter, ModelClass, data);

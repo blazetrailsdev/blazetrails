@@ -1286,6 +1286,8 @@ describe("WhereTest", () => {
     class PnwPriceEstimate extends Base {
       static {
         this._tableName = "pnw_price_estimates";
+        this.attribute("estimate_of_type", "string");
+        this.attribute("estimate_of_id", "integer");
         this.attribute("thing_type", "string");
         this.attribute("thing_id", "integer");
       }
@@ -1293,9 +1295,10 @@ describe("WhereTest", () => {
     registerModel("PnwPost", PnwPost);
     registerModel("PnwPriceEstimate", PnwPriceEstimate);
     Associations.belongsTo.call(PnwPriceEstimate, "thing", { polymorphic: true });
+    // Mirrors Rails `Treasure has_many :price_estimates, as: :estimate_of`.
     Associations.hasMany.call(PnwTreasure, "price_estimates", {
       className: "PnwPriceEstimate",
-      foreignKey: "thing_id",
+      as: "estimateOf",
     });
 
     const thing = new PnwPost();
@@ -1328,9 +1331,10 @@ describe("WhereTest", () => {
     registerModel("PsnTreasure", PsnTreasure);
     registerModel("PsnPriceEstimate", PsnPriceEstimate);
     Associations.belongsTo.call(PsnPriceEstimate, "estimateOf", { polymorphic: true });
+    // Mirrors Rails `Treasure has_many :price_estimates, as: :estimate_of`.
     Associations.hasMany.call(PsnTreasure, "price_estimates", {
       className: "PsnPriceEstimate",
-      foreignKey: "estimate_of_id",
+      as: "estimateOf",
     });
 
     const treasure = new PsnHiddenTreasure();

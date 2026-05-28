@@ -4039,9 +4039,10 @@ describe("RelationTest", () => {
   it("reorder replaces existing order", () => {
     const rel = Product.all().order("name").reorder({ price: "desc" });
     const sql = rel.toSql();
-    // Should have price DESC, not name ASC
-    expect(sql).toContain('"price" DESC');
-    expect(sql).not.toContain('"name" ASC');
+    // reorder replaces "name" with "price DESC". Quote char varies by adapter
+    // (" on SQLite/PG, ` on MySQL/MariaDB), so match quote-agnostically.
+    expect(sql).toMatch(/price.{0,2}\s+DESC/i);
+    expect(sql).not.toMatch(/name.{0,2}\s+ASC/i);
   });
 
   // -- reverseOrder --

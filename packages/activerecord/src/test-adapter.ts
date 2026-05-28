@@ -24,7 +24,7 @@ import {
 import type { SchemaCache } from "./connection-adapters/schema-cache.js";
 import {
   clearAppliedSchemaSignatures,
-  restoreCanonicalSchemaSignatures,
+  restoreCanonicalSchemaSignaturesUnlessAdapter,
 } from "./test-helpers/define-schema.js";
 import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import { SidecarFixtures } from "./test-helpers/sidecar-fixtures.js";
@@ -165,8 +165,8 @@ export interface TestDatabaseAdapter extends DatabaseAdapter {
 
 /**
  * Create a fresh adapter for testing. Phase 7 removed the lazy auto-schema
- * machinery, so this is now a thin factory — every returned instance wraps
- * the same shared inner adapter.
+ * machinery; E5 routes all adapters through the shared connection pool.
+ * Every returned instance is a thin wrapper around a pool-leased connection.
  */
 export function createTestAdapter(): TestDatabaseAdapter {
   return _factory();
@@ -272,7 +272,7 @@ export async function resetTestAdapterState(): Promise<void> {
   // also need the global signature cache cleared.
   _pool.connections.forEach((a) => a.schemaCache?.clear());
   clearAppliedSchemaSignatures();
-  restoreCanonicalSchemaSignatures();
+  restoreCanonicalSchemaSignaturesUnlessAdapter(_pool.leaseConnection() as DatabaseAdapter);
   clearDdlTrackers();
   Base._modelsByName.clear();
 }

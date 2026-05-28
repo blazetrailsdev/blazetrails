@@ -8,6 +8,7 @@ import {
   type TestDatabaseAdapter,
 } from "../test-adapter.js";
 import { SQLite3Adapter } from "../connection-adapters/sqlite3-adapter.js";
+import { NullTransaction } from "../connection-adapters/abstract/transaction.js";
 import { defineSchema } from "./define-schema.js";
 import { withTransactionalFixtures } from "./with-transactional-fixtures.js";
 
@@ -356,5 +357,6 @@ describe("concurrency isolation: two concurrent transaction chains stay independ
     // is open — NullTransaction is the Rails-correct sentinel for "no transaction".
     expect(adapter.openTransactions).toBe(0);
     expect(adapter.inTransaction).toBe(false);
+    expect(adapter.currentTransaction()).toBeInstanceOf(NullTransaction);
   });
 });

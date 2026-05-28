@@ -2522,8 +2522,8 @@ describe("SchemaAdapter TM delegation", () => {
     );
 
     // After all transactions complete, the adapter's chain-aware view sees
-    // no current transaction (storage cleared).
-    expect((testAdapter as any).currentTransaction?.()).toBeFalsy();
+    // no current transaction — NullTransaction is the Rails-correct sentinel.
+    expect((testAdapter as any).currentTransaction?.()).toBeInstanceOf(NullTransaction);
     // Mutex must have fully serialized — no two bodies ever overlapped.
     expect(maxActive).toBe(1);
     // Every chain must have seen a frame (no nulls/undefined) AND each frame

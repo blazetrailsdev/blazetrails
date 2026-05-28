@@ -214,7 +214,7 @@ export class ConnectionPoolConfiguration {
   }
 
   async enableQueryCache<T>(fn: () => T | Promise<T>): Promise<T> {
-    if (this._queryCacheMaxSize === null) return fn() as Promise<T>;
+    if (this._queryCacheMaxSize === null) return await fn();
     const qc = this.queryCache;
     const oldEnabled = qc.enabled;
     const oldDirties = qc.dirties;

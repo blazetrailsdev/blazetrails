@@ -635,8 +635,7 @@ export class ConnectionPool implements ReapablePool {
       return pinned;
     }
     const conn = this._acquireConnection();
-    this._cacheConfig.checkoutAndVerify(conn as unknown as QueryCacheHost);
-    return conn;
+    return checkoutAndVerify(this, conn);
   }
 
   async checkoutAsync(timeout?: number): Promise<DatabaseAdapter> {
@@ -653,8 +652,7 @@ export class ConnectionPool implements ReapablePool {
     }
     const conn = this._tryAcquire();
     if (conn) {
-      this._cacheConfig.checkoutAndVerify(conn as unknown as QueryCacheHost);
-      return conn;
+      return checkoutAndVerify(this, conn);
     }
 
     const t = timeout ?? this.checkoutTimeout;
@@ -675,8 +673,7 @@ export class ConnectionPool implements ReapablePool {
       throw new ConnectionNotEstablished("Connection pool has been discarded");
     }
     this._checkedOut.add(c);
-    this._cacheConfig.checkoutAndVerify(c as unknown as QueryCacheHost);
-    return c;
+    return checkoutAndVerify(this, c);
   }
 
   private _acquireConnection(): DatabaseAdapter {

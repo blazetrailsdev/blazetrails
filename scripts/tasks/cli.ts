@@ -1,4 +1,4 @@
-#!/usr/bin/env -S node --experimental-strip-types
+#!/usr/bin/env tsx
 // trails-side CLI for the sibling blazetrailsdev/rfcs repo.
 //
 // All state lives in $RFCS_DIR (default ~/github/blazetrailsdev/rfcs).
@@ -234,7 +234,7 @@ export function editFrontmatter(file: string, edits: Record<string, string>): vo
 // non-fast-forward. `mutator` is run inside each attempt so a rebased
 // index file is re-read between tries. Throws (and asks caller to
 // retry) only after two consecutive lost races.
-function commitAndPush(opts: {
+export function commitAndPush(opts: {
   message: string;
   fileToStage: string;
   mutator: () => void;
@@ -276,8 +276,8 @@ function claim(id: string, assignee: string): void {
       const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
       editFrontmatter(file, {
         status: "claimed",
-        claim: `"${now}"`,
-        assignee: `"${assignee}"`,
+        claim: JSON.stringify(now),
+        assignee: JSON.stringify(assignee),
       });
     },
   });
@@ -355,6 +355,23 @@ function statusCounts(index: Index): void {
 }
 
 // ──────────────────── argv ────────────────────
+
+// Reject `--foo` for a value-flag where no value followed (the parser
+// fell back to `true`). `Number(true)` is `1`, which silently passes
+// `if (!pr)` checks; coerce-and-validate at the call site instead.
+export function numberFlag(flags: Record<string, string | boolean>, name: string): number | null {
+  const v = flags[name];
+  if (typeof v !== "string" || !/^\d+$/.test(v)) return null;
+  return Number(v);
+}
+
+export function stringFlag(
+  flags: Record<string, string | boolean>,
+  name: string,
+): string | undefined {
+  const v = flags[name];
+  return typeof v === "string" ? v : undefined;
+}
 
 // Known boolean flags. Everything else with a non-`--` following token
 // is treated as `--key value`. Boolean flags never consume the next
@@ -435,27 +452,28 @@ function main(): void {
       break;
     case "claim": {
       const id = pos[0];
+      const assignee = stringFlag(flags, "assignee");
       if (!id) usage();
-      claim(id, (flags.assignee as string) ?? id);
+      claim(id, assignee ?? id);
       break;
     }
     case "in-progress": {
       const id = pos[0];
-      const pr = Number(flags.pr);
-      if (!id || !pr) usage();
+      const pr = numberFlag(flags, "pr");
+      if (!id || pr === null) usage();
       inProgress(id, pr);
       break;
     }
     case "done": {
       const id = pos[0];
-      const pr = Number(flags.pr);
-      if (!id || !pr) usage();
+      const pr = numberFlag(flags, "pr");
+      if (!id || pr === null) usage();
       done(id, pr);
       break;
     }
     case "block": {
       const id = pos[0];
-      const reason = (flags.reason as string) ?? pos[1];
+      const reason = stringFlag(flags, "reason") ?? pos[1];
       if (!id || !reason) usage();
       block(id, reason);
       break;

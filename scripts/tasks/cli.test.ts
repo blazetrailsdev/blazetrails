@@ -1,15 +1,34 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// commitAndPush() shells out to git via execFileSync. Mock the whole
+// child_process module so the retry/success/failure paths are testable
+// without a real git repo. Pure tests in this file don't call
+// execFileSync, so the mock is inert for them. Use vi.hoisted so the
+// mock fn is available inside vi.mock's hoisted factory.
+const { execFileSyncMock } = vi.hoisted(() => ({
+  execFileSyncMock: vi.fn<(file: string, args: string[]) => string>(),
+}));
+vi.mock("node:child_process", () => ({ execFileSync: execFileSyncMock }));
+
+afterEach(() => {
+  execFileSyncMock.mockReset();
+  vi.restoreAllMocks();
+});
+
 import {
   bestBundle,
+  commitAndPush,
   editFrontmatter,
   Index,
   listFiltered,
   nextBundle,
+  numberFlag,
   parseFlags,
   ready,
+  stringFlag,
   StoryEntry,
 } from "./cli.ts";
 
@@ -154,14 +173,13 @@ describe("editFrontmatter", () => {
 
   it("refuses to edit a list-valued key", () => {
     const file = writeStory(`---\ndeps:\n  - a\n  - b\nstatus: ready\n---\nbody\n`);
-    const exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+    vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
       throw new Error(`exit ${code}`);
     }) as never);
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => editFrontmatter(file, { deps: "[a, b, c]" })).toThrow(/exit 1/);
     expect(errSpy.mock.calls[0]?.[0]).toMatch(/refusing to edit list-valued/);
-    exit.mockRestore();
-    errSpy.mockRestore();
+    // afterEach restores all mocks; no manual restore needed.
   });
 });
 
@@ -175,5 +193,110 @@ describe("parseFlags", () => {
   it("treats the next token as boolean when it starts with --", () => {
     const { flags } = parseFlags(["--json", "--rfc", "0001-x"]);
     expect(flags).toEqual({ json: true, rfc: "0001-x" });
+  });
+});
+
+describe("numberFlag / stringFlag (value-flag validation)", () => {
+  it("numberFlag returns null when value-flag was parsed as bare boolean", () => {
+    // `--pr` with no following value becomes `pr: true`; Number(true) === 1.
+    // numberFlag must reject this so callers don't silently dispatch as PR #1.
+    expect(numberFlag({ pr: true }, "pr")).toBeNull();
+    expect(numberFlag({}, "pr")).toBeNull();
+    expect(numberFlag({ pr: "abc" }, "pr")).toBeNull();
+    expect(numberFlag({ pr: "2552" }, "pr")).toBe(2552);
+  });
+
+  it("stringFlag returns undefined for bare boolean or missing", () => {
+    expect(stringFlag({ reason: true }, "reason")).toBeUndefined();
+    expect(stringFlag({}, "reason")).toBeUndefined();
+    expect(stringFlag({ reason: "broken" }, "reason")).toBe("broken");
+  });
+});
+
+describe("commitAndPush (git mutation flow)", () => {
+  function setup() {
+    const exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as never);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const seen: string[] = [];
+    execFileSyncMock.mockImplementation((_file, args) => {
+      const sub = (args ?? []).find((a) => !a.startsWith("-") && a !== "git") ?? "";
+      // Use the first non-flag token after `-C <dir>` to label the call.
+      const label = args && args.length >= 3 ? args[2] : sub;
+      seen.push(label);
+      return "" as never;
+    });
+    return { exit, seen };
+  }
+
+  it("happy path: pull → add → commit → push, no retry", () => {
+    const { seen } = setup();
+    let mutatorCalls = 0;
+    commitAndPush({
+      message: "test",
+      fileToStage: "/some/file.md",
+      mutator: () => mutatorCalls++,
+      raceMessage: "shouldn't be reached",
+      raceExitCode: 99,
+    });
+    expect(mutatorCalls).toBe(1);
+    expect(seen).toEqual(["pull", "add", "commit", "push"]);
+  });
+
+  it("retries once on push failure, succeeds on second attempt", () => {
+    const { seen } = setup();
+    let push = 0;
+    execFileSyncMock.mockImplementation((_file, args) => {
+      const label = args && args.length >= 3 ? args[2] : "";
+      seen.push(label);
+      if (label === "push" && push++ === 0) throw new Error("non-fast-forward");
+      return "" as never;
+    });
+    let mutatorCalls = 0;
+    commitAndPush({
+      message: "test",
+      fileToStage: "/some/file.md",
+      mutator: () => mutatorCalls++,
+      raceMessage: "no",
+      raceExitCode: 99,
+    });
+    expect(mutatorCalls).toBe(2);
+    // First attempt: pull, add, commit, push(throws), reset.
+    // Second attempt: pull, add, commit, push(ok).
+    expect(seen).toEqual([
+      "pull",
+      "add",
+      "commit",
+      "push",
+      "reset",
+      "pull",
+      "add",
+      "commit",
+      "push",
+    ]);
+  });
+
+  it("exits with raceExitCode after two consecutive push failures", () => {
+    const { seen, exit } = setup();
+    execFileSyncMock.mockImplementation((_file, args) => {
+      const label = args && args.length >= 3 ? args[2] : "";
+      seen.push(label);
+      if (label === "push") throw new Error("non-fast-forward");
+      return "" as never;
+    });
+    expect(() =>
+      commitAndPush({
+        message: "test",
+        fileToStage: "/some/file.md",
+        mutator: () => {},
+        raceMessage: "lost race",
+        raceExitCode: 3,
+      }),
+    ).toThrow(/exit 3/);
+    expect(exit).toHaveBeenCalledWith(3);
+    // Two attempts, each: pull, add, commit, push(throws), reset.
+    expect(seen.filter((l) => l === "push").length).toBe(2);
+    expect(seen.filter((l) => l === "reset").length).toBe(2);
   });
 });

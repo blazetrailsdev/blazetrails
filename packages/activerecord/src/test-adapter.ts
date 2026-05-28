@@ -362,7 +362,7 @@ class TestAdapterFixtures implements DatabaseAdapter {
   }
 
   get pool(): unknown {
-    return this.inner?.pool ?? this.inner;
+    return this.inner;
   }
 
   /** Expose the underlying adapter for tests that need adapter-specific behavior (e.g. columnTypes). */

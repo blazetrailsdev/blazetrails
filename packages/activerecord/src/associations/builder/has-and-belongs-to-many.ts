@@ -158,21 +158,6 @@ export class HasAndBelongsToMany {
       model._associations = [...(model._associations ?? [])];
     }
 
-    // Array-side analog of Rails' `Reflection.add_reflection`
-    // (reflection.rb:23-28), which replaces rather than layers:
-    //   ar._reflections = ar._reflections.except(name).merge!(name => reflection)
-    // `_reflections` is a hash keyed by name, so `except(name)` drops any prior
-    // entry before re-adding. Our `addReflection` mirrors that for the
-    // reflection hash, but the parallel `_associations` array (trails-specific
-    // infra with no Rails counterpart) would otherwise drift by appending a
-    // duplicate HABTM entry plus a duplicate middle `has_many` — and adding one
-    // record would then insert two join rows. Apply the same `except(name)`
-    // here for the association name and its derived middle name.
-    const priorMiddleName = [pluralize(model.name.toLowerCase()), name].sort().join("_");
-    model._associations = model._associations.filter(
-      (a: { name: string }) => a.name !== name && a.name !== priorMiddleName,
-    );
-
     const targetClassName = (options.className as string) ?? camelize(singularize(name));
     const joinTableName =
       (options.joinTable as string) ??

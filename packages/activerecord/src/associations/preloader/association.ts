@@ -228,10 +228,28 @@ export class Association {
   private _associateRecordsToOwner(owner: Base, records: Base[]): void {
     if (this.isLoaded(owner)) return;
 
+    const isCollection = (this.reflection as any).isCollection?.() ?? false;
+    let value: Base | Base[] | null;
+    try {
+      const association = (owner as any).association(this.reflection.name);
+      if (isCollection) {
+        const currentTarget: Base[] = Array.isArray(association.target) ? association.target : [];
+        const notPersisted = currentTarget.filter(
+          (r) => (r as any).isNewRecord?.() ?? !(r as any).isPersisted?.(),
+        );
+        value = [...records, ...notPersisted];
+        association.setTarget(value);
+      } else {
+        value = records[0] ?? null;
+        association.setTarget(value);
+      }
+    } catch {
+      value = isCollection ? records : (records[0] ?? null);
+    }
+
     if (!(owner as any)._preloadedAssociations) {
       (owner as any)._preloadedAssociations = new Map();
     }
-    const value = (this.reflection as any).isCollection?.() ? records : (records[0] ?? null);
     (owner as any)._preloadedAssociations.set(this.reflection.name, value);
 
     let inverseName: string | undefined;

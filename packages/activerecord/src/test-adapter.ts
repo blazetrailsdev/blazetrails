@@ -123,7 +123,11 @@ function _establishPooledTestPool(): Promise<
     } else {
       adapterName = "sqlite3";
       const database = _pooledSqliteDatabase();
-      configuration = { adapter: adapterName, database };
+      // pool: 1 — drivers compiled with SQLITE_OMIT_SHARED_CACHE (better-sqlite3,
+      // expo-sqlite) don't honour cache=shared, so each connection would be a
+      // private in-memory DB. A single-connection pool is the correct Rails-shape
+      // equivalent for those drivers.
+      configuration = { adapter: adapterName, database, pool: 1 };
       const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
       adapterFactory = () => new SQLite3Adapter(database) as unknown as DatabaseAdapter;
     }

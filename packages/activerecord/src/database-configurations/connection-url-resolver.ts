@@ -10,37 +10,9 @@
  *   //      database: "foo_test", username: "foo", password: "bar", pool: "5" }
  */
 import type { DatabaseConfigOptions } from "./database-config.js";
-
-// Scheme-to-adapter mapping (Rails' ActiveRecord.protocol_adapters).
-// E.g., "postgres" → "postgresql". This is the default; it can be replaced or
-// extended at runtime via ConnectionUrlResolver.protocolAdapterMapping for
-// custom protocols registered by external adapters.
-const DEFAULT_PROTOCOL_ADAPTERS: Record<string, string> = {
-  postgres: "postgresql",
-  postgresql: "postgresql",
-  mysql: "mysql2",
-  mysql2: "mysql2",
-  sqlite: "sqlite3",
-  sqlite3: "sqlite3",
-};
-
-let protocolAdapterMapping: Record<string, string> = { ...DEFAULT_PROTOCOL_ADAPTERS };
+import { protocolAdapters } from "../ar-config.js";
 
 export class ConnectionUrlResolver {
-  /**
-   * Mirrors: ActiveRecord.protocol_adapters (exposed here as
-   * ConnectionUrlResolver.protocol_adapter_mapping). Returns the live mapping
-   * object — mutating it in place adds/updates a single protocol, matching
-   * Rails' `ActiveRecord.protocol_adapters.custom = "..."`.
-   */
-  static get protocolAdapterMapping(): Record<string, string> {
-    return protocolAdapterMapping;
-  }
-
-  static set protocolAdapterMapping(mapping: Record<string, string>) {
-    protocolAdapterMapping = mapping;
-  }
-
   private readonly _adapter: string | null;
   private readonly _parsed: URL | null;
   private readonly _opaque: string | null;
@@ -67,7 +39,7 @@ export class ConnectionUrlResolver {
     const hasAuthority = !!schemeMatch[2];
     const rest = schemeMatch[3];
 
-    this._adapter = protocolAdapterMapping[scheme] ?? scheme;
+    this._adapter = protocolAdapters[scheme] ?? scheme;
 
     if (hasAuthority) {
       // Standard URL: scheme://user:pass@host:port/path?query

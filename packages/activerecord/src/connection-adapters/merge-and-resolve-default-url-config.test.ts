@@ -7,7 +7,7 @@ import {
   InvalidConfigurationError,
   type RawConfigurations,
 } from "../database-configurations.js";
-import { ConnectionUrlResolver } from "../database-configurations/connection-url-resolver.js";
+import { protocolAdapters, setProtocolAdapters } from "../ar-config.js";
 
 const DEFAULT_ENV = "default_env";
 
@@ -22,7 +22,7 @@ beforeEach(() => {
   savedRailsEnv = process.env["RAILS_ENV"];
   savedRackEnv = process.env["RACK_ENV"];
   savedDefaultEnv = DatabaseConfigurations.defaultEnv;
-  savedProtocolMapping = { ...ConnectionUrlResolver.protocolAdapterMapping };
+  savedProtocolMapping = { ...protocolAdapters };
   delete process.env["DATABASE_URL"];
   delete process.env["RAILS_ENV"];
   delete process.env["RACK_ENV"];
@@ -37,7 +37,7 @@ afterEach(() => {
   if (savedRackEnv !== undefined) process.env["RACK_ENV"] = savedRackEnv;
   else delete process.env["RACK_ENV"];
   DatabaseConfigurations.defaultEnv = savedDefaultEnv;
-  ConnectionUrlResolver.protocolAdapterMapping = savedProtocolMapping;
+  setProtocolAdapters(savedProtocolMapping);
 });
 
 function resolveConfig(
@@ -403,7 +403,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   });
 
   it("protocol adapter mapping is used and can be updated", () => {
-    ConnectionUrlResolver.protocolAdapterMapping.potato = "postgresql";
+    protocolAdapters.potato = "postgresql";
     process.env["DATABASE_URL"] = "potato://localhost/exampledb";
     DatabaseConfigurations.defaultEnv = "production";
     const actual = resolveDbConfig("production", {});
@@ -415,7 +415,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   });
 
   it("protocol adapter mapping translates underscores to dashes", () => {
-    ConnectionUrlResolver.protocolAdapterMapping.custom_protocol = "postgresql";
+    protocolAdapters.custom_protocol = "postgresql";
     process.env["DATABASE_URL"] = "custom-protocol://localhost/exampledb";
     DatabaseConfigurations.defaultEnv = "production";
     const actual = resolveDbConfig("production", {});
@@ -427,7 +427,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   });
 
   it("protocol adapter mapping handles sqlite3 file urls", () => {
-    ConnectionUrlResolver.protocolAdapterMapping.custom_protocol = "sqlite3";
+    protocolAdapters.custom_protocol = "sqlite3";
     process.env["DATABASE_URL"] = "custom-protocol:/path/to/db.sqlite3";
     DatabaseConfigurations.defaultEnv = "production";
     const actual = resolveDbConfig("production", {});

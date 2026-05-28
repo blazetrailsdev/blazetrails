@@ -1110,8 +1110,12 @@ function reverseOrderBang(this: QueryMethodsHost): any {
             `Order ${JSON.stringify(raw)} cannot be reversed automatically`,
           );
         }
-        const flipped = raw.replace(/\s+ASC$/i, " DESC").replace(/\s+DESC$/i, " ASC");
-        return new Nodes.SqlLiteral(flipped !== raw ? flipped : `${raw} DESC`);
+        // Mutually exclusive, mirroring Rails `gsub(asc) || gsub(desc) || (s << " DESC")`.
+        let flipped: string;
+        if (/\s+ASC$/i.test(raw)) flipped = raw.replace(/\s+ASC$/i, " DESC");
+        else if (/\s+DESC$/i.test(raw)) flipped = raw.replace(/\s+DESC$/i, " ASC");
+        else flipped = `${raw} DESC`;
+        return new Nodes.SqlLiteral(flipped);
       }
       // Mirrors Rails reverse_sql_order: flip Arel::Nodes::Ordering subclasses
       // (Ascending/Descending/NullsFirst/NullsLast) via reverse(), and fall back

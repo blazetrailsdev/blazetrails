@@ -4797,8 +4797,9 @@ describe("RelationTest", () => {
     await Post.create({ title: "b" });
     // Use Arel SQL node to order, then reverse — verifies the Arel node path
     const sql = Post.order(arelSql("title ASC")).reverseOrder().toSql();
-    // Reversing a plain SQL string reverses "ASC" → "DESC"
+    // Reversing a plain SQL string flips "ASC" → "DESC" (and only once).
     expect(sql).toContain("DESC");
+    expect(sql).not.toContain("ASC");
   });
 
   it("reverse order with function", () => {

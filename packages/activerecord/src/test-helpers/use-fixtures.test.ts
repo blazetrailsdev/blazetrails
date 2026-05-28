@@ -2,9 +2,15 @@ import { describe, it, expect, expectTypeOf, vi, beforeAll } from "vitest";
 import { useFixtures } from "./use-fixtures.js";
 import { FixtureSet } from "./fixture-set.js";
 import { Base } from "../base.js";
+import "../relation.js"; // registers the Relation ctor so Model.findBy/.all/.count work
 import { fixtureId } from "./define-fixtures.js";
 import { defineSchema } from "./define-schema.js";
 import { createTestAdapter } from "../test-adapter.js";
+import { setupHandlerSuite } from "./setup-handler-suite.js";
+import { useHandlerTransactionalFixtures } from "./use-handler-transactional-fixtures.js";
+import { TEST_SCHEMA } from "./test-schema.js";
+import { Author } from "./models/author.js";
+import { Post } from "./models/post.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
 const TYPE_CONTRACT_SCHEMA = {
@@ -136,6 +142,69 @@ describe("useFixtures type contract", () => {
   it("label arg is narrowed to declared fixture names only", () => {
     expectTypeOf<Parameters<typeof topics>[0]>().toEqualTypeOf<"first" | "second">();
     expectTypeOf<Parameters<typeof posts>[0]>().toEqualTypeOf<"welcome">();
+  });
+});
+
+// --- useFixtures by registry name (string[] overload, real seeding) ---
+
+describe("useFixtures by registry name", () => {
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema(TEST_SCHEMA);
+  });
+
+  // author_addresses listed first: authors.author_address_id ref() resolves to its
+  // declared ids, so the target set must load before its dependent.
+  const { authors, posts } = useFixtures(
+    ["authorAddresses", "authors", "posts"],
+    () => Base.adapter,
+  );
+
+  it("loads authors by label with the expected attributes", async () => {
+    const david = authors("david");
+    expect(david.id).toBe(1);
+    const [row] = await Base.adapter.execute(
+      `SELECT name FROM ${Base.adapter.quoteTableName(Author.tableName)} WHERE id = 1`,
+    );
+    expect((row as { name: string }).name).toBe("David");
+  });
+
+  it("all() returns every seeded author", () => {
+    expect(authors.all().length).toBe(3);
+  });
+
+  it("resolves cross-fixture ref() to the target fixture's declared id", async () => {
+    // authors.david.author_address_id = ref("author_addresses", "david_address"),
+    // and author_addresses.david_address declares id: 1. Read the persisted FK
+    // straight from the row so the assertion doesn't depend on a reflected getter.
+    const [a] = await Base.adapter.execute(
+      `SELECT author_address_id FROM ${Base.adapter.quoteTableName(Author.tableName)} WHERE id = 1`,
+    );
+    expect((a as { author_address_id: number }).author_address_id).toBe(1);
+    // posts.welcome.author_id = ref("authors", "david"), authors.david declares id: 1.
+    const [p] = await Base.adapter.execute(
+      `SELECT author_id FROM ${Base.adapter.quoteTableName(Post.tableName)} WHERE id = 1`,
+    );
+    expect((p as { author_id: number }).author_id).toBe(1);
+  });
+
+  it("isolation part 1 — a delete lands within the test", async () => {
+    expect(await Author.count()).toBe(3);
+    await Base.adapter.executeMutation(
+      `DELETE FROM ${Base.adapter.quoteTableName(Author.tableName)}`,
+    );
+    expect(await Author.count()).toBe(0);
+  });
+
+  it("isolation part 2 — cleanup reseeded the fixture rows for the next test", async () => {
+    expect(await Author.count()).toBe(3);
+  });
+
+  it("label arg is narrowed to declared fixture names only", () => {
+    expectTypeOf<Parameters<typeof authors>[0]>().toEqualTypeOf<"david" | "mary" | "bob">();
+    expectTypeOf<ReturnType<typeof authors>>().toEqualTypeOf<Author>();
+    expectTypeOf<ReturnType<typeof posts.all>>().toEqualTypeOf<Post[]>();
   });
 });
 

@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, afterEach, afterAll } from "vitest";
 import type { DatabaseAdapter } from "../adapter.js";
-import { resetTestAdapterState, type TestDatabaseAdapter } from "../test-adapter.js";
+import { resetTestAdapterState } from "../test-adapter.js";
 import type { ConnectionPool } from "../connection-adapters/abstract/connection-pool.js";
 import { popSkipGlobalReset, pushSkipGlobalReset } from "./skip-global-reset.js";
 import { getUseTransactionalTests } from "./use-transactional-tests.js";
@@ -18,16 +18,17 @@ interface TxnHost {
 }
 
 /**
- * The helper accepts either the {@link TestDatabaseAdapter} produced by
- * {@link createTestAdapter} or a raw `DatabaseAdapter` constructed directly
- * by a test file (`new PostgreSQLAdapter(...)`, `new SQLite3Adapter(...)`,
- * etc.) which exposes `transactionManager` on itself via `AbstractAdapter`.
- * Adapter-cluster tests under `adapters/**` predominantly take the raw path.
- * Not every `DatabaseAdapter` shape in the repo carries `transactionManager`
- * (e.g. the `QueryCacheAdapter` wrapper in `query-cache.ts`), so the union
- * narrows to adapters that do — type-checking matches runtime behavior.
+ * Adapters accepted by {@link withTransactionalFixtures}: any
+ * {@link DatabaseAdapter} that also exposes `transactionManager` via
+ * `AbstractAdapter`. Adapter-cluster tests (`adapters/**`) pass a raw
+ * adapter constructed directly; most other test files pass the adapter
+ * returned by {@link createTestAdapter} (which satisfies this shape because
+ * pool-leased connections are `AbstractAdapter` instances). Not every
+ * `DatabaseAdapter` in the repo carries `transactionManager` (e.g.
+ * `QueryCacheAdapter`), so the type narrows to those that do — matching the
+ * runtime guard in `tm()`.
  */
-export type TransactionalFixturesAdapter = TestDatabaseAdapter | (DatabaseAdapter & TxnHost);
+export type TransactionalFixturesAdapter = DatabaseAdapter & TxnHost;
 
 function tm(adapter: TransactionalFixturesAdapter): TxnHost["transactionManager"] {
   const host = adapter as unknown as Partial<TxnHost>;

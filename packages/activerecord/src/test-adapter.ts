@@ -139,21 +139,22 @@ const _pool = await _establishPooledTestPool();
 // rather than shared across all callers that hit the same pool-leased object
 // in context 0. All property accesses delegate transparently to the
 // underlying adapter; only the object identity differs.
-const _factory = (): DatabaseAdapter => new Proxy(_pool.leaseConnection() as DatabaseAdapter, {});
+const _factory = (): SidecarAdapter => new Proxy(_pool.leaseConnection() as SidecarAdapter, {});
 
 /**
  * Type alias for the adapter returned by {@link createTestAdapter}. Retained
- * for backward compatibility with test-file annotations; resolves to the
- * plain {@link DatabaseAdapter} type — F5 deleted the wrapping class.
+ * for backward compatibility with test-file annotations. Resolves to
+ * {@link SidecarAdapter} — a pool-leased {@link DatabaseAdapter} that
+ * exposes `transactionManager` via `AbstractAdapter`.
  */
-export type TestDatabaseAdapter = DatabaseAdapter;
+export type TestDatabaseAdapter = SidecarAdapter;
 
 /**
  * Create a fresh adapter for testing. Phase 7 removed the lazy auto-schema
  * machinery; E5 routes all adapters through the shared connection pool.
  * Every returned instance is a pool-leased connection.
  */
-export function createTestAdapter(): DatabaseAdapter {
+export function createTestAdapter(): SidecarAdapter {
   return _factory();
 }
 

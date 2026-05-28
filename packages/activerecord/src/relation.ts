@@ -243,7 +243,7 @@ function hasTopLevelComma(s: string): boolean {
 }
 
 function resolveColumnNameMatcher(adapter: any): RegExp {
-  // Walk adapter prototype chain to find a static columnNameMatcher on the concrete adapter class.
+  // Walk the .inner chain (for wrappers like QueryCacheAdapter) to find a static columnNameMatcher on the concrete adapter class.
   let a = adapter;
   while (a) {
     const matcher = (a.constructor as any)?.columnNameMatcher?.();

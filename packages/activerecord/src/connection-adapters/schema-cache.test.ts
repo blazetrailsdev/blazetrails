@@ -615,13 +615,31 @@ describe("DDL cache-invalidation safety-net", () => {
   });
 
   // BLOCKED: F2 — needs inline schemaCache.clearDataSourceCacheBang at
-  // abstract/schema-statements.ts SchemaStatements#renameTable
-  it.skip("renameTable clears schema cache entry for old name", async () => {
+  // abstract/schema-statements.ts SchemaStatements#renameTable (both old AND new name,
+  // matching Rails PG/MySQL/SQLite adapter overrides which clear both)
+  it.skip("renameTable clears schema cache entry for both old and new name", async () => {
     const cache = new SchemaCache();
     cache.setColumns("posts", [makeColumn("id", "integer")]);
+    // Pre-seed new name too (could be stale from a previous run)
+    cache.setColumns("articles", [makeColumn("id", "integer")]);
 
     const ss = new SchemaStatements(makeMockAdapter(cache) as any);
     await ss.renameTable("posts", "articles");
+
+    expect(cache.isCached("posts")).toBe(false);
+    expect(cache.isCached("articles")).toBe(false);
+  });
+
+  // BLOCKED: F2 — needs inline schemaCache.clearDataSourceCacheBang at
+  // abstract/schema-statements.ts SchemaStatements#createTable (non-force branch,
+  // matching Rails abstract/schema_statements.rb:306)
+  it.skip("createTable clears schema cache entry (non-force branch)", async () => {
+    const cache = new SchemaCache();
+    // Stale entry from a prior create (e.g. after resetTestAdapterState dropped the table)
+    cache.setColumns("posts", [makeColumn("id", "integer")]);
+
+    const ss = new SchemaStatements(makeMockAdapter(cache) as any);
+    await ss.createTable("posts");
 
     expect(cache.isCached("posts")).toBe(false);
   });

@@ -318,7 +318,9 @@ describe("RelationTest", () => {
     it("having with hash form", () => {
       const sql = Post.all().group("category").having({ count: 5 }).toSql();
       expect(sql).toContain("HAVING");
-      expect(sql).toContain(`"count" = 5`);
+      // Identifier quoting is adapter-specific ("count" vs `count`) and the
+      // column may be table-qualified; assert the predicate regardless.
+      expect(sql).toMatch(/count[`"]? = 5/);
     });
   });
 

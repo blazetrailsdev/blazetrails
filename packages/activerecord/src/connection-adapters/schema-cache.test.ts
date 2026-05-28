@@ -736,6 +736,7 @@ describe("SchemaCache DDL invalidation", () => {
   });
 
   it("renameTable clears both old and new names before ALTER TABLE RENAME", async () => {
+    warmCache("stuff"); // simulate stale cache for the destination name
     await adapter.renameTable("things", "stuff");
     expect(adapter.schemaCache.isCached("things")).toBe(false);
     expect(adapter.schemaCache.isCached("stuff")).toBe(false);

@@ -1,18 +1,24 @@
 # Fixtures-adoption inventory
 
-> **Generated** by `pnpm fixtures:adoption:inventory` (`scripts/fixtures-inventory/inventory.ts`). Do not hand-edit — re-run the script. Static classification; rough by design (see Phase A in `fixtures-adoption-plan.md`).
+> **Generated** by `pnpm fixtures:adoption:inventory` (`scripts/fixtures-inventory/inventory.ts`). Do not hand-edit — re-run the script.
+
+## Scope & method (read before acting on the tiers)
+
+This is a **TS-side structural** classification, not the full Phase A tiering contract. The Phase A plan envisioned deriving tiers from a Rails-counterpart map (`scripts/api-compare/test-mapping.json`), parsed `fixtures :foo` usage on the Rails side, and `fixtures:compare` readiness. Those committed inputs **do not exist in this repo** (`test-mapping.json` is absent; there is no Rails-fixture-usage extractor), so this script cannot consume them. Instead it uses the static heuristics the Phase A task spec actually lists — DB-op presence, inline `class X extends Base`, canonical-model membership, inline-body `defineSchema`, and Phase 6 hazards — applied to comment-stripped source.
+
+Consequence: a Tier 1 here means _structurally mechanical to convert_, not _confirmed to have a fixtures-using Rails counterpart_. Treat the tiers as an **upper bound** on the convertible pool — the true pool is smaller once Rails-counterpart/`fixtures:compare` filtering is applied. That only strengthens the recommendation below (a small pool gets smaller). Classification is rough by design — it drives a planning decision, not automated conversion.
 
 ## Tier counts
 
 | Tier | Meaning                           | Count   | %     |
 | ---- | --------------------------------- | ------- | ----- |
-| 1    | auto-eligible (mechanical)        | 14      | 2.8%  |
+| 1    | auto-eligible (mechanical)        | 9       | 1.8%  |
 | 2    | loader-gap blocker                | 0       | 0.0%  |
-| 3    | Phase 6 hazard / bespoke schema   | 141     | 28.4% |
-| 4    | no DB ops / intentional isolation | 341     | 68.8% |
-| —    | **total**                         | **496** | 100%  |
+| 3    | Phase 6 hazard / bespoke schema   | 146     | 29.4% |
+| 4    | no DB ops / intentional isolation | 342     | 68.8% |
+| —    | **total**                         | **497** | 100%  |
 
-Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B canaries) and **5** are unconverted Tier 1 (the Phase C sweep pool).
+Of the 9 Tier 1 files, **4** already call `useFixtures` (converted in Phase B canaries) and **5** are unconverted Tier 1 (the Phase C sweep pool).
 
 ## Comparison to phase-g-candidates.md (D-1 subset, 2026-05-26)
 
@@ -20,7 +26,7 @@ Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B c
 
 ## Recommendation
 
-**Defer Phase G as a sweep.** Only 5 unconverted Tier 1 files remain and Tier 2 is 0 — the canary-era ~8% yield reality persists post-D-1. The structural prerequisites became universal, but the binding constraint was never D-1: it is that the AR suite is built on bespoke per-describe models (141 Tier 3 files) and no-DB-op unit tests (341 Tier 4 files), neither of which a canonical-fixture loader can serve. Recommend: do NOT spin up a 12–18 PR sweep. Instead convert the small Tier 1 pool opportunistically (bundled into adjacent PRs touching those files) and treat fixtures adoption as a per-file Rails-parity nicety, not a program.
+**Defer Phase G as a sweep.** Only 5 unconverted Tier 1 files remain and Tier 2 is 0 — the canary-era ~8% yield reality persists post-D-1. The structural prerequisites became universal, but the binding constraint was never D-1: it is that the AR suite is built on bespoke per-describe models (146 Tier 3 files) and no-DB-op unit tests (342 Tier 4 files), neither of which a canonical-fixture loader can serve. Recommend: do NOT spin up a 12–18 PR sweep. Instead convert the small Tier 1 pool opportunistically (bundled into adjacent PRs touching those files) and treat fixtures adoption as a per-file Rails-parity nicety, not a program.
 
 ## Per-file classification
 
@@ -93,7 +99,7 @@ Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B c
 | `adapters/postgresql/invertible-migration.test.ts`                     | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `adapters/postgresql/json.test.ts`                                     | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `adapters/postgresql/ltree.test.ts`                                    | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
-| `adapters/postgresql/money.test.ts`                                    | 3    | y      | n           | raw-DDL                                                                                   | bespoke surgery |
+| `adapters/postgresql/money.test.ts`                                    | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `adapters/postgresql/network.test.ts`                                  | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `adapters/postgresql/numbers.test.ts`                                  | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `adapters/postgresql/optimizer-hints.test.ts`                          | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
@@ -165,7 +171,7 @@ Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B c
 | `associations/errors.test.ts`                                          | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `associations/extension.test.ts`                                       | 3    | y      | n           | inline-body-defineSchema; 10-inline-classes                                               | bespoke surgery |
 | `associations/habtm.test.ts`                                           | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
-| `associations/has-and-belongs-to-many-associations.test.ts`            | 3    | y      | n           | inline-body-defineSchema; 20-inline-classes                                               | bespoke surgery |
+| `associations/has-and-belongs-to-many-associations.test.ts`            | 3    | y      | n           | inline-body-defineSchema; 25-inline-classes                                               | bespoke surgery |
 | `associations/has-many-associations.test.ts`                           | 3    | y      | n           | inline-body-defineSchema; dependent:destroy/nullify/restrict; 396-inline-classes          | bespoke surgery |
 | `associations/has-many-through-associations.test.ts`                   | 3    | y      | n           | inline-body-defineSchema; dependent:destroy/nullify/restrict; 482-inline-classes          | bespoke surgery |
 | `associations/has-many-through-disable-joins-associations.test.ts`     | 3    | y      | n           | inline-body-defineSchema; 6-inline-classes                                                | bespoke surgery |
@@ -192,6 +198,7 @@ Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B c
 | `associations/polymorphic-sti-through.test.ts`                         | 3    | y      | n           | inline-body-defineSchema; 5-inline-classes                                                | bespoke surgery |
 | `associations/required.test.ts`                                        | 3    | y      | n           | inline-body-defineSchema; 8-inline-classes                                                | bespoke surgery |
 | `associations/source-type-validation.test.ts`                          | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
+| `associations/through-association-scope.test.ts`                       | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
 | `asynchronous-queries.test.ts`                                         | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `attribute-assignment.test.ts`                                         | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `attribute-methods.test.ts`                                            | 3    | y      | n           | inline-body-defineSchema; 13-inline-classes                                               | bespoke surgery |
@@ -212,9 +219,9 @@ Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B c
 | `bind-parameter.test.ts`                                               | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `boolean.test.ts`                                                      | 1    | n      | y           | —                                                                                         | converted       |
 | `cache-key.test.ts`                                                    | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
-| `calculations.test.ts`                                                 | 1    | y      | y           | —                                                                                         | converted       |
+| `calculations.test.ts`                                                 | 3    | y      | n           | inline-body-defineSchema; dependent:destroy/nullify/restrict; 21-inline-classes           | bespoke surgery |
 | `callbacks.test.ts`                                                    | 3    | y      | n           | inline-body-defineSchema; 24-inline-classes                                               | bespoke surgery |
-| `clone.test.ts`                                                        | 1    | y      | y           | —                                                                                         | converted       |
+| `clone.test.ts`                                                        | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
 | `coders/column-serializer.test.ts`                                     | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `coders/json.test.ts`                                                  | 1    | n      | y           | —                                                                                         | converted       |
 | `coders/yaml-column.test.ts`                                           | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
@@ -313,7 +320,7 @@ Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B c
 | `date-time.test.ts`                                                    | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `date.test.ts`                                                         | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
 | `defaults.test.ts`                                                     | 3    | y      | n           | inline-body-defineSchema; 8-inline-classes                                                | bespoke surgery |
-| `delegate.test.ts`                                                     | 1    | y      | y           | —                                                                                         | converted       |
+| `delegate.test.ts`                                                     | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
 | `delegated-type.test.ts`                                               | 3    | y      | n           | inline-body-defineSchema; 8-inline-classes                                                | bespoke surgery |
 | `deprecator.test.ts`                                                   | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `dirty.test.ts`                                                        | 3    | y      | n           | inline-body-defineSchema; raw-DDL; 9-inline-classes                                       | bespoke surgery |
@@ -408,13 +415,13 @@ Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B c
 | `quoting.test.ts`                                                      | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `readonly.test.ts`                                                     | 3    | y      | n           | inline-body-defineSchema; 5-inline-classes                                                | bespoke surgery |
 | `reaper.test.ts`                                                       | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
-| `reflection.test.ts`                                                   | 3    | y      | n           | inline-body-defineSchema; 123-inline-classes                                              | bespoke surgery |
+| `reflection.test.ts`                                                   | 3    | y      | n           | inline-body-defineSchema; 122-inline-classes                                              | bespoke surgery |
 | `relation.test.ts`                                                     | 3    | y      | n           | inline-body-defineSchema; 18-inline-classes                                               | bespoke surgery |
 | `relation/and.test.ts`                                                 | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
 | `relation/annotations.test.ts`                                         | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
 | `relation/build-arel-helpers.test.ts`                                  | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `relation/composite-where.test.ts`                                     | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
-| `relation/delegation.test.ts`                                          | 1    | y      | y           | —                                                                                         | converted       |
+| `relation/delegation.test.ts`                                          | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
 | `relation/delete-all.test.ts`                                          | 3    | y      | n           | inline-body-defineSchema; 5-inline-classes                                                | bespoke surgery |
 | `relation/field-ordered-values.test.ts`                                | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `relation/finder-methods.test.ts`                                      | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
@@ -457,7 +464,7 @@ Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B c
 | `serialized-attribute.test.ts`                                         | 3    | y      | n           | inline-body-defineSchema; 24-inline-classes                                               | bespoke surgery |
 | `shard-keys.test.ts`                                                   | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `shard-selector.test.ts`                                               | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
-| `signed-id.test.ts`                                                    | 3    | y      | n           | inline-body-defineSchema; 7-inline-classes                                                | bespoke surgery |
+| `signed-id.test.ts`                                                    | 3    | y      | n           | inline-body-defineSchema; 6-inline-classes                                                | bespoke surgery |
 | `sql-default.test.ts`                                                  | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `statement-cache.test.ts`                                              | 3    | y      | n           | inline-body-defineSchema                                                                  | bespoke surgery |
 | `statement-invalid.test.ts`                                            | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
@@ -465,7 +472,7 @@ Of the 14 Tier 1 files, **9** already call `useFixtures` (converted in Phase B c
 | `store.test.ts`                                                        | 3    | y      | n           | inline-body-defineSchema; 8-inline-classes                                                | bespoke surgery |
 | `strict-loading-sync-reader.test.ts`                                   | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `strict-loading.test.ts`                                               | 3    | y      | n           | inline-body-defineSchema; 54-inline-classes                                               | bespoke surgery |
-| `suppressor.test.ts`                                                   | 1    | y      | y           | —                                                                                         | converted       |
+| `suppressor.test.ts`                                                   | 3    | y      | n           | inline-body-defineSchema; 8-inline-classes                                                | bespoke surgery |
 | `table-metadata.test.ts`                                               | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |
 | `tasks/database-tasks.test.ts`                                         | 3    | y      | n           | raw-DDL                                                                                   | bespoke surgery |
 | `tasks/mysql-database-tasks.test.ts`                                   | 4    | n      | n           | no DB ops (in-memory / SQL-gen)                                                           | n/a             |

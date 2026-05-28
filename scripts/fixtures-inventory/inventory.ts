@@ -1,37 +1,23 @@
 #!/usr/bin/env tsx
 /**
- * Phase G Phase A — fixtures-adoption inventory.
- *
- * Classifies every `*.test.ts` under `packages/activerecord/src` into one
- * of four adoption tiers and writes `docs/activerecord/fixtures-adoption-
- * inventory.md`. Re-run after every Phase C/D/E batch:
+ * Phase G Phase A — fixtures-adoption inventory. Classifies every
+ * `*.test.ts` under `packages/activerecord/src` into a structural adoption
+ * tier (1 mechanical / 2 loader-gap / 3 bespoke-or-hazard / 4 no-DB-ops)
+ * and writes the doc below. Tier rules + scope caveats are documented in
+ * the generated doc's header and in `fixtures-adoption-plan.md` Phase A.
  *
  *   pnpm fixtures:adoption:inventory
  *
- * Tiers (see docs/activerecord/fixtures-adoption-plan.md Phase A):
- *   1 — auto-eligible: DB ops, all model classes canonical, no inline
- *       per-body schema, no Phase 6 hazard. Mechanical conversion.
- *   2 — loader-gap blocker: would be Tier 1 but references a non-canonical
- *       table/class that the canonical loader can't yet seed.
- *   3 — Phase 6 hazard or bespoke schema: inline DDL in a test body,
- *       per-describe bespoke classes, dependent:destroy/nullify/restrict.
- *   4 — no DB ops or intentional isolation: in-memory / SQL-generation
- *       only, or files that deliberately isolate adapter state.
- *
- * The classification is static and deliberately rough — it drives a
- * planning decision, not an automated conversion.
- *
- * Hard rules for this script: async fs only, no process.* — paths derive
- * from import.meta.url.
+ * Hard rules: async fs only, no process.* — paths derive from import.meta.
  */
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-const HERE = fileURLToPath(new URL(".", import.meta.url));
 const REPO = new URL("../../", import.meta.url);
 const AR_SRC = fileURLToPath(new URL("packages/activerecord/src/", REPO));
 const MODELS_DIR = `${AR_SRC}test-helpers/models/`;
-const OUT = fileURLToPath(new URL("docs/activerecord/fixtures-adoption-inventory.md", REPO));
+const OUT_REL = "docs/activerecord/fixtures-adoption-inventory.md";
+const OUT = fileURLToPath(new URL(OUT_REL, REPO));
 
 type Tier = 1 | 2 | 3 | 4;
 
@@ -83,6 +69,49 @@ async function canonicalClassNames(): Promise<Set<string>> {
   return names;
 }
 
+// Blank out `//` and block comments (preserving newlines/indentation) so
+// commented-out mentions of `useFixtures`/`defineSchema`/etc. stop counting
+// as real code. String literals are kept on purpose: RAW_DDL and the
+// dependent-option hazard match SQL/option text that lives inside strings.
+function stripComments(src: string): string {
+  let out = "";
+  let i = 0;
+  let state: "code" | "line" | "block" | "sq" | "dq" | "tpl" = "code";
+  while (i < src.length) {
+    const c = src[i];
+    const n = src[i + 1];
+    const blank = c === "\n" ? "\n" : " ";
+    if (state === "code") {
+      if (c === "/" && n === "/") ((state = "line"), (out += "  "), (i += 2));
+      else if (c === "/" && n === "*") ((state = "block"), (out += "  "), (i += 2));
+      else if (c === "'") ((state = "sq"), (out += c), i++);
+      else if (c === '"') ((state = "dq"), (out += c), i++);
+      else if (c === "`") ((state = "tpl"), (out += c), i++);
+      else ((out += c), i++);
+    } else if (state === "line") {
+      if (c === "\n") ((state = "code"), (out += "\n"), i++);
+      else ((out += blank), i++);
+    } else if (state === "block") {
+      if (c === "*" && n === "/") ((state = "code"), (out += "  "), (i += 2));
+      else ((out += blank), i++);
+    } else {
+      // inside a string literal: copy verbatim, handle escapes + terminators
+      out += c;
+      if (c === "\\" && i + 1 < src.length) ((out += src[i + 1]), (i += 2));
+      else {
+        if (
+          (state === "sq" && c === "'") ||
+          (state === "dq" && c === '"') ||
+          (state === "tpl" && c === "`")
+        )
+          state = "code";
+        i++;
+      }
+    }
+  }
+  return out;
+}
+
 // Persistence/query methods that signal a file seeds or reads real rows.
 const DB_METHOD =
   /\b([A-Z]\w+)\.(create|createAll|save|update|updateAll|upsert|insert|insertAll|destroy|destroyAll|deleteAll|increment|decrement|findBy|findOrCreateBy|first|last|count|sum|pluck|exists)\b/g;
@@ -104,7 +133,8 @@ const INLINE_BODY_SCHEMA = /^\s+(?:await\s+)?defineSchema\(/m;
 const DEPENDENT_HAZARD = /dependent:\s*["']?(destroy|nullify|restrict)/;
 const RAW_DDL = /CREATE\s+TABLE|executeSql|execute\(\s*["'`]\s*CREATE/i;
 
-function classify(content: string, canonical: Set<string>): Omit<Row, "file" | "loc"> {
+function classify(raw: string, canonical: Set<string>): Omit<Row, "file" | "loc"> {
+  const content = stripComments(raw);
   const hasUseFixtures = /useFixtures\s*\(/.test(content);
   const hasDbOps = detectDbOps(content);
 
@@ -177,8 +207,33 @@ function renderDoc(rows: Row[]): string {
   lines.push(
     "> **Generated** by `pnpm fixtures:adoption:inventory` " +
       "(`scripts/fixtures-inventory/inventory.ts`). Do not hand-edit — re-run " +
-      "the script. Static classification; rough by design (see Phase A in " +
-      "`fixtures-adoption-plan.md`).",
+      "the script.",
+  );
+  lines.push("");
+  lines.push("## Scope & method (read before acting on the tiers)");
+  lines.push("");
+  lines.push(
+    "This is a **TS-side structural** classification, not the full Phase A " +
+      "tiering contract. The Phase A plan envisioned deriving tiers from a " +
+      "Rails-counterpart map (`scripts/api-compare/test-mapping.json`), parsed " +
+      "`fixtures :foo` usage on the Rails side, and `fixtures:compare` " +
+      "readiness. Those committed inputs **do not exist in this repo** " +
+      "(`test-mapping.json` is absent; there is no Rails-fixture-usage " +
+      "extractor), so this script cannot consume them. Instead it uses the " +
+      "static heuristics the Phase A task spec actually lists — DB-op presence, " +
+      "inline `class X extends Base`, canonical-model membership, inline-body " +
+      "`defineSchema`, and Phase 6 hazards — applied to comment-stripped " +
+      "source.",
+  );
+  lines.push("");
+  lines.push(
+    "Consequence: a Tier 1 here means *structurally mechanical to convert*, " +
+      "not *confirmed to have a fixtures-using Rails counterpart*. Treat the " +
+      "tiers as an **upper bound** on the convertible pool — the true pool is " +
+      "smaller once Rails-counterpart/`fixtures:compare` filtering is applied. " +
+      "That only strengthens the recommendation below (a small pool gets " +
+      "smaller). Classification is rough by design — it drives a planning " +
+      "decision, not automated conversion.",
   );
   lines.push("");
   lines.push("## Tier counts");
@@ -274,7 +329,7 @@ async function main(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(
     `Classified ${rows.length} files → T1=${counts[1]} T2=${counts[2]} ` +
-      `T3=${counts[3]} T4=${counts[4]} → ${OUT.slice(HERE.length)}`,
+      `T3=${counts[3]} T4=${counts[4]} → ${OUT_REL}`,
   );
 }
 

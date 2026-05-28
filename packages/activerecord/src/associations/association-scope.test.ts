@@ -104,7 +104,7 @@ describe("AssociationScope", () => {
     });
 
     const sql = scope.toSql();
-    expect(sql).toMatch(/"as_posts".*"as_author_id"\s*=\s*7/s);
+    expect(sql).toMatch(/["`]as_posts["`].*["`]as_author_id["`]\s*=\s*7/s);
   });
 
   it("builds a belongsTo scope with WHERE on the target's PK = owner.FK + limit(1)", async () => {
@@ -122,7 +122,7 @@ describe("AssociationScope", () => {
 
     const sql = scope.toSql();
     // belongsTo → WHERE target.id = owner.fk; isCollection? false → LIMIT 1.
-    expect(sql).toMatch(/"as_authors".*"id"\s*=\s*42.*LIMIT\s+1/s);
+    expect(sql).toMatch(/["`]as_authors["`].*["`]id["`]\s*=\s*42.*LIMIT\s+1/s);
   });
 
   it("getBindValues collects owner's join_foreign_key values (chain length 1)", () => {
@@ -182,7 +182,7 @@ describe("AssociationScope", () => {
     // The lambda must run exactly once — _addConstraints applies it via
     // reflection.scope; the loader path must not re-apply options.scope.
     expect(calls).toBe(1);
-    expect(scope.toSql()).toMatch(/"published"\s*=\s*(?:TRUE|1)/i);
+    expect(scope.toSql()).toMatch(/["`]published["`]\s*=\s*(?:TRUE|1)/i);
   });
 
   it("applies STI type_condition on subclass targets (compensates for our unscoped)", () => {
@@ -222,7 +222,7 @@ describe("AssociationScope", () => {
       klass: reflection.klass,
     });
 
-    expect(scope.toSql()).toMatch(/"type"\s*=\s*'StiSpecial'/);
+    expect(scope.toSql()).toMatch(/["`]type["`]\s*=\s*'StiSpecial'/);
   });
 
   it("loadHasMany merges target's scope_for_association (default_scope flows through)", async () => {
@@ -261,8 +261,8 @@ describe("AssociationScope", () => {
     }) as any;
     const merged = (DsPost as any).scopeForAssociation().merge(built);
     const sql = merged.toSql();
-    expect(sql).toMatch(/"published"\s*=\s*(?:TRUE|1)/i);
-    expect(sql).toMatch(/"ds_author_id"\s*=\s*1/);
+    expect(sql).toMatch(/["`]published["`]\s*=\s*(?:TRUE|1)/i);
+    expect(sql).toMatch(/["`]ds_author_id["`]\s*=\s*1/);
   });
 
   it("loadHasMany applies caller-supplied options.scope when it differs from reflection.scope", async () => {
@@ -338,7 +338,7 @@ describe("AssociationScope", () => {
     const sql = (
       AssociationScope.scope({ owner, reflection, klass: reflection.klass }) as any
     ).toSql();
-    expect(sql).toMatch(/"active"\s*=\s*(?:TRUE|1)/i);
+    expect(sql).toMatch(/["`]active["`]\s*=\s*(?:TRUE|1)/i);
   });
 
   it("hasMany :as adds the polymorphic type WHERE on the target table", () => {
@@ -368,8 +368,8 @@ describe("AssociationScope", () => {
     const sql = (
       AssociationScope.scope({ owner, reflection, klass: reflection.klass }) as any
     ).toSql();
-    expect(sql).toMatch(/"commentable_id"\s*=\s*7/);
-    expect(sql).toMatch(/"commentable_type"\s*=\s*'AsOwner'/);
+    expect(sql).toMatch(/["`]commentable_id["`]\s*=\s*7/);
+    expect(sql).toMatch(/["`]commentable_type["`]\s*=\s*'AsOwner'/);
   });
 
   it("hasOne :as adds the polymorphic type WHERE plus LIMIT 1", () => {
@@ -395,8 +395,8 @@ describe("AssociationScope", () => {
     const sql = (
       AssociationScope.scope({ owner, reflection, klass: reflection.klass }) as any
     ).toSql();
-    expect(sql).toMatch(/"imageable_id"\s*=\s*3/);
-    expect(sql).toMatch(/"imageable_type"\s*=\s*'AsOneOwner'/);
+    expect(sql).toMatch(/["`]imageable_id["`]\s*=\s*3/);
+    expect(sql).toMatch(/["`]imageable_type["`]\s*=\s*'AsOneOwner'/);
     expect(sql).toMatch(/LIMIT\s+1/);
   });
 
@@ -426,8 +426,8 @@ describe("AssociationScope", () => {
       AssociationScope.scope({ owner: comment, reflection, klass: PolyTarget }) as any
     ).toSql();
     // Target side: WHERE poly_targets.id = 99 (the FK value), LIMIT 1.
-    expect(sql).toMatch(/"poly_targets"/);
-    expect(sql).toMatch(/"id"\s*=\s*99/);
+    expect(sql).toMatch(/["`]poly_targets["`]/);
+    expect(sql).toMatch(/["`]id["`]\s*=\s*99/);
     expect(sql).toMatch(/LIMIT\s+1/);
   });
 
@@ -491,8 +491,8 @@ describe("AssociationScope", () => {
       AssociationScope.scope({ owner: comment, reflection, klass: UuidTarget }) as any
     ).toSql();
     // Must WHERE on uuid (the target's actual PK), NOT id.
-    expect(sql).toMatch(/"uuid"\s*=\s*'abc-123'/);
-    expect(sql).not.toMatch(/"id"\s*=/);
+    expect(sql).toMatch(/["`]uuid["`]\s*=\s*'abc-123'/);
+    expect(sql).not.toMatch(/["`]id["`]\s*=/);
   });
 
   it("static scope() routes through this.INSTANCE (subclass dispatch)", async () => {
@@ -556,9 +556,9 @@ describe("AssociationScope", () => {
         klass: reflection.klass,
       }) as any
     ).toSql();
-    expect(sql).toMatch(/INNER JOIN\s+"?cc_memberships"?/i);
-    expect(sql).toMatch(/"cc_memberships"\."cc_author_id"\s*=\s*1/);
-    expect(sql).toMatch(/"cc_memberships"\."active"\s*=\s*(?:TRUE|1)/i);
+    expect(sql).toMatch(/INNER JOIN\s+["`]?cc_memberships["`]?/i);
+    expect(sql).toMatch(/["`]cc_memberships["`]\.["`]cc_author_id["`]\s*=\s*1/);
+    expect(sql).toMatch(/["`]cc_memberships["`]\.["`]active["`]\s*=\s*(?:TRUE|1)/i);
   });
 
   it("loadHasMany through with sourceType filters by polymorphic source type (PR 3c)", async () => {
@@ -1029,8 +1029,8 @@ describe("AssociationScope", () => {
         klass: reflection.klass,
       }) as any
     ).toSql();
-    expect(sql).toMatch(/FROM\s+"hot_settings"/);
-    expect(sql).toMatch(/INNER JOIN\s+"?hot_accounts"?/i);
+    expect(sql).toMatch(/FROM\s+["`]hot_settings["`]/);
+    expect(sql).toMatch(/INNER JOIN\s+["`]?hot_accounts["`]?/i);
     // Pin the ON condition so a regression where the join keys flip
     // (or get dropped) doesn't slip through. PR 3 builds these via
     // _nextChainScope using joinPrimaryKey / joinForeignKey from the
@@ -1091,8 +1091,8 @@ describe("AssociationScope", () => {
         klass: reflection.klass,
       }) as any
     ).toSql();
-    expect(sql).toMatch(/FROM\s+"through_posts"/);
-    expect(sql).toMatch(/INNER JOIN\s+"?through_memberships"?/i);
+    expect(sql).toMatch(/FROM\s+["`]through_posts["`]/);
+    expect(sql).toMatch(/INNER JOIN\s+["`]?through_memberships["`]?/i);
     expect(sql).toMatch(
       /["`]through_posts["`]\.["`]id["`]\s*=\s*["`]through_memberships["`]\.["`]through_post_id["`]/,
     );

@@ -875,7 +875,11 @@ export const ClassMethods = {
 // ActiveRecord::ConnectionAdapters.resolve). Pass the adapter name through
 // unchanged — the registry handles canonical names and aliases, so caller
 // overrides like register("mysql2", ...) aren't shadowed by normalization.
-_setAdapterClassResolver(async (adapterName) => _loadAdapter(adapterName));
+_setAdapterClassResolver(
+  async (adapterName) => _loadAdapter(adapterName),
+  (adapterName) => resolveConnectionAdapterSync(adapterName),
+  (adapterName, configuration) => buildAdapterArg(adapterName, configuration),
+);
 
 /**
  * Resolve a config-or-env value through Base.configurations and set the

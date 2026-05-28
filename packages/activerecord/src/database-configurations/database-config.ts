@@ -44,11 +44,21 @@ export function _setDefaultEnvGetter(fn: () => string): void {
 // Registered by connection-handling.ts so DatabaseConfig#adapterClass and
 // #newConnection can resolve adapter classes without a circular import.
 type AdapterClassResolver = (adapterName: string) => Promise<new (...args: any[]) => unknown>;
+type AdapterClassResolverSync = (adapterName: string) => (new (...args: any[]) => unknown) | null;
+type AdapterArgBuilder = (adapterName: string, configuration: Record<string, unknown>) => unknown;
 let _adapterClassResolver: AdapterClassResolver | null = null;
+let _adapterClassResolverSync: AdapterClassResolverSync | null = null;
+let _buildAdapterArg: AdapterArgBuilder = (_n, c) => c;
 
 /** @internal Set by connection-handling.ts to break circular dependency */
-export function _setAdapterClassResolver(fn: AdapterClassResolver): void {
+export function _setAdapterClassResolver(
+  fn: AdapterClassResolver,
+  syncFn?: AdapterClassResolverSync,
+  argBuilder?: AdapterArgBuilder,
+): void {
   _adapterClassResolver = fn;
+  if (syncFn) _adapterClassResolverSync = syncFn;
+  if (argBuilder) _buildAdapterArg = argBuilder;
 }
 
 /**
@@ -139,11 +149,47 @@ export class DatabaseConfig {
   /**
    * Mirrors: DatabaseConfig#new_connection
    *
-   * Creates a new adapter instance from this configuration.
+   *   def new_connection
+   *     adapter_class.new(configuration_hash)
+   *   end
+   *
+   * Synchronous in trails because adapter classes are pre-resolved (via
+   * {@link _setAdapterClassResolver}'s async loader registered at module
+   * init). Pre-warm by awaiting {@link loadAdapter} before the first call —
+   * `ConnectionHandler.establishConnection` does this automatically and
+   * exposes the resulting promise as `pool.adapterReady`.
+   *
+   * Uses {@link buildAdapterArg} for the trails-specific argument shape
+   * (SQLite takes a filename string, PG/MySQL take a config object). Rails
+   * passes `configuration_hash` directly because its adapter constructors
+   * uniformly accept a hash; trails' adapter constructors don't (yet).
    */
-  async newConnection(): Promise<unknown> {
-    const Klass = await this.adapterClass();
-    return new Klass(this.configuration);
+  newConnection(): unknown {
+    if (!_adapterClassResolverSync) {
+      throw new Error("Adapter class resolver not registered — import connection-handling first");
+    }
+    if (!this.adapter) {
+      throw new Error(`Database configuration missing adapter: ${this.inspect()}`);
+    }
+    const Klass = _adapterClassResolverSync(this.adapter);
+    if (!Klass) {
+      throw new Error(
+        `Adapter "${this.adapter}" not pre-resolved. Await pool.adapterReady, ` +
+          `or call ${this.adapter}.loadAdapter() before calling newConnection.`,
+      );
+    }
+    const arg = _buildAdapterArg(this.adapter, this.configuration as Record<string, unknown>);
+    return new (Klass as new (a: unknown) => unknown)(arg);
+  }
+
+  /**
+   * Pre-warm the synchronous adapter-class cache for this configuration's
+   * adapter. The returned promise resolves once {@link newConnection} can
+   * succeed synchronously. Mirrors Rails' implicit autoload step — trails
+   * needs it explicit because ESM imports are async.
+   */
+  async loadAdapter(): Promise<unknown> {
+    return this.adapterClass();
   }
 
   get host(): string | undefined {

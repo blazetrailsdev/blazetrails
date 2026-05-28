@@ -205,7 +205,7 @@ export class ExecutorHooks {
         const txn =
           (connection as any).currentTransaction?.() ??
           (connection as any).transactionManager?.currentTransaction;
-        if (txn && (txn.closed || !txn.joinable)) {
+        if (!txn || txn.closed || !txn.joinable) {
           pool.releaseConnection();
         }
       }

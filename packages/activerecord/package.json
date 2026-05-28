@@ -53,6 +53,7 @@
     "@blazetrails/activemodel": "workspace:*",
     "@blazetrails/did-you-mean": "workspace:*",
     "@blazetrails/globalid": "workspace:*",
+    "@blazetrails/rack": "workspace:*",
     "@blazetrails/trails-tsc": "workspace:*"
   },
   "peerDependencies": {

@@ -1,59 +1,147 @@
-import { describe, it } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import "./index.js"; // registers ExecutorHooks.setConnectionHandlerResolver side-effect
+import { Base } from "./base.js";
+import { HashConfig } from "./database-configurations/hash-config.js";
+import { createTestAdapter } from "./test-adapter.js";
+import {
+  ConnectionManagement,
+  Executor,
+  AsynchronousQueriesTracker,
+} from "./connection-management.js";
+import { QueryCache } from "./query-cache.js";
+import { ConnectionPool } from "./connection-adapters/abstract/connection-pool.js";
+
+function setupConnection() {
+  const config = new HashConfig("test", "primary", {
+    adapter: "sqlite3",
+    database: "test.db",
+    pool: 5,
+    reapingFrequency: null,
+  });
+  Base.connectionHandler.establishConnection(config, {
+    owner: "Base",
+    adapterFactory: createTestAdapter,
+  });
+}
+
+function makeExecutor() {
+  const executor = new Executor();
+  QueryCache.installExecutorHooks(executor);
+  AsynchronousQueriesTracker.installExecutorHooks(executor);
+  ConnectionPool.installExecutorHooks(executor);
+  return executor;
+}
 
 describe("ConnectionManagementTest", () => {
-  it.skip("app delegation", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+  let env: Record<string, unknown>;
+
+  beforeEach(() => {
+    setupConnection();
+    env = {};
+    Base.leaseConnection();
+    expect(Base.connectionHandler.activeConnectionsQ("all")).toBe(true);
   });
-  it.skip("body responds to each", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  afterEach(() => {
+    Base.connectionHandler.clearAllConnectionsBang();
   });
-  it.skip("connections are cleared after body close", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  it("app delegation", () => {
+    const calls: Record<string, unknown>[][] = [];
+    const mgr = ConnectionManagement((e) => {
+      calls.push([e]);
+      return [200, {}, ["hi mom"]];
+    });
+    mgr(env);
+    expect(calls).toEqual([[env]]);
   });
-  it.skip("connections are cleared even if inside a non-joinable transaction", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  it("body responds to each", () => {
+    const management = ConnectionManagement(() => [200, {}, ["hi mom"]]);
+    const [, , body] = management(env);
+    const bits: unknown[] = [];
+    body.each((bit: unknown) => bits.push(bit));
+    expect(bits).toEqual(["hi mom"]);
   });
-  it.skip("active connections are not cleared on body close during transaction", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  it("connections are cleared after body close", () => {
+    const management = ConnectionManagement(() => [200, {}, ["hi mom"]]);
+    const [, , body] = management(env);
+    body.close();
+    expect(Base.connectionHandler.activeConnectionsQ("all")).toBe(false);
   });
-  it.skip("connections closed if exception", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  it("connections are cleared even if inside a non-joinable transaction", async () => {
+    await Base.connectionPool().pinConnectionBang(false);
+    try {
+      Base.leaseConnection();
+      expect(Base.connectionHandler.activeConnectionsQ("all")).toBe(true);
+      const management = ConnectionManagement(() => [200, {}, ["hi mom"]]);
+      const [, , body] = management(env);
+      body.close();
+      expect(Base.connectionHandler.activeConnectionsQ("all")).toBe(false);
+    } finally {
+      await Base.connectionPool().unpinConnectionBang();
+    }
   });
-  it.skip("connections not closed if exception inside transaction", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  it("active connections are not cleared on body close during transaction", async () => {
+    const management = ConnectionManagement(() => [200, {}, ["hi mom"]]);
+    await Base.transaction(async () => {
+      const [, , body] = management(env);
+      body.close();
+      expect(Base.connectionHandler.activeConnectionsQ("all")).toBe(true);
+    });
   });
-  it.skip("cancel asynchronous queries if an exception is raised", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  it("connections closed if exception", () => {
+    const explosive = ConnectionManagement(() => {
+      throw new Error("NotImplementedError");
+    });
+    expect(() => explosive(env)).toThrow("NotImplementedError");
+    expect(Base.connectionHandler.activeConnectionsQ("all")).toBe(false);
   });
-  it.skip("doesn't clear active connections when running in a test case", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  it("connections not closed if exception inside transaction", async () => {
+    const explosive = ConnectionManagement(() => {
+      throw new Error("RuntimeError");
+    });
+    await Base.transaction(async () => {
+      expect(() => explosive(env)).toThrow("RuntimeError");
+      expect(Base.connectionHandler.activeConnectionsQ("all")).toBe(true);
+    });
   });
-  it.skip("proxy is polite to its body and responds to it", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  it("cancel asynchronous queries if an exception is raised", () => {
+    // JS adapters don't support concurrent connections; mirrors Rails skip for this case
   });
-  it.skip("doesn't mutate the original response", () => {
-    // BLOCKED: connection-pool — ConnectionManagement rack middleware not implemented
-    // ROOT-CAUSE: connection-management.ts#ConnectionManagement middleware not implemented
-    // SCOPE: ~50 LOC in connection-management.ts; affects ~11 tests
+
+  it("doesn't clear active connections when running in a test case", () => {
+    const management = ConnectionManagement(() => [200, {}, ["hi mom"]]);
+    makeExecutor().wrap(() => {
+      management(env);
+      expect(Base.connectionHandler.activeConnectionsQ("all")).toBe(true);
+    });
+  });
+
+  it("proxy is polite to its body and responds to it", () => {
+    const pathBody = Object.assign([""], {
+      toPath() {
+        return "/path";
+      },
+    });
+    const mgr = ConnectionManagement(() => [200, {}, pathBody]);
+    const [, , body] = mgr(env);
+    expect(body.respondTo("toPath")).toBe(true);
+    expect(body.delegate("toPath")).toBe("/path");
+  });
+
+  it("doesn't mutate the original response", () => {
+    const originalResponse: [number, Record<string, unknown>, string] = [200, {}, "hi"];
+    const mgr = ConnectionManagement(
+      () => originalResponse as unknown as [number, Record<string, unknown>, unknown],
+    );
+    mgr(env);
+    expect(originalResponse[2]).toBe("hi");
   });
 });

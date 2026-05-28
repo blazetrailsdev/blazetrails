@@ -356,3 +356,9 @@ export { Resolver as DatabaseSelectorResolver } from "./middleware/database-sele
 export { Session as DatabaseSelectorSession } from "./middleware/database-selector/resolver/session.js";
 export { DatabaseSelector } from "./middleware/database-selector.js";
 export { ShardSelector } from "./middleware/shard-selector.js";
+
+export {
+  ConnectionManagement,
+  Executor,
+  AsynchronousQueriesTracker,
+} from "./connection-management.js";

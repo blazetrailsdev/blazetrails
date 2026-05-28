@@ -15,6 +15,7 @@ import type { DatabaseAdapter } from "../../adapter.js";
 import { AdapterNotSpecified, ConnectionNotDefined } from "../../errors.js";
 import type { QueryCachePool } from "./query-cache.js";
 import { Notifications } from "@blazetrails/activesupport";
+import { resolve as resolveConnectionAdapter } from "../../connection-adapters.js";
 
 export { ConnectionDescriptor };
 export type { ConnectionOwner };
@@ -140,6 +141,17 @@ export class ConnectionHandler {
       shard,
       config: poolConfig.dbConfig.configuration,
     });
+
+    // Mirrors connectsTo: when no explicit adapterFactory is given, kick off
+    // an async load so the synchronous adapter cache is warm by the time the
+    // pool first calls newConnection(). Callers that need to await this can
+    // read `pool.adapterReady`. Detached `.catch` so unhandled-rejection
+    // warnings don't fire when callers never await it.
+    if (!options.adapterFactory && poolConfig.dbConfig.adapter) {
+      const adapterReady = resolveConnectionAdapter(poolConfig.dbConfig.adapter);
+      adapterReady.catch(() => {});
+      poolConfig.pool.adapterReady = adapterReady;
+    }
 
     return poolConfig.pool;
   }

@@ -8,6 +8,8 @@ import { adapterNameFromConfig } from "../abstract-adapter.js";
 import type { DatabaseAdapter } from "../../adapter.js";
 import type { DatabaseConfig } from "../../database-configurations/database-config.js";
 import type { PoolConfig } from "../pool-config.js";
+import { resolveSync as resolveConnectionAdapterSync } from "../../connection-adapters.js";
+import { buildAdapterArg } from "../adapter-args.js";
 import type { ConnectionDescriptor } from "./connection-descriptor.js";
 import {
   ConnectionNotEstablished,
@@ -902,11 +904,44 @@ export class ConnectionPool implements ReapablePool {
 
   // --- Connection creation ---
 
-  newConnection(): DatabaseAdapter {
-    if (!this.poolConfig.adapterFactory) {
-      throw new ConnectionNotEstablished("No adapter factory configured for connection pool");
+  /**
+   * Construct an adapter from `dbConfig.adapter` + `dbConfig.configuration`.
+   *
+   * Mirrors Rails' `ActiveRecord::DatabaseConfigurations::HashConfig#connect`,
+   * which resolves the adapter class from the configuration and instantiates
+   * it. Called by {@link newConnection} when no explicit `adapterFactory` is
+   * provided on the PoolConfig.
+   *
+   * Requires the adapter class to have been pre-resolved at least once via
+   * `resolveConnectionAdapter` (which `ConnectionHandler.establishConnection`
+   * kicks off asynchronously when no factory is provided). Throws a clear
+   * error if the cache is cold so misuse surfaces immediately.
+   */
+  private _resolveAdapterFromConfig(): DatabaseAdapter {
+    const adapterName = this.dbConfig.adapter;
+    if (!adapterName) {
+      throw new ConnectionNotEstablished(
+        "ConnectionPool: dbConfig.adapter is missing — set `adapter` in the configuration or provide adapterFactory",
+      );
     }
-    const conn = this.poolConfig.adapterFactory();
+    const AdapterClass = resolveConnectionAdapterSync(adapterName);
+    if (!AdapterClass) {
+      throw new ConnectionNotEstablished(
+        `Adapter "${adapterName}" not pre-resolved. Await pool.adapterReady, ` +
+          `or call resolveConnectionAdapter("${adapterName}") before leasing a connection.`,
+      );
+    }
+    const arg = buildAdapterArg(
+      adapterName,
+      this.dbConfig.configuration as Record<string, unknown>,
+    );
+    return new (AdapterClass as new (a: unknown) => DatabaseAdapter)(arg);
+  }
+
+  newConnection(): DatabaseAdapter {
+    const conn = this.poolConfig.adapterFactory
+      ? this.poolConfig.adapterFactory()
+      : this._resolveAdapterFromConfig();
     // Set the back-reference so AbstractAdapter#schemaCache can reach
     // pool.poolConfig.schemaCache to share the raw SchemaCache across
     // every connection in this pool. Rails' AbstractAdapter has the

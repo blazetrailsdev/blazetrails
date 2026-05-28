@@ -15,6 +15,11 @@ import {
   resolveSync as resolveConnectionAdapterSync,
 } from "./connection-adapters.js";
 import {
+  buildAdapterArg,
+  normalizeAdapterName,
+  parseSqliteUrl,
+} from "./connection-adapters/adapter-args.js";
+import {
   AdapterNotFound,
   AdapterNotSpecified,
   ConnectionNotEstablished,
@@ -124,44 +129,6 @@ export function connectsTo(
   }
 
   return connections;
-}
-
-/**
- * Build the adapter-constructor argument used by `connectsTo` and
- * `establishConnection`. SQLite expects the database string directly; other
- * adapters take a config hash. Mirrors the inline normalization done by
- * `establishWithConfig`.
- *
- * @internal
- */
-function buildAdapterArg(adapterName: string, configuration: Record<string, unknown>): unknown {
-  const normalized = normalizeAdapterName(adapterName);
-  const url = configuration.url as string | undefined;
-  const database = configuration.database as string | undefined;
-  if (normalized === "sqlite") {
-    // Mirrors establishWithConfig's `url || config?.database || ":memory:"`
-    // precedence so connectsTo and establishConnection normalize SQLite
-    // configs identically. autoConnect already pre-zeroes `url` when the
-    // configuration hash carries a `database`, so the resolved-database-
-    // wins semantic is preserved on the public entrypoint.
-    return parseSqliteUrl(url || database || ":memory:");
-  }
-  // Mirrors establishWithConfig's `else if (url) adapterArg = url` branch:
-  // URL-only configs (e.g. opaque adapter strings like jdbc:...) are passed
-  // through as the raw URL string. Hash-form configs (no url, or url + an
-  // explicit database) get the normalized hash with username/host defaults.
-  if (url && database === undefined) {
-    return url;
-  }
-  const { adapter: _a, url: _u, username, ...rest } = configuration;
-  const adapterConfig: Record<string, unknown> = { ...rest };
-  if (adapterConfig.user === undefined && username !== undefined) {
-    adapterConfig.user = username;
-  }
-  if (adapterConfig.host === undefined) {
-    adapterConfig.host = "localhost";
-  }
-  return adapterConfig;
 }
 
 export function connectedTo<T>(
@@ -830,29 +797,13 @@ async function loadJsonConfig(configPath: string): Promise<RawConfigurations> {
   }
 }
 
-export function normalizeAdapterName(name: string): string {
-  switch (name) {
-    case "postgresql":
-    case "postgres":
-      return "postgresql";
-    case "mysql":
-    case "mysql2":
-      return "mysql";
-    case "sqlite":
-    case "sqlite3":
-      return "sqlite";
-    default:
-      return name;
-  }
-}
-
-export function parseSqliteUrl(url: string): string {
-  if (url.startsWith("sqlite3://") || url.startsWith("sqlite://")) {
-    const stripped = url.replace(/^sqlite3?:\/\//, "");
-    return stripped || ":memory:";
-  }
-  return url;
-}
+// Re-exports for backward compat — these now live in adapter-args.ts so
+// ConnectionPool can use them without back-edging through connection-handling.
+export {
+  normalizeAdapterName,
+  parseSqliteUrl,
+  buildAdapterArg,
+} from "./connection-adapters/adapter-args.js";
 
 export function adapterNameFromUrl(url: string): string {
   if (url.startsWith("postgres://") || url.startsWith("postgresql://")) {

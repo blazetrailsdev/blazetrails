@@ -3046,15 +3046,6 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Return the lock clause value (the lock string, or null when unlocked).
-   *
-   * Mirrors: ActiveRecord::Relation#lock_value
-   */
-  get lockValue(): string | null {
-    return this._lockValue;
-  }
-
-  /**
    * Return the SELECT columns.
    *
    * Mirrors: ActiveRecord::Relation#select_values

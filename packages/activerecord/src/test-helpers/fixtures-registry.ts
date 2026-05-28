@@ -32,6 +32,10 @@ export interface FixtureRegistryEntry {
  * - `bad-posts` — no canonical model (arunit2 alt-connection fixture)
  * - `categories-ordered` — no dedicated model (alternate ordering fixture for categories)
  * - `categories-posts` — HABTM join table, no model class
+ * - `chefs` — `chef.ts` throws at import: trails' `acceptsNestedAttributesFor`
+ *   eagerly rejects the polymorphic `employable` belongs_to, whereas Rails
+ *   (chef.rb: `accepts_nested_attributes_for :employable`) defers that check to
+ *   build time. Pre-existing model-port divergence; re-add once chef.ts imports cleanly.
  * - `developers-projects` — HABTM join table, no model class
  * - `encrypted-book-that-ignores-cases` — same encryption add-on requirement
  * - `encrypted-books` — model requires the `@blazetrails/activerecord/encryption` add-on loaded at import time
@@ -96,10 +100,6 @@ export const fixtureRegistry = {
   categorizations: {
     model: () => import("./models/categorization.js").then((m) => m.Categorization),
     data: FixtureData.categorizationFixtureData,
-  },
-  chefs: {
-    model: () => import("./models/chef.js").then((m) => m.Chef),
-    data: FixtureData.chefFixtureData,
   },
   citations: {
     model: () => import("./models/citation.js").then((m) => m.Citation),

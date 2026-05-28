@@ -1,5 +1,6 @@
 import { describe, it, expect, expectTypeOf, vi, beforeAll } from "vitest";
 import { useFixtures } from "./use-fixtures.js";
+import { fixtureRegistry } from "./fixtures-registry.js";
 import { FixtureSet } from "./fixture-set.js";
 import { Base } from "../base.js";
 import "../relation.js"; // registers the Relation ctor so Model.findBy/.all/.count work
@@ -205,6 +206,37 @@ describe("useFixtures by registry name", () => {
     expectTypeOf<Parameters<typeof authors>[0]>().toEqualTypeOf<"david" | "mary" | "bob">();
     expectTypeOf<ReturnType<typeof authors>>().toEqualTypeOf<Author>();
     expectTypeOf<ReturnType<typeof posts.all>>().toEqualTypeOf<Post[]>();
+  });
+});
+
+// --- fixture registry conformance ---
+
+describe("fixtureRegistry conformance", () => {
+  it("every entry resolves to a Base subclass with a table name and non-empty data", async () => {
+    for (const [name, entry] of Object.entries(fixtureRegistry)) {
+      const ModelClass = await (entry as { model: () => Promise<typeof Base> }).model();
+      expect(typeof ModelClass, `${name}: model thunk must resolve to a class`).toBe("function");
+      expect(ModelClass.prototype instanceof Base, `${name}: resolved model must extend Base`).toBe(
+        true,
+      );
+      expect(typeof ModelClass.tableName, `${name}: model must declare a tableName`).toBe("string");
+      expect(ModelClass.tableName.length, `${name}: tableName must be non-empty`).toBeGreaterThan(
+        0,
+      );
+
+      const data = (entry as { data: Record<string, unknown> }).data;
+      const labels = Object.keys(data);
+      expect(
+        labels.length,
+        `${name}: fixture data must declare at least one label`,
+      ).toBeGreaterThan(0);
+      for (const label of labels) {
+        expect(
+          typeof data[label],
+          `${name}.${label}: each fixture row must be an attributes object`,
+        ).toBe("object");
+      }
+    }
   });
 });
 

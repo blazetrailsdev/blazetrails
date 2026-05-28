@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { Reaper } from "./connection-adapters/abstract/connection-pool/reaper.js";
 import { Notifications } from "@blazetrails/activesupport";
 import { Visitors } from "@blazetrails/arel";
 import {
@@ -327,18 +328,18 @@ it.skip("reap inactive", () => {
 });
 
 it("reaper flushes idle connections after idle_timeout", () => {
-  vi.useFakeTimers();
-  const dbConfig = new HashConfig("test", "primary", {
-    adapter: "sqlite3",
-    database: "test.db",
-    idleTimeout: 1,
-    reapingFrequency: 10,
-  });
-  const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
-    adapterFactory: createTestAdapter,
-  });
-  const pool = new ConnectionPool(pc);
   try {
+    vi.useFakeTimers();
+    const dbConfig = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: "test.db",
+      idleTimeout: 1,
+      reapingFrequency: 10,
+    });
+    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
+      adapterFactory: createTestAdapter,
+    });
+    const pool = new ConnectionPool(pc);
     const conn = pool.checkout();
     pool.checkin(conn);
     expect(pool.stat().connections).toBe(1);
@@ -351,12 +352,11 @@ it("reaper flushes idle connections after idle_timeout", () => {
     vi.advanceTimersByTime(10_000);
     expect(pool.stat().connections).toBe(0);
   } finally {
-    // Discard the pool so the next reaper tick removes it, then advance to
-    // trigger that tick and let the reaper clear its per-frequency timer entry.
-    // Without this, Reaper._timers retains the fake-interval handle and later
-    // pools with the same reapingFrequency never spawn a real timer.
-    pool.discardBang();
-    vi.advanceTimersByTime(10_000);
+    // Clear Reaper static state directly (mirrors reaper.test.ts teardown) so
+    // later tests with the same reapingFrequency get a fresh real timer.
+    (Reaper as any)._timers.forEach((t: any) => clearInterval(t));
+    (Reaper as any)._timers.clear();
+    (Reaper as any)._pools.clear();
     vi.useRealTimers();
   }
 });

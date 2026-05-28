@@ -19,7 +19,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const RFCS_DIR = process.env.RFCS_DIR ?? join(homedir(), "github", "blazetrailsdev", "rfcs");
@@ -141,12 +141,13 @@ export function nextBundle(
   const candidates = ready(index, { rfc: opts.rfc })
     .filter((s) => s.est_loc !== null)
     .filter((s) => (opts.cluster ? s.cluster === opts.cluster : true));
-  const byCluster = new Map<string, StoryEntry[]>();
+  // Use Map<string | null, ...> so `null` (unclustered) stays distinct
+  // from any real cluster name, even one literally called "_none".
+  const byCluster = new Map<string | null, StoryEntry[]>();
   for (const s of candidates) {
-    const k = s.cluster ?? "_none";
-    const bucket = byCluster.get(k) ?? [];
+    const bucket = byCluster.get(s.cluster) ?? [];
     bucket.push(s);
-    byCluster.set(k, bucket);
+    byCluster.set(s.cluster, bucket);
   }
   let best: StoryEntry[] = [];
   let bestTotal = 0;
@@ -260,60 +261,65 @@ export function commitAndPush(opts: {
   }
 }
 
-function claim(id: string, assignee: string): void {
-  inGitRfcs();
-  const file = storyFilePath(loadIndex(), id);
-  commitAndPush({
-    message: `claim: ${id}`,
-    fileToStage: file,
-    raceMessage: `lost claim race on ${id} — pick another story`,
-    raceExitCode: 3,
-    mutator: () => {
-      const fm = readFileSync(file, "utf8");
-      if (!/^claim: null\s*$/m.test(fm)) {
-        console.error(`error: ${id} is already claimed`);
-        process.exit(2);
-      }
-      const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
-      editFrontmatter(file, {
-        status: "claimed",
-        claim: JSON.stringify(now),
-        assignee: JSON.stringify(assignee),
-      });
-    },
-  });
-  console.log(`claimed ${id} as ${assignee}`);
-}
-
-function flip(id: string, message: string, mutator: () => void): void {
+// All mutations enter via `flip`. The order — `inGitRfcs()` then
+// `loadIndex()` — matters: if `$RFCS_DIR` is missing or not a git repo,
+// the friendly error from `inGitRfcs` fires before `loadIndex` would try
+// to `execFileSync` the rfcs-side build script in a non-repo directory.
+// `mutate` receives the resolved file path so command implementations
+// don't repeat the lookup.
+function flip(
+  id: string,
+  message: string,
+  raceMessage: string,
+  raceExitCode: number,
+  mutate: (file: string) => void,
+): void {
   inGitRfcs();
   const file = storyFilePath(loadIndex(), id);
   commitAndPush({
     message,
     fileToStage: file,
-    raceMessage: `failed to update ${id} after retry — pull manually and retry`,
-    raceExitCode: 4,
-    mutator,
+    raceMessage,
+    raceExitCode,
+    mutator: () => mutate(file),
   });
 }
 
+function claim(id: string, assignee: string): void {
+  flip(id, `claim: ${id}`, `lost claim race on ${id} — pick another story`, 3, (file) => {
+    const fm = readFileSync(file, "utf8");
+    if (!/^claim: null\s*$/m.test(fm)) {
+      console.error(`error: ${id} is already claimed`);
+      process.exit(2);
+    }
+    const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+    editFrontmatter(file, {
+      status: "claimed",
+      claim: JSON.stringify(now),
+      assignee: JSON.stringify(assignee),
+    });
+  });
+  console.log(`claimed ${id} as ${assignee}`);
+}
+
+const RETRY_MSG = (id: string) => `failed to update ${id} after retry — pull manually and retry`;
+
 function inProgress(id: string, pr: number): void {
-  const file = storyFilePath(loadIndex(), id);
-  flip(id, `in-progress: ${id} #${pr}`, () =>
+  flip(id, `in-progress: ${id} #${pr}`, RETRY_MSG(id), 4, (file) =>
     editFrontmatter(file, { status: "in-progress", pr: String(pr) }),
   );
   console.log(`marked ${id} in-progress #${pr}`);
 }
 
 function done(id: string, pr: number): void {
-  const file = storyFilePath(loadIndex(), id);
-  flip(id, `done: ${id} #${pr}`, () => editFrontmatter(file, { status: "done", pr: String(pr) }));
+  flip(id, `done: ${id} #${pr}`, RETRY_MSG(id), 4, (file) =>
+    editFrontmatter(file, { status: "done", pr: String(pr) }),
+  );
   console.log(`marked ${id} done #${pr}`);
 }
 
 function block(id: string, reason: string): void {
-  const file = storyFilePath(loadIndex(), id);
-  flip(id, `block: ${id} — ${reason}`, () =>
+  flip(id, `block: ${id} — ${reason}`, RETRY_MSG(id), 4, (file) =>
     editFrontmatter(file, { status: "blocked", "blocked-by": JSON.stringify(reason) }),
   );
   console.log(`blocked ${id}: ${reason}`);
@@ -511,4 +517,4 @@ Set $RFCS_DIR to override the default ~/github/blazetrailsdev/rfcs.`);
 // CLI entry — only runs when this module is the script entrypoint, not
 // when imported (e.g. by the smoke test). Matches the pattern used by
 // scripts/fixtures-compare/compare.ts and scripts/api-compare/lint-deps.ts.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) main();

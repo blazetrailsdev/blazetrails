@@ -140,6 +140,19 @@ describe("nextBundle", () => {
     const idx = index([story({ id: "a", est_loc: null }), story({ id: "b", est_loc: 50 })]);
     expect(nextBundle(idx, { maxLoc: 250 }).map((s) => s.id)).toEqual(["b"]);
   });
+
+  it("never mixes a real cluster named '_none' with unclustered stories", () => {
+    // A story with cluster: null must stay separate from a story whose
+    // cluster literally equals "_none" — bundles are same-cluster only.
+    // Patch the parent RFC's clusters so the literal "_none" passes validation.
+    const idx = index([
+      story({ id: "u", cluster: null, est_loc: 100 }),
+      story({ id: "n", cluster: "_none", est_loc: 100 }),
+    ]);
+    const bundle = nextBundle(idx, { maxLoc: 250 });
+    // Both clusters tie at 100; either may win, but never both together.
+    expect(bundle.length).toBe(1);
+  });
 });
 
 describe("listFiltered", () => {

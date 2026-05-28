@@ -392,12 +392,8 @@ export class ThroughAssociation extends Association {
 
     // cascade_strict_loading: a strict-loading preload scope propagates to the
     // through query so intermediate records inherit the constraint
-    // (preloader/through_association.rb, Association#cascade_strict_loading).
-    if (this._preloadScope?.isStrictLoading) {
-      scope = scope.strictLoading?.() ?? scope;
-    }
-
-    return scope;
+    // (preloader/through_association.rb:145, Association#cascade_strict_loading).
+    return this._cascadeStrictLoading(scope);
   }
 
   private get _throughReflection(): AssociationLikeReflection | null {

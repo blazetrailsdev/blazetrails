@@ -57,11 +57,9 @@ export const adapterType: "sqlite" | "postgres" | "mysql" = PG_TEST_URL
 
 // --- Connection pool infrastructure -----------------------------------------
 //
-// All test adapters now route through a real ConnectionPool. Pool size 1
-// serves as the shared-cache
-// equivalent for drivers that compile with SQLITE_OMIT_SHARED_CACHE
-// (better-sqlite3, expo-sqlite) — a single-connection pool serializes all
-// concurrent callers through the lease queue with no AsyncContext filter needed.
+// All test adapters now route through a real ConnectionPool. SQLite uses a
+// shared-cache URI (cache=shared) so all pool connections share the same
+// in-memory database without needing pool size 1.
 
 let _pooledHandler:
   | import("./connection-adapters/abstract/connection-handler.js").ConnectionHandler
@@ -123,11 +121,9 @@ function _establishPooledTestPool(): Promise<
     } else {
       adapterName = "sqlite3";
       const database = _pooledSqliteDatabase();
-      // pool: 1 — drivers compiled with SQLITE_OMIT_SHARED_CACHE (better-sqlite3,
-      // expo-sqlite) don't honour cache=shared, so each connection would be a
-      // private in-memory DB. A single-connection pool is the correct Rails-shape
-      // equivalent for those drivers.
-      configuration = { adapter: adapterName, database, pool: 1 };
+      // cache=shared in the URI is what provides shared-cache semantics across
+      // pool connections; no need to limit pool size to 1.
+      configuration = { adapter: adapterName, database };
       const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
       adapterFactory = () => new SQLite3Adapter(database) as unknown as DatabaseAdapter;
     }
@@ -237,7 +233,7 @@ export function _resetPooledTestAdapterForTests(): void {
  * Clean up test data by dropping all tables via a pool-leased connection.
  */
 export async function cleanupTestAdapter(_adapter: DatabaseAdapter): Promise<void> {
-  await dropAllTables(_pool.leaseConnection() as DatabaseAdapter);
+  await _pool.withConnection((a) => dropAllTables(a), { preventPermanentCheckout: true });
 }
 
 /**
@@ -266,16 +262,20 @@ export async function cleanupTestAdapter(_adapter: DatabaseAdapter): Promise<voi
  * @internal
  */
 export async function resetTestAdapterState(): Promise<void> {
-  const adapter = _pool.leaseConnection() as DatabaseAdapter;
-  await dropAllTables(adapter);
-  // Clear schema cache on all live pool connections (mirrors Rails'
-  // ConnectionPool#clear_cache!). Tests that construct raw adapters directly
-  // also need the global signature cache cleared.
-  _pool.connections.forEach((a) => a.schemaCache?.clear());
-  clearAppliedSchemaSignatures();
-  restoreCanonicalSchemaSignaturesUnlessAdapter(adapter);
-  clearDdlTrackers();
-  Base._modelsByName.clear();
+  await _pool.withConnection(
+    async (adapter) => {
+      await dropAllTables(adapter);
+      // Clear schema cache on all live pool connections (mirrors Rails'
+      // ConnectionPool#clear_cache!). Tests that construct raw adapters directly
+      // also need the global signature cache cleared.
+      _pool.connections.forEach((a) => a.schemaCache?.clear());
+      clearAppliedSchemaSignatures();
+      restoreCanonicalSchemaSignaturesUnlessAdapter(adapter);
+      clearDdlTrackers();
+      Base._modelsByName.clear();
+    },
+    { preventPermanentCheckout: true },
+  );
 }
 
 /**

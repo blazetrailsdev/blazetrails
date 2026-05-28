@@ -58,6 +58,16 @@ function _pooledSqliteDatabase(): string {
   return `file:trails_test_${workerId}?mode=memory&cache=shared`;
 }
 
+/**
+ * Synchronous factory that creates a fresh underlying adapter for the active
+ * environment. Set once at module boot (after the async pool init resolves).
+ * Use this when you need a distinct adapter object per call — e.g. as the
+ * `adapterFactory` for a test-local {@link ConnectionPool}.
+ *
+ * @internal
+ */
+export let newRawTestAdapter: () => DatabaseAdapter;
+
 function _establishPooledTestPool(): Promise<
   import("./connection-adapters/abstract/connection-pool.js").ConnectionPool
 > {
@@ -109,6 +119,8 @@ function _establishPooledTestPool(): Promise<
       adapterFactory = () => new SQLite3Adapter(database) as unknown as DatabaseAdapter;
     }
 
+    newRawTestAdapter = adapterFactory;
+
     const handler = new ConnectionHandler();
     _pooledHandler = handler;
     // Name = "primary" so HashConfig#isPrimary() reports true and the
@@ -130,6 +142,7 @@ function _establishPooledTestPool(): Promise<
 }
 
 // Boot: initialize the pool eagerly so factory calls below are synchronous.
+// newRawTestAdapter is also set during this await.
 const _pool = await _establishPooledTestPool();
 
 /** Type alias for pool-leased adapters returned by test factories. */

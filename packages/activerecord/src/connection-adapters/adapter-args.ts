@@ -48,25 +48,45 @@ export function parseSqliteUrl(url: string): string {
 }
 
 /**
- * Build the adapter-constructor argument from a configuration hash.
+ * Build the adapter-constructor argument *tuple* from a configuration hash.
+ * Returned as an array so callers can spread directly: `new Klass(...args)`.
  *
- * SQLite expects the database string directly; PG/MySQL take a config hash
- * (or URL string). Mirrors the inline normalization done by `connectsTo` /
- * `establishWithConfig` and is the resolver used by
- * {@link ConnectionPool#newConnection} when no `adapterFactory` is provided.
+ * Shape per adapter:
+ *  - SQLite: `[filename, options]` — `SQLite3Adapter(filename, options?)`
+ *    preserves SQLite-specific keys (`readonly`, `driver`, `pragmas`,
+ *    `strict`, `statementLimit`, `preparedStatements`).
+ *  - PG/MySQL: `[config]` — single config object (or URL string).
+ *
+ * Mirrors the inline normalization in `connectsTo` / `establishWithConfig`
+ * and is the resolver used by {@link ConnectionPool#newConnection} when no
+ * `adapterFactory` is provided.
  */
 export function buildAdapterArg(
   adapterName: string,
   configuration: Record<string, unknown>,
-): unknown {
+): unknown[] {
   const normalized = normalizeAdapterName(adapterName);
   const url = configuration.url as string | undefined;
   const database = configuration.database as string | undefined;
   if (normalized === "sqlite") {
-    return parseSqliteUrl(url || database || ":memory:");
+    const filename = parseSqliteUrl(url || database || ":memory:");
+    // Keep only the SQLite3Adapter constructor's `options` keys so we don't
+    // forward unrelated database.yml entries (pool, host, etc.) into the
+    // options object. The adapter ignores unknown keys today but accepting
+    // them here would lock in a foot-gun.
+    const { readonly, driver, pragmas, strict, statementLimit, preparedStatements } =
+      configuration as Record<string, unknown>;
+    const options: Record<string, unknown> = {};
+    if (readonly !== undefined) options.readonly = readonly;
+    if (driver !== undefined) options.driver = driver;
+    if (pragmas !== undefined) options.pragmas = pragmas;
+    if (strict !== undefined) options.strict = strict;
+    if (statementLimit !== undefined) options.statementLimit = statementLimit;
+    if (preparedStatements !== undefined) options.preparedStatements = preparedStatements;
+    return Object.keys(options).length > 0 ? [filename, options] : [filename];
   }
   if (url && database === undefined) {
-    return url;
+    return [url];
   }
   const { adapter: _a, url: _u, username, ...rest } = configuration;
   const adapterConfig: Record<string, unknown> = { ...rest };
@@ -76,5 +96,5 @@ export function buildAdapterArg(
   if (adapterConfig.host === undefined) {
     adapterConfig.host = "localhost";
   }
-  return adapterConfig;
+  return [adapterConfig];
 }

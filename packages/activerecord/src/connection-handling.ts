@@ -121,7 +121,7 @@ export function connectsTo(
                 `await the pool's \`adapterReady\` promise after \`connectsTo\` returns.`,
             );
           }
-          return new AdapterClass(adapterArg);
+          return new AdapterClass(...(adapterArg as unknown[]));
         },
       });
       pool.adapterReady = adapterReady;
@@ -614,15 +614,16 @@ async function establishWithConfig(
   // like register("mysql2", ...) aren't shadowed by normalization.
   const AdapterClass = await _loadAdapter(adapterName);
 
-  let adapterArg: unknown;
-  if (normalized === "sqlite") {
-    adapterArg = parseSqliteUrl(url || (config?.database as string) || ":memory:");
-  } else if (url) {
-    adapterArg = url;
-  } else if (config) {
-    adapterArg = buildAdapterArg(adapterName, config);
+  // For SQLite, preserve adapter options (pragmas, strict, readonly, driver,
+  // etc.) by routing through buildAdapterArg whenever a config hash is given;
+  // bare-URL inputs fall through to the simple filename path.
+  let adapterArgs: unknown[];
+  if (config) {
+    adapterArgs = buildAdapterArg(adapterName, config);
+  } else if (normalized === "sqlite") {
+    adapterArgs = [parseSqliteUrl(url || ":memory:")];
   } else {
-    adapterArg = url;
+    adapterArgs = [url];
   }
 
   const dbConfig = new HashConfig(
@@ -653,7 +654,8 @@ async function establishWithConfig(
     owner: modelClass.connectionClassForSelf(),
     role,
     shard,
-    adapterFactory: () => new AdapterClass(adapterArg),
+    adapterFactory: () =>
+      new (AdapterClass as new (...args: unknown[]) => DatabaseAdapter)(...adapterArgs),
   });
 }
 

@@ -45,11 +45,11 @@ export function _setDefaultEnvGetter(fn: () => string): void {
 // #newConnection can resolve adapter classes without a circular import.
 type AdapterClassResolver = (adapterName: string) => Promise<new (...args: any[]) => unknown>;
 type AdapterClassResolverSync = (adapterName: string) => (new (...args: any[]) => unknown) | null;
-type AdapterArgBuilder = (adapterName: string, configuration: Record<string, unknown>) => unknown;
+type AdapterArgBuilder = (adapterName: string, configuration: Record<string, unknown>) => unknown[];
 type LoadErrorLookup = (adapterName: string) => unknown | null;
 let _adapterClassResolver: AdapterClassResolver | null = null;
 let _adapterClassResolverSync: AdapterClassResolverSync | null = null;
-let _buildAdapterArg: AdapterArgBuilder = (_n, c) => c;
+let _buildAdapterArg: AdapterArgBuilder = (_n, c) => [c];
 let _loadAdapterError: LoadErrorLookup | null = null;
 
 /** @internal Set by connection-handling.ts to break circular dependency */
@@ -186,8 +186,8 @@ export class DatabaseConfig {
         loadError ? { cause: loadError } : undefined,
       );
     }
-    const arg = _buildAdapterArg(this.adapter, this.configuration as Record<string, unknown>);
-    return new (Klass as new (a: unknown) => unknown)(arg);
+    const args = _buildAdapterArg(this.adapter, this.configuration as Record<string, unknown>);
+    return new (Klass as new (...args: unknown[]) => unknown)(...args);
   }
 
   /**

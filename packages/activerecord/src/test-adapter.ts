@@ -266,13 +266,14 @@ export async function cleanupTestAdapter(_adapter: DatabaseAdapter): Promise<voi
  * @internal
  */
 export async function resetTestAdapterState(): Promise<void> {
-  await dropAllTables(_pool.leaseConnection() as DatabaseAdapter);
+  const adapter = _pool.leaseConnection() as DatabaseAdapter;
+  await dropAllTables(adapter);
   // Clear schema cache on all live pool connections (mirrors Rails'
   // ConnectionPool#clear_cache!). Tests that construct raw adapters directly
   // also need the global signature cache cleared.
   _pool.connections.forEach((a) => a.schemaCache?.clear());
   clearAppliedSchemaSignatures();
-  restoreCanonicalSchemaSignaturesUnlessAdapter(_pool.leaseConnection() as DatabaseAdapter);
+  restoreCanonicalSchemaSignaturesUnlessAdapter(adapter);
   clearDdlTrackers();
   Base._modelsByName.clear();
 }

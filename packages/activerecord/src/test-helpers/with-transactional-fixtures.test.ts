@@ -287,10 +287,10 @@ describe("withTransactionalFixtures (pooled adapter)", () => {
 // so the test targets that mechanism directly — the invariant boundary is the
 // same whether callers go via Base.transaction() or withinNewTransaction().
 //
-// E3 deleted the AsyncContext _txVisible() filter from SidecarFixtures.
-// E5 rewires createSidecarTestAdapter() through the pool so each chain's
-// checkout provides natural isolation. These tests are skipped from E3 until
-// E5 ships; they document the invariant and will be unskipped at that point.
+// F5 removed SidecarFixtures; createSidecarTestAdapter() now returns the raw
+// pool-leased adapter directly. Pool-backed isolation (each checkout gets its
+// own AsyncLocalStorage context) lands at E5; these tests remain skipped until
+// that ships.
 describe("concurrency isolation: two concurrent transaction chains stay independent", () => {
   // Skipped at E3: AsyncContext filter removed; pool-backed isolation lands at E5.
   it.skip("chain B sees openTransactions=0 while chain A is mid-transaction", async () => {

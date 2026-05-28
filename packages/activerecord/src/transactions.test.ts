@@ -13,6 +13,7 @@ import {
 } from "./index.js";
 
 import { createSidecarTestAdapter, createTestAdapter } from "./test-adapter.js";
+import { NullTransaction } from "./connection-adapters/abstract/transaction.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
 import { useHandlerTransactionalFixtures } from "./test-helpers/use-handler-transactional-fixtures.js";
@@ -2551,8 +2552,7 @@ describe("SchemaAdapter TM delegation", () => {
 
     expect((testAdapter as any).inTransaction).toBe(false);
     expect((testAdapter as any).openTransactions).toBe(0);
-    const noTx = (testAdapter as any).currentTransaction?.();
-    expect(noTx?.constructor?.name).toBe("NullTransaction");
+    expect((testAdapter as any).currentTransaction?.()).toBeInstanceOf(NullTransaction);
 
     await testAdapter.beginTransaction();
     expect((testAdapter as any).inTransaction).toBe(true);

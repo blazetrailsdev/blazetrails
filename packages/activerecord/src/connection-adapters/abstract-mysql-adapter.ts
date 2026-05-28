@@ -628,6 +628,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       defaultOrChanges,
     );
     await this._execMutation(`ALTER TABLE ${this.quoteTableName(tableName)} ${fragment}`);
+    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
   }
 
   /**
@@ -746,6 +747,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   ): Promise<void> {
     const sql = `ALTER TABLE ${this.quoteTableName(tableName)} ${await this.changeColumnForAlter(tableName, columnName, type, options)}`;
     await this._execMutation(sql);
+    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
   }
 
   async buildChangeColumnDefinition(
@@ -801,6 +803,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     const createIndex = await this.buildCreateIndexDefinition(tableName, columnName, options);
     if (!createIndex) return;
     await this._execMutation(this.schemaStatements().schemaCreation.accept(createIndex));
+    this.schemaCache.clearDataSourceCacheBang(this.pool, tableName);
   }
 
   /**

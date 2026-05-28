@@ -2224,6 +2224,11 @@ export class Base extends Model {
     for (const [key, value] of Object.entries(row)) {
       record._attributes.writeFromDatabase(key, value);
     }
+    // A SELECT that projects only a subset of columns yields a row with just
+    // those keys. Narrow the attribute set to the projected columns so
+    // hasAttribute() reflects what was loaded, not the full schema —
+    // mirrors Rails' build_from_database materializing only result columns.
+    record._attributes.narrowTo(Object.keys(row));
     record._newRecord = false;
     (record as any)._dirty.snapshot(record._attributes);
     record.changesApplied();

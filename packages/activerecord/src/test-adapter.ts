@@ -25,7 +25,6 @@ import type { SchemaCache } from "./connection-adapters/schema-cache.js";
 import {
   clearAppliedSchemaSignatures,
   restoreCanonicalSchemaSignatures,
-  restoreCanonicalSchemaSignaturesUnlessAdapter,
 } from "./test-helpers/define-schema.js";
 import { dropAllTables } from "./test-helpers/drop-all-tables.js";
 import { SidecarFixtures } from "./test-helpers/sidecar-fixtures.js";
@@ -56,93 +55,13 @@ export const adapterType: "sqlite" | "postgres" | "mysql" = PG_TEST_URL
     ? "mysql"
     : "sqlite";
 
-let _sharedAdapter: any = null;
-
-let _factory: () => TestAdapterFixtures;
-
-if (PG_TEST_URL) {
-  const { PostgreSQLAdapter } = await import("./connection-adapters/postgresql-adapter.js");
-  _sharedAdapter = new PostgreSQLAdapter(PG_TEST_URL);
-  const rows = await _sharedAdapter.execute(
-    `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
-  );
-  for (const r of rows) {
-    try {
-      await _sharedAdapter.exec(`DROP TABLE IF EXISTS "${(r as any).tablename}" CASCADE`);
-    } catch {}
-  }
-  _factory = () => new TestAdapterFixtures(_sharedAdapter);
-} else if (MYSQL_TEST_URL) {
-  const { Mysql2Adapter } = await import("./connection-adapters/mysql2-adapter.js");
-  _sharedAdapter = new Mysql2Adapter(MYSQL_TEST_URL);
-  const rows = await _sharedAdapter.execute(`SHOW TABLES`);
-  for (const r of rows) {
-    const table = Object.values(r)[0] as string;
-    try {
-      await _sharedAdapter.exec(`DROP TABLE IF EXISTS \`${table}\``);
-    } catch {}
-  }
-  _factory = () => new TestAdapterFixtures(_sharedAdapter);
-} else {
-  const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
-  _sharedAdapter = new SQLite3Adapter(":memory:");
-  _factory = () => new TestAdapterFixtures(_sharedAdapter);
-}
-
-/** DatabaseAdapter wrapper returned by {@link createTestAdapter}, with test-only accessors. */
-export interface TestDatabaseAdapter extends DatabaseAdapter {
-  readonly innerAdapter: DatabaseAdapter;
-  readonly tables: Set<string>;
-}
-
-/**
- * Create a fresh adapter for testing. Phase 7 removed the lazy auto-schema
- * machinery, so this is now a thin factory — every returned instance wraps
- * the same shared inner adapter.
- */
-export function createTestAdapter(): TestDatabaseAdapter {
-  return _factory();
-}
-
-/**
- * Adapter shape returned by {@link createSidecarTestAdapter}. The shared
- * real adapter is always one of the concrete `AbstractAdapter` subclasses
- * (SQLite3 / PostgreSQL / Mysql2), so `transactionManager` is guaranteed
- * at runtime. Exposing it on the type lets sidecar callers satisfy
- * {@link TransactionalFixturesAdapter} without casts.
- *
- * @internal
- */
-export type SidecarAdapter = DatabaseAdapter & { transactionManager: TransactionManager };
-
-/**
- * Path 2 sidecar factory: returns the shared real {@link DatabaseAdapter}
- * directly alongside a fresh {@link SidecarFixtures} handle. Use this
- * when migrating off the `TestAdapterFixtures` wrapper — callers can
- * issue DB ops on `adapter` directly (no delegation overhead) and use
- * `fixtures` for the test-only TX visibility / DDL tracking concerns.
- *
- * Additive in sub-PR (a); consumers migrate in sub-PR (b); the wrapper
- * is deleted in sub-PR (c).
- *
- * @internal
- */
-export function createSidecarTestAdapter(): {
-  adapter: SidecarAdapter;
-  fixtures: SidecarFixtures;
-} {
-  return { adapter: _sharedAdapter, fixtures: new SidecarFixtures(_sharedAdapter) };
-}
-
-// --- Phase B: pooled test adapter -------------------------------------------
+// --- Connection pool infrastructure -----------------------------------------
 //
-// Connection-pool-backed test adapter. Wires through PoolConfig +
-// ConnectionHandler so tests can lease + pin a real connection per test,
-// matching Rails' `setup_transactional_fixtures` pattern at
-// `vendor/rails/activerecord/lib/active_record/test_fixtures.rb:172-184`.
-//
-// Coexists with `_sharedAdapter` / `createSidecarTestAdapter()`; consumer
-// migration and shared-singleton deletion are follow-up PRs.
+// All test adapters now route through a real ConnectionPool. Pool size 1
+// serves as the shared-cache
+// equivalent for drivers that compile with SQLITE_OMIT_SHARED_CACHE
+// (better-sqlite3, expo-sqlite) — a single-connection pool serializes all
+// concurrent callers through the lease queue with no AsyncContext filter needed.
 
 let _pooledHandler:
   | import("./connection-adapters/abstract/connection-handler.js").ConnectionHandler
@@ -229,20 +148,63 @@ function _establishPooledTestPool(): Promise<
   return _pooledPoolPromise;
 }
 
+// Boot: initialize the pool eagerly so factory calls below are synchronous.
+const _pool = await _establishPooledTestPool();
+const _factory: () => TestAdapterFixtures = () =>
+  new TestAdapterFixtures(_pool.leaseConnection() as DatabaseAdapter);
+
+/** DatabaseAdapter wrapper returned by {@link createTestAdapter}, with test-only accessors. */
+export interface TestDatabaseAdapter extends DatabaseAdapter {
+  readonly innerAdapter: DatabaseAdapter;
+  readonly tables: Set<string>;
+}
+
 /**
- * Phase B factory: returns a {@link DatabaseAdapter} leased from a real
- * connection pool, plus a fresh {@link SidecarFixtures} handle. Mirrors
- * Rails' transactional-fixtures wiring (`Base.connection_handler.connection_pool_list(:writing)`
- * → `pool.pin_connection!` → `pool.lease_connection`).
+ * Create a fresh adapter for testing. Phase 7 removed the lazy auto-schema
+ * machinery, so this is now a thin factory — every returned instance wraps
+ * the same shared inner adapter.
+ */
+export function createTestAdapter(): TestDatabaseAdapter {
+  return _factory();
+}
+
+/**
+ * Adapter shape returned by {@link createSidecarTestAdapter}. The shared
+ * real adapter is always one of the concrete `AbstractAdapter` subclasses
+ * (SQLite3 / PostgreSQL / Mysql2), so `transactionManager` is guaranteed
+ * at runtime. Exposing it on the type lets sidecar callers satisfy
+ * {@link TransactionalFixturesAdapter} without casts.
+ *
+ * @internal
+ */
+export type SidecarAdapter = DatabaseAdapter & { transactionManager: TransactionManager };
+
+/**
+ * Returns a pool-leased {@link DatabaseAdapter} alongside a fresh
+ * {@link SidecarFixtures} handle. Callers can issue DB ops on `adapter`
+ * directly (no delegation overhead) and use `fixtures` for TX lifecycle.
+ *
+ * The pool is already initialized at module boot, so this call is synchronous.
+ *
+ * @internal
+ */
+export function createSidecarTestAdapter(): {
+  adapter: SidecarAdapter;
+  fixtures: SidecarFixtures;
+} {
+  const adapter = _pool.leaseConnection() as SidecarAdapter;
+  return { adapter, fixtures: new SidecarFixtures(adapter) };
+}
+
+/**
+ * Returns a {@link DatabaseAdapter} leased from the pool, plus a fresh
+ * {@link SidecarFixtures} handle. Mirrors Rails' transactional-fixtures
+ * wiring (`Base.connection_handler.connection_pool_list(:writing)` →
+ * `pool.pin_connection!` → `pool.lease_connection`).
  *
  * The pool itself is exposed so callers can call
  * `pool.pinConnectionBang(false)` / `pool.unpinConnectionBang()` per test
- * to mirror Rails' `pin_connection!(lock_threads)` lifecycle. Consumer
- * migration and the `withTransactionalFixtures` pool-integration land in
- * follow-up PRs (Phase C).
- *
- * Additive only: existing `createTestAdapter()` / `createSidecarTestAdapter()`
- * continue to return the `_sharedAdapter` singleton.
+ * to mirror Rails' `pin_connection!(lock_threads)` lifecycle.
  *
  * @internal
  */
@@ -268,10 +230,10 @@ export function _resetPooledTestAdapterForTests(): void {
 }
 
 /**
- * Clean up test data by dropping all tables in the shared adapter.
+ * Clean up test data by dropping all tables via a pool-leased connection.
  */
 export async function cleanupTestAdapter(_adapter: DatabaseAdapter): Promise<void> {
-  if (_sharedAdapter) await dropAllTables(_sharedAdapter);
+  await dropAllTables(_pool.leaseConnection() as DatabaseAdapter);
 }
 
 /**
@@ -300,20 +262,13 @@ export async function cleanupTestAdapter(_adapter: DatabaseAdapter): Promise<voi
  * @internal
  */
 export async function resetTestAdapterState(): Promise<void> {
-  if (_sharedAdapter) {
-    await dropAllTables(_sharedAdapter);
-    _sharedAdapter.schemaCache?.clear();
-  }
-  // Drop every adapter's signature cache, not just `_sharedAdapter`'s. Tests
-  // that construct raw adapters directly (e.g. adapter-cluster tests under
-  // `connection-adapters/**`) also accumulate entries; under the sidecar
-  // shape the wrapper isolation that used to mask this is gone.
+  await dropAllTables(_pool.leaseConnection() as DatabaseAdapter);
+  // Clear schema cache on all live pool connections (mirrors Rails'
+  // ConnectionPool#clear_cache!). Tests that construct raw adapters directly
+  // also need the global signature cache cleared.
+  _pool.connections.forEach((a) => a.schemaCache?.clear());
   clearAppliedSchemaSignatures();
-  if (_sharedAdapter) {
-    restoreCanonicalSchemaSignaturesUnlessAdapter(_sharedAdapter);
-  } else {
-    restoreCanonicalSchemaSignatures();
-  }
+  restoreCanonicalSchemaSignatures();
   clearDdlTrackers();
   Base._modelsByName.clear();
 }

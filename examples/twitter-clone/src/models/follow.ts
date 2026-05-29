@@ -1,4 +1,4 @@
-import { Base, registerModel } from "@blazetrails/activerecord";
+import { Base } from "@blazetrails/activerecord";
 
 /** Join record: `follower_id` follows `followee_id`. */
 export class Follow extends Base {
@@ -10,7 +10,5 @@ export class Follow extends Base {
     this.validates("followee_id", { presence: true });
     // Can't follow the same person twice.
     this.validatesUniqueness("followee_id", { scope: "follower_id" });
-
-    registerModel(this);
   }
 }

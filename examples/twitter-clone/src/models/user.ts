@@ -1,4 +1,4 @@
-import { Base, registerModel } from "@blazetrails/activerecord";
+import { Base } from "@blazetrails/activerecord";
 
 /**
  * A user who can tweet, follow others, and like tweets.
@@ -43,8 +43,5 @@ export class User extends Base {
     this.validates("display_name", { presence: true });
     // Uniqueness is DB-aware, so it has its own (AR-only) macro.
     this.validatesUniqueness("handle");
-
-    // Register so `className: "User"` / `through:` lookups resolve by name.
-    registerModel(this);
   }
 }

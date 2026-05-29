@@ -1,17 +1,24 @@
-import { connectAndMigrate } from "./db.js";
+import { connect, loadModelSchemas } from "./db.js";
+import { hasPendingMigrations } from "./migrator.js";
 import { buildApp } from "./app.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
-// Set DATABASE_URL to persist (e.g. sqlite3:twitter.db or a postgres:// URL).
-// Default is in-memory SQLite — a clean slate on every boot.
-const DATABASE_URL = process.env.DATABASE_URL;
 
 async function main() {
-  await connectAndMigrate(DATABASE_URL ?? undefined);
+  await connect();
+
+  // Rails refuses to boot with pending migrations; do the same and point at
+  // the CLI rather than silently auto-migrating.
+  if (await hasPendingMigrations()) {
+    console.error("Pending migrations. Run `pnpm db:setup` (or `pnpm db:migrate`) first.");
+    process.exit(1);
+  }
+
+  await loadModelSchemas();
+
   const app = buildApp();
   app.listen(PORT, () => {
     console.log(`Twitter clone listening on http://localhost:${PORT}`);
-    console.log(`  DB: ${DATABASE_URL ?? "in-memory sqlite"}`);
   });
 }
 

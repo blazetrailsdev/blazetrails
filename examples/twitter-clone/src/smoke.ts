@@ -1,13 +1,16 @@
 /**
- * End-to-end smoke test driving the models directly (no HTTP).
- * Run with `pnpm smoke`. Exercises create, associations, scopes,
- * through-associations, and the timeline query.
+ * End-to-end smoke test driving the models directly (no HTTP). The `smoke`
+ * script sets `NODE_ENV=test`, which `config/database.json` maps to an
+ * in-memory SQLite DB; this migrates it from scratch. Run with `pnpm smoke`.
  */
-import { connectAndMigrate } from "./db.js";
+import { connect, loadModelSchemas } from "./db.js";
+import { migrate } from "./migrator.js";
 import { User, Tweet, Follow } from "./models/index.js";
 
 async function main() {
-  await connectAndMigrate();
+  await connect();
+  await migrate();
+  await loadModelSchemas();
 
   const alice = await User.createBang({ handle: "alice", display_name: "Alice" });
   const bob = await User.createBang({ handle: "bob", display_name: "Bob" });

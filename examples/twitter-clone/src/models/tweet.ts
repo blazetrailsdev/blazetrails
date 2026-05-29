@@ -1,4 +1,4 @@
-import { Base, registerModel, Relation } from "@blazetrails/activerecord";
+import { Base, Relation } from "@blazetrails/activerecord";
 
 export class Tweet extends Base {
   static {
@@ -8,7 +8,5 @@ export class Tweet extends Base {
     this.validates("body", { presence: true, length: { maximum: 280 } });
 
     this.scope("recent", (rel: Relation<Tweet>) => rel.order("created_at", "desc"));
-
-    registerModel(this);
   }
 }

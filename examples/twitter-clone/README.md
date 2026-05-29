@@ -6,11 +6,12 @@ port of Rails' ActiveRecord — inside an [Express](https://expressjs.com/) app.
 
 It exercises the parts of ActiveRecord you reach for first:
 
-- **Connections & schema** — `Base.establishConnection` + `Schema.define`
-  with the same `create_table` DSL Rails migrations use (`db.ts`).
-- **Models** — `class X extends Base` with `this.attribute`, `belongsTo`,
-  `hasMany`, `hasMany … through:` (self-referential follows!), scopes, and
-  validations (`src/models/`).
+- **Migrations** — timestamped files in `db/migrate/`, each a `Migration`
+  subclass with a reversible `change()`, run through a Rails-style
+  `db:migrate` / `db:rollback` / `db:setup` CLI (`src/cli.ts`).
+- **Models** — `class X extends Base` with `belongsTo`, `hasMany`,
+  `hasMany … through:` (self-referential follows!), scopes, and validations
+  (`src/models/`).
 - **Querying** — `findByBang`, `where`, `order`, `includes` (eager loading),
   `limit`, scopes, association proxies (`user.tweets.createBang(...)`), and
   `count`.
@@ -29,21 +30,74 @@ Then, from this directory:
 
 ```sh
 pnpm install          # if you haven't already at the workspace root
-pnpm dump-schema      # (re)generate db/schema-columns.json from the schema
+pnpm db:setup         # create the database, run migrations, load seeds
 pnpm typecheck        # schema-driven type-check via trails-tsc (see below)
-pnpm smoke            # runs the whole flow against in-memory SQLite, no HTTP
-pnpm start            # boots the HTTP server on :3000 (in-memory SQLite)
+pnpm start            # boots the HTTP server on :3000
 ```
 
-To persist data across restarts (and seed it):
+`pnpm smoke` runs the whole flow end-to-end with no HTTP and no setup needed.
+It runs as `NODE_ENV=test`, which the config below maps to an in-memory DB,
+and migrates it from scratch.
 
-```sh
-DATABASE_URL=sqlite3:twitter.db pnpm seed
-DATABASE_URL=sqlite3:twitter.db pnpm start
+### Connection config
+
+All connection settings live in **`config/database.json`** — the single
+source of truth, like Rails' `config/database.yml`. It's keyed by
+environment; `NODE_ENV` (default `development`) picks the entry, and
+`Base.establishConnection()` reads the file with no arguments (see
+`src/db.ts`, which contains no config of its own):
+
+```json
+{
+  "development": { "adapter": "sqlite3", "database": "db/development.sqlite3", "pool": 5 },
+  "test": { "adapter": "sqlite3", "database": ":memory:", "pool": 1 },
+  "production": { "adapter": "sqlite3", "database": "db/production.sqlite3", "pool": 5 }
+}
 ```
 
-`DATABASE_URL` also accepts `postgres://…` / `mysql://…` — the model code is
-adapter-agnostic, exactly like Rails.
+To use Postgres or MySQL, edit this file (e.g.
+`{ "adapter": "postgresql", "database": "twitter", "host": "localhost" }`) —
+the model code is adapter-agnostic, exactly like Rails.
+
+## Database tasks
+
+A small `rails db:*`-style runner (`src/cli.ts`) wraps ActiveRecord's
+`Migration` / `MigrationRunner`:
+
+| Command                  | Description                                   |
+| ------------------------ | --------------------------------------------- |
+| `pnpm db:create`         | Create the database                           |
+| `pnpm db:drop`           | Delete the database                           |
+| `pnpm db:migrate`        | Run pending migrations, then dump the schema  |
+| `pnpm db:rollback [n]`   | Roll back the last `n` migrations (default 1) |
+| `pnpm db:migrate:status` | Show each migration's `up`/`down` state       |
+| `pnpm db:seed`           | Load `db/seeds.ts`                            |
+| `pnpm db:schema:dump`    | Regenerate `db/schema-columns.json`           |
+| `pnpm db:setup`          | `create` + `migrate` + `seed`                 |
+| `pnpm db:prepare`        | Create if needed, migrate, seed when empty    |
+| `pnpm db:reset`          | `drop` + `setup`                              |
+
+Migrations live in `db/migrate/<YYYYMMDDHHMMSS>_<name>.ts`:
+
+```ts
+import { Migration } from "@blazetrails/activerecord";
+
+export default class CreateUsers extends Migration {
+  async change() {
+    await this.createTable("users", (t) => {
+      t.string("handle");
+      t.string("display_name");
+      t.string("bio");
+      t.timestamps();
+    });
+  }
+}
+```
+
+The 14-digit filename prefix is the version recorded in `schema_migrations`.
+`change()` is reversible, so `db:rollback` drops the table automatically.
+Like Rails refusing to boot with pending migrations, `pnpm start` exits with
+a hint to run `db:migrate` if any migration is unapplied.
 
 ## API
 
@@ -84,7 +138,6 @@ export class User extends Base {
     this.hasMany("following", { through: "activeFollows", source: "followee", className: "User" });
     this.validates("handle", { presence: true });
     this.validatesUniqueness("handle");
-    registerModel(this);
   }
 }
 ```

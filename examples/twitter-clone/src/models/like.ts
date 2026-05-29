@@ -1,4 +1,4 @@
-import { Base, registerModel } from "@blazetrails/activerecord";
+import { Base } from "@blazetrails/activerecord";
 
 export class Like extends Base {
   static {
@@ -7,7 +7,5 @@ export class Like extends Base {
 
     // A user can like a given tweet at most once.
     this.validatesUniqueness("user_id", { scope: "tweet_id" });
-
-    registerModel(this);
   }
 }

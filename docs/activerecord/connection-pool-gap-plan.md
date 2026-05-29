@@ -165,7 +165,7 @@ reopen — Rails gates the suite `unless in_memory_db?`).
 
 **From #2534 (P12 query cache):**
 
-- [ ] ~20 LOC: move guard from `enableQueryCacheBang` to `QueryCache.run`; requires `run()` to accept pools or a discriminated union. Low priority.
+- [ ] ~20 LOC: move guard from `enableQueryCacheBang` to `QueryCache.run`; requires `run()` to accept pools or a discriminated union. Low priority. **Subsumed by `query-cache-mixin-plan.md` Phase 2** (pool-based `QueryCache.run`) — track there, not here.
 - [ ] decide whether to port "cache is available when using a not connected connection" (not present in the ported suite). Note: there is no `test/unported-files.ts` — unported notes are inline `it.skip` in `query-cache.test.ts`, where "query cache with forked processes" already lives.
 
 **From #2542 (P1 unit-test unskip):**

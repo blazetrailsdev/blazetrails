@@ -28,8 +28,8 @@ Verification:
 
 **Net: query caching is non-functional in the live path.** The mixin replaced
 the wrapper's plumbing (checkout, pool config, enable/disable surface) but not
-its behavior. The 54 behavioral tests in `query-cache.test.ts` that map to
-Rails `query_cache_test.rb` pass _only because they run against the wrapper_.
+its behavior. The behavioral tests in `query-cache.test.ts` that map to Rails
+`query_cache_test.rb` pass _only because they run against the wrapper_.
 
 ## Parity entanglement (do not regress)
 
@@ -38,21 +38,28 @@ Rails `query_cache_test.rb` pass _only because they run against the wrapper_.
   on the `QueryCache` class; **`cache`/`uncached` are on the `QueryCacheAdapter`
   wrapper** (`cache` property + `uncached` method). Deleting the wrapper without
   relocating these drops `query_cache.rb` to 3/5.
-- **test:compare** — `query_cache_test.rb` → `query-cache.test.ts` at 54 OK / 13
-  skipped. Test names are matched verbatim; they cannot be renamed or dropped,
-  only migrated.
+- **test:compare** — `query_cache_test.rb` → `query-cache.test.ts`. Use the
+  **live** `pnpm test:compare` output as the baseline for migration scope (at
+  time of writing: 54 OK / 13 skipped). Note the snapshot in
+  `activerecord-test-compare-100.md` is stale (dated 2026-05-18) and disagrees;
+  trust the tool, not the snapshot. Test names are matched verbatim; they cannot
+  be renamed or dropped, only migrated.
 
 ## Rails references
 
 - `vendor/rails/activerecord/lib/active_record/connection_adapters/abstract/query_cache.rb`
   — the mixin (`Store`, `compute_if_absent`, `dirties_query_cache`,
-  `ConnectionPoolConfiguration`). `select_all` consults `@query_cache` here.
+  `ConnectionPoolConfiguration`). **This is where the cache wiring lives**: the
+  module **overrides `select_all`** (line 236) to call
+  `lookup_sql_cache(sql, ...) || super` / `cache_sql(sql, ...) { super }`. The
+  override is the missing piece in trails.
+- `vendor/rails/activerecord/lib/active_record/connection_adapters/abstract/database_statements.rb`
+  — provides the **base** `select_all` (line 69) that the `query_cache.rb`
+  override wraps via `super`. Not edited for caching; it stays the uncached path.
 - `vendor/rails/activerecord/lib/active_record/query_cache.rb` —
   `ActiveRecord::QueryCache` middleware: `cache`/`uncached` ClassMethods operate
   on `connection_pool` (not an adapter); `self.run`/`self.complete(pools)`
   iterate pools.
-- `vendor/rails/activerecord/lib/active_record/connection_adapters/abstract/database_statements.rb`
-  — `select_all` → cache lookup/store; this is the missing wiring.
 
 ## Phased path
 
@@ -95,7 +102,7 @@ Files: `query-cache.ts` (+ its tests for these methods).
 
 ### Phase 3 — migrate tests, delete the wrapper, simplify `.inner` walks (cleanup)
 
-- Migrate the 54 `query_cache_test.rb`-matched tests in `query-cache.test.ts`
+- Migrate the `query_cache_test.rb`-matched tests in `query-cache.test.ts`
   from `new QueryCacheAdapter(inner)` to the mixin adapter, **names verbatim**.
   The wrapper-only tests with no Rails counterpart (`forwards Quoting methods to
 inner adapter`, the Quoting-forwarder fallback tests) are deleted with the

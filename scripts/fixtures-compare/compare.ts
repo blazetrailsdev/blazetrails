@@ -363,7 +363,7 @@ function unwrapSerializedYaml(v: unknown): unknown {
 
 function resolveEnumSymbol(table: string, attr: string, symbol: string): number | null | undefined {
   const map = ENUM_MAPS[table]?.[attr];
-  return map && symbol in map ? map[symbol] : undefined;
+  return map && Object.hasOwn(map, symbol) ? map[symbol] : undefined;
 }
 
 // prettier-ignore

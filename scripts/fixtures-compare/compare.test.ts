@@ -470,6 +470,15 @@ describe("enum-symbol comparator", () => {
     // A nil-mapped member doesn't match a non-null TS value.
     expect(compareValue(0, "forgotten", "ddd.last_read", idIndex, [], "books")).toBe(false);
   });
+  it("never resolves an enum member from Object.prototype keys", () => {
+    // `toString`/`constructor` are not declared enum members; the lookup must
+    // treat them as unmapped (soft-skip), not pull off the prototype.
+    const notes: string[] = [];
+    const skip = { n: 0 };
+    expect(compareValue(2, ":toString", "row.status", idIndex, notes, "books", skip)).toBe(true);
+    expect(skip.n).toBe(1);
+    expect(notes[0]).toMatch(/^enum-unmapped:/);
+  });
 });
 
 describe("buildIdIndex (implicit-id fallback)", () => {

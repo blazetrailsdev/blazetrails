@@ -7,6 +7,14 @@ import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 import { Associations, loadHasMany, loadHabtm, association } from "../associations.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
+import { useGlobalReset } from "../test-helpers/require-global-reset.js";
+
+// Opt into the global per-test reset (drop tables + clear model registry
+// between tests) plus a final reset on the way out. This file reuses the
+// shared pool and creates rows across tests; on PG/MySQL the autoincrement
+// sequence doesn't roll back, so without a real drop old id=1,2 rows survive
+// and a following test/file hits RecordNotUnique.
+useGlobalReset();
 
 function freshAdapter(): DatabaseAdapter {
   return createTestAdapter();

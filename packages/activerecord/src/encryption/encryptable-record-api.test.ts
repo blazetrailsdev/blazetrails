@@ -14,6 +14,14 @@ import {
 } from "./test-helpers.js";
 import { Scheme } from "./scheme.js";
 import { Configurable } from "./configurable.js";
+import { useGlobalReset } from "../test-helpers/require-global-reset.js";
+
+// Opt into the global per-test reset (drop tables + clear model registry
+// between tests) plus a final reset on the way out. This file reuses the
+// shared pool and redefines encryption models across tests; on PG/MySQL the
+// autoincrement sequence doesn't roll back, so without a real drop old
+// id=1,2 rows survive and a following test/file hits RecordNotUnique.
+useGlobalReset();
 
 describe("ActiveRecord::Encryption::EncryptableRecordApiTest", () => {
   let configSnapshot: ReturnType<typeof snapshotEncryptionConfig>;

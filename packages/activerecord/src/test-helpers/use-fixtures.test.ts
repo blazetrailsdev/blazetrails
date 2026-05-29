@@ -248,10 +248,14 @@ describe("fixtureRegistry conformance", () => {
 
 // Seed-level conformance: the structural checks above can't see whether the
 // model's primary key matches the *schema* table (id-less tables, custom-PK
-// columns like `ID`/`monkeyID`, NOT NULL timestamps, composite schema PKs).
+// columns like `ID`/`monkeyID`, NOT NULL timestamps, composite schema PKs), nor
+// strict-engine type mismatches that SQLite's dynamic typing hides (int→bool,
+// integer overflow, STI string into an integer column, tz datetime literals).
 // The only authoritative check is to actually seed each entry against the
-// canonical TEST_SCHEMA — exactly what the name-based API does at runtime. An
-// entry that can't seed must move to the registry's gap list, not stay exposed.
+// canonical TEST_SCHEMA — exactly what the name-based API does at runtime. This
+// runs on every CI engine (SQLite/PostgreSQL/MariaDB), so "seedable" means
+// seedable on the strictest engine. An entry that can't seed must move to the
+// registry's gap list, not stay exposed.
 describe("fixtureRegistry seeds against TEST_SCHEMA", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();

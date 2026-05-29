@@ -25,7 +25,7 @@ import type { Nodes } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { filterScopeForCreate } from "./association.js";
 import { RecordNotSaved, ConfigurationError, AssociationTypeMismatch } from "../errors.js";
-import { strictLoadingViolationBang } from "../strict-loading-violation.js";
+import { strictLoadingViolationBang } from "../core.js";
 import { RecordInvalid } from "../validations.js";
 import {
   HasManyThroughCantAssociateThroughHasOneOrManyReflection,

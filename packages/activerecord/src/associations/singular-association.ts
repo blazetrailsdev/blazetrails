@@ -1,7 +1,7 @@
 import type { Base } from "../base.js";
 import type { AssociationDefinition } from "../associations.js";
 import { Association } from "./association.js";
-import { strictLoadingViolationBang } from "../strict-loading-violation.js";
+import { strictLoadingViolationBang } from "../core.js";
 
 /**
  * Base class for has_one and belongs_to associations.

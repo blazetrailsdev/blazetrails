@@ -2,7 +2,7 @@ import type { Base } from "./base.js";
 import { Relation } from "./relation.js";
 import type { CollectionProxy } from "./associations/collection-proxy.js";
 import { _setAssociationRelationCtor } from "./associations/collection-proxy.js";
-import { strictLoadingViolationBang } from "./strict-loading-violation.js";
+import { strictLoadingViolationBang } from "./core.js";
 
 /**
  * A Relation produced by a collection association (e.g. `blog.posts`,

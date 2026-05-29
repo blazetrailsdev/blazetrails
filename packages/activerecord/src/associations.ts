@@ -52,7 +52,7 @@ export async function initializeAssociations(): Promise<void> {
   ]);
 }
 import { ConfigurationError, Rollback } from "./errors.js";
-import { strictLoadingViolationBang } from "./strict-loading-violation.js";
+import { strictLoadingViolationBang } from "./core.js";
 import { HasManyThroughAssociationNotFoundError } from "./associations/errors.js";
 import {
   AssociationNotFoundError,

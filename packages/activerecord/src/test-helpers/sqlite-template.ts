@@ -11,7 +11,10 @@
  * SQLite only. PG/MariaDB are out of scope for the spike — their phases land
  * separately and keep the current per-worker preload until then.
  *
- * Hard rule: no `node:*` / `process.*` fs APIs — the async fs-adapter only.
+ * Hard rule: no `node:*` / `process.*` fs APIs — all filesystem access goes
+ * through the activesupport fs-adapter. The clone path uses the adapter's
+ * sync `copyFileSync` / `unlinkSync` (the one-shot copy and the exit-handler
+ * unlink are simplest synchronous); async callers use `getFsAsync` / `exists`.
  * `process.env` reads are allowed (the env carries the handoff from
  * globalSetup to forked workers).
  */

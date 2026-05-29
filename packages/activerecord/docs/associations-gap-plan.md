@@ -1,9 +1,9 @@
 # Associations gap plan
 
 Originally 339 skipped tests across 33 files; 20 PRs across 9 tracks,
-organized by unlock potential. After the cleanup batch, **8 PRs shipped
-(A1–A4, B1, E1, F1, H1)** and **12 remain** (A5, B2, B3, C1–C3, D1, D2,
-E2, F2, G1, H2). Per-track unlock counts in the headers below are the
+organized by unlock potential. After the cleanup batch, **9 PRs shipped
+(A1–A4, B1, E1, F1, F2, H1)** and **11 remain** (A5, B2, B3, C1–C3, D1, D2,
+E2, G1, H2). Per-track unlock counts in the headers below are the
 original pre-cleanup aggregates; remaining work per track is whatever PRs
 are still listed. Some tests are gated on multiple PRs (noted in dependency
 graph). ~18 permanent-skip (marshal, Ruby-only), ~10 scattered single-test
@@ -167,24 +167,23 @@ fires callbacks directly, bypassing `addToTarget`. Skips
 
 ---
 
-## Track 6: HABTM (F1 shipped; F2 remaining — ~8 tests: scope-chain + extend:)
+## Track 6: HABTM (F1 + F2 shipped — scope-chain + extend: complete)
 
-### PR F2: HABTM `extend:` option + scope chain composition
+### PR F2: HABTM `extend:` option + scope chain composition ✓ SHIPPED
 
-**Problem:** `extend:` option is not implemented — module methods are not
-mixed into CollectionProxy. 4 tests are blocked on scope chain composition
-(scoped find on through/habtm incorrectly marks results readonly; `find`
-with `group:` option not supported on collection relation; `having()` not
-supported on scoped collection relation).
+**Status:** Shipped — `extend:` module hooking landed in #2613, and the
+scope-chain composition tests (scoped find on through/habtm not marked
+readonly; `find` with `group:`; `having()` on scoped collection relation)
+landed in #2574. All target tests are present, unskipped, and passing:
+`join with group`, `find grouped`, `find scoped grouped`,
+`find scoped grouped having` (`has-and-belongs-to-many-associations.test.ts`),
+`dynamic find all should respect readonly access`, and
+`through association readonly should be false`
+(`has-many-through-associations.test.ts`).
 
-**Files:**
-
-- `associations/collection-proxy.ts` — `extend:` mixin
-- `associations/collection-association.ts` — scope chain composition
-
-**Rails ref:** `collection_proxy.rb` `extend`, `collection_association.rb`
-
-**Est:** ~80 LOC
+The composition is wired via the `SCOPE_MUTATOR_BANGS` registry in
+`collection-proxy.ts` (`groupBang` / `havingBang` / `readonlyBang` /
+`extendingBang` survive the collection scope-chain merge).
 
 ---
 
@@ -263,7 +262,7 @@ D2 (blocked on Phase G fixtures)
 
 E2 (create() dedup; E1 unified dispatch shipped #2567)
 
-F2 (standalone; F1 shipped #2563)
+F2 ✓ shipped (#2574, #2613)
 
 A5 → G1 (has_one :through eager loading needs nested eager_load)
 
@@ -291,13 +290,13 @@ These are independent of each other and can run in parallel.
 
 ### Tier 3 — gated on Tier 1/2
 
-| PR  | Tests | Est LOC | Depends on | Why                                        |
-| --- | ----- | ------- | ---------- | ------------------------------------------ |
-| C2  | ~5    | ~40     | C1         | Inverse on push — completes inverse track  |
-| B2  | ~10   | ~100    | B1 ✓       | HMT concat — completes HMT write track     |
-| F2  | ~8    | ~80     | —          | HABTM extend + scope chain                 |
-| E2  | ~4    | ~80     | E1 ✓       | create() dedup — completes callback track  |
-| A5  | ~20   | ~150    | (A1–A4 ✓)  | Nested eager_load — hardest PR in the plan |
+| PR   | Tests | Est LOC | Depends on | Why                                        |
+| ---- | ----- | ------- | ---------- | ------------------------------------------ |
+| C2   | ~5    | ~40     | C1         | Inverse on push — completes inverse track  |
+| B2   | ~10   | ~100    | B1 ✓       | HMT concat — completes HMT write track     |
+| F2 ✓ | ~8    | ~80     | —          | HABTM extend + scope chain (#2574, #2613)  |
+| E2   | ~4    | ~80     | E1 ✓       | create() dedup — completes callback track  |
+| A5   | ~20   | ~150    | (A1–A4 ✓)  | Nested eager_load — hardest PR in the plan |
 
 ### Tier 4 — gated on Tier 3 or external blockers
 
@@ -316,7 +315,7 @@ If running multiple agents, these lanes have zero file overlap:
 - **Lane A:** A5 (preloader core A1–A4 shipped → eager_load)
 - **Lane B:** B2, B3 (HMT writes; B1 shipped — concat & delete paths independent)
 - **Lane C:** C1 → C2 (inverse_of)
-- **Lane E:** F2 (HABTM extend + scope chain — standalone; F1 shipped)
+- **Lane E:** F2 ✓ shipped (HABTM extend + scope chain — #2574, #2613)
 
 **Coverage:** 339 tests total. ~18 permanent-skip (marshal, Ruby-only),
 ~10 scattered single-test gaps (Track 9). All others accounted for above.

@@ -1365,12 +1365,14 @@ export class Relation<T extends Base> {
    * (`function () { return this.where(...) }`) and arrow scopes
    * (`(rel) => rel.where(...)`, `(rel, owner) => ...`) are all evaluated, with
    * the Rails `instance_exec(owner) || relation` falsy-fallback. A bare join
-   * has no owner instance, so the scope runs with `owner === undefined`. A
-   * scope that actually dereferences the absent owner throws; we catch and
-   * skip it (an owner-dependent scope can't be folded into an ownerless join),
-   * matching the prior behavior where such scopes were ignored entirely.
-   * Owner-independent scopes — whatever their arity — still apply, so the SQL
-   * matches JoinDependency's scope folding.
+   * has no owner instance, so the scope runs with `owner === undefined`.
+   *
+   * An owner-arg scope (arity >= 2) that dereferences the absent owner throws;
+   * we swallow that and skip the scope (an owner-dependent scope can't be
+   * folded into an ownerless join), matching the prior behavior where such
+   * scopes were ignored entirely. A 0/1-arity scope has no owner to depend on,
+   * so a throw there is a real bug — it propagates, exactly as
+   * JoinDependency's scope folding does (it doesn't rescue scope errors).
    *
    * @internal
    */
@@ -1381,10 +1383,11 @@ export class Relation<T extends Base> {
     let scopeRel: any;
     try {
       scopeRel = invokeScopeLambda(scope, baseRel, undefined as unknown as Base) || baseRel;
-    } catch {
-      // Owner-dependent scope evaluated against an absent owner — not
-      // representable in a bare join. Skip, as the pre-scope-folding code did.
-      return;
+    } catch (err) {
+      // Only an owner-arg scope can legitimately fail for lack of an owner;
+      // rethrow for owner-independent scopes so real errors aren't masked.
+      if (scope.length >= 2) return;
+      throw err;
     }
     if (scopeRel?._whereClause && !scopeRel._whereClause.isEmpty()) {
       predicates.push(scopeRel._whereClause.ast);

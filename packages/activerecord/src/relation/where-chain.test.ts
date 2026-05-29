@@ -40,6 +40,10 @@ beforeAll(async () => {
     rr_posts: postCols,
     cpk_shops: { name: "string" },
     cpk_orders: { shop_id: "integer", order_id: "integer", cpk_shop_id: "integer" },
+    wc_authors: authorCols,
+    wc_books: { name: "string", last_read: "integer" },
+    cpk_authors: authorCols,
+    cpk_shelf_books: { author_id: "integer", book_id: "integer", cpk_author_id: "integer" },
   });
 });
 
@@ -58,6 +62,48 @@ describe("WhereChainTest", () => {
   Associations.belongsTo.call(Post, "author", {});
   registerModel(Post);
   registerModel(Author);
+
+  // Mirrors Rails' Author#reading_listing / #unread_listing — has_one Book
+  // scoped to an enum value, with the enum column doubling as the foreign key
+  // (`-> { reading }, foreign_key: :last_read`). Because the join folds in the
+  // scope's `last_read = <enum int>` predicate AND the FK constraint
+  // `books.last_read = authors.id`, only the author whose id equals the enum
+  // integer (2 = :reading) can own a reading_listing. This is what exercises
+  // enum casting on the association FK in `where.associated`/`where.missing`.
+  class WcAuthor extends Base {
+    static {
+      this.attribute("name", "string");
+    }
+  }
+  class WcBook extends Base {
+    static {
+      this.attribute("name", "string");
+      this.attribute("last_read", "integer");
+      this.enum("last_read", { unread: 0, reading: 2, read: 3 });
+    }
+  }
+  registerModel("WcAuthor", WcAuthor);
+  registerModel("WcBook", WcBook);
+  Associations.hasOne.call(WcAuthor, "readingListing", {
+    className: "WcBook",
+    foreignKey: "last_read",
+    scope: (rel: any) => rel.merge((WcBook as any).reading()),
+  });
+  Associations.hasOne.call(WcAuthor, "unreadListing", {
+    className: "WcBook",
+    foreignKey: "last_read",
+    scope: (rel: any) => rel.merge((WcBook as any).unread()),
+  });
+  const NamedExtension = { namedExtension: () => true };
+
+  // Authors get explicit ids so the id == enum-int relationship holds across
+  // adapters (PG sequences don't roll back between transactional-fixture tests).
+  async function seedReadingFixture(): Promise<void> {
+    await WcAuthor.create({ id: 1, name: "A1" });
+    await WcAuthor.create({ id: 2, name: "A2" });
+    await WcAuthor.create({ id: 3, name: "A3" });
+    await WcBook.create({ name: "RR", last_read: 2 });
+  }
 
   it("associated with child association", () => {
     const sql = Post.all().whereAssociated("author").toSql();
@@ -137,35 +183,56 @@ describe("WhereChainTest", () => {
     expect(sql).not.toMatch(/IS NOT NULL/);
     expect(sql).toContain("ORDER BY");
   });
-  it.skip("associated with enum", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+  it("associated with enum", async () => {
+    await seedReadingFixture();
+    const result = await WcAuthor.all()
+      .joins("readingListing")
+      .where()
+      .associated("readingListing")
+      .first();
+    expect((result as any)?.id).toBe(2);
   });
-  it.skip("associated with enum ordered", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+  it("associated with enum ordered", async () => {
+    await seedReadingFixture();
+    const result = await WcAuthor.all()
+      .order({ id: "desc" })
+      .joins("readingListing")
+      .where()
+      .associated("readingListing")
+      .first();
+    expect((result as any)?.id).toBe(2);
   });
-  it.skip("associated with enum unscoped", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+  it("associated with enum unscoped", async () => {
+    await seedReadingFixture();
+    const result = await WcAuthor.all()
+      .unscope("where")
+      .joins("readingListing")
+      .where()
+      .associated("readingListing")
+      .first();
+    expect((result as any)?.id).toBe(2);
   });
-  it.skip("associated with enum extended early", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+  it("associated with enum extended early", async () => {
+    await seedReadingFixture();
+    const result = await WcAuthor.all()
+      .extending(NamedExtension)
+      .order({ id: "desc" })
+      .joins("readingListing")
+      .where()
+      .associated("readingListing")
+      .first();
+    expect((result as any)?.id).toBe(2);
   });
-  it.skip("associated with enum extended late", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+  it("associated with enum extended late", async () => {
+    await seedReadingFixture();
+    const result = await WcAuthor.all()
+      .order({ id: "desc" })
+      .joins("readingListing")
+      .where()
+      .associated("readingListing")
+      .extending(NamedExtension)
+      .first();
+    expect((result as any)?.id).toBe(2);
   });
   it("associated with add joins before", async () => {
     class JbAuthor extends Base {
@@ -385,41 +452,50 @@ describe("WhereChainTest", () => {
     expect(sql).toContain("JOIN");
     expect(sql).not.toMatch(/IS NULL/);
   });
+  // The missing-with-enum cluster joins `reading_listing` (inner) AND
+  // left-joins `unread_listing` — two has_one associations targeting the SAME
+  // table (Book) differentiated only by an enum scope. Rails aliases the second
+  // join; we don't yet, so `_addAssocJoin` throws on the same-table collision.
+  // BLOCKED on join table-aliasing (separate from the predicate-builder /
+  // scoped-join enum-cast fix landed here). See relation-gap-plan.md R4 note.
   it.skip("missing with enum", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+    /* blocked: same-table join aliasing (reading_listing + unread_listing → Book) */
   });
   it.skip("missing with enum ordered", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+    /* blocked: same-table join aliasing (reading_listing + unread_listing → Book) */
   });
   it.skip("missing with enum unscoped", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+    /* blocked: same-table join aliasing (reading_listing + unread_listing → Book) */
   });
   it.skip("missing with enum extended early", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+    /* blocked: same-table join aliasing (reading_listing + unread_listing → Book) */
   });
   it.skip("missing with enum extended late", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* fixture-dependent */
+    /* blocked: same-table join aliasing (reading_listing + unread_listing → Book) */
   });
-  it.skip("missing with composite primary key", () => {
-    // BLOCKED: relation — WhereChain feature gap (not/and/or chaining)
-    // ROOT-CAUSE: relation/where-chain.ts#WhereChain missing or incomplete Rails parity
-    // SCOPE: ~50 LOC in relation/where-chain.ts; affects ~27 tests in where-chain.test.ts
-    /* needs proper composite primary key model setup */
+  it("missing with composite primary key", async () => {
+    class CpkAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+      }
+    }
+    class CpkShelfBook extends Base {
+      static {
+        this.primaryKey = ["author_id", "book_id"];
+        this.attribute("author_id", "integer");
+        this.attribute("book_id", "integer");
+        this.attribute("cpk_author_id", "integer");
+      }
+    }
+    registerModel("CpkAuthor", CpkAuthor);
+    registerModel("CpkShelfBook", CpkShelfBook);
+    Associations.belongsTo.call(CpkShelfBook, "author", {
+      className: "CpkAuthor",
+      foreignKey: "cpk_author_id",
+    });
+    await CpkShelfBook.create({ author_id: 1, book_id: 2 });
+    const results = await CpkShelfBook.all().where().missing("author").toArray();
+    expect(results.length).toBeGreaterThan(0);
   });
 
   it("rewhere with alias condition", () => {

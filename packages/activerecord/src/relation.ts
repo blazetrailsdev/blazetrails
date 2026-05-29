@@ -1351,6 +1351,27 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * Append a macro-time association `scope:` lambda to a JOIN's ON
+   * predicates, mirroring JoinDependency's scope handling
+   * (associations/join-dependency.ts:272-282) and Rails' `joins(:assoc)`,
+   * which folds the reflection scope into the join constraint. Routing the
+   * scope's conditions through the target model's `where()` casts enum FK
+   * values (e.g. `where(last_read: :reading)` → `last_read = 2`), so
+   * `where.associated`/`where.missing` see the integer mapping that the
+   * raw column-to-column ON would otherwise skip.
+   *
+   * @internal
+   */
+  private _appendAssociationScope(predicates: Nodes.Node[], assocDef: any, targetModel: any): void {
+    const scope = assocDef.options.scope;
+    if (typeof scope !== "function") return;
+    const scopeRel = scope((targetModel as any)._allForPreload());
+    if (scopeRel?._whereClause && !scopeRel._whereClause.isEmpty()) {
+      predicates.push(scopeRel._whereClause.ast);
+    }
+  }
+
+  /**
    * Resolve an association name to one or more JOIN table/ON pairs.
    * Returns null if the name is not a recognized association.
    *
@@ -1392,6 +1413,7 @@ export class Relation<T extends Base> {
         predicates.push(tgt.get(inheritanceCol).in(stiNames));
       }
 
+      this._appendAssociationScope(predicates, assocDef, targetModel);
       return {
         table: targetTable,
         on: this._arelVisitor().compile(
@@ -1437,6 +1459,7 @@ export class Relation<T extends Base> {
         predicates.push(tgt.get(inheritanceCol).in(stiNames));
       }
 
+      this._appendAssociationScope(predicates, assocDef, targetModel);
       return {
         table: targetTable,
         on: this._arelVisitor().compile(

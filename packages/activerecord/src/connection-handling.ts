@@ -16,6 +16,7 @@ import {
   normalizeAdapterName,
   parseSqliteUrl,
 } from "./connection-adapters/adapter-args.js";
+import { installAdapterVisitor, clearAdapterVisitor } from "./arel-visitor-sync.js";
 import {
   AdapterNotFound,
   AdapterNotSpecified,
@@ -394,6 +395,9 @@ export function removeConnection(this: typeof Base): void {
     role: coreCurrentRole.call(this as any),
     shard: coreCurrentShard.call(this as any),
   });
+  // Forget the established dialect so the global Arel fallback resets to its
+  // default once the connection is gone.
+  clearAdapterVisitor();
 }
 
 export function connectionSpecificationName(this: typeof Base): string {
@@ -653,6 +657,12 @@ async function establishWithConfig(
     adapterFactory: () =>
       new (AdapterClass as new (...args: unknown[]) => DatabaseAdapter)(...adapterArgs),
   });
+
+  // Point the global Arel toSql fallback at this connection's dialect.
+  // Derived from the adapter name — no checkout — so it stays lazy (Rails
+  // never connects eagerly on establish_connection) and avoids the SQLite
+  // :memory: pool:1 checkout deadlock.
+  installAdapterVisitor(normalized);
 }
 
 async function autoConnect(modelClass: typeof Base): Promise<void> {

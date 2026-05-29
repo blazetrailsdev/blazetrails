@@ -37,7 +37,7 @@ export interface Core {
   readonlyBang(): this;
   isStrictLoading(): boolean;
   strictLoadingBang(value?: boolean, options?: { mode?: StrictLoadingMode }): this;
-  strictLoadingMode(): StrictLoadingMode | null;
+  strictLoadingMode(): StrictLoadingMode;
   isStrictLoadingAll(): boolean;
   isStrictLoadingNPlusOneOnly(): boolean;
   isFrozen(): boolean;
@@ -242,7 +242,7 @@ function effectiveStrictLoadingMode(record: StrictLoadingModeHost): StrictLoadin
   return record._strictLoadingMode ?? classMode ?? "all";
 }
 
-export function strictLoadingMode(this: StrictLoadingModeHost): StrictLoadingMode | null {
+export function strictLoadingMode(this: StrictLoadingModeHost): StrictLoadingMode {
   return effectiveStrictLoadingMode(this);
 }
 

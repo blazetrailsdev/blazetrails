@@ -497,16 +497,16 @@ describe("WhereChainTest", () => {
       className: "CpkAuthor",
       foreignKey: "cpk_author_id",
     });
+    const author = await CpkAuthor.create({ name: "Cpk" });
+    // One book WITH an author and one authorless book; missing("author") must
+    // return exactly the authorless row (a degraded missing() returning every
+    // row would wrongly include the associated book too).
+    await CpkShelfBook.create({ author_id: 1, book_id: 1, cpk_author_id: (author as any).id });
     await CpkShelfBook.create({ author_id: 1, book_id: 2 });
     const results = await CpkShelfBook.all().where().missing("author").toArray();
-    // The authorless book (no CpkAuthor with id = cpk_author_id) must be the
-    // one returned — not merely "some rows", which would also pass if missing()
-    // degraded to returning everything.
-    expect(
-      results.some(
-        (r: any) => r.readAttribute("author_id") === 1 && r.readAttribute("book_id") === 2,
-      ),
-    ).toBe(true);
+    expect(results).toHaveLength(1);
+    expect((results[0] as any).readAttribute("author_id")).toBe(1);
+    expect((results[0] as any).readAttribute("book_id")).toBe(2);
   });
 
   it("rewhere with alias condition", () => {

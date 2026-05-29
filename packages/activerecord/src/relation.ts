@@ -105,6 +105,7 @@ import { inspectExplainOption } from "./adapter.js";
 import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import { rubyInspectArray } from "./relation/ruby-inspect.js";
 import { JoinDependency } from "./associations/join-dependency.js";
+import { invokeScopeLambda } from "./associations/association-scope.js";
 import type { AliasTracker } from "./associations/alias-tracker.js";
 
 /**
@@ -1360,12 +1361,19 @@ export class Relation<T extends Base> {
    * `where.associated`/`where.missing` see the integer mapping that the
    * raw column-to-column ON would otherwise skip.
    *
+   * Invoked via `invokeScopeLambda` so 0-arity `this`-bound scopes
+   * (`function () { return this.where(...) }`) and arity-1/2 arrow scopes
+   * are all evaluated correctly, with the Rails `instance_exec(owner) ||
+   * relation` falsy-fallback. There is no owner instance in a bare join, so
+   * `undefined` is passed — owner-dependent scopes don't apply to a join.
+   *
    * @internal
    */
   private _appendAssociationScope(predicates: Nodes.Node[], assocDef: any, targetModel: any): void {
     const scope = assocDef.options.scope;
     if (typeof scope !== "function") return;
-    const scopeRel = scope((targetModel as any)._allForPreload());
+    const baseRel = (targetModel as any)._allForPreload();
+    const scopeRel = invokeScopeLambda(scope, baseRel, undefined as unknown as Base) || baseRel;
     if (scopeRel?._whereClause && !scopeRel._whereClause.isEmpty()) {
       predicates.push(scopeRel._whereClause.ast);
     }

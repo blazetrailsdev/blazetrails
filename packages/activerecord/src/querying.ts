@@ -22,7 +22,7 @@ export async function findBySql<T extends typeof Base>(
   opts: { allowRetry?: boolean } | ((record: InstanceType<T>) => void) = {},
   block?: (record: InstanceType<T>) => void,
 ): Promise<InstanceType<T>[]> {
-  const resolvedOpts = typeof opts === "function" ? {} : opts;
+  const resolvedOpts = typeof opts === "function" ? {} : (opts ?? {});
   const resolvedBlock = typeof opts === "function" ? opts : block;
   const rows = await _queryBySql.call(this, sql, binds, { allowRetry: resolvedOpts.allowRetry });
   return _loadFromSql.call<T, [Record<string, unknown>[], typeof resolvedBlock], InstanceType<T>[]>(

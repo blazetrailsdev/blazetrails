@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Nodes } from "@blazetrails/arel";
+import type { DatabaseAdapter } from "./adapter.js";
 import { AbstractAdapter } from "./connection-adapters/abstract-adapter.js";
 import { SQLite3Adapter } from "./connection-adapters/sqlite3-adapter.js";
 import { AdapterError, ConnectionFailed } from "./errors.js";
@@ -439,6 +440,39 @@ describe("AdapterConnectionTest", () => {
       (PostForRetryTest as any).where(absTagsCount.eq(2)).limit(1).toArray(),
     ).rejects.toBeInstanceOf(ConnectionFailed);
     expect(adapter.capturedAllowRetry).toBe(false);
+  });
+  it("a from(Arel node) clause does not reset the SELECT's retryable classification", async () => {
+    const adapter = new QueryTestAdapter();
+    adapter.simulateConnect();
+    PostForRetryTest.adapter = adapter as any;
+
+    // The raw-SQL WHERE makes the SELECT non-retryable. from() takes a
+    // retryable Arel node, which _toSqlWithoutSetOp compiles a second time
+    // through the shared visitor — that compile must not clobber the
+    // already-captured classification (regression: collector reset).
+    const fromNode = new Nodes.SqlLiteral("posts", { retryable: true });
+    await PostForRetryTest.where("1 = 1").from(fromNode).limit(1).toArray();
+    expect(adapter.capturedAllowRetry).toBe(false);
+
+    // A fully retryable query with a from(Arel node) stays retryable.
+    await PostForRetryTest.where({ id: 1 }).from(fromNode).limit(1).toArray();
+    expect(adapter.capturedAllowRetry).toBe(true);
+  });
+  it("findBySql tolerates a null opts argument without throwing", async () => {
+    const adapter = new QueryTestAdapter();
+    adapter.simulateConnect();
+    PostForRetryTest.adapter = adapter as any;
+
+    await expect(
+      (PostForRetryTest as any).findBySql("SELECT * FROM posts", [], null),
+    ).resolves.toEqual([]);
+  });
+  it("execQuery options type accepts allowRetry alongside prepare", () => {
+    const opts: NonNullable<Parameters<DatabaseAdapter["execQuery"]>[3]> = {
+      prepare: true,
+      allowRetry: true,
+    };
+    expect(opts.allowRetry).toBe(true);
   });
   it.skip("transaction restores after remote disconnection", () => {
     // BLOCKED: transactions

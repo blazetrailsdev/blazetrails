@@ -307,6 +307,11 @@ export class Relation<T extends Base> {
   // committing stale records/loaded state.
   private _loadToken = 0;
 
+  // Retryability of the most recently compiled SELECT, captured in
+  // _compileSelectSql before any FROM-clause recompile can reset the shared
+  // visitor's collector. Read by toArray() to set allowRetry.
+  private _lastSelectRetryable = false;
+
   private _table: Table | null = null;
 
   constructor(modelClass: typeof Base, table?: Table, predicateBuilder?: PredicateBuilder) {
@@ -2029,10 +2034,11 @@ export class Relation<T extends Base> {
       this.loadRecords(loadedRecords);
     } else {
       const sql = this._toSql();
-      // After _toSql(), the visitor's collector.retryable reflects whether every
-      // node in the compiled Arel tree is retryable. Raw SQL fragments set it false.
-      const v = this._setOperation ? null : this._selectVisitor();
-      const allowRetry = v ? ((v as any).collector?.retryable ?? false) : false;
+      // _compileSelectSql captures the SELECT's retryability into
+      // _lastSelectRetryable at compile time. Reading the visitor's collector
+      // here would be wrong: from(ArelNode) recompiles and resets it, and set
+      // operations compile each side separately.
+      const allowRetry = this._setOperation ? false : this._lastSelectRetryable;
       const result = await this._modelClass.connection.selectAll(
         sql,
         `${this._modelClass.name} Load`,
@@ -3720,7 +3726,13 @@ export class Relation<T extends Base> {
    */
   private _compileSelectSql(manager: { ast: Nodes.Node; toSql(): string }): string {
     const v = this._selectVisitor();
-    return v ? v.compile(manager.ast) : manager.toSql();
+    const sql = v ? v.compile(manager.ast) : manager.toSql();
+    // Capture the SELECT's retryability immediately after compilation. The
+    // shared adapter visitor's collector is reset on every compile() call, and
+    // _toSqlWithoutSetOp may compile again for from(ArelNode) FROM clauses —
+    // which would clobber the flag before toArray() reads it.
+    this._lastSelectRetryable = v ? ((v as any).collector?.retryable ?? false) : false;
+    return sql;
   }
 
   private _compileArelNode(node: Nodes.Node): string {

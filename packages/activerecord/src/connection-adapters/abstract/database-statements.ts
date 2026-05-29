@@ -238,8 +238,8 @@ export function toSqlAndBinds(
 export function cacheableQuery(
   this: DatabaseStatementsHost | void,
   klass: {
-    query?(sql: string): unknown;
-    partialQuery?(parts: unknown): unknown;
+    query?(sql: string, options?: { retryable?: boolean }): unknown;
+    partialQuery?(parts: unknown, options?: { retryable?: boolean }): unknown;
     partialQueryCollector?(): unknown;
   },
   arel: unknown,
@@ -256,7 +256,11 @@ export function cacheableQuery(
   // Prepared path: compile with bind extraction, return Query + raw binds
   if (host?.preparedStatements && klass.query && visitor && node instanceof Nodes.Node) {
     const [sql, binds] = visitor.compileWithBinds(node);
-    return [klass.query(sql), binds];
+    // Propagate the compiled tree's retryability so StatementCache.execute
+    // can default allowRetry correctly (Rails passes retryable: from the
+    // collector into the Query). Raw SQL fragments leave it false.
+    const retryable = (visitor as any).collector?.retryable ?? false;
+    return [klass.query(sql, { retryable }), binds];
   }
 
   // Unprepared path: compile through PartialQueryCollector to produce
@@ -265,10 +269,11 @@ export function cacheableQuery(
   if (klass.partialQueryCollector && klass.partialQuery && visitor && node instanceof Nodes.Node) {
     const collector = klass.partialQueryCollector() as {
       value: [unknown[], unknown[]];
+      retryable?: boolean;
     };
     visitor.compileWithCollector(node, collector);
     const [parts, collectedBinds] = collector.value;
-    return [klass.partialQuery(parts), collectedBinds];
+    return [klass.partialQuery(parts, { retryable: collector.retryable ?? false }), collectedBinds];
   }
 
   // Fallback: compile to SQL string

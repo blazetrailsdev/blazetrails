@@ -462,6 +462,13 @@ export class AbstractAdapter implements Quoting {
   // Mirrors Rails @unconfigured_connection: a raw connection that has been
   // opened but not yet run through configure_connection. verifyBang() promotes
   // it via attemptConfigureConnection() before marking the adapter verified.
+  //
+  // In Rails the only writer is the soft-deprecated `initialize` path that
+  // accepts a pre-opened raw connection instead of a config hash
+  // (abstract_adapter.rb:141); trails has not ported that constructor overload,
+  // so today this is set only in tests. The verifyBang() read-side is ported
+  // here to keep `verify!` faithful — wiring the deprecated constructor writer
+  // is a tracked follow-up.
   protected _unconfiguredConnection: AbstractAdapter | null = null;
   // Mirrors Rails @raw_connection_dirty. Setters land with the per-adapter
   // exec paths (PR 25b) and reconnect-with-restore (Wave 6 follow-up);

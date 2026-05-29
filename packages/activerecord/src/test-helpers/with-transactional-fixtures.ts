@@ -2,7 +2,6 @@ import { beforeAll, beforeEach, afterEach, afterAll } from "vitest";
 import type { DatabaseAdapter } from "../adapter.js";
 import { resetTestAdapterState } from "../test-adapter.js";
 import type { ConnectionPool } from "../connection-adapters/abstract/connection-pool.js";
-import { popSkipGlobalReset, pushSkipGlobalReset } from "./skip-global-reset.js";
 import {
   _restoreAppliedSchemaSignaturesForAdapter,
   _snapshotAppliedSchemaSignaturesForAdapter,
@@ -80,11 +79,11 @@ function pooledAdapterPool(adapter: TransactionalFixturesAdapter): ConnectionPoo
  * Mirrors Rails' transactional fixtures (`ActiveRecord::TestFixtures`:
  * `setup_fixtures` opens a transaction; `teardown_fixtures` rolls back).
  *
- * Files calling this helper opt out of the global `resetTestAdapterState`
- * beforeEach (in `test-setup-ar.ts`) for their duration, so a one-time
- * schema set up in `beforeAll` survives across tests. The helper runs
+ * The global `resetTestAdapterState` beforeEach (in `test-setup-ar.ts`) is
+ * opt-in and off by default, so a one-time schema set up in `beforeAll`
+ * survives across tests for free. The helper still runs
  * `resetTestAdapterState` in its own `afterAll` so other files are
- * unaffected.
+ * unaffected by leftover tables/data.
  *
  * Caller contract:
  *   - Set up schema in `beforeAll` *before* calling this helper, or inside
@@ -129,6 +128,14 @@ export interface WithTransactionalFixturesOptions {
   invalidateSchemaCache?: boolean;
 }
 
+/**
+ * Refcount of active transactional-fixtures scopes, so the outermost scope's
+ * `afterAll` is the one that runs the end-of-file `resetTestAdapterState()`.
+ *
+ * @internal
+ */
+let _txnFixtureDepth = 0;
+
 export function withTransactionalFixtures(
   getAdapter: () => TransactionalFixturesAdapter,
   options: WithTransactionalFixturesOptions = {},
@@ -142,14 +149,17 @@ export function withTransactionalFixtures(
   let outerSig: Map<string, string> | null = null;
 
   beforeAll(() => {
-    pushSkipGlobalReset();
+    _txnFixtureDepth += 1;
   });
 
   afterAll(async () => {
-    // Only reset when the outermost scope exits, mirroring Rails
-    // ConnectionPool#unpin_connection! finalizing at depth zero
-    // (connection_pool.rb:347).
-    if (popSkipGlobalReset() === 0) await resetTestAdapterState();
+    // The global beforeEach reset is opt-in (off by default), so there is no
+    // per-test drop to suppress here. We still reset once when the outermost
+    // transactional-fixtures scope exits so leftover tables/data don't bleed
+    // into the next file, mirroring Rails ConnectionPool#unpin_connection!
+    // finalizing at depth zero (connection_pool.rb:347).
+    _txnFixtureDepth -= 1;
+    if (_txnFixtureDepth === 0) await resetTestAdapterState();
   });
 
   beforeEach(async () => {

@@ -13,11 +13,13 @@
 import "@blazetrails/activesupport/sqlite/better-sqlite3";
 import { beforeEach } from "vitest";
 import { resetTestAdapterState } from "./test-adapter.js";
-import { shouldSkipGlobalReset } from "./test-helpers/skip-global-reset.js";
+import { shouldRunGlobalReset } from "./test-helpers/require-global-reset.js";
 
-// Wipe shared test-adapter state before every test so each test starts
-// from a clean slate.
+// Rails parity: schema is loaded once per suite and never reset between
+// tests — per-test cleanup is transactional rollback. The global reset is
+// therefore opt-in (off by default); only files that explicitly call
+// pushRequireGlobalReset() pay the full resetTestAdapterState() round-trip.
 beforeEach(async () => {
-  if (shouldSkipGlobalReset()) return;
+  if (!shouldRunGlobalReset()) return;
   await resetTestAdapterState();
 });

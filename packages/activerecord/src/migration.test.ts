@@ -3,7 +3,7 @@
  * Mirrors: activerecord/test/cases/migration_test.rb
  *          activerecord/test/cases/invertible_migration_test.rb
  */
-import { describe, it, expect, beforeEach, afterAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from "vitest";
 import { Base, MigrationContext, MigrationRunner, Migrator } from "./index.js";
 import { SchemaMigration } from "./schema-migration.js";
 import type { MigrationProxy } from "./migration.js";
@@ -16,6 +16,23 @@ import { Logger } from "@blazetrails/activesupport";
 import { TableDefinition } from "./connection-adapters/abstract/schema-definitions.js";
 import { Schema } from "./schema.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
+import {
+  popRequireGlobalReset,
+  pushRequireGlobalReset,
+} from "./test-helpers/require-global-reset.js";
+
+// Migration tests exercise DDL directly against the shared pool DB, where
+// CREATE/ALTER TABLE auto-commits and can't be rolled back by transactional
+// fixtures. They depend on the per-test global reset (resetTestAdapterState)
+// to drop accumulated tables between tests, so opt in for the whole file.
+// The global reset is off by default after the opt-in flip; pop in afterAll
+// so the elevated refcount doesn't leak into other files in the same worker.
+beforeAll(() => {
+  pushRequireGlobalReset();
+});
+afterAll(() => {
+  popRequireGlobalReset();
+});
 
 // Tables some tests rely on existing before any migration runs. Under
 // AR_NO_AUTO_SCHEMA=1 the test adapter no longer auto-creates missing
@@ -1198,9 +1215,10 @@ describe("Rails-guided: migrations", () => {
 // D-1 partial conversion: columnsHash()-only tests drop their adapter assignment
 // (adapter-independent). The 3 DB-operation tests and the DDL sub-describes retain
 // freshAdapterWithSchema()/freshContext() isolation — adding setupHandlerSuite() here
-// would call pushSkipGlobalReset() and prevent the per-test DDL cleanup that the
+// would suppress the per-test DDL cleanup (resetTestAdapterState) that the
 // MigrationContext-based tests (ReservedWordsMigrationTest, BulkAlterTable, etc.)
-// depend on. Same structural reason as transaction-instrumentation.test.ts.
+// depend on; the file opts into that reset at top level instead. Same
+// structural reason as transaction-instrumentation.test.ts.
 describe("MigrationTest", () => {
   let adapter: DatabaseAdapter;
 

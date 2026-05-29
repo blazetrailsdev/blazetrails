@@ -79,8 +79,12 @@ export class InverseOfAssociationRecursiveError extends ActiveRecordError {
   readonly reflection: string;
   readonly inverseOf: string;
 
-  constructor(reflection: string, inverseOf: string) {
-    super(`Inverse association ${reflection} (:${inverseOf}) is recursive.`);
+  constructor(reflection: string, inverseOf: string, associatedClass: string | null = null) {
+    super(
+      `Inverse association ${reflection} (:${inverseOf}${
+        associatedClass ? ` in ${associatedClass}` : ""
+      }) is recursive.`,
+    );
     this.name = "InverseOfAssociationRecursiveError";
     this.reflection = reflection;
     this.inverseOf = inverseOf;

@@ -84,28 +84,38 @@ Owns **generators, the migrator, `init`, the `db:*` CLI, and the
 pending-migration check**. Installable on its own; `trailties` depends on it
 and re-exports, deleting its duplicate copies.
 
-### 4.2 Dependency graph — a straight line, no loops
+### 4.2 Dependency graph — acyclic; runtime vs tooling split
+
+Target end-state, **after relocating the AR tsc-wrapper + bins** into the CLI
+(see §4.8):
 
 ```
 trails-tsc          (generic tsc-plugin framework; dep: tse-compiler — no AR dep)
    ▲
-activerecord        (runtime ORM; the AR model-scanner already lives here
-                     under src/tsc-wrapper/; ships DatabaseTasks)
-   ▲
-activerecord-cli    (generators, migrator, init, db CLI, pending-check)
-   ▲
-trailties           (drops its copies; re-exports from activerecord-cli)
+   │            ┌────────────────────────────┐
+activerecord    │  (pure runtime ORM + DatabaseTasks; NO trails-tsc dep)
+   ▲            │
+   └────────────┤
+activerecord-cli │  (AR tsc-wrapper + model-scanner, the trails-tsc /
+   ▲            │   trails-schema-dump bins, generators, migrator, init,
+   │            │   db CLI, pending-check)  →  depends on activerecord + trails-tsc
+trailties          (drops its copies; re-exports from activerecord-cli)
 ```
 
-Key facts that keep this clean (and corrected an earlier mistaken design):
+Edges: `activerecord-cli → activerecord`, `activerecord-cli → trails-tsc`,
+`trailties → activerecord-cli`. No cycles.
+
+Key facts:
 
 - `trails-tsc` is **generic** and does **not** import `activerecord` → no
-  `activerecord ↔ trails-tsc` loop.
-- The **AR model-scanner already lives in `activerecord`**
-  (`src/tsc-wrapper/ar-models-plugin.ts`, `ar-program.ts`). `activerecord-cli`
-  reuses it via its existing `activerecord` dependency → **no
-  `activerecord-cli → trails-tsc` edge**.
-- Each layer depends only on the one below it.
+  `activerecord ↔ trails-tsc` loop, regardless of where the AR wrapper lives.
+- **Today** the AR model-scanner + tsc-wrapper live in `activerecord`
+  (`src/tsc-wrapper/`), which is why `activerecord` currently depends on
+  `trails-tsc`. The plan **moves them to `activerecord-cli`** (§4.8), so
+  `activerecord` becomes pure runtime with one fewer dependency and the
+  scanner sits next to the generator that also needs it.
+- The only multi-edge node is `activerecord-cli` (→ `activerecord` +
+  `trails-tsc`), which is honest: it's the tooling layer.
 
 ### 4.3 No new `connect()` in core
 
@@ -156,7 +166,8 @@ export { User, Tweet, Follow, Like };
   autoload covers discovery, our append covers it).
 - A **full scan** is needed only by `ar init` (adopt a pre-existing `models/`
   dir) and an optional `ar models:manifest --rebuild`/verify. Those reuse the
-  scanner **already in `activerecord`** — no new dependency.
+  **model-scanner that moves into `activerecord-cli` alongside the generator**
+  (§4.8) — the same scanner the AR tsc-wrapper uses.
 
 ### 4.5 trails-tsc's role: scan + (optionally) verify, never write
 
@@ -190,9 +201,61 @@ models/index.ts               # GENERATED manifest (import + register + export)
 db.ts                         # generated glue: establishConnection + loadSchemas
 ```
 
+### 4.8 Install story, one CLI, and the tooling relocation
+
+**Two packages + a driver.** A bare-AR user installs:
+
+- `@blazetrails/activerecord` — runtime dep (you import models/Base from it).
+- `@blazetrails/activerecord-cli` — dev dep (tooling). Brings the `trails-tsc`
+  type-virtualizer transitively, so users never install `trails-tsc` directly.
+- a driver peer (`better-sqlite3` / `pg` / `mysql2`).
+
+Since `activerecord-cli` depends on `activerecord`, even installing only the
+CLI pulls the runtime in. Splitting by role (runtime dep vs dev dep) keeps it
+to two direct entries.
+
+**One CLI surface.** `activerecord-cli` exposes a single `ar` command that
+_delegates_ to the wrappers rather than asking users to learn several
+binaries: `ar typecheck` → the `trails-tsc` virtualizer, `ar schema:dump` →
+`trails-schema-dump`, plus `ar init / generate / db:*`. `trails-tsc` remains
+directly invokable by its own name (editors, build pipelines, `tsconfig`
+setups want the drop-in `tsc`); `ar typecheck` is the convenience alias, not a
+replacement. Do **not** re-declare the `trails-tsc` bin in two packages — that
+is a PATH-collision footgun.
+
+**Relocation (part of this plan, not a future note).** Move the AR
+type-tooling out of the runtime package:
+
+- Move `activerecord/src/tsc-wrapper/` (the AR virtualizer plugin,
+  `ar-program`, the model-scanner) into `activerecord-cli`.
+- Move the `trails-tsc`, `trails-schema-dump`, `trails-models-dump` **bins**
+  from `activerecord`'s `package.json` to `activerecord-cli`'s.
+- Drop `@blazetrails/trails-tsc` from `activerecord`'s dependencies;
+  `activerecord` becomes pure runtime. Add `activerecord` + `trails-tsc` as
+  `activerecord-cli`'s deps.
+
+This reinforces the runtime/tooling split and the two-package story (zero-
+declare models _require_ the virtualizer, which now ships with the tooling
+package, exactly where it belongs).
+
+**One wrinkle to plan for — a dev-only cycle.** `activerecord`'s own
+`virtualized-dx-tests` are type-checked by the wrapper (today
+`packages/activerecord/dist/tsc-wrapper/cli.js`). After the move, that
+type-check consumes `activerecord-cli`, i.e. `activerecord` (devDependency) →
+`activerecord-cli` → `activerecord`. This never reaches published runtime
+deps — it's a monorepo dev-only edge that pnpm workspaces resolve fine — but
+the `test:types:virtualized` script must repoint to the relocated CLI, and
+`trailties` / any CI invoking `activerecord`'s old `trails-tsc` bin path must
+update. If we'd rather avoid even the dev cycle, the lighter variant is to
+relocate **only the bins** (thin wrappers) to `activerecord-cli` while leaving
+the wrapper _library_ in `activerecord` for self-test — at the cost of
+`activerecord` keeping its `trails-tsc` dep. The full move is the cleaner
+end-state; the bin-only move is the low-risk increment.
+
 ## 5. CLI surface (`activerecord-cli`)
 
-Backed by the existing `Migration` / `MigrationRunner` / `DatabaseTasks`:
+Backed by the existing `Migration` / `MigrationRunner` / `DatabaseTasks`, plus
+the relocated type-tooling (§4.8):
 
 | Command                                   | Notes                                                           |
 | ----------------------------------------- | --------------------------------------------------------------- |
@@ -205,6 +268,11 @@ Backed by the existing `Migration` / `MigrationRunner` / `DatabaseTasks`:
 | `ar db:seed`                              | run `db/seeds.ts`                                               |
 | `ar db:schema:dump`                       | regenerate `db/schema-columns.json` (for `trails-tsc --schema`) |
 | `ar db:setup` / `db:prepare` / `db:reset` | composites                                                      |
+| `ar typecheck`                            | delegates to the `trails-tsc` virtualizer (`--schema`)          |
+| `ar schema:dump`                          | delegates to `trails-schema-dump`                               |
+
+`trails-tsc` / `trails-schema-dump` stay directly invokable by name;
+`ar typecheck` / `ar schema:dump` are convenience aliases (§4.8).
 
 The **pending-migration check** lives here (or in the web layer), invoked at
 boot — mirroring Rails' `CheckPending` railtie middleware, **not** AR core.

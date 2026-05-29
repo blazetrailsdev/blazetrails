@@ -114,6 +114,50 @@ enum*`, raw-SQL/table-alias hash select, etc.) are itemized under
 Items surfaced after the shipped batch (R1 #2566, R2 #2562, R3 #2551,
 R5 #2569, R6a+R6b #2564).
 
+### Actionable PR queue
+
+Open `[ ]` items bundled into ≤300-LOC work units, ordered by readiness.
+Detail/rationale in the per-PR sections below.
+
+**Ready now:**
+
+- **RF1 — FK-derivation consolidation** (~40–60 LOC, refactor). Fold the four
+  near-identical `derive_foreign_key` reimplementations in `relation.ts`
+  (`_resolveAssociationTarget` ~584, `_resolveHasManySubquery` ~620,
+  `_resolveHasManyJoin` ~655, `_resolveAssociationJoin` ~1455) into one helper
+  mirroring `Reflection#derive_foreign_key`, plus a direct-assertion test sweep
+  of the `.joins` string resolver's through/HABTM/STI branches. Files:
+  `relation.ts`, `relation/where.test.ts`. Source: #2590.
+- **RF2 — `where.test.ts` stub cleanup** (size TBD). Replace or remove the
+  synthetic, non-Rails-named placeholder stubs at `relation/where.test.ts`
+  ~252–498 with properly Rails-mirrored tests (verbatim name + body from
+  `where_test.rb`), so test:compare can match. Files: `relation/where.test.ts`.
+  Source: #2566.
+- **RF3 — `inOrderOf` type-cast** (~10–20 LOC). Add `type_cast_for_database`
+  value casting in `inOrderOf`. Files: `relation.ts` /
+  `relation/query-methods.ts`. Source: #2569. (Surfaces only once a
+  typed-column caller exists — low urgency.)
+
+**Blocked / needs a design decision (not a clean PR yet):**
+
+- **Join table-aliasing** (large, separate track) — two has_one associations to
+  the same target table in one query. Unblocks the 5 `missing with enum*` tests
+  (relation) and overlaps the associations H2 self-join work (AF6). Source:
+  #2582.
+- **Enum write-casting from string labels** — `create({ enumCol: "label" })` /
+  `where({ enumCol: "label" })` store/compare as `null` instead of casting
+  label → integer (enum _scope_ methods already cast). Source: #2582.
+- **Select-narrowing edges** — `select with hash and table alias`, `... with few
+tables` (per-join table aliasing); `reselect with default scope select`;
+  `select`/`select`-block arity validation. Feature-gated. Source: #2562.
+- **R6c — parameterized join strings** — `joins("... WHERE x = ?", value)` is
+  not Rails-faithful (`joins(*args)` wraps in `Arel.sql`, no bind interpolation).
+  Needs a design decision before any implementation. Source: #2564.
+- **Async `inspect()`** — the unloaded path needs sync DB I/O Rails does but JS
+  can't in a string-returning method; 4 `#inspect` + 3 `#pretty_print` tests
+  stay on weakened assertions until an async-inspect API is designed. Source:
+  #2617.
+
 **From #2551 (R3 Arel order identity / reverseOrder):**
 
 - [x] `reverseOrderBang` `{raw}` double-flip fixed (Done #2595) — now delegates

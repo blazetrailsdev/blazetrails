@@ -112,6 +112,58 @@ P13 (StandaloneConnection — blocked on Rails source refresh)
 Items surfaced after the shipped batches (#2529, #2530, #2532, #2534, #2535,
 #2539, #2542, #2547, #2553, #2554, #2561, #2570; follow-up PRs #2601, #2603, #2610).
 
+### Actionable PR queue
+
+Open `[ ]` items bundled into ≤300-LOC work units, ordered by readiness.
+Detail/rationale in the per-PR sections below.
+
+**Ready now:**
+
+- **PF1 — reconnect/verify lifecycle bundle** (~54 LOC). Add
+  `enableLazyTransactionsBang()` + `resetTransaction(restore:)` +
+  `attemptConfigureConnection()` to `reconnectBang()`; add the
+  `_unconfiguredConnection` fast-path to `verifyBang()`; add failure cleanup
+  (`_lastActivity = 0`, `_verified = false`) in `reconnectBang()`'s catch.
+  Files: abstract adapter (`reconnectBang`/`verifyBang`). Unblocks the
+  materialized/unmaterialized tx-restoration tests + "disconnect and recover on
+  #configure_connection failure". Source: #2539.
+- **PF2 — query-cache config polish** (~35 LOC). Move the guard from
+  `enableQueryCacheBang` to `QueryCache.run`; add the `"unlimited"` string alias
+  in `DatabaseConfigOptions["queryCache"]` (→ `max_size: null`); add the two
+  forked-process / not-connected cache tests to `unported-files.ts`. Files:
+  query-cache + `database-configurations.ts` + `unported-files.ts`. Source:
+  #2534.
+- **PF3 — P10 ConnectionManagement middleware** (~60 LOC). Create
+  `connection-management.ts` (Rails clears active connections after each
+  request). Open track; #2531 closed, needs a fresh attempt. Unblocks ~11
+  tests. Source: Track 5 / P10.
+- **PF4 — P4 opaque-URI merge order** (~15 LOC). Split
+  `ConnectionUrlResolver#toHash()` so structural fields win for opaque URIs.
+  Files: `connection-url-resolver.ts`. Source: #2529.
+- **PF5 — connection-handler skip re-audit** (triage, then sized). Re-check the
+  11 still-skipped `connection-handler.test.ts` tests now that P9 (nested
+  `connectedTo`) shipped — some may already unblock; the rest split by blocker
+  (process-fork = permanent, schema-cache = not-yet-impl). Files:
+  `connection-handler.test.ts`. Source: #2530, #2547.
+
+**Gated / deferred (external blocker or design decision):**
+
+- **Adapter `allowRetry` forwarding** (~15–25 LOC; gated on pool track) —
+  concrete `execQuery` overrides (`mysql2`/`postgresql`) must accept + forward
+  `allowRetry` once `execute → withRawConnection` threads it. Source: #2601.
+- **`cachedFindBy` StatementCache reconcile** (~30–50 LOC; gated on porting
+  `cachedFindBy` off its current `findBy` bypass). Source: #2601.
+- **Env-resolution unify** (~20–40 LOC, low priority) — `fromEnv()` `currentEnv`
+  vs `forCurrentEnv` `defaultEnv` can disagree when `TRAILS_ENV != defaultEnv`.
+  Source: #2603.
+- **Per-class callback registry** (~15 LOC; only if a concrete adapter ever
+  registers its own checkout/checkin callback). Source: #2610.
+- **P13 StandaloneConnection** (~40 LOC + 4 tests; blocked on a Rails source
+  refresh — the class isn't in the vendored snapshot). Source: #2570.
+- **Reap/flush expire audit** — glance at other paths that re-add to
+  `_available` without expiring first (a double-lease bug was fixed in
+  `clearReloadableConnections`). Source: #2570.
+
 **From #2539 (P2 lifecycle):**
 
 - [ ] ~30 LOC: add `enableLazyTransactionsBang()` + `resetTransaction(restore:)` + `attemptConfigureConnection()` to `reconnectBang()` — unblocks the materialized/unmaterialized transaction-restoration tests still skipped.

@@ -77,6 +77,106 @@ shipped.
 Items surfaced after the shipped batch (A1 #2550, A2 #2568, A3 #2555,
 A4 #2559, B1 #2557, E1 #2567, F1 #2563, H1 #2556).
 
+### Actionable PR queue
+
+The open `[ ]` items below, bundled into ≤300-LOC, non-overlapping work units
+and ordered by readiness. Each line is scope · files · unblocks · est · source.
+The per-PR sections that follow are the detail / rationale for each item.
+
+**Ready now (no unmerged dependency):**
+
+- **AF1 — inverse-of completion** (~65 LOC). Add the `foreignKeyFor(record)`
+  gate to `Association#inverseAssociationFor`, and teach
+  `canFindInverseOfAutomatically` to handle composite (`queryConstraints`) FKs.
+  Files: `associations/association.ts`, `reflection.ts`,
+  `inverse-associations.test.ts`. Unblocks the 2 composite-FK
+  automatic-inverse tests. Source: #2584.
+- **AF2 — CollectionProxy add-path unification** (~110–150 LOC). Route
+  `push`/`<<` (and the through/HABTM `_pushThrough` branch) through
+  `_addToTarget`, and finish the `CollectionProxy#size` port (`!find_target?`,
+  `@association_ids`, `group_values`, `distinct_value` guards). Files:
+  `associations/collection-proxy.ts`, `associations/collection-association.ts`,
+  `inverse-associations.test.ts`. Unblocks 4 has-many-inversing dedup tests.
+  Source: #2583, #2591.
+- **AF3 — HMT array-assignment build** (~90–160 LOC). Route new-owner
+  `CollectionAssociation#replace` through `replace_records → concat` so
+  `post.people = [..]` / `Category.new(authors: [..])` build through-rows in
+  memory; route `throughScopeAttributes` through `throughScope(assoc) ?? scope`.
+  Files: `associations/collection-association.ts`,
+  `associations/has-many-through-association.ts`. Unblocks
+  `test_both_parent_ids_set_when_saving_new`,
+  `test_assign_array_to_new_record_builds_join_records`. Source: #2581.
+- **AF4 — HMT delete completion** (~160 LOC). Unskip the 3 `join-model.test.ts`
+  deletion tests (string-id / type-mismatch / nonstandard-id) and wire
+  `CollectionAssociation#deleteAll` through `deleteOrNullifyAllRecords`; also
+  route the through `deleteAll()` branch through `deleteRecords` so the join
+  model's counter-cache callbacks fire. Files: `join-model.test.ts`,
+  `associations/collection-association.ts`,
+  `associations/has-many-through-association.ts`. Source: #2575, #2602.
+- **AF5 — eager_load raise semantics** (~150 LOC, new track entry).
+  Distinguish raise-worthy specs (polymorphic / misspelled →
+  `EagerLoadPolymorphicError` / `ConfigurationError`) from capability-gap
+  fallbacks (CPK / unjoinable-through) in `addAssociation`/`_walkSpec`. Files:
+  `associations/join-dependency.ts`, `relation.ts`. Unblocks
+  `eager_test.rb:1639` mirror + polymorphic-references stubs. Source: #2571.
+- **AF6 — H2 alias-tracker self-join** (~200 LOC). JoinDependency AliasTracker
+  self-join alias emission. Files: `associations/join-dependency.ts`,
+  `associations/alias-tracker.ts`. Unblocks the 3 nested-through self-join
+  tests (`taggings_authors_join` etc.). Source: #2585.
+- **AF7 — strict-loading exec_queries parity** (~60 LOC + ~100 deletions).
+  Drop the owner-strict backstop in `association-relation.ts`
+  `_checkStrictLoading`; delete the method + 10 call sites + 9 vestigial
+  pass-through aggregate overrides. Files: `association-relation.ts`. Source:
+  #2615.
+- **AF8 — association-scope `nextChainScope`/`join`** (~30–60 LOC). Wire `join`
+  into `nextChainScope` (Arel constraint nodes), move the polymorphic `_type`
+  filter to a WHERE via `applyScope`; audit `scope()` for
+  `extending! reflection.extensions`. Files:
+  `associations/association-scope.ts`. Source: #2556, #2599.
+- **AF9 — eager-load suggestions** (~40 LOC). Raise `AssociationNotFoundError`
+  on unknown top-level eager assoc in `preloader/branch.ts` `groupedRecords()`
+  (keep nested-through-null silent); rework the 2 misnamed flat-string tests to
+  Rails' nested-hash form. Files: `associations/preloader/branch.ts`,
+  `eager.test.ts`. Unblocks `exceptions have suggestions for fix`. Source:
+  #2594.
+- **AF10 — small-fix bundle** (~115 LOC, to ceiling). has_one inverse build
+  test (#2557, ~15) + `association.delete` nullify/delete-all else-branch test
+  (#2596, ~30) + delete dead free fns
+  `countRecords`/`deleteOrNullifyAllRecords`/`intersection` in
+  `has-many-association.ts` (#2596, ~10) +
+  `InverseOfAssociationNotFoundError`/`HasManyThroughAssociationNotFoundError`
+  DidYouMean-formatter alignment (#2594) + `InverseOfAssociationRecursiveError`
+  class + recursion detection (#2591, ~50).
+
+**Gated (sequence after the listed PR):**
+
+- **AF11 — strict-loading test unblocks** (~90 LOC + 6 tests; after AF7).
+  Record-level `reload` interaction (2 tests), CollectionProxy unloaded-reader
+  lazy proxy (1), validation-context association tests (2), eager has_one
+  reflection opt-in (1). Files: `persistence.ts`, association loaders,
+  `strict-loading.test.ts`. Source: #2615.
+- **AF12 — G1b preload through-WHERE placement** (~30–50 LOC; after AF6). Fix
+  the `includes`-only path that mis-places a through-table WHERE onto the SOURCE
+  query. Files: `associations/preloader/through-association.ts`. Source: #2586.
+
+**Blocked / architectural (not yet a clean PR):**
+
+- **Collection-store unification** — merge `_cachedAssociations` and
+  CollectionProxy `_target` into one store (Rails' single `@target`). Large;
+  blocks faithful ports of several inverse dedup tests. Source: #2591.
+- **`join_middle_table_alias`** — blocked on two infra gaps: middle HABTM
+  reflection hidden in `normalizedReflections`, and
+  `JoinDependency#addAssociation` bailing on composite-PK join targets. Source:
+  #2563, #2608.
+- **Persisted-owner HABTM source-FK governance** — fix the
+  `makeHabtmWithCallbacks` test schema first, then read the join model's
+  declared `associationForeignKey` in `_pushThrough`. Source: #2604.
+- **Callback dispatch collapse** — fold the 3 dispatch paths into the unified
+  one + Rails all-or-nothing `catch(:abort)`. Source: #2567.
+- **Nested-through remainder** — HABTM-into-polymorphic-source joins,
+  default_scope query-method injection, shared-source preload reset, nested-HMT
+  autosave exclusion; each a separate feature. Source: #2585.
+
 **From #2555 (A3 polymorphic guard):**
 
 - Minor (no action unless triggered): `branch.ts`

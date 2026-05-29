@@ -6394,8 +6394,9 @@ describe("RelationTest", () => {
       .toSql();
     expect(sql).toContain("INNER JOIN");
     // "posts.title" resolves to the qualified column (mirrors Rails arel_column),
-    // not a literal "posts"."posts.title".
-    expect(sql).toContain('"posts"."title"');
+    // not a literal "posts"."posts.title". Match either quote style (PG/SQLite
+    // double-quote, MySQL/MariaDB backtick).
+    expect(sql).toMatch(/[`"]posts[`"]\.[`"]title[`"]/);
   });
 
   it("joins with select custom attribute", async () => {

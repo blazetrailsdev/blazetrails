@@ -686,8 +686,9 @@ describe("resolveConfigForConnection / connectsTo with unset configurations", ()
 describe("establishConnection installs the matching Arel visitor", () => {
   afterEach(() => {
     setToSqlVisitor(Visitors.ToSql);
+    // establishConnection nulls _adapter up the prototype chain on entry, so
+    // clearing the handler's pools is the only reset needed here.
     Base.connectionHandler.clearAllConnectionsBang();
-    Base._adapter = null;
   });
 
   it("routes the global toSql visitor through the established adapter's dialect", async () => {
@@ -701,5 +702,24 @@ describe("establishConnection installs the matching Arel visitor", () => {
 
     // SQLite's visitor rewrites IS DISTINCT FROM NULL to IS NOT NULL.
     expect(node.toSql()).toBe(`"users"."name" IS NOT NULL`);
+  });
+
+  it("leaves the visitor untouched and does not throw when the database cannot be opened", async () => {
+    // Generic visitor installed; establishing against an unopenable path must
+    // not flip it, and the open failure must defer to the first real query.
+    setToSqlVisitor(Visitors.ToSql);
+    const users = new Table("users");
+    const node = users.get("name").isDistinctFrom(null);
+
+    class Unopenable extends Base {}
+    await expect(
+      Unopenable.establishConnection({
+        adapter: "sqlite3",
+        database: "no/such/dir/foo.sqlite3",
+        pool: 1,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(node.toSql()).toBe(`"users"."name" IS DISTINCT FROM NULL`);
   });
 });

@@ -41,6 +41,15 @@ import { IsolatedExecutionState } from "@blazetrails/activesupport";
 
 const PROHIBIT_SHARD_SWAPPING_KEY = Symbol.for("ar_prohibit_shard_swapping");
 
+/**
+ * The zero-arg constructor shape `setToSqlVisitor` expects — the global
+ * fallback visitor is built without a connection (see arel
+ * `node.ts#setToSqlVisitor`). Adapter visitors are normally connection-bound
+ * (`new Visitors.ToSql(connection)`), but their *constructor* is reused here
+ * only to pick the dialect class for the connection-less global path.
+ */
+type ToSqlVisitorConstructor = new () => { compile(node: Nodes.Node): string };
+
 // --- ConnectionHandling module methods (mixed into Base as static methods) ---
 
 // Mirrors: self == Base — own-property marker set only on the literal Base class,
@@ -626,12 +635,15 @@ export async function installAdapterVisitor(modelClass: typeof Base): Promise<vo
     await modelClass.withConnection((adapter: DatabaseAdapter) => {
       const visitor = (adapter as { visitor?: object } | null | undefined)?.visitor;
       if (visitor) {
-        setToSqlVisitor(
-          (visitor as object).constructor as new () => { compile(node: Nodes.Node): string },
-        );
+        setToSqlVisitor((visitor as object).constructor as ToSqlVisitorConstructor);
       }
     });
   } catch (error) {
+    // trails wraps every driver-level open/checkout failure as a
+    // `ConnectionNotEstablished` subclass (e.g. `DatabaseConnectionError`),
+    // mirroring Rails' adapter `connect`/`reconnect` rescue contract — so this
+    // is the right boundary: swallow connection-open failures, rethrow real
+    // wiring/programmer errors.
     if (!(error instanceof ConnectionNotEstablished)) throw error;
     // No connection available: dialect is irrelevant until one is opened.
   }

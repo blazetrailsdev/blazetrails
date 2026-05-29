@@ -799,21 +799,30 @@ function syncToAssociationInstance(record: Base, assocName: string, result: unkn
 }
 
 /**
- * Whether lazily loading `assocName` on `record` is a strict-loading
+ * Whether lazily loading an association on `record` is a strict-loading
  * violation. Mirrors Rails' `Association#violates_strict_loading?`:
- * a `strictLoading` option declared on the reflection wins over the
- * owner's flag (so `strict_loading: false` turns enforcement off even
- * when the owner is strict, and `strict_loading: true` turns it on),
- * otherwise the owner's `_strictLoading` flag decides.
+ *
+ *   return if @skip_strict_loading
+ *   return unless owner.validation_context.nil?
+ *   return reflection.strict_loading? if reflection.options.key?(:strict_loading)
+ *   owner.strict_loading? && !owner.strict_loading_n_plus_one_only?
+ *
+ * i.e. nothing is enforced inside a bypass block or a validation context; a
+ * `strictLoading` option declared on the reflection then wins over the owner's
+ * flag (`strict_loading: false` turns enforcement off even when the owner is
+ * strict, `strict_loading: true` turns it on); otherwise the owner's flag
+ * decides, except in `n_plus_one_only` mode where lazily loading the first
+ * level is allowed.
  *
  * @internal
  */
 function _violatesStrictLoading(record: Base, options: AssociationOptions): boolean {
   if (record._strictLoadingBypassCount) return false;
+  if (record._validationContext != null) return false;
   if (Object.prototype.hasOwnProperty.call(options, "strictLoading")) {
     return options.strictLoading === true;
   }
-  return record._strictLoading;
+  return record._strictLoading && !record.isStrictLoadingNPlusOneOnly();
 }
 
 /**

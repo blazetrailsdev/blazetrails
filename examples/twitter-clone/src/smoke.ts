@@ -3,6 +3,7 @@
  * script sets `TRAILS_ENV=test`, which `config/database.ts` maps to an
  * in-memory SQLite DB; this migrates it from scratch. Run with `pnpm smoke`.
  */
+import { RecordInvalid } from "@blazetrails/activerecord";
 import { connect, loadModelSchemas } from "./db.js";
 import { migrate } from "./migrator.js";
 import { User, Tweet, Follow } from "./models/index.js";
@@ -51,7 +52,13 @@ async function main() {
     console.error("FAIL: duplicate handle should have raised");
     process.exit(1);
   } catch (err) {
-    console.log("duplicate handle rejected:", (err as Error).message);
+    // Assert it's the expected validation failure — not a DB constraint error
+    // or some other unexpected throw masquerading as success.
+    if (!(err instanceof RecordInvalid)) {
+      console.error("FAIL: expected RecordInvalid, got:", err);
+      process.exit(1);
+    }
+    console.log("duplicate handle rejected:", err.message);
   }
 
   console.log("\nSmoke test passed ✅");

@@ -845,7 +845,7 @@ export class AbstractAdapter implements Quoting {
     // the base to own the raw-reconnect call (a cross-adapter refactor of the
     // PG/MySQL overrides) — tracked as a follow-up.
     const cleanupOnFailure = (error: unknown): never => {
-      const translated = this.translateExceptionClass(error, null, null);
+      const translated = this.translateExceptionClass(error, undefined, undefined);
       this._lastActivity = 0;
       this._verified = false;
       throw translated;

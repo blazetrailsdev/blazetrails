@@ -599,7 +599,8 @@ describe("AbstractAdapter reconnect/verify lifecycle", () => {
   it("reconnectBang re-enables lazy transactions, clears the cache, and reconfigures", async () => {
     const a = new ReconnectLifecycleAdapter();
     a.attachRawConnection();
-    a.transactionManager.disableLazyTransactionsBang();
+    await a.transactionManager.disableLazyTransactionsBang();
+    expect(a.transactionManager.isLazyTransactionsEnabled()).toBe(false);
 
     await a.reconnectBang();
 

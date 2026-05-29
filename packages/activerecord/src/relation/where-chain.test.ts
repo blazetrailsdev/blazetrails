@@ -101,11 +101,11 @@ describe("WhereChainTest", () => {
     await WcAuthor.deleteAll();
     await WcAuthor.create({ name: "A1" });
     const reader = await WcAuthor.create({ name: "A2" });
-    await WcAuthor.create({ name: "A3" });
+    const other = await WcAuthor.create({ name: "A3" });
     // A reading book (enum-cast last_read = 2) belonging to `reader`, plus a
     // non-reading book on another author to prove the scope filters.
     await WcBook.create({ name: "RR", last_read: 2, wc_author_id: (reader as any).id });
-    await WcBook.create({ name: "UR", last_read: 0, wc_author_id: (reader as any).id + 1 });
+    await WcBook.create({ name: "UR", last_read: 0, wc_author_id: (other as any).id });
     return (reader as any).id;
   }
 
@@ -499,7 +499,14 @@ describe("WhereChainTest", () => {
     });
     await CpkShelfBook.create({ author_id: 1, book_id: 2 });
     const results = await CpkShelfBook.all().where().missing("author").toArray();
-    expect(results.length).toBeGreaterThan(0);
+    // The authorless book (no CpkAuthor with id = cpk_author_id) must be the
+    // one returned — not merely "some rows", which would also pass if missing()
+    // degraded to returning everything.
+    expect(
+      results.some(
+        (r: any) => r.readAttribute("author_id") === 1 && r.readAttribute("book_id") === 2,
+      ),
+    ).toBe(true);
   });
 
   it("rewhere with alias condition", () => {

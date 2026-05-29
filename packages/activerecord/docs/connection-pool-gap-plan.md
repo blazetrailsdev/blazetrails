@@ -14,20 +14,20 @@ since shipped are marked ✓ — their residual edge cases (if any) are tracked
 in **Post-merge follow-ups** below. Only **ConnectionManagement middleware**
 (P10) and **Standalone connection** (P13) remain open.
 
-| Cluster                                | Tests | Status                                                                       |
-| -------------------------------------- | ----- | ---------------------------------------------------------------------------- |
-| Adapter retry/reconnect lifecycle      | 18    | ✓ P1/P2/P3 (#2542/#2539/#2553) shipped; `allowRetry` adapter wiring deferred |
-| Database config resolution             | 20    | ✓ P4/P5 (#2529/#2554) shipped; env-var + scheme-less URI follow-ups          |
-| DatabaseSelector middleware            | 16    | ✓ P11 #2548 shipped (test infra delivered)                                   |
-| Query cache (per-context broadcast)    | 14    | ✓ P12 #2534 shipped; minor guard/alias follow-ups                            |
-| Pool lifecycle (checkout/checkin/reap) | 12    | ✓ P6/P7 (#2535/#2561) shipped                                                |
-| ConnectionManagement middleware        | 11    | **OPEN** — entire class missing (P10)                                        |
-| ConnectionHandler multi-DB             | 11    | ✓ P8 #2530 shipped; re-audit residual handler skips                          |
-| Multi-DB switching                     | 11    | ✓ P9 #2547 shipped (`connectedTo` nested role+shard stack)                   |
-| Connection swapping nested             | 7     | ✓ P9 #2547 shipped                                                           |
-| Adapter leasing                        | 4     | ✓ P14 #2570 shipped (test harness delivered)                                 |
-| Standalone connection                  | 4     | **BLOCKED** — class missing (P13; needs Rails source refresh)                |
-| Pooled connections                     | 3     | ✓ P7 #2561 shipped                                                           |
+| Cluster                                | Tests | Status                                                                           |
+| -------------------------------------- | ----- | -------------------------------------------------------------------------------- |
+| Adapter retry/reconnect lifecycle      | 18    | ✓ P1/P2/P3 (#2542/#2539/#2553) shipped; `allowRetry` adapter wiring deferred     |
+| Database config resolution             | 20    | ✓ P4/P5 (#2529/#2554) shipped; env-var + bare-name URI follow-ups closed (#2603) |
+| DatabaseSelector middleware            | 16    | ✓ P11 #2548 shipped (test infra delivered)                                       |
+| Query cache (per-context broadcast)    | 14    | ✓ P12 #2534 shipped; minor guard/alias follow-ups                                |
+| Pool lifecycle (checkout/checkin/reap) | 12    | ✓ P6/P7 (#2535/#2561) shipped                                                    |
+| ConnectionManagement middleware        | 11    | **OPEN** — entire class missing (P10)                                            |
+| ConnectionHandler multi-DB             | 11    | ✓ P8 #2530 shipped; re-audit residual handler skips                              |
+| Multi-DB switching                     | 11    | ✓ P9 #2547 shipped (`connectedTo` nested role+shard stack)                       |
+| Connection swapping nested             | 7     | ✓ P9 #2547 shipped                                                               |
+| Adapter leasing                        | 4     | ✓ P14 #2570 shipped (test harness delivered)                                     |
+| Standalone connection                  | 4     | **BLOCKED** — class missing (P13; needs Rails source refresh)                    |
+| Pooled connections                     | 3     | ✓ P7 #2561 shipped                                                               |
 
 **Not counted here** (attributed to other blockers in same files):
 adapter.test.ts also has 22 fixture-blocked, 10 transaction-blocked,
@@ -110,7 +110,7 @@ P13 (StandaloneConnection — blocked on Rails source refresh)
 ## Post-merge follow-ups
 
 Items surfaced after the shipped batches (#2529, #2530, #2532, #2534, #2535,
-#2539, #2542, #2547, and #2553, #2554, #2561, #2570).
+#2539, #2542, #2547, #2553, #2554, #2561, #2570; follow-up PRs #2601, #2603).
 
 **From #2539 (P2 lifecycle):**
 
@@ -147,18 +147,16 @@ Items surfaced after the shipped batches (#2529, #2530, #2532, #2534, #2535,
 - All 7 `ConnectionSwappingNestedTest` cases un-skipped (granular role/shard, combined, `connectedToMany`, `preventWrites` granularity, `ApplicationRecord` preventWrites, class-reload). No regressions in shard-keys/connection-pool/handler suites.
 - Follow-up: re-check the 11 still-skipped `connection-handler.test.ts` tests now that nested switching is in place — some may already unblock.
 
-**From #2553 (P3 retryable query classification):** 4 confirmed bugs surfaced by Copilot review #2 (not fixed before merge):
+**From #2553 (P3 retryable query classification):** all 4 confirmed bugs from Copilot review #2 fixed in **#2601** — visitor collector reset (`_lastSelectRetryable` capture + FROM fold-in), `findBySql` null-opts crash, `StatementCache` retryable on Query/PartialQuery, widened `execQuery` type. Remaining:
 
-- [ ] ~15 LOC: visitor collector reset in `relation.ts toArray()`. `allowRetry` is read from `v.collector.retryable` after `_toSql()`, but `_toSqlWithoutSetOp` can call `sv.compile(raw)` a second time for `from(ArelNode)` paths. Fix: capture retryable inside `_compileSelectSql` via private `_lastSelectRetryable`, read in `toArray()`.
-- [ ] ~3 LOC: `findBySql` null-opts crash — `findBySql(sql, binds, undefined, block)` causes `resolvedOpts.allowRetry` to throw. Fix: `typeof opts === 'function' ? {} : (opts ?? {})`.
-- [ ] ~10 LOC: `StatementCache.create()` never sets `retryable` on Query/PartialQuery. In `cacheableQuery` (database-statements.ts) extract `collector.retryable` after compilation, pass as `retryable:` to `StatementCache.query()`/`partialQuery()`.
-- [ ] ~5 LOC: widen `execQuery(options?)` type to `{prepare?: boolean; allowRetry?: boolean}` in `adapter.ts` + `abstract-adapter.ts`.
-- Deferred (connection-pool track): wire `allowRetry` through `execute` → `withRawConnection` in real adapters (sqlite3, mysql2, pg) — needs pool integration. `QueryCacheAdapter.selectAll` from `query-cache.ts` needs separate assessment.
+- [ ] ~15-25 LOC (gated on connection-pool track): concrete adapter `execQuery` overrides (`mysql2-adapter.ts`, `postgresql-adapter.ts`) + their per-adapter `database-statements.ts` interface decls still type options as `{prepare?: boolean}` only — they don't accept/forward `allowRetry`. The abstract interface + default impl carry `{prepare?; allowRetry?}` but the default `execQuery` captures `allowRetry` and ignores it (`void options`, `database-statements.ts:1433-1435`) pending pool integration. When the pool track wires `allowRetry` through `execute → withRawConnection`, widen these concrete signatures AND read the flag.
+- [ ] ~30-50 LOC (gated on `cachedFindBy` port): `cachedFindBy` (`core.ts:626`) currently bypasses `StatementCache` (reroutes to `findBy`). When ported to actually use `StatementCache.execute`, reconcile with Rails — keep the `Query.retryable` design or switch to caller-passes-`allowRetry` like Rails' `cached_find_by`.
+- Architecture note: trails compiles the FROM clause separately from SELECT (string-replace), unlike Rails' single-collector compile. #2601 works around it via `_lastSelectRetryable` + fold-in in `_toSqlWithoutSetOp`; if the SQL builder is ever refactored to one visitor pass, that fold-in becomes unnecessary.
 
-**From #2554 (P5 protocolAdapterMapping):**
+**From #2554 (P5 protocolAdapterMapping):** both follow-ups shipped in **#2603** — `resolver with database uri containing only database name` (bare-name URI → `{ database: <name> }` via a `/^[A-Za-z0-9_-]+$/` carve-out that keeps dots/slashes/`:memory:` on the `{ url }` passthrough) and `separate database env vars` (per-name `PRIMARY_DATABASE_URL`/`ANIMALS_DATABASE_URL` resolution wired into `_buildConfigs`). Remaining:
 
-- [ ] ~30-60 LOC: unskip `resolver with database uri containing only database name`. Rails' URI parser turns a bare scheme-less `"foo"` into `{ database: "foo" }`, overriding config's database. Our `buildUrlHash` passes scheme-less strings through as `{ url }` to preserve SQLite `:memory:`/bare-path behavior. Needs dedicated reconcile in `connection-url-resolver.ts` / `url-config.ts buildUrlHash`.
-- [ ] ~50-100 LOC: unskip `separate database env vars`. Requires per-name env var resolution (`PRIMARY_DATABASE_URL` / `ANIMALS_DATABASE_URL`) in `database-configurations.ts`.
+- [ ] ~20-40 LOC (pre-existing, low priority): `fromEnv()` passes `currentEnv = TRAILS_ENV ?? NODE_ENV ?? defaultEnv` into `_buildConfigs`, but `DatabaseConfig#forCurrentEnv` resolves via `DatabaseConfigurations.defaultEnv`. If `TRAILS_ENV` differs from `defaultEnv`, the build-time guard and `forCurrentEnv` can disagree. No test exercises the mismatch; unify env resolution only if it bites.
+- Deviation: the bare-name carve-out is narrower than Rails' `URI::RFC2396_Parser` (which treats ANY scheme-less path as the DB name). Revisit only if a real config surfaces a bare DB name containing a dot.
 
 **From #2561 (P7 pool checkout/checkin):**
 

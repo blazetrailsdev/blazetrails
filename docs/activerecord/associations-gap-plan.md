@@ -52,9 +52,10 @@ Track 9 scattered single-test gaps (mostly standalone)
 | Track 9 | ~10   | ~10–40 each | —          | Counter-cache, readonly, join-node edges  |
 | D2      | ~24   | ~200        | Phase G    | has_one fixture bodies — external blocker |
 
-The deeper edge-case work (eager_load raise semantics, store unification,
-alias-tracker self-joins, etc.) is itemized under **Post-merge follow-ups**
-below — sized and ready to lift into new track entries when prioritized.
+The deeper edge-case work (eager_load raise semantics, collection-store
+unification, nested-through remainder, etc.) is itemized under **Post-merge
+follow-ups** below — sized and ready to lift into new track entries when
+prioritized.
 
 **Remaining coverage:** ~18 permanent-skip (marshal, Ruby-only), ~10 scattered
 single-test gaps (Track 9), ~24 fixture-gated (D2).

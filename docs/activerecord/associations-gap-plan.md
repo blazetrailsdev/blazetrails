@@ -1,28 +1,13 @@
 # Associations gap plan
 
-Originally 339 skipped tests across 33 files; 20 PRs across 9 tracks,
-organized by unlock potential. After two cleanup rounds, **19 of 20 PRs
-shipped** (A1–A5, B1–B3, C1–C3, D1, E1, E2, F1, F2, G1, H1, H2) and only
-**D2 remains** (has_one fixture bodies, blocked on Phase G). The residual
-edge cases surfaced after each shipped PR are tracked under **Post-merge
-follow-ups** below, not as open tracks. ~18 permanent-skip (marshal,
-Ruby-only), ~10 scattered single-test gaps (Track 9).
-
-Round-2 shipped (since the prior cleanup #2576): A5 #2571, B2 #2581,
-B3 #2575, C1+D1 #2584, C2+C3 #2591, E2 #2583, F2 #2574, G1 #2586, H2 #2585,
-plus follow-up PRs #2594, #2596, #2598, #2599, #2602, #2604, #2606, #2608,
-#2611, #2613, #2615.
-
-Round-3 shipped (follow-up PRs since #2616): #2629 (E2 — `_pushThrough` /
-`_createThrough` through `_addToTarget`), #2622 (Track 9 — `extension name` +
-dirty-target tests), #2620 (StrictLoadingScope module-private), #2619
-(strict_loading `:n_plus_one_only` mode + `actionOnStrictLoadingViolation`
-`:log`), #2630 (B3b — unskip HMT deletion tests), #2631 (B3 —
-`deleteAll` → `deleteOrNullifyAllRecords` base dispatch).
+Open work in the associations layer: **D2** (has_one fixture bodies, blocked on
+Phase G) and ~10 scattered single-test gaps (Track 9). ~18 tests are
+permanent-skip (marshal, Ruby-only). Edge cases that need follow-up work are
+tracked under **Post-merge follow-ups** below.
 
 ---
 
-## Track 4: has_one (D1 shipped #2584; D2 remaining — ~24 fixture-gated tests)
+## Track 4: has_one — D2 remaining (~24 fixture-gated tests)
 
 ### PR D2: has_one fixture bodies
 
@@ -39,21 +24,20 @@ implementation is largely complete but tests lack data.
 
 These are individual root causes that don't cluster into a track:
 
-| Test file                             | Gap                                                                                                                                             | Est       |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `has-many-associations.test.ts`       | Counter cache updates in memory after create/push/empty (3 tests)                                                                               | ~40 LOC   |
-| `belongs-to-associations.test.ts`     | `readonly` check on save (1 test)                                                                                                               | ~10 LOC   |
-| `nested-error.test.ts`                | Nested attributes error semantics (4 tests) — blocked on `accepts_nested_attributes_for`                                                        | Phase G   |
-| `extension.test.ts`                   | `:extend` hooking (#2613), `extension name` + dirty-target (#2622) shipped; only the 2 Marshal tests remain (no TS equivalent — permanent-skip) | permanent |
-| `required.test.ts`                    | `belongsToRequiredByDefault` config (1 test)                                                                                                    | ~10 LOC   |
-| `left-outer-join-association.test.ts` | Arel join node in left outer join (3 tests)                                                                                                     | ~30 LOC   |
-| `inner-join-association.test.ts`      | Inner join edge cases (2 tests)                                                                                                                 | ~20 LOC   |
+| Test file                             | Gap                                                                                      | Est       |
+| ------------------------------------- | ---------------------------------------------------------------------------------------- | --------- |
+| `has-many-associations.test.ts`       | Counter cache updates in memory after create/push/empty (3 tests)                        | ~40 LOC   |
+| `belongs-to-associations.test.ts`     | `readonly` check on save (1 test)                                                        | ~10 LOC   |
+| `nested-error.test.ts`                | Nested attributes error semantics (4 tests) — blocked on `accepts_nested_attributes_for` | Phase G   |
+| `extension.test.ts`                   | only the 2 Marshal tests remain — no TS equivalent (permanent-skip)                      | permanent |
+| `required.test.ts`                    | `belongsToRequiredByDefault` config (1 test)                                             | ~10 LOC   |
+| `left-outer-join-association.test.ts` | Arel join node in left outer join (3 tests)                                              | ~30 LOC   |
+| `inner-join-association.test.ts`      | Inner join edge cases (2 tests)                                                          | ~20 LOC   |
 
 ---
 
 ## Dependency graph
 
-A1–A5, B1–B3, C1–C3, D1, E1, E2, F1, F2, G1, H1, H2 all shipped.
 Remaining:
 
 ```
@@ -68,21 +52,18 @@ Track 9 scattered single-test gaps (mostly standalone)
 | Track 9 | ~10   | ~10–40 each | —          | Counter-cache, readonly, join-node edges  |
 | D2      | ~24   | ~200        | Phase G    | has_one fixture bodies — external blocker |
 
-The deeper edge-case work that surfaced from the shipped batch (eager_load
-raise semantics, store unification, alias-tracker self-joins, etc.) is
-itemized under **Post-merge follow-ups** below — sized and ready to lift
-into new track entries when prioritized.
+The deeper edge-case work (eager_load raise semantics, store unification,
+alias-tracker self-joins, etc.) is itemized under **Post-merge follow-ups**
+below — sized and ready to lift into new track entries when prioritized.
 
-**Coverage:** 339 tests total. ~18 permanent-skip (marshal, Ruby-only),
-~10 scattered single-test gaps (Track 9), ~24 fixture-gated (D2). All others
-shipped.
+**Remaining coverage:** ~18 permanent-skip (marshal, Ruby-only), ~10 scattered
+single-test gaps (Track 9), ~24 fixture-gated (D2).
 
 ---
 
 ## Post-merge follow-ups
 
-Items surfaced after the shipped batch (A1 #2550, A2 #2568, A3 #2555,
-A4 #2559, B1 #2557, E1 #2567, F1 #2563, H1 #2556).
+Forward-looking items needing follow-up work, grouped into PR-sized work units.
 
 ### Actionable PR queue
 
@@ -98,14 +79,12 @@ The per-PR sections that follow are the detail / rationale for each item.
   Files: `associations/association.ts`, `reflection.ts`,
   `inverse-associations.test.ts`. Unblocks the 2 composite-FK
   automatic-inverse tests. Source: #2584.
-- **AF2 — CollectionProxy#size port** (~30 LOC). The add-path unification
-  shipped — `push`/`<<` (#2591) and the through/HABTM `_pushThrough` /
-  `_createThrough` branch (#2629) now route through `_addToTarget`, unblocking
-  the 4 has-many-inversing dedup tests. Remaining: finish the
-  `CollectionProxy#size` port (`!find_target?` → `target.size` for new records,
-  `@association_ids`, `group_values`, `distinct_value` guards). Files:
-  `associations/collection-proxy.ts`, `associations/collection-association.ts`.
-  Source: #2591.
+- **AF2 — CollectionProxy#size port** (~30 LOC). Finish the
+  `CollectionProxy#size` port: add the `!find_target?` (new-record →
+  `target.size`), `@association_ids`, `group_values`, and `distinct_value`
+  guards (only the `!distinct_value && !target.empty?` branch exists today).
+  Files: `associations/collection-proxy.ts`,
+  `associations/collection-association.ts`. Source: #2591.
 - **AF3 — HMT array-assignment build** (~90–160 LOC). Route new-owner
   `CollectionAssociation#replace` through `replace_records → concat` so
   `post.people = [..]` / `Category.new(authors: [..])` build through-rows in
@@ -114,18 +93,16 @@ The per-PR sections that follow are the detail / rationale for each item.
   `associations/has-many-through-association.ts`. Unblocks
   `test_both_parent_ids_set_when_saving_new`,
   `test_assign_array_to_new_record_builds_join_records`. Source: #2581.
-- **AF4 — HMT delete override wiring** (~40 LOC). The 3 `join-model.test.ts`
-  deletion tests are unskipped (#2630) and `CollectionAssociation#deleteAll` now
-  routes through an overridable `deleteOrNullifyAllRecords(method)` base dispatch
-  (#2631). Remaining: wire the faithful-but-unwired standalone helpers in
-  `has-many-association.ts:207` / `has-many-through-association.ts:224` as actual
-  `protected override deleteOrNullifyAllRecords(method)` methods (currently dead
-  code). The HMT override (`deleteRecords(loadTarget, method)`) routes HMT
-  `delete_all` through join-row deletion with counter-cache callbacks
-  (`has_many_through_association.rb:136-138`) instead of base bulk `scope.deleteAll`.
-  Fold in the nil-method semantics fix (base treats `nil` method as DELETE;
-  Rails `HasMany#delete_count` nullifies). Files:
-  `associations/has-many-association.ts`,
+- **AF4 — HMT delete override wiring** (~40 LOC). Wire the faithful-but-unwired
+  standalone helpers in `has-many-association.ts:207` /
+  `has-many-through-association.ts:224` as actual `protected override
+deleteOrNullifyAllRecords(method)` methods of the `CollectionAssociation`
+  base dispatch (currently dead code). The HMT override
+  (`deleteRecords(loadTarget, method)`) routes HMT `delete_all` through join-row
+  deletion with counter-cache callbacks (`has_many_through_association.rb:136-138`)
+  instead of base bulk `scope.deleteAll`. Fold in the nil-method semantics fix
+  (base treats `nil` method as DELETE; Rails `HasMany#delete_count` nullifies).
+  Files: `associations/has-many-association.ts`,
   `associations/has-many-through-association.ts`. Source: #2575, #2602, #2631.
 - **AF5 — eager_load raise semantics** (~150 LOC, new track entry).
   Distinguish raise-worthy specs (polymorphic / misspelled →
@@ -157,7 +134,7 @@ The per-PR sections that follow are the detail / rationale for each item.
   test (#2557, ~15) + `association.delete` nullify/delete-all else-branch test
   (#2596, ~30) + delete dead free fns `countRecords`/`intersection` in
   `has-many-association.ts` (#2596, ~10; NB: do **not** delete
-  `deleteOrNullifyAllRecords` — AF4 wires it as the #2631 dispatch override) +
+  `deleteOrNullifyAllRecords` — AF4 wires it as the dispatch override) +
   `InverseOfAssociationNotFoundError`/`HasManyThroughAssociationNotFoundError`
   DidYouMean-formatter alignment (#2594) + `InverseOfAssociationRecursiveError`
   class + recursion detection (#2591, ~50).
@@ -403,8 +380,7 @@ inverse of derived automatically despite of composite foreign key`).
 **From #2594 (Did You Mean? on AssociationNotFoundError):**
 
 - [ ] ~40 LOC (Track-1): unskip `eager.test.ts` `exceptions have suggestions
-for fix`. The corrections plumbing shipped here; the blocker is a
-      separate `preloader/branch.ts` gap — `groupedRecords()` (~line 161)
+for fix`. The blocker is a `preloader/branch.ts` gap — `groupedRecords()` (~line 161)
       silently skips missing reflections for top-level eager loads instead of
       raising `AssociationNotFoundError`. Fix: (a) raise on unknown top-level
       association, (b) keep nested-through-null cases silent
@@ -424,18 +400,18 @@ for fix`. The corrections plumbing shipped here; the blocker is a
 - [ ] ~10 LOC cleanup: pre-existing dead free functions `countRecords`,
       `intersection` in `has-many-association.ts` (definition-only, no callers;
       lint doesn't flag them). NB: the third such free fn,
-      `deleteOrNullifyAllRecords`, is NOT dead-to-delete — AF4 (#2631) wires it
-      as the `protected override deleteOrNullifyAllRecords(method)` dispatch
-      point, so leave it.
+      `deleteOrNullifyAllRecords`, is NOT dead-to-delete — AF4 wires it as the
+      `protected override deleteOrNullifyAllRecords(method)` dispatch point, so
+      leave it.
 - Composite-PK non-through has_many uses a per-column `IN` over-approximation
   vs Rails' tuple `where(query_constraints => values)`; only matters if such a
   model is ported.
 
 **From #2585 (H2 nested-through edge cases — test-only):**
 
-- [ ] ~200 LOC: JoinDependency AliasTracker self-join alias emission (deferred
-      heavy half of H2; the HABTM-through alias variant shipped separately in
-      #2608). Unblocks 3 tests: `nested has many through with a table
+- [ ] ~200 LOC: JoinDependency AliasTracker self-join alias emission (the
+      heavy half of H2; the HABTM-through alias variant is handled separately).
+      Unblocks 3 tests: `nested has many through with a table
 referenced multiple times` (asserts canonical alias
       `taggings_authors_join`), `nested has many through with scope on
 polymorphic reflection`, `polymorphic has many through joined different
@@ -489,7 +465,7 @@ doesnt reset source association if already preloaded`.
 
 - [ ] ~2 LOC: fix the STALE `inheritance.ts` `initializeInternalsCallback` JSDoc
       that says "integrating it into Base's init flow is a follow-up" — it IS
-      already wired into the `Base` ctor (`base.ts:2331`, `:2375`).
+      already wired into the `Base` ctor (`base.ts:2331`, `base.ts:2375`).
 
 **From #2630 (B3b HMT deletion tests):**
 

@@ -1,39 +1,29 @@
 # Relation gap plan
 
-275 skipped tests across 30 files. Organized into PR-sized work items
-(~150–300 LOC each), ordered by unlock potential.
+Remaining gaps in the relation layer, grouped by cluster. Residual edge cases
+from clusters whose core work is done are tracked under **Post-merge
+follow-ups** below.
 
 ---
 
-## Summary by cluster
+## Remaining open clusters
 
-This table is the original pre-cleanup landscape. Clusters whose PRs have
-since shipped are marked ✓ — their residual edge cases (if any) are tracked
-in **Post-merge follow-ups** below, not as open tracks. Only unmarked rows
-remain open here.
+| Cluster                                                   | Tests | Status / root cause                                                                            |
+| --------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------- |
+| load_async / FutureResult                                 | 28    | Ruby-thread-only; PERMANENT-SKIP                                                               |
+| Query cache                                               | 27    | Blocked on connection-pool (per-thread cache architecture)                                     |
+| WhereChain `.associated`/`.missing` with enums            | 5     | 5 `missing with enum*` blocked on join table-aliasing                                          |
+| Standalone relation (joins, eager, race, fixture)         | 8     | Parameterized joins (2 — R6c deferred), eager_load toSql (3 → assoc A5), race/fixture/Ruby (3) |
+| Calculations with associations                            | 12    | Fixture-dependent + grouped association join                                                   |
+| Misc (batches, update-all, delegation, predicate-builder) | ~6    | Scattered single-test gaps                                                                     |
 
-| Cluster                                                   | Tests | Status / root cause                                                                                           |
-| --------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------- |
-| WHERE with associations/polymorphic/CPK                   | 31    | ✓ R1 #2566 shipped (core path); residual nested/polymorphic/CPK edge cases — see follow-ups                   |
-| load_async / FutureResult                                 | 28    | Ruby-thread-only; PERMANENT-SKIP                                                                              |
-| Scoping — Arel nodes in `order()` / `reverseOrder`        | 20    | ✓ R3 #2551 shipped; residual reverseOrder `{raw}` double-flip — see follow-ups                                |
-| Scoping — query cache + select narrowing                  | 8     | ✓ R3b #2573 shipped (select narrowing); 6 still need query cache (→ P12)                                      |
-| Query cache                                               | 27    | Blocked on connection-pool (per-thread cache architecture)                                                    |
-| Hash-form select                                          | 23    | ✓ R2 #2562 shipped (incl. `select(nil)`); residual raw-SQL keys/table-alias edge cases — see follow-ups       |
-| WhereChain `.associated`/`.missing` with enums            | 12    | ✓ R4 #2582 shipped scoped-join enum cast (6 unskipped); 5 `missing with enum*` blocked on join table-aliasing |
-| lock / FOR UPDATE                                         | 7     | ✓ R6a #2564 shipped; `lockValue` reader still missing — see follow-ups                                        |
-| Standalone relation (joins, eager, race, fixture)         | 8     | Parameterized joins (2 — R6c deferred), eager_load toSql (3 → assoc A5), race/fixture/Ruby (3)                |
-| Calculations with associations                            | 12    | Fixture-dependent + grouped association join                                                                  |
-| `inOrderOf`                                               | 4     | ✓ R5 #2569 shipped; raw-SQL guard / type-cast follow-ups — see follow-ups                                     |
-| Misc (batches, update-all, delegation, predicate-builder) | ~6    | Scattered single-test gaps                                                                                    |
+Residual edge cases for WHERE associations/polymorphic/CPK, hash-form select,
+`order()`/`reverseOrder`, lock, and `inOrderOf` are itemized under **Post-merge
+follow-ups**.
 
 ---
 
-## Track 4: WhereChain `.associated`/`.missing` with enums (R4 #2582 shipped — 5 remain)
-
-The R4 scoped-join enum cast shipped (#2582): `Relation#_appendAssociationScope`
-folds the reflection `scope:` lambda into the JOIN ON, unskipping the 5
-`associated with enum*` tests + `missing with composite primary key`.
+## WhereChain `.associated`/`.missing` with enums — 5 remain
 
 **Still blocked:** the 5 `missing with enum*` tests join `reading_listing`
 (inner) AND left-join `unread_listing` — two has_one associations on the SAME
@@ -56,10 +46,10 @@ bind parameters in join string not implemented.
 
 - `relation/query-methods.ts` — `joins` string-with-binds branch
 
-**Note:** deliberately NOT shipped with the R6 bundle (#2564). Rails
-`joins(*args)` wraps string joins in `Arel.sql` with no bind interpolation,
-so `joins("... WHERE x = ?", value)` is not Rails-faithful. Needs a design
-decision before any implementation (see post-merge follow-ups from #2564).
+**Note:** deferred. Rails `joins(*args)` wraps string joins in `Arel.sql` with
+no bind interpolation, so `joins("... WHERE x = ?", value)` is not
+Rails-faithful. Needs a design decision before any implementation (see
+post-merge follow-ups from #2564).
 
 **Est:** ~40 LOC (2 tests)
 
@@ -82,8 +72,7 @@ decision before any implementation (see post-merge follow-ups from #2564).
 
 ## Dependency graph
 
-R1, R2, R2b, R3, R3b, R4, R5, R6a, R6b shipped (#2566, #2562, #2551, #2573,
-#2582, #2569, #2564). Remaining:
+Remaining:
 
 ```
 R6c (parameterized join strings — deferred, needs design decision)
@@ -99,10 +88,9 @@ The remaining edge cases beyond R6c (join table-aliasing for `missing with
 enum*`, raw-SQL/table-alias hash select, etc.) are itemized under
 **Post-merge follow-ups** below.
 
-**Coverage:** 275 tests total.
+**Remaining coverage:**
 
-- **Remaining actionable here:** ~2 tests (R6c, deferred). The shipped
-  R1/R2/R2b/R3/R3b/R4/R5/R6a/R6b work (~98 tests) is no longer counted.
+- **Actionable here:** ~2 tests (R6c, deferred).
 - **Cross-blocked:** ~47 tests (connection-pool P12, associations A5,
   Phase G fixtures, join table-aliasing)
 - **Permanently skipped:** ~36 tests (load_async, GVL/fork, SimpleDelegator)
@@ -111,8 +99,7 @@ enum*`, raw-SQL/table-alias hash select, etc.) are itemized under
 
 ## Post-merge follow-ups
 
-Items surfaced after the shipped batch (R1 #2566, R2 #2562, R3 #2551,
-R5 #2569, R6a+R6b #2564).
+Forward-looking items needing follow-up work, grouped into PR-sized work units.
 
 ### Actionable PR queue
 
@@ -176,12 +163,11 @@ alias`, `select with hash argument with few tables` (need per-join table
   and lets Arel expand to `FOR UPDATE`; trails `lockBang` stores literal
   `"FOR UPDATE"` in `_lockValue`. SQL output identical. Strict `lock_value`
   parity would differ.
-- **R6c (parameterized join strings) deliberately NOT shipped.** Rails
-  `joins(*args)` wraps string joins in `Arel.sql` with no bind
-  interpolation, so `joins("... WHERE x = ?", value)` is not Rails-faithful.
-  Synthetic empty-body test `joins with string sql and string interpolation`
-  (relations.test.ts:~1395) remains `it.skip`. Needs design decision before
-  any implementation.
+- **R6c (parameterized join strings) deferred.** Rails `joins(*args)` wraps
+  string joins in `Arel.sql` with no bind interpolation, so
+  `joins("... WHERE x = ?", value)` is not Rails-faithful. Synthetic empty-body
+  test `joins with string sql and string interpolation` (relations.test.ts:~1395)
+  remains `it.skip`. Needs design decision before any implementation.
 
 **From #2566 (R1 polymorphic/nested where):**
 

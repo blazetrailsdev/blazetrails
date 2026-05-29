@@ -296,8 +296,11 @@ export function findStiClass(baseClass: typeof Base, typeName: string): typeof B
  * `_default_attributes.except(column_names - [primary_key])` (model_schema.rb):
  * only the primary key and virtual (non-column) attributes keep their
  * defaults — every other unselected column is left uninitialized. Applied in
- * both the direct and STI instantiation paths, matching Rails'
- * `instantiate_instance_of`, which narrows before discriminating the class.
+ * both the direct and STI instantiation paths so projected loads narrow
+ * regardless of STI, matching the net result of Rails'
+ * `instantiate_instance_of`. (Rails narrows in `build_from_database` before
+ * `discriminate_class_for_record`; trails resolves the STI subclass first in
+ * `instantiateSti` and narrows here per concrete class — same end state.)
  *
  * `column_names` is the right narrowing set here: in trails every declared
  * attribute is a real DB column (an `attribute()` with no backing column fails
@@ -309,7 +312,11 @@ export function findStiClass(baseClass: typeof Base, typeName: string): typeof B
  *
  * @internal Rails-private helper.
  */
-export function narrowToProjectedColumns(klass: typeof Base, record: Base, row: object): void {
+export function narrowToProjectedColumns(
+  klass: typeof Base,
+  record: Base,
+  row: Record<string, unknown>,
+): void {
   const pk = (klass as any).primaryKey as string | string[] | undefined;
   const pkSet = new Set(Array.isArray(pk) ? pk : pk != null ? [pk] : []);
   const rowKeys = new Set(Object.keys(row));

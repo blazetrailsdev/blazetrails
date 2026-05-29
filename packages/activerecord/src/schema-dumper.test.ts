@@ -1,24 +1,16 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MigrationContext } from "./migration.js";
-import {
-  popRequireGlobalReset,
-  pushRequireGlobalReset,
-} from "./test-helpers/require-global-reset.js";
+import { useGlobalReset } from "./test-helpers/require-global-reset.js";
 import { SchemaDumper } from "./connection-adapters/abstract/schema-dumper.js";
 import { cleanDefault, cleanRawPgExpression } from "./schema-dumper.js";
 import { createSidecarTestAdapter, createTestAdapter, adapterType } from "./test-adapter.js";
 import type { TestDatabaseAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 
-// Opts into the global per-test reset (resetTestAdapterState). The global
-// reset is off by default after the opt-in flip; the dump assertions depend
-// on a clean table set per test, which the per-test reset provides.
-beforeAll(() => {
-  pushRequireGlobalReset();
-});
-afterAll(() => {
-  popRequireGlobalReset();
-});
+// Opt into the global per-test reset (drop tables + clear model
+// registry between tests) plus a final reset on the way out so this
+// file leaves no state for the next file in the worker.
+useGlobalReset();
 
 function freshCtx(): { adapter: TestDatabaseAdapter; ctx: MigrationContext } {
   const adapter = createTestAdapter();

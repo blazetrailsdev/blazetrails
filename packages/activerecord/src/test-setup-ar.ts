@@ -11,28 +11,21 @@
 // (not in activerecord/index.ts) to keep better-sqlite3 a true optional peer
 // for non-test consumers.
 import "@blazetrails/activesupport/sqlite/better-sqlite3";
-import { beforeEach, afterAll } from "vitest";
+import { beforeEach } from "vitest";
 import { resetTestAdapterState } from "./test-adapter.js";
 import { shouldRunGlobalReset } from "./test-helpers/require-global-reset.js";
 
 // Rails parity: schema is loaded once per suite and never reset between
 // tests — per-test cleanup is transactional rollback. The PER-TEST reset is
-// therefore opt-in (off by default); only files that explicitly call
-// pushRequireGlobalReset() pay the full resetTestAdapterState() round-trip
-// between every test. This is the structural perf win: thousands of per-test
-// drops become a handful.
+// therefore opt-in (off by default); only files that opt in via
+// useGlobalReset() pay the full resetTestAdapterState() round-trip between
+// every test. This is the structural perf win: thousands of per-test drops
+// become a handful. Those opt-in files also run one final reset in their own
+// afterAll (see useGlobalReset), and transactional-fixtures files reset on
+// their way out, so a file never leaves state behind for the next file in the
+// same worker. Files that manage their own raw adapters are left untouched —
+// forcing a pool reset through them deadlocks on PostgreSQL.
 beforeEach(async () => {
   if (!shouldRunGlobalReset()) return;
-  await resetTestAdapterState();
-});
-
-// Cross-file cleanup, always on. Setup-file hooks apply per test file, so this
-// runs exactly once after each file's suite — cheap (~one drop per file, not
-// per test). It guarantees a file never leaves tables or model-registry state
-// behind for the next file in the same worker, which (under the shared
-// per-worker DB) would otherwise bleed into a following non-opt-in file. This
-// restores the cross-file isolation the old per-test reset provided as a side
-// effect, without paying the per-test cost.
-afterAll(async () => {
   await resetTestAdapterState();
 });

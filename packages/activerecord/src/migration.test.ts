@@ -3,7 +3,7 @@
  * Mirrors: activerecord/test/cases/migration_test.rb
  *          activerecord/test/cases/invertible_migration_test.rb
  */
-import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, afterEach, vi } from "vitest";
 import { Base, MigrationContext, MigrationRunner, Migrator } from "./index.js";
 import { SchemaMigration } from "./schema-migration.js";
 import type { MigrationProxy } from "./migration.js";
@@ -16,23 +16,12 @@ import { Logger } from "@blazetrails/activesupport";
 import { TableDefinition } from "./connection-adapters/abstract/schema-definitions.js";
 import { Schema } from "./schema.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
-import {
-  popRequireGlobalReset,
-  pushRequireGlobalReset,
-} from "./test-helpers/require-global-reset.js";
+import { useGlobalReset } from "./test-helpers/require-global-reset.js";
 
-// Migration tests exercise DDL directly against the shared pool DB, where
-// CREATE/ALTER TABLE auto-commits and can't be rolled back by transactional
-// fixtures. They depend on the per-test global reset (resetTestAdapterState)
-// to drop accumulated tables between tests, so opt in for the whole file.
-// The global reset is off by default after the opt-in flip; pop in afterAll
-// so the elevated refcount doesn't leak into other files in the same worker.
-beforeAll(() => {
-  pushRequireGlobalReset();
-});
-afterAll(() => {
-  popRequireGlobalReset();
-});
+// Opt into the global per-test reset (drop tables + clear model
+// registry between tests) plus a final reset on the way out so this
+// file leaves no state for the next file in the worker.
+useGlobalReset();
 
 // Tables some tests rely on existing before any migration runs. Under
 // AR_NO_AUTO_SCHEMA=1 the test adapter no longer auto-creates missing

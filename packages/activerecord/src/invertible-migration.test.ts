@@ -2,28 +2,19 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { Migration } from "./index.js";
-import {
-  popRequireGlobalReset,
-  pushRequireGlobalReset,
-} from "./test-helpers/require-global-reset.js";
+import { useGlobalReset } from "./test-helpers/require-global-reset.js";
 import { IrreversibleMigration } from "./migration.js";
 import { CommandRecorder } from "./migration/command-recorder.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 
-// Opts into the global per-test reset (resetTestAdapterState). The global
-// reset is off by default after the opt-in flip; these migrations create
-// tables on the shared pool that auto-commit and aren't rolled back, so the
-// per-test drop is required to keep tests isolated.
-beforeAll(() => {
-  pushRequireGlobalReset();
-});
-afterAll(() => {
-  popRequireGlobalReset();
-});
+// Opt into the global per-test reset (drop tables + clear model
+// registry between tests) plus a final reset on the way out so this
+// file leaves no state for the next file in the worker.
+useGlobalReset();
 
 // -- Helpers --
 function freshAdapter(): DatabaseAdapter {

@@ -1,5 +1,6 @@
-import { beforeEach, afterEach } from "vitest";
+import { beforeAll, beforeEach, afterEach, afterAll } from "vitest";
 import type { DatabaseAdapter } from "../adapter.js";
+import { resetTestAdapterState } from "../test-adapter.js";
 import type { ConnectionPool } from "../connection-adapters/abstract/connection-pool.js";
 import {
   _restoreAppliedSchemaSignaturesForAdapter,
@@ -78,11 +79,11 @@ function pooledAdapterPool(adapter: TransactionalFixturesAdapter): ConnectionPoo
  * Mirrors Rails' transactional fixtures (`ActiveRecord::TestFixtures`:
  * `setup_fixtures` opens a transaction; `teardown_fixtures` rolls back).
  *
- * The global per-test `resetTestAdapterState` (in `test-setup-ar.ts`) is
+ * The global `resetTestAdapterState` beforeEach (in `test-setup-ar.ts`) is
  * opt-in and off by default, so a one-time schema set up in `beforeAll`
- * survives across tests for free. Cross-file cleanup is handled centrally by
- * the global per-file `afterAll` in `test-setup-ar.ts`, so this helper no
- * longer needs to reset on its own way out.
+ * survives across tests for free. The helper still runs
+ * `resetTestAdapterState` in its own `afterAll` so other files are
+ * unaffected by leftover tables/data.
  *
  * Caller contract:
  *   - Set up schema in `beforeAll` *before* calling this helper, or inside
@@ -127,6 +128,14 @@ export interface WithTransactionalFixturesOptions {
   invalidateSchemaCache?: boolean;
 }
 
+/**
+ * Refcount of active transactional-fixtures scopes, so the outermost scope's
+ * `afterAll` is the one that runs the end-of-file `resetTestAdapterState()`.
+ *
+ * @internal
+ */
+let _txnFixtureDepth = 0;
+
 export function withTransactionalFixtures(
   getAdapter: () => TransactionalFixturesAdapter,
   options: WithTransactionalFixturesOptions = {},
@@ -138,6 +147,20 @@ export function withTransactionalFixtures(
   // discarding signatures for any `defineSchema(...)` that ran inside the
   // `it()` body (whose DDL was rolled back at the DB).
   let outerSig: Map<string, string> | null = null;
+
+  beforeAll(() => {
+    _txnFixtureDepth += 1;
+  });
+
+  afterAll(async () => {
+    // The global beforeEach reset is opt-in (off by default), so there is no
+    // per-test drop to suppress here. We still reset once when the outermost
+    // transactional-fixtures scope exits so leftover tables/data don't bleed
+    // into the next file, mirroring Rails ConnectionPool#unpin_connection!
+    // finalizing at depth zero (connection_pool.rb:347).
+    _txnFixtureDepth -= 1;
+    if (_txnFixtureDepth === 0) await resetTestAdapterState();
+  });
 
   beforeEach(async () => {
     const adapter = getAdapter();

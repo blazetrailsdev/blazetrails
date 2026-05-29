@@ -1,19 +1,10 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
-import {
-  popRequireGlobalReset,
-  pushRequireGlobalReset,
-} from "./test-helpers/require-global-reset.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import { useGlobalReset } from "./test-helpers/require-global-reset.js";
 
-// Opts into the global per-test reset (resetTestAdapterState). The global
-// reset is off by default after the opt-in flip; the migrator creates tables
-// on the shared pool that auto-commit and aren't rolled back, so the per-test
-// drop is required to keep tests isolated.
-beforeAll(() => {
-  pushRequireGlobalReset();
-});
-afterAll(() => {
-  popRequireGlobalReset();
-});
+// Opt into the global per-test reset (drop tables + clear model
+// registry between tests) plus a final reset on the way out so this
+// file leaves no state for the next file in the worker.
+useGlobalReset();
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";

@@ -18,8 +18,26 @@
  * `process.env` reads are allowed (the env carries the handoff from
  * globalSetup to forked workers).
  */
+import type { FsAdapter } from "@blazetrails/activesupport/fs-adapter";
 import { getFsAsync, getPathAsync } from "@blazetrails/activesupport/fs-adapter";
 import { getOsAsync } from "@blazetrails/activesupport";
+
+/** WAL sidecars sqlite writes alongside a file DB, plus the DB file itself. */
+const DB_FILE_SUFFIXES = ["", "-wal", "-shm"] as const;
+
+/**
+ * Unlink a sqlite file DB and its WAL sidecars (`-wal`, `-shm`). Best-effort
+ * and synchronous so it can run from a `process.on("exit")` handler.
+ */
+export function unlinkDbFiles(fs: FsAdapter, base: string): void {
+  for (const suffix of DB_FILE_SUFFIXES) {
+    try {
+      fs.unlinkSync(base + suffix);
+    } catch {
+      // already gone / never created — nothing to do.
+    }
+  }
+}
 
 /** Env var: absolute path of the canonical template DB built by globalSetup. */
 export const TEMPLATE_PATH_ENV = "AR_TEST_TEMPLATE_PATH";
@@ -71,13 +89,9 @@ export async function ensureWorkerClone(): Promise<string | null> {
     fs.copyFileSync(template, dest);
   }
   // Best-effort cleanup on process exit. Registered once per worker.
-  process.on("exit", () => {
-    try {
-      fs.unlinkSync(dest);
-    } catch {
-      // already gone / never created — nothing to do.
-    }
-  });
+  // WAL mode (the sqlite adapter's default for file DBs) leaves `-wal`/`-shm`
+  // sidecars next to the main file; unlink those too so nothing lingers.
+  process.on("exit", () => unlinkDbFiles(fs, dest));
 
   g.__arWorkerDbPath = dest;
   return dest;

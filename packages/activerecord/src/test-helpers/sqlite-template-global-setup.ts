@@ -23,6 +23,7 @@ import {
   TEMPLATE_PATH_ENV,
   isSqliteRun,
   templatePathFor,
+  unlinkDbFiles,
 } from "./sqlite-template.js";
 
 // Acceptance probe: the canonical DDL must run exactly once for a whole
@@ -51,9 +52,7 @@ export default async function setup(): Promise<(() => Promise<void>) | undefined
   process.env[RUN_TOKEN_ENV] = runToken;
 
   return async () => {
-    const fs = await getFsAsync();
-    if (fs.unlink && (await fs.exists(templatePath))) {
-      await fs.unlink(templatePath);
-    }
+    // Remove the template DB plus its WAL sidecars (-wal/-shm).
+    unlinkDbFiles(await getFsAsync(), templatePath);
   };
 }

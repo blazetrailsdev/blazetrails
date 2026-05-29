@@ -75,6 +75,17 @@ export interface FixtureRegistryEntry {
  *   - `citations` — `book2_id` ref() value overflows the column's integer range
  *   - `memberships` — STI `type` string ("CurrentMembership") written to an integer `type` column
  *   - `tasks` — tz-offset datetime literal rejected by MariaDB's `datetime` column
+ *
+ * Additional gaps — the model seeds, but the fixture data `ref()`s a table that is
+ * itself NOT loadable by name (it's gap-listed above). `ref()` falls back to the
+ * CRC32 of the target label, which diverges from the target's declared Rails id, so
+ * `useFixtures([set])` would seed foreign keys pointing at rows that can't be loaded
+ * by name. Re-addable once the ref'd set becomes registerable (verified by the
+ * "refs only loadable tables" conformance test):
+ * - `subscriptions` → `books` (books declare ids 1-4; `book_id` would be CRC32)
+ * - `readers`, `references` → `people` (people declare explicit ids)
+ * - `price-estimates` → `cars` (cars declare explicit ids)
+ * - `cpk-order-agreements` → `cpk-orders`, `cpk-reviews` → `cpk-books` (composite-PK targets)
  */
 export const fixtureRegistry = {
   accounts: {
@@ -156,14 +167,6 @@ export const fixtureRegistry = {
   cpkAuthors: {
     model: () => import("./models/cpk.js").then((m) => m.CpkAuthor),
     data: FixtureData.cpkAuthorFixtureData,
-  },
-  cpkOrderAgreements: {
-    model: () => import("./models/cpk.js").then((m) => m.CpkOrderAgreement),
-    data: FixtureData.cpkOrderAgreementFixtureData,
-  },
-  cpkReviews: {
-    model: () => import("./models/cpk.js").then((m) => m.CpkReview),
-    data: FixtureData.cpkReviewFixtureData,
   },
   cpkTags: {
     model: () => import("./models/cpk.js").then((m) => m.CpkTag),
@@ -293,10 +296,6 @@ export const fixtureRegistry = {
     model: () => import("./models/post.js").then((m) => m.Post),
     data: FixtureData.postFixtureData,
   },
-  priceEstimates: {
-    model: () => import("./models/price-estimate.js").then((m) => m.PriceEstimate),
-    data: FixtureData.priceEstimateFixtureData,
-  },
   products: {
     model: () => import("./models/shop.js").then((m) => m.ShopProduct),
     data: FixtureData.productFixtureData,
@@ -308,14 +307,6 @@ export const fixtureRegistry = {
   ratings: {
     model: () => import("./models/rating.js").then((m) => m.Rating),
     data: FixtureData.ratingFixtureData,
-  },
-  readers: {
-    model: () => import("./models/reader.js").then((m) => m.Reader),
-    data: FixtureData.readerFixtureData,
-  },
-  references: {
-    model: () => import("./models/reference.js").then((m) => m.Reference),
-    data: FixtureData.referenceFixtureData,
   },
   shardedBlogPosts: {
     model: () => import("./models/sharded.js").then((m) => m.ShardedBlogPost),
@@ -348,10 +339,6 @@ export const fixtureRegistry = {
   strictZines: {
     model: () => import("./models/strict-zine.js").then((m) => m.StrictZine),
     data: FixtureData.strictZineFixtureData,
-  },
-  subscriptions: {
-    model: () => import("./models/subscription.js").then((m) => m.Subscription),
-    data: FixtureData.subscriptionFixtureData,
   },
   taggings: {
     model: () => import("./models/tagging.js").then((m) => m.Tagging),

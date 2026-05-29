@@ -4,7 +4,7 @@ import { fixtureRegistry } from "./fixtures-registry.js";
 import { FixtureSet } from "./fixture-set.js";
 import { Base } from "../base.js";
 import "../relation.js"; // registers the Relation ctor so Model.findBy/.all/.count work
-import { fixtureId, defineFixtures } from "./define-fixtures.js";
+import { fixtureId, defineFixtures, isFixtureRef } from "./define-fixtures.js";
 import { defineSchema } from "./define-schema.js";
 import { createTestAdapter } from "../test-adapter.js";
 import { setupHandlerSuite } from "./setup-handler-suite.js";
@@ -244,6 +244,35 @@ describe("fixtureRegistry conformance", () => {
       }
     }
   });
+});
+
+describe("fixtureRegistry ref targets", () => {
+  it("every ref() points at a table that is itself loadable by name", async () => {
+    // A registered set whose data ref()s a non-registered table would seed FK
+    // values from the CRC32 fallback (≠ the target's declared id), since the
+    // target can't be loaded by name to populate the declared-id registry.
+    const loadable = new Set<string>();
+    for (const entry of Object.values(fixtureRegistry)) {
+      const M = await (entry as { model: () => Promise<typeof Base> }).model();
+      loadable.add(M.tableName);
+    }
+    const offenders: string[] = [];
+    for (const [name, entry] of Object.entries(fixtureRegistry)) {
+      const data = (entry as { data: Record<string, Record<string, unknown>> }).data;
+      const refTables = new Set<string>();
+      for (const row of Object.values(data)) {
+        for (const value of Object.values(row)) {
+          if (isFixtureRef(value)) refTables.add(value.tableName);
+        }
+      }
+      const unloadable = [...refTables].filter((t) => !loadable.has(t));
+      if (unloadable.length)
+        offenders.push(`${name} → refs unloadable table(s): ${unloadable.join(", ")}`);
+    }
+    expect(offenders, `registry entries with unsatisfiable refs:\n${offenders.join("\n")}`).toEqual(
+      [],
+    );
+  }, 60000);
 });
 
 describe("resolveFixtureNames same-table guard", () => {

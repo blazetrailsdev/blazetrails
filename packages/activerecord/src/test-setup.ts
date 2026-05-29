@@ -4,5 +4,5 @@
 // dialect visitor out from under the per-worker handler connection, which is
 // why handler-suite files previously needed a `beforeEach` resync. Tests that
 // install a one-off dialect visitor for their duration restore it themselves
-// (see node.test.ts's try/finally pattern).
+// (see packages/arel/src/nodes/node.test.ts's try/finally pattern).
 export {};

@@ -43,8 +43,8 @@ const PROHIBIT_SHARD_SWAPPING_KEY = Symbol.for("ar_prohibit_shard_swapping");
 
 /**
  * The zero-arg constructor shape `setToSqlVisitor` expects — the global
- * fallback visitor is built without a connection (see arel
- * `node.ts#setToSqlVisitor`). Adapter visitors are normally connection-bound
+ * fallback visitor is built without a connection (see
+ * `packages/arel/src/nodes/node.ts#setToSqlVisitor`). Adapter visitors are normally connection-bound
  * (`new Visitors.ToSql(connection)`), but their *constructor* is reused here
  * only to pick the dialect class for the connection-less global path.
  */

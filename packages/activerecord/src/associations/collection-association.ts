@@ -284,52 +284,60 @@ export class CollectionAssociation extends Association {
     for (const val of otherArray) (this as any).raiseOnTypeMismatchBang(val);
     const wasLoaded = this.isLoaded();
     const originalTarget = [...this.target];
-    replaceCommonRecordsInMemory(this, otherArray, originalTarget);
     if (this.owner.isNewRecord()) {
       // Rails routes a new-owner replace through replace_records → concat →
-      // concat_records (collection_association.rb), so the build path runs:
-      // for HMT this constructs through-rows in memory that the owner's save
-      // autosaves alongside it. Mirror that here rather than setting _target
-      // directly, which would skip the through-row build.
+      // concat_records (collection_association.rb): delete(difference(target,
+      // new_target)) then concat(difference(new_target, target)). The concat
+      // runs the build path — for HMT it constructs through-rows in memory that
+      // the owner's save autosaves alongside it. Mirror that here rather than
+      // setting _target directly, which would skip the through-row build.
       for (const r of [...this.target]) {
         if (!otherArray.includes(r)) {
           const idx = this.target.indexOf(r);
           if (idx !== -1) this.target.splice(idx, 1);
         }
       }
+      const added: Base[] = [];
       for (const r of otherArray) {
         if (!this.target.includes(r)) {
-          this.setOwnerAttributes(r);
           this.addToTarget(r);
+          added.push(r);
         }
       }
       this.loadedBang();
-      this.buildThroughRecordsInMemory(otherArray);
-    } else if (!wasLoaded || !arraysEqual(otherArray, originalTarget)) {
-      for (const r of originalTarget) {
-        if (!otherArray.includes(r)) {
-          const idx = this.target.indexOf(r);
-          if (idx !== -1) this.target.splice(idx, 1);
+      this.buildThroughRecordsInMemory(added);
+    } else {
+      // Persisted owner: Rails calls replace_common_records_in_memory before
+      // diffing (collection_association.rb). For a new owner Rails skips it —
+      // replace_records leaves common records in place untouched — so it lives
+      // here, not above the branch.
+      replaceCommonRecordsInMemory(this, otherArray, originalTarget);
+      if (!wasLoaded || !arraysEqual(otherArray, originalTarget)) {
+        for (const r of originalTarget) {
+          if (!otherArray.includes(r)) {
+            const idx = this.target.indexOf(r);
+            if (idx !== -1) this.target.splice(idx, 1);
+          }
         }
-      }
-      for (const r of otherArray) {
-        if (!this.target.includes(r)) {
-          this.setOwnerAttributes(r);
-          this.addToTarget(r);
+        for (const r of otherArray) {
+          if (!this.target.includes(r)) {
+            this.setOwnerAttributes(r);
+            this.addToTarget(r);
+          }
         }
-      }
-      this.loadedBang();
-      // Preserve the first originalTarget (what's in the DB) across multiple
-      // replace() calls before save(). Only update newTarget so the final flush
-      // diffs against the real persisted state, not an intermediate in-memory one.
-      if (this._pendingReplace) {
-        if (wasLoaded && arraysEqual(otherArray, this._pendingReplace.originalTarget)) {
-          this._pendingReplace = null; // reverted to DB state — nothing to flush
+        this.loadedBang();
+        // Preserve the first originalTarget (what's in the DB) across multiple
+        // replace() calls before save(). Only update newTarget so the final flush
+        // diffs against the real persisted state, not an intermediate in-memory one.
+        if (this._pendingReplace) {
+          if (wasLoaded && arraysEqual(otherArray, this._pendingReplace.originalTarget)) {
+            this._pendingReplace = null; // reverted to DB state — nothing to flush
+          } else {
+            this._pendingReplace.newTarget = [...otherArray];
+          }
         } else {
-          this._pendingReplace.newTarget = [...otherArray];
+          this._pendingReplace = { newTarget: [...otherArray], originalTarget, wasLoaded };
         }
-      } else {
-        this._pendingReplace = { newTarget: [...otherArray], originalTarget, wasLoaded };
       }
     }
   }

@@ -30,7 +30,4 @@ export async function bootstrapTestHandler(): Promise<void> {
       await Base.establishConnection({ adapter: "sqlite3", database, pool: 1 });
     }
   }
-  // `establishConnection` installs the matching Arel visitor as a side effect
-  // (connection-handling.ts#installAdapterVisitor), so no separate resync is
-  // needed here or in a `beforeEach`.
 }

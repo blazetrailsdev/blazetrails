@@ -41,13 +41,6 @@ import { IsolatedExecutionState } from "@blazetrails/activesupport";
 
 const PROHIBIT_SHARD_SWAPPING_KEY = Symbol.for("ar_prohibit_shard_swapping");
 
-/**
- * The zero-arg constructor shape `setToSqlVisitor` expects — the global
- * fallback visitor is built without a connection (see
- * `packages/arel/src/nodes/node.ts#setToSqlVisitor`). Adapter visitors are normally connection-bound
- * (`new Visitors.ToSql(connection)`), but their *constructor* is reused here
- * only to pick the dialect class for the connection-less global path.
- */
 type ToSqlVisitorConstructor = new () => { compile(node: Nodes.Node): string };
 
 // --- ConnectionHandling module methods (mixed into Base as static methods) ---
@@ -607,45 +600,23 @@ export async function establishConnection(
     await establishWithConfig(modelClass, resolved.adapterName, resolved.url, resolved.config);
   }
 
-  // Mirror Rails: establishing the connection resolves the adapter, which in
-  // turn builds the matching Arel visitor (AbstractAdapter#initialize sets
-  // `@visitor = arel_visitor`). Rails has no global visitor, but trails keeps
-  // one for code paths that lack adapter context (Node#toSql, TreeManager
-  // #toSql) — so point it at the just-established dialect here instead of via
-  // a separate `syncHandlerVisitor` step.
   await installAdapterVisitor(modelClass);
 }
 
-/**
- * Point the global Arel `toSql` visitor at the model's established adapter
- * dialect. Uses a transient `withConnection` checkout (not a permanent lease)
- * so it doesn't leave a connection checked out past `establishConnection`.
- * Best-effort: if the pool can't yield a connection (e.g. the configured
- * database can't be opened), the visitor is left untouched — without a
- * connection there is no SQL to compile, so the dialect is irrelevant, and the
- * underlying error surfaces on the first real query rather than from
- * `establishConnection`. Only connection-establishment/checkout failures
- * (`ConnectionNotEstablished` and subclasses) are swallowed; any other error
- * (e.g. a bug in the visitor wiring) is rethrown.
- *
- * @internal
- */
+/** @internal */
 export async function installAdapterVisitor(modelClass: typeof Base): Promise<void> {
   try {
-    await modelClass.withConnection((adapter: DatabaseAdapter) => {
-      const visitor = (adapter as { visitor?: object } | null | undefined)?.visitor;
-      if (visitor) {
-        setToSqlVisitor((visitor as object).constructor as ToSqlVisitorConstructor);
-      }
-    });
+    await modelClass.withConnection(
+      (adapter: DatabaseAdapter) => {
+        const visitor = (adapter as { visitor?: object } | null | undefined)?.visitor;
+        if (visitor) {
+          setToSqlVisitor((visitor as object).constructor as ToSqlVisitorConstructor);
+        }
+      },
+      { preventPermanentCheckout: true },
+    );
   } catch (error) {
-    // trails wraps every driver-level open/checkout failure as a
-    // `ConnectionNotEstablished` subclass (e.g. `DatabaseConnectionError`),
-    // mirroring Rails' adapter `connect`/`reconnect` rescue contract — so this
-    // is the right boundary: swallow connection-open failures, rethrow real
-    // wiring/programmer errors.
     if (!(error instanceof ConnectionNotEstablished)) throw error;
-    // No connection available: dialect is irrelevant until one is opened.
   }
 }
 

@@ -1699,22 +1699,22 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     this._ensureThroughWritable();
     return this._withoutStrictLoading(async () => {
       const records = await this.toArray();
-      const persisted = records.filter((r) => !r.isNewRecord());
       // Rails' `clear` routes through `delete_all`, which removes the rows in
       // bulk and does NOT run `before_remove`/`after_remove` callbacks (unlike
-      // per-record `delete`). Through/HABTM drop the join rows via SQL; plain
-      // collections nullify the owner FK. Mirror `deleteAll`'s divergence
-      // guard: when in-place proxy mutations (whereBang / ...) have run,
-      // `scope()` would rebuild the unmutated association scope and nullify
-      // MORE rows than the caller constrained, so go through `super.updateAll`.
-      if (persisted.length > 0) {
-        if (this._isThrough) {
-          await this._deleteThroughAllSql();
-        } else if (this._relationStateDiverged()) {
-          await super.updateAll(this._buildNullifyUpdates());
-        } else {
-          await this.scope().updateAll(this._buildNullifyUpdates());
-        }
+      // per-record `delete`). Like `deleteAll`, the bulk removal runs
+      // unconditionally — gating on loaded targets would orphan dangling join
+      // rows whose targets aren't loadable. Through/HABTM drop the join rows
+      // via SQL; plain collections nullify the owner FK. Mirror `deleteAll`'s
+      // divergence guard: when in-place proxy mutations (whereBang / ...) have
+      // run, `scope()` would rebuild the unmutated association scope and
+      // nullify MORE rows than the caller constrained, so go through
+      // `super.updateAll`.
+      if (this._isThrough) {
+        await this._deleteThroughAllSql();
+      } else if (this._relationStateDiverged()) {
+        await super.updateAll(this._buildNullifyUpdates());
+      } else {
+        await this.scope().updateAll(this._buildNullifyUpdates());
       }
       this._removeFromTarget(records);
       this._invalidateAssociationIds();

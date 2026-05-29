@@ -43,6 +43,10 @@ const TEST_SCHEMA: Schema = {
     type: "string",
   },
   sti_thr_members: { name: "string" },
+  sti_n_posts: { title: "string" },
+  sti_n_comments: { sti_n_post_id: "integer", type: "string", body: "string" },
+  sti_n_ratings: { sti_n_comment_id: "integer", value: "integer" },
+  sti_n_taggings: { sti_n_rating_id: "integer" },
   nwr_authors: { name: "string" },
   nwr_posts: { nwr_author_id: "integer", title: "string" },
   nwr_taggings: { nwr_post_id: "integer", nwr_tag_id: "integer" },
@@ -1259,10 +1263,39 @@ describe("NestedThroughAssociationsTest", () => {
     expect(preloadedTags.every((t: any) => t.name === "general")).toBe(true);
   });
 
-  it.skip("distinct has many through a has many through association on through reflection", () => {
-    // BLOCKED: associations — nested-through edge case
-    // ROOT-CAUSE: associations/ or preloader/ — feature-specific (joins/distinct/STI/polymorphic-with-scope/autosave/source-reset)
-    // SCOPE: per-stub; see test name for the specific behavior. Tracked under Batch 34 follow-ups.
+  it("distinct has many through a has many through association on through reflection", async () => {
+    // Mirrors Rails distinct_subscribers: the through reflection (postTaggings)
+    // is itself a nested has_many :through, and a `distinct` scope on the final
+    // association deduplicates records reached via multiple through rows.
+    Associations.hasMany.call(Author, "posts", { className: "Post", foreignKey: "author_id" });
+    Associations.hasMany.call(Post, "taggings", {
+      className: "Tagging",
+      foreignKey: "taggable_id",
+    });
+    Associations.hasMany.call(Author, "postTaggings", {
+      className: "Tagging",
+      through: "posts",
+      source: "taggings",
+    });
+    Associations.hasMany.call(Author, "distinctTags", {
+      className: "Tag",
+      through: "postTaggings",
+      source: "tag",
+      scope: (rel: any) => rel.distinct(),
+    });
+    Associations.belongsTo.call(Tagging, "tag", { className: "Tag", foreignKey: "tag_id" });
+    const author = await Author.create({ name: "David" });
+    const post1 = await Post.create({ author_id: author.id, title: "P1", body: "B" });
+    const post2 = await Post.create({ author_id: author.id, title: "P2", body: "B" });
+    const tag = await Tag.create({ name: "general" });
+    // Same tag reached via two taggings on two posts.
+    await Tagging.create({ tag_id: tag.id, taggable_id: post1.id, taggable_type: "Post" });
+    await Tagging.create({ tag_id: tag.id, taggable_id: post2.id, taggable_type: "Post" });
+
+    const authors = await Author.all().preload("distinctTags").toArray();
+    const preloadedTags = (authors[0] as any)._preloadedAssociations?.get("distinctTags") ?? [];
+    expect(preloadedTags).toHaveLength(1);
+    expect(preloadedTags[0].name).toBe("general");
   });
 
   // Mirrors Rails test_nested_has_many_through_with_a_table_referenced_multiple_times
@@ -1553,10 +1586,82 @@ describe("NestedThroughAssociationsTest", () => {
     expect(members[0].name).toBe("Alice");
   });
 
-  it.skip("has many through with sti on nested through reflection", () => {
-    // BLOCKED: associations — nested-through edge case
-    // ROOT-CAUSE: associations/ or preloader/ — feature-specific (joins/distinct/STI/polymorphic-with-scope/autosave/source-reset)
-    // SCOPE: per-stub; see test name for the specific behavior. Tracked under Batch 34 follow-ups.
+  it("has many through with sti on nested through reflection", async () => {
+    // Mirrors Rails Post#special_comments_ratings_taggings: the nested through
+    // reflection (specialCommentsRatings) walks through an STI association
+    // (specialComments → StiNSpecialComment only). Plain comments and their
+    // rating/tagging chains must be excluded by the STI type filter.
+    class StiNPost extends Base {
+      static {
+        this.attribute("title", "string");
+      }
+    }
+    class StiNComment extends Base {
+      static {
+        this.attribute("sti_n_post_id", "integer");
+        this.attribute("type", "string");
+        this.attribute("body", "string");
+        this._tableName = "sti_n_comments";
+        enableSti(StiNComment);
+      }
+    }
+    class StiNSpecialComment extends StiNComment {
+      static {
+        registerModel(StiNSpecialComment);
+        registerSubclass(StiNSpecialComment);
+      }
+    }
+    class StiNRating extends Base {
+      static {
+        this.attribute("sti_n_comment_id", "integer");
+        this.attribute("value", "integer");
+      }
+    }
+    class StiNTagging extends Base {
+      static {
+        this.attribute("sti_n_rating_id", "integer");
+      }
+    }
+    Associations.hasMany.call(StiNPost, "specialComments", {
+      className: "StiNSpecialComment",
+      foreignKey: "sti_n_post_id",
+    });
+    Associations.hasMany.call(StiNSpecialComment, "ratings", {
+      className: "StiNRating",
+      foreignKey: "sti_n_comment_id",
+    });
+    Associations.hasMany.call(StiNRating, "taggings", {
+      className: "StiNTagging",
+      foreignKey: "sti_n_rating_id",
+    });
+    Associations.hasMany.call(StiNPost, "specialCommentsRatings", {
+      className: "StiNRating",
+      through: "specialComments",
+      source: "ratings",
+    });
+    Associations.hasMany.call(StiNPost, "specialCommentsRatingsTaggings", {
+      className: "StiNTagging",
+      through: "specialCommentsRatings",
+      source: "taggings",
+    });
+    registerModel("StiNPost", StiNPost);
+    registerModel("StiNComment", StiNComment);
+    registerModel("StiNRating", StiNRating);
+    registerModel("StiNTagging", StiNTagging);
+
+    const post = await StiNPost.create({ title: "sti_comments" });
+    const special = await StiNSpecialComment.create({ sti_n_post_id: post.id, body: "S" });
+    const plain = await StiNComment.create({ sti_n_post_id: post.id, body: "P" });
+    const specialRating = await StiNRating.create({ sti_n_comment_id: special.id, value: 1 });
+    const plainRating = await StiNRating.create({ sti_n_comment_id: plain.id, value: 2 });
+    const specialTagging = await StiNTagging.create({ sti_n_rating_id: specialRating.id });
+    await StiNTagging.create({ sti_n_rating_id: plainRating.id });
+
+    const posts = await StiNPost.all().preload("specialCommentsRatingsTaggings").toArray();
+    const taggings =
+      (posts[0] as any)._preloadedAssociations?.get("specialCommentsRatingsTaggings") ?? [];
+    expect(taggings).toHaveLength(1);
+    expect(taggings[0].id).toBe(specialTagging.id);
   });
 
   it("nested has many through writers should raise error", async () => {

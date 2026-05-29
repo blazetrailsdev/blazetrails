@@ -99,12 +99,12 @@ function buildUrlHash(url: string): DatabaseConfigOptions {
     return { url };
   }
   if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
-    // Scheme-less string. Rails' URI parser turns a bare word ("foo") into
-    // `{ database: "foo" }`, overriding the config's database. Filesystem-style
+    // Scheme-less string. Rails' URI parser turns a bare word ("foo", "foo-bar")
+    // into `{ database: "foo" }`, overriding the config's database. Filesystem-style
     // SQLite connection strings (":memory:", bare paths with "/", "\\" or ".")
     // are not database names — pass those through as `{ url }` unchanged so the
     // UrlConfig#database accessor can fall back to the path.
-    if (/^[A-Za-z0-9_]+$/.test(url)) {
+    if (/^[A-Za-z0-9_-]+$/.test(url)) {
       return { database: url };
     }
     return { url };

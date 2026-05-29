@@ -11,31 +11,37 @@ import { protocolAdapters, setProtocolAdapters } from "../ar-config.js";
 
 const DEFAULT_ENV = "default_env";
 
-let savedDatabaseUrl: string | undefined;
-let savedRailsEnv: string | undefined;
-let savedRackEnv: string | undefined;
+// Per-name *_DATABASE_URL vars are cleared too: environment_value_for reads
+// NAME_DATABASE_URL (and PRIMARY_DATABASE_URL for the primary slot) ahead of
+// DATABASE_URL, so an ambient value would otherwise trample the primary config
+// in tests that only set DATABASE_URL.
+const ENV_KEYS = [
+  "DATABASE_URL",
+  "PRIMARY_DATABASE_URL",
+  "ANIMALS_DATABASE_URL",
+  "RAILS_ENV",
+  "RACK_ENV",
+];
+let savedEnv: Record<string, string | undefined>;
 let savedDefaultEnv: string;
 let savedProtocolMapping: Record<string, string>;
 
 beforeEach(() => {
-  savedDatabaseUrl = process.env["DATABASE_URL"];
-  savedRailsEnv = process.env["RAILS_ENV"];
-  savedRackEnv = process.env["RACK_ENV"];
+  savedEnv = {};
+  for (const key of ENV_KEYS) {
+    savedEnv[key] = process.env[key];
+    delete process.env[key];
+  }
   savedDefaultEnv = DatabaseConfigurations.defaultEnv;
   savedProtocolMapping = { ...protocolAdapters };
-  delete process.env["DATABASE_URL"];
-  delete process.env["RAILS_ENV"];
-  delete process.env["RACK_ENV"];
   DatabaseConfigurations.defaultEnv = DEFAULT_ENV;
 });
 
 afterEach(() => {
-  if (savedDatabaseUrl !== undefined) process.env["DATABASE_URL"] = savedDatabaseUrl;
-  else delete process.env["DATABASE_URL"];
-  if (savedRailsEnv !== undefined) process.env["RAILS_ENV"] = savedRailsEnv;
-  else delete process.env["RAILS_ENV"];
-  if (savedRackEnv !== undefined) process.env["RACK_ENV"] = savedRackEnv;
-  else delete process.env["RACK_ENV"];
+  for (const key of ENV_KEYS) {
+    if (savedEnv[key] !== undefined) process.env[key] = savedEnv[key];
+    else delete process.env[key];
+  }
   DatabaseConfigurations.defaultEnv = savedDefaultEnv;
   setProtocolAdapters(savedProtocolMapping);
 });
@@ -372,19 +378,14 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
       },
     };
 
-    try {
-      let configs = DatabaseConfigurations.fromRaw(config);
-      let actual = configs.configsFor({ envName: DEFAULT_ENV, name: "primary" })[0]!
-        .configurationHash;
-      expect(actual.database).toBe("primary");
+    let configs = DatabaseConfigurations.fromRaw(config);
+    let actual = configs.configsFor({ envName: DEFAULT_ENV, name: "primary" })[0]!
+      .configurationHash;
+    expect(actual.database).toBe("primary");
 
-      configs = DatabaseConfigurations.fromRaw(config);
-      actual = configs.configsFor({ envName: DEFAULT_ENV, name: "animals" })[0]!.configurationHash;
-      expect(actual.database).toBe("animals");
-    } finally {
-      delete process.env["PRIMARY_DATABASE_URL"];
-      delete process.env["ANIMALS_DATABASE_URL"];
-    }
+    configs = DatabaseConfigurations.fromRaw(config);
+    actual = configs.configsFor({ envName: DEFAULT_ENV, name: "animals" })[0]!.configurationHash;
+    expect(actual.database).toBe("animals");
   });
 
   it("does not change other environments", () => {

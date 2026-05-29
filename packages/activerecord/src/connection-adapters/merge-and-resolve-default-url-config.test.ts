@@ -151,11 +151,18 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
     });
   });
 
-  it.skip("resolver with database uri containing only database name", () => {
-    // FOLLOW-UP (not P5): Rails' URI parser turns a bare "foo" into { database: "foo" },
-    // overriding the config's database. Our buildUrlHash passes scheme-less strings
-    // through as { url } to preserve SQLite `:memory:` / bare-path behavior, so the
-    // override doesn't happen. Reconciling the two needs a dedicated change.
+  it("resolver with database uri containing only database name", () => {
+    process.env["DATABASE_URL"] = "foo";
+    process.env["RAILS_ENV"] = "test";
+    DatabaseConfigurations.defaultEnv = "test";
+
+    const config = { test: { adapter: "postgres", database: "not_foo", host: "localhost" } };
+    const actual = resolveDbConfig("test", config);
+    expect(actual.configurationHash).toEqual({
+      adapter: "postgres",
+      database: "foo",
+      host: "localhost",
+    });
   });
 
   it("jdbc url", () => {
@@ -353,10 +360,31 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
     expect(actual).toEqual({ adapter: "abstract", pool: 5 });
   });
 
-  it.skip("separate database env vars", () => {
-    // FOLLOW-UP (not P5): requires per-name env var resolution
-    // (PRIMARY_DATABASE_URL / ANIMALS_DATABASE_URL), which is separate infrastructure
-    // from the protocol-adapter-mapping work in this PR.
+  it("separate database env vars", () => {
+    process.env["DATABASE_URL"] = "postgres://localhost/foo";
+    process.env["PRIMARY_DATABASE_URL"] = "postgres://localhost/primary";
+    process.env["ANIMALS_DATABASE_URL"] = "postgres://localhost/animals";
+
+    const config = {
+      default_env: {
+        primary: { adapter: "abstract", pool: 5 },
+        animals: { adapter: "abstract", pool: 5 },
+      },
+    };
+
+    try {
+      let configs = DatabaseConfigurations.fromRaw(config);
+      let actual = configs.configsFor({ envName: DEFAULT_ENV, name: "primary" })[0]!
+        .configurationHash;
+      expect(actual.database).toBe("primary");
+
+      configs = DatabaseConfigurations.fromRaw(config);
+      actual = configs.configsFor({ envName: DEFAULT_ENV, name: "animals" })[0]!.configurationHash;
+      expect(actual.database).toBe("animals");
+    } finally {
+      delete process.env["PRIMARY_DATABASE_URL"];
+      delete process.env["ANIMALS_DATABASE_URL"];
+    }
   });
 
   it("does not change other environments", () => {

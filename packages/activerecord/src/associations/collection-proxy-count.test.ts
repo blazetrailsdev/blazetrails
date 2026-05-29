@@ -117,13 +117,15 @@ describe("CollectionProxy#count — non-through fast path", () => {
   });
 
   it("size() with a GROUP BY loads the target and counts the group rows", async () => {
-    // Mirrors a grouped association scope (Rails' `clients_grouped_by_name`):
-    // size() takes the `!group_values.empty?` branch — load + count rows,
-    // not a scalar COUNT(*).
+    // Mirrors a grouped association scope (Rails' `clients_grouped_by_name`,
+    // defined `-> { group("name").select("name") }`): size() takes the
+    // `!group_values.empty?` branch — load + count rows, not a scalar
+    // COUNT(*). The `.select("title")` pairs with the GROUP BY so the loaded
+    // SELECT is valid SQL (PostgreSQL rejects `SELECT *` under GROUP BY).
     Associations.hasMany.call(CpcAuthor, "cpcPostsByTitle", {
       className: "CpcPost",
       foreignKey: "cpc_author_id",
-      scope: (rel: any) => rel.group("title"),
+      scope: (rel: any) => rel.group("title").select("title"),
     });
     const author = await CpcAuthor.create({ name: "g" });
     await CpcPost.create({ cpc_author_id: author.id, title: "X" });

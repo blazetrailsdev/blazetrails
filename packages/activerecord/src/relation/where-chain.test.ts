@@ -41,7 +41,7 @@ beforeAll(async () => {
     cpk_shops: { name: "string" },
     cpk_orders: { shop_id: "integer", order_id: "integer", cpk_shop_id: "integer" },
     wc_authors: authorCols,
-    wc_books: { name: "string", last_read: "integer" },
+    wc_books: { name: "string", last_read: "integer", wc_author_id: "integer" },
     cpk_authors: authorCols,
     cpk_shelf_books: { author_id: "integer", book_id: "integer", cpk_author_id: "integer" },
   });
@@ -63,13 +63,14 @@ describe("WhereChainTest", () => {
   registerModel(Post);
   registerModel(Author);
 
-  // Mirrors Rails' Author#reading_listing / #unread_listing — has_one Book
-  // scoped to an enum value, with the enum column doubling as the foreign key
-  // (`-> { reading }, foreign_key: :last_read`). Because the join folds in the
-  // scope's `last_read = <enum int>` predicate AND the FK constraint
-  // `books.last_read = authors.id`, only the author whose id equals the enum
-  // integer (2 = :reading) can own a reading_listing. This is what exercises
-  // enum casting on the association FK in `where.associated`/`where.missing`.
+  // Mirrors Rails' Author#reading_listing — a has_one Book scoped to an enum
+  // value (`-> { reading }`). Rails reuses the enum column `last_read` as the
+  // foreign key; here the FK is a plain `wc_author_id` column so the test
+  // doesn't depend on an author's id coinciding with the enum integer (auto-
+  // increment ids aren't controllable across adapters/transactional fixtures).
+  // The behavior under test is identical: `joins(:readingListing)` must fold
+  // the scope's enum-cast predicate (`last_read = 2`) into the JOIN ON, so only
+  // an author with a *reading* book is associated.
   class WcAuthor extends Base {
     static {
       this.attribute("name", "string");
@@ -79,6 +80,7 @@ describe("WhereChainTest", () => {
     static {
       this.attribute("name", "string");
       this.attribute("last_read", "integer");
+      this.attribute("wc_author_id", "integer");
       this.enum("last_read", { unread: 0, reading: 2, read: 3 });
     }
   }
@@ -86,23 +88,25 @@ describe("WhereChainTest", () => {
   registerModel("WcBook", WcBook);
   Associations.hasOne.call(WcAuthor, "readingListing", {
     className: "WcBook",
-    foreignKey: "last_read",
+    foreignKey: "wc_author_id",
     scope: (rel: any) => rel.merge((WcBook as any).reading()),
-  });
-  Associations.hasOne.call(WcAuthor, "unreadListing", {
-    className: "WcBook",
-    foreignKey: "last_read",
-    scope: (rel: any) => rel.merge((WcBook as any).unread()),
   });
   const NamedExtension = { namedExtension: () => true };
 
-  // Authors get explicit ids so the id == enum-int relationship holds across
-  // adapters (PG sequences don't roll back between transactional-fixture tests).
-  async function seedReadingFixture(): Promise<void> {
-    await WcAuthor.create({ id: 1, name: "A1" });
-    await WcAuthor.create({ id: 2, name: "A2" });
-    await WcAuthor.create({ id: 3, name: "A3" });
-    await WcBook.create({ name: "RR", last_read: 2 });
+  // Seeds three authors; only the middle one owns a *reading* book. Returns
+  // that author's id (auto-assigned) so callers assert against it without
+  // assuming a particular id value.
+  async function seedReadingFixture(): Promise<number> {
+    await WcBook.deleteAll();
+    await WcAuthor.deleteAll();
+    await WcAuthor.create({ name: "A1" });
+    const reader = await WcAuthor.create({ name: "A2" });
+    await WcAuthor.create({ name: "A3" });
+    // A reading book (enum-cast last_read = 2) belonging to `reader`, plus a
+    // non-reading book on another author to prove the scope filters.
+    await WcBook.create({ name: "RR", last_read: 2, wc_author_id: (reader as any).id });
+    await WcBook.create({ name: "UR", last_read: 0, wc_author_id: (reader as any).id + 1 });
+    return (reader as any).id;
   }
 
   it("associated with child association", () => {
@@ -184,36 +188,36 @@ describe("WhereChainTest", () => {
     expect(sql).toContain("ORDER BY");
   });
   it("associated with enum", async () => {
-    await seedReadingFixture();
+    const readerId = await seedReadingFixture();
     const result = await WcAuthor.all()
       .joins("readingListing")
       .where()
       .associated("readingListing")
       .first();
-    expect((result as any)?.id).toBe(2);
+    expect((result as any)?.id).toBe(readerId);
   });
   it("associated with enum ordered", async () => {
-    await seedReadingFixture();
+    const readerId = await seedReadingFixture();
     const result = await WcAuthor.all()
       .order({ id: "desc" })
       .joins("readingListing")
       .where()
       .associated("readingListing")
       .first();
-    expect((result as any)?.id).toBe(2);
+    expect((result as any)?.id).toBe(readerId);
   });
   it("associated with enum unscoped", async () => {
-    await seedReadingFixture();
+    const readerId = await seedReadingFixture();
     const result = await WcAuthor.all()
       .unscope("where")
       .joins("readingListing")
       .where()
       .associated("readingListing")
       .first();
-    expect((result as any)?.id).toBe(2);
+    expect((result as any)?.id).toBe(readerId);
   });
   it("associated with enum extended early", async () => {
-    await seedReadingFixture();
+    const readerId = await seedReadingFixture();
     const result = await WcAuthor.all()
       .extending(NamedExtension)
       .order({ id: "desc" })
@@ -221,10 +225,10 @@ describe("WhereChainTest", () => {
       .where()
       .associated("readingListing")
       .first();
-    expect((result as any)?.id).toBe(2);
+    expect((result as any)?.id).toBe(readerId);
   });
   it("associated with enum extended late", async () => {
-    await seedReadingFixture();
+    const readerId = await seedReadingFixture();
     const result = await WcAuthor.all()
       .order({ id: "desc" })
       .joins("readingListing")
@@ -232,7 +236,7 @@ describe("WhereChainTest", () => {
       .associated("readingListing")
       .extending(NamedExtension)
       .first();
-    expect((result as any)?.id).toBe(2);
+    expect((result as any)?.id).toBe(readerId);
   });
   it("associated with add joins before", async () => {
     class JbAuthor extends Base {

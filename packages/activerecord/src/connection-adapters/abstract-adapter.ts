@@ -852,6 +852,11 @@ export class AbstractAdapter implements Quoting {
     };
 
     try {
+      // The callback form of resetTransaction always resolves asynchronously;
+      // wrap in Promise.resolve so cleanupOnFailure is wired unconditionally
+      // (rather than gated on an `instanceof Promise` check). The surrounding
+      // try/catch still covers a synchronous throw from resetTransaction's
+      // pre-callback prefix.
       const result = this.resetTransaction(
         { restore: opts.restoreTransactions ?? false },
         async () => {
@@ -859,7 +864,7 @@ export class AbstractAdapter implements Quoting {
           await this.attemptConfigureConnection();
         },
       );
-      if (result instanceof Promise) return result.then(() => {}, cleanupOnFailure);
+      return Promise.resolve(result).then(() => {}, cleanupOnFailure);
     } catch (error) {
       cleanupOnFailure(error);
     }

@@ -131,9 +131,12 @@ not full coverage. Note it in the spike writeup; do not claim "DDL eliminated."
   startup. Cheap vs hundreds of CREATEs, but confirm the async-fs copy isn't
   itself a bottleneck on CI's disk. Measure.
 - **sqlite file vs `:memory:` semantics.** Some tests may assume `:memory:`
-  (e.g. isolation, or pragmas). Audit `describeIfSqlite` / `:memory:`
-  assumptions before switching the worker DB to a file. The spike must run the
-  sqlite-specific suite (`adapters/sqlite3/**`) green.
+  (e.g. isolation, or pragmas). There is no `describeIfSqlite` helper (sqlite
+  is the default adapter, so sqlite paths aren't gated); audit the concrete
+  targets instead — the `":memory:"` string literals (~55 files) and the
+  sqlite adapter suites under `adapters/sqlite3/**` and
+  `connection-adapters/sqlite3-*.test.ts` — before switching the worker DB to
+  a file. The spike must run those sqlite suites green.
 - **globalSetup ↔ worker env handoff.** `globalSetup` can't share module
   state with setup files; the template path must travel via env or a known
   tmp location. Confirm vitest propagates env set in `globalSetup` to forked
@@ -141,9 +144,12 @@ not full coverage. Note it in the spike writeup; do not claim "DDL eliminated."
   for globalSetup specifically — may need to write the path to a fixed tmp
   filename instead).
 - **Concurrent local worktrees.** Multiple agents running the suite share
-  `<tmp>`; template/clone paths must be unique per invocation (include the
-  advisory slot or a per-run token — but `Date.now()`/`Math.random()` are
-  fine here since this is test infra, not a workflow script).
+  `<tmp>`. The advisory slot is **not** unique across invocations — two
+  separate runs each claim slot 1 and would collide on the same path. Paths
+  must include a **per-run token** (e.g. a `Date.now()`/`Math.random()` value
+  stamped once in `globalSetup` and propagated to workers), with the advisory
+  slot only as an additional per-worker suffix. `Date.now()`/`Math.random()`
+  are fine here since this is test infra, not a workflow script.
 
 ## Acceptance for the prototype PR
 

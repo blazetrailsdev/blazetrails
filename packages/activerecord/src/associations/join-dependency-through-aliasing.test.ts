@@ -214,10 +214,12 @@ describe("JoinDependency#_addThroughAssociation real-table-name reuse", () => {
     expect(effectiveNames.filter((n) => n === "taggings").length).toBe(1);
     expect(effectiveNames.filter((n) => n === "posts").length).toBe(1);
 
-    // The canonical alias is addressable in the emitted SQL.
+    // The canonical alias is addressable in the emitted SQL. Match either
+    // quote style (PG/SQLite double-quote, MySQL backtick) so the assertion
+    // isn't tied to the test adapter's quoting.
     const sql = (StjAuthor as any).all().leftJoins("similarPosts").toSql();
-    expect(sql).toContain('"taggings" "taggings_authors_join"');
-    expect(sql).toContain('"posts" "posts_authors_join"');
+    expect(sql).toMatch(/["`]taggings["`]\s+["`]taggings_authors_join["`]/);
+    expect(sql).toMatch(/["`]posts["`]\s+["`]posts_authors_join["`]/);
   });
 
   it("uses the Rails alias_candidate with _join when the through real name collides", () => {

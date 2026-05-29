@@ -1118,7 +1118,10 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
           ? primaryKey.map((col: string) => `${underscore(ctor.name)}_${col}`)
           : `${underscore(ctor.name)}_id`));
     const typeCol = asName ? `${underscore(asName)}_type` : null;
-    for (const record of records) {
+    // insert_record: assign the owner's FK/type onto the record, then save.
+    // Mirrors Rails' `CollectionAssociation#insert_record` →
+    // `set_owner_attributes` + `record.save`.
+    const insertRecord = (record: T): Promise<boolean> => {
       if (Array.isArray(foreignKey)) {
         if (!Array.isArray(primaryKey) || primaryKey.length !== foreignKey.length) {
           throw new Error(
@@ -1141,12 +1144,15 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         record._writeAttribute(foreignKey as string, pkValue);
       }
       if (typeCol) record._writeAttribute(typeCol, ctor.name);
+      return record.save();
+    };
+    for (const record of records) {
       // Route through replace_on_target (via _addToTarget) so set_inverse_instance
       // and @replaced_or_added_targets dedup tracking run on push/<<, mirroring
-      // Rails' concat_records → add_to_target { insert_record }. A record already
-      // wired into the loaded target by inverse-of setting is replaced in place
-      // rather than appended twice.
-      await this._addToTarget(record, {}, () => record.save());
+      // Rails' concat_records → add_to_target(record) { insert_record }. A record
+      // already wired into the loaded target by inverse-of setting is replaced in
+      // place rather than appended twice.
+      await this._addToTarget(record, {}, () => insertRecord(record));
     }
   }
 

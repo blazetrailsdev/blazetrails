@@ -1445,10 +1445,13 @@ describe("HasAndBelongsToManyAssociationsTest", () => {
 
   it("redefine habtm", async () => {
     // Mirrors Rails: SubDeveloper < Developer inherits Developer's
-    // `special_projects` HABTM. Pushing a SpecialProject on a subclass
-    // instance and saving must insert exactly one join row whose owner FK
-    // is mapped from the subclass instance's id (not double-inserted via a
-    // COW-inherited middle has_many whose derived name differs).
+    // `special_projects` HABTM. Pushing a target on a subclass instance and
+    // saving must insert exactly one join row whose owner FK is mapped from
+    // the subclass instance's id (not double-inserted via the eager
+    // through-push path while the owner is still a new record). The target's
+    // className resolves to Project here, so a Project is pushed — Rails'
+    // `special_projects` points at SpecialProject, but this describe block's
+    // schema only declares Developer/Project.
     Associations.hasAndBelongsToMany.call(Developer, "specialProjects", {
       className: "Project",
       joinTable: "developer_projects",

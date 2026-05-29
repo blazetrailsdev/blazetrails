@@ -1379,6 +1379,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       // null owner FK (the owner has no id yet) and double-insert once the
       // autosave runs.
       if (this._record.isNewRecord()) {
+        // Wire the inverse before firing after_add, mirroring Rails'
+        // replace_on_target → set_inverse_instance(record) (which runs before
+        // the after_add callback) so user code observing the collection before
+        // save sees the inverse-of relationship.
+        _setCollectionInverseInstance(
+          this._record,
+          this._assocName,
+          this._assocDef.options,
+          record,
+        );
         this._target.push(record);
         this._invalidateAssociationIds();
         if (!skipCallbacks) {

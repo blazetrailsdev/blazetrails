@@ -70,6 +70,12 @@ async function main(): Promise<void> {
       await runMigrate();
       break;
     case "db:rollback":
+      if (!Number.isInteger(step) || step < 1) {
+        console.error(
+          `Invalid step "${process.argv[3] ?? process.env.STEP}" — pass a positive integer.`,
+        );
+        process.exit(2);
+      }
       await connect();
       await rollback(step);
       await dumpSchema();

@@ -291,12 +291,33 @@ export class CollectionAssociation extends Association {
       // runs the build path — for HMT it constructs through-rows in memory that
       // the owner's save autosaves alongside it. Mirror that here rather than
       // setting _target directly, which would skip the through-row build.
-      for (const r of [...this.target]) {
-        if (!otherArray.includes(r)) {
-          const idx = this.target.indexOf(r);
-          if (idx !== -1) this.target.splice(idx, 1);
+      //
+      // delete(difference(...)) → delete_or_destroy → remove_records: fire
+      // before_remove (an abort halts removal), prune the target and clear the
+      // inverse, then after_remove. delete_records (the DB delete) is skipped —
+      // a new owner has no persisted join rows yet, so existing_records is
+      // empty (the owner's save is what creates them).
+      const toRemove = (this.target as Base[]).filter((r) => !otherArray.includes(r));
+      let removable = true;
+      for (const r of toRemove) {
+        if (!callback(this, "beforeRemove", r)) {
+          removable = false;
+          break;
         }
       }
+      if (removable) {
+        for (const r of toRemove) {
+          const idx = this.target.indexOf(r);
+          if (idx !== -1) this.target.splice(idx, 1);
+          this.removeInverseInstance(r);
+        }
+        for (const r of toRemove) callback(this, "afterRemove", r);
+      }
+      // concat(difference(new_target, target)): add_to_target per record.
+      // `added` is that difference — Rails' concat_records returns the full
+      // input array (before_add aborts affect @target membership but not the
+      // returned set), and HMT#concat_records builds a through-row for each, so
+      // we build for the whole difference rather than filtering on addToTarget.
       const added: Base[] = [];
       for (const r of otherArray) {
         if (!this.target.includes(r)) {

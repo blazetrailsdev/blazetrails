@@ -51,13 +51,13 @@ const TEST_SCHEMA: Schema = {
   },
 };
 
-describe("PrimaryKeysTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
-  });
+setupHandlerSuite();
+useHandlerTransactionalFixtures();
+beforeAll(async () => {
+  await defineSchema(TEST_SCHEMA);
+});
 
+describe("PrimaryKeysTest", () => {
   function makeTopic() {
     class Topic extends Base {
       static {
@@ -327,11 +327,6 @@ describe("PrimaryKeysTest", () => {
 });
 
 describe("PrimaryKeyIntegerTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
-  });
   it("primary key column type with serial/integer", async () => {
     class Widget extends Base {
       static {
@@ -382,11 +377,6 @@ describe("PrimaryKeyIntegerTest", () => {
 });
 
 describe("PrimaryKeyAnyTypeTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
-  });
   it("any type primary key", async () => {
     class Widget extends Base {
       static {
@@ -419,11 +409,6 @@ describe("PrimaryKeyAnyTypeTest", () => {
 });
 
 describe("PrimaryKeyWithAutoIncrementTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
-  });
   it("primary key with integer", async () => {
     class AutoItem extends Base {
       static {
@@ -448,12 +433,6 @@ describe("PrimaryKeyWithAutoIncrementTest", () => {
 });
 
 describe("PrimaryKeyIntegerNilDefaultTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
-  });
-
   it("schema dump primary key integer with default nil", async () => {
     class NilDefaultPk extends Base {
       static {
@@ -491,11 +470,6 @@ describe("Base features (Rails-guided) - primary keys", () => {
 });
 
 describe("CompositePrimaryKeyTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
-  });
   it("composite primary key", () => {
     class Order extends Base {
       static {

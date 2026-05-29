@@ -208,13 +208,13 @@ const TEST_SCHEMA: Schema = {
   users: { name: "string", email: "string" },
 };
 
-describe("ReflectionTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
-  });
+setupHandlerSuite();
+useHandlerTransactionalFixtures();
+beforeAll(async () => {
+  await defineSchema(TEST_SCHEMA);
+});
 
+describe("ReflectionTest", () => {
   function makeModels() {
     class Author extends Base {
       static {
@@ -2683,11 +2683,6 @@ describe("ReflectionTest", () => {
 });
 
 describe("ReflectionTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
-  });
   // Rails: test "columns"
   it("columns", () => {
     class Person extends Base {

@@ -12,22 +12,51 @@ import {
   registerModel,
 } from "./index.js";
 
-import { defineSchema } from "./test-helpers/define-schema.js";
+import { defineSchema, type Schema } from "./test-helpers/define-schema.js";
 import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
 import { useHandlerTransactionalFixtures } from "./test-helpers/use-handler-transactional-fixtures.js";
+
+// Union of every table referenced by the CallbacksTest describe blocks below.
+// Overlapping tables share a consistent column shape, so one up-front schema
+// covers all blocks (transactional fixtures roll back rows between tests).
+const TEST_SCHEMA: Schema = {
+  topics: { title: "string" },
+  animals: { name: "string", type: "string" },
+  people: { name: "string" },
+  cb_posts: { title: "string" },
+  trackeds: { name: "string" },
+  guardeds: { name: "string" },
+  auto_slugs: { title: "string", slug: "string" },
+  counteds: { name: "string" },
+  multis: { name: "string" },
+  things: { name: "string", status: "string" },
+  records: { name: "string" },
+  tasks: { name: "string", important: "boolean", skip: "boolean" },
+  blocked: { name: "string" },
+  users: { name: "string", updated_at: "datetime" },
+  developers: { name: "string", salary: "integer" },
+  orders: { total: "integer", discount_code: "string", silent: "boolean" },
+  widgets: { name: "string" },
+  gadgets: { value: "integer" },
+  lockeds: { allowed: "boolean" },
+  envelopes: { label: "string" },
+  protecteds: { sealed: "boolean" },
+  items: { name: "string", updated_at: "datetime", updated_on: "datetime" },
+  no_ts_items: { name: "string", updated_at: "datetime" },
+  no_change_items: { name: "string", updated_at: "datetime" },
+  immutables: { locked: "boolean" },
+};
+
+setupHandlerSuite();
+useHandlerTransactionalFixtures();
+beforeAll(async () => {
+  await defineSchema(TEST_SCHEMA);
+});
 
 // ==========================================================================
 // CallbacksTest — targets callbacks_test.rb
 // ==========================================================================
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({
-      topics: { title: "string" },
-      animals: { name: "string", type: "string" },
-    });
-  });
   it("create", async () => {
     class Topic extends Base {
       static {
@@ -83,16 +112,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({
-      people: { name: "string" },
-      animals: { name: "string", type: "string" },
-      topics: { title: "string" },
-      cb_posts: { title: "string" },
-    });
-  });
   it("save person", async () => {
     class Person extends Base {
       static {
@@ -392,12 +411,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({ topics: { title: "string" } });
-  });
-
   it("trigger once on multiple deletion within transaction 2", async () => {
     const log: string[] = [];
     class Topic extends Base {
@@ -488,12 +501,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({ topics: { title: "string" } });
-  });
-
   it("created callback called on last to save of separate instances in a transaction 2", async () => {
     const log: string[] = [];
     class Topic extends Base {
@@ -614,11 +621,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({ trackeds: { name: "string" } });
-  });
   it("runs after_create and after_update at correct times", async () => {
     const log: string[] = [];
 
@@ -686,14 +688,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({
-      things: { name: "string", status: "string" },
-      records: { name: "string" },
-    });
-  });
   it("fires after_initialize on new records", () => {
     class Thing extends Base {
       static _tableName = "things";
@@ -730,13 +724,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({
-      tasks: { name: "string", important: "boolean", skip: "boolean" },
-    });
-  });
   it("supports if: condition on callbacks", async () => {
     const log: string[] = [];
     class Task extends Base {
@@ -783,11 +770,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({ blocked: { name: "string" } });
-  });
   it("halts save when before_save returns false", async () => {
     class Blocked extends Base {
       static _tableName = "blocked";
@@ -804,11 +786,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({ users: { name: "string", updated_at: "datetime" } });
-  });
   it("fires after touch() is called", async () => {
     const touched: string[] = [];
     class User extends Base {
@@ -827,17 +804,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({
-      trackeds: { name: "string" },
-      guardeds: { name: "string" },
-      auto_slugs: { title: "string", slug: "string" },
-      counteds: { name: "string" },
-      multis: { name: "string" },
-    });
-  });
   it("create callback order", async () => {
     const log: string[] = [];
     class Tracked extends Base {
@@ -1028,17 +994,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({
-      trackeds: { name: "string" },
-      guardeds: { name: "string" },
-      auto_slugs: { title: "string", slug: "string" },
-      counteds: { name: "string" },
-      multis: { name: "string" },
-    });
-  });
   it("create lifecycle: before_validation → after_validation → before_save → before_create → after_create → after_save", async () => {
     const log: string[] = [];
 
@@ -1358,14 +1313,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({
-      developers: { name: "string", salary: "integer" },
-      animals: { name: "string", type: "string" },
-    });
-  });
   // Rails: test "after_initialize is called on new"
   it("after_initialize fires on Model.new", () => {
     class Developer extends Base {
@@ -1507,22 +1454,6 @@ describe("CallbacksTest", () => {
 });
 
 describe("CallbacksTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
-  beforeAll(async () => {
-    await defineSchema({
-      orders: { total: "integer", discount_code: "string", silent: "boolean" },
-      widgets: { name: "string" },
-      gadgets: { value: "integer" },
-      lockeds: { allowed: "boolean" },
-      envelopes: { label: "string" },
-      protecteds: { sealed: "boolean" },
-      items: { name: "string", updated_at: "datetime", updated_on: "datetime" },
-      no_ts_items: { name: "string", updated_at: "datetime" },
-      no_change_items: { name: "string", updated_at: "datetime" },
-      immutables: { locked: "boolean" },
-    });
-  });
   // Rails: test "before_save callback with if condition"
   it("before_save with if: only runs when condition is true", async () => {
     const log: string[] = [];

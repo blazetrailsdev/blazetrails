@@ -54,6 +54,7 @@ import {
 import { _setCollectionProxyCtor } from "./collection-proxy-slot.js";
 import { buildThroughInverseFor } from "./has-many-through-association.js";
 import { throughForeignKeyPresent } from "./through-association.js";
+import { foreignKeyPresentFor } from "./foreign-association.js";
 
 // Declaration merging with `class CollectionProxy extends Relation`
 // propagates Relation's method types into this interface. `load()`
@@ -1123,31 +1124,23 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   }
 
   /**
-   * Mirrors `ForeignAssociation#foreign_key_present?` (foreign_association.rb:5),
-   * which has_many includes: the owner's primary key (`active_record_primary_key`)
-   * must be present for the target to be fetchable, since the children carry the
-   * FK referencing it. A new-record owner with a PK already assigned can still
-   * load. A has_many :through routes through a belongs_to instead
-   * (through_association.rb:90). This matches `CollectionAssociation#foreignKeyPresent`
-   * so the proxy and the OO association never disagree.
+   * Whether the target can be fetched for a new-record owner. A has_many :through
+   * routes through a belongs_to (`ThroughAssociation#foreign_key_present?`,
+   * through_association.rb:90); a vanilla has_many requires the owner's
+   * `active_record_primary_key` to be present (`ForeignAssociation#foreign_key_present?`,
+   * foreign_association.rb:5). The same two-branch dispatch runs in
+   * `CollectionAssociation#foreignKeyPresent`, so the proxy and the OO
+   * association agree on both the through and non-through paths.
    * @internal
    */
   private _foreignKeyPresent(): boolean {
+    const ctor = this._record.constructor as typeof Base;
+    const reflection = (ctor as any)._reflectOnAssociation?.(this._assocName);
+    if (!reflection) return false;
     if (this._assocDef.options.through) {
-      const ctor = this._record.constructor as typeof Base;
-      const reflection = (ctor as any)._reflectOnAssociation?.(this._assocName);
-      if (!reflection) return false;
       return throughForeignKeyPresent({ owner: this._record, reflection });
     }
-    const ctor = this._record.constructor as typeof Base;
-    const pk = this._assocDef.options.primaryKey ?? (ctor as any).primaryKey ?? "id";
-    const keys = Array.isArray(pk) ? pk : [pk];
-    return keys.every((key: string) => {
-      const owner = this._record as any;
-      const val =
-        typeof owner._readAttribute === "function" ? owner._readAttribute(key) : owner[key];
-      return val != null;
-    });
+    return foreignKeyPresentFor(reflection, this._record);
   }
 
   /**

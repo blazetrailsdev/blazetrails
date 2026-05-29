@@ -59,15 +59,24 @@ actually caching).
 
 ### Phase 1 — wire the mixin cache into the live query path (feature)
 
-The real missing piece. Make `selectAll` / `exec_query` on the mixin adapter
-consult `this.queryCache` via `compute_if_absent` when enabled, and have write
-statements dirty the cache, mirroring `database_statements.rb` +
-`query_cache.rb`'s `dirties_query_cache`. Prove with the subset of
-`query_cache_test.rb` cases that assert cache hits, run against the **mixin**
-adapter (newly unskipped or duplicated under their verbatim names).
+The real missing piece. Mirror Rails exactly: the `QueryCache` module
+**overrides `select_all`** (`query_cache.rb:236`) to call
+`lookup_sql_cache(sql, ...) || super` on a cache hit and
+`cache_sql(sql, ...) { super }` otherwise — i.e. the override wraps the base
+`select_all` from `database_statements.rb` via `super`, it does **not** edit the
+base method. Port this as a `selectAll` override in the `QueryCache` mixin
+(`abstract/query-cache.ts`) that delegates to the adapter's base `selectAll`
+(`abstract/database-statements.ts`) for the uncached path, and have write
+statements dirty the cache via `dirties_query_cache`. The `lookupSqlCache` /
+`cacheSql` helpers already exist there with no callers — this wiring is what
+invokes them. Prove with the subset of `query_cache_test.rb` cases that assert
+cache hits, run against the **mixin** adapter (newly unskipped or duplicated
+under their verbatim names).
 
-Files: `connection-adapters/abstract/database-statements.ts`,
-`connection-adapters/abstract/query-cache.ts`, `connection-adapters/abstract-adapter.ts`.
+Files: `connection-adapters/abstract/query-cache.ts` (the `selectAll` override +
+existing helpers), `connection-adapters/abstract-adapter.ts` (mixin wiring);
+the base `selectAll` in `connection-adapters/abstract/database-statements.ts`
+stays untouched (the override calls it via `super`/delegation).
 
 ### Phase 2 — pool-based `ActiveRecord::QueryCache` (refactor, parity-preserving)
 

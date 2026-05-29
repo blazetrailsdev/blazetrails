@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { analyzeSources, applyRenames, type FileReport } from "./base-adapter-to-connection.js";
+import {
+  analyzeSources,
+  applyRenames,
+  globToRegExp,
+  type FileReport,
+} from "./base-adapter-to-connection.js";
 
 /**
  * A minimal stand-in for `ActiveRecord::Base`: the deprecated `adapter`
@@ -85,6 +90,13 @@ describe("base-adapter-to-connection codemod", () => {
     expect(report.rename).toBe(0);
     expect(report.skip).toBe(1);
     expect(report.sites[0].reason).toContain("assignment");
+  });
+
+  it("globToRegExp matches --exclude patterns against full paths", () => {
+    expect(globToRegExp("*.test.ts").test("/repo/src/foo.test.ts")).toBe(true);
+    expect(globToRegExp("*.test.ts").test("/repo/src/foo.ts")).toBe(false);
+    expect(globToRegExp("**/adapters/**").test("/repo/src/adapters/pg.ts")).toBe(true);
+    expect(globToRegExp("**/adapters/**").test("/repo/src/models/user.ts")).toBe(false);
   });
 
   it("is idempotent: a rewritten file has zero rename sites on a second pass", () => {

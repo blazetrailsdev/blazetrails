@@ -172,7 +172,8 @@ function dirUrl(...segments: string[]): string {
   return ts.sys.resolvePath(here + segments.join("/"));
 }
 
-function globToRegExp(glob: string): RegExp {
+/** Convert a `*` / `**` glob to a (substring-matched) RegExp. Exported for tests. */
+export function globToRegExp(glob: string): RegExp {
   const escaped = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&");
   const pattern = escaped.replace(/\*\*|\*/g, (m) => (m === "**" ? ".*" : "[^/]*"));
   return new RegExp(pattern);
@@ -192,8 +193,11 @@ function parseArgs(argv: string[]): CliArgs {
     const arg = argv[i];
     if (arg === "--apply") apply = true;
     else if (arg === "--report" || arg === "--dry-run") apply = false;
-    else if (arg === "--exclude") excludes.push(globToRegExp(argv[++i] ?? ""));
-    else if (arg.startsWith("--")) throw new Error(`Unknown flag: ${arg}`);
+    else if (arg === "--exclude") {
+      const glob = argv[++i];
+      if (!glob) throw new Error("--exclude requires a glob argument");
+      excludes.push(globToRegExp(glob));
+    } else if (arg.startsWith("--")) throw new Error(`Unknown flag: ${arg}`);
     else paths.push(ts.sys.resolvePath(arg));
   }
   return { paths, apply, excludes };
@@ -201,6 +205,12 @@ function parseArgs(argv: string[]): CliArgs {
 
 function isUnderPaths(fileName: string, paths: string[]): boolean {
   return paths.some((p) => fileName === p || fileName.startsWith(p.endsWith("/") ? p : p + "/"));
+}
+
+/** Display a path relative to cwd so reports stay portable and readable. */
+function rel(p: string): string {
+  const cwd = ts.sys.getCurrentDirectory();
+  return p.startsWith(cwd + "/") ? p.slice(cwd.length + 1) : p;
 }
 
 function renderMarkdown(reports: FileReport[]): string {
@@ -212,8 +222,11 @@ function renderMarkdown(reports: FileReport[]): string {
     rename = 0,
     skip = 0,
     manual = 0;
-  for (const r of reports.filter((r) => r.total > 0).sort((a, b) => b.rename - a.rename)) {
-    lines.push(`| ${r.fileName} | ${r.total} | ${r.rename} | ${r.skip} | ${r.manual} |`);
+  const rows = reports
+    .filter((r) => r.total > 0)
+    .sort((a, b) => b.rename - a.rename || a.fileName.localeCompare(b.fileName));
+  for (const r of rows) {
+    lines.push(`| ${rel(r.fileName)} | ${r.total} | ${r.rename} | ${r.skip} | ${r.manual} |`);
     total += r.total;
     rename += r.rename;
     skip += r.skip;
@@ -223,7 +236,7 @@ function renderMarkdown(reports: FileReport[]): string {
   const manualSites = reports.flatMap((r) =>
     r.sites
       .filter((s) => s.kind === "manual")
-      .map((s) => `- ${r.fileName}:${s.line} — ${s.reason}`),
+      .map((s) => `- ${rel(r.fileName)}:${s.line} — ${s.reason}`),
   );
   if (manualSites.length) {
     lines.push("## Needs manual review", "", ...manualSites, "");
@@ -284,7 +297,7 @@ function main(): void {
 
   if (apply) {
     for (const r of reports.filter((r) => r.rename > 0)) {
-      ts.sys.write(`${r.fileName}: ${r.rename} renamed\n`);
+      ts.sys.write(`${rel(r.fileName)}: ${r.rename} renamed\n`);
     }
     ts.sys.write(
       `\n${written} file(s) modified, ${reports.reduce((n, r) => n + r.rename, 0)} site(s) renamed.\n`,

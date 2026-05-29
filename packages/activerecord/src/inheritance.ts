@@ -291,6 +291,41 @@ export function findStiClass(baseClass: typeof Base, typeName: string): typeof B
 /**
  * Directly instantiate a record without STI delegation (avoids recursion).
  */
+/**
+ * Narrow a freshly-hydrated record's attribute set to the columns actually
+ * returned by the query, so `hasAttribute()` reflects a projected SELECT.
+ *
+ * Mirrors Rails' `attributes_builder`, which builds from
+ * `_default_attributes.except(column_names - [primary_key])` (model_schema.rb):
+ * only the primary key and virtual (non-column) attributes keep their
+ * defaults — every other unselected column is left uninitialized. Applied in
+ * both the direct and STI instantiation paths, matching Rails'
+ * `instantiate_instance_of`, which narrows before discriminating the class.
+ *
+ * @internal Rails-private helper.
+ */
+export function narrowToProjectedColumns(klass: typeof Base, record: Base, row: object): void {
+  const pk = (klass as any).primaryKey as string | string[] | undefined;
+  const pkSet = new Set(Array.isArray(pk) ? pk : pk != null ? [pk] : []);
+  const rowKeys = new Set(Object.keys(row));
+  const narrowable = (klass.columnNames() as string[]).filter(
+    (c) => !pkSet.has(c) && !rowKeys.has(c),
+  );
+  // Hot path: a full SELECT projects every column, so there is nothing to
+  // narrow — skip the attribute-set scan entirely.
+  if (narrowable.length === 0) return;
+  const attrs = (record as any)._attributes as {
+    keys(): Iterable<string>;
+    narrowTo(names: Iterable<string>): void;
+  };
+  const keep = new Set(rowKeys);
+  const drop = new Set(narrowable);
+  for (const name of attrs.keys()) {
+    if (!drop.has(name)) keep.add(name);
+  }
+  attrs.narrowTo(keep);
+}
+
 function directInstantiate(klass: typeof Base, row: Record<string, unknown>): Base {
   (klass as any)._skipEncryption = true;
   const hadOwnSuppress = Object.prototype.hasOwnProperty.call(klass, "_suppressInitializeCallback");
@@ -307,6 +342,7 @@ function directInstantiate(klass: typeof Base, row: Record<string, unknown>): Ba
     }
     (klass as any)._skipEncryption = false;
   }
+  narrowToProjectedColumns(klass, record, row);
   record._newRecord = false;
   (record as any)._dirty.snapshot(record._attributes);
   record.changesApplied();

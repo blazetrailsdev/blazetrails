@@ -66,6 +66,7 @@ import {
   setAbstractClass as _setAbstractClass,
   isBaseClass as _isBaseClass,
   ensureProperType as _ensureProperType,
+  narrowToProjectedColumns,
 } from "./inheritance.js";
 import { NotImplementedError, RecordNotFound, StaleObjectError } from "./errors.js";
 import {
@@ -2226,28 +2227,9 @@ export class Base extends Model {
     }
     // A SELECT that projects only a subset of columns yields a row with just
     // those keys, so hasAttribute() must reflect what was loaded rather than
-    // the full schema. Rails' attributes_builder builds from a default set of
-    // `_default_attributes.except(column_names - [primary_key])`
-    // (model_schema.rb), so only the primary key and virtual (non-column)
-    // attributes keep their defaults — every other unselected column is
-    // uninitialized. Mirror that by keeping the projected columns plus those
-    // retained-default attributes.
-    const pk = (this as any).primaryKey as string | string[] | undefined;
-    const pkSet = new Set(Array.isArray(pk) ? pk : pk != null ? [pk] : []);
-    const rowKeys = new Set(Object.keys(row));
-    const narrowable = (this.columnNames() as string[]).filter(
-      (c) => !pkSet.has(c) && !rowKeys.has(c),
-    );
-    // Hot path: a full SELECT projects every column, so there is nothing to
-    // narrow — skip the attribute-set scan entirely.
-    if (narrowable.length > 0) {
-      const keep = new Set(rowKeys);
-      const drop = new Set(narrowable);
-      for (const name of record._attributes.keys()) {
-        if (!drop.has(name)) keep.add(name);
-      }
-      record._attributes.narrowTo(keep);
-    }
+    // the full schema. Mirrors Rails' attributes_builder narrowing (see
+    // narrowToProjectedColumns). Shared with the STI path in inheritance.ts.
+    narrowToProjectedColumns(this as unknown as typeof Base, record as unknown as Base, row);
     record._newRecord = false;
     (record as any)._dirty.snapshot(record._attributes);
     record.changesApplied();

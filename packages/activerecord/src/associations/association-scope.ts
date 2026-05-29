@@ -586,6 +586,15 @@ export class AssociationScope {
     // entry's limit/select/etc override the main scope). The head
     // reflection (chain[0]) is handled by the scope/scopeFor branch
     // below — Rails' chain_head item in add_constraints.
+    //
+    // Rails' reverse_each loop ALSO has an eager-load branch that merges
+    // a scope-chain item's includes/eager_load via
+    // `construct_join_dependency(associations, Arel::Nodes::OuterJoin)`
+    // (association_scope.rb:138-141). We don't propagate eager loads
+    // through the association scope here — the preloader handles that —
+    // so this branch isn't ported; the reference keeps the documented
+    // Rails dependency (activerecord → arel) visible.
+    void Nodes.OuterJoin;
     for (let i = chain.length - 1; i >= 1; i--) {
       scope = this._mergeReflectionScopeChain(scope, chain[i], owner);
     }

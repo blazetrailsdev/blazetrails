@@ -807,7 +807,15 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    * `save`, when supplied, runs between `set_inverse_instance` and the target
    * mutation (Rails' `yield(record)` inside `replace_on_target`, used by
    * `create` to `insert_record`). If it resolves false the record is left out
-   * of the target — matching the prior `if (saved)` gate.
+   * of the target — matching the prior `if (saved)` gate. (Rails pushes
+   * regardless and relies on the surrounding `transaction { ... } / raise
+   * Rollback` to undo the DB write; trails' `create` has no transaction yet —
+   * see `_createThrough` — so we gate the in-memory push on save success.)
+   *
+   * Rails' append branch is gated on `@_was_loaded || !loaded?`. On the create
+   * path `@_was_loaded` is set true before the save and reset to `loaded?`
+   * after, so that gate is always true; with `create` the sole caller it is
+   * collapsed to an unconditional push here.
    * @internal
    */
   private async _addToTarget(

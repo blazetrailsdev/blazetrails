@@ -735,11 +735,9 @@ export class AssociationScope {
   /**
    * Build the Arel join node Rails wraps a chain join in:
    * `Arel::Nodes::LeadingJoin.new(table, Arel::Nodes::On.new(constraint))`
-   * (association_scope.rb:54-56). Our `nextChainScope` builds the JOIN ON
-   * clause as a quoted SQL string instead (Relation stores joins as
-   * strings, re-wrapped in `Nodes.SqlLiteral` at apply time), so this
-   * node-form helper is retained for Rails parity rather than wired into
-   * the runtime join path.
+   * (association_scope.rb:54-56). Wired into `nextChainScope`, which passes
+   * the result to `Relation#joins` so it lands in `joins_values` as a
+   * `LeadingJoin` node — matching Rails' `scope.joins!(join(...))`.
    *
    * @internal
    */

@@ -256,9 +256,12 @@ export function cacheableQuery(
   // Prepared path: compile with bind extraction, return Query + raw binds
   if (host?.preparedStatements && klass.query && visitor && node instanceof Nodes.Node) {
     const [sql, binds] = visitor.compileWithBinds(node);
-    // Propagate the compiled tree's retryability so StatementCache.execute
-    // can default allowRetry correctly (Rails passes retryable: from the
-    // collector into the Query). Raw SQL fragments leave it false.
+    // Rails' cacheable_query does not carry retryability on the Query; its
+    // cached_find_by instead passes `allow_retry: true` at the execute() call
+    // site because the generated statement is always a simple equality. trails
+    // carries the collector's retryable flag on the Query (see Query/
+    // PartialQuery in statement-cache.ts) so StatementCache.execute can default
+    // allowRetry without caller-side knowledge. Raw SQL fragments leave it false.
     const retryable = (visitor as any).collector?.retryable ?? false;
     return [klass.query(sql, { retryable }), binds];
   }

@@ -457,6 +457,13 @@ describe("AdapterConnectionTest", () => {
     // A fully retryable query with a from(Arel node) stays retryable.
     await PostForRetryTest.where({ id: 1 }).from(fromNode).limit(1).toArray();
     expect(adapter.capturedAllowRetry).toBe(true);
+
+    // A non-retryable FROM node lowers the classification even when the rest
+    // of the SELECT is retryable — Rails compiles the whole arel through one
+    // collector, so the raw FROM fragment makes allow_retry false.
+    const rawFromNode = new Nodes.SqlLiteral("posts");
+    await PostForRetryTest.where({ id: 1 }).from(rawFromNode).limit(1).toArray();
+    expect(adapter.capturedAllowRetry).toBe(false);
   });
   it("findBySql tolerates a null opts argument without throwing", async () => {
     const adapter = new QueryTestAdapter();

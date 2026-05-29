@@ -3643,6 +3643,13 @@ export class Relation<T extends Base> {
         // quoting stays dialect-consistent across the whole SELECT.
         const sv = this._selectVisitor();
         fromExpr = sv ? sv.compile(raw) : raw.toSql();
+        // Rails compiles the whole arel (including the FROM clause) through a
+        // single collector, so a non-retryable FROM node lowers the overall
+        // classification. We compile it separately, so AND its retryability
+        // into the captured SELECT flag rather than letting it clobber.
+        if (sv) {
+          this._lastSelectRetryable &&= (sv as any).collector?.retryable ?? false;
+        }
       } else if (alias) {
         fromExpr = `${raw} ${_safeAlias(alias)}`;
       } else {

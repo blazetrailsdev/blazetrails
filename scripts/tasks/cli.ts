@@ -24,9 +24,15 @@ import { fileURLToPath } from "node:url";
 
 // $TASKS_DIR is the canonical override; $RFCS_DIR is honored as a
 // transition fallback after the rfcs → tasks repo rename.
+// Treat empty/whitespace-only env vars as unset so `TASKS_DIR=` doesn't
+// silently resolve to cwd via `git -C ""`.
+const envDir = (v: string | undefined): string | undefined => {
+  const t = v?.trim();
+  return t ? t : undefined;
+};
 export const TASKS_DIR =
-  process.env.TASKS_DIR ??
-  process.env.RFCS_DIR ??
+  envDir(process.env.TASKS_DIR) ??
+  envDir(process.env.RFCS_DIR) ??
   join(homedir(), "github", "blazetrailsdev", "tasks");
 
 export type StoryStatus = "draft" | "ready" | "claimed" | "in-progress" | "done" | "blocked";
@@ -192,7 +198,7 @@ export function listFiltered(
 function inGitTasks(): void {
   if (!existsSync(join(TASKS_DIR, ".git"))) {
     console.error(
-      `error: ${TASKS_DIR} is not a git repo. Clone blazetrailsdev/tasks as a sibling of trails.`,
+      `error: ${TASKS_DIR} is not a git repo. Clone blazetrailsdev/tasks there, or set $TASKS_DIR to an existing checkout.`,
     );
     process.exit(1);
   }
@@ -532,7 +538,8 @@ function usage(): never {
   done <id> --pr <N>
   block <id> --reason "<text>"
 
-Set $TASKS_DIR to override the default ~/github/blazetrailsdev/tasks.`);
+Set $TASKS_DIR to override the default ~/github/blazetrailsdev/tasks.
+($RFCS_DIR is honored as a transition fallback after the rfcs → tasks rename.)`);
   process.exit(2);
 }
 

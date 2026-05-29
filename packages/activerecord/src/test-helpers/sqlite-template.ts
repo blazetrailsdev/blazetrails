@@ -16,6 +16,7 @@
  * globalSetup to forked workers).
  */
 import { getFsAsync, getPathAsync } from "@blazetrails/activesupport/fs-adapter";
+import { getOsAsync } from "@blazetrails/activesupport";
 
 /** Env var: absolute path of the canonical template DB built by globalSetup. */
 export const TEMPLATE_PATH_ENV = "AR_TEST_TEMPLATE_PATH";
@@ -29,15 +30,15 @@ export function isSqliteRun(): boolean {
   return !process.env.PG_TEST_URL && !process.env.MYSQL_TEST_URL;
 }
 
-/** Temp directory root. `node:os` is banned, so read the env (TMPDIR) with a /tmp fallback. */
-function tmpRoot(): string {
-  return process.env.TMPDIR || "/tmp";
+/** Temp directory root, via the os-adapter so the path is portable (TMPDIR/TEMP/TMP). */
+async function tmpRoot(): Promise<string> {
+  return (await getOsAsync()).tmpdir();
 }
 
 /** Path of the canonical template DB for a given run token. */
 export async function templatePathFor(runToken: string): Promise<string> {
   const path = await getPathAsync();
-  return path.join(tmpRoot(), `ar-test-template-${runToken}.sqlite`);
+  return path.join(await tmpRoot(), `ar-test-template-${runToken}.sqlite`);
 }
 
 // Shared across re-evaluations of the worker setupFile within one worker
@@ -61,7 +62,7 @@ export async function ensureWorkerClone(): Promise<string | null> {
   const fs = await getFsAsync();
   const runToken = process.env[RUN_TOKEN_ENV] ?? "x";
   const slot = process.env.VITEST_POOL_ID ?? process.env.VITEST_WORKER_ID ?? "1";
-  const dest = path.join(tmpRoot(), `ar-test-worker-${runToken}-${slot}.sqlite`);
+  const dest = path.join(await tmpRoot(), `ar-test-worker-${runToken}-${slot}.sqlite`);
 
   if (!(await fs.exists(dest))) {
     fs.copyFileSync(template, dest);

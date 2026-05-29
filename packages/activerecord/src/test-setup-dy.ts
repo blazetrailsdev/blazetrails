@@ -25,7 +25,7 @@ await bootstrapTestHandler();
 // the defineSchema() below short-circuits to a cache-hit (no per-file DDL).
 // defineSchema's dataSourceExists guard still recreates any table a prior
 // file's reset dropped from the shared worker file, preserving correctness.
-if (process.env.AR_TEST_WORKER_DB) {
+if (process.env.AR_TEST_WORKER_DB && Base.connection.adapterName === "sqlite") {
   seedSchemaSignatures(Base.connection, TEST_SCHEMA);
 }
 await defineSchema(TEST_SCHEMA);

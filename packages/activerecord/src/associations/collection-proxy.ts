@@ -1205,7 +1205,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       // Rails' concat_records → add_to_target(record) { insert_record }. A record
       // already wired into the loaded target by inverse-of setting is replaced in
       // place rather than appended twice.
-      await this._addToTarget(record, {}, () => insertRecord(record));
+      // Rails' add_to_target computes `replace: replace || association_scope.distinct_value`
+      // so a `distinct` association scope dedups in place on append rather than appending twice.
+      await this._addToTarget(record, { replace: this.distinctValue }, () => insertRecord(record));
     }
   }
 
@@ -1470,7 +1472,11 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         }
         return joinRecord.isPersisted();
       };
-      await this._addToTarget(record, { skipCallbacks }, insertJoinRecord);
+      await this._addToTarget(
+        record,
+        { skipCallbacks, replace: this.distinctValue },
+        insertJoinRecord,
+      );
     }
   }
 

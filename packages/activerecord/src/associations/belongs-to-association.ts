@@ -229,6 +229,21 @@ export class BelongsToAssociation extends SingularAssociation {
     return !this.isLoaded() && this.foreignKeyPresent();
   }
 
+  /**
+   * Mirrors Rails' `BelongsToAssociation#invertible_for?`
+   * (belongs_to_association.rb:158-161): unlike the base, belongs_to does NOT
+   * require the record to carry the foreign key (the FK lives on the owner).
+   * It gates on `inverse && (inverse.has_one? || inverse.klass.has_many_inversing)`.
+   * The inverse-present half is checked by `inverseAssociationFor`; the
+   * has_many `has_many_inversing` half is enforced downstream in
+   * `_wireInverseAssociation` (which refuses to poison a hasMany cache slot
+   * unless `hasManyInversing` is set), so wiring here is unconditional.
+   * @internal
+   */
+  protected override isInvertibleFor(_record: Base): boolean {
+    return true;
+  }
+
   protected override foreignKeyPresent(): boolean {
     return this.foreignKeyNames().every((fk) => {
       const value =

@@ -1692,6 +1692,11 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#clear
    */
   async clear(): Promise<void> {
+    // Rails' `clear` → `delete_all` → through `delete_records` runs through
+    // `ensure_mutable` / the nested-through readonly check; mirror `deleteAll`
+    // and the prior per-record `delete` path by enforcing the same guard
+    // before touching join rows.
+    this._ensureThroughWritable();
     return this._withoutStrictLoading(async () => {
       const records = await this.toArray();
       const persisted = records.filter((r) => !r.isNewRecord());

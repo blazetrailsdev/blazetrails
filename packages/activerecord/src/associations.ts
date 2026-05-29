@@ -816,7 +816,7 @@ function syncToAssociationInstance(record: Base, assocName: string, result: unkn
  *
  * @internal
  */
-function _violatesStrictLoading(record: Base, options: AssociationOptions): boolean {
+export function _violatesStrictLoading(record: Base, options: AssociationOptions): boolean {
   if (record._strictLoadingBypassCount) return false;
   if (record._validationContext != null) return false;
   if (Object.prototype.hasOwnProperty.call(options, "strictLoading")) {
@@ -2209,7 +2209,7 @@ function wrapCollectionProxy<T extends Base = Base>(
         return target.target[Number(prop)];
       }
 
-      if (target._record._strictLoading && !target._record._strictLoadingBypassCount) {
+      if (_violatesStrictLoading(target._record, target._assocDef.options)) {
         throw StrictLoadingViolationError.forAssociation(target._record, target._assocName);
       }
 

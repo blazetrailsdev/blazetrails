@@ -1505,11 +1505,11 @@ describe("StrictLoadingTest", () => {
       const created = await TooaDev.create({ name: "Dev", tooa_mentor_id: mentor.id });
       const dev = await TooaDev.find(created.id);
       expect(dev.isStrictLoading()).toBe(true);
-      const loaded = await loadBelongsTo(dev, "tooaOffMentor", {
-        className: "TooaMentor",
-        foreignKey: "tooa_mentor_id",
-        strictLoading: false,
-      });
+      // Drive the loader with the options the reflection preserved, so the
+      // test exercises the reflection-level toggle, not an ad-hoc argument.
+      const refl = TooaDev._reflectOnAssociation("tooaOffMentor")!;
+      expect(refl.options.strictLoading).toBe(false);
+      const loaded = await loadBelongsTo(dev, "tooaOffMentor", refl.options);
       expect(loaded?.id).toBe(mentor.id);
     } finally {
       TooaDev.strictLoadingByDefault = false;

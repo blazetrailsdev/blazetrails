@@ -134,6 +134,10 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
    * to enforce this.
    */
   private _checkStrictLoading(): void {
+    // Rails' AssociationRelation#exec_queries does NOT raise — it cascades via
+    // set_strict_loading (see the toArray tail). The reflection toggle's
+    // enforcement point is the association reader (find_target / collection
+    // proxy), not chained relation reads, so we keep the owner-only guard.
     const owner = this._association.owner;
     const ownerAny = owner as unknown as {
       _strictLoading?: boolean;

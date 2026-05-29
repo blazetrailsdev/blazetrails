@@ -1,5 +1,5 @@
 import { Temporal } from "@blazetrails/activesupport/temporal";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "vitest";
 import {
   freshAdapter,
   configureEncryption,
@@ -31,6 +31,21 @@ import { Configurable } from "./configurable.js";
 import { defineSchema } from "../test-helpers/define-schema.js";
 import { EncryptableRecord } from "./encryptable-record.js";
 import { isEncryptedAttribute } from "../encryption.js";
+import {
+  popRequireGlobalReset,
+  pushRequireGlobalReset,
+} from "../test-helpers/require-global-reset.js";
+
+// Opts into the global per-test reset (resetTestAdapterState). The global
+// reset is off by default after the opt-in flip; these encryption tests
+// redefine models with the same name across tests (ignore_case deterministic
+// encryption) and rely on the reset to clear Base._modelsByName between them.
+beforeAll(() => {
+  pushRequireGlobalReset();
+});
+afterAll(() => {
+  popRequireGlobalReset();
+});
 
 describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   let configSnapshot: ReturnType<typeof snapshotEncryptionConfig>;

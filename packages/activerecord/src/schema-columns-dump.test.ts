@@ -1,4 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  popRequireGlobalReset,
+  pushRequireGlobalReset,
+} from "./test-helpers/require-global-reset.js";
+
+// Opts into the global per-test reset (resetTestAdapterState). The global
+// reset is off by default after the opt-in flip; the dump assertions depend
+// on a clean table set per test, which the per-test reset provides.
+beforeAll(() => {
+  pushRequireGlobalReset();
+});
+afterAll(() => {
+  popRequireGlobalReset();
+});
 import { createTestAdapter } from "./test-adapter.js";
 import { MigrationContext } from "./migration.js";
 import { dumpSchemaColumns } from "./schema-columns-dump.js";

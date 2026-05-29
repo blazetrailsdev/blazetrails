@@ -1,6 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createTestAdapter } from "./test-adapter.js";
 import { MigrationContext } from "./migration.js";
+import {
+  popRequireGlobalReset,
+  pushRequireGlobalReset,
+} from "./test-helpers/require-global-reset.js";
 import {
   introspectTables,
   introspectColumns,
@@ -9,6 +13,17 @@ import {
   introspectForeignKeys,
 } from "./schema-introspection.js";
 import { ForeignKeyDefinition } from "./connection-adapters/abstract/schema-definitions.js";
+
+// Opts into the global per-test reset (resetTestAdapterState). The global
+// reset is off by default after the opt-in flip; these introspection tests
+// reuse the shared pool across tests and rely on the reset to drop tables
+// and clear the model registry between them.
+beforeAll(() => {
+  pushRequireGlobalReset();
+});
+afterAll(() => {
+  popRequireGlobalReset();
+});
 
 /**
  * Return a proxy over `adapter` that hides the named methods so the

@@ -1,4 +1,19 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import {
+  popRequireGlobalReset,
+  pushRequireGlobalReset,
+} from "./test-helpers/require-global-reset.js";
+
+// Opts into the global per-test reset (resetTestAdapterState). The global
+// reset is off by default after the opt-in flip; this file's tests redefine
+// models / reuse the shared pool across tests and rely on the reset to drop
+// tables and clear the model registry between them.
+beforeAll(() => {
+  pushRequireGlobalReset();
+});
+afterAll(() => {
+  popRequireGlobalReset();
+});
 import { Temporal } from "@blazetrails/activesupport/temporal";
 import { ArgumentError } from "@blazetrails/activemodel";
 import { Base } from "./index.js";

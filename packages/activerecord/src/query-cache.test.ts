@@ -1,4 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  popRequireGlobalReset,
+  pushRequireGlobalReset,
+} from "./test-helpers/require-global-reset.js";
+
+// Opts into the global per-test reset (resetTestAdapterState). The global
+// reset is off by default after the opt-in flip; this file's tests redefine
+// models / reuse the shared pool across tests and rely on the reset to drop
+// tables and clear the model registry between them.
+beforeAll(() => {
+  pushRequireGlobalReset();
+});
+afterAll(() => {
+  popRequireGlobalReset();
+});
 import { Base } from "./index.js";
 import { adapterType, createTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";

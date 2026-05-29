@@ -610,11 +610,14 @@ export async function establishConnection(
 /**
  * Point the global Arel `toSql` visitor at the model's established adapter
  * dialect. Uses a transient `withConnection` checkout (not a permanent lease)
- * so it doesn't hold a connection open past `establishConnection`. Best-effort:
- * if the pool can't yield a connection (e.g. the configured database can't be
- * opened), the visitor is left untouched — without a connection there is no
- * SQL to compile, so the dialect is irrelevant, and the underlying error
- * surfaces on the first real query rather than from `establishConnection`.
+ * so it doesn't leave a connection checked out past `establishConnection`.
+ * Best-effort: if the pool can't yield a connection (e.g. the configured
+ * database can't be opened), the visitor is left untouched — without a
+ * connection there is no SQL to compile, so the dialect is irrelevant, and the
+ * underlying error surfaces on the first real query rather than from
+ * `establishConnection`. Only connection-establishment/checkout failures
+ * (`ConnectionNotEstablished` and subclasses) are swallowed; any other error
+ * (e.g. a bug in the visitor wiring) is rethrown.
  *
  * @internal
  */
@@ -628,7 +631,8 @@ export async function installAdapterVisitor(modelClass: typeof Base): Promise<vo
         );
       }
     });
-  } catch {
+  } catch (error) {
+    if (!(error instanceof ConnectionNotEstablished)) throw error;
     // No connection available: dialect is irrelevant until one is opened.
   }
 }

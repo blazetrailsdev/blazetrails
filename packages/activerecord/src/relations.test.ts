@@ -451,6 +451,11 @@ describe("RelationTest", () => {
       const sql = Post.all().lock("FOR SHARE").toSql();
       expect(sql).toContain("FOR SHARE");
     });
+
+    it("exposes lockValue", () => {
+      expect(Post.all().lockValue).toBe(null);
+      expect(Post.all().lock("FOR SHARE").lockValue).toBe("FOR SHARE");
+    });
   });
 
   // ── readonly / strictLoading ──
@@ -6388,7 +6393,9 @@ describe("RelationTest", () => {
       .select("posts.title")
       .toSql();
     expect(sql).toContain("INNER JOIN");
-    expect(sql).toContain("posts.title");
+    // "posts.title" resolves to the qualified column (mirrors Rails arel_column),
+    // not a literal "posts"."posts.title".
+    expect(sql).toContain('"posts"."title"');
   });
 
   it("joins with select custom attribute", async () => {

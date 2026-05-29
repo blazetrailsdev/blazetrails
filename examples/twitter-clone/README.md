@@ -36,28 +36,35 @@ pnpm start            # boots the HTTP server on :3000
 ```
 
 `pnpm smoke` runs the whole flow end-to-end with no HTTP and no setup needed.
-It runs as `NODE_ENV=test`, which the config below maps to an in-memory DB,
+It runs as `TRAILS_ENV=test`, which the config below maps to an in-memory DB,
 and migrates it from scratch.
 
 ### Connection config
 
-All connection settings live in **`config/database.json`** — the single
+All connection settings live in **`config/database.ts`** — the single
 source of truth, like Rails' `config/database.yml`. It's keyed by
-environment; `NODE_ENV` (default `development`) picks the entry, and
+environment; `TRAILS_ENV` (default `development`) picks the entry, and
 `Base.establishConnection()` reads the file with no arguments (see
 `src/db.ts`, which contains no config of its own):
 
-```json
-{
-  "development": { "adapter": "sqlite3", "database": "db/development.sqlite3", "pool": 5 },
-  "test": { "adapter": "sqlite3", "database": ":memory:", "pool": 1 },
-  "production": { "adapter": "sqlite3", "database": "db/production.sqlite3", "pool": 5 }
-}
+```ts
+const config = {
+  development: { adapter: "sqlite3", database: "db/development.sqlite3", pool: 5 },
+  test: { adapter: "sqlite3", database: ":memory:", pool: 1 },
+  production: { adapter: "sqlite3", database: "db/production.sqlite3", pool: 5 },
+};
+export default config;
 ```
 
 To use Postgres or MySQL, edit this file (e.g.
-`{ "adapter": "postgresql", "database": "twitter", "host": "localhost" }`) —
+`{ adapter: "postgresql", database: "twitter", host: "localhost" }`) —
 the model code is adapter-agnostic, exactly like Rails.
+
+> We key on `TRAILS_ENV`, not `NODE_ENV`: the JS ecosystem treats `NODE_ENV`
+> as a build-time hint, so reusing it to select a database silently picks the
+> wrong one in many setups. `NODE_ENV` is honored only as a fallback. This is
+> the convention the [`activerecord-cli` proposal](../../docs/activerecord/standalone-activerecord-cli-proposal.md)
+> recommends standardizing on.
 
 ## Database tasks
 

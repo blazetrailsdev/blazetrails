@@ -42,7 +42,8 @@ is the gap this doc addresses.
    reflection for every model under an abstract base.
 6. **Config discovery diverges.** `trailties` uses `config/database.ts` +
    `TRAILS_ENV` (deliberately _not_ `NODE_ENV`, see `trailties/database.ts`);
-   the example initially used `config/database.json` + `NODE_ENV`.
+   the example now follows that same convention (`config/database.ts` +
+   `TRAILS_ENV`); core already supports both file forms and env vars.
 7. **Minor:** `validates({ uniqueness })` is not routed (must use
    `validatesUniqueness`); named scopes need a manual `declare static` under
    plain `tsc`; running a scratch script from outside the workspace pulls a
@@ -321,6 +322,6 @@ example had to drop).
 
 `examples/twitter-clone` is the hand-rolled version of all of the above:
 timestamped `db/migrate/`, a `db:*` CLI (`src/cli.ts` + `src/migrator.ts`),
-`config/database.json`, a generated-style `models/index.ts`, schema-driven
+`config/database.ts` (`TRAILS_ENV`-keyed), a generated-style `models/index.ts`, schema-driven
 zero-attribute models typed via `trails-tsc --schema db/schema-columns.json`.
 It is what `activerecord-cli` should make unnecessary to write by hand.

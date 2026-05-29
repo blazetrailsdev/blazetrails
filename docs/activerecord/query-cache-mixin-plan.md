@@ -140,11 +140,12 @@ Forward-looking items needing follow-up work, grouped into PR-sized work units.
 - **Phase 1 — wire the mixin cache into the live query path** (~feature; see
   §"Phase 1" above). The real missing piece. **Must land first** — Phases 2/3
   depend on the mixin actually caching. Correction from #2651 to fold in:
-  the framing "`lookupSqlCache`/`cacheSql` have no callers" is imprecise — an
-  unwired `selectAll` **factory** at
-  `connection-adapters/abstract/query-cache.ts:395` already calls those helpers
-  (lines 419, 424); it's the factory that's never installed onto
-  `AbstractAdapter`. Files: `abstract/query-cache.ts`, `abstract-adapter.ts`.
+  the framing "`lookupSqlCache`/`cacheSql` have no callers" is imprecise — the
+  unwired `selectAll(original)` **factory** in
+  `connection-adapters/abstract/query-cache.ts` returns a `cachedSelectAll`
+  closure that already calls those helpers; it's the factory that's never
+  installed onto `AbstractAdapter`. Files: `abstract/query-cache.ts`,
+  `abstract-adapter.ts`.
 
 **Gated (sequence after Phase 1):**
 

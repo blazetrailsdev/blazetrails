@@ -1362,16 +1362,19 @@ export class Relation<T extends Base> {
    * raw column-to-column ON would otherwise skip.
    *
    * Invoked via `invokeScopeLambda` so 0-arity `this`-bound scopes
-   * (`function () { return this.where(...) }`) and arity-1/2 arrow scopes
-   * are all evaluated correctly, with the Rails `instance_exec(owner) ||
-   * relation` falsy-fallback. There is no owner instance in a bare join, so
-   * `undefined` is passed — owner-dependent scopes don't apply to a join.
+   * (`function () { return this.where(...) }`) and arity-1 arrow scopes
+   * (`(rel) => rel.where(...)`) are evaluated correctly, with the Rails
+   * `instance_exec(owner) || relation` falsy-fallback. A bare join has no
+   * owner instance, so owner-dependent scopes (arity >= 2, e.g.
+   * `(rel, owner) => rel.where({ x: owner.id })`) are skipped rather than
+   * invoked with an undefined owner — matching the prior behavior where the
+   * scope was ignored entirely, and avoiding a throw at join-build time.
    *
    * @internal
    */
   private _appendAssociationScope(predicates: Nodes.Node[], assocDef: any, targetModel: any): void {
     const scope = assocDef.options.scope;
-    if (typeof scope !== "function") return;
+    if (typeof scope !== "function" || scope.length >= 2) return;
     const baseRel = (targetModel as any)._allForPreload();
     const scopeRel = invokeScopeLambda(scope, baseRel, undefined as unknown as Base) || baseRel;
     if (scopeRel?._whereClause && !scopeRel._whereClause.isEmpty()) {

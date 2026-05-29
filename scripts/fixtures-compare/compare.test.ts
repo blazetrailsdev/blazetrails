@@ -215,6 +215,31 @@ describe("compareFile + schema integration", () => {
     expect(r.status).toBe("DIFF");
     expect(r.notes.some((n) => /^schema-extra-col: .*\.name/.test(n))).toBe(true);
   });
+
+  it("SKIP_ATTRS suppresses a Rails-only column without flagging missing-in-ts, keeping the % accurate", async () => {
+    // `binaries.data` is in SKIP_ATTRS: the `!binary` blob isn't mirrored in
+    // binaries.ts (rows carry only `id`). Even though the Rails side declares
+    // `data`, it must be a soft skip — not `missing-in-ts` — and excluded from
+    // attrsTotal so the percentage stays at the real-column ratio.
+    const railsBinaries = new Map([
+      [
+        "binaries",
+        { flowers: { id: 1, data: "<blob>" }, binary_helper: { id: 2, data: "<blob>" } },
+      ],
+    ]);
+    const r = await compareFile("binaries.yml", railsBinaries, new Map(), undefined, {
+      binaries: { data: "binary" },
+    });
+    // (1) the skipped attr never surfaces as drift…
+    expect(r.notes.some((n) => /-in-ts: \w+\.data/.test(n))).toBe(false);
+    // (2) …it increments attrsSkipped once per row…
+    expect(r.attrsSkipped).toBe(2);
+    // (3) …and attrsTotal counts only the real columns (the two `id`s), so the
+    // ratio is a clean 2/2 MATCH rather than being diluted to 2/4.
+    expect(r.attrsTotal).toBe(2);
+    expect(r.attrsMatched).toBe(2);
+    expect(r.status).toBe("MATCH");
+  });
 });
 
 describe("canonicalizeRailsRow", () => {

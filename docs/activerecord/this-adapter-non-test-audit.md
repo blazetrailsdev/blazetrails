@@ -1,6 +1,6 @@
 # `this.adapter = …` non-test audit
 
-Classifies the non-`*.test.ts` `.ts` files that contain `this.adapter = …`
+Classifies the six non-`*.test.ts` `.ts` files that contain `this.adapter = …`
 writes, to separate **D-1 bypass survivors** (test classes extending `Base`
 that set `this.adapter` to skip the connection handler — the same pattern
 PRs #2587 / #2589 just cleaned up) from **legitimate bound-adapter class
@@ -38,7 +38,26 @@ a `Base` subclass, so the #2580 codemod correctly skipped it.
   builder under `test-helpers`/`adapters`, so it survived the `*.test.ts`
   cleanup wave.
 
-### 2. `packages/activerecord/src/type/adapter-specific-registry.ts`
+### 2. `packages/activerecord/src/encryption/test-helpers.ts`
+
+- **Class(es):** `EncryptedPost`, `EncryptedBook`, `EncryptedBookWithDowncaseName`,
+  `EncryptedBookThatIgnoresCase`, `EncryptedAuthor`, `EncryptedBookWithCustomCompressor`,
+  `BookThatWillFailToEncryptName`, `EncryptedTrafficLightWithStoreState`,
+  `EncryptedBookWithBinary`, `EncryptedBookWithSerializedFirstBinary`,
+  `EncryptedBookWithSerializedSecondBinary`, `EncryptedBookWithBinaryMessagePackSerialized`,
+  `MsgPackTextBook`, `UnencryptedBook`, `EncryptedBookWithUniquenessValidation`,
+  `EncryptedBookAttribute`, `EncryptedBookNormalizedFirst`, `EncryptedBookNormalizedSecond`,
+  plus one anonymous `class extends Base` — all `extends Base`, built by factory
+  functions for the encryption test suite.
+- **Sites:** 243, 259, 275, 287, 300, 311, 334, 357, 373, 392, 411, 430, 446,
+  463, 479, 494, 511, 549, 570 (19 sites)
+- **Verdict:** **bypass survivor (needs migration)**
+- **Rationale:** Same shape as `schema-ar-models.ts` (edge case #3) — factory-built
+  `Base` subclass test fixtures pinning `this.adapter = adapter` to skip the
+  connection handler; survived the `*.test.ts` sweep because the fixtures live in
+  a `test-helpers` builder rather than a `*.test.ts` file.
+
+### 3. `packages/activerecord/src/type/adapter-specific-registry.ts`
 
 - **Class:** `Registration` (no `extends`; `DecorationRegistration extends Registration`)
 - **Sites:** 39
@@ -47,7 +66,7 @@ a `Base` subclass, so the #2580 codemod correctly skipped it.
   is scoped to (e.g. `"postgresql"`), not a `DatabaseAdapter` connection, and
   the class is unrelated to `Base`.
 
-### 3. `packages/activerecord/src/test-helpers/bootstrap-test-handler.ts`
+### 4. `packages/activerecord/src/test-helpers/bootstrap-test-handler.ts`
 
 - **Class:** none — the file is module-level functions
   (`bootstrapTestHandler`, `syncHandlerVisitor`).
@@ -57,7 +76,7 @@ a `Base` subclass, so the #2580 codemod correctly skipped it.
 - **Rationale:** No `this.adapter` assignment exists; the file is the
   Phase-D handler-bootstrap helper that models migrate _toward_.
 
-### 4. `packages/activerecord/src/migrator.ts`
+### 5. `packages/activerecord/src/migrator.ts`
 
 - **Class:** `MigrationRunner` (no `extends`)
 - **Sites:** 25
@@ -65,7 +84,7 @@ a `Base` subclass, so the #2580 codemod correctly skipped it.
 - **Rationale:** `private adapter: DatabaseAdapter` is a constructor-bound
   reference on a standalone migration runner, not a `Base` subclass bypass.
 
-### 5. `packages/activerecord/src/connection-adapters/abstract/schema-creation.ts`
+### 6. `packages/activerecord/src/connection-adapters/abstract/schema-creation.ts`
 
 - **Class:** `SchemaCreation` (no `extends`)
 - **Sites:** 47
@@ -79,17 +98,19 @@ a `Base` subclass, so the #2580 codemod correctly skipped it.
 | File                                              | Verdict             | Sites |
 | ------------------------------------------------- | ------------------- | ----- |
 | `adapters/postgresql/schema-ar-models.ts`         | **bypass survivor** | 8     |
+| `encryption/test-helpers.ts`                      | **bypass survivor** | 19    |
 | `type/adapter-specific-registry.ts`               | legit class field   | 1     |
 | `test-helpers/bootstrap-test-handler.ts`          | legit (no write)    | 0     |
 | `migrator.ts`                                     | legit class field   | 1     |
 | `connection-adapters/abstract/schema-creation.ts` | legit class field   | 1     |
 
-**Bypass-survivor sites remaining after the `*.test.ts` cleanup wave: 8**,
-all in `schema-ar-models.ts`. Because that file is a fixture _builder_ (not a
-`*.test.ts` file), the test-file sweep does not reach it; it needs a sized
-follow-up PR to migrate its 8 factory-built `Base` subclasses off
-`this.adapter = adapter` onto the `Base.connection` handler chain (the
-`bootstrapTestHandler` pattern). **Not migrated here — doc only.**
+**Bypass-survivor sites remaining after the `*.test.ts` cleanup wave: 27** —
+8 in `schema-ar-models.ts` and 19 in `encryption/test-helpers.ts`. Both are
+fixture _builders_ (not `*.test.ts` files), so the test-file sweep does not
+reach them; each needs a sized follow-up PR to migrate its factory-built
+`Base` subclasses off `this.adapter = adapter` onto the `Base.connection`
+handler chain (the `bootstrapTestHandler` pattern). **Not migrated here —
+doc only.**
 
 The other 4 files (`adapter-specific-registry.ts`, `bootstrap-test-handler.ts`,
 `migrator.ts`, `schema-creation.ts`) are legitimate bound-adapter fields on

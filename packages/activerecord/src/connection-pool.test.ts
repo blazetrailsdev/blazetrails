@@ -1578,15 +1578,18 @@ describe("checkout/checkin callbacks", () => {
     await pool.pinConnectionBang();
     const pinned = pool.checkout() as TransactionAwareTestAdapter;
     const spy = vi.spyOn(pinned, "verifyBang");
-
-    const again = pool.checkout();
-    expect(again).toBe(pinned);
-    expect(spy).toHaveBeenCalledTimes(1);
-    // Rails' pinned branch (connection_pool.rb:553-559) does not run
-    // checkout_and_verify, so no Store is attached on the pinned path.
-    expect((pinned as unknown as { _queryCache: Store | null })._queryCache).toBeNull();
-
-    await pool.unpinConnectionBang();
+    try {
+      const again = pool.checkout();
+      expect(again).toBe(pinned);
+      expect(spy).toHaveBeenCalledTimes(1);
+      // Rails' pinned branch (connection_pool.rb:553-559) does not run
+      // checkout_and_verify, so no Store is attached on the pinned path.
+      expect((pinned as unknown as { _queryCache: Store | null })._queryCache).toBeNull();
+    } finally {
+      // Always unpin so an early assertion failure can't leak the pinned
+      // connection into the rest of this file's run.
+      await pool.unpinConnectionBang();
+    }
   });
 
   it("checkin runs the registered :checkin :after callbacks (unset_query_cache!, enable_lazy_transactions!)", () => {

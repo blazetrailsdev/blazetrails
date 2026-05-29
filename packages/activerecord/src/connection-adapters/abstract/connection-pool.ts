@@ -644,7 +644,10 @@ export class ConnectionPool implements ReapablePool {
       // Mirrors Rails' pinned branch (connection_pool.rb:553-559): verify!
       // unconditionally, ensure membership in @connections, and return — no
       // checkout_and_verify / QueryCache wiring on the pinned connection.
-      (pinned as unknown as { verifyBang(): void }).verifyBang();
+      // verifyBang is async in trails (Rails' verify! is sync); await it on the
+      // async path so verification completes before the connection is handed out
+      // and a rejection surfaces here rather than as an unhandled rejection.
+      await (pinned as unknown as { verifyBang(): void | Promise<void> }).verifyBang();
       if (this._connections && !this._connections.includes(pinned)) {
         this._connections.push(pinned);
       }

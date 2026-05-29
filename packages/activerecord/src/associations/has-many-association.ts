@@ -91,7 +91,9 @@ export class HasManyAssociation extends CollectionAssociation {
   }
 
   protected override async doAsyncFindTarget(): Promise<Base[]> {
-    return loadHasMany(this.owner, this.reflection.name, this.reflection.options);
+    const records = await loadHasMany(this.owner, this.reflection.name, this.reflection.options);
+    for (const record of records) this.setStrictLoading(record);
+    return records;
   }
 
   protected override setOwnerAttributes(record: Base): void {

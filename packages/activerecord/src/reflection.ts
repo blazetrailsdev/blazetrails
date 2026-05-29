@@ -45,6 +45,26 @@ function arrayLen(value: string | string[]): number {
 }
 
 /**
+ * Build the strict-loading violation message for an association. `owner` is the
+ * violating record's class name; `name` is the association name. Polymorphic
+ * associations get the "polymorphic association" variant, others name their klass.
+ *
+ * Mirrors: ActiveRecord::Reflection::AbstractReflection#strict_loading_violation_message
+ */
+export function strictLoadingViolationMessage(
+  owner: string,
+  reflection: { name: string; polymorphic: boolean; className?: string },
+): string {
+  const assocDesc = reflection.polymorphic
+    ? "polymorphic association"
+    : `${reflection.className} association`;
+  return (
+    `\`${owner}\` is marked for strict_loading. ` +
+    `The ${assocDesc} named \`:${reflection.name}\` cannot be lazily loaded.`
+  );
+}
+
+/**
  * Base class shared by all reflection types.
  *
  * Mirrors: ActiveRecord::Reflection::AbstractReflection
@@ -258,13 +278,11 @@ export class AbstractReflection {
   }
 
   strictLoadingViolationMessage(owner: string): string {
-    const assocDesc = this.isPolymorphic()
-      ? "polymorphic association"
-      : `${this.className} association`;
-    return (
-      `\`${owner}\` is marked for strict_loading. ` +
-      `The ${assocDesc} named \`:${(this as any).name}\` cannot be lazily loaded.`
-    );
+    return strictLoadingViolationMessage(owner, {
+      name: (this as any).name,
+      polymorphic: this.isPolymorphic(),
+      className: this.className,
+    });
   }
 
   hasInverse(): boolean {

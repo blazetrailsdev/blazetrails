@@ -240,7 +240,9 @@ export class BelongsToAssociation extends SingularAssociation {
   }
 
   protected override async doAsyncFindTarget(): Promise<Base | null> {
-    return loadBelongsTo(this.owner, this.reflection.name, this.reflection.options);
+    const record = await loadBelongsTo(this.owner, this.reflection.name, this.reflection.options);
+    if (record) this.setStrictLoading(record);
+    return record;
   }
 
   // --- Private helpers ---

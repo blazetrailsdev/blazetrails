@@ -144,7 +144,10 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
     if (owner._validationContext != null) return;
     if (this._association.reflection.options.strictLoading === false) return;
     if (owner._strictLoading && !owner.isStrictLoadingNPlusOneOnly?.()) {
-      strictLoadingViolationBang(this._association.owner, this._association.associationName);
+      strictLoadingViolationBang(this._association.owner, this._association.associationName, {
+        polymorphic: this._association.reflection.options.polymorphic,
+        className: this._association.reflection.options.className,
+      });
     }
   }
 

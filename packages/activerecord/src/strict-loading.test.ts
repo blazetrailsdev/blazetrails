@@ -468,6 +468,7 @@ describe("StrictLoadingTest", () => {
       slpnt_logs: { message: "string", slpnt_dev_id: "integer" },
       slpwp_devs: { name: "string" },
       slpwp_logs: { message: "string", slpwp_dev_id: "integer" },
+      slpwp_extras: { note: "string", slpwp_dev_id: "integer" },
     });
   });
   // Rails: test_raises_on_lazy_loading_a_strict_loading_has_many_relation
@@ -723,21 +724,36 @@ describe("StrictLoadingTest", () => {
         this.attribute("slpwp_dev_id", "integer");
       }
     }
+    class SlpwpExtra extends Base {
+      static {
+        this.attribute("note", "string");
+        this.attribute("slpwp_dev_id", "integer");
+      }
+    }
     Associations.hasMany.call(SlpwpDev, "slpwpLogs", {
       className: "SlpwpLog",
       foreignKey: "slpwp_dev_id",
     });
+    Associations.hasMany.call(SlpwpDev, "slpwpExtras", {
+      className: "SlpwpExtra",
+      foreignKey: "slpwp_dev_id",
+    });
     registerModel("SlpwpDev", SlpwpDev);
     registerModel("SlpwpLog", SlpwpLog);
+    registerModel("SlpwpExtra", SlpwpExtra);
     const created = await SlpwpDev.create({ name: "D" });
     await SlpwpLog.create({ message: "M", slpwp_dev_id: created.id });
-    // Preload one association on a strict-loading relation; lazy-loading a
-    // non-preloaded association on the (now strict) parent must raise.
-    const devs = await SlpwpDev.all().strictLoading().toArray();
+    await SlpwpExtra.create({ note: "N", slpwp_dev_id: created.id });
+    // Preload one association on a strict-loading relation: the preloaded
+    // association is reachable, but lazy-loading a different, non-preloaded
+    // association on the (now strict) parent must raise.
+    const devs = await SlpwpDev.all().includes("slpwpLogs").strictLoading().toArray();
     const dev = devs[0];
     expect(dev.isStrictLoading()).toBe(true);
+    const preloaded = (dev as any)._preloadedAssociations?.get("slpwpLogs") ?? [];
+    expect(preloaded).toHaveLength(1);
     await expect(
-      loadHasMany(dev, "slpwpLogs", { className: "SlpwpLog", foreignKey: "slpwp_dev_id" }),
+      loadHasMany(dev, "slpwpExtras", { className: "SlpwpExtra", foreignKey: "slpwp_dev_id" }),
     ).rejects.toThrow(StrictLoadingViolationError);
   });
   it("strict loading by default can be toggled", () => {

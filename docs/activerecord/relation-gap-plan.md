@@ -128,11 +128,6 @@ Detail/rationale in the per-PR sections below.
   mirroring `Reflection#derive_foreign_key`, plus a direct-assertion test sweep
   of the `.joins` string resolver's through/HABTM/STI branches. Files:
   `relation.ts`, `relation/where.test.ts`. Source: #2590.
-- **RF2 — `where.test.ts` stub cleanup** (size TBD). Replace or remove the
-  synthetic, non-Rails-named placeholder stubs at `relation/where.test.ts`
-  ~252–498 with properly Rails-mirrored tests (verbatim name + body from
-  `where_test.rb`), so test:compare can match. Files: `relation/where.test.ts`.
-  Source: #2566.
 - **RF3 — `inOrderOf` type-cast** (~10–20 LOC). Add `type_cast_for_database`
   value casting in `inOrderOf`. Files: `relation.ts` /
   `relation/query-methods.ts`. Source: #2569. (Surfaces only once a
@@ -160,30 +155,15 @@ tables` (per-join table aliasing); `reselect with default scope select`;
 
 **From #2551 (R3 Arel order identity / reverseOrder):**
 
-- [x] `reverseOrderBang` `{raw}` double-flip fixed (Done #2595) — now delegates
-      to the Rails-faithful `reverseSqlOrder` helper.
 - The 3 `reorder replaces existing order` tests have no verbatim Rails
   counterpart (Rails names this behavior `test_finding_with_reorder` /
   `test_reorder_deduplication` in `relations_test.rb`). Pre-existing in our
   suite. Don't rename in place — instead verify each maps to a real Rails
   test and, where it does, align body + name to that counterpart so
   test:compare matches; otherwise document the genuine test:compare gap.
-- [x] `inspect()` Arel-node stringification fixed (Done #2617) — `inspect()`
-      now stringifies live `Nodes.Node` objects in `_orderClauses`, and the
-      loaded path renders Rails' `#<Class [records...]>` format (11-cap, `...`
-      truncation). New follow-up (needs a design decision, not a quick fix):
-      the UNLOADED `inspect()` path is fundamentally divergent — Rails does
-      synchronous blocking DB I/O (`annotate("loading for inspect").take(n)`),
-      which JS can't do in a string-returning method, so trails falls back to a
-      query-chain representation. 4 `relations_test.rb` `#inspect` tests + 3
-      `#pretty_print` tests stay on weakened (typeof / load-first) assertions
-      with Rails-verbatim names; closing the gap likely needs an async inspect
-      API.
 
 **From #2562 (R2 hash-form select):**
 
-- [x] `_buildProjections` bare-string literals/symbols now route through
-      `arelColumns` (Done #2595) — `select with non field values` unskipped.
 - Still skipped (blocked on other features): `select with hash and table
 alias`, `select with hash argument with few tables` (need per-join table
   aliasing); `reselect with default scope select` (default_scope+select);
@@ -192,7 +172,6 @@ alias`, `select with hash argument with few tables` (need per-join table
 
 **From #2564 (R6 bundle — lock + having-hash):**
 
-- [x] `Relation#lockValue` reader added (Done #2595).
 - Pre-existing internal divergence: Rails `lock!` stores `true` for default
   and lets Arel expand to `FOR UPDATE`; trails `lockBang` stores literal
   `"FOR UPDATE"` in `_lockValue`. SQL output identical. Strict `lock_value`
@@ -204,20 +183,8 @@ alias`, `select with hash argument with few tables` (need per-join table
   (relations.test.ts:~1395) remains `it.skip`. Needs design decision before
   any implementation.
 
-**From #2566 (R1 polymorphic/nested where):** test-only PR.
+**From #2566 (R1 polymorphic/nested where):**
 
-- [x] `as:` polymorphic inverse FK id-column derivation fixed (Done #2590).
-      The fix was solely in `relation.ts` `_resolveAssociationJoin` (the
-      `.joins("assoc")` string resolver), NOT `builder/has-many.ts` +
-      `reflection.ts` as the bullet originally pointed — both already derived
-      `estimate_of_id` correctly (since #459). Follow-ups: (a) ~30–50 LOC
-      refactor consolidating the four near-identical FK-derivation sites in
-      `relation.ts` (`_resolveAssociationTarget` ~584, `_resolveHasManySubquery`
-      ~620, `_resolveHasManyJoin` ~655, `_resolveAssociationJoin` ~1455) into
-      one helper mirroring `Reflection#derive_foreign_key`; (b) ~10 LOC
-      direct-assertion test sweep of the `.joins` string resolver's other
-      branches (through, HABTM, STI) — actual-vs-expected tests sharing the
-      same resolver are blind to column bugs.
 - Still skipped (need join+fixture infra): `belongs to nested where with
 relation`, `where not polymorphic id and type as nand`, `where not
 association as nand`, `polymorphic nested array where not`, `type casting
@@ -228,20 +195,11 @@ collection polymorphic relation`.
 - Type-system gaps: `where with rational for string column` (no JS
   Rational), `where with duration for string column` (ActiveSupport::Duration
   cast not wired).
-- [ ] Cleanup: the synthetic, non-Rails-named stubs in
-      `src/relation/where.test.ts` (lines ~252–498) are placeholders with no
-      Rails counterpart — they don't mirror `where_test.rb`. Replace each
-      with a properly Rails-mirrored test (verbatim name + body from the
-      real counterpart) so test:compare can match it, or remove the
-      placeholder. This is not a rename of existing Rails-mirrored tests.
 
 **From #2569 (R5 inOrderOf extensions):**
 
-- [x] `column_name_with_order_matcher` guard wired into `inOrderOf` (Done
-      #2609). Other order-path callers (`order`/`reorder`) were already guarded
-      via `resolveOrderMatcher`. Minor: `resolveColumnNameMatcher` vs
-      `resolveColumnNameWithOrderMatcher` in `relation.ts` are near-duplicates —
-      candidate for a shared helper.
+- Minor: `resolveColumnNameMatcher` vs `resolveColumnNameWithOrderMatcher` in
+  `relation.ts` are near-duplicates — candidate for a shared helper.
 - [ ] ~10-20 LOC: add `type_cast_for_database` value casting in `inOrderOf`
       once a typed-column caller surfaces the gap.
 - belongsTo accessor returns `null` in minimal inline-model + handler-suite

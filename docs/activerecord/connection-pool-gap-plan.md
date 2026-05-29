@@ -110,7 +110,8 @@ P13 (StandaloneConnection — blocked on Rails source refresh)
 ## Post-merge follow-ups
 
 Items surfaced after the shipped batches (#2529, #2530, #2532, #2534, #2535,
-#2539, #2542, #2547, #2553, #2554, #2561, #2570; follow-up PRs #2601, #2603, #2610).
+#2539, #2542, #2547, #2553, #2554, #2561, #2570; follow-up PRs #2601, #2603,
+#2610, #2625, #2626, #2627).
 
 ### Actionable PR queue
 
@@ -119,32 +120,39 @@ Detail/rationale in the per-PR sections below.
 
 **Ready now:**
 
-- **PF1 — reconnect/verify lifecycle bundle** (~54 LOC). Add
-  `enableLazyTransactionsBang()` + `resetTransaction(restore:)` +
-  `attemptConfigureConnection()` to `reconnectBang()`; add the
-  `_unconfiguredConnection` fast-path to `verifyBang()`; add failure cleanup
-  (`_lastActivity = 0`, `_verified = false`) in `reconnectBang()`'s catch.
-  Files: abstract adapter (`reconnectBang`/`verifyBang`). Unblocks the
-  materialized/unmaterialized tx-restoration tests + "disconnect and recover on
-  #configure_connection failure". Source: #2539.
-- **PF2 — query-cache config polish** (~35 LOC). Move the guard from
-  `enableQueryCacheBang` to `QueryCache.run`; add the `"unlimited"` string alias
-  in `DatabaseConfigOptions["queryCache"]` (→ `max_size: null`); add the two
-  forked-process / not-connected cache tests to `unported-files.ts`. Files:
-  query-cache + `database-configurations.ts` + `unported-files.ts`. Source:
-  #2534.
+- **PF2 — query-cache guard move** (~20 LOC). Move the guard from
+  `enableQueryCacheBang` to `QueryCache.run` (requires `run()` to accept pools
+  or a discriminated union; low priority). Files: query-cache. Source: #2534.
 - **PF3 — P10 ConnectionManagement middleware** (~60 LOC). Create
   `connection-management.ts` (Rails clears active connections after each
   request). Open track; #2531 closed, needs a fresh attempt. Unblocks ~11
   tests. Source: Track 5 / P10.
-- **PF4 — P4 opaque-URI merge order** (~15 LOC). Split
-  `ConnectionUrlResolver#toHash()` so structural fields win for opaque URIs.
-  Files: `connection-url-resolver.ts`. Source: #2529.
 - **PF5 — connection-handler skip re-audit** (triage, then sized). Re-check the
   11 still-skipped `connection-handler.test.ts` tests now that P9 (nested
   `connectedTo`) shipped — some may already unblock; the rest split by blocker
   (process-fork = permanent, schema-cache = not-yet-impl). Files:
   `connection-handler.test.ts`. Source: #2530, #2547.
+
+**Round-3 follow-ups (named, PR-sized):**
+
+### follow-up: reconnect! retry loop + raw-connection ownership (~120 LOC, cross-adapter)
+
+Files: `connection-adapters/abstract-adapter.ts`,
+`connection-adapters/postgresql-adapter.ts`,
+`connection-adapters/mysql2-adapter.ts`. Source: #2625. PF1 ported the
+post-reconnect lifecycle but OMITS Rails' `reconnect!` retry loop
+(connection_retries / retry_deadline / backoff). Faithful porting needs the base
+to own a raw, non-recursive `reconnect()` so the loop can re-drive it — today
+base `reconnect()` aliases `reconnectBang()` (recursion) and PG/MySQL2 override
+`reconnectBang()` with their own raw reconnect WITHOUT `super`. Make base
+`reconnectBang` own the raw `reconnect()` + retry loop; convert PG/MySQL2 to
+override raw `reconnect()` and call `super.reconnectBang(opts)`. Also port the
+deprecated raw-connection `initialize` overload (`abstract_adapter.rb:141`) that
+stashes a pre-opened connection in `@unconfigured_connection` — the only
+production writer of `_unconfiguredConnection` (until it lands the verifyBang
+fast-path is test-only). Unblocks the skipped `AdapterConnectionTest`
+integration tests (also gated on a non-`:memory:` adapter with raw-connection
+reopen — Rails gates the suite `unless in_memory_db?`).
 
 **Gated / deferred (external blocker or design decision):**
 
@@ -166,21 +174,17 @@ Detail/rationale in the per-PR sections below.
 
 **From #2539 (P2 lifecycle):**
 
-- [ ] ~30 LOC: add `enableLazyTransactionsBang()` + `resetTransaction(restore:)` + `attemptConfigureConnection()` to `reconnectBang()` — unblocks the materialized/unmaterialized transaction-restoration tests still skipped.
-- [ ] ~20 LOC: add `_unconfiguredConnection` fast-path to `verifyBang()` — unblocks "disconnect and recover on #configure_connection failure".
-- [ ] ~4 LOC: failure cleanup in `reconnectBang()` (`_lastActivity = 0`, `_verified = false` in catch) — guards against concrete-adapter overrides that `super` then throw.
+- Pre-existing: `SQLite3Adapter` does not override `reconnectBang()` to close+reopen its driver — base `reconnectBang` only runs the lifecycle, so sqlite "reconnect" is incomplete. Follow-up only if sqlite reconnect fidelity is needed. (The materialized/unmaterialized integration tests stay skipped — see the _reconnect! retry loop_ follow-up above.)
 
 **From #2529 (P4 URL coercion):**
 
-- [ ] ~15 LOC: opaque-URI merge order — split `ConnectionUrlResolver#toHash()` so structural fields win for opaque URIs (matches Rails exactly).
 - Deviation: `replica?` returns `false` instead of Rails' `nil` when the key is absent. Pre-existing.
 - [ ] 7 skipped tests in `merge-and-resolve-default-url-config.test.ts` unblock when ConnectionHandler is fully ported (covers P9 scope).
 
 **From #2534 (P12 query cache):**
 
 - [ ] ~20 LOC: move guard from `enableQueryCacheBang` to `QueryCache.run`; requires `run()` to accept pools or a discriminated union. Low priority.
-- [ ] ~10 LOC: add `"unlimited"` string alias in `DatabaseConfigOptions["queryCache"]` mapping to `max_size: null`; update `normalizeQueryCacheConfig` and assertions.
-- [ ] ~5 LOC: add "query cache with forked processes" + "cache is available when using a not connected connection" to `unported-files.ts` skip list.
+- [ ] decide whether to port "cache is available when using a not connected connection" (not present in the ported suite). Note: there is no `test/unported-files.ts` — unported notes are inline `it.skip` in `query-cache.test.ts`, where "query cache with forked processes" already lives.
 
 **From #2542 (P1 unit-test unskip):**
 

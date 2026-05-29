@@ -599,35 +599,37 @@ export async function establishConnection(
   }
 
   // Mirror Rails: establishing the connection resolves the adapter, which in
-  // turn installs the matching Arel visitor. Lease the connection so the
-  // global toSql visitor reflects the just-established dialect — code paths
-  // that lack adapter context (Node#toSql, TreeManager#toSql) then produce
-  // dialect-correct SQL without a separate `syncHandlerVisitor` step.
-  installAdapterVisitor(modelClass);
+  // turn builds the matching Arel visitor (AbstractAdapter#initialize sets
+  // `@visitor = arel_visitor`). Rails has no global visitor, but trails keeps
+  // one for code paths that lack adapter context (Node#toSql, TreeManager
+  // #toSql) — so point it at the just-established dialect here instead of via
+  // a separate `syncHandlerVisitor` step.
+  await installAdapterVisitor(modelClass);
 }
 
 /**
- * Install the global Arel `toSql` visitor to match the model's established
- * adapter dialect. Leasing the connection is best-effort: if the pool can't
- * yield a connection (e.g. the configured database can't be opened), the
- * visitor is left untouched — without a connection there is no SQL to
- * compile, so the dialect is irrelevant, and the underlying error surfaces on
- * the first real query rather than from `establishConnection`.
+ * Point the global Arel `toSql` visitor at the model's established adapter
+ * dialect. Uses a transient `withConnection` checkout (not a permanent lease)
+ * so it doesn't hold a connection open past `establishConnection`. Best-effort:
+ * if the pool can't yield a connection (e.g. the configured database can't be
+ * opened), the visitor is left untouched — without a connection there is no
+ * SQL to compile, so the dialect is irrelevant, and the underlying error
+ * surfaces on the first real query rather than from `establishConnection`.
  *
  * @internal
  */
-export function installAdapterVisitor(modelClass: typeof Base): void {
-  let adapter: DatabaseAdapter;
+export async function installAdapterVisitor(modelClass: typeof Base): Promise<void> {
   try {
-    adapter = modelClass.connection;
+    await modelClass.withConnection((adapter: DatabaseAdapter) => {
+      const visitor = (adapter as { visitor?: object } | null | undefined)?.visitor;
+      if (visitor) {
+        setToSqlVisitor(
+          (visitor as object).constructor as new () => { compile(node: Nodes.Node): string },
+        );
+      }
+    });
   } catch {
-    return;
-  }
-  const visitor = (adapter as { visitor?: object } | null | undefined)?.visitor;
-  if (visitor) {
-    setToSqlVisitor(
-      (visitor as object).constructor as new () => { compile(node: Nodes.Node): string },
-    );
+    // No connection available: dialect is irrelevant until one is opened.
   }
 }
 

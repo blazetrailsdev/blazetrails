@@ -41,9 +41,21 @@ export type UseFixturesByNameResult<N extends FixtureName> = {
 /**
  * Resolves fixture-set names through the registry into the `[Model, data]` map shape.
  * Model classes are dynamic-imported (see {@link FixtureRegistryEntry}), so this is async.
+ *
+ * Rejects a request that names two sets backed by the same table (e.g.
+ * `deadParrots`/`liveParrots` → `parrots`, `dogs`/`otherDogs` → `dogs`). Each
+ * `defineFixtures` call deletes its table before inserting, so seeding both in
+ * one call would wipe the first set's rows while leaving its accessor populated
+ * with now-deleted instances. Rails loads multiple same-table fixture files by
+ * deleting each table once and inserting all sets together; that combined path
+ * needs a `defineFixtures` change (build rows per model, delete the shared table
+ * once) and is deferred — until then, request same-table sets in separate calls.
+ *
+ * @internal
  */
-async function resolveFixtureNames(names: readonly FixtureName[]): Promise<FixtureMap> {
+export async function resolveFixtureNames(names: readonly FixtureName[]): Promise<FixtureMap> {
   const map: FixtureMap = {};
+  const tableToName = new Map<string, string>();
   for (const name of names) {
     const entry = fixtureRegistry[name as FixtureName] as
       | { model: () => Promise<BaseClass>; data: Record<string, FixtureAttrs> }
@@ -53,7 +65,17 @@ async function resolveFixtureNames(names: readonly FixtureName[]): Promise<Fixtu
         `useFixtures: no fixture set named "${name}" in the registry — add it to fixtures-registry.ts`,
       );
     }
-    map[name] = [await entry.model(), entry.data];
+    const model = await entry.model();
+    const prior = tableToName.get(model.tableName);
+    if (prior !== undefined) {
+      throw new Error(
+        `useFixtures: "${name}" and "${prior}" both map to table "${model.tableName}"; ` +
+          `combined same-table loading isn't supported yet (defineFixtures deletes the ` +
+          `table per set). Request them in separate useFixtures calls.`,
+      );
+    }
+    tableToName.set(model.tableName, name);
+    map[name] = [model, entry.data];
   }
   return map;
 }

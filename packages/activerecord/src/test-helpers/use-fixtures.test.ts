@@ -1,5 +1,5 @@
 import { describe, it, expect, expectTypeOf, vi, beforeAll } from "vitest";
-import { useFixtures } from "./use-fixtures.js";
+import { useFixtures, resolveFixtureNames } from "./use-fixtures.js";
 import { fixtureRegistry } from "./fixtures-registry.js";
 import { FixtureSet } from "./fixture-set.js";
 import { Base } from "../base.js";
@@ -243,6 +243,20 @@ describe("fixtureRegistry conformance", () => {
         ).toBe("object");
       }
     }
+  });
+});
+
+describe("resolveFixtureNames same-table guard", () => {
+  it("rejects two requested sets that resolve to the same table", async () => {
+    // deadParrots + liveParrots are both STI subclasses on the `parrots` table.
+    await expect(resolveFixtureNames(["deadParrots", "liveParrots"])).rejects.toThrow(
+      /both map to table "parrots"/,
+    );
+  });
+
+  it("resolves distinct-table sets without error", async () => {
+    const map = await resolveFixtureNames(["authors", "posts"]);
+    expect(Object.keys(map)).toEqual(["authors", "posts"]);
   });
 });
 

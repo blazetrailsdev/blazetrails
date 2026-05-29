@@ -7,20 +7,25 @@
 
 ## Summary by cluster
 
-| Cluster                                                   | Tests | Root cause                                                                                          |
-| --------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------- |
-| WHERE with associations/polymorphic/CPK                   | 31    | `PredicateBuilder` handles basic case; edge cases missing (nested, CPK nil, cross-table, Arel star) |
-| load_async / FutureResult                                 | 28    | Ruby-thread-only; PERMANENT-SKIP                                                                    |
-| Scoping — Arel nodes in `order()` / `reverseOrder`        | 20    | `orderBang` pre-renders Arel nodes to raw strings; `reverseOrder` can't flip them                   |
-| Scoping — query cache + select narrowing                  | 8     | 6 need query cache (→ P12), 2 need select narrowing (→ R3b)                                         |
-| Query cache                                               | 27    | Blocked on connection-pool (per-thread cache architecture)                                          |
-| Hash-form select                                          | 23    | `arelColumnAliasesFromHash` handles basics; edge cases: raw-SQL keys, nil, reserved aliases         |
-| WhereChain `.associated`/`.missing` with enums            | 12    | Bypasses predicate builder; enum cast never applied                                                 |
-| lock / FOR UPDATE                                         | 7     | Lock clause not propagated to Arel SQL manager                                                      |
-| Standalone relation (joins, eager, race, fixture)         | 8     | Parameterized joins (2), eager_load toSql (3 → assoc A5), race/fixture/Ruby (3)                     |
-| Calculations with associations                            | 12    | Fixture-dependent + grouped association join                                                        |
-| `inOrderOf`                                               | 4     | Implemented in `relation.ts:959`; edge cases: expressions, associations, `filter: false`            |
-| Misc (batches, update-all, delegation, predicate-builder) | ~6    | Scattered single-test gaps                                                                          |
+This table is the original pre-cleanup landscape. Clusters whose PRs have
+since shipped are marked ✓ — their residual edge cases (if any) are tracked
+in **Post-merge follow-ups** below, not as open tracks. Only unmarked rows
+remain open here.
+
+| Cluster                                                   | Tests | Status / root cause                                                                                     |
+| --------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- |
+| WHERE with associations/polymorphic/CPK                   | 31    | ✓ R1 #2566 shipped (core path); residual nested/polymorphic/CPK edge cases — see follow-ups             |
+| load_async / FutureResult                                 | 28    | Ruby-thread-only; PERMANENT-SKIP                                                                        |
+| Scoping — Arel nodes in `order()` / `reverseOrder`        | 20    | ✓ R3 #2551 shipped; residual reverseOrder `{raw}` double-flip — see follow-ups                          |
+| Scoping — query cache + select narrowing                  | 8     | 6 need query cache (→ P12), 2 need select narrowing (→ R3b)                                             |
+| Query cache                                               | 27    | Blocked on connection-pool (per-thread cache architecture)                                              |
+| Hash-form select                                          | 23    | ✓ R2 #2562 shipped (incl. `select(nil)`); residual raw-SQL keys/table-alias edge cases — see follow-ups |
+| WhereChain `.associated`/`.missing` with enums            | 12    | Bypasses predicate builder; enum cast never applied (R4 — open)                                         |
+| lock / FOR UPDATE                                         | 7     | ✓ R6a #2564 shipped; `lockValue` reader still missing — see follow-ups                                  |
+| Standalone relation (joins, eager, race, fixture)         | 8     | Parameterized joins (2 — R6c deferred), eager_load toSql (3 → assoc A5), race/fixture/Ruby (3)          |
+| Calculations with associations                            | 12    | Fixture-dependent + grouped association join                                                            |
+| `inOrderOf`                                               | 4     | ✓ R5 #2569 shipped; raw-SQL guard / type-cast follow-ups — see follow-ups                               |
+| Misc (batches, update-all, delegation, predicate-builder) | ~6    | Scattered single-test gaps                                                                              |
 
 ---
 

@@ -9,20 +9,25 @@ cache. Many files are entirely stub test suites (every test skipped).
 
 ## Summary by cluster
 
-| Cluster                                | Tests | Status                                                   |
-| -------------------------------------- | ----- | -------------------------------------------------------- |
-| Adapter retry/reconnect lifecycle      | 18    | `withRawConnection`, `verify!`, `clean!`, `active?` gaps |
-| Database config resolution             | 20    | URL coercion, env-var `DATABASE_URL`, edge cases         |
-| DatabaseSelector middleware            | 16    | Source exists; test infra missing                        |
-| Query cache (per-context broadcast)    | 14    | `enableQueryCacheBang` broadcast + AsyncLocalStorage     |
-| Pool lifecycle (checkout/checkin/reap) | 12    | `removeConnectionForThread`, schema-cache on checkout    |
-| ConnectionManagement middleware        | 11    | Entire class missing                                     |
-| ConnectionHandler multi-DB             | 11    | Role validation, handler clearing edge cases             |
-| Multi-DB switching                     | 11    | `connectedTo` nested role+shard stack                    |
-| Connection swapping nested             | 7     | Nested switch verification                               |
-| Adapter leasing                        | 4     | Test harness gap (impl exists)                           |
-| Standalone connection                  | 4     | Entire class missing                                     |
-| Pooled connections                     | 3     | Checkout/checkin semantics                               |
+This table is the original pre-cleanup landscape. Clusters whose PRs have
+since shipped are marked ✓ — their residual edge cases (if any) are tracked
+in **Post-merge follow-ups** below. Only **ConnectionManagement middleware**
+(P10) and **Standalone connection** (P13) remain open.
+
+| Cluster                                | Tests | Status                                                                       |
+| -------------------------------------- | ----- | ---------------------------------------------------------------------------- |
+| Adapter retry/reconnect lifecycle      | 18    | ✓ P1/P2/P3 (#2542/#2539/#2553) shipped; `allowRetry` adapter wiring deferred |
+| Database config resolution             | 20    | ✓ P4/P5 (#2529/#2554) shipped; env-var + scheme-less URI follow-ups          |
+| DatabaseSelector middleware            | 16    | ✓ P11 #2548 shipped (test infra delivered)                                   |
+| Query cache (per-context broadcast)    | 14    | ✓ P12 #2534 shipped; minor guard/alias follow-ups                            |
+| Pool lifecycle (checkout/checkin/reap) | 12    | ✓ P6/P7 (#2535/#2561) shipped                                                |
+| ConnectionManagement middleware        | 11    | **OPEN** — entire class missing (P10)                                        |
+| ConnectionHandler multi-DB             | 11    | ✓ P8 #2530 shipped; re-audit residual handler skips                          |
+| Multi-DB switching                     | 11    | ✓ P9 #2547 shipped (`connectedTo` nested role+shard stack)                   |
+| Connection swapping nested             | 7     | ✓ P9 #2547 shipped                                                           |
+| Adapter leasing                        | 4     | ✓ P14 #2570 shipped (test harness delivered)                                 |
+| Standalone connection                  | 4     | **BLOCKED** — class missing (P13; needs Rails source refresh)                |
+| Pooled connections                     | 3     | ✓ P7 #2561 shipped                                                           |
 
 **Not counted here** (attributed to other blockers in same files):
 adapter.test.ts also has 22 fixture-blocked, 10 transaction-blocked,
@@ -61,12 +66,15 @@ checkin, `close` returns to pool.
 
 - Create `connection-adapters/standalone-connection.ts`
 
-**Rails ref:** `connection_adapters/abstract/connection_pool.rb`
-`StandaloneConnection` inner class
+**Rails ref:** A newer Rails' `connection_adapters/abstract/connection_pool.rb`
+`StandaloneConnection` inner class (plus its `standalone_connection_test.rb`).
+NOT present in the currently vendored Rails — confirm against `vendor/rails`
+after the refresh.
 
-**Note:** deferred — vendored Rails has no `StandaloneConnection` class yet
-(see post-merge follow-ups from #2570). Needs a Rails source refresh before
-implementation.
+**Note:** deferred — the vendored Rails snapshot has no `StandaloneConnection`
+class yet, and the vendored `standalone_connection_test.rb` references a newer
+Rails (see post-merge follow-ups from #2570). Needs a Rails source refresh
+before implementation.
 
 **Est:** ~40 LOC
 

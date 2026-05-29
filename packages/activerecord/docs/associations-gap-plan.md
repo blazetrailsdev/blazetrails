@@ -1,13 +1,17 @@
 # Associations gap plan
 
-339 skipped tests across 33 files. 20 PRs across 9 tracks, organized
-by unlock potential. Some tests are gated on multiple PRs (noted in
-dependency graph). ~18 permanent-skip (marshal, Ruby-only), ~10
-scattered single-test gaps (Track 9).
+Originally 339 skipped tests across 33 files; 20 PRs across 9 tracks,
+organized by unlock potential. After the cleanup batch, **8 PRs shipped
+(A1–A4, B1, E1, F1, H1)** and **12 remain** (A5, B2, B3, C1–C3, D1, D2,
+E2, F2, G1, H2). Per-track unlock counts in the headers below are the
+original pre-cleanup aggregates; remaining work per track is whatever PRs
+are still listed. Some tests are gated on multiple PRs (noted in dependency
+graph). ~18 permanent-skip (marshal, Ruby-only), ~10 scattered single-test
+gaps (Track 9).
 
 ---
 
-## Track 1: Preloader core (unlocks ~104 eager-loading + ~18 cascaded tests)
+## Track 1: Preloader core (A1–A4 shipped; A5 remaining — ~20 eager-loading tests)
 
 ### PR A5: `eager_load` nested hash specs → JoinDependency (not preload fallback)
 
@@ -28,7 +32,7 @@ hashes.
 
 ---
 
-## Track 2: has_many :through writes (unlocks ~40 tests)
+## Track 2: has_many :through writes (B1 shipped; B2 + B3 remaining — ~25 tests)
 
 ### PR B2: `concatRecords` + `@through_records` cache
 
@@ -143,7 +147,7 @@ implementation is largely complete but tests lack data.
 
 ---
 
-## Track 5: Collection callbacks (unlocks ~12 tests)
+## Track 5: Collection callbacks (E1 shipped; E2 remaining — ~4 tests)
 
 ### PR E2: `create()` goes through `addToTarget` + dedup tracking
 
@@ -163,7 +167,7 @@ fires callbacks directly, bypassing `addToTarget`. Skips
 
 ---
 
-## Track 6: HABTM (unlocks ~15 tests, 24 total — 4 scope-chain, 2 eager, 3 cross-blocker)
+## Track 6: HABTM (F1 shipped; F2 remaining — ~8 tests: scope-chain + extend:)
 
 ### PR F2: HABTM `extend:` option + scope chain composition
 
@@ -206,7 +210,7 @@ blocked on `disableJoins` scope chain.
 
 ---
 
-## Track 8: AssociationScope + nested-through (unlocks ~25 tests)
+## Track 8: AssociationScope + nested-through (H1 shipped; H2 remaining — ~12 tests)
 
 ### PR H2: Nested-through edge cases (distinct, STI, polymorphic scope, alias)
 
@@ -249,7 +253,8 @@ A1–A4 shipped (#2550, #2568, #2555, #2559). Remaining:
 ```
 A5 (eager_load JOIN path — preloader core now shipped)
 
-B2 → B3 (each builds on prior HMT plumbing; B1 shipped #2557)
+B2, B3 (both extend shipped B1 #2557 HMT write plumbing; independent of
+       each other — Rails `delete_records` does not depend on `concat_records`)
 
 C1 → C2 → C3 (inverseName() must work before wiring it into collection/preloader)
 
@@ -309,7 +314,7 @@ These are independent of each other and can run in parallel.
 If running multiple agents, these lanes have zero file overlap:
 
 - **Lane A:** A5 (preloader core A1–A4 shipped → eager_load)
-- **Lane B:** B2 → B3 (HMT writes; B1 shipped)
+- **Lane B:** B2, B3 (HMT writes; B1 shipped — concat & delete paths independent)
 - **Lane C:** C1 → C2 (inverse_of)
 - **Lane E:** F2 (HABTM extend + scope chain — standalone; F1 shipped)
 

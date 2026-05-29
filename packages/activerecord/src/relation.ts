@@ -1362,21 +1362,30 @@ export class Relation<T extends Base> {
    * raw column-to-column ON would otherwise skip.
    *
    * Invoked via `invokeScopeLambda` so 0-arity `this`-bound scopes
-   * (`function () { return this.where(...) }`) and arity-1 arrow scopes
-   * (`(rel) => rel.where(...)`) are evaluated correctly, with the Rails
-   * `instance_exec(owner) || relation` falsy-fallback. A bare join has no
-   * owner instance, so owner-dependent scopes (arity >= 2, e.g.
-   * `(rel, owner) => rel.where({ x: owner.id })`) are skipped rather than
-   * invoked with an undefined owner — matching the prior behavior where the
-   * scope was ignored entirely, and avoiding a throw at join-build time.
+   * (`function () { return this.where(...) }`) and arrow scopes
+   * (`(rel) => rel.where(...)`, `(rel, owner) => ...`) are all evaluated, with
+   * the Rails `instance_exec(owner) || relation` falsy-fallback. A bare join
+   * has no owner instance, so the scope runs with `owner === undefined`. A
+   * scope that actually dereferences the absent owner throws; we catch and
+   * skip it (an owner-dependent scope can't be folded into an ownerless join),
+   * matching the prior behavior where such scopes were ignored entirely.
+   * Owner-independent scopes — whatever their arity — still apply, so the SQL
+   * matches JoinDependency's scope folding.
    *
    * @internal
    */
   private _appendAssociationScope(predicates: Nodes.Node[], assocDef: any, targetModel: any): void {
     const scope = assocDef.options.scope;
-    if (typeof scope !== "function" || scope.length >= 2) return;
+    if (typeof scope !== "function") return;
     const baseRel = (targetModel as any)._allForPreload();
-    const scopeRel = invokeScopeLambda(scope, baseRel, undefined as unknown as Base) || baseRel;
+    let scopeRel: any;
+    try {
+      scopeRel = invokeScopeLambda(scope, baseRel, undefined as unknown as Base) || baseRel;
+    } catch {
+      // Owner-dependent scope evaluated against an absent owner — not
+      // representable in a bare join. Skip, as the pre-scope-folding code did.
+      return;
+    }
     if (scopeRel?._whereClause && !scopeRel._whereClause.isEmpty()) {
       predicates.push(scopeRel._whereClause.ast);
     }
